@@ -10,21 +10,21 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-decimal-scaled = "0.1"
+decimal-scaled = "0.1.1"
 ```
 
 For `no_std` targets (disables `std` and `serde`):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.1", default-features = false }
+decimal-scaled = { version = "0.1.1", default-features = false }
 ```
 
 To enable `serde` without `std`:
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.1", default-features = false, features = ["serde", "alloc"] }
+decimal-scaled = { version = "0.1.1", default-features = false, features = ["serde", "alloc"] }
 ```
 
 ---
