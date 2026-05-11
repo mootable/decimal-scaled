@@ -1,0 +1,1156 @@
+//! Power and root methods for [`I128`].
+//!
+//! # Methods
+//!
+//! - [`I128::pow`] — unsigned integer power via square-and-multiply over
+//!   the `Mul` operator. Panics on overflow in debug builds; wraps in
+//!   release builds. Matches `i128::pow` semantics.
+//! - [`I128::powi`] — signed integer power. For negative `exp`, returns
+//!   `I128::ONE / self.pow(exp.unsigned_abs())`.
+//! - [`I128::powf`] — floating-point power via the f64 bridge. Lossy.
+//!   Requires the `std` feature.
+//! - [`I128::sqrt`] — square root via the f64 bridge. IEEE 754 mandates
+//!   that `f64::sqrt` is correctly-rounded, so identical inputs produce
+//!   identical output bit-patterns on every conformant platform.
+//!   Requires the `std` feature.
+//! - [`I128::cbrt`] — cube root via the f64 bridge. Defined for negative
+//!   inputs. Requires the `std` feature.
+//! - [`I128::mul_add`] — `self * a + b` in one call. No hardware FMA;
+//!   mirrors the `f64::mul_add` call shape so generic numeric code can
+//!   monomorphise to `I128`. Always available.
+//! - [`I128::hypot`] — `sqrt(self^2 + other^2)` without intermediate
+//!   overflow, using the scale-trick algorithm. Requires the `std`
+//!   feature via `sqrt`.
+//!
+//! # `std`-feature gating
+//!
+//! `f64::sqrt`, `f64::cbrt`, and `f64::powf` are inherent methods on
+//! `f64` defined only in `std`; they delegate to platform intrinsics
+//! that are absent from `core`. The integer forms (`pow`, `powi`, and
+//! the variant family) work in `no_std` because they use only `I128`
+//! operators.
+//!
+//! When the `strict` feature is enabled, the four f64-bridge functions
+//! (`powf`, `sqrt`, `cbrt`, `hypot`) compile integer-only stub
+//! implementations that do not require `std`. The stubs currently
+//! `todo!`; they exist so that `strict` builds link without pulling in
+//! the f64 platform intrinsics. Callers that need approximate results in
+//! a `strict`/`no_std` context can obtain the raw `i128` mantissa via
+//! `to_bits` and apply their own arithmetic.
+//!
+//! When `strict` is absent and `std` is present, the original f64-bridge
+//! implementations are compiled instead.
+//!
+//! `no_std` callers without `strict` that need square root, cube root,
+//! or float power can compose them via `libm` or hardware-specific
+//! intrinsics applied to the raw f64 obtained from `to_f64_lossy`.
+//!
+//! # Variant family for `pow`
+//!
+//! - [`I128::checked_pow`] — `Option<Self>`, `None` on overflow at any
+//!   step.
+//! - [`I128::wrapping_pow`] — two's-complement wrap at every step.
+//! - [`I128::saturating_pow`] — clamps to `I128::MAX` or `I128::MIN`
+//!   based on the sign of the would-be result.
+//! - [`I128::overflowing_pow`] — `(Self, bool)`; the bool is `true` if
+//!   any step overflowed, with the value equal to the wrapping form.
+//!
+//! # Square-and-multiply algorithm
+//!
+//! Starting from `acc = ONE`, the algorithm walks the bits of `exp` from
+//! low to high. On each iteration:
+//!
+//! 1. If the current bit of `exp` is set, multiply `acc *= base`.
+//! 2. Square `base *= base`.
+//!
+//! This costs `O(log exp)` multiplications rather than `O(exp)`. The
+//! variant family follows the same structure but applies the
+//! corresponding overflow arithmetic at every multiplication step.
+//!
+//! # `i32::MIN` edge case for `powi`
+//!
+//! `i32::unsigned_abs` returns `2_147_483_648_u32` for `i32::MIN`,
+//! avoiding the signed-negation overflow that `(-i32::MIN) as u32` would
+//! cause. `I128::ONE.powi(i32::MIN)` therefore evaluates correctly as
+//! `I128::ONE / I128::ONE.pow(2_147_483_648_u32)`.
+
+use crate::core_type::I128;
+use crate::mg_divide::mul_div_pow10;
+
+impl<const SCALE: u32> I128<SCALE> {
+    /// Raises `self` to the power `exp`.
+    ///
+    /// Uses square-and-multiply: walks the bits of `exp` from low to
+    /// high, squaring the base each step and accumulating when the
+    /// corresponding bit is set. Costs `O(log exp)` multiplications.
+    /// Each multiplication routes through the `I128` `Mul` operator.
+    ///
+    /// `exp = 0` always returns `ONE`, even when `self` is `ZERO`
+    /// (matches `i128::pow` convention).
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, panics on `i128` overflow at any multiplication
+    /// step. In release builds, wraps two's-complement. Matches
+    /// `i128::pow` and `I128::Mul` semantics.
+    ///
+    /// Use [`Self::checked_pow`], [`Self::wrapping_pow`],
+    /// [`Self::saturating_pow`], or [`Self::overflowing_pow`] for
+    /// explicit overflow control.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let two = I128s12::from_int(2);
+    /// assert_eq!(two.pow(10), I128s12::from_int(1024));
+    /// // exp = 0 returns ONE regardless of base.
+    /// assert_eq!(I128s12::ZERO.pow(0), I128s12::ONE);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn pow(self, exp: u32) -> Self {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        let mut e = exp;
+        while e > 0 {
+            if e & 1 == 1 {
+                acc *= base;
+            }
+            e >>= 1;
+            if e > 0 {
+                base *= base;
+            }
+        }
+        acc
+    }
+
+    /// Raises `self` to the signed integer power `exp`.
+    ///
+    /// For non-negative `exp`, equivalent to `self.pow(exp as u32)`.
+    /// For negative `exp`, returns `I128::ONE / self.pow(exp.unsigned_abs())`,
+    /// i.e. the reciprocal of the positive-exponent form.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Panics
+    ///
+    /// - Overflow of `i128` storage at any step in debug builds (matches
+    ///   [`Self::pow`]).
+    /// - Division by zero when `self == ZERO` and `exp < 0`.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let two = I128s12::from_int(2);
+    /// assert_eq!(two.powi(-1), I128s12::ONE / two);
+    /// assert_eq!(two.powi(0), I128s12::ONE);
+    /// assert_eq!(two.powi(3), I128s12::from_int(8));
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn powi(self, exp: i32) -> Self {
+        if exp >= 0 {
+            self.pow(exp as u32)
+        } else {
+            // unsigned_abs handles i32::MIN without signed-negation overflow.
+            Self::ONE / self.pow(exp.unsigned_abs())
+        }
+    }
+
+    /// Raises `self` to the power `exp` (strict integer-only stub).
+    ///
+    /// Converts both operands to f64, calls `f64::powf`, then converts
+    /// the result back. For integer exponents, prefer [`Self::pow`] or
+    /// [`Self::powi`], which are bit-exact.
+    ///
+    /// NaN results map to `ZERO`; infinities clamp to `MAX` or `MIN`,
+    /// following the saturate-vs-error policy of [`Self::from_f64_lossy`].
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let two = I128s12::from_int(2);
+    /// let three = I128s12::from_int(3);
+    /// // 2^3 = 8, within f64 precision.
+    /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
+    /// ```
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn powf(self, exp: I128<SCALE>) -> Self {
+        todo!("strict: integer-only powf not yet implemented")
+    }
+
+    /// Raises `self` to the power `exp` via the f64 bridge.
+    ///
+    /// Converts both operands to f64, calls `f64::powf`, then converts
+    /// the result back. For integer exponents, prefer [`Self::pow`] or
+    /// [`Self::powi`], which are bit-exact.
+    ///
+    /// NaN results map to `ZERO`; infinities clamp to `MAX` or `MIN`,
+    /// following the saturate-vs-error policy of [`Self::from_f64_lossy`].
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let two = I128s12::from_int(2);
+    /// let three = I128s12::from_int(3);
+    /// // 2^3 = 8, within f64 precision.
+    /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
+    /// ```
+    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[inline]
+    #[must_use]
+    pub fn powf(self, exp: I128<SCALE>) -> Self {
+        Self::from_f64_lossy(self.to_f64_lossy().powf(exp.to_f64_lossy()))
+    }
+
+    /// Returns the square root of `self` (strict integer-only stub).
+    ///
+    /// IEEE 754 mandates that `f64::sqrt` is correctly-rounded
+    /// (round-to-nearest, ties-to-even). Combined with the deterministic
+    /// `to_f64_lossy` / `from_f64_lossy` round-trip, this makes
+    /// `I128::sqrt` bit-deterministic: the same input produces the same
+    /// output bit-pattern on every IEEE-754-conformant platform.
+    ///
+    /// Negative inputs produce a NaN from `f64::sqrt`, which
+    /// [`Self::from_f64_lossy`] maps to `ZERO` per the saturate-vs-error
+    /// policy. No panic is raised for negative inputs.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// assert_eq!(I128s12::ZERO.sqrt(), I128s12::ZERO);
+    /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
+    /// assert_eq!(I128s12::ONE.sqrt(), I128s12::ONE);
+    /// ```
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn sqrt(self) -> Self {
+        todo!("strict: integer-only sqrt not yet implemented")
+    }
+
+    /// Returns the square root of `self` via the f64 bridge.
+    ///
+    /// IEEE 754 mandates that `f64::sqrt` is correctly-rounded
+    /// (round-to-nearest, ties-to-even). Combined with the deterministic
+    /// `to_f64_lossy` / `from_f64_lossy` round-trip, this makes
+    /// `I128::sqrt` bit-deterministic: the same input produces the same
+    /// output bit-pattern on every IEEE-754-conformant platform.
+    ///
+    /// Negative inputs produce a NaN from `f64::sqrt`, which
+    /// [`Self::from_f64_lossy`] maps to `ZERO` per the saturate-vs-error
+    /// policy. No panic is raised for negative inputs.
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// assert_eq!(I128s12::ZERO.sqrt(), I128s12::ZERO);
+    /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
+    /// assert_eq!(I128s12::ONE.sqrt(), I128s12::ONE);
+    /// ```
+    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[inline]
+    #[must_use]
+    pub fn sqrt(self) -> Self {
+        Self::from_f64_lossy(self.to_f64_lossy().sqrt())
+    }
+
+    /// Returns the cube root of `self` via the f64 bridge.
+    ///
+    /// `f64::cbrt` is defined for the entire real line, including
+    /// negative inputs (`cbrt(-8.0) == -2.0`). The result is
+    /// bit-deterministic across IEEE-754-conformant platforms because
+    /// `f64::cbrt` is correctly-rounded.
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let neg_eight = I128s12::from_int(-8);
+    /// let result = neg_eight.cbrt();
+    /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
+    /// ```
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn cbrt(self) -> Self {
+        Self::from_f64_lossy(self.to_f64_lossy().cbrt())
+    }
+
+    // Integer power variant family.
+
+    /// Returns `self * a + b`.
+    ///
+    /// Mirrors the `f64::mul_add` call shape so f64-generic numeric code
+    /// can monomorphise to `I128` without rewriting call sites. No
+    /// hardware FMA is involved; the multiply uses the `I128` `Mul`
+    /// operator and the add uses plain `i128` addition.
+    ///
+    /// The result is bit-equal to `self * a + b` on every input,
+    /// including panic or wrap behaviour at overflow boundaries.
+    ///
+    /// Available in `no_std` builds because the underlying `Mul` and
+    /// `Add` operators require only `core`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Panics
+    ///
+    /// In debug builds, panics on overflow at the multiply step or the
+    /// add step. In release builds, both steps wrap two's-complement.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let two   = I128s12::from_int(2);
+    /// let three = I128s12::from_int(3);
+    /// let four  = I128s12::from_int(4);
+    /// // 2 * 3 + 4 = 10
+    /// assert_eq!(two.mul_add(three, four), I128s12::from_int(10));
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn mul_add(self, a: Self, b: Self) -> Self {
+        self * a + b
+    }
+
+    /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
+    ///
+    /// The naive form `(self * self + other * other).sqrt()` overflows
+    /// `i128` once either operand approaches `sqrt(I128::MAX)`. This
+    /// method uses the scale trick to avoid that:
+    ///
+    /// ```text
+    /// hypot(a, b) = max(|a|, |b|) * sqrt(1 + (min(|a|, |b|) / max(|a|, |b|))^2)
+    /// ```
+    ///
+    /// The `min/max` ratio is in `[0, 1]`, so `ratio^2` is also in
+    /// `[0, 1]` and cannot overflow. The outer multiply by `large` only
+    /// overflows when the true hypotenuse genuinely exceeds `I128::MAX`,
+    /// which matches `f64::hypot`'s contract.
+    ///
+    /// Both inputs are absolute-valued before processing, so
+    /// `hypot(-a, b) == hypot(a, b)`.
+    ///
+    /// Edge cases: `hypot(0, 0) == 0` (bit-exact via the early return);
+    /// `hypot(0, x) ~= |x|` and `hypot(x, 0) ~= |x|`.
+    ///
+    /// # Precision
+    ///
+    /// Lossy: involves f64 at some point; result may lose precision.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let three = I128s12::from_int(3);
+    /// let four  = I128s12::from_int(4);
+    /// // Pythagorean triple: hypot(3, 4) ~= 5.
+    /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
+    /// ```
+    #[cfg(feature = "std")]
+    #[inline]
+    #[must_use]
+    pub fn hypot(self, other: Self) -> Self {
+        let a = self.abs();
+        let b = other.abs();
+        let (large, small) = if a >= b { (a, b) } else { (b, a) };
+        if large == Self::ZERO {
+            // Both inputs are zero; large is the max of two non-negatives,
+            // so this branch is only reached when both are zero.
+            Self::ZERO
+        } else {
+            let ratio = small / large;
+            // ratio^2 is in [0, 1]; ONE + ratio^2 is in [1, 2]; no overflow.
+            // The outer sqrt is in [1, sqrt(2)]; the final multiply by large
+            // only overflows when the true hypotenuse exceeds I128::MAX.
+            let one_plus_sq = Self::ONE + ratio * ratio;
+            large * one_plus_sq.sqrt()
+        }
+    }
+
+    // Overflow-variant family for pow.
+
+    /// Returns `Some(self^exp)`, or `None` if any multiplication step
+    /// overflows `i128`.
+    ///
+    /// Walks the same square-and-multiply as [`Self::pow`] but uses
+    /// `mul_div_pow10` (which returns `Option<i128>`) at each step.
+    /// The first `None` short-circuits to a `None` return.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// // MAX^2 overflows.
+    /// assert!(I128s12::MAX.checked_pow(2).is_none());
+    /// // Any power of ONE is ONE.
+    /// assert_eq!(I128s12::ONE.checked_pow(1_000_000), Some(I128s12::ONE));
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn checked_pow(self, exp: u32) -> Option<Self> {
+        let mut acc: i128 = Self::ONE.0;
+        let mut base: i128 = self.0;
+        let mut e = exp;
+        while e > 0 {
+            if e & 1 == 1 {
+                acc = mul_div_pow10::<SCALE>(acc, base)?;
+            }
+            e >>= 1;
+            if e > 0 {
+                base = mul_div_pow10::<SCALE>(base, base)?;
+            }
+        }
+        Some(Self(acc))
+    }
+
+    /// Returns `self^exp`, wrapping two's-complement on overflow at
+    /// every multiplication step.
+    ///
+    /// Follows the same square-and-multiply structure as [`Self::pow`].
+    /// When a step overflows `mul_div_pow10`, the fallback is
+    /// `wrapping_mul` followed by `wrapping_div` of the scale
+    /// multiplier. The exact wrap pattern is deterministic and
+    /// reproducible but is not otherwise specified.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// // ONE^N never overflows and returns ONE.
+    /// assert_eq!(I128s12::ONE.wrapping_pow(1_000_000), I128s12::ONE);
+    /// // MAX^2 wraps to a deterministic but unspecified value.
+    /// let _ = I128s12::MAX.wrapping_pow(2);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn wrapping_pow(self, exp: u32) -> Self {
+        let mut acc: i128 = Self::ONE.0;
+        let mut base: i128 = self.0;
+        let mut e = exp;
+        let mult = Self::multiplier();
+        while e > 0 {
+            if e & 1 == 1 {
+                acc = match mul_div_pow10::<SCALE>(acc, base) {
+                    Some(q) => q,
+                    None => acc.wrapping_mul(base).wrapping_div(mult),
+                };
+            }
+            e >>= 1;
+            if e > 0 {
+                base = match mul_div_pow10::<SCALE>(base, base) {
+                    Some(q) => q,
+                    None => base.wrapping_mul(base).wrapping_div(mult),
+                };
+            }
+        }
+        Self(acc)
+    }
+
+    /// Returns `self^exp`, clamping to `I128::MAX` or `I128::MIN` on
+    /// overflow at any step.
+    ///
+    /// On the first step that overflows, the result is clamped based on
+    /// the sign of the mathematical result: positive overflows clamp to
+    /// `MAX`, negative overflows clamp to `MIN`. The sign of the result
+    /// is determined by `self.signum()` and whether `exp` is odd.
+    ///
+    /// `exp = 0` always returns `ONE` before entering the loop.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// assert_eq!(I128s12::MAX.saturating_pow(2), I128s12::MAX);
+    /// assert_eq!(I128s12::ONE.saturating_pow(1_000_000), I128s12::ONE);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn saturating_pow(self, exp: u32) -> Self {
+        // exp == 0: result is ONE by convention.
+        if exp == 0 {
+            return Self::ONE;
+        }
+        let mut acc: i128 = Self::ONE.0;
+        let mut base: i128 = self.0;
+        let mut e = exp;
+        // The final result is negative iff the base is negative and exp is odd.
+        let result_negative_if_overflow = self.0 < 0 && (exp & 1) == 1;
+        while e > 0 {
+            if e & 1 == 1 {
+                match mul_div_pow10::<SCALE>(acc, base) {
+                    Some(q) => acc = q,
+                    None => {
+                        return if result_negative_if_overflow {
+                            Self::MIN
+                        } else {
+                            Self::MAX
+                        };
+                    }
+                }
+            }
+            e >>= 1;
+            if e > 0 {
+                match mul_div_pow10::<SCALE>(base, base) {
+                    Some(q) => base = q,
+                    None => {
+                        // base*base is non-negative (squared); clamp by the
+                        // sign of the would-be final result.
+                        return if result_negative_if_overflow {
+                            Self::MIN
+                        } else {
+                            Self::MAX
+                        };
+                    }
+                }
+            }
+        }
+        Self(acc)
+    }
+
+    /// Returns `(self^exp, overflowed)`.
+    ///
+    /// `overflowed` is `true` if any multiplication step overflowed
+    /// `i128`. The returned value is the wrapping form (matches
+    /// [`Self::wrapping_pow`]).
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```ignore
+    /// use decimal_scaled::I128s12;
+    /// let (_value, overflowed) = I128s12::MAX.overflowing_pow(2);
+    /// assert!(overflowed);
+    /// let (value, overflowed) = I128s12::ONE.overflowing_pow(5);
+    /// assert!(!overflowed);
+    /// assert_eq!(value, I128s12::ONE);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn overflowing_pow(self, exp: u32) -> (Self, bool) {
+        let mut acc: i128 = Self::ONE.0;
+        let mut base: i128 = self.0;
+        let mut e = exp;
+        let mut overflowed = false;
+        let mult = Self::multiplier();
+        while e > 0 {
+            if e & 1 == 1 {
+                acc = match mul_div_pow10::<SCALE>(acc, base) {
+                    Some(q) => q,
+                    None => {
+                        overflowed = true;
+                        acc.wrapping_mul(base).wrapping_div(mult)
+                    }
+                };
+            }
+            e >>= 1;
+            if e > 0 {
+                base = match mul_div_pow10::<SCALE>(base, base) {
+                    Some(q) => q,
+                    None => {
+                        overflowed = true;
+                        base.wrapping_mul(base).wrapping_div(mult)
+                    }
+                };
+            }
+        }
+        (Self(acc), overflowed)
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::core_type::I128s12;
+
+    // Tolerance for f64-bridge tests. Used only by std-feature-gated
+    // tests below; gated to suppress unused-item warnings on no_std builds.
+    #[cfg(feature = "std")]
+    const TWO_LSB: i128 = 2;
+
+    #[cfg(feature = "std")]
+    fn within_lsb(actual: I128s12, expected: I128s12, lsb: i128) -> bool {
+        let diff = (actual.to_bits() - expected.to_bits()).abs();
+        diff <= lsb
+    }
+
+    // pow (integer)
+
+    /// `pow(0)` returns ONE for a nonzero base.
+    #[test]
+    fn pow_zero_is_one_for_nonzero() {
+        let v = I128s12::from_int(7);
+        assert_eq!(v.pow(0), I128s12::ONE);
+    }
+
+    /// `pow(1)` returns self.
+    #[test]
+    fn pow_one_is_self() {
+        let v = I128s12::from_int(7);
+        assert_eq!(v.pow(1), v);
+    }
+
+    /// `pow(2)` equals `self * self` for an integer value.
+    #[test]
+    fn pow_two_matches_mul() {
+        let v = I128s12::from_int(13);
+        assert_eq!(v.pow(2), v * v);
+    }
+
+    /// `pow(2)` equals `self * self` for a fractional value.
+    #[test]
+    fn pow_two_matches_mul_fractional() {
+        // 1.5 in raw bits at SCALE = 12.
+        let v = I128s12::from_bits(1_500_000_000_000);
+        assert_eq!(v.pow(2), v * v);
+    }
+
+    /// `2^10 == 1024`.
+    #[test]
+    fn pow_two_to_the_ten() {
+        let two = I128s12::from_int(2);
+        assert_eq!(two.pow(10), I128s12::from_int(1024));
+    }
+
+    /// `pow(0, 0) == ONE` — matches `i128::pow(0, 0) == 1`.
+    #[test]
+    fn zero_pow_zero_is_one() {
+        assert_eq!(I128s12::ZERO.pow(0), I128s12::ONE);
+    }
+
+    /// `pow(0, n)` for `n > 0` is `ZERO`.
+    #[test]
+    fn zero_pow_positive_is_zero() {
+        assert_eq!(I128s12::ZERO.pow(1), I128s12::ZERO);
+        assert_eq!(I128s12::ZERO.pow(5), I128s12::ZERO);
+    }
+
+    /// `pow(n)` of `ONE` is always `ONE`.
+    #[test]
+    fn one_pow_n_is_one() {
+        assert_eq!(I128s12::ONE.pow(0), I128s12::ONE);
+        assert_eq!(I128s12::ONE.pow(1), I128s12::ONE);
+        assert_eq!(I128s12::ONE.pow(100), I128s12::ONE);
+    }
+
+    /// `(-1)^n` alternates sign.
+    #[test]
+    fn negative_one_pow_alternates() {
+        let neg_one = -I128s12::ONE;
+        assert_eq!(neg_one.pow(0), I128s12::ONE);
+        assert_eq!(neg_one.pow(1), neg_one);
+        assert_eq!(neg_one.pow(2), I128s12::ONE);
+        assert_eq!(neg_one.pow(3), neg_one);
+    }
+
+    // powi (signed integer)
+
+    /// `powi(0)` returns ONE.
+    #[test]
+    fn powi_zero_is_one() {
+        let v = I128s12::from_int(7);
+        assert_eq!(v.powi(0), I128s12::ONE);
+    }
+
+    /// `powi(1)` returns self.
+    #[test]
+    fn powi_one_is_self() {
+        let v = I128s12::from_int(7);
+        assert_eq!(v.powi(1), v);
+    }
+
+    /// `powi(-1)` returns `ONE / self`.
+    #[test]
+    fn powi_minus_one_is_reciprocal() {
+        let v = I128s12::from_int(7);
+        assert_eq!(v.powi(-1), I128s12::ONE / v);
+    }
+
+    /// `powi(-3)` equals `ONE / pow(3)`.
+    #[test]
+    fn powi_negative_matches_reciprocal_of_positive() {
+        let v = I128s12::from_int(2);
+        assert_eq!(v.powi(-3), I128s12::ONE / v.pow(3));
+    }
+
+    /// `powi` agrees with `pow` for non-negative exponents.
+    #[test]
+    fn powi_positive_matches_pow() {
+        let v = I128s12::from_int(3);
+        for e in 0_i32..6 {
+            assert_eq!(v.powi(e), v.pow(e as u32));
+        }
+    }
+
+    /// `i32::MIN` edge: `unsigned_abs` returns 2_147_483_648; for a base
+    /// of ONE the result is ONE.
+    #[test]
+    fn powi_i32_min_for_one_base() {
+        assert_eq!(I128s12::ONE.powi(i32::MIN), I128s12::ONE);
+    }
+
+    // powf — requires std feature
+
+    /// `powf(0.5)` approximates `sqrt` within 2 LSB.
+    #[cfg(feature = "std")]
+    #[test]
+    fn powf_half_matches_sqrt() {
+        let v = I128s12::from_int(4);
+        let half = I128s12::from_bits(500_000_000_000); // 0.5 at SCALE=12
+        let powf_result = v.powf(half);
+        let sqrt_result = v.sqrt();
+        assert!(
+            within_lsb(powf_result, sqrt_result, TWO_LSB),
+            "powf(0.5)={}, sqrt={}, diff={}",
+            powf_result.to_bits(),
+            sqrt_result.to_bits(),
+            (powf_result.to_bits() - sqrt_result.to_bits()).abs(),
+        );
+    }
+
+    /// `powf(2)` agrees with `pow(2)` within 2 LSB.
+    #[cfg(feature = "std")]
+    #[test]
+    fn powf_two_matches_pow_two_within_lsb() {
+        let v = I128s12::from_int(7);
+        let two = I128s12::from_int(2);
+        assert!(within_lsb(v.powf(two), v.pow(2), TWO_LSB));
+    }
+
+    // sqrt — requires std feature
+
+    /// `sqrt(0) == 0`.
+    #[cfg(feature = "std")]
+    #[test]
+    fn sqrt_zero_is_zero() {
+        assert_eq!(I128s12::ZERO.sqrt(), I128s12::ZERO);
+    }
+
+    /// `sqrt(1) == 1` — bit-exact because `f64::sqrt(1.0) == 1.0`.
+    #[cfg(feature = "std")]
+    #[test]
+    fn sqrt_one_is_one_bit_exact() {
+        assert_eq!(I128s12::ONE.sqrt(), I128s12::ONE);
+    }
+
+    /// `sqrt(4) == 2` — bit-exact because `f64::sqrt(4.0) == 2.0`.
+    #[cfg(feature = "std")]
+    #[test]
+    fn sqrt_four_is_two() {
+        let four = I128s12::from_int(4);
+        let two = I128s12::from_int(2);
+        assert_eq!(four.sqrt(), two);
+    }
+
+    /// `sqrt(self * self) ~= self.abs()` within 2 LSB.
+    #[cfg(feature = "std")]
+    #[test]
+    fn sqrt_of_square_recovers_abs() {
+        let v = I128s12::from_bits(1_234_567_890_123);
+        let squared = v * v;
+        let recovered = squared.sqrt();
+        let abs_v = v.abs();
+        assert!(
+            within_lsb(recovered, abs_v, TWO_LSB),
+            "sqrt({})={}, expected~={}, diff={}",
+            squared.to_bits(),
+            recovered.to_bits(),
+            abs_v.to_bits(),
+            (recovered.to_bits() - abs_v.to_bits()).abs(),
+        );
+    }
+
+    /// `sqrt(self * self) ~= self.abs()` within 2 LSB for negative self.
+    #[cfg(feature = "std")]
+    #[test]
+    fn sqrt_of_square_negative_recovers_abs() {
+        let v = -I128s12::from_bits(4_567_891_234_567);
+        let squared = v * v;
+        let recovered = squared.sqrt();
+        let abs_v = v.abs();
+        assert!(within_lsb(recovered, abs_v, TWO_LSB));
+    }
+
+    /// A negative input produces NaN in f64, which maps to ZERO.
+    #[cfg(feature = "std")]
+    #[test]
+    fn sqrt_negative_saturates_to_zero() {
+        let v = -I128s12::from_int(4);
+        assert_eq!(v.sqrt(), I128s12::ZERO);
+    }
+
+    // cbrt — requires std feature
+
+    /// `cbrt(0) == 0`.
+    #[cfg(feature = "std")]
+    #[test]
+    fn cbrt_zero_is_zero() {
+        assert_eq!(I128s12::ZERO.cbrt(), I128s12::ZERO);
+    }
+
+    /// `cbrt(1) == 1`.
+    #[cfg(feature = "std")]
+    #[test]
+    fn cbrt_one_is_one() {
+        assert_eq!(I128s12::ONE.cbrt(), I128s12::ONE);
+    }
+
+    /// `cbrt(8) ~= 2` within 2 LSB.
+    #[cfg(feature = "std")]
+    #[test]
+    fn cbrt_eight_is_two() {
+        let eight = I128s12::from_int(8);
+        let two = I128s12::from_int(2);
+        assert!(within_lsb(eight.cbrt(), two, TWO_LSB));
+    }
+
+    /// `cbrt(-8) ~= -2` within 2 LSB.
+    #[cfg(feature = "std")]
+    #[test]
+    fn cbrt_minus_eight_is_minus_two() {
+        let neg_eight = I128s12::from_int(-8);
+        let neg_two = I128s12::from_int(-2);
+        assert!(
+            within_lsb(neg_eight.cbrt(), neg_two, TWO_LSB),
+            "cbrt(-8) = {}, expected ~ {}",
+            neg_eight.cbrt().to_bits(),
+            neg_two.to_bits(),
+        );
+    }
+
+    // checked_pow / wrapping_pow / saturating_pow / overflowing_pow
+
+    /// `checked_pow(MAX, 2)` is `None` because MAX^2 overflows.
+    #[test]
+    fn checked_pow_max_squared_is_none() {
+        assert!(I128s12::MAX.checked_pow(2).is_none());
+    }
+
+    /// `checked_pow(ONE, N)` is `Some(ONE)` for any N.
+    #[test]
+    fn checked_pow_one_is_some_one() {
+        assert_eq!(I128s12::ONE.checked_pow(1_000_000), Some(I128s12::ONE));
+        assert_eq!(I128s12::ONE.checked_pow(0), Some(I128s12::ONE));
+    }
+
+    /// `checked_pow` agrees with `pow` for non-overflowing inputs.
+    #[test]
+    fn checked_pow_matches_pow_when_no_overflow() {
+        let v = I128s12::from_int(3);
+        assert_eq!(v.checked_pow(0), Some(v.pow(0)));
+        assert_eq!(v.checked_pow(1), Some(v.pow(1)));
+        assert_eq!(v.checked_pow(5), Some(v.pow(5)));
+    }
+
+    /// `saturating_pow(MAX, 2)` clamps to `MAX`.
+    #[test]
+    fn saturating_pow_max_squared_is_max() {
+        assert_eq!(I128s12::MAX.saturating_pow(2), I128s12::MAX);
+    }
+
+    /// `saturating_pow(MIN, 3)` clamps to `MIN` (negative result, odd exp).
+    #[test]
+    fn saturating_pow_min_cubed_is_min() {
+        assert_eq!(I128s12::MIN.saturating_pow(3), I128s12::MIN);
+    }
+
+    /// `saturating_pow(MIN, 2)` clamps to `MAX` (positive result, even exp).
+    #[test]
+    fn saturating_pow_min_squared_is_max() {
+        assert_eq!(I128s12::MIN.saturating_pow(2), I128s12::MAX);
+    }
+
+    /// `saturating_pow(ONE, N)` is ONE for any N.
+    #[test]
+    fn saturating_pow_one_is_one() {
+        assert_eq!(I128s12::ONE.saturating_pow(1_000_000), I128s12::ONE);
+    }
+
+    /// `saturating_pow(v, 0)` is ONE for any base.
+    #[test]
+    fn saturating_pow_zero_exp_is_one() {
+        assert_eq!(I128s12::MAX.saturating_pow(0), I128s12::ONE);
+        assert_eq!(I128s12::MIN.saturating_pow(0), I128s12::ONE);
+    }
+
+    /// `overflowing_pow(MAX, 2)` returns `(wrapping_value, true)`.
+    #[test]
+    fn overflowing_pow_max_squared_flags_overflow() {
+        let (value, overflowed) = I128s12::MAX.overflowing_pow(2);
+        assert!(overflowed);
+        assert_eq!(value, I128s12::MAX.wrapping_pow(2));
+    }
+
+    /// `overflowing_pow(ONE, N)` never overflows.
+    #[test]
+    fn overflowing_pow_one_no_overflow() {
+        let (value, overflowed) = I128s12::ONE.overflowing_pow(1_000_000);
+        assert!(!overflowed);
+        assert_eq!(value, I128s12::ONE);
+    }
+
+    /// `overflowing_pow(v, 0)` is `(ONE, false)`.
+    #[test]
+    fn overflowing_pow_zero_exp_no_overflow() {
+        let (value, overflowed) = I128s12::MAX.overflowing_pow(0);
+        assert!(!overflowed);
+        assert_eq!(value, I128s12::ONE);
+    }
+
+    /// `wrapping_pow(MAX, 2)` matches the value half of `overflowing_pow`.
+    #[test]
+    fn wrapping_pow_max_squared_matches_overflowing() {
+        let wrap = I128s12::MAX.wrapping_pow(2);
+        let (over, _flag) = I128s12::MAX.overflowing_pow(2);
+        assert_eq!(wrap, over);
+    }
+
+    /// `wrapping_pow(ONE, N)` is ONE.
+    #[test]
+    fn wrapping_pow_one_is_one() {
+        assert_eq!(I128s12::ONE.wrapping_pow(1_000_000), I128s12::ONE);
+    }
+
+    /// `wrapping_pow` agrees with `pow` for non-overflowing inputs.
+    #[test]
+    fn wrapping_pow_matches_pow_when_no_overflow() {
+        let v = I128s12::from_int(3);
+        for e in 0..6 {
+            assert_eq!(v.wrapping_pow(e), v.pow(e));
+        }
+    }
+
+    /// `pow(2) == self * self` for several representative raw values.
+    #[test]
+    fn pow_two_property_safe_values() {
+        for raw in [
+            1_234_567_890_123_i128,
+            4_567_891_234_567_i128,
+            7_890_123_456_789_i128,
+        ] {
+            let v = I128s12::from_bits(raw);
+            assert_eq!(v.pow(2), v * v, "raw bits {raw}");
+        }
+    }
+
+    // mul_add (always available)
+
+    /// `mul_add(0, 0, 0) == 0`.
+    #[test]
+    fn mul_add_zero_zero_zero_is_zero() {
+        let z = I128s12::ZERO;
+        assert_eq!(z.mul_add(z, z), I128s12::ZERO);
+    }
+
+    /// `mul_add(2, 3, 4) == 10`.
+    #[test]
+    fn mul_add_two_three_four_is_ten() {
+        let two = I128s12::from_int(2);
+        let three = I128s12::from_int(3);
+        let four = I128s12::from_int(4);
+        assert_eq!(two.mul_add(three, four), I128s12::from_int(10));
+    }
+
+    /// `mul_add(self, ONE, ZERO) == self`.
+    #[test]
+    fn mul_add_identity_collapses() {
+        let v = I128s12::from_int(7);
+        assert_eq!(v.mul_add(I128s12::ONE, I128s12::ZERO), v);
+    }
+
+    /// `mul_add(self, ZERO, b) == b`.
+    #[test]
+    fn mul_add_zero_factor_yields_addend() {
+        let v = I128s12::from_int(7);
+        let b = I128s12::from_int(13);
+        assert_eq!(v.mul_add(I128s12::ZERO, b), b);
+    }
+
+    /// `mul_add(a, b, c) == a * b + c` for representative raw values.
+    #[test]
+    fn mul_add_matches_mul_then_add_safe_values() {
+        for (a_raw, b_raw, c_raw) in [
+            (1_234_567_890_123_i128, 2_345_678_901_234_i128, 3_456_789_012_345_i128),
+            (4_567_891_234_567_i128, 5_678_912_345_678_i128, 6_789_123_456_789_i128),
+            (7_890_123_456_789_i128, 8_901_234_567_891_i128, 9_012_345_678_912_i128),
+        ] {
+            let a = I128s12::from_bits(a_raw);
+            let b = I128s12::from_bits(b_raw);
+            let c = I128s12::from_bits(c_raw);
+            assert_eq!(
+                a.mul_add(b, c),
+                a * b + c,
+                "raw bits ({a_raw}, {b_raw}, {c_raw})",
+            );
+        }
+    }
+
+    /// `(-a).mul_add(b, c)` propagates the sign through the multiply step.
+    #[test]
+    fn mul_add_sign_propagates_through_factor() {
+        let a = I128s12::from_int(3);
+        let b = I128s12::from_int(5);
+        let c = I128s12::from_int(7);
+        // (-3) * 5 + 7 = -15 + 7 = -8
+        assert_eq!((-a).mul_add(b, c), I128s12::from_int(-8));
+    }
+
+    // hypot — requires std feature
+
+    // Tolerance for hypot: composes divide + square + add + sqrt + multiply,
+    // each with up to 1 LSB of f64-bridge slack; sqrt quantisation dominates.
+    #[cfg(feature = "std")]
+    const HYPOT_TOLERANCE_LSB: i128 = 32;
+
+    /// `hypot(3, 4) ~= 5` — the Pythagorean triple.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_three_four_is_five() {
+        let three = I128s12::from_int(3);
+        let four = I128s12::from_int(4);
+        let five = I128s12::from_int(5);
+        let result = three.hypot(four);
+        assert!(
+            within_lsb(result, five, HYPOT_TOLERANCE_LSB),
+            "hypot(3, 4)={}, expected~={}, diff={}",
+            result.to_bits(),
+            five.to_bits(),
+            (result.to_bits() - five.to_bits()).abs(),
+        );
+    }
+
+    /// `hypot(0, 0) == 0` — bit-exact via the early-return path.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_zero_zero_is_zero_bit_exact() {
+        assert_eq!(I128s12::ZERO.hypot(I128s12::ZERO), I128s12::ZERO);
+    }
+
+    /// `hypot(0, x) ~= x.abs()` for nonzero x.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_zero_x_is_abs_x() {
+        let x = I128s12::from_int(7);
+        let result = I128s12::ZERO.hypot(x);
+        assert!(
+            within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
+            "hypot(0, 7)={}, expected~={}",
+            result.to_bits(),
+            x.abs().to_bits(),
+        );
+    }
+
+    /// `hypot(x, 0) ~= x.abs()` for nonzero x.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_x_zero_is_abs_x() {
+        let x = I128s12::from_int(-9);
+        let result = x.hypot(I128s12::ZERO);
+        assert!(
+            within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
+            "hypot(-9, 0)={}, expected~={}",
+            result.to_bits(),
+            x.abs().to_bits(),
+        );
+    }
+
+    /// `hypot(-a, b) == hypot(a, b)` — sign invariance from the abs step.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_sign_invariant() {
+        let three = I128s12::from_int(3);
+        let four = I128s12::from_int(4);
+        let pos = three.hypot(four);
+        let neg_a = (-three).hypot(four);
+        let neg_b = three.hypot(-four);
+        let neg_both = (-three).hypot(-four);
+        assert_eq!(pos, neg_a);
+        assert_eq!(pos, neg_b);
+        assert_eq!(pos, neg_both);
+    }
+
+    /// `hypot` does not panic at large magnitudes that the naive form
+    /// would overflow.
+    ///
+    /// At SCALE=12 with `i128::MAX / 2` raw bits, the true hypotenuse
+    /// is well below `I128::MAX / sqrt(2)`, so no overflow occurs and
+    /// the result is a nonzero positive value.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_large_magnitudes_does_not_panic() {
+        let half_max = I128s12::from_bits(i128::MAX / 2);
+        let result = half_max.hypot(half_max);
+        assert!(result > I128s12::ZERO);
+        assert!(result >= half_max);
+    }
+
+    /// `hypot(a, b)` matches the naive `sqrt(a^2 + b^2)` within tolerance
+    /// for small magnitudes where the naive form does not overflow.
+    #[cfg(feature = "std")]
+    #[test]
+    fn hypot_matches_naive_sqrt_of_sum_of_squares() {
+        let a = I128s12::from_int(12);
+        let b = I128s12::from_int(13);
+        let h = a.hypot(b);
+        let naive = (a * a + b * b).sqrt();
+        assert!(
+            within_lsb(h, naive, HYPOT_TOLERANCE_LSB),
+            "hypot(12, 13)={}, naive sqrt(a^2+b^2)={}, diff={}",
+            h.to_bits(),
+            naive.to_bits(),
+            (h.to_bits() - naive.to_bits()).abs(),
+        );
+    }
+}

@@ -1,0 +1,1028 @@
+//! [`core::fmt`] formatters and [`core::str::FromStr`] for [`I128`].
+//!
+//! # Display format
+//!
+//! [`fmt::Display`] formats as a base-10 decimal literal: integer digits,
+//! a `.`, then exactly `SCALE` fractional digits (trailing zeros are always
+//! emitted). At `SCALE = 12`, `1.5` displays as `1.500000000000`. The output
+//! is bit-faithful: parsing it back through [`FromStr`] returns the identical
+//! storage value.
+//!
+//! # Debug format
+//!
+//! [`fmt::Debug`] wraps the [`fmt::Display`] output with a scale annotation:
+//! `I128<SCALE>(...)`. This replaces the default derived format, which would
+//! show only the raw `i128` storage.
+//!
+//! # Scientific notation
+//!
+//! [`fmt::LowerExp`] and [`fmt::UpperExp`] emit scientific notation (`1.5e0`
+//! / `1.5E0`). Trailing zeros in the mantissa are stripped.
+//!
+//! # Storage-level radix formats
+//!
+//! [`fmt::LowerHex`], [`fmt::UpperHex`], [`fmt::Octal`], and [`fmt::Binary`]
+//! format the **raw `i128` storage** (= `value * 10^SCALE`), not the decimal
+//! value. For example, `I128s12::ONE` (storage `10^12`) prints in lower-hex
+//! as `e8d4a51000`.
+//!
+//! # FromStr
+//!
+//! Parses canonical decimal literals. Accepted forms:
+//! - Integer-only: `42` parses as `42 * 10^SCALE`.
+//! - Decimal with up to `SCALE` fractional digits: `1.5`, `1.500`.
+//! - Optional sign prefix: `-` or `+`.
+//! - Bare zero: `0` or `0.0`.
+//!
+//! Rejected forms (with the corresponding [`ParseDecimalError`] variant):
+//! - Empty string: [`ParseDecimalError::Empty`].
+//! - Sign with no digits: [`ParseDecimalError::SignOnly`].
+//! - Redundant leading zeros (`01`, `00`): [`ParseDecimalError::LeadingZero`].
+//! - More than `SCALE` fractional digits: [`ParseDecimalError::OverlongFractional`].
+//! - Scientific notation (`1e3`): [`ParseDecimalError::ScientificNotation`].
+//! - Missing digits on either side of the point (`.5`, `5.`):
+//!   [`ParseDecimalError::MissingDigits`].
+//! - Non-digit, non-sign, non-dot characters: [`ParseDecimalError::InvalidChar`].
+//! - Magnitudes outside `[I128::MIN, I128::MAX]`: [`ParseDecimalError::OutOfRange`].
+
+use core::fmt;
+use core::str::FromStr;
+
+use crate::core_type::{ParseDecimalError, I128};
+
+#[cfg(feature = "alloc")]
+extern crate alloc;
+
+// ──────────────────────────────────────────────────────────────────────
+// Display -- canonical decimal string
+// ──────────────────────────────────────────────────────────────────────
+
+impl<const SCALE: u32> fmt::Display for I128<SCALE> {
+    /// Formats the value as a canonical decimal string.
+    ///
+    /// Always emits exactly `SCALE` fractional digits. The integer and
+    /// fractional parts are derived from integer division of the unsigned
+    /// magnitude, so `i128::MIN` (whose absolute value overflows `i128`)
+    /// is handled correctly via `unsigned_abs`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// let v = I128s12::from_bits(1_500_000_000_000);
+    /// assert_eq!(v.to_string(), "1.500000000000");
+    ///
+    /// let neg = I128s12::from_bits(-1_500_000_000_000);
+    /// assert_eq!(neg.to_string(), "-1.500000000000");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let raw = self.0;
+        let negative = raw < 0;
+        // `unsigned_abs` is the only correct way to get |i128::MIN| as
+        // a u128; `i128::abs` would panic on MIN.
+        let mag: u128 = raw.unsigned_abs();
+        let multiplier: u128 = 10u128.pow(SCALE);
+        let int_part = mag / multiplier;
+        let frac_part = mag % multiplier;
+
+        if negative {
+            f.write_str("-")?;
+        }
+        // SCALE = 0: no fractional part and no decimal point.
+        if SCALE == 0 {
+            return write!(f, "{int_part}");
+        }
+        let scale_usize = SCALE as usize;
+        write!(f, "{int_part}.{frac_part:0>width$}", width = scale_usize)
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Debug -- Display + SCALE annotation
+// ──────────────────────────────────────────────────────────────────────
+
+impl<const SCALE: u32> fmt::Debug for I128<SCALE> {
+    /// Formats as `I128<SCALE>(<canonical decimal>)`.
+    ///
+    /// Delegates to [`fmt::Display`] so the output shows the human-readable
+    /// decimal value rather than the raw `i128` storage.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// let v = I128s12::from_bits(1_500_000_000_000);
+    /// assert_eq!(format!("{v:?}"), "I128<12>(1.500000000000)");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "I128<{SCALE}>({self})")
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// LowerExp / UpperExp -- scientific notation
+// ──────────────────────────────────────────────────────────────────────
+
+impl<const SCALE: u32> fmt::LowerExp for I128<SCALE> {
+    /// Formats the value in scientific notation with a lowercase `e`.
+    ///
+    /// Trailing zeros in the mantissa are stripped, so `1.500000000000`
+    /// formats as `1.5e0`. Zero formats as `0e0`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// let v = I128s12::from_bits(1_500_000_000_000);
+    /// assert_eq!(format!("{v:e}"), "1.5e0");
+    ///
+    /// let sub = I128s12::from_bits(1_500_000_000);
+    /// assert_eq!(format!("{sub:e}"), "1.5e-3");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_exp(self.0, SCALE, false, f)
+    }
+}
+
+impl<const SCALE: u32> fmt::UpperExp for I128<SCALE> {
+    /// Formats the value in scientific notation with an uppercase `E`.
+    ///
+    /// Identical to [`fmt::LowerExp`] except the exponent separator is `E`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// let v = I128s12::from_bits(1_500_000_000_000);
+    /// assert_eq!(format!("{v:E}"), "1.5E0");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        format_exp(self.0, SCALE, true, f)
+    }
+}
+
+/// Shared implementation for `LowerExp` and `UpperExp`.
+///
+/// Builds the decimal digit string in a fixed 40-byte stack buffer
+/// (a `u128` has at most 39 digits) so no heap allocation is needed.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+    let exp_char = if upper { 'E' } else { 'e' };
+    if raw == 0 {
+        return write!(f, "0{exp_char}0");
+    }
+    let negative = raw < 0;
+    let mag: u128 = raw.unsigned_abs();
+
+    // Collect decimal digits of `mag` LSB-first into the buffer,
+    // then reverse to get MSB-first order.
+    let mut buf = [0u8; 40];
+    let mut len = 0usize;
+    let mut n = mag;
+    while n > 0 {
+        let digit = (n % 10) as u8;
+        buf[len] = b'0' + digit;
+        len += 1;
+        n /= 10;
+    }
+    buf[..len].reverse();
+    let digits = &buf[..len];
+
+    // The decimal exponent for the leading digit is `(len - 1) - scale`.
+    let exp: i32 = (len as i32 - 1) - scale as i32;
+
+    // Strip trailing zeros from the mantissa digit string.
+    let mut frac_end = len;
+    while frac_end > 1 && digits[frac_end - 1] == b'0' {
+        frac_end -= 1;
+    }
+    let mantissa_int = digits[0] as char;
+    let mantissa_frac = &digits[1..frac_end];
+
+    if negative {
+        f.write_str("-")?;
+    }
+    if mantissa_frac.is_empty() {
+        // Single-digit mantissa: emit without a decimal point.
+        write!(f, "{mantissa_int}{exp_char}{exp}")
+    } else {
+        f.write_fmt(format_args!("{mantissa_int}."))?;
+        // mantissa_frac contains only ASCII digit bytes; from_utf8 cannot fail.
+        let frac_str = core::str::from_utf8(mantissa_frac).map_err(|_| fmt::Error)?;
+        write!(f, "{frac_str}{exp_char}{exp}")
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// Storage hex / octal / binary -- delegate to i128
+// ──────────────────────────────────────────────────────────────────────
+//
+// These format the raw i128 storage (= value * 10^SCALE), not the
+// decimal value. Useful for inspecting the bit pattern of the storage.
+
+impl<const SCALE: u32> fmt::LowerHex for I128<SCALE> {
+    /// Formats the **raw `i128` storage** (= `value * 10^SCALE`) as lowercase hex.
+    ///
+    /// This is a bit-level view of the storage, not a hex encoding of the
+    /// decimal value. All standard format flags (`#`, `0`, width, precision)
+    /// are forwarded to the underlying `i128` formatter.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// // Storage for 1.0 at SCALE=12 is 10^12 = 0xe8d4a51000.
+    /// assert_eq!(format!("{:x}", I128s12::ONE), "e8d4a51000");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::LowerHex::fmt(&self.0, f)
+    }
+}
+
+impl<const SCALE: u32> fmt::UpperHex for I128<SCALE> {
+    /// Formats the **raw `i128` storage** as uppercase hex.
+    ///
+    /// See [`fmt::LowerHex`] for the storage-versus-value distinction.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// assert_eq!(format!("{:X}", I128s12::ONE), "E8D4A51000");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::UpperHex::fmt(&self.0, f)
+    }
+}
+
+impl<const SCALE: u32> fmt::Octal for I128<SCALE> {
+    /// Formats the **raw `i128` storage** in octal.
+    ///
+    /// See [`fmt::LowerHex`] for the storage-versus-value distinction.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// assert_eq!(format!("{:o}", I128s12::ZERO), "0");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Octal::fmt(&self.0, f)
+    }
+}
+
+impl<const SCALE: u32> fmt::Binary for I128<SCALE> {
+    /// Formats the **raw `i128` storage** in binary.
+    ///
+    /// See [`fmt::LowerHex`] for the storage-versus-value distinction.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// // 10^12 in binary is a 40-bit value.
+    /// let s = format!("{:b}", I128s12::ONE);
+    /// assert_eq!(s, "1110100011010100101001010001000000000000");
+    /// ```
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        fmt::Binary::fmt(&self.0, f)
+    }
+}
+
+// ──────────────────────────────────────────────────────────────────────
+// ParseDecimalError -- Display + Error
+// ──────────────────────────────────────────────────────────────────────
+
+impl fmt::Display for ParseDecimalError {
+    /// Formats the error as a short human-readable message.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        let msg = match self {
+            Self::Empty => "empty input",
+            Self::SignOnly => "sign with no digits",
+            Self::LeadingZero => "redundant leading zero in integer part",
+            Self::OverlongFractional => "fractional part exceeds SCALE digits",
+            Self::ScientificNotation => "scientific notation not accepted",
+            Self::InvalidChar => "invalid character",
+            Self::OutOfRange => "value out of representable range",
+            Self::MissingDigits => "decimal point with no adjacent digits",
+        };
+        f.write_str(msg)
+    }
+}
+
+#[cfg(feature = "std")]
+impl std::error::Error for ParseDecimalError {}
+
+// ──────────────────────────────────────────────────────────────────────
+// FromStr -- canonical decimal parser
+// ──────────────────────────────────────────────────────────────────────
+
+impl<const SCALE: u32> FromStr for I128<SCALE> {
+    type Err = ParseDecimalError;
+
+    /// Parses a canonical decimal literal into `I128<SCALE>`.
+    ///
+    /// Delegates to the internal parser. See the module-level docs for the
+    /// full list of accepted and rejected forms, and [`ParseDecimalError`]
+    /// for the failure variants.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    ///
+    /// # Examples
+    ///
+    /// ```
+    /// use decimal_scaled::I128s12;
+    ///
+    /// let v: I128s12 = "1.5".parse().unwrap();
+    /// assert_eq!(v.to_bits(), 1_500_000_000_000);
+    ///
+    /// let neg: I128s12 = "-1.5".parse().unwrap();
+    /// assert_eq!(neg.to_bits(), -1_500_000_000_000);
+    /// ```
+    fn from_str(s: &str) -> Result<Self, Self::Err> {
+        parse_decimal::<SCALE>(s)
+    }
+}
+
+/// Core decimal string parser.
+///
+/// Extracted from the trait impl to keep `from_str` small and to centralise
+/// the sign / dot / digit state machine in one place.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+fn parse_decimal<const SCALE: u32>(s: &str) -> Result<I128<SCALE>, ParseDecimalError> {
+    if s.is_empty() {
+        return Err(ParseDecimalError::Empty);
+    }
+
+    let bytes = s.as_bytes();
+    let mut idx = 0usize;
+
+    // Consume an optional leading sign byte.
+    let negative = match bytes[0] {
+        b'-' => {
+            idx += 1;
+            true
+        }
+        b'+' => {
+            idx += 1;
+            false
+        }
+        _ => false,
+    };
+    if idx == bytes.len() {
+        // Sign byte with nothing following it.
+        return Err(ParseDecimalError::SignOnly);
+    }
+
+    // Single forward pass: locate the decimal point; reject scientific
+    // notation and invalid characters immediately.
+    let mut dot_pos: Option<usize> = None;
+    {
+        let mut i = idx;
+        while i < bytes.len() {
+            let c = bytes[i];
+            match c {
+                b'0'..=b'9' => {}
+                b'.' => {
+                    if dot_pos.is_some() {
+                        // A second dot is an invalid character, not a
+                        // missing-digit case.
+                        return Err(ParseDecimalError::InvalidChar);
+                    }
+                    dot_pos = Some(i);
+                }
+                b'e' | b'E' => {
+                    return Err(ParseDecimalError::ScientificNotation);
+                }
+                _ => return Err(ParseDecimalError::InvalidChar),
+            }
+            i += 1;
+        }
+    }
+
+    let (int_str, frac_str) = match dot_pos {
+        Some(p) => (&bytes[idx..p], &bytes[p + 1..]),
+        None => (&bytes[idx..], &[][..]),
+    };
+
+    if dot_pos.is_some() {
+        // Both sides of the dot must have at least one digit.
+        if int_str.is_empty() || frac_str.is_empty() {
+            return Err(ParseDecimalError::MissingDigits);
+        }
+    } else if int_str.is_empty() {
+        return Err(ParseDecimalError::SignOnly);
+    }
+
+    // Allow `0` and `0.x` but reject `00`, `01`, `01.5`.
+    if int_str.len() > 1 && int_str[0] == b'0' {
+        return Err(ParseDecimalError::LeadingZero);
+    }
+
+    // More than SCALE fractional digits would lose precision on round-trip.
+    if frac_str.len() > SCALE as usize {
+        return Err(ParseDecimalError::OverlongFractional);
+    }
+
+    // Accumulate the storage value as u128 (avoids the i128::MIN asymmetry)
+    // and apply the sign at the very end.
+    let multiplier: u128 = 10u128.pow(SCALE);
+
+    // Parse the integer part and scale it by 10^SCALE.
+    let mut int_value: u128 = 0;
+    for &b in int_str {
+        let digit = (b - b'0') as u128;
+        int_value = match int_value.checked_mul(10).and_then(|v| v.checked_add(digit)) {
+            Some(v) => v,
+            None => return Err(ParseDecimalError::OutOfRange),
+        };
+    }
+    let int_scaled = match int_value.checked_mul(multiplier) {
+        Some(v) => v,
+        None => return Err(ParseDecimalError::OutOfRange),
+    };
+
+    // Parse the fractional part, then pad to exactly SCALE digits by
+    // multiplying by 10^(SCALE - frac_len).
+    let mut frac_value: u128 = 0;
+    let frac_len = frac_str.len();
+    for &b in frac_str {
+        let digit = (b - b'0') as u128;
+        frac_value = match frac_value
+            .checked_mul(10)
+            .and_then(|v| v.checked_add(digit))
+        {
+            Some(v) => v,
+            None => return Err(ParseDecimalError::OutOfRange),
+        };
+    }
+    let pad = (SCALE as usize) - frac_len;
+    if pad > 0 {
+        let pad_factor: u128 = 10u128.pow(pad as u32);
+        frac_value = match frac_value.checked_mul(pad_factor) {
+            Some(v) => v,
+            None => return Err(ParseDecimalError::OutOfRange),
+        };
+    }
+
+    let combined = match int_scaled.checked_add(frac_value) {
+        Some(v) => v,
+        None => return Err(ParseDecimalError::OutOfRange),
+    };
+
+    // Convert to i128. The negative branch handles i128::MIN whose absolute
+    // value (i128::MAX + 1) is not representable as a positive i128.
+    let raw: i128 = if negative {
+        let neg_min_abs: u128 = (i128::MAX as u128) + 1;
+        if combined > neg_min_abs {
+            return Err(ParseDecimalError::OutOfRange);
+        }
+        if combined == neg_min_abs {
+            i128::MIN
+        } else {
+            -(combined as i128)
+        }
+    } else {
+        if combined > i128::MAX as u128 {
+            return Err(ParseDecimalError::OutOfRange);
+        }
+        combined as i128
+    };
+
+    Ok(I128::<SCALE>::from_bits(raw))
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::core_type::{I128s12, I128};
+    #[cfg(feature = "alloc")]
+    use alloc::format;
+    #[cfg(feature = "alloc")]
+    use alloc::string::ToString;
+
+    // ── Display ──
+
+    /// ZERO renders as `0.000000000000` at SCALE = 12.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_zero_renders() {
+        assert_eq!(I128s12::ZERO.to_string(), "0.000000000000");
+    }
+
+    /// ONE renders as `1.000000000000` at SCALE = 12.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_one_renders() {
+        assert_eq!(I128s12::ONE.to_string(), "1.000000000000");
+    }
+
+    /// `1.5` renders with full SCALE fractional digits.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_one_point_five_renders() {
+        let v = I128s12::from_bits(1_500_000_000_000);
+        assert_eq!(v.to_string(), "1.500000000000");
+    }
+
+    /// Negative values get a leading `-`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_negative_renders() {
+        let v = I128s12::from_bits(-1_500_000_000_000);
+        assert_eq!(v.to_string(), "-1.500000000000");
+    }
+
+    /// `0.001` (sub-unit positive) keeps leading-zero fractional.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_subunit_keeps_leading_zeros() {
+        // 0.001 = 1_000_000_000 at SCALE 12
+        let v = I128s12::from_bits(1_000_000_000);
+        assert_eq!(v.to_string(), "0.001000000000");
+    }
+
+    /// MAX renders without panicking. Spot-check the canonical form
+    /// at SCALE 12: `170141183460469231731687303.715884105727`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_max_does_not_panic() {
+        let s = I128s12::MAX.to_string();
+        assert_eq!(s, "170141183460469231731687303.715884105727");
+    }
+
+    /// MIN renders without panicking. The unsigned-abs path handles
+    /// the i128::MIN special case (|MIN| = MAX + 1, so the trailing
+    /// digit is 8 not 7).
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_min_does_not_panic() {
+        let s = I128s12::MIN.to_string();
+        assert_eq!(s, "-170141183460469231731687303.715884105728");
+    }
+
+    /// SCALE = 0 has no decimal point.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn display_scale_zero_no_dot() {
+        type D0 = I128<0>;
+        assert_eq!(D0::ONE.to_string(), "1");
+        assert_eq!(D0::ZERO.to_string(), "0");
+        assert_eq!(D0::from_bits(-42).to_string(), "-42");
+    }
+
+    // ── Debug ──
+
+    /// Debug delegates to Display + SCALE annotation.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn debug_includes_scale_and_value() {
+        let v = I128s12::from_bits(1_500_000_000_000);
+        let debug_str = format!("{v:?}");
+        assert_eq!(debug_str, "I128<12>(1.500000000000)");
+    }
+
+    /// Debug on ZERO at a non-12 scale.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn debug_other_scale() {
+        type D6 = I128<6>;
+        let v = D6::ZERO;
+        assert_eq!(format!("{v:?}"), "I128<6>(0.000000)");
+    }
+
+    // ── LowerExp / UpperExp ──
+
+    /// `1.0` -> `1e0` (single digit mantissa).
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_exp_one() {
+        let v = I128s12::ONE;
+        assert_eq!(format!("{v:e}"), "1e0");
+    }
+
+    /// `1.5` -> `1.5e0`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_exp_one_point_five() {
+        let v = I128s12::from_bits(1_500_000_000_000);
+        assert_eq!(format!("{v:e}"), "1.5e0");
+    }
+
+    /// `15.0` -> `1.5e1`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_exp_fifteen() {
+        let v = I128s12::from_bits(15_000_000_000_000);
+        assert_eq!(format!("{v:e}"), "1.5e1");
+    }
+
+    /// `0.0` -> `0e0`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_exp_zero() {
+        assert_eq!(format!("{:e}", I128s12::ZERO), "0e0");
+    }
+
+    /// Sub-unit value -> negative exponent. `0.0015 = 1.5e-3`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_exp_subunit_negative_exponent() {
+        // 0.0015 at SCALE 12 = 1_500_000_000
+        let v = I128s12::from_bits(1_500_000_000);
+        assert_eq!(format!("{v:e}"), "1.5e-3");
+    }
+
+    /// Negative value preserves sign.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_exp_negative() {
+        let v = I128s12::from_bits(-1_500_000_000_000);
+        assert_eq!(format!("{v:e}"), "-1.5e0");
+    }
+
+    /// UpperExp uses `E`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn upper_exp_uses_capital_e() {
+        let v = I128s12::from_bits(1_500_000_000_000);
+        assert_eq!(format!("{v:E}"), "1.5E0");
+    }
+
+    // ── LowerHex / UpperHex / Octal / Binary ──
+
+    /// LowerHex of I128s12::ONE is the hex of 10^12 (= 0xe8d4a51000),
+    /// NOT the hex of `1.0` formatted as a decimal in hex.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn lower_hex_is_storage() {
+        assert_eq!(format!("{:x}", I128s12::ONE), "e8d4a51000");
+    }
+
+    /// UpperHex of ONE: same digits in upper case.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn upper_hex_is_storage() {
+        assert_eq!(format!("{:X}", I128s12::ONE), "E8D4A51000");
+    }
+
+    /// Octal of ZERO is `0`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn octal_zero() {
+        assert_eq!(format!("{:o}", I128s12::ZERO), "0");
+    }
+
+    /// Binary of ONE has the `10^12` bit pattern (40 bits).
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn binary_one() {
+        // 10^12 in binary: 1110_1000_1101_0100_1010_0101_0001_0000_0000_0000
+        let s = format!("{:b}", I128s12::ONE);
+        assert_eq!(s, "1110100011010100101001010001000000000000");
+    }
+
+    // ── ParseDecimalError Display ──
+
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn parse_error_display_messages() {
+        assert_eq!(ParseDecimalError::Empty.to_string(), "empty input");
+        assert_eq!(
+            ParseDecimalError::SignOnly.to_string(),
+            "sign with no digits"
+        );
+        assert_eq!(
+            ParseDecimalError::LeadingZero.to_string(),
+            "redundant leading zero in integer part"
+        );
+        assert_eq!(
+            ParseDecimalError::OverlongFractional.to_string(),
+            "fractional part exceeds SCALE digits"
+        );
+        assert_eq!(
+            ParseDecimalError::ScientificNotation.to_string(),
+            "scientific notation not accepted"
+        );
+        assert_eq!(
+            ParseDecimalError::InvalidChar.to_string(),
+            "invalid character"
+        );
+        assert_eq!(
+            ParseDecimalError::OutOfRange.to_string(),
+            "value out of representable range"
+        );
+        assert_eq!(
+            ParseDecimalError::MissingDigits.to_string(),
+            "decimal point with no adjacent digits"
+        );
+    }
+
+    // ── FromStr happy path ──
+
+    #[test]
+    fn from_str_zero() {
+        let v: I128s12 = "0".parse().unwrap();
+        assert_eq!(v, I128s12::ZERO);
+        let v: I128s12 = "0.0".parse().unwrap();
+        assert_eq!(v, I128s12::ZERO);
+    }
+
+    #[test]
+    fn from_str_one() {
+        let v: I128s12 = "1".parse().unwrap();
+        assert_eq!(v, I128s12::ONE);
+        let v: I128s12 = "1.0".parse().unwrap();
+        assert_eq!(v, I128s12::ONE);
+    }
+
+    /// Headline base-10 claim: `1.1` parses bit-exact.
+    #[test]
+    fn from_str_one_point_one_parses_exactly() {
+        let v: I128s12 = "1.1".parse().unwrap();
+        assert_eq!(v.to_bits(), 1_100_000_000_000);
+    }
+
+    /// Sign prefix.
+    #[test]
+    fn from_str_signs() {
+        let neg: I128s12 = "-1.5".parse().unwrap();
+        assert_eq!(neg.to_bits(), -1_500_000_000_000);
+
+        let pos: I128s12 = "+1.5".parse().unwrap();
+        assert_eq!(pos.to_bits(), 1_500_000_000_000);
+    }
+
+    /// Fractional with fewer digits than SCALE pads correctly.
+    #[test]
+    fn from_str_short_fractional_pads() {
+        // "0.5" at SCALE 12 -> 5_000_000_000 (= 0.5 * 10^12).
+        let v: I128s12 = "0.5".parse().unwrap();
+        assert_eq!(v.to_bits(), 500_000_000_000);
+    }
+
+    /// Fractional with exactly SCALE digits is the natural form.
+    #[test]
+    fn from_str_full_scale_fractional() {
+        let v: I128s12 = "1.500000000000".parse().unwrap();
+        assert_eq!(v.to_bits(), 1_500_000_000_000);
+    }
+
+    // ── FromStr error paths ──
+
+    #[test]
+    fn from_str_empty_is_err() {
+        let r: Result<I128s12, _> = "".parse();
+        assert_eq!(r, Err(ParseDecimalError::Empty));
+    }
+
+    #[test]
+    fn from_str_sign_only_is_err() {
+        assert_eq!("-".parse::<I128s12>(), Err(ParseDecimalError::SignOnly));
+        assert_eq!("+".parse::<I128s12>(), Err(ParseDecimalError::SignOnly));
+    }
+
+    #[test]
+    fn from_str_leading_zero_is_err() {
+        assert_eq!("01".parse::<I128s12>(), Err(ParseDecimalError::LeadingZero));
+        assert_eq!(
+            "01.5".parse::<I128s12>(),
+            Err(ParseDecimalError::LeadingZero)
+        );
+        assert_eq!("00".parse::<I128s12>(), Err(ParseDecimalError::LeadingZero));
+    }
+
+    #[test]
+    fn from_str_overlong_fractional_is_err() {
+        // SCALE 12, fractional length 13 -> reject.
+        let r: Result<I128s12, _> = "0.1234567890123".parse();
+        assert_eq!(r, Err(ParseDecimalError::OverlongFractional));
+    }
+
+    #[test]
+    fn from_str_scientific_notation_is_err() {
+        assert_eq!(
+            "1e3".parse::<I128s12>(),
+            Err(ParseDecimalError::ScientificNotation)
+        );
+        assert_eq!(
+            "1.5E2".parse::<I128s12>(),
+            Err(ParseDecimalError::ScientificNotation)
+        );
+    }
+
+    #[test]
+    fn from_str_invalid_char_is_err() {
+        assert_eq!(
+            "garbage".parse::<I128s12>(),
+            Err(ParseDecimalError::InvalidChar)
+        );
+        assert_eq!(
+            "1.2x".parse::<I128s12>(),
+            Err(ParseDecimalError::InvalidChar)
+        );
+        assert_eq!(
+            "1..2".parse::<I128s12>(),
+            Err(ParseDecimalError::InvalidChar)
+        );
+    }
+
+    #[test]
+    fn from_str_missing_digits_is_err() {
+        assert_eq!(
+            ".5".parse::<I128s12>(),
+            Err(ParseDecimalError::MissingDigits)
+        );
+        assert_eq!(
+            "5.".parse::<I128s12>(),
+            Err(ParseDecimalError::MissingDigits)
+        );
+        assert_eq!(
+            "-.5".parse::<I128s12>(),
+            Err(ParseDecimalError::MissingDigits)
+        );
+    }
+
+    #[test]
+    fn from_str_out_of_range_is_err() {
+        // 10^39 > i128::MAX (~1.7e38). At SCALE 12, the maximum
+        // integer part is i128::MAX / 10^12 ~= 1.7e26, so an integer
+        // part of 1e27 already overflows.
+        let r: Result<I128s12, _> = "1000000000000000000000000000".parse();
+        assert_eq!(r, Err(ParseDecimalError::OutOfRange));
+    }
+
+    /// Parse exactly at i128::MIN -- the asymmetric two's-complement
+    /// boundary. At SCALE 12:
+    /// `i128::MIN = -170141183460469231731687303715884105728`
+    /// which splits into integer `170141183460469231731687303` and
+    /// fractional `715884105728` (the negative form has the same
+    /// digits since |MIN| = MAX + 1).
+    #[test]
+    fn from_str_i128_min_boundary() {
+        let s = "-170141183460469231731687303.715884105728";
+        let v: I128s12 = s.parse().unwrap();
+        assert_eq!(v.to_bits(), i128::MIN);
+    }
+
+    /// Parse exactly at i128::MAX boundary. At SCALE 12 the canonical
+    /// form is `170141183460469231731687303.715884105727`.
+    #[test]
+    fn from_str_i128_max_boundary() {
+        let s = "170141183460469231731687303.715884105727";
+        let v: I128s12 = s.parse().unwrap();
+        assert_eq!(v.to_bits(), i128::MAX);
+    }
+
+    /// One-past-MAX positive overflows.
+    #[test]
+    fn from_str_just_above_max_overflows() {
+        // ...728 is one fractional LSB above i128::MAX.
+        let s = "170141183460469231731687303.715884105728";
+        let r: Result<I128s12, _> = s.parse();
+        assert_eq!(r, Err(ParseDecimalError::OutOfRange));
+    }
+
+    // ── Property tests: parse(value.to_string()) round-trip ──
+
+    /// Round-trip property for representative storage values.
+    /// Uses safe-decimal-test-values (no clippy approx_constant traps).
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn round_trip_representative_values() {
+        let cases: &[i128] = &[
+            0,
+            1,
+            -1,
+            1_000_000_000_000, // 1.0
+            -1_000_000_000_000,
+            1_500_000_000_000, // 1.5
+            -1_500_000_000_000,
+            1_100_000_000_000, // 1.1 (the headline base-10 claim)
+            2_200_000_000_000, // 2.2
+            3_300_000_000_000, // 3.3
+            // Safe arbitrary-looking literal (avoids approx_constant
+            // triggers like 3.14, 2.718, 1.414 etc.):
+            1_234_567_890_123, // ~1.234567890123
+            -1_234_567_890_123,
+            4_567_891_234_567, // ~4.567891234567
+            7_890_123_456_789, // ~7.890123456789
+            i128::MAX,
+            i128::MIN,
+            i128::MAX / 2,
+            i128::MIN / 2,
+        ];
+        for &raw in cases {
+            let v = I128s12::from_bits(raw);
+            let s = v.to_string();
+            let parsed: I128s12 = s.parse().unwrap_or_else(|e| {
+                panic!("round-trip parse failed for raw={raw}, s={s:?}, err={e:?}")
+            });
+            assert_eq!(
+                parsed.to_bits(),
+                raw,
+                "round-trip mismatch: raw={raw}, s={s:?}, parsed_bits={}",
+                parsed.to_bits()
+            );
+        }
+    }
+
+    /// Round-trip property at SCALE = 6 to exercise the const-generic
+    /// path away from the v1 SCALE = 12.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn round_trip_other_scale() {
+        type D6 = I128<6>;
+        let cases: &[i128] = &[
+            0,
+            1,
+            -1,
+            1_000_000,
+            -1_000_000,
+            1_500_000,
+            i128::MAX,
+            i128::MIN,
+        ];
+        for &raw in cases {
+            let v = D6::from_bits(raw);
+            let s = v.to_string();
+            let parsed: D6 = s.parse().expect("round-trip parse");
+            assert_eq!(
+                parsed.to_bits(),
+                raw,
+                "round-trip mismatch at SCALE=6, raw={raw}"
+            );
+        }
+    }
+
+    /// Round-trip at SCALE = 0 (integer-only) to exercise the
+    /// no-decimal-point path.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn round_trip_scale_zero() {
+        type D0 = I128<0>;
+        let cases: &[i128] = &[0, 1, -1, 42, -42, i128::MAX, i128::MIN];
+        for &raw in cases {
+            let v = D0::from_bits(raw);
+            let s = v.to_string();
+            let parsed: D0 = s.parse().expect("round-trip parse");
+            assert_eq!(
+                parsed.to_bits(),
+                raw,
+                "round-trip mismatch at SCALE=0, raw={raw}"
+            );
+        }
+    }
+}

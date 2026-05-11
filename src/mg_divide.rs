@@ -1,0 +1,561 @@
+//! Moller-Granlund magic-number division for `I128` rescale operations.
+//!
+//! This module provides two `pub(crate)` entry points used by the
+//! arithmetic layer:
+//!
+//! - [`mul_div_pow10`] -- computes `(a * b) / 10^SCALE` with a 256-bit
+//!   intermediate product to avoid silent overflow from the naive
+//!   `(a * b) / multiplier()` form.
+//!
+//! - [`div_pow10_div`] -- computes `(a * 10^SCALE) / b` with a 256-bit
+//!   intermediate numerator, used for the division rescale.
+//!
+//! Both functions return `None` when the final `i128` quotient would
+//! overflow; the caller maps `None` to a panic (debug) or wrapping
+//! behaviour (release) as appropriate.
+//!
+//! # Algorithm references
+//!
+//! - Moller, N. and Granlund, T. (2011). "Improved Division by Invariant
+//!   Integers." IEEE Transactions on Computers, 60(2), 165-175.
+//!   DOI: 10.1109/TC.2010.143. (The magic-number table and the
+//!   256-bit-dividend divide algorithm used in [`div_exp_fast_2word`].)
+//! - Granlund, T. and Montgomery, P. L. (1994). "Division by Invariant
+//!   Integers using Multiplication." PLDI '94. (Basis for the 1-word
+//!   fast path that the upstream library also references.)
+//!
+//! The 128x128->256 multiply ([`mul2`]) and the magic-number table
+//! ([`MG_EXP_MAGICS`]) are adapted from the `primitive_fixed_point_decimal`
+//! crate (MIT-licensed; see `LICENSE-THIRD-PARTY`).
+//!
+//! # `SCALE = 0` special case
+//!
+//! At `SCALE = 0` the multiplier is 1, so no rescale is needed. The table
+//! entry at index 0 is a placeholder `(0, 0)`; using it would produce a
+//! shift of `128 - 0 = 128`, which is undefined behaviour on `u128`. Both
+//! public entry points short-circuit at `SCALE == 0` before touching the
+//! table.
+
+use crate::core_type::I128;
+
+/// Pre-computed magic constants for divide-by-`10^i` via the
+/// Moller-Granlund algorithm. Index `i` covers `i = 0..=38`.
+///
+/// Each entry is `(magic, zeros)` where `zeros` is the number of leading
+/// zeros in `10^i` when left-aligned to 128 bits, and `magic` is the
+/// 128-bit Moller-Granlund multiplier for that divisor:
+///
+/// ```python
+/// def gen(d):
+///     zeros = 128 - d.bit_length()
+///     magic = pow(2, 256) // (d << zeros)
+///     magic = magic - pow(2, 128)  # fits in 128 bits
+///     return (magic, zeros)
+/// ```
+///
+/// Index 0 is a placeholder `(0, 0)`. Callers must not pass `SCALE = 0`
+/// into the magic-divide functions; both public entry points guard that
+/// case before indexing this table.
+const MG_EXP_MAGICS: [(u128, u32); 39] = [
+    (0, 0),
+    (0x99999999999999999999999999999999, 124),
+    (0x47ae147ae147ae147ae147ae147ae147, 121),
+    (0x0624dd2f1a9fbe76c8b4395810624dd2, 118),
+    (0xa36e2eb1c432ca57a786c226809d4951, 114),
+    (0x4f8b588e368f08461f9f01b866e43aa7, 111),
+    (0x0c6f7a0b5ed8d36b4c7f34938583621f, 108),
+    (0xad7f29abcaf485787a6520ec08d23699, 104),
+    (0x5798ee2308c39df9fb841a566d74f87a, 101),
+    (0x12e0be826d694b2e62d01511f12a6061, 98),
+    (0xb7cdfd9d7bdbab7d6ae6881cb5109a36, 94),
+    (0x5fd7fe17964955fdef1ed34a2a73ae91, 91),
+    (0x19799812dea11197f27f0f6e885c8ba7, 88),
+    (0xc25c268497681c2650cb4be40d60df73, 84),
+    (0x6849b86a12b9b01ea70909833de71928, 81),
+    (0x203af9ee756159b21f3a6e0297ec1420, 78),
+    (0xcd2b297d889bc2b6985d7cd0f3135367, 74),
+    (0x70ef54646d496892137dfd73f5a90f85, 71),
+    (0x2725dd1d243aba0e75fe645cc4873f9e, 68),
+    (0xd83c94fb6d2ac34a5663d3c7a0d865ca, 64),
+    (0x79ca10c9242235d511e976394d79eb08, 61),
+    (0x2e3b40a0e9b4f7dda7edf82dd794bc06, 58),
+    (0xe392010175ee5962a6498d1625bac670, 54),
+    (0x82db34012b25144eeb6e0a781e2f0527, 51),
+    (0x357c299a88ea76a58924d52ce4f26a85, 48),
+    (0xef2d0f5da7dd8aa27507bb7b07ea4409, 44),
+    (0x8c240c4aecb13bb52a6c95fc0655033a, 41),
+    (0x3ce9a36f23c0fc90eebd44c99eaa68fb, 38),
+    (0xfb0f6be50601941b17953adc3110a7f8, 34),
+    (0x95a5efea6b34767c12ddc8b027408660, 31),
+    (0x4484bfeebc29f863424b06f3529a051a, 28),
+    (0x039d66589687f9e901d59f290ee19dae, 25),
+    (0x9f623d5a8a732974cfbc31db4b0295e4, 21),
+    (0x4c4e977ba1f5bac3d9635b15d59bab1c, 18),
+    (0x09d8792fb4c495697ab5e277de16227d, 15),
+    (0xa95a5b7f87a0ef0f2abc9d8c9689d0c8, 11),
+    (0x54484932d2e725a5bbca17a3aba173d3, 8),
+    (0x1039d428a8b8eaeafca1ac82efb45ca9, 5),
+    (0xb38fb9daa78e44ab2dcf7a6b19209442, 1),
+];
+
+// 128x128 -> 256 schoolbook multiply.
+//
+// All four 64-bit sub-products are accumulated with explicit carry
+// tracking so the full 256-bit result is exact with no overflow loss.
+
+/// Full 256-bit product of two unsigned 128-bit integers.
+///
+/// Returns `(high, low)` such that `high * 2^128 + low == a * b`
+/// for all `a`, `b` in `0..=u128::MAX`.
+///
+/// `const fn` so constant inputs can be folded at compile time.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+#[inline]
+const fn mul2(a: u128, b: u128) -> (u128, u128) {
+    let (ahigh, alow) = (a >> 64, a & u64::MAX as u128);
+    let (bhigh, blow) = (b >> 64, b & u64::MAX as u128);
+
+    let (mid, carry1) = (alow * bhigh).overflowing_add(ahigh * blow);
+    let (mlow, carry2) = (alow * blow).overflowing_add(mid << 64);
+    let mhigh = ahigh * bhigh + (mid >> 64) + ((carry1 as u128) << 64) + carry2 as u128;
+    (mhigh, mlow)
+}
+
+// 256-bit / 10^scale_idx divide via Moller-Granlund 2011 magic numbers.
+//
+// The algorithm aligns the divisor to the top of a 128-bit word (the
+// `zeros` shift), computes a 256-bit approximate quotient using the
+// pre-multiplied magic constant, then applies a single add-back
+// correction because the estimate can be off by at most 1.
+
+/// Divide the unsigned 256-bit value `(n_high, n_low)` by
+/// `exp = 10^scale_idx` using the Moller-Granlund 2011 magic-number
+/// method. Returns `Some(quotient)` if the quotient fits in 128 bits,
+/// or `None` if `n_high >= exp` (quotient would overflow).
+///
+/// # Preconditions
+///
+/// - `1 <= scale_idx <= 38`. The public entry points enforce this;
+///   `scale_idx == 0` must be handled by the caller before calling here.
+/// - `exp == 10u128.pow(scale_idx)`. The caller computes this once to
+///   avoid redundant work.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+#[inline]
+fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) -> Option<u128> {
+    // Overflow check: quotient must fit in 128 bits.
+    if n_high >= exp {
+        return None;
+    }
+
+    let (magic, zeros) = MG_EXP_MAGICS[scale_idx];
+
+    // Step 1: align n to the top of the 256-bit word.
+    //   (z_high, z_low) = n << zeros
+    let z_high = (n_high << zeros) | (n_low >> (128 - zeros));
+    let z_low = n_low << zeros;
+
+    // Step 2: approximate quotient via magic multiplication.
+    //   (m_high, m_low) = (magic * z) >> 128
+    let (m1_high, _) = mul2(z_low, magic);
+    let (m2_high, m2_low) = mul2(z_high, magic);
+
+    let (m_low, carry) = m2_low.overflowing_add(m1_high);
+    let m_high = m2_high + carry as u128;
+
+    // Step 3: extract the 128-bit quotient estimate.
+    //   q = (m + z) >> 128
+    let (_, carry) = m_low.overflowing_add(z_low);
+    let q = m_high + z_high + carry as u128;
+
+    // Step 4: single add-back correction. The estimate can be off by 1;
+    // check the remainder and increment if needed.
+    let (pp_high, pp_low) = mul2(q, exp);
+    let (r_low, borrow) = n_low.overflowing_sub(pp_low);
+    debug_assert!(n_high == pp_high + borrow as u128);
+
+    if r_low < exp {
+        Some(q)
+    } else {
+        Some(q + 1)
+    }
+}
+
+// Binary shift-subtract long-divide for the variable-divisor path.
+//
+// Used when dividing a 256-bit numerator by an arbitrary 128-bit `b`
+// (not a power of 10), so no magic table applies. The loop runs exactly
+// 256 iterations -- one per bit of the numerator -- and is competitive
+// in practice because the widening path is taken only for large `a`.
+
+/// Divide the unsigned 256-bit value `(n_high, n_low)` by the 128-bit
+/// divisor `d` using a binary shift-subtract algorithm. Returns
+/// `Some(quotient)` if the quotient fits in 128 bits, or `None` if
+/// `d == 0` or the quotient would overflow 128 bits.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+#[inline]
+fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u128> {
+    if d == 0 {
+        return None;
+    }
+    // Fast path: dividend already fits 128 bits.
+    if n_high == 0 {
+        return Some(n_low / d);
+    }
+    // Overflow check: quotient must fit in 128 bits, so n_high < d.
+    if n_high >= d {
+        return None;
+    }
+
+    // Shift-subtract: walk all 256 bits of the dividend, accumulating
+    // the quotient one bit at a time.
+    let mut q: u128 = 0;
+    let mut rem: u128 = 0;
+    let mut i = 0;
+    while i < 256 {
+        // Shift (rem, n_high, n_low) left by 1.
+        rem = (rem << 1) | (n_high >> 127);
+        n_high = (n_high << 1) | (n_low >> 127);
+        n_low <<= 1;
+        q <<= 1;
+        if rem >= d {
+            rem -= d;
+            q |= 1;
+        }
+        i += 1;
+    }
+    Some(q)
+}
+
+/// Compute `(a * b) / 10^SCALE` with truncating division semantics
+/// matching `i128 /`. Returns `None` if the result overflows `i128`.
+///
+/// When `a * b` fits in `i128` the multiply is done directly and the
+/// result is divided by the scale multiplier. When the product would
+/// overflow `i128`, the unsigned absolute values are multiplied to a
+/// full 256-bit result via [`mul2`], divided by `10^SCALE` using the
+/// Moller-Granlund magic-number algorithm, and the correct sign is
+/// restored.
+///
+/// At `SCALE = 0` the multiplier is 1 and the function reduces to
+/// `a.checked_mul(b)`.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+///
+/// # Examples
+///
+/// ```ignore
+/// use decimal_scaled::I128;
+/// // 50_000_000_000_000_000_000_000 * 30_000_000_000_000_000_000_000
+/// // overflows i128 but fits after dividing by 10^12.
+/// let result = mul_div_pow10::<12>(
+///     50_000_000_000_000_000_000_000_i128,
+///     30_000_000_000_000_000_000_000_i128,
+/// );
+/// assert_eq!(result, Some(1_500_000_000_000_000_000_000_000_000_000_000_i128));
+/// ```
+#[inline]
+pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
+    // SCALE = 0: multiplier is 1, result is just a * b.
+    if SCALE == 0 {
+        return a.checked_mul(b);
+    }
+
+    // Fast path: i128 * i128 didn't overflow; finish with i128 /.
+    if let Some(prod) = a.checked_mul(b) {
+        return Some(prod / I128::<SCALE>::multiplier());
+    }
+
+    // Widening path: |a*b| > i128::MAX. Compute the unsigned 256-bit
+    // product, magic-divide by 10^SCALE, restore sign.
+    let ua = a.unsigned_abs();
+    let ub = b.unsigned_abs();
+    let (mhigh, mlow) = mul2(ua, ub);
+
+    let exp = I128::<SCALE>::multiplier() as u128;
+    let q = div_exp_fast_2word(mhigh, mlow, exp, SCALE as usize)?;
+
+    // Sign: result is negative iff exactly one operand is negative.
+    let neg = (a < 0) ^ (b < 0);
+    if neg {
+        // -q must fit in i128. q == 2^127 is fine (that is i128::MIN).
+        if q <= i128::MAX as u128 {
+            Some(-(q as i128))
+        } else if q == (i128::MAX as u128) + 1 {
+            Some(i128::MIN)
+        } else {
+            None
+        }
+    } else {
+        // Positive: q must be <= i128::MAX.
+        if q <= i128::MAX as u128 {
+            Some(q as i128)
+        } else {
+            None
+        }
+    }
+}
+
+/// Compute `(a * 10^SCALE) / b` with truncating division semantics
+/// matching `i128 /`. Returns `None` if the result overflows `i128` or
+/// `b == 0`.
+///
+/// When `a * 10^SCALE` fits in `i128` the multiply-then-divide is done
+/// directly. When it would overflow, the unsigned absolute value of `a`
+/// is multiplied by the scale multiplier to a full 256-bit result via
+/// [`mul2`], divided by `|b|` using the binary long-divide, and the
+/// correct sign is restored.
+///
+/// At `SCALE = 0` the multiplier is 1 and the function reduces to
+/// `a.checked_div(b)`.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+///
+/// # Examples
+///
+/// ```ignore
+/// use decimal_scaled::I128;
+/// // (10^22 * 10^12) / 2 = 5e33, which requires 256-bit intermediates.
+/// let result = div_pow10_div::<12>(10_i128.pow(22), 2);
+/// assert_eq!(result, Some(5 * 10_i128.pow(33)));
+/// ```
+#[inline]
+pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
+    if b == 0 {
+        return None;
+    }
+
+    // SCALE = 0: just a / b.
+    if SCALE == 0 {
+        return a.checked_div(b);
+    }
+
+    let mult = I128::<SCALE>::multiplier();
+
+    // Fast path: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
+    // fits with headroom; for larger SCALE the overflow check below
+    // handles the fallthrough.
+    if let Some(num) = a.checked_mul(mult) {
+        return Some(num / b);
+    }
+
+    // Widening path: a*mult overflows i128. Compute it as a 256-bit
+    // unsigned, divide by |b|, restore sign.
+    let ua = a.unsigned_abs();
+    let umult = mult as u128;
+    let (mhigh, mlow) = mul2(ua, umult);
+
+    let ub = b.unsigned_abs();
+    let q = div_long_256_by_128(mhigh, mlow, ub)?;
+
+    // Sign: result is negative iff exactly one of `a` and `b` is
+    // negative. (mult is always positive.)
+    let neg = (a < 0) ^ (b < 0);
+    if neg {
+        if q <= i128::MAX as u128 {
+            Some(-(q as i128))
+        } else if q == (i128::MAX as u128) + 1 {
+            Some(i128::MIN)
+        } else {
+            None
+        }
+    } else if q <= i128::MAX as u128 {
+        Some(q as i128)
+    } else {
+        None
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Small operands route via the i128 fast path; result matches the
+    /// naive form bit-exactly.
+    #[test]
+    fn mul_div_pow10_small_matches_naive() {
+        const SCALE: u32 = 12;
+        let a: i128 = 1_500_000_000;
+        let b: i128 = 2_300_000_000;
+        let expected = (a * b) / 1_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+    }
+
+    /// Mid-range operands: still fits the i128 fast path with a wider
+    /// product.
+    #[test]
+    fn mul_div_pow10_mid_matches_naive() {
+        const SCALE: u32 = 12;
+        let a: i128 = 3_000_000_000_000_000;
+        let b: i128 = 4_700_000_000_000_000;
+        let expected = (a * b) / 1_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+    }
+
+    /// Operands near the boundary of the i128 fast path; still within
+    /// i128 by construction.
+    #[test]
+    fn mul_div_pow10_bound_matches_naive() {
+        const SCALE: u32 = 12;
+        // 7e18 * 4.7e18 = 3.29e37 < i128::MAX (1.7e38)
+        let a: i128 = 7_000_000_000_000_000_000;
+        let b: i128 = 4_700_000_000_000_000_000;
+        let expected = (a * b) / 1_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+    }
+
+    /// Wide operands: 5e22 * 3e22 = 1.5e45, past i128::MAX. The widening
+    /// path produces the correct result (1.5e33 after dividing by 10^12).
+    #[test]
+    fn mul_div_pow10_wide_correctness() {
+        const SCALE: u32 = 12;
+        let a: i128 = 50_000_000_000_000_000_000_000;
+        let b: i128 = 30_000_000_000_000_000_000_000;
+        // a * b == 1.5e45 raw; / 10^12 == 1.5e33 raw.
+        // 1.5e33 < i128::MAX (1.7e38), so the result fits.
+        let expected: i128 = 1_500_000_000_000_000_000_000_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+    }
+
+    /// When the final i128 quotient would overflow, the function returns
+    /// `None`.
+    #[test]
+    fn mul_div_pow10_overflows_to_none() {
+        const SCALE: u32 = 12;
+        // a*b = 10^52; /10^12 = 10^40. i128::MAX < 10^39, so this overflows.
+        let a: i128 = 10_i128.pow(26);
+        let b: i128 = 10_i128.pow(26);
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), None);
+    }
+
+    /// One negative operand produces a negative result.
+    #[test]
+    fn mul_div_pow10_negative_one_sided() {
+        const SCALE: u32 = 12;
+        let a: i128 = -50_000_000_000_000_000_000_000;
+        let b: i128 = 30_000_000_000_000_000_000_000;
+        let expected: i128 = -1_500_000_000_000_000_000_000_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+    }
+
+    /// Two negative operands produce a positive result.
+    #[test]
+    fn mul_div_pow10_negative_both() {
+        const SCALE: u32 = 12;
+        let a: i128 = -50_000_000_000_000_000_000_000;
+        let b: i128 = -30_000_000_000_000_000_000_000;
+        let expected: i128 = 1_500_000_000_000_000_000_000_000_000_000_000_i128;
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(expected));
+    }
+
+    /// `SCALE = 0`: identity multiplier; result is just `a * b`.
+    #[test]
+    fn mul_div_pow10_scale_zero() {
+        const SCALE: u32 = 0;
+        assert_eq!(mul_div_pow10::<SCALE>(7, 11), Some(77));
+        assert_eq!(mul_div_pow10::<SCALE>(-7, 11), Some(-77));
+        assert_eq!(mul_div_pow10::<SCALE>(i128::MAX, 1), Some(i128::MAX));
+        assert_eq!(mul_div_pow10::<SCALE>(i128::MAX, 2), None); // overflows
+    }
+
+    /// `SCALE = 1`: smallest non-trivial scale, exercises the fast path.
+    #[test]
+    fn mul_div_pow10_scale_one() {
+        const SCALE: u32 = 1;
+        // 25 * 4 = 100; / 10 = 10.
+        assert_eq!(mul_div_pow10::<SCALE>(25, 4), Some(10));
+    }
+
+    /// `SCALE = 18`: large but common scale.
+    #[test]
+    fn mul_div_pow10_scale_eighteen() {
+        const SCALE: u32 = 18;
+        // 10^18 * 10^18 = 10^36; / 10^18 = 10^18.
+        let a: i128 = 10_i128.pow(18);
+        let b: i128 = 10_i128.pow(18);
+        assert_eq!(mul_div_pow10::<SCALE>(a, b), Some(10_i128.pow(18)));
+    }
+
+    /// Division: small operands match the naive form.
+    #[test]
+    fn div_pow10_div_small_matches_naive() {
+        const SCALE: u32 = 12;
+        let a: i128 = 1_500_000_000;
+        let b: i128 = 7;
+        let expected = (a * 1_000_000_000_000_i128) / b;
+        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(expected));
+    }
+
+    /// Division by zero returns `None`.
+    #[test]
+    fn div_pow10_div_by_zero_is_none() {
+        const SCALE: u32 = 12;
+        assert_eq!(div_pow10_div::<SCALE>(123, 0), None);
+    }
+
+    /// `SCALE = 0`: reduces to plain truncating divide.
+    #[test]
+    fn div_pow10_div_scale_zero() {
+        const SCALE: u32 = 0;
+        assert_eq!(div_pow10_div::<SCALE>(15, 4), Some(3));
+        assert_eq!(div_pow10_div::<SCALE>(-15, 4), Some(-3));
+        // i128::MIN / -1 overflows -> checked_div returns None.
+        assert_eq!(div_pow10_div::<SCALE>(i128::MIN, -1), None);
+    }
+
+    /// Wide-operand divide: `(10^22 * 10^12) / 2 = 5e33`.
+    #[test]
+    fn div_pow10_div_wide_correctness() {
+        const SCALE: u32 = 12;
+        let a: i128 = 10_i128.pow(22);
+        let b: i128 = 2;
+        // a * 10^12 = 10^34; / 2 = 5e33.
+        let expected: i128 = 5 * 10_i128.pow(33);
+        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(expected));
+    }
+
+    /// Round-trip within i128 range: `(a / b) * b` recovers `a`.
+    #[test]
+    fn div_pow10_div_round_trip_small() {
+        const SCALE: u32 = 12;
+        // 6.0 / 2.0 == 3.0  (raw: 6e12 / 2e12 -> in scaled space:
+        // (6e12 * 1e12) / 2e12 == 3e12)
+        let a: i128 = 6_000_000_000_000;
+        let b: i128 = 2_000_000_000_000;
+        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(3_000_000_000_000));
+    }
+
+    /// Negative dividend with positive divisor produces a negative result.
+    #[test]
+    fn div_pow10_div_negative_dividend() {
+        const SCALE: u32 = 12;
+        let a: i128 = -6_000_000_000_000;
+        let b: i128 = 2_000_000_000_000;
+        assert_eq!(div_pow10_div::<SCALE>(a, b), Some(-3_000_000_000_000));
+    }
+
+    /// Round-trip property: `(a * b) / b == a` on the widening path.
+    #[test]
+    fn mul_div_round_trip_wide() {
+        const SCALE: u32 = 12;
+        let a: i128 = 50_000_000_000_000_000_000_000;
+        let b: i128 = 30_000_000_000_000_000_000_000;
+        // a * b / 10^12 = 1.5e33
+        let prod = mul_div_pow10::<SCALE>(a, b).expect("wide mul");
+        // Dividing back by b should recover a (up to truncation).
+        let recovered = div_pow10_div::<SCALE>(prod, b).expect("wide div");
+        assert_eq!(recovered, a);
+    }
+}
