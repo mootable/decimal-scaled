@@ -38,7 +38,7 @@
 //! `mul_div_candidates.rs`.
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D128, D128e12, DecimalConsts};
+use decimal_scaled::{D128, D128s12, DecimalConsts};
 
 type D = D128<12>;
 
@@ -451,7 +451,7 @@ fn bench_display(c: &mut Criterion) {
     });
     g.bench_function("FromStr_parse", |bn| {
         let s = "1.5";
-        bn.iter(|| black_box(s).parse::<D128e12>())
+        bn.iter(|| black_box(s).parse::<D128s12>())
     });
 
     g.finish();

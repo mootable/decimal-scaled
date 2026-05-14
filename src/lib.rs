@@ -12,10 +12,10 @@
 //!
 //! - [`D128<SCALE>`] is the const-generic foundation. Every method is
 //!   implemented once and is available at any scale.
-//! - [`D128e12`] is the concrete alias `D128<12>`. At `SCALE = 12`, one LSB
+//! - [`D128s12`] is the concrete alias `D128<12>`. At `SCALE = 12`, one LSB
 //!   equals `10^-12` model units and the representable range is roughly
 //!   +/-1.7e14 model units.
-//! - Scale aliases [`D128e0`] through [`D128e38`] cover every supported scale.
+//! - Scale aliases [`D128s0`] through [`D128s38`] cover every supported scale.
 //!   `SCALE = 39` is not supported because `10^39` overflows `i128`.
 //!
 //! # Equality and hashing
@@ -87,11 +87,11 @@ mod trig;
 pub use consts::DecimalConsts;
 pub use conversions::D128ConvertError;
 pub use core_type::{
-    D128, D128e0, D128e1, D128e2, D128e3, D128e4, D128e5, D128e6, D128e7, D128e8, D128e9, D128e10,
-    D128e11, D128e12, D128e13, D128e14, D128e15, D128e16, D128e17, D128e18, D128e19, D128e20,
-    D128e21, D128e22, D128e23, D128e24, D128e25, D128e26, D128e27, D128e28, D128e29, D128e30,
-    D128e31, D128e32, D128e33, D128e34, D128e35, D128e36, D128e37, D128e38, ParseD128Error,
+    D128, D128s0, D128s1, D128s2, D128s3, D128s4, D128s5, D128s6, D128s7, D128s8, D128s9, D128s10,
+    D128s11, D128s12, D128s13, D128s14, D128s15, D128s16, D128s17, D128s18, D128s19, D128s20,
+    D128s21, D128s22, D128s23, D128s24, D128s25, D128s26, D128s27, D128s28, D128s29, D128s30,
+    D128s31, D128s32, D128s33, D128s34, D128s35, D128s36, D128s37, D128s38, ParseD128Error,
 };
 
 #[cfg(feature = "macros")]
-pub use decimal_scaled_macros::i128s;
+pub use decimal_scaled_macros::d128;

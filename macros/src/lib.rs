@@ -7,14 +7,14 @@ use syn::{
 };
 
 #[proc_macro]
-pub fn i128s(input: TokenStream) -> TokenStream {
+pub fn d128(input: TokenStream) -> TokenStream {
     let input = parse_macro_input!(input as DecimalParser);
     to_code(input.value, input.scale)
 }
 
 fn to_code(value: i128, scale: u32) -> TokenStream {
     quote! {
-        D128e12::from_bits(#value)
+        D128s12::from_bits(#value)
     }.into()
 }
 

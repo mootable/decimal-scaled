@@ -103,10 +103,10 @@ impl<const SCALE: u32> From<i8> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_i8).to_bits(), 1_000_000_000_000);
-    /// assert_eq!(D128e12::from(-1_i8).to_bits(), -1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_i8).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(-1_i8).to_bits(), -1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: i8) -> Self {
@@ -126,9 +126,9 @@ impl<const SCALE: u32> From<i16> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_i16).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_i16).to_bits(), 1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: i16) -> Self {
@@ -148,9 +148,9 @@ impl<const SCALE: u32> From<i32> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_i32).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_i32).to_bits(), 1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: i32) -> Self {
@@ -172,10 +172,10 @@ impl<const SCALE: u32> From<i64> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_i64).to_bits(), 1_000_000_000_000);
-    /// assert_eq!(D128e12::from(-1_i64).to_bits(), -1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_i64).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(-1_i64).to_bits(), -1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: i64) -> Self {
@@ -195,9 +195,9 @@ impl<const SCALE: u32> From<u8> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_u8).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_u8).to_bits(), 1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: u8) -> Self {
@@ -217,9 +217,9 @@ impl<const SCALE: u32> From<u16> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_u16).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_u16).to_bits(), 1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: u16) -> Self {
@@ -239,9 +239,9 @@ impl<const SCALE: u32> From<u32> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_u32).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_u32).to_bits(), 1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: u32) -> Self {
@@ -263,9 +263,9 @@ impl<const SCALE: u32> From<u64> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(1_u64).to_bits(), 1_000_000_000_000);
+    /// assert_eq!(D128s12::from(1_u64).to_bits(), 1_000_000_000_000);
     /// ```
     #[inline]
     fn from(value: u64) -> Self {
@@ -297,12 +297,12 @@ impl<const SCALE: u32> TryFrom<i128> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128e12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, D128ConvertError};
     ///
-    /// let v: D128e12 = 1_i128.try_into().unwrap();
-    /// assert_eq!(v, D128e12::ONE);
+    /// let v: D128s12 = 1_i128.try_into().unwrap();
+    /// assert_eq!(v, D128s12::ONE);
     ///
-    /// let overflow: Result<D128e12, _> = i128::MAX.try_into();
+    /// let overflow: Result<D128s12, _> = i128::MAX.try_into();
     /// assert_eq!(overflow, Err(D128ConvertError::Overflow));
     /// ```
     #[inline]
@@ -329,12 +329,12 @@ impl<const SCALE: u32> TryFrom<u128> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128e12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, D128ConvertError};
     ///
-    /// let v: D128e12 = 42_u128.try_into().unwrap();
+    /// let v: D128s12 = 42_u128.try_into().unwrap();
     /// assert_eq!(v.to_bits(), 42_000_000_000_000);
     ///
-    /// let overflow: Result<D128e12, _> = u128::MAX.try_into();
+    /// let overflow: Result<D128s12, _> = u128::MAX.try_into();
     /// assert_eq!(overflow, Err(D128ConvertError::Overflow));
     /// ```
     #[inline]
@@ -364,12 +364,12 @@ impl<const SCALE: u32> TryFrom<f32> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128e12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, D128ConvertError};
     ///
-    /// let v: D128e12 = 1.0_f32.try_into().unwrap();
-    /// assert_eq!(v, D128e12::ONE);
+    /// let v: D128s12 = 1.0_f32.try_into().unwrap();
+    /// assert_eq!(v, D128s12::ONE);
     ///
-    /// let nan: Result<D128e12, _> = f32::NAN.try_into();
+    /// let nan: Result<D128s12, _> = f32::NAN.try_into();
     /// assert_eq!(nan, Err(D128ConvertError::NotFinite));
     /// ```
     #[inline]
@@ -397,15 +397,15 @@ impl<const SCALE: u32> TryFrom<f64> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128e12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, D128ConvertError};
     ///
-    /// let v: D128e12 = 1.0_f64.try_into().unwrap();
-    /// assert_eq!(v, D128e12::ONE);
+    /// let v: D128s12 = 1.0_f64.try_into().unwrap();
+    /// assert_eq!(v, D128s12::ONE);
     ///
-    /// let nan: Result<D128e12, _> = f64::NAN.try_into();
+    /// let nan: Result<D128s12, _> = f64::NAN.try_into();
     /// assert_eq!(nan, Err(D128ConvertError::NotFinite));
     ///
-    /// let overflow: Result<D128e12, _> = 1e30_f64.try_into();
+    /// let overflow: Result<D128s12, _> = 1e30_f64.try_into();
     /// assert_eq!(overflow, Err(D128ConvertError::Overflow));
     /// ```
     #[inline]
@@ -445,10 +445,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_int(1), D128e12::ONE);
-    /// assert_eq!(D128e12::from_int(-42).to_bits(), -42_000_000_000_000_i128);
+    /// assert_eq!(D128s12::from_int(1), D128s12::ONE);
+    /// assert_eq!(D128s12::from_int(-42).to_bits(), -42_000_000_000_000_i128);
     /// ```
     #[inline]
     pub fn from_int(value: i64) -> Self {
@@ -467,10 +467,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_i32(1), D128e12::ONE);
-    /// assert_eq!(D128e12::from_i32(0), D128e12::ZERO);
+    /// assert_eq!(D128s12::from_i32(1), D128s12::ONE);
+    /// assert_eq!(D128s12::from_i32(0), D128s12::ZERO);
     /// ```
     #[inline]
     pub fn from_i32(value: i32) -> Self {
@@ -496,12 +496,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_f64_lossy(1.0), D128e12::ONE);
-    /// assert_eq!(D128e12::from_f64_lossy(f64::NAN), D128e12::ZERO);
-    /// assert_eq!(D128e12::from_f64_lossy(f64::INFINITY), D128e12::MAX);
-    /// assert_eq!(D128e12::from_f64_lossy(f64::NEG_INFINITY), D128e12::MIN);
+    /// assert_eq!(D128s12::from_f64_lossy(1.0), D128s12::ONE);
+    /// assert_eq!(D128s12::from_f64_lossy(f64::NAN), D128s12::ZERO);
+    /// assert_eq!(D128s12::from_f64_lossy(f64::INFINITY), D128s12::MAX);
+    /// assert_eq!(D128s12::from_f64_lossy(f64::NEG_INFINITY), D128s12::MIN);
     /// ```
     pub fn from_f64_lossy(value: f64) -> Self {
         if value.is_nan() {
@@ -537,15 +537,15 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
     /// // Truncates toward zero.
-    /// assert_eq!(D128e12::from_bits(2_500_000_000_000).to_int_lossy(), 2);
-    /// assert_eq!(D128e12::from_bits(-2_500_000_000_000).to_int_lossy(), -2);
+    /// assert_eq!(D128s12::from_bits(2_500_000_000_000).to_int_lossy(), 2);
+    /// assert_eq!(D128s12::from_bits(-2_500_000_000_000).to_int_lossy(), -2);
     ///
     /// // Saturates when the integer part exceeds i64 range.
-    /// assert_eq!(D128e12::MAX.to_int_lossy(), i64::MAX);
-    /// assert_eq!(D128e12::MIN.to_int_lossy(), i64::MIN);
+    /// assert_eq!(D128s12::MAX.to_int_lossy(), i64::MAX);
+    /// assert_eq!(D128s12::MIN.to_int_lossy(), i64::MIN);
     /// ```
     #[inline]
     pub fn to_int_lossy(self) -> i64 {
@@ -572,10 +572,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::ZERO.to_f64_lossy(), 0.0);
-    /// assert_eq!(D128e12::ONE.to_f64_lossy(), 1.0);
+    /// assert_eq!(D128s12::ZERO.to_f64_lossy(), 0.0);
+    /// assert_eq!(D128s12::ONE.to_f64_lossy(), 1.0);
     /// ```
     #[inline]
     pub fn to_f64_lossy(self) -> f64 {
@@ -595,10 +595,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::ZERO.to_f32_lossy(), 0.0_f32);
-    /// assert_eq!(D128e12::ONE.to_f32_lossy(), 1.0_f32);
+    /// assert_eq!(D128s12::ZERO.to_f32_lossy(), 0.0_f32);
+    /// assert_eq!(D128s12::ONE.to_f32_lossy(), 1.0_f32);
     /// ```
     #[inline]
     pub fn to_f32_lossy(self) -> f32 {
@@ -609,7 +609,7 @@ impl<const SCALE: u32> D128<SCALE> {
 #[cfg(test)]
 mod tests {
     use super::D128ConvertError;
-    use crate::core_type::{D128, D128e12};
+    use crate::core_type::{D128, D128s12};
 
     // ──────────────────────────────────────────────────────────────────
     // from_int / from_i32 -- foundation wrappers around From<iN>
@@ -617,28 +617,28 @@ mod tests {
 
     #[test]
     fn from_int_zero_is_zero() {
-        assert_eq!(D128e12::from_int(0), D128e12::ZERO);
+        assert_eq!(D128s12::from_int(0), D128s12::ZERO);
     }
 
     #[test]
     fn from_i32_zero_is_zero() {
-        assert_eq!(D128e12::from_i32(0), D128e12::ZERO);
+        assert_eq!(D128s12::from_i32(0), D128s12::ZERO);
     }
 
     #[test]
     fn from_int_one_is_one() {
-        assert_eq!(D128e12::from_int(1), D128e12::ONE);
+        assert_eq!(D128s12::from_int(1), D128s12::ONE);
     }
 
     #[test]
     fn from_i32_one_is_one() {
-        assert_eq!(D128e12::from_i32(1), D128e12::ONE);
+        assert_eq!(D128s12::from_i32(1), D128s12::ONE);
     }
 
     #[test]
     fn from_int_negative() {
-        assert_eq!(D128e12::from_int(-1), -D128e12::ONE);
-        assert_eq!(D128e12::from_int(-42).to_bits(), -42_000_000_000_000_i128);
+        assert_eq!(D128s12::from_int(-1), -D128s12::ONE);
+        assert_eq!(D128s12::from_int(-42).to_bits(), -42_000_000_000_000_i128);
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -647,51 +647,51 @@ mod tests {
 
     #[test]
     fn from_i8_scales_correctly() {
-        assert_eq!(D128e12::from(0_i8).to_bits(), 0);
-        assert_eq!(D128e12::from(1_i8).to_bits(), 1_000_000_000_000);
-        assert_eq!(D128e12::from(-1_i8).to_bits(), -1_000_000_000_000);
-        assert_eq!(D128e12::from(i8::MAX).to_bits(), 127_000_000_000_000);
-        assert_eq!(D128e12::from(i8::MIN).to_bits(), -128_000_000_000_000);
+        assert_eq!(D128s12::from(0_i8).to_bits(), 0);
+        assert_eq!(D128s12::from(1_i8).to_bits(), 1_000_000_000_000);
+        assert_eq!(D128s12::from(-1_i8).to_bits(), -1_000_000_000_000);
+        assert_eq!(D128s12::from(i8::MAX).to_bits(), 127_000_000_000_000);
+        assert_eq!(D128s12::from(i8::MIN).to_bits(), -128_000_000_000_000);
     }
 
     #[test]
     fn from_i16_scales_correctly() {
-        assert_eq!(D128e12::from(0_i16).to_bits(), 0);
-        assert_eq!(D128e12::from(1_i16).to_bits(), 1_000_000_000_000);
-        assert_eq!(D128e12::from(i16::MAX).to_bits(), 32_767_000_000_000_000);
-        assert_eq!(D128e12::from(i16::MIN).to_bits(), -32_768_000_000_000_000);
+        assert_eq!(D128s12::from(0_i16).to_bits(), 0);
+        assert_eq!(D128s12::from(1_i16).to_bits(), 1_000_000_000_000);
+        assert_eq!(D128s12::from(i16::MAX).to_bits(), 32_767_000_000_000_000);
+        assert_eq!(D128s12::from(i16::MIN).to_bits(), -32_768_000_000_000_000);
     }
 
     #[test]
     fn from_i32_scales_correctly() {
-        assert_eq!(D128e12::from(0_i32).to_bits(), 0);
-        assert_eq!(D128e12::from(i32::MAX).to_bits(), (i32::MAX as i128) * 1_000_000_000_000);
-        assert_eq!(D128e12::from(i32::MIN).to_bits(), (i32::MIN as i128) * 1_000_000_000_000);
+        assert_eq!(D128s12::from(0_i32).to_bits(), 0);
+        assert_eq!(D128s12::from(i32::MAX).to_bits(), (i32::MAX as i128) * 1_000_000_000_000);
+        assert_eq!(D128s12::from(i32::MIN).to_bits(), (i32::MIN as i128) * 1_000_000_000_000);
     }
 
     #[test]
     fn from_i64_scales_correctly() {
-        assert_eq!(D128e12::from(0_i64).to_bits(), 0);
-        assert_eq!(D128e12::from(i64::MAX).to_bits(), (i64::MAX as i128) * 1_000_000_000_000);
-        assert_eq!(D128e12::from(i64::MIN).to_bits(), (i64::MIN as i128) * 1_000_000_000_000);
+        assert_eq!(D128s12::from(0_i64).to_bits(), 0);
+        assert_eq!(D128s12::from(i64::MAX).to_bits(), (i64::MAX as i128) * 1_000_000_000_000);
+        assert_eq!(D128s12::from(i64::MIN).to_bits(), (i64::MIN as i128) * 1_000_000_000_000);
     }
 
     #[test]
     fn from_u8_scales_correctly() {
-        assert_eq!(D128e12::from(0_u8).to_bits(), 0);
-        assert_eq!(D128e12::from(u8::MAX).to_bits(), 255_000_000_000_000);
+        assert_eq!(D128s12::from(0_u8).to_bits(), 0);
+        assert_eq!(D128s12::from(u8::MAX).to_bits(), 255_000_000_000_000);
     }
 
     #[test]
     fn from_u16_scales_correctly() {
-        assert_eq!(D128e12::from(0_u16).to_bits(), 0);
-        assert_eq!(D128e12::from(u16::MAX).to_bits(), 65_535_000_000_000_000);
+        assert_eq!(D128s12::from(0_u16).to_bits(), 0);
+        assert_eq!(D128s12::from(u16::MAX).to_bits(), 65_535_000_000_000_000);
     }
 
     #[test]
     fn from_u32_scales_correctly() {
-        assert_eq!(D128e12::from(0_u32).to_bits(), 0);
-        assert_eq!(D128e12::from(u32::MAX).to_bits(), (u32::MAX as i128) * 1_000_000_000_000);
+        assert_eq!(D128s12::from(0_u32).to_bits(), 0);
+        assert_eq!(D128s12::from(u32::MAX).to_bits(), (u32::MAX as i128) * 1_000_000_000_000);
     }
 
     /// `From<u64>` at the boundary -- u64::MAX times multiplier is
@@ -699,7 +699,7 @@ mod tests {
     /// at SCALE=12.
     #[test]
     fn from_u64_at_boundary_is_lossless() {
-        let v = D128e12::from(u64::MAX);
+        let v = D128s12::from(u64::MAX);
         // u64::MAX = 2^64 - 1 = 18_446_744_073_709_551_615
         assert_eq!(v.to_bits(), (u64::MAX as i128) * 1_000_000_000_000);
     }
@@ -709,10 +709,10 @@ mod tests {
     #[test]
     fn integer_round_trip_via_lossy_to_int() {
         for v in [0_i32, 1, -1, 42, -42, i32::MAX, i32::MIN] {
-            assert_eq!(D128e12::from(v).to_int_lossy(), v as i64);
+            assert_eq!(D128s12::from(v).to_int_lossy(), v as i64);
         }
         for v in [0_i64, 1, -1, 1_000_000_000, -1_000_000_000] {
-            assert_eq!(D128e12::from(v).to_int_lossy(), v);
+            assert_eq!(D128s12::from(v).to_int_lossy(), v);
         }
     }
 
@@ -722,34 +722,34 @@ mod tests {
 
     #[test]
     fn from_f64_lossy_zero_is_zero() {
-        assert_eq!(D128e12::from_f64_lossy(0.0), D128e12::ZERO);
+        assert_eq!(D128s12::from_f64_lossy(0.0), D128s12::ZERO);
     }
 
     #[test]
     fn zero_to_int_lossy_is_zero() {
-        assert_eq!(D128e12::ZERO.to_int_lossy(), 0);
+        assert_eq!(D128s12::ZERO.to_int_lossy(), 0);
     }
 
     #[test]
     fn zero_to_f64_lossy_is_zero() {
-        assert_eq!(D128e12::ZERO.to_f64_lossy(), 0.0);
+        assert_eq!(D128s12::ZERO.to_f64_lossy(), 0.0);
     }
 
     #[test]
     fn zero_to_f32_lossy_is_zero() {
-        assert_eq!(D128e12::ZERO.to_f32_lossy(), 0.0);
+        assert_eq!(D128s12::ZERO.to_f32_lossy(), 0.0);
     }
 
     #[test]
     fn from_f64_lossy_one_is_one() {
-        let v = D128e12::from_f64_lossy(1.0);
-        assert_eq!(v, D128e12::ONE);
+        let v = D128s12::from_f64_lossy(1.0);
+        assert_eq!(v, D128s12::ONE);
     }
 
     #[test]
     fn from_f64_lossy_negative() {
-        let v = D128e12::from_f64_lossy(-1.0);
-        assert_eq!(v, -D128e12::ONE);
+        let v = D128s12::from_f64_lossy(-1.0);
+        assert_eq!(v, -D128s12::ONE);
     }
 
     /// Property test: `(from_f64_lossy(x).to_f64_lossy() - x).abs()`
@@ -758,7 +758,7 @@ mod tests {
     /// truncation in `from_f64_lossy`.
     #[test]
     fn from_f64_to_f64_round_trip_within_1_lsb() {
-        let lsb = 1.0 / (D128e12::multiplier() as f64);
+        let lsb = 1.0 / (D128s12::multiplier() as f64);
         let cases = [
             0.0_f64,
             1.0,
@@ -783,7 +783,7 @@ mod tests {
             // Skip values smaller than the LSB.
         ];
         for x in cases {
-            let v = D128e12::from_f64_lossy(x);
+            let v = D128s12::from_f64_lossy(x);
             let back = v.to_f64_lossy();
             let err = (back - x).abs();
             assert!(
@@ -798,11 +798,11 @@ mod tests {
     #[test]
     fn to_f32_lossy_matches_f64_path() {
         let cases = [
-            D128e12::ZERO,
-            D128e12::ONE,
-            -D128e12::ONE,
-            D128e12::from_bits(1_500_000_000_000),
-            D128e12::from_bits(-7_321_654_987_000),
+            D128s12::ZERO,
+            D128s12::ONE,
+            -D128s12::ONE,
+            D128s12::from_bits(1_500_000_000_000),
+            D128s12::from_bits(-7_321_654_987_000),
         ];
         for v in cases {
             let via_f64 = v.to_f64_lossy() as f32;
@@ -813,51 +813,51 @@ mod tests {
     /// Saturation: `from_f64_lossy(f64::INFINITY) == D128::MAX`.
     #[test]
     fn from_f64_lossy_infinity_saturates_max() {
-        assert_eq!(D128e12::from_f64_lossy(f64::INFINITY), D128e12::MAX);
+        assert_eq!(D128s12::from_f64_lossy(f64::INFINITY), D128s12::MAX);
     }
 
     /// Saturation: `from_f64_lossy(f64::NEG_INFINITY) == D128::MIN`.
     #[test]
     fn from_f64_lossy_neg_infinity_saturates_min() {
-        assert_eq!(D128e12::from_f64_lossy(f64::NEG_INFINITY), D128e12::MIN);
+        assert_eq!(D128s12::from_f64_lossy(f64::NEG_INFINITY), D128s12::MIN);
     }
 
     /// NaN handling (locked policy): `from_f64_lossy(NaN) == ZERO`.
     #[test]
     fn from_f64_lossy_nan_is_zero() {
-        assert_eq!(D128e12::from_f64_lossy(f64::NAN), D128e12::ZERO);
+        assert_eq!(D128s12::from_f64_lossy(f64::NAN), D128s12::ZERO);
     }
 
     /// Saturation: finite out-of-range inputs clamp to MAX/MIN.
     #[test]
     fn from_f64_lossy_finite_out_of_range_saturates() {
         // 1e30 * 10^12 = 1e42 > i128::MAX ~1.7e38
-        assert_eq!(D128e12::from_f64_lossy(1e30), D128e12::MAX);
-        assert_eq!(D128e12::from_f64_lossy(-1e30), D128e12::MIN);
+        assert_eq!(D128s12::from_f64_lossy(1e30), D128s12::MAX);
+        assert_eq!(D128s12::from_f64_lossy(-1e30), D128s12::MIN);
     }
 
     /// `to_int_lossy` truncates toward zero (drops fractional part).
     #[test]
     fn to_int_lossy_truncates_toward_zero() {
         // 2.5 -> 2
-        assert_eq!(D128e12::from_bits(2_500_000_000_000).to_int_lossy(), 2);
+        assert_eq!(D128s12::from_bits(2_500_000_000_000).to_int_lossy(), 2);
         // -2.5 -> -2 (toward zero, not toward neg-infinity)
-        assert_eq!(D128e12::from_bits(-2_500_000_000_000).to_int_lossy(), -2);
+        assert_eq!(D128s12::from_bits(-2_500_000_000_000).to_int_lossy(), -2);
         // 0.999... -> 0
-        assert_eq!(D128e12::from_bits(999_999_999_999).to_int_lossy(), 0);
+        assert_eq!(D128s12::from_bits(999_999_999_999).to_int_lossy(), 0);
         // -0.999... -> 0
-        assert_eq!(D128e12::from_bits(-999_999_999_999).to_int_lossy(), 0);
+        assert_eq!(D128s12::from_bits(-999_999_999_999).to_int_lossy(), 0);
     }
 
     /// `to_int_lossy` saturates beyond i64's range.
     #[test]
     fn to_int_lossy_saturates() {
-        // D128e12::MAX is i128::MAX bits; integer part = i128::MAX / 10^12
+        // D128s12::MAX is i128::MAX bits; integer part = i128::MAX / 10^12
         // ~= 1.7e26, way above i64::MAX. Saturates to i64::MAX.
-        assert_eq!(D128e12::MAX.to_int_lossy(), i64::MAX);
-        // D128e12::MIN is i128::MIN bits; integer part way below i64::MIN.
+        assert_eq!(D128s12::MAX.to_int_lossy(), i64::MAX);
+        // D128s12::MIN is i128::MIN bits; integer part way below i64::MIN.
         // Saturates to i64::MIN.
-        assert_eq!(D128e12::MIN.to_int_lossy(), i64::MIN);
+        assert_eq!(D128s12::MIN.to_int_lossy(), i64::MIN);
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -866,36 +866,36 @@ mod tests {
 
     #[test]
     fn try_from_i128_zero_succeeds() {
-        let v: D128e12 = 0_i128.try_into().expect("zero fits");
-        assert_eq!(v, D128e12::ZERO);
+        let v: D128s12 = 0_i128.try_into().expect("zero fits");
+        assert_eq!(v, D128s12::ZERO);
     }
 
     #[test]
     fn try_from_i128_in_range_succeeds() {
         // 1_000_000 model units -> 1e6 * 10^12 = 1e18, well under i128::MAX
-        let v: D128e12 = 1_000_000_i128.try_into().expect("in-range fits");
+        let v: D128s12 = 1_000_000_i128.try_into().expect("in-range fits");
         assert_eq!(v.to_bits(), 1_000_000 * 1_000_000_000_000);
     }
 
     #[test]
     fn try_from_i128_overflow_returns_err() {
         // i128::MAX cannot be scaled by 10^12.
-        let result: Result<D128e12, _> = i128::MAX.try_into();
+        let result: Result<D128s12, _> = i128::MAX.try_into();
         assert_eq!(result, Err(D128ConvertError::Overflow));
 
-        let result_neg: Result<D128e12, _> = i128::MIN.try_into();
+        let result_neg: Result<D128s12, _> = i128::MIN.try_into();
         assert_eq!(result_neg, Err(D128ConvertError::Overflow));
     }
 
     #[test]
     fn try_from_u128_zero_succeeds() {
-        let v: D128e12 = 0_u128.try_into().expect("zero fits");
-        assert_eq!(v, D128e12::ZERO);
+        let v: D128s12 = 0_u128.try_into().expect("zero fits");
+        assert_eq!(v, D128s12::ZERO);
     }
 
     #[test]
     fn try_from_u128_in_range_succeeds() {
-        let v: D128e12 = 42_u128.try_into().expect("in-range fits");
+        let v: D128s12 = 42_u128.try_into().expect("in-range fits");
         assert_eq!(v.to_bits(), 42 * 1_000_000_000_000);
     }
 
@@ -903,13 +903,13 @@ mod tests {
     fn try_from_u128_above_i128_max_returns_err() {
         // Any u128 > i128::MAX is unrepresentable.
         let above: u128 = (i128::MAX as u128) + 1;
-        let result: Result<D128e12, _> = above.try_into();
+        let result: Result<D128s12, _> = above.try_into();
         assert_eq!(result, Err(D128ConvertError::Overflow));
     }
 
     #[test]
     fn try_from_u128_max_returns_err() {
-        let result: Result<D128e12, _> = u128::MAX.try_into();
+        let result: Result<D128s12, _> = u128::MAX.try_into();
         assert_eq!(result, Err(D128ConvertError::Overflow));
     }
 
@@ -919,65 +919,65 @@ mod tests {
 
     #[test]
     fn try_from_f64_zero_succeeds() {
-        let v: D128e12 = 0.0_f64.try_into().expect("zero fits");
-        assert_eq!(v, D128e12::ZERO);
+        let v: D128s12 = 0.0_f64.try_into().expect("zero fits");
+        assert_eq!(v, D128s12::ZERO);
     }
 
     #[test]
     fn try_from_f64_one_succeeds() {
-        let v: D128e12 = 1.0_f64.try_into().expect("one fits");
-        assert_eq!(v, D128e12::ONE);
+        let v: D128s12 = 1.0_f64.try_into().expect("one fits");
+        assert_eq!(v, D128s12::ONE);
     }
 
     #[test]
     fn try_from_f64_nan_returns_err() {
-        let result: Result<D128e12, _> = f64::NAN.try_into();
+        let result: Result<D128s12, _> = f64::NAN.try_into();
         assert_eq!(result, Err(D128ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f64_pos_infinity_returns_err() {
-        let result: Result<D128e12, _> = f64::INFINITY.try_into();
+        let result: Result<D128s12, _> = f64::INFINITY.try_into();
         assert_eq!(result, Err(D128ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f64_neg_infinity_returns_err() {
-        let result: Result<D128e12, _> = f64::NEG_INFINITY.try_into();
+        let result: Result<D128s12, _> = f64::NEG_INFINITY.try_into();
         assert_eq!(result, Err(D128ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f64_out_of_range_returns_err() {
         // 1e30 * 10^12 = 1e42 > i128::MAX
-        let result: Result<D128e12, _> = 1e30_f64.try_into();
+        let result: Result<D128s12, _> = 1e30_f64.try_into();
         assert_eq!(result, Err(D128ConvertError::Overflow));
 
-        let result_neg: Result<D128e12, _> = (-1e30_f64).try_into();
+        let result_neg: Result<D128s12, _> = (-1e30_f64).try_into();
         assert_eq!(result_neg, Err(D128ConvertError::Overflow));
     }
 
     #[test]
     fn try_from_f32_zero_succeeds() {
-        let v: D128e12 = 0.0_f32.try_into().expect("zero fits");
-        assert_eq!(v, D128e12::ZERO);
+        let v: D128s12 = 0.0_f32.try_into().expect("zero fits");
+        assert_eq!(v, D128s12::ZERO);
     }
 
     #[test]
     fn try_from_f32_nan_returns_err() {
-        let result: Result<D128e12, _> = f32::NAN.try_into();
+        let result: Result<D128s12, _> = f32::NAN.try_into();
         assert_eq!(result, Err(D128ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f32_infinity_returns_err() {
-        let result: Result<D128e12, _> = f32::INFINITY.try_into();
+        let result: Result<D128s12, _> = f32::INFINITY.try_into();
         assert_eq!(result, Err(D128ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f32_neg_infinity_returns_err() {
-        let result: Result<D128e12, _> = f32::NEG_INFINITY.try_into();
+        let result: Result<D128s12, _> = f32::NEG_INFINITY.try_into();
         assert_eq!(result, Err(D128ConvertError::NotFinite));
     }
 

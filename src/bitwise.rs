@@ -11,10 +11,10 @@
 //! Bitwise operations see that raw integer, not the logical decimal.
 //!
 //! ```ignore
-//! use decimal_scaled::D128e12;
-//! // D128e12::ONE.to_bits() == 1_000_000_000_000 (= 10^12), NOT 1.
+//! use decimal_scaled::D128s12;
+//! // D128s12::ONE.to_bits() == 1_000_000_000_000 (= 10^12), NOT 1.
 //! // count_ones() returns the popcount of 10^12, which is 21.
-//! assert_eq!(D128e12::ONE.count_ones(), 21);
+//! assert_eq!(D128s12::ONE.count_ones(), 21);
 //! ```
 //!
 //! For predictable bit-pattern test data, construct values with
@@ -59,10 +59,10 @@ impl<const SCALE: u32> BitAnd for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// let a = D128e12::from_bits(0b1100);
-    /// let b = D128e12::from_bits(0b1010);
-    /// assert_eq!(a & b, D128e12::from_bits(0b1000));
+    /// use decimal_scaled::D128s12;
+    /// let a = D128s12::from_bits(0b1100);
+    /// let b = D128s12::from_bits(0b1010);
+    /// assert_eq!(a & b, D128s12::from_bits(0b1000));
     /// ```
     #[inline]
     fn bitand(self, rhs: Self) -> Self {
@@ -100,10 +100,10 @@ impl<const SCALE: u32> BitOr for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// let a = D128e12::from_bits(0b1100);
-    /// let b = D128e12::from_bits(0b1010);
-    /// assert_eq!(a | b, D128e12::from_bits(0b1110));
+    /// use decimal_scaled::D128s12;
+    /// let a = D128s12::from_bits(0b1100);
+    /// let b = D128s12::from_bits(0b1010);
+    /// assert_eq!(a | b, D128s12::from_bits(0b1110));
     /// ```
     #[inline]
     fn bitor(self, rhs: Self) -> Self {
@@ -141,10 +141,10 @@ impl<const SCALE: u32> BitXor for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// let a = D128e12::from_bits(0b1100);
-    /// let b = D128e12::from_bits(0b1010);
-    /// assert_eq!(a ^ b, D128e12::from_bits(0b0110));
+    /// use decimal_scaled::D128s12;
+    /// let a = D128s12::from_bits(0b1100);
+    /// let b = D128s12::from_bits(0b1010);
+    /// assert_eq!(a ^ b, D128s12::from_bits(0b0110));
     /// ```
     #[inline]
     fn bitxor(self, rhs: Self) -> Self {
@@ -188,8 +188,8 @@ impl<const SCALE: u32> Shl<u32> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::from_bits(1) << 3u32, D128e12::from_bits(8));
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::from_bits(1) << 3u32, D128s12::from_bits(8));
     /// ```
     #[inline]
     fn shl(self, n: u32) -> Self {
@@ -238,9 +238,9 @@ impl<const SCALE: u32> Shr<u32> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // Arithmetic shift: -8 >> 1 == -4.
-    /// assert_eq!(D128e12::from_bits(-8) >> 1u32, D128e12::from_bits(-4));
+    /// assert_eq!(D128s12::from_bits(-8) >> 1u32, D128s12::from_bits(-4));
     /// ```
     #[inline]
     fn shr(self, n: u32) -> Self {
@@ -283,9 +283,9 @@ impl<const SCALE: u32> Not for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(!D128e12::ZERO, D128e12::from_bits(-1));
-    /// assert_eq!(!D128e12::from_bits(-1), D128e12::ZERO);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(!D128s12::ZERO, D128s12::from_bits(-1));
+    /// assert_eq!(!D128s12::from_bits(-1), D128s12::ZERO);
     /// ```
     #[inline]
     fn not(self) -> Self {
@@ -317,12 +317,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // -1 raw is all-ones. Arithmetic shr keeps it all-ones;
     /// // unsigned_shr clears the top bit, giving i128::MAX.
-    /// let neg_one = D128e12::from_bits(-1);
+    /// let neg_one = D128s12::from_bits(-1);
     /// assert_eq!(neg_one >> 1u32, neg_one);                          // sign-extending
-    /// assert_eq!(neg_one.unsigned_shr(1), D128e12::from_bits(i128::MAX)); // zero-fill
+    /// assert_eq!(neg_one.unsigned_shr(1), D128s12::from_bits(i128::MAX)); // zero-fill
     /// ```
     #[inline]
     pub const fn unsigned_shr(self, n: u32) -> Self {
@@ -344,9 +344,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // 0b111 rotated left by 1 = 0b1110.
-    /// assert_eq!(D128e12::from_bits(0b111).rotate_left(1), D128e12::from_bits(0b1110));
+    /// assert_eq!(D128s12::from_bits(0b111).rotate_left(1), D128s12::from_bits(0b1110));
     /// ```
     #[inline]
     pub const fn rotate_left(self, n: u32) -> Self {
@@ -366,9 +366,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // 1 rotated right by 1 wraps the low bit to the top: i128::MIN.
-    /// assert_eq!(D128e12::from_bits(1).rotate_right(1), D128e12::from_bits(i128::MIN));
+    /// assert_eq!(D128s12::from_bits(1).rotate_right(1), D128s12::from_bits(i128::MIN));
     /// ```
     #[inline]
     pub const fn rotate_right(self, n: u32) -> Self {
@@ -389,10 +389,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::from_bits(1).leading_zeros(), 127);
-    /// assert_eq!(D128e12::ZERO.leading_zeros(), 128);
-    /// assert_eq!(D128e12::from_bits(-1).leading_zeros(), 0);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::from_bits(1).leading_zeros(), 127);
+    /// assert_eq!(D128s12::ZERO.leading_zeros(), 128);
+    /// assert_eq!(D128s12::from_bits(-1).leading_zeros(), 0);
     /// ```
     #[inline]
     pub const fn leading_zeros(self) -> u32 {
@@ -413,9 +413,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::from_bits(8).trailing_zeros(), 3);
-    /// assert_eq!(D128e12::ZERO.trailing_zeros(), 128);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::from_bits(8).trailing_zeros(), 3);
+    /// assert_eq!(D128s12::ZERO.trailing_zeros(), 128);
     /// ```
     #[inline]
     pub const fn trailing_zeros(self) -> u32 {
@@ -425,7 +425,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// Population count: number of `1` bits set in the underlying `i128`
     /// storage.
     ///
-    /// Note the storage-not-value semantic: `D128e12::ONE.count_ones()`
+    /// Note the storage-not-value semantic: `D128s12::ONE.count_ones()`
     /// returns the popcount of `10^12` (= 21), not `1`. Use
     /// [`D128::from_bits`] when you need a predictable bit pattern.
     ///
@@ -438,8 +438,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::from_bits(0b101).count_ones(), 2);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::from_bits(0b101).count_ones(), 2);
     /// ```
     #[inline]
     pub const fn count_ones(self) -> u32 {
@@ -460,9 +460,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // 0b101 has 2 ones and 126 zeros in 128-bit storage.
-    /// assert_eq!(D128e12::from_bits(0b101).count_zeros(), 126);
+    /// assert_eq!(D128s12::from_bits(0b101).count_zeros(), 126);
     /// ```
     #[inline]
     pub const fn count_zeros(self) -> u32 {
@@ -477,7 +477,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// `false` because the sign bit being set means more than one bit is
     /// set in the `u128` view.
     ///
-    /// Note the storage-not-value semantic: `D128e12::ONE.is_power_of_two()`
+    /// Note the storage-not-value semantic: `D128s12::ONE.is_power_of_two()`
     /// returns `false` because storage is `10^12 = 2^12 * 5^12`, not a
     /// single-bit value.
     ///
@@ -490,10 +490,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert!(D128e12::from_bits(8).is_power_of_two());
-    /// assert!(!D128e12::from_bits(7).is_power_of_two());
-    /// assert!(!D128e12::from_bits(-1).is_power_of_two());
+    /// use decimal_scaled::D128s12;
+    /// assert!(D128s12::from_bits(8).is_power_of_two());
+    /// assert!(!D128s12::from_bits(7).is_power_of_two());
+    /// assert!(!D128s12::from_bits(-1).is_power_of_two());
     /// ```
     #[inline]
     pub const fn is_power_of_two(self) -> bool {
@@ -525,9 +525,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::from_bits(7).next_power_of_two(), D128e12::from_bits(8));
-    /// assert_eq!(D128e12::from_bits(8).next_power_of_two(), D128e12::from_bits(8));
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::from_bits(7).next_power_of_two(), D128s12::from_bits(8));
+    /// assert_eq!(D128s12::from_bits(8).next_power_of_two(), D128s12::from_bits(8));
     /// ```
     #[inline]
     pub const fn next_power_of_two(self) -> Self {
@@ -540,58 +540,58 @@ impl<const SCALE: u32> D128<SCALE> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::D128e12;
+    use crate::core_type::D128s12;
 
     // --- BitAnd / BitOr / BitXor ------------------------------------
 
     #[test]
     fn bitand_clears_bits() {
         // raw-bit boundary; from_bits not ONE
-        let a = D128e12::from_bits(0xF0);
-        let b = D128e12::from_bits(0x0F);
-        assert_eq!(a & b, D128e12::from_bits(0x00));
+        let a = D128s12::from_bits(0xF0);
+        let b = D128s12::from_bits(0x0F);
+        assert_eq!(a & b, D128s12::from_bits(0x00));
     }
 
     #[test]
     fn bitand_assign_in_place() {
-        let mut a = D128e12::from_bits(0xFF);
-        a &= D128e12::from_bits(0x0F);
-        assert_eq!(a, D128e12::from_bits(0x0F));
+        let mut a = D128s12::from_bits(0xFF);
+        a &= D128s12::from_bits(0x0F);
+        assert_eq!(a, D128s12::from_bits(0x0F));
     }
 
     #[test]
     fn bitor_sets_bits() {
         // raw-bit boundary; from_bits not ONE
-        let zero = D128e12::ZERO;
-        let one_lsb = D128e12::from_bits(1);
+        let zero = D128s12::ZERO;
+        let one_lsb = D128s12::from_bits(1);
         assert_eq!(zero | one_lsb, one_lsb);
     }
 
     #[test]
     fn bitor_assign_in_place() {
-        let mut a = D128e12::from_bits(0xF0);
-        a |= D128e12::from_bits(0x0F);
-        assert_eq!(a, D128e12::from_bits(0xFF));
+        let mut a = D128s12::from_bits(0xF0);
+        a |= D128s12::from_bits(0x0F);
+        assert_eq!(a, D128s12::from_bits(0xFF));
     }
 
     #[test]
     fn bitxor_toggles_bits() {
-        let a = D128e12::from_bits(0b1100);
-        let b = D128e12::from_bits(0b1010);
-        assert_eq!(a ^ b, D128e12::from_bits(0b0110));
+        let a = D128s12::from_bits(0b1100);
+        let b = D128s12::from_bits(0b1010);
+        assert_eq!(a ^ b, D128s12::from_bits(0b0110));
     }
 
     #[test]
     fn bitxor_assign_in_place() {
-        let mut a = D128e12::from_bits(0xFF);
-        a ^= D128e12::from_bits(0x0F);
-        assert_eq!(a, D128e12::from_bits(0xF0));
+        let mut a = D128s12::from_bits(0xFF);
+        a ^= D128s12::from_bits(0x0F);
+        assert_eq!(a, D128s12::from_bits(0xF0));
     }
 
     #[test]
     fn bitxor_self_is_zero() {
-        let a = D128e12::from_bits(0xDEAD_BEEF_i128);
-        assert_eq!(a ^ a, D128e12::ZERO);
+        let a = D128s12::from_bits(0xDEAD_BEEF_i128);
+        assert_eq!(a ^ a, D128s12::ZERO);
     }
 
     // --- Shl / Shr ---------------------------------------------------
@@ -599,39 +599,39 @@ mod tests {
     #[test]
     fn shl_doubles_lsb() {
         // raw-bit boundary; from_bits(1) not ONE
-        assert_eq!(D128e12::from_bits(1) << 1u32, D128e12::from_bits(2));
+        assert_eq!(D128s12::from_bits(1) << 1u32, D128s12::from_bits(2));
     }
 
     #[test]
     fn shr_halves_lsb() {
         // raw-bit boundary; from_bits not ONE
-        assert_eq!(D128e12::from_bits(2) >> 1u32, D128e12::from_bits(1));
+        assert_eq!(D128s12::from_bits(2) >> 1u32, D128s12::from_bits(1));
     }
 
     #[test]
     fn shr_is_sign_extending() {
         // -1 raw is all-ones; arithmetic shr preserves all-ones.
-        assert_eq!(D128e12::from_bits(-1) >> 1u32, D128e12::from_bits(-1));
+        assert_eq!(D128s12::from_bits(-1) >> 1u32, D128s12::from_bits(-1));
     }
 
     #[test]
     fn shr_negative_stays_negative() {
         // -8 raw >> 1 = -4 raw under arithmetic shift.
-        assert_eq!(D128e12::from_bits(-8) >> 1u32, D128e12::from_bits(-4));
+        assert_eq!(D128s12::from_bits(-8) >> 1u32, D128s12::from_bits(-4));
     }
 
     #[test]
     fn shl_assign_in_place() {
-        let mut a = D128e12::from_bits(1);
+        let mut a = D128s12::from_bits(1);
         a <<= 4u32;
-        assert_eq!(a, D128e12::from_bits(16));
+        assert_eq!(a, D128s12::from_bits(16));
     }
 
     #[test]
     fn shr_assign_in_place() {
-        let mut a = D128e12::from_bits(16);
+        let mut a = D128s12::from_bits(16);
         a >>= 2u32;
-        assert_eq!(a, D128e12::from_bits(4));
+        assert_eq!(a, D128s12::from_bits(4));
     }
 
     // --- Not ---------------------------------------------------------
@@ -639,17 +639,17 @@ mod tests {
     #[test]
     fn not_zero_is_neg_one() {
         // raw-bit boundary; from_bits(-1) not -ONE
-        assert_eq!(!D128e12::ZERO, D128e12::from_bits(-1));
+        assert_eq!(!D128s12::ZERO, D128s12::from_bits(-1));
     }
 
     #[test]
     fn not_neg_one_is_zero() {
-        assert_eq!(!D128e12::from_bits(-1), D128e12::ZERO);
+        assert_eq!(!D128s12::from_bits(-1), D128s12::ZERO);
     }
 
     #[test]
     fn not_is_self_inverse() {
-        let a = D128e12::from_bits(0xCAFE);
+        let a = D128s12::from_bits(0xCAFE);
         assert_eq!(!!a, a);
     }
 
@@ -660,22 +660,22 @@ mod tests {
         // -1 raw is all-ones; logical shr by 1 clears the top bit, so
         // the result is i128::MAX.
         assert_eq!(
-            D128e12::from_bits(-1).unsigned_shr(1),
-            D128e12::from_bits(i128::MAX)
+            D128s12::from_bits(-1).unsigned_shr(1),
+            D128s12::from_bits(i128::MAX)
         );
     }
 
     #[test]
     fn unsigned_shr_positive_matches_arithmetic_shr() {
         // For non-negative inputs, arithmetic and logical shifts agree.
-        let a = D128e12::from_bits(0xFF);
+        let a = D128s12::from_bits(0xFF);
         assert_eq!(a.unsigned_shr(4), a >> 4u32);
-        assert_eq!(a.unsigned_shr(4), D128e12::from_bits(0x0F));
+        assert_eq!(a.unsigned_shr(4), D128s12::from_bits(0x0F));
     }
 
     #[test]
     fn unsigned_shr_zero_amount_identity() {
-        let a = D128e12::from_bits(-42);
+        let a = D128s12::from_bits(-42);
         assert_eq!(a.unsigned_shr(0), a);
     }
 
@@ -685,8 +685,8 @@ mod tests {
     fn rotate_left_low_bits() {
         // 0b111 rotate_left 1 = 0b1110 = 14.
         assert_eq!(
-            D128e12::from_bits(0b111).rotate_left(1),
-            D128e12::from_bits(0b1110)
+            D128s12::from_bits(0b111).rotate_left(1),
+            D128s12::from_bits(0b1110)
         );
     }
 
@@ -694,20 +694,20 @@ mod tests {
     fn rotate_right_low_bit_wraps_to_top() {
         // 1 rotate_right 1 = top bit set = i128::MIN raw.
         assert_eq!(
-            D128e12::from_bits(1).rotate_right(1),
-            D128e12::from_bits(i128::MIN)
+            D128s12::from_bits(1).rotate_right(1),
+            D128s12::from_bits(i128::MIN)
         );
     }
 
     #[test]
     fn rotate_left_full_width_is_identity() {
-        let a = D128e12::from_bits(0xDEAD_BEEF_i128);
+        let a = D128s12::from_bits(0xDEAD_BEEF_i128);
         assert_eq!(a.rotate_left(128), a);
     }
 
     #[test]
     fn rotate_right_round_trip() {
-        let a = D128e12::from_bits(0xCAFE_F00D_i128);
+        let a = D128s12::from_bits(0xCAFE_F00D_i128);
         assert_eq!(a.rotate_left(13).rotate_right(13), a);
     }
 
@@ -716,32 +716,32 @@ mod tests {
     #[test]
     fn leading_zeros_lsb_is_127() {
         // raw-bit boundary; from_bits(1) not ONE
-        assert_eq!(D128e12::from_bits(1).leading_zeros(), 127);
+        assert_eq!(D128s12::from_bits(1).leading_zeros(), 127);
     }
 
     #[test]
     fn leading_zeros_zero_is_128() {
-        assert_eq!(D128e12::ZERO.leading_zeros(), 128);
+        assert_eq!(D128s12::ZERO.leading_zeros(), 128);
     }
 
     #[test]
     fn leading_zeros_neg_one_is_zero() {
-        assert_eq!(D128e12::from_bits(-1).leading_zeros(), 0);
+        assert_eq!(D128s12::from_bits(-1).leading_zeros(), 0);
     }
 
     #[test]
     fn trailing_zeros_eight_is_three() {
-        assert_eq!(D128e12::from_bits(8).trailing_zeros(), 3);
+        assert_eq!(D128s12::from_bits(8).trailing_zeros(), 3);
     }
 
     #[test]
     fn trailing_zeros_zero_is_128() {
-        assert_eq!(D128e12::ZERO.trailing_zeros(), 128);
+        assert_eq!(D128s12::ZERO.trailing_zeros(), 128);
     }
 
     #[test]
     fn trailing_zeros_one_is_zero() {
-        assert_eq!(D128e12::from_bits(1).trailing_zeros(), 0);
+        assert_eq!(D128s12::from_bits(1).trailing_zeros(), 0);
     }
 
     // --- count_ones / count_zeros -----------------------------------
@@ -749,30 +749,30 @@ mod tests {
     #[test]
     fn count_ones_pattern() {
         // 0b101 has two ones.
-        assert_eq!(D128e12::from_bits(0b101).count_ones(), 2);
+        assert_eq!(D128s12::from_bits(0b101).count_ones(), 2);
     }
 
     #[test]
     fn count_zeros_pattern() {
         // 0b101 has 128 - 2 = 126 zeros (in i128 storage).
-        assert_eq!(D128e12::from_bits(0b101).count_zeros(), 126);
+        assert_eq!(D128s12::from_bits(0b101).count_zeros(), 126);
     }
 
     #[test]
     fn count_ones_zero_is_zero() {
-        assert_eq!(D128e12::ZERO.count_ones(), 0);
+        assert_eq!(D128s12::ZERO.count_ones(), 0);
     }
 
     #[test]
     fn count_ones_neg_one_is_128() {
         // -1 raw is all-ones.
-        assert_eq!(D128e12::from_bits(-1).count_ones(), 128);
+        assert_eq!(D128s12::from_bits(-1).count_ones(), 128);
     }
 
     #[test]
     fn count_zeros_complement_relation() {
         // count_ones + count_zeros == 128 for every value.
-        let a = D128e12::from_bits(0xDEAD_BEEF_CAFE_i128);
+        let a = D128s12::from_bits(0xDEAD_BEEF_CAFE_i128);
         assert_eq!(a.count_ones() + a.count_zeros(), 128);
     }
 
@@ -780,38 +780,38 @@ mod tests {
 
     #[test]
     fn is_power_of_two_true_for_eight() {
-        assert!(D128e12::from_bits(8).is_power_of_two());
+        assert!(D128s12::from_bits(8).is_power_of_two());
     }
 
     #[test]
     fn is_power_of_two_false_for_seven() {
-        assert!(!D128e12::from_bits(7).is_power_of_two());
+        assert!(!D128s12::from_bits(7).is_power_of_two());
     }
 
     #[test]
     fn is_power_of_two_false_for_zero() {
-        assert!(!D128e12::ZERO.is_power_of_two());
+        assert!(!D128s12::ZERO.is_power_of_two());
     }
 
     #[test]
     fn is_power_of_two_false_for_negative() {
         // Negative i128 has the sign bit set; reinterpreted as u128 the
         // popcount is more than one, so not a power of two.
-        assert!(!D128e12::from_bits(-1).is_power_of_two());
+        assert!(!D128s12::from_bits(-1).is_power_of_two());
     }
 
     #[test]
     fn is_power_of_two_storage_not_value_semantic() {
-        // D128e12::ONE has storage 10^12 = 2^12 * 5^12, not a power of
+        // D128s12::ONE has storage 10^12 = 2^12 * 5^12, not a power of
         // two. Documents the storage-not-value semantic.
-        assert!(!D128e12::ONE.is_power_of_two());
+        assert!(!D128s12::ONE.is_power_of_two());
     }
 
     #[test]
     fn next_power_of_two_seven_is_eight() {
         assert_eq!(
-            D128e12::from_bits(7).next_power_of_two(),
-            D128e12::from_bits(8)
+            D128s12::from_bits(7).next_power_of_two(),
+            D128s12::from_bits(8)
         );
     }
 
@@ -819,16 +819,16 @@ mod tests {
     fn next_power_of_two_eight_is_eight() {
         // Already a power of two -- stays put.
         assert_eq!(
-            D128e12::from_bits(8).next_power_of_two(),
-            D128e12::from_bits(8)
+            D128s12::from_bits(8).next_power_of_two(),
+            D128s12::from_bits(8)
         );
     }
 
     #[test]
     fn next_power_of_two_one_is_one() {
         assert_eq!(
-            D128e12::from_bits(1).next_power_of_two(),
-            D128e12::from_bits(1)
+            D128s12::from_bits(1).next_power_of_two(),
+            D128s12::from_bits(1)
         );
     }
 

@@ -32,19 +32,19 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["ser
 ## Quick start
 
 ```rust
-use decimal_scaled::D128e12;
+use decimal_scaled::D128s12;
 
 // Construct from raw integer storage (value × 10^12)
-let a = D128e12::from_bits(1_100_000_000_000); // exactly 1.1
-let b = D128e12::from_bits(2_200_000_000_000); // exactly 2.2
+let a = D128s12::from_bits(1_100_000_000_000); // exactly 1.1
+let b = D128s12::from_bits(2_200_000_000_000); // exactly 2.2
 
 // Constants
-let zero = D128e12::ZERO;
-let one  = D128e12::ONE;
+let zero = D128s12::ZERO;
+let one  = D128s12::ONE;
 
 // Raw storage
 assert_eq!(a.to_bits(), 1_100_000_000_000);
-assert_eq!(D128e12::multiplier(), 1_000_000_000_000);
+assert_eq!(D128s12::multiplier(), 1_000_000_000_000);
 ```
 
 ---
@@ -170,8 +170,8 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 | `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | Yes |
 | `rust_decimal`                 | 96-bit + scale byte | 10 | Yes | Yes | ±7.9 × 10²⁸ | Yes |
 | `bigdecimal`                   | heap-allocated | 10 | Yes | Yes | Unbounded | No |
-| `D128<12>` or `D128e12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | Yes |
-| `D128<6>` or `D128e6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | Yes |
+| `D128<12>` or `D128s12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | Yes |
+| `D128<6>` or `D128s6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | Yes |
 
 ### Hash and equality contracts
 
@@ -190,7 +190,7 @@ A well-behaved numeric type must satisfy: if `a == b` then `hash(a) == hash(b)`.
 
 For `rust_decimal` and `bigdecimal`, the normalisation is correct but carries a runtime cost on every comparison and hash call, and it means the stored representation is not canonical - you cannot memcmp two values.
 
-`D128<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because the scale is fixed at compile time there is exactly one `i128` value per logical number. `1.10` and `1.1` parsed via `FromStr` both produce `D128e12(1_100_000_000_000)` - the same bit pattern - so equality and hashing are a single integer comparison with no runtime normalisation.
+`D128<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because the scale is fixed at compile time there is exactly one `i128` value per logical number. `1.10` and `1.1` parsed via `FromStr` both produce `D128s12(1_100_000_000_000)` - the same bit pattern - so equality and hashing are a single integer comparison with no runtime normalisation.
 
 ### Key differences from `fixed`
 
@@ -206,14 +206,14 @@ For human-scale decimal values `D128` gives decimal-exact results with no roundi
 
 | Alias | `SCALE` | 1 least significant decimal digit | Approximate range |
 |---|---|---|---|
-| `D128e0` | 0 | 1 | ±1.7 × 10³⁸ |
-| `D128e2` | 2 | 0.01 (cents) | ±1.7 × 10³⁶ |
-| `D128e6` | 6 | 10⁻⁶ (µ) | ±1.7 × 10³² |
-| `D128e12` | 12 | 10⁻¹² (p) | ±1.7 × 10²⁶ |
-| `D128e18` | 18 | 10⁻¹⁸ (a) | ±1.7 × 10²⁰ |
-| `D128e38` | 38 | 10⁻³⁸ | ±1.7 |
+| `D128s0` | 0 | 1 | ±1.7 × 10³⁸ |
+| `D128s2` | 2 | 0.01 (cents) | ±1.7 × 10³⁶ |
+| `D128s6` | 6 | 10⁻⁶ (µ) | ±1.7 × 10³² |
+| `D128s12` | 12 | 10⁻¹² (p) | ±1.7 × 10²⁶ |
+| `D128s18` | 18 | 10⁻¹⁸ (a) | ±1.7 × 10²⁰ |
+| `D128s38` | 38 | 10⁻³⁸ | ±1.7 |
 
-Aliases `D128e0` through `D128e38` are all provided. `SCALE = 39` would overflow `i128`.
+Aliases `D128s0` through `D128s38` are all provided. `SCALE = 39` would overflow `i128`.
 
 ---
 

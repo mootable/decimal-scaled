@@ -1,5 +1,5 @@
 //! Core type definition: [`D128`] and the concrete scale aliases
-//! [`D128e0`] through [`D128e38`].
+//! [`D128s0`] through [`D128s38`].
 //!
 //! `D128<const SCALE: u32>` is a `#[repr(transparent)]` newtype around
 //! `i128`. The stored integer equals `actual_value * 10^SCALE`.
@@ -54,7 +54,7 @@ impl<const SCALE: u32> Default for D128<SCALE> {
     }
 }
 
-// Scale aliases: D128e0 through D128e38.
+// Scale aliases: D128s0 through D128s38.
 //
 // Each alias names a specific SCALE value. The const-generic impl block
 // makes every method generic, so adding aliases is purely additive.
@@ -74,7 +74,7 @@ impl<const SCALE: u32> Default for D128<SCALE> {
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e0 = D128<0>;
+pub type D128s0 = D128<0>;
 
 /// Scale alias: `D128<1>`. 1 LSB = 10^-1 (1 decimal digit).
 /// Range ~+/-1.7e37.
@@ -82,14 +82,14 @@ pub type D128e0 = D128<0>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e1 = D128<1>;
+pub type D128s1 = D128<1>;
 
 /// Scale alias: `D128<2>`. 1 LSB = 10^-2 (cents). Range ~+/-1.7e36.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e2 = D128<2>;
+pub type D128s2 = D128<2>;
 
 /// Scale alias: `D128<3>`. 1 LSB = 10^-3 (thousandths; 1 mm at m units).
 /// Range ~+/-1.7e35.
@@ -97,21 +97,21 @@ pub type D128e2 = D128<2>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e3 = D128<3>;
+pub type D128s3 = D128<3>;
 
 /// Scale alias: `D128<4>`. 1 LSB = 10^-4 (basis points). Range ~+/-1.7e34.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e4 = D128<4>;
+pub type D128s4 = D128<4>;
 
 /// Scale alias: `D128<5>`. 1 LSB = 10^-5. Range ~+/-1.7e33.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e5 = D128<5>;
+pub type D128s5 = D128<5>;
 
 /// Scale alias: `D128<6>`. 1 LSB = 10^-6 (1 um at mm units; ppm).
 /// Range ~+/-1.7e32.
@@ -119,21 +119,21 @@ pub type D128e5 = D128<5>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e6 = D128<6>;
+pub type D128s6 = D128<6>;
 
 /// Scale alias: `D128<7>`. 1 LSB = 10^-7. Range ~+/-1.7e31.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e7 = D128<7>;
+pub type D128s7 = D128<7>;
 
 /// Scale alias: `D128<8>`. 1 LSB = 10^-8 (satoshi-grade). Range ~+/-1.7e30.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e8 = D128<8>;
+pub type D128s8 = D128<8>;
 
 /// Scale alias: `D128<9>`. 1 LSB = 10^-9 (1 nm at mm units; ppb).
 /// Range ~+/-1.7e29.
@@ -141,21 +141,21 @@ pub type D128e8 = D128<8>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e9 = D128<9>;
+pub type D128s9 = D128<9>;
 
 /// Scale alias: `D128<10>`. 1 LSB = 10^-10. Range ~+/-1.7e28.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e10 = D128<10>;
+pub type D128s10 = D128<10>;
 
 /// Scale alias: `D128<11>`. 1 LSB = 10^-11. Range ~+/-1.7e27.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e11 = D128<11>;
+pub type D128s11 = D128<11>;
 
 /// Scale alias: `D128<12>`. 1 LSB = 10^-12 (1 pm at mm units).
 /// Range ~+/-1.7e14 model units.
@@ -169,42 +169,42 @@ pub type D128e11 = D128<11>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e12 = D128<12>;
+pub type D128s12 = D128<12>;
 
 /// Scale alias: `D128<13>`. 1 LSB = 10^-13. Range ~+/-1.7e25.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e13 = D128<13>;
+pub type D128s13 = D128<13>;
 
 /// Scale alias: `D128<14>`. 1 LSB = 10^-14. Range ~+/-1.7e24.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e14 = D128<14>;
+pub type D128s14 = D128<14>;
 
 /// Scale alias: `D128<15>`. 1 LSB = 10^-15 (femto). Range ~+/-1.7e23.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e15 = D128<15>;
+pub type D128s15 = D128<15>;
 
 /// Scale alias: `D128<16>`. 1 LSB = 10^-16. Range ~+/-1.7e22.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e16 = D128<16>;
+pub type D128s16 = D128<16>;
 
 /// Scale alias: `D128<17>`. 1 LSB = 10^-17. Range ~+/-1.7e21.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e17 = D128<17>;
+pub type D128s17 = D128<17>;
 
 /// Scale alias: `D128<18>`. 1 LSB = 10^-18 (atto; high-precision scientific).
 /// Range ~+/-1.7e20.
@@ -212,119 +212,119 @@ pub type D128e17 = D128<17>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e18 = D128<18>;
+pub type D128s18 = D128<18>;
 
 /// Scale alias: `D128<19>`. 1 LSB = 10^-19. Range ~+/-1.7e19.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e19 = D128<19>;
+pub type D128s19 = D128<19>;
 
 /// Scale alias: `D128<20>`. 1 LSB = 10^-20. Range ~+/-1.7e18.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e20 = D128<20>;
+pub type D128s20 = D128<20>;
 
 /// Scale alias: `D128<21>`. 1 LSB = 10^-21 (zepto). Range ~+/-1.7e17.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e21 = D128<21>;
+pub type D128s21 = D128<21>;
 
 /// Scale alias: `D128<22>`. 1 LSB = 10^-22. Range ~+/-1.7e16.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e22 = D128<22>;
+pub type D128s22 = D128<22>;
 
 /// Scale alias: `D128<23>`. 1 LSB = 10^-23. Range ~+/-1.7e15.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e23 = D128<23>;
+pub type D128s23 = D128<23>;
 
 /// Scale alias: `D128<24>`. 1 LSB = 10^-24 (yocto). Range ~+/-1.7e14.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e24 = D128<24>;
+pub type D128s24 = D128<24>;
 
 /// Scale alias: `D128<25>`. 1 LSB = 10^-25. Range ~+/-1.7e13.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e25 = D128<25>;
+pub type D128s25 = D128<25>;
 
 /// Scale alias: `D128<26>`. 1 LSB = 10^-26. Range ~+/-1.7e12.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e26 = D128<26>;
+pub type D128s26 = D128<26>;
 
 /// Scale alias: `D128<27>`. 1 LSB = 10^-27. Range ~+/-1.7e11.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e27 = D128<27>;
+pub type D128s27 = D128<27>;
 
 /// Scale alias: `D128<28>`. 1 LSB = 10^-28. Range ~+/-1.7e10.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e28 = D128<28>;
+pub type D128s28 = D128<28>;
 
 /// Scale alias: `D128<29>`. 1 LSB = 10^-29. Range ~+/-1.7e9.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e29 = D128<29>;
+pub type D128s29 = D128<29>;
 
 /// Scale alias: `D128<30>`. 1 LSB = 10^-30. Range ~+/-1.7e8.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e30 = D128<30>;
+pub type D128s30 = D128<30>;
 
 /// Scale alias: `D128<31>`. 1 LSB = 10^-31. Range ~+/-1.7e7.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e31 = D128<31>;
+pub type D128s31 = D128<31>;
 
 /// Scale alias: `D128<32>`. 1 LSB = 10^-32. Range ~+/-1.7e6.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e32 = D128<32>;
+pub type D128s32 = D128<32>;
 
 /// Scale alias: `D128<33>`. 1 LSB = 10^-33. Range ~+/-1.7e5.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e33 = D128<33>;
+pub type D128s33 = D128<33>;
 
 /// Scale alias: `D128<34>`. 1 LSB = 10^-34. Range ~+/-1.7e4.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e34 = D128<34>;
+pub type D128s34 = D128<34>;
 
 /// Scale alias: `D128<35>`. 1 LSB = 10^-35. Range ~+/-1.7e3.
 ///
@@ -335,7 +335,7 @@ pub type D128e34 = D128<34>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e35 = D128<35>;
+pub type D128s35 = D128<35>;
 
 /// Scale alias: `D128<36>`. 1 LSB = 10^-36. Range ~+/-170.
 ///
@@ -347,28 +347,28 @@ pub type D128e35 = D128<35>;
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e36 = D128<36>;
+pub type D128s36 = D128<36>;
 
 /// Scale alias: `D128<37>`. 1 LSB = 10^-37. Range ~+/-17.
 ///
-/// Math constants lose precision above `SCALE = 35`; see `D128e36`.
+/// Math constants lose precision above `SCALE = 35`; see `D128s36`.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e37 = D128<37>;
+pub type D128s37 = D128<37>;
 
 /// Scale alias: `D128<38>`. 1 LSB = 10^-38. Range ~+/-1.7
 /// (sub-unit dimensionless ratios).
 ///
 /// This is the maximum supported scale. `10^38 < i128::MAX < 10^39`, so
 /// `SCALE = 39` is not supported (`multiplier()` would overflow). Math
-/// constants lose precision above `SCALE = 35`; see `D128e36`.
+/// constants lose precision above `SCALE = 35`; see `D128s36`.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-pub type D128e38 = D128<38>;
+pub type D128s38 = D128<38>;
 
 /// Error returned by `<D128<SCALE> as FromStr>::from_str` when the input
 /// string is not a valid canonical decimal literal.
@@ -428,9 +428,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // Raw 1_500_000_000_000 represents the logical value 1.5.
-    /// let v = D128e12::from_bits(1_500_000_000_000);
+    /// let v = D128s12::from_bits(1_500_000_000_000);
     /// assert_eq!(v.to_bits(), 1_500_000_000_000);
     /// ```
     #[inline]
@@ -450,8 +450,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::ONE.to_bits(), 1_000_000_000_000_i128);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::ONE.to_bits(), 1_000_000_000_000_i128);
     /// ```
     #[inline]
     pub const fn to_bits(self) -> i128 {
@@ -476,8 +476,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::multiplier(), 1_000_000_000_000_i128);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::multiplier(), 1_000_000_000_000_i128);
     /// ```
     #[inline]
     pub const fn multiplier() -> i128 {
@@ -497,9 +497,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::SCALE, 12);
-    /// const N: u32 = D128e12::SCALE;
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::SCALE, 12);
+    /// const N: u32 = D128s12::SCALE;
     /// ```
     pub const SCALE: u32 = SCALE;
 
@@ -515,8 +515,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
-    /// let v = D128e12::ONE;
+    /// use decimal_scaled::D128s12;
+    /// let v = D128s12::ONE;
     /// assert_eq!(v.scale(), 12);
     /// ```
     #[inline]
@@ -570,44 +570,44 @@ mod tests {
     #[test]
     fn from_bits_to_bits_round_trip() {
         let raw: i128 = 1_500_000_000_000;
-        let v: D128e12 = D128e12::from_bits(raw);
+        let v: D128s12 = D128s12::from_bits(raw);
         assert_eq!(v.to_bits(), raw);
     }
 
     /// `ZERO` has raw bit value 0.
     #[test]
     fn zero_is_zero_bits() {
-        assert_eq!(D128e12::ZERO.to_bits(), 0);
+        assert_eq!(D128s12::ZERO.to_bits(), 0);
     }
 
     /// Two instances with identical raw bits compare equal.
     #[test]
     fn equal_by_underlying_bits() {
         assert_eq!(
-            D128e12::from_bits(42_000_000_000_000),
-            D128e12::from_bits(42_000_000_000_000)
+            D128s12::from_bits(42_000_000_000_000),
+            D128s12::from_bits(42_000_000_000_000)
         );
-        assert_ne!(D128e12::from_bits(42), D128e12::from_bits(43));
+        assert_ne!(D128s12::from_bits(42), D128s12::from_bits(43));
     }
 
     /// Ord is derived from i128: smaller bits compare less.
     #[test]
     fn ord_by_underlying_bits() {
-        assert!(D128e12::from_bits(1) < D128e12::from_bits(2));
-        assert!(D128e12::from_bits(-1) < D128e12::from_bits(0));
+        assert!(D128s12::from_bits(1) < D128s12::from_bits(2));
+        assert!(D128s12::from_bits(-1) < D128s12::from_bits(0));
     }
 
     /// `multiplier()` returns 10^SCALE. At SCALE = 12 that is 10^12.
     #[test]
     fn multiplier_is_ten_to_scale() {
-        assert_eq!(D128e12::multiplier(), 1_000_000_000_000_i128);
+        assert_eq!(D128s12::multiplier(), 1_000_000_000_000_i128);
     }
 
     /// `SCALE` associated const returns the const-generic scale.
     #[test]
     fn scale_const_matches_type_parameter() {
-        assert_eq!(D128e12::SCALE, 12);
-        const N: u32 = D128e12::SCALE;
+        assert_eq!(D128s12::SCALE, 12);
+        const N: u32 = D128s12::SCALE;
         assert_eq!(N, 12);
     }
 
@@ -615,10 +615,10 @@ mod tests {
     /// independent of the instance's value.
     #[test]
     fn scale_method_matches_type_parameter() {
-        assert_eq!(D128e12::ZERO.scale(), 12);
-        assert_eq!(D128e12::ONE.scale(), 12);
-        assert_eq!(D128e12::from_bits(i128::MAX).scale(), 12);
-        assert_eq!(D128e12::from_bits(-7).scale(), 12);
+        assert_eq!(D128s12::ZERO.scale(), 12);
+        assert_eq!(D128s12::ONE.scale(), 12);
+        assert_eq!(D128s12::from_bits(i128::MAX).scale(), 12);
+        assert_eq!(D128s12::from_bits(-7).scale(), 12);
     }
 
     /// Both forms agree at non-default scales.
@@ -638,26 +638,26 @@ mod tests {
     /// `ONE` has bit pattern 10^SCALE so that the logical value is 1.
     #[test]
     fn one_has_scaled_bit_pattern() {
-        assert_eq!(D128e12::ONE.to_bits(), 1_000_000_000_000_i128);
+        assert_eq!(D128s12::ONE.to_bits(), 1_000_000_000_000_i128);
     }
 
     /// `MAX` is `i128::MAX`.
     #[test]
     fn max_is_i128_max() {
-        assert_eq!(D128e12::MAX.to_bits(), i128::MAX);
+        assert_eq!(D128s12::MAX.to_bits(), i128::MAX);
     }
 
     /// `MIN` is `i128::MIN`.
     #[test]
     fn min_is_i128_min() {
-        assert_eq!(D128e12::MIN.to_bits(), i128::MIN);
+        assert_eq!(D128s12::MIN.to_bits(), i128::MIN);
     }
 
     /// `ONE` is not equal to `ZERO`.
     #[test]
     fn one_is_not_zero() {
-        assert_ne!(D128e12::ONE, D128e12::ZERO);
-        assert!(D128e12::ONE.is_positive());
+        assert_ne!(D128s12::ONE, D128s12::ZERO);
+        assert!(D128s12::ONE.is_positive());
     }
 
     /// `multiplier()` works correctly at non-default scales.

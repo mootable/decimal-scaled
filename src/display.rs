@@ -23,7 +23,7 @@
 //!
 //! [`fmt::LowerHex`], [`fmt::UpperHex`], [`fmt::Octal`], and [`fmt::Binary`]
 //! format the **raw `i128` storage** (= `value * 10^SCALE`), not the decimal
-//! value. For example, `D128e12::ONE` (storage `10^12`) prints in lower-hex
+//! value. For example, `D128s12::ONE` (storage `10^12`) prints in lower-hex
 //! as `e8d4a51000`.
 //!
 //! # FromStr
@@ -72,12 +72,12 @@ impl<const SCALE: u32> fmt::Display for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let v = D128e12::from_bits(1_500_000_000_000);
+    /// let v = D128s12::from_bits(1_500_000_000_000);
     /// assert_eq!(v.to_string(), "1.500000000000");
     ///
-    /// let neg = D128e12::from_bits(-1_500_000_000_000);
+    /// let neg = D128s12::from_bits(-1_500_000_000_000);
     /// assert_eq!(neg.to_string(), "-1.500000000000");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -119,9 +119,9 @@ impl<const SCALE: u32> fmt::Debug for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let v = D128e12::from_bits(1_500_000_000_000);
+    /// let v = D128s12::from_bits(1_500_000_000_000);
     /// assert_eq!(format!("{v:?}"), "D128<12>(1.500000000000)");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -146,12 +146,12 @@ impl<const SCALE: u32> fmt::LowerExp for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let v = D128e12::from_bits(1_500_000_000_000);
+    /// let v = D128s12::from_bits(1_500_000_000_000);
     /// assert_eq!(format!("{v:e}"), "1.5e0");
     ///
-    /// let sub = D128e12::from_bits(1_500_000_000);
+    /// let sub = D128s12::from_bits(1_500_000_000);
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -171,9 +171,9 @@ impl<const SCALE: u32> fmt::UpperExp for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let v = D128e12::from_bits(1_500_000_000_000);
+    /// let v = D128s12::from_bits(1_500_000_000_000);
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -257,10 +257,10 @@ impl<const SCALE: u32> fmt::LowerHex for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
     /// // Storage for 1.0 at SCALE=12 is 10^12 = 0xe8d4a51000.
-    /// assert_eq!(format!("{:x}", D128e12::ONE), "e8d4a51000");
+    /// assert_eq!(format!("{:x}", D128s12::ONE), "e8d4a51000");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::LowerHex::fmt(&self.0, f)
@@ -279,9 +279,9 @@ impl<const SCALE: u32> fmt::UpperHex for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(format!("{:X}", D128e12::ONE), "E8D4A51000");
+    /// assert_eq!(format!("{:X}", D128s12::ONE), "E8D4A51000");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::UpperHex::fmt(&self.0, f)
@@ -300,9 +300,9 @@ impl<const SCALE: u32> fmt::Octal for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(format!("{:o}", D128e12::ZERO), "0");
+    /// assert_eq!(format!("{:o}", D128s12::ZERO), "0");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         fmt::Octal::fmt(&self.0, f)
@@ -321,10 +321,10 @@ impl<const SCALE: u32> fmt::Binary for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
     /// // 10^12 in binary is a 40-bit value.
-    /// let s = format!("{:b}", D128e12::ONE);
+    /// let s = format!("{:b}", D128s12::ONE);
     /// assert_eq!(s, "1110100011010100101001010001000000000000");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -380,12 +380,12 @@ impl<const SCALE: u32> FromStr for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let v: D128e12 = "1.5".parse().unwrap();
+    /// let v: D128s12 = "1.5".parse().unwrap();
     /// assert_eq!(v.to_bits(), 1_500_000_000_000);
     ///
-    /// let neg: D128e12 = "-1.5".parse().unwrap();
+    /// let neg: D128s12 = "-1.5".parse().unwrap();
     /// assert_eq!(neg.to_bits(), -1_500_000_000_000);
     /// ```
     fn from_str(s: &str) -> Result<Self, Self::Err> {
@@ -547,7 +547,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::{D128e12, D128};
+    use crate::core_type::{D128s12, D128};
     #[cfg(feature = "alloc")]
     use alloc::format;
     #[cfg(feature = "alloc")]
@@ -559,21 +559,21 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_zero_renders() {
-        assert_eq!(D128e12::ZERO.to_string(), "0.000000000000");
+        assert_eq!(D128s12::ZERO.to_string(), "0.000000000000");
     }
 
     /// ONE renders as `1.000000000000` at SCALE = 12.
     #[cfg(feature = "alloc")]
     #[test]
     fn display_one_renders() {
-        assert_eq!(D128e12::ONE.to_string(), "1.000000000000");
+        assert_eq!(D128s12::ONE.to_string(), "1.000000000000");
     }
 
     /// `1.5` renders with full SCALE fractional digits.
     #[cfg(feature = "alloc")]
     #[test]
     fn display_one_point_five_renders() {
-        let v = D128e12::from_bits(1_500_000_000_000);
+        let v = D128s12::from_bits(1_500_000_000_000);
         assert_eq!(v.to_string(), "1.500000000000");
     }
 
@@ -581,7 +581,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_negative_renders() {
-        let v = D128e12::from_bits(-1_500_000_000_000);
+        let v = D128s12::from_bits(-1_500_000_000_000);
         assert_eq!(v.to_string(), "-1.500000000000");
     }
 
@@ -590,7 +590,7 @@ mod tests {
     #[test]
     fn display_subunit_keeps_leading_zeros() {
         // 0.001 = 1_000_000_000 at SCALE 12
-        let v = D128e12::from_bits(1_000_000_000);
+        let v = D128s12::from_bits(1_000_000_000);
         assert_eq!(v.to_string(), "0.001000000000");
     }
 
@@ -599,7 +599,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_max_does_not_panic() {
-        let s = D128e12::MAX.to_string();
+        let s = D128s12::MAX.to_string();
         assert_eq!(s, "170141183460469231731687303.715884105727");
     }
 
@@ -609,7 +609,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_min_does_not_panic() {
-        let s = D128e12::MIN.to_string();
+        let s = D128s12::MIN.to_string();
         assert_eq!(s, "-170141183460469231731687303.715884105728");
     }
 
@@ -629,7 +629,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn debug_includes_scale_and_value() {
-        let v = D128e12::from_bits(1_500_000_000_000);
+        let v = D128s12::from_bits(1_500_000_000_000);
         let debug_str = format!("{v:?}");
         assert_eq!(debug_str, "D128<12>(1.500000000000)");
     }
@@ -649,7 +649,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_one() {
-        let v = D128e12::ONE;
+        let v = D128s12::ONE;
         assert_eq!(format!("{v:e}"), "1e0");
     }
 
@@ -657,7 +657,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_one_point_five() {
-        let v = D128e12::from_bits(1_500_000_000_000);
+        let v = D128s12::from_bits(1_500_000_000_000);
         assert_eq!(format!("{v:e}"), "1.5e0");
     }
 
@@ -665,7 +665,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_fifteen() {
-        let v = D128e12::from_bits(15_000_000_000_000);
+        let v = D128s12::from_bits(15_000_000_000_000);
         assert_eq!(format!("{v:e}"), "1.5e1");
     }
 
@@ -673,7 +673,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_zero() {
-        assert_eq!(format!("{:e}", D128e12::ZERO), "0e0");
+        assert_eq!(format!("{:e}", D128s12::ZERO), "0e0");
     }
 
     /// Sub-unit value -> negative exponent. `0.0015 = 1.5e-3`.
@@ -681,7 +681,7 @@ mod tests {
     #[test]
     fn lower_exp_subunit_negative_exponent() {
         // 0.0015 at SCALE 12 = 1_500_000_000
-        let v = D128e12::from_bits(1_500_000_000);
+        let v = D128s12::from_bits(1_500_000_000);
         assert_eq!(format!("{v:e}"), "1.5e-3");
     }
 
@@ -689,7 +689,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_negative() {
-        let v = D128e12::from_bits(-1_500_000_000_000);
+        let v = D128s12::from_bits(-1_500_000_000_000);
         assert_eq!(format!("{v:e}"), "-1.5e0");
     }
 
@@ -697,32 +697,32 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn upper_exp_uses_capital_e() {
-        let v = D128e12::from_bits(1_500_000_000_000);
+        let v = D128s12::from_bits(1_500_000_000_000);
         assert_eq!(format!("{v:E}"), "1.5E0");
     }
 
     // ── LowerHex / UpperHex / Octal / Binary ──
 
-    /// LowerHex of D128e12::ONE is the hex of 10^12 (= 0xe8d4a51000),
+    /// LowerHex of D128s12::ONE is the hex of 10^12 (= 0xe8d4a51000),
     /// NOT the hex of `1.0` formatted as a decimal in hex.
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_hex_is_storage() {
-        assert_eq!(format!("{:x}", D128e12::ONE), "e8d4a51000");
+        assert_eq!(format!("{:x}", D128s12::ONE), "e8d4a51000");
     }
 
     /// UpperHex of ONE: same digits in upper case.
     #[cfg(feature = "alloc")]
     #[test]
     fn upper_hex_is_storage() {
-        assert_eq!(format!("{:X}", D128e12::ONE), "E8D4A51000");
+        assert_eq!(format!("{:X}", D128s12::ONE), "E8D4A51000");
     }
 
     /// Octal of ZERO is `0`.
     #[cfg(feature = "alloc")]
     #[test]
     fn octal_zero() {
-        assert_eq!(format!("{:o}", D128e12::ZERO), "0");
+        assert_eq!(format!("{:o}", D128s12::ZERO), "0");
     }
 
     /// Binary of ONE has the `10^12` bit pattern (40 bits).
@@ -730,7 +730,7 @@ mod tests {
     #[test]
     fn binary_one() {
         // 10^12 in binary: 1110_1000_1101_0100_1010_0101_0001_0000_0000_0000
-        let s = format!("{:b}", D128e12::ONE);
+        let s = format!("{:b}", D128s12::ONE);
         assert_eq!(s, "1110100011010100101001010001000000000000");
     }
 
@@ -774,34 +774,34 @@ mod tests {
 
     #[test]
     fn from_str_zero() {
-        let v: D128e12 = "0".parse().unwrap();
-        assert_eq!(v, D128e12::ZERO);
-        let v: D128e12 = "0.0".parse().unwrap();
-        assert_eq!(v, D128e12::ZERO);
+        let v: D128s12 = "0".parse().unwrap();
+        assert_eq!(v, D128s12::ZERO);
+        let v: D128s12 = "0.0".parse().unwrap();
+        assert_eq!(v, D128s12::ZERO);
     }
 
     #[test]
     fn from_str_one() {
-        let v: D128e12 = "1".parse().unwrap();
-        assert_eq!(v, D128e12::ONE);
-        let v: D128e12 = "1.0".parse().unwrap();
-        assert_eq!(v, D128e12::ONE);
+        let v: D128s12 = "1".parse().unwrap();
+        assert_eq!(v, D128s12::ONE);
+        let v: D128s12 = "1.0".parse().unwrap();
+        assert_eq!(v, D128s12::ONE);
     }
 
     /// Headline base-10 claim: `1.1` parses bit-exact.
     #[test]
     fn from_str_one_point_one_parses_exactly() {
-        let v: D128e12 = "1.1".parse().unwrap();
+        let v: D128s12 = "1.1".parse().unwrap();
         assert_eq!(v.to_bits(), 1_100_000_000_000);
     }
 
     /// Sign prefix.
     #[test]
     fn from_str_signs() {
-        let neg: D128e12 = "-1.5".parse().unwrap();
+        let neg: D128s12 = "-1.5".parse().unwrap();
         assert_eq!(neg.to_bits(), -1_500_000_000_000);
 
-        let pos: D128e12 = "+1.5".parse().unwrap();
+        let pos: D128s12 = "+1.5".parse().unwrap();
         assert_eq!(pos.to_bits(), 1_500_000_000_000);
     }
 
@@ -809,14 +809,14 @@ mod tests {
     #[test]
     fn from_str_short_fractional_pads() {
         // "0.5" at SCALE 12 -> 5_000_000_000 (= 0.5 * 10^12).
-        let v: D128e12 = "0.5".parse().unwrap();
+        let v: D128s12 = "0.5".parse().unwrap();
         assert_eq!(v.to_bits(), 500_000_000_000);
     }
 
     /// Fractional with exactly SCALE digits is the natural form.
     #[test]
     fn from_str_full_scale_fractional() {
-        let v: D128e12 = "1.500000000000".parse().unwrap();
+        let v: D128s12 = "1.500000000000".parse().unwrap();
         assert_eq!(v.to_bits(), 1_500_000_000_000);
     }
 
@@ -824,41 +824,41 @@ mod tests {
 
     #[test]
     fn from_str_empty_is_err() {
-        let r: Result<D128e12, _> = "".parse();
+        let r: Result<D128s12, _> = "".parse();
         assert_eq!(r, Err(ParseD128Error::Empty));
     }
 
     #[test]
     fn from_str_sign_only_is_err() {
-        assert_eq!("-".parse::<D128e12>(), Err(ParseD128Error::SignOnly));
-        assert_eq!("+".parse::<D128e12>(), Err(ParseD128Error::SignOnly));
+        assert_eq!("-".parse::<D128s12>(), Err(ParseD128Error::SignOnly));
+        assert_eq!("+".parse::<D128s12>(), Err(ParseD128Error::SignOnly));
     }
 
     #[test]
     fn from_str_leading_zero_is_err() {
-        assert_eq!("01".parse::<D128e12>(), Err(ParseD128Error::LeadingZero));
+        assert_eq!("01".parse::<D128s12>(), Err(ParseD128Error::LeadingZero));
         assert_eq!(
-            "01.5".parse::<D128e12>(),
+            "01.5".parse::<D128s12>(),
             Err(ParseD128Error::LeadingZero)
         );
-        assert_eq!("00".parse::<D128e12>(), Err(ParseD128Error::LeadingZero));
+        assert_eq!("00".parse::<D128s12>(), Err(ParseD128Error::LeadingZero));
     }
 
     #[test]
     fn from_str_overlong_fractional_is_err() {
         // SCALE 12, fractional length 13 -> reject.
-        let r: Result<D128e12, _> = "0.1234567890123".parse();
+        let r: Result<D128s12, _> = "0.1234567890123".parse();
         assert_eq!(r, Err(ParseD128Error::OverlongFractional));
     }
 
     #[test]
     fn from_str_scientific_notation_is_err() {
         assert_eq!(
-            "1e3".parse::<D128e12>(),
+            "1e3".parse::<D128s12>(),
             Err(ParseD128Error::ScientificNotation)
         );
         assert_eq!(
-            "1.5E2".parse::<D128e12>(),
+            "1.5E2".parse::<D128s12>(),
             Err(ParseD128Error::ScientificNotation)
         );
     }
@@ -866,15 +866,15 @@ mod tests {
     #[test]
     fn from_str_invalid_char_is_err() {
         assert_eq!(
-            "garbage".parse::<D128e12>(),
+            "garbage".parse::<D128s12>(),
             Err(ParseD128Error::InvalidChar)
         );
         assert_eq!(
-            "1.2x".parse::<D128e12>(),
+            "1.2x".parse::<D128s12>(),
             Err(ParseD128Error::InvalidChar)
         );
         assert_eq!(
-            "1..2".parse::<D128e12>(),
+            "1..2".parse::<D128s12>(),
             Err(ParseD128Error::InvalidChar)
         );
     }
@@ -882,15 +882,15 @@ mod tests {
     #[test]
     fn from_str_missing_digits_is_err() {
         assert_eq!(
-            ".5".parse::<D128e12>(),
+            ".5".parse::<D128s12>(),
             Err(ParseD128Error::MissingDigits)
         );
         assert_eq!(
-            "5.".parse::<D128e12>(),
+            "5.".parse::<D128s12>(),
             Err(ParseD128Error::MissingDigits)
         );
         assert_eq!(
-            "-.5".parse::<D128e12>(),
+            "-.5".parse::<D128s12>(),
             Err(ParseD128Error::MissingDigits)
         );
     }
@@ -900,7 +900,7 @@ mod tests {
         // 10^39 > i128::MAX (~1.7e38). At SCALE 12, the maximum
         // integer part is i128::MAX / 10^12 ~= 1.7e26, so an integer
         // part of 1e27 already overflows.
-        let r: Result<D128e12, _> = "1000000000000000000000000000".parse();
+        let r: Result<D128s12, _> = "1000000000000000000000000000".parse();
         assert_eq!(r, Err(ParseD128Error::OutOfRange));
     }
 
@@ -913,7 +913,7 @@ mod tests {
     #[test]
     fn from_str_i128_min_boundary() {
         let s = "-170141183460469231731687303.715884105728";
-        let v: D128e12 = s.parse().unwrap();
+        let v: D128s12 = s.parse().unwrap();
         assert_eq!(v.to_bits(), i128::MIN);
     }
 
@@ -922,7 +922,7 @@ mod tests {
     #[test]
     fn from_str_i128_max_boundary() {
         let s = "170141183460469231731687303.715884105727";
-        let v: D128e12 = s.parse().unwrap();
+        let v: D128s12 = s.parse().unwrap();
         assert_eq!(v.to_bits(), i128::MAX);
     }
 
@@ -931,7 +931,7 @@ mod tests {
     fn from_str_just_above_max_overflows() {
         // ...728 is one fractional LSB above i128::MAX.
         let s = "170141183460469231731687303.715884105728";
-        let r: Result<D128e12, _> = s.parse();
+        let r: Result<D128s12, _> = s.parse();
         assert_eq!(r, Err(ParseD128Error::OutOfRange));
     }
 
@@ -965,9 +965,9 @@ mod tests {
             i128::MIN / 2,
         ];
         for &raw in cases {
-            let v = D128e12::from_bits(raw);
+            let v = D128s12::from_bits(raw);
             let s = v.to_string();
-            let parsed: D128e12 = s.parse().unwrap_or_else(|e| {
+            let parsed: D128s12 = s.parse().unwrap_or_else(|e| {
                 panic!("round-trip parse failed for raw={raw}, s={s:?}, err={e:?}")
             });
             assert_eq!(

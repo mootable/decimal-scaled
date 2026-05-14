@@ -35,18 +35,18 @@
 //! # Examples
 //!
 //! ```
-//! use decimal_scaled::D128e12;
+//! use decimal_scaled::D128s12;
 //!
 //! // Constructor mirrors `I64F64::from_num`:
-//! let d = D128e12::from_num(42_i32);
-//! assert_eq!(d, D128e12::from(42_i32));
+//! let d = D128s12::from_num(42_i32);
+//! assert_eq!(d, D128s12::from(42_i32));
 //!
 //! // Reader mirrors `I64F64::to_num`:
 //! let f: f32 = d.to_num();
 //! assert_eq!(f, 42.0_f32);
 //!
 //! // Saturation: `f64::INFINITY` -> `D128::MAX` (not panic):
-//! assert_eq!(D128e12::from_num(f64::INFINITY), D128e12::MAX);
+//! assert_eq!(D128s12::from_num(f64::INFINITY), D128s12::MAX);
 //! ```
 
 use num_traits::{Bounded, NumCast, ToPrimitive};
@@ -79,11 +79,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_num(42_i32), D128e12::from(42_i32));
-    /// assert_eq!(D128e12::from_num(f64::INFINITY), D128e12::MAX);
-    /// assert_eq!(D128e12::from_num(f64::NAN), D128e12::ZERO);
+    /// assert_eq!(D128s12::from_num(42_i32), D128s12::from(42_i32));
+    /// assert_eq!(D128s12::from_num(f64::INFINITY), D128s12::MAX);
+    /// assert_eq!(D128s12::from_num(f64::NAN), D128s12::ZERO);
     /// ```
     pub fn from_num<T: ToPrimitive>(value: T) -> Self {
         // Determine sign and NaN status before consuming `value` through
@@ -157,11 +157,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from(42_i32).to_num::<i32>(), 42_i32);
-    /// assert_eq!(D128e12::MAX.to_num::<i32>(), i32::MAX);
-    /// assert_eq!(D128e12::MIN.to_num::<i32>(), i32::MIN);
+    /// assert_eq!(D128s12::from(42_i32).to_num::<i32>(), 42_i32);
+    /// assert_eq!(D128s12::MAX.to_num::<i32>(), i32::MAX);
+    /// assert_eq!(D128s12::MIN.to_num::<i32>(), i32::MIN);
     /// ```
     pub fn to_num<T: NumCast + Bounded>(self) -> T {
         match T::from(self) {
@@ -182,65 +182,65 @@ impl<const SCALE: u32> D128<SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core_type::{D128, D128e12};
+    use crate::core_type::{D128, D128s12};
 
     // from_num -- thin delegate over NumCast / FromPrimitive
 
     /// `from_num(i32)` matches the idiomatic `From<i32>` impl.
     #[test]
     fn from_num_i32_round_trip() {
-        let d = D128e12::from_num(42_i32);
-        assert_eq!(d, D128e12::from(42_i32));
+        let d = D128s12::from_num(42_i32);
+        assert_eq!(d, D128s12::from(42_i32));
         assert_eq!(d.to_num::<i32>(), 42_i32);
     }
 
     /// `from_num(i64)` matches `From<i64>`.
     #[test]
     fn from_num_i64_matches_from() {
-        let d = D128e12::from_num(1_000_i64);
-        assert_eq!(d, D128e12::from(1_000_i64));
+        let d = D128s12::from_num(1_000_i64);
+        assert_eq!(d, D128s12::from(1_000_i64));
     }
 
     /// `from_num(f64)` for an in-range value matches `from_f64_lossy`.
     #[test]
     fn from_num_f64_within_range() {
-        let d = D128e12::from_num(1.5_f64);
-        assert_eq!(d, D128e12::from_f64_lossy(1.5_f64));
+        let d = D128s12::from_num(1.5_f64);
+        assert_eq!(d, D128s12::from_f64_lossy(1.5_f64));
     }
 
     /// `from_num(f64::INFINITY)` saturates to `MAX`.
     #[test]
     fn from_num_f64_inf_saturates_max() {
-        assert_eq!(D128e12::from_num(f64::INFINITY), D128e12::MAX);
+        assert_eq!(D128s12::from_num(f64::INFINITY), D128s12::MAX);
     }
 
     /// `from_num(f64::NEG_INFINITY)` saturates to `MIN`.
     #[test]
     fn from_num_f64_neg_inf_saturates_min() {
-        assert_eq!(D128e12::from_num(f64::NEG_INFINITY), D128e12::MIN);
+        assert_eq!(D128s12::from_num(f64::NEG_INFINITY), D128s12::MIN);
     }
 
     /// `from_num(f64::NAN)` returns `ZERO` (deterministic NaN policy).
     #[test]
     fn from_num_f64_nan_is_zero() {
-        assert_eq!(D128e12::from_num(f64::NAN), D128e12::ZERO);
+        assert_eq!(D128s12::from_num(f64::NAN), D128s12::ZERO);
     }
 
     /// Finite out-of-range f64 saturates by sign.
     #[test]
     fn from_num_f64_finite_oor_saturates() {
         // 1e30 * 10^12 = 1e42 > i128::MAX ~1.7e38; positive -> MAX.
-        assert_eq!(D128e12::from_num(1e30_f64), D128e12::MAX);
+        assert_eq!(D128s12::from_num(1e30_f64), D128s12::MAX);
         // negative -> MIN.
-        assert_eq!(D128e12::from_num(-1e30_f64), D128e12::MIN);
+        assert_eq!(D128s12::from_num(-1e30_f64), D128s12::MIN);
     }
 
     /// `from_num(f32::INFINITY)` saturates (validates f32 path).
     #[test]
     fn from_num_f32_inf_saturates() {
-        assert_eq!(D128e12::from_num(f32::INFINITY), D128e12::MAX);
-        assert_eq!(D128e12::from_num(f32::NEG_INFINITY), D128e12::MIN);
-        assert_eq!(D128e12::from_num(f32::NAN), D128e12::ZERO);
+        assert_eq!(D128s12::from_num(f32::INFINITY), D128s12::MAX);
+        assert_eq!(D128s12::from_num(f32::NEG_INFINITY), D128s12::MIN);
+        assert_eq!(D128s12::from_num(f32::NAN), D128s12::ZERO);
     }
 
     // from_num -- wider range than I64F64
@@ -252,7 +252,7 @@ mod tests {
     #[test]
     fn from_num_does_not_panic_on_wider_range_than_i64f64() {
         let v: i64 = 10_000_000_000_i64;
-        let d = D128e12::from_num(v);
+        let d = D128s12::from_num(v);
         // Round-trip: to_int_lossy must return the original value.
         assert_eq!(d.to_int_lossy(), v);
     }
@@ -262,46 +262,46 @@ mod tests {
     /// `D128::ONE.to_num::<f64>() == 1.0`.
     #[test]
     fn to_num_f64_lossy() {
-        assert_eq!(D128e12::ONE.to_num::<f64>(), 1.0_f64);
-        assert_eq!((-D128e12::ONE).to_num::<f64>(), -1.0_f64);
-        assert_eq!(D128e12::ZERO.to_num::<f64>(), 0.0_f64);
+        assert_eq!(D128s12::ONE.to_num::<f64>(), 1.0_f64);
+        assert_eq!((-D128s12::ONE).to_num::<f64>(), -1.0_f64);
+        assert_eq!(D128s12::ZERO.to_num::<f64>(), 0.0_f64);
     }
 
     /// `D128::ONE.to_num::<f32>() == 1.0`.
     #[test]
     fn to_num_f32_lossy() {
-        assert_eq!(D128e12::ONE.to_num::<f32>(), 1.0_f32);
-        assert_eq!((-D128e12::ONE).to_num::<f32>(), -1.0_f32);
+        assert_eq!(D128s12::ONE.to_num::<f32>(), 1.0_f32);
+        assert_eq!((-D128s12::ONE).to_num::<f32>(), -1.0_f32);
     }
 
     /// `D128::from(42_i32).to_num::<i32>() == 42`.
     #[test]
     fn to_num_i32_in_range() {
-        let d = D128e12::from(42_i32);
+        let d = D128s12::from(42_i32);
         assert_eq!(d.to_num::<i32>(), 42_i32);
 
-        let neg = D128e12::from(-42_i32);
+        let neg = D128s12::from(-42_i32);
         assert_eq!(neg.to_num::<i32>(), -42_i32);
     }
 
     /// `D128::MAX.to_num::<i32>() == i32::MAX` (saturating positive).
     #[test]
     fn to_num_i32_out_of_range_saturates_max() {
-        assert_eq!(D128e12::MAX.to_num::<i32>(), i32::MAX);
+        assert_eq!(D128s12::MAX.to_num::<i32>(), i32::MAX);
     }
 
     /// `D128::MIN.to_num::<i32>() == i32::MIN` (saturating negative).
     #[test]
     fn to_num_i32_out_of_range_saturates_min() {
-        assert_eq!(D128e12::MIN.to_num::<i32>(), i32::MIN);
+        assert_eq!(D128s12::MIN.to_num::<i32>(), i32::MIN);
     }
 
     /// `to_num::<i64>()` saturates at i64 bounds.
     #[test]
     fn to_num_i64_saturates() {
-        assert_eq!(D128e12::MAX.to_num::<i64>(), i64::MAX);
-        assert_eq!(D128e12::MIN.to_num::<i64>(), i64::MIN);
-        assert_eq!(D128e12::from(42_i64).to_num::<i64>(), 42_i64);
+        assert_eq!(D128s12::MAX.to_num::<i64>(), i64::MAX);
+        assert_eq!(D128s12::MIN.to_num::<i64>(), i64::MIN);
+        assert_eq!(D128s12::from(42_i64).to_num::<i64>(), 42_i64);
     }
 
     /// `to_num::<u32>()` returns 0 for negative values (saturates to
@@ -309,17 +309,17 @@ mod tests {
     #[test]
     fn to_num_u32_negative_saturates_to_zero() {
         // u32::MIN is 0, so negative D128 values saturate to 0.
-        assert_eq!((-D128e12::ONE).to_num::<u32>(), u32::MIN);
-        assert_eq!(D128e12::MIN.to_num::<u32>(), u32::MIN);
+        assert_eq!((-D128s12::ONE).to_num::<u32>(), u32::MIN);
+        assert_eq!(D128s12::MIN.to_num::<u32>(), u32::MIN);
         // Positive out-of-range -> u32::MAX.
-        assert_eq!(D128e12::MAX.to_num::<u32>(), u32::MAX);
+        assert_eq!(D128s12::MAX.to_num::<u32>(), u32::MAX);
     }
 
     /// Round-trip via from_num / to_num for representative i32 values.
     #[test]
     fn from_num_to_num_round_trip_i32() {
         for v in [0_i32, 1, -1, 42, -42, 1_000_000, -1_000_000] {
-            let d = D128e12::from_num(v);
+            let d = D128s12::from_num(v);
             assert_eq!(d.to_num::<i32>(), v);
         }
     }
@@ -343,13 +343,13 @@ mod tests {
     /// reads sign directly from i128.
     #[test]
     fn from_num_i128_max_saturates_via_int_signal() {
-        assert_eq!(D128e12::from_num(i128::MAX), D128e12::MAX);
+        assert_eq!(D128s12::from_num(i128::MAX), D128s12::MAX);
     }
 
     /// `from_num(i128::MIN)` saturates to `D128::MIN` via the i128 sign signal.
     #[test]
     fn from_num_i128_min_saturates_via_int_signal() {
-        assert_eq!(D128e12::from_num(i128::MIN), D128e12::MIN);
+        assert_eq!(D128s12::from_num(i128::MIN), D128s12::MIN);
     }
 
     /// `from_num(u128::MAX)` saturates to `D128::MAX` via the u128 sign
@@ -357,14 +357,14 @@ mod tests {
     /// fallback path is exercised here.
     #[test]
     fn from_num_u128_max_saturates_via_uint_signal() {
-        assert_eq!(D128e12::from_num(u128::MAX), D128e12::MAX);
+        assert_eq!(D128s12::from_num(u128::MAX), D128s12::MAX);
     }
 
     /// `from_num(u64::MAX)` succeeds without saturation -- u64::MAX fits
     /// in D128's storage at SCALE = 12.
     #[test]
     fn from_num_u64_max_succeeds_without_saturation() {
-        let d = D128e12::from_num(u64::MAX);
-        assert_eq!(d, D128e12::from(u64::MAX));
+        let d = D128s12::from_num(u64::MAX);
+        assert_eq!(d, D128s12::from(u64::MAX));
     }
 }

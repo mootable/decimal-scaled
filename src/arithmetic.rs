@@ -54,10 +54,10 @@ impl<const SCALE: u32> Add for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(1_500_000_000_000); // 1.5
-    /// let b = D128e12::from_bits(2_500_000_000_000); // 2.5
+    /// let a = D128s12::from_bits(1_500_000_000_000); // 1.5
+    /// let b = D128s12::from_bits(2_500_000_000_000); // 2.5
     /// assert_eq!((a + b).to_bits(), 4_000_000_000_000);
     /// ```
     #[inline]
@@ -92,10 +92,10 @@ impl<const SCALE: u32> Sub for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(3_000_000_000_000); // 3.0
-    /// let b = D128e12::from_bits(1_500_000_000_000); // 1.5
+    /// let a = D128s12::from_bits(3_000_000_000_000); // 3.0
+    /// let b = D128s12::from_bits(1_500_000_000_000); // 1.5
     /// assert_eq!((a - b).to_bits(), 1_500_000_000_000);
     /// ```
     #[inline]
@@ -136,9 +136,9 @@ impl<const SCALE: u32> Neg for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let x = D128e12::from_bits(1_500_000_000_000); // 1.5
+    /// let x = D128s12::from_bits(1_500_000_000_000); // 1.5
     /// assert_eq!((-x).to_bits(), -1_500_000_000_000);
     /// ```
     #[inline]
@@ -171,10 +171,10 @@ impl<const SCALE: u32> Mul for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(1_500_000_000_000); // 1.5
-    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// let a = D128s12::from_bits(1_500_000_000_000); // 1.5
+    /// let b = D128s12::from_bits(2_000_000_000_000); // 2.0
     /// assert_eq!((a * b).to_bits(), 3_000_000_000_000); // 3.0
     /// ```
     #[inline]
@@ -222,10 +222,10 @@ impl<const SCALE: u32> Div for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(3_000_000_000_000); // 3.0
-    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// let a = D128s12::from_bits(3_000_000_000_000); // 3.0
+    /// let b = D128s12::from_bits(2_000_000_000_000); // 2.0
     /// assert_eq!((a / b).to_bits(), 1_500_000_000_000); // 1.5
     /// ```
     #[inline]
@@ -322,10 +322,10 @@ impl<const SCALE: u32> Rem for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(5_500_000_000_000); // 5.5
-    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// let a = D128s12::from_bits(5_500_000_000_000); // 5.5
+    /// let b = D128s12::from_bits(2_000_000_000_000); // 2.0
     /// assert_eq!((a % b).to_bits(), 1_500_000_000_000); // 1.5
     /// ```
     #[inline]
@@ -384,9 +384,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let x = D128e12::from_bits(-1_500_000_000_000);
+    /// let x = D128s12::from_bits(-1_500_000_000_000);
     /// assert_eq!(x.abs().to_bits(), 1_500_000_000_000);
     /// ```
     #[inline]
@@ -408,11 +408,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_bits(500_000_000_000).signum(), D128e12::ONE);
-    /// assert_eq!(D128e12::ZERO.signum(), D128e12::ZERO);
-    /// assert_eq!(D128e12::from_bits(-500_000_000_000).signum(), -D128e12::ONE);
+    /// assert_eq!(D128s12::from_bits(500_000_000_000).signum(), D128s12::ONE);
+    /// assert_eq!(D128s12::ZERO.signum(), D128s12::ZERO);
+    /// assert_eq!(D128s12::from_bits(-500_000_000_000).signum(), -D128s12::ONE);
     /// ```
     #[inline]
     pub fn signum(self) -> Self {
@@ -436,12 +436,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let x = D128e12::from_bits(2_500_000_000_000); // 2.5
+    /// let x = D128s12::from_bits(2_500_000_000_000); // 2.5
     /// assert_eq!(x.floor().to_bits(), 2_000_000_000_000);
     ///
-    /// let y = D128e12::from_bits(-2_500_000_000_000); // -2.5
+    /// let y = D128s12::from_bits(-2_500_000_000_000); // -2.5
     /// assert_eq!(y.floor().to_bits(), -3_000_000_000_000);
     /// ```
     #[inline]
@@ -462,12 +462,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let x = D128e12::from_bits(2_500_000_000_000); // 2.5
+    /// let x = D128s12::from_bits(2_500_000_000_000); // 2.5
     /// assert_eq!(x.ceil().to_bits(), 3_000_000_000_000);
     ///
-    /// let y = D128e12::from_bits(-2_500_000_000_000); // -2.5
+    /// let y = D128s12::from_bits(-2_500_000_000_000); // -2.5
     /// assert_eq!(y.ceil().to_bits(), -2_000_000_000_000);
     /// ```
     #[inline]
@@ -491,11 +491,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_bits(2_500_000_000_000).round().to_bits(), 3_000_000_000_000);
-    /// assert_eq!(D128e12::from_bits(2_400_000_000_000).round().to_bits(), 2_000_000_000_000);
-    /// assert_eq!(D128e12::from_bits(-2_500_000_000_000).round().to_bits(), -3_000_000_000_000);
+    /// assert_eq!(D128s12::from_bits(2_500_000_000_000).round().to_bits(), 3_000_000_000_000);
+    /// assert_eq!(D128s12::from_bits(2_400_000_000_000).round().to_bits(), 2_000_000_000_000);
+    /// assert_eq!(D128s12::from_bits(-2_500_000_000_000).round().to_bits(), -3_000_000_000_000);
     /// ```
     #[inline]
     pub fn round(self) -> Self {
@@ -519,10 +519,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_bits(2_500_000_000_000).trunc().to_bits(), 2_000_000_000_000);
-    /// assert_eq!(D128e12::from_bits(-2_500_000_000_000).trunc().to_bits(), -2_000_000_000_000);
+    /// assert_eq!(D128s12::from_bits(2_500_000_000_000).trunc().to_bits(), 2_000_000_000_000);
+    /// assert_eq!(D128s12::from_bits(-2_500_000_000_000).trunc().to_bits(), -2_000_000_000_000);
     /// ```
     #[inline]
     pub fn trunc(self) -> Self {
@@ -543,11 +543,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert_eq!(D128e12::from_bits(2_500_000_000_000).fract().to_bits(), 500_000_000_000);
-    /// assert_eq!(D128e12::from_bits(-2_500_000_000_000).fract().to_bits(), -500_000_000_000);
-    /// assert_eq!(D128e12::from_bits(2_000_000_000_000).fract().to_bits(), 0);
+    /// assert_eq!(D128s12::from_bits(2_500_000_000_000).fract().to_bits(), 500_000_000_000);
+    /// assert_eq!(D128s12::from_bits(-2_500_000_000_000).fract().to_bits(), -500_000_000_000);
+    /// assert_eq!(D128s12::from_bits(2_000_000_000_000).fract().to_bits(), 0);
     /// ```
     #[inline]
     pub fn fract(self) -> Self {
@@ -564,10 +564,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(1_000_000_000_000);
-    /// let b = D128e12::from_bits(2_000_000_000_000);
+    /// let a = D128s12::from_bits(1_000_000_000_000);
+    /// let b = D128s12::from_bits(2_000_000_000_000);
     /// assert_eq!(a.min(b), a);
     /// ```
     #[inline]
@@ -584,10 +584,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(1_000_000_000_000);
-    /// let b = D128e12::from_bits(2_000_000_000_000);
+    /// let a = D128s12::from_bits(1_000_000_000_000);
+    /// let b = D128s12::from_bits(2_000_000_000_000);
     /// assert_eq!(a.max(b), b);
     /// ```
     #[inline]
@@ -611,11 +611,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let lo = D128e12::from_bits(1_000_000_000_000); // 1.0
-    /// let hi = D128e12::from_bits(3_000_000_000_000); // 3.0
-    /// let x  = D128e12::from_bits(5_000_000_000_000); // 5.0
+    /// let lo = D128s12::from_bits(1_000_000_000_000); // 1.0
+    /// let hi = D128s12::from_bits(3_000_000_000_000); // 3.0
+    /// let x  = D128s12::from_bits(5_000_000_000_000); // 5.0
     /// assert_eq!(x.clamp(lo, hi), hi);
     /// ```
     #[inline]
@@ -636,10 +636,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let two  = D128e12::from_bits(2_000_000_000_000);
-    /// let half = D128e12::from_bits(500_000_000_000);
+    /// let two  = D128s12::from_bits(2_000_000_000_000);
+    /// let half = D128s12::from_bits(500_000_000_000);
     /// assert_eq!(two.recip(), half);
     /// ```
     #[inline]
@@ -659,10 +659,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let pos = D128e12::from_bits(1_500_000_000_000);
-    /// let neg = D128e12::from_bits(-2_000_000_000_000);
+    /// let pos = D128s12::from_bits(1_500_000_000_000);
+    /// let neg = D128s12::from_bits(-2_000_000_000_000);
     /// assert_eq!(pos.copysign(neg).to_bits(), -1_500_000_000_000);
     /// ```
     #[inline]
@@ -691,10 +691,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(-5_000_000_000_000); // -5.0
-    /// let b = D128e12::from_bits( 2_000_000_000_000); //  2.0
+    /// let a = D128s12::from_bits(-5_000_000_000_000); // -5.0
+    /// let b = D128s12::from_bits( 2_000_000_000_000); //  2.0
     /// // Euclidean: quotient = -3, remainder = 1 (always non-negative)
     /// assert_eq!(a.div_euclid(b).to_bits(), -3_000_000_000_000);
     /// ```
@@ -720,10 +720,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(-5_000_000_000_000); // -5.0
-    /// let b = D128e12::from_bits( 2_000_000_000_000); //  2.0
+    /// let a = D128s12::from_bits(-5_000_000_000_000); // -5.0
+    /// let b = D128s12::from_bits( 2_000_000_000_000); //  2.0
     /// assert_eq!(a.rem_euclid(b).to_bits(), 1_000_000_000_000); // 1.0, non-negative
     /// ```
     #[inline]
@@ -752,10 +752,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(-5_000_000_000_000); // -5.0
-    /// let b = D128e12::from_bits( 2_000_000_000_000); //  2.0
+    /// let a = D128s12::from_bits(-5_000_000_000_000); // -5.0
+    /// let b = D128s12::from_bits( 2_000_000_000_000); //  2.0
     /// // floor(-2.5) = -3
     /// assert_eq!(a.div_floor(b).to_bits(), -3_000_000_000_000);
     /// ```
@@ -786,10 +786,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(5_000_000_000_000); // 5.0
-    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// let a = D128s12::from_bits(5_000_000_000_000); // 5.0
+    /// let b = D128s12::from_bits(2_000_000_000_000); // 2.0
     /// // ceil(2.5) = 3
     /// assert_eq!(a.div_ceil(b).to_bits(), 3_000_000_000_000);
     /// ```
@@ -816,10 +816,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits( 5_000_000_000_000); //  5.0
-    /// let b = D128e12::from_bits(-2_000_000_000_000); // -2.0
+    /// let a = D128s12::from_bits( 5_000_000_000_000); //  5.0
+    /// let b = D128s12::from_bits(-2_000_000_000_000); // -2.0
     /// assert_eq!(a.abs_diff(b).to_bits(), 7_000_000_000_000); // 7.0
     /// ```
     #[inline]
@@ -841,10 +841,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// let a = D128e12::from_bits(1_000_000_000_000); // 1.0
-    /// let b = D128e12::from_bits(3_000_000_000_000); // 3.0
+    /// let a = D128s12::from_bits(1_000_000_000_000); // 1.0
+    /// let b = D128s12::from_bits(3_000_000_000_000); // 3.0
     /// assert_eq!(a.midpoint(b).to_bits(), 2_000_000_000_000); // 2.0
     /// ```
     #[inline]
@@ -867,10 +867,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!(!D128e12::ZERO.is_nan());
-    /// assert!(!D128e12::MAX.is_nan());
+    /// assert!(!D128s12::ZERO.is_nan());
+    /// assert!(!D128s12::MAX.is_nan());
     /// ```
     #[inline]
     pub const fn is_nan(self) -> bool {
@@ -886,9 +886,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!(!D128e12::MAX.is_infinite());
+    /// assert!(!D128s12::MAX.is_infinite());
     /// ```
     #[inline]
     pub const fn is_infinite(self) -> bool {
@@ -904,10 +904,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!(D128e12::MAX.is_finite());
-    /// assert!(D128e12::MIN.is_finite());
+    /// assert!(D128s12::MAX.is_finite());
+    /// assert!(D128s12::MIN.is_finite());
     /// ```
     #[inline]
     pub const fn is_finite(self) -> bool {
@@ -926,10 +926,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!(!D128e12::ZERO.is_normal());
-    /// assert!(D128e12::ONE.is_normal());
+    /// assert!(!D128s12::ZERO.is_normal());
+    /// assert!(D128s12::ONE.is_normal());
     /// ```
     #[inline]
     pub const fn is_normal(self) -> bool {
@@ -945,10 +945,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!(D128e12::ZERO.is_zero());
-    /// assert!(!D128e12::ONE.is_zero());
+    /// assert!(D128s12::ZERO.is_zero());
+    /// assert!(!D128s12::ONE.is_zero());
     /// ```
     #[inline]
     pub const fn is_zero(self) -> bool {
@@ -964,11 +964,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!(D128e12::ONE.is_positive());
-    /// assert!(!D128e12::ZERO.is_positive());
-    /// assert!(!(-D128e12::ONE).is_positive());
+    /// assert!(D128s12::ONE.is_positive());
+    /// assert!(!D128s12::ZERO.is_positive());
+    /// assert!(!(-D128s12::ONE).is_positive());
     /// ```
     #[inline]
     pub const fn is_positive(self) -> bool {
@@ -984,11 +984,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     ///
-    /// assert!((-D128e12::ONE).is_negative());
-    /// assert!(!D128e12::ZERO.is_negative());
-    /// assert!(!D128e12::ONE.is_negative());
+    /// assert!((-D128s12::ONE).is_negative());
+    /// assert!(!D128s12::ZERO.is_negative());
+    /// assert!(!D128s12::ONE.is_negative());
     /// ```
     #[inline]
     pub const fn is_negative(self) -> bool {
@@ -998,40 +998,40 @@ impl<const SCALE: u32> D128<SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core_type::D128e12;
+    use crate::core_type::D128s12;
 
     /// ZERO + ZERO == ZERO.
     #[test]
     fn add_zero_to_zero_is_zero() {
-        assert_eq!(D128e12::ZERO + D128e12::ZERO, D128e12::ZERO);
+        assert_eq!(D128s12::ZERO + D128s12::ZERO, D128s12::ZERO);
     }
 
     /// ZERO - ZERO == ZERO.
     #[test]
     fn sub_zero_from_zero_is_zero() {
-        assert_eq!(D128e12::ZERO - D128e12::ZERO, D128e12::ZERO);
+        assert_eq!(D128s12::ZERO - D128s12::ZERO, D128s12::ZERO);
     }
 
     /// -ZERO == ZERO.
     #[test]
     fn neg_zero_is_zero() {
-        assert_eq!(-D128e12::ZERO, D128e12::ZERO);
+        assert_eq!(-D128s12::ZERO, D128s12::ZERO);
     }
 
     /// AddAssign mutates in place.
     #[test]
     fn add_assign_zero() {
-        let mut v = D128e12::ZERO;
-        v += D128e12::ZERO;
-        assert_eq!(v, D128e12::ZERO);
+        let mut v = D128s12::ZERO;
+        v += D128s12::ZERO;
+        assert_eq!(v, D128s12::ZERO);
     }
 
     /// SubAssign mutates in place.
     #[test]
     fn sub_assign_zero() {
-        let mut v = D128e12::ZERO;
-        v -= D128e12::ZERO;
-        assert_eq!(v, D128e12::ZERO);
+        let mut v = D128s12::ZERO;
+        v -= D128s12::ZERO;
+        assert_eq!(v, D128s12::ZERO);
     }
 
     /// Canonical claim: `(a + b) - b == a` for representative values.
@@ -1039,23 +1039,23 @@ mod tests {
     /// 0.25 mm` is bits `250_000_000_000`.
     #[test]
     fn add_sub_round_trip_canonical_claim() {
-        let a = D128e12::from_bits(1_500_000_000_000);
-        let b = D128e12::from_bits(250_000_000_000);
+        let a = D128s12::from_bits(1_500_000_000_000);
+        let b = D128s12::from_bits(250_000_000_000);
         assert_eq!((a + b) - b, a);
     }
 
     /// Round-trip with a negative `a` to exercise sign handling.
     #[test]
     fn add_sub_round_trip_negative() {
-        let a = D128e12::from_bits(-7_321_654_987_000);
-        let b = D128e12::from_bits(42_000_000_000_000);
+        let a = D128s12::from_bits(-7_321_654_987_000);
+        let b = D128s12::from_bits(42_000_000_000_000);
         assert_eq!((a + b) - b, a);
     }
 
     /// `ONE + ONE` is the scaled bit-pattern `2 * 10^12`.
     #[test]
     fn one_plus_one_is_two_in_scaled_bits() {
-        let two = D128e12::ONE + D128e12::ONE;
+        let two = D128s12::ONE + D128s12::ONE;
         // 2 * 10^12 = 2_000_000_000_000
         assert_eq!(two.to_bits(), 2_000_000_000_000);
     }
@@ -1063,7 +1063,7 @@ mod tests {
     /// `-ONE + ONE == ZERO` -- additive inverse property.
     #[test]
     fn neg_one_plus_one_is_zero() {
-        assert_eq!(-D128e12::ONE + D128e12::ONE, D128e12::ZERO);
+        assert_eq!(-D128s12::ONE + D128s12::ONE, D128s12::ZERO);
     }
 
     /// Default policy: overflow panics in debug builds. Locks the
@@ -1075,7 +1075,7 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
     fn add_overflow_panics_in_debug() {
-        let _ = D128e12::MAX + D128e12::ONE;
+        let _ = D128s12::MAX + D128s12::ONE;
     }
 
     /// Default policy: underflow panics in debug builds.
@@ -1083,7 +1083,7 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
     fn sub_underflow_panics_in_debug() {
-        let _ = D128e12::MIN - D128e12::ONE;
+        let _ = D128s12::MIN - D128s12::ONE;
     }
 
     /// Default policy: `-MIN` panics in debug builds (i128::MIN has
@@ -1092,24 +1092,24 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
     fn neg_min_panics_in_debug() {
-        let _ = -D128e12::MIN;
+        let _ = -D128s12::MIN;
     }
 
     /// AddAssign with non-zero values.
     #[test]
     fn add_assign_accumulates() {
-        let mut v = D128e12::from_bits(100);
-        v += D128e12::from_bits(250);
+        let mut v = D128s12::from_bits(100);
+        v += D128s12::from_bits(250);
         assert_eq!(v.to_bits(), 350);
-        v += D128e12::from_bits(-50);
+        v += D128s12::from_bits(-50);
         assert_eq!(v.to_bits(), 300);
     }
 
     /// SubAssign with non-zero values.
     #[test]
     fn sub_assign_accumulates() {
-        let mut v = D128e12::from_bits(1000);
-        v -= D128e12::from_bits(250);
+        let mut v = D128s12::from_bits(1000);
+        v -= D128s12::from_bits(250);
         assert_eq!(v.to_bits(), 750);
     }
 
@@ -1118,83 +1118,83 @@ mod tests {
     /// `ONE * ONE == ONE` -- multiplicative identity.
     #[test]
     fn mul_one_one_is_one() {
-        assert_eq!(D128e12::ONE * D128e12::ONE, D128e12::ONE);
+        assert_eq!(D128s12::ONE * D128s12::ONE, D128s12::ONE);
     }
 
     /// `ONE / ONE == ONE`.
     #[test]
     fn div_one_one_is_one() {
-        assert_eq!(D128e12::ONE / D128e12::ONE, D128e12::ONE);
+        assert_eq!(D128s12::ONE / D128s12::ONE, D128s12::ONE);
     }
 
     /// `ZERO % ONE == ZERO`.
     #[test]
     fn rem_zero_one_is_zero() {
-        assert_eq!(D128e12::ZERO % D128e12::ONE, D128e12::ZERO);
+        assert_eq!(D128s12::ZERO % D128s12::ONE, D128s12::ZERO);
     }
 
     /// `ZERO * x == ZERO` for representative non-trivial `x`.
     #[test]
     fn mul_zero_is_zero() {
-        let x = D128e12::from_bits(1_500_000_000_000); // 1.5
-        assert_eq!(D128e12::ZERO * x, D128e12::ZERO);
-        assert_eq!(x * D128e12::ZERO, D128e12::ZERO);
+        let x = D128s12::from_bits(1_500_000_000_000); // 1.5
+        assert_eq!(D128s12::ZERO * x, D128s12::ZERO);
+        assert_eq!(x * D128s12::ZERO, D128s12::ZERO);
     }
 
     /// `ONE * x == x` for representative `x` (left and right identity).
     #[test]
     fn mul_one_is_identity() {
-        let x = D128e12::from_bits(1_500_000_000_000); // 1.5
-        assert_eq!(D128e12::ONE * x, x);
-        assert_eq!(x * D128e12::ONE, x);
+        let x = D128s12::from_bits(1_500_000_000_000); // 1.5
+        assert_eq!(D128s12::ONE * x, x);
+        assert_eq!(x * D128s12::ONE, x);
 
-        let y = D128e12::from_bits(-7_321_654_987_000); // -7.321...
-        assert_eq!(D128e12::ONE * y, y);
-        assert_eq!(y * D128e12::ONE, y);
+        let y = D128s12::from_bits(-7_321_654_987_000); // -7.321...
+        assert_eq!(D128s12::ONE * y, y);
+        assert_eq!(y * D128s12::ONE, y);
     }
 
     /// `x / ONE == x`.
     #[test]
     fn div_one_is_identity() {
-        let x = D128e12::from_bits(1_500_000_000_000);
-        assert_eq!(x / D128e12::ONE, x);
+        let x = D128s12::from_bits(1_500_000_000_000);
+        assert_eq!(x / D128s12::ONE, x);
 
-        let y = D128e12::from_bits(-7_321_654_987_000);
-        assert_eq!(y / D128e12::ONE, y);
+        let y = D128s12::from_bits(-7_321_654_987_000);
+        assert_eq!(y / D128s12::ONE, y);
     }
 
     /// `x / x == ONE` for non-zero x.
     #[test]
     fn div_self_is_one() {
-        let x = D128e12::from_bits(1_500_000_000_000); // 1.5
-        assert_eq!(x / x, D128e12::ONE);
+        let x = D128s12::from_bits(1_500_000_000_000); // 1.5
+        assert_eq!(x / x, D128s12::ONE);
 
-        let y = D128e12::from_bits(-7_321_654_987_000);
-        assert_eq!(y / y, D128e12::ONE);
+        let y = D128s12::from_bits(-7_321_654_987_000);
+        assert_eq!(y / y, D128s12::ONE);
 
         // ONE / ONE already covered; a smaller value to exercise the
         // promotion path.
-        let small = D128e12::from_bits(1); // 1 LSB
-        assert_eq!(small / small, D128e12::ONE);
+        let small = D128s12::from_bits(1); // 1 LSB
+        assert_eq!(small / small, D128s12::ONE);
     }
 
     /// `(x * 7) % x == 0` -- multiple-of property.
     #[test]
     fn rem_multiple_is_zero() {
-        let x = D128e12::from_bits(3_500_000_000_000); // 3.5
-        let seven = D128e12::ONE + D128e12::ONE + D128e12::ONE + D128e12::ONE
-            + D128e12::ONE + D128e12::ONE + D128e12::ONE; // 7
-        assert_eq!((x * seven) % x, D128e12::ZERO);
+        let x = D128s12::from_bits(3_500_000_000_000); // 3.5
+        let seven = D128s12::ONE + D128s12::ONE + D128s12::ONE + D128s12::ONE
+            + D128s12::ONE + D128s12::ONE + D128s12::ONE; // 7
+        assert_eq!((x * seven) % x, D128s12::ZERO);
     }
 
     /// `x % x == ZERO` for non-zero x.
     #[test]
     fn rem_self_is_zero() {
-        let x = D128e12::from_bits(1_500_000_000_000);
-        assert_eq!(x % x, D128e12::ZERO);
+        let x = D128s12::from_bits(1_500_000_000_000);
+        assert_eq!(x % x, D128s12::ZERO);
 
-        let y = D128e12::from_bits(-7_321_654_987_000);
-        assert_eq!(y % y, D128e12::ZERO);
+        let y = D128s12::from_bits(-7_321_654_987_000);
+        assert_eq!(y % y, D128s12::ZERO);
     }
 
     /// **Headline claim**: `1.1 + 2.2 == 3.3` exactly. This is the
@@ -1203,9 +1203,9 @@ mod tests {
     /// bit-patterns rather than the (not-yet-shipped) `FromStr`.
     #[test]
     fn one_point_one_plus_two_point_two_equals_three_point_three() {
-        let one_point_one = D128e12::from_bits(1_100_000_000_000); // 1.1
-        let two_point_two = D128e12::from_bits(2_200_000_000_000); // 2.2
-        let three_point_three = D128e12::from_bits(3_300_000_000_000); // 3.3
+        let one_point_one = D128s12::from_bits(1_100_000_000_000); // 1.1
+        let two_point_two = D128s12::from_bits(2_200_000_000_000); // 2.2
+        let three_point_three = D128s12::from_bits(3_300_000_000_000); // 3.3
         assert_eq!(one_point_one + two_point_two, three_point_three);
     }
 
@@ -1215,15 +1215,15 @@ mod tests {
     #[test]
     fn mul_round_trip_canonical_claim() {
         // a = 1.5, b = 2.5 -> a * b = 3.75; (3.75 / 2.5) == 1.5
-        let a = D128e12::from_bits(1_500_000_000_000);
-        let b = D128e12::from_bits(2_500_000_000_000);
+        let a = D128s12::from_bits(1_500_000_000_000);
+        let b = D128s12::from_bits(2_500_000_000_000);
         let product = a * b;
-        assert_eq!(product, D128e12::from_bits(3_750_000_000_000));
+        assert_eq!(product, D128s12::from_bits(3_750_000_000_000));
         assert_eq!(product / b, a);
 
         // Negative-operand round-trip.
-        let c = D128e12::from_bits(-7_321_654_987_000);
-        let d = D128e12::from_bits(13_000_000_000); // 0.013
+        let c = D128s12::from_bits(-7_321_654_987_000);
+        let d = D128s12::from_bits(13_000_000_000); // 0.013
         let cd = c * d;
         assert_eq!(cd / d, c);
     }
@@ -1231,8 +1231,8 @@ mod tests {
     /// In-place MulAssign matches `Mul`.
     #[test]
     fn mul_assign_matches_mul() {
-        let a = D128e12::from_bits(1_500_000_000_000);
-        let b = D128e12::from_bits(2_500_000_000_000);
+        let a = D128s12::from_bits(1_500_000_000_000);
+        let b = D128s12::from_bits(2_500_000_000_000);
         let mut x = a;
         x *= b;
         assert_eq!(x, a * b);
@@ -1241,8 +1241,8 @@ mod tests {
     /// In-place DivAssign matches `Div`.
     #[test]
     fn div_assign_matches_div() {
-        let a = D128e12::from_bits(3_750_000_000_000);
-        let b = D128e12::from_bits(2_500_000_000_000);
+        let a = D128s12::from_bits(3_750_000_000_000);
+        let b = D128s12::from_bits(2_500_000_000_000);
         let mut x = a;
         x /= b;
         assert_eq!(x, a / b);
@@ -1251,8 +1251,8 @@ mod tests {
     /// In-place RemAssign matches `Rem`.
     #[test]
     fn rem_assign_matches_rem() {
-        let a = D128e12::from_bits(7_500_000_000_000);
-        let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+        let a = D128s12::from_bits(7_500_000_000_000);
+        let b = D128s12::from_bits(2_000_000_000_000); // 2.0
         let mut x = a;
         x %= b;
         assert_eq!(x, a % b);
@@ -1261,25 +1261,25 @@ mod tests {
     /// `Mul` is commutative under canonical equality.
     #[test]
     fn mul_is_commutative() {
-        let a = D128e12::from_bits(1_500_000_000_000);
-        let b = D128e12::from_bits(2_500_000_000_000);
+        let a = D128s12::from_bits(1_500_000_000_000);
+        let b = D128s12::from_bits(2_500_000_000_000);
         assert_eq!(a * b, b * a);
     }
 
     /// `Mul` rescales correctly: 0.5 * 0.5 == 0.25 (bit-exact).
     #[test]
     fn mul_subunit_rescales_exactly() {
-        let half = D128e12::from_bits(500_000_000_000); // 0.5
-        let quarter = D128e12::from_bits(250_000_000_000); // 0.25
+        let half = D128s12::from_bits(500_000_000_000); // 0.5
+        let quarter = D128s12::from_bits(250_000_000_000); // 0.25
         assert_eq!(half * half, quarter);
     }
 
     /// `Div` rescales correctly: 0.5 / 2 == 0.25.
     #[test]
     fn div_rescales_exactly() {
-        let half = D128e12::from_bits(500_000_000_000); // 0.5
-        let two = D128e12::from_bits(2_000_000_000_000); // 2.0
-        let quarter = D128e12::from_bits(250_000_000_000); // 0.25
+        let half = D128s12::from_bits(500_000_000_000); // 0.5
+        let two = D128s12::from_bits(2_000_000_000_000); // 2.0
+        let quarter = D128s12::from_bits(250_000_000_000); // 0.25
         assert_eq!(half / two, quarter);
     }
 
@@ -1287,14 +1287,14 @@ mod tests {
     /// 5.5 % 2.0 == 1.5 (since 5.5 = 2 * 2.0 + 1.5).
     #[test]
     fn rem_truncates_toward_zero() {
-        let a = D128e12::from_bits(5_500_000_000_000);
-        let b = D128e12::from_bits(2_000_000_000_000);
-        let expected = D128e12::from_bits(1_500_000_000_000);
+        let a = D128s12::from_bits(5_500_000_000_000);
+        let b = D128s12::from_bits(2_000_000_000_000);
+        let expected = D128s12::from_bits(1_500_000_000_000);
         assert_eq!(a % b, expected);
 
         // Negative dividend keeps the sign of the dividend (matches i128 %).
-        let neg = D128e12::from_bits(-5_500_000_000_000);
-        let neg_expected = D128e12::from_bits(-1_500_000_000_000);
+        let neg = D128s12::from_bits(-5_500_000_000_000);
+        let neg_expected = D128s12::from_bits(-1_500_000_000_000);
         assert_eq!(neg % b, neg_expected);
     }
 
@@ -1305,8 +1305,8 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
     fn mul_overflow_panics_in_debug() {
-        let two = D128e12::from_bits(2_000_000_000_000);
-        let _ = D128e12::MAX * two;
+        let two = D128s12::from_bits(2_000_000_000_000);
+        let _ = D128s12::MAX * two;
     }
 
     /// Widening multiply correctness: at operand magnitudes above the
@@ -1318,9 +1318,9 @@ mod tests {
     /// the final i128 range (i128::MAX ~= 1.7e38).
     #[test]
     fn mul_wide_operands_match_widened_form() {
-        let a = D128e12::from_bits(50_000_000_000_000_000_000_000);
-        let b = D128e12::from_bits(30_000_000_000_000_000_000_000);
-        let expected = D128e12::from_bits(1_500_000_000_000_000_000_000_000_000_000_000);
+        let a = D128s12::from_bits(50_000_000_000_000_000_000_000);
+        let b = D128s12::from_bits(30_000_000_000_000_000_000_000);
+        let expected = D128s12::from_bits(1_500_000_000_000_000_000_000_000_000_000_000);
         assert_eq!(a * b, expected);
         // Symmetric.
         assert_eq!(b * a, expected);
@@ -1329,8 +1329,8 @@ mod tests {
     /// Signed round-trip at wide operand magnitudes: `(a * b) / b == a`.
     #[test]
     fn mul_div_wide_round_trip() {
-        let a = D128e12::from_bits(50_000_000_000_000_000_000_000);
-        let b = D128e12::from_bits(30_000_000_000_000_000_000_000);
+        let a = D128s12::from_bits(50_000_000_000_000_000_000_000);
+        let b = D128s12::from_bits(30_000_000_000_000_000_000_000);
         let prod = a * b;
         // Round-trip: prod / b should recover a.
         assert_eq!(prod / b, a);
@@ -1339,8 +1339,8 @@ mod tests {
     /// Sign handling at wide operand magnitudes: mixed and same signs.
     #[test]
     fn mul_wide_negative_signs() {
-        let a = D128e12::from_bits(50_000_000_000_000_000_000_000);
-        let b = D128e12::from_bits(30_000_000_000_000_000_000_000);
+        let a = D128s12::from_bits(50_000_000_000_000_000_000_000);
+        let b = D128s12::from_bits(30_000_000_000_000_000_000_000);
         let neg_a = -a;
         let neg_b = -b;
         let pos_prod = a * b;
@@ -1354,11 +1354,11 @@ mod tests {
     #[test]
     fn div_wide_dividend_correct() {
         // a = 10^22 raw (~10^10 in scaled value at SCALE=12)
-        let a = D128e12::from_bits(10_i128.pow(22));
+        let a = D128s12::from_bits(10_i128.pow(22));
         // b = 2 raw (sub-LSB; effectively divides by 2 * 10^-12)
-        let b = D128e12::from_bits(2);
+        let b = D128s12::from_bits(2);
         // Expected: (a.0 * 10^12) / b.0 = (10^34) / 2 = 5e33.
-        let expected = D128e12::from_bits(5 * 10_i128.pow(33));
+        let expected = D128s12::from_bits(5 * 10_i128.pow(33));
         assert_eq!(a / b, expected);
     }
 
@@ -1368,11 +1368,11 @@ mod tests {
     fn div_wide_round_trip_exact() {
         // a = 10^27 raw: a * 10^12 = 10^39 > i128::MAX (1.7e38).
         // Divide by b = 100 raw: q = 10^39 / 100 = 10^37, which fits i128.
-        let a = D128e12::from_bits(10_i128.pow(27));
-        let b = D128e12::from_bits(100);
+        let a = D128s12::from_bits(10_i128.pow(27));
+        let b = D128s12::from_bits(100);
         let q = a / b;
         // q = (10^27 * 10^12) / 100 = 10^37 raw.
-        let expected = D128e12::from_bits(10_i128.pow(37));
+        let expected = D128s12::from_bits(10_i128.pow(37));
         assert_eq!(q, expected);
     }
 
@@ -1400,14 +1400,14 @@ mod tests {
     #[test]
     #[should_panic]
     fn div_by_zero_panics() {
-        let _ = D128e12::ONE / D128e12::ZERO;
+        let _ = D128s12::ONE / D128s12::ZERO;
     }
 
     /// Default policy: remainder with zero divisor panics.
     #[test]
     #[should_panic]
     fn rem_by_zero_panics() {
-        let _ = D128e12::ONE % D128e12::ZERO;
+        let _ = D128s12::ONE % D128s12::ZERO;
     }
 
     // ── Math methods ──
@@ -1417,21 +1417,21 @@ mod tests {
     /// `abs(0) == 0`.
     #[test]
     fn abs_zero_is_zero() {
-        assert_eq!(D128e12::ZERO.abs(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.abs(), D128s12::ZERO);
     }
 
     /// `abs(positive) == positive`.
     #[test]
     fn abs_positive_is_self() {
-        let x = D128e12::from_bits(1_500_000_000_000); // 1.5
+        let x = D128s12::from_bits(1_500_000_000_000); // 1.5
         assert_eq!(x.abs(), x);
     }
 
     /// `abs(negative) == positive(magnitude)`.
     #[test]
     fn abs_negative_is_positive() {
-        let neg = D128e12::from_bits(-1_500_000_000_000);
-        let pos = D128e12::from_bits(1_500_000_000_000);
+        let neg = D128s12::from_bits(-1_500_000_000_000);
+        let pos = D128s12::from_bits(1_500_000_000_000);
         assert_eq!(neg.abs(), pos);
     }
 
@@ -1441,7 +1441,7 @@ mod tests {
     #[cfg(debug_assertions)]
     #[should_panic(expected = "overflow")]
     fn abs_min_panics_in_debug() {
-        let _ = D128e12::MIN.abs();
+        let _ = D128s12::MIN.abs();
     }
 
     // ── signum ──
@@ -1449,28 +1449,28 @@ mod tests {
     /// `signum(0) == ZERO` (no sign for zero).
     #[test]
     fn signum_zero_is_zero() {
-        assert_eq!(D128e12::ZERO.signum(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.signum(), D128s12::ZERO);
     }
 
     /// `signum(positive) == ONE`.
     #[test]
     fn signum_positive_is_one() {
-        let x = D128e12::from_bits(1_500_000_000_000);
-        assert_eq!(x.signum(), D128e12::ONE);
+        let x = D128s12::from_bits(1_500_000_000_000);
+        assert_eq!(x.signum(), D128s12::ONE);
 
         // Smallest positive (1 LSB).
-        let tiny = D128e12::from_bits(1);
-        assert_eq!(tiny.signum(), D128e12::ONE);
+        let tiny = D128s12::from_bits(1);
+        assert_eq!(tiny.signum(), D128s12::ONE);
     }
 
     /// `signum(negative) == -ONE`.
     #[test]
     fn signum_negative_is_neg_one() {
-        let x = D128e12::from_bits(-1_500_000_000_000);
-        assert_eq!(x.signum(), -D128e12::ONE);
+        let x = D128s12::from_bits(-1_500_000_000_000);
+        assert_eq!(x.signum(), -D128s12::ONE);
 
-        let tiny_neg = D128e12::from_bits(-1);
-        assert_eq!(tiny_neg.signum(), -D128e12::ONE);
+        let tiny_neg = D128s12::from_bits(-1);
+        assert_eq!(tiny_neg.signum(), -D128s12::ONE);
     }
 
     // ── floor ──
@@ -1478,8 +1478,8 @@ mod tests {
     /// `floor(2.5) == 2.0` (positive fractional rounds down).
     #[test]
     fn floor_positive_fractional_rounds_down() {
-        let x = D128e12::from_bits(2_500_000_000_000);
-        let expected = D128e12::from_bits(2_000_000_000_000);
+        let x = D128s12::from_bits(2_500_000_000_000);
+        let expected = D128s12::from_bits(2_000_000_000_000);
         assert_eq!(x.floor(), expected);
     }
 
@@ -1488,26 +1488,26 @@ mod tests {
     /// distinction from `trunc`).
     #[test]
     fn floor_negative_fractional_rounds_down_toward_neg_inf() {
-        let x = D128e12::from_bits(-2_500_000_000_000);
-        let expected = D128e12::from_bits(-3_000_000_000_000);
+        let x = D128s12::from_bits(-2_500_000_000_000);
+        let expected = D128s12::from_bits(-3_000_000_000_000);
         assert_eq!(x.floor(), expected);
 
         // Smaller fractional part: -0.5 -> -1.0
-        let small_neg = D128e12::from_bits(-500_000_000_000);
-        let small_expected = D128e12::from_bits(-1_000_000_000_000);
+        let small_neg = D128s12::from_bits(-500_000_000_000);
+        let small_expected = D128s12::from_bits(-1_000_000_000_000);
         assert_eq!(small_neg.floor(), small_expected);
     }
 
     /// `floor(integer) == integer` (already at an integer boundary).
     #[test]
     fn floor_integer_unchanged() {
-        let two = D128e12::from_bits(2_000_000_000_000);
+        let two = D128s12::from_bits(2_000_000_000_000);
         assert_eq!(two.floor(), two);
 
-        let neg_two = D128e12::from_bits(-2_000_000_000_000);
+        let neg_two = D128s12::from_bits(-2_000_000_000_000);
         assert_eq!(neg_two.floor(), neg_two);
 
-        assert_eq!(D128e12::ZERO.floor(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.floor(), D128s12::ZERO);
     }
 
     // ── ceil ──
@@ -1515,8 +1515,8 @@ mod tests {
     /// `ceil(2.5) == 3.0`.
     #[test]
     fn ceil_positive_fractional_rounds_up() {
-        let x = D128e12::from_bits(2_500_000_000_000);
-        let expected = D128e12::from_bits(3_000_000_000_000);
+        let x = D128s12::from_bits(2_500_000_000_000);
+        let expected = D128s12::from_bits(3_000_000_000_000);
         assert_eq!(x.ceil(), expected);
     }
 
@@ -1524,25 +1524,25 @@ mod tests {
     /// rounds toward positive infinity.
     #[test]
     fn ceil_negative_fractional_rounds_up_toward_pos_inf() {
-        let x = D128e12::from_bits(-2_500_000_000_000);
-        let expected = D128e12::from_bits(-2_000_000_000_000);
+        let x = D128s12::from_bits(-2_500_000_000_000);
+        let expected = D128s12::from_bits(-2_000_000_000_000);
         assert_eq!(x.ceil(), expected);
 
         // -0.5 -> 0
-        let small_neg = D128e12::from_bits(-500_000_000_000);
-        assert_eq!(small_neg.ceil(), D128e12::ZERO);
+        let small_neg = D128s12::from_bits(-500_000_000_000);
+        assert_eq!(small_neg.ceil(), D128s12::ZERO);
     }
 
     /// `ceil(integer) == integer`.
     #[test]
     fn ceil_integer_unchanged() {
-        let two = D128e12::from_bits(2_000_000_000_000);
+        let two = D128s12::from_bits(2_000_000_000_000);
         assert_eq!(two.ceil(), two);
 
-        let neg_two = D128e12::from_bits(-2_000_000_000_000);
+        let neg_two = D128s12::from_bits(-2_000_000_000_000);
         assert_eq!(neg_two.ceil(), neg_two);
 
-        assert_eq!(D128e12::ZERO.ceil(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.ceil(), D128s12::ZERO);
     }
 
     // ── round ──
@@ -1557,27 +1557,27 @@ mod tests {
     #[test]
     fn round_half_away_from_zero() {
         // Positive halves
-        let two_point_five = D128e12::from_bits(2_500_000_000_000);
-        assert_eq!(two_point_five.round(), D128e12::from_bits(3_000_000_000_000));
+        let two_point_five = D128s12::from_bits(2_500_000_000_000);
+        assert_eq!(two_point_five.round(), D128s12::from_bits(3_000_000_000_000));
 
-        let two_point_four = D128e12::from_bits(2_400_000_000_000);
-        assert_eq!(two_point_four.round(), D128e12::from_bits(2_000_000_000_000));
+        let two_point_four = D128s12::from_bits(2_400_000_000_000);
+        assert_eq!(two_point_four.round(), D128s12::from_bits(2_000_000_000_000));
 
-        let two_point_six = D128e12::from_bits(2_600_000_000_000);
-        assert_eq!(two_point_six.round(), D128e12::from_bits(3_000_000_000_000));
+        let two_point_six = D128s12::from_bits(2_600_000_000_000);
+        assert_eq!(two_point_six.round(), D128s12::from_bits(3_000_000_000_000));
 
         // Negative halves -- away from zero == toward neg infinity
-        let neg_two_point_five = D128e12::from_bits(-2_500_000_000_000);
-        assert_eq!(neg_two_point_five.round(), D128e12::from_bits(-3_000_000_000_000));
+        let neg_two_point_five = D128s12::from_bits(-2_500_000_000_000);
+        assert_eq!(neg_two_point_five.round(), D128s12::from_bits(-3_000_000_000_000));
 
-        let neg_two_point_four = D128e12::from_bits(-2_400_000_000_000);
-        assert_eq!(neg_two_point_four.round(), D128e12::from_bits(-2_000_000_000_000));
+        let neg_two_point_four = D128s12::from_bits(-2_400_000_000_000);
+        assert_eq!(neg_two_point_four.round(), D128s12::from_bits(-2_000_000_000_000));
 
-        let neg_two_point_six = D128e12::from_bits(-2_600_000_000_000);
-        assert_eq!(neg_two_point_six.round(), D128e12::from_bits(-3_000_000_000_000));
+        let neg_two_point_six = D128s12::from_bits(-2_600_000_000_000);
+        assert_eq!(neg_two_point_six.round(), D128s12::from_bits(-3_000_000_000_000));
 
         // Zero
-        assert_eq!(D128e12::ZERO.round(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.round(), D128s12::ZERO);
     }
 
     // ── trunc / fract ──
@@ -1587,19 +1587,19 @@ mod tests {
     #[test]
     fn trunc_drops_fractional() {
         // Positive
-        let x = D128e12::from_bits(2_500_000_000_000);
-        assert_eq!(x.trunc(), D128e12::from_bits(2_000_000_000_000));
+        let x = D128s12::from_bits(2_500_000_000_000);
+        assert_eq!(x.trunc(), D128s12::from_bits(2_000_000_000_000));
 
         // Negative -- key sign distinction: trunc(-2.5) == -2.0
         // (floor(-2.5) would be -3.0)
-        let neg = D128e12::from_bits(-2_500_000_000_000);
-        assert_eq!(neg.trunc(), D128e12::from_bits(-2_000_000_000_000));
+        let neg = D128s12::from_bits(-2_500_000_000_000);
+        assert_eq!(neg.trunc(), D128s12::from_bits(-2_000_000_000_000));
 
         // Zero
-        assert_eq!(D128e12::ZERO.trunc(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.trunc(), D128s12::ZERO);
 
         // Already-integer values
-        let two = D128e12::from_bits(2_000_000_000_000);
+        let two = D128s12::from_bits(2_000_000_000_000);
         assert_eq!(two.trunc(), two);
     }
 
@@ -1607,33 +1607,33 @@ mod tests {
     /// of `self` (because `trunc` rounds toward zero).
     #[test]
     fn fract_keeps_only_fractional() {
-        let x = D128e12::from_bits(2_500_000_000_000);
-        assert_eq!(x.fract(), D128e12::from_bits(500_000_000_000));
+        let x = D128s12::from_bits(2_500_000_000_000);
+        assert_eq!(x.fract(), D128s12::from_bits(500_000_000_000));
 
         // Negative: fract preserves dividend sign
-        let neg = D128e12::from_bits(-2_500_000_000_000);
-        assert_eq!(neg.fract(), D128e12::from_bits(-500_000_000_000));
+        let neg = D128s12::from_bits(-2_500_000_000_000);
+        assert_eq!(neg.fract(), D128s12::from_bits(-500_000_000_000));
 
         // Integer values have zero fract
-        let two = D128e12::from_bits(2_000_000_000_000);
-        assert_eq!(two.fract(), D128e12::ZERO);
+        let two = D128s12::from_bits(2_000_000_000_000);
+        assert_eq!(two.fract(), D128s12::ZERO);
 
-        assert_eq!(D128e12::ZERO.fract(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.fract(), D128s12::ZERO);
     }
 
     /// Identity: `trunc(x) + fract(x) == x` for any `x`.
     #[test]
     fn trunc_plus_fract_equals_self() {
         let cases = [
-            D128e12::from_bits(2_500_000_000_000),
-            D128e12::from_bits(-2_500_000_000_000),
-            D128e12::from_bits(7_321_654_987_000),
-            D128e12::from_bits(-7_321_654_987_000),
-            D128e12::ZERO,
-            D128e12::ONE,
-            -D128e12::ONE,
-            D128e12::from_bits(1), // sub-LSB fractional
-            D128e12::from_bits(-1),
+            D128s12::from_bits(2_500_000_000_000),
+            D128s12::from_bits(-2_500_000_000_000),
+            D128s12::from_bits(7_321_654_987_000),
+            D128s12::from_bits(-7_321_654_987_000),
+            D128s12::ZERO,
+            D128s12::ONE,
+            -D128s12::ONE,
+            D128s12::from_bits(1), // sub-LSB fractional
+            D128s12::from_bits(-1),
         ];
         for x in cases {
             assert_eq!(x.trunc() + x.fract(), x, "failed for {:?}", x);
@@ -1645,9 +1645,9 @@ mod tests {
     /// Basic min/max/clamp on representative values.
     #[test]
     fn min_max_clamp_basic() {
-        let a = D128e12::from_bits(1_000_000_000_000); // 1.0
-        let b = D128e12::from_bits(2_000_000_000_000); // 2.0
-        let c = D128e12::from_bits(3_000_000_000_000); // 3.0
+        let a = D128s12::from_bits(1_000_000_000_000); // 1.0
+        let b = D128s12::from_bits(2_000_000_000_000); // 2.0
+        let c = D128s12::from_bits(3_000_000_000_000); // 3.0
 
         assert_eq!(a.min(b), a);
         assert_eq!(b.min(a), a);
@@ -1657,9 +1657,9 @@ mod tests {
         // clamp inside range -- pass through
         assert_eq!(b.clamp(a, c), b);
         // clamp below lo
-        assert_eq!(D128e12::ZERO.clamp(a, c), a);
+        assert_eq!(D128s12::ZERO.clamp(a, c), a);
         // clamp above hi
-        let four = D128e12::from_bits(4_000_000_000_000);
+        let four = D128s12::from_bits(4_000_000_000_000);
         assert_eq!(four.clamp(a, c), c);
 
         // Negative values
@@ -1674,23 +1674,23 @@ mod tests {
     /// `recip(2.0) == 0.5`, `recip(0.5) == 2.0`.
     #[test]
     fn recip_inverts_known_values() {
-        let two = D128e12::from_bits(2_000_000_000_000);
-        let half = D128e12::from_bits(500_000_000_000);
+        let two = D128s12::from_bits(2_000_000_000_000);
+        let half = D128s12::from_bits(500_000_000_000);
         assert_eq!(two.recip(), half);
         assert_eq!(half.recip(), two);
 
         // recip of ONE is ONE
-        assert_eq!(D128e12::ONE.recip(), D128e12::ONE);
+        assert_eq!(D128s12::ONE.recip(), D128s12::ONE);
 
         // recip of -ONE is -ONE
-        assert_eq!((-D128e12::ONE).recip(), -D128e12::ONE);
+        assert_eq!((-D128s12::ONE).recip(), -D128s12::ONE);
     }
 
     /// `recip(ZERO)` panics (division by zero).
     #[test]
     #[should_panic]
     fn recip_zero_panics() {
-        let _ = D128e12::ZERO.recip();
+        let _ = D128s12::ZERO.recip();
     }
 
     // ── copysign ──
@@ -1698,8 +1698,8 @@ mod tests {
     /// Magnitude of self, sign of `sign` arg.
     #[test]
     fn copysign_basic() {
-        let pos = D128e12::from_bits(1_500_000_000_000);
-        let neg = D128e12::from_bits(-1_500_000_000_000);
+        let pos = D128s12::from_bits(1_500_000_000_000);
+        let neg = D128s12::from_bits(-1_500_000_000_000);
 
         // copysign(pos, pos) == pos
         assert_eq!(pos.copysign(pos), pos);
@@ -1715,16 +1715,16 @@ mod tests {
     /// zero in i128). This locks the v1 policy.
     #[test]
     fn copysign_zero() {
-        let neg = D128e12::from_bits(-1_500_000_000_000);
-        let pos = D128e12::from_bits(1_500_000_000_000);
+        let neg = D128s12::from_bits(-1_500_000_000_000);
+        let pos = D128s12::from_bits(1_500_000_000_000);
 
         // sign == ZERO -> positive magnitude
-        assert_eq!(neg.copysign(D128e12::ZERO), pos);
-        assert_eq!(pos.copysign(D128e12::ZERO), pos);
+        assert_eq!(neg.copysign(D128s12::ZERO), pos);
+        assert_eq!(pos.copysign(D128s12::ZERO), pos);
 
         // self == ZERO -> result == ZERO regardless of sign
-        assert_eq!(D128e12::ZERO.copysign(neg), D128e12::ZERO);
-        assert_eq!(D128e12::ZERO.copysign(pos), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.copysign(neg), D128s12::ZERO);
+        assert_eq!(D128s12::ZERO.copysign(pos), D128s12::ZERO);
     }
 
     // ── div_euclid / rem_euclid ──
@@ -1733,14 +1733,14 @@ mod tests {
     /// 5.0 / 2.0 = 2.5; div_euclid -> floor = 2.0; rem_euclid -> 1.0.
     #[test]
     fn div_euclid_positive() {
-        let a = D128e12::from_bits(5_000_000_000_000); // 5.0
-        let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+        let a = D128s12::from_bits(5_000_000_000_000); // 5.0
+        let b = D128s12::from_bits(2_000_000_000_000); // 2.0
 
         let q = a.div_euclid(b);
-        assert_eq!(q, D128e12::from_bits(2_000_000_000_000)); // 2
+        assert_eq!(q, D128s12::from_bits(2_000_000_000_000)); // 2
 
         let r = a.rem_euclid(b);
-        assert_eq!(r, D128e12::from_bits(1_000_000_000_000)); // 1
+        assert_eq!(r, D128s12::from_bits(1_000_000_000_000)); // 1
 
         // Identity: q*b + r == a
         assert_eq!(q * b + r, a);
@@ -1750,15 +1750,15 @@ mod tests {
     /// non-negative remainder).
     #[test]
     fn div_euclid_negative_dividend() {
-        let a = D128e12::from_bits(-5_000_000_000_000); // -5.0
-        let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+        let a = D128s12::from_bits(-5_000_000_000_000); // -5.0
+        let b = D128s12::from_bits(2_000_000_000_000); // 2.0
 
         let q = a.div_euclid(b);
         // -5 = -3*2 + 1, so quotient = -3, rem = 1
-        assert_eq!(q, D128e12::from_bits(-3_000_000_000_000));
+        assert_eq!(q, D128s12::from_bits(-3_000_000_000_000));
 
         let r = a.rem_euclid(b);
-        assert_eq!(r, D128e12::from_bits(1_000_000_000_000));
+        assert_eq!(r, D128s12::from_bits(1_000_000_000_000));
 
         // Identity: q*b + r == a
         assert_eq!(q * b + r, a);
@@ -1768,14 +1768,14 @@ mod tests {
     /// remainder non-negative).
     #[test]
     fn div_euclid_negative_divisor() {
-        let a = D128e12::from_bits(5_000_000_000_000); // 5.0
-        let b = D128e12::from_bits(-2_000_000_000_000); // -2.0
+        let a = D128s12::from_bits(5_000_000_000_000); // 5.0
+        let b = D128s12::from_bits(-2_000_000_000_000); // -2.0
 
         let q = a.div_euclid(b);
-        assert_eq!(q, D128e12::from_bits(-2_000_000_000_000)); // -2
+        assert_eq!(q, D128s12::from_bits(-2_000_000_000_000)); // -2
 
         let r = a.rem_euclid(b);
-        assert_eq!(r, D128e12::from_bits(1_000_000_000_000)); // 1 (non-negative!)
+        assert_eq!(r, D128s12::from_bits(1_000_000_000_000)); // 1 (non-negative!)
 
         // Identity: q*b + r == a
         assert_eq!(q * b + r, a);
@@ -1794,8 +1794,8 @@ mod tests {
             (-7_321_654_987_000, 13_000_000_000),
         ];
         for (a_bits, b_bits) in cases {
-            let a = D128e12::from_bits(*a_bits);
-            let b = D128e12::from_bits(*b_bits);
+            let a = D128s12::from_bits(*a_bits);
+            let b = D128s12::from_bits(*b_bits);
             let q = a.div_euclid(b);
             let r = a.rem_euclid(b);
             assert_eq!(q * b + r, a, "failed for a={}, b={}", a_bits, b_bits);
@@ -1812,38 +1812,38 @@ mod tests {
     #[test]
     fn div_floor_basic() {
         // 5.0 / 2.0 -> floor(2.5) = 2.0
-        let a = D128e12::from_bits(5_000_000_000_000);
-        let b = D128e12::from_bits(2_000_000_000_000);
-        assert_eq!(a.div_floor(b), D128e12::from_bits(2_000_000_000_000));
+        let a = D128s12::from_bits(5_000_000_000_000);
+        let b = D128s12::from_bits(2_000_000_000_000);
+        assert_eq!(a.div_floor(b), D128s12::from_bits(2_000_000_000_000));
 
         // -5.0 / 2.0 -> floor(-2.5) = -3.0
-        let neg_a = D128e12::from_bits(-5_000_000_000_000);
-        assert_eq!(neg_a.div_floor(b), D128e12::from_bits(-3_000_000_000_000));
+        let neg_a = D128s12::from_bits(-5_000_000_000_000);
+        assert_eq!(neg_a.div_floor(b), D128s12::from_bits(-3_000_000_000_000));
 
         // -5.0 / -2.0 -> floor(2.5) = 2.0 (sign distinction from div_euclid)
-        let neg_b = D128e12::from_bits(-2_000_000_000_000);
-        assert_eq!(neg_a.div_floor(neg_b), D128e12::from_bits(2_000_000_000_000));
+        let neg_b = D128s12::from_bits(-2_000_000_000_000);
+        assert_eq!(neg_a.div_floor(neg_b), D128s12::from_bits(2_000_000_000_000));
 
         // 5.0 / -2.0 -> floor(-2.5) = -3.0
         // (div_euclid here would be -2 because rem must be >= 0.)
-        assert_eq!(a.div_floor(neg_b), D128e12::from_bits(-3_000_000_000_000));
+        assert_eq!(a.div_floor(neg_b), D128s12::from_bits(-3_000_000_000_000));
     }
 
     /// `div_ceil` rounds toward positive infinity.
     #[test]
     fn div_ceil_basic() {
         // 5.0 / 2.0 -> ceil(2.5) = 3.0
-        let a = D128e12::from_bits(5_000_000_000_000);
-        let b = D128e12::from_bits(2_000_000_000_000);
-        assert_eq!(a.div_ceil(b), D128e12::from_bits(3_000_000_000_000));
+        let a = D128s12::from_bits(5_000_000_000_000);
+        let b = D128s12::from_bits(2_000_000_000_000);
+        assert_eq!(a.div_ceil(b), D128s12::from_bits(3_000_000_000_000));
 
         // -5.0 / 2.0 -> ceil(-2.5) = -2.0
-        let neg_a = D128e12::from_bits(-5_000_000_000_000);
-        assert_eq!(neg_a.div_ceil(b), D128e12::from_bits(-2_000_000_000_000));
+        let neg_a = D128s12::from_bits(-5_000_000_000_000);
+        assert_eq!(neg_a.div_ceil(b), D128s12::from_bits(-2_000_000_000_000));
 
         // 4.0 / 2.0 -> exact -> 2.0
-        let four = D128e12::from_bits(4_000_000_000_000);
-        assert_eq!(four.div_ceil(b), D128e12::from_bits(2_000_000_000_000));
+        let four = D128s12::from_bits(4_000_000_000_000);
+        assert_eq!(four.div_ceil(b), D128s12::from_bits(2_000_000_000_000));
     }
 
     // ── abs_diff ──
@@ -1851,9 +1851,9 @@ mod tests {
     /// `abs_diff` is commutative and non-negative.
     #[test]
     fn abs_diff_commutative() {
-        let a = D128e12::from_bits(5_000_000_000_000); // 5.0
-        let b = D128e12::from_bits(2_000_000_000_000); // 2.0
-        let expected = D128e12::from_bits(3_000_000_000_000); // 3.0
+        let a = D128s12::from_bits(5_000_000_000_000); // 5.0
+        let b = D128s12::from_bits(2_000_000_000_000); // 2.0
+        let expected = D128s12::from_bits(3_000_000_000_000); // 3.0
 
         assert_eq!(a.abs_diff(b), expected);
         assert_eq!(b.abs_diff(a), expected);
@@ -1866,7 +1866,7 @@ mod tests {
         assert_eq!(neg_b.abs_diff(neg_a), expected);
 
         // Mixed sign: |5 - (-2)| = 7
-        let seven = D128e12::from_bits(7_000_000_000_000);
+        let seven = D128s12::from_bits(7_000_000_000_000);
         assert_eq!(a.abs_diff(neg_b), seven);
         assert_eq!(neg_b.abs_diff(a), seven);
     }
@@ -1874,12 +1874,12 @@ mod tests {
     /// `abs_diff(x, x) == 0` and `abs_diff(x, 0) == abs(x)`.
     #[test]
     fn abs_diff_zero() {
-        let x = D128e12::from_bits(1_500_000_000_000);
-        assert_eq!(x.abs_diff(x), D128e12::ZERO);
-        assert_eq!(x.abs_diff(D128e12::ZERO), x.abs());
+        let x = D128s12::from_bits(1_500_000_000_000);
+        assert_eq!(x.abs_diff(x), D128s12::ZERO);
+        assert_eq!(x.abs_diff(D128s12::ZERO), x.abs());
 
         let neg = -x;
-        assert_eq!(neg.abs_diff(D128e12::ZERO), x);
+        assert_eq!(neg.abs_diff(D128s12::ZERO), x);
     }
 
     // ── midpoint ──
@@ -1887,17 +1887,17 @@ mod tests {
     /// Midpoint of two representative values.
     #[test]
     fn midpoint_basic() {
-        let a = D128e12::from_bits(1_000_000_000_000); // 1.0
-        let b = D128e12::from_bits(3_000_000_000_000); // 3.0
-        assert_eq!(a.midpoint(b), D128e12::from_bits(2_000_000_000_000)); // 2.0
+        let a = D128s12::from_bits(1_000_000_000_000); // 1.0
+        let b = D128s12::from_bits(3_000_000_000_000); // 3.0
+        assert_eq!(a.midpoint(b), D128s12::from_bits(2_000_000_000_000)); // 2.0
 
         // Negative
         let neg_a = -a;
         let neg_b = -b;
-        assert_eq!(neg_a.midpoint(neg_b), D128e12::from_bits(-2_000_000_000_000));
+        assert_eq!(neg_a.midpoint(neg_b), D128s12::from_bits(-2_000_000_000_000));
 
         // Mixed sign: midpoint(-1, 1) == 0
-        assert_eq!(neg_a.midpoint(a), D128e12::ZERO);
+        assert_eq!(neg_a.midpoint(a), D128s12::ZERO);
     }
 
     /// Midpoint near MAX must not overflow (the whole point of using
@@ -1906,13 +1906,13 @@ mod tests {
     fn midpoint_no_overflow_at_max() {
         // (MAX + MAX) / 2 == MAX, but a naive (a+b)/2 would overflow.
         // i128::midpoint handles this without intermediate overflow.
-        assert_eq!(D128e12::MAX.midpoint(D128e12::MAX), D128e12::MAX);
-        assert_eq!(D128e12::MIN.midpoint(D128e12::MIN), D128e12::MIN);
+        assert_eq!(D128s12::MAX.midpoint(D128s12::MAX), D128s12::MAX);
+        assert_eq!(D128s12::MIN.midpoint(D128s12::MIN), D128s12::MIN);
         // midpoint(MIN, MAX) -- delegates to i128::midpoint. The
         // Rust 1.95 stabilised implementation rounds the average
         // toward zero for signed integers (so MIN + MAX = -1 averages
         // to 0, not -1). Just assert it doesn't overflow / panic.
-        let mid = D128e12::MIN.midpoint(D128e12::MAX);
+        let mid = D128s12::MIN.midpoint(D128s12::MAX);
         assert!(mid.0 == 0 || mid.0 == -1,
                 "midpoint(MIN, MAX) should be 0 or -1, got {}", mid.0);
     }
@@ -1921,56 +1921,56 @@ mod tests {
 
     #[test]
     fn is_nan_always_false() {
-        assert!(!D128e12::ZERO.is_nan());
-        assert!(!D128e12::ONE.is_nan());
-        assert!(!D128e12::MAX.is_nan());
-        assert!(!D128e12::MIN.is_nan());
+        assert!(!D128s12::ZERO.is_nan());
+        assert!(!D128s12::ONE.is_nan());
+        assert!(!D128s12::MAX.is_nan());
+        assert!(!D128s12::MIN.is_nan());
     }
 
     #[test]
     fn is_infinite_always_false() {
-        assert!(!D128e12::ZERO.is_infinite());
-        assert!(!D128e12::MAX.is_infinite());
-        assert!(!D128e12::MIN.is_infinite());
+        assert!(!D128s12::ZERO.is_infinite());
+        assert!(!D128s12::MAX.is_infinite());
+        assert!(!D128s12::MIN.is_infinite());
     }
 
     #[test]
     fn is_finite_always_true() {
-        assert!(D128e12::ZERO.is_finite());
-        assert!(D128e12::ONE.is_finite());
-        assert!(D128e12::MAX.is_finite());
-        assert!(D128e12::MIN.is_finite());
+        assert!(D128s12::ZERO.is_finite());
+        assert!(D128s12::ONE.is_finite());
+        assert!(D128s12::MAX.is_finite());
+        assert!(D128s12::MIN.is_finite());
     }
 
     #[test]
     fn is_normal_zero_is_false() {
-        assert!(!D128e12::ZERO.is_normal());
+        assert!(!D128s12::ZERO.is_normal());
     }
 
     #[test]
     fn is_normal_nonzero_is_true() {
-        assert!(D128e12::ONE.is_normal());
-        assert!((-D128e12::ONE).is_normal());
-        assert!(D128e12::from_bits(1).is_normal()); // smallest positive
-        assert!(D128e12::from_bits(-1).is_normal()); // smallest negative
-        assert!(D128e12::MAX.is_normal());
-        assert!(D128e12::MIN.is_normal());
+        assert!(D128s12::ONE.is_normal());
+        assert!((-D128s12::ONE).is_normal());
+        assert!(D128s12::from_bits(1).is_normal()); // smallest positive
+        assert!(D128s12::from_bits(-1).is_normal()); // smallest negative
+        assert!(D128s12::MAX.is_normal());
+        assert!(D128s12::MIN.is_normal());
     }
 
     /// is_zero / is_positive / is_negative resolve in the foundation
     /// slice (cheap predicates).
     #[test]
     fn is_zero_predicates() {
-        assert!(D128e12::ZERO.is_zero());
-        assert!(!D128e12::ZERO.is_positive());
-        assert!(!D128e12::ZERO.is_negative());
+        assert!(D128s12::ZERO.is_zero());
+        assert!(!D128s12::ZERO.is_positive());
+        assert!(!D128s12::ZERO.is_negative());
 
-        assert!(!D128e12::from_bits(1).is_zero());
-        assert!(D128e12::from_bits(1).is_positive());
-        assert!(!D128e12::from_bits(1).is_negative());
+        assert!(!D128s12::from_bits(1).is_zero());
+        assert!(D128s12::from_bits(1).is_positive());
+        assert!(!D128s12::from_bits(1).is_negative());
 
-        assert!(!D128e12::from_bits(-1).is_zero());
-        assert!(!D128e12::from_bits(-1).is_positive());
-        assert!(D128e12::from_bits(-1).is_negative());
+        assert!(!D128s12::from_bits(-1).is_zero());
+        assert!(!D128s12::from_bits(-1).is_positive());
+        assert!(D128s12::from_bits(-1).is_negative());
     }
 }

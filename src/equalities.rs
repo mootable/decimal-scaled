@@ -10,9 +10,9 @@
 //!   the remainder is zero and the quotient equals `n`.
 //!
 //!   Examples:
-//!   - `D128e12::from_int(5) == 5_i32` -> `true`
-//!   - `D128e12::from_bits(5_500_000_000_000) == 5_i32` -> `false` (5.5 != 5)
-//!   - `D128e12::from_bits(-1) == 0_u32` -> `false` (negative value)
+//!   - `D128s12::from_int(5) == 5_i32` -> `true`
+//!   - `D128s12::from_bits(5_500_000_000_000) == 5_i32` -> `false` (5.5 != 5)
+//!   - `D128s12::from_bits(-1) == 0_u32` -> `false` (negative value)
 //!
 //! - **Floats** (`f32`, `f64`): equality holds iff `f` is finite and converts
 //!   to and from `D128` losslessly relative to the f64 representation. NaN and
@@ -22,7 +22,7 @@
 //!
 //!   Note that f64 cannot represent decimals like `1.1` exactly; the nearest
 //!   f64 to `1.1` is `1.1000000000000000888...`. The implementation treats
-//!   that nearest f64 as equal to `D128e12::from_bits(1_100_000_000_000)`
+//!   that nearest f64 as equal to `D128s12::from_bits(1_100_000_000_000)`
 //!   because the round-trip through `from_f64_lossy`/`to_f64_lossy` agrees.
 //!   Callers who need true rational equality should convert and compare
 //!   explicitly.
@@ -173,41 +173,41 @@ impl_eq_float!(f64);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::D128e12;
+    use crate::core_type::D128s12;
 
     // --- signed integers --------------------------------------------------
 
     #[test]
     fn eq_signed_exact_match() {
-        assert!(D128e12::from_int(5) == 5_i32);
-        assert!(5_i32 == D128e12::from_int(5));
-        assert!(D128e12::from_int(-7) == -7_i64);
-        assert!(D128e12::ZERO == 0_i8);
+        assert!(D128s12::from_int(5) == 5_i32);
+        assert!(5_i32 == D128s12::from_int(5));
+        assert!(D128s12::from_int(-7) == -7_i64);
+        assert!(D128s12::ZERO == 0_i8);
     }
 
     #[test]
     fn eq_signed_fractional_is_false() {
-        let one_and_a_half = D128e12::from_bits(1_500_000_000_000);
+        let one_and_a_half = D128s12::from_bits(1_500_000_000_000);
         assert!(!(one_and_a_half == 1_i32));
         assert!(!(one_and_a_half == 2_i32));
     }
 
     #[test]
     fn eq_signed_one_lsb_is_false() {
-        let just_above_zero = D128e12::from_bits(1);
+        let just_above_zero = D128s12::from_bits(1);
         assert!(!(just_above_zero == 0_i32));
     }
 
     #[test]
     fn eq_i128_no_overflow_at_extremes() {
-        let huge = i128::MAX / D128e12::multiplier();
-        let d = D128e12::from_bits(huge * D128e12::multiplier());
+        let huge = i128::MAX / D128s12::multiplier();
+        let d = D128s12::from_bits(huge * D128s12::multiplier());
         assert!(d == huge);
     }
 
     #[test]
     fn eq_i128_negative() {
-        let d = D128e12::from_bits(-42_000_000_000_000);
+        let d = D128s12::from_bits(-42_000_000_000_000);
         assert!(d == -42_i128);
         assert!(-42_i128 == d);
     }
@@ -216,14 +216,14 @@ mod tests {
 
     #[test]
     fn eq_unsigned_exact_match() {
-        assert!(D128e12::from_int(5) == 5_u32);
-        assert!(5_u64 == D128e12::from_int(5));
-        assert!(D128e12::ZERO == 0_u8);
+        assert!(D128s12::from_int(5) == 5_u32);
+        assert!(5_u64 == D128s12::from_int(5));
+        assert!(D128s12::ZERO == 0_u8);
     }
 
     #[test]
     fn eq_unsigned_negative_is_false() {
-        let neg = D128e12::from_int(-1);
+        let neg = D128s12::from_int(-1);
         assert!(!(neg == 0_u32));
         assert!(!(neg == 1_u32));
     }
@@ -231,7 +231,7 @@ mod tests {
     #[test]
     fn eq_u128_large_value() {
         let n: u128 = 1_000_000_u128;
-        let d = D128e12::from_bits((n as i128) * D128e12::multiplier());
+        let d = D128s12::from_bits((n as i128) * D128s12::multiplier());
         assert!(d == n);
     }
 
@@ -239,7 +239,7 @@ mod tests {
     fn eq_u128_out_of_d128_range_is_false() {
         // A u128 value larger than D128::MAX after scaling cannot match.
         let too_big: u128 = u128::MAX;
-        let d = D128e12::MAX;
+        let d = D128s12::MAX;
         assert!(!(d == too_big));
     }
 
@@ -247,8 +247,8 @@ mod tests {
 
     #[test]
     fn eq_float_exact_representable() {
-        // 1.5 is exactly representable in both f64 and D128e12.
-        let d = D128e12::from_bits(1_500_000_000_000);
+        // 1.5 is exactly representable in both f64 and D128s12.
+        let d = D128s12::from_bits(1_500_000_000_000);
         assert!(d == 1.5_f64);
         assert!(1.5_f64 == d);
         assert!(d == 1.5_f32);
@@ -256,28 +256,28 @@ mod tests {
 
     #[test]
     fn eq_float_zero_and_one() {
-        assert!(D128e12::ZERO == 0.0_f64);
-        assert!(D128e12::ONE == 1.0_f64);
-        assert!(D128e12::ZERO == 0.0_f32);
-        assert!(D128e12::ONE == 1.0_f32);
+        assert!(D128s12::ZERO == 0.0_f64);
+        assert!(D128s12::ONE == 1.0_f64);
+        assert!(D128s12::ZERO == 0.0_f32);
+        assert!(D128s12::ONE == 1.0_f32);
     }
 
     #[test]
     fn eq_float_nan_is_false() {
-        assert!(!(D128e12::ZERO == f64::NAN));
-        assert!(!(D128e12::ZERO == f32::NAN));
+        assert!(!(D128s12::ZERO == f64::NAN));
+        assert!(!(D128s12::ZERO == f32::NAN));
     }
 
     #[test]
     fn eq_float_infinity_is_false() {
-        assert!(!(D128e12::MAX == f64::INFINITY));
-        assert!(!(D128e12::MIN == f64::NEG_INFINITY));
-        assert!(!(D128e12::MAX == f32::INFINITY));
+        assert!(!(D128s12::MAX == f64::INFINITY));
+        assert!(!(D128s12::MIN == f64::NEG_INFINITY));
+        assert!(!(D128s12::MAX == f32::INFINITY));
     }
 
     #[test]
     fn eq_float_negative() {
-        let d = D128e12::from_bits(-2_500_000_000_000);
+        let d = D128s12::from_bits(-2_500_000_000_000);
         assert!(d == -2.5_f64);
         assert!(-2.5_f64 == d);
     }

@@ -157,7 +157,7 @@ fn rescale_from_ref(raw: i128, target_scale: u32) -> i128 {
 
 /// Well-known mathematical constants available on any [`D128<SCALE>`].
 ///
-/// Import this trait to call `D128e12::pi()`, `D128e12::e()`, etc.
+/// Import this trait to call `D128s12::pi()`, `D128s12::e()`, etc.
 ///
 /// All returned values are computed from a 35-digit raw-`i128` reference
 /// without passing through `f64`. The result is bit-exact at the target
@@ -291,7 +291,7 @@ impl<const SCALE: u32> D128<SCALE> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::D128e12;
+    use crate::core_type::D128s12;
 
     // Bit-exact assertions at SCALE = 12.
     //
@@ -304,7 +304,7 @@ mod tests {
     /// Expected: 3_141_592_653_590.
     #[test]
     fn pi_is_bit_exact_at_scale_12() {
-        assert_eq!(D128e12::pi().to_bits(), 3_141_592_653_590_i128);
+        assert_eq!(D128s12::pi().to_bits(), 3_141_592_653_590_i128);
     }
 
     /// tau at SCALE=12: raw / 10^23.
@@ -312,7 +312,7 @@ mod tests {
     /// 14th digit is 5 -> round up. Expected: 6_283_185_307_180.
     #[test]
     fn tau_is_bit_exact_at_scale_12() {
-        assert_eq!(D128e12::tau().to_bits(), 6_283_185_307_180_i128);
+        assert_eq!(D128s12::tau().to_bits(), 6_283_185_307_180_i128);
     }
 
     /// half_pi at SCALE=12: raw / 10^23.
@@ -320,7 +320,7 @@ mod tests {
     /// 14th digit is 8 -> round up. Expected: 1_570_796_326_795.
     #[test]
     fn half_pi_is_bit_exact_at_scale_12() {
-        assert_eq!(D128e12::half_pi().to_bits(), 1_570_796_326_795_i128);
+        assert_eq!(D128s12::half_pi().to_bits(), 1_570_796_326_795_i128);
     }
 
     /// quarter_pi at SCALE=12: raw / 10^23.
@@ -328,7 +328,7 @@ mod tests {
     /// 13th digit is 4 -> no round-up. Expected: 785_398_163_397.
     #[test]
     fn quarter_pi_is_bit_exact_at_scale_12() {
-        assert_eq!(D128e12::quarter_pi().to_bits(), 785_398_163_397_i128);
+        assert_eq!(D128s12::quarter_pi().to_bits(), 785_398_163_397_i128);
     }
 
     /// e at SCALE=12: raw / 10^23.
@@ -336,7 +336,7 @@ mod tests {
     /// 14th digit is 0 -> no round-up. Expected: 2_718_281_828_459.
     #[test]
     fn e_is_bit_exact_at_scale_12() {
-        assert_eq!(D128e12::e().to_bits(), 2_718_281_828_459_i128);
+        assert_eq!(D128s12::e().to_bits(), 2_718_281_828_459_i128);
     }
 
     /// golden at SCALE=12: raw / 10^23.
@@ -344,7 +344,7 @@ mod tests {
     /// 14th digit is 8 -> round up. Expected: 1_618_033_988_750.
     #[test]
     fn golden_is_bit_exact_at_scale_12() {
-        assert_eq!(D128e12::golden().to_bits(), 1_618_033_988_750_i128);
+        assert_eq!(D128s12::golden().to_bits(), 1_618_033_988_750_i128);
     }
 
     // Closeness checks against core::f64::consts.
@@ -356,27 +356,27 @@ mod tests {
     /// the f64 conversion step.
     #[test]
     fn pi_close_to_f64_pi() {
-        let diff = (D128e12::pi().to_f64_lossy() - core::f64::consts::PI).abs();
+        let diff = (D128s12::pi().to_f64_lossy() - core::f64::consts::PI).abs();
         assert!(diff < 1e-11, "pi diverges from f64 PI by {diff}");
     }
 
     #[test]
     fn tau_close_to_f64_tau() {
-        let diff = (D128e12::tau().to_f64_lossy() - core::f64::consts::TAU).abs();
+        let diff = (D128s12::tau().to_f64_lossy() - core::f64::consts::TAU).abs();
         assert!(diff < 1e-11, "tau diverges from f64 TAU by {diff}");
     }
 
     #[test]
     fn half_pi_close_to_f64_frac_pi_2() {
         let diff =
-            (D128e12::half_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_2).abs();
+            (D128s12::half_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_2).abs();
         assert!(diff < 1e-11, "half_pi diverges from f64 FRAC_PI_2 by {diff}");
     }
 
     #[test]
     fn quarter_pi_close_to_f64_frac_pi_4() {
         let diff =
-            (D128e12::quarter_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_4).abs();
+            (D128s12::quarter_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_4).abs();
         assert!(
             diff < 1e-11,
             "quarter_pi diverges from f64 FRAC_PI_4 by {diff}"
@@ -385,7 +385,7 @@ mod tests {
 
     #[test]
     fn e_close_to_f64_e() {
-        let diff = (D128e12::e().to_f64_lossy() - core::f64::consts::E).abs();
+        let diff = (D128s12::e().to_f64_lossy() - core::f64::consts::E).abs();
         assert!(diff < 1e-11, "e diverges from f64 E by {diff}");
     }
 
@@ -395,7 +395,7 @@ mod tests {
     #[test]
     fn golden_close_to_closed_form() {
         let expected = (1.0_f64 + 5.0_f64.sqrt()) / 2.0;
-        let diff = (D128e12::golden().to_f64_lossy() - expected).abs();
+        let diff = (D128s12::golden().to_f64_lossy() - expected).abs();
         assert!(diff < 1e-11, "golden diverges from closed-form by {diff}");
     }
 
@@ -403,14 +403,14 @@ mod tests {
 
     #[test]
     fn epsilon_is_one_ulp() {
-        assert_eq!(D128e12::EPSILON.to_bits(), 1_i128);
-        assert!(D128e12::EPSILON > D128e12::ZERO);
+        assert_eq!(D128s12::EPSILON.to_bits(), 1_i128);
+        assert!(D128s12::EPSILON > D128s12::ZERO);
     }
 
     #[test]
     fn min_positive_is_one_ulp() {
-        assert_eq!(D128e12::MIN_POSITIVE.to_bits(), 1_i128);
-        assert_eq!(D128e12::MIN_POSITIVE, D128e12::EPSILON);
+        assert_eq!(D128s12::MIN_POSITIVE.to_bits(), 1_i128);
+        assert_eq!(D128s12::MIN_POSITIVE, D128s12::EPSILON);
     }
 
     /// At SCALE = 6 the LSB is 10^-6; EPSILON is still raw 1.
@@ -457,7 +457,7 @@ mod tests {
     /// Negative-side rounding: negating pi gives the expected raw bits.
     #[test]
     fn neg_pi_round_trip() {
-        let pi = D128e12::pi();
+        let pi = D128s12::pi();
         let neg_pi = -pi;
         assert_eq!(neg_pi.to_bits(), -3_141_592_653_590_i128);
     }

@@ -105,11 +105,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let two = D128e12::from_int(2);
-    /// assert_eq!(two.pow(10), D128e12::from_int(1024));
+    /// use decimal_scaled::D128s12;
+    /// let two = D128s12::from_int(2);
+    /// assert_eq!(two.pow(10), D128s12::from_int(1024));
     /// // exp = 0 returns ONE regardless of base.
-    /// assert_eq!(D128e12::ZERO.pow(0), D128e12::ONE);
+    /// assert_eq!(D128s12::ZERO.pow(0), D128s12::ONE);
     /// ```
     #[inline]
     #[must_use]
@@ -148,11 +148,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let two = D128e12::from_int(2);
-    /// assert_eq!(two.powi(-1), D128e12::ONE / two);
-    /// assert_eq!(two.powi(0), D128e12::ONE);
-    /// assert_eq!(two.powi(3), D128e12::from_int(8));
+    /// use decimal_scaled::D128s12;
+    /// let two = D128s12::from_int(2);
+    /// assert_eq!(two.powi(-1), D128s12::ONE / two);
+    /// assert_eq!(two.powi(0), D128s12::ONE);
+    /// assert_eq!(two.powi(3), D128s12::from_int(8));
     /// ```
     #[inline]
     #[must_use]
@@ -181,9 +181,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let two = D128e12::from_int(2);
-    /// let three = D128e12::from_int(3);
+    /// use decimal_scaled::D128s12;
+    /// let two = D128s12::from_int(2);
+    /// let three = D128s12::from_int(3);
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
@@ -210,9 +210,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let two = D128e12::from_int(2);
-    /// let three = D128e12::from_int(3);
+    /// use decimal_scaled::D128s12;
+    /// let two = D128s12::from_int(2);
+    /// let three = D128s12::from_int(3);
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
@@ -242,10 +242,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::ZERO.sqrt(), D128e12::ZERO);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::ZERO.sqrt(), D128s12::ZERO);
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
-    /// assert_eq!(D128e12::ONE.sqrt(), D128e12::ONE);
+    /// assert_eq!(D128s12::ONE.sqrt(), D128s12::ONE);
     /// ```
     #[cfg(feature = "strict")]
     #[inline]
@@ -273,10 +273,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::ZERO.sqrt(), D128e12::ZERO);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::ZERO.sqrt(), D128s12::ZERO);
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
-    /// assert_eq!(D128e12::ONE.sqrt(), D128e12::ONE);
+    /// assert_eq!(D128s12::ONE.sqrt(), D128s12::ONE);
     /// ```
     #[cfg(all(feature = "std", not(feature = "strict")))]
     #[inline]
@@ -299,8 +299,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let neg_eight = D128e12::from_int(-8);
+    /// use decimal_scaled::D128s12;
+    /// let neg_eight = D128s12::from_int(-8);
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
     /// ```
@@ -338,12 +338,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let two   = D128e12::from_int(2);
-    /// let three = D128e12::from_int(3);
-    /// let four  = D128e12::from_int(4);
+    /// use decimal_scaled::D128s12;
+    /// let two   = D128s12::from_int(2);
+    /// let three = D128s12::from_int(3);
+    /// let four  = D128s12::from_int(4);
     /// // 2 * 3 + 4 = 10
-    /// assert_eq!(two.mul_add(three, four), D128e12::from_int(10));
+    /// assert_eq!(two.mul_add(three, four), D128s12::from_int(10));
     /// ```
     #[inline]
     #[must_use]
@@ -379,9 +379,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let three = D128e12::from_int(3);
-    /// let four  = D128e12::from_int(4);
+    /// use decimal_scaled::D128s12;
+    /// let three = D128s12::from_int(3);
+    /// let four  = D128s12::from_int(4);
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
     /// ```
@@ -422,11 +422,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // MAX^2 overflows.
-    /// assert!(D128e12::MAX.checked_pow(2).is_none());
+    /// assert!(D128s12::MAX.checked_pow(2).is_none());
     /// // Any power of ONE is ONE.
-    /// assert_eq!(D128e12::ONE.checked_pow(1_000_000), Some(D128e12::ONE));
+    /// assert_eq!(D128s12::ONE.checked_pow(1_000_000), Some(D128s12::ONE));
     /// ```
     #[inline]
     #[must_use]
@@ -462,11 +462,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
+    /// use decimal_scaled::D128s12;
     /// // ONE^N never overflows and returns ONE.
-    /// assert_eq!(D128e12::ONE.wrapping_pow(1_000_000), D128e12::ONE);
+    /// assert_eq!(D128s12::ONE.wrapping_pow(1_000_000), D128s12::ONE);
     /// // MAX^2 wraps to a deterministic but unspecified value.
-    /// let _ = D128e12::MAX.wrapping_pow(2);
+    /// let _ = D128s12::MAX.wrapping_pow(2);
     /// ```
     #[inline]
     #[must_use]
@@ -510,9 +510,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// assert_eq!(D128e12::MAX.saturating_pow(2), D128e12::MAX);
-    /// assert_eq!(D128e12::ONE.saturating_pow(1_000_000), D128e12::ONE);
+    /// use decimal_scaled::D128s12;
+    /// assert_eq!(D128s12::MAX.saturating_pow(2), D128s12::MAX);
+    /// assert_eq!(D128s12::ONE.saturating_pow(1_000_000), D128s12::ONE);
     /// ```
     #[inline]
     #[must_use]
@@ -571,12 +571,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128e12;
-    /// let (_value, overflowed) = D128e12::MAX.overflowing_pow(2);
+    /// use decimal_scaled::D128s12;
+    /// let (_value, overflowed) = D128s12::MAX.overflowing_pow(2);
     /// assert!(overflowed);
-    /// let (value, overflowed) = D128e12::ONE.overflowing_pow(5);
+    /// let (value, overflowed) = D128s12::ONE.overflowing_pow(5);
     /// assert!(!overflowed);
-    /// assert_eq!(value, D128e12::ONE);
+    /// assert_eq!(value, D128s12::ONE);
     /// ```
     #[inline]
     #[must_use]
@@ -613,7 +613,7 @@ impl<const SCALE: u32> D128<SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core_type::D128e12;
+    use crate::core_type::D128s12;
 
     // Tolerance for f64-bridge tests. Used only by std-feature-gated
     // tests below; gated to suppress unused-item warnings on no_std builds.
@@ -621,7 +621,7 @@ mod tests {
     const TWO_LSB: i128 = 2;
 
     #[cfg(feature = "std")]
-    fn within_lsb(actual: D128e12, expected: D128e12, lsb: i128) -> bool {
+    fn within_lsb(actual: D128s12, expected: D128s12, lsb: i128) -> bool {
         let diff = (actual.to_bits() - expected.to_bits()).abs();
         diff <= lsb
     }
@@ -631,21 +631,21 @@ mod tests {
     /// `pow(0)` returns ONE for a nonzero base.
     #[test]
     fn pow_zero_is_one_for_nonzero() {
-        let v = D128e12::from_int(7);
-        assert_eq!(v.pow(0), D128e12::ONE);
+        let v = D128s12::from_int(7);
+        assert_eq!(v.pow(0), D128s12::ONE);
     }
 
     /// `pow(1)` returns self.
     #[test]
     fn pow_one_is_self() {
-        let v = D128e12::from_int(7);
+        let v = D128s12::from_int(7);
         assert_eq!(v.pow(1), v);
     }
 
     /// `pow(2)` equals `self * self` for an integer value.
     #[test]
     fn pow_two_matches_mul() {
-        let v = D128e12::from_int(13);
+        let v = D128s12::from_int(13);
         assert_eq!(v.pow(2), v * v);
     }
 
@@ -653,45 +653,45 @@ mod tests {
     #[test]
     fn pow_two_matches_mul_fractional() {
         // 1.5 in raw bits at SCALE = 12.
-        let v = D128e12::from_bits(1_500_000_000_000);
+        let v = D128s12::from_bits(1_500_000_000_000);
         assert_eq!(v.pow(2), v * v);
     }
 
     /// `2^10 == 1024`.
     #[test]
     fn pow_two_to_the_ten() {
-        let two = D128e12::from_int(2);
-        assert_eq!(two.pow(10), D128e12::from_int(1024));
+        let two = D128s12::from_int(2);
+        assert_eq!(two.pow(10), D128s12::from_int(1024));
     }
 
     /// `pow(0, 0) == ONE` — matches `i128::pow(0, 0) == 1`.
     #[test]
     fn zero_pow_zero_is_one() {
-        assert_eq!(D128e12::ZERO.pow(0), D128e12::ONE);
+        assert_eq!(D128s12::ZERO.pow(0), D128s12::ONE);
     }
 
     /// `pow(0, n)` for `n > 0` is `ZERO`.
     #[test]
     fn zero_pow_positive_is_zero() {
-        assert_eq!(D128e12::ZERO.pow(1), D128e12::ZERO);
-        assert_eq!(D128e12::ZERO.pow(5), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.pow(1), D128s12::ZERO);
+        assert_eq!(D128s12::ZERO.pow(5), D128s12::ZERO);
     }
 
     /// `pow(n)` of `ONE` is always `ONE`.
     #[test]
     fn one_pow_n_is_one() {
-        assert_eq!(D128e12::ONE.pow(0), D128e12::ONE);
-        assert_eq!(D128e12::ONE.pow(1), D128e12::ONE);
-        assert_eq!(D128e12::ONE.pow(100), D128e12::ONE);
+        assert_eq!(D128s12::ONE.pow(0), D128s12::ONE);
+        assert_eq!(D128s12::ONE.pow(1), D128s12::ONE);
+        assert_eq!(D128s12::ONE.pow(100), D128s12::ONE);
     }
 
     /// `(-1)^n` alternates sign.
     #[test]
     fn negative_one_pow_alternates() {
-        let neg_one = -D128e12::ONE;
-        assert_eq!(neg_one.pow(0), D128e12::ONE);
+        let neg_one = -D128s12::ONE;
+        assert_eq!(neg_one.pow(0), D128s12::ONE);
         assert_eq!(neg_one.pow(1), neg_one);
-        assert_eq!(neg_one.pow(2), D128e12::ONE);
+        assert_eq!(neg_one.pow(2), D128s12::ONE);
         assert_eq!(neg_one.pow(3), neg_one);
     }
 
@@ -700,35 +700,35 @@ mod tests {
     /// `powi(0)` returns ONE.
     #[test]
     fn powi_zero_is_one() {
-        let v = D128e12::from_int(7);
-        assert_eq!(v.powi(0), D128e12::ONE);
+        let v = D128s12::from_int(7);
+        assert_eq!(v.powi(0), D128s12::ONE);
     }
 
     /// `powi(1)` returns self.
     #[test]
     fn powi_one_is_self() {
-        let v = D128e12::from_int(7);
+        let v = D128s12::from_int(7);
         assert_eq!(v.powi(1), v);
     }
 
     /// `powi(-1)` returns `ONE / self`.
     #[test]
     fn powi_minus_one_is_reciprocal() {
-        let v = D128e12::from_int(7);
-        assert_eq!(v.powi(-1), D128e12::ONE / v);
+        let v = D128s12::from_int(7);
+        assert_eq!(v.powi(-1), D128s12::ONE / v);
     }
 
     /// `powi(-3)` equals `ONE / pow(3)`.
     #[test]
     fn powi_negative_matches_reciprocal_of_positive() {
-        let v = D128e12::from_int(2);
-        assert_eq!(v.powi(-3), D128e12::ONE / v.pow(3));
+        let v = D128s12::from_int(2);
+        assert_eq!(v.powi(-3), D128s12::ONE / v.pow(3));
     }
 
     /// `powi` agrees with `pow` for non-negative exponents.
     #[test]
     fn powi_positive_matches_pow() {
-        let v = D128e12::from_int(3);
+        let v = D128s12::from_int(3);
         for e in 0_i32..6 {
             assert_eq!(v.powi(e), v.pow(e as u32));
         }
@@ -738,7 +738,7 @@ mod tests {
     /// of ONE the result is ONE.
     #[test]
     fn powi_i32_min_for_one_base() {
-        assert_eq!(D128e12::ONE.powi(i32::MIN), D128e12::ONE);
+        assert_eq!(D128s12::ONE.powi(i32::MIN), D128s12::ONE);
     }
 
     // powf — requires std feature
@@ -747,8 +747,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn powf_half_matches_sqrt() {
-        let v = D128e12::from_int(4);
-        let half = D128e12::from_bits(500_000_000_000); // 0.5 at SCALE=12
+        let v = D128s12::from_int(4);
+        let half = D128s12::from_bits(500_000_000_000); // 0.5 at SCALE=12
         let powf_result = v.powf(half);
         let sqrt_result = v.sqrt();
         assert!(
@@ -764,8 +764,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
-        let v = D128e12::from_int(7);
-        let two = D128e12::from_int(2);
+        let v = D128s12::from_int(7);
+        let two = D128s12::from_int(2);
         assert!(within_lsb(v.powf(two), v.pow(2), TWO_LSB));
     }
 
@@ -775,22 +775,22 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_zero_is_zero() {
-        assert_eq!(D128e12::ZERO.sqrt(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.sqrt(), D128s12::ZERO);
     }
 
     /// `sqrt(1) == 1` — bit-exact because `f64::sqrt(1.0) == 1.0`.
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_one_is_one_bit_exact() {
-        assert_eq!(D128e12::ONE.sqrt(), D128e12::ONE);
+        assert_eq!(D128s12::ONE.sqrt(), D128s12::ONE);
     }
 
     /// `sqrt(4) == 2` — bit-exact because `f64::sqrt(4.0) == 2.0`.
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_four_is_two() {
-        let four = D128e12::from_int(4);
-        let two = D128e12::from_int(2);
+        let four = D128s12::from_int(4);
+        let two = D128s12::from_int(2);
         assert_eq!(four.sqrt(), two);
     }
 
@@ -798,7 +798,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_of_square_recovers_abs() {
-        let v = D128e12::from_bits(1_234_567_890_123);
+        let v = D128s12::from_bits(1_234_567_890_123);
         let squared = v * v;
         let recovered = squared.sqrt();
         let abs_v = v.abs();
@@ -816,7 +816,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_of_square_negative_recovers_abs() {
-        let v = -D128e12::from_bits(4_567_891_234_567);
+        let v = -D128s12::from_bits(4_567_891_234_567);
         let squared = v * v;
         let recovered = squared.sqrt();
         let abs_v = v.abs();
@@ -827,8 +827,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_negative_saturates_to_zero() {
-        let v = -D128e12::from_int(4);
-        assert_eq!(v.sqrt(), D128e12::ZERO);
+        let v = -D128s12::from_int(4);
+        assert_eq!(v.sqrt(), D128s12::ZERO);
     }
 
     // cbrt — requires std feature
@@ -837,22 +837,22 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn cbrt_zero_is_zero() {
-        assert_eq!(D128e12::ZERO.cbrt(), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.cbrt(), D128s12::ZERO);
     }
 
     /// `cbrt(1) == 1`.
     #[cfg(feature = "std")]
     #[test]
     fn cbrt_one_is_one() {
-        assert_eq!(D128e12::ONE.cbrt(), D128e12::ONE);
+        assert_eq!(D128s12::ONE.cbrt(), D128s12::ONE);
     }
 
     /// `cbrt(8) ~= 2` within 2 LSB.
     #[cfg(feature = "std")]
     #[test]
     fn cbrt_eight_is_two() {
-        let eight = D128e12::from_int(8);
-        let two = D128e12::from_int(2);
+        let eight = D128s12::from_int(8);
+        let two = D128s12::from_int(2);
         assert!(within_lsb(eight.cbrt(), two, TWO_LSB));
     }
 
@@ -860,8 +860,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn cbrt_minus_eight_is_minus_two() {
-        let neg_eight = D128e12::from_int(-8);
-        let neg_two = D128e12::from_int(-2);
+        let neg_eight = D128s12::from_int(-8);
+        let neg_two = D128s12::from_int(-2);
         assert!(
             within_lsb(neg_eight.cbrt(), neg_two, TWO_LSB),
             "cbrt(-8) = {}, expected ~ {}",
@@ -875,20 +875,20 @@ mod tests {
     /// `checked_pow(MAX, 2)` is `None` because MAX^2 overflows.
     #[test]
     fn checked_pow_max_squared_is_none() {
-        assert!(D128e12::MAX.checked_pow(2).is_none());
+        assert!(D128s12::MAX.checked_pow(2).is_none());
     }
 
     /// `checked_pow(ONE, N)` is `Some(ONE)` for any N.
     #[test]
     fn checked_pow_one_is_some_one() {
-        assert_eq!(D128e12::ONE.checked_pow(1_000_000), Some(D128e12::ONE));
-        assert_eq!(D128e12::ONE.checked_pow(0), Some(D128e12::ONE));
+        assert_eq!(D128s12::ONE.checked_pow(1_000_000), Some(D128s12::ONE));
+        assert_eq!(D128s12::ONE.checked_pow(0), Some(D128s12::ONE));
     }
 
     /// `checked_pow` agrees with `pow` for non-overflowing inputs.
     #[test]
     fn checked_pow_matches_pow_when_no_overflow() {
-        let v = D128e12::from_int(3);
+        let v = D128s12::from_int(3);
         assert_eq!(v.checked_pow(0), Some(v.pow(0)));
         assert_eq!(v.checked_pow(1), Some(v.pow(1)));
         assert_eq!(v.checked_pow(5), Some(v.pow(5)));
@@ -897,76 +897,76 @@ mod tests {
     /// `saturating_pow(MAX, 2)` clamps to `MAX`.
     #[test]
     fn saturating_pow_max_squared_is_max() {
-        assert_eq!(D128e12::MAX.saturating_pow(2), D128e12::MAX);
+        assert_eq!(D128s12::MAX.saturating_pow(2), D128s12::MAX);
     }
 
     /// `saturating_pow(MIN, 3)` clamps to `MIN` (negative result, odd exp).
     #[test]
     fn saturating_pow_min_cubed_is_min() {
-        assert_eq!(D128e12::MIN.saturating_pow(3), D128e12::MIN);
+        assert_eq!(D128s12::MIN.saturating_pow(3), D128s12::MIN);
     }
 
     /// `saturating_pow(MIN, 2)` clamps to `MAX` (positive result, even exp).
     #[test]
     fn saturating_pow_min_squared_is_max() {
-        assert_eq!(D128e12::MIN.saturating_pow(2), D128e12::MAX);
+        assert_eq!(D128s12::MIN.saturating_pow(2), D128s12::MAX);
     }
 
     /// `saturating_pow(ONE, N)` is ONE for any N.
     #[test]
     fn saturating_pow_one_is_one() {
-        assert_eq!(D128e12::ONE.saturating_pow(1_000_000), D128e12::ONE);
+        assert_eq!(D128s12::ONE.saturating_pow(1_000_000), D128s12::ONE);
     }
 
     /// `saturating_pow(v, 0)` is ONE for any base.
     #[test]
     fn saturating_pow_zero_exp_is_one() {
-        assert_eq!(D128e12::MAX.saturating_pow(0), D128e12::ONE);
-        assert_eq!(D128e12::MIN.saturating_pow(0), D128e12::ONE);
+        assert_eq!(D128s12::MAX.saturating_pow(0), D128s12::ONE);
+        assert_eq!(D128s12::MIN.saturating_pow(0), D128s12::ONE);
     }
 
     /// `overflowing_pow(MAX, 2)` returns `(wrapping_value, true)`.
     #[test]
     fn overflowing_pow_max_squared_flags_overflow() {
-        let (value, overflowed) = D128e12::MAX.overflowing_pow(2);
+        let (value, overflowed) = D128s12::MAX.overflowing_pow(2);
         assert!(overflowed);
-        assert_eq!(value, D128e12::MAX.wrapping_pow(2));
+        assert_eq!(value, D128s12::MAX.wrapping_pow(2));
     }
 
     /// `overflowing_pow(ONE, N)` never overflows.
     #[test]
     fn overflowing_pow_one_no_overflow() {
-        let (value, overflowed) = D128e12::ONE.overflowing_pow(1_000_000);
+        let (value, overflowed) = D128s12::ONE.overflowing_pow(1_000_000);
         assert!(!overflowed);
-        assert_eq!(value, D128e12::ONE);
+        assert_eq!(value, D128s12::ONE);
     }
 
     /// `overflowing_pow(v, 0)` is `(ONE, false)`.
     #[test]
     fn overflowing_pow_zero_exp_no_overflow() {
-        let (value, overflowed) = D128e12::MAX.overflowing_pow(0);
+        let (value, overflowed) = D128s12::MAX.overflowing_pow(0);
         assert!(!overflowed);
-        assert_eq!(value, D128e12::ONE);
+        assert_eq!(value, D128s12::ONE);
     }
 
     /// `wrapping_pow(MAX, 2)` matches the value half of `overflowing_pow`.
     #[test]
     fn wrapping_pow_max_squared_matches_overflowing() {
-        let wrap = D128e12::MAX.wrapping_pow(2);
-        let (over, _flag) = D128e12::MAX.overflowing_pow(2);
+        let wrap = D128s12::MAX.wrapping_pow(2);
+        let (over, _flag) = D128s12::MAX.overflowing_pow(2);
         assert_eq!(wrap, over);
     }
 
     /// `wrapping_pow(ONE, N)` is ONE.
     #[test]
     fn wrapping_pow_one_is_one() {
-        assert_eq!(D128e12::ONE.wrapping_pow(1_000_000), D128e12::ONE);
+        assert_eq!(D128s12::ONE.wrapping_pow(1_000_000), D128s12::ONE);
     }
 
     /// `wrapping_pow` agrees with `pow` for non-overflowing inputs.
     #[test]
     fn wrapping_pow_matches_pow_when_no_overflow() {
-        let v = D128e12::from_int(3);
+        let v = D128s12::from_int(3);
         for e in 0..6 {
             assert_eq!(v.wrapping_pow(e), v.pow(e));
         }
@@ -980,7 +980,7 @@ mod tests {
             4_567_891_234_567_i128,
             7_890_123_456_789_i128,
         ] {
-            let v = D128e12::from_bits(raw);
+            let v = D128s12::from_bits(raw);
             assert_eq!(v.pow(2), v * v, "raw bits {raw}");
         }
     }
@@ -990,32 +990,32 @@ mod tests {
     /// `mul_add(0, 0, 0) == 0`.
     #[test]
     fn mul_add_zero_zero_zero_is_zero() {
-        let z = D128e12::ZERO;
-        assert_eq!(z.mul_add(z, z), D128e12::ZERO);
+        let z = D128s12::ZERO;
+        assert_eq!(z.mul_add(z, z), D128s12::ZERO);
     }
 
     /// `mul_add(2, 3, 4) == 10`.
     #[test]
     fn mul_add_two_three_four_is_ten() {
-        let two = D128e12::from_int(2);
-        let three = D128e12::from_int(3);
-        let four = D128e12::from_int(4);
-        assert_eq!(two.mul_add(three, four), D128e12::from_int(10));
+        let two = D128s12::from_int(2);
+        let three = D128s12::from_int(3);
+        let four = D128s12::from_int(4);
+        assert_eq!(two.mul_add(three, four), D128s12::from_int(10));
     }
 
     /// `mul_add(self, ONE, ZERO) == self`.
     #[test]
     fn mul_add_identity_collapses() {
-        let v = D128e12::from_int(7);
-        assert_eq!(v.mul_add(D128e12::ONE, D128e12::ZERO), v);
+        let v = D128s12::from_int(7);
+        assert_eq!(v.mul_add(D128s12::ONE, D128s12::ZERO), v);
     }
 
     /// `mul_add(self, ZERO, b) == b`.
     #[test]
     fn mul_add_zero_factor_yields_addend() {
-        let v = D128e12::from_int(7);
-        let b = D128e12::from_int(13);
-        assert_eq!(v.mul_add(D128e12::ZERO, b), b);
+        let v = D128s12::from_int(7);
+        let b = D128s12::from_int(13);
+        assert_eq!(v.mul_add(D128s12::ZERO, b), b);
     }
 
     /// `mul_add(a, b, c) == a * b + c` for representative raw values.
@@ -1026,9 +1026,9 @@ mod tests {
             (4_567_891_234_567_i128, 5_678_912_345_678_i128, 6_789_123_456_789_i128),
             (7_890_123_456_789_i128, 8_901_234_567_891_i128, 9_012_345_678_912_i128),
         ] {
-            let a = D128e12::from_bits(a_raw);
-            let b = D128e12::from_bits(b_raw);
-            let c = D128e12::from_bits(c_raw);
+            let a = D128s12::from_bits(a_raw);
+            let b = D128s12::from_bits(b_raw);
+            let c = D128s12::from_bits(c_raw);
             assert_eq!(
                 a.mul_add(b, c),
                 a * b + c,
@@ -1040,11 +1040,11 @@ mod tests {
     /// `(-a).mul_add(b, c)` propagates the sign through the multiply step.
     #[test]
     fn mul_add_sign_propagates_through_factor() {
-        let a = D128e12::from_int(3);
-        let b = D128e12::from_int(5);
-        let c = D128e12::from_int(7);
+        let a = D128s12::from_int(3);
+        let b = D128s12::from_int(5);
+        let c = D128s12::from_int(7);
         // (-3) * 5 + 7 = -15 + 7 = -8
-        assert_eq!((-a).mul_add(b, c), D128e12::from_int(-8));
+        assert_eq!((-a).mul_add(b, c), D128s12::from_int(-8));
     }
 
     // hypot — requires std feature
@@ -1058,9 +1058,9 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_three_four_is_five() {
-        let three = D128e12::from_int(3);
-        let four = D128e12::from_int(4);
-        let five = D128e12::from_int(5);
+        let three = D128s12::from_int(3);
+        let four = D128s12::from_int(4);
+        let five = D128s12::from_int(5);
         let result = three.hypot(four);
         assert!(
             within_lsb(result, five, HYPOT_TOLERANCE_LSB),
@@ -1075,15 +1075,15 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_zero_zero_is_zero_bit_exact() {
-        assert_eq!(D128e12::ZERO.hypot(D128e12::ZERO), D128e12::ZERO);
+        assert_eq!(D128s12::ZERO.hypot(D128s12::ZERO), D128s12::ZERO);
     }
 
     /// `hypot(0, x) ~= x.abs()` for nonzero x.
     #[cfg(feature = "std")]
     #[test]
     fn hypot_zero_x_is_abs_x() {
-        let x = D128e12::from_int(7);
-        let result = D128e12::ZERO.hypot(x);
+        let x = D128s12::from_int(7);
+        let result = D128s12::ZERO.hypot(x);
         assert!(
             within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
             "hypot(0, 7)={}, expected~={}",
@@ -1096,8 +1096,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_x_zero_is_abs_x() {
-        let x = D128e12::from_int(-9);
-        let result = x.hypot(D128e12::ZERO);
+        let x = D128s12::from_int(-9);
+        let result = x.hypot(D128s12::ZERO);
         assert!(
             within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
             "hypot(-9, 0)={}, expected~={}",
@@ -1110,8 +1110,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_sign_invariant() {
-        let three = D128e12::from_int(3);
-        let four = D128e12::from_int(4);
+        let three = D128s12::from_int(3);
+        let four = D128s12::from_int(4);
         let pos = three.hypot(four);
         let neg_a = (-three).hypot(four);
         let neg_b = three.hypot(-four);
@@ -1130,9 +1130,9 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_large_magnitudes_does_not_panic() {
-        let half_max = D128e12::from_bits(i128::MAX / 2);
+        let half_max = D128s12::from_bits(i128::MAX / 2);
         let result = half_max.hypot(half_max);
-        assert!(result > D128e12::ZERO);
+        assert!(result > D128s12::ZERO);
         assert!(result >= half_max);
     }
 
@@ -1141,8 +1141,8 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_matches_naive_sqrt_of_sum_of_squares() {
-        let a = D128e12::from_int(12);
-        let b = D128e12::from_int(13);
+        let a = D128s12::from_int(12);
+        let b = D128s12::from_int(13);
         let h = a.hypot(b);
         let naive = (a * a + b * b).sqrt();
         assert!(

@@ -312,7 +312,7 @@ fn mg_mul(a: i128, b: i128) -> i128 {
     }
 }
 
-// MG-style divide for D128e12::div: numerator = a * MULT (256-bit),
+// MG-style divide for D128s12::div: numerator = a * MULT (256-bit),
 // divisor = b (128-bit). MG magic-divide doesn't apply (b is variable).
 // We use the same hand-rolled binary long divide as Candidate B.
 #[inline(always)]
@@ -421,7 +421,7 @@ fn sanity_check_consistency() {
 
 fn bench_mul(c: &mut Criterion) {
     sanity_check_consistency();
-    let mut group = c.benchmark_group("D128e12::mul");
+    let mut group = c.benchmark_group("D128s12::mul");
 
     for inp in [SMALL, MID, BOUND, WIDE] {
         // Candidate A -- skip at WIDE (overflows)
@@ -447,7 +447,7 @@ fn bench_mul(c: &mut Criterion) {
 }
 
 fn bench_div(c: &mut Criterion) {
-    let mut group = c.benchmark_group("D128e12::div");
+    let mut group = c.benchmark_group("D128s12::div");
 
     for inp in [SMALL, MID, BOUND, WIDE] {
         if inp.label != "wide_1e22" {
