@@ -3,7 +3,7 @@
 //! The full parser logic lives in `display.rs::parse_decimal_bits`,
 //! which returns the raw bits as `i128`. Per-width `FromStr` impls
 //! narrow that i128 to the target storage and report
-//! `ParseD128Error::OutOfRange` when the narrowing would lose
+//! `ParseError::OutOfRange` when the narrowing would lose
 //! information.
 
 /// Emits `core::str::FromStr` for a decimal type with the given
@@ -11,12 +11,12 @@
 macro_rules! decl_decimal_from_str {
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
-            type Err = $crate::core_type::ParseD128Error;
+            type Err = $crate::core_type::ParseError;
             fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
                 let bits_i128 = $crate::display::parse_decimal_bits::<SCALE>(s)?;
                 if bits_i128 > <$Storage>::MAX as i128 || bits_i128 < <$Storage>::MIN as i128 {
                     return ::core::result::Result::Err(
-                        $crate::core_type::ParseD128Error::OutOfRange,
+                        $crate::core_type::ParseError::OutOfRange,
                     );
                 }
                 ::core::result::Result::Ok(Self(bits_i128 as $Storage))

@@ -395,7 +395,7 @@ pub type D128s38 = D128<38>;
 /// - [`MissingDigits`](Self::MissingDigits): a decimal point has no digit on
 ///   one side (e.g. `.5` or `5.`). The required form is `0.5` or `5.0`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ParseD128Error {
+pub enum ParseError {
     /// Input string is empty.
     Empty,
     /// Input is `-` or `+` with no following digits.

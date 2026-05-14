@@ -90,14 +90,14 @@ pub mod serde_helpers;
 mod trig;
 
 pub use consts::DecimalConsts;
-pub use conversions::D128ConvertError;
+pub use conversions::ConvertError;
 pub use decimal_trait::Decimal;
 pub use rounding::RoundingMode;
 pub use core_type::{
     D128, D128s0, D128s1, D128s2, D128s3, D128s4, D128s5, D128s6, D128s7, D128s8, D128s9, D128s10,
     D128s11, D128s12, D128s13, D128s14, D128s15, D128s16, D128s17, D128s18, D128s19, D128s20,
     D128s21, D128s22, D128s23, D128s24, D128s25, D128s26, D128s27, D128s28, D128s29, D128s30,
-    D128s31, D128s32, D128s33, D128s34, D128s35, D128s36, D128s37, D128s38, ParseD128Error,
+    D128s31, D128s32, D128s33, D128s34, D128s35, D128s36, D128s37, D128s38, ParseError,
 };
 
 #[cfg(feature = "macros")]

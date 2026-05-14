@@ -30,7 +30,7 @@
 //! # Fallible `TryFrom` impls
 //!
 //! Four `TryFrom` impls cover types where lossless conversion is not always
-//! possible: `i128`, `u128`, `f32`, `f64`. They return [`D128ConvertError`]
+//! possible: `i128`, `u128`, `f32`, `f64`. They return [`ConvertError`]
 //! with two variants:
 //!
 //! - `Overflow` -- the magnitude exceeds `D128::MAX` / `D128::MIN` after
@@ -53,12 +53,12 @@ use crate::core_type::D128;
 /// Error returned by the fallible [`TryFrom`] impls on [`D128`].
 ///
 /// Covers the two distinct failure modes:
-/// - [`D128ConvertError::Overflow`] -- the input, after scaling by
+/// - [`ConvertError::Overflow`] -- the input, after scaling by
 ///   `10^SCALE`, exceeds the range `[D128::MIN, D128::MAX]`.
-/// - [`D128ConvertError::NotFinite`] -- the float input is `NaN`,
+/// - [`ConvertError::NotFinite`] -- the float input is `NaN`,
 ///   `+inf`, or `-inf`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum D128ConvertError {
+pub enum ConvertError {
     /// Input magnitude is outside `[D128::MIN, D128::MAX]` after scaling.
     Overflow,
     /// Input is `NaN`, `+inf`, or `-inf` (only reachable from the
@@ -66,7 +66,7 @@ pub enum D128ConvertError {
     NotFinite,
 }
 
-impl core::fmt::Display for D128ConvertError {
+impl core::fmt::Display for ConvertError {
     /// Formats the error as a short human-readable message.
     ///
     /// # Precision
@@ -81,7 +81,7 @@ impl core::fmt::Display for D128ConvertError {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for D128ConvertError {}
+impl std::error::Error for ConvertError {}
 
 // ──────────────────────────────────────────────────────────────────────
 // Lossless From<integer> impls
@@ -106,7 +106,7 @@ impl std::error::Error for D128ConvertError {}
 // the f64 representations of i128::MIN / i128::MAX, and casts to i128.
 
 impl<const SCALE: u32> TryFrom<i128> for D128<SCALE> {
-    type Error = D128ConvertError;
+    type Error = ConvertError;
 
     /// Scales `value` by `10^SCALE` using checked multiplication.
     ///
@@ -120,25 +120,25 @@ impl<const SCALE: u32> TryFrom<i128> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128s12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, ConvertError};
     ///
     /// let v: D128s12 = 1_i128.try_into().unwrap();
     /// assert_eq!(v, D128s12::ONE);
     ///
     /// let overflow: Result<D128s12, _> = i128::MAX.try_into();
-    /// assert_eq!(overflow, Err(D128ConvertError::Overflow));
+    /// assert_eq!(overflow, Err(ConvertError::Overflow));
     /// ```
     #[inline]
     fn try_from(value: i128) -> Result<Self, Self::Error> {
         value
             .checked_mul(Self::multiplier())
             .map(Self)
-            .ok_or(D128ConvertError::Overflow)
+            .ok_or(ConvertError::Overflow)
     }
 }
 
 impl<const SCALE: u32> TryFrom<u128> for D128<SCALE> {
-    type Error = D128ConvertError;
+    type Error = ConvertError;
 
     /// Converts `value` to `i128`, then scales by `10^SCALE`.
     ///
@@ -152,28 +152,28 @@ impl<const SCALE: u32> TryFrom<u128> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128s12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, ConvertError};
     ///
     /// let v: D128s12 = 42_u128.try_into().unwrap();
     /// assert_eq!(v.to_bits(), 42_000_000_000_000);
     ///
     /// let overflow: Result<D128s12, _> = u128::MAX.try_into();
-    /// assert_eq!(overflow, Err(D128ConvertError::Overflow));
+    /// assert_eq!(overflow, Err(ConvertError::Overflow));
     /// ```
     #[inline]
     fn try_from(value: u128) -> Result<Self, Self::Error> {
         // Step 1: u128 -> i128 (overflows when value > i128::MAX).
-        let as_i128: i128 = i128::try_from(value).map_err(|_| D128ConvertError::Overflow)?;
+        let as_i128: i128 = i128::try_from(value).map_err(|_| ConvertError::Overflow)?;
         // Step 2: scale using the existing checked path.
         as_i128
             .checked_mul(Self::multiplier())
             .map(Self)
-            .ok_or(D128ConvertError::Overflow)
+            .ok_or(ConvertError::Overflow)
     }
 }
 
 impl<const SCALE: u32> TryFrom<f32> for D128<SCALE> {
-    type Error = D128ConvertError;
+    type Error = ConvertError;
 
     /// Widens `value` to `f64` and delegates to [`TryFrom<f64>`].
     ///
@@ -187,13 +187,13 @@ impl<const SCALE: u32> TryFrom<f32> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128s12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, ConvertError};
     ///
     /// let v: D128s12 = 1.0_f32.try_into().unwrap();
     /// assert_eq!(v, D128s12::ONE);
     ///
     /// let nan: Result<D128s12, _> = f32::NAN.try_into();
-    /// assert_eq!(nan, Err(D128ConvertError::NotFinite));
+    /// assert_eq!(nan, Err(ConvertError::NotFinite));
     /// ```
     #[inline]
     fn try_from(value: f32) -> Result<Self, Self::Error> {
@@ -202,7 +202,7 @@ impl<const SCALE: u32> TryFrom<f32> for D128<SCALE> {
 }
 
 impl<const SCALE: u32> TryFrom<f64> for D128<SCALE> {
-    type Error = D128ConvertError;
+    type Error = ConvertError;
 
     /// Multiplies `value` by `10^SCALE` in `f64` and truncates to `i128`.
     ///
@@ -220,28 +220,28 @@ impl<const SCALE: u32> TryFrom<f64> for D128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::{D128s12, D128ConvertError};
+    /// use decimal_scaled::{D128s12, ConvertError};
     ///
     /// let v: D128s12 = 1.0_f64.try_into().unwrap();
     /// assert_eq!(v, D128s12::ONE);
     ///
     /// let nan: Result<D128s12, _> = f64::NAN.try_into();
-    /// assert_eq!(nan, Err(D128ConvertError::NotFinite));
+    /// assert_eq!(nan, Err(ConvertError::NotFinite));
     ///
     /// let overflow: Result<D128s12, _> = 1e30_f64.try_into();
-    /// assert_eq!(overflow, Err(D128ConvertError::Overflow));
+    /// assert_eq!(overflow, Err(ConvertError::Overflow));
     /// ```
     #[inline]
     fn try_from(value: f64) -> Result<Self, Self::Error> {
         if !value.is_finite() {
-            return Err(D128ConvertError::NotFinite);
+            return Err(ConvertError::NotFinite);
         }
         let scaled = value * (Self::multiplier() as f64);
         // i128::MAX as f64 rounds up to 2^127; use strict `<` so 2^127 is rejected.
         const I128_MAX_F64: f64 = i128::MAX as f64;
         const I128_MIN_F64: f64 = i128::MIN as f64;
         if !(I128_MIN_F64..I128_MAX_F64).contains(&scaled) {
-            return Err(D128ConvertError::Overflow);
+            return Err(ConvertError::Overflow);
         }
         Ok(Self(scaled as i128))
     }
@@ -346,7 +346,7 @@ impl<const SCALE: u32> D128<SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use super::D128ConvertError;
+    use super::ConvertError;
     use crate::core_type::{D128, D128s12};
 
     // ──────────────────────────────────────────────────────────────────
@@ -619,10 +619,10 @@ mod tests {
     fn try_from_i128_overflow_returns_err() {
         // i128::MAX cannot be scaled by 10^12.
         let result: Result<D128s12, _> = i128::MAX.try_into();
-        assert_eq!(result, Err(D128ConvertError::Overflow));
+        assert_eq!(result, Err(ConvertError::Overflow));
 
         let result_neg: Result<D128s12, _> = i128::MIN.try_into();
-        assert_eq!(result_neg, Err(D128ConvertError::Overflow));
+        assert_eq!(result_neg, Err(ConvertError::Overflow));
     }
 
     #[test]
@@ -642,13 +642,13 @@ mod tests {
         // Any u128 > i128::MAX is unrepresentable.
         let above: u128 = (i128::MAX as u128) + 1;
         let result: Result<D128s12, _> = above.try_into();
-        assert_eq!(result, Err(D128ConvertError::Overflow));
+        assert_eq!(result, Err(ConvertError::Overflow));
     }
 
     #[test]
     fn try_from_u128_max_returns_err() {
         let result: Result<D128s12, _> = u128::MAX.try_into();
-        assert_eq!(result, Err(D128ConvertError::Overflow));
+        assert_eq!(result, Err(ConvertError::Overflow));
     }
 
     // ──────────────────────────────────────────────────────────────────
@@ -670,29 +670,29 @@ mod tests {
     #[test]
     fn try_from_f64_nan_returns_err() {
         let result: Result<D128s12, _> = f64::NAN.try_into();
-        assert_eq!(result, Err(D128ConvertError::NotFinite));
+        assert_eq!(result, Err(ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f64_pos_infinity_returns_err() {
         let result: Result<D128s12, _> = f64::INFINITY.try_into();
-        assert_eq!(result, Err(D128ConvertError::NotFinite));
+        assert_eq!(result, Err(ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f64_neg_infinity_returns_err() {
         let result: Result<D128s12, _> = f64::NEG_INFINITY.try_into();
-        assert_eq!(result, Err(D128ConvertError::NotFinite));
+        assert_eq!(result, Err(ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f64_out_of_range_returns_err() {
         // 1e30 * 10^12 = 1e42 > i128::MAX
         let result: Result<D128s12, _> = 1e30_f64.try_into();
-        assert_eq!(result, Err(D128ConvertError::Overflow));
+        assert_eq!(result, Err(ConvertError::Overflow));
 
         let result_neg: Result<D128s12, _> = (-1e30_f64).try_into();
-        assert_eq!(result_neg, Err(D128ConvertError::Overflow));
+        assert_eq!(result_neg, Err(ConvertError::Overflow));
     }
 
     #[test]
@@ -704,23 +704,23 @@ mod tests {
     #[test]
     fn try_from_f32_nan_returns_err() {
         let result: Result<D128s12, _> = f32::NAN.try_into();
-        assert_eq!(result, Err(D128ConvertError::NotFinite));
+        assert_eq!(result, Err(ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f32_infinity_returns_err() {
         let result: Result<D128s12, _> = f32::INFINITY.try_into();
-        assert_eq!(result, Err(D128ConvertError::NotFinite));
+        assert_eq!(result, Err(ConvertError::NotFinite));
     }
 
     #[test]
     fn try_from_f32_neg_infinity_returns_err() {
         let result: Result<D128s12, _> = f32::NEG_INFINITY.try_into();
-        assert_eq!(result, Err(D128ConvertError::NotFinite));
+        assert_eq!(result, Err(ConvertError::NotFinite));
     }
 
     // ──────────────────────────────────────────────────────────────────
-    // D128ConvertError -- Display + Debug shape
+    // ConvertError -- Display + Debug shape
     // ──────────────────────────────────────────────────────────────────
 
     /// Display impl produces stable strings for both variants.
@@ -730,22 +730,22 @@ mod tests {
         extern crate alloc;
         use alloc::string::ToString;
         assert_eq!(
-            D128ConvertError::Overflow.to_string(),
+            ConvertError::Overflow.to_string(),
             "decimal conversion overflow"
         );
         assert_eq!(
-            D128ConvertError::NotFinite.to_string(),
+            ConvertError::NotFinite.to_string(),
             "decimal conversion from non-finite float"
         );
     }
 
-    /// `D128ConvertError` is `Debug + Clone + Copy + Eq + Hash`
+    /// `ConvertError` is `Debug + Clone + Copy + Eq + Hash`
     /// (basic suite expected of any leaf error type).
     #[test]
     fn convert_error_traits_compile() {
         // Compile-time check: Copy + Clone + Eq + Hash bounds.
         fn assert_traits<T: core::fmt::Debug + Copy + Eq + core::hash::Hash>() {}
-        assert_traits::<D128ConvertError>();
+        assert_traits::<ConvertError>();
     }
 
     // ──────────────────────────────────────────────────────────────────

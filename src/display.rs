@@ -34,21 +34,21 @@
 //! - Optional sign prefix: `-` or `+`.
 //! - Bare zero: `0` or `0.0`.
 //!
-//! Rejected forms (with the corresponding [`ParseD128Error`] variant):
-//! - Empty string: [`ParseD128Error::Empty`].
-//! - Sign with no digits: [`ParseD128Error::SignOnly`].
-//! - Redundant leading zeros (`01`, `00`): [`ParseD128Error::LeadingZero`].
-//! - More than `SCALE` fractional digits: [`ParseD128Error::OverlongFractional`].
-//! - Scientific notation (`1e3`): [`ParseD128Error::ScientificNotation`].
+//! Rejected forms (with the corresponding [`ParseError`] variant):
+//! - Empty string: [`ParseError::Empty`].
+//! - Sign with no digits: [`ParseError::SignOnly`].
+//! - Redundant leading zeros (`01`, `00`): [`ParseError::LeadingZero`].
+//! - More than `SCALE` fractional digits: [`ParseError::OverlongFractional`].
+//! - Scientific notation (`1e3`): [`ParseError::ScientificNotation`].
 //! - Missing digits on either side of the point (`.5`, `5.`):
-//!   [`ParseD128Error::MissingDigits`].
-//! - Non-digit, non-sign, non-dot characters: [`ParseD128Error::InvalidChar`].
-//! - Magnitudes outside `[D128::MIN, D128::MAX]`: [`ParseD128Error::OutOfRange`].
+//!   [`ParseError::MissingDigits`].
+//! - Non-digit, non-sign, non-dot characters: [`ParseError::InvalidChar`].
+//! - Magnitudes outside `[D128::MIN, D128::MAX]`: [`ParseError::OutOfRange`].
 
 use core::fmt;
 use core::str::FromStr;
 
-use crate::core_type::{ParseD128Error, D128};
+use crate::core_type::{ParseError, D128};
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -263,10 +263,10 @@ impl<const SCALE: u32> fmt::Binary for D128<SCALE> {
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// ParseD128Error -- Display + Error
+// ParseError -- Display + Error
 // ──────────────────────────────────────────────────────────────────────
 
-impl fmt::Display for ParseD128Error {
+impl fmt::Display for ParseError {
     /// Formats the error as a short human-readable message.
     ///
     /// # Precision
@@ -288,19 +288,19 @@ impl fmt::Display for ParseD128Error {
 }
 
 #[cfg(feature = "std")]
-impl std::error::Error for ParseD128Error {}
+impl std::error::Error for ParseError {}
 
 // ──────────────────────────────────────────────────────────────────────
 // FromStr -- canonical decimal parser
 // ──────────────────────────────────────────────────────────────────────
 
 impl<const SCALE: u32> FromStr for D128<SCALE> {
-    type Err = ParseD128Error;
+    type Err = ParseError;
 
     /// Parses a canonical decimal literal into `D128<SCALE>`.
     ///
     /// Delegates to the internal parser. See the module-level docs for the
-    /// full list of accepted and rejected forms, and [`ParseD128Error`]
+    /// full list of accepted and rejected forms, and [`ParseError`]
     /// for the failure variants.
     ///
     /// # Precision
@@ -331,13 +331,13 @@ impl<const SCALE: u32> FromStr for D128<SCALE> {
 /// # Precision
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
-pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseD128Error> {
+pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
     parse_decimal::<SCALE>(s).map(|v| v.to_bits())
 }
 
-fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Error> {
+fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseError> {
     if s.is_empty() {
-        return Err(ParseD128Error::Empty);
+        return Err(ParseError::Empty);
     }
 
     let bytes = s.as_bytes();
@@ -357,7 +357,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
     };
     if idx == bytes.len() {
         // Sign byte with nothing following it.
-        return Err(ParseD128Error::SignOnly);
+        return Err(ParseError::SignOnly);
     }
 
     // Single forward pass: locate the decimal point; reject scientific
@@ -373,14 +373,14 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
                     if dot_pos.is_some() {
                         // A second dot is an invalid character, not a
                         // missing-digit case.
-                        return Err(ParseD128Error::InvalidChar);
+                        return Err(ParseError::InvalidChar);
                     }
                     dot_pos = Some(i);
                 }
                 b'e' | b'E' => {
-                    return Err(ParseD128Error::ScientificNotation);
+                    return Err(ParseError::ScientificNotation);
                 }
-                _ => return Err(ParseD128Error::InvalidChar),
+                _ => return Err(ParseError::InvalidChar),
             }
             i += 1;
         }
@@ -394,20 +394,20 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
     if dot_pos.is_some() {
         // Both sides of the dot must have at least one digit.
         if int_str.is_empty() || frac_str.is_empty() {
-            return Err(ParseD128Error::MissingDigits);
+            return Err(ParseError::MissingDigits);
         }
     } else if int_str.is_empty() {
-        return Err(ParseD128Error::SignOnly);
+        return Err(ParseError::SignOnly);
     }
 
     // Allow `0` and `0.x` but reject `00`, `01`, `01.5`.
     if int_str.len() > 1 && int_str[0] == b'0' {
-        return Err(ParseD128Error::LeadingZero);
+        return Err(ParseError::LeadingZero);
     }
 
     // More than SCALE fractional digits would lose precision on round-trip.
     if frac_str.len() > SCALE as usize {
-        return Err(ParseD128Error::OverlongFractional);
+        return Err(ParseError::OverlongFractional);
     }
 
     // Accumulate the storage value as u128 (avoids the i128::MIN asymmetry)
@@ -420,12 +420,12 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
         let digit = (b - b'0') as u128;
         int_value = match int_value.checked_mul(10).and_then(|v| v.checked_add(digit)) {
             Some(v) => v,
-            None => return Err(ParseD128Error::OutOfRange),
+            None => return Err(ParseError::OutOfRange),
         };
     }
     let int_scaled = match int_value.checked_mul(multiplier) {
         Some(v) => v,
-        None => return Err(ParseD128Error::OutOfRange),
+        None => return Err(ParseError::OutOfRange),
     };
 
     // Parse the fractional part, then pad to exactly SCALE digits by
@@ -439,7 +439,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
             .and_then(|v| v.checked_add(digit))
         {
             Some(v) => v,
-            None => return Err(ParseD128Error::OutOfRange),
+            None => return Err(ParseError::OutOfRange),
         };
     }
     let pad = (SCALE as usize) - frac_len;
@@ -447,13 +447,13 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
         let pad_factor: u128 = 10u128.pow(pad as u32);
         frac_value = match frac_value.checked_mul(pad_factor) {
             Some(v) => v,
-            None => return Err(ParseD128Error::OutOfRange),
+            None => return Err(ParseError::OutOfRange),
         };
     }
 
     let combined = match int_scaled.checked_add(frac_value) {
         Some(v) => v,
-        None => return Err(ParseD128Error::OutOfRange),
+        None => return Err(ParseError::OutOfRange),
     };
 
     // Convert to i128. The negative branch handles i128::MIN whose absolute
@@ -461,7 +461,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
     let raw: i128 = if negative {
         let neg_min_abs: u128 = (i128::MAX as u128) + 1;
         if combined > neg_min_abs {
-            return Err(ParseD128Error::OutOfRange);
+            return Err(ParseError::OutOfRange);
         }
         if combined == neg_min_abs {
             i128::MIN
@@ -470,7 +470,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Erro
         }
     } else {
         if combined > i128::MAX as u128 {
-            return Err(ParseD128Error::OutOfRange);
+            return Err(ParseError::OutOfRange);
         }
         combined as i128
     };
@@ -668,38 +668,38 @@ mod tests {
         assert_eq!(s, "1110100011010100101001010001000000000000");
     }
 
-    // ── ParseD128Error Display ──
+    // ── ParseError Display ──
 
     #[cfg(feature = "alloc")]
     #[test]
     fn parse_error_display_messages() {
-        assert_eq!(ParseD128Error::Empty.to_string(), "empty input");
+        assert_eq!(ParseError::Empty.to_string(), "empty input");
         assert_eq!(
-            ParseD128Error::SignOnly.to_string(),
+            ParseError::SignOnly.to_string(),
             "sign with no digits"
         );
         assert_eq!(
-            ParseD128Error::LeadingZero.to_string(),
+            ParseError::LeadingZero.to_string(),
             "redundant leading zero in integer part"
         );
         assert_eq!(
-            ParseD128Error::OverlongFractional.to_string(),
+            ParseError::OverlongFractional.to_string(),
             "fractional part exceeds SCALE digits"
         );
         assert_eq!(
-            ParseD128Error::ScientificNotation.to_string(),
+            ParseError::ScientificNotation.to_string(),
             "scientific notation not accepted"
         );
         assert_eq!(
-            ParseD128Error::InvalidChar.to_string(),
+            ParseError::InvalidChar.to_string(),
             "invalid character"
         );
         assert_eq!(
-            ParseD128Error::OutOfRange.to_string(),
+            ParseError::OutOfRange.to_string(),
             "value out of representable range"
         );
         assert_eq!(
-            ParseD128Error::MissingDigits.to_string(),
+            ParseError::MissingDigits.to_string(),
             "decimal point with no adjacent digits"
         );
     }
@@ -759,41 +759,41 @@ mod tests {
     #[test]
     fn from_str_empty_is_err() {
         let r: Result<D128s12, _> = "".parse();
-        assert_eq!(r, Err(ParseD128Error::Empty));
+        assert_eq!(r, Err(ParseError::Empty));
     }
 
     #[test]
     fn from_str_sign_only_is_err() {
-        assert_eq!("-".parse::<D128s12>(), Err(ParseD128Error::SignOnly));
-        assert_eq!("+".parse::<D128s12>(), Err(ParseD128Error::SignOnly));
+        assert_eq!("-".parse::<D128s12>(), Err(ParseError::SignOnly));
+        assert_eq!("+".parse::<D128s12>(), Err(ParseError::SignOnly));
     }
 
     #[test]
     fn from_str_leading_zero_is_err() {
-        assert_eq!("01".parse::<D128s12>(), Err(ParseD128Error::LeadingZero));
+        assert_eq!("01".parse::<D128s12>(), Err(ParseError::LeadingZero));
         assert_eq!(
             "01.5".parse::<D128s12>(),
-            Err(ParseD128Error::LeadingZero)
+            Err(ParseError::LeadingZero)
         );
-        assert_eq!("00".parse::<D128s12>(), Err(ParseD128Error::LeadingZero));
+        assert_eq!("00".parse::<D128s12>(), Err(ParseError::LeadingZero));
     }
 
     #[test]
     fn from_str_overlong_fractional_is_err() {
         // SCALE 12, fractional length 13 -> reject.
         let r: Result<D128s12, _> = "0.1234567890123".parse();
-        assert_eq!(r, Err(ParseD128Error::OverlongFractional));
+        assert_eq!(r, Err(ParseError::OverlongFractional));
     }
 
     #[test]
     fn from_str_scientific_notation_is_err() {
         assert_eq!(
             "1e3".parse::<D128s12>(),
-            Err(ParseD128Error::ScientificNotation)
+            Err(ParseError::ScientificNotation)
         );
         assert_eq!(
             "1.5E2".parse::<D128s12>(),
-            Err(ParseD128Error::ScientificNotation)
+            Err(ParseError::ScientificNotation)
         );
     }
 
@@ -801,15 +801,15 @@ mod tests {
     fn from_str_invalid_char_is_err() {
         assert_eq!(
             "garbage".parse::<D128s12>(),
-            Err(ParseD128Error::InvalidChar)
+            Err(ParseError::InvalidChar)
         );
         assert_eq!(
             "1.2x".parse::<D128s12>(),
-            Err(ParseD128Error::InvalidChar)
+            Err(ParseError::InvalidChar)
         );
         assert_eq!(
             "1..2".parse::<D128s12>(),
-            Err(ParseD128Error::InvalidChar)
+            Err(ParseError::InvalidChar)
         );
     }
 
@@ -817,15 +817,15 @@ mod tests {
     fn from_str_missing_digits_is_err() {
         assert_eq!(
             ".5".parse::<D128s12>(),
-            Err(ParseD128Error::MissingDigits)
+            Err(ParseError::MissingDigits)
         );
         assert_eq!(
             "5.".parse::<D128s12>(),
-            Err(ParseD128Error::MissingDigits)
+            Err(ParseError::MissingDigits)
         );
         assert_eq!(
             "-.5".parse::<D128s12>(),
-            Err(ParseD128Error::MissingDigits)
+            Err(ParseError::MissingDigits)
         );
     }
 
@@ -835,7 +835,7 @@ mod tests {
         // integer part is i128::MAX / 10^12 ~= 1.7e26, so an integer
         // part of 1e27 already overflows.
         let r: Result<D128s12, _> = "1000000000000000000000000000".parse();
-        assert_eq!(r, Err(ParseD128Error::OutOfRange));
+        assert_eq!(r, Err(ParseError::OutOfRange));
     }
 
     /// Parse exactly at i128::MIN -- the asymmetric two's-complement
@@ -866,7 +866,7 @@ mod tests {
         // ...728 is one fractional LSB above i128::MAX.
         let s = "170141183460469231731687303.715884105728";
         let r: Result<D128s12, _> = s.parse();
-        assert_eq!(r, Err(ParseD128Error::OutOfRange));
+        assert_eq!(r, Err(ParseError::OutOfRange));
     }
 
     // ── Property tests: parse(value.to_string()) round-trip ──

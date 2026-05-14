@@ -45,7 +45,7 @@ use num_traits::{
     FromPrimitive, Num, NumCast, One, Signed, ToPrimitive, Zero,
 };
 
-use crate::core_type::{D128, ParseD128Error};
+use crate::core_type::{D128, ParseError};
 
 // ---------------------------------------------------------------------------
 // Zero / One
@@ -146,12 +146,12 @@ impl<const SCALE: u32> One for D128<SCALE> {
 // ---------------------------------------------------------------------------
 
 impl<const SCALE: u32> Num for D128<SCALE> {
-    type FromStrRadixErr = ParseD128Error;
+    type FromStrRadixErr = ParseError;
 
     /// Parses a decimal string in the given radix.
     ///
     /// Only `radix == 10` is supported; `D128<SCALE>` is a base-10 type
-    /// by construction. Any other radix returns `ParseD128Error::InvalidChar`
+    /// by construction. Any other radix returns `ParseError::InvalidChar`
     /// without attempting to parse the string.
     ///
     /// For `radix == 10` the call delegates to the [`core::str::FromStr`]
@@ -174,7 +174,7 @@ impl<const SCALE: u32> Num for D128<SCALE> {
     /// ```
     fn from_str_radix(s: &str, radix: u32) -> Result<Self, Self::FromStrRadixErr> {
         if radix != 10 {
-            return Err(ParseD128Error::InvalidChar);
+            return Err(ParseError::InvalidChar);
         }
         s.parse::<Self>()
     }

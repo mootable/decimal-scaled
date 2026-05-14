@@ -48,13 +48,13 @@ pub(crate) use decl_cross_width_widening;
 
 /// Generates `TryFrom<$Src<SCALE>> for $Dest<SCALE>` for a fallible
 /// narrowing conversion. Returns
-/// `Err(D128ConvertError::OutOfRange)` when the source value exceeds
+/// `Err(ConvertError::OutOfRange)` when the source value exceeds
 /// the destination's representable range; otherwise returns the
 /// narrowed value bit-for-bit (same logical decimal value).
 macro_rules! decl_cross_width_narrowing {
     ($Dest:ident, $DestStorage:ty, $Src:ident, $SrcStorage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<$Src<SCALE>> for $Dest<SCALE> {
-            type Error = $crate::conversions::D128ConvertError;
+            type Error = $crate::conversions::ConvertError;
             /// Attempts to narrow a wider decimal type to this narrower
             /// one. Fails with `OutOfRange` when the source value
             /// exceeds the destination's `MIN..=MAX`. The scale is
@@ -66,7 +66,7 @@ macro_rules! decl_cross_width_narrowing {
                     || bits < (<$DestStorage>::MIN as $SrcStorage)
                 {
                     return ::core::result::Result::Err(
-                        $crate::conversions::D128ConvertError::Overflow,
+                        $crate::conversions::ConvertError::Overflow,
                     );
                 }
                 ::core::result::Result::Ok(Self(bits as $DestStorage))
