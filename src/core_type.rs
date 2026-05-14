@@ -454,6 +454,7 @@ crate::macros::sign::decl_decimal_sign_methods!(D32, i32);
 crate::macros::consts::decl_decimal_consts!(D32, i32);
 crate::macros::from_str::decl_decimal_from_str!(D32, i32);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D32, i32);
+crate::macros::storage_formatters::decl_decimal_storage_formatters!(D32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -510,6 +511,7 @@ crate::macros::sign::decl_decimal_sign_methods!(D64, i64);
 crate::macros::consts::decl_decimal_consts!(D64, i64);
 crate::macros::from_str::decl_decimal_from_str!(D64, i64);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D64, i64);
+crate::macros::storage_formatters::decl_decimal_storage_formatters!(D64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::macros::conversions::decl_cross_width_widening!(D64, i64, D32, i32);
