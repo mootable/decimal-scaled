@@ -21,6 +21,7 @@ pub(crate) mod equalities;
 pub(crate) mod float_bridge;
 pub(crate) mod from_str;
 pub(crate) mod helpers;
+pub(crate) mod int_methods;
 pub(crate) mod num_traits;
 pub(crate) mod overflow;
 pub(crate) mod rescale;
