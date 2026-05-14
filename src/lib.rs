@@ -71,6 +71,7 @@ mod bitwise;
 mod consts;
 mod conversions;
 mod core_type;
+mod decimal_trait;
 mod display;
 mod equalities;
 mod fixed_compat;
@@ -88,6 +89,7 @@ mod trig;
 
 pub use consts::DecimalConsts;
 pub use conversions::D128ConvertError;
+pub use decimal_trait::Decimal;
 pub use rounding::RoundingMode;
 pub use core_type::{
     D128, D128s0, D128s1, D128s2, D128s3, D128s4, D128s5, D128s6, D128s7, D128s8, D128s9, D128s10,
