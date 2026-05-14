@@ -215,13 +215,53 @@ fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u12
         return None;
     }
 
-    // Shift-subtract: walk all 256 bits of the dividend, accumulating
-    // the quotient one bit at a time.
+    // Word-divisor fast path: a divisor that fits in 64 bits admits
+    // schoolbook base-2^64 long division — one hardware divide per
+    // 64-bit limb instead of a 256-iteration bit loop. Every
+    // `10^scale` for `scale <= 19` lands here.
+    if d <= u64::MAX as u128 {
+        let limbs = [
+            n_low as u64,
+            (n_low >> 64) as u64,
+            n_high as u64,
+            (n_high >> 64) as u64,
+        ];
+        // `n_high < d` guarantees the quotient fits in 128 bits, so the
+        // top two limbs of the result are always zero.
+        let mut out = [0u64; 4];
+        let mut rem: u128 = 0;
+        let mut i = 4;
+        while i > 0 {
+            i -= 1;
+            let cur = (rem << 64) | limbs[i] as u128;
+            out[i] = (cur / d) as u64;
+            rem = cur % d;
+        }
+        return Some(out[0] as u128 | ((out[1] as u128) << 64));
+    }
+
+    // Shift-subtract over only the significant bits of the dividend.
+    // Pre-shift so the top set bit is aligned, then iterate exactly
+    // that many times (the leading iterations of the naive 256-step
+    // loop are provably no-ops).
+    let bits = if n_high != 0 {
+        256 - n_high.leading_zeros()
+    } else {
+        128 - n_low.leading_zeros()
+    };
+    let shift = 256 - bits;
+    if shift >= 128 {
+        n_high = n_low << (shift - 128);
+        n_low = 0;
+    } else if shift > 0 {
+        n_high = (n_high << shift) | (n_low >> (128 - shift));
+        n_low <<= shift;
+    }
     let mut q: u128 = 0;
     let mut rem: u128 = 0;
-    let mut i = 0;
-    while i < 256 {
-        // Shift (rem, n_high, n_low) left by 1.
+    let mut i = bits;
+    while i > 0 {
+        i -= 1;
         rem = (rem << 1) | (n_high >> 127);
         n_high = (n_high << 1) | (n_low >> 127);
         n_low <<= 1;
@@ -230,7 +270,6 @@ fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u12
             rem -= d;
             q |= 1;
         }
-        i += 1;
     }
     Some(q)
 }
