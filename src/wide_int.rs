@@ -133,6 +133,36 @@ fn shl_u512(n: U512, shift: u32) -> U512 {
     out
 }
 
+/// Quotient `num / d` for a 512-bit dividend and a divisor that fits
+/// in a single 64-bit word.
+///
+/// Schoolbook long division in base `2^64`: each step divides a
+/// 128-bit `(remainder, limb)` pair by the word divisor with one
+/// hardware division. Far cheaper than the general bit loop, and it
+/// covers every `10^scale` divisor for `scale <= 19` — the common
+/// decimal multiply path.
+fn div_u512_by_word(num: U512, d: u64) -> U512 {
+    let dd = d as u128;
+    let mut limbs = [0u64; 8];
+    for i in 0..4 {
+        limbs[i << 1] = num[i] as u64;
+        limbs[(i << 1) | 1] = (num[i] >> 64) as u64;
+    }
+    let mut rem: u128 = 0;
+    let mut i = 8;
+    while i > 0 {
+        i -= 1;
+        let cur = (rem << 64) | limbs[i] as u128;
+        limbs[i] = (cur / dd) as u64;
+        rem = cur % dd;
+    }
+    let mut out = [0u128; 4];
+    for i in 0..4 {
+        out[i] = limbs[i << 1] as u128 | ((limbs[(i << 1) | 1] as u128) << 64);
+    }
+    out
+}
+
 /// Quotient `num / d` where `num` is 512-bit and `d` is 256-bit.
 ///
 /// Returned as `U512`; for every use in this crate the true quotient
@@ -145,6 +175,18 @@ fn shl_u512(n: U512, shift: u32) -> U512 {
 /// that is a multiple-times reduction in iteration count.
 pub(crate) fn div_u512_by_u256(num: U512, d: U256) -> U512 {
     debug_assert!(!(d[0] == 0 && d[1] == 0), "division by zero");
+    // Fast path: when both the dividend and divisor fit in a single
+    // 128-bit word, the hardware divide is exact and far cheaper than
+    // any bit loop. This covers the overwhelmingly common case of
+    // moderate-magnitude decimal multiply/divide at small scales.
+    if num[1] == 0 && num[2] == 0 && num[3] == 0 && d[1] == 0 {
+        return [num[0] / d[0], 0, 0, 0];
+    }
+    // Word-divisor path: a wide dividend divided by a divisor that
+    // fits in 64 bits (every `10^scale` for `scale <= 19`).
+    if d[1] == 0 && d[0] <= u64::MAX as u128 {
+        return div_u512_by_word(num, d[0] as u64);
+    }
     let bits = bitlen_u512(num);
     if bits == 0 {
         return [0; 4];
@@ -560,6 +602,10 @@ fn shl_u256(n: U256, shift: u32) -> U256 {
 /// actual bit length rather than a fixed 256 iterations.
 fn divmod_u256(a: U256, b: U256) -> (U256, U256) {
     debug_assert!(!is_zero_u256(b), "division by zero");
+    // Fast path: both operands fit in a single 128-bit word.
+    if a[1] == 0 && b[1] == 0 {
+        return ([a[0] / b[0], 0], [a[0] % b[0], 0]);
+    }
     let bits = bitlen_u256(a);
     if bits == 0 {
         return ([0, 0], [0, 0]);
