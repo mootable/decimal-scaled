@@ -379,6 +379,12 @@ pub use crate::error::ParseError;
 // definition and the surface it produces.
 crate::macros::basics::decl_decimal_basics!(D128, i128, 38);
 crate::macros::display::decl_decimal_display!(D128);
+// FromStr and the raw-storage hex / octal / binary formatters: the
+// shared macros. D128's hand-coded versions were equivalent (`FromStr`
+// delegated to the same `parse_decimal` path; the formatters delegate
+// straight to the `i128` formatter).
+crate::macros::from_str::decl_decimal_from_str!(D128, i128);
+crate::macros::storage_formatters::decl_decimal_storage_formatters!(D128);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D128, i128);
 crate::macros::conversions::decl_from_primitive!(D128, i128, i8);
 crate::macros::conversions::decl_from_primitive!(D128, i128, i16);

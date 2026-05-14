@@ -46,7 +46,6 @@
 //! - Magnitudes outside `[D128::MIN, D128::MAX]`: [`ParseError::OutOfRange`].
 
 use core::fmt;
-use core::str::FromStr;
 
 use crate::core_type::{ParseError, D128};
 
@@ -167,135 +166,8 @@ fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) ->
 }
 
 // ──────────────────────────────────────────────────────────────────────
-// Storage hex / octal / binary -- delegate to i128
-// ──────────────────────────────────────────────────────────────────────
-//
-// These format the raw i128 storage (= value * 10^SCALE), not the
-// decimal value. Useful for inspecting the bit pattern of the storage.
-
-impl<const SCALE: u32> fmt::LowerHex for D128<SCALE> {
-    /// Formats the **raw `i128` storage** (= `value * 10^SCALE`) as lowercase hex.
-    ///
-    /// This is a bit-level view of the storage, not a hex encoding of the
-    /// decimal value. All standard format flags (`#`, `0`, width, precision)
-    /// are forwarded to the underlying `i128` formatter.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// // Storage for 1.0 at SCALE=12 is 10^12 = 0xe8d4a51000.
-    /// assert_eq!(format!("{:x}", D128s12::ONE), "e8d4a51000");
-    /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::LowerHex::fmt(&self.0, f)
-    }
-}
-
-impl<const SCALE: u32> fmt::UpperHex for D128<SCALE> {
-    /// Formats the **raw `i128` storage** as uppercase hex.
-    ///
-    /// See [`fmt::LowerHex`] for the storage-versus-value distinction.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// assert_eq!(format!("{:X}", D128s12::ONE), "E8D4A51000");
-    /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::UpperHex::fmt(&self.0, f)
-    }
-}
-
-impl<const SCALE: u32> fmt::Octal for D128<SCALE> {
-    /// Formats the **raw `i128` storage** in octal.
-    ///
-    /// See [`fmt::LowerHex`] for the storage-versus-value distinction.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// assert_eq!(format!("{:o}", D128s12::ZERO), "0");
-    /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Octal::fmt(&self.0, f)
-    }
-}
-
-impl<const SCALE: u32> fmt::Binary for D128<SCALE> {
-    /// Formats the **raw `i128` storage** in binary.
-    ///
-    /// See [`fmt::LowerHex`] for the storage-versus-value distinction.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// // 10^12 in binary is a 40-bit value.
-    /// let s = format!("{:b}", D128s12::ONE);
-    /// assert_eq!(s, "1110100011010100101001010001000000000000");
-    /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        fmt::Binary::fmt(&self.0, f)
-    }
-}
-
 // `ParseError`'s `Display` and `Error` impls live in `src/error.rs`.
 
-// ──────────────────────────────────────────────────────────────────────
-// FromStr -- canonical decimal parser
-// ──────────────────────────────────────────────────────────────────────
-
-impl<const SCALE: u32> FromStr for D128<SCALE> {
-    type Err = ParseError;
-
-    /// Parses a canonical decimal literal into `D128<SCALE>`.
-    ///
-    /// Delegates to the internal parser. See the module-level docs for the
-    /// full list of accepted and rejected forms, and [`ParseError`]
-    /// for the failure variants.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// let v: D128s12 = "1.5".parse().unwrap();
-    /// assert_eq!(v.to_bits(), 1_500_000_000_000);
-    ///
-    /// let neg: D128s12 = "-1.5".parse().unwrap();
-    /// assert_eq!(neg.to_bits(), -1_500_000_000_000);
-    /// ```
-    fn from_str(s: &str) -> Result<Self, Self::Err> {
-        parse_decimal::<SCALE>(s)
-    }
-}
 
 /// Core decimal string parser.
 ///
