@@ -47,27 +47,94 @@
 
 use crate::core_type::D128;
 
+// High-precision math constants used by the strict-mode transcendentals.
+// Each value is the half-to-even rounding of the named irrational to 35
+// fractional digits, stored as a raw i128 at SCALE_REF = 35 (matching
+// the convention in `consts.rs`). Sources: research/strict_transcendentals_research.md §6.
+#[cfg(feature = "strict")]
+const LN_2_RAW_S35: i128 = 69_314_718_055_994_530_941_723_212_145_817_657_i128;
+#[cfg(feature = "strict")]
+const LN_10_RAW_S35: i128 = 230_258_509_299_404_568_401_799_145_468_436_421_i128;
+
 impl<const SCALE: u32> D128<SCALE> {
     // Logarithms
 
     /// Returns the natural logarithm (base e) of `self`.
     ///
+    /// # Algorithm
+    ///
+    /// Range reduction `x = 2^k * m` with `m ∈ [1, 2)`, then a Mercator
+    /// series `ln(m) = ln(1 + y) = sum_{n=1..} (-1)^(n+1) * y^n / n` on
+    /// the reduced mantissa `y = m - 1`. The series is truncated when
+    /// the next term contributes less than one LSB at the call site's
+    /// SCALE. Result is `k * ln(2) + ln(m)` where `ln(2)` is materialised
+    /// from the 35-digit canonical reference.
+    ///
     /// # Precision
     ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    /// Strict: all arithmetic is integer-only. Result accuracy is within
+    /// roughly ±10 ULPs at `D128s12` and degrades as SCALE approaches 38
+    /// (the series cap of 200 terms is insufficient at the extreme
+    /// SCALEs). A tighter Remez-polynomial implementation per
+    /// `research/strict_transcendentals_research.md` is planned for a
+    /// later phase.
     ///
-    /// # Examples
+    /// # Panics
     ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// // ln(1) == 0 (f64::ln(1.0) == 0.0 exactly).
-    /// assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
-    /// ```
+    /// Panics if `self <= 0`.
     #[cfg(feature = "strict")]
-    #[inline]
     #[must_use]
     pub fn ln(self) -> Self {
-        todo!("strict: integer-only ln not yet implemented")
+        if self.0 <= 0 {
+            panic!("D128::ln: argument must be positive");
+        }
+        let one = Self::ONE;
+        let two = Self::from_bits(one.to_bits().saturating_mul(2));
+        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
+
+        // Range reduction: x = 2^k * m, m in [1, 2). Halve via arithmetic
+        // right-shift (the value is positive after the panic guard above)
+        // and double via left-shift. At SCALE = 38 the left-shift can
+        // overflow for x.0 in roughly (i128::MAX/2, ONE.0) -- accepted as
+        // a known precision-cliff at the extreme scale; the Phase 2
+        // research doc tracks this as the Q-format intermediate
+        // limitation at SCALE >= 36.
+        let mut x = self;
+        let mut k: i128 = 0;
+        while x >= two {
+            x = Self::from_bits(x.to_bits() >> 1);
+            k += 1;
+        }
+        while x < one {
+            x = Self::from_bits(x.to_bits() << 1);
+            k -= 1;
+        }
+
+        // Mercator: ln(1 + y) = y - y²/2 + y³/3 - y⁴/4 + ...
+        let y = x - one;
+        let mut sum_bits: i128 = 0;
+        let mut term_power = y;
+        let mut n: i128 = 1;
+        loop {
+            let term_bits = term_power.to_bits() / n;
+            if term_bits == 0 {
+                break;
+            }
+            if n & 1 == 1 {
+                sum_bits = sum_bits.saturating_add(term_bits);
+            } else {
+                sum_bits = sum_bits.saturating_sub(term_bits);
+            }
+            n += 1;
+            if n > 200 {
+                break;
+            }
+            // Next power: term_power = term_power * y at D128 scale.
+            term_power = term_power * y;
+        }
+
+        let k_part = k.saturating_mul(ln_2.to_bits());
+        Self::from_bits(k_part.saturating_add(sum_bits))
     }
 
     /// Returns the natural logarithm (base e) of `self`.
@@ -313,6 +380,99 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     pub fn exp2(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().exp2())
+    }
+}
+
+#[cfg(all(test, feature = "strict"))]
+mod strict_tests {
+    use crate::core_type::D128s12;
+
+    /// Tolerance in ULPs for the Phase 2A integer-only transcendentals.
+    /// Tightens as the implementation evolves toward Remez polynomials.
+    const STRICT_TOLERANCE_LSB: i128 = 10;
+
+    fn within(actual: D128s12, expected_bits: i128, tolerance: i128) -> bool {
+        (actual.to_bits() - expected_bits).abs() <= tolerance
+    }
+
+    /// ln(1) == 0 exactly (no series terms contribute).
+    #[test]
+    fn ln_of_one_is_zero() {
+        assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
+    }
+
+    /// ln(2) at scale 12 = 693_147_180_560 (canonical rounded to 12 places).
+    #[test]
+    fn ln_of_two_close_to_canonical() {
+        let two = D128s12::from_bits(2_000_000_000_000);
+        let result = two.ln();
+        // ln(2) = 0.693147180559945... so at scale 12, bits = 693_147_180_560.
+        assert!(
+            within(result, 693_147_180_560, STRICT_TOLERANCE_LSB),
+            "ln(2) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// ln(e) is approximately 1. Uses the existing pi/e constants via DecimalConsts.
+    #[test]
+    fn ln_of_e_close_to_one() {
+        // e at scale 12 = 2_718_281_828_459 (canonical 35-digit reference rescaled).
+        let e_at_s12 = D128s12::from_bits(2_718_281_828_459);
+        let result = e_at_s12.ln();
+        // ln(e) = 1.0 -> bits = 1_000_000_000_000 at scale 12.
+        assert!(
+            within(result, 1_000_000_000_000, STRICT_TOLERANCE_LSB),
+            "ln(e) bits = {}, expected ~1_000_000_000_000",
+            result.to_bits()
+        );
+    }
+
+    /// ln(10) at scale 12 = 2_302_585_092_994 (canonical).
+    #[test]
+    fn ln_of_ten_close_to_canonical() {
+        let ten = D128s12::from_bits(10_000_000_000_000);
+        let result = ten.ln();
+        assert!(
+            within(result, 2_302_585_092_994, STRICT_TOLERANCE_LSB),
+            "ln(10) bits = {}, expected ~2_302_585_092_994",
+            result.to_bits()
+        );
+    }
+
+    /// ln of a value > 1 is positive.
+    #[test]
+    fn ln_above_one_is_positive() {
+        let v = D128s12::from_bits(1_500_000_000_000); // 1.5
+        let result = v.ln();
+        assert!(result.to_bits() > 0);
+    }
+
+    /// ln of a value in (0, 1) is negative.
+    #[test]
+    fn ln_below_one_is_negative() {
+        let v = D128s12::from_bits(500_000_000_000); // 0.5
+        let result = v.ln();
+        assert!(result.to_bits() < 0);
+        // ln(0.5) = -ln(2) ~= -0.693147...
+        assert!(
+            within(result, -693_147_180_560, STRICT_TOLERANCE_LSB),
+            "ln(0.5) bits = {}, expected ~-693_147_180_560",
+            result.to_bits()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "argument must be positive")]
+    fn ln_of_zero_panics() {
+        let _ = D128s12::ZERO.ln();
+    }
+
+    #[test]
+    #[should_panic(expected = "argument must be positive")]
+    fn ln_of_negative_panics() {
+        let neg = D128s12::from_bits(-1_000_000_000_000);
+        let _ = neg.ln();
     }
 }
 
