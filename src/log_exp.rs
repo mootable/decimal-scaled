@@ -161,28 +161,21 @@ impl<const SCALE: u32> D128<SCALE> {
 
     /// Returns the logarithm of `self` in the given `base`.
     ///
-    /// Implemented via a single `f64::log(self_f64, base_f64)` call, which
-    /// avoids the extra quantisation that would come from computing
-    /// `ln(self) / ln(base)` with two separate f64 round-trips.
+    /// Computed as `ln(self) / ln(base)`. Both subexpressions inherit
+    /// the precision characteristics of [`Self::ln`].
     ///
-    /// # Precision
+    /// # Panics
     ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// // log_2(8) is approximately 3 within f64 precision.
-    /// let eight = D128s12::from_int(8);
-    /// let two   = D128s12::from_int(2);
-    /// let result = eight.log(two);
-    /// ```
+    /// Panics if `self <= 0` (via [`Self::ln`]), if `base <= 0`, or if
+    /// `base == 1` (division by `ln(1) = 0`).
     #[cfg(feature = "strict")]
-    #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
-        todo!("strict: integer-only log not yet implemented")
+        let ln_base = base.ln();
+        if ln_base.to_bits() == 0 {
+            panic!("D128::log: base must not equal 1 (ln(1) is zero)");
+        }
+        self.ln() / ln_base
     }
 
     /// Returns the logarithm of `self` in the given `base`.
@@ -213,22 +206,16 @@ impl<const SCALE: u32> D128<SCALE> {
 
     /// Returns the base-2 logarithm of `self`.
     ///
-    /// # Precision
+    /// Computed as `ln(self) / ln(2)`.
     ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    /// # Panics
     ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// // log2(1) == 0 (f64::log2(1.0) == 0.0 exactly).
-    /// assert_eq!(D128s12::ONE.log2(), D128s12::ZERO);
-    /// ```
+    /// Panics if `self <= 0` (via [`Self::ln`]).
     #[cfg(feature = "strict")]
-    #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
-        todo!("strict: integer-only log2 not yet implemented")
+        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
+        self.ln() / ln_2
     }
 
     /// Returns the base-2 logarithm of `self`.
@@ -256,22 +243,16 @@ impl<const SCALE: u32> D128<SCALE> {
 
     /// Returns the base-10 logarithm of `self`.
     ///
-    /// # Precision
+    /// Computed as `ln(self) / ln(10)`.
     ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    /// # Panics
     ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// // log10(1) == 0 (f64::log10(1.0) == 0.0 exactly).
-    /// assert_eq!(D128s12::ONE.log10(), D128s12::ZERO);
-    /// ```
+    /// Panics if `self <= 0` (via [`Self::ln`]).
     #[cfg(feature = "strict")]
-    #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
-        todo!("strict: integer-only log10 not yet implemented")
+        let ln_10 = D128::<35>::from_bits(LN_10_RAW_S35).rescale::<SCALE>();
+        self.ln() / ln_10
     }
 
     /// Returns the base-10 logarithm of `self`.
@@ -473,6 +454,91 @@ mod strict_tests {
     fn ln_of_negative_panics() {
         let neg = D128s12::from_bits(-1_000_000_000_000);
         let _ = neg.ln();
+    }
+
+    // log2 / log10 / log derive from ln; tolerance grows because the
+    // additional division step accumulates ~1 LSB.
+    const DERIVED_LOG_TOLERANCE_LSB: i128 = 20;
+
+    /// log2(2) ~= 1.
+    #[test]
+    fn log2_of_two_is_one() {
+        let two = D128s12::from_bits(2_000_000_000_000);
+        let result = two.log2();
+        assert!(
+            within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
+            "log2(2) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// log2(8) ~= 3.
+    #[test]
+    fn log2_of_eight_is_three() {
+        let eight = D128s12::from_bits(8_000_000_000_000);
+        let result = eight.log2();
+        assert!(
+            within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
+            "log2(8) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// log10(10) ~= 1.
+    #[test]
+    fn log10_of_ten_is_one() {
+        let ten = D128s12::from_bits(10_000_000_000_000);
+        let result = ten.log10();
+        assert!(
+            within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
+            "log10(10) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// log10(100) ~= 2.
+    #[test]
+    fn log10_of_hundred_is_two() {
+        let hundred = D128s12::from_bits(100_000_000_000_000);
+        let result = hundred.log10();
+        assert!(
+            within(result, 2_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
+            "log10(100) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// log_base_b(b) == 1 for any b > 0, b != 1.
+    #[test]
+    fn log_self_is_one() {
+        let base = D128s12::from_bits(5_000_000_000_000); // 5
+        let result = base.log(base);
+        assert!(
+            within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
+            "log_5(5) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// log_2(8) == 3 via the generic log.
+    #[test]
+    fn log_with_base_two() {
+        let eight = D128s12::from_bits(8_000_000_000_000);
+        let two = D128s12::from_bits(2_000_000_000_000);
+        let result = eight.log(two);
+        assert!(
+            within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
+            "log_2(8) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    #[test]
+    #[should_panic(expected = "base must not equal 1")]
+    fn log_base_one_panics() {
+        let x = D128s12::from_bits(5_000_000_000_000);
+        let one = D128s12::ONE;
+        let _ = x.log(one);
     }
 }
 
