@@ -342,6 +342,18 @@ impl Fixed {
         }
     }
 
+    /// Square root at working scale `w`: returns `√self` at scale `w`,
+    /// truncating toward zero. `self` must be non-negative; a negative
+    /// value's magnitude is used (callers guard the sign themselves).
+    ///
+    /// `√(mag/10^w) · 10^w = √(mag · 10^w)` — the radicand is formed as
+    /// a 512-bit value and its integer square root taken exactly. The
+    /// caller's working values keep `mag · 10^w < 2^512`.
+    pub(crate) fn sqrt(self, w: u32) -> Fixed {
+        let radicand = mul_u256(self.mag, Fixed::pow10(w));
+        Fixed { negative: false, mag: isqrt_u512(radicand) }
+    }
+
     /// Divides by another working-scale value: `(self * 10^w) / rhs`,
     /// truncating toward zero. `rhs` must be non-zero. `self * 10^w`
     /// must fit 512 bits (it always does for the evaluators' inputs).
@@ -426,6 +438,47 @@ impl Fixed {
         } else {
             m
         }
+    }
+}
+
+/// `floor(sqrt(n))` for an unsigned 512-bit value, via Newton's method.
+///
+/// The result fits `U256`. Callers in this crate keep `n < 2^452`
+/// (a working-scale radicand `mag · 10^w` with `w <= 68`), so the
+/// initial overestimate and every iterate stay below `2^256`.
+fn isqrt_u512(n: U512) -> U256 {
+    if n == [0, 0, 0, 0] {
+        return [0, 0];
+    }
+    // Bit length of n.
+    let bits = if n[3] != 0 {
+        512 - n[3].leading_zeros()
+    } else if n[2] != 0 {
+        384 - n[2].leading_zeros()
+    } else if n[1] != 0 {
+        256 - n[1].leading_zeros()
+    } else {
+        128 - n[0].leading_zeros()
+    };
+    // Initial overestimate y0 = 2^ceil(bits/2) >= sqrt(n); for n < 2^452
+    // this is at most 2^226, comfortably inside U256.
+    let half_bits = (bits + 1) / 2;
+    let mut y: U256 = if half_bits >= 128 {
+        [0, 1u128 << (half_bits - 128)]
+    } else {
+        [1u128 << half_bits, 0]
+    };
+    loop {
+        // nq = n / y  (fits U256 because y >= sqrt(n)).
+        let nq = div_u512_by_u256(n, y);
+        let nq = [nq[0], nq[1]];
+        // y_next = (y + nq) / 2.
+        let (sum, _carry) = add_u256(y, nq);
+        let y_next = halve_u256(sum);
+        if ge_u256(y_next, y) {
+            return y;
+        }
+        y = y_next;
     }
 }
 
@@ -533,6 +586,24 @@ mod tests {
         // sign of a negative product
         assert_eq!(two.neg().mul(three, w).negative, true);
         assert_eq!(two.neg().mul(three.neg(), w).negative, false);
+    }
+
+    #[test]
+    fn fixed_sqrt_basic() {
+        let w = 12;
+        let one = 10u128.pow(w);
+        // sqrt(4) == 2
+        assert_eq!(
+            Fixed::from_u128_mag(4 * one, false).sqrt(w),
+            Fixed::from_u128_mag(2 * one, false)
+        );
+        // sqrt(2) ≈ 1.414213562373 (truncated at scale 12)
+        let s2 = Fixed::from_u128_mag(2 * one, false).sqrt(w);
+        assert_eq!(s2.mag[0], 1_414_213_562_373);
+        assert_eq!(s2.mag[1], 0);
+        // sqrt(1) == 1, sqrt(0) == 0
+        assert_eq!(Fixed::from_u128_mag(one, false).sqrt(w), Fixed::from_u128_mag(one, false));
+        assert!(Fixed::ZERO.sqrt(w).is_zero());
     }
 
     #[test]
