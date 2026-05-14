@@ -1,0 +1,104 @@
+name: docs
+
+# Builds the API documentation (rustdoc) plus the prose guides in
+# `docs/` and publishes them to GitHub Pages.
+#
+# Triggers:
+#   * any pushed `v*` release tag (the deploy script in
+#     `scripts/deploy.ps1` pushes such a tag as its final git step);
+#   * a push to `main` (keeps the published docs current between
+#     releases);
+#   * manual dispatch from the Actions tab.
+#
+# One-time repo setup: Settings -> Pages -> Build and deployment ->
+# Source: "GitHub Actions".
+
+on:
+  push:
+    tags:
+      - 'v*'
+    branches:
+      - main
+  workflow_dispatch:
+
+# Allow only one concurrent deployment.
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Build rustdoc (all features)
+        run: cargo doc --no-deps --all-features --workspace
+        env:
+          # Fail the build on any rustdoc warning so broken intra-doc
+          # links never reach the published site.
+          RUSTDOCFLAGS: "-D warnings"
+
+      - name: Assemble the Pages site
+        run: |
+          set -euo pipefail
+          site=_site
+          mkdir -p "$site"
+          # rustdoc output -> /api
+          cp -r target/doc "$site/api"
+          # prose guides -> /guides (raw markdown; GitHub Pages serves
+          # them, and the docs/README.md is the guide index)
+          if [ -d docs ]; then
+            cp -r docs "$site/guides"
+          fi
+          # Root landing page: link to the API docs and the guides.
+          cat > "$site/index.html" <<'HTML'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>decimal-scaled documentation</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <style>
+              body { font-family: system-ui, sans-serif; max-width: 40rem;
+                     margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
+              code { background: #f3f3f3; padding: 0.1rem 0.3rem; border-radius: 3px; }
+              a { color: #3060c0; }
+            </style>
+          </head>
+          <body>
+            <h1>decimal-scaled</h1>
+            <p>Const-generic base-10 fixed-point decimal types for
+               deterministic, bit-exact arithmetic.</p>
+            <ul>
+              <li><a href="api/decimal_scaled/index.html">API reference (rustdoc)</a></li>
+              <li><a href="guides/README.md">Usage guides</a></li>
+            </ul>
+          </body>
+          </html>
+          HTML
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: _site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4
