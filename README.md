@@ -261,7 +261,8 @@ See [`docs/macros.md`](docs/macros.md).
 | `alloc` | yes | String formatting and parsing on `no_std`. Required. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers`. |
 | `macros` | no | The `d128!` compile-time decimal-literal macro. |
-| `strict` | no | Integer-only, platform-independent transcendentals instead of the `f64` bridge. `no_std`-compatible. |
+| `strict` | no | Plain transcendentals dispatch to the integer-only, platform-independent `*_strict` path instead of the `f64` bridge. `no_std`-compatible. |
+| `no_strict` | no | Drops the `*_strict` transcendental surface for a smaller build. Overrides `strict`. |
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
 | `d256` / `d512` / `d1024` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by `bnum`. |
 | `wide` | no | Umbrella over `d256` + `d512` + `d1024`. |

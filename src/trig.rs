@@ -2,7 +2,7 @@
 //!
 //! # Methods
 //!
-//! Fifteen methods, all routed through the f64 bridge:
+//! Fifteen methods:
 //!
 //! - **Forward trig (radians input):** [`D128::sin`] / [`D128::cos`] /
 //!   [`D128::tan`].
@@ -12,35 +12,32 @@
 //!   [`D128::asinh`] / [`D128::acosh`] / [`D128::atanh`].
 //! - **Angle conversions:** [`D128::to_degrees`] / [`D128::to_radians`].
 //!
-//! # Feature gating
+//! # The `*_strict` dual API
 //!
-//! Every method here calls an inherent `f64` method (`f64::sin`,
-//! `f64::cos`, `f64::tan`, `f64::asin`, `f64::acos`, `f64::atan`,
-//! `f64::atan2`, `f64::sinh`, `f64::cosh`, `f64::tanh`, `f64::asinh`,
-//! `f64::acosh`, `f64::atanh`, `f64::to_degrees`, `f64::to_radians`),
-//! which are only available in `std` — they delegate to platform or
-//! hardware intrinsics that are not in `core`. Each method is gated
-//! `#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]`. The module
-//! declaration in `lib.rs` is ungated so that future integer-only
-//! `strict` implementations can be added alongside the f64 wrappers
-//! without restructuring.
+//! Each method has two implementations:
 //!
-//! `no_std` users that need trigonometric or hyperbolic functions can
-//! compose them externally via `libm` or hardware-specific intrinsics.
+//! - An integer-only `<method>_strict` form — always compiled (unless
+//!   the `no_strict` feature is set), `no_std`-compatible, and
+//!   platform-deterministic. `sin`/`cos`/`tan` range-reduce and
+//!   evaluate a Taylor series; `atan`/`asin`/`acos`/`atan2` derive from
+//!   a reciprocal-reduced Taylor `atan`; the hyperbolic family composes
+//!   the strict `exp` / `ln` / `sqrt`.
+//! - An f64-bridge form — converts to `f64`, calls the platform
+//!   intrinsic, converts back. Gated on `std`.
+//!
+//! The plain `<method>` is a dispatcher: with the `strict` feature it
+//! calls `<method>_strict`; otherwise it is the f64 bridge. See
+//! `docs/strict-mode.md` for the full dual-API and feature-gating
+//! rules and the 0.5 ULP accuracy contract.
 //!
 //! # Precision
 //!
-//! All methods in this module are **Lossy**: the `D128` value is
-//! converted to `f64` via `to_f64_lossy`, the corresponding `f64`
-//! intrinsic is applied, and the result is converted back via
-//! `from_f64_lossy`. The f64 round-trip introduces up to one LSB of
-//! quantisation error per conversion step.
-//!
-//! IEEE 754 mandates correct rounding for `f64::sqrt` but not for
-//! transcendental functions. In practice mainstream libm implementations
-//! (glibc, msvcrt, macOS libm, musl) produce bit-identical results for
-//! identical inputs, so results are bit-deterministic on supported
-//! platforms in practice.
+//! The f64-bridge forms are **Lossy** — the `D128` value round-trips
+//! through `f64`, which introduces up to one LSB of quantisation per
+//! conversion. The `*_strict` forms are held to the IEEE-754
+//! correctly-rounded standard (within 0.5 ULP of the exact result);
+//! the trig family is mid-rework toward that bound (see
+//! `research/strict_transcendentals_research.md`).
 //!
 //! # `atan2` signature
 //!

@@ -5,45 +5,37 @@
 //! - **Logarithms:** [`D128::ln`] / [`D128::log`] / [`D128::log2`] / [`D128::log10`].
 //! - **Exponentials:** [`D128::exp`] / [`D128::exp2`].
 //!
-//! # Feature gating
+//! # The `*_strict` dual API
 //!
-//! Each method is provided in two cfg-disjoint forms:
+//! Each method has an integer-only `<method>_strict` form and an
+//! f64-bridge form:
 //!
-//! - The f64-based form is gated `#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]`
-//!   and calls an inherent `f64` method (`f64::ln`, `f64::log`, `f64::log2`,
-//!   `f64::log10`, `f64::exp`, `f64::exp2`). Those intrinsics live in `std`,
-//!   so the gate excludes them from `no_std` builds.
-//! - The strict form is gated `#[cfg(all(feature = "strict", not(feature = "no_strict")))]` and is an
-//!   integer-only implementation. The bodies are currently `todo!` stubs;
-//!   they compile under `no_std` and will be filled in with real
-//!   integer algorithms in a later pass.
+//! - `<method>_strict` — always compiled (unless the `no_strict`
+//!   feature is set), `no_std`-compatible, platform-deterministic.
+//!   `ln_strict` uses range reduction plus a Mercator series;
+//!   `exp_strict` uses range reduction plus a Taylor series; the
+//!   remaining methods compose those two.
+//! - The f64-bridge form is gated on `std` and calls the inherent
+//!   `f64` intrinsic.
 //!
-//! The module declaration in `lib.rs` is ungated so that the strict stubs
-//! remain reachable under `no_std + strict`. `no_std` users without the
-//! `strict` feature can compose logarithms and exponentials externally via
-//! `libm` or hardware-specific intrinsics.
+//! The plain `<method>` is a dispatcher: with the `strict` feature it
+//! calls `<method>_strict`, otherwise the f64 bridge. See
+//! `docs/strict-mode.md` for the full dual-API and feature rules.
 //!
 //! # Precision
 //!
-//! All methods in this module are **Lossy** (without `strict`): each one
-//! converts `self` to `f64`, applies the corresponding `f64` transcendental,
-//! and converts the result back. IEEE 754 does not mandate correct rounding
-//! for transcendental functions, so results may differ by one or more ULPs
-//! across platforms or library versions.
+//! The f64-bridge forms are **Lossy** — `self` round-trips through
+//! `f64`. The `*_strict` forms are held to the IEEE-754 correctly-
+//! rounded standard (within 0.5 ULP of the exact result); `ln` / `exp`
+//! are mid-rework toward that bound — see
+//! `research/strict_transcendentals_research.md`.
 //!
 //! # Domain handling
 //!
 //! `f64::ln`, `f64::log2`, `f64::log10`, and `f64::log` return `-Infinity`
 //! for `0.0` and `NaN` for negative inputs. The f64 bridge maps `NaN` to
 //! `D128::ZERO` and saturates infinities to `D128::MAX` or `D128::MIN`.
-//! Callers that require an explicit error for out-of-domain inputs should
-//! check `is_negative()` or `is_zero()` before calling these methods.
-//!
-//! # Base-aware `log`
-//!
-//! `D128::log(self, base)` routes through `f64::log(self_f64, base_f64)`
-//! rather than computing `ln(self) / ln(base)`, avoiding a second f64
-//! round-trip and the associated extra quantisation noise.
+//! The `*_strict` forms panic on out-of-domain inputs (`self <= 0`).
 
 use crate::core_type::D128;
 
