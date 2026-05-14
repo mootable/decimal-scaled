@@ -420,6 +420,14 @@ pub enum ParseD128Error {
 crate::macros::basics::decl_decimal_basics!(D128, i128, 38);
 crate::macros::display::decl_decimal_display!(D128);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D128, i128);
+crate::macros::conversions::decl_from_primitive!(D128, i128, i8);
+crate::macros::conversions::decl_from_primitive!(D128, i128, i16);
+crate::macros::conversions::decl_from_primitive!(D128, i128, i32);
+crate::macros::conversions::decl_from_primitive!(D128, i128, i64);
+crate::macros::conversions::decl_from_primitive!(D128, i128, u8);
+crate::macros::conversions::decl_from_primitive!(D128, i128, u16);
+crate::macros::conversions::decl_from_primitive!(D128, i128, u32);
+crate::macros::conversions::decl_from_primitive!(D128, i128, u64);
 
 // ---------------------------------------------------------------------
 // D32 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger
@@ -458,6 +466,7 @@ crate::macros::float_bridge::decl_decimal_float_bridge!(D32, i32);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D32);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D32);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D32);
+crate::macros::helpers::decl_decimal_helpers!(D32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -517,6 +526,7 @@ crate::macros::float_bridge::decl_decimal_float_bridge!(D64, i64);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D64);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D64);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D64);
+crate::macros::helpers::decl_decimal_helpers!(D64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::macros::conversions::decl_cross_width_widening!(D64, i64, D32, i32);
