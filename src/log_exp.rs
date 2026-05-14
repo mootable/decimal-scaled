@@ -83,6 +83,7 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Panics if `self <= 0`.
     #[cfg(feature = "strict")]
+    #[inline]
     #[must_use]
     pub fn ln(self) -> Self {
         if self.0 <= 0 {
@@ -169,6 +170,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// Panics if `self <= 0` (via [`Self::ln`]), if `base <= 0`, or if
     /// `base == 1` (division by `ln(1) = 0`).
     #[cfg(feature = "strict")]
+    #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
         let ln_base = base.ln();
@@ -212,6 +214,7 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Panics if `self <= 0` (via [`Self::ln`]).
     #[cfg(feature = "strict")]
+    #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
         let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
@@ -249,6 +252,7 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Panics if `self <= 0` (via [`Self::ln`]).
     #[cfg(feature = "strict")]
+    #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
         let ln_10 = D128::<35>::from_bits(LN_10_RAW_S35).rescale::<SCALE>();
@@ -300,6 +304,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// At `D128s12` this happens for `self.to_f64_lossy()` greater than
     /// roughly `60`.
     #[cfg(feature = "strict")]
+    #[inline]
     #[must_use]
     pub fn exp(self) -> Self {
         let one = Self::ONE;
@@ -393,6 +398,7 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Panics if the result overflows D128's representable range.
     #[cfg(feature = "strict")]
+    #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
         let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
