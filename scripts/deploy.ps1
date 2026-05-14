@@ -150,9 +150,20 @@ function Invoke-Step {
 }
 
 # --- 4. Build + test gate ---------------------------------------------
+# `--all-features` would pull in `experimental-floats`, which needs the
+# nightly toolchain; the gate uses the widest stable-buildable set
+# instead, plus a separate strict-mode build (strict and the f64 bridge
+# are mutually exclusive per build).
 Write-Host "`n--- Build + test gate ---" -ForegroundColor Cyan
-Invoke-Step 'cargo build' { cargo build --all-features } 'cargo build --all-features'
-Invoke-Step 'cargo test'  { cargo test  --all-features } 'cargo test --all-features'
+Invoke-Step 'cargo build (wide,macros)' {
+    cargo build --features wide,macros
+} 'cargo build --features wide,macros'
+Invoke-Step 'cargo build (strict)' {
+    cargo build --no-default-features --features alloc,strict,wide,macros
+} 'cargo build --no-default-features --features alloc,strict,wide,macros'
+Invoke-Step 'cargo test (wide,macros)' {
+    cargo test --features wide,macros
+} 'cargo test --features wide,macros'
 
 # --- 5. Git: commit, tag, push ----------------------------------------
 $tag = "v$NewVersion"

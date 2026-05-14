@@ -41,8 +41,11 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Build rustdoc (all features)
-        run: cargo doc --no-deps --all-features --workspace
+      - name: Build rustdoc
+        # `--all-features` is avoided: `experimental-floats` needs the
+        # nightly toolchain. `wide` + `macros` is the widest
+        # stable-buildable set and documents the whole public surface.
+        run: cargo doc --no-deps --features wide,macros --workspace
         env:
           # Fail the build on any rustdoc warning so broken intra-doc
           # links never reach the published site.

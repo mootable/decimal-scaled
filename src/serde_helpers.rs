@@ -21,7 +21,7 @@
 //! - **Binary formats** (postcard, bincode, etc.): 16 little-endian
 //!   bytes from `i128::to_le_bytes`. Compact and endian-canonical.
 //!
-//! On deserialise, [`DecimalVisitor`] handles both wire forms plus
+//! On deserialise, the internal `DecimalVisitor` handles both wire forms plus
 //! `visit_i64` / `visit_u64` / `visit_i128` / `visit_u128` callbacks,
 //! which are used when the underlying format yields a native integer.
 //! The integer is interpreted directly as the scaled `i128` storage.
