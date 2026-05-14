@@ -451,6 +451,7 @@ crate::decimal_display_macro::decl_decimal_display!(D32);
 crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D32, i32, i64);
 crate::decimal_num_traits_macro::decl_decimal_num_traits_basics!(D32);
 crate::decimal_sign_macro::decl_decimal_sign_methods!(D32, i32);
+crate::decimal_consts_macro::decl_decimal_consts!(D32, i32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -504,6 +505,7 @@ crate::decimal_display_macro::decl_decimal_display!(D64);
 crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D64, i64, i128);
 crate::decimal_num_traits_macro::decl_decimal_num_traits_basics!(D64);
 crate::decimal_sign_macro::decl_decimal_sign_methods!(D64, i64);
+crate::decimal_consts_macro::decl_decimal_consts!(D64, i64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::decimal_conversions_macro::decl_cross_width_widening!(D64, i64, D32, i32);
@@ -789,6 +791,26 @@ mod tests {
         let mid: super::D64s2 = super::D64s2::from_bits(i64::MAX);
         let narrow: Result<super::D32s2, _> = mid.try_into();
         assert!(narrow.is_err());
+    }
+
+    #[test]
+    fn d32_consts() {
+        use crate::consts::DecimalConsts;
+        type D32s4 = super::D32<4>;
+        // pi at scale 4 = 3.1416 -> bits = 31416.
+        assert_eq!(D32s4::pi().to_bits(), 31416);
+        // e at scale 4 = 2.7183 -> bits = 27183.
+        assert_eq!(D32s4::e().to_bits(), 27183);
+    }
+
+    #[test]
+    fn d64_consts() {
+        use crate::consts::DecimalConsts;
+        type D64s12 = super::D64<12>;
+        // pi at scale 12 = 3.141592653590 (matches D128s12).
+        assert_eq!(D64s12::pi().to_bits(), 3_141_592_653_590);
+        // tau at scale 12 = 6.283185307180.
+        assert_eq!(D64s12::tau().to_bits(), 6_283_185_307_180);
     }
 
     #[test]

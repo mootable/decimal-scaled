@@ -185,6 +185,30 @@ pub trait DecimalConsts: Sized {
     fn e() -> Self;
 }
 
+// Public-to-crate helpers that return each constant's rescaled bits at
+// the caller's target SCALE. Used by the `decl_decimal_consts!` macro
+// to provide DecimalConsts for narrower widths (D32, D64) without
+// duplicating the rescale logic.
+
+pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
+    D128::<SCALE_REF>::from_bits(PI_RAW_S35).rescale::<TARGET>().to_bits()
+}
+pub(crate) fn tau_at_target<const TARGET: u32>() -> i128 {
+    D128::<SCALE_REF>::from_bits(TAU_RAW_S35).rescale::<TARGET>().to_bits()
+}
+pub(crate) fn half_pi_at_target<const TARGET: u32>() -> i128 {
+    D128::<SCALE_REF>::from_bits(HALF_PI_RAW_S35).rescale::<TARGET>().to_bits()
+}
+pub(crate) fn quarter_pi_at_target<const TARGET: u32>() -> i128 {
+    D128::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S35).rescale::<TARGET>().to_bits()
+}
+pub(crate) fn golden_at_target<const TARGET: u32>() -> i128 {
+    D128::<SCALE_REF>::from_bits(GOLDEN_RAW_S35).rescale::<TARGET>().to_bits()
+}
+pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
+    D128::<SCALE_REF>::from_bits(E_RAW_S35).rescale::<TARGET>().to_bits()
+}
+
 impl<const SCALE: u32> DecimalConsts for D128<SCALE> {
     #[inline]
     fn pi() -> Self {
