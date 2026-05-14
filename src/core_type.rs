@@ -448,6 +448,7 @@ crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i16);
 crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u8);
 crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u16);
 crate::decimal_display_macro::decl_decimal_display!(D32);
+crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D32, i32, i64);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -498,6 +499,7 @@ crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u8);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u16);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u32);
 crate::decimal_display_macro::decl_decimal_display!(D64);
+crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D64, i64, i128);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::decimal_conversions_macro::decl_cross_width_widening!(D64, i64, D32, i32);

@@ -22,6 +22,17 @@ macros = ["dep:decimal_scaled_macros"]
 # Strict mode does not require `std`; transcendental methods compile under
 # `no_std + alloc` using integer algorithms.
 strict = []
+# Compile-time selector for the default RoundingMode used by the
+# no-arg `rescale` family (and any future default-rounding methods).
+# If none of these is enabled, the default is HalfToEven (IEEE-754
+# default; banker's rounding). Mutually exclusive in intent — if more
+# than one is enabled, the priority order in `src/rounding.rs` picks
+# canonically.
+rounding-half-away-from-zero = []
+rounding-half-toward-zero = []
+rounding-trunc = []
+rounding-floor = []
+rounding-ceiling = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }

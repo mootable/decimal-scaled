@@ -55,6 +55,58 @@ pub enum RoundingMode {
     Ceiling,
 }
 
+/// Compile-time default `RoundingMode` for the no-arg `rescale` and
+/// future default-rounding methods.
+///
+/// Selected by Cargo feature flags (priority order: first match wins):
+/// 1. `rounding-half-away-from-zero` → `HalfAwayFromZero`
+/// 2. `rounding-half-toward-zero` → `HalfTowardZero`
+/// 3. `rounding-trunc` → `Trunc`
+/// 4. `rounding-floor` → `Floor`
+/// 5. `rounding-ceiling` → `Ceiling`
+/// 6. (none) → `HalfToEven` (IEEE-754 default; banker's rounding)
+#[cfg(feature = "rounding-half-away-from-zero")]
+pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfAwayFromZero;
+
+#[cfg(all(
+    not(feature = "rounding-half-away-from-zero"),
+    feature = "rounding-half-toward-zero"
+))]
+pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfTowardZero;
+
+#[cfg(all(
+    not(feature = "rounding-half-away-from-zero"),
+    not(feature = "rounding-half-toward-zero"),
+    feature = "rounding-trunc"
+))]
+pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::Trunc;
+
+#[cfg(all(
+    not(feature = "rounding-half-away-from-zero"),
+    not(feature = "rounding-half-toward-zero"),
+    not(feature = "rounding-trunc"),
+    feature = "rounding-floor"
+))]
+pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::Floor;
+
+#[cfg(all(
+    not(feature = "rounding-half-away-from-zero"),
+    not(feature = "rounding-half-toward-zero"),
+    not(feature = "rounding-trunc"),
+    not(feature = "rounding-floor"),
+    feature = "rounding-ceiling"
+))]
+pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::Ceiling;
+
+#[cfg(not(any(
+    feature = "rounding-half-away-from-zero",
+    feature = "rounding-half-toward-zero",
+    feature = "rounding-trunc",
+    feature = "rounding-floor",
+    feature = "rounding-ceiling",
+)))]
+pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfToEven;
+
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
