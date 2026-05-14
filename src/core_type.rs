@@ -496,6 +496,16 @@ crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u8);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u16);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u32);
 
+// Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
+crate::decimal_conversions_macro::decl_cross_width_widening!(D64, i64, D32, i32);
+crate::decimal_conversions_macro::decl_cross_width_widening!(D128, i128, D32, i32);
+crate::decimal_conversions_macro::decl_cross_width_widening!(D128, i128, D64, i64);
+
+// Cross-width narrowing (fallible). D128 -> D64, D128 -> D32, D64 -> D32.
+crate::decimal_conversions_macro::decl_cross_width_narrowing!(D64, i64, D128, i128);
+crate::decimal_conversions_macro::decl_cross_width_narrowing!(D32, i32, D128, i128);
+crate::decimal_conversions_macro::decl_cross_width_narrowing!(D32, i32, D64, i64);
+
 /// Scale alias: `D64<0>`. 1 LSB = 1. Range ±9.2 × 10¹⁸.
 pub type D64s0 = D64<0>;
 /// Scale alias: `D64<1>`. 1 LSB = 10^-1. Range ±9.2 × 10¹⁷.
@@ -693,6 +703,55 @@ mod tests {
         assert_eq!((x * y).to_bits(), 6_000_000_000);
         assert_eq!((y / x).to_bits(), 1_500_000_000);
         assert_eq!((y % x).to_bits(), 1_000_000_000);
+    }
+
+    #[test]
+    fn cross_width_widening_d32_to_d64() {
+        let small: super::D32s2 = super::D32s2::from_bits(150);
+        let wider: super::D64s2 = small.into();
+        assert_eq!(wider.to_bits(), 150_i64);
+    }
+
+    #[test]
+    fn cross_width_widening_d32_to_d128() {
+        let small: super::D32s2 = super::D32s2::from_bits(-150);
+        let wider: super::D128s2 = small.into();
+        assert_eq!(wider.to_bits(), -150_i128);
+    }
+
+    #[test]
+    fn cross_width_widening_d64_to_d128() {
+        let mid: super::D64s9 = super::D64s9::from_bits(i64::MAX);
+        let wider: super::D128s9 = mid.into();
+        assert_eq!(wider.to_bits(), i64::MAX as i128);
+    }
+
+    #[test]
+    fn cross_width_narrowing_d128_to_d64_in_range() {
+        let wide: super::D128s9 = super::D128s9::from_bits(1_500_000_000);
+        let narrow: super::D64s9 = wide.try_into().unwrap();
+        assert_eq!(narrow.to_bits(), 1_500_000_000);
+    }
+
+    #[test]
+    fn cross_width_narrowing_d128_to_d64_out_of_range() {
+        let wide: super::D128s9 = super::D128s9::from_bits(i128::MAX);
+        let narrow: Result<super::D64s9, _> = wide.try_into();
+        assert!(narrow.is_err());
+    }
+
+    #[test]
+    fn cross_width_narrowing_d64_to_d32_in_range() {
+        let mid: super::D64s2 = super::D64s2::from_bits(150);
+        let narrow: super::D32s2 = mid.try_into().unwrap();
+        assert_eq!(narrow.to_bits(), 150);
+    }
+
+    #[test]
+    fn cross_width_narrowing_d64_to_d32_out_of_range() {
+        let mid: super::D64s2 = super::D64s2::from_bits(i64::MAX);
+        let narrow: Result<super::D32s2, _> = mid.try_into();
+        assert!(narrow.is_err());
     }
 
     #[test]
