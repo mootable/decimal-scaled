@@ -442,6 +442,10 @@ impl<const SCALE: u32> Default for D32<SCALE> {
 
 crate::decimal_macro::decl_decimal_basics!(D32, i32, 9);
 crate::decimal_arithmetic_macro::decl_decimal_arithmetic!(D32, i32, i64);
+crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i8);
+crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i16);
+crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u8);
+crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u16);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -485,6 +489,12 @@ impl<const SCALE: u32> Default for D64<SCALE> {
 
 crate::decimal_macro::decl_decimal_basics!(D64, i64, 18);
 crate::decimal_arithmetic_macro::decl_decimal_arithmetic!(D64, i64, i128);
+crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i8);
+crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i16);
+crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i32);
+crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u8);
+crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u16);
+crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u32);
 
 /// Scale alias: `D64<0>`. 1 LSB = 1. Range ±9.2 × 10¹⁸.
 pub type D64s0 = D64<0>;
