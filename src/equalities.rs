@@ -36,9 +36,9 @@ use crate::core_type::{D128, D32, D64};
 // `decl_eq_all_integers!` macro family — see
 // `src/decimal_equalities_macro.rs`. The same surface is generated for
 // every decimal width.
-crate::decimal_equalities_macro::decl_eq_all_integers!(D128);
-crate::decimal_equalities_macro::decl_eq_all_integers!(D64);
-crate::decimal_equalities_macro::decl_eq_all_integers!(D32);
+crate::macros::equalities::decl_eq_all_integers!(D128);
+crate::macros::equalities::decl_eq_all_integers!(D64);
+crate::macros::equalities::decl_eq_all_integers!(D32);
 
 // Float equality requires the f64 bridge (`from_f64_lossy` /
 // `to_f64_lossy`), which is only present when `std` is on and
@@ -46,9 +46,9 @@ crate::decimal_equalities_macro::decl_eq_all_integers!(D32);
 // emitted for D128 only at present — the D32/D64 conversion bridge
 // covers will follow in a later commit.
 #[cfg(all(feature = "std", not(feature = "strict")))]
-crate::decimal_equalities_macro::decl_eq_float!(D128, f32);
+crate::macros::equalities::decl_eq_float!(D128, f32);
 #[cfg(all(feature = "std", not(feature = "strict")))]
-crate::decimal_equalities_macro::decl_eq_float!(D128, f64);
+crate::macros::equalities::decl_eq_float!(D128, f64);
 
 #[cfg(test)]
 mod tests {

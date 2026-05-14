@@ -417,8 +417,8 @@ pub enum ParseD128Error {
 // Inherent basics + Decimal trait impl: emitted by the macro generator
 // (one invocation per width). See src/decimal_macro.rs for the macro
 // definition and the surface it produces.
-crate::decimal_macro::decl_decimal_basics!(D128, i128, 38);
-crate::decimal_display_macro::decl_decimal_display!(D128);
+crate::macros::basics::decl_decimal_basics!(D128, i128, 38);
+crate::macros::display::decl_decimal_display!(D128);
 
 // ---------------------------------------------------------------------
 // D32 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger
@@ -441,18 +441,18 @@ impl<const SCALE: u32> Default for D32<SCALE> {
     }
 }
 
-crate::decimal_macro::decl_decimal_basics!(D32, i32, 9);
-crate::decimal_arithmetic_macro::decl_decimal_arithmetic!(D32, i32, i64);
-crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i8);
-crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i16);
-crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u8);
-crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u16);
-crate::decimal_display_macro::decl_decimal_display!(D32);
-crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D32, i32, i64);
-crate::decimal_num_traits_macro::decl_decimal_num_traits_basics!(D32);
-crate::decimal_sign_macro::decl_decimal_sign_methods!(D32, i32);
-crate::decimal_consts_macro::decl_decimal_consts!(D32, i32);
-crate::decimal_from_str_macro::decl_decimal_from_str!(D32, i32);
+crate::macros::basics::decl_decimal_basics!(D32, i32, 9);
+crate::macros::arithmetic::decl_decimal_arithmetic!(D32, i32, i64);
+crate::macros::conversions::decl_from_primitive!(D32, i32, i8);
+crate::macros::conversions::decl_from_primitive!(D32, i32, i16);
+crate::macros::conversions::decl_from_primitive!(D32, i32, u8);
+crate::macros::conversions::decl_from_primitive!(D32, i32, u16);
+crate::macros::display::decl_decimal_display!(D32);
+crate::macros::overflow::decl_decimal_overflow_variants!(D32, i32, i64);
+crate::macros::num_traits::decl_decimal_num_traits_basics!(D32);
+crate::macros::sign::decl_decimal_sign_methods!(D32, i32);
+crate::macros::consts::decl_decimal_consts!(D32, i32);
+crate::macros::from_str::decl_decimal_from_str!(D32, i32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -494,30 +494,30 @@ impl<const SCALE: u32> Default for D64<SCALE> {
     }
 }
 
-crate::decimal_macro::decl_decimal_basics!(D64, i64, 18);
-crate::decimal_arithmetic_macro::decl_decimal_arithmetic!(D64, i64, i128);
-crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i8);
-crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i16);
-crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i32);
-crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u8);
-crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u16);
-crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u32);
-crate::decimal_display_macro::decl_decimal_display!(D64);
-crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D64, i64, i128);
-crate::decimal_num_traits_macro::decl_decimal_num_traits_basics!(D64);
-crate::decimal_sign_macro::decl_decimal_sign_methods!(D64, i64);
-crate::decimal_consts_macro::decl_decimal_consts!(D64, i64);
-crate::decimal_from_str_macro::decl_decimal_from_str!(D64, i64);
+crate::macros::basics::decl_decimal_basics!(D64, i64, 18);
+crate::macros::arithmetic::decl_decimal_arithmetic!(D64, i64, i128);
+crate::macros::conversions::decl_from_primitive!(D64, i64, i8);
+crate::macros::conversions::decl_from_primitive!(D64, i64, i16);
+crate::macros::conversions::decl_from_primitive!(D64, i64, i32);
+crate::macros::conversions::decl_from_primitive!(D64, i64, u8);
+crate::macros::conversions::decl_from_primitive!(D64, i64, u16);
+crate::macros::conversions::decl_from_primitive!(D64, i64, u32);
+crate::macros::display::decl_decimal_display!(D64);
+crate::macros::overflow::decl_decimal_overflow_variants!(D64, i64, i128);
+crate::macros::num_traits::decl_decimal_num_traits_basics!(D64);
+crate::macros::sign::decl_decimal_sign_methods!(D64, i64);
+crate::macros::consts::decl_decimal_consts!(D64, i64);
+crate::macros::from_str::decl_decimal_from_str!(D64, i64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
-crate::decimal_conversions_macro::decl_cross_width_widening!(D64, i64, D32, i32);
-crate::decimal_conversions_macro::decl_cross_width_widening!(D128, i128, D32, i32);
-crate::decimal_conversions_macro::decl_cross_width_widening!(D128, i128, D64, i64);
+crate::macros::conversions::decl_cross_width_widening!(D64, i64, D32, i32);
+crate::macros::conversions::decl_cross_width_widening!(D128, i128, D32, i32);
+crate::macros::conversions::decl_cross_width_widening!(D128, i128, D64, i64);
 
 // Cross-width narrowing (fallible). D128 -> D64, D128 -> D32, D64 -> D32.
-crate::decimal_conversions_macro::decl_cross_width_narrowing!(D64, i64, D128, i128);
-crate::decimal_conversions_macro::decl_cross_width_narrowing!(D32, i32, D128, i128);
-crate::decimal_conversions_macro::decl_cross_width_narrowing!(D32, i32, D64, i64);
+crate::macros::conversions::decl_cross_width_narrowing!(D64, i64, D128, i128);
+crate::macros::conversions::decl_cross_width_narrowing!(D32, i32, D128, i128);
+crate::macros::conversions::decl_cross_width_narrowing!(D32, i32, D64, i64);
 
 /// Scale alias: `D64<0>`. 1 LSB = 1. Range ±9.2 × 10¹⁸.
 pub type D64s0 = D64<0>;

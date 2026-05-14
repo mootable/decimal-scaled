@@ -23,9 +23,9 @@ use crate::core_type::{D128, D32, D64};
 
 // The rescale / rescale_with methods are emitted by the
 // `decl_decimal_rescale!` macro (see `src/decimal_rescale_macro.rs`).
-crate::decimal_rescale_macro::decl_decimal_rescale!(D128, i128);
-crate::decimal_rescale_macro::decl_decimal_rescale!(D64, i64);
-crate::decimal_rescale_macro::decl_decimal_rescale!(D32, i32);
+crate::macros::rescale::decl_decimal_rescale!(D128, i128);
+crate::macros::rescale::decl_decimal_rescale!(D64, i64);
+crate::macros::rescale::decl_decimal_rescale!(D32, i32);
 
 #[cfg(test)]
 mod tests {

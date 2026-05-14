@@ -136,18 +136,18 @@ macro_rules! decl_eq_float {
 /// equality surface for a decimal type.
 macro_rules! decl_eq_all_integers {
     ($Type:ident) => {
-        $crate::decimal_equalities_macro::decl_eq_signed_int!($Type, i8);
-        $crate::decimal_equalities_macro::decl_eq_signed_int!($Type, i16);
-        $crate::decimal_equalities_macro::decl_eq_signed_int!($Type, i32);
-        $crate::decimal_equalities_macro::decl_eq_signed_int!($Type, i64);
-        $crate::decimal_equalities_macro::decl_eq_signed_int!($Type, isize);
-        $crate::decimal_equalities_macro::decl_eq_i128!($Type);
-        $crate::decimal_equalities_macro::decl_eq_unsigned_int!($Type, u8);
-        $crate::decimal_equalities_macro::decl_eq_unsigned_int!($Type, u16);
-        $crate::decimal_equalities_macro::decl_eq_unsigned_int!($Type, u32);
-        $crate::decimal_equalities_macro::decl_eq_unsigned_int!($Type, u64);
-        $crate::decimal_equalities_macro::decl_eq_unsigned_int!($Type, usize);
-        $crate::decimal_equalities_macro::decl_eq_u128!($Type);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i8);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i16);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i32);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i64);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, isize);
+        $crate::macros::equalities::decl_eq_i128!($Type);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u8);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u16);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u32);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u64);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, usize);
+        $crate::macros::equalities::decl_eq_u128!($Type);
     };
 }
 
