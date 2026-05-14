@@ -72,6 +72,13 @@ harness = false
 name = "all_functions"
 harness = false
 
+# Head-to-head bench of the bnum-backed `D256` vs the hand-rolled
+# `D256H`. Needs the wide tier, so it only builds with `--features wide`.
+[[bench]]
+name = "wide_handrolled_vs_bnum"
+harness = false
+required-features = ["wide"]
+
 [lints.rust]
 unused_variables = "allow"
 dead_code = "allow"
