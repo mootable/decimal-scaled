@@ -370,49 +370,9 @@ pub type D128s37 = D128<37>;
 /// N/A: constant value, no arithmetic performed.
 pub type D128s38 = D128<38>;
 
-/// Error returned by `<D128<SCALE> as FromStr>::from_str` when the input
-/// string is not a valid canonical decimal literal.
-///
-/// Each variant identifies one specific failure mode so callers can surface
-/// a precise diagnostic.
-///
-/// # Variants
-///
-/// - [`Empty`](Self::Empty): the input is empty after trimming.
-/// - [`SignOnly`](Self::SignOnly): the input is a bare `-` or `+` with no digits.
-/// - [`LeadingZero`](Self::LeadingZero): the integer part has a redundant
-///   leading zero (e.g. `01.5`). A bare `0` or `0.x` is permitted; `00`, `01`,
-///   and `01.5` are not.
-/// - [`OverlongFractional`](Self::OverlongFractional): the fractional part has
-///   more digits than `SCALE`, which would silently discard precision.
-/// - [`ScientificNotation`](Self::ScientificNotation): the input contains a
-///   scientific-notation `e` or `E` exponent. Callers that need this form must
-///   strip the exponent themselves.
-/// - [`InvalidChar`](Self::InvalidChar): the input contains a character that is
-///   not a digit, sign, or decimal point.
-/// - [`OutOfRange`](Self::OutOfRange): the parsed magnitude exceeds `D128::MAX`
-///   or `D128::MIN` after scaling by `10^SCALE`.
-/// - [`MissingDigits`](Self::MissingDigits): a decimal point has no digit on
-///   one side (e.g. `.5` or `5.`). The required form is `0.5` or `5.0`.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ParseError {
-    /// Input string is empty.
-    Empty,
-    /// Input is `-` or `+` with no following digits.
-    SignOnly,
-    /// Integer part has a redundant leading zero (e.g. `01.5`).
-    LeadingZero,
-    /// Fractional part has more digits than `SCALE`.
-    OverlongFractional,
-    /// Input uses scientific notation (`1e3`); not accepted.
-    ScientificNotation,
-    /// Input contains a character that is not a digit, sign, or dot.
-    InvalidChar,
-    /// Parsed value exceeds `D128::MAX` or `D128::MIN` after scaling.
-    OutOfRange,
-    /// Decimal point with no digit on one side (e.g. `.5` or `5.`).
-    MissingDigits,
-}
+// The `ParseError` enum lives in `src/error.rs` and is re-exported
+// from the crate root. It is not width-specific.
+pub use crate::error::ParseError;
 
 // Inherent basics + Decimal trait impl: emitted by the macro generator
 // (one invocation per width). See src/decimal_macro.rs for the macro
@@ -428,6 +388,21 @@ crate::macros::conversions::decl_from_primitive!(D128, i128, u8);
 crate::macros::conversions::decl_from_primitive!(D128, i128, u16);
 crate::macros::conversions::decl_from_primitive!(D128, i128, u32);
 crate::macros::conversions::decl_from_primitive!(D128, i128, u64);
+crate::macros::conversions::decl_try_from_i128!(D128, i128);
+crate::macros::conversions::decl_try_from_u128!(D128, i128);
+crate::macros::conversions::decl_try_from_i128!(D64, i64);
+crate::macros::conversions::decl_try_from_u128!(D64, i64);
+crate::macros::conversions::decl_try_from_i128!(D32, i32);
+crate::macros::conversions::decl_try_from_u128!(D32, i32);
+crate::macros::conversions::decl_try_from_f64!(D128, i128);
+crate::macros::conversions::decl_try_from_f32!(D128, i128);
+crate::macros::conversions::decl_try_from_f64!(D64, i64);
+crate::macros::conversions::decl_try_from_f32!(D64, i64);
+crate::macros::conversions::decl_try_from_f64!(D32, i32);
+crate::macros::conversions::decl_try_from_f32!(D32, i32);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(D128, i128, i64);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(D64, i64, i64);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(D32, i32, i32);
 
 // ---------------------------------------------------------------------
 // D32 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger

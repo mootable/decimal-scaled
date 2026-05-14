@@ -58,6 +58,48 @@ macro_rules! decl_decimal_num_traits_basics {
             }
         }
 
+        impl<const SCALE: u32> ::num_traits::CheckedAdd for $Type<SCALE> {
+            #[inline]
+            fn checked_add(&self, rhs: &Self) -> Option<Self> {
+                <$Type<SCALE>>::checked_add(*self, *rhs)
+            }
+        }
+
+        impl<const SCALE: u32> ::num_traits::CheckedSub for $Type<SCALE> {
+            #[inline]
+            fn checked_sub(&self, rhs: &Self) -> Option<Self> {
+                <$Type<SCALE>>::checked_sub(*self, *rhs)
+            }
+        }
+
+        impl<const SCALE: u32> ::num_traits::CheckedMul for $Type<SCALE> {
+            #[inline]
+            fn checked_mul(&self, rhs: &Self) -> Option<Self> {
+                <$Type<SCALE>>::checked_mul(*self, *rhs)
+            }
+        }
+
+        impl<const SCALE: u32> ::num_traits::CheckedDiv for $Type<SCALE> {
+            #[inline]
+            fn checked_div(&self, rhs: &Self) -> Option<Self> {
+                <$Type<SCALE>>::checked_div(*self, *rhs)
+            }
+        }
+
+        impl<const SCALE: u32> ::num_traits::CheckedRem for $Type<SCALE> {
+            #[inline]
+            fn checked_rem(&self, rhs: &Self) -> Option<Self> {
+                <$Type<SCALE>>::checked_rem(*self, *rhs)
+            }
+        }
+
+        impl<const SCALE: u32> ::num_traits::CheckedNeg for $Type<SCALE> {
+            #[inline]
+            fn checked_neg(&self) -> Option<Self> {
+                <$Type<SCALE>>::checked_neg(*self)
+            }
+        }
+
         impl<const SCALE: u32> ::num_traits::Signed for $Type<SCALE> {
             #[inline]
             fn abs(&self) -> Self {

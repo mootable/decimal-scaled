@@ -262,33 +262,7 @@ impl<const SCALE: u32> fmt::Binary for D128<SCALE> {
     }
 }
 
-// ──────────────────────────────────────────────────────────────────────
-// ParseError -- Display + Error
-// ──────────────────────────────────────────────────────────────────────
-
-impl fmt::Display for ParseError {
-    /// Formats the error as a short human-readable message.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let msg = match self {
-            Self::Empty => "empty input",
-            Self::SignOnly => "sign with no digits",
-            Self::LeadingZero => "redundant leading zero in integer part",
-            Self::OverlongFractional => "fractional part exceeds SCALE digits",
-            Self::ScientificNotation => "scientific notation not accepted",
-            Self::InvalidChar => "invalid character",
-            Self::OutOfRange => "value out of representable range",
-            Self::MissingDigits => "decimal point with no adjacent digits",
-        };
-        f.write_str(msg)
-    }
-}
-
-#[cfg(feature = "std")]
-impl std::error::Error for ParseError {}
+// `ParseError`'s `Display` and `Error` impls live in `src/error.rs`.
 
 // ──────────────────────────────────────────────────────────────────────
 // FromStr -- canonical decimal parser
