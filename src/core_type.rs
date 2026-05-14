@@ -419,6 +419,110 @@ pub enum ParseD128Error {
 // definition and the surface it produces.
 crate::decimal_macro::decl_decimal_basics!(D128, i128, 38);
 
+// ---------------------------------------------------------------------
+// D32 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger
+// type. SCALE = 9 fits ~21.5 with 9 decimal digits of precision; SCALE
+// = 0 covers ±2.1 × 10⁹ unscaled. Only the basics emitted in this
+// sub-phase; arithmetic / display / num_traits land incrementally.
+// ---------------------------------------------------------------------
+
+/// Scaled fixed-point decimal with 32-bit storage. See [`D128`] for the
+/// shape documentation; D32 has the same surface scaled to `i32` and
+/// `MAX_SCALE = 9`.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D32<const SCALE: u32>(pub i32);
+
+impl<const SCALE: u32> Default for D32<SCALE> {
+    #[inline]
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+crate::decimal_macro::decl_decimal_basics!(D32, i32, 9);
+
+/// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
+pub type D32s0 = D32<0>;
+/// Scale alias: `D32<1>`. 1 LSB = 10^-1. Range ±2.1 × 10⁸.
+pub type D32s1 = D32<1>;
+/// Scale alias: `D32<2>`. 1 LSB = 10^-2 (cents). Range ±2.1 × 10⁷.
+pub type D32s2 = D32<2>;
+/// Scale alias: `D32<3>`. 1 LSB = 10^-3 (mills). Range ±2.1 × 10⁶.
+pub type D32s3 = D32<3>;
+/// Scale alias: `D32<4>`. 1 LSB = 10^-4 (basis points). Range ±2.1 × 10⁵.
+pub type D32s4 = D32<4>;
+/// Scale alias: `D32<5>`. 1 LSB = 10^-5. Range ±2.1 × 10⁴.
+pub type D32s5 = D32<5>;
+/// Scale alias: `D32<6>`. 1 LSB = 10^-6 (ppm). Range ±2.1 × 10³.
+pub type D32s6 = D32<6>;
+/// Scale alias: `D32<7>`. 1 LSB = 10^-7. Range ±214.
+pub type D32s7 = D32<7>;
+/// Scale alias: `D32<8>`. 1 LSB = 10^-8 (satoshi). Range ±21.4.
+pub type D32s8 = D32<8>;
+/// Scale alias: `D32<9>`. 1 LSB = 10^-9 (nano). Range ±2.1.
+pub type D32s9 = D32<9>;
+
+// ---------------------------------------------------------------------
+// D64 — 64-bit storage, scale 0..=18. Interchange size; fits a GPR on
+// 64-bit hosts and maps cleanly to ANSI / SQL `DECIMAL(18, S)` columns.
+// ---------------------------------------------------------------------
+
+/// Scaled fixed-point decimal with 64-bit storage. See [`D128`] for the
+/// shape documentation; D64 has the same surface scaled to `i64` and
+/// `MAX_SCALE = 18`.
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D64<const SCALE: u32>(pub i64);
+
+impl<const SCALE: u32> Default for D64<SCALE> {
+    #[inline]
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+crate::decimal_macro::decl_decimal_basics!(D64, i64, 18);
+
+/// Scale alias: `D64<0>`. 1 LSB = 1. Range ±9.2 × 10¹⁸.
+pub type D64s0 = D64<0>;
+/// Scale alias: `D64<1>`. 1 LSB = 10^-1. Range ±9.2 × 10¹⁷.
+pub type D64s1 = D64<1>;
+/// Scale alias: `D64<2>`. 1 LSB = 10^-2 (cents). Range ±9.2 × 10¹⁶.
+pub type D64s2 = D64<2>;
+/// Scale alias: `D64<3>`. 1 LSB = 10^-3 (mills). Range ±9.2 × 10¹⁵.
+pub type D64s3 = D64<3>;
+/// Scale alias: `D64<4>`. 1 LSB = 10^-4 (basis points). Range ±9.2 × 10¹⁴.
+pub type D64s4 = D64<4>;
+/// Scale alias: `D64<5>`. 1 LSB = 10^-5. Range ±9.2 × 10¹³.
+pub type D64s5 = D64<5>;
+/// Scale alias: `D64<6>`. 1 LSB = 10^-6 (ppm). Range ±9.2 × 10¹².
+pub type D64s6 = D64<6>;
+/// Scale alias: `D64<7>`. 1 LSB = 10^-7. Range ±9.2 × 10¹¹.
+pub type D64s7 = D64<7>;
+/// Scale alias: `D64<8>`. 1 LSB = 10^-8 (satoshi). Range ±9.2 × 10¹⁰.
+pub type D64s8 = D64<8>;
+/// Scale alias: `D64<9>`. 1 LSB = 10^-9 (nano). Range ±9.2 × 10⁹.
+pub type D64s9 = D64<9>;
+/// Scale alias: `D64<10>`. 1 LSB = 10^-10. Range ±9.2 × 10⁸.
+pub type D64s10 = D64<10>;
+/// Scale alias: `D64<11>`. 1 LSB = 10^-11. Range ±9.2 × 10⁷.
+pub type D64s11 = D64<11>;
+/// Scale alias: `D64<12>`. 1 LSB = 10^-12 (pico). Range ±9.2 × 10⁶.
+pub type D64s12 = D64<12>;
+/// Scale alias: `D64<13>`. 1 LSB = 10^-13. Range ±9.2 × 10⁵.
+pub type D64s13 = D64<13>;
+/// Scale alias: `D64<14>`. 1 LSB = 10^-14. Range ±9.2 × 10⁴.
+pub type D64s14 = D64<14>;
+/// Scale alias: `D64<15>`. 1 LSB = 10^-15 (femto). Range ±9200.
+pub type D64s15 = D64<15>;
+/// Scale alias: `D64<16>`. 1 LSB = 10^-16. Range ±920.
+pub type D64s16 = D64<16>;
+/// Scale alias: `D64<17>`. 1 LSB = 10^-17. Range ±92.
+pub type D64s17 = D64<17>;
+/// Scale alias: `D64<18>`. 1 LSB = 10^-18 (atto). Range ±9.2.
+pub type D64s18 = D64<18>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
