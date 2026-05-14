@@ -13,8 +13,8 @@ categories = ["mathematics", "no-std", "science", "finance"]
 [features]
 default = ["std", "serde"]
 std = ["alloc"]
-alloc = []
-serde = ["dep:serde"]
+alloc = ["bnum?/alloc"]
+serde = ["dep:serde", "bnum?/serde"]
 macros = ["dep:decimal_scaled_macros"]
 # When enabled, only integer-only (strict) implementations of transcendental
 # functions (trig, log, exp, sqrt, cbrt, powf, hypot) are compiled.
@@ -42,9 +42,9 @@ experimental-floats = []
 # umbrella over all three. They pull in `bnum` for the big-integer
 # storage backend. D32 / D64 / D128 never need `bnum`.
 wide = ["d256", "d512", "d1024"]
-d256 = ["dep:bnum"]
-d512 = ["dep:bnum"]
-d1024 = ["dep:bnum"]
+d256 = ["dep:bnum", "bnum/numtraits"]
+d512 = ["dep:bnum", "bnum/numtraits"]
+d1024 = ["dep:bnum", "bnum/numtraits"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }

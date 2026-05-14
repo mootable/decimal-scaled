@@ -552,6 +552,61 @@ pub type D64s17 = D64<17>;
 /// Scale alias: `D64<18>`. 1 LSB = 10^-18 (atto). Range ±9.2.
 pub type D64s18 = D64<18>;
 
+// ---------------------------------------------------------------------
+// D256 — 256-bit storage (bnum `I256`), scale 0..=76. First of the
+// wide tier; gated behind the `d256` / `wide` Cargo features. Covers
+// the full IEEE-754 decimal128 range and gives 35-digit fractional
+// precision with integer-part headroom (see research doc §1).
+// ---------------------------------------------------------------------
+
+/// Scaled fixed-point decimal with 256-bit storage. See [`D128`] for the
+/// shape documentation; D256 has the same surface scaled to a 256-bit
+/// signed integer and `MAX_SCALE = 76`.
+///
+/// Gated behind the `d256` (or umbrella `wide`) Cargo feature. The
+/// storage backend is `bnum`'s `I256`; this is the interim backend per
+/// `research/multi_width_decimals.md` §3.
+#[cfg(any(feature = "d256", feature = "wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D256<const SCALE: u32>(pub crate::wide::I256);
+
+#[cfg(any(feature = "d256", feature = "wide"))]
+impl<const SCALE: u32> Default for D256<SCALE> {
+    #[inline]
+    fn default() -> Self {
+        Self::ZERO
+    }
+}
+
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::basics::decl_decimal_basics!(wide D256, crate::wide::I256, 76);
+
+/// Scale alias: `D256<0>`. 1 LSB = 1 (256-bit integer ledger).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s0 = D256<0>;
+/// Scale alias: `D256<2>`. 1 LSB = 10^-2 (cents).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s2 = D256<2>;
+/// Scale alias: `D256<6>`. 1 LSB = 10^-6 (ppm).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s6 = D256<6>;
+/// Scale alias: `D256<12>`. 1 LSB = 10^-12 (pico; financial standard).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s12 = D256<12>;
+/// Scale alias: `D256<18>`. 1 LSB = 10^-18 (atto).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s18 = D256<18>;
+/// Scale alias: `D256<35>`. 1 LSB = 10^-35 (matches `SCALE_REF`).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s35 = D256<35>;
+/// Scale alias: `D256<50>`. 1 LSB = 10^-50 (deep scientific precision).
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s50 = D256<50>;
+/// Scale alias: `D256<76>`. 1 LSB = 10^-76. Maximum supported scale.
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub type D256s76 = D256<76>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -827,6 +882,30 @@ mod tests {
         assert_eq!(D64s12::pi().to_bits(), 3_141_592_653_590);
         // tau at scale 12 = 6.283185307180.
         assert_eq!(D64s12::tau().to_bits(), 6_283_185_307_180);
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_basics() {
+        use crate::decimal_trait::Decimal;
+        use crate::wide::I256;
+        assert_eq!(super::D256s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
+        assert_eq!(super::D256s2::ONE.to_bits(), I256::from_str_radix("100", 10).unwrap());
+        assert_eq!(super::D256s2::MAX.to_bits(), I256::MAX);
+        assert_eq!(super::D256s2::MIN.to_bits(), I256::MIN);
+        assert_eq!(super::D256s2::multiplier(), I256::from_str_radix("100", 10).unwrap());
+        assert_eq!(super::D256s2::SCALE, 2);
+        assert_eq!(super::D256s2::ZERO.scale(), 2);
+        // SCALE = 76 multiplier is 10^76, well within 256-bit range.
+        let m76 = super::D256s76::multiplier();
+        assert_eq!(
+            m76,
+            I256::from_str_radix("10000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap()
+        );
+        assert_eq!(<super::D256s12 as Decimal>::MAX_SCALE, 76);
+        // round-trip
+        let raw = I256::from_str_radix("123456789012345678901234567890", 10).unwrap();
+        assert_eq!(super::D256s12::from_bits(raw).to_bits(), raw);
     }
 
     #[test]

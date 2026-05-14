@@ -1,12 +1,5 @@
 //! Macro-generated impls for the *basics* of every decimal width.
 //!
-//! Phase 1 of the multi-width plan introduces this macro skeleton with
-//! D128 as its only consumer. The bulk of D128's surface (arithmetic,
-//! display, num_traits, overflow variants, equalities, conversions,
-//! transcendentals) stays hand-coded in its own modules for now;
-//! incremental macro extraction of those surfaces lands as new widths
-//! join the family in Phase 3+.
-//!
 //! What this macro emits, for a given `(Type, Storage, MAX_SCALE)`:
 //!
 //! - The inherent constructor / accessor / multiplier methods.
@@ -15,18 +8,62 @@
 //! - The [`crate::decimal_trait::Decimal`] trait impl, delegating to
 //!   the inherent surface.
 //!
-//! Invoke once per width (see `core_type.rs` for the D128 invocation).
+//! Invoke once per width (see `core_type.rs` for the per-width
+//! invocations).
+//!
+//! Two front-end arms exist:
+//!
+//! - `decl_decimal_basics!(D128, i128, 38)` — *native* storage. The
+//!   storage type is a primitive signed integer that supports the
+//!   `(10 as $Storage)` literal cast and a const-fn `pow`.
+//! - `decl_decimal_basics!(wide D256, I256, 76)` — *wide* storage. The
+//!   storage type is a `bnum` fixed-width integer, which has no `as`
+//!   cast from integer literals; the `10` and `0` constants are built
+//!   via the const-fn `from_str_radix` instead.
+//!
+//! Both arms forward to a shared `@impl` arm so the bulk of the surface
+//! is defined exactly once.
 
-/// Generates the basic inherent surface and the `Decimal` trait impl
-/// for a decimal type `$Type<SCALE>` backed by `$Storage`, with the
-/// given `$max_scale`.
-///
-/// `$Storage` must be a signed integer primitive that supports
-/// `MAX`, `MIN`, and a const-fn `pow(u32)`. Today only `i128` is
-/// supplied; `i32` / `i64` follow in Phase 3, and the wide widths
-/// (`BInt<N>`) follow in Phase 5.
 macro_rules! decl_decimal_basics {
+    // Wide (bnum-backed) storage: literal `10` / `0` are constructed via
+    // the const-fn `from_str_radix` because `bnum` integers have no
+    // `as`-cast from a primitive literal.
+    (wide $Type:ident, $Storage:ty, $max_scale:literal) => {
+        $crate::macros::basics::decl_decimal_basics! {
+            @impl $Type, $Storage, $max_scale,
+            multiplier = {
+                match <$Storage>::from_str_radix("10", 10) {
+                    ::core::result::Result::Ok(v) => v,
+                    ::core::result::Result::Err(_) => {
+                        panic!("wide decimal: invalid base-10 multiplier literal")
+                    }
+                }
+                .pow(SCALE)
+            },
+            zero = {
+                match <$Storage>::from_str_radix("0", 10) {
+                    ::core::result::Result::Ok(v) => v,
+                    ::core::result::Result::Err(_) => {
+                        panic!("wide decimal: invalid zero literal")
+                    }
+                }
+            }
+        }
+    };
+
+    // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty, $max_scale:literal) => {
+        $crate::macros::basics::decl_decimal_basics! {
+            @impl $Type, $Storage, $max_scale,
+            multiplier = { (10 as $Storage).pow(SCALE) },
+            zero = { 0 }
+        }
+    };
+
+    // Shared implementation body. `$mult` is the const expression for
+    // `10^SCALE`; `$zero` is the const expression for the storage zero.
+    (@impl $Type:ident, $Storage:ty, $max_scale:literal,
+     multiplier = { $mult:expr }, zero = { $zero:expr }) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Constructs from a raw storage bit pattern.
             ///
@@ -70,7 +107,7 @@ macro_rules! decl_decimal_basics {
             /// when the const item is evaluated.
             #[inline]
             pub const fn multiplier() -> $Storage {
-                (10 as $Storage).pow(SCALE)
+                $mult
             }
 
             /// The decimal scale of this type, equal to the `SCALE`
@@ -93,7 +130,7 @@ macro_rules! decl_decimal_basics {
             /// # Precision
             ///
             /// N/A: constant value, no arithmetic performed.
-            pub const ZERO: Self = Self(0);
+            pub const ZERO: Self = Self($zero);
 
             /// The multiplicative identity. Stored as `10^SCALE` bits.
             ///

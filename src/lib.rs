@@ -81,6 +81,8 @@ mod log_exp;
 mod rescale;
 mod rounding;
 mod mg_divide;
+#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+mod wide;
 mod num_traits_impls;
 mod overflow_variants;
 mod powers;
