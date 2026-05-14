@@ -441,6 +441,7 @@ impl<const SCALE: u32> Default for D32<SCALE> {
 }
 
 crate::decimal_macro::decl_decimal_basics!(D32, i32, 9);
+crate::decimal_arithmetic_macro::decl_decimal_arithmetic!(D32, i32, i64);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -483,6 +484,7 @@ impl<const SCALE: u32> Default for D64<SCALE> {
 }
 
 crate::decimal_macro::decl_decimal_basics!(D64, i64, 18);
+crate::decimal_arithmetic_macro::decl_decimal_arithmetic!(D64, i64, i128);
 
 /// Scale alias: `D64<0>`. 1 LSB = 1. Range ±9.2 × 10¹⁸.
 pub type D64s0 = D64<0>;
@@ -631,5 +633,70 @@ mod tests {
         type D0 = super::D128<0>;
         assert_eq!(D0::multiplier(), 1_i128);
         assert_eq!(D0::ONE.to_bits(), 1_i128);
+    }
+
+    // ----- D32 / D64 sanity tests -----
+
+    #[test]
+    fn d32_basics() {
+        assert_eq!(super::D32s2::ZERO.to_bits(), 0_i32);
+        assert_eq!(super::D32s2::ONE.to_bits(), 100_i32);
+        assert_eq!(super::D32s2::MAX.to_bits(), i32::MAX);
+        assert_eq!(super::D32s2::MIN.to_bits(), i32::MIN);
+        assert_eq!(super::D32s2::multiplier(), 100_i32);
+        assert_eq!(super::D32s2::SCALE, 2);
+    }
+
+    #[test]
+    fn d64_basics() {
+        assert_eq!(super::D64s9::ZERO.to_bits(), 0_i64);
+        assert_eq!(super::D64s9::ONE.to_bits(), 1_000_000_000_i64);
+        assert_eq!(super::D64s9::multiplier(), 1_000_000_000_i64);
+        assert_eq!(super::D64s9::SCALE, 9);
+    }
+
+    #[test]
+    fn d32_arithmetic() {
+        let a = super::D32s2::from_bits(150); // 1.50
+        let b = super::D32s2::from_bits(250); // 2.50
+        assert_eq!((a + b).to_bits(), 400);
+        assert_eq!((b - a).to_bits(), 100);
+        assert_eq!((-a).to_bits(), -150);
+
+        let x = super::D32s2::from_bits(200); // 2.00
+        let y = super::D32s2::from_bits(300); // 3.00
+        assert_eq!((x * y).to_bits(), 600); // 6.00
+        assert_eq!((y / x).to_bits(), 150); // 1.50
+        assert_eq!((y % x).to_bits(), 100); // 1.00
+    }
+
+    #[test]
+    fn d64_arithmetic() {
+        let a = super::D64s9::from_bits(1_500_000_000); // 1.5
+        let b = super::D64s9::from_bits(2_500_000_000); // 2.5
+        assert_eq!((a + b).to_bits(), 4_000_000_000);
+        assert_eq!((b - a).to_bits(), 1_000_000_000);
+        assert_eq!((-a).to_bits(), -1_500_000_000);
+
+        let x = super::D64s9::from_bits(2_000_000_000); // 2.0
+        let y = super::D64s9::from_bits(3_000_000_000); // 3.0
+        assert_eq!((x * y).to_bits(), 6_000_000_000);
+        assert_eq!((y / x).to_bits(), 1_500_000_000);
+        assert_eq!((y % x).to_bits(), 1_000_000_000);
+    }
+
+    #[test]
+    fn d32_op_assign() {
+        let mut v = super::D32s2::from_bits(100);
+        v += super::D32s2::from_bits(50);
+        assert_eq!(v.to_bits(), 150);
+        v -= super::D32s2::from_bits(25);
+        assert_eq!(v.to_bits(), 125);
+        v *= super::D32s2::from_bits(200); // *2.00
+        assert_eq!(v.to_bits(), 250);
+        v /= super::D32s2::from_bits(200); // /2.00
+        assert_eq!(v.to_bits(), 125);
+        v %= super::D32s2::from_bits(100);
+        assert_eq!(v.to_bits(), 25);
     }
 }
