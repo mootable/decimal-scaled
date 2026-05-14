@@ -647,6 +647,13 @@ crate::macros::bitwise::decl_decimal_bitwise!(wide D256, crate::wide::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::int_methods::decl_decimal_int_methods!(wide D256, crate::wide::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
+crate::wide_roots::decl_wide_roots!(
+    D256,
+    crate::wide::I256,
+    ::bnum::types::I512,
+    ::bnum::types::I1024
+);
+#[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D256, crate::wide::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i8);
@@ -769,6 +776,13 @@ crate::macros::bitwise::decl_decimal_bitwise!(wide D512, crate::wide::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::int_methods::decl_decimal_int_methods!(wide D512, crate::wide::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
+crate::wide_roots::decl_wide_roots!(
+    D512,
+    crate::wide::I512,
+    ::bnum::types::I1024,
+    ::bnum::types::I2048
+);
+#[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D512, crate::wide::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i8);
@@ -877,6 +891,13 @@ crate::macros::helpers::decl_decimal_helpers!(wide D1024);
 crate::macros::bitwise::decl_decimal_bitwise!(wide D1024, crate::wide::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::int_methods::decl_decimal_int_methods!(wide D1024, crate::wide::I1024);
+#[cfg(any(feature = "d1024", feature = "wide"))]
+crate::wide_roots::decl_wide_roots!(
+    D1024,
+    crate::wide::I1024,
+    ::bnum::types::I2048,
+    ::bnum::types::I4096
+);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D1024, crate::wide::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]

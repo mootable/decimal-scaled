@@ -86,6 +86,8 @@ mod wide_int;
 mod wide;
 #[cfg(any(feature = "d256", feature = "wide"))]
 mod hand_decimal;
+#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+mod wide_roots;
 mod num_traits_impls;
 mod overflow_variants;
 mod powers;
