@@ -75,6 +75,8 @@ mod display;
 mod equalities;
 mod fixed_compat;
 mod log_exp;
+mod rescale;
+mod rounding;
 mod mg_divide;
 mod num_traits_impls;
 mod overflow_variants;
@@ -86,6 +88,7 @@ mod trig;
 
 pub use consts::DecimalConsts;
 pub use conversions::D128ConvertError;
+pub use rounding::RoundingMode;
 pub use core_type::{
     D128, D128s0, D128s1, D128s2, D128s3, D128s4, D128s5, D128s6, D128s7, D128s8, D128s9, D128s10,
     D128s11, D128s12, D128s13, D128s14, D128s15, D128s16, D128s17, D128s18, D128s19, D128s20,
