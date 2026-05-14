@@ -24,3 +24,4 @@ pub(crate) mod overflow;
 pub(crate) mod rescale;
 pub(crate) mod sign;
 pub(crate) mod storage_formatters;
+pub(crate) mod strict_transcendentals;

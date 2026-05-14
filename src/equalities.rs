@@ -45,17 +45,17 @@ crate::macros::equalities::decl_eq_all_integers!(D32);
 // `strict` is off. Gate the float impls accordingly. Float impls are
 // emitted for D128 only at present — the D32/D64 conversion bridge
 // covers will follow in a later commit.
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D128, f32);
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D128, f64);
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D64, f32);
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D64, f64);
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D32, f32);
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D32, f64);
 
 #[cfg(test)]
@@ -133,7 +133,7 @@ mod tests {
 
     // --- floats -----------------------------------------------------------
 
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(feature = "std")]
     #[test]
     fn eq_float_exact_representable() {
         // 1.5 is exactly representable in both f64 and D128s12.
@@ -143,7 +143,7 @@ mod tests {
         assert!(d == 1.5_f32);
     }
 
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(feature = "std")]
     #[test]
     fn eq_float_zero_and_one() {
         assert!(D128s12::ZERO == 0.0_f64);
@@ -152,14 +152,14 @@ mod tests {
         assert!(D128s12::ONE == 1.0_f32);
     }
 
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(feature = "std")]
     #[test]
     fn eq_float_nan_is_false() {
         assert!(!(D128s12::ZERO == f64::NAN));
         assert!(!(D128s12::ZERO == f32::NAN));
     }
 
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(feature = "std")]
     #[test]
     fn eq_float_infinity_is_false() {
         assert!(!(D128s12::MAX == f64::INFINITY));
@@ -167,7 +167,7 @@ mod tests {
         assert!(!(D128s12::MAX == f32::INFINITY));
     }
 
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(feature = "std")]
     #[test]
     fn eq_float_negative() {
         let d = D128s12::from_bits(-2_500_000_000_000);

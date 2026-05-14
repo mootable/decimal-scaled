@@ -109,7 +109,7 @@ macro_rules! decl_eq_u128 {
 ///
 /// Only available when the lossy f64 bridge is present (i.e. not
 /// in `--features strict` mode).
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 macro_rules! decl_eq_float {
     ($Type:ident, $Src:ty) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
@@ -157,5 +157,5 @@ pub(crate) use decl_eq_signed_int;
 pub(crate) use decl_eq_u128;
 pub(crate) use decl_eq_unsigned_int;
 
-#[cfg(all(feature = "std", not(feature = "strict")))]
+#[cfg(feature = "std")]
 pub(crate) use decl_eq_float;

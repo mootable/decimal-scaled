@@ -21,7 +21,7 @@ macro_rules! decl_decimal_float_bridge {
             /// mode (HalfToEven, or whichever a `rounding-*` Cargo
             /// feature selects). NaN -> ZERO, +Infinity -> MAX,
             /// -Infinity -> MIN, out-of-range -> saturate by sign.
-            #[cfg(all(feature = "std", not(feature = "strict")))]
+            #[cfg(feature = "std")]
             #[inline]
             #[must_use]
             pub fn from_f64_lossy(value: f64) -> Self {
@@ -30,7 +30,7 @@ macro_rules! decl_decimal_float_bridge {
 
             /// Constructs from an `f64` using the supplied rounding
             /// mode. Saturation policy as in [`Self::from_f64_lossy`].
-            #[cfg(all(feature = "std", not(feature = "strict")))]
+            #[cfg(feature = "std")]
             #[inline]
             #[must_use]
             pub fn from_f64_lossy_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
@@ -69,7 +69,7 @@ macro_rules! decl_decimal_float_bridge {
             }
 
             /// Converts to `f64` by dividing the raw storage by `10^SCALE`.
-            #[cfg(all(feature = "std", not(feature = "strict")))]
+            #[cfg(feature = "std")]
             #[inline]
             #[must_use]
             pub fn to_f64_lossy(self) -> f64 {
@@ -77,7 +77,7 @@ macro_rules! decl_decimal_float_bridge {
             }
 
             /// Converts to `f32` via `f64`, then narrows.
-            #[cfg(all(feature = "std", not(feature = "strict")))]
+            #[cfg(feature = "std")]
             #[inline]
             #[must_use]
             pub fn to_f32_lossy(self) -> f32 {
