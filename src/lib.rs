@@ -71,6 +71,7 @@ mod bitwise;
 mod consts;
 mod conversions;
 mod core_type;
+mod decimal_macro;
 mod decimal_trait;
 mod display;
 mod equalities;

@@ -22,8 +22,6 @@
 //! aliases like `D128s12`) is the canonical surface. Reach for
 //! `Decimal` only when writing code that must work across widths.
 
-use crate::core_type::D128;
-
 /// A scaled fixed-point decimal type with a compile-time `SCALE` and a
 /// fixed-width integer `Storage`.
 ///
@@ -84,36 +82,9 @@ pub trait Decimal: Copy + PartialEq + Eq {
     fn scale(self) -> u32;
 }
 
-impl<const SCALE: u32> Decimal for D128<SCALE> {
-    type Storage = i128;
-
-    const SCALE: u32 = SCALE;
-    const MAX_SCALE: u32 = 38;
-    const ZERO: Self = D128::<SCALE>::ZERO;
-    const ONE: Self = D128::<SCALE>::ONE;
-    const MAX: Self = D128::<SCALE>::MAX;
-    const MIN: Self = D128::<SCALE>::MIN;
-
-    #[inline]
-    fn multiplier() -> i128 {
-        D128::<SCALE>::multiplier()
-    }
-
-    #[inline]
-    fn from_bits(raw: i128) -> Self {
-        D128::<SCALE>::from_bits(raw)
-    }
-
-    #[inline]
-    fn to_bits(self) -> i128 {
-        self.0
-    }
-
-    #[inline]
-    fn scale(self) -> u32 {
-        SCALE
-    }
-}
+// The `Decimal` trait impl for `D128<SCALE>` is emitted by the
+// `decl_decimal_basics!` macro invocation in `core_type.rs`. Future
+// widths' impls are emitted by the same macro.
 
 #[cfg(test)]
 mod tests {
