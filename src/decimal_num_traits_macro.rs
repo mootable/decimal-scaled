@@ -43,11 +43,47 @@ macro_rules! decl_decimal_num_traits_basics {
             }
         }
 
-        // `Signed` requires `Num` as a supertrait; `Num` requires
-        // `FromStrRadixErr` and `from_str_radix`, which in turn need
-        // `FromStr`. Once `FromStr` is added for $Type, `Num` and
-        // `Signed` can be emitted by this macro. Tracked for a later
-        // sub-phase alongside `FromStr`.
+        impl<const SCALE: u32> ::num_traits::Num for $Type<SCALE> {
+            type FromStrRadixErr = $crate::core_type::ParseD128Error;
+            fn from_str_radix(
+                s: &str,
+                radix: u32,
+            ) -> ::core::result::Result<Self, Self::FromStrRadixErr> {
+                if radix != 10 {
+                    return ::core::result::Result::Err(
+                        $crate::core_type::ParseD128Error::InvalidChar,
+                    );
+                }
+                <Self as ::core::str::FromStr>::from_str(s)
+            }
+        }
+
+        impl<const SCALE: u32> ::num_traits::Signed for $Type<SCALE> {
+            #[inline]
+            fn abs(&self) -> Self {
+                <$Type<SCALE>>::abs(*self)
+            }
+            #[inline]
+            fn abs_sub(&self, other: &Self) -> Self {
+                if self <= other {
+                    Self::ZERO
+                } else {
+                    *self - *other
+                }
+            }
+            #[inline]
+            fn signum(&self) -> Self {
+                <$Type<SCALE>>::signum(*self)
+            }
+            #[inline]
+            fn is_positive(&self) -> bool {
+                <$Type<SCALE>>::is_positive(*self)
+            }
+            #[inline]
+            fn is_negative(&self) -> bool {
+                <$Type<SCALE>>::is_negative(*self)
+            }
+        }
     };
 }
 
