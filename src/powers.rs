@@ -333,11 +333,72 @@ impl<const SCALE: u32> D128<SCALE> {
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
     /// ```
-    #[cfg(feature = "std")]
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[inline]
     #[must_use]
     pub fn cbrt(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().cbrt())
+    }
+
+    /// Returns the cube root of `self` via Newton iteration on
+    /// `f(y) = y³ - x`. Defined for all reals: the sign of the input is
+    /// preserved (`cbrt(-8) = -2`).
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only Newton iteration. Convergence is quadratic;
+    /// settles within ~50 iterations. Precision is roughly Phase 2A
+    /// (~10 ULP at D128s12).
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn cbrt(self) -> Self {
+        if self.to_bits() == 0 {
+            return Self::ZERO;
+        }
+        // Newton iteration on y³ = x: y_{n+1} = (2*y_n + x / y_n²) / 3.
+        // For negative inputs, work on the absolute value and restore the
+        // sign at the end (cube root is sign-symmetric).
+        let neg = self.to_bits() < 0;
+        let mag = if neg {
+            Self::from_bits(self.to_bits().wrapping_neg())
+        } else {
+            self
+        };
+        let one = Self::ONE;
+        let mut y = if mag >= one { mag } else { one };
+        let mut prev_bits: i128 = 0;
+        for _ in 0..100 {
+            let y_squared = y * y;
+            if y_squared.to_bits() == 0 {
+                break;
+            }
+            let quotient = mag / y_squared;
+            // y_new = (2*y + quotient) / 3 in D128 arithmetic. Because
+            // `2*y + quotient` and `3` (as raw integer) both leave the
+            // multiplier factored consistently, the per-bits divide by 3
+            // is the right operation.
+            let y_new_bits = (y
+                .to_bits()
+                .saturating_mul(2)
+                .saturating_add(quotient.to_bits()))
+                / 3;
+            if y_new_bits == y.to_bits() || y_new_bits == prev_bits {
+                let result = Self::from_bits(y_new_bits);
+                return if neg {
+                    Self::from_bits(result.to_bits().wrapping_neg())
+                } else {
+                    result
+                };
+            }
+            prev_bits = y.to_bits();
+            y = Self::from_bits(y_new_bits);
+        }
+        if neg {
+            Self::from_bits(y.to_bits().wrapping_neg())
+        } else {
+            y
+        }
     }
 
     // Integer power variant family.
