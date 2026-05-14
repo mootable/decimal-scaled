@@ -477,51 +477,6 @@ impl<const SCALE: u32> D128<SCALE> {
         Self::from(value)
     }
 
-    /// Constructs a `D128` from an `f64`, saturating on non-finite or
-    /// out-of-range inputs.
-    ///
-    /// Multiplies `value` by `10^SCALE` and truncates to `i128`. Non-finite
-    /// and out-of-range inputs are handled as follows:
-    ///
-    /// - `NaN` returns `D128::ZERO` (deterministic, no panic).
-    /// - `+inf` or any finite value above the representable range returns `D128::MAX`.
-    /// - `-inf` or any finite value below the representable range returns `D128::MIN`.
-    ///
-    /// Use [`TryFrom<f64>`] when you want an error instead of saturation.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f32 or f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// assert_eq!(D128s12::from_f64_lossy(1.0), D128s12::ONE);
-    /// assert_eq!(D128s12::from_f64_lossy(f64::NAN), D128s12::ZERO);
-    /// assert_eq!(D128s12::from_f64_lossy(f64::INFINITY), D128s12::MAX);
-    /// assert_eq!(D128s12::from_f64_lossy(f64::NEG_INFINITY), D128s12::MIN);
-    /// ```
-    pub fn from_f64_lossy(value: f64) -> Self {
-        if value.is_nan() {
-            return Self::ZERO;
-        }
-        if value.is_infinite() {
-            return if value > 0.0 { Self::MAX } else { Self::MIN };
-        }
-        let scaled = value * (Self::multiplier() as f64);
-        const I128_MAX_F64: f64 = i128::MAX as f64;
-        const I128_MIN_F64: f64 = i128::MIN as f64;
-        if scaled >= I128_MAX_F64 {
-            return Self::MAX;
-        }
-        if scaled < I128_MIN_F64 {
-            return Self::MIN;
-        }
-        Self(scaled as i128)
-    }
-
     /// Converts to `i64` by truncating the fractional part toward zero.
     ///
     /// The integer part is `self.0 / 10^SCALE`. If that value exceeds
@@ -559,52 +514,12 @@ impl<const SCALE: u32> D128<SCALE> {
         }
     }
 
-    /// Converts to `f64` by dividing the raw storage by `10^SCALE`.
-    ///
-    /// f64 has a 53-bit mantissa, so large or precision-dense `D128` values
-    /// will round. The division is performed as `(self.0 as f64) / multiplier`
-    /// to keep as much precision as f64 allows.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f32 or f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// assert_eq!(D128s12::ZERO.to_f64_lossy(), 0.0);
-    /// assert_eq!(D128s12::ONE.to_f64_lossy(), 1.0);
-    /// ```
-    #[inline]
-    pub fn to_f64_lossy(self) -> f64 {
-        (self.0 as f64) / (Self::multiplier() as f64)
-    }
-
-    /// Converts to `f32` via `f64`, then narrows to `f32`.
-    ///
-    /// f32 has only a 24-bit mantissa, making this lossier than
-    /// [`Self::to_f64_lossy`]. The `f64` intermediate step retains the
-    /// best precision available before the final narrowing cast.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f32 or f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// assert_eq!(D128s12::ZERO.to_f32_lossy(), 0.0_f32);
-    /// assert_eq!(D128s12::ONE.to_f32_lossy(), 1.0_f32);
-    /// ```
-    #[inline]
-    pub fn to_f32_lossy(self) -> f32 {
-        self.to_f64_lossy() as f32
-    }
 }
+
+// `from_f64_lossy` / `to_f64_lossy` / `to_f32_lossy` are emitted by the
+// shared `decl_decimal_float_bridge!` macro invoked in `core_type.rs`,
+// so D128 picks up the same rounding-mode-aware implementation as
+// D32 / D64.
 
 #[cfg(test)]
 mod tests {

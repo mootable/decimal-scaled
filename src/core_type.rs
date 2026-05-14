@@ -419,6 +419,7 @@ pub enum ParseD128Error {
 // definition and the surface it produces.
 crate::macros::basics::decl_decimal_basics!(D128, i128, 38);
 crate::macros::display::decl_decimal_display!(D128);
+crate::macros::float_bridge::decl_decimal_float_bridge!(D128, i128);
 
 // ---------------------------------------------------------------------
 // D32 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger

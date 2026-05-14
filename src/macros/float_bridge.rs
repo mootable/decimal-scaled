@@ -69,15 +69,15 @@ macro_rules! decl_decimal_float_bridge {
             }
 
             /// Converts to `f64` by dividing the raw storage by `10^SCALE`.
-            #[cfg(feature = "std")]
+            /// Available in `no_std` because the `as f64` cast and float
+            /// division are part of `core`.
             #[inline]
             #[must_use]
             pub fn to_f64_lossy(self) -> f64 {
                 (self.0 as f64) / (Self::multiplier() as f64)
             }
 
-            /// Converts to `f32` via `f64`, then narrows.
-            #[cfg(feature = "std")]
+            /// Converts to `f32` via `f64`, then narrows. `no_std`-safe.
             #[inline]
             #[must_use]
             pub fn to_f32_lossy(self) -> f32 {
