@@ -194,3 +194,54 @@ fn six_digit_micro() {
     let v = d128!(1.234_567, scale 6);
     assert_eq!(v, D128s6::from_bits(1_234_567));
 }
+
+// --- Inline expressions ---------------------------------------------
+
+#[test]
+fn expression_simple_arithmetic() {
+    let v = d128!(10 * 12 + 3, scale 0);
+    assert_eq!(v, D128s0::from_bits(123));
+}
+
+#[test]
+fn expression_with_scale_factor() {
+    // Scale 4 means each input unit becomes 10_000 bits.
+    let v = d128!(5, scale 4);
+    assert_eq!(v, D128::<4>::from_bits(50_000));
+}
+
+#[test]
+fn expression_with_variable() {
+    let x: i128 = 42;
+    let v = d128!(x, scale 2);
+    assert_eq!(v, D128s2::from_bits(4_200));
+}
+
+#[test]
+fn expression_with_const() {
+    const N: i128 = 100;
+    let v = d128!(N + 23, scale 2);
+    assert_eq!(v, D128s2::from_bits(12_300));
+}
+
+#[test]
+fn expression_function_call() {
+    fn produce() -> i128 {
+        7
+    }
+    let v = d128!(produce() * 2, scale 0);
+    assert_eq!(v, D128s0::from_bits(14));
+}
+
+#[test]
+fn expression_negative_result() {
+    let v = d128!(0 - 5, scale 2);
+    assert_eq!(v, D128s2::from_bits(-500));
+}
+
+#[test]
+fn expression_const_context_works() {
+    const N: i128 = 42;
+    const V: D128s2 = d128!(N * 3, scale 2);
+    assert_eq!(V, D128s2::from_bits(12_600));
+}
