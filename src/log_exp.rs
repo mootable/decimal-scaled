@@ -280,22 +280,86 @@ impl<const SCALE: u32> D128<SCALE> {
 
     /// Returns `e^self` (natural exponential).
     ///
+    /// # Algorithm
+    ///
+    /// Range reduction `x = k * ln(2) + r` with `|r| ≤ ln(2)/2 ≈ 0.347`,
+    /// then a Taylor series `exp(r) = 1 + r + r²/2! + r³/3! + ...` on the
+    /// reduced remainder. Reassembly is `exp(x) = 2^k * exp(r)`, applied
+    /// via a left- or right-shift of the storage bits.
+    ///
     /// # Precision
     ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    /// Strict: all arithmetic is integer-only. The series converges
+    /// quickly because `|r|` is bounded by `ln(2)/2`. Result accuracy
+    /// is within roughly ±10 ULPs at `D128s12` and degrades at higher
+    /// SCALE for the same reasons as [`Self::ln`].
     ///
-    /// # Examples
+    /// # Panics
     ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// // exp(0) == 1 (f64::exp(0.0) == 1.0 exactly).
-    /// assert_eq!(D128s12::ZERO.exp(), D128s12::ONE);
-    /// ```
+    /// Panics if the result overflows D128's representable range.
+    /// At `D128s12` this happens for `self.to_f64_lossy()` greater than
+    /// roughly `60`.
     #[cfg(feature = "strict")]
-    #[inline]
     #[must_use]
     pub fn exp(self) -> Self {
-        todo!("strict: integer-only exp not yet implemented")
+        let one = Self::ONE;
+        if self.to_bits() == 0 {
+            return one;
+        }
+        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
+
+        // x = k * ln(2) + r, |r| <= ln(2)/2.
+        let q = self / ln_2;
+        let half_bits = one.to_bits() >> 1;
+        let q_with_half = if q.to_bits() >= 0 {
+            q.to_bits().saturating_add(half_bits)
+        } else {
+            q.to_bits().saturating_sub(half_bits)
+        };
+        let k = q_with_half / one.to_bits();
+        let k_ln_2_bits = match k.checked_mul(ln_2.to_bits()) {
+            Some(v) => v,
+            None => panic!("D128::exp: argument out of range"),
+        };
+        let r = Self::from_bits(self.to_bits() - k_ln_2_bits);
+
+        // Taylor series for exp(r): 1 + r + r²/2! + r³/3! + ...
+        // At each step `t` represents r^n / n!.
+        let mut sum_bits: i128 = one.to_bits();
+        let mut t = one;
+        let mut n: i128 = 1;
+        loop {
+            t = t * r;
+            let term_bits = t.to_bits() / n;
+            if term_bits == 0 {
+                break;
+            }
+            sum_bits = sum_bits.saturating_add(term_bits);
+            t = Self::from_bits(term_bits);
+            n += 1;
+            if n > 100 {
+                break;
+            }
+        }
+
+        // exp(x) = 2^k * exp(r); apply via bit-shift on the raw storage.
+        let result_bits = if k > 0 {
+            let shift = k as u32;
+            if shift >= 128 || sum_bits.checked_shl(shift).is_none() {
+                panic!("D128::exp: result overflows D128 range");
+            }
+            sum_bits << shift
+        } else if k < 0 {
+            let shift = (-k) as u32;
+            if shift >= 128 {
+                0
+            } else {
+                sum_bits >> shift
+            }
+        } else {
+            sum_bits
+        };
+        Self::from_bits(result_bits)
     }
 
     /// Returns `e^self` (natural exponential).
@@ -323,22 +387,16 @@ impl<const SCALE: u32> D128<SCALE> {
 
     /// Returns `2^self` (base-2 exponential).
     ///
-    /// # Precision
+    /// Computed as `exp(self * ln(2))`.
     ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
+    /// # Panics
     ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// // exp2(0) == 1 (f64::exp2(0.0) == 1.0 exactly).
-    /// assert_eq!(D128s12::ZERO.exp2(), D128s12::ONE);
-    /// ```
+    /// Panics if the result overflows D128's representable range.
     #[cfg(feature = "strict")]
-    #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
-        todo!("strict: integer-only exp2 not yet implemented")
+        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
+        (self * ln_2).exp()
     }
 
     /// Returns `2^self` (base-2 exponential).
@@ -539,6 +597,82 @@ mod strict_tests {
         let x = D128s12::from_bits(5_000_000_000_000);
         let one = D128s12::ONE;
         let _ = x.log(one);
+    }
+
+    // exp / exp2: tolerance accounts for Taylor truncation, 2^k bit-shift
+    // exactness, and the range-reduction rounding step. ~20 LSB at D128s12.
+    const EXP_TOLERANCE_LSB: i128 = 20;
+
+    /// exp(0) == 1 exactly.
+    #[test]
+    fn exp_of_zero_is_one() {
+        assert_eq!(D128s12::ZERO.exp(), D128s12::ONE);
+    }
+
+    /// exp(1) ~= e.
+    #[test]
+    fn exp_of_one_is_e() {
+        let result = D128s12::ONE.exp();
+        // e ~= 2.718281828459 at D128s12.
+        assert!(
+            within(result, 2_718_281_828_459, EXP_TOLERANCE_LSB),
+            "exp(1) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// exp(ln(2)) ~= 2.
+    #[test]
+    fn exp_of_ln_2_is_two() {
+        let ln_2 = D128s12::from_bits(693_147_180_560);
+        let result = ln_2.exp();
+        assert!(
+            within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
+            "exp(ln 2) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// exp(-1) ~= 1/e ~= 0.367879441171.
+    #[test]
+    fn exp_of_negative_one_is_reciprocal_e() {
+        let neg_one = D128s12::from_bits(-1_000_000_000_000);
+        let result = neg_one.exp();
+        // 1/e ~= 0.367879441171 at D128s12 -> bits ~= 367_879_441_171.
+        assert!(
+            within(result, 367_879_441_171, EXP_TOLERANCE_LSB),
+            "exp(-1) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// exp2(0) == 1 exactly.
+    #[test]
+    fn exp2_of_zero_is_one() {
+        assert_eq!(D128s12::ZERO.exp2(), D128s12::ONE);
+    }
+
+    /// exp2(1) ~= 2.
+    #[test]
+    fn exp2_of_one_is_two() {
+        let result = D128s12::ONE.exp2();
+        assert!(
+            within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
+            "exp2(1) bits = {}",
+            result.to_bits()
+        );
+    }
+
+    /// exp2(10) ~= 1024.
+    #[test]
+    fn exp2_of_ten_is_1024() {
+        let ten = D128s12::from_bits(10_000_000_000_000);
+        let result = ten.exp2();
+        assert!(
+            within(result, 1024_000_000_000_000, EXP_TOLERANCE_LSB * 10),
+            "exp2(10) bits = {}",
+            result.to_bits()
+        );
     }
 }
 
