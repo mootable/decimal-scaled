@@ -413,6 +413,10 @@ crate::macros::rounding_methods::decl_decimal_rounding_methods!(D128);
 // The mul / div variants stay hand-coded in `src/overflow_variants.rs`
 // because they route through the type-specific `mg_divide` path.
 crate::macros::overflow::decl_decimal_overflow_variants!(@common D128, i128);
+// Add / Sub / Neg / Rem operator impls (and their `*Assign` forms): the
+// arithmetic macro's shared `@common` arm. Mul / Div stay hand-coded in
+// `src/arithmetic.rs` (the `mg_divide` 256-bit-widening path).
+crate::macros::arithmetic::decl_decimal_arithmetic!(@common D128, i128);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D64, i64, i64);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D32, i32, i32);
 
