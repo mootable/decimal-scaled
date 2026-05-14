@@ -73,6 +73,7 @@ mod conversions;
 mod core_type;
 mod decimal_arithmetic_macro;
 mod decimal_conversions_macro;
+mod decimal_display_macro;
 mod decimal_macro;
 mod decimal_trait;
 mod display;

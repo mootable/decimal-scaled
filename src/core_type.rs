@@ -418,6 +418,7 @@ pub enum ParseD128Error {
 // (one invocation per width). See src/decimal_macro.rs for the macro
 // definition and the surface it produces.
 crate::decimal_macro::decl_decimal_basics!(D128, i128, 38);
+crate::decimal_display_macro::decl_decimal_display!(D128);
 
 // ---------------------------------------------------------------------
 // D32 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger
@@ -446,6 +447,7 @@ crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i8);
 crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, i16);
 crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u8);
 crate::decimal_conversions_macro::decl_from_primitive!(D32, i32, u16);
+crate::decimal_display_macro::decl_decimal_display!(D32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -495,6 +497,7 @@ crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, i32);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u8);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u16);
 crate::decimal_conversions_macro::decl_from_primitive!(D64, i64, u32);
+crate::decimal_display_macro::decl_decimal_display!(D64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::decimal_conversions_macro::decl_cross_width_widening!(D64, i64, D32, i32);
@@ -703,6 +706,34 @@ mod tests {
         assert_eq!((x * y).to_bits(), 6_000_000_000);
         assert_eq!((y / x).to_bits(), 1_500_000_000);
         assert_eq!((y % x).to_bits(), 1_000_000_000);
+    }
+
+    #[test]
+    fn d32_display() {
+        let v: super::D32s2 = super::D32s2::from_bits(150); // 1.50
+        let s = alloc::format!("{}", v);
+        assert_eq!(s, "1.50");
+        let neg: super::D32s2 = super::D32s2::from_bits(-2050); // -20.50
+        assert_eq!(alloc::format!("{}", neg), "-20.50");
+        let zero: super::D32s2 = super::D32s2::ZERO;
+        assert_eq!(alloc::format!("{}", zero), "0.00");
+        let int_only: super::D32s0 = super::D32s0::from_bits(42);
+        assert_eq!(alloc::format!("{}", int_only), "42");
+    }
+
+    #[test]
+    fn d64_display() {
+        let v: super::D64s9 = super::D64s9::from_bits(1_500_000_000); // 1.500000000
+        assert_eq!(alloc::format!("{}", v), "1.500000000");
+        let neg: super::D64s9 = super::D64s9::from_bits(-1_500_000_000);
+        assert_eq!(alloc::format!("{}", neg), "-1.500000000");
+    }
+
+    #[test]
+    fn d32_debug() {
+        let v: super::D32s2 = super::D32s2::from_bits(150);
+        let s = alloc::format!("{:?}", v);
+        assert_eq!(s, "D32<2>(1.50)");
     }
 
     #[test]

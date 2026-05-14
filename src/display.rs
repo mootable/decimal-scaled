@@ -54,80 +54,10 @@ use crate::core_type::{ParseD128Error, D128};
 extern crate alloc;
 
 // ──────────────────────────────────────────────────────────────────────
-// Display -- canonical decimal string
+// Display and Debug are emitted by the `decl_decimal_display!` macro
+// in `core_type.rs` (see `src/decimal_display_macro.rs`). The macro
+// handles all widths uniformly.
 // ──────────────────────────────────────────────────────────────────────
-
-impl<const SCALE: u32> fmt::Display for D128<SCALE> {
-    /// Formats the value as a canonical decimal string.
-    ///
-    /// Always emits exactly `SCALE` fractional digits. The integer and
-    /// fractional parts are derived from integer division of the unsigned
-    /// magnitude, so `i128::MIN` (whose absolute value overflows `i128`)
-    /// is handled correctly via `unsigned_abs`.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// let v = D128s12::from_bits(1_500_000_000_000);
-    /// assert_eq!(v.to_string(), "1.500000000000");
-    ///
-    /// let neg = D128s12::from_bits(-1_500_000_000_000);
-    /// assert_eq!(neg.to_string(), "-1.500000000000");
-    /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        let raw = self.0;
-        let negative = raw < 0;
-        // `unsigned_abs` is the only correct way to get |i128::MIN| as
-        // a u128; `i128::abs` would panic on MIN.
-        let mag: u128 = raw.unsigned_abs();
-        let multiplier: u128 = 10u128.pow(SCALE);
-        let int_part = mag / multiplier;
-        let frac_part = mag % multiplier;
-
-        if negative {
-            f.write_str("-")?;
-        }
-        // SCALE = 0: no fractional part and no decimal point.
-        if SCALE == 0 {
-            return write!(f, "{int_part}");
-        }
-        let scale_usize = SCALE as usize;
-        write!(f, "{int_part}.{frac_part:0>width$}", width = scale_usize)
-    }
-}
-
-// ──────────────────────────────────────────────────────────────────────
-// Debug -- Display + SCALE annotation
-// ──────────────────────────────────────────────────────────────────────
-
-impl<const SCALE: u32> fmt::Debug for D128<SCALE> {
-    /// Formats as `D128<SCALE>(<canonical decimal>)`.
-    ///
-    /// Delegates to [`fmt::Display`] so the output shows the human-readable
-    /// decimal value rather than the raw `i128` storage.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Examples
-    ///
-    /// ```
-    /// use decimal_scaled::D128s12;
-    ///
-    /// let v = D128s12::from_bits(1_500_000_000_000);
-    /// assert_eq!(format!("{v:?}"), "D128<12>(1.500000000000)");
-    /// ```
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        write!(f, "D128<{SCALE}>({self})")
-    }
-}
 
 // ──────────────────────────────────────────────────────────────────────
 // LowerExp / UpperExp -- scientific notation
