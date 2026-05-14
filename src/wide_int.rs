@@ -92,30 +92,80 @@ pub(crate) fn mul_u256(a: U256, b: U256) -> U512 {
     [r0, r1, r2, r3]
 }
 
+/// Bit length of a 512-bit value (`0` for zero, else `floor(log2)+1`).
+#[inline]
+fn bitlen_u512(n: U512) -> u32 {
+    if n[3] != 0 {
+        512 - n[3].leading_zeros()
+    } else if n[2] != 0 {
+        384 - n[2].leading_zeros()
+    } else if n[1] != 0 {
+        256 - n[1].leading_zeros()
+    } else {
+        128 - n[0].leading_zeros()
+    }
+}
+
+/// `n << shift` for a 512-bit value (`shift < 512`).
+#[inline]
+fn shl_u512(n: U512, shift: u32) -> U512 {
+    if shift == 0 {
+        return n;
+    }
+    let limb = (shift / 128) as usize;
+    let bit = shift % 128;
+    let mut out = [0u128; 4];
+    if bit == 0 {
+        for i in (limb..4).rev() {
+            out[i] = n[i - limb];
+        }
+    } else {
+        for i in (limb..4).rev() {
+            let lo = n[i - limb] << bit;
+            let carry = if i - limb == 0 {
+                0
+            } else {
+                n[i - limb - 1] >> (128 - bit)
+            };
+            out[i] = lo | carry;
+        }
+    }
+    out
+}
+
 /// Quotient `num / d` where `num` is 512-bit and `d` is 256-bit.
 ///
 /// Returned as `U512`; for every use in this crate the true quotient
 /// fits in 256 bits, but the wider return type keeps the routine
 /// general and the high limbs are simply zero in practice.
+///
+/// Binary shift-subtract long division. The loop is bounded by the
+/// numerator's actual bit length, not a fixed 512 — for the typical
+/// operands in this crate (products of moderate-magnitude decimals)
+/// that is a multiple-times reduction in iteration count.
 pub(crate) fn div_u512_by_u256(num: U512, d: U256) -> U512 {
     debug_assert!(!(d[0] == 0 && d[1] == 0), "division by zero");
+    let bits = bitlen_u512(num);
+    if bits == 0 {
+        return [0; 4];
+    }
+    // Pre-shift so the most-significant set bit sits at position 511,
+    // then only `bits` shift-subtract steps are needed (the leading
+    // `512 - bits` iterations of the naive loop are provably no-ops).
+    let mut num = shl_u512(num, 512 - bits);
     let mut q: U512 = [0; 4];
     let mut rem: U256 = [0, 0];
-    let mut num = num;
-    let mut i = 512;
+    let mut i = bits;
     while i > 0 {
         i -= 1;
         // Shift (rem, num) left by 1; the top bit of num enters rem.
         let bit = (num[3] >> 127) & 1;
-        // num <<= 1
         num[3] = (num[3] << 1) | (num[2] >> 127);
         num[2] = (num[2] << 1) | (num[1] >> 127);
         num[1] = (num[1] << 1) | (num[0] >> 127);
         num[0] <<= 1;
-        // rem = (rem << 1) | bit
         rem[1] = (rem[1] << 1) | (rem[0] >> 127);
         rem[0] = (rem[0] << 1) | bit;
-        // q <<= 1
         q[3] = (q[3] << 1) | (q[2] >> 127);
         q[2] = (q[2] << 1) | (q[1] >> 127);
         q[1] = (q[1] << 1) | (q[0] >> 127);
@@ -482,13 +532,42 @@ fn isqrt_u512(n: U512) -> U256 {
     }
 }
 
+/// Bit length of a 256-bit value (`0` for zero, else `floor(log2)+1`).
+#[inline]
+fn bitlen_u256(n: U256) -> u32 {
+    if n[1] != 0 {
+        256 - n[1].leading_zeros()
+    } else {
+        128 - n[0].leading_zeros()
+    }
+}
+
+/// `n << shift` for a 256-bit value (`shift < 256`).
+#[inline]
+fn shl_u256(n: U256, shift: u32) -> U256 {
+    if shift == 0 {
+        n
+    } else if shift >= 128 {
+        [0, n[0] << (shift - 128)]
+    } else {
+        [n[0] << shift, (n[1] << shift) | (n[0] >> (128 - shift))]
+    }
+}
+
 /// `a / b` and `a % b` for 256-bit values.
+///
+/// Binary shift-subtract long division, bounded by the dividend's
+/// actual bit length rather than a fixed 256 iterations.
 fn divmod_u256(a: U256, b: U256) -> (U256, U256) {
     debug_assert!(!is_zero_u256(b), "division by zero");
+    let bits = bitlen_u256(a);
+    if bits == 0 {
+        return ([0, 0], [0, 0]);
+    }
     let mut q: U256 = [0, 0];
     let mut rem: U256 = [0, 0];
-    let mut a = a;
-    let mut i = 256;
+    let mut a = shl_u256(a, 256 - bits);
+    let mut i = bits;
     while i > 0 {
         i -= 1;
         let bit = (a[1] >> 127) & 1;
