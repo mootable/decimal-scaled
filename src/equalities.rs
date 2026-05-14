@@ -30,145 +30,25 @@
 //! Each impl provides both directions (`D128<S> == T` and `T == D128<S>`) so
 //! comparisons are symmetric at the call site.
 
-use crate::core_type::D128;
+use crate::core_type::{D128, D32, D64};
 
-// ---------------------------------------------------------------------------
-// Signed integer impls (i8 .. i64, isize). All widen losslessly to i128.
-// ---------------------------------------------------------------------------
+// Cross-equality with primitive integer types is emitted by the
+// `decl_eq_all_integers!` macro family — see
+// `src/decimal_equalities_macro.rs`. The same surface is generated for
+// every decimal width.
+crate::decimal_equalities_macro::decl_eq_all_integers!(D128);
+crate::decimal_equalities_macro::decl_eq_all_integers!(D64);
+crate::decimal_equalities_macro::decl_eq_all_integers!(D32);
 
-macro_rules! impl_eq_signed {
-    ($t:ty) => {
-        impl<const SCALE: u32> PartialEq<$t> for D128<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$t) -> bool {
-                let m = Self::multiplier();
-                self.0 % m == 0 && self.0 / m == *other as i128
-            }
-        }
-
-        impl<const SCALE: u32> PartialEq<D128<SCALE>> for $t {
-            #[inline]
-            fn eq(&self, other: &D128<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
-}
-
-impl_eq_signed!(i8);
-impl_eq_signed!(i16);
-impl_eq_signed!(i32);
-impl_eq_signed!(i64);
-impl_eq_signed!(isize);
-
-// i128 is special-cased because the `*other as i128` cast in the macro is
-// already exact, but multiplying `n * m` would overflow for large `n`. The
-// quotient/remainder split avoids any multiplication.
-
-impl<const SCALE: u32> PartialEq<i128> for D128<SCALE> {
-    #[inline]
-    fn eq(&self, other: &i128) -> bool {
-        let m = Self::multiplier();
-        self.0 % m == 0 && self.0 / m == *other
-    }
-}
-
-impl<const SCALE: u32> PartialEq<D128<SCALE>> for i128 {
-    #[inline]
-    fn eq(&self, other: &D128<SCALE>) -> bool {
-        other == self
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Unsigned integer impls (u8 .. u64, usize). All widen losslessly to i128.
-// A negative `D128` is never equal to an unsigned value.
-// ---------------------------------------------------------------------------
-
-macro_rules! impl_eq_unsigned {
-    ($t:ty) => {
-        impl<const SCALE: u32> PartialEq<$t> for D128<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$t) -> bool {
-                if self.0 < 0 {
-                    return false;
-                }
-                let m = Self::multiplier();
-                self.0 % m == 0 && self.0 / m == *other as i128
-            }
-        }
-
-        impl<const SCALE: u32> PartialEq<D128<SCALE>> for $t {
-            #[inline]
-            fn eq(&self, other: &D128<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
-}
-
-impl_eq_unsigned!(u8);
-impl_eq_unsigned!(u16);
-impl_eq_unsigned!(u32);
-impl_eq_unsigned!(u64);
-impl_eq_unsigned!(usize);
-
-// u128 covers a range that does not fit in i128. After the negativity guard
-// the storage value is non-negative, so casting the quotient to u128 is safe
-// and lossless.
-
-impl<const SCALE: u32> PartialEq<u128> for D128<SCALE> {
-    #[inline]
-    fn eq(&self, other: &u128) -> bool {
-        if self.0 < 0 {
-            return false;
-        }
-        let m = Self::multiplier();
-        if self.0 % m != 0 {
-            return false;
-        }
-        (self.0 / m) as u128 == *other
-    }
-}
-
-impl<const SCALE: u32> PartialEq<D128<SCALE>> for u128 {
-    #[inline]
-    fn eq(&self, other: &D128<SCALE>) -> bool {
-        other == self
-    }
-}
-
-// ---------------------------------------------------------------------------
-// Float impls (f32, f64). Equality holds when the f64 representation of the
-// float and the f64 view of the D128 agree exactly, and the value round-trips
-// back to the same storage bits. NaN and ±inf are always unequal.
-// ---------------------------------------------------------------------------
-
-macro_rules! impl_eq_float {
-    ($t:ty) => {
-        impl<const SCALE: u32> PartialEq<$t> for D128<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$t) -> bool {
-                if !other.is_finite() {
-                    return false;
-                }
-                let f = *other as f64;
-                let from_f = D128::<SCALE>::from_f64_lossy(f);
-                from_f.0 == self.0 && self.to_f64_lossy() == f
-            }
-        }
-
-        impl<const SCALE: u32> PartialEq<D128<SCALE>> for $t {
-            #[inline]
-            fn eq(&self, other: &D128<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
-}
-
-impl_eq_float!(f32);
-impl_eq_float!(f64);
+// Float equality requires the f64 bridge (`from_f64_lossy` /
+// `to_f64_lossy`), which is only present when `std` is on and
+// `strict` is off. Gate the float impls accordingly. Float impls are
+// emitted for D128 only at present — the D32/D64 conversion bridge
+// covers will follow in a later commit.
+#[cfg(all(feature = "std", not(feature = "strict")))]
+crate::decimal_equalities_macro::decl_eq_float!(D128, f32);
+#[cfg(all(feature = "std", not(feature = "strict")))]
+crate::decimal_equalities_macro::decl_eq_float!(D128, f64);
 
 #[cfg(test)]
 mod tests {
@@ -245,6 +125,7 @@ mod tests {
 
     // --- floats -----------------------------------------------------------
 
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[test]
     fn eq_float_exact_representable() {
         // 1.5 is exactly representable in both f64 and D128s12.
@@ -254,6 +135,7 @@ mod tests {
         assert!(d == 1.5_f32);
     }
 
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[test]
     fn eq_float_zero_and_one() {
         assert!(D128s12::ZERO == 0.0_f64);
@@ -262,12 +144,14 @@ mod tests {
         assert!(D128s12::ONE == 1.0_f32);
     }
 
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[test]
     fn eq_float_nan_is_false() {
         assert!(!(D128s12::ZERO == f64::NAN));
         assert!(!(D128s12::ZERO == f32::NAN));
     }
 
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[test]
     fn eq_float_infinity_is_false() {
         assert!(!(D128s12::MAX == f64::INFINITY));
@@ -275,10 +159,36 @@ mod tests {
         assert!(!(D128s12::MAX == f32::INFINITY));
     }
 
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[test]
     fn eq_float_negative() {
         let d = D128s12::from_bits(-2_500_000_000_000);
         assert!(d == -2.5_f64);
         assert!(-2.5_f64 == d);
+    }
+
+    // --- D32 / D64 cross-equality (uses the macro just like D128) --------
+
+    #[test]
+    fn eq_d32_with_integer() {
+        use crate::core_type::D32s2;
+        let v = D32s2::from_bits(150); // 1.50
+        assert!(!(v == 1_i32));
+        assert!(!(v == 2_i32));
+        let int = D32s2::from_bits(500); // 5.00
+        assert!(int == 5_i32);
+        assert!(5_i32 == int);
+        assert!(int == 5_u8);
+    }
+
+    #[test]
+    fn eq_d64_with_integer() {
+        use crate::core_type::D64s9;
+        let v = D64s9::from_bits(7_000_000_000); // 7.0
+        assert!(v == 7_i64);
+        assert!(v == 7_u64);
+        let neg = D64s9::from_bits(-7_000_000_000);
+        assert!(neg == -7_i32);
+        assert!(!(neg == 7_u32));
     }
 }
