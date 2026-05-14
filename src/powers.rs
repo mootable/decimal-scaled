@@ -191,7 +191,17 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf(self, exp: D128<SCALE>) -> Self {
-        todo!("strict: integer-only powf not yet implemented")
+        // x^y = exp(y * ln(x)). Inherits the precision and panic
+        // characteristics of `ln` and `exp`.
+        if self.to_bits() == 0 {
+            return Self::ZERO;
+        }
+        if self.to_bits() < 0 {
+            // Negative base with arbitrary fractional exponent is not
+            // real-valued. Match the f64-bridge NaN-to-ZERO saturation.
+            return Self::ZERO;
+        }
+        (exp * self.ln()).exp()
     }
 
     /// Raises `self` to the power `exp` via the f64 bridge.
@@ -251,7 +261,26 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
-        todo!("strict: integer-only sqrt not yet implemented")
+        // Newton iteration: y_{n+1} = (y_n + x / y_n) / 2.
+        // Quadratic convergence — typically settles in <50 iterations
+        // for any in-range input. Matches the f64-bridge policy of
+        // mapping negative inputs to ZERO (saturation, not panic).
+        if self.to_bits() <= 0 {
+            return Self::ZERO;
+        }
+        let one = Self::ONE;
+        let mut y = if self >= one { self } else { one };
+        let mut prev_bits: i128 = 0;
+        for _ in 0..100 {
+            let quotient = self / y;
+            let y_new_bits = (y.to_bits() + quotient.to_bits()) >> 1;
+            if y_new_bits == y.to_bits() || y_new_bits == prev_bits {
+                return Self::from_bits(y_new_bits);
+            }
+            prev_bits = y.to_bits();
+            y = Self::from_bits(y_new_bits);
+        }
+        y
     }
 
     /// Returns the square root of `self` via the f64 bridge.
@@ -760,13 +789,25 @@ mod tests {
         );
     }
 
-    /// `powf(2)` agrees with `pow(2)` within 2 LSB.
-    #[cfg(feature = "std")]
+    /// `powf(2)` agrees with `pow(2)` within 2 LSB (f64 bridge).
+    #[cfg(all(feature = "std", not(feature = "strict")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D128s12::from_int(7);
         let two = D128s12::from_int(2);
         assert!(within_lsb(v.powf(two), v.pow(2), TWO_LSB));
+    }
+
+    /// `powf(2)` agrees with `pow(2)` within a wider tolerance under
+    /// strict mode. Strict powf is `exp(2 * ln(x))` with Phase 2A
+    /// precision (~10-20 ULP per transcendental call); the round-trip
+    /// stacks two such errors. 1000 LSB is comfortable headroom.
+    #[cfg(feature = "strict")]
+    #[test]
+    fn powf_two_matches_pow_two_within_lsb() {
+        let v = D128s12::from_int(7);
+        let two = D128s12::from_int(2);
+        assert!(within_lsb(v.powf(two), v.pow(2), 1000));
     }
 
     // sqrt — requires std feature
