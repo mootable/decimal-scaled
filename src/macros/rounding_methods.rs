@@ -1,15 +1,54 @@
 //! Macro-generated rounding-related methods (floor, ceil, round,
 //! trunc, fract) for decimal types.
 //!
-//! All five methods work uniformly on integer storage by exploiting
-//! integer division and `div_euclid` semantics. No widening or
-//! float arithmetic is needed.
+//! `floor` / `ceil` / `trunc` / `fract` are storage-agnostic — they
+//! only use `div_euclid`, multiply, subtract and negate, which both
+//! primitive integers and `bnum` integers support with identical
+//! spelling — so they live in a shared `@common` arm. Only `round`
+//! differs: it needs the half-LSB threshold and a sign test, which a
+//! `bnum` integer cannot express against the `0` / `2` literals, so it
+//! is written inline per front-end arm.
 
 /// Emits `floor`, `ceil`, `round` (half-away-from-zero), `trunc`,
-/// `fract` for `$Type<SCALE>`. Storage type is inferred via
-/// `Self::multiplier()`.
+/// `fract` for `$Type<SCALE>`.
 macro_rules! decl_decimal_rounding_methods {
+    // Wide (bnum-backed) storage.
+    (wide $Type:ident) => {
+        $crate::macros::rounding_methods::decl_decimal_rounding_methods!(@common $Type);
+
+        impl<const SCALE: u32> $Type<SCALE> {
+            /// Round to the nearest integer (half-away-from-zero).
+            #[inline]
+            #[must_use]
+            pub fn round(self) -> Self {
+                let m = Self::multiplier();
+                // `m` (= 10^SCALE) is positive, so `>> 1` is `m / 2`.
+                let half = m >> 1u32;
+                let bias = if self.0.is_negative() { -half } else { half };
+                Self((self.0 + bias) / m * m)
+            }
+        }
+    };
+
+    // Native (primitive integer) storage.
     ($Type:ident) => {
+        $crate::macros::rounding_methods::decl_decimal_rounding_methods!(@common $Type);
+
+        impl<const SCALE: u32> $Type<SCALE> {
+            /// Round to the nearest integer (half-away-from-zero).
+            #[inline]
+            #[must_use]
+            pub fn round(self) -> Self {
+                let m = Self::multiplier();
+                let half = m / 2;
+                let bias = if self.0 >= 0 { half } else { -half };
+                Self((self.0 + bias) / m * m)
+            }
+        }
+    };
+
+    // Shared: floor / ceil / trunc / fract.
+    (@common $Type:ident) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Largest integer multiple of `ONE` less than or equal to
             /// `self` (toward negative infinity).
@@ -27,16 +66,6 @@ macro_rules! decl_decimal_rounding_methods {
             pub fn ceil(self) -> Self {
                 let m = Self::multiplier();
                 Self(-((-self.0).div_euclid(m)) * m)
-            }
-
-            /// Round to the nearest integer (half-away-from-zero).
-            #[inline]
-            #[must_use]
-            pub fn round(self) -> Self {
-                let m = Self::multiplier();
-                let half = m / 2;
-                let bias = if self.0 >= 0 { half } else { -half };
-                Self((self.0 + bias) / m * m)
             }
 
             /// Drop the fractional part (toward zero).

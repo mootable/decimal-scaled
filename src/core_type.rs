@@ -639,6 +639,12 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D128, i128, D256, c
 crate::macros::conversions::decl_cross_width_narrowing!(wide D64, i64, D256, crate::wide::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D32, i32, D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::float_bridge::decl_decimal_float_bridge!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::rescale::decl_decimal_rescale!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D256);
 
 /// Scale alias: `D256<0>`. 1 LSB = 1 (256-bit integer ledger).
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -1155,6 +1161,45 @@ mod tests {
         let out_of_range = super::D256s76::MAX;
         let narrow_fail: Result<super::D128<76>, _> = out_of_range.try_into();
         assert!(narrow_fail.is_err());
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_rescale_rounding_floats() {
+        use crate::rounding::RoundingMode;
+        use crate::wide::I256;
+        type D6 = super::D256<6>;
+        // rescale up (lossless): scale 6 -> scale 9
+        let v = D6::from_bits(I256::from_str_radix("1500000", 10).unwrap()); // 1.5
+        let up: super::D256<9> = v.rescale::<9>();
+        assert_eq!(up.to_bits(), I256::from_str_radix("1500000000", 10).unwrap());
+        // rescale down (lossy, HalfToEven): scale 6 -> scale 2
+        let down: super::D256<2> = v.rescale::<2>();
+        assert_eq!(down.to_bits(), I256::from_str_radix("150", 10).unwrap());
+        // rescale down with explicit mode: 2.5 (scale 0 representation) ...
+        let two_p_five = super::D256::<1>::from_bits(I256::from_str_radix("25", 10).unwrap());
+        let r0: super::D256<0> = two_p_five.rescale_with::<0>(RoundingMode::HalfToEven);
+        assert_eq!(r0.to_bits(), I256::from_str_radix("2", 10).unwrap());
+        let r0b: super::D256<0> = two_p_five.rescale_with::<0>(RoundingMode::HalfAwayFromZero);
+        assert_eq!(r0b.to_bits(), I256::from_str_radix("3", 10).unwrap());
+        // floor / ceil / round / trunc / fract on 1.5 at scale 6
+        assert_eq!(v.floor(), D6::ONE);
+        assert_eq!(v.ceil(), D6::ONE + D6::ONE);
+        assert_eq!(v.round(), D6::ONE + D6::ONE); // half away from zero
+        assert_eq!(v.trunc(), D6::ONE);
+        assert_eq!(v.fract(), D6::from_bits(I256::from_str_radix("500000", 10).unwrap()));
+        // negative: -1.5
+        let neg = -v;
+        assert_eq!(neg.floor(), -(D6::ONE + D6::ONE));
+        assert_eq!(neg.ceil(), -D6::ONE);
+        assert_eq!(neg.round(), -(D6::ONE + D6::ONE));
+        // float bridge
+        let from_f = D6::from_f64_lossy(2.5);
+        assert_eq!(from_f.to_bits(), I256::from_str_radix("2500000", 10).unwrap());
+        assert_eq!(D6::from_f64_lossy(f64::NAN), D6::ZERO);
+        assert_eq!(D6::from_f64_lossy(f64::INFINITY), D6::MAX);
+        let round_trip = D6::ONE.to_f64_lossy();
+        assert!((round_trip - 1.0).abs() < 1e-9);
     }
 
     #[test]
