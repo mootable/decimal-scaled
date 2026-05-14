@@ -261,26 +261,27 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
-        // Newton iteration: y_{n+1} = (y_n + x / y_n) / 2.
-        // Quadratic convergence — typically settles in <50 iterations
-        // for any in-range input. Matches the f64-bridge policy of
-        // mapping negative inputs to ZERO (saturation, not panic).
+        // Correctly-rounded square root.
+        //
+        // For a `D128<SCALE>` with raw storage `r`, the logical value is
+        // `r / 10^SCALE`, and the raw storage of its square root is
+        //
+        //   round( sqrt(r / 10^SCALE) · 10^SCALE )
+        //     = round( sqrt(r · 10^SCALE) ).
+        //
+        // `r · 10^SCALE` is formed exactly as a 256-bit product and its
+        // integer square root is computed exactly, so the result is the
+        // exact square root correctly rounded to the type's last place
+        // (within 0.5 ULP — the IEEE-754 round-to-nearest result).
+        //
+        // Negative inputs saturate to ZERO, matching the f64-bridge
+        // policy (saturation, not panic).
         if self.to_bits() <= 0 {
             return Self::ZERO;
         }
-        let one = Self::ONE;
-        let mut y = if self >= one { self } else { one };
-        let mut prev_bits: i128 = 0;
-        for _ in 0..100 {
-            let quotient = self / y;
-            let y_new_bits = (y.to_bits() + quotient.to_bits()) >> 1;
-            if y_new_bits == y.to_bits() || y_new_bits == prev_bits {
-                return Self::from_bits(y_new_bits);
-            }
-            prev_bits = y.to_bits();
-            y = Self::from_bits(y_new_bits);
-        }
-        y
+        let raw = self.to_bits() as u128;
+        let q = crate::mg_divide::sqrt_raw_correctly_rounded(raw, SCALE);
+        Self::from_bits(q as i128)
     }
 
     /// Returns the square root of `self` via the f64 bridge.
@@ -894,6 +895,73 @@ mod tests {
         let four = D128s12::from_int(4);
         let two = D128s12::from_int(2);
         assert_eq!(four.sqrt(), two);
+    }
+
+    /// Strict `sqrt` is correctly rounded: for the raw result `q`, the
+    /// scaled radicand `N = r · 10^SCALE` must satisfy
+    /// `(q − 0.5)² ≤ N ≤ (q + 0.5)²`, i.e. `q` is the exact square root
+    /// rounded to nearest. Checked exactly in 256-bit integer space
+    /// across several scales and magnitudes.
+    #[cfg(feature = "strict")]
+    #[test]
+    fn strict_sqrt_is_correctly_rounded() {
+        // (q - 0.5)^2 = q^2 - q + 0.25  → lower bound  N ≥ q^2 - q + 1 (ints, when q>0)
+        // (q + 0.5)^2 = q^2 + q + 0.25  → upper bound  N ≤ q^2 + q
+        // So a correctly-rounded q satisfies  q^2 - q < N ≤ q^2 + q  (q>0),
+        // or N == 0 when q == 0.
+        fn check<const S: u32>(raw: i128) {
+            let x = crate::core_type::D128::<S>::from_bits(raw);
+            let q = x.sqrt().to_bits();
+            assert!(q >= 0, "sqrt result must be non-negative");
+            // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
+            let mult = 10u128.pow(S);
+            let (n_hi, n_lo) = crate::mg_divide::mul2(raw as u128, mult);
+            let (qsq_hi, qsq_lo) = crate::mg_divide::mul2(q as u128, q as u128);
+            // lower: N > q^2 - q   ⇔   N + q > q^2   (q ≥ 0)
+            // upper: N ≤ q^2 + q
+            let q_u = q as u128;
+            // q^2 + q  (256-bit)
+            let (uphi, uplo) = {
+                let (lo, c) = qsq_lo.overflowing_add(q_u);
+                (qsq_hi + c as u128, lo)
+            };
+            // N ≤ q^2 + q ?
+            let n_le_upper = n_hi < uphi || (n_hi == uphi && n_lo <= uplo);
+            assert!(n_le_upper, "sqrt({raw} @ s{S}) = {q}: N exceeds (q+0.5)^2");
+            if q > 0 {
+                // N + q  (256-bit)
+                let (nphi, nplo) = {
+                    let (lo, c) = n_lo.overflowing_add(q_u);
+                    (n_hi + c as u128, lo)
+                };
+                // N + q > q^2 ?
+                let above_lower =
+                    nphi > qsq_hi || (nphi == qsq_hi && nplo > qsq_lo);
+                assert!(above_lower, "sqrt({raw} @ s{S}) = {q}: N below (q-0.5)^2");
+            }
+        }
+        for &raw in &[
+            1_i128,
+            2,
+            3,
+            4,
+            5,
+            999_999_999_999,
+            1_000_000_000_000,
+            1_500_000_000_000,
+            123_456_789_012_345,
+            i128::MAX,
+            i128::MAX / 7,
+        ] {
+            check::<0>(raw);
+            check::<6>(raw);
+            check::<12>(raw);
+            check::<19>(raw);
+        }
+        // High-scale cases where the radicand approaches the 256-bit cap.
+        for &raw in &[1_i128, 2, 17, i128::MAX, i128::MAX / 3] {
+            check::<38>(raw);
+        }
     }
 
     /// `sqrt(self * self) ~= self.abs()` within 2 LSB.

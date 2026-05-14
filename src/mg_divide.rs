@@ -114,7 +114,7 @@ const MG_EXP_MAGICS: [(u128, u32); 39] = [
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-const fn mul2(a: u128, b: u128) -> (u128, u128) {
+pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
     let (ahigh, alow) = (a >> 64, a & u64::MAX as u128);
     let (bhigh, blow) = (b >> 64, b & u64::MAX as u128);
 
@@ -233,6 +233,93 @@ fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u12
         i += 1;
     }
     Some(q)
+}
+
+/// `floor(sqrt(N))` for the unsigned 256-bit value `N = hi·2^128 + lo`.
+///
+/// # Preconditions
+///
+/// `N < 2^254`, so the result fits in `u128` (`< 2^127`). Every caller
+/// in this crate is the scaled-fixed-point `sqrt` path, where
+/// `N = r · 10^SCALE` with `r < 2^127` and `10^SCALE ≤ 10^38 < 2^127`,
+/// so the product is below `2^254`.
+///
+/// # Precision
+///
+/// Strict: integer-only Newton iteration; the result is the exact
+/// mathematical floor of the square root.
+pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
+    if hi == 0 && lo == 0 {
+        return 0;
+    }
+    // Bit length of N.
+    let bits = if hi != 0 {
+        256 - hi.leading_zeros()
+    } else {
+        128 - lo.leading_zeros()
+    };
+    // Initial overestimate q0 = 2^ceil(bits/2) ≥ sqrt(N). With N < 2^254
+    // this is at most 2^127, so it fits in u128 and `N / q0` cannot
+    // overflow 128 bits.
+    let mut q: u128 = 1u128 << ((bits + 1) / 2);
+    loop {
+        // q ≥ sqrt(N) on every iteration, so N / q ≤ sqrt(N) < 2^127
+        // and the divide always succeeds.
+        let nq = div_long_256_by_128(hi, lo, q)
+            .expect("isqrt_256: q >= sqrt(N), so N/q fits in 128 bits");
+        // q_next = (q + nq) / 2, computed without the q+nq overflow.
+        let q_next = (q >> 1) + (nq >> 1) + (q & nq & 1);
+        if q_next >= q {
+            return q;
+        }
+        q = q_next;
+    }
+}
+
+/// Correctly-rounded raw storage of `sqrt` for a scaled fixed-point
+/// value.
+///
+/// Given the non-negative raw storage `r` of a `D*<SCALE>` value and
+/// the `SCALE`, returns `round_to_nearest(sqrt(r · 10^SCALE))` — which
+/// is the raw storage of `sqrt(value)` correctly rounded to the type's
+/// last representable place (IEEE-754 round-to-nearest).
+///
+/// The computation is exact: `r · 10^SCALE` is formed as a full 256-bit
+/// product, its integer square root is exact, and the round-to-nearest
+/// decision `N − q² > q` is an exact integer comparison.
+///
+/// # Preconditions
+///
+/// `r ≥ 0` and `SCALE ≤ 38` (so `r · 10^SCALE < 2^254`).
+///
+/// # Precision
+///
+/// Strict: integer-only; the result is within 0.5 ULP of the exact
+/// square root — it is the exact result correctly rounded.
+pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
+    if r == 0 {
+        return 0;
+    }
+    // N = r · 10^SCALE as a 256-bit value.
+    let (hi, lo) = mul2(r, 10u128.pow(scale));
+    let q = isqrt_256(hi, lo);
+    // q = floor(sqrt(N)). Round up to q+1 iff N is closer to (q+1)²
+    // than to q², i.e. iff N ≥ (q + 0.5)² = q² + q + 0.25, i.e. (in
+    // integers) iff N − q² > q.
+    let (q_sq_hi, q_sq_lo) = mul2(q, q);
+    // diff = N − q²  (non-negative because q = floor(sqrt(N))).
+    let (diff_hi, diff_lo) = if lo >= q_sq_lo {
+        (hi - q_sq_hi, lo - q_sq_lo)
+    } else {
+        (hi - q_sq_hi - 1, lo.wrapping_sub(q_sq_lo))
+    };
+    // diff ≤ 2q < 2^128, so diff_hi is 0 unless diff == 2^128 exactly;
+    // either way `diff > q` iff diff_hi != 0 or diff_lo > q.
+    if diff_hi != 0 || diff_lo > q {
+        q + 1
+    } else {
+        q
+    }
 }
 
 /// Compute `(a * b) / 10^SCALE` with truncating division semantics
