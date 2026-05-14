@@ -452,6 +452,7 @@ crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D32, i32, i64);
 crate::decimal_num_traits_macro::decl_decimal_num_traits_basics!(D32);
 crate::decimal_sign_macro::decl_decimal_sign_methods!(D32, i32);
 crate::decimal_consts_macro::decl_decimal_consts!(D32, i32);
+crate::decimal_from_str_macro::decl_decimal_from_str!(D32, i32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -506,6 +507,7 @@ crate::decimal_overflow_macro::decl_decimal_overflow_variants!(D64, i64, i128);
 crate::decimal_num_traits_macro::decl_decimal_num_traits_basics!(D64);
 crate::decimal_sign_macro::decl_decimal_sign_methods!(D64, i64);
 crate::decimal_consts_macro::decl_decimal_consts!(D64, i64);
+crate::decimal_from_str_macro::decl_decimal_from_str!(D64, i64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::decimal_conversions_macro::decl_cross_width_widening!(D64, i64, D32, i32);
@@ -801,6 +803,26 @@ mod tests {
         assert_eq!(D32s4::pi().to_bits(), 31416);
         // e at scale 4 = 2.7183 -> bits = 27183.
         assert_eq!(D32s4::e().to_bits(), 27183);
+    }
+
+    #[test]
+    fn d32_from_str() {
+        use core::str::FromStr;
+        let v = super::D32s2::from_str("1.50").unwrap();
+        assert_eq!(v.to_bits(), 150);
+        let neg = super::D32s2::from_str("-20.50").unwrap();
+        assert_eq!(neg.to_bits(), -2050);
+        // Out of range for D32s2 (i32::MAX is ~2.1e9).
+        assert!(super::D32s2::from_str("1000000000000.00").is_err());
+    }
+
+    #[test]
+    fn d64_from_str() {
+        use core::str::FromStr;
+        let v = super::D64s9::from_str("1.500000000").unwrap();
+        assert_eq!(v.to_bits(), 1_500_000_000);
+        let neg = super::D64s9::from_str("-1.500000000").unwrap();
+        assert_eq!(neg.to_bits(), -1_500_000_000);
     }
 
     #[test]

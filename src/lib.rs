@@ -76,6 +76,7 @@ mod decimal_consts_macro;
 mod decimal_conversions_macro;
 mod decimal_display_macro;
 mod decimal_equalities_macro;
+mod decimal_from_str_macro;
 mod decimal_macro;
 mod decimal_num_traits_macro;
 mod decimal_overflow_macro;

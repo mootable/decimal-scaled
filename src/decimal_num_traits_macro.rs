@@ -42,6 +42,12 @@ macro_rules! decl_decimal_num_traits_basics {
                 Self::MAX
             }
         }
+
+        // `Signed` requires `Num` as a supertrait; `Num` requires
+        // `FromStrRadixErr` and `from_str_radix`, which in turn need
+        // `FromStr`. Once `FromStr` is added for $Type, `Num` and
+        // `Signed` can be emitted by this macro. Tracked for a later
+        // sub-phase alongside `FromStr`.
     };
 }
 

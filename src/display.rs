@@ -331,6 +331,10 @@ impl<const SCALE: u32> FromStr for D128<SCALE> {
 /// # Precision
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
+pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseD128Error> {
+    parse_decimal::<SCALE>(s).map(|v| v.to_bits())
+}
+
 fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D128<SCALE>, ParseD128Error> {
     if s.is_empty() {
         return Err(ParseD128Error::Empty);
