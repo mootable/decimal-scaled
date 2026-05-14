@@ -440,43 +440,6 @@ impl<const SCALE: u32> D128<SCALE> {
 
     // Integer power variant family.
 
-    /// Returns `self * a + b`.
-    ///
-    /// Mirrors the `f64::mul_add` call shape so f64-generic numeric code
-    /// can monomorphise to `D128` without rewriting call sites. No
-    /// hardware FMA is involved; the multiply uses the `D128` `Mul`
-    /// operator and the add uses plain `i128` addition.
-    ///
-    /// The result is bit-equal to `self * a + b` on every input,
-    /// including panic or wrap behaviour at overflow boundaries.
-    ///
-    /// Available in `no_std` builds because the underlying `Mul` and
-    /// `Add` operators require only `core`.
-    ///
-    /// # Precision
-    ///
-    /// Strict: all arithmetic is integer-only; result is bit-exact.
-    ///
-    /// # Panics
-    ///
-    /// In debug builds, panics on overflow at the multiply step or the
-    /// add step. In release builds, both steps wrap two's-complement.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// let two   = D128s12::from_int(2);
-    /// let three = D128s12::from_int(3);
-    /// let four  = D128s12::from_int(4);
-    /// // 2 * 3 + 4 = 10
-    /// assert_eq!(two.mul_add(three, four), D128s12::from_int(10));
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn mul_add(self, a: Self, b: Self) -> Self {
-        self * a + b
-    }
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
     ///

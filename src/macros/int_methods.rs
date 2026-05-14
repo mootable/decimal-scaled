@@ -185,6 +185,16 @@ macro_rules! decl_decimal_int_methods {
             pub const fn is_finite(self) -> bool {
                 true
             }
+
+            /// `self * a + b`. Mirrors the `f64::mul_add` call shape so
+            /// f64-generic numeric code can monomorphise to a decimal
+            /// type; there is no hardware FMA — the multiply uses the
+            /// type's `Mul` and the add uses its `Add`.
+            #[inline]
+            #[must_use]
+            pub fn mul_add(self, a: Self, b: Self) -> Self {
+                self * a + b
+            }
         }
     };
 }
