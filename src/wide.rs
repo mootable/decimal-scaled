@@ -13,12 +13,13 @@
 //! active.
 //!
 //! Each tier's multiply / divide widens one size up to hold the
-//! intermediate product, so a width's storage alias is also exposed
-//! whenever the *next narrower* width is enabled:
+//! intermediate product, so a width's signed storage alias is exposed
+//! whenever that width *or the next narrower one* is enabled:
 //!
-//! - `I256` — needed by D256.
-//! - `I512` — needed by D512 *and* by D256's mul/div widening step.
-//! - `I1024` — needed by D1024 *and* by D512's mul/div widening step.
+//! - `I256`  — D256 storage.
+//! - `I512`  — D512 storage, and D256's mul/div widening step.
+//! - `I1024` — D1024 storage, and D512's mul/div widening step.
+//! - `I2048` — D1024's mul/div widening step.
 //!
 //! The matching unsigned types (`U256` / `U512` / `U1024`) are used by
 //! the magnitude-formatting path in `Display`, which needs
@@ -30,11 +31,11 @@ pub(crate) use bnum::types::{I256, U256};
 #[cfg(any(feature = "d256", feature = "d512", feature = "wide"))]
 pub(crate) use bnum::types::I512;
 
-#[cfg(any(feature = "d512", feature = "d1024", feature = "wide"))]
-pub(crate) use bnum::types::I1024;
-
 #[cfg(any(feature = "d512", feature = "wide"))]
 pub(crate) use bnum::types::U512;
 
+#[cfg(any(feature = "d512", feature = "d1024", feature = "wide"))]
+pub(crate) use bnum::types::I1024;
+
 #[cfg(any(feature = "d1024", feature = "wide"))]
-pub(crate) use bnum::types::U1024;
+pub(crate) use bnum::types::{I2048, U1024};
