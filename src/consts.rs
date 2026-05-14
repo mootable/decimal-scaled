@@ -110,50 +110,11 @@ const E_RAW_S35: i128 = 271_828_182_845_904_523_536_028_747_135_266_250_i128;
 /// N/A: constant value, no arithmetic performed.
 const GOLDEN_RAW_S35: i128 = 161_803_398_874_989_484_820_458_683_436_563_812_i128;
 
-// Rescale helper (half-to-even).
-
-/// Rescales `raw` from `SCALE_REF` to `target_scale` using round-half-to-even
-/// (IEEE-754 default; banker's rounding).
-///
-/// - Equal scales: returns `raw` unchanged.
-/// - `target_scale < SCALE_REF`: integer division with round-half-to-even
-///   rounding. Exact half-LSB values round to the even neighbour, eliminating
-///   the systematic upward magnitude bias of the half-away-from-zero rule.
-/// - `target_scale > SCALE_REF`: integer multiplication; panics on overflow in
-///   debug builds (only reachable at `SCALE >= 38` for large constants).
-///
-/// # Precision
-///
-/// Strict: all arithmetic is integer-only; result is bit-exact.
-#[inline]
-fn rescale_from_ref(raw: i128, target_scale: u32) -> i128 {
-    if target_scale == SCALE_REF {
-        return raw;
-    }
-    if target_scale < SCALE_REF {
-        let shift = SCALE_REF - target_scale;
-        let divisor = 10i128.pow(shift);
-        let quotient = raw / divisor;
-        let remainder = raw % divisor;
-        let abs_rem = remainder.unsigned_abs();
-        let half = (divisor / 2) as u128;
-
-        if abs_rem < half {
-            quotient
-        } else if abs_rem > half {
-            if raw >= 0 { quotient + 1 } else { quotient - 1 }
-        } else if quotient % 2 == 0 {
-            quotient
-        } else if raw >= 0 {
-            quotient + 1
-        } else {
-            quotient - 1
-        }
-    } else {
-        let shift = target_scale - SCALE_REF;
-        raw * 10i128.pow(shift)
-    }
-}
+// Rescaling from SCALE_REF to the caller's SCALE is delegated to
+// `D128::rescale` (which uses round-half-to-even by default; see
+// `src/rescale.rs`). The constants below construct a `D128<SCALE_REF>`
+// from the raw integer literal and then rescale to the caller's
+// `D128<SCALE>`.
 
 /// Well-known mathematical constants available on any [`D128<SCALE>`].
 ///
@@ -227,32 +188,32 @@ pub trait DecimalConsts: Sized {
 impl<const SCALE: u32> DecimalConsts for D128<SCALE> {
     #[inline]
     fn pi() -> Self {
-        Self(rescale_from_ref(PI_RAW_S35, SCALE))
+        D128::<SCALE_REF>::from_bits(PI_RAW_S35).rescale::<SCALE>()
     }
 
     #[inline]
     fn tau() -> Self {
-        Self(rescale_from_ref(TAU_RAW_S35, SCALE))
+        D128::<SCALE_REF>::from_bits(TAU_RAW_S35).rescale::<SCALE>()
     }
 
     #[inline]
     fn half_pi() -> Self {
-        Self(rescale_from_ref(HALF_PI_RAW_S35, SCALE))
+        D128::<SCALE_REF>::from_bits(HALF_PI_RAW_S35).rescale::<SCALE>()
     }
 
     #[inline]
     fn quarter_pi() -> Self {
-        Self(rescale_from_ref(QUARTER_PI_RAW_S35, SCALE))
+        D128::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S35).rescale::<SCALE>()
     }
 
     #[inline]
     fn golden() -> Self {
-        Self(rescale_from_ref(GOLDEN_RAW_S35, SCALE))
+        D128::<SCALE_REF>::from_bits(GOLDEN_RAW_S35).rescale::<SCALE>()
     }
 
     #[inline]
     fn e() -> Self {
-        Self(rescale_from_ref(E_RAW_S35, SCALE))
+        D128::<SCALE_REF>::from_bits(E_RAW_S35).rescale::<SCALE>()
     }
 }
 
@@ -462,35 +423,7 @@ mod tests {
         assert_eq!(neg_pi.to_bits(), -3_141_592_653_590_i128);
     }
 
-    /// Round-half-to-even: at the exact half boundary, ties round to the
-    /// even neighbour. 0.5 -> 0 (even), 1.5 -> 2, 2.5 -> 2 (even),
-    /// 3.5 -> 4, -0.5 -> 0, -1.5 -> -2.
-    #[test]
-    fn rescale_half_to_even_at_boundary() {
-        // SCALE_REF = 35; choosing target_scale = 34 shifts by one digit so
-        // the divisor is 10 and `5` is exactly half.
-        assert_eq!(rescale_from_ref(5, 34), 0);
-        assert_eq!(rescale_from_ref(15, 34), 2);
-        assert_eq!(rescale_from_ref(25, 34), 2);
-        assert_eq!(rescale_from_ref(35, 34), 4);
-        assert_eq!(rescale_from_ref(45, 34), 4);
-        assert_eq!(rescale_from_ref(-5, 34), 0);
-        assert_eq!(rescale_from_ref(-15, 34), -2);
-        assert_eq!(rescale_from_ref(-25, 34), -2);
-        assert_eq!(rescale_from_ref(-35, 34), -4);
-    }
-
-    /// Round-half-to-even: non-half remainders go to the nearest neighbour
-    /// regardless of parity.
-    #[test]
-    fn rescale_non_half_rounds_nearest() {
-        assert_eq!(rescale_from_ref(4, 34), 0);
-        assert_eq!(rescale_from_ref(6, 34), 1);
-        assert_eq!(rescale_from_ref(14, 34), 1);
-        assert_eq!(rescale_from_ref(16, 34), 2);
-        assert_eq!(rescale_from_ref(-4, 34), 0);
-        assert_eq!(rescale_from_ref(-6, 34), -1);
-        assert_eq!(rescale_from_ref(-14, 34), -1);
-        assert_eq!(rescale_from_ref(-16, 34), -2);
-    }
+    // (`rescale_from_ref` boundary tests removed: the rounding logic now
+    // lives in `D128::rescale` / `src/rounding.rs::apply_rounding` and is
+    // covered by the tests in those modules.)
 }

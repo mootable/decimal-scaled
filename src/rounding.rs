@@ -61,8 +61,7 @@ pub enum RoundingMode {
 /// `divisor` must be positive and at most `10^38` (i.e. `< i128::MAX`),
 /// so `divisor / 2` and `raw % divisor` are safe operations.
 ///
-/// Used internally by [`D128::rescale_with`] and (via inline copies) by
-/// `consts.rs::rescale_from_ref`.
+/// Used internally by [`D128::rescale_with`].
 #[inline]
 pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i128 {
     let quotient = raw / divisor;
