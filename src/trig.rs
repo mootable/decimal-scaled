@@ -34,10 +34,10 @@
 //!
 //! The f64-bridge forms are **Lossy** — the `D128` value round-trips
 //! through `f64`, which introduces up to one LSB of quantisation per
-//! conversion. The `*_strict` forms are held to the IEEE-754
-//! correctly-rounded standard (within 0.5 ULP of the exact result);
-//! the trig family is mid-rework toward that bound (see
-//! `research/strict_transcendentals_research.md`).
+//! conversion. The `*_strict` forms are **correctly rounded**: within
+//! 0.5 ULP of the exact result (IEEE-754 round-to-nearest). They
+//! evaluate every reduction and series step in the `wide_int::Fixed`
+//! guard-digit intermediate and round once at the end.
 //!
 //! # `atan2` signature
 //!
@@ -450,12 +450,11 @@ impl<const SCALE: u32> D128<SCALE> {
 // Strict-mode (integer-only) trigonometric, hyperbolic, and angle-
 // conversion methods.
 //
-// These mirror the f64-bridge surface above but are compiled under
-// `#[cfg(feature = "strict")]`. They are integer-only and `no_std`-
-// compatible. Accuracy matches the rest of the strict module: within
-// roughly ±10 ULP at moderate SCALE, degrading toward the extreme
-// SCALEs (a tighter Remez-polynomial implementation is tracked in
-// `research/strict_transcendentals_research.md`).
+// These mirror the f64-bridge surface above but are integer-only,
+// `no_std`-compatible, and **correctly rounded** — within 0.5 ULP of
+// the exact result. Every reduction and series step runs in the
+// `wide_int::Fixed` guard-digit intermediate (the same machinery the
+// log/exp family uses) and the value is rounded once at the end.
 //
 // Composition strategy:
 //

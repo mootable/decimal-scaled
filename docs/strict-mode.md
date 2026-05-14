@@ -88,26 +88,35 @@ and no `*_strict` methods are emitted at all.
 
 ## The 0.5 ULP accuracy guarantee
 
-The strict methods are held to the **IEEE-754 correctly-rounded
+Every strict method is held to the **IEEE-754 correctly-rounded
 standard**: the returned value is within **0.5 ULP** of the
 mathematically exact result — i.e. it is the exact result rounded to
 the nearest representable value at the type's last decimal place.
 
-Concretely, a `D128<38>` result is computed to at least 39 decimal
-places internally (one guard digit beyond the type's precision, more
-where an algorithm's error analysis requires it) and rounded once at
-the end. The implementation forms exact wide-integer intermediates
-where an exact integer formulation exists, and otherwise carries a
-guard-digit Q-format intermediate with a proven error bound below
-0.5 ULP of the output.
+How it is achieved, per function family:
 
-**Implementation status.** `sqrt_strict` is correctly-rounded today —
-it forms the exact 256-bit radicand `r · 10^SCALE`, takes its exact
-integer square root, and rounds with an exact integer comparison. The
-remaining transcendentals (`ln` / `exp` / the trig family) are being
-reworked from their earlier ~10-ULP series implementations to the
-correctly-rounded guard-digit form; until that lands they do not yet
-meet the 0.5 ULP bound. Track progress in
+- **Algebraic roots** (`sqrt`, `cbrt`) form the exact wide-integer
+  radicand (`r · 10^SCALE` for sqrt as a 256-bit value, `r · 10^(2·SCALE)`
+  for cbrt as a 384-bit value), take its *exact* integer root, and
+  decide the rounding with an exact integer comparison
+  (`8·N ≥ (2q+1)³` for cbrt, etc.). No approximation enters.
+- **Transcendentals** (`ln`, `log`, `log2`, `log10`, `exp`, `exp2`,
+  `powf`, and the whole trig / hyperbolic / angle-conversion family)
+  evaluate their range reduction and series in the in-tree
+  `wide_int::Fixed` intermediate — a 256-bit value at `SCALE + 30`
+  decimal *guard digits*. The 30 guard digits bound the total
+  accumulated rounding error to roughly `1e-17` of an output ULP, far
+  inside the 0.5 ULP margin, and the value is rounded once
+  (half-to-even) at the very end.
+
+This holds across the whole `SCALE` range, including `SCALE = 38`,
+because the guard-digit intermediate is wider than `i128`. Every
+strict transcendental is cross-checked against the platform `f64`
+implementation at `D128<9>` (where `f64` is comfortably more precise
+than the type's ULP) — see the in-crate tests.
+
+The wide tiers (`D256` / `D512` / `D1024`) do not yet have the strict
+transcendental surface; that follow-up is tracked in
 `research/strict_transcendentals_research.md`.
 
 ## Choosing the configuration

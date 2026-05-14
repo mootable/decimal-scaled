@@ -22,28 +22,24 @@
 //!   overflow, using the scale-trick algorithm. Requires the `std`
 //!   feature via `sqrt`.
 //!
-//! # `std`-feature gating
+//! # The `*_strict` dual API
 //!
-//! `f64::sqrt`, `f64::cbrt`, and `f64::powf` are inherent methods on
-//! `f64` defined only in `std`; they delegate to platform intrinsics
-//! that are absent from `core`. The integer forms (`pow`, `powi`, and
-//! the variant family) work in `no_std` because they use only `D128`
-//! operators.
+//! `sqrt` / `cbrt` / `powf` / `hypot` each have an integer-only
+//! `*_strict` form and an f64-bridge form (see `docs/strict-mode.md`).
+//! The `*_strict` forms are **correctly rounded** — within 0.5 ULP of
+//! the exact result:
 //!
-//! When the `strict` feature is enabled, the four f64-bridge functions
-//! (`powf`, `sqrt`, `cbrt`, `hypot`) compile integer-only stub
-//! implementations that do not require `std`. The stubs currently
-//! `todo!`; they exist so that `strict` builds link without pulling in
-//! the f64 platform intrinsics. Callers that need approximate results in
-//! a `strict`/`no_std` context can obtain the raw `i128` mantissa via
-//! `to_bits` and apply their own arithmetic.
+//! - `sqrt_strict` / `cbrt_strict` form the exact 256-/384-bit
+//!   radicand and take its exact integer root, rounding to nearest;
+//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `wide_int`
+//!   guard-digit intermediate;
+//! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
 //!
-//! When `strict` is absent and `std` is present, the original f64-bridge
-//! implementations are compiled instead.
-//!
-//! `no_std` callers without `strict` that need square root, cube root,
-//! or float power can compose them via `libm` or hardware-specific
-//! intrinsics applied to the raw f64 obtained from `to_f64_lossy`.
+//! `pow` / `powi` (integer exponents) are exact at any feature
+//! configuration. The plain `sqrt` / `cbrt` / `powf` / `hypot`
+//! dispatch to the `*_strict` form under the `strict` feature, and to
+//! the f64 bridge otherwise; the `*_strict` forms are always compiled
+//! unless `no_strict` is set, and are `no_std`-compatible.
 //!
 //! # Variant family for `pow`
 //!

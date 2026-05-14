@@ -25,10 +25,10 @@
 //! # Precision
 //!
 //! The f64-bridge forms are **Lossy** — `self` round-trips through
-//! `f64`. The `*_strict` forms are held to the IEEE-754 correctly-
-//! rounded standard (within 0.5 ULP of the exact result); `ln` / `exp`
-//! are mid-rework toward that bound — see
-//! `research/strict_transcendentals_research.md`.
+//! `f64`. The `*_strict` forms are **correctly rounded**: the result
+//! is within 0.5 ULP of the exact value (IEEE-754 round-to-nearest).
+//! They evaluate the series in the `wide_int::Fixed` guard-digit
+//! intermediate and round once at the end.
 //!
 //! # Domain handling
 //!
@@ -617,9 +617,10 @@ impl<const SCALE: u32> D128<SCALE> {
 mod strict_tests {
     use crate::core_type::D128s12;
 
-    /// Tolerance in ULPs for the Phase 2A integer-only transcendentals.
-    /// Tightens as the implementation evolves toward Remez polynomials.
-    const STRICT_TOLERANCE_LSB: i128 = 10;
+    /// Tolerance in ULPs for the strict transcendentals. They are
+    /// correctly rounded (≤ 0.5 ULP); 2 LSB of slack absorbs the
+    /// test's own expected-value rounding.
+    const STRICT_TOLERANCE_LSB: i128 = 2;
 
     fn within(actual: D128s12, expected_bits: i128, tolerance: i128) -> bool {
         (actual.to_bits() - expected_bits).abs() <= tolerance
