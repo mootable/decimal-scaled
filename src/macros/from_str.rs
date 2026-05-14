@@ -1,14 +1,33 @@
-//! Macro-generated `FromStr` for narrow decimal widths.
+//! Macro-generated `FromStr` for the decimal widths.
 //!
 //! The full parser logic lives in `display.rs::parse_decimal_bits`,
-//! which returns the raw bits as `i128`. Per-width `FromStr` impls
-//! narrow that i128 to the target storage and report
-//! `ParseError::OutOfRange` when the narrowing would lose
-//! information.
+//! which returns the raw bits as `i128`.
+//!
+//! - The *native* arm narrows that `i128` to the target storage and
+//!   reports `ParseError::OutOfRange` when the narrowing would lose
+//!   information.
+//! - The *wide* arm widens the `i128` into `bnum` storage via
+//!   `bnum::cast::As`. Note: because the shared parser accumulates in
+//!   `i128`, wide-width parsing is currently limited to values whose
+//!   scaled magnitude fits in `i128`; literals beyond that report
+//!   `ParseError::OutOfRange` from the parser itself. A full-range
+//!   wide parser is future work.
 
 /// Emits `core::str::FromStr` for a decimal type with the given
 /// storage. Reuses the central `parse_decimal_bits` helper.
 macro_rules! decl_decimal_from_str {
+    // Wide (bnum-backed) storage.
+    (wide $Type:ident, $Storage:ty) => {
+        impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
+            type Err = $crate::core_type::ParseError;
+            fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
+                let bits_i128 = $crate::display::parse_decimal_bits::<SCALE>(s)?;
+                ::core::result::Result::Ok(Self(::bnum::cast::As::as_(bits_i128)))
+            }
+        }
+    };
+
+    // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
             type Err = $crate::core_type::ParseError;

@@ -17,7 +17,7 @@ macro_rules! decl_decimal_num_traits_basics {
             }
             #[inline]
             fn is_zero(&self) -> bool {
-                self.0 == 0
+                *self == Self::ZERO
             }
         }
 

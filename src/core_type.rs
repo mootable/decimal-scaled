@@ -585,6 +585,20 @@ crate::macros::basics::decl_decimal_basics!(wide D256, crate::wide::I256, 76);
 crate::macros::arithmetic::decl_decimal_arithmetic!(wide D256, crate::wide::I256, crate::wide::I512);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::display::decl_decimal_display!(wide D256, crate::wide::U256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::overflow::decl_decimal_overflow_variants!(wide D256, crate::wide::I256, crate::wide::I512);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::num_traits::decl_decimal_num_traits_basics!(D256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::sign::decl_decimal_sign_methods!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::consts::decl_decimal_consts!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::from_str::decl_decimal_from_str!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::storage_formatters::decl_decimal_storage_formatters!(D256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::helpers::decl_decimal_helpers!(wide D256);
 
 /// Scale alias: `D256<0>`. 1 LSB = 1 (256-bit integer ledger).
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -972,6 +986,83 @@ mod tests {
         let s = alloc::format!("{}", big);
         assert!(s.starts_with("5.78960446"));
         assert_eq!(s.len(), "5.".len() + 76);
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_sign_and_helpers() {
+        type D = super::D256<6>;
+        let neg = -D::ONE;
+        assert!(neg.is_negative());
+        assert!(D::ONE.is_positive());
+        assert!(!D::ZERO.is_positive());
+        assert_eq!(neg.abs(), D::ONE);
+        assert_eq!(D::ONE.signum(), D::ONE);
+        assert_eq!(neg.signum(), neg);
+        assert_eq!(D::ZERO.signum(), D::ZERO);
+        // min / max / clamp
+        let two = D::ONE + D::ONE;
+        assert_eq!(D::ONE.min(two), D::ONE);
+        assert_eq!(D::ONE.max(two), two);
+        assert_eq!(two.clamp(D::ZERO, D::ONE), D::ONE);
+        // copysign
+        assert_eq!(D::ONE.copysign(neg), neg);
+        assert_eq!(neg.copysign(D::ONE), D::ONE);
+        // recip: 1/2 at scale 6
+        let half = D::from_bits(D::multiplier() / crate::wide::I256::from_str_radix("2", 10).unwrap());
+        assert_eq!(two.recip(), half);
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_overflow_variants() {
+        type D = super::D256<2>;
+        // checked_add overflow at MAX
+        assert_eq!(D::MAX.checked_add(D::ONE), None);
+        assert_eq!(D::ONE.checked_add(D::ONE), Some(D::ONE + D::ONE));
+        // saturating
+        assert_eq!(D::MAX.saturating_add(D::ONE), D::MAX);
+        assert_eq!(D::MIN.saturating_sub(D::ONE), D::MIN);
+        // checked_neg of MIN overflows
+        assert_eq!(D::MIN.checked_neg(), None);
+        assert_eq!(D::ONE.checked_neg(), Some(-D::ONE));
+        // checked_mul / checked_div
+        let two = D::ONE + D::ONE;
+        let three = two + D::ONE;
+        assert_eq!(two.checked_mul(three), Some(D::from_bits(D::multiplier() * crate::wide::I256::from_str_radix("6", 10).unwrap())));
+        assert_eq!(D::ONE.checked_div(D::ZERO), None);
+        assert_eq!((three).checked_div(D::ONE), Some(three));
+        // wrapping_add of one storage LSB at MAX wraps around to MIN.
+        let one_lsb = D::from_bits(crate::wide::I256::from_str_radix("1", 10).unwrap());
+        assert_eq!(D::MAX.wrapping_add(one_lsb), D::MIN);
+        // overflowing
+        assert_eq!(D::ONE.overflowing_add(D::ONE), (two, false));
+        assert_eq!(D::MAX.overflowing_add(D::ONE).1, true);
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_consts_and_from_str() {
+        use crate::consts::DecimalConsts;
+        use core::str::FromStr;
+        // pi at scale 12 matches the D128 reference.
+        assert_eq!(
+            super::D256::<12>::pi().to_bits(),
+            crate::wide::I256::from_str_radix("3141592653590", 10).unwrap()
+        );
+        assert_eq!(
+            super::D256::<4>::e().to_bits(),
+            crate::wide::I256::from_str_radix("27183", 10).unwrap()
+        );
+        // FromStr within i128 range
+        let v = super::D256::<2>::from_str("1.50").unwrap();
+        assert_eq!(v.to_bits(), crate::wide::I256::from_str_radix("150", 10).unwrap());
+        let neg = super::D256::<2>::from_str("-20.50").unwrap();
+        assert_eq!(neg.to_bits(), crate::wide::I256::from_str_radix("-2050", 10).unwrap());
+        // num_traits Zero / One
+        use num_traits::{One, Zero};
+        assert!(super::D256::<6>::zero().is_zero());
+        assert!(super::D256::<6>::one().is_one());
     }
 
     #[test]

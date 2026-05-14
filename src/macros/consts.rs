@@ -11,7 +11,47 @@
 /// Emits `DecimalConsts` for a decimal type. Requires the
 /// `D128::<SCALE_REF>::from_bits(_).rescale::<SCALE>()` path to be
 /// available (i.e. the rescale macro is already invoked for D128).
+///
+/// - `decl_decimal_consts!(D32, i32)` — *native* storage; the `i128`
+///   reference bits narrow via an `as`-cast.
+/// - `decl_decimal_consts!(wide D256, I256)` — *wide* storage; the
+///   `i128` reference bits widen via `bnum::cast::As`. Because the
+///   reference constants are only carried to `SCALE_REF = 35` digits,
+///   wide widths gain no extra precision above that scale (the trailing
+///   digits are zero-extended) — the value is still correct, just not
+///   more precise than the D128 reference.
 macro_rules! decl_decimal_consts {
+    // Wide (bnum-backed) storage.
+    (wide $Type:ident, $Storage:ty) => {
+        impl<const SCALE: u32> $crate::consts::DecimalConsts for $Type<SCALE> {
+            #[inline]
+            fn pi() -> Self {
+                Self(::bnum::cast::As::as_($crate::consts::pi_at_target::<SCALE>()))
+            }
+            #[inline]
+            fn tau() -> Self {
+                Self(::bnum::cast::As::as_($crate::consts::tau_at_target::<SCALE>()))
+            }
+            #[inline]
+            fn half_pi() -> Self {
+                Self(::bnum::cast::As::as_($crate::consts::half_pi_at_target::<SCALE>()))
+            }
+            #[inline]
+            fn quarter_pi() -> Self {
+                Self(::bnum::cast::As::as_($crate::consts::quarter_pi_at_target::<SCALE>()))
+            }
+            #[inline]
+            fn golden() -> Self {
+                Self(::bnum::cast::As::as_($crate::consts::golden_at_target::<SCALE>()))
+            }
+            #[inline]
+            fn e() -> Self {
+                Self(::bnum::cast::As::as_($crate::consts::e_at_target::<SCALE>()))
+            }
+        }
+    };
+
+    // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $crate::consts::DecimalConsts for $Type<SCALE> {
             #[inline]

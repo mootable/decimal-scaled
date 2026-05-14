@@ -1,18 +1,265 @@
-//! Macro-generated overflow-aware arithmetic variants for narrow
-//! decimal widths.
+//! Macro-generated overflow-aware arithmetic variants for the decimal
+//! widths that use a *uniform* mul/div pattern (D32, D64, and the wide
+//! tier D256 / D512 / D1024).
 //!
 //! Emits the four standard families (`checked_*`, `wrapping_*`,
 //! `saturating_*`, `overflowing_*`) for `add`, `sub`, `neg`, `mul`,
-//! `div`, `rem`. Add/sub/neg/rem delegate to the storage type's
-//! primitive intrinsics (`i32::checked_add`, etc.). Mul/div widen to
-//! `$Wider` for the intermediate, then narrow back.
+//! `div`, `rem`.
+//!
+//! Add / sub / neg / rem delegate to the storage type's `checked_*` /
+//! `wrapping_*` / `saturating_*` / `overflowing_*` intrinsics, which
+//! `bnum` integers expose with the same names and `const`-ness as the
+//! primitive integers — so those families live in a shared `@common`
+//! arm. Mul / div widen to `$Wider` for the intermediate; only the
+//! widening *spelling* differs (native `as`-casts vs `bnum::cast::As`),
+//! so they are written inline per front-end arm.
+//!
+//! D128 is the exception: its overflow mul/div go through the
+//! hand-rolled `mg_divide` path and are not generated here.
 
-/// Emits overflow variants for a decimal type. `$Storage` must support
-/// the standard `checked_*` / `wrapping_*` / `saturating_*` /
-/// `overflowing_*` intrinsic families. `$Wider` is used as the
-/// intermediate for mul/div.
+/// Emits overflow variants for a decimal type.
+///
+/// - `decl_decimal_overflow_variants!(D32, i32, i64)` — *native*
+///   storage; `$Wider` is a primitive integer.
+/// - `decl_decimal_overflow_variants!(wide D256, I256, I512)` — *wide*
+///   storage; `$Wider` is the next `bnum` size up.
 macro_rules! decl_decimal_overflow_variants {
+    // Wide (bnum-backed) storage.
+    (wide $Type:ident, $Storage:ty, $Wider:ty) => {
+        $crate::macros::overflow::decl_decimal_overflow_variants!(@common $Type, $Storage);
+
+        impl<const SCALE: u32> $Type<SCALE> {
+            // ----- mul (uses widening) ------------------------------
+
+            #[inline]
+            #[must_use]
+            pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+                let a: $Wider = ::bnum::cast::As::as_(self.0);
+                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let m: $Wider = <$Wider>::from_str_radix("10", 10)
+                    .expect("wide decimal: invalid base-10 literal")
+                    .pow(SCALE);
+                let prod = a.checked_mul(b)?;
+                let scaled = prod / m;
+                let storage_max: $Wider = ::bnum::cast::As::as_(<$Storage>::MAX);
+                let storage_min: $Wider = ::bnum::cast::As::as_(<$Storage>::MIN);
+                if scaled > storage_max || scaled < storage_min {
+                    None
+                } else {
+                    Some(Self(::bnum::cast::As::as_(scaled)))
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn wrapping_mul(self, rhs: Self) -> Self {
+                let a: $Wider = ::bnum::cast::As::as_(self.0);
+                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let m: $Wider = <$Wider>::from_str_radix("10", 10)
+                    .expect("wide decimal: invalid base-10 literal")
+                    .pow(SCALE);
+                let prod = a.wrapping_mul(b);
+                let scaled = prod / m;
+                Self(::bnum::cast::As::as_(scaled))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn saturating_mul(self, rhs: Self) -> Self {
+                match self.checked_mul(rhs) {
+                    Some(v) => v,
+                    None => {
+                        let neg_result =
+                            self.0.is_negative() ^ rhs.0.is_negative();
+                        if neg_result { Self::MIN } else { Self::MAX }
+                    }
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
+                match self.checked_mul(rhs) {
+                    Some(v) => (v, false),
+                    None => (self.wrapping_mul(rhs), true),
+                }
+            }
+
+            // ----- div ----------------------------------------------
+
+            #[inline]
+            #[must_use]
+            pub fn checked_div(self, rhs: Self) -> Option<Self> {
+                if rhs == Self::ZERO {
+                    return None;
+                }
+                let a: $Wider = ::bnum::cast::As::as_(self.0);
+                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let m: $Wider = <$Wider>::from_str_radix("10", 10)
+                    .expect("wide decimal: invalid base-10 literal")
+                    .pow(SCALE);
+                let scaled_numer = a.checked_mul(m)?;
+                let result = scaled_numer / b;
+                let storage_max: $Wider = ::bnum::cast::As::as_(<$Storage>::MAX);
+                let storage_min: $Wider = ::bnum::cast::As::as_(<$Storage>::MIN);
+                if result > storage_max || result < storage_min {
+                    None
+                } else {
+                    Some(Self(::bnum::cast::As::as_(result)))
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn wrapping_div(self, rhs: Self) -> Self {
+                let a: $Wider = ::bnum::cast::As::as_(self.0);
+                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let m: $Wider = <$Wider>::from_str_radix("10", 10)
+                    .expect("wide decimal: invalid base-10 literal")
+                    .pow(SCALE);
+                let scaled_numer = a.wrapping_mul(m);
+                let result = scaled_numer / b;
+                Self(::bnum::cast::As::as_(result))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn saturating_div(self, rhs: Self) -> Self {
+                match self.checked_div(rhs) {
+                    Some(v) => v,
+                    None => {
+                        let neg_result =
+                            self.0.is_negative() ^ rhs.0.is_negative();
+                        if neg_result { Self::MIN } else { Self::MAX }
+                    }
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
+                match self.checked_div(rhs) {
+                    Some(v) => (v, false),
+                    None => (self.wrapping_div(rhs), true),
+                }
+            }
+        }
+    };
+
+    // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty, $Wider:ty) => {
+        $crate::macros::overflow::decl_decimal_overflow_variants!(@common $Type, $Storage);
+
+        impl<const SCALE: u32> $Type<SCALE> {
+            // ----- mul (uses widening) ------------------------------
+
+            #[inline]
+            #[must_use]
+            pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+                let a = self.0 as $Wider;
+                let b = rhs.0 as $Wider;
+                let m = (10 as $Wider).pow(SCALE);
+                let prod = a.checked_mul(b)?;
+                let scaled = prod / m;
+                if scaled > <$Storage>::MAX as $Wider || scaled < <$Storage>::MIN as $Wider {
+                    None
+                } else {
+                    Some(Self(scaled as $Storage))
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn wrapping_mul(self, rhs: Self) -> Self {
+                let a = self.0 as $Wider;
+                let b = rhs.0 as $Wider;
+                let m = (10 as $Wider).pow(SCALE);
+                let prod = a.wrapping_mul(b);
+                let scaled = prod / m;
+                Self(scaled as $Storage)
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn saturating_mul(self, rhs: Self) -> Self {
+                match self.checked_mul(rhs) {
+                    Some(v) => v,
+                    None => {
+                        // Sign of (a * b) is sign(a) XOR sign(b).
+                        let neg_result = (self.0 < 0) ^ (rhs.0 < 0);
+                        if neg_result { Self::MIN } else { Self::MAX }
+                    }
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
+                match self.checked_mul(rhs) {
+                    Some(v) => (v, false),
+                    None => (self.wrapping_mul(rhs), true),
+                }
+            }
+
+            // ----- div ----------------------------------------------
+
+            #[inline]
+            #[must_use]
+            pub fn checked_div(self, rhs: Self) -> Option<Self> {
+                if rhs.0 == 0 {
+                    return None;
+                }
+                let a = self.0 as $Wider;
+                let b = rhs.0 as $Wider;
+                let m = (10 as $Wider).pow(SCALE);
+                let scaled_numer = a.checked_mul(m)?;
+                let result = scaled_numer / b;
+                if result > <$Storage>::MAX as $Wider || result < <$Storage>::MIN as $Wider {
+                    None
+                } else {
+                    Some(Self(result as $Storage))
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn wrapping_div(self, rhs: Self) -> Self {
+                let a = self.0 as $Wider;
+                let b = rhs.0 as $Wider;
+                let m = (10 as $Wider).pow(SCALE);
+                let scaled_numer = a.wrapping_mul(m);
+                let result = scaled_numer / b;
+                Self(result as $Storage)
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn saturating_div(self, rhs: Self) -> Self {
+                match self.checked_div(rhs) {
+                    Some(v) => v,
+                    None => {
+                        // Sign of (a / b) is sign(a) XOR sign(b).
+                        let neg_result = (self.0 < 0) ^ (rhs.0 < 0);
+                        if neg_result { Self::MIN } else { Self::MAX }
+                    }
+                }
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
+                match self.checked_div(rhs) {
+                    Some(v) => (v, false),
+                    None => (self.wrapping_div(rhs), true),
+                }
+            }
+        }
+    };
+
+    // Shared: add / sub / neg / rem and their overflow families.
+    // `bnum` integers expose these intrinsics with the same names and
+    // `const`-ness as the primitive integers.
+    (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
             // ----- add ----------------------------------------------
 
@@ -102,117 +349,6 @@ macro_rules! decl_decimal_overflow_variants {
             pub const fn overflowing_neg(self) -> (Self, bool) {
                 let (v, of) = self.0.overflowing_neg();
                 (Self(v), of)
-            }
-
-            // ----- mul (uses widening) ------------------------------
-
-            #[inline]
-            #[must_use]
-            pub fn checked_mul(self, rhs: Self) -> Option<Self> {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let prod = a.checked_mul(b)?;
-                let scaled = prod / m;
-                if scaled > <$Storage>::MAX as $Wider || scaled < <$Storage>::MIN as $Wider {
-                    None
-                } else {
-                    Some(Self(scaled as $Storage))
-                }
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn wrapping_mul(self, rhs: Self) -> Self {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let prod = a.wrapping_mul(b);
-                let scaled = prod / m;
-                Self(scaled as $Storage)
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn saturating_mul(self, rhs: Self) -> Self {
-                match self.checked_mul(rhs) {
-                    Some(v) => v,
-                    None => {
-                        // Sign of (a * b) is sign(a) XOR sign(b).
-                        let neg_result = (self.0 < 0) ^ (rhs.0 < 0);
-                        if neg_result {
-                            Self::MIN
-                        } else {
-                            Self::MAX
-                        }
-                    }
-                }
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
-                match self.checked_mul(rhs) {
-                    Some(v) => (v, false),
-                    None => (self.wrapping_mul(rhs), true),
-                }
-            }
-
-            // ----- div ----------------------------------------------
-
-            #[inline]
-            #[must_use]
-            pub fn checked_div(self, rhs: Self) -> Option<Self> {
-                if rhs.0 == 0 {
-                    return None;
-                }
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let scaled_numer = a.checked_mul(m)?;
-                let result = scaled_numer / b;
-                if result > <$Storage>::MAX as $Wider || result < <$Storage>::MIN as $Wider {
-                    None
-                } else {
-                    Some(Self(result as $Storage))
-                }
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn wrapping_div(self, rhs: Self) -> Self {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let scaled_numer = a.wrapping_mul(m);
-                let result = scaled_numer / b;
-                Self(result as $Storage)
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn saturating_div(self, rhs: Self) -> Self {
-                match self.checked_div(rhs) {
-                    Some(v) => v,
-                    None => {
-                        // Sign of (a / b) is sign(a) XOR sign(b).
-                        let neg_result = (self.0 < 0) ^ (rhs.0 < 0);
-                        if neg_result {
-                            Self::MIN
-                        } else {
-                            Self::MAX
-                        }
-                    }
-                }
-            }
-
-            #[inline]
-            #[must_use]
-            pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
-                match self.checked_div(rhs) {
-                    Some(v) => (v, false),
-                    None => (self.wrapping_div(rhs), true),
-                }
             }
 
             // ----- rem ----------------------------------------------
