@@ -39,15 +39,162 @@
 
 use crate::core_type::D128;
 
-// High-precision math constants used by the strict-mode transcendentals.
-// Each value is the half-to-even rounding of the named irrational to 35
-// fractional digits, stored as a raw i128 at SCALE_REF = 35 (matching
-// the convention in `consts.rs`). Sources: research/strict_transcendentals_research.md §6.
+// ─────────────────────────────────────────────────────────────────────
+// Correctly-rounded strict log / exp core.
 //
-// Not feature-gated: the `*_strict` methods are always compiled (see the
-// module doc), so the constants they depend on are too.
-const LN_2_RAW_S35: i128 = 69_314_718_055_994_530_941_723_212_145_817_657_i128;
-const LN_10_RAW_S35: i128 = 230_258_509_299_404_568_401_799_145_468_436_421_i128;
+// The strict `ln` / `log` / `log2` / `log10` / `exp` / `exp2` all run
+// on a 256-bit `Fixed` intermediate at `SCALE + GUARD` working digits.
+// The 30 guard digits bound the total accumulated rounding error far
+// below 0.5 ULP of the output, so each result — rounded once,
+// half-to-even, back to `SCALE` — is correctly rounded.
+//
+// `GUARD = 30` keeps the working scale `W = SCALE + 30 <= 68` for
+// `SCALE <= 38`, which is small enough that the 64-digit constants
+// cover it, `r · 10^GUARD` fits `U256`, and the 512-bit mul/div
+// intermediates never overflow.
+// ─────────────────────────────────────────────────────────────────────
+
+#[cfg(not(feature = "no_strict"))]
+const STRICT_GUARD: u32 = 30;
+
+/// `ln(2)` as a `Fixed` at working scale `w` (`w <= 64`). The constant
+/// is embedded to 64 fractional digits and narrowed to `w`.
+#[cfg(not(feature = "no_strict"))]
+fn wide_ln2(w: u32) -> crate::wide_int::Fixed {
+    // ln 2 = 0.693147180559945309417232121458176568075500134360255254120680 0094
+    crate::wide_int::Fixed::from_decimal_split(
+        69_314_718_055_994_530_941_723_212_145_817_u128,
+        65_680_755_001_343_602_552_541_206_800_094_u128,
+    )
+    .rescale_down(64, w)
+}
+
+/// `ln(10)` as a `Fixed` at working scale `w` (`w <= 63`). Embedded to
+/// 63 fractional digits (`ln 10 ≈ 2.30…` has an integer digit) and
+/// narrowed to `w`.
+#[cfg(not(feature = "no_strict"))]
+fn wide_ln10(w: u32) -> crate::wide_int::Fixed {
+    // ln 10 = 2.302585092994045684017991454684364207601101488628772976033327 901
+    crate::wide_int::Fixed::from_decimal_split(
+        23_025_850_929_940_456_840_179_914_546_843_u128,
+        64_207_601_101_488_628_772_976_033_327_901_u128,
+    )
+    .rescale_down(63, w)
+}
+
+/// Natural logarithm of a positive working-scale value `v_w`, returned
+/// at the same working scale `w`.
+///
+/// Range-reduces `v = 2^k · m` with `m ∈ [1,2)` — the mantissa is
+/// recomputed exactly from `v_w` once `k` is known — then evaluates
+/// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
+/// and returns `k·ln(2) + ln(m)`.
+#[cfg(not(feature = "no_strict"))]
+fn ln_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
+    use crate::wide_int::Fixed;
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let two_w = one_w.double();
+
+    // Range reduction: find k with v ∈ [2^k, 2^(k+1)); m_w = v_w / 2^k.
+    let mut k: i32 = v_w.bit_length() as i32 - one_w.bit_length() as i32;
+    let m_w = loop {
+        let m = if k >= 0 {
+            v_w.shr(k as u32)
+        } else {
+            v_w.shl((-k) as u32)
+        };
+        if m.ge_mag(two_w) {
+            k += 1;
+        } else if !m.ge_mag(one_w) {
+            k -= 1;
+        } else {
+            break m;
+        }
+    };
+
+    // t = (m - 1) / (m + 1) ∈ [0, 1/3]; artanh(t) = t + t³/3 + t⁵/5 + …
+    let t = m_w.sub(one_w).div(m_w.add(one_w), w);
+    let t2 = t.mul(t, w);
+    let mut sum = t;
+    let mut term = t;
+    let mut j: u128 = 1;
+    loop {
+        term = term.mul(t2, w);
+        let contrib = term.div_small(2 * j + 1);
+        if contrib.is_zero() {
+            break;
+        }
+        sum = sum.add(contrib);
+        j += 1;
+        if j > 400 {
+            break;
+        }
+    }
+    let ln_m = sum.double();
+
+    let ln2 = wide_ln2(w);
+    let k_ln2 = if k >= 0 {
+        ln2.mul_u128(k as u128)
+    } else {
+        ln2.mul_u128((-k) as u128).neg()
+    };
+    k_ln2.add(ln_m)
+}
+
+/// `e` raised to a working-scale value `v_w`, returned at the same
+/// working scale `w`.
+///
+/// Range-reduces `v = k·ln(2) + s` with `|s| ≤ ln(2)/2`, evaluates the
+/// Taylor series for `exp(s)`, then reassembles `2^k · exp(s)` by
+/// shifting the working-scale value (so the `2^k` factor never
+/// amplifies a rounding error).
+///
+/// # Panics
+///
+/// Panics if `2^k · exp(s)` cannot fit a 256-bit working value — i.e.
+/// the caller's result would overflow its representable range.
+#[cfg(not(feature = "no_strict"))]
+fn exp_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
+    use crate::wide_int::Fixed;
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let ln2 = wide_ln2(w);
+
+    // k = round(v / ln 2); s = v - k·ln(2), |s| <= ln(2)/2.
+    let k = v_w.div(ln2, w).round_to_nearest_int(w);
+    let k_ln2 = if k >= 0 {
+        ln2.mul_u128(k as u128)
+    } else {
+        ln2.mul_u128((-k) as u128).neg()
+    };
+    let s = v_w.sub(k_ln2);
+
+    // Taylor series exp(s) = 1 + s + s²/2! + … — `term` carries sⁿ/n!.
+    let mut sum = one_w;
+    let mut term = one_w;
+    let mut n: u128 = 1;
+    loop {
+        term = term.mul(s, w).div_small(n);
+        if term.is_zero() {
+            break;
+        }
+        sum = sum.add(term);
+        n += 1;
+        if n > 400 {
+            break;
+        }
+    }
+
+    // exp(v) = 2^k · exp(s).
+    if k >= 0 {
+        let shift = k as u32;
+        if sum.bit_length() + shift > 256 {
+            panic!("D128::exp: result overflows the representable range");
+        }
+        sum.shl(shift)
+    } else {
+        sum.shr((-k) as u32)
+    }
+}
 
 impl<const SCALE: u32> D128<SCALE> {
     // Logarithms
@@ -85,78 +232,13 @@ impl<const SCALE: u32> D128<SCALE> {
     #[cfg(not(feature = "no_strict"))]
     pub fn ln_strict(self) -> Self {
         use crate::wide_int::Fixed;
-
         if self.0 <= 0 {
             panic!("D128::ln: argument must be positive");
         }
-
-        // Working scale: SCALE + 20 guard digits. With SCALE <= 38 this
-        // keeps W <= 58, so the 64-digit ln(2) constant covers it and
-        // the 512-bit mul/div intermediates never overflow.
-        const GUARD: u32 = 20;
-        let w = SCALE + GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let two_w = one_w.double();
-
-        // v_w = r · 10^GUARD — exact, since `r` is the exact raw storage.
-        let v_w = Fixed::from_u128_mag(self.0 as u128, false)
-            .mul_u128(10u128.pow(GUARD));
-
-        // Range reduction: find k with v ∈ [2^k, 2^(k+1)); m_w = v_w/2^k.
-        // `>>` truncates once (< 1 ULP at W); `<<` is exact.
-        let mut k: i32 = v_w.bit_length() as i32 - one_w.bit_length() as i32;
-        let m_w = loop {
-            let m = if k >= 0 {
-                v_w.shr(k as u32)
-            } else {
-                v_w.shl((-k) as u32)
-            };
-            if m.ge_mag(two_w) {
-                k += 1;
-            } else if !m.ge_mag(one_w) {
-                k -= 1;
-            } else {
-                break m;
-            }
-        };
-
-        // t = (m - 1) / (m + 1) ∈ [0, 1/3].
-        let t = m_w.sub(one_w).div(m_w.add(one_w), w);
-        let t2 = t.mul(t, w);
-
-        // artanh(t) = t + t³/3 + t⁵/5 + … — `term` carries t^(2j+1).
-        let mut sum = t;
-        let mut term = t;
-        let mut j: u128 = 1;
-        loop {
-            term = term.mul(t2, w);
-            let contrib = term.div_small(2 * j + 1);
-            if contrib.is_zero() {
-                break;
-            }
-            sum = sum.add(contrib);
-            j += 1;
-            if j > 400 {
-                break;
-            }
-        }
-        // ln(m) = 2 · artanh(t).
-        let ln_m = sum.double();
-
-        // ln(v) = k·ln(2) + ln(m). ln(2) to 64 digits, narrowed to W.
-        let ln2 = Fixed::from_decimal_split(
-            69_314_718_055_994_530_941_723_212_145_817_u128,
-            65_680_755_001_343_602_552_541_206_800_094_u128,
-        )
-        .rescale_down(64, w);
-        let k_ln2 = if k >= 0 {
-            ln2.mul_u128(k as u128)
-        } else {
-            ln2.mul_u128((-k) as u128).neg()
-        };
-
-        let result_w = k_ln2.add(ln_m);
-        let raw = result_w
+        let w = SCALE + STRICT_GUARD;
+        let v_w =
+            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        let raw = ln_fixed(v_w, w)
             .round_to_i128(w, SCALE)
             .expect("D128::ln: result out of range");
         Self::from_bits(raw)
@@ -196,23 +278,40 @@ impl<const SCALE: u32> D128<SCALE> {
     }
 
     /// Returns the logarithm of `self` in the given `base`, computed
-    /// integer-only as `ln_strict(self) / ln_strict(base)`.
+    /// integer-only as `ln(self) / ln(base)` — both logarithms and the
+    /// division are carried in the wide guard-digit intermediate, so
+    /// the result is correctly rounded.
     ///
     /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0` (via [`Self::ln_strict`]), if `base <= 0`,
-    /// or if `base == 1` (division by `ln(1) = 0`).
+    /// Panics if `self <= 0` or `base <= 0`, or if `base == 1`
+    /// (division by `ln(1) = 0`).
     #[inline]
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log_strict(self, base: Self) -> Self {
-        let ln_base = base.ln_strict();
-        if ln_base.to_bits() == 0 {
+        use crate::wide_int::Fixed;
+        if self.0 <= 0 {
+            panic!("D128::log: argument must be positive");
+        }
+        if base.0 <= 0 {
+            panic!("D128::log: base must be positive");
+        }
+        let w = SCALE + STRICT_GUARD;
+        let pow = 10u128.pow(STRICT_GUARD);
+        let v_w = Fixed::from_u128_mag(self.0 as u128, false).mul_u128(pow);
+        let b_w = Fixed::from_u128_mag(base.0 as u128, false).mul_u128(pow);
+        let ln_b = ln_fixed(b_w, w);
+        if ln_b.is_zero() {
             panic!("D128::log: base must not equal 1 (ln(1) is zero)");
         }
-        self.ln_strict() / ln_base
+        let raw = ln_fixed(v_w, w)
+            .div(ln_b, w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::log: result out of range");
+        Self::from_bits(raw)
     }
 
     /// Returns the logarithm of `self` in the given `base`.
@@ -253,19 +352,30 @@ impl<const SCALE: u32> D128<SCALE> {
     }
 
     /// Returns the base-2 logarithm of `self`, computed integer-only as
-    /// `ln_strict(self) / ln(2)`.
+    /// `ln(self) / ln(2)` in the wide guard-digit intermediate — the
+    /// result is correctly rounded.
     ///
     /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0` (via [`Self::ln_strict`]).
+    /// Panics if `self <= 0`.
     #[inline]
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log2_strict(self) -> Self {
-        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
-        self.ln_strict() / ln_2
+        use crate::wide_int::Fixed;
+        if self.0 <= 0 {
+            panic!("D128::log2: argument must be positive");
+        }
+        let w = SCALE + STRICT_GUARD;
+        let v_w =
+            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        let raw = ln_fixed(v_w, w)
+            .div(wide_ln2(w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::log2: result out of range");
+        Self::from_bits(raw)
     }
 
     /// Returns the base-2 logarithm of `self`.
@@ -303,19 +413,30 @@ impl<const SCALE: u32> D128<SCALE> {
     }
 
     /// Returns the base-10 logarithm of `self`, computed integer-only
-    /// as `ln_strict(self) / ln(10)`.
+    /// as `ln(self) / ln(10)` in the wide guard-digit intermediate —
+    /// the result is correctly rounded.
     ///
     /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0` (via [`Self::ln_strict`]).
+    /// Panics if `self <= 0`.
     #[inline]
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log10_strict(self) -> Self {
-        let ln_10 = D128::<35>::from_bits(LN_10_RAW_S35).rescale::<SCALE>();
-        self.ln_strict() / ln_10
+        use crate::wide_int::Fixed;
+        if self.0 <= 0 {
+            panic!("D128::log10: argument must be positive");
+        }
+        let w = SCALE + STRICT_GUARD;
+        let v_w =
+            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        let raw = ln_fixed(v_w, w)
+            .div(wide_ln10(w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::log10: result out of range");
+        Self::from_bits(raw)
     }
 
     /// Returns the base-10 logarithm of `self`.
@@ -356,85 +477,41 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// # Algorithm
     ///
-    /// Range reduction `x = k * ln(2) + r` with `|r| ≤ ln(2)/2 ≈ 0.347`,
-    /// then a Taylor series `exp(r) = 1 + r + r²/2! + r³/3! + ...` on the
-    /// reduced remainder. Reassembly is `exp(x) = 2^k * exp(r)`, applied
-    /// via a left- or right-shift of the storage bits.
+    /// Range reduction `x = k·ln(2) + s` with `k = round(x / ln 2)` and
+    /// `|s| ≤ ln(2)/2 ≈ 0.347`, then the Taylor series
+    /// `exp(s) = 1 + s + s²/2! + …` evaluated in a 256-bit `Fixed`
+    /// intermediate at `SCALE + 30` working digits. Reassembly is
+    /// `exp(x) = 2^k · exp(s)`, applied as a shift on the working-scale
+    /// value *before* the final rounding, so the `2^k` factor never
+    /// amplifies a rounding error. The result is rounded once,
+    /// half-to-even, back to `SCALE`.
     ///
     /// # Precision
     ///
-    /// Strict: all arithmetic is integer-only. The series converges
-    /// quickly because `|r|` is bounded by `ln(2)/2`. Result accuracy
-    /// is within roughly ±10 ULPs at `D128s12` and degrades at higher
-    /// SCALE for the same reasons as [`Self::ln`].
+    /// Strict: integer-only, and **correctly rounded** — the result is
+    /// within 0.5 ULP of the exact exponential (IEEE-754
+    /// round-to-nearest).
     ///
     /// # Panics
     ///
-    /// Panics if the result overflows D128's representable range.
-    /// At `D128s12` this happens for `self.to_f64_lossy()` greater than
-    /// roughly `60`.
+    /// Panics if the result overflows the type's representable range.
     #[inline]
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn exp_strict(self) -> Self {
-        let one = Self::ONE;
-        if self.to_bits() == 0 {
-            return one;
+        use crate::wide_int::Fixed;
+        if self.0 == 0 {
+            return Self::ONE;
         }
-        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
-
-        // x = k * ln(2) + r, |r| <= ln(2)/2.
-        let q = self / ln_2;
-        let half_bits = one.to_bits() >> 1;
-        let q_with_half = if q.to_bits() >= 0 {
-            q.to_bits().saturating_add(half_bits)
-        } else {
-            q.to_bits().saturating_sub(half_bits)
-        };
-        let k = q_with_half / one.to_bits();
-        let k_ln_2_bits = match k.checked_mul(ln_2.to_bits()) {
-            Some(v) => v,
-            None => panic!("D128::exp: argument out of range"),
-        };
-        let r = Self::from_bits(self.to_bits() - k_ln_2_bits);
-
-        // Taylor series for exp(r): 1 + r + r²/2! + r³/3! + ...
-        // At each step `t` represents r^n / n!.
-        let mut sum_bits: i128 = one.to_bits();
-        let mut t = one;
-        let mut n: i128 = 1;
-        loop {
-            t = t * r;
-            let term_bits = t.to_bits() / n;
-            if term_bits == 0 {
-                break;
-            }
-            sum_bits = sum_bits.saturating_add(term_bits);
-            t = Self::from_bits(term_bits);
-            n += 1;
-            if n > 100 {
-                break;
-            }
-        }
-
-        // exp(x) = 2^k * exp(r); apply via bit-shift on the raw storage.
-        let result_bits = if k > 0 {
-            let shift = k as u32;
-            if shift >= 128 || sum_bits.checked_shl(shift).is_none() {
-                panic!("D128::exp: result overflows D128 range");
-            }
-            sum_bits << shift
-        } else if k < 0 {
-            let shift = (-k) as u32;
-            if shift >= 128 {
-                0
-            } else {
-                sum_bits >> shift
-            }
-        } else {
-            sum_bits
-        };
-        Self::from_bits(result_bits)
+        let w = SCALE + STRICT_GUARD;
+        let negative_input = self.0 < 0;
+        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
+            .mul_u128(10u128.pow(STRICT_GUARD));
+        let v_w = if negative_input { v_w.neg() } else { v_w };
+        let raw = exp_fixed(v_w, w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::exp: result overflows the representable range");
+        Self::from_bits(raw)
     }
 
     /// Returns `e^self` (natural exponential).
@@ -472,7 +549,9 @@ impl<const SCALE: u32> D128<SCALE> {
     }
 
     /// Returns `2^self` (base-2 exponential), computed integer-only as
-    /// `exp_strict(self * ln(2))`.
+    /// `exp(self · ln(2))` — the `self · ln(2)` product is formed in
+    /// the wide guard-digit intermediate (not at the type's own scale),
+    /// so the result is correctly rounded.
     ///
     /// Always available, regardless of the `strict` feature.
     ///
@@ -483,8 +562,21 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn exp2_strict(self) -> Self {
-        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
-        (self * ln_2).exp_strict()
+        use crate::wide_int::Fixed;
+        if self.0 == 0 {
+            return Self::ONE;
+        }
+        let w = SCALE + STRICT_GUARD;
+        let negative_input = self.0 < 0;
+        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
+            .mul_u128(10u128.pow(STRICT_GUARD));
+        let v_w = if negative_input { v_w.neg() } else { v_w };
+        // arg = self · ln(2), carried at the wide working scale.
+        let arg_w = v_w.mul(wide_ln2(w), w);
+        let raw = exp_fixed(arg_w, w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::exp2: result overflows the representable range");
+        Self::from_bits(raw)
     }
 
     /// Returns `2^self` (base-2 exponential).
@@ -574,6 +666,70 @@ mod strict_tests {
             i64::MAX as i128,
         ] {
             check(raw);
+        }
+    }
+
+    /// `exp_strict` / `log2_strict` / `log10_strict` agree with the f64
+    /// bridge to within 1 ULP at D128<9>, where f64 is comfortably more
+    /// precise than the type's ULP — strong evidence of correct
+    /// rounding for the whole log/exp family.
+    #[test]
+    fn strict_log_exp_family_matches_f64() {
+        use crate::core_type::D128;
+        fn check_exp(raw: i128) {
+            let x = D128::<9>::from_bits(raw);
+            let strict = x.exp_strict().to_bits();
+            let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
+            assert!(
+                (strict - reference).abs() <= 1,
+                "exp_strict({raw}) = {strict}, f64 reference {reference}"
+            );
+        }
+        fn check_log2(raw: i128) {
+            let x = D128::<9>::from_bits(raw);
+            let strict = x.log2_strict().to_bits();
+            let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
+            assert!(
+                (strict - reference).abs() <= 1,
+                "log2_strict({raw}) = {strict}, f64 reference {reference}"
+            );
+        }
+        fn check_log10(raw: i128) {
+            let x = D128::<9>::from_bits(raw);
+            let strict = x.log10_strict().to_bits();
+            let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
+            assert!(
+                (strict - reference).abs() <= 1,
+                "log10_strict({raw}) = {strict}, f64 reference {reference}"
+            );
+        }
+        // exp: keep the argument modest so the result stays in range.
+        for &raw in &[
+            -5_000_000_000, -1_000_000_000, -500_000_000, 1, 500_000_000,
+            1_000_000_000, 2_000_000_000, 5_000_000_000, 10_000_000_000,
+        ] {
+            check_exp(raw);
+        }
+        // log2 / log10: positive arguments across the range.
+        for &raw in &[
+            1, 500_000_000, 1_000_000_000, 2_000_000_000, 8_000_000_000,
+            10_000_000_000, 123_456_789_012_345, i64::MAX as i128,
+        ] {
+            check_log2(raw);
+            check_log10(raw);
+        }
+    }
+
+    /// `exp2_strict` is exact at integer arguments: `2^10` is `1024`.
+    #[test]
+    fn strict_exp2_at_integers() {
+        use crate::core_type::D128;
+        for k in 0_i128..=12 {
+            let x = D128::<12>::from_bits(k * 10i128.pow(12));
+            let got = x.exp2_strict().to_bits();
+            let expected = (1i128 << k) * 10i128.pow(12);
+            // Correctly rounded: exactly the integer power of two.
+            assert_eq!(got, expected, "2^{k}");
         }
     }
 

@@ -407,6 +407,28 @@ impl Fixed {
     }
 }
 
+impl Fixed {
+    /// Rounds the working-scale value to the nearest integer (ties away
+    /// from zero) and returns it as `i128`. Used to find the `k` in the
+    /// `exp` range reduction `v = k·ln(2) + s`; `|k|` is small there, so
+    /// the result always fits.
+    pub(crate) fn round_to_nearest_int(self, w: u32) -> i128 {
+        let scale = Fixed::pow10(w);
+        let (q, r) = divmod_u256(self.mag, scale);
+        let int_mag = if ge_u256(r, halve_u256(scale)) {
+            add_u256(q, [1, 0]).0
+        } else {
+            q
+        };
+        let m = int_mag[0] as i128;
+        if self.negative {
+            -m
+        } else {
+            m
+        }
+    }
+}
+
 /// `a / b` and `a % b` for 256-bit values.
 fn divmod_u256(a: U256, b: U256) -> (U256, U256) {
     debug_assert!(!is_zero_u256(b), "division by zero");
