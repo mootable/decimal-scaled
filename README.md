@@ -217,13 +217,74 @@ Aliases `D128s0` through `D128s38` are all provided. `SCALE = 39` would overflow
 
 ---
 
+## The width family
+
+`D128` is the foundation, but it is one of six storage widths that share
+an identical API and the `Decimal` trait:
+
+| Type | Storage | `MAX_SCALE` | Feature gate |
+|---|---|---|---|
+| `D32`   | 32-bit  | 9   | always on |
+| `D64`   | 64-bit  | 18  | always on |
+| `D128`  | 128-bit | 38  | always on |
+| `D256`  | 256-bit | 76  | `d256` / `wide` |
+| `D512`  | 512-bit | 153 | `d512` / `wide` |
+| `D1024` | 1024-bit| 307 | `d1024` / `wide` |
+
+Pick the narrowest width whose range covers your values at the scale you
+need. Widening between widths is lossless (`From`); narrowing is fallible
+(`TryFrom`). The wide tier is backed by the `bnum` big-integer crate and
+is opt-in. See [`docs/widths.md`](docs/widths.md).
+
+## Compile-time literals
+
+With the `macros` feature, `d128!` writes `D128` values at compile time
+with automatic scale inference:
+
+```rust
+use decimal_scaled::d128;
+
+let price = d128!(19.99);              // D128<2>
+let micro = d128!(1.234_567, scale 6); // D128<6>
+let rnd   = d128!(1.235, scale 2, rounded); // 1.24 (half-to-even)
+```
+
+See [`docs/macros.md`](docs/macros.md).
+
+---
+
 ## Features
 
 | Feature | Default | Description |
 |---|---|---|
-| `std` | yes | Enables `FromStr`, `Display`, logarithm/exponential, trigonometry |
-| `alloc` | yes | Enables string formatting on `no_std` |
-| `serde` | yes | Enables `Serialize`/`Deserialize` via `serde_helpers` |
+| `std` | yes | `f64`-bridge transcendentals (trig, log/exp, sqrt). Pulls in `alloc`. |
+| `alloc` | yes | String formatting and parsing on `no_std`. Required. |
+| `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers`. |
+| `macros` | no | The `d128!` compile-time decimal-literal macro. |
+| `strict` | no | Integer-only, platform-independent transcendentals instead of the `f64` bridge. `no_std`-compatible. |
+| `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
+| `d256` / `d512` / `d1024` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by `bnum`. |
+| `wide` | no | Umbrella over `d256` + `d512` + `d1024`. |
+| `experimental-floats` | no | Nightly-only `f16` / `f128` entry points on the float bridge. |
+
+See [`docs/features.md`](docs/features.md) for the full reference and
+common configurations.
+
+---
+
+## Documentation
+
+In-depth usage guides live in [`docs/`](docs/README.md):
+
+- [Getting started](docs/getting-started.md) — constructing values, arithmetic, formatting, parsing.
+- [The width family](docs/widths.md) — `D32` … `D1024`, scale ranges, the `Decimal` trait.
+- [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing.
+- [Rounding](docs/rounding.md) — `RoundingMode`, `rescale`, the `rounding-*` features.
+- [Strict mode](docs/strict-mode.md) — integer-only transcendentals.
+- [The `d128!` macro](docs/macros.md) — compile-time decimal literals.
+- [Cargo features](docs/features.md) — every feature flag.
+
+API reference: <https://docs.rs/decimal-scaled/>.
 
 ---
 

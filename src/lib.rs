@@ -97,12 +97,39 @@ pub use consts::DecimalConsts;
 pub use decimal_trait::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;
+
+// D128 — the 128-bit foundation, plus every scale alias D128s0..=D128s38.
 pub use core_type::{
     D128, D128s0, D128s1, D128s2, D128s3, D128s4, D128s5, D128s6, D128s7, D128s8, D128s9, D128s10,
     D128s11, D128s12, D128s13, D128s14, D128s15, D128s16, D128s17, D128s18, D128s19, D128s20,
     D128s21, D128s22, D128s23, D128s24, D128s25, D128s26, D128s27, D128s28, D128s29, D128s30,
     D128s31, D128s32, D128s33, D128s34, D128s35, D128s36, D128s37, D128s38,
 };
+
+// D32 — 32-bit storage, scale 0..=9.
+pub use core_type::{
+    D32, D32s0, D32s1, D32s2, D32s3, D32s4, D32s5, D32s6, D32s7, D32s8, D32s9,
+};
+
+// D64 — 64-bit storage, scale 0..=18.
+pub use core_type::{
+    D64, D64s0, D64s1, D64s2, D64s3, D64s4, D64s5, D64s6, D64s7, D64s8, D64s9, D64s10, D64s11,
+    D64s12, D64s13, D64s14, D64s15, D64s16, D64s17, D64s18,
+};
+
+// D256 — 256-bit storage (bnum-backed), behind the `d256` / `wide` features.
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub use core_type::{
+    D256, D256s0, D256s2, D256s6, D256s12, D256s18, D256s35, D256s50, D256s76,
+};
+
+// D512 — 512-bit storage (bnum-backed), behind the `d512` / `wide` features.
+#[cfg(any(feature = "d512", feature = "wide"))]
+pub use core_type::{D512, D512s0, D512s35, D512s75, D512s150, D512s153};
+
+// D1024 — 1024-bit storage (bnum-backed), behind the `d1024` / `wide` features.
+#[cfg(any(feature = "d1024", feature = "wide"))]
+pub use core_type::{D1024, D1024s0, D1024s35, D1024s150, D1024s300, D1024s307};
 
 #[cfg(feature = "macros")]
 pub use decimal_scaled_macros::d128;
