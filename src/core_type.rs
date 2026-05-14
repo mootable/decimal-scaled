@@ -581,6 +581,10 @@ impl<const SCALE: u32> Default for D256<SCALE> {
 
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::basics::decl_decimal_basics!(wide D256, crate::wide::I256, 76);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::arithmetic::decl_decimal_arithmetic!(wide D256, crate::wide::I256, crate::wide::I512);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::display::decl_decimal_display!(wide D256, crate::wide::U256);
 
 /// Scale alias: `D256<0>`. 1 LSB = 1 (256-bit integer ledger).
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -906,6 +910,68 @@ mod tests {
         // round-trip
         let raw = I256::from_str_radix("123456789012345678901234567890", 10).unwrap();
         assert_eq!(super::D256s12::from_bits(raw).to_bits(), raw);
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_arithmetic() {
+        type D = super::D256<12>;
+        let one = D::ONE;
+        let two = D::from_bits(D::multiplier() + D::multiplier());
+        let three = D::from_bits(D::multiplier() * crate::wide::I256::from_str_radix("3", 10).unwrap());
+        // add / sub / neg
+        assert_eq!((one + two), three);
+        assert_eq!((three - one), two);
+        assert_eq!((-one).to_bits(), -D::multiplier());
+        // mul: 2 * 3 == 6
+        let six = D::from_bits(D::multiplier() * crate::wide::I256::from_str_radix("6", 10).unwrap());
+        assert_eq!((two * three), six);
+        // div: 6 / 2 == 3
+        assert_eq!((six / two), three);
+        // rem: 6 % 2 == 0  (storage-level remainder)
+        assert_eq!((six % two), D::ZERO);
+        // assign forms
+        let mut v = one;
+        v += two;
+        assert_eq!(v, three);
+        v *= two;
+        assert_eq!(v, six);
+        v /= two;
+        assert_eq!(v, three);
+        v -= one;
+        assert_eq!(v, two);
+        v %= two;
+        assert_eq!(v, D::ZERO);
+        // fractional: 1.5 * 1.5 == 2.25 at scale 12
+        let half = D::from_bits(D::multiplier() / crate::wide::I256::from_str_radix("2", 10).unwrap());
+        let one_and_half = one + half;
+        let product = one_and_half * one_and_half;
+        let expected = D::from_bits(
+            D::multiplier() * crate::wide::I256::from_str_radix("2", 10).unwrap()
+                + D::multiplier() / crate::wide::I256::from_str_radix("4", 10).unwrap(),
+        );
+        assert_eq!(product, expected);
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_display() {
+        type D = super::D256<12>;
+        let one = D::ONE;
+        assert_eq!(alloc::format!("{}", one), "1.000000000000");
+        assert_eq!(alloc::format!("{}", -one), "-1.000000000000");
+        assert_eq!(alloc::format!("{}", D::ZERO), "0.000000000000");
+        let half = D::from_bits(D::multiplier() / crate::wide::I256::from_str_radix("2", 10).unwrap());
+        assert_eq!(alloc::format!("{}", half), "0.500000000000");
+        assert_eq!(alloc::format!("{:?}", one), "D256<12>(1.000000000000)");
+        // scale 0 prints no fractional part
+        let int_only: super::D256<0> = super::D256::<0>::ONE;
+        assert_eq!(alloc::format!("{}", int_only), "1");
+        // very large magnitude near the 76-digit ceiling
+        let big = super::D256s76::MAX;
+        let s = alloc::format!("{}", big);
+        assert!(s.starts_with("5.78960446"));
+        assert_eq!(s.len(), "5.".len() + 76);
     }
 
     #[test]
