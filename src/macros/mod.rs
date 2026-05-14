@@ -17,6 +17,7 @@ pub(crate) mod consts;
 pub(crate) mod conversions;
 pub(crate) mod display;
 pub(crate) mod equalities;
+pub(crate) mod float_bridge;
 pub(crate) mod from_str;
 pub(crate) mod num_traits;
 pub(crate) mod overflow;

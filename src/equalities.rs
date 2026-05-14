@@ -49,6 +49,14 @@ crate::macros::equalities::decl_eq_all_integers!(D32);
 crate::macros::equalities::decl_eq_float!(D128, f32);
 #[cfg(all(feature = "std", not(feature = "strict")))]
 crate::macros::equalities::decl_eq_float!(D128, f64);
+#[cfg(all(feature = "std", not(feature = "strict")))]
+crate::macros::equalities::decl_eq_float!(D64, f32);
+#[cfg(all(feature = "std", not(feature = "strict")))]
+crate::macros::equalities::decl_eq_float!(D64, f64);
+#[cfg(all(feature = "std", not(feature = "strict")))]
+crate::macros::equalities::decl_eq_float!(D32, f32);
+#[cfg(all(feature = "std", not(feature = "strict")))]
+crate::macros::equalities::decl_eq_float!(D32, f64);
 
 #[cfg(test)]
 mod tests {
