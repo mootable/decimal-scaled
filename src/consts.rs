@@ -209,37 +209,13 @@ pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
     D128::<SCALE_REF>::from_bits(E_RAW_S35).rescale::<TARGET>().to_bits()
 }
 
-impl<const SCALE: u32> DecimalConsts for D128<SCALE> {
-    #[inline]
-    fn pi() -> Self {
-        D128::<SCALE_REF>::from_bits(PI_RAW_S35).rescale::<SCALE>()
-    }
-
-    #[inline]
-    fn tau() -> Self {
-        D128::<SCALE_REF>::from_bits(TAU_RAW_S35).rescale::<SCALE>()
-    }
-
-    #[inline]
-    fn half_pi() -> Self {
-        D128::<SCALE_REF>::from_bits(HALF_PI_RAW_S35).rescale::<SCALE>()
-    }
-
-    #[inline]
-    fn quarter_pi() -> Self {
-        D128::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S35).rescale::<SCALE>()
-    }
-
-    #[inline]
-    fn golden() -> Self {
-        D128::<SCALE_REF>::from_bits(GOLDEN_RAW_S35).rescale::<SCALE>()
-    }
-
-    #[inline]
-    fn e() -> Self {
-        D128::<SCALE_REF>::from_bits(E_RAW_S35).rescale::<SCALE>()
-    }
-}
+// The `DecimalConsts` impl for `D128<SCALE>` is emitted by the
+// `decl_decimal_consts!` macro — the same macro D32 / D64 / D256+ use.
+// It expands to `Self(pi_at_target::<SCALE>())` etc., which is
+// identical to the previous hand-coded
+// `D128::<SCALE_REF>::from_bits(PI_RAW_S35).rescale::<SCALE>()` because
+// `pi_at_target` is defined as exactly that, then `.to_bits()`.
+crate::macros::consts::decl_decimal_consts!(D128, i128);
 
 // Inherent associated constants: EPSILON / MIN_POSITIVE.
 //
