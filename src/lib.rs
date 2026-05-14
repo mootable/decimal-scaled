@@ -84,6 +84,8 @@ mod mg_divide;
 mod wide_int;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide;
+#[cfg(any(feature = "d256", feature = "wide"))]
+mod hand_decimal;
 mod num_traits_impls;
 mod overflow_variants;
 mod powers;
@@ -123,6 +125,13 @@ pub use core_type::{
 #[cfg(any(feature = "d256", feature = "wide"))]
 pub use core_type::{
     D256, D256s0, D256s2, D256s6, D256s12, D256s18, D256s35, D256s50, D256s76,
+};
+
+// D256H — the hand-rolled 256-bit decimal (in-tree `HInt256` storage),
+// kept alongside the bnum-backed `D256` for backend benchmarking.
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub use hand_decimal::{
+    D256H, D256Hs0, D256Hs12, D256Hs18, D256Hs2, D256Hs35, D256Hs6, D256Hs76,
 };
 
 // D512 — 512-bit storage (bnum-backed), behind the `d512` / `wide` features.

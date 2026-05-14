@@ -630,3 +630,287 @@ mod tests {
         assert_eq!(v.round_to_i128(w, w), Some(123_456));
     }
 }
+
+// ─────────────────────────────────────────────────────────────────────
+// HInt256 — a hand-rolled signed 256-bit integer.
+//
+// This is the storage backend for the hand-rolled wide-decimal type
+// `D256H` (see `src/hand_decimal.rs`), kept *alongside* the
+// `bnum`-backed `D256` so the two can be benchmarked head to head.
+//
+// Representation: two's-complement, little-endian `[u128; 2]`
+// (`limbs[0]` least significant, the sign is bit 127 of `limbs[1]`).
+// It reuses the unsigned 256/512-bit primitives above
+// (`mul_u256`, `div_u512_by_u256`, `divmod_u256`) for the
+// multiply/divide magnitude work.
+// ─────────────────────────────────────────────────────────────────────
+
+/// Hand-rolled signed 256-bit integer (two's complement).
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+pub(crate) struct HInt256(pub(crate) [u128; 2]);
+
+impl HInt256 {
+    /// Zero.
+    pub(crate) const ZERO: HInt256 = HInt256([0, 0]);
+    /// The largest representable value, `2^255 − 1`.
+    pub(crate) const MAX: HInt256 = HInt256([u128::MAX, i128::MAX as u128]);
+    /// The smallest representable value, `−2^255`.
+    pub(crate) const MIN: HInt256 = HInt256([0, 1u128 << 127]);
+
+    /// `true` if the value is negative (sign bit set).
+    #[inline]
+    pub(crate) fn is_negative(self) -> bool {
+        self.0[1] >> 127 == 1
+    }
+
+    /// `true` if the value is strictly positive.
+    #[inline]
+    pub(crate) fn is_positive(self) -> bool {
+        !self.is_negative() && !self.is_zero()
+    }
+
+    /// `true` if the value is exactly zero.
+    #[inline]
+    pub(crate) fn is_zero(self) -> bool {
+        self.0[0] == 0 && self.0[1] == 0
+    }
+
+    /// Two's-complement negation. `MIN.negate() == MIN` (wraps, matching
+    /// primitive signed integers).
+    #[inline]
+    pub(crate) fn negate(self) -> HInt256 {
+        let (lo, c) = (!self.0[0]).overflowing_add(1);
+        let hi = (!self.0[1]).wrapping_add(c as u128);
+        HInt256([lo, hi])
+    }
+
+    /// Wrapping addition.
+    #[inline]
+    pub(crate) fn wrapping_add(self, rhs: HInt256) -> HInt256 {
+        let (lo, c) = self.0[0].overflowing_add(rhs.0[0]);
+        let hi = self.0[1]
+            .wrapping_add(rhs.0[1])
+            .wrapping_add(c as u128);
+        HInt256([lo, hi])
+    }
+
+    /// Wrapping subtraction.
+    #[inline]
+    pub(crate) fn wrapping_sub(self, rhs: HInt256) -> HInt256 {
+        self.wrapping_add(rhs.negate())
+    }
+
+    /// Checked addition — `None` on signed overflow.
+    #[inline]
+    pub(crate) fn checked_add(self, rhs: HInt256) -> Option<HInt256> {
+        let r = self.wrapping_add(rhs);
+        // Overflow iff the operands share a sign and the result's sign
+        // differs from it.
+        if self.is_negative() == rhs.is_negative() && r.is_negative() != self.is_negative() {
+            None
+        } else {
+            Some(r)
+        }
+    }
+
+    /// Checked subtraction — `None` on signed overflow.
+    #[inline]
+    pub(crate) fn checked_sub(self, rhs: HInt256) -> Option<HInt256> {
+        let r = self.wrapping_sub(rhs);
+        if self.is_negative() != rhs.is_negative() && r.is_negative() != self.is_negative() {
+            None
+        } else {
+            Some(r)
+        }
+    }
+
+    /// Checked negation — `None` only for `MIN`.
+    #[inline]
+    pub(crate) fn checked_neg(self) -> Option<HInt256> {
+        if self == HInt256::MIN {
+            None
+        } else {
+            Some(self.negate())
+        }
+    }
+
+    /// Unsigned magnitude `|self|` as a `U256`. For `MIN` this is
+    /// exactly `2^255`, which is the true magnitude (it does not fit a
+    /// signed `HInt256`, but the unsigned `U256` holds it).
+    #[inline]
+    fn magnitude(self) -> U256 {
+        if self.is_negative() {
+            self.negate().0
+        } else {
+            self.0
+        }
+    }
+
+    /// Applies a sign to a non-negative magnitude.
+    #[inline]
+    fn with_sign(mag: U256, negative: bool) -> HInt256 {
+        let v = HInt256(mag);
+        if negative && !v.is_zero() {
+            v.negate()
+        } else {
+            v
+        }
+    }
+
+    /// Decimal multiply at scale `scale`: `(self · rhs) / 10^scale`,
+    /// truncating toward zero. The 256×256→512 product is exact; the
+    /// divide-back is the only rounding step. The caller's values keep
+    /// the result inside the signed 256-bit range.
+    #[inline]
+    pub(crate) fn dec_mul(self, rhs: HInt256, scale: u32) -> HInt256 {
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let prod = mul_u256(self.magnitude(), rhs.magnitude());
+        let q = div_u512_by_u256(prod, Fixed::pow10(scale));
+        HInt256::with_sign([q[0], q[1]], negative)
+    }
+
+    /// Decimal divide at scale `scale`: `(self · 10^scale) / rhs`,
+    /// truncating toward zero. `rhs` must be non-zero.
+    #[inline]
+    pub(crate) fn dec_div(self, rhs: HInt256, scale: u32) -> HInt256 {
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let scaled = mul_u256(self.magnitude(), Fixed::pow10(scale));
+        let q = div_u512_by_u256(scaled, rhs.magnitude());
+        HInt256::with_sign([q[0], q[1]], negative)
+    }
+
+    /// Truncated remainder `self % rhs` (result carries the sign of
+    /// `self`, matching primitive signed `%`). `rhs` must be non-zero.
+    #[inline]
+    pub(crate) fn rem(self, rhs: HInt256) -> HInt256 {
+        let (_q, r) = divmod_u256(self.magnitude(), rhs.magnitude());
+        HInt256::with_sign(r, self.is_negative())
+    }
+
+    /// `10^exp` as an `HInt256` (`exp <= 76`, always non-negative and
+    /// in range).
+    #[inline]
+    pub(crate) fn pow10(exp: u32) -> HInt256 {
+        HInt256(Fixed::pow10(exp))
+    }
+
+    /// Splits `|self|` into `(integer_part, fractional_part)` modulo
+    /// `10^exp` — the magnitude divided by, and remaindered against,
+    /// `10^exp`. Used by the hand-rolled decimal `Display`.
+    #[inline]
+    pub(crate) fn magnitude_divmod_pow10(self, exp: u32) -> (U256, U256) {
+        divmod_u256(self.magnitude(), Fixed::pow10(exp))
+    }
+}
+
+/// Renders an unsigned 256-bit value as its decimal digit string.
+///
+/// Repeatedly splits off 38-digit chunks (each `< 10^38`, so it fits a
+/// `u128`) from the least-significant end, then concatenates them
+/// most-significant first with zero-padding between chunks.
+#[cfg(feature = "alloc")]
+pub(crate) fn u256_decimal_string(mut v: U256) -> alloc::string::String {
+    use alloc::string::String;
+    if is_zero_u256(v) {
+        return String::from("0");
+    }
+    let ten_38 = Fixed::pow10(38);
+    let mut chunks: alloc::vec::Vec<u128> = alloc::vec::Vec::new();
+    while !is_zero_u256(v) {
+        let (q, r) = divmod_u256(v, ten_38);
+        chunks.push(r[0]); // r < 10^38, so it fits limb 0.
+        v = q;
+    }
+    let mut s = String::new();
+    let last = chunks.len() - 1;
+    // Most-significant chunk has no leading zeros.
+    s.push_str(&alloc::format!("{}", chunks[last]));
+    // Remaining chunks are zero-padded to a full 38 digits.
+    for i in (0..last).rev() {
+        s.push_str(&alloc::format!("{:0>38}", chunks[i]));
+    }
+    s
+}
+
+impl core::cmp::Ord for HInt256 {
+    #[inline]
+    fn cmp(&self, other: &HInt256) -> core::cmp::Ordering {
+        match (self.is_negative(), other.is_negative()) {
+            (true, false) => core::cmp::Ordering::Less,
+            (false, true) => core::cmp::Ordering::Greater,
+            // Same sign: the unsigned limb ordering agrees with the
+            // signed ordering (two's complement is monotonic within a
+            // sign class).
+            _ => cmp_u256(self.0, other.0),
+        }
+    }
+}
+
+impl core::cmp::PartialOrd for HInt256 {
+    #[inline]
+    fn partial_cmp(&self, other: &HInt256) -> Option<core::cmp::Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+#[cfg(test)]
+mod hint256_tests {
+    use super::HInt256;
+
+    fn from_i128(n: i128) -> HInt256 {
+        if n < 0 {
+            HInt256([n as u128, u128::MAX])
+        } else {
+            HInt256([n as u128, 0])
+        }
+    }
+
+    #[test]
+    fn add_sub_neg() {
+        let three = from_i128(3);
+        let five = from_i128(5);
+        assert_eq!(three.wrapping_add(five), from_i128(8));
+        assert_eq!(five.wrapping_sub(three), from_i128(2));
+        assert_eq!(three.wrapping_sub(five), from_i128(-2));
+        assert_eq!(three.negate(), from_i128(-3));
+        assert_eq!(from_i128(-7).negate(), from_i128(7));
+        assert_eq!(HInt256::ZERO.negate(), HInt256::ZERO);
+    }
+
+    #[test]
+    fn checked_overflow() {
+        assert_eq!(HInt256::MAX.checked_add(from_i128(1)), None);
+        assert_eq!(HInt256::MIN.checked_sub(from_i128(1)), None);
+        assert_eq!(HInt256::MIN.checked_neg(), None);
+        assert_eq!(HInt256::MAX.checked_neg(), Some(HInt256::MIN.wrapping_add(from_i128(1))));
+        assert_eq!(from_i128(2).checked_add(from_i128(3)), Some(from_i128(5)));
+    }
+
+    #[test]
+    fn ordering_is_signed() {
+        assert!(from_i128(-1) < from_i128(0));
+        assert!(from_i128(-1) < from_i128(1));
+        assert!(HInt256::MIN < HInt256::MAX);
+        assert!(HInt256::MAX > HInt256::ZERO);
+        assert!(from_i128(5) > from_i128(3));
+        assert!(from_i128(-5) < from_i128(-3));
+    }
+
+    #[test]
+    fn dec_mul_div_rem() {
+        // Scale 6: 2.0 * 3.0 == 6.0
+        let s = 6;
+        let one = HInt256::pow10(s);
+        let two = HInt256([2 * 10u128.pow(s), 0]);
+        let three = HInt256([3 * 10u128.pow(s), 0]);
+        let six = HInt256([6 * 10u128.pow(s), 0]);
+        assert_eq!(two.dec_mul(three, s), six);
+        assert_eq!(six.dec_div(two, s), three);
+        assert_eq!(three.dec_mul(one, s), three);
+        // Signed: (-2) * 3 == -6
+        assert_eq!(two.negate().dec_mul(three, s), six.negate());
+        // rem: 7 % 3 == 1 at scale 0
+        assert_eq!(from_i128(7).rem(from_i128(3)), from_i128(1));
+        assert_eq!(from_i128(-7).rem(from_i128(3)), from_i128(-1));
+    }
+}
