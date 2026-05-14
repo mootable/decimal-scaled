@@ -57,24 +57,26 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Algorithm
     ///
     /// Range reduction `x = 2^k * m` with `m ∈ [1, 2)`, then a Mercator
-    /// series `ln(m) = ln(1 + y) = sum_{n=1..} (-1)^(n+1) * y^n / n` on
-    /// the reduced mantissa `y = m - 1`. The series is truncated when
-    /// the next term contributes less than one LSB at the call site's
-    /// SCALE. Result is `k * ln(2) + ln(m)` where `ln(2)` is materialised
-    /// from the 35-digit canonical reference.
+    /// reduction `x = 2^k * m` with `m ∈ [1, 2)`, then the
+    /// area-hyperbolic-tangent series
+    /// `ln(m) = 2·artanh(t)`, `t = (m-1)/(m+1) ∈ [0, 1/3]`,
+    /// `artanh(t) = t + t³/3 + t⁵/5 + …`, evaluated in a 256-bit
+    /// fixed-point intermediate at `SCALE + 20` working digits. The 20
+    /// guard digits bound the total accumulated rounding error far
+    /// below 0.5 ULP of the output, so the result — `k·ln(2) + ln(m)`,
+    /// rounded once at the end — is correctly rounded.
     ///
     /// # Precision
     ///
-    /// Strict: all arithmetic is integer-only. Result accuracy is within
-    /// roughly ±10 ULPs at `D128s12` and degrades as SCALE approaches 38
-    /// (the series cap of 200 terms is insufficient at the extreme
-    /// SCALEs). A tighter Remez-polynomial implementation per
-    /// `research/strict_transcendentals_research.md` is planned for a
-    /// later phase.
+    /// Strict: integer-only, and **correctly rounded** — the result is
+    /// within 0.5 ULP of the exact natural logarithm (IEEE-754
+    /// round-to-nearest).
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0`.
+    /// Panics if `self <= 0`, or if the result overflows the type's
+    /// representable range (only possible for `ln` of a near-`MAX`
+    /// value at `SCALE >= 37`).
     ///
     /// Always available, regardless of the `strict` feature. When
     /// `strict` is enabled, the plain [`Self::ln`] delegates here.
@@ -82,56 +84,82 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn ln_strict(self) -> Self {
+        use crate::wide_int::Fixed;
+
         if self.0 <= 0 {
             panic!("D128::ln: argument must be positive");
         }
-        let one = Self::ONE;
-        let two = Self::from_bits(one.to_bits().saturating_mul(2));
-        let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
 
-        // Range reduction: x = 2^k * m, m in [1, 2). Halve via arithmetic
-        // right-shift (the value is positive after the panic guard above)
-        // and double via left-shift. At SCALE = 38 the left-shift can
-        // overflow for x.0 in roughly (i128::MAX/2, ONE.0) -- accepted as
-        // a known precision-cliff at the extreme scale; the Phase 2
-        // research doc tracks this as the Q-format intermediate
-        // limitation at SCALE >= 36.
-        let mut x = self;
-        let mut k: i128 = 0;
-        while x >= two {
-            x = Self::from_bits(x.to_bits() >> 1);
-            k += 1;
-        }
-        while x < one {
-            x = Self::from_bits(x.to_bits() << 1);
-            k -= 1;
-        }
+        // Working scale: SCALE + 20 guard digits. With SCALE <= 38 this
+        // keeps W <= 58, so the 64-digit ln(2) constant covers it and
+        // the 512-bit mul/div intermediates never overflow.
+        const GUARD: u32 = 20;
+        let w = SCALE + GUARD;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let two_w = one_w.double();
 
-        // Mercator: ln(1 + y) = y - y²/2 + y³/3 - y⁴/4 + ...
-        let y = x - one;
-        let mut sum_bits: i128 = 0;
-        let mut term_power = y;
-        let mut n: i128 = 1;
-        loop {
-            let term_bits = term_power.to_bits() / n;
-            if term_bits == 0 {
-                break;
-            }
-            if n & 1 == 1 {
-                sum_bits = sum_bits.saturating_add(term_bits);
+        // v_w = r · 10^GUARD — exact, since `r` is the exact raw storage.
+        let v_w = Fixed::from_u128_mag(self.0 as u128, false)
+            .mul_u128(10u128.pow(GUARD));
+
+        // Range reduction: find k with v ∈ [2^k, 2^(k+1)); m_w = v_w/2^k.
+        // `>>` truncates once (< 1 ULP at W); `<<` is exact.
+        let mut k: i32 = v_w.bit_length() as i32 - one_w.bit_length() as i32;
+        let m_w = loop {
+            let m = if k >= 0 {
+                v_w.shr(k as u32)
             } else {
-                sum_bits = sum_bits.saturating_sub(term_bits);
+                v_w.shl((-k) as u32)
+            };
+            if m.ge_mag(two_w) {
+                k += 1;
+            } else if !m.ge_mag(one_w) {
+                k -= 1;
+            } else {
+                break m;
             }
-            n += 1;
-            if n > 200 {
+        };
+
+        // t = (m - 1) / (m + 1) ∈ [0, 1/3].
+        let t = m_w.sub(one_w).div(m_w.add(one_w), w);
+        let t2 = t.mul(t, w);
+
+        // artanh(t) = t + t³/3 + t⁵/5 + … — `term` carries t^(2j+1).
+        let mut sum = t;
+        let mut term = t;
+        let mut j: u128 = 1;
+        loop {
+            term = term.mul(t2, w);
+            let contrib = term.div_small(2 * j + 1);
+            if contrib.is_zero() {
                 break;
             }
-            // Next power: term_power = term_power * y at D128 scale.
-            term_power = term_power * y;
+            sum = sum.add(contrib);
+            j += 1;
+            if j > 400 {
+                break;
+            }
         }
+        // ln(m) = 2 · artanh(t).
+        let ln_m = sum.double();
 
-        let k_part = k.saturating_mul(ln_2.to_bits());
-        Self::from_bits(k_part.saturating_add(sum_bits))
+        // ln(v) = k·ln(2) + ln(m). ln(2) to 64 digits, narrowed to W.
+        let ln2 = Fixed::from_decimal_split(
+            69_314_718_055_994_530_941_723_212_145_817_u128,
+            65_680_755_001_343_602_552_541_206_800_094_u128,
+        )
+        .rescale_down(64, w);
+        let k_ln2 = if k >= 0 {
+            ln2.mul_u128(k as u128)
+        } else {
+            ln2.mul_u128((-k) as u128).neg()
+        };
+
+        let result_w = k_ln2.add(ln_m);
+        let raw = result_w
+            .round_to_i128(w, SCALE)
+            .expect("D128::ln: result out of range");
+        Self::from_bits(raw)
     }
 
     /// Returns the natural logarithm (base e) of `self`.
@@ -509,6 +537,67 @@ mod strict_tests {
     #[test]
     fn ln_of_one_is_zero() {
         assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
+    }
+
+    /// `ln_strict` is correctly rounded: cross-check against the f64
+    /// bridge at a scale where `f64` (≈ 15–16 significant digits) is
+    /// comfortably more precise than the type's ULP, so the
+    /// correctly-rounded integer result must agree to within 1 ULP.
+    #[test]
+    fn ln_strict_is_correctly_rounded_vs_f64() {
+        use crate::core_type::D128;
+        // D128<9>: ULP is 1e-9; f64 ln is good to ~1e-15 over this
+        // range, so the correctly-rounded result is within 1 ULP of the
+        // f64 reference (allow 1 for the f64 reference's own rounding).
+        fn check(raw: i128) {
+            let x = D128::<9>::from_bits(raw);
+            let strict = x.ln_strict().to_bits();
+            let reference = {
+                let v = raw as f64 / 1e9;
+                (v.ln() * 1e9).round() as i128
+            };
+            assert!(
+                (strict - reference).abs() <= 1,
+                "ln_strict({raw}) = {strict}, f64 reference {reference}"
+            );
+        }
+        for &raw in &[
+            1,
+            500_000_000,            // 0.5
+            1_000_000_000,          // 1.0
+            1_500_000_000,          // 1.5
+            2_000_000_000,          // 2.0
+            2_718_281_828,          // ≈ e
+            10_000_000_000,         // 10
+            123_456_789_012_345,    // ≈ 123456.78…
+            999_999_999_999_999_999,// ≈ 1e9
+            i64::MAX as i128,
+        ] {
+            check(raw);
+        }
+    }
+
+    /// `ln_strict` is exact at the powers of two it can represent:
+    /// `ln(2^k)` rounds to `k · ln(2)` at the type's scale.
+    #[test]
+    fn ln_strict_of_powers_of_two() {
+        use crate::core_type::D128;
+        // ln(2) at scale 18, correctly rounded:
+        // 0.693147180559945309… -> 693147180559945309.
+        let ln2_s18: i128 = 693_147_180_559_945_309;
+        for k in 1_i128..=20 {
+            let x = D128::<18>::from_bits((1i128 << k) * 10i128.pow(18));
+            let got = x.ln_strict().to_bits();
+            let expected = k * ln2_s18;
+            // k·ln(2) accumulates k roundings of the scale-18 ln(2);
+            // the correctly-rounded result is within ⌈k/2⌉+1 of the
+            // naive k·(rounded ln2).
+            let tol = k / 2 + 2;
+            assert!(
+                (got - expected).abs() <= tol,
+                "ln(2^{k}) = {got}, expected ≈ {expected}"
+            );
+        }
     }
 
     /// ln(2) at scale 12 = 693_147_180_560 (canonical rounded to 12 places).

@@ -176,6 +176,94 @@ impl Fixed {
         is_zero_u256(self.mag)
     }
 
+    /// Builds a non-negative value from a 64-digit decimal constant
+    /// supplied as two 32-digit halves: `value = hi * 10^32 + lo`. Used
+    /// to embed the bedrock transcendental constants (ln 2, ln 10, e, …)
+    /// at a 64-digit working scale.
+    pub(crate) fn from_decimal_split(hi: u128, lo: u128) -> Fixed {
+        let ten_pow_32 = 10u128.pow(32);
+        let (carry, low) = mul_128(hi, ten_pow_32);
+        let (mag, _c) = add_u256([low, carry], [lo, 0]);
+        Fixed { negative: false, mag }
+    }
+
+    /// Truncating change of working scale from `from_w` down to `to_w`
+    /// (`to_w <= from_w`): divides the magnitude by `10^(from_w-to_w)`.
+    pub(crate) fn rescale_down(self, from_w: u32, to_w: u32) -> Fixed {
+        if from_w == to_w {
+            return self;
+        }
+        let (q, _r) = divmod_u256(self.mag, Fixed::pow10(from_w - to_w));
+        Fixed { negative: self.negative && !is_zero_u256(q), mag: q }
+    }
+
+    /// Multiplies the magnitude by a small unsigned integer `k`. The
+    /// caller guarantees the result stays below `2^256`.
+    pub(crate) fn mul_u128(self, k: u128) -> Fixed {
+        // self.mag * k: (mag_lo + mag_hi*B) * k.
+        let (lo_hi, lo_lo) = mul_128(self.mag[0], k);
+        let (_hi_hi, hi_lo) = mul_128(self.mag[1], k);
+        let (mag1, _c) = hi_lo.overflowing_add(lo_hi);
+        let mag = [lo_lo, mag1];
+        Fixed { negative: self.negative && !is_zero_u256(mag), mag }
+    }
+
+    /// `|self| >= |rhs|` — magnitude comparison.
+    #[inline]
+    pub(crate) fn ge_mag(self, rhs: Fixed) -> bool {
+        ge_u256(self.mag, rhs.mag)
+    }
+
+    /// `self * 2` (magnitude doubled). Caller guarantees no overflow.
+    #[inline]
+    pub(crate) fn double(self) -> Fixed {
+        let mag = [self.mag[0] << 1 | 0, (self.mag[1] << 1) | (self.mag[0] >> 127)];
+        Fixed { negative: self.negative, mag }
+    }
+
+    /// `self / 2`, truncating (magnitude halved).
+    #[inline]
+    pub(crate) fn halve(self) -> Fixed {
+        Fixed { negative: self.negative, mag: halve_u256(self.mag) }
+    }
+
+    /// Bit length of the magnitude (0 for zero, else `floor(log2)+1`).
+    #[inline]
+    pub(crate) fn bit_length(self) -> u32 {
+        if self.mag[1] != 0 {
+            256 - self.mag[1].leading_zeros()
+        } else {
+            128 - self.mag[0].leading_zeros()
+        }
+    }
+
+    /// `self << n` (magnitude shifted left). Caller guarantees no
+    /// significant bits are lost (`bit_length + n <= 256`).
+    pub(crate) fn shl(self, n: u32) -> Fixed {
+        if n == 0 {
+            return self;
+        }
+        let mag = if n >= 128 {
+            [0, self.mag[0] << (n - 128)]
+        } else {
+            [self.mag[0] << n, (self.mag[1] << n) | (self.mag[0] >> (128 - n))]
+        };
+        Fixed { negative: self.negative, mag }
+    }
+
+    /// `self >> n` (magnitude shifted right, truncating).
+    pub(crate) fn shr(self, n: u32) -> Fixed {
+        if n == 0 {
+            return self;
+        }
+        let mag = if n >= 128 {
+            [self.mag[1] >> (n - 128), 0]
+        } else {
+            [(self.mag[0] >> n) | (self.mag[1] << (128 - n)), self.mag[1] >> n]
+        };
+        Fixed { negative: self.negative && !is_zero_u256(mag), mag }
+    }
+
     /// Adds two values at the same working scale.
     pub(crate) fn add(self, rhs: Fixed) -> Fixed {
         if self.negative == rhs.negative {
