@@ -385,6 +385,11 @@ crate::macros::display::decl_decimal_display!(D128);
 // straight to the `i128` formatter).
 crate::macros::from_str::decl_decimal_from_str!(D128, i128);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D128);
+// Bitwise operators (BitAnd/Or/Xor/Not, Shl/Shr) and bit-manipulation
+// methods (unsigned_shr, rotate_*, *_zeros, count_*, *_power_of_two) on
+// the raw storage. Previously hand-coded for D128 only; now a shared
+// macro so every width has the surface.
+crate::macros::bitwise::decl_decimal_bitwise!(D128, i128);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D128, i128);
 crate::macros::conversions::decl_from_primitive!(D128, i128, i8);
 crate::macros::conversions::decl_from_primitive!(D128, i128, i16);
@@ -469,6 +474,7 @@ crate::macros::storage_formatters::decl_decimal_storage_formatters!(D32);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D32);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D32);
 crate::macros::helpers::decl_decimal_helpers!(D32);
+crate::macros::bitwise::decl_decimal_bitwise!(D32, i32);
 
 /// Scale alias: `D32<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
 pub type D32s0 = D32<0>;
@@ -529,6 +535,7 @@ crate::macros::storage_formatters::decl_decimal_storage_formatters!(D64);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D64);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D64);
 crate::macros::helpers::decl_decimal_helpers!(D64);
+crate::macros::bitwise::decl_decimal_bitwise!(D64, i64);
 
 // Cross-width widening (lossless). D32 -> D64, D32 -> D128, D64 -> D128.
 crate::macros::conversions::decl_cross_width_widening!(D64, i64, D32, i32);
@@ -626,6 +633,8 @@ crate::macros::from_str::decl_decimal_from_str!(wide D256, crate::wide::I256);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::bitwise::decl_decimal_bitwise!(wide D256, crate::wide::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i8);
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -743,6 +752,8 @@ crate::macros::storage_formatters::decl_decimal_storage_formatters!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
+crate::macros::bitwise::decl_decimal_bitwise!(wide D512, crate::wide::I512);
+#[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i8);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i16);
@@ -845,6 +856,8 @@ crate::macros::from_str::decl_decimal_from_str!(wide D1024, crate::wide::I1024);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D1024);
+#[cfg(any(feature = "d1024", feature = "wide"))]
+crate::macros::bitwise::decl_decimal_bitwise!(wide D1024, crate::wide::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, i8);
 #[cfg(any(feature = "d1024", feature = "wide"))]

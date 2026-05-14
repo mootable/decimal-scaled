@@ -13,6 +13,7 @@
 
 pub(crate) mod arithmetic;
 pub(crate) mod basics;
+pub(crate) mod bitwise;
 pub(crate) mod consts;
 pub(crate) mod conversions;
 pub(crate) mod display;
