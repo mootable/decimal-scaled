@@ -188,7 +188,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
     /// Raises `self` to the power `exp`, computed integer-only as
-    /// `exp_strict(exp * ln_strict(self))`.
+    /// `exp(exp · ln(self))` — the `ln`, the `· exp`, and the `exp` all
+    /// run in the shared wide guard-digit intermediate, so the result
+    /// is correctly rounded (within 0.5 ULP).
     ///
     /// Always available, regardless of the `strict` feature. When
     /// `strict` is enabled, the plain [`Self::powf`] delegates here.
@@ -200,10 +202,27 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_strict(self, exp: D128<SCALE>) -> Self {
+        use crate::wide_int::Fixed;
         if self.to_bits() <= 0 {
             return Self::ZERO;
         }
-        (exp * self.ln_strict()).exp_strict()
+        let guard = crate::log_exp::STRICT_GUARD;
+        let w = SCALE + guard;
+        let pow = 10u128.pow(guard);
+        // ln(self) in the wide intermediate.
+        let ln_x = crate::log_exp::ln_fixed(
+            Fixed::from_u128_mag(self.to_bits() as u128, false).mul_u128(pow),
+            w,
+        );
+        // y = exp, carried at the wide working scale (with its sign).
+        let y_neg = exp.to_bits() < 0;
+        let y_w = Fixed::from_u128_mag(exp.to_bits().unsigned_abs(), false).mul_u128(pow);
+        let y_w = if y_neg { y_w.neg() } else { y_w };
+        // exp(y · ln(x)), rounded once at the end.
+        let raw = crate::log_exp::exp_fixed(y_w.mul(ln_x, w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::powf: result overflows the representable range");
+        Self::from_bits(raw)
     }
 
     /// Raises `self` to the power `exp` via the f64 bridge.
@@ -867,16 +886,23 @@ mod tests {
         assert!(within_lsb(v.powf(two), v.pow(2), TWO_LSB));
     }
 
-    /// `powf(2)` agrees with `pow(2)` within a wider tolerance under
-    /// strict mode. Strict powf is `exp(2 * ln(x))` with Phase 2A
-    /// precision (~10-20 ULP per transcendental call); the round-trip
-    /// stacks two such errors. 1000 LSB is comfortable headroom.
+    /// Strict `powf` is correctly rounded: `powf(7, 2)` agrees with the
+    /// exact `pow(7, 2)` to within 1 ULP — the whole `exp(y·ln(x))`
+    /// chain runs in the shared wide guard-digit intermediate.
     #[cfg(all(feature = "strict", not(feature = "no_strict")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D128s12::from_int(7);
         let two = D128s12::from_int(2);
-        assert!(within_lsb(v.powf(two), v.pow(2), 1000));
+        assert!(within_lsb(v.powf(two), v.pow(2), 1));
+        // A few more integer-exponent cross-checks against exact `pow`.
+        for base in [2_i64, 3, 5, 11] {
+            let b = D128s12::from_int(base);
+            assert!(
+                within_lsb(b.powf(D128s12::from_int(3)), b.pow(3), 1),
+                "powf({base}, 3)"
+            );
+        }
     }
 
     // sqrt — requires std feature

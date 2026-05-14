@@ -55,12 +55,12 @@ use crate::core_type::D128;
 // ─────────────────────────────────────────────────────────────────────
 
 #[cfg(not(feature = "no_strict"))]
-const STRICT_GUARD: u32 = 30;
+pub(crate) const STRICT_GUARD: u32 = 30;
 
 /// `ln(2)` as a `Fixed` at working scale `w` (`w <= 64`). The constant
 /// is embedded to 64 fractional digits and narrowed to `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_ln2(w: u32) -> crate::wide_int::Fixed {
+pub(crate) fn wide_ln2(w: u32) -> crate::wide_int::Fixed {
     // ln 2 = 0.693147180559945309417232121458176568075500134360255254120680 0094
     crate::wide_int::Fixed::from_decimal_split(
         69_314_718_055_994_530_941_723_212_145_817_u128,
@@ -90,7 +90,7 @@ fn wide_ln10(w: u32) -> crate::wide_int::Fixed {
 /// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
 /// and returns `k·ln(2) + ln(m)`.
 #[cfg(not(feature = "no_strict"))]
-fn ln_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
+pub(crate) fn ln_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
     use crate::wide_int::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let two_w = one_w.double();
@@ -154,7 +154,7 @@ fn ln_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
 /// Panics if `2^k · exp(s)` cannot fit a 256-bit working value — i.e.
 /// the caller's result would overflow its representable range.
 #[cfg(not(feature = "no_strict"))]
-fn exp_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
+pub(crate) fn exp_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
     use crate::wide_int::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let ln2 = wide_ln2(w);
