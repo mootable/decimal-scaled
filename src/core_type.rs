@@ -401,6 +401,13 @@ crate::macros::conversions::decl_try_from_f32!(D64, i64);
 crate::macros::conversions::decl_try_from_f64!(D32, i32);
 crate::macros::conversions::decl_try_from_f32!(D32, i32);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D128, i128, i64);
+// abs / signum / is_positive / is_negative, min / max / clamp / recip /
+// copysign, and floor / ceil / round / trunc / fract are emitted by the
+// shared macros — D128's hand-coded versions were byte-identical to the
+// macro output (see `src/macros/{sign,helpers,rounding_methods}.rs`).
+crate::macros::sign::decl_decimal_sign_methods!(D128, i128);
+crate::macros::helpers::decl_decimal_helpers!(D128);
+crate::macros::rounding_methods::decl_decimal_rounding_methods!(D128);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D64, i64, i64);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D32, i32, i32);
 

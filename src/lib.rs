@@ -88,9 +88,10 @@ mod overflow_variants;
 mod powers;
 #[cfg(feature = "serde")]
 pub mod serde_helpers;
-// `trig` is compiled either with the f64-bridge methods (std,
-// non-strict) or with the integer-only `strict` methods.
-#[cfg(any(all(feature = "std", not(feature = "strict")), feature = "strict"))]
+// `trig` is compiled when it has any surface to emit: the integer-only
+// `*_strict` methods (present unless `no_strict`) or the f64-bridge
+// methods (present with `std`).
+#[cfg(any(not(feature = "no_strict"), feature = "std"))]
 mod trig;
 
 pub use consts::DecimalConsts;
