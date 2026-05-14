@@ -417,6 +417,11 @@ crate::macros::overflow::decl_decimal_overflow_variants!(@common D128, i128);
 // arithmetic macro's shared `@common` arm. Mul / Div stay hand-coded in
 // `src/arithmetic.rs` (the `mg_divide` 256-bit-widening path).
 crate::macros::arithmetic::decl_decimal_arithmetic!(@common D128, i128);
+// num-traits: Zero / One / Num / Bounded / Signed / Checked{Add,Sub,Mul,
+// Div,Rem,Neg} via the shared macro — D128's hand-coded impls were
+// equivalent. FromPrimitive / ToPrimitive / NumCast stay hand-coded in
+// `src/num_traits_impls.rs` (not part of the macro surface).
+crate::macros::num_traits::decl_decimal_num_traits_basics!(D128);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D64, i64, i64);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D32, i32, i32);
 
