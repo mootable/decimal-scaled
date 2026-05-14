@@ -80,6 +80,30 @@ pub trait Decimal: Copy + PartialEq + Eq {
     /// Returns the decimal scale of this value (equal to
     /// [`Self::SCALE`]; provided for ergonomic method-call syntax).
     fn scale(self) -> u32;
+
+    /// `true` if this value is the additive identity.
+    #[inline]
+    fn is_zero(self) -> bool {
+        self == Self::ZERO
+    }
+
+    /// `true` if this value is the multiplicative identity.
+    #[inline]
+    fn is_one(self) -> bool {
+        self == Self::ONE
+    }
+
+    /// Sums an iterator of decimals of this width, starting from
+    /// `ZERO`. Width-generic convenience for `iter.fold(ZERO, add)`;
+    /// requires the implementor to support `+`.
+    #[inline]
+    fn sum<I>(iter: I) -> Self
+    where
+        I: IntoIterator<Item = Self>,
+        Self: core::ops::Add<Output = Self>,
+    {
+        iter.into_iter().fold(Self::ZERO, |acc, x| acc + x)
+    }
 }
 
 // The `Decimal` trait impl for `D128<SCALE>` is emitted by the
