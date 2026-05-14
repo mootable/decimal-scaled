@@ -599,6 +599,46 @@ crate::macros::from_str::decl_decimal_from_str!(wide D256, crate::wide::I256);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i8);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i16);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i32);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i64);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u8);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u16);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u32);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u64);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_try_from_i128!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_try_from_u128!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_try_from_f64!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_try_from_f32!(wide D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D256, crate::wide::I256, i128);
+// Cross-width widening into D256 (lossless): D32 / D64 / D128 -> D256.
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide::I256, D32, i32);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide::I256, D64, i64);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide::I256, D128, i128);
+// Cross-width narrowing from D256 (fallible): D256 -> D128 / D64 / D32.
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D128, i128, D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D64, i64, D256, crate::wide::I256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D32, i32, D256, crate::wide::I256);
 
 /// Scale alias: `D256<0>`. 1 LSB = 1 (256-bit integer ledger).
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -1063,6 +1103,58 @@ mod tests {
         use num_traits::{One, Zero};
         assert!(super::D256::<6>::zero().is_zero());
         assert!(super::D256::<6>::one().is_one());
+    }
+
+    #[cfg(any(feature = "d256", feature = "wide"))]
+    #[test]
+    fn d256_conversions() {
+        use crate::wide::I256;
+        type D = super::D256<6>;
+        // From<primitive int>
+        let from_i32: D = 5i32.into();
+        assert_eq!(from_i32.to_bits(), I256::from_str_radix("5000000", 10).unwrap());
+        let from_u64: D = 7u64.into();
+        assert_eq!(from_u64.to_bits(), I256::from_str_radix("7000000", 10).unwrap());
+        let from_neg: D = (-3i16).into();
+        assert_eq!(from_neg.to_bits(), I256::from_str_radix("-3000000", 10).unwrap());
+        // TryFrom<i128> / TryFrom<u128>
+        let from_i128 = D::try_from(123i128).unwrap();
+        assert_eq!(from_i128.to_bits(), I256::from_str_radix("123000000", 10).unwrap());
+        let from_u128 = D::try_from(u128::MAX).unwrap();
+        assert_eq!(
+            from_u128.to_bits(),
+            I256::from_str_radix("340282366920938463463374607431768211455", 10).unwrap()
+                * I256::from_str_radix("1000000", 10).unwrap()
+        );
+        // TryFrom<f64>
+        let from_f64 = D::try_from(2.5f64).unwrap();
+        assert_eq!(from_f64.to_bits(), I256::from_str_radix("2500000", 10).unwrap());
+        assert!(D::try_from(f64::NAN).is_err());
+        // from_int / from_i32
+        assert_eq!(D::from_int(9i128), 9i32.into());
+        assert_eq!(D::from_i32(-4), (-4i32).into());
+        // to_int_lossy: 2.5 with HalfToEven -> 2
+        use crate::rounding::RoundingMode;
+        let two_and_half = D::from_bits(I256::from_str_radix("2500000", 10).unwrap());
+        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::HalfToEven), 2);
+        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::HalfAwayFromZero), 3);
+        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::Ceiling), 3);
+        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::Floor), 2);
+        let neg_two_and_half = -two_and_half;
+        assert_eq!(neg_two_and_half.to_int_lossy_with(RoundingMode::Floor), -3);
+        assert_eq!(neg_two_and_half.to_int_lossy_with(RoundingMode::Trunc), -2);
+        // cross-width widening D128 -> D256 (lossless)
+        let d128: super::D128s6 = super::D128s6::from_bits(-150);
+        let widened: super::D256<6> = d128.into();
+        assert_eq!(widened.to_bits(), I256::from_str_radix("-150", 10).unwrap());
+        // cross-width narrowing D256 -> D128 in range
+        let in_range: super::D256<6> = super::D256::<6>::from_bits(I256::from_str_radix("999", 10).unwrap());
+        let narrowed: super::D128s6 = in_range.try_into().unwrap();
+        assert_eq!(narrowed.to_bits(), 999i128);
+        // cross-width narrowing D256 -> D128 out of range
+        let out_of_range = super::D256s76::MAX;
+        let narrow_fail: Result<super::D128<76>, _> = out_of_range.try_into();
+        assert!(narrow_fail.is_err());
     }
 
     #[test]
