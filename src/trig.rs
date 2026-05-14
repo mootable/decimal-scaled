@@ -449,17 +449,450 @@ impl<const SCALE: u32> D128<SCALE> {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// Strict-mode (integer-only) trigonometric, hyperbolic, and angle-
+// conversion methods.
+//
+// These mirror the f64-bridge surface above but are compiled under
+// `#[cfg(feature = "strict")]`. They are integer-only and `no_std`-
+// compatible. Accuracy matches the rest of the strict module: within
+// roughly ±10 ULP at moderate SCALE, degrading toward the extreme
+// SCALEs (a tighter Remez-polynomial implementation is tracked in
+// `research/strict_transcendentals_research.md`).
+//
+// Composition strategy:
+//
+// - Hyperbolic functions are composed from the strict `exp` / `ln` /
+//   `sqrt` already implemented in `log_exp.rs` / `powers.rs`.
+// - `cos` is `sin` phase-shifted by π/2; `tan` is `sin / cos`.
+// - `sin` uses range reduction modulo τ into one π/2 octant followed by
+//   a Taylor series.
+// - `atan` uses reciprocal reduction for |x| > 1 plus argument halving,
+//   then a Taylor series; `asin` / `acos` / `atan2` are derived from it.
+// ─────────────────────────────────────────────────────────────────────
+
+#[cfg(feature = "strict")]
+impl<const SCALE: u32> D128<SCALE> {
+    /// Taylor series for `sin` on a reduced argument `r ∈ [0, π/2]`:
+    /// `r − r³/3! + r⁵/5! − …`. Integer-only; terms are accumulated at
+    /// the storage scale and the loop stops once a term underflows one
+    /// LSB.
+    #[cfg(feature = "strict")]
+    fn taylor_sin_reduced(r: Self) -> Self {
+        let mut sum_bits: i128 = r.to_bits();
+        // term = r ; iteratively term *= -r*r / ((2k)(2k+1))
+        let mut term = r;
+        let mut k: i128 = 1;
+        loop {
+            // term_{k} = term_{k-1} * r^2 / ((2k)(2k+1)), alternating sign
+            term = term * r;
+            term = term * r;
+            let denom = (2 * k) * (2 * k + 1);
+            term = Self::from_bits(term.to_bits() / denom);
+            let tb = term.to_bits();
+            if tb == 0 {
+                break;
+            }
+            if k & 1 == 1 {
+                sum_bits = sum_bits.saturating_sub(tb);
+            } else {
+                sum_bits = sum_bits.saturating_add(tb);
+            }
+            k += 1;
+            if k > 40 {
+                break;
+            }
+        }
+        Self::from_bits(sum_bits)
+    }
+
+    /// Taylor series for `atan` on a reduced argument `x ∈ [0, ~0.42]`:
+    /// `x − x³/3 + x⁵/5 − …`. Integer-only.
+    #[cfg(feature = "strict")]
+    fn taylor_atan_reduced(x: Self) -> Self {
+        let mut sum_bits: i128 = x.to_bits();
+        let mut power = x; // x^(2k+1)
+        let mut k: i128 = 1;
+        loop {
+            power = power * x;
+            power = power * x;
+            let denom = 2 * k + 1;
+            let tb = power.to_bits() / denom;
+            if tb == 0 {
+                break;
+            }
+            if k & 1 == 1 {
+                sum_bits = sum_bits.saturating_sub(tb);
+            } else {
+                sum_bits = sum_bits.saturating_add(tb);
+            }
+            k += 1;
+            if k > 60 {
+                break;
+            }
+        }
+        Self::from_bits(sum_bits)
+    }
+
+    /// Sine of `self` (radians). Strict: integer-only.
+    ///
+    /// # Algorithm
+    ///
+    /// Reduce `self` modulo τ into `[0, τ)`, fold into one π/2 octant
+    /// while tracking the result sign and whether the cofunction
+    /// reflection (`π − x`) applies, then evaluate the Taylor series.
+    ///
+    /// # Precision
+    ///
+    /// Strict: all arithmetic is integer-only. Accuracy is within a few
+    /// ULP at moderate SCALE.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn sin(self) -> Self {
+        use crate::consts::DecimalConsts;
+        let tau = Self::tau();
+        let pi = Self::pi();
+        let half_pi = Self::half_pi();
+        // Range-reduce into [0, τ).
+        let mut x = self % tau;
+        if x.is_negative() {
+            x = x + tau;
+        }
+        // Fold [0, τ) -> [0, π/2] with sign + reflection bookkeeping.
+        let (r, negate) = if x <= half_pi {
+            (x, false)
+        } else if x <= pi {
+            (pi - x, false)
+        } else if x <= pi + half_pi {
+            (x - pi, true)
+        } else {
+            (tau - x, true)
+        };
+        let s = Self::taylor_sin_reduced(r);
+        if negate { -s } else { s }
+    }
+
+    /// Cosine of `self` (radians). Strict: `cos(x) = sin(x + π/2)`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only; accuracy as for [`Self::sin`].
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn cos(self) -> Self {
+        use crate::consts::DecimalConsts;
+        (self + Self::half_pi()).sin()
+    }
+
+    /// Tangent of `self` (radians). Strict: `tan(x) = sin(x) / cos(x)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `cos(self)` is zero (an odd multiple of π/2).
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only; accuracy as for [`Self::sin`], with the
+    /// usual blow-up near the poles.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn tan(self) -> Self {
+        let c = self.cos();
+        if c == Self::ZERO {
+            panic!("D128::tan: cosine is zero (argument is an odd multiple of pi/2)");
+        }
+        self.sin() / c
+    }
+
+    /// Arctangent of `self`, in radians, in `(−π/2, π/2)`. Strict.
+    ///
+    /// # Algorithm
+    ///
+    /// Odd-function fold to `x ≥ 0`; reciprocal reduction
+    /// `atan(x) = π/2 − atan(1/x)` for `x > 1`; two rounds of argument
+    /// halving `atan(x) = 2·atan(x / (1 + √(1+x²)))` to shrink the
+    /// series argument; then the Taylor series.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only; accuracy within a few ULP at moderate SCALE.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn atan(self) -> Self {
+        use crate::consts::DecimalConsts;
+        let one = Self::ONE;
+        let neg = self.is_negative();
+        let mut x = if neg { -self } else { self };
+        let mut add_half_pi = false;
+        if x > one {
+            x = one / x;
+            add_half_pi = true;
+        }
+        // Two rounds of argument halving:
+        //   atan(x) = 2 * atan( x / (1 + sqrt(1 + x*x)) )
+        let mut halvings: u32 = 0;
+        for _ in 0..2 {
+            let denom = one + (one + x * x).sqrt();
+            x = x / denom;
+            halvings += 1;
+        }
+        let mut result = Self::taylor_atan_reduced(x);
+        for _ in 0..halvings {
+            result = Self::from_bits(result.to_bits().saturating_mul(2));
+        }
+        if add_half_pi {
+            result = Self::half_pi() - result;
+        }
+        if neg { -result } else { result }
+    }
+
+    /// Arcsine of `self`, in radians, in `[−π/2, π/2]`. Strict.
+    ///
+    /// `asin(x) = atan(x / √(1 − x²))`, with the endpoints `±1` mapped
+    /// directly to `±π/2`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `|self| > 1`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn asin(self) -> Self {
+        use crate::consts::DecimalConsts;
+        let one = Self::ONE;
+        let mag = if self.is_negative() { -self } else { self };
+        if mag > one {
+            panic!("D128::asin: argument out of domain [-1, 1]");
+        }
+        if mag == one {
+            let hp = Self::half_pi();
+            return if self.is_negative() { -hp } else { hp };
+        }
+        let denom = (one - self * self).sqrt();
+        (self / denom).atan()
+    }
+
+    /// Arccosine of `self`, in radians, in `[0, π]`. Strict:
+    /// `acos(x) = π/2 − asin(x)`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `|self| > 1`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn acos(self) -> Self {
+        use crate::consts::DecimalConsts;
+        Self::half_pi() - self.asin()
+    }
+
+    /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`), in
+    /// radians, in `(−π, π]`. Strict.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn atan2(self, other: Self) -> Self {
+        use crate::consts::DecimalConsts;
+        let y = self;
+        let x = other;
+        let zero = Self::ZERO;
+        let pi = Self::pi();
+        let half_pi = Self::half_pi();
+        if x == zero {
+            return if y.is_positive() {
+                half_pi
+            } else if y.is_negative() {
+                -half_pi
+            } else {
+                zero
+            };
+        }
+        let base = (y / x).atan();
+        if x.is_positive() {
+            base
+        } else if !y.is_negative() {
+            base + pi
+        } else {
+            base - pi
+        }
+    }
+
+    /// Hyperbolic sine of `self`. Strict:
+    /// `sinh(x) = (eˣ − e⁻ˣ) / 2`, composed from the strict `exp`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn sinh(self) -> Self {
+        let ex = self.exp();
+        let enx = (-self).exp();
+        Self::from_bits((ex - enx).to_bits() / 2)
+    }
+
+    /// Hyperbolic cosine of `self`. Strict:
+    /// `cosh(x) = (eˣ + e⁻ˣ) / 2`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn cosh(self) -> Self {
+        let ex = self.exp();
+        let enx = (-self).exp();
+        Self::from_bits((ex + enx).to_bits() / 2)
+    }
+
+    /// Hyperbolic tangent of `self`. Strict: `tanh(x) = sinh(x)/cosh(x)`.
+    /// `cosh` is always ≥ 1, so the division never traps.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn tanh(self) -> Self {
+        self.sinh() / self.cosh()
+    }
+
+    /// Inverse hyperbolic sine of `self`. Strict:
+    /// `asinh(x) = ln(x + √(x² + 1))`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn asinh(self) -> Self {
+        let one = Self::ONE;
+        let inner = self + (self * self + one).sqrt();
+        inner.ln()
+    }
+
+    /// Inverse hyperbolic cosine of `self`. Strict:
+    /// `acosh(x) = ln(x + √(x² − 1))`, defined for `x ≥ 1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self < 1`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn acosh(self) -> Self {
+        let one = Self::ONE;
+        if self < one {
+            panic!("D128::acosh: argument must be >= 1");
+        }
+        let inner = self + (self * self - one).sqrt();
+        inner.ln()
+    }
+
+    /// Inverse hyperbolic tangent of `self`. Strict:
+    /// `atanh(x) = ln((1 + x) / (1 − x)) / 2`, defined for `|x| < 1`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `|self| >= 1`.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn atanh(self) -> Self {
+        let one = Self::ONE;
+        let mag = if self.is_negative() { -self } else { self };
+        if mag >= one {
+            panic!("D128::atanh: argument out of domain (-1, 1)");
+        }
+        let ratio = (one + self) / (one - self);
+        Self::from_bits(ratio.ln().to_bits() / 2)
+    }
+
+    /// Convert radians to degrees: `self · (180 / π)`. Strict.
+    ///
+    /// Computed as `(self · 180) / π` (multiply-first) so the only
+    /// rounding step is the final divide. The `self · 180` intermediate
+    /// can overflow only for absurdly large angles at very low SCALE.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn to_degrees(self) -> Self {
+        use crate::consts::DecimalConsts;
+        (self * Self::from_int(180)) / Self::pi()
+    }
+
+    /// Convert degrees to radians: `self · (π / 180)`. Strict.
+    ///
+    /// Computed as `(self · π) / 180` (multiply-first) so the only
+    /// rounding step is the final divide.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only.
+    #[cfg(feature = "strict")]
+    #[inline]
+    #[must_use]
+    pub fn to_radians(self) -> Self {
+        use crate::consts::DecimalConsts;
+        (self * Self::pi()) / Self::from_int(180)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use crate::consts::DecimalConsts;
     use crate::core_type::D128s12;
 
-    // Allow 2 LSB of tolerance for single f64 round-trip operations.
+    // Tolerance for single-operation results. In the f64-bridge build
+    // each op is one f64 round-trip (≤ 2 LSB). The integer-only `strict`
+    // build composes several ±ULP primitives per trig call (e.g. `atan`
+    // chains a `sqrt`, two argument-halvings, and a Taylor series), so
+    // the bound is widened to the strict module's documented ~10-ULP
+    // envelope.
+    #[cfg(not(feature = "strict"))]
     const TWO_LSB: i128 = 2;
+    #[cfg(feature = "strict")]
+    const TWO_LSB: i128 = 12;
 
-    // Allow 4 LSB of tolerance for operations that chain multiple trig
-    // calls, each adding up to 1 LSB of quantisation slack.
+    // Tolerance for results that chain multiple trig calls. Same
+    // rationale as `TWO_LSB`; the strict bound is wider still because
+    // identities like `cosh² − sinh²` subtract two composed quantities.
+    #[cfg(not(feature = "strict"))]
     const FOUR_LSB: i128 = 4;
+    #[cfg(feature = "strict")]
+    const FOUR_LSB: i128 = 24;
 
     // Allow 32 LSB when comparing angle-conversion results against exact
     // integer targets (180, 90, 45 degrees). The D128::pi() constant has
