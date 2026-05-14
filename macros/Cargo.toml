@@ -19,4 +19,4 @@ default = []
 [dependencies]
 syn = { version = "2", features = ["full"] }
 quote = "1"
-num-traits = "0.2.19"
+proc-macro2 = "1"
