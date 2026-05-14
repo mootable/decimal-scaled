@@ -9,11 +9,11 @@
 //!
 //! Each method is provided in two cfg-disjoint forms:
 //!
-//! - The f64-based form is gated `#[cfg(all(feature = "std", not(feature = "strict")))]`
+//! - The f64-based form is gated `#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]`
 //!   and calls an inherent `f64` method (`f64::ln`, `f64::log`, `f64::log2`,
 //!   `f64::log10`, `f64::exp`, `f64::exp2`). Those intrinsics live in `std`,
 //!   so the gate excludes them from `no_std` builds.
-//! - The strict form is gated `#[cfg(feature = "strict")]` and is an
+//! - The strict form is gated `#[cfg(all(feature = "strict", not(feature = "no_strict")))]` and is an
 //!   integer-only implementation. The bodies are currently `todo!` stubs;
 //!   they compile under `no_std` and will be filled in with real
 //!   integer algorithms in a later pass.
@@ -51,9 +51,10 @@ use crate::core_type::D128;
 // Each value is the half-to-even rounding of the named irrational to 35
 // fractional digits, stored as a raw i128 at SCALE_REF = 35 (matching
 // the convention in `consts.rs`). Sources: research/strict_transcendentals_research.md §6.
-#[cfg(feature = "strict")]
+//
+// Not feature-gated: the `*_strict` methods are always compiled (see the
+// module doc), so the constants they depend on are too.
 const LN_2_RAW_S35: i128 = 69_314_718_055_994_530_941_723_212_145_817_657_i128;
-#[cfg(feature = "strict")]
 const LN_10_RAW_S35: i128 = 230_258_509_299_404_568_401_799_145_468_436_421_i128;
 
 impl<const SCALE: u32> D128<SCALE> {
@@ -82,10 +83,13 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Panics
     ///
     /// Panics if `self <= 0`.
-    #[cfg(feature = "strict")]
+    ///
+    /// Always available, regardless of the `strict` feature. When
+    /// `strict` is enabled, the plain [`Self::ln`] delegates here.
     #[inline]
     #[must_use]
-    pub fn ln(self) -> Self {
+    #[cfg(not(feature = "no_strict"))]
+    pub fn ln_strict(self) -> Self {
         if self.0 <= 0 {
             panic!("D128::ln: argument must be positive");
         }
@@ -153,31 +157,42 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // ln(1) == 0 (f64::ln(1.0) == 0.0 exactly).
     /// assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn ln(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().ln())
     }
 
-    /// Returns the logarithm of `self` in the given `base`.
+    /// Returns the natural logarithm (base e) of `self`.
     ///
-    /// Computed as `ln(self) / ln(base)`. Both subexpressions inherit
-    /// the precision characteristics of [`Self::ln`].
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::ln_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn ln(self) -> Self {
+        self.ln_strict()
+    }
+
+    /// Returns the logarithm of `self` in the given `base`, computed
+    /// integer-only as `ln_strict(self) / ln_strict(base)`.
+    ///
+    /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0` (via [`Self::ln`]), if `base <= 0`, or if
-    /// `base == 1` (division by `ln(1) = 0`).
-    #[cfg(feature = "strict")]
+    /// Panics if `self <= 0` (via [`Self::ln_strict`]), if `base <= 0`,
+    /// or if `base == 1` (division by `ln(1) = 0`).
     #[inline]
     #[must_use]
-    pub fn log(self, base: Self) -> Self {
-        let ln_base = base.ln();
+    #[cfg(not(feature = "no_strict"))]
+    pub fn log_strict(self, base: Self) -> Self {
+        let ln_base = base.ln_strict();
         if ln_base.to_bits() == 0 {
             panic!("D128::log: base must not equal 1 (ln(1) is zero)");
         }
-        self.ln() / ln_base
+        self.ln_strict() / ln_base
     }
 
     /// Returns the logarithm of `self` in the given `base`.
@@ -199,26 +214,38 @@ impl<const SCALE: u32> D128<SCALE> {
     /// let two   = D128s12::from_int(2);
     /// let result = eight.log(two);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().log(base.to_f64_lossy()))
     }
 
-    /// Returns the base-2 logarithm of `self`.
+    /// Returns the logarithm of `self` in the given `base`.
     ///
-    /// Computed as `ln(self) / ln(2)`.
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::log_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn log(self, base: Self) -> Self {
+        self.log_strict(base)
+    }
+
+    /// Returns the base-2 logarithm of `self`, computed integer-only as
+    /// `ln_strict(self) / ln(2)`.
+    ///
+    /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0` (via [`Self::ln`]).
-    #[cfg(feature = "strict")]
+    /// Panics if `self <= 0` (via [`Self::ln_strict`]).
     #[inline]
     #[must_use]
-    pub fn log2(self) -> Self {
+    #[cfg(not(feature = "no_strict"))]
+    pub fn log2_strict(self) -> Self {
         let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
-        self.ln() / ln_2
+        self.ln_strict() / ln_2
     }
 
     /// Returns the base-2 logarithm of `self`.
@@ -237,26 +264,38 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // log2(1) == 0 (f64::log2(1.0) == 0.0 exactly).
     /// assert_eq!(D128s12::ONE.log2(), D128s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().log2())
     }
 
-    /// Returns the base-10 logarithm of `self`.
+    /// Returns the base-2 logarithm of `self`.
     ///
-    /// Computed as `ln(self) / ln(10)`.
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::log2_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn log2(self) -> Self {
+        self.log2_strict()
+    }
+
+    /// Returns the base-10 logarithm of `self`, computed integer-only
+    /// as `ln_strict(self) / ln(10)`.
+    ///
+    /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
-    /// Panics if `self <= 0` (via [`Self::ln`]).
-    #[cfg(feature = "strict")]
+    /// Panics if `self <= 0` (via [`Self::ln_strict`]).
     #[inline]
     #[must_use]
-    pub fn log10(self) -> Self {
+    #[cfg(not(feature = "no_strict"))]
+    pub fn log10_strict(self) -> Self {
         let ln_10 = D128::<35>::from_bits(LN_10_RAW_S35).rescale::<SCALE>();
-        self.ln() / ln_10
+        self.ln_strict() / ln_10
     }
 
     /// Returns the base-10 logarithm of `self`.
@@ -273,11 +312,22 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // log10(1) == 0 (f64::log10(1.0) == 0.0 exactly).
     /// assert_eq!(D128s12::ONE.log10(), D128s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().log10())
+    }
+
+    /// Returns the base-10 logarithm of `self`.
+    ///
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::log10_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn log10(self) -> Self {
+        self.log10_strict()
     }
 
     // Exponentials
@@ -303,10 +353,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// Panics if the result overflows D128's representable range.
     /// At `D128s12` this happens for `self.to_f64_lossy()` greater than
     /// roughly `60`.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn exp(self) -> Self {
+    #[cfg(not(feature = "no_strict"))]
+    pub fn exp_strict(self) -> Self {
         let one = Self::ONE;
         if self.to_bits() == 0 {
             return one;
@@ -383,26 +433,38 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // exp(0) == 1 (f64::exp(0.0) == 1.0 exactly).
     /// assert_eq!(D128s12::ZERO.exp(), D128s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn exp(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().exp())
     }
 
-    /// Returns `2^self` (base-2 exponential).
+    /// Returns `e^self` (natural exponential).
     ///
-    /// Computed as `exp(self * ln(2))`.
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::exp_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn exp(self) -> Self {
+        self.exp_strict()
+    }
+
+    /// Returns `2^self` (base-2 exponential), computed integer-only as
+    /// `exp_strict(self * ln(2))`.
+    ///
+    /// Always available, regardless of the `strict` feature.
     ///
     /// # Panics
     ///
     /// Panics if the result overflows D128's representable range.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn exp2(self) -> Self {
+    #[cfg(not(feature = "no_strict"))]
+    pub fn exp2_strict(self) -> Self {
         let ln_2 = D128::<35>::from_bits(LN_2_RAW_S35).rescale::<SCALE>();
-        (self * ln_2).exp()
+        (self * ln_2).exp_strict()
     }
 
     /// Returns `2^self` (base-2 exponential).
@@ -420,15 +482,26 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // exp2(0) == 1 (f64::exp2(0.0) == 1.0 exactly).
     /// assert_eq!(D128s12::ZERO.exp2(), D128s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().exp2())
     }
+
+    /// Returns `2^self` (base-2 exponential).
+    ///
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::exp2_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn exp2(self) -> Self {
+        self.exp2_strict()
+    }
 }
 
-#[cfg(all(test, feature = "strict"))]
+#[cfg(all(test, feature = "strict", not(feature = "no_strict")))]
 mod strict_tests {
     use crate::core_type::D128s12;
 
@@ -682,7 +755,7 @@ mod strict_tests {
     }
 }
 
-#[cfg(all(test, not(feature = "strict")))]
+#[cfg(all(test, any(not(feature = "strict"), feature = "no_strict")))]
 mod tests {
     use crate::consts::DecimalConsts;
     use crate::core_type::D128s12;

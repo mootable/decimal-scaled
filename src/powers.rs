@@ -187,21 +187,23 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
-    #[cfg(feature = "strict")]
+    /// Raises `self` to the power `exp`, computed integer-only as
+    /// `exp_strict(exp * ln_strict(self))`.
+    ///
+    /// Always available, regardless of the `strict` feature. When
+    /// `strict` is enabled, the plain [`Self::powf`] delegates here.
+    ///
+    /// A zero or negative base saturates to `ZERO` (a negative base
+    /// with an arbitrary fractional exponent is not real-valued),
+    /// matching the f64-bridge NaN-to-ZERO policy.
+    #[cfg(not(feature = "no_strict"))]
     #[inline]
     #[must_use]
-    pub fn powf(self, exp: D128<SCALE>) -> Self {
-        // x^y = exp(y * ln(x)). Inherits the precision and panic
-        // characteristics of `ln` and `exp`.
-        if self.to_bits() == 0 {
+    pub fn powf_strict(self, exp: D128<SCALE>) -> Self {
+        if self.to_bits() <= 0 {
             return Self::ZERO;
         }
-        if self.to_bits() < 0 {
-            // Negative base with arbitrary fractional exponent is not
-            // real-valued. Match the f64-bridge NaN-to-ZERO saturation.
-            return Self::ZERO;
-        }
-        (exp * self.ln()).exp()
+        (exp * self.ln_strict()).exp_strict()
     }
 
     /// Raises `self` to the power `exp` via the f64 bridge.
@@ -226,11 +228,22 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn powf(self, exp: D128<SCALE>) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().powf(exp.to_f64_lossy()))
+    }
+
+    /// Raises `self` to the power `exp`.
+    ///
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::powf_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn powf(self, exp: D128<SCALE>) -> Self {
+        self.powf_strict(exp)
     }
 
     /// Returns the square root of `self` (strict integer-only stub).
@@ -257,10 +270,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
     /// assert_eq!(D128s12::ONE.sqrt(), D128s12::ONE);
     /// ```
-    #[cfg(feature = "strict")]
+    #[cfg(not(feature = "no_strict"))]
     #[inline]
     #[must_use]
-    pub fn sqrt(self) -> Self {
+    pub fn sqrt_strict(self) -> Self {
         // Correctly-rounded square root.
         //
         // For a `D128<SCALE>` with raw storage `r`, the logical value is
@@ -308,11 +321,23 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
     /// assert_eq!(D128s12::ONE.sqrt(), D128s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().sqrt())
+    }
+
+    /// Returns the square root of `self`.
+    ///
+    /// With the `strict` feature enabled this is the integer-only,
+    /// correctly-rounded [`Self::sqrt_strict`]; without it, the
+    /// f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn sqrt(self) -> Self {
+        self.sqrt_strict()
     }
 
     /// Returns the cube root of `self` via the f64 bridge.
@@ -334,11 +359,22 @@ impl<const SCALE: u32> D128<SCALE> {
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn cbrt(self) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().cbrt())
+    }
+
+    /// Returns the cube root of `self`.
+    ///
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::cbrt_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn cbrt(self) -> Self {
+        self.cbrt_strict()
     }
 
     /// Returns the cube root of `self` via Newton iteration on
@@ -350,10 +386,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// Strict: integer-only Newton iteration. Convergence is quadratic;
     /// settles within ~50 iterations. Precision is roughly Phase 2A
     /// (~10 ULP at D128s12).
-    #[cfg(feature = "strict")]
+    #[cfg(not(feature = "no_strict"))]
     #[inline]
     #[must_use]
-    pub fn cbrt(self) -> Self {
+    pub fn cbrt_strict(self) -> Self {
         if self.to_bits() == 0 {
             return Self::ZERO;
         }
@@ -476,7 +512,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
     /// ```
-    #[cfg(feature = "std")]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn hypot(self, other: Self) -> Self {
@@ -495,6 +531,39 @@ impl<const SCALE: u32> D128<SCALE> {
             let one_plus_sq = Self::ONE + ratio * ratio;
             large * one_plus_sq.sqrt()
         }
+    }
+
+    /// Returns `sqrt(self^2 + other^2)` without intermediate overflow,
+    /// computed integer-only via the correctly-rounded
+    /// [`Self::sqrt_strict`]. Same scale-trick algorithm as the
+    /// f64-bridge [`Self::hypot`]; available in `no_std`.
+    ///
+    /// Always available, regardless of the `strict` feature.
+    #[cfg(not(feature = "no_strict"))]
+    #[inline]
+    #[must_use]
+    pub fn hypot_strict(self, other: Self) -> Self {
+        let a = self.abs();
+        let b = other.abs();
+        let (large, small) = if a >= b { (a, b) } else { (b, a) };
+        if large == Self::ZERO {
+            Self::ZERO
+        } else {
+            let ratio = small / large;
+            let one_plus_sq = Self::ONE + ratio * ratio;
+            large * one_plus_sq.sqrt_strict()
+        }
+    }
+
+    /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
+    ///
+    /// With the `strict` feature enabled this is the integer-only
+    /// [`Self::hypot_strict`]; without it, the f64-bridge form.
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[inline]
+    #[must_use]
+    pub fn hypot(self, other: Self) -> Self {
+        self.hypot_strict(other)
     }
 
     // Overflow-variant family for pow.
@@ -852,7 +921,7 @@ mod tests {
     }
 
     /// `powf(2)` agrees with `pow(2)` within 2 LSB (f64 bridge).
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D128s12::from_int(7);
@@ -864,7 +933,7 @@ mod tests {
     /// strict mode. Strict powf is `exp(2 * ln(x))` with Phase 2A
     /// precision (~10-20 ULP per transcendental call); the round-trip
     /// stacks two such errors. 1000 LSB is comfortable headroom.
-    #[cfg(feature = "strict")]
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D128s12::from_int(7);
@@ -902,7 +971,7 @@ mod tests {
     /// `(q − 0.5)² ≤ N ≤ (q + 0.5)²`, i.e. `q` is the exact square root
     /// rounded to nearest. Checked exactly in 256-bit integer space
     /// across several scales and magnitudes.
-    #[cfg(feature = "strict")]
+    #[cfg(not(feature = "no_strict"))]
     #[test]
     fn strict_sqrt_is_correctly_rounded() {
         // (q - 0.5)^2 = q^2 - q + 0.25  → lower bound  N ≥ q^2 - q + 1 (ints, when q>0)
@@ -911,7 +980,7 @@ mod tests {
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
             let x = crate::core_type::D128::<S>::from_bits(raw);
-            let q = x.sqrt().to_bits();
+            let q = x.sqrt_strict().to_bits();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
             let mult = 10u128.pow(S);

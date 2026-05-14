@@ -20,7 +20,7 @@
 //! `f64::acosh`, `f64::atanh`, `f64::to_degrees`, `f64::to_radians`),
 //! which are only available in `std` — they delegate to platform or
 //! hardware intrinsics that are not in `core`. Each method is gated
-//! `#[cfg(all(feature = "std", not(feature = "strict")))]`. The module
+//! `#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]`. The module
 //! declaration in `lib.rs` is ungated so that future integer-only
 //! `strict` implementations can be added alongside the f64 wrappers
 //! without restructuring.
@@ -69,7 +69,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.sin(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn sin(self) -> Self {
@@ -92,7 +92,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.cos(), D128s12::ONE);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn cos(self) -> Self {
@@ -120,7 +120,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.tan(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn tan(self) -> Self {
@@ -148,7 +148,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.asin(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn asin(self) -> Self {
@@ -174,7 +174,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ONE.acos(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn acos(self) -> Self {
@@ -199,7 +199,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.atan(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn atan(self) -> Self {
@@ -227,7 +227,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// let result = one.atan2(one); // approximately D128s12::quarter_pi()
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn atan2(self, other: Self) -> Self {
@@ -255,7 +255,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.sinh(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn sinh(self) -> Self {
@@ -281,7 +281,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.cosh(), D128s12::ONE);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn cosh(self) -> Self {
@@ -306,7 +306,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.tanh(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn tanh(self) -> Self {
@@ -331,7 +331,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.asinh(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn asinh(self) -> Self {
@@ -357,7 +357,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ONE.acosh(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn acosh(self) -> Self {
@@ -383,7 +383,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.atanh(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn atanh(self) -> Self {
@@ -415,7 +415,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.to_degrees(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn to_degrees(self) -> Self {
@@ -441,7 +441,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// assert_eq!(D128s12::ZERO.to_radians(), D128s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", not(feature = "strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
     pub fn to_radians(self) -> Self {
@@ -471,13 +471,139 @@ impl<const SCALE: u32> D128<SCALE> {
 //   then a Taylor series; `asin` / `acos` / `atan2` are derived from it.
 // ─────────────────────────────────────────────────────────────────────
 
-#[cfg(feature = "strict")]
+// Strict-feature dispatchers. When `strict` is enabled (and
+// `no_strict` is not), the plain trig methods route to the
+// integer-only `*_strict` implementations below.
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
+impl<const SCALE: u32> D128<SCALE> {
+    /// With `strict` this dispatches to [`Self::sin_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn sin(self) -> Self {
+        self.sin_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::cos_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn cos(self) -> Self {
+        self.cos_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::tan_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn tan(self) -> Self {
+        self.tan_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::asin_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn asin(self) -> Self {
+        self.asin_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::acos_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn acos(self) -> Self {
+        self.acos_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::atan_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn atan(self) -> Self {
+        self.atan_strict()
+    }
+
+    /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`).
+    /// With `strict` this dispatches to [`Self::atan2_strict`];
+    /// without it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn atan2(self, other: Self) -> Self {
+        self.atan2_strict(other)
+    }
+
+    /// With `strict` this dispatches to [`Self::sinh_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn sinh(self) -> Self {
+        self.sinh_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::cosh_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn cosh(self) -> Self {
+        self.cosh_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::tanh_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn tanh(self) -> Self {
+        self.tanh_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::asinh_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn asinh(self) -> Self {
+        self.asinh_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::acosh_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn acosh(self) -> Self {
+        self.acosh_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::atanh_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn atanh(self) -> Self {
+        self.atanh_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::to_degrees_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn to_degrees(self) -> Self {
+        self.to_degrees_strict()
+    }
+
+    /// With `strict` this dispatches to [`Self::to_radians_strict`]; without
+    /// it, the f64-bridge form is used instead.
+    #[inline]
+    #[must_use]
+    pub fn to_radians(self) -> Self {
+        self.to_radians_strict()
+    }
+}
+
+#[cfg(not(feature = "no_strict"))]
 impl<const SCALE: u32> D128<SCALE> {
     /// Taylor series for `sin` on a reduced argument `r ∈ [0, π/2]`:
     /// `r − r³/3! + r⁵/5! − …`. Integer-only; terms are accumulated at
     /// the storage scale and the loop stops once a term underflows one
     /// LSB.
-    #[cfg(feature = "strict")]
     fn taylor_sin_reduced(r: Self) -> Self {
         let mut sum_bits: i128 = r.to_bits();
         // term = r ; iteratively term *= -r*r / ((2k)(2k+1))
@@ -508,7 +634,6 @@ impl<const SCALE: u32> D128<SCALE> {
 
     /// Taylor series for `atan` on a reduced argument `x ∈ [0, ~0.42]`:
     /// `x − x³/3 + x⁵/5 − …`. Integer-only.
-    #[cfg(feature = "strict")]
     fn taylor_atan_reduced(x: Self) -> Self {
         let mut sum_bits: i128 = x.to_bits();
         let mut power = x; // x^(2k+1)
@@ -546,10 +671,9 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Strict: all arithmetic is integer-only. Accuracy is within a few
     /// ULP at moderate SCALE.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn sin(self) -> Self {
+    pub fn sin_strict(self) -> Self {
         use crate::consts::DecimalConsts;
         let tau = Self::tau();
         let pi = Self::pi();
@@ -578,12 +702,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only; accuracy as for [`Self::sin`].
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn cos(self) -> Self {
+    pub fn cos_strict(self) -> Self {
         use crate::consts::DecimalConsts;
-        (self + Self::half_pi()).sin()
+        (self + Self::half_pi()).sin_strict()
     }
 
     /// Tangent of `self` (radians). Strict: `tan(x) = sin(x) / cos(x)`.
@@ -596,15 +719,14 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Strict: integer-only; accuracy as for [`Self::sin`], with the
     /// usual blow-up near the poles.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn tan(self) -> Self {
-        let c = self.cos();
+    pub fn tan_strict(self) -> Self {
+        let c = self.cos_strict();
         if c == Self::ZERO {
             panic!("D128::tan: cosine is zero (argument is an odd multiple of pi/2)");
         }
-        self.sin() / c
+        self.sin_strict() / c
     }
 
     /// Arctangent of `self`, in radians, in `(−π/2, π/2)`. Strict.
@@ -619,10 +741,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only; accuracy within a few ULP at moderate SCALE.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn atan(self) -> Self {
+    pub fn atan_strict(self) -> Self {
         use crate::consts::DecimalConsts;
         let one = Self::ONE;
         let neg = self.is_negative();
@@ -636,7 +757,7 @@ impl<const SCALE: u32> D128<SCALE> {
         //   atan(x) = 2 * atan( x / (1 + sqrt(1 + x*x)) )
         let mut halvings: u32 = 0;
         for _ in 0..2 {
-            let denom = one + (one + x * x).sqrt();
+            let denom = one + (one + x * x).sqrt_strict();
             x = x / denom;
             halvings += 1;
         }
@@ -662,10 +783,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn asin(self) -> Self {
+    pub fn asin_strict(self) -> Self {
         use crate::consts::DecimalConsts;
         let one = Self::ONE;
         let mag = if self.is_negative() { -self } else { self };
@@ -676,8 +796,8 @@ impl<const SCALE: u32> D128<SCALE> {
             let hp = Self::half_pi();
             return if self.is_negative() { -hp } else { hp };
         }
-        let denom = (one - self * self).sqrt();
-        (self / denom).atan()
+        let denom = (one - self * self).sqrt_strict();
+        (self / denom).atan_strict()
     }
 
     /// Arccosine of `self`, in radians, in `[0, π]`. Strict:
@@ -690,12 +810,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn acos(self) -> Self {
+    pub fn acos_strict(self) -> Self {
         use crate::consts::DecimalConsts;
-        Self::half_pi() - self.asin()
+        Self::half_pi() - self.asin_strict()
     }
 
     /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`), in
@@ -704,10 +823,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn atan2(self, other: Self) -> Self {
+    pub fn atan2_strict(self, other: Self) -> Self {
         use crate::consts::DecimalConsts;
         let y = self;
         let x = other;
@@ -723,7 +841,7 @@ impl<const SCALE: u32> D128<SCALE> {
                 zero
             };
         }
-        let base = (y / x).atan();
+        let base = (y / x).atan_strict();
         if x.is_positive() {
             base
         } else if !y.is_negative() {
@@ -739,12 +857,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn sinh(self) -> Self {
-        let ex = self.exp();
-        let enx = (-self).exp();
+    pub fn sinh_strict(self) -> Self {
+        let ex = self.exp_strict();
+        let enx = (-self).exp_strict();
         Self::from_bits((ex - enx).to_bits() / 2)
     }
 
@@ -754,12 +871,11 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn cosh(self) -> Self {
-        let ex = self.exp();
-        let enx = (-self).exp();
+    pub fn cosh_strict(self) -> Self {
+        let ex = self.exp_strict();
+        let enx = (-self).exp_strict();
         Self::from_bits((ex + enx).to_bits() / 2)
     }
 
@@ -769,11 +885,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn tanh(self) -> Self {
-        self.sinh() / self.cosh()
+    pub fn tanh_strict(self) -> Self {
+        self.sinh_strict() / self.cosh_strict()
     }
 
     /// Inverse hyperbolic sine of `self`. Strict:
@@ -782,13 +897,12 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn asinh(self) -> Self {
+    pub fn asinh_strict(self) -> Self {
         let one = Self::ONE;
-        let inner = self + (self * self + one).sqrt();
-        inner.ln()
+        let inner = self + (self * self + one).sqrt_strict();
+        inner.ln_strict()
     }
 
     /// Inverse hyperbolic cosine of `self`. Strict:
@@ -801,16 +915,15 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn acosh(self) -> Self {
+    pub fn acosh_strict(self) -> Self {
         let one = Self::ONE;
         if self < one {
             panic!("D128::acosh: argument must be >= 1");
         }
-        let inner = self + (self * self - one).sqrt();
-        inner.ln()
+        let inner = self + (self * self - one).sqrt_strict();
+        inner.ln_strict()
     }
 
     /// Inverse hyperbolic tangent of `self`. Strict:
@@ -823,17 +936,16 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn atanh(self) -> Self {
+    pub fn atanh_strict(self) -> Self {
         let one = Self::ONE;
         let mag = if self.is_negative() { -self } else { self };
         if mag >= one {
             panic!("D128::atanh: argument out of domain (-1, 1)");
         }
         let ratio = (one + self) / (one - self);
-        Self::from_bits(ratio.ln().to_bits() / 2)
+        Self::from_bits(ratio.ln_strict().to_bits() / 2)
     }
 
     /// Convert radians to degrees: `self · (180 / π)`. Strict.
@@ -845,10 +957,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn to_degrees(self) -> Self {
+    pub fn to_degrees_strict(self) -> Self {
         use crate::consts::DecimalConsts;
         (self * Self::from_int(180)) / Self::pi()
     }
@@ -861,10 +972,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only.
-    #[cfg(feature = "strict")]
     #[inline]
     #[must_use]
-    pub fn to_radians(self) -> Self {
+    pub fn to_radians_strict(self) -> Self {
         use crate::consts::DecimalConsts;
         (self * Self::pi()) / Self::from_int(180)
     }
@@ -881,17 +991,20 @@ mod tests {
     // chains a `sqrt`, two argument-halvings, and a Taylor series), so
     // the bound is widened to the strict module's documented ~10-ULP
     // envelope.
-    #[cfg(not(feature = "strict"))]
+    // Tight bound when the dispatched methods are the f64 bridge
+    // (default or `no_strict` builds); wider when they are the
+    // integer-only strict path.
+    #[cfg(any(not(feature = "strict"), feature = "no_strict"))]
     const TWO_LSB: i128 = 2;
-    #[cfg(feature = "strict")]
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
     const TWO_LSB: i128 = 12;
 
     // Tolerance for results that chain multiple trig calls. Same
     // rationale as `TWO_LSB`; the strict bound is wider still because
     // identities like `cosh² − sinh²` subtract two composed quantities.
-    #[cfg(not(feature = "strict"))]
+    #[cfg(any(not(feature = "strict"), feature = "no_strict"))]
     const FOUR_LSB: i128 = 4;
-    #[cfg(feature = "strict")]
+    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
     const FOUR_LSB: i128 = 24;
 
     // Allow 32 LSB when comparing angle-conversion results against exact

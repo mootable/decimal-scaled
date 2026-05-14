@@ -22,6 +22,11 @@ macros = ["dep:decimal_scaled_macros"]
 # Strict mode does not require `std`; transcendental methods compile under
 # `no_std + alloc` using integer algorithms.
 strict = []
+# Drops the integer-only `*_strict` transcendental surface entirely for
+# a smaller build. `no_strict` overrides `strict`: when both are set the
+# crate behaves as if neither were — the f64-bridge transcendentals are
+# used (when `std` is available) and no `*_strict` methods are emitted.
+no_strict = []
 # Compile-time selector for the default RoundingMode used by the
 # no-arg `rescale` family (and any future default-rounding methods).
 # If none of these is enabled, the default is HalfToEven (IEEE-754
