@@ -61,6 +61,7 @@
 //!   `no_std + alloc`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
+#![cfg_attr(feature = "experimental-floats", feature(f16, f128))]
 #![allow(clippy::module_name_repetitions)]
 
 #[cfg(feature = "alloc")]

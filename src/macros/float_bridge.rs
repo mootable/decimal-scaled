@@ -83,6 +83,86 @@ macro_rules! decl_decimal_float_bridge {
             pub fn to_f32_lossy(self) -> f32 {
                 self.to_f64_lossy() as f32
             }
+
+            /// Construct from an `f16` using the crate default rounding
+            /// mode. Available only on nightly with the
+            /// `experimental-floats` feature.
+            #[cfg(all(feature = "std", feature = "experimental-floats"))]
+            #[inline]
+            #[must_use]
+            pub fn from_f16_lossy(value: f16) -> Self {
+                Self::from_f64_lossy(value as f64)
+            }
+
+            /// Convert to `f16` (lossy; f16 has only a 10-bit mantissa).
+            #[cfg(all(feature = "std", feature = "experimental-floats"))]
+            #[inline]
+            #[must_use]
+            pub fn to_f16_lossy(self) -> f16 {
+                self.to_f64_lossy() as f16
+            }
+
+            /// Construct from an `f128` using the crate default rounding
+            /// mode. Available only on nightly with the
+            /// `experimental-floats` feature. The intermediate is `f128`
+            /// directly (no lossy `as f64` step) for the maximum
+            /// precision available before narrowing to the storage.
+            #[cfg(all(feature = "std", feature = "experimental-floats"))]
+            #[inline]
+            #[must_use]
+            pub fn from_f128_lossy(value: f128) -> Self {
+                Self::from_f128_lossy_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Construct from an `f128` using the supplied rounding mode.
+            #[cfg(all(feature = "std", feature = "experimental-floats"))]
+            #[inline]
+            #[must_use]
+            pub fn from_f128_lossy_with(
+                value: f128,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if value.is_nan() {
+                    return Self::ZERO;
+                }
+                if value.is_infinite() {
+                    return if value > 0.0 { Self::MAX } else { Self::MIN };
+                }
+                let scaled = value * (Self::multiplier() as f128);
+                let storage_max_f128 = <$Storage>::MAX as f128;
+                let storage_min_f128 = <$Storage>::MIN as f128;
+                if scaled >= storage_max_f128 {
+                    return Self::MAX;
+                }
+                if scaled < storage_min_f128 {
+                    return Self::MIN;
+                }
+                let rounded = match mode {
+                    $crate::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
+                    $crate::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
+                    $crate::rounding::RoundingMode::HalfTowardZero => {
+                        if scaled >= 0.0 {
+                            (scaled - 0.5).ceil()
+                        } else {
+                            (scaled + 0.5).floor()
+                        }
+                    }
+                    $crate::rounding::RoundingMode::Trunc => scaled.trunc(),
+                    $crate::rounding::RoundingMode::Floor => scaled.floor(),
+                    $crate::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                };
+                Self(rounded as $Storage)
+            }
+
+            /// Convert to `f128`. Lossless when the storage fits in the
+            /// f128 mantissa (113 bits), which holds for D128 and
+            /// narrower; D256 / D512 / D1024 narrowing is lossy.
+            #[cfg(all(feature = "std", feature = "experimental-floats"))]
+            #[inline]
+            #[must_use]
+            pub fn to_f128_lossy(self) -> f128 {
+                (self.0 as f128) / (Self::multiplier() as f128)
+            }
         }
     };
 }

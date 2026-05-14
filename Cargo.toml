@@ -33,6 +33,11 @@ rounding-half-toward-zero = []
 rounding-trunc = []
 rounding-floor = []
 rounding-ceiling = []
+# Nightly-only: expose `from_f16_lossy` / `to_f16_lossy` /
+# `from_f128_lossy` / `to_f128_lossy` on each decimal type. f16 and
+# f128 are experimental in Rust; this feature requires the nightly
+# toolchain. On stable, leave the feature off.
+experimental-floats = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
