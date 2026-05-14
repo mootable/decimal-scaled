@@ -50,9 +50,9 @@
 //! shows --- for naive.
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use decimal_scaled::I128;
+use decimal_scaled::D128;
 
-type D = I128<12>;
+type D = D128<12>;
 const MULT: i128 = 1_000_000_000_000;
 
 // -----------------------------------------------------------------------------
@@ -312,7 +312,7 @@ fn mg_mul(a: i128, b: i128) -> i128 {
     }
 }
 
-// MG-style divide for I128s12::div: numerator = a * MULT (256-bit),
+// MG-style divide for D128e12::div: numerator = a * MULT (256-bit),
 // divisor = b (128-bit). MG magic-divide doesn't apply (b is variable).
 // We use the same hand-rolled binary long divide as Candidate B.
 #[inline(always)]
@@ -321,7 +321,7 @@ fn mg_div(a: i128, b: i128) -> i128 {
 }
 
 // -----------------------------------------------------------------------------
-// Candidate E: production `I128<12>` operators (the actual shipping path).
+// Candidate E: production `D128<12>` operators (the actual shipping path).
 // Calls `D::Mul` / `D::Div` so we measure inclusive of the production
 // `mg_divide::mul_div_pow10` / `div_pow10_div` helpers, the 38-entry magic
 // table lookup, and the overflow-handling branch.
@@ -421,7 +421,7 @@ fn sanity_check_consistency() {
 
 fn bench_mul(c: &mut Criterion) {
     sanity_check_consistency();
-    let mut group = c.benchmark_group("I128s12::mul");
+    let mut group = c.benchmark_group("D128e12::mul");
 
     for inp in [SMALL, MID, BOUND, WIDE] {
         // Candidate A -- skip at WIDE (overflows)
@@ -447,7 +447,7 @@ fn bench_mul(c: &mut Criterion) {
 }
 
 fn bench_div(c: &mut Criterion) {
-    let mut group = c.benchmark_group("I128s12::div");
+    let mut group = c.benchmark_group("D128e12::div");
 
     for inp in [SMALL, MID, BOUND, WIDE] {
         if inp.label != "wide_1e22" {

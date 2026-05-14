@@ -1,13 +1,13 @@
-//! `serde` integration for [`I128`].
+//! `serde` integration for [`D128`].
 //!
 //! # Wire format
 //!
-//! `I128<SCALE>` chooses its wire encoding based on the serializer's
+//! `D128<SCALE>` chooses its wire encoding based on the serializer's
 //! [`serde::Serializer::is_human_readable`] flag:
 //!
 //! - **Human-readable formats** (JSON, TOML, YAML): a base-10 integer
 //!   string of the underlying `i128` storage value. For example,
-//!   `I128s12::ONE` (storage `1_000_000_000_000`) serialises as the
+//!   `D128e12::ONE` (storage `1_000_000_000_000`) serialises as the
 //!   JSON string `"1000000000000"`. This is not a decimal string like
 //!   `"1.0"` — that is the job of `Display`, not the wire format.
 //!
@@ -33,11 +33,11 @@ use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
 
-use crate::core_type::I128;
+use crate::core_type::D128;
 
 // ── Serialize ─────────────────────────────────────────────────────────
 
-impl<const SCALE: u32> Serialize for I128<SCALE> {
+impl<const SCALE: u32> Serialize for D128<SCALE> {
     /// Serialise `self` as a base-10 integer string for human-readable
     /// formats, or as 16 little-endian bytes for binary formats.
     ///
@@ -74,7 +74,7 @@ impl<const SCALE: u32> Serialize for I128<SCALE> {
 
 // ── Deserialize ───────────────────────────────────────────────────────
 
-impl<'de, const SCALE: u32> Deserialize<'de> for I128<SCALE> {
+impl<'de, const SCALE: u32> Deserialize<'de> for D128<SCALE> {
     /// Deserialise from a base-10 integer string (human-readable
     /// formats), 16 little-endian bytes (binary formats), or a native
     /// integer (self-describing binary formats such as CBOR).
@@ -102,16 +102,16 @@ impl<'de, const SCALE: u32> Deserialize<'de> for I128<SCALE> {
 
 /// Serde helper module for `#[serde(with = "...")]` field annotations.
 ///
-/// Use this module when you want to control serialisation of a `I128`
+/// Use this module when you want to control serialisation of a `D128`
 /// field on a struct that derives `Serialize` / `Deserialize`:
 ///
 /// ```ignore
-/// use decimal_scaled::I128;
+/// use decimal_scaled::D128;
 ///
 /// #[derive(serde::Serialize, serde::Deserialize)]
 /// struct MyStruct {
 ///     #[serde(with = "decimal_scaled::serde_helpers::decimal_serde")]
-///     length: I128<12>,
+///     length: D128<12>,
 /// }
 /// ```
 ///
@@ -122,7 +122,7 @@ impl<'de, const SCALE: u32> Deserialize<'de> for I128<SCALE> {
 pub mod decimal_serde {
     use super::*;
 
-    /// Serialise `v` using the `I128` wire format.
+    /// Serialise `v` using the `D128` wire format.
     ///
     /// Intended for use under `#[serde(serialize_with = "...")]` or
     /// `#[serde(with = "...")]`.
@@ -132,13 +132,13 @@ pub mod decimal_serde {
     /// Strict: all arithmetic is integer-only; result is bit-exact.
     #[inline]
     pub fn serialize<const SCALE: u32, S: Serializer>(
-        v: &I128<SCALE>,
+        v: &D128<SCALE>,
         s: S,
     ) -> Result<S::Ok, S::Error> {
         v.serialize(s)
     }
 
-    /// Deserialise a `I128` using the wire format.
+    /// Deserialise a `D128` using the wire format.
     ///
     /// Intended for use under `#[serde(deserialize_with = "...")]` or
     /// `#[serde(with = "...")]`.
@@ -149,8 +149,8 @@ pub mod decimal_serde {
     #[inline]
     pub fn deserialize<'de, const SCALE: u32, D: Deserializer<'de>>(
         d: D,
-    ) -> Result<I128<SCALE>, D::Error> {
-        I128::<SCALE>::deserialize(d)
+    ) -> Result<D128<SCALE>, D::Error> {
+        D128::<SCALE>::deserialize(d)
     }
 
     /// Visitor that backs [`deserialize`]. Public so external helper
@@ -169,7 +169,7 @@ pub mod decimal_serde {
     pub struct DecimalVisitor<const SCALE: u32>(pub PhantomData<()>);
 
     impl<'de, const SCALE: u32> Visitor<'de> for DecimalVisitor<SCALE> {
-        type Value = I128<SCALE>;
+        type Value = D128<SCALE>;
 
         fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.write_str(
@@ -202,7 +202,7 @@ pub mod decimal_serde {
                 ));
             }
             v.parse::<i128>()
-                .map(I128::<SCALE>::from_bits)
+                .map(D128::<SCALE>::from_bits)
                 .map_err(|_| {
                     serde::de::Error::custom(
                         "decimal-scaled: expected a base-10 i128 integer string",
@@ -232,7 +232,7 @@ pub mod decimal_serde {
                     &"exactly 16 little-endian bytes for an i128",
                 )
             })?;
-            Ok(I128::<SCALE>::from_bits(i128::from_le_bytes(arr)))
+            Ok(D128::<SCALE>::from_bits(i128::from_le_bytes(arr)))
         }
 
         fn visit_borrowed_bytes<E: serde::de::Error>(
@@ -259,45 +259,45 @@ pub mod decimal_serde {
         // serialise path.
 
         fn visit_i8<E: serde::de::Error>(self, v: i8) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_i16<E: serde::de::Error>(self, v: i16) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v))
+            Ok(D128::<SCALE>::from_bits(v))
         }
 
         fn visit_u8<E: serde::de::Error>(self, v: u8) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_u16<E: serde::de::Error>(self, v: u16) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
-            Ok(I128::<SCALE>::from_bits(v as i128))
+            Ok(D128::<SCALE>::from_bits(v as i128))
         }
 
         fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Self::Value, E> {
             // u128 values above i128::MAX cannot be represented; reject
             // explicitly rather than wrapping silently.
-            i128::try_from(v).map(I128::<SCALE>::from_bits).map_err(|_| {
+            i128::try_from(v).map(D128::<SCALE>::from_bits).map_err(|_| {
                 serde::de::Error::custom(
                     "decimal-scaled: u128 value exceeds i128 storage range",
                 )
@@ -320,7 +320,7 @@ pub mod decimal_serde {
 #[cfg(all(test, feature = "alloc", feature = "serde"))]
 mod tests {
     use super::*;
-    use crate::core_type::{I128, I128s12};
+    use crate::core_type::{D128, D128e12};
     use serde::de::value::{Error as DeError, StrDeserializer};
     use serde::de::IntoDeserializer;
     use alloc::format;
@@ -331,18 +331,18 @@ mod tests {
     #[test]
     fn deserialize_canonical_zero_string() {
         let de: StrDeserializer<DeError> = "0".into_deserializer();
-        let v: I128s12 = I128s12::deserialize(de).unwrap();
-        assert_eq!(v, I128s12::ZERO);
+        let v: D128e12 = D128e12::deserialize(de).unwrap();
+        assert_eq!(v, D128e12::ZERO);
     }
 
     /// The visitor accepts the scaled integer representation of `ONE`
-    /// (`10^12` for `I128s12`) when fed via `visit_str`.
+    /// (`10^12` for `D128e12`) when fed via `visit_str`.
     #[test]
     fn visitor_accepts_scaled_one_str() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: I128s12 =
+        let v: D128e12 =
             <_ as Visitor>::visit_str::<DeError>(visitor, "1000000000000").unwrap();
-        assert_eq!(v, I128s12::ONE);
+        assert_eq!(v, D128e12::ONE);
     }
 
     /// The visitor rejects a decimal-point string. `"1.5"` is the
@@ -350,7 +350,7 @@ mod tests {
     #[test]
     fn visitor_rejects_decimal_point_str() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let res: Result<I128s12, _> =
+        let res: Result<D128e12, _> =
             <_ as Visitor>::visit_str::<DeError>(visitor, "1.5");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
@@ -358,11 +358,11 @@ mod tests {
     // ── Native-integer wire form round-trips ──────────────────────────
 
     /// `visit_i64` interprets the input as scaled storage; `-5` stored
-    /// directly produces a `I128` whose raw bits are `-5`.
+    /// directly produces a `D128` whose raw bits are `-5`.
     #[test]
     fn visitor_accepts_i64_as_storage() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: I128s12 = <_ as Visitor>::visit_i64::<DeError>(visitor, -5).unwrap();
+        let v: D128e12 = <_ as Visitor>::visit_i64::<DeError>(visitor, -5).unwrap();
         assert_eq!(v.to_bits(), -5);
     }
 
@@ -370,7 +370,7 @@ mod tests {
     #[test]
     fn visitor_accepts_u64_max() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: I128s12 =
+        let v: D128e12 =
             <_ as Visitor>::visit_u64::<DeError>(visitor, u64::MAX).unwrap();
         assert_eq!(v.to_bits(), u64::MAX as i128);
     }
@@ -380,7 +380,7 @@ mod tests {
     #[test]
     fn visitor_rejects_u128_above_i128_max() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let res: Result<I128s12, _> = <_ as Visitor>::visit_u128::<DeError>(
+        let res: Result<D128e12, _> = <_ as Visitor>::visit_u128::<DeError>(
             visitor,
             (i128::MAX as u128) + 1,
         );
@@ -389,61 +389,61 @@ mod tests {
 
     // ── JSON round-trips ──────────────────────────────────────────────
 
-    /// `I128s12::ONE` serialises as the JSON string `"1000000000000"`.
+    /// `D128e12::ONE` serialises as the JSON string `"1000000000000"`.
     /// This is the BigInt-compatible wire form, not the Display form
     /// `"1.000000000000"`.
     #[test]
     fn json_one_serialises_as_scaled_integer_string() {
-        let json = serde_json::to_string(&I128s12::ONE).unwrap();
+        let json = serde_json::to_string(&D128e12::ONE).unwrap();
         assert_eq!(json, "\"1000000000000\"");
     }
 
     #[test]
     fn json_zero_serialises_as_zero_string() {
-        let json = serde_json::to_string(&I128s12::ZERO).unwrap();
+        let json = serde_json::to_string(&D128e12::ZERO).unwrap();
         assert_eq!(json, "\"0\"");
     }
 
     #[test]
     fn json_one_round_trips() {
-        let json = serde_json::to_string(&I128s12::ONE).unwrap();
-        let back: I128s12 = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, I128s12::ONE);
+        let json = serde_json::to_string(&D128e12::ONE).unwrap();
+        let back: D128e12 = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, D128e12::ONE);
     }
 
     #[test]
     fn json_zero_round_trips() {
-        let json = serde_json::to_string(&I128s12::ZERO).unwrap();
-        let back: I128s12 = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, I128s12::ZERO);
+        let json = serde_json::to_string(&D128e12::ZERO).unwrap();
+        let back: D128e12 = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, D128e12::ZERO);
     }
 
     /// Negative values round-trip through JSON. `from(-5_i32)` stores
     /// `-5 * 10^12 = -5_000_000_000_000`.
     #[test]
     fn json_negative_round_trips() {
-        let v = I128s12::from(-5_i32);
+        let v = D128e12::from(-5_i32);
         let json = serde_json::to_string(&v).unwrap();
         assert_eq!(json, "\"-5000000000000\"");
-        let back: I128s12 = serde_json::from_str(&json).unwrap();
+        let back: D128e12 = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
         assert_eq!(back.to_bits(), -5_000_000_000_000_i128);
     }
 
-    /// `I128::MAX` and `I128::MIN` round-trip exactly through the
+    /// `D128::MAX` and `D128::MIN` round-trip exactly through the
     /// JSON-string wire format.
     #[test]
     fn json_max_round_trips() {
-        let json = serde_json::to_string(&I128s12::MAX).unwrap();
-        let back: I128s12 = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, I128s12::MAX);
+        let json = serde_json::to_string(&D128e12::MAX).unwrap();
+        let back: D128e12 = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, D128e12::MAX);
     }
 
     #[test]
     fn json_min_round_trips() {
-        let json = serde_json::to_string(&I128s12::MIN).unwrap();
-        let back: I128s12 = serde_json::from_str(&json).unwrap();
-        assert_eq!(back, I128s12::MIN);
+        let json = serde_json::to_string(&D128e12::MIN).unwrap();
+        let back: D128e12 = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, D128e12::MIN);
     }
 
     /// The JSON string representation matches `i128::to_string` exactly.
@@ -452,7 +452,7 @@ mod tests {
     #[test]
     fn json_string_matches_i128_to_string() {
         let raw: i128 = -123_456_789_012_345_678_901_234_567_890_i128;
-        let v = I128s12::from_bits(raw);
+        let v = D128e12::from_bits(raw);
         let json = serde_json::to_string(&v).unwrap();
         assert_eq!(json, format!("\"{}\"", raw));
     }
@@ -461,25 +461,25 @@ mod tests {
 
     #[test]
     fn json_rejects_decimal_point_string() {
-        let res: Result<I128s12, _> = serde_json::from_str("\"1.5\"");
+        let res: Result<D128e12, _> = serde_json::from_str("\"1.5\"");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
     #[test]
     fn json_rejects_scientific_notation_string() {
-        let res: Result<I128s12, _> = serde_json::from_str("\"1e6\"");
+        let res: Result<D128e12, _> = serde_json::from_str("\"1e6\"");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
     #[test]
     fn json_rejects_not_a_number_string() {
-        let res: Result<I128s12, _> = serde_json::from_str("\"not-a-number\"");
+        let res: Result<D128e12, _> = serde_json::from_str("\"not-a-number\"");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
     #[test]
     fn json_rejects_empty_string() {
-        let res: Result<I128s12, _> = serde_json::from_str("\"\"");
+        let res: Result<D128e12, _> = serde_json::from_str("\"\"");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
@@ -487,13 +487,13 @@ mod tests {
     fn json_rejects_leading_whitespace_string() {
         // `i128::from_str` does not trim whitespace; the wire format
         // requires a strict integer literal.
-        let res: Result<I128s12, _> = serde_json::from_str("\"  42\"");
+        let res: Result<D128e12, _> = serde_json::from_str("\"  42\"");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
     #[test]
     fn json_rejects_plus_prefix() {
-        let res: Result<I128s12, _> = serde_json::from_str("\"+42\"");
+        let res: Result<D128e12, _> = serde_json::from_str("\"+42\"");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
@@ -501,7 +501,7 @@ mod tests {
     /// The number is interpreted as the scaled storage value.
     #[test]
     fn json_accepts_bare_integer_number_as_storage() {
-        let back: I128s12 = serde_json::from_str("42").unwrap();
+        let back: D128e12 = serde_json::from_str("42").unwrap();
         assert_eq!(back.to_bits(), 42_i128);
     }
 
@@ -509,42 +509,42 @@ mod tests {
 
     #[test]
     fn postcard_one_round_trips() {
-        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&I128s12::ONE).unwrap();
+        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&D128e12::ONE).unwrap();
         // Verify the raw 16 LE bytes appear somewhere in the postcard
         // output (postcard may prepend a varint length prefix).
-        let raw = I128s12::ONE.to_bits().to_le_bytes();
+        let raw = D128e12::ONE.to_bits().to_le_bytes();
         assert!(bytes.windows(16).any(|w| w == raw));
-        let back: I128s12 = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(back, I128s12::ONE);
+        let back: D128e12 = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(back, D128e12::ONE);
     }
 
     #[test]
     fn postcard_zero_round_trips() {
-        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&I128s12::ZERO).unwrap();
-        let back: I128s12 = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(back, I128s12::ZERO);
+        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&D128e12::ZERO).unwrap();
+        let back: D128e12 = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(back, D128e12::ZERO);
     }
 
     #[test]
     fn postcard_negative_round_trips() {
-        let v = I128s12::from(-5_i32);
+        let v = D128e12::from(-5_i32);
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
-        let back: I128s12 = postcard::from_bytes(&bytes).unwrap();
+        let back: D128e12 = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, v);
     }
 
     #[test]
     fn postcard_max_round_trips() {
-        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&I128s12::MAX).unwrap();
-        let back: I128s12 = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(back, I128s12::MAX);
+        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&D128e12::MAX).unwrap();
+        let back: D128e12 = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(back, D128e12::MAX);
     }
 
     #[test]
     fn postcard_min_round_trips() {
-        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&I128s12::MIN).unwrap();
-        let back: I128s12 = postcard::from_bytes(&bytes).unwrap();
-        assert_eq!(back, I128s12::MIN);
+        let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&D128e12::MIN).unwrap();
+        let back: D128e12 = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(back, D128e12::MIN);
     }
 
     /// The postcard payload contains the raw `i128::to_le_bytes`
@@ -552,7 +552,7 @@ mod tests {
     /// the MSB.
     #[test]
     fn postcard_byte_order_matches_le() {
-        let v = I128s12::from_bits(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128);
+        let v = D128e12::from_bits(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128);
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
         let raw = v.to_bits().to_le_bytes();
         let found = bytes.windows(16).position(|w| w == raw);
@@ -567,7 +567,7 @@ mod tests {
     /// to `to_le_bytes`, matches the binary wire representation directly.
     #[test]
     fn cross_format_json_string_matches_le_bytes() {
-        let v = I128s12::from(42_i32);
+        let v = D128e12::from(42_i32);
         let json = serde_json::to_string(&v).unwrap();
         let inner = json.trim_matches('"');
         let parsed: i128 = inner.parse().unwrap();
@@ -582,8 +582,8 @@ mod tests {
     #[test]
     fn cross_scale_wire_is_storage_only() {
         let raw: i128 = 1_500_000_000_000;
-        let v12 = I128::<12>::from_bits(raw);
-        let v6 = I128::<6>::from_bits(raw);
+        let v12 = D128::<12>::from_bits(raw);
+        let v6 = D128::<6>::from_bits(raw);
         assert_eq!(serde_json::to_string(&v12).unwrap(), "\"1500000000000\"");
         assert_eq!(serde_json::to_string(&v6).unwrap(), "\"1500000000000\"");
     }
@@ -597,11 +597,11 @@ mod tests {
         #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
         struct Holder {
             #[serde(with = "crate::serde_helpers::decimal_serde")]
-            length: I128<12>,
+            length: D128<12>,
         }
 
         let h = Holder {
-            length: I128s12::from(7_i32),
+            length: D128e12::from(7_i32),
         };
         let json = serde_json::to_string(&h).unwrap();
         assert_eq!(json, r#"{"length":"7000000000000"}"#);

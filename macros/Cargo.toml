@@ -1,0 +1,22 @@
+[package]
+name = "decimal_scaled_macros"
+version = "0.1.1"
+edition = "2024"
+license = "MIT OR Apache-2.0"
+description = "Generic scaled fixed-point decimal macros for deterministic arithmetic. Multiply / divide use a 256-bit widening intermediate with the Moller-Granlund 2011 magic-number divide algorithm (adapted from ConstScaleFpdec, MIT-licensed; see LICENSE-THIRD-PARTY)."
+repository = "https://github.com/mootable/decimal-scaled"
+documentation = "https://docs.rs/decimal-scaled/"
+readme = "README.md"
+keywords = ["decimal", "deterministic", "no_std", "fixed", "precision"]
+categories = ["mathematics", "no-std", "science", "finance"]
+
+[lib]
+proc-macro = true
+
+[features]
+default = []
+
+[dependencies]
+syn = { version = "2", features = ["full"] }
+quote = "1"
+num-traits = "0.2.19"

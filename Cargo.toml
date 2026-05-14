@@ -1,19 +1,21 @@
 [package]
 name = "decimal-scaled"
 version = "0.1.1"
-edition = "2021"
+edition = "2024"
 license = "MIT OR Apache-2.0"
 description = "Generic scaled fixed-point decimal types for deterministic arithmetic. Multiply / divide use a 256-bit widening intermediate with the Moller-Granlund 2011 magic-number divide algorithm (adapted from ConstScaleFpdec, MIT-licensed; see LICENSE-THIRD-PARTY)."
 repository = "https://github.com/mootable/decimal-scaled"
+documentation = "https://docs.rs/decimal-scaled/"
 readme = "README.md"
-keywords = ["decimal", "fixed-point", "deterministic", "arithmetic", "no_std"]
-categories = ["mathematics", "no-std", "science"]
+keywords = ["decimal", "deterministic", "no_std", "fixed", "precision"]
+categories = ["mathematics", "no-std", "science", "finance"]
 
 [features]
 default = ["std", "serde"]
 std = ["alloc"]
 alloc = []
 serde = ["dep:serde"]
+macros = ["dep:decimal_scaled_macros"]
 # When enabled, only integer-only (strict) implementations of transcendental
 # functions (trig, log, exp, sqrt, cbrt, powf, hypot) are compiled.
 # Float-to-decimal and decimal-to-float conversion methods are not compiled.
@@ -24,12 +26,14 @@ strict = []
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
+decimal_scaled_macros = { path = "macros", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
-i256 = { version = "0.1", default-features = false }
+i256 = { version = "0.2", default-features = false }
 serde_json = "1"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
+decimal_scaled_macros = { path = "macros" }
 
 [[bench]]
 name = "mul_div_candidates"
@@ -42,3 +46,10 @@ harness = false
 [lints.rust]
 unused_variables = "allow"
 dead_code = "allow"
+
+[workspace]
+members = [
+    ".",
+    "./macros",
+]
+resolver = "3"

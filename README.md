@@ -32,19 +32,19 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["ser
 ## Quick start
 
 ```rust
-use decimal_scaled::I128s12;
+use decimal_scaled::D128e12;
 
 // Construct from raw integer storage (value × 10^12)
-let a = I128s12::from_bits(1_100_000_000_000); // exactly 1.1
-let b = I128s12::from_bits(2_200_000_000_000); // exactly 2.2
+let a = D128e12::from_bits(1_100_000_000_000); // exactly 1.1
+let b = D128e12::from_bits(2_200_000_000_000); // exactly 2.2
 
 // Constants
-let zero = I128s12::ZERO;
-let one  = I128s12::ONE;
+let zero = D128e12::ZERO;
+let one  = D128e12::ONE;
 
 // Raw storage
 assert_eq!(a.to_bits(), 1_100_000_000_000);
-assert_eq!(I128s12::multiplier(), 1_000_000_000_000);
+assert_eq!(D128e12::multiplier(), 1_000_000_000_000);
 ```
 
 ---
@@ -108,7 +108,7 @@ All numeric types have a finite number space. The choice is which region of the 
 | `fixed::I64F64` | fixed (64 binary fractional bits, not decimal) | binary fixed fractions | decimal fractions | digital signal processing, physics, binary data |
 | `rust_decimal` | variable per value (0–28, stored alongside each number) | decimal fractions up to 28 digits | repeating decimals | finance, variable scale |
 | `bigdecimal` | variable per value (unbounded, heap-allocated) | any terminating decimal | repeating decimals | arbitrary-precision decimal work |
-| `I128<S>` (this crate) | **fixed to `S` at compile time** | decimal fractions up to `S` digits | repeating decimals | finance, computer-aided design, human-entered values |
+| `D128<S>` (this crate) | **fixed to `S` at compile time** | decimal fractions up to `S` digits | repeating decimals | finance, computer-aided design, human-entered values |
 
 **Use `decimal-scaled` when:**
 - Values are entered by humans as decimal strings (prices, measurements, quantities)
@@ -130,7 +130,7 @@ All numeric types have a finite number space. The choice is which region of the 
 **Use `rust_decimal` when:**
 - Scale varies between values (e.g. mixing 0.1 and 0.001 in the same collection)
 - You need up to 28 significant decimal digits
-- You do not need `no_std` and can afford heap-allocated metadata
+- You are happy to carry a per-value scale byte and pay normalisation cost on equality/hash
 
 **Use `bigdecimal` when:**
 - Precision requirements are unbounded or unknown at compile time
@@ -140,7 +140,7 @@ All numeric types have a finite number space. The choice is which region of the 
 
 ## What `decimal-scaled` provides
 
-`I128<const SCALE: u32>` is a `#[repr(transparent)]` newtype around `i128`. The const generic `SCALE` is the base-10 exponent baked into the type at compile time. There is exactly one representation per value: no normalisation, no variable scale, no heap allocation.
+`D128<const SCALE: u32>` is a `#[repr(transparent)]` newtype around `i128`. The const generic `SCALE` is the base-10 exponent baked into the type at compile time. There is exactly one representation per value: no normalisation, no variable scale, no heap allocation.
 
 ```
 stored = logical_value × 10^SCALE
@@ -155,7 +155,7 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 - **`no_std` compatible** - compiles with `no_std + alloc` when default features are disabled.
 - **`num-traits` compatible** - implements `Zero`, `One`, `Num`, `Bounded`, `Signed`, `FromPrimitive`, `ToPrimitive`, and the `Checked*` family.
 - **`serde` support** - canonical-string serialize/deserialize behind the `serde` feature (on by default).
-- **Const-generic scale** - future scale variants (`I128<6>`, `I128<18>`) are free type aliases, not separate implementations.
+- **Const-generic scale** - future scale variants (`D128<6>`, `D128<18>`) are free type aliases, not separate implementations.
 
 ---
 
@@ -168,10 +168,10 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 | `f128`                         | 128-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.2 × 10⁴⁹³² | Partial |
 | `fixed::I64F64`                | 128-bit binary fixed | 2 | No | No | ~±9.2 × 10¹⁸ | Yes |
 | `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | Yes |
-| `rust_decimal`                 | 96-bit + scale byte | 10 | Yes | Yes | ±7.9 × 10²⁸ | No |
+| `rust_decimal`                 | 96-bit + scale byte | 10 | Yes | Yes | ±7.9 × 10²⁸ | Yes |
 | `bigdecimal`                   | heap-allocated | 10 | Yes | Yes | Unbounded | No |
-| `I128<12>` or `I128s12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | Yes |
-| `I128<6>` or `I128s6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | Yes |
+| `D128<12>` or `D128e12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | Yes |
+| `D128<6>` or `D128e6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | Yes |
 
 ### Hash and equality contracts
 
@@ -184,21 +184,21 @@ A well-behaved numeric type must satisfy: if `a == b` then `hash(a) == hash(b)`.
 | `fixed::I64F64` | Yes (same binary approximation) | Yes | Yes | structural (one representation) |
 | `rust_decimal` | Yes | Yes | Yes | normalises trailing zeros at comparison and hash time |
 | `bigdecimal` | Yes | Yes | Yes | normalises at comparison and hash time |
-| `I128<S>` (this) | Yes | Yes | Yes | structural - scale is fixed, one bit pattern per value |
+| `D128<S>` (this) | Yes | Yes | Yes | structural - scale is fixed, one bit pattern per value |
 
 `f32`, `f64`, and `f128` do not implement `Hash` in the Rust standard library because Not-a-Number values are not equal to themselves (`NaN != NaN`) while a structural hash would make all such values collide - the contract cannot be satisfied without special-casing.
 
 For `rust_decimal` and `bigdecimal`, the normalisation is correct but carries a runtime cost on every comparison and hash call, and it means the stored representation is not canonical - you cannot memcmp two values.
 
-`I128<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because the scale is fixed at compile time there is exactly one `i128` value per logical number. `1.10` and `1.1` parsed via `FromStr` both produce `I128s12(1_100_000_000_000)` - the same bit pattern - so equality and hashing are a single integer comparison with no runtime normalisation.
+`D128<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because the scale is fixed at compile time there is exactly one `i128` value per logical number. `1.10` and `1.1` parsed via `FromStr` both produce `D128e12(1_100_000_000_000)` - the same bit pattern - so equality and hashing are a single integer comparison with no runtime normalisation.
 
 ### Key differences from `fixed`
 
 The `fixed` crate's `I64F64` has 64 bits of integer and 64 bits of binary fraction. Its least significant bit is 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰, and its maximum value is 2⁶³ - 1 ≈ 9.2 × 10¹⁸.
 
-`I128<20>` has a least significant decimal digit of 10⁻²⁰ and a maximum value of i128::MAX / 10²⁰ ≈ 1.7 × 10¹⁸ model units. The two types offer comparable precision and range in this configuration, but with opposite trade-offs: `I64F64` represents its fractional part in binary (exact for powers of two, rounded for decimal fractions), while `I128<20>` represents it in decimal (exact for decimal fractions, rounded for fractions like 1/3).
+`D128<20>` has a least significant decimal digit of 10⁻²⁰ and a maximum value of i128::MAX / 10²⁰ ≈ 1.7 × 10¹⁸ model units. The two types offer comparable precision and range in this configuration, but with opposite trade-offs: `I64F64` represents its fractional part in binary (exact for powers of two, rounded for decimal fractions), while `D128<20>` represents it in decimal (exact for decimal fractions, rounded for fractions like 1/3).
 
-For human-scale decimal values `I128` gives decimal-exact results with no rounding on input or output. For values derived from binary arithmetic or mathematical operations, `I64F64` avoids the binary-to-decimal rounding boundary entirely.
+For human-scale decimal values `D128` gives decimal-exact results with no rounding on input or output. For values derived from binary arithmetic or mathematical operations, `I64F64` avoids the binary-to-decimal rounding boundary entirely.
 
 ---
 
@@ -206,14 +206,14 @@ For human-scale decimal values `I128` gives decimal-exact results with no roundi
 
 | Alias | `SCALE` | 1 least significant decimal digit | Approximate range |
 |---|---|---|---|
-| `I128s0` | 0 | 1 | ±1.7 × 10³⁸ |
-| `I128s2` | 2 | 0.01 (cents) | ±1.7 × 10³⁶ |
-| `I128s6` | 6 | 10⁻⁶ (µ) | ±1.7 × 10³² |
-| `I128s12` | 12 | 10⁻¹² (p) | ±1.7 × 10²⁶ |
-| `I128s18` | 18 | 10⁻¹⁸ (a) | ±1.7 × 10²⁰ |
-| `I128s38` | 38 | 10⁻³⁸ | ±1.7 |
+| `D128e0` | 0 | 1 | ±1.7 × 10³⁸ |
+| `D128e2` | 2 | 0.01 (cents) | ±1.7 × 10³⁶ |
+| `D128e6` | 6 | 10⁻⁶ (µ) | ±1.7 × 10³² |
+| `D128e12` | 12 | 10⁻¹² (p) | ±1.7 × 10²⁶ |
+| `D128e18` | 18 | 10⁻¹⁸ (a) | ±1.7 × 10²⁰ |
+| `D128e38` | 38 | 10⁻³⁸ | ±1.7 |
 
-Aliases `I128s0` through `I128s38` are all provided. `SCALE = 39` would overflow `i128`.
+Aliases `D128e0` through `D128e38` are all provided. `SCALE = 39` would overflow `i128`.
 
 ---
 

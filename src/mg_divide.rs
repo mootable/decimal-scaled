@@ -1,4 +1,4 @@
-//! Moller-Granlund magic-number division for `I128` rescale operations.
+//! Moller-Granlund magic-number division for `D128` rescale operations.
 //!
 //! This module provides two `pub(crate)` entry points used by the
 //! arithmetic layer:
@@ -36,7 +36,7 @@
 //! public entry points short-circuit at `SCALE == 0` before touching the
 //! table.
 
-use crate::core_type::I128;
+use crate::core_type::D128;
 
 /// Pre-computed magic constants for divide-by-`10^i` via the
 /// Moller-Granlund algorithm. Index `i` covers `i = 0..=38`.
@@ -255,7 +255,7 @@ fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u12
 /// # Examples
 ///
 /// ```ignore
-/// use decimal_scaled::I128;
+/// use decimal_scaled::D128;
 /// // 50_000_000_000_000_000_000_000 * 30_000_000_000_000_000_000_000
 /// // overflows i128 but fits after dividing by 10^12.
 /// let result = mul_div_pow10::<12>(
@@ -273,7 +273,7 @@ pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
 
     // Fast path: i128 * i128 didn't overflow; finish with i128 /.
     if let Some(prod) = a.checked_mul(b) {
-        return Some(prod / I128::<SCALE>::multiplier());
+        return Some(prod / D128::<SCALE>::multiplier());
     }
 
     // Widening path: |a*b| > i128::MAX. Compute the unsigned 256-bit
@@ -282,7 +282,7 @@ pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
     let ub = b.unsigned_abs();
     let (mhigh, mlow) = mul2(ua, ub);
 
-    let exp = I128::<SCALE>::multiplier() as u128;
+    let exp = D128::<SCALE>::multiplier() as u128;
     let q = div_exp_fast_2word(mhigh, mlow, exp, SCALE as usize)?;
 
     // Sign: result is negative iff exactly one operand is negative.
@@ -326,7 +326,7 @@ pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
 /// # Examples
 ///
 /// ```ignore
-/// use decimal_scaled::I128;
+/// use decimal_scaled::D128;
 /// // (10^22 * 10^12) / 2 = 5e33, which requires 256-bit intermediates.
 /// let result = div_pow10_div::<12>(10_i128.pow(22), 2);
 /// assert_eq!(result, Some(5 * 10_i128.pow(33)));
@@ -342,7 +342,7 @@ pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
         return a.checked_div(b);
     }
 
-    let mult = I128::<SCALE>::multiplier();
+    let mult = D128::<SCALE>::multiplier();
 
     // Fast path: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
     // fits with headroom; for larger SCALE the overflow check below

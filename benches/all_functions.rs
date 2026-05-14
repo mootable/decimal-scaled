@@ -1,4 +1,4 @@
-//! Per-function benchmark sweep over every public surface of `I128<12>`.
+//! Per-function benchmark sweep over every public surface of `D128<12>`.
 //!
 //! Companion to `mul_div_candidates.rs`. Where that bench compares
 //! several candidate algorithms against the production `Mul` / `Div`
@@ -38,9 +38,9 @@
 //! `mul_div_candidates.rs`.
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{I128, I128s12, DecimalConsts};
+use decimal_scaled::{D128, D128e12, DecimalConsts};
 
-type D = I128<12>;
+type D = D128<12>;
 
 // Representative inputs. RAW_A and RAW_B are mid-magnitude (well within
 // i128 range, above i64 boundary) so the production fast paths stay
@@ -451,14 +451,14 @@ fn bench_display(c: &mut Criterion) {
     });
     g.bench_function("FromStr_parse", |bn| {
         let s = "1.5";
-        bn.iter(|| black_box(s).parse::<I128s12>())
+        bn.iter(|| black_box(s).parse::<D128e12>())
     });
 
     g.finish();
 }
 
 // =============================================================================
-// i64f64_compat shim
+// fixed_compat shim
 // =============================================================================
 fn bench_compat(c: &mut Criterion) {
     let mut g = c.benchmark_group("compat");

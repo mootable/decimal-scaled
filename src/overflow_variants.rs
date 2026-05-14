@@ -1,7 +1,7 @@
-//! Overflow-aware arithmetic variants for [`I128`].
+//! Overflow-aware arithmetic variants for [`D128`].
 //!
 //! Provides the standard Rust explicit-overflow method families as
-//! inherent methods on [`I128<SCALE>`], covering six operations:
+//! inherent methods on [`D128<SCALE>`], covering six operations:
 //!
 //! - `add`, `sub`, `mul`, `div`, `rem` (binary)
 //! - `neg` (unary)
@@ -34,9 +34,9 @@
 //! - `div` variants route through the same widening long-divide helper
 //!   (`crate::mg_divide::div_pow10_div`) as the default `Div` operator.
 
-use crate::core_type::I128;
+use crate::core_type::D128;
 
-impl<const SCALE: u32> I128<SCALE> {
+impl<const SCALE: u32> D128<SCALE> {
     // Add
 
     /// Returns `self + rhs`, or `None` if the result overflows `i128`.
@@ -48,12 +48,12 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(1_000_000_000_000); // 1.0
-    /// let b = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.checked_add(b), Some(I128s12::from_bits(3_000_000_000_000)));
-    /// assert_eq!(I128s12::MAX.checked_add(I128s12::ONE), None);
+    /// let a = D128e12::from_bits(1_000_000_000_000); // 1.0
+    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.checked_add(b), Some(D128e12::from_bits(3_000_000_000_000)));
+    /// assert_eq!(D128e12::MAX.checked_add(D128e12::ONE), None);
     /// ```
     #[inline]
     #[must_use]
@@ -73,13 +73,13 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(1_000_000_000_000); // 1.0
-    /// let b = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.wrapping_add(b), I128s12::from_bits(3_000_000_000_000));
+    /// let a = D128e12::from_bits(1_000_000_000_000); // 1.0
+    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.wrapping_add(b), D128e12::from_bits(3_000_000_000_000));
     /// // Overflow wraps to MIN.
-    /// assert_eq!(I128s12::MAX.wrapping_add(I128s12::from_bits(1)), I128s12::MIN);
+    /// assert_eq!(D128e12::MAX.wrapping_add(D128e12::from_bits(1)), D128e12::MIN);
     /// ```
     #[inline]
     #[must_use]
@@ -87,7 +87,7 @@ impl<const SCALE: u32> I128<SCALE> {
         Self(self.0.wrapping_add(rhs.0))
     }
 
-    /// Returns `self + rhs`, clamped to `I128::MAX` or `I128::MIN` on overflow.
+    /// Returns `self + rhs`, clamped to `D128::MAX` or `D128::MIN` on overflow.
     ///
     /// # Precision
     ///
@@ -96,13 +96,13 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(1_000_000_000_000); // 1.0
-    /// let b = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.saturating_add(b), I128s12::from_bits(3_000_000_000_000));
-    /// assert_eq!(I128s12::MAX.saturating_add(I128s12::ONE), I128s12::MAX);
-    /// assert_eq!(I128s12::MIN.saturating_add(-I128s12::ONE), I128s12::MIN);
+    /// let a = D128e12::from_bits(1_000_000_000_000); // 1.0
+    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.saturating_add(b), D128e12::from_bits(3_000_000_000_000));
+    /// assert_eq!(D128e12::MAX.saturating_add(D128e12::ONE), D128e12::MAX);
+    /// assert_eq!(D128e12::MIN.saturating_add(-D128e12::ONE), D128e12::MIN);
     /// ```
     #[inline]
     #[must_use]
@@ -120,14 +120,14 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(1_000_000_000_000); // 1.0
-    /// let b = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.overflowing_add(b), (I128s12::from_bits(3_000_000_000_000), false));
+    /// let a = D128e12::from_bits(1_000_000_000_000); // 1.0
+    /// let b = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.overflowing_add(b), (D128e12::from_bits(3_000_000_000_000), false));
     /// assert_eq!(
-    ///     I128s12::MAX.overflowing_add(I128s12::from_bits(1)),
-    ///     (I128s12::MIN, true),
+    ///     D128e12::MAX.overflowing_add(D128e12::from_bits(1)),
+    ///     (D128e12::MIN, true),
     /// );
     /// ```
     #[inline]
@@ -148,12 +148,12 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let three = I128s12::from_bits(3_000_000_000_000);
-    /// let two   = I128s12::from_bits(2_000_000_000_000);
-    /// assert_eq!(three.checked_sub(two), Some(I128s12::ONE));
-    /// assert_eq!(I128s12::MIN.checked_sub(I128s12::ONE), None);
+    /// let three = D128e12::from_bits(3_000_000_000_000);
+    /// let two   = D128e12::from_bits(2_000_000_000_000);
+    /// assert_eq!(three.checked_sub(two), Some(D128e12::ONE));
+    /// assert_eq!(D128e12::MIN.checked_sub(D128e12::ONE), None);
     /// ```
     #[inline]
     #[must_use]
@@ -173,13 +173,13 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let three = I128s12::from_bits(3_000_000_000_000);
-    /// let two   = I128s12::from_bits(2_000_000_000_000);
-    /// assert_eq!(three.wrapping_sub(two), I128s12::ONE);
+    /// let three = D128e12::from_bits(3_000_000_000_000);
+    /// let two   = D128e12::from_bits(2_000_000_000_000);
+    /// assert_eq!(three.wrapping_sub(two), D128e12::ONE);
     /// // Underflow wraps to MAX.
-    /// assert_eq!(I128s12::MIN.wrapping_sub(I128s12::from_bits(1)), I128s12::MAX);
+    /// assert_eq!(D128e12::MIN.wrapping_sub(D128e12::from_bits(1)), D128e12::MAX);
     /// ```
     #[inline]
     #[must_use]
@@ -187,7 +187,7 @@ impl<const SCALE: u32> I128<SCALE> {
         Self(self.0.wrapping_sub(rhs.0))
     }
 
-    /// Returns `self - rhs`, clamped to `I128::MAX` or `I128::MIN` on overflow.
+    /// Returns `self - rhs`, clamped to `D128::MAX` or `D128::MIN` on overflow.
     ///
     /// # Precision
     ///
@@ -196,12 +196,12 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let three = I128s12::from_bits(3_000_000_000_000);
-    /// let two   = I128s12::from_bits(2_000_000_000_000);
-    /// assert_eq!(three.saturating_sub(two), I128s12::ONE);
-    /// assert_eq!(I128s12::MIN.saturating_sub(I128s12::ONE), I128s12::MIN);
+    /// let three = D128e12::from_bits(3_000_000_000_000);
+    /// let two   = D128e12::from_bits(2_000_000_000_000);
+    /// assert_eq!(three.saturating_sub(two), D128e12::ONE);
+    /// assert_eq!(D128e12::MIN.saturating_sub(D128e12::ONE), D128e12::MIN);
     /// ```
     #[inline]
     #[must_use]
@@ -219,14 +219,14 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let three = I128s12::from_bits(3_000_000_000_000);
-    /// let two   = I128s12::from_bits(2_000_000_000_000);
-    /// assert_eq!(three.overflowing_sub(two), (I128s12::ONE, false));
+    /// let three = D128e12::from_bits(3_000_000_000_000);
+    /// let two   = D128e12::from_bits(2_000_000_000_000);
+    /// assert_eq!(three.overflowing_sub(two), (D128e12::ONE, false));
     /// assert_eq!(
-    ///     I128s12::MIN.overflowing_sub(I128s12::from_bits(1)),
-    ///     (I128s12::MAX, true),
+    ///     D128e12::MIN.overflowing_sub(D128e12::from_bits(1)),
+    ///     (D128e12::MAX, true),
     /// );
     /// ```
     #[inline]
@@ -238,7 +238,7 @@ impl<const SCALE: u32> I128<SCALE> {
 
     // Neg
 
-    /// Returns `-self`, or `None` for `I128::MIN` (whose two's-complement
+    /// Returns `-self`, or `None` for `D128::MIN` (whose two's-complement
     /// negation does not fit in `i128`).
     ///
     /// # Precision
@@ -248,10 +248,10 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// assert_eq!(I128s12::ONE.checked_neg(), Some(-I128s12::ONE));
-    /// assert_eq!(I128s12::MIN.checked_neg(), None);
+    /// assert_eq!(D128e12::ONE.checked_neg(), Some(-D128e12::ONE));
+    /// assert_eq!(D128e12::MIN.checked_neg(), None);
     /// ```
     #[inline]
     #[must_use]
@@ -262,8 +262,8 @@ impl<const SCALE: u32> I128<SCALE> {
         }
     }
 
-    /// Returns `-self` with two's-complement wrap. For `I128::MIN`
-    /// this returns `I128::MIN` (matches `i128::wrapping_neg`).
+    /// Returns `-self` with two's-complement wrap. For `D128::MIN`
+    /// this returns `D128::MIN` (matches `i128::wrapping_neg`).
     ///
     /// # Precision
     ///
@@ -272,10 +272,10 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// assert_eq!(I128s12::ONE.wrapping_neg(), -I128s12::ONE);
-    /// assert_eq!(I128s12::MIN.wrapping_neg(), I128s12::MIN);
+    /// assert_eq!(D128e12::ONE.wrapping_neg(), -D128e12::ONE);
+    /// assert_eq!(D128e12::MIN.wrapping_neg(), D128e12::MIN);
     /// ```
     #[inline]
     #[must_use]
@@ -283,7 +283,7 @@ impl<const SCALE: u32> I128<SCALE> {
         Self(self.0.wrapping_neg())
     }
 
-    /// Returns `-self`, clamped to `I128::MAX` for `I128::MIN`
+    /// Returns `-self`, clamped to `D128::MAX` for `D128::MIN`
     /// (matches `i128::saturating_neg`).
     ///
     /// # Precision
@@ -293,10 +293,10 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// assert_eq!(I128s12::ONE.saturating_neg(), -I128s12::ONE);
-    /// assert_eq!(I128s12::MIN.saturating_neg(), I128s12::MAX);
+    /// assert_eq!(D128e12::ONE.saturating_neg(), -D128e12::ONE);
+    /// assert_eq!(D128e12::MIN.saturating_neg(), D128e12::MAX);
     /// ```
     #[inline]
     #[must_use]
@@ -305,7 +305,7 @@ impl<const SCALE: u32> I128<SCALE> {
     }
 
     /// Returns `(-self, did_overflow)`. Overflow occurs only for
-    /// `I128::MIN`, in which case the wrapping result is `I128::MIN`.
+    /// `D128::MIN`, in which case the wrapping result is `D128::MIN`.
     ///
     /// # Precision
     ///
@@ -314,10 +314,10 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// assert_eq!(I128s12::ONE.overflowing_neg(), (-I128s12::ONE, false));
-    /// assert_eq!(I128s12::MIN.overflowing_neg(), (I128s12::MIN, true));
+    /// assert_eq!(D128e12::ONE.overflowing_neg(), (-D128e12::ONE, false));
+    /// assert_eq!(D128e12::MIN.overflowing_neg(), (D128e12::MIN, true));
     /// ```
     #[inline]
     #[must_use]
@@ -348,11 +348,11 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let half = I128s12::from_bits(500_000_000_000); // 0.5
-    /// assert_eq!(half.checked_mul(half), Some(I128s12::from_bits(250_000_000_000)));
-    /// assert_eq!(I128s12::MAX.checked_mul(I128s12::from_bits(2_000_000_000_000)), None);
+    /// let half = D128e12::from_bits(500_000_000_000); // 0.5
+    /// assert_eq!(half.checked_mul(half), Some(D128e12::from_bits(250_000_000_000)));
+    /// assert_eq!(D128e12::MAX.checked_mul(D128e12::from_bits(2_000_000_000_000)), None);
     /// ```
     #[inline]
     #[must_use]
@@ -374,12 +374,12 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let half = I128s12::from_bits(500_000_000_000); // 0.5
-    /// assert_eq!(half.wrapping_mul(half), I128s12::from_bits(250_000_000_000));
+    /// let half = D128e12::from_bits(500_000_000_000); // 0.5
+    /// assert_eq!(half.wrapping_mul(half), D128e12::from_bits(250_000_000_000));
     /// // Overflow does not panic.
-    /// let _ = I128s12::MAX.wrapping_mul(I128s12::from_bits(2_000_000_000_000));
+    /// let _ = D128e12::MAX.wrapping_mul(D128e12::from_bits(2_000_000_000_000));
     /// ```
     #[inline]
     #[must_use]
@@ -394,7 +394,7 @@ impl<const SCALE: u32> I128<SCALE> {
         }
     }
 
-    /// Returns `self * rhs`, clamped to `I128::MAX` or `I128::MIN` on overflow.
+    /// Returns `self * rhs`, clamped to `D128::MAX` or `D128::MIN` on overflow.
     ///
     /// The clamp direction is determined by the XOR of operand signs:
     /// same-sign operands saturate to `MAX`; mixed-sign operands saturate
@@ -407,11 +407,11 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(I128s12::MAX.saturating_mul(two), I128s12::MAX);
-    /// assert_eq!(I128s12::MAX.saturating_mul(-two), I128s12::MIN);
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(D128e12::MAX.saturating_mul(two), D128e12::MAX);
+    /// assert_eq!(D128e12::MAX.saturating_mul(-two), D128e12::MIN);
     /// ```
     #[inline]
     #[must_use]
@@ -437,11 +437,11 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let half = I128s12::from_bits(500_000_000_000); // 0.5
-    /// assert_eq!(half.overflowing_mul(half), (I128s12::from_bits(250_000_000_000), false));
-    /// let (_, ovf) = I128s12::MAX.overflowing_mul(I128s12::from_bits(2_000_000_000_000));
+    /// let half = D128e12::from_bits(500_000_000_000); // 0.5
+    /// assert_eq!(half.overflowing_mul(half), (D128e12::from_bits(250_000_000_000), false));
+    /// let (_, ovf) = D128e12::MAX.overflowing_mul(D128e12::from_bits(2_000_000_000_000));
     /// assert!(ovf);
     /// ```
     #[inline]
@@ -465,7 +465,7 @@ impl<const SCALE: u32> I128<SCALE> {
     /// rescaled quotient does not fit in `i128`.
     ///
     /// The only finite-operand overflow case is
-    /// `I128::MIN / NEG_ONE` (storage negation of `i128::MIN` overflows).
+    /// `D128::MIN / NEG_ONE` (storage negation of `i128::MIN` overflows).
     ///
     /// # Precision
     ///
@@ -475,12 +475,12 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let six = I128s12::from_bits(6_000_000_000_000); // 6.0
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(six.checked_div(two), Some(I128s12::from_bits(3_000_000_000_000)));
-    /// assert_eq!(I128s12::ONE.checked_div(I128s12::ZERO), None);
+    /// let six = D128e12::from_bits(6_000_000_000_000); // 6.0
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(six.checked_div(two), Some(D128e12::from_bits(3_000_000_000_000)));
+    /// assert_eq!(D128e12::ONE.checked_div(D128e12::ZERO), None);
     /// ```
     #[inline]
     #[must_use]
@@ -505,11 +505,11 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let six = I128s12::from_bits(6_000_000_000_000); // 6.0
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(six.wrapping_div(two), I128s12::from_bits(3_000_000_000_000));
+    /// let six = D128e12::from_bits(6_000_000_000_000); // 6.0
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(six.wrapping_div(two), D128e12::from_bits(3_000_000_000_000));
     /// ```
     #[inline]
     #[must_use]
@@ -527,7 +527,7 @@ impl<const SCALE: u32> I128<SCALE> {
         }
     }
 
-    /// Returns `self / rhs`, clamped to `I128::MAX` or `I128::MIN` on
+    /// Returns `self / rhs`, clamped to `D128::MAX` or `D128::MIN` on
     /// overflow.
     ///
     /// The clamp direction is determined by the XOR of operand signs,
@@ -544,13 +544,13 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let six = I128s12::from_bits(6_000_000_000_000); // 6.0
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(six.saturating_div(two), I128s12::from_bits(3_000_000_000_000));
+    /// let six = D128e12::from_bits(6_000_000_000_000); // 6.0
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(six.saturating_div(two), D128e12::from_bits(3_000_000_000_000));
     /// // MAX / 0.5 overflows; both positive so clamp to MAX.
-    /// assert_eq!(I128s12::MAX.saturating_div(I128s12::from_bits(500_000_000_000)), I128s12::MAX);
+    /// assert_eq!(D128e12::MAX.saturating_div(D128e12::from_bits(500_000_000_000)), D128e12::MAX);
     /// ```
     #[inline]
     #[must_use]
@@ -582,13 +582,13 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let six = I128s12::from_bits(6_000_000_000_000); // 6.0
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(six.overflowing_div(two), (I128s12::from_bits(3_000_000_000_000), false));
-    /// let half = I128s12::from_bits(500_000_000_000); // 0.5
-    /// let (_, ovf) = I128s12::MAX.overflowing_div(half);
+    /// let six = D128e12::from_bits(6_000_000_000_000); // 6.0
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(six.overflowing_div(two), (D128e12::from_bits(3_000_000_000_000), false));
+    /// let half = D128e12::from_bits(500_000_000_000); // 0.5
+    /// let (_, ovf) = D128e12::MAX.overflowing_div(half);
     /// assert!(ovf);
     /// ```
     #[inline]
@@ -614,7 +614,7 @@ impl<const SCALE: u32> I128<SCALE> {
     // fit. The standard library does not define one for primitive integers.
 
     /// Returns `self % rhs`, or `None` on `rhs == ZERO` or for the
-    /// storage-level overflow case `I128::MIN % from_bits(-1)`
+    /// storage-level overflow case `D128::MIN % from_bits(-1)`
     /// (matches `i128::checked_rem`).
     ///
     /// # Precision
@@ -624,12 +624,12 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(5_500_000_000_000); // 5.5
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.checked_rem(two), Some(I128s12::from_bits(1_500_000_000_000)));
-    /// assert_eq!(I128s12::ONE.checked_rem(I128s12::ZERO), None);
+    /// let a = D128e12::from_bits(5_500_000_000_000); // 5.5
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.checked_rem(two), Some(D128e12::from_bits(1_500_000_000_000)));
+    /// assert_eq!(D128e12::ONE.checked_rem(D128e12::ZERO), None);
     /// ```
     #[inline]
     #[must_use]
@@ -641,7 +641,7 @@ impl<const SCALE: u32> I128<SCALE> {
     }
 
     /// Returns `self % rhs`. For the storage-level overflow case
-    /// `I128::MIN.wrapping_rem(from_bits(-1))`, returns `ZERO`
+    /// `D128::MIN.wrapping_rem(from_bits(-1))`, returns `ZERO`
     /// (matches `i128::wrapping_rem`).
     ///
     /// # Precision
@@ -655,11 +655,11 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(5_500_000_000_000); // 5.5
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.wrapping_rem(two), I128s12::from_bits(1_500_000_000_000));
+    /// let a = D128e12::from_bits(5_500_000_000_000); // 5.5
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.wrapping_rem(two), D128e12::from_bits(1_500_000_000_000));
     /// ```
     #[inline]
     #[must_use]
@@ -668,7 +668,7 @@ impl<const SCALE: u32> I128<SCALE> {
     }
 
     /// Returns `(self % rhs, did_overflow)`. Overflow (`did_overflow == true`)
-    /// occurs only for the storage-level case `I128::MIN % from_bits(-1)`,
+    /// occurs only for the storage-level case `D128::MIN % from_bits(-1)`,
     /// in which case the wrapping result is `ZERO`.
     ///
     /// # Precision
@@ -682,13 +682,13 @@ impl<const SCALE: u32> I128<SCALE> {
     /// # Examples
     ///
     /// ```
-    /// use decimal_scaled::I128s12;
+    /// use decimal_scaled::D128e12;
     ///
-    /// let a = I128s12::from_bits(5_500_000_000_000); // 5.5
-    /// let two = I128s12::from_bits(2_000_000_000_000); // 2.0
-    /// assert_eq!(a.overflowing_rem(two), (I128s12::from_bits(1_500_000_000_000), false));
-    /// let neg_one_lsb = I128s12::from_bits(-1);
-    /// assert_eq!(I128s12::MIN.overflowing_rem(neg_one_lsb), (I128s12::ZERO, true));
+    /// let a = D128e12::from_bits(5_500_000_000_000); // 5.5
+    /// let two = D128e12::from_bits(2_000_000_000_000); // 2.0
+    /// assert_eq!(a.overflowing_rem(two), (D128e12::from_bits(1_500_000_000_000), false));
+    /// let neg_one_lsb = D128e12::from_bits(-1);
+    /// assert_eq!(D128e12::MIN.overflowing_rem(neg_one_lsb), (D128e12::ZERO, true));
     /// ```
     #[inline]
     #[must_use]
@@ -701,62 +701,62 @@ impl<const SCALE: u32> I128<SCALE> {
 #[cfg(test)]
 #[allow(clippy::arithmetic_side_effects)]
 mod tests {
-    use crate::core_type::{I128, I128s12};
+    use crate::core_type::{D128, D128e12};
 
     /// Returns `-ONE` as a convenience value.
-    fn neg_one() -> I128s12 {
-        -I128s12::ONE
+    fn neg_one() -> D128e12 {
+        -D128e12::ONE
     }
 
-    /// Returns `2.0` in `I128s12` canonical form.
-    fn two() -> I128s12 {
-        I128s12::from_bits(2_000_000_000_000)
+    /// Returns `2.0` in `D128e12` canonical form.
+    fn two() -> D128e12 {
+        D128e12::from_bits(2_000_000_000_000)
     }
 
-    /// Returns `3.0` in `I128s12` canonical form.
-    fn three() -> I128s12 {
-        I128s12::from_bits(3_000_000_000_000)
+    /// Returns `3.0` in `D128e12` canonical form.
+    fn three() -> D128e12 {
+        D128e12::from_bits(3_000_000_000_000)
     }
 
     // Add variants
 
     #[test]
     fn checked_add_normal() {
-        assert_eq!(I128s12::ONE.checked_add(I128s12::ONE), Some(two()));
+        assert_eq!(D128e12::ONE.checked_add(D128e12::ONE), Some(two()));
     }
 
     #[test]
     fn checked_add_overflow_returns_none() {
         // MAX + ONE overflows (MAX is i128::MAX raw; ONE is 10^SCALE raw).
-        assert_eq!(I128s12::MAX.checked_add(I128s12::ONE), None);
+        assert_eq!(D128e12::MAX.checked_add(D128e12::ONE), None);
         // Boundary: MAX + 1 LSB also overflows.
         assert_eq!(
-            I128s12::MAX.checked_add(I128s12::from_bits(1)),
+            D128e12::MAX.checked_add(D128e12::from_bits(1)),
             None
         );
     }
 
     #[test]
     fn checked_add_negative_overflow_returns_none() {
-        assert_eq!(I128s12::MIN.checked_add(neg_one()), None);
+        assert_eq!(D128e12::MIN.checked_add(neg_one()), None);
         // Boundary: MIN + (-1 LSB) also overflows.
         assert_eq!(
-            I128s12::MIN.checked_add(I128s12::from_bits(-1)),
+            D128e12::MIN.checked_add(D128e12::from_bits(-1)),
             None
         );
     }
 
     #[test]
     fn wrapping_add_normal_matches_op() {
-        assert_eq!(I128s12::ONE.wrapping_add(I128s12::ONE), two());
+        assert_eq!(D128e12::ONE.wrapping_add(D128e12::ONE), two());
     }
 
     #[test]
     fn wrapping_add_overflow_wraps_to_min() {
         // MAX + 1 LSB wraps to MIN under two's-complement.
         assert_eq!(
-            I128s12::MAX.wrapping_add(I128s12::from_bits(1)),
-            I128s12::MIN
+            D128e12::MAX.wrapping_add(D128e12::from_bits(1)),
+            D128e12::MIN
         );
     }
 
@@ -764,30 +764,30 @@ mod tests {
     fn wrapping_add_negative_overflow_wraps_to_max() {
         // MIN + (-1 LSB) wraps to MAX.
         assert_eq!(
-            I128s12::MIN.wrapping_add(I128s12::from_bits(-1)),
-            I128s12::MAX
+            D128e12::MIN.wrapping_add(D128e12::from_bits(-1)),
+            D128e12::MAX
         );
     }
 
     #[test]
     fn saturating_add_normal_matches_op() {
-        assert_eq!(I128s12::ONE.saturating_add(I128s12::ONE), two());
+        assert_eq!(D128e12::ONE.saturating_add(D128e12::ONE), two());
     }
 
     #[test]
     fn saturating_add_overflow_clamps_to_max() {
-        assert_eq!(I128s12::MAX.saturating_add(I128s12::ONE), I128s12::MAX);
+        assert_eq!(D128e12::MAX.saturating_add(D128e12::ONE), D128e12::MAX);
     }
 
     #[test]
     fn saturating_add_negative_overflow_clamps_to_min() {
-        assert_eq!(I128s12::MIN.saturating_add(neg_one()), I128s12::MIN);
+        assert_eq!(D128e12::MIN.saturating_add(neg_one()), D128e12::MIN);
     }
 
     #[test]
     fn overflowing_add_normal_no_overflow() {
         assert_eq!(
-            I128s12::ONE.overflowing_add(I128s12::ONE),
+            D128e12::ONE.overflowing_add(D128e12::ONE),
             (two(), false)
         );
     }
@@ -796,8 +796,8 @@ mod tests {
     fn overflowing_add_overflow_flagged() {
         // MAX + 1 LSB wraps exactly to MIN; overflow flag is set.
         assert_eq!(
-            I128s12::MAX.overflowing_add(I128s12::from_bits(1)),
-            (I128s12::MIN, true)
+            D128e12::MAX.overflowing_add(D128e12::from_bits(1)),
+            (D128e12::MIN, true)
         );
     }
 
@@ -805,8 +805,8 @@ mod tests {
     fn overflowing_add_negative_overflow_flagged() {
         // MIN + (-1 LSB) wraps exactly to MAX.
         assert_eq!(
-            I128s12::MIN.overflowing_add(I128s12::from_bits(-1)),
-            (I128s12::MAX, true)
+            D128e12::MIN.overflowing_add(D128e12::from_bits(-1)),
+            (D128e12::MAX, true)
         );
     }
 
@@ -814,54 +814,54 @@ mod tests {
 
     #[test]
     fn checked_sub_normal() {
-        assert_eq!(three().checked_sub(I128s12::ONE), Some(two()));
+        assert_eq!(three().checked_sub(D128e12::ONE), Some(two()));
     }
 
     #[test]
     fn checked_sub_underflow_returns_none() {
-        assert_eq!(I128s12::MIN.checked_sub(I128s12::ONE), None);
+        assert_eq!(D128e12::MIN.checked_sub(D128e12::ONE), None);
     }
 
     #[test]
     fn checked_sub_positive_overflow_returns_none() {
         // MAX - (-ONE) = MAX + ONE -> overflows.
-        assert_eq!(I128s12::MAX.checked_sub(neg_one()), None);
+        assert_eq!(D128e12::MAX.checked_sub(neg_one()), None);
     }
 
     #[test]
     fn wrapping_sub_normal() {
-        assert_eq!(three().wrapping_sub(I128s12::ONE), two());
+        assert_eq!(three().wrapping_sub(D128e12::ONE), two());
     }
 
     #[test]
     fn wrapping_sub_underflow_wraps_to_max() {
         // MIN - 1 LSB wraps exactly to MAX.
         assert_eq!(
-            I128s12::MIN.wrapping_sub(I128s12::from_bits(1)),
-            I128s12::MAX
+            D128e12::MIN.wrapping_sub(D128e12::from_bits(1)),
+            D128e12::MAX
         );
     }
 
     #[test]
     fn saturating_sub_normal() {
-        assert_eq!(three().saturating_sub(I128s12::ONE), two());
+        assert_eq!(three().saturating_sub(D128e12::ONE), two());
     }
 
     #[test]
     fn saturating_sub_underflow_clamps_to_min() {
-        assert_eq!(I128s12::MIN.saturating_sub(I128s12::ONE), I128s12::MIN);
+        assert_eq!(D128e12::MIN.saturating_sub(D128e12::ONE), D128e12::MIN);
     }
 
     #[test]
     fn saturating_sub_overflow_clamps_to_max() {
         // MAX - (-ONE) saturates to MAX.
-        assert_eq!(I128s12::MAX.saturating_sub(neg_one()), I128s12::MAX);
+        assert_eq!(D128e12::MAX.saturating_sub(neg_one()), D128e12::MAX);
     }
 
     #[test]
     fn overflowing_sub_normal() {
         assert_eq!(
-            three().overflowing_sub(I128s12::ONE),
+            three().overflowing_sub(D128e12::ONE),
             (two(), false)
         );
     }
@@ -870,8 +870,8 @@ mod tests {
     fn overflowing_sub_underflow_flagged() {
         // MIN - 1 LSB wraps exactly to MAX.
         assert_eq!(
-            I128s12::MIN.overflowing_sub(I128s12::from_bits(1)),
-            (I128s12::MAX, true)
+            D128e12::MIN.overflowing_sub(D128e12::from_bits(1)),
+            (D128e12::MAX, true)
         );
     }
 
@@ -879,63 +879,63 @@ mod tests {
 
     #[test]
     fn checked_neg_normal() {
-        assert_eq!(I128s12::ONE.checked_neg(), Some(neg_one()));
-        assert_eq!(neg_one().checked_neg(), Some(I128s12::ONE));
-        assert_eq!(I128s12::ZERO.checked_neg(), Some(I128s12::ZERO));
+        assert_eq!(D128e12::ONE.checked_neg(), Some(neg_one()));
+        assert_eq!(neg_one().checked_neg(), Some(D128e12::ONE));
+        assert_eq!(D128e12::ZERO.checked_neg(), Some(D128e12::ZERO));
     }
 
     #[test]
     fn checked_neg_min_returns_none() {
-        assert_eq!(I128s12::MIN.checked_neg(), None);
+        assert_eq!(D128e12::MIN.checked_neg(), None);
     }
 
     #[test]
     fn checked_neg_max_succeeds() {
         // MAX = i128::MAX, -MAX = i128::MIN + 1, fits.
-        let neg_max = I128s12::from_bits(-i128::MAX);
-        assert_eq!(I128s12::MAX.checked_neg(), Some(neg_max));
+        let neg_max = D128e12::from_bits(-i128::MAX);
+        assert_eq!(D128e12::MAX.checked_neg(), Some(neg_max));
     }
 
     #[test]
     fn wrapping_neg_normal() {
-        assert_eq!(I128s12::ONE.wrapping_neg(), neg_one());
-        assert_eq!(I128s12::ZERO.wrapping_neg(), I128s12::ZERO);
+        assert_eq!(D128e12::ONE.wrapping_neg(), neg_one());
+        assert_eq!(D128e12::ZERO.wrapping_neg(), D128e12::ZERO);
     }
 
     #[test]
     fn wrapping_neg_min_returns_min() {
         // -i128::MIN wraps to i128::MIN under two's-complement.
-        assert_eq!(I128s12::MIN.wrapping_neg(), I128s12::MIN);
+        assert_eq!(D128e12::MIN.wrapping_neg(), D128e12::MIN);
     }
 
     #[test]
     fn saturating_neg_normal() {
-        assert_eq!(I128s12::ONE.saturating_neg(), neg_one());
-        assert_eq!(I128s12::ZERO.saturating_neg(), I128s12::ZERO);
+        assert_eq!(D128e12::ONE.saturating_neg(), neg_one());
+        assert_eq!(D128e12::ZERO.saturating_neg(), D128e12::ZERO);
     }
 
     #[test]
     fn saturating_neg_min_returns_max() {
-        assert_eq!(I128s12::MIN.saturating_neg(), I128s12::MAX);
+        assert_eq!(D128e12::MIN.saturating_neg(), D128e12::MAX);
     }
 
     #[test]
     fn overflowing_neg_normal() {
         assert_eq!(
-            I128s12::ONE.overflowing_neg(),
+            D128e12::ONE.overflowing_neg(),
             (neg_one(), false)
         );
         assert_eq!(
-            I128s12::ZERO.overflowing_neg(),
-            (I128s12::ZERO, false)
+            D128e12::ZERO.overflowing_neg(),
+            (D128e12::ZERO, false)
         );
     }
 
     #[test]
     fn overflowing_neg_min_flagged() {
         assert_eq!(
-            I128s12::MIN.overflowing_neg(),
-            (I128s12::MIN, true)
+            D128e12::MIN.overflowing_neg(),
+            (D128e12::MIN, true)
         );
     }
 
@@ -943,94 +943,94 @@ mod tests {
 
     #[test]
     fn checked_mul_normal() {
-        let half = I128s12::from_bits(500_000_000_000);
-        let quarter = I128s12::from_bits(250_000_000_000);
+        let half = D128e12::from_bits(500_000_000_000);
+        let quarter = D128e12::from_bits(250_000_000_000);
         assert_eq!(half.checked_mul(half), Some(quarter));
     }
 
     #[test]
     fn checked_mul_zero() {
-        assert_eq!(I128s12::MAX.checked_mul(I128s12::ZERO), Some(I128s12::ZERO));
-        assert_eq!(I128s12::ZERO.checked_mul(I128s12::ZERO), Some(I128s12::ZERO));
+        assert_eq!(D128e12::MAX.checked_mul(D128e12::ZERO), Some(D128e12::ZERO));
+        assert_eq!(D128e12::ZERO.checked_mul(D128e12::ZERO), Some(D128e12::ZERO));
     }
 
     #[test]
     fn checked_mul_one_identity() {
-        let v = I128s12::from_bits(7_500_000_000_000); // 7.5
-        assert_eq!(v.checked_mul(I128s12::ONE), Some(v));
-        assert_eq!(I128s12::ONE.checked_mul(v), Some(v));
+        let v = D128e12::from_bits(7_500_000_000_000); // 7.5
+        assert_eq!(v.checked_mul(D128e12::ONE), Some(v));
+        assert_eq!(D128e12::ONE.checked_mul(v), Some(v));
     }
 
     #[test]
     fn checked_mul_overflow_returns_none() {
         // MAX * 2.0 overflows the final i128 quotient.
-        assert_eq!(I128s12::MAX.checked_mul(two()), None);
+        assert_eq!(D128e12::MAX.checked_mul(two()), None);
     }
 
     #[test]
     fn checked_mul_min_overflow_returns_none() {
         // MIN * 2.0 overflows.
-        assert_eq!(I128s12::MIN.checked_mul(two()), None);
+        assert_eq!(D128e12::MIN.checked_mul(two()), None);
     }
 
     #[test]
     fn wrapping_mul_normal() {
-        let half = I128s12::from_bits(500_000_000_000);
-        let quarter = I128s12::from_bits(250_000_000_000);
+        let half = D128e12::from_bits(500_000_000_000);
+        let quarter = D128e12::from_bits(250_000_000_000);
         assert_eq!(half.wrapping_mul(half), quarter);
     }
 
     #[test]
     fn wrapping_mul_overflow_does_not_panic() {
         // Verify it does not panic; the exact bit pattern is unspecified.
-        let _ = I128s12::MAX.wrapping_mul(two());
-        let _ = I128s12::MIN.wrapping_mul(two());
+        let _ = D128e12::MAX.wrapping_mul(two());
+        let _ = D128e12::MIN.wrapping_mul(two());
     }
 
     #[test]
     fn saturating_mul_normal() {
-        let half = I128s12::from_bits(500_000_000_000);
-        let quarter = I128s12::from_bits(250_000_000_000);
+        let half = D128e12::from_bits(500_000_000_000);
+        let quarter = D128e12::from_bits(250_000_000_000);
         assert_eq!(half.saturating_mul(half), quarter);
     }
 
     #[test]
     fn saturating_mul_positive_overflow_clamps_to_max() {
         // MAX * 2.0 (both positive) saturates to MAX.
-        assert_eq!(I128s12::MAX.saturating_mul(two()), I128s12::MAX);
+        assert_eq!(D128e12::MAX.saturating_mul(two()), D128e12::MAX);
     }
 
     #[test]
     fn saturating_mul_negative_overflow_clamps_to_min() {
         // MAX * (-2.0) (mixed sign) saturates to MIN.
         assert_eq!(
-            I128s12::MAX.saturating_mul(-two()),
-            I128s12::MIN
+            D128e12::MAX.saturating_mul(-two()),
+            D128e12::MIN
         );
     }
 
     #[test]
     fn saturating_mul_min_times_two_clamps_to_min() {
         // MIN * 2.0 (MIN negative, 2 positive) saturates to MIN.
-        assert_eq!(I128s12::MIN.saturating_mul(two()), I128s12::MIN);
+        assert_eq!(D128e12::MIN.saturating_mul(two()), D128e12::MIN);
     }
 
     #[test]
     fn saturating_mul_min_times_neg_two_clamps_to_max() {
         // MIN * -2.0 (both negative) saturates to MAX.
-        assert_eq!(I128s12::MIN.saturating_mul(-two()), I128s12::MAX);
+        assert_eq!(D128e12::MIN.saturating_mul(-two()), D128e12::MAX);
     }
 
     #[test]
     fn overflowing_mul_normal_no_overflow() {
-        let half = I128s12::from_bits(500_000_000_000);
-        let quarter = I128s12::from_bits(250_000_000_000);
+        let half = D128e12::from_bits(500_000_000_000);
+        let quarter = D128e12::from_bits(250_000_000_000);
         assert_eq!(half.overflowing_mul(half), (quarter, false));
     }
 
     #[test]
     fn overflowing_mul_overflow_flagged() {
-        let (_, ovf) = I128s12::MAX.overflowing_mul(two());
+        let (_, ovf) = D128e12::MAX.overflowing_mul(two());
         assert!(ovf);
     }
 
@@ -1039,93 +1039,93 @@ mod tests {
     #[test]
     fn checked_div_normal() {
         // 6.0 / 2.0 = 3.0
-        let six = I128s12::from_bits(6_000_000_000_000);
+        let six = D128e12::from_bits(6_000_000_000_000);
         assert_eq!(six.checked_div(two()), Some(three()));
     }
 
     #[test]
     fn checked_div_by_zero_returns_none() {
-        assert_eq!(I128s12::ONE.checked_div(I128s12::ZERO), None);
+        assert_eq!(D128e12::ONE.checked_div(D128e12::ZERO), None);
     }
 
     #[test]
     fn checked_div_overflow_returns_none() {
         // MAX / 0.5 = 2 * MAX -> overflows the final quotient.
-        let half = I128s12::from_bits(500_000_000_000);
-        assert_eq!(I128s12::MAX.checked_div(half), None);
+        let half = D128e12::from_bits(500_000_000_000);
+        assert_eq!(D128e12::MAX.checked_div(half), None);
     }
 
     #[test]
     fn checked_div_negative_normal() {
-        let neg_six = I128s12::from_bits(-6_000_000_000_000);
+        let neg_six = D128e12::from_bits(-6_000_000_000_000);
         assert_eq!(neg_six.checked_div(two()), Some(-three()));
     }
 
     #[test]
     fn wrapping_div_normal() {
-        let six = I128s12::from_bits(6_000_000_000_000);
+        let six = D128e12::from_bits(6_000_000_000_000);
         assert_eq!(six.wrapping_div(two()), three());
     }
 
     #[test]
     #[should_panic(expected = "attempt to divide by zero")]
     fn wrapping_div_by_zero_panics() {
-        let _ = I128s12::ONE.wrapping_div(I128s12::ZERO);
+        let _ = D128e12::ONE.wrapping_div(D128e12::ZERO);
     }
 
     #[test]
     fn wrapping_div_overflow_does_not_panic() {
         // Verify it does not panic; the exact result is unspecified.
-        let half = I128s12::from_bits(500_000_000_000);
-        let _ = I128s12::MAX.wrapping_div(half);
+        let half = D128e12::from_bits(500_000_000_000);
+        let _ = D128e12::MAX.wrapping_div(half);
     }
 
     #[test]
     fn saturating_div_normal() {
-        let six = I128s12::from_bits(6_000_000_000_000);
+        let six = D128e12::from_bits(6_000_000_000_000);
         assert_eq!(six.saturating_div(two()), three());
     }
 
     #[test]
     #[should_panic(expected = "attempt to divide by zero")]
     fn saturating_div_by_zero_panics() {
-        let _ = I128s12::ONE.saturating_div(I128s12::ZERO);
+        let _ = D128e12::ONE.saturating_div(D128e12::ZERO);
     }
 
     #[test]
     fn saturating_div_overflow_clamps_to_max() {
         // MAX / 0.5 (both positive) saturates to MAX.
-        let half = I128s12::from_bits(500_000_000_000);
-        assert_eq!(I128s12::MAX.saturating_div(half), I128s12::MAX);
+        let half = D128e12::from_bits(500_000_000_000);
+        assert_eq!(D128e12::MAX.saturating_div(half), D128e12::MAX);
     }
 
     #[test]
     fn saturating_div_negative_overflow_clamps_to_min() {
         // MAX / -0.5 (mixed sign) saturates to MIN.
-        let neg_half = I128s12::from_bits(-500_000_000_000);
+        let neg_half = D128e12::from_bits(-500_000_000_000);
         assert_eq!(
-            I128s12::MAX.saturating_div(neg_half),
-            I128s12::MIN
+            D128e12::MAX.saturating_div(neg_half),
+            D128e12::MIN
         );
     }
 
     #[test]
     fn overflowing_div_normal() {
-        let six = I128s12::from_bits(6_000_000_000_000);
+        let six = D128e12::from_bits(6_000_000_000_000);
         assert_eq!(six.overflowing_div(two()), (three(), false));
     }
 
     #[test]
     fn overflowing_div_overflow_flagged() {
-        let half = I128s12::from_bits(500_000_000_000);
-        let (_, ovf) = I128s12::MAX.overflowing_div(half);
+        let half = D128e12::from_bits(500_000_000_000);
+        let (_, ovf) = D128e12::MAX.overflowing_div(half);
         assert!(ovf);
     }
 
     #[test]
     #[should_panic(expected = "attempt to divide by zero")]
     fn overflowing_div_by_zero_panics() {
-        let _ = I128s12::ONE.overflowing_div(I128s12::ZERO);
+        let _ = D128e12::ONE.overflowing_div(D128e12::ZERO);
     }
 
     // Rem variants
@@ -1133,14 +1133,14 @@ mod tests {
     #[test]
     fn checked_rem_normal() {
         // 5.5 % 2.0 = 1.5
-        let a = I128s12::from_bits(5_500_000_000_000);
-        let expected = I128s12::from_bits(1_500_000_000_000);
+        let a = D128e12::from_bits(5_500_000_000_000);
+        let expected = D128e12::from_bits(1_500_000_000_000);
         assert_eq!(a.checked_rem(two()), Some(expected));
     }
 
     #[test]
     fn checked_rem_by_zero_returns_none() {
-        assert_eq!(I128s12::ONE.checked_rem(I128s12::ZERO), None);
+        assert_eq!(D128e12::ONE.checked_rem(D128e12::ZERO), None);
     }
 
     #[test]
@@ -1148,46 +1148,46 @@ mod tests {
         // The raw overflow case is `i128::MIN % -1` (because i128::MIN / -1
         // overflows). The divisor's raw bits are -1, not the decimal -ONE
         // (-10^12), which does not trigger this path.
-        let neg_one_lsb = I128s12::from_bits(-1);
-        assert_eq!(I128s12::MIN.checked_rem(neg_one_lsb), None);
+        let neg_one_lsb = D128e12::from_bits(-1);
+        assert_eq!(D128e12::MIN.checked_rem(neg_one_lsb), None);
     }
 
     #[test]
     fn wrapping_rem_normal() {
-        let a = I128s12::from_bits(5_500_000_000_000);
-        let expected = I128s12::from_bits(1_500_000_000_000);
+        let a = D128e12::from_bits(5_500_000_000_000);
+        let expected = D128e12::from_bits(1_500_000_000_000);
         assert_eq!(a.wrapping_rem(two()), expected);
     }
 
     #[test]
     #[should_panic(expected = "attempt to calculate the remainder with a divisor of zero")]
     fn wrapping_rem_by_zero_panics() {
-        let _ = I128s12::ONE.wrapping_rem(I128s12::ZERO);
+        let _ = D128e12::ONE.wrapping_rem(D128e12::ZERO);
     }
 
     #[test]
     fn wrapping_rem_min_neg_one_lsb_returns_zero() {
         // i128::MIN % -1 wraps to 0 (the overflow case).
-        let neg_one_lsb = I128s12::from_bits(-1);
+        let neg_one_lsb = D128e12::from_bits(-1);
         assert_eq!(
-            I128s12::MIN.wrapping_rem(neg_one_lsb),
-            I128s12::ZERO
+            D128e12::MIN.wrapping_rem(neg_one_lsb),
+            D128e12::ZERO
         );
     }
 
     #[test]
     fn overflowing_rem_normal() {
-        let a = I128s12::from_bits(5_500_000_000_000);
-        let expected = I128s12::from_bits(1_500_000_000_000);
+        let a = D128e12::from_bits(5_500_000_000_000);
+        let expected = D128e12::from_bits(1_500_000_000_000);
         assert_eq!(a.overflowing_rem(two()), (expected, false));
     }
 
     #[test]
     fn overflowing_rem_min_neg_one_lsb_flagged() {
-        let neg_one_lsb = I128s12::from_bits(-1);
+        let neg_one_lsb = D128e12::from_bits(-1);
         assert_eq!(
-            I128s12::MIN.overflowing_rem(neg_one_lsb),
-            (I128s12::ZERO, true)
+            D128e12::MIN.overflowing_rem(neg_one_lsb),
+            (D128e12::ZERO, true)
         );
     }
 
@@ -1196,7 +1196,7 @@ mod tests {
     /// Verifies that the variant family compiles and functions correctly at SCALE = 6.
     #[test]
     fn variants_at_scale_6() {
-        type D6 = I128<6>;
+        type D6 = D128<6>;
         let one = D6::ONE;
         let two_d6 = D6::from_bits(2_000_000); // 2.0 at SCALE=6
         let one_lsb = D6::from_bits(1);
@@ -1219,7 +1219,7 @@ mod tests {
     /// Verifies that `checked_*` matches the base operator when no overflow occurs.
     #[test]
     fn checked_matches_op_in_range() {
-        let a = I128s12::from_bits(7_500_000_000_000); // 7.5
+        let a = D128e12::from_bits(7_500_000_000_000); // 7.5
         let b = two();
         assert_eq!(a.checked_add(b), Some(a + b));
         assert_eq!(a.checked_sub(b), Some(a - b));
@@ -1232,27 +1232,27 @@ mod tests {
     #[test]
     fn overflowing_flag_matches_checked_none() {
         // Add: MAX + ONE
-        let (_, ovf) = I128s12::MAX.overflowing_add(I128s12::ONE);
-        assert_eq!(ovf, I128s12::MAX.checked_add(I128s12::ONE).is_none());
+        let (_, ovf) = D128e12::MAX.overflowing_add(D128e12::ONE);
+        assert_eq!(ovf, D128e12::MAX.checked_add(D128e12::ONE).is_none());
 
         // Sub: MIN - ONE
-        let (_, ovf) = I128s12::MIN.overflowing_sub(I128s12::ONE);
-        assert_eq!(ovf, I128s12::MIN.checked_sub(I128s12::ONE).is_none());
+        let (_, ovf) = D128e12::MIN.overflowing_sub(D128e12::ONE);
+        assert_eq!(ovf, D128e12::MIN.checked_sub(D128e12::ONE).is_none());
 
         // Mul: MAX * 2
-        let (_, ovf) = I128s12::MAX.overflowing_mul(two());
-        assert_eq!(ovf, I128s12::MAX.checked_mul(two()).is_none());
+        let (_, ovf) = D128e12::MAX.overflowing_mul(two());
+        assert_eq!(ovf, D128e12::MAX.checked_mul(two()).is_none());
 
         // Neg: MIN
-        let (_, ovf) = I128s12::MIN.overflowing_neg();
-        assert_eq!(ovf, I128s12::MIN.checked_neg().is_none());
+        let (_, ovf) = D128e12::MIN.overflowing_neg();
+        assert_eq!(ovf, D128e12::MIN.checked_neg().is_none());
 
         // Rem: MIN % (-1 LSB) -- the raw i128::MIN % -1 case.
-        let neg_one_lsb = I128s12::from_bits(-1);
-        let (_, ovf) = I128s12::MIN.overflowing_rem(neg_one_lsb);
+        let neg_one_lsb = D128e12::from_bits(-1);
+        let (_, ovf) = D128e12::MIN.overflowing_rem(neg_one_lsb);
         assert_eq!(
             ovf,
-            I128s12::MIN.checked_rem(neg_one_lsb).is_none()
+            D128e12::MIN.checked_rem(neg_one_lsb).is_none()
         );
     }
 
@@ -1261,20 +1261,20 @@ mod tests {
     #[test]
     fn saturating_never_escapes_bounds() {
         let extremes = [
-            I128s12::MIN,
-            I128s12::from_bits(-1),
-            I128s12::ZERO,
-            I128s12::ONE,
-            I128s12::MAX,
+            D128e12::MIN,
+            D128e12::from_bits(-1),
+            D128e12::ZERO,
+            D128e12::ONE,
+            D128e12::MAX,
         ];
         for &a in &extremes {
             for &b in &extremes {
                 let s_add = a.saturating_add(b);
                 let s_sub = a.saturating_sub(b);
                 let s_mul = a.saturating_mul(b);
-                assert!(s_add >= I128s12::MIN && s_add <= I128s12::MAX);
-                assert!(s_sub >= I128s12::MIN && s_sub <= I128s12::MAX);
-                assert!(s_mul >= I128s12::MIN && s_mul <= I128s12::MAX);
+                assert!(s_add >= D128e12::MIN && s_add <= D128e12::MAX);
+                assert!(s_sub >= D128e12::MIN && s_sub <= D128e12::MAX);
+                assert!(s_mul >= D128e12::MIN && s_mul <= D128e12::MAX);
             }
         }
     }
