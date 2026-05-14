@@ -377,65 +377,40 @@ impl<const SCALE: u32> D128<SCALE> {
         self.cbrt_strict()
     }
 
-    /// Returns the cube root of `self` via Newton iteration on
-    /// `f(y) = y³ - x`. Defined for all reals: the sign of the input is
-    /// preserved (`cbrt(-8) = -2`).
+    /// Cube root of `self`. Defined for all reals — the sign of the
+    /// input is preserved (`cbrt(-8) = -2`).
+    ///
+    /// # Algorithm
+    ///
+    /// For a `D128<SCALE>` with raw storage `r`, the raw storage of the
+    /// cube root is
+    ///
+    ///   round( cbrt(r / 10^SCALE) · 10^SCALE )
+    ///     = round( cbrt(r · 10^(2·SCALE)) ).
+    ///
+    /// `r · 10^(2·SCALE)` is formed exactly as a 384-bit value and its
+    /// integer cube root is computed exactly, so the result is the
+    /// exact cube root correctly rounded to the type's last place
+    /// (within 0.5 ULP — the IEEE-754 round-to-nearest result).
     ///
     /// # Precision
     ///
-    /// Strict: integer-only Newton iteration. Convergence is quadratic;
-    /// settles within ~50 iterations. Precision is roughly Phase 2A
-    /// (~10 ULP at D128s12).
+    /// Strict: integer-only; correctly rounded.
     #[cfg(not(feature = "no_strict"))]
     #[inline]
     #[must_use]
     pub fn cbrt_strict(self) -> Self {
-        if self.to_bits() == 0 {
+        let raw = self.to_bits();
+        if raw == 0 {
             return Self::ZERO;
         }
-        // Newton iteration on y³ = x: y_{n+1} = (2*y_n + x / y_n²) / 3.
-        // For negative inputs, work on the absolute value and restore the
-        // sign at the end (cube root is sign-symmetric).
-        let neg = self.to_bits() < 0;
-        let mag = if neg {
-            Self::from_bits(self.to_bits().wrapping_neg())
-        } else {
-            self
-        };
-        let one = Self::ONE;
-        let mut y = if mag >= one { mag } else { one };
-        let mut prev_bits: i128 = 0;
-        for _ in 0..100 {
-            let y_squared = y * y;
-            if y_squared.to_bits() == 0 {
-                break;
-            }
-            let quotient = mag / y_squared;
-            // y_new = (2*y + quotient) / 3 in D128 arithmetic. Because
-            // `2*y + quotient` and `3` (as raw integer) both leave the
-            // multiplier factored consistently, the per-bits divide by 3
-            // is the right operation.
-            let y_new_bits = (y
-                .to_bits()
-                .saturating_mul(2)
-                .saturating_add(quotient.to_bits()))
-                / 3;
-            if y_new_bits == y.to_bits() || y_new_bits == prev_bits {
-                let result = Self::from_bits(y_new_bits);
-                return if neg {
-                    Self::from_bits(result.to_bits().wrapping_neg())
-                } else {
-                    result
-                };
-            }
-            prev_bits = y.to_bits();
-            y = Self::from_bits(y_new_bits);
-        }
-        if neg {
-            Self::from_bits(y.to_bits().wrapping_neg())
-        } else {
-            y
-        }
+        let negative = raw < 0;
+        // `unsigned_abs` handles `i128::MIN` without the signed-negation
+        // overflow; the magnitude is at most 2^127.
+        let q = crate::mg_divide::cbrt_raw_correctly_rounded(raw.unsigned_abs(), SCALE);
+        // q < 2^127, so it fits i128 and its negation cannot overflow.
+        let result = q as i128;
+        Self::from_bits(if negative { -result } else { result })
     }
 
     // Integer power variant family.
@@ -993,6 +968,62 @@ mod tests {
         // High-scale cases where the radicand approaches the 256-bit cap.
         for &raw in &[1_i128, 2, 17, i128::MAX, i128::MAX / 3] {
             check::<38>(raw);
+        }
+    }
+
+    /// Strict `cbrt` is correctly rounded: for the raw result `q`, the
+    /// scaled radicand `N = |r| · 10^(2·SCALE)` must satisfy
+    /// `(2q − 1)³ < 8·N ≤ (2q + 1)³`, i.e. `q` is the exact cube root
+    /// rounded to nearest. Checked exactly in 384-bit integer space.
+    #[cfg(not(feature = "no_strict"))]
+    #[test]
+    fn strict_cbrt_is_correctly_rounded() {
+        // q correctly rounded  ⇔  q − 0.5 < cbrt(N) ≤ q + 0.5
+        //                      ⇔  (2q − 1)³ < 8N ≤ (2q + 1)³.
+        // 384-bit comparison via num-bigint-free manual limbs would be
+        // verbose, so this check leans on the i256 dev-dependency to
+        // hold the 384-bit cubes (i256 is already a dev-dependency).
+        use i256::U256;
+        fn check<const S: u32>(raw: i128) {
+            let x = crate::core_type::D128::<S>::from_bits(raw);
+            let q = x.cbrt_strict().to_bits();
+            // Sign must match the input.
+            assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");
+            let qa = q.unsigned_abs();
+            let ra = raw.unsigned_abs();
+            // N = |r| · 10^(2S). 2S ≤ 76, so 10^(2S) needs U256; the
+            // product needs more than 256 bits at high S, so cap the
+            // scales exercised here to keep the check in U256 range.
+            // (The 384-bit path itself is exercised across all scales by
+            // the round-trip tests; this exact check covers S ≤ 25.)
+            let m = U256::from(10u8).pow(2 * S);
+            let n = U256::from(ra) * m;
+            let eight_n = n << 3;
+            let two_q = U256::from(qa) * U256::from(2u8);
+            let upper = {
+                let t = two_q + U256::from(1u8);
+                t * t * t
+            };
+            assert!(eight_n <= upper, "cbrt({raw} @ s{S}) = {q}: 8N exceeds (2q+1)^3");
+            if qa > 0 {
+                let t = two_q - U256::from(1u8);
+                let lower = t * t * t;
+                assert!(eight_n > lower, "cbrt({raw} @ s{S}) = {q}: 8N at/below (2q-1)^3");
+            }
+        }
+        for &raw in &[
+            1_i128, 2, 7, 8, 9, 26, 27, 28,
+            999_999_999_999, 1_000_000_000_000, 123_456_789_012_345,
+            -8, -27, -1_000_000_000_000,
+        ] {
+            check::<0>(raw);
+            check::<6>(raw);
+            check::<12>(raw);
+        }
+        // Larger magnitudes at low scale (still within the U256 check).
+        for &raw in &[i128::MAX, i128::MIN + 1, i128::MAX / 11] {
+            check::<0>(raw);
+            check::<2>(raw);
         }
     }
 

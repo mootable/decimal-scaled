@@ -322,6 +322,205 @@ pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// 384-bit integer helpers for the correctly-rounded cube root.
+//
+// `cbrt` of a `D*<SCALE>` value with raw storage `r` is
+// `round(icbrt(r · 10^(2·SCALE)))`. At `SCALE = 38` the radicand
+// `r · 10^76` is just under `2^380`, so it needs a 384-bit
+// intermediate — wider than the 256-bit machinery above. These helpers
+// give exactly the operations the cube-root path needs and nothing
+// more. A 384-bit value is `[u128; 3]`, least-significant limb first.
+// ─────────────────────────────────────────────────────────────────────
+
+/// `10^exp` as a 256-bit value `[lo, hi]`. `exp <= 76` (so the result
+/// is below `2^253` and fits 256 bits).
+fn pow10_256(exp: u32) -> [u128; 2] {
+    if exp <= 38 {
+        [10u128.pow(exp), 0]
+    } else {
+        // 10^exp = 10^38 * 10^(exp-38); both factors fit u128 for exp <= 76.
+        let (hi, lo) = mul2(10u128.pow(38), 10u128.pow(exp - 38));
+        [lo, hi]
+    }
+}
+
+/// `a * m` where `m` is a 256-bit value `[lo, hi]`; result is 384-bit.
+fn mul_u128_by_256(a: u128, m: [u128; 2]) -> [u128; 3] {
+    let (p0_hi, p0_lo) = mul2(a, m[0]);
+    let (p1_hi, p1_lo) = mul2(a, m[1]);
+    let limb0 = p0_lo;
+    let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
+    let limb2 = p1_hi + c1 as u128;
+    [limb0, limb1, limb2]
+}
+
+/// `s * b` where `s` is a 256-bit value `[lo, hi]`; result is 384-bit.
+fn mul_u256_by_u128(s: [u128; 2], b: u128) -> [u128; 3] {
+    let (p0_hi, p0_lo) = mul2(s[0], b);
+    let (p1_hi, p1_lo) = mul2(s[1], b);
+    let limb0 = p0_lo;
+    let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
+    let limb2 = p1_hi + c1 as u128;
+    [limb0, limb1, limb2]
+}
+
+/// Left-shift a 384-bit value by 3 bits. The caller guarantees no
+/// significant bits are lost (used only on `N < 2^380`, so `8N < 2^383`).
+fn shl3_384(n: [u128; 3]) -> [u128; 3] {
+    [
+        n[0] << 3,
+        (n[1] << 3) | (n[0] >> 125),
+        (n[2] << 3) | (n[1] >> 125),
+    ]
+}
+
+/// `a >= b` for 384-bit values.
+fn ge_384(a: [u128; 3], b: [u128; 3]) -> bool {
+    if a[2] != b[2] {
+        a[2] > b[2]
+    } else if a[1] != b[1] {
+        a[1] > b[1]
+    } else {
+        a[0] >= b[0]
+    }
+}
+
+/// `a >= b` for 256-bit values `[lo, hi]`.
+fn ge_256(a: [u128; 2], b: [u128; 2]) -> bool {
+    a[1] > b[1] || (a[1] == b[1] && a[0] >= b[0])
+}
+
+/// `a - b` for 256-bit values `[lo, hi]`; caller guarantees `a >= b`.
+fn sub_256(a: [u128; 2], b: [u128; 2]) -> [u128; 2] {
+    let (lo, borrow) = a[0].overflowing_sub(b[0]);
+    let hi = a[1] - b[1] - borrow as u128;
+    [lo, hi]
+}
+
+/// Divide the 384-bit `num` by the 256-bit `d` via binary
+/// shift-subtract. The caller guarantees the quotient fits in `u128`.
+fn div_384_by_256(mut num: [u128; 3], d: [u128; 2]) -> u128 {
+    let mut rem: [u128; 2] = [0, 0];
+    let mut q: u128 = 0;
+    let mut i = 0;
+    while i < 384 {
+        // Shift the top bit of `num` into `rem`, both left by 1.
+        let num_top = num[2] >> 127;
+        num[2] = (num[2] << 1) | (num[1] >> 127);
+        num[1] = (num[1] << 1) | (num[0] >> 127);
+        num[0] <<= 1;
+        rem[1] = (rem[1] << 1) | (rem[0] >> 127);
+        rem[0] = (rem[0] << 1) | num_top;
+        q <<= 1;
+        if ge_256(rem, d) {
+            rem = sub_256(rem, d);
+            q |= 1;
+        }
+        i += 1;
+    }
+    q
+}
+
+/// `floor((carry · 2^128 + val) / 3)` for `carry` in `0..=2`. Used by
+/// the cube-root Newton step, where `2y + N/y²` can be a 130-bit value.
+fn floor_div3(mut carry: u128, mut val: u128) -> u128 {
+    // 2^128 = 3·K + 1, with K = (2^128 - 1) / 3.
+    const K: u128 = u128::MAX / 3;
+    let mut q: u128 = 0;
+    loop {
+        if carry == 0 {
+            return q + val / 3;
+        }
+        // carry·2^128 + val = 3·carry·K + (carry + val).
+        q += carry * K;
+        let (next_val, c) = val.overflowing_add(carry);
+        carry = c as u128;
+        val = next_val;
+    }
+}
+
+/// `floor(cbrt(N))` for the unsigned 384-bit value `N`.
+///
+/// # Preconditions
+///
+/// `N < 2^381` (so the result is below `2^127` and the Newton iteration
+/// stays within `u128`). The scaled-fixed-point caller forms
+/// `N = r · 10^(2·SCALE)` with `r < 2^127` and `2·SCALE <= 76`, so
+/// `N < 2^380`.
+fn icbrt_384(n: [u128; 3]) -> u128 {
+    if n == [0, 0, 0] {
+        return 0;
+    }
+    // Bit length of N.
+    let bits = if n[2] != 0 {
+        384 - n[2].leading_zeros()
+    } else if n[1] != 0 {
+        256 - n[1].leading_zeros()
+    } else {
+        128 - n[0].leading_zeros()
+    };
+    // Overestimate y0 = 2^ceil(bits/3) >= cbrt(N); <= 2^127 for N < 2^381.
+    let mut y: u128 = 1u128 << (((bits + 2) / 3).min(127));
+    loop {
+        // y² as a 256-bit divisor.
+        let (yy_hi, yy_lo) = mul2(y, y);
+        // nq = N / y²; y >= cbrt(N) keeps this below 2^128.
+        let nq = div_384_by_256(n, [yy_lo, yy_hi]);
+        // y_next = (2y + nq) / 3, computed via a (carry, sum) pair so
+        // the up-to-130-bit intermediate never overflows `u128`.
+        let (two_y, c0) = y.overflowing_add(y);
+        let (sum, c1) = two_y.overflowing_add(nq);
+        let carry = c0 as u128 + c1 as u128;
+        let y_next = floor_div3(carry, sum);
+        if y_next >= y {
+            return y;
+        }
+        y = y_next;
+    }
+}
+
+/// Correctly-rounded raw storage of `cbrt` for a scaled fixed-point
+/// value.
+///
+/// Given the non-negative raw storage `r` of a `D*<SCALE>` value and
+/// the `SCALE`, returns `round_to_nearest(cbrt(r · 10^(2·SCALE)))` —
+/// the raw storage of `cbrt(value)` correctly rounded to the type's
+/// last place (IEEE-754 round-to-nearest).
+///
+/// The radicand `r · 10^(2·SCALE)` is formed exactly as a 384-bit
+/// value, its integer cube root is exact, and the round-to-nearest
+/// decision uses the exact identity `round up iff 8·N ≥ (2q + 1)³`
+/// (because `(2q + 1)³ = 8q³ + 12q² + 6q + 1 = 8·(q + 0.5)³`).
+///
+/// # Preconditions
+///
+/// `r >= 0` and `SCALE <= 38` (so `r · 10^(2·SCALE) < 2^380`).
+///
+/// # Precision
+///
+/// Strict: integer-only; the result is within 0.5 ULP of the exact
+/// cube root — it is the exact result correctly rounded.
+pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
+    if r == 0 {
+        return 0;
+    }
+    // N = r · 10^(2·SCALE) as a 384-bit value.
+    let n = mul_u128_by_256(r, pow10_256(2 * scale));
+    let q = icbrt_384(n);
+    // Round up to q+1 iff N is closer to (q+1)³ than to q³, i.e. iff
+    // N ≥ (q + 0.5)³. Multiplying by 8: 8·N ≥ (2q + 1)³.
+    let eight_n = shl3_384(n);
+    let two_q_plus_1 = 2 * q + 1;
+    let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
+    let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
+    if ge_384(eight_n, cube) {
+        q + 1
+    } else {
+        q
+    }
+}
+
 /// Compute `(a * b) / 10^SCALE` with truncating division semantics
 /// matching `i128 /`. Returns `None` if the result overflows `i128`.
 ///
