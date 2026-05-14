@@ -408,6 +408,11 @@ crate::macros::conversions::decl_decimal_int_conversion_methods!(D128, i128, i64
 crate::macros::sign::decl_decimal_sign_methods!(D128, i128);
 crate::macros::helpers::decl_decimal_helpers!(D128);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D128);
+// Overflow-variant families for add / sub / neg / rem: the macro's
+// shared `@common` arm. D128's hand-coded versions were byte-identical.
+// The mul / div variants stay hand-coded in `src/overflow_variants.rs`
+// because they route through the type-specific `mg_divide` path.
+crate::macros::overflow::decl_decimal_overflow_variants!(@common D128, i128);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D64, i64, i64);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D32, i32, i32);
 
