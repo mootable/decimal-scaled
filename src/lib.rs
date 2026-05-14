@@ -79,6 +79,7 @@ mod decimal_macro;
 mod decimal_num_traits_macro;
 mod decimal_overflow_macro;
 mod decimal_rescale_macro;
+mod decimal_sign_macro;
 mod decimal_trait;
 mod display;
 mod equalities;
