@@ -28,6 +28,19 @@ macro_rules! decl_decimal_rescale {
                 self.rescale_with::<TARGET_SCALE>($crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
+            /// Builder-style alias for [`Self::rescale`].
+            ///
+            /// Returns a new value at `TARGET_SCALE` using the crate's
+            /// default rounding mode. Use [`Self::rescale_with`] when
+            /// you need to pass an explicit [`RoundingMode`].
+            ///
+            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            #[inline]
+            #[must_use]
+            pub fn with_scale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
+                self.rescale::<TARGET_SCALE>()
+            }
+
             /// Rescales to `TARGET_SCALE` using the supplied rounding
             /// mode.
             ///
@@ -127,6 +140,19 @@ macro_rules! decl_decimal_rescale {
             #[must_use]
             pub const fn rescale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
                 self.rescale_with::<TARGET_SCALE>($crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Builder-style alias for [`Self::rescale`].
+            ///
+            /// Returns a new value at `TARGET_SCALE` using the crate's
+            /// default rounding mode. Use [`Self::rescale_with`] when
+            /// you need to pass an explicit [`RoundingMode`].
+            ///
+            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            #[inline]
+            #[must_use]
+            pub const fn with_scale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
+                self.rescale::<TARGET_SCALE>()
             }
 
             /// Rescales to `TARGET_SCALE` using the supplied rounding

@@ -10,6 +10,21 @@ const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-
     || cfg!(feature = "rounding-floor")
     || cfg!(feature = "rounding-ceiling"));
 
+// --- with_scale alias ----------------------------------------------
+
+#[test]
+fn with_scale_matches_rescale() {
+    // Native tier.
+    let a = D38s2::from_bits(150);
+    assert_eq!(a.with_scale::<6>().to_bits(), a.rescale::<6>().to_bits());
+    assert_eq!(a.with_scale::<2>().to_bits(), a.to_bits());
+
+    // The builder-style name is the only difference; semantics are
+    // bit-identical to rescale.
+    let b = D38s12::from_bits(12_345_678_901_234);
+    assert_eq!(b.with_scale::<6>().to_bits(), b.rescale::<6>().to_bits());
+}
+
 // --- scale-up direction --------------------------------------------
 
 #[test]
