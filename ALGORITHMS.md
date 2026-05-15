@@ -194,11 +194,24 @@ largest of the six). Sources:
   wins. Karatsuba kicks in at D2048 and above; recorded as a future
   optimisation. (Karatsuba, A. and Ofman, Yu. (1962). *Doklady Akad.
   Nauk SSSR* 145, 293–294.)
-- **AGM-based ln / exp (Brent–Salamin 1976).** Quadratic convergence
-  beats series-based methods for very high precision (>~50 digits).
-  Would benefit D256/D512/D1024 strict transcendentals. Recorded as
-  a future refactor. (Brent, R. P. (1976). "Fast multiple-precision
-  evaluation of elementary functions." *J. ACM* 23(2), 242–251.)
+- **AGM-based ln / exp (Brent–Salamin 1976).** `ln_strict_agm`
+  (D256 / D512 / D1024) uses Brent's identity
+  `ln(s) ≈ π / (2 · AGM(1, 4/s))` with range reduction
+  `ln(x) = ln(x · 2^m) − m·ln 2`. `exp_strict_agm` uses Newton's
+  iteration on `ln_strict_agm`. Both converge quadratically — `O(log
+  p)` iterations vs the artanh path's `O(p)` series terms — so they
+  win asymptotically as working scale grows. Currently exposed as
+  the alternate path; the canonical `ln_strict` / `exp_strict` stays
+  on the artanh / Taylor implementations until a bench at the
+  relevant working scale shows AGM winning by the
+  `OVERRIDE_POLICY.md` margin. *Caveat:* the present
+  implementation runs the AGM iteration at the same working scale
+  `w` as the artanh path; at storage scales beyond ~30 the early-
+  phase `sqrt(a·b)` step's truncation error amplifies and the
+  output drops to ~p/2 bits of precision. Brent §3 fixes this by
+  raising intermediate AGM precision; recorded as a follow-up.
+  (Brent, R. P. (1976). "Fast multiple-precision evaluation of
+  elementary functions." *J. ACM* 23(2), 242–251.)
 - **Burnikel–Ziegler recursive division.** Asymptotically faster
   than schoolbook for very wide divisors. Useful only past Int4096.
   (Burnikel, C. and Ziegler, J. (1998). "Fast recursive division."

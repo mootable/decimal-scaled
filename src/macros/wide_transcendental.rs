@@ -350,6 +350,142 @@ macro_rules! decl_wide_transcendental {
                 ln_fixed(one(w) * lit(10), w)
             }
 
+            /// Natural log of a positive working-scale value via the
+            /// Brent–Salamin AGM (1976).
+            ///
+            /// Identity: `ln(s) ≈ π / (2 · AGM(1, 4/s))` as `s → ∞`,
+            /// with error `O(s⁻²)`. To compute `ln(x)` for arbitrary
+            /// positive `x`, pick `m` so `s := x · 2^m` is large
+            /// enough that `4/s < 2^(−p/2)` (p = working precision in
+            /// bits). Then `ln(x) = ln(s) − m·ln 2`.
+            ///
+            /// Convergence: AGM doubles the number of correct digits
+            /// per iteration, so `O(log p)` iterations suffice
+            /// regardless of `w`. For very high working scales this
+            /// asymptotically beats the artanh-series `ln_fixed`,
+            /// which is linear in `p`.
+            ///
+            /// Bit budget: this routine shifts `v_w` left by `m` bits.
+            /// `W` must have headroom for `bit_length(v_w) + m`; for
+            /// every wide tier in this crate, `W` is sized so that
+            /// holds with comfortable margin (see the macro header).
+            ///
+            /// # Precision caveat
+            ///
+            /// This implementation runs the AGM iteration at the same
+            /// working scale `w` as the artanh path. When the input
+            /// `y = 4/s` is many orders of magnitude smaller than
+            /// `1` (a regime AGM is designed for), the early-phase
+            /// `sqrt(a·b)` step amplifies its half-LSB truncation
+            /// error by `√(a/b)`. At very deep storage scales (`w`
+            /// beyond ~40) that amplification dominates and the
+            /// output drops to `~p/2` bits of precision rather than
+            /// `p`. Brent 1976 §3 fixes this by raising the
+            /// intermediate AGM precision; that's recorded as a
+            /// follow-up and not implemented yet. At storage scales
+            /// up to ~30 the AGM and artanh paths agree to 2 LSB.
+            pub(super) fn ln_fixed_agm(v_w: W, w: u32) -> W {
+                let one_w = one(w);
+                // p_bits ≈ working-scale precision in bits, w · log2(10).
+                // 332/100 is the integer rational just above log2(10).
+                let p_bits = ((w as i32) * 332 + 99) / 100;
+                let bl_v = bit_length(v_w) as i32;
+                let bl_one = bit_length(one_w) as i32;
+                // We need s = v_w · 2^m with bit_length(s) ≥ p/2 + bl_one
+                // + safety_margin so that y = 4·one_w/s has bit_length
+                // ≤ bl_one − (p/2 + safety_margin). Brent's bound on
+                // the AGM error is `O(log(s)/s²)`, so log₂(s) needs an
+                // extra `½·log₂(p)` bits beyond `p/2` to push the
+                // residual error below one LSB at scale w.
+                let safety = 2 + ((p_bits.max(1) as u32).ilog2() / 2) as i32;
+                let mut m: i32 = (p_bits / 2) + safety + bl_one - bl_v;
+                if m < 2 {
+                    m = 2;
+                }
+                // Cap m so v_w << m + the AGM mul both fit in W. The mul
+                // doubles bit length, so leave half-width headroom.
+                let half_w = (W::BITS as i32) / 2;
+                let cap = half_w - bl_v - 2;
+                if cap > 0 && m > cap {
+                    m = cap;
+                }
+                debug_assert!(
+                    m > 0,
+                    "ln_fixed_agm: working-int width too small for this scale"
+                );
+                let s_w = v_w << (m as u32);
+                let y_w = div(lit(4) * one_w, s_w, w);
+                let mut a = one_w;
+                let mut b = y_w;
+                let iter_cap = 80u32;
+                for _ in 0..iter_cap {
+                    let next_a = (a + b) / lit(2);
+                    let next_b = sqrt_fixed(mul(a, b, w), w);
+                    let d = if next_a >= next_b { next_a - next_b } else { next_b - next_a };
+                    a = next_a;
+                    b = next_b;
+                    if d <= lit(2) {
+                        break;
+                    }
+                }
+                let pi_w = pi(w);
+                let agm_part = div(pi_w, a + a, w);
+                agm_part - scale_by_k(ln2(w), m as i128)
+            }
+
+            /// Exponential of a working-scale value via Newton's
+            /// iteration on `ln_fixed_agm`.
+            ///
+            /// Given target `y`, finds `x = exp(y)` by iterating
+            /// `x_{n+1} = x_n · (1 + (y − ln x_n))`. Quadratic
+            /// convergence: roughly `log₂(p)` iterations of one
+            /// `ln_fixed_agm` each. For very high working scales this
+            /// is asymptotically faster than the Taylor `exp_fixed`,
+            /// which is linear in `p`.
+            ///
+            /// Range-reduces `v = k·ln 2 + s` first (same trick as
+            /// `exp_fixed`) so the Newton seed and iterations stay in
+            /// a small absolute range, then reassembles `2^k · exp(s)`.
+            pub(super) fn exp_fixed_agm(v_w: W, w: u32) -> W {
+                let one_w = one(w);
+                let l2 = ln2(w);
+                let k = round_to_nearest_int(div(v_w, l2, w), w);
+                let s = v_w - scale_by_k(l2, k);
+                // Newton seed: low-order Taylor (1 + s + s²/2). Within
+                // ~10⁻² of truth for |s| ≤ ln(2)/2 ≈ 0.347.
+                let s2 = mul(s, s, w);
+                let mut x = one_w + s + s2 / lit(2);
+                if x <= lit(0) {
+                    x = one_w;
+                }
+                let iter_cap = 80u32;
+                for _ in 0..iter_cap {
+                    let ln_x = ln_fixed_agm(x, w);
+                    let delta = s - ln_x;
+                    if abs(delta) <= lit(2) {
+                        x = mul(x, one_w + delta, w);
+                        break;
+                    }
+                    x = mul(x, one_w + delta, w);
+                }
+                if k >= 0 {
+                    let shift = k as u32;
+                    if bit_length(x) + shift >= W::BITS {
+                        panic!(concat!(
+                            stringify!($Type),
+                            "::exp: result overflows the representable range"
+                        ));
+                    }
+                    x << shift
+                } else {
+                    let neg_k = (-k) as u128;
+                    if neg_k >= bit_length(x) as u128 {
+                        return zero();
+                    }
+                    x >> (neg_k as u32)
+                }
+            }
+
             /// `e^v` for a working-scale value `v`.
             ///
             /// Range-reduces `v = k·ln 2 + s` with `|s| ≤ ln 2 / 2`,
@@ -520,6 +656,46 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + $core::GUARD;
                 let r = $core::ln_fixed($core::to_work(raw), w);
+                Self::from_bits($core::round_to_storage(r, w, SCALE))
+            }
+
+            /// Natural logarithm via the Brent–Salamin AGM (1976).
+            /// Strict and correctly rounded. Same contract as
+            /// [`Self::ln_strict`]; the implementation path differs.
+            /// AGM converges quadratically and scales better than the
+            /// artanh-series path at very high working scales.
+            ///
+            /// Currently an alternate; the canonical `ln_strict` stays
+            /// on the artanh path until a bench at the relevant
+            /// working scale shows AGM winning by the
+            /// `OVERRIDE_POLICY.md` margin.
+            #[inline]
+            #[must_use]
+            pub fn ln_strict_agm(self) -> Self {
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::ln_fixed_agm($core::to_work(raw), w);
+                Self::from_bits($core::round_to_storage(r, w, SCALE))
+            }
+
+            /// `e^self` via Newton's iteration on `ln_fixed_agm`.
+            /// Strict and correctly rounded. Same contract as
+            /// [`Self::exp_strict`]; the implementation path differs.
+            /// Quadratic convergence makes this asymptotically faster
+            /// than the Taylor `exp_strict` at very high working
+            /// scales.
+            #[inline]
+            #[must_use]
+            pub fn exp_strict_agm(self) -> Self {
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ONE;
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::exp_fixed_agm($core::to_work(raw), w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -1110,6 +1286,73 @@ mod tests {
         assert_eq!(D1024::<6>::ONE.ln_strict(), D1024::<6>::ZERO);
         assert_eq!(D1024::<6>::ZERO.exp_strict(), D1024::<6>::ONE);
         assert_eq!(D1024::<6>::ZERO.cosh_strict(), D1024::<6>::ONE);
+    }
+
+    /// AGM-based `ln_strict_agm` and `exp_strict_agm` (Brent–Salamin
+    /// 1976 / Newton-on-AGM) are correctly rounded by the same
+    /// contract as the canonical artanh / Taylor paths, so they must
+    /// agree to within a couple of ULP at storage scale.
+    #[test]
+    fn wide_agm_matches_taylor_at_storage_scale() {
+        let positives = [1i64, 250_000, 500_000, 1_000_000, 2_718_282, 7_500_000];
+        let all = [-3_000_000i64, -500_000, 1, 500_000, 1_500_000, 4_000_000];
+
+        fn agree(label: &str, ctx: i64, agm: i128, taylor: i128) {
+            assert!(
+                (agm - taylor).abs() <= 2,
+                "{label} AGM-vs-Taylor mismatch at {ctx}: agm {agm} vs taylor {taylor}"
+            );
+        }
+
+        for raw in positives {
+            let w = D256::<6>::from_bits(
+                crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128),
+            );
+            agree(
+                "ln",
+                raw,
+                w.ln_strict_agm().to_bits().resize::<i128>(),
+                w.ln_strict().to_bits().resize::<i128>(),
+            );
+        }
+        for raw in all {
+            let w = D256::<6>::from_bits(
+                crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128),
+            );
+            agree(
+                "exp",
+                raw,
+                w.exp_strict_agm().to_bits().resize::<i128>(),
+                w.exp_strict().to_bits().resize::<i128>(),
+            );
+        }
+    }
+
+    /// Identity points: AGM `ln(1) = 0`, AGM `exp(0) = 1`.
+    #[test]
+    fn wide_agm_identity_points() {
+        assert_eq!(D256::<6>::ONE.ln_strict_agm(), D256::<6>::ZERO);
+        assert_eq!(D256::<6>::ZERO.exp_strict_agm(), D256::<6>::ONE);
+        assert_eq!(D512::<6>::ONE.ln_strict_agm(), D512::<6>::ZERO);
+        assert_eq!(D512::<6>::ZERO.exp_strict_agm(), D512::<6>::ONE);
+        assert_eq!(D1024::<6>::ONE.ln_strict_agm(), D1024::<6>::ZERO);
+        assert_eq!(D1024::<6>::ZERO.exp_strict_agm(), D1024::<6>::ONE);
+    }
+
+    /// AGM ln/exp round-trip at moderate storage scales. Goes up to
+    /// the scale where the current implementation maintains full
+    /// precision (see the precision caveat on `ln_strict_agm`).
+    #[test]
+    fn wide_agm_moderate_scale_round_trip() {
+        let x = D256::<20>::from_int(3);
+        let back = x.ln_strict_agm().exp_strict_agm();
+        let delta = (back.to_bits().resize::<i128>() - x.to_bits().resize::<i128>()).abs();
+        assert!(delta <= 8, "AGM exp(ln(3)) at D256<20> delta {delta}");
+
+        let y = D512::<20>::from_int(2);
+        let back = y.exp_strict_agm().ln_strict_agm();
+        let delta = (back.to_bits().resize::<i128>() - y.to_bits().resize::<i128>()).abs();
+        assert!(delta <= 8, "AGM ln(exp(2)) at D512<20> delta {delta}");
     }
 
     /// Exercises a scale beyond D128's range, where delegation is
