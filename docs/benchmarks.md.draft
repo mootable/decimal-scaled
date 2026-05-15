@@ -2,7 +2,7 @@
 
 Head-to-head matrix sweep of `decimal-scaled` against the wider Rust
 numeric ecosystem (`bnum`, `ruint`, `rust_decimal`, `fixed`), plus
-the crate's own lossy / strict transcendental variants. Every
+the crate's own fast / strict transcendental variants. Every
 decimal width is exercised at three scales (smallest / midpoint /
 largest) so the reader can see how cost scales with both storage
 width and `SCALE`.
@@ -40,7 +40,7 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 | `ns` | nanosecond | 10⁻⁹ s | ×1 |
 
 `1 µs` = `1 000 ns`. A `27 µs` strict `ln` is `27 000 ns` — about
-700× a `37 ns` lossy `ln`.
+700× a `37 ns` fast `ln`.
 
 ---
 
@@ -111,67 +111,67 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
-| add | `__ARITH_D32_S0_ADD__` | `__ARITH_D32_S5_ADD__` | `__ARITH_D32_S9_ADD__` |
-| sub | `__ARITH_D32_S0_SUB__` | `__ARITH_D32_S5_SUB__` | `__ARITH_D32_S9_SUB__` |
-| mul | `__ARITH_D32_S0_MUL__` | `__ARITH_D32_S5_MUL__` | `__ARITH_D32_S9_MUL__` |
-| div | `__ARITH_D32_S0_DIV__` | `__ARITH_D32_S5_DIV__` | `__ARITH_D32_S9_DIV__` |
-| rem | `__ARITH_D32_S0_REM__` | `__ARITH_D32_S5_REM__` | `__ARITH_D32_S9_REM__` |
-| neg | `__ARITH_D32_S0_NEG__` | `__ARITH_D32_S5_NEG__` | `__ARITH_D32_S9_NEG__` |
+| add | `__ARITH_D9_S0_ADD__` | `__ARITH_D9_S5_ADD__` | `__ARITH_D9_S9_ADD__` |
+| sub | `__ARITH_D9_S0_SUB__` | `__ARITH_D9_S5_SUB__` | `__ARITH_D9_S9_SUB__` |
+| mul | `__ARITH_D9_S0_MUL__` | `__ARITH_D9_S5_MUL__` | `__ARITH_D9_S9_MUL__` |
+| div | `__ARITH_D9_S0_DIV__` | `__ARITH_D9_S5_DIV__` | `__ARITH_D9_S9_DIV__` |
+| rem | `__ARITH_D9_S0_REM__` | `__ARITH_D9_S5_REM__` | `__ARITH_D9_S9_REM__` |
+| neg | `__ARITH_D9_S0_NEG__` | `__ARITH_D9_S5_NEG__` | `__ARITH_D9_S9_NEG__` |
 
 ### D18
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
-| add | `__ARITH_D64_S0_ADD__` | `__ARITH_D64_S9_ADD__` | `__ARITH_D64_S18_ADD__` |
-| sub | `__ARITH_D64_S0_SUB__` | `__ARITH_D64_S9_SUB__` | `__ARITH_D64_S18_SUB__` |
-| mul | `__ARITH_D64_S0_MUL__` | `__ARITH_D64_S9_MUL__` | `__ARITH_D64_S18_MUL__` |
-| div | `__ARITH_D64_S0_DIV__` | `__ARITH_D64_S9_DIV__` | `__ARITH_D64_S18_DIV__` |
-| rem | `__ARITH_D64_S0_REM__` | `__ARITH_D64_S9_REM__` | `__ARITH_D64_S18_REM__` |
-| neg | `__ARITH_D64_S0_NEG__` | `__ARITH_D64_S9_NEG__` | `__ARITH_D64_S18_NEG__` |
+| add | `__ARITH_D18_S0_ADD__` | `__ARITH_D18_S9_ADD__` | `__ARITH_D18_S18_ADD__` |
+| sub | `__ARITH_D18_S0_SUB__` | `__ARITH_D18_S9_SUB__` | `__ARITH_D18_S18_SUB__` |
+| mul | `__ARITH_D18_S0_MUL__` | `__ARITH_D18_S9_MUL__` | `__ARITH_D18_S18_MUL__` |
+| div | `__ARITH_D18_S0_DIV__` | `__ARITH_D18_S9_DIV__` | `__ARITH_D18_S18_DIV__` |
+| rem | `__ARITH_D18_S0_REM__` | `__ARITH_D18_S9_REM__` | `__ARITH_D18_S18_REM__` |
+| neg | `__ARITH_D18_S0_NEG__` | `__ARITH_D18_S9_NEG__` | `__ARITH_D18_S18_NEG__` |
 
 ### D38 + cross-crate baselines
 
 | op | s = 0 | s = 19 | s = 38 | `rust_decimal` | `fixed::I64F64` |
 |---|---|---|---|---|---|
-| add | `__ARITH_D128_S0_ADD__` | `__ARITH_D128_S19_ADD__` | `__ARITH_D128_S38_ADD__` | `__ARITH_RD_ADD__` | `__ARITH_FX_ADD__` |
-| sub | `__ARITH_D128_S0_SUB__` | `__ARITH_D128_S19_SUB__` | `__ARITH_D128_S38_SUB__` | `__ARITH_RD_SUB__` | `__ARITH_FX_SUB__` |
-| mul | `__ARITH_D128_S0_MUL__` | `__ARITH_D128_S19_MUL__` | `__ARITH_D128_S38_MUL__` | `__ARITH_RD_MUL__` | `__ARITH_FX_MUL__` |
-| div | `__ARITH_D128_S0_DIV__` | `__ARITH_D128_S19_DIV__` | `__ARITH_D128_S38_DIV__` | `__ARITH_RD_DIV__` | `__ARITH_FX_DIV__` |
-| rem | `__ARITH_D128_S0_REM__` | `__ARITH_D128_S19_REM__` | `__ARITH_D128_S38_REM__` | `__ARITH_RD_REM__` | `__ARITH_FX_REM__` |
-| neg | `__ARITH_D128_S0_NEG__` | `__ARITH_D128_S19_NEG__` | `__ARITH_D128_S38_NEG__` | `__ARITH_RD_NEG__` | `__ARITH_FX_NEG__` |
+| add | `__ARITH_D38_S0_ADD__` | `__ARITH_D38_S19_ADD__` | `__ARITH_D38_S38_ADD__` | `__ARITH_RD_ADD__` | `__ARITH_FX_ADD__` |
+| sub | `__ARITH_D38_S0_SUB__` | `__ARITH_D38_S19_SUB__` | `__ARITH_D38_S38_SUB__` | `__ARITH_RD_SUB__` | `__ARITH_FX_SUB__` |
+| mul | `__ARITH_D38_S0_MUL__` | `__ARITH_D38_S19_MUL__` | `__ARITH_D38_S38_MUL__` | `__ARITH_RD_MUL__` | `__ARITH_FX_MUL__` |
+| div | `__ARITH_D38_S0_DIV__` | `__ARITH_D38_S19_DIV__` | `__ARITH_D38_S38_DIV__` | `__ARITH_RD_DIV__` | `__ARITH_FX_DIV__` |
+| rem | `__ARITH_D38_S0_REM__` | `__ARITH_D38_S19_REM__` | `__ARITH_D38_S38_REM__` | `__ARITH_RD_REM__` | `__ARITH_FX_REM__` |
+| neg | `__ARITH_D38_S0_NEG__` | `__ARITH_D38_S19_NEG__` | `__ARITH_D38_S38_NEG__` | `__ARITH_RD_NEG__` | `__ARITH_FX_NEG__` |
 
 ### D76 + `bnum`-backed D76 baseline
 
-| op | s = 0 | s = 35 | s = 76 | `bnum_d256` (s = 35) |
+| op | s = 0 | s = 35 | s = 76 | `bnum_d76` (s = 35) |
 |---|---|---|---|---|
-| add | `__ARITH_D256_S0_ADD__` | `__ARITH_D256_S35_ADD__` | `__ARITH_D256_S76_ADD__` | `__ARITH_BD_ADD__` |
-| sub | `__ARITH_D256_S0_SUB__` | `__ARITH_D256_S35_SUB__` | `__ARITH_D256_S76_SUB__` | `__ARITH_BD_SUB__` |
-| mul | `__ARITH_D256_S0_MUL__` | `__ARITH_D256_S35_MUL__` | `__ARITH_D256_S76_MUL__` | `__ARITH_BD_MUL__` |
-| div | `__ARITH_D256_S0_DIV__` | `__ARITH_D256_S35_DIV__` | `__ARITH_D256_S76_DIV__` | `__ARITH_BD_DIV__` |
-| rem | `__ARITH_D256_S0_REM__` | `__ARITH_D256_S35_REM__` | `__ARITH_D256_S76_REM__` | `__ARITH_BD_REM__` |
-| neg | `__ARITH_D256_S0_NEG__` | `__ARITH_D256_S35_NEG__` | `__ARITH_D256_S76_NEG__` | `__ARITH_BD_NEG__` |
+| add | `__ARITH_D76_S0_ADD__` | `__ARITH_D76_S35_ADD__` | `__ARITH_D76_S76_ADD__` | `__ARITH_BD_ADD__` |
+| sub | `__ARITH_D76_S0_SUB__` | `__ARITH_D76_S35_SUB__` | `__ARITH_D76_S76_SUB__` | `__ARITH_BD_SUB__` |
+| mul | `__ARITH_D76_S0_MUL__` | `__ARITH_D76_S35_MUL__` | `__ARITH_D76_S76_MUL__` | `__ARITH_BD_MUL__` |
+| div | `__ARITH_D76_S0_DIV__` | `__ARITH_D76_S35_DIV__` | `__ARITH_D76_S76_DIV__` | `__ARITH_BD_DIV__` |
+| rem | `__ARITH_D76_S0_REM__` | `__ARITH_D76_S35_REM__` | `__ARITH_D76_S76_REM__` | `__ARITH_BD_REM__` |
+| neg | `__ARITH_D76_S0_NEG__` | `__ARITH_D76_S35_NEG__` | `__ARITH_D76_S76_NEG__` | `__ARITH_BD_NEG__` |
 
 ### D153
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
-| add | `__ARITH_D512_S0_ADD__` | `__ARITH_D512_S75_ADD__` | `__ARITH_D512_S153_ADD__` |
-| sub | `__ARITH_D512_S0_SUB__` | `__ARITH_D512_S75_SUB__` | `__ARITH_D512_S153_SUB__` |
-| mul | `__ARITH_D512_S0_MUL__` | `__ARITH_D512_S75_MUL__` | `__ARITH_D512_S153_MUL__` |
-| div | `__ARITH_D512_S0_DIV__` | `__ARITH_D512_S75_DIV__` | `__ARITH_D512_S153_DIV__` |
-| rem | `__ARITH_D512_S0_REM__` | `__ARITH_D512_S75_REM__` | `__ARITH_D512_S153_REM__` |
-| neg | `__ARITH_D512_S0_NEG__` | `__ARITH_D512_S75_NEG__` | `__ARITH_D512_S153_NEG__` |
+| add | `__ARITH_D153_S0_ADD__` | `__ARITH_D153_S75_ADD__` | `__ARITH_D153_S153_ADD__` |
+| sub | `__ARITH_D153_S0_SUB__` | `__ARITH_D153_S75_SUB__` | `__ARITH_D153_S153_SUB__` |
+| mul | `__ARITH_D153_S0_MUL__` | `__ARITH_D153_S75_MUL__` | `__ARITH_D153_S153_MUL__` |
+| div | `__ARITH_D153_S0_DIV__` | `__ARITH_D153_S75_DIV__` | `__ARITH_D153_S153_DIV__` |
+| rem | `__ARITH_D153_S0_REM__` | `__ARITH_D153_S75_REM__` | `__ARITH_D153_S153_REM__` |
+| neg | `__ARITH_D153_S0_NEG__` | `__ARITH_D153_S75_NEG__` | `__ARITH_D153_S153_NEG__` |
 
 ### D307
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
-| add | `__ARITH_D1024_S0_ADD__` | `__ARITH_D1024_S150_ADD__` | `__ARITH_D1024_S307_ADD__` |
-| sub | `__ARITH_D1024_S0_SUB__` | `__ARITH_D1024_S150_SUB__` | `__ARITH_D1024_S307_SUB__` |
-| mul | `__ARITH_D1024_S0_MUL__` | `__ARITH_D1024_S150_MUL__` | `__ARITH_D1024_S307_MUL__` |
-| div | `__ARITH_D1024_S0_DIV__` | `__ARITH_D1024_S150_DIV__` | `__ARITH_D1024_S307_DIV__` |
-| rem | `__ARITH_D1024_S0_REM__` | `__ARITH_D1024_S150_REM__` | `__ARITH_D1024_S307_REM__` |
-| neg | `__ARITH_D1024_S0_NEG__` | `__ARITH_D1024_S150_NEG__` | `__ARITH_D1024_S307_NEG__` |
+| add | `__ARITH_D307_S0_ADD__` | `__ARITH_D307_S150_ADD__` | `__ARITH_D307_S307_ADD__` |
+| sub | `__ARITH_D307_S0_SUB__` | `__ARITH_D307_S150_SUB__` | `__ARITH_D307_S307_SUB__` |
+| mul | `__ARITH_D307_S0_MUL__` | `__ARITH_D307_S150_MUL__` | `__ARITH_D307_S307_MUL__` |
+| div | `__ARITH_D307_S0_DIV__` | `__ARITH_D307_S150_DIV__` | `__ARITH_D307_S307_DIV__` |
+| rem | `__ARITH_D307_S0_REM__` | `__ARITH_D307_S150_REM__` | `__ARITH_D307_S307_REM__` |
+| neg | `__ARITH_D307_S0_NEG__` | `__ARITH_D307_S150_NEG__` | `__ARITH_D307_S307_NEG__` |
 
 **Reading the arithmetic tables.** Add / sub / neg are exact;
 mul / div round per `DEFAULT_ROUNDING_MODE`. Add / sub / neg are
@@ -194,7 +194,7 @@ algorithm cost. The crate keeps SCALE 38 as the *correct* path
 
 ---
 
-## 2. Lossy transcendentals (`f64`-bridge)
+## 2. Fast transcendentals (`f64`-bridge)
 
 Available on D9 / D18 / D38 only — the wide tiers ship no lossy
 form (f64 can't carry their precision; the strict path is the
@@ -211,14 +211,14 @@ not the full series.
 Accuracy: ~16 decimal digits of f64 precision. **Not** correctly
 rounded; results vary with platform libm.
 
-### D9 / D18 / D38 lossy
+### D9 / D18 / D38 fast
 
 | fn | D9 s=9 | D18 s=18 | D38 s=38 | `rust_decimal` |
 |---|---|---|---|---|
-| ln | `__LOSSY_D32_LN__` | `__LOSSY_D64_LN__` | `__LOSSY_D128_LN__` | `__LOSSY_RD_LN__` |
-| exp | `__LOSSY_D32_EXP__` | `__LOSSY_D64_EXP__` | `__LOSSY_D128_EXP__` | `__LOSSY_RD_EXP__` |
-| sin | `__LOSSY_D32_SIN__` | `__LOSSY_D64_SIN__` | `__LOSSY_D128_SIN__` | `__LOSSY_RD_SIN__` |
-| sqrt | `__LOSSY_D32_SQRT__` | `__LOSSY_D64_SQRT__` | `__LOSSY_D128_SQRT__` | `__LOSSY_RD_SQRT__` |
+| ln | `__LOSSY_D9_LN__` | `__LOSSY_D18_LN__` | `__LOSSY_D38_LN__` | `__LOSSY_RD_LN__` |
+| exp | `__LOSSY_D9_EXP__` | `__LOSSY_D18_EXP__` | `__LOSSY_D38_EXP__` | `__LOSSY_RD_EXP__` |
+| sin | `__LOSSY_D9_SIN__` | `__LOSSY_D18_SIN__` | `__LOSSY_D38_SIN__` | `__LOSSY_RD_SIN__` |
+| sqrt | `__LOSSY_D9_SQRT__` | `__LOSSY_D18_SQRT__` | `__LOSSY_D38_SQRT__` | `__LOSSY_RD_SQRT__` |
 
 `rust_decimal`'s transcendentals are software-implemented (no f64
 bridge) — accurate but not correctly rounded to the last place,
@@ -229,7 +229,7 @@ and substantially slower than the f64 path.
 ## 3. Strict transcendentals (integer-only, correctly rounded)
 
 Functions: `ln_strict`, `exp_strict`, `sin_strict`,
-`sqrt_strict`. Same argument convention as the lossy block (1.5
+`sqrt_strict`. Same argument convention as the fast block (1.5
 for ln / sin / sqrt, 0.5 for exp). Deterministic across
 platforms, `no_std`-compatible, 0.5 ULP at storage.
 
@@ -240,10 +240,10 @@ their cost is dominated by D38 plus the narrow-tier round-trip.
 
 | fn | D9 s=9 | D18 s=18 | D38 s=0 | D38 s=19 | D38 s=38 |
 |---|---|---|---|---|---|
-| ln | `__STRICT_D32_LN__` | `__STRICT_D64_LN__` | `__STRICT_D128_S0_LN__` | `__STRICT_D128_S19_LN__` | `__STRICT_D128_S38_LN__` |
-| exp | `__STRICT_D32_EXP__` | `__STRICT_D64_EXP__` | `__STRICT_D128_S0_EXP__` | `__STRICT_D128_S19_EXP__` | `__STRICT_D128_S38_EXP__` |
-| sin | `__STRICT_D32_SIN__` | `__STRICT_D64_SIN__` | `__STRICT_D128_S0_SIN__` | `__STRICT_D128_S19_SIN__` | `__STRICT_D128_S38_SIN__` |
-| sqrt | `__STRICT_D32_SQRT__` | `__STRICT_D64_SQRT__` | `__STRICT_D128_S0_SQRT__` | `__STRICT_D128_S19_SQRT__` | `__STRICT_D128_S38_SQRT__` |
+| ln | `__STRICT_D9_LN__` | `__STRICT_D18_LN__` | `__STRICT_D38_S0_LN__` | `__STRICT_D38_S19_LN__` | `__STRICT_D38_S38_LN__` |
+| exp | `__STRICT_D9_EXP__` | `__STRICT_D18_EXP__` | `__STRICT_D38_S0_EXP__` | `__STRICT_D38_S19_EXP__` | `__STRICT_D38_S38_EXP__` |
+| sin | `__STRICT_D9_SIN__` | `__STRICT_D18_SIN__` | `__STRICT_D38_S0_SIN__` | `__STRICT_D38_S19_SIN__` | `__STRICT_D38_S38_SIN__` |
+| sqrt | `__STRICT_D9_SQRT__` | `__STRICT_D18_SQRT__` | `__STRICT_D38_S0_SQRT__` | `__STRICT_D38_S19_SQRT__` | `__STRICT_D38_S38_SQRT__` |
 
 ### Wide-tier strict — D76 / D153 / D307
 
@@ -252,10 +252,10 @@ guard-digit budget at each scale.
 
 | fn | D76 s=0 | D76 s=35 | D76 s=76 | D153 s=0 | D153 s=75 | D153 s=153 | D307 s=0 | D307 s=150 | D307 s=307 |
 |---|---|---|---|---|---|---|---|---|---|
-| ln | `__STRICT_D256_S0_LN__` | `__STRICT_D256_S35_LN__` | `__STRICT_D256_S76_LN__` | `__STRICT_D512_S0_LN__` | `__STRICT_D512_S75_LN__` | `__STRICT_D512_S153_LN__` | `__STRICT_D1024_S0_LN__` | `__STRICT_D1024_S150_LN__` | `__STRICT_D1024_S307_LN__` |
-| exp | `__STRICT_D256_S0_EXP__` | `__STRICT_D256_S35_EXP__` | `__STRICT_D256_S76_EXP__` | `__STRICT_D512_S0_EXP__` | `__STRICT_D512_S75_EXP__` | `__STRICT_D512_S153_EXP__` | `__STRICT_D1024_S0_EXP__` | `__STRICT_D1024_S150_EXP__` | `__STRICT_D1024_S307_EXP__` |
-| sin | `__STRICT_D256_S0_SIN__` | `__STRICT_D256_S35_SIN__` | `__STRICT_D256_S76_SIN__` | `__STRICT_D512_S0_SIN__` | `__STRICT_D512_S75_SIN__` | `__STRICT_D512_S153_SIN__` | `__STRICT_D1024_S0_SIN__` | `__STRICT_D1024_S150_SIN__` | `__STRICT_D1024_S307_SIN__` |
-| sqrt | `__STRICT_D256_S0_SQRT__` | `__STRICT_D256_S35_SQRT__` | `__STRICT_D256_S76_SQRT__` | `__STRICT_D512_S0_SQRT__` | `__STRICT_D512_S75_SQRT__` | `__STRICT_D512_S153_SQRT__` | `__STRICT_D1024_S0_SQRT__` | `__STRICT_D1024_S150_SQRT__` | `__STRICT_D1024_S307_SQRT__` |
+| ln | `__STRICT_D76_S0_LN__` | `__STRICT_D76_S35_LN__` | `__STRICT_D76_S76_LN__` | `__STRICT_D153_S0_LN__` | `__STRICT_D153_S75_LN__` | `__STRICT_D153_S153_LN__` | `__STRICT_D307_S0_LN__` | `__STRICT_D307_S150_LN__` | `__STRICT_D307_S307_LN__` |
+| exp | `__STRICT_D76_S0_EXP__` | `__STRICT_D76_S35_EXP__` | `__STRICT_D76_S76_EXP__` | `__STRICT_D153_S0_EXP__` | `__STRICT_D153_S75_EXP__` | `__STRICT_D153_S153_EXP__` | `__STRICT_D307_S0_EXP__` | `__STRICT_D307_S150_EXP__` | `__STRICT_D307_S307_EXP__` |
+| sin | `__STRICT_D76_S0_SIN__` | `__STRICT_D76_S35_SIN__` | `__STRICT_D76_S76_SIN__` | `__STRICT_D153_S0_SIN__` | `__STRICT_D153_S75_SIN__` | `__STRICT_D153_S153_SIN__` | `__STRICT_D307_S0_SIN__` | `__STRICT_D307_S150_SIN__` | `__STRICT_D307_S307_SIN__` |
+| sqrt | `__STRICT_D76_S0_SQRT__` | `__STRICT_D76_S35_SQRT__` | `__STRICT_D76_S76_SQRT__` | `__STRICT_D153_S0_SQRT__` | `__STRICT_D153_S75_SQRT__` | `__STRICT_D153_S153_SQRT__` | `__STRICT_D307_S0_SQRT__` | `__STRICT_D307_S150_SQRT__` | `__STRICT_D307_S307_SQRT__` |
 
 **Reading the strict tables.** A few cells reflect *fast paths*
 rather than the full series evaluation — the bold winner per row
@@ -285,7 +285,7 @@ maximum-scale columns. There:
 
 ## 4. What the strict variants buy
 
-Versus the lossy `f64` bridge:
+Versus the fast `f64` bridge:
 
 - **0.5 ULP correctly-rounded last place** at storage scale (D38;
   wide tiers at typical scales).
@@ -293,7 +293,7 @@ Versus the lossy `f64` bridge:
 - **`no_std`**-compatible.
 
 The cost is throughput — typically 100–1000× the f64 bridge. For
-latency-sensitive code that doesn't need determinism, lossy is the
+latency-sensitive code that doesn't need determinism, fast is the
 better default; for finance, regulated computation, reproducible
 research, or `no_std` targets, strict is the reason the crate
 exists.
@@ -339,5 +339,5 @@ At 1024 bits the native back-end takes div / rem on its own
   no debug-assertions).
 - **Default features.** Stock `wide` + `x-wide` enabled. `strict`
   feature off — both `*` (lossy) and `*_strict` are exercised on
-  the narrow tiers; with `strict` the lossy block would dispatch
+  the narrow tiers; with `strict` the fast block would dispatch
   to strict.

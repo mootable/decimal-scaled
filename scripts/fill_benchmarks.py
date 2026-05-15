@@ -167,7 +167,7 @@ def build_placeholder_map() -> dict[str, str]:
     # Baselines for arith.
     bd_scales = "s35"
     for op in ops:
-        m[f"ARITH_BD_{op}"] = f"arith/bnum_d256_{bd_scales}/{op.lower()}"
+        m[f"ARITH_BD_{op}"] = f"arith/bnum_d76_{bd_scales}/{op.lower()}"
         m[f"ARITH_RD_{op}"] = f"arith/rust_decimal/{op.lower()}"
         m[f"ARITH_FX_{op}"] = f"arith/fixed_i64f64/{op.lower()}"
 
@@ -179,17 +179,17 @@ def build_placeholder_map() -> dict[str, str]:
     ]
     for type_name, bench_tag in lossy_specs:
         for fn in ["LN", "EXP", "SIN", "SQRT"]:
-            m[f"LOSSY_{type_name}_{fn}"] = f"lossy/{bench_tag}/{fn.lower()}"
+            m[f"LOSSY_{type_name}_{fn}"] = f"fast/{bench_tag}/{fn.lower()}"
     for fn in ["LN", "EXP", "SIN", "SQRT"]:
-        m[f"LOSSY_RD_{fn}"] = f"lossy/rust_decimal/{fn.lower()}"
+        m[f"LOSSY_RD_{fn}"] = f"fast/rust_decimal/{fn.lower()}"
 
     # Strict (narrow).
     narrow_strict_specs = [
         ("D9",  "D9_s9",   "D9"),
         ("D18",  "D18_s18",  "D18"),
-        ("D128_S0",  "D38_s0",  "D38"),
-        ("D128_S19", "D38_s19", "D38"),
-        ("D128_S38", "D38_s38", "D38"),
+        ("D38_S0",  "D38_s0",  "D38"),
+        ("D38_S19", "D38_s19", "D38"),
+        ("D38_S38", "D38_s38", "D38"),
     ]
     for ph_tag, bench_tag, _typ in narrow_strict_specs:
         for fn in ["LN", "EXP", "SIN", "SQRT"]:
@@ -197,15 +197,15 @@ def build_placeholder_map() -> dict[str, str]:
 
     # Strict (wide).
     wide_strict_specs = [
-        ("D256_S0",   "D76_s0"),
-        ("D256_S35",  "D76_s35"),
-        ("D256_S76",  "D76_s76"),
-        ("D512_S0",   "D153_s0"),
-        ("D512_S75",  "D153_s75"),
-        ("D512_S153", "D153_s153"),
-        ("D1024_S0",   "D307_s0"),
-        ("D1024_S150", "D307_s150"),
-        ("D1024_S307", "D307_s307"),
+        ("D76_S0",   "D76_s0"),
+        ("D76_S35",  "D76_s35"),
+        ("D76_S76",  "D76_s76"),
+        ("D153_S0",   "D153_s0"),
+        ("D153_S75",  "D153_s75"),
+        ("D153_S153", "D153_s153"),
+        ("D307_S0",   "D307_s0"),
+        ("D307_S150", "D307_s150"),
+        ("D307_S307", "D307_s307"),
     ]
     for ph_tag, bench_tag in wide_strict_specs:
         for fn in ["LN", "EXP", "SIN", "SQRT"]:
@@ -225,33 +225,33 @@ def add_arith_rows() -> None:
 
     # D9: three scales.
     for op in ops:
-        ROWS.append([f"ARITH_D32_S0_{op}", f"ARITH_D32_S5_{op}", f"ARITH_D32_S9_{op}"])
+        ROWS.append([f"ARITH_D9_S0_{op}", f"ARITH_D9_S5_{op}", f"ARITH_D9_S9_{op}"])
     # D18.
     for op in ops:
-        ROWS.append([f"ARITH_D64_S0_{op}", f"ARITH_D64_S9_{op}", f"ARITH_D64_S18_{op}"])
+        ROWS.append([f"ARITH_D18_S0_{op}", f"ARITH_D18_S9_{op}", f"ARITH_D18_S18_{op}"])
     # D38 + rust_decimal + fixed.
     for op in ops:
         ROWS.append([
-            f"ARITH_D128_S0_{op}",
-            f"ARITH_D128_S19_{op}",
-            f"ARITH_D128_S38_{op}",
+            f"ARITH_D38_S0_{op}",
+            f"ARITH_D38_S19_{op}",
+            f"ARITH_D38_S38_{op}",
             f"ARITH_RD_{op}",
             f"ARITH_FX_{op}",
         ])
-    # D76 + bnum_d256.
+    # D76 + bnum_d76.
     for op in ops:
         ROWS.append([
-            f"ARITH_D256_S0_{op}",
-            f"ARITH_D256_S35_{op}",
-            f"ARITH_D256_S76_{op}",
+            f"ARITH_D76_S0_{op}",
+            f"ARITH_D76_S35_{op}",
+            f"ARITH_D76_S76_{op}",
             f"ARITH_BD_{op}",
         ])
     # D153.
     for op in ops:
-        ROWS.append([f"ARITH_D512_S0_{op}", f"ARITH_D512_S75_{op}", f"ARITH_D512_S153_{op}"])
+        ROWS.append([f"ARITH_D153_S0_{op}", f"ARITH_D153_S75_{op}", f"ARITH_D153_S153_{op}"])
     # D307.
     for op in ops:
-        ROWS.append([f"ARITH_D1024_S0_{op}", f"ARITH_D1024_S150_{op}", f"ARITH_D1024_S307_{op}"])
+        ROWS.append([f"ARITH_D307_S0_{op}", f"ARITH_D307_S150_{op}", f"ARITH_D307_S307_{op}"])
 
 
 def add_lossy_rows() -> None:
@@ -265,22 +265,22 @@ def add_strict_rows() -> None:
         ROWS.append([
             f"STRICT_D32_{fn}",
             f"STRICT_D64_{fn}",
-            f"STRICT_D128_S0_{fn}",
-            f"STRICT_D128_S19_{fn}",
-            f"STRICT_D128_S38_{fn}",
+            f"STRICT_D38_S0_{fn}",
+            f"STRICT_D38_S19_{fn}",
+            f"STRICT_D38_S38_{fn}",
         ])
     # Wide strict.
     for fn in ["LN", "EXP", "SIN", "SQRT"]:
         ROWS.append([
-            f"STRICT_D256_S0_{fn}",
-            f"STRICT_D256_S35_{fn}",
-            f"STRICT_D256_S76_{fn}",
-            f"STRICT_D512_S0_{fn}",
-            f"STRICT_D512_S75_{fn}",
-            f"STRICT_D512_S153_{fn}",
-            f"STRICT_D1024_S0_{fn}",
-            f"STRICT_D1024_S150_{fn}",
-            f"STRICT_D1024_S307_{fn}",
+            f"STRICT_D76_S0_{fn}",
+            f"STRICT_D76_S35_{fn}",
+            f"STRICT_D76_S76_{fn}",
+            f"STRICT_D153_S0_{fn}",
+            f"STRICT_D153_S75_{fn}",
+            f"STRICT_D153_S153_{fn}",
+            f"STRICT_D307_S0_{fn}",
+            f"STRICT_D307_S150_{fn}",
+            f"STRICT_D307_S307_{fn}",
         ])
 
 

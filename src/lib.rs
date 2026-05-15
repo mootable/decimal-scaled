@@ -45,7 +45,7 @@
 //!
 //! # Feature flags
 //!
-//! - `std` (default): enables the lossy implementations of transcendental
+//! - `std` (default): enables the fast implementations of transcendental
 //! functions (trigonometry, logarithms, exponentials, square root, cube
 //! root, float power) that delegate to platform `f64` intrinsics.
 //! - `alloc`: pulled in automatically; required for string formatting and
@@ -80,7 +80,7 @@ mod error;
 mod macros;
 mod fixed_compat;
 mod log_exp_strict;
-mod log_exp_lossy;
+mod log_exp_fast;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
@@ -101,16 +101,16 @@ mod d_w128_kernels;
 mod wide_int;
 mod overflow_variants;
 mod powers_strict;
-mod powers_lossy;
+mod powers_fast;
 
 #[cfg(feature = "serde")]
 pub mod serde_helpers;
 // `trig` is compiled when it has any surface to emit: the integer-only
-// `*_strict` methods (present unless `no_strict`) or the f64-bridge
+// `*_strict` methods (present unless `fast`) or the f64-bridge
 // methods (present with `std`).
-#[cfg(any(not(feature = "no_strict"), feature = "std"))]
+#[cfg(any(not(feature = "fast"), feature = "std"))]
 mod trig_strict;
-mod trig_lossy;
+mod trig_fast;
 
 
 pub use consts::DecimalConsts;
@@ -159,4 +159,4 @@ pub use core_type::{D153, D153s0, D153s35, D153s75, D153s150, D153s153};
 pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 
 #[cfg(feature = "macros")]
-pub use decimal_scaled_macros::d128;
+pub use decimal_scaled_macros::d38;

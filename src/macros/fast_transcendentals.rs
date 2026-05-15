@@ -1,15 +1,15 @@
 //! Macro-generated f64-bridge (lossy) transcendentals for every width
 //! except D38.
 //!
-//! D38 has the lossy transcendentals hand-written in
+//! D38 has the fast transcendentals hand-written in
 //! `log_exp.rs` / `trig.rs` / `powers.rs`; D9 / D18 and the wide tiers
 //! D76 / D153 / D307 all share the same delegation shape — convert
 //! to `f64`, call the platform intrinsic, convert back — so it lives
 //! in one macro reused per width.
 //!
-//! Each emitted method is gated `std` and "not strict (or no_strict
+//! Each emitted method is gated `std` and "not strict (or fast
 //! overrides strict)": exactly the configuration in which the plain
-//! method dispatches to the lossy bridge rather than the integer-only
+//! method dispatches to the fast bridge rather than the integer-only
 //! `*_strict` path. The `*_strict` methods themselves are emitted by
 //! `strict_transcendentals.rs` (for D9 / D18, via the D38 path) and
 //! by `wide_transcendental.rs` (for the wide tiers).
@@ -21,9 +21,9 @@
 //! `*_strict` form for correctly-rounded results.
 
 /// Emits the f64-bridge transcendental surface for `$Type<SCALE>`.
-macro_rules! decl_lossy_transcendentals_via_f64 {
+macro_rules! decl_fast_transcendentals_via_f64 {
     ($Type:ident) => {
-        #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+        #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
         impl<const SCALE: u32> $Type<SCALE> {
             // ── Logarithms ───────────────────────────────────────────
             /// Natural logarithm via the f64 bridge.
@@ -192,4 +192,4 @@ macro_rules! decl_lossy_transcendentals_via_f64 {
     };
 }
 
-pub(crate) use decl_lossy_transcendentals_via_f64;
+pub(crate) use decl_fast_transcendentals_via_f64;

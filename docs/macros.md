@@ -1,6 +1,6 @@
-# The `d128!` macro
+# The `d38!` macro
 
-`d128!` is a procedural macro for writing `D38` literals at compile
+`d38!` is a procedural macro for writing `D38` literals at compile
 time. It parses the literal you write, picks (or is told) a scale, and
 expands to a `D38<SCALE>::from_bits(...)` call — so there is no runtime
 parsing and the scale lands in the type.
@@ -13,7 +13,7 @@ decimal-scaled = { version = "0.1.1", features = ["macros"] }
 ```
 
 ```rust
-use decimal_scaled::d128;
+use decimal_scaled::d38;
 ```
 
 ## Automatic scale inference
@@ -22,15 +22,15 @@ With no qualifier, the scale is the number of fractional digits you
 wrote — trailing zeros are significant:
 
 ```rust
-# use decimal_scaled::d128;
+# use decimal_scaled::d38;
 # use decimal_scaled::{D38, D38s0, D38s2, D38s5};
-let a = d128!(1.23);          // D38<2>
-let b = d128!(123);           // D38<0>
-let c = d128!(1.0);           // D38<1>  — the written `.0` counts
-let d = d128!(1.230);         // D38<3>  — trailing zero preserved
-let e = d128!(0.001);         // D38<3>
-let f = d128!(-1.23);         // D38<2>
-let g = d128!(1_234.567_89);  // D38<5>  — underscores allowed
+let a = d38!(1.23);          // D38<2>
+let b = d38!(123);           // D38<0>
+let c = d38!(1.0);           // D38<1>  — the written `.0` counts
+let d = d38!(1.230);         // D38<3>  — trailing zero preserved
+let e = d38!(0.001);         // D38<3>
+let f = d38!(-1.23);         // D38<2>
+let g = d38!(1_234.567_89);  // D38<5>  — underscores allowed
 # assert_eq!(a, D38s2::from_bits(123));
 # assert_eq!(b, D38s0::from_bits(123));
 ```
@@ -41,12 +41,12 @@ let g = d128!(1_234.567_89);  // D38<5>  — underscores allowed
 represent the value exactly:
 
 ```rust
-# use decimal_scaled::d128;
+# use decimal_scaled::d38;
 # use decimal_scaled::{D38, D38s0};
-let a = d128!(1.5e3);    // 1500    -> D38<0>
-let b = d128!(1.5e-3);   // 0.0015  -> D38<4>
-let c = d128!(1e6);      // 1000000 -> D38<0>
-let d = d128!(-2.5e-2);  // -0.025  -> D38<3>
+let a = d38!(1.5e3);    // 1500    -> D38<0>
+let b = d38!(1.5e-3);   // 0.0015  -> D38<4>
+let c = d38!(1e6);      // 1000000 -> D38<0>
+let d = d38!(-2.5e-2);  // -0.025  -> D38<3>
 # assert_eq!(a, D38s0::from_bits(1500));
 ```
 
@@ -55,11 +55,11 @@ let d = d128!(-2.5e-2);  // -0.025  -> D38<3>
 Force a specific target scale. Scaling *up* pads with zeros (lossless):
 
 ```rust
-# use decimal_scaled::d128;
+# use decimal_scaled::d38;
 # use decimal_scaled::D38;
-let a = d128!(1.23, scale 4);     // D38<4>, raw 12_300
-let b = d128!(42, scale 0);       // D38<0>, raw 42
-let c = d128!(1.5e3, scale 5);    // D38<5>, raw 150_000_000
+let a = d38!(1.23, scale 4);     // D38<4>, raw 12_300
+let b = d38!(42, scale 0);       // D38<0>, raw 42
+let c = d38!(1.5e3, scale 5);    // D38<5>, raw 150_000_000
 ```
 
 Scaling *down* with `scale N` alone is a compile error if it would lose
@@ -71,12 +71,12 @@ Combine with `scale N` to round (half-to-even) when the target scale has
 fewer digits than the literal:
 
 ```rust
-# use decimal_scaled::d128;
+# use decimal_scaled::d38;
 # use decimal_scaled::D38s2;
-let a = d128!(1.234999, scale 2, rounded);   // 1.23
-let b = d128!(1.235001, scale 2, rounded);   // 1.24
-let c = d128!(1.235,    scale 2, rounded);   // 1.24  (tie -> even)
-let d = d128!(1.225,    scale 2, rounded);   // 1.22  (tie -> even)
+let a = d38!(1.234999, scale 2, rounded);   // 1.23
+let b = d38!(1.235001, scale 2, rounded);   // 1.24
+let c = d38!(1.235,    scale 2, rounded);   // 1.24  (tie -> even)
+let d = d38!(1.225,    scale 2, rounded);   // 1.22  (tie -> even)
 # assert_eq!(a, D38s2::from_bits(123));
 ```
 
@@ -86,10 +86,10 @@ The first argument can be an integer expression; combine with
 `scale N` to land it in a typed `D38`:
 
 ```rust
-# use decimal_scaled::d128;
+# use decimal_scaled::d38;
 # use decimal_scaled::{D38, D38s0};
-let a = d128!(10 * 12 + 3, scale 0);   // D38<0>, raw 123
-let b = d128!(5, scale 4);             // D38<4>, raw 50_000
+let a = d38!(10 * 12 + 3, scale 0);   // D38<0>, raw 123
+let b = d38!(5, scale 4);             // D38<4>, raw 50_000
 # assert_eq!(a, D38s0::from_bits(123));
 ```
 

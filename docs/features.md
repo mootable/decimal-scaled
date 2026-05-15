@@ -12,14 +12,14 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["all
 | `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64_lossy` constructors. Pulls in `alloc`. |
 | `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` (canonical-string form). |
-| `macros` | no | The `d128!` compile-time literal macro. See [the macro guide](macros.md). |
+| `macros` | no | The `d38!` compile-time literal macro. See [the macro guide](macros.md). |
 | `strict` | no | The plain transcendental methods dispatch to the integer-only `*_strict` path instead of the `f64` bridge. Platform-independent; works under `no_std`. See [strict mode](strict-mode.md). |
-| `no_strict` | no | Drops the `*_strict` transcendental surface entirely for a smaller build. **Overrides `strict`** — with both set, the crate behaves as if neither were. |
+| `fast` | no | Drops the `*_strict` transcendental surface entirely for a smaller build. **Overrides `strict`** — with both set, the crate behaves as if neither were. |
 
 Notes:
 
 - The `*_strict` methods (`sqrt_strict`, `ln_strict`, …) are compiled
-  **regardless of the `strict` feature** — only `no_strict` removes
+  **regardless of the `strict` feature** — only `fast` removes
   them. `strict` only controls whether the *plain* methods (`sqrt`,
   `ln`, …) dispatch to the strict path.
 - With `strict` on, the plain transcendentals use the integer path even
@@ -82,5 +82,5 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["all
 decimal-scaled = { version = "0.1.1", features = ["wide", "macros"] }
 
 # Smallest build — no strict surface at all.
-decimal-scaled = { version = "0.1.1", features = ["no_strict"] }
+decimal-scaled = { version = "0.1.1", features = ["fast"] }
 ```

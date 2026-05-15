@@ -30,7 +30,7 @@ pub(crate) mod rounding_methods;
 pub(crate) mod sign;
 pub(crate) mod storage_formatters;
 pub(crate) mod strict_transcendentals;
-pub(crate) mod lossy_transcendentals;
+pub(crate) mod fast_transcendentals;
 pub(crate) mod full;
 #[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
 pub(crate) mod wide_roots;

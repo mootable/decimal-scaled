@@ -732,7 +732,7 @@ mod wide_serde_tests {
     use crate::D76;
 
     #[test]
-    fn d256_human_readable_round_trip() {
+    fn d76_human_readable_round_trip() {
         let v = D76::<12>::from_int(1_234_567_i128);
         let json = serde_json::to_string(&v).unwrap();
         let back: D76<12> = serde_json::from_str(&json).unwrap();
@@ -740,7 +740,7 @@ mod wide_serde_tests {
     }
 
     #[test]
-    fn d256_negative_human_readable_round_trip() {
+    fn d76_negative_human_readable_round_trip() {
         let v = -D76::<12>::from_int(987_654_321_i128);
         let json = serde_json::to_string(&v).unwrap();
         let back: D76<12> = serde_json::from_str(&json).unwrap();
@@ -748,7 +748,7 @@ mod wide_serde_tests {
     }
 
     #[test]
-    fn d256_binary_round_trip() {
+    fn d76_binary_round_trip() {
         // postcard is a binary, non-self-describing format.
         let v = D76::<12>::from_int(42_i128);
         let bytes = postcard::to_allocvec(&v).unwrap();

@@ -51,8 +51,8 @@ fn div_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> 
 const A_BITS: i128 = 1_234_567_890_123_456_789;
 const B_BITS: i128 = 9_876_543_210_987;
 
-fn bench_d128_mul(c: &mut Criterion) {
-    let mut g = c.benchmark_group("d128/mul");
+fn bench_d38_mul(c: &mut Criterion) {
+    let mut g = c.benchmark_group("d38/mul");
     let a = D38::<12>::from_bits(A_BITS);
     let b = D38::<12>::from_bits(B_BITS);
 
@@ -66,8 +66,8 @@ fn bench_d128_mul(c: &mut Criterion) {
     g.finish();
 }
 
-fn bench_d128_div(c: &mut Criterion) {
-    let mut g = c.benchmark_group("d128/div");
+fn bench_d38_div(c: &mut Criterion) {
+    let mut g = c.benchmark_group("d38/div");
     let a = D38::<12>::from_bits(A_BITS);
     let b = D38::<12>::from_bits(B_BITS);
 
@@ -81,5 +81,5 @@ fn bench_d128_div(c: &mut Criterion) {
     g.finish();
 }
 
-criterion_group!(benches, bench_d128_mul, bench_d128_div);
+criterion_group!(benches, bench_d38_mul, bench_d38_div);
 criterion_main!(benches);

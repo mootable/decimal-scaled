@@ -2,19 +2,19 @@
 //!
 //! See `macros/Macros.md` for the full spec. Current sub-phase ships:
 //!
-//! - `d128!(literal)` — auto-scale inference from the literal's
+//! - `d38!(literal)` — auto-scale inference from the literal's
 //!   fractional-digit count.
-//! - `d128!(literal, scale N)` — explicit target scale.
-//! - `d128!(literal, rounded)` — opt into round-half-to-even when the
+//! - `d38!(literal, scale N)` — explicit target scale.
+//! - `d38!(literal, rounded)` — opt into round-half-to-even when the
 //!   target scale is smaller than the literal's natural scale.
 //! - Scientific notation: `1.5e3`, `6.022e23`, `1e-9`.
-//! - Inline expressions: `d128!(some_var, scale 4)`,
-//!   `d128!(10 * 12 + 3, scale 0)`. `scale N` is mandatory when the
+//! - Inline expressions: `d38!(some_var, scale 4)`,
+//!   `d38!(10 * 12 + 3, scale 0)`. `scale N` is mandatory when the
 //!   value is anything other than a numeric literal.
 //!
 //! Deferred to follow-on commits:
-//! - `radix N` qualifier (`d128!(0x7B, radix 16, scale 2)`).
-//! - Per-scale variants `d128s2!`, `d128s12!`, etc. as macro_rules in
+//! - `radix N` qualifier (`d38!(0x7B, radix 16, scale 2)`).
+//! - Per-scale variants `d38s2!`, `d38s12!`, etc. as macro_rules in
 //!   the parent crate.
 //! - Wide-tier macros `d76!`, `d153!`, `d307!` (Phase 5+).
 
@@ -26,24 +26,24 @@ use syn::{
     parse::{Parse, ParseStream},
 };
 
-const D128_MAX_SCALE: u32 = 38;
+const D38_MAX_SCALE: u32 = 38;
 
-/// `d128!` — construct a `D38<SCALE>` value at compile time (or, for
+/// `d38!` — construct a `D38<SCALE>` value at compile time (or, for
 /// inline-expression input, by evaluating the expression at runtime
 /// and scaling it).
 ///
 /// See the crate-level docs and `macros/Macros.md` for the full spec.
 #[proc_macro]
-pub fn d128(input: TokenStream) -> TokenStream {
-    match syn::parse::<D128Invocation>(input) {
+pub fn d38(input: TokenStream) -> TokenStream {
+    match syn::parse::<D38Invocation>(input) {
         Ok(invocation) => invocation.expand(),
         Err(e) => e.into_compile_error().into(),
     }
 }
 
-/// One invocation of `d128!`: either a parsed numeric literal or an
+/// One invocation of `d38!`: either a parsed numeric literal or an
 /// inline expression, plus qualifiers.
-enum D128Invocation {
+enum D38Invocation {
     Literal {
         sign: i128,
         digits: String,
@@ -62,7 +62,7 @@ enum D128Invocation {
     },
 }
 
-impl Parse for D128Invocation {
+impl Parse for D38Invocation {
     fn parse(input: ParseStream) -> Result<Self> {
         // Parse the value position as a Rust expression. This is
         // permissive: it accepts numeric literals, sign-prefixed
@@ -81,7 +81,7 @@ impl Parse for D128Invocation {
             Some((sign, raw_str, lit_span)) => {
                 let (digits, mantissa_fractional, sci_exponent) =
                     parse_numeric_token(&raw_str, lit_span)?;
-                Ok(D128Invocation::Literal {
+                Ok(D38Invocation::Literal {
                     sign,
                     digits,
                     mantissa_fractional,
@@ -98,11 +98,11 @@ impl Parse for D128Invocation {
                     None => {
                         return Err(syn::Error::new(
                             value_span,
-                            "scale must be specified for an expression value: `d128!(expr, scale N)`",
+                            "scale must be specified for an expression value: `d38!(expr, scale N)`",
                         ));
                     }
                 };
-                Ok(D128Invocation::Expression {
+                Ok(D38Invocation::Expression {
                     expr: value_expr,
                     scale,
                     scale_span,
@@ -162,10 +162,10 @@ fn parse_qualifiers(
     Ok((scale_qualifier, rounded))
 }
 
-impl D128Invocation {
+impl D38Invocation {
     fn expand(self) -> TokenStream {
         match self {
-            D128Invocation::Literal {
+            D38Invocation::Literal {
                 sign,
                 digits,
                 mantissa_fractional,
@@ -182,7 +182,7 @@ impl D128Invocation {
                 rounded,
                 value_span,
             ),
-            D128Invocation::Expression {
+            D38Invocation::Expression {
                 expr,
                 scale,
                 scale_span,
@@ -216,11 +216,11 @@ fn expand_literal(
         Some((n, sp)) => (n, sp),
         None => (natural_scale, value_span),
     };
-    if target_scale > D128_MAX_SCALE {
+    if target_scale > D38_MAX_SCALE {
         return error(
             scale_span,
             format!(
-                "scale {target_scale} exceeds max for D38 (max = {D128_MAX_SCALE})"
+                "scale {target_scale} exceeds max for D38 (max = {D38_MAX_SCALE})"
             ),
         );
     }
@@ -291,11 +291,11 @@ fn expand_literal(
 }
 
 fn expand_expression(expr: Expr, scale: u32, scale_span: Span) -> TokenStream {
-    if scale > D128_MAX_SCALE {
+    if scale > D38_MAX_SCALE {
         return error(
             scale_span,
             format!(
-                "scale {scale} exceeds max for D38 (max = {D128_MAX_SCALE})"
+                "scale {scale} exceeds max for D38 (max = {D38_MAX_SCALE})"
             ),
         );
     }
@@ -315,7 +315,7 @@ fn expand_expression(expr: Expr, scale: u32, scale_span: Span) -> TokenStream {
             ::decimal_scaled::D38::<#scale>::from_bits({
                 let _v: i128 = (#expr);
                 _v.checked_mul(#multiplier)
-                    .expect("d128! overflow: expression * 10^SCALE exceeds i128 range")
+                    .expect("d38! overflow: expression * 10^SCALE exceeds i128 range")
             })
         }
     };
@@ -408,7 +408,7 @@ fn parse_numeric_token(
         if raw.as_bytes()[idx] != b'e' && raw.as_bytes()[idx] != b'E' {
             return Err(syn::Error::new(
                 span,
-                "type suffixes (e.g. _i64, _f32) are not accepted in d128! literals",
+                "type suffixes (e.g. _i64, _f32) are not accepted in d38! literals",
             ));
         }
     }

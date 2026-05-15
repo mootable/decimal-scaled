@@ -14,7 +14,7 @@ trigonometry) come in two forms:
 **Every transcendental that has a strict implementation exposes it
 under a `*_strict` name, and that `*_strict` method is always
 compiled** — it does *not* depend on the `strict` Cargo feature being
-enabled (it is only removed by `no_strict`, below).
+enabled (it is only removed by `fast`, below).
 
 ```rust
 use decimal_scaled::D38s12;
@@ -68,13 +68,13 @@ float-conversion methods (`to_f64_lossy`, `from_f64_lossy`,
 `TryFrom<f64>`, …) remain available — they are type conversions, not
 transcendental operations.
 
-## The `no_strict` feature
+## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.1.1", features = ["no_strict"] }
+decimal-scaled = { version = "0.1.1", features = ["fast"] }
 ```
 
-`no_strict` drops the entire `*_strict` surface for a smaller build. It
+`fast` drops the entire `*_strict` surface for a smaller build. It
 **overrides `strict`**: with both set, the crate behaves as if neither
 were — the plain methods are the f64 bridge (when `std` is available),
 and no `*_strict` methods are emitted at all.
@@ -83,8 +83,8 @@ and no `*_strict` methods are emitted at all.
 |---|---|---|
 | *(none)* | present | f64 bridge (needs `std`) |
 | `strict` | present | dispatch to `*_strict` |
-| `no_strict` | **absent** | f64 bridge (needs `std`) |
-| `strict`, `no_strict` | **absent** | f64 bridge (needs `std`) |
+| `fast` | **absent** | f64 bridge (needs `std`) |
+| `strict`, `fast` | **absent** | f64 bridge (needs `std`) |
 
 ## The 0.5 ULP accuracy guarantee
 
@@ -128,4 +128,4 @@ transcendental surface; that follow-up is tracked in
 | Max speed, `std`, mainstream platform | default (f64 bridge) |
 | Bit-identical results everywhere, or `no_std` | `strict` |
 | The strict path *and* the bridge in one build | default or `strict` — call `*_strict` explicitly for the former |
-| The smallest possible build, no strict surface | `no_strict` |
+| The smallest possible build, no strict surface | `fast` |

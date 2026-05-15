@@ -39,7 +39,7 @@
 //! configuration. The plain `sqrt` / `cbrt` / `powf` / `hypot`
 //! dispatch to the `*_strict` form under the `strict` feature, and to
 //! the f64 bridge otherwise; the `*_strict` forms are always compiled
-//! unless `no_strict` is set, and are `no_std`-compatible.
+//! unless `fast` is set, and are `no_std`-compatible.
 //!
 //! # Variant family for `pow`
 //!
@@ -194,7 +194,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// A zero or negative base saturates to `ZERO` (a negative base
     /// with an arbitrary fractional exponent is not real-valued),
     /// matching the f64-bridge NaN-to-ZERO policy.
-    #[cfg(not(feature = "no_strict"))]
+    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn powf_strict(self, exp: D38<SCALE>) -> Self {
@@ -225,7 +225,7 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// With the `strict` feature enabled this is the integer-only
     /// [`Self::powf_strict`]; without it, the f64-bridge form.
-    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn powf(self, exp: D38<SCALE>) -> Self {
@@ -256,7 +256,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
     /// assert_eq!(D38s12::ONE.sqrt(), D38s12::ONE);
     /// ```
-    #[cfg(not(feature = "no_strict"))]
+    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn sqrt_strict(self) -> Self {
@@ -288,7 +288,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// With the `strict` feature enabled this is the integer-only,
     /// correctly-rounded [`Self::sqrt_strict`]; without it, the
     /// f64-bridge form.
-    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
@@ -299,7 +299,7 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// With the `strict` feature enabled this is the integer-only
     /// [`Self::cbrt_strict`]; without it, the f64-bridge form.
-    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn cbrt(self) -> Self {
@@ -325,7 +325,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only; correctly rounded.
-    #[cfg(not(feature = "no_strict"))]
+    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn cbrt_strict(self) -> Self {
@@ -348,7 +348,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// f64-bridge [`Self::hypot`]; available in `no_std`.
     ///
     /// Always available, regardless of the `strict` feature.
-    #[cfg(not(feature = "no_strict"))]
+    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn hypot_strict(self, other: Self) -> Self {
@@ -368,7 +368,7 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// With the `strict` feature enabled this is the integer-only
     /// [`Self::hypot_strict`]; without it, the f64-bridge form.
-    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn hypot(self, other: Self) -> Self {
@@ -731,7 +731,7 @@ mod tests {
     }
 
     /// `powf(2)` agrees with `pow(2)` within 2 LSB (f64 bridge).
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D38s12::from_int(7);
@@ -742,7 +742,7 @@ mod tests {
     /// Strict `powf` is correctly rounded: `powf(7, 2)` agrees with the
     /// exact `pow(7, 2)` to within 1 ULP — the whole `exp(y·ln(x))`
     /// chain runs in the shared wide guard-digit intermediate.
-    #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[test]
     fn powf_two_matches_pow_two_within_lsb() {
         let v = D38s12::from_int(7);
@@ -788,7 +788,7 @@ mod tests {
     /// `(q − 0.5)² ≤ N ≤ (q + 0.5)²`, i.e. `q` is the exact square root
     /// rounded to nearest. Checked exactly in 256-bit integer space
     /// across several scales and magnitudes.
-    #[cfg(not(feature = "no_strict"))]
+    #[cfg(not(feature = "fast"))]
     #[test]
     fn strict_sqrt_is_correctly_rounded() {
         // (q - 0.5)^2 = q^2 - q + 0.25 → lower bound  N ≥ q^2 - q + 1 (ints, when q>0)
@@ -854,7 +854,7 @@ mod tests {
     /// scaled radicand `N = |r| · 10^(2·SCALE)` must satisfy
     /// `(2q − 1)³ < 8·N ≤ (2q + 1)³`, i.e. `q` is the exact cube root
     /// rounded to nearest. Checked exactly in 384-bit integer space.
-    #[cfg(not(feature = "no_strict"))]
+    #[cfg(not(feature = "fast"))]
     #[test]
     fn strict_cbrt_is_correctly_rounded() {
         // q correctly rounded ⇔  q − 0.5 < cbrt(N) ≤ q + 0.5

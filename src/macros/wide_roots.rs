@@ -21,10 +21,10 @@
 //! Two surfaces are emitted per method, mirroring the rest of the
 //! strict family:
 //!
-//! - `<method>_strict` — always present unless the `no_strict` feature
+//! - `<method>_strict` — always present unless the `fast` feature
 //! is set. Integer-only; `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//! `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
+//! `#[cfg(all(feature = "strict", not(feature = "fast")))]`,
 //! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
 //! transcendentals of their own, so there is no non-strict
 //! `<method>` for these widths.
@@ -65,7 +65,7 @@ macro_rules! decl_wide_roots {
             /// Strict: integer-only; the result is the exact square
             /// root correctly rounded to the type's last place (within
             /// 0.5 ULP).
-            #[cfg(not(feature = "no_strict"))]
+            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
@@ -94,7 +94,7 @@ macro_rules! decl_wide_roots {
             /// Strict: integer-only; the result is the exact cube root
             /// correctly rounded to the type's last place (within 0.5
             /// ULP).
-            #[cfg(not(feature = "no_strict"))]
+            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
@@ -140,7 +140,7 @@ macro_rules! decl_wide_roots {
 
             /// Square root. With `strict` enabled this is the
             /// integer-only, correctly-rounded [`Self::sqrt_strict`].
-            #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+            #[cfg(all(feature = "strict", not(feature = "fast")))]
             #[inline]
             #[must_use]
             pub fn sqrt(self) -> Self {
@@ -149,7 +149,7 @@ macro_rules! decl_wide_roots {
 
             /// Cube root. With `strict` enabled this is the
             /// integer-only, correctly-rounded [`Self::cbrt_strict`].
-            #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+            #[cfg(all(feature = "strict", not(feature = "fast")))]
             #[inline]
             #[must_use]
             pub fn cbrt(self) -> Self {
@@ -170,7 +170,7 @@ macro_rules! decl_wide_roots {
             /// hypotenuse genuinely exceeds the type's range.
             ///
             /// `hypot(0, 0) = 0` (bit-exact); `hypot(0, x) = |x|`.
-            #[cfg(not(feature = "no_strict"))]
+            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn hypot_strict(self, other: Self) -> Self {
@@ -191,7 +191,7 @@ macro_rules! decl_wide_roots {
 
 pub(crate) use {decl_wide_roots, wide_lit};
 
-#[cfg(all(test, not(feature = "no_strict")))]
+#[cfg(all(test, not(feature = "fast")))]
 mod tests {
     use crate::{D38, D76, D153, D307};
 
@@ -249,7 +249,7 @@ mod tests {
     /// D38 and D76 results must agree bit-for-bit (both land on the
     /// IEEE-754 round-to-nearest value).
     #[test]
-    fn wide_roots_match_d128() {
+    fn wide_roots_match_d38() {
         for raw in [2i64, 3, 5, 7, 10, 123, 1_000, 999_983] {
             let narrow = D38::<6>::from_int(raw);
             let wide: D76<6> = narrow.into();

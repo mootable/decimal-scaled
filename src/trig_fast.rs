@@ -2,7 +2,7 @@
 //!
 //! Companion to trig_strict.rs. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
-//! no_strict set). When strict is on, the dispatcher in the
+//! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
 use crate::core_type::D38;
@@ -26,7 +26,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.sin(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn sin(self) -> Self {
@@ -49,7 +49,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.cos(), D38s12::ONE);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn cos(self) -> Self {
@@ -77,7 +77,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.tan(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn tan(self) -> Self {
@@ -105,7 +105,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.asin(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn asin(self) -> Self {
@@ -131,7 +131,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ONE.acos(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn acos(self) -> Self {
@@ -156,7 +156,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.atan(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn atan(self) -> Self {
@@ -184,7 +184,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let result = one.atan2(one); // approximately D38s12::quarter_pi()
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn atan2(self, other: Self) -> Self {
@@ -212,7 +212,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.sinh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn sinh(self) -> Self {
@@ -238,7 +238,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.cosh(), D38s12::ONE);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn cosh(self) -> Self {
@@ -263,7 +263,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.tanh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn tanh(self) -> Self {
@@ -288,7 +288,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.asinh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn asinh(self) -> Self {
@@ -314,7 +314,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ONE.acosh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn acosh(self) -> Self {
@@ -340,7 +340,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.atanh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn atanh(self) -> Self {
@@ -372,7 +372,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.to_degrees(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn to_degrees(self) -> Self {
@@ -398,7 +398,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.to_radians(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn to_radians(self) -> Self {

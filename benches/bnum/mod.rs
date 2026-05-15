@@ -16,9 +16,9 @@ use bnum::types::{I256, I512};
 /// A 256-bit fixed-point decimal whose storage is `value * 10^SCALE`,
 /// backed by `bnum`'s `I256`.
 #[derive(Clone, Copy)]
-pub struct BnumD256<const SCALE: u32>(pub I256);
+pub struct BnumD76<const SCALE: u32>(pub I256);
 
-impl<const SCALE: u32> BnumD256<SCALE> {
+impl<const SCALE: u32> BnumD76<SCALE> {
     /// `10^SCALE` as the storage type.
     #[inline]
     fn multiplier() -> I256 {
@@ -31,27 +31,27 @@ impl<const SCALE: u32> BnumD256<SCALE> {
     #[inline]
     pub fn from_int(value: i128) -> Self {
         let widened: I256 = value.as_();
-        BnumD256(widened * Self::multiplier())
+        BnumD76(widened * Self::multiplier())
     }
 }
 
-impl<const SCALE: u32> core::ops::Add for BnumD256<SCALE> {
+impl<const SCALE: u32> core::ops::Add for BnumD76<SCALE> {
     type Output = Self;
     #[inline]
     fn add(self, rhs: Self) -> Self {
-        BnumD256(self.0 + rhs.0)
+        BnumD76(self.0 + rhs.0)
     }
 }
 
-impl<const SCALE: u32> core::ops::Sub for BnumD256<SCALE> {
+impl<const SCALE: u32> core::ops::Sub for BnumD76<SCALE> {
     type Output = Self;
     #[inline]
     fn sub(self, rhs: Self) -> Self {
-        BnumD256(self.0 - rhs.0)
+        BnumD76(self.0 - rhs.0)
     }
 }
 
-impl<const SCALE: u32> core::ops::Mul for BnumD256<SCALE> {
+impl<const SCALE: u32> core::ops::Mul for BnumD76<SCALE> {
     type Output = Self;
     #[inline]
     fn mul(self, rhs: Self) -> Self {
@@ -60,11 +60,11 @@ impl<const SCALE: u32> core::ops::Mul for BnumD256<SCALE> {
         let m: I512 = I512::from_str_radix("10", 10)
             .expect("bnum baseline: invalid base-10 literal")
             .pow(SCALE);
-        BnumD256((a * b / m).as_())
+        BnumD76((a * b / m).as_())
     }
 }
 
-impl<const SCALE: u32> core::ops::Div for BnumD256<SCALE> {
+impl<const SCALE: u32> core::ops::Div for BnumD76<SCALE> {
     type Output = Self;
     #[inline]
     fn div(self, rhs: Self) -> Self {
@@ -73,22 +73,22 @@ impl<const SCALE: u32> core::ops::Div for BnumD256<SCALE> {
         let m: I512 = I512::from_str_radix("10", 10)
             .expect("bnum baseline: invalid base-10 literal")
             .pow(SCALE);
-        BnumD256((a * m / b).as_())
+        BnumD76((a * m / b).as_())
     }
 }
 
-impl<const SCALE: u32> core::ops::Rem for BnumD256<SCALE> {
+impl<const SCALE: u32> core::ops::Rem for BnumD76<SCALE> {
     type Output = Self;
     #[inline]
     fn rem(self, rhs: Self) -> Self {
-        BnumD256(self.0 % rhs.0)
+        BnumD76(self.0 % rhs.0)
     }
 }
 
-impl<const SCALE: u32> core::ops::Neg for BnumD256<SCALE> {
+impl<const SCALE: u32> core::ops::Neg for BnumD76<SCALE> {
     type Output = Self;
     #[inline]
     fn neg(self) -> Self {
-        BnumD256(-self.0)
+        BnumD76(-self.0)
     }
 }

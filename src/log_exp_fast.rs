@@ -2,7 +2,7 @@
 //!
 //! Companion to log_exp_strict.rs. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
-//! no_strict set). When strict is on, the dispatcher in the
+//! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
 use crate::core_type::D38;
@@ -24,7 +24,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // ln(1) == 0 (f64::ln(1.0) == 0.0 exactly).
     /// assert_eq!(D38s12::ONE.ln(), D38s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn ln(self) -> Self {
@@ -50,7 +50,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let two = D38s12::from_int(2);
     /// let result = eight.log(two);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
@@ -73,7 +73,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // log2(1) == 0 (f64::log2(1.0) == 0.0 exactly).
     /// assert_eq!(D38s12::ONE.log2(), D38s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
@@ -94,7 +94,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // log10(1) == 0 (f64::log10(1.0) == 0.0 exactly).
     /// assert_eq!(D38s12::ONE.log10(), D38s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
@@ -117,7 +117,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // exp(0) == 1 (f64::exp(0.0) == 1.0 exactly).
     /// assert_eq!(D38s12::ZERO.exp(), D38s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn exp(self) -> Self {
@@ -139,7 +139,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // exp2(0) == 1 (f64::exp2(0.0) == 1.0 exactly).
     /// assert_eq!(D38s12::ZERO.exp2(), D38s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
@@ -147,7 +147,7 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 }
 
-#[cfg(all(test, any(not(feature = "strict"), feature = "no_strict")))]
+#[cfg(all(test, any(not(feature = "strict"), feature = "fast")))]
 mod tests {
     use crate::consts::DecimalConsts;
     use crate::core_type::D38s12;

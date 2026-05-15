@@ -83,29 +83,29 @@ const SCALE_REF: u32 = 37;
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
-const PI_RAW_S37: i128 = match i128::from_str_radix(PI_D128_S37, 10) {
+const PI_RAW_S37: i128 = match i128::from_str_radix(PI_D38_S37, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: PI_D128_S37 not parseable"),
+    Err(_) => panic!("consts: PI_D38_S37 not parseable"),
 };
-const TAU_RAW_S37: i128 = match i128::from_str_radix(TAU_D128_S37, 10) {
+const TAU_RAW_S37: i128 = match i128::from_str_radix(TAU_D38_S37, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: TAU_D128_S37 not parseable"),
+    Err(_) => panic!("consts: TAU_D38_S37 not parseable"),
 };
-const HALF_PI_RAW_S37: i128 = match i128::from_str_radix(HALF_PI_D128_S37, 10) {
+const HALF_PI_RAW_S37: i128 = match i128::from_str_radix(HALF_PI_D38_S37, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: HALF_PI_D128_S37 not parseable"),
+    Err(_) => panic!("consts: HALF_PI_D38_S37 not parseable"),
 };
-const QUARTER_PI_RAW_S37: i128 = match i128::from_str_radix(QUARTER_PI_D128_S37, 10) {
+const QUARTER_PI_RAW_S37: i128 = match i128::from_str_radix(QUARTER_PI_D38_S37, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: QUARTER_PI_D128_S37 not parseable"),
+    Err(_) => panic!("consts: QUARTER_PI_D38_S37 not parseable"),
 };
-const E_RAW_S37: i128 = match i128::from_str_radix(E_D128_S37, 10) {
+const E_RAW_S37: i128 = match i128::from_str_radix(E_D38_S37, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: E_D128_S37 not parseable"),
+    Err(_) => panic!("consts: E_D38_S37 not parseable"),
 };
-const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D128_S37, 10) {
+const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D38_S37, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: GOLDEN_D128_S37 not parseable"),
+    Err(_) => panic!("consts: GOLDEN_D38_S37 not parseable"),
 };
 
 // Rescaling from SCALE_REF to the caller's SCALE is delegated to

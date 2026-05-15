@@ -33,7 +33,7 @@
 //! All tests short-circuit when a non-default `rounding-*` feature is
 //! active (the per-mode contract differs).
 
-#![cfg(not(feature = "no_strict"))]
+#![cfg(not(feature = "fast"))]
 
 use decimal_scaled::{D38, D38s12, DecimalConsts};
 

@@ -16,7 +16,7 @@ const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-
 /// the build-time-generated 75-digit Int256 constants, it returns a
 /// well-defined value.
 #[test]
-fn d256_pi_at_max_scale_does_not_panic() {
+fn d76_pi_at_max_scale_does_not_panic() {
     if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // SCALE=50: deeper than D38 but inside D76's max of 76.
     let pi50 = D76::<50>::pi();
@@ -25,7 +25,7 @@ fn d256_pi_at_max_scale_does_not_panic() {
 }
 
 #[test]
-fn d256_pi_at_scale_75_is_exact() {
+fn d76_pi_at_scale_75_is_exact() {
     if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // At SCALE = SCALE_REF (75), pi() returns the raw constant
     // exactly — no rescaling.
@@ -36,7 +36,7 @@ fn d256_pi_at_scale_75_is_exact() {
 }
 
 #[test]
-fn d512_pi_at_scale_153_works() {
+fn d153_pi_at_scale_153_works() {
     if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let pi = D153::<153>::pi();
     let s = pi.to_bits().to_string();
@@ -44,7 +44,7 @@ fn d512_pi_at_scale_153_works() {
 }
 
 #[test]
-fn d1024_pi_at_scale_300_works() {
+fn d307_pi_at_scale_300_works() {
     if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let pi = D307::<300>::pi();
     let s = pi.to_bits().to_string();
@@ -55,7 +55,7 @@ fn d1024_pi_at_scale_300_works() {
 /// same logical value (the storage layouts differ but the rescaled
 /// integer agrees). Uses the public `Decimal` trait to bridge.
 #[test]
-fn d256_pi_at_scale_37_matches_d128() {
+fn d76_pi_at_scale_37_matches_d38() {
     if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38;
     let n = D38::<37>::pi().to_bits();

@@ -2,7 +2,7 @@
 //!
 //! Companion to powers_strict.rs. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
-//! no_strict set). When strict is on, the dispatcher in the
+//! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
 use crate::core_type::D38;
@@ -31,7 +31,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn powf(self, exp: D38<SCALE>) -> Self {
@@ -62,7 +62,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
     /// assert_eq!(D38s12::ONE.sqrt(), D38s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
@@ -88,7 +88,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn cbrt(self) -> Self {
@@ -132,7 +132,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn hypot(self, other: Self) -> Self {

@@ -24,13 +24,13 @@
 //! - **strict transcendentals** — `ln_strict` / `exp_strict` /
 //!   `sin_strict` / `sqrt_strict` on every type×scale combo where
 //!   they're meaningful (positive argument that fits storage).
-//! - **lossy transcendentals** — same four functions via the `f64`
+//! - **fast transcendentals** — same four functions via the `f64`
 //!   bridge. Available on D9 / D18 / D38 only — the wide tiers
 //!   don't ship lossy paths.
 //!
 //! Cross-crate baselines:
 //!
-//! - `bnum_d256` — `bnum`-backed 256-bit decimal shim from
+//! - `bnum_d76` — `bnum`-backed 256-bit decimal shim from
 //!   `benches/bnum/` — pure-Rust big-integer crate, used as a
 //!   reference for hand-rolled wide-tier decimal arithmetic.
 //! - `rust_decimal::Decimal` — 96-bit-mantissa software decimal.
@@ -46,7 +46,7 @@
 
 mod bnum;
 
-use bnum::BnumD256;
+use bnum::BnumD76;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use decimal_scaled::{D307, D38, D76, D9, D153, D18};
 use fixed::types::I64F64;
@@ -111,14 +111,14 @@ fn bench_arith(c: &mut Criterion) {
 
     // Cross-crate baselines.
     {
-        let a = BnumD256::<35>::from_int(2);
-        let b = BnumD256::<35>::from_int(1);
-        g.bench_function("bnum_d256_s35/add", |bn| bn.iter(|| black_box(a) + black_box(b)));
-        g.bench_function("bnum_d256_s35/sub", |bn| bn.iter(|| black_box(a) - black_box(b)));
-        g.bench_function("bnum_d256_s35/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
-        g.bench_function("bnum_d256_s35/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
-        g.bench_function("bnum_d256_s35/rem", |bn| bn.iter(|| black_box(a) % black_box(b)));
-        g.bench_function("bnum_d256_s35/neg", |bn| bn.iter(|| -black_box(a)));
+        let a = BnumD76::<35>::from_int(2);
+        let b = BnumD76::<35>::from_int(1);
+        g.bench_function("bnum_d76_s35/add", |bn| bn.iter(|| black_box(a) + black_box(b)));
+        g.bench_function("bnum_d76_s35/sub", |bn| bn.iter(|| black_box(a) - black_box(b)));
+        g.bench_function("bnum_d76_s35/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+        g.bench_function("bnum_d76_s35/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+        g.bench_function("bnum_d76_s35/rem", |bn| bn.iter(|| black_box(a) % black_box(b)));
+        g.bench_function("bnum_d76_s35/neg", |bn| bn.iter(|| -black_box(a)));
     }
     {
         let a = Decimal::from(2);
@@ -145,12 +145,12 @@ fn bench_arith(c: &mut Criterion) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Lossy transcendentals — f64-bridge form. D9 / D18 / D38 only.
-// (The wide tiers don't ship a lossy path: f64 can't carry their
+// Fast transcendentals — f64-bridge form. D9 / D18 / D38 only.
+// (The wide tiers don't ship a fast path: f64 can't carry their
 // precision and the strict path is the only correct one.)
 // ─────────────────────────────────────────────────────────────────────
 
-macro_rules! lossy_block {
+macro_rules! fast_block {
     ($g:ident, $tag:literal, $T:ty) => {{
         // Arguments are picked so the result fits at every type×
         // scale combo the bench fans out across — D38<38> with
@@ -180,17 +180,17 @@ fn bench_lossy(c: &mut Criterion) {
     let mut g = c.benchmark_group("lossy");
     g.sample_size(80);
 
-    lossy_block!(g, "D9_s0", D9<0>);
-    lossy_block!(g, "D9_s5", D9<5>);
-    lossy_block!(g, "D9_s9", D9<9>);
+    fast_block!(g, "D9_s0", D9<0>);
+    fast_block!(g, "D9_s5", D9<5>);
+    fast_block!(g, "D9_s9", D9<9>);
 
-    lossy_block!(g, "D18_s0", D18<0>);
-    lossy_block!(g, "D18_s9", D18<9>);
-    lossy_block!(g, "D18_s18", D18<18>);
+    fast_block!(g, "D18_s0", D18<0>);
+    fast_block!(g, "D18_s9", D18<9>);
+    fast_block!(g, "D18_s18", D18<18>);
 
-    lossy_block!(g, "D38_s0", D38<0>);
-    lossy_block!(g, "D38_s19", D38<19>);
-    lossy_block!(g, "D38_s38", D38<38>);
+    fast_block!(g, "D38_s0", D38<0>);
+    fast_block!(g, "D38_s19", D38<19>);
+    fast_block!(g, "D38_s38", D38<38>);
 
     {
         let r = Decimal::from(2);
@@ -221,9 +221,9 @@ fn bench_lossy(_c: &mut Criterion) {
 
 macro_rules! strict_block {
     ($g:ident, $tag:literal, $T:ty) => {{
-        // Same argument convention as the lossy block: 1.5 for the
+        // Same argument convention as the fast block: 1.5 for the
         // domain-positive series (ln / sin / sqrt), 0.5 for exp.
-        // See the lossy_block doc for the reasoning.
+        // See the fast_block doc for the reasoning.
         let half: $T = <$T>::from_int(1) / <$T>::from_int(2);
         let x: $T = <$T>::from_int(1) + half;
         let xh: $T = half;

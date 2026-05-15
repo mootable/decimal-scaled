@@ -503,8 +503,8 @@ crate::macros::consts::decl_decimal_consts!(D9, i32);
 crate::macros::from_str::decl_decimal_from_str!(D9, i32);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D9, i32);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D9);
-crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D9);
-crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D9);
+crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D9);
+crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D9);
 crate::macros::pow::decl_decimal_pow!(D9);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D9);
 crate::macros::helpers::decl_decimal_helpers!(D9);
@@ -568,8 +568,8 @@ crate::macros::consts::decl_decimal_consts!(D18, i64);
 crate::macros::from_str::decl_decimal_from_str!(D18, i64);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D18, i64);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D18);
-crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D18);
-crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D18);
+crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D18);
+crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D18);
 crate::macros::pow::decl_decimal_pow!(D18);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D18);
 crate::macros::helpers::decl_decimal_helpers!(D18);
@@ -662,7 +662,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int512,
     crate::wide_int::Int1024,
     crate::wide_int::Int1024,
-    wide_trig_d256,
+    wide_trig_d76,
     76
 );
 // Cross-width widening into D76 (lossless): D9 / D18 / D38 -> D76.
@@ -738,7 +738,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int1024,
     crate::wide_int::Int2048,
     crate::wide_int::Int2048,
-    wide_trig_d512,
+    wide_trig_d153,
     153
 );
 // Cross-width widening into D153 (lossless): D38 / D76 -> D153.
@@ -801,7 +801,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int2048,
     crate::wide_int::Int4096,
     crate::wide_int::Int4096,
-    wide_trig_d1024,
+    wide_trig_d307,
     307
 );
 // Cross-width widening into D307 (lossless): D76 / D153 -> D307.
@@ -944,7 +944,7 @@ mod tests {
     // ----- D9 / D18 sanity tests -----
 
     #[test]
-    fn d32_basics() {
+    fn d9_basics() {
         assert_eq!(super::D9s2::ZERO.to_bits(), 0_i32);
         assert_eq!(super::D9s2::ONE.to_bits(), 100_i32);
         assert_eq!(super::D9s2::MAX.to_bits(), i32::MAX);
@@ -954,7 +954,7 @@ mod tests {
     }
 
     #[test]
-    fn d64_basics() {
+    fn d18_basics() {
         assert_eq!(super::D18s9::ZERO.to_bits(), 0_i64);
         assert_eq!(super::D18s9::ONE.to_bits(), 1_000_000_000_i64);
         assert_eq!(super::D18s9::multiplier(), 1_000_000_000_i64);
@@ -962,7 +962,7 @@ mod tests {
     }
 
     #[test]
-    fn d32_arithmetic() {
+    fn d9_arithmetic() {
         let a = super::D9s2::from_bits(150); // 1.50
         let b = super::D9s2::from_bits(250); // 2.50
         assert_eq!((a + b).to_bits(), 400);
@@ -977,7 +977,7 @@ mod tests {
     }
 
     #[test]
-    fn d64_arithmetic() {
+    fn d18_arithmetic() {
         let a = super::D18s9::from_bits(1_500_000_000); // 1.5
         let b = super::D18s9::from_bits(2_500_000_000); // 2.5
         assert_eq!((a + b).to_bits(), 4_000_000_000);
@@ -992,7 +992,7 @@ mod tests {
     }
 
     #[test]
-    fn d32_display() {
+    fn d9_display() {
         let v: super::D9s2 = super::D9s2::from_bits(150); // 1.50
         let s = alloc::format!("{}", v);
         assert_eq!(s, "1.50");
@@ -1005,7 +1005,7 @@ mod tests {
     }
 
     #[test]
-    fn d64_display() {
+    fn d18_display() {
         let v: super::D18s9 = super::D18s9::from_bits(1_500_000_000); // 1.500000000
         assert_eq!(alloc::format!("{}", v), "1.500000000");
         let neg: super::D18s9 = super::D18s9::from_bits(-1_500_000_000);
@@ -1013,63 +1013,63 @@ mod tests {
     }
 
     #[test]
-    fn d32_debug() {
+    fn d9_debug() {
         let v: super::D9s2 = super::D9s2::from_bits(150);
         let s = alloc::format!("{:?}", v);
         assert_eq!(s, "D9<2>(1.50)");
     }
 
     #[test]
-    fn cross_width_widening_d32_to_d64() {
+    fn cross_width_widening_d9_to_d18() {
         let small: super::D9s2 = super::D9s2::from_bits(150);
         let wider: super::D18s2 = small.into();
         assert_eq!(wider.to_bits(), 150_i64);
     }
 
     #[test]
-    fn cross_width_widening_d32_to_d128() {
+    fn cross_width_widening_d9_to_d38() {
         let small: super::D9s2 = super::D9s2::from_bits(-150);
         let wider: super::D38s2 = small.into();
         assert_eq!(wider.to_bits(), -150_i128);
     }
 
     #[test]
-    fn cross_width_widening_d64_to_d128() {
+    fn cross_width_widening_d18_to_d38() {
         let mid: super::D18s9 = super::D18s9::from_bits(i64::MAX);
         let wider: super::D38s9 = mid.into();
         assert_eq!(wider.to_bits(), i64::MAX as i128);
     }
 
     #[test]
-    fn cross_width_narrowing_d128_to_d64_in_range() {
+    fn cross_width_narrowing_d38_to_d18_in_range() {
         let wide: super::D38s9 = super::D38s9::from_bits(1_500_000_000);
         let narrow: super::D18s9 = wide.try_into().unwrap();
         assert_eq!(narrow.to_bits(), 1_500_000_000);
     }
 
     #[test]
-    fn cross_width_narrowing_d128_to_d64_out_of_range() {
+    fn cross_width_narrowing_d38_to_d18_out_of_range() {
         let wide: super::D38s9 = super::D38s9::from_bits(i128::MAX);
         let narrow: Result<super::D18s9, _> = wide.try_into();
         assert!(narrow.is_err());
     }
 
     #[test]
-    fn cross_width_narrowing_d64_to_d32_in_range() {
+    fn cross_width_narrowing_d18_to_d9_in_range() {
         let mid: super::D18s2 = super::D18s2::from_bits(150);
         let narrow: super::D9s2 = mid.try_into().unwrap();
         assert_eq!(narrow.to_bits(), 150);
     }
 
     #[test]
-    fn cross_width_narrowing_d64_to_d32_out_of_range() {
+    fn cross_width_narrowing_d18_to_d9_out_of_range() {
         let mid: super::D18s2 = super::D18s2::from_bits(i64::MAX);
         let narrow: Result<super::D9s2, _> = mid.try_into();
         assert!(narrow.is_err());
     }
 
     #[test]
-    fn d32_consts() {
+    fn d9_consts() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         use crate::consts::DecimalConsts;
         type D9s4 = super::D9<4>;
@@ -1080,7 +1080,7 @@ mod tests {
     }
 
     #[test]
-    fn d32_from_str() {
+    fn d9_from_str() {
         use core::str::FromStr;
         let v = super::D9s2::from_str("1.50").unwrap();
         assert_eq!(v.to_bits(), 150);
@@ -1091,7 +1091,7 @@ mod tests {
     }
 
     #[test]
-    fn d64_from_str() {
+    fn d18_from_str() {
         use core::str::FromStr;
         let v = super::D18s9::from_str("1.500000000").unwrap();
         assert_eq!(v.to_bits(), 1_500_000_000);
@@ -1100,7 +1100,7 @@ mod tests {
     }
 
     #[test]
-    fn d64_consts() {
+    fn d18_consts() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         use crate::consts::DecimalConsts;
         type D18s12 = super::D18<12>;
@@ -1112,7 +1112,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_basics() {
+    fn d76_basics() {
         use crate::decimal_trait::Decimal;
         use crate::wide_int::I256;
         assert_eq!(super::D76s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
@@ -1136,7 +1136,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_arithmetic() {
+    fn d76_arithmetic() {
         type D = super::D76<12>;
         let one = D::ONE;
         let two = D::from_bits(D::multiplier() + D::multiplier());
@@ -1177,7 +1177,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_display() {
+    fn d76_display() {
         type D = super::D76<12>;
         let one = D::ONE;
         assert_eq!(alloc::format!("{}", one), "1.000000000000");
@@ -1198,7 +1198,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_sign_and_helpers() {
+    fn d76_sign_and_helpers() {
         type D = super::D76<6>;
         let neg = -D::ONE;
         assert!(neg.is_negative());
@@ -1223,7 +1223,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_overflow_variants() {
+    fn d76_overflow_variants() {
         type D = super::D76<2>;
         // checked_add overflow at MAX
         assert_eq!(D::MAX.checked_add(D::ONE), None);
@@ -1250,7 +1250,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_consts_and_from_str() {
+    fn d76_consts_and_from_str() {
         use crate::consts::DecimalConsts;
         use core::str::FromStr;
         // pi at scale 12 matches the D38 reference.
@@ -1275,7 +1275,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_conversions() {
+    fn d76_conversions() {
         use crate::wide_int::I256;
         type D = super::D76<6>;
         // From<primitive int>
@@ -1312,8 +1312,8 @@ mod tests {
         assert_eq!(neg_two_and_half.to_int_lossy_with(RoundingMode::Floor), -3);
         assert_eq!(neg_two_and_half.to_int_lossy_with(RoundingMode::Trunc), -2);
         // cross-width widening D38 -> D76 (lossless)
-        let d128: super::D38s6 = super::D38s6::from_bits(-150);
-        let widened: super::D76<6> = d128.into();
+        let d38: super::D38s6 = super::D38s6::from_bits(-150);
+        let widened: super::D76<6> = d38.into();
         assert_eq!(widened.to_bits(), I256::from_str_radix("-150", 10).unwrap());
         // cross-width narrowing D76 -> D38 in range
         let in_range: super::D76<6> = super::D76::<6>::from_bits(I256::from_str_radix("999", 10).unwrap());
@@ -1327,7 +1327,7 @@ mod tests {
 
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
-    fn d256_rescale_rounding_floats() {
+    fn d76_rescale_rounding_floats() {
         use crate::rounding::RoundingMode;
         use crate::wide_int::I256;
         type D6 = super::D76<6>;
@@ -1366,7 +1366,7 @@ mod tests {
 
     #[cfg(any(feature = "d153", feature = "wide"))]
     #[test]
-    fn d512_smoke() {
+    fn d153_smoke() {
         use crate::decimal_trait::Decimal;
         use crate::wide_int::I512;
         type D = super::D153<35>;
@@ -1388,7 +1388,7 @@ mod tests {
 
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
-    fn d1024_smoke() {
+    fn d307_smoke() {
         use crate::decimal_trait::Decimal;
         use crate::wide_int::I1024;
         type D = super::D307<35>;
@@ -1414,7 +1414,7 @@ mod tests {
     }
 
     #[test]
-    fn d32_op_assign() {
+    fn d9_op_assign() {
         let mut v = super::D9s2::from_bits(100);
         v += super::D9s2::from_bits(50);
         assert_eq!(v.to_bits(), 150);

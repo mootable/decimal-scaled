@@ -65,7 +65,7 @@ fn eq_u128_large_value() {
 }
 
 #[test]
-fn eq_u128_out_of_d128_range_is_false() {
+fn eq_u128_out_of_d38_range_is_false() {
     // A u128 value larger than D38::MAX after scaling cannot match.
     let too_big: u128 = u128::MAX;
     let d = D38s12::MAX;
@@ -119,7 +119,7 @@ fn eq_float_negative() {
 // --- D9 / D18 cross-equality (uses the macro just like D38) --------
 
 #[test]
-fn eq_d32_with_integer() {
+fn eq_d9_with_integer() {
     use decimal_scaled::D9s2;
     let v = D9s2::from_bits(150); // 1.50
     assert!(!(v == 1_i32));
@@ -131,7 +131,7 @@ fn eq_d32_with_integer() {
 }
 
 #[test]
-fn eq_d64_with_integer() {
+fn eq_d18_with_integer() {
     use decimal_scaled::D18s9;
     let v = D18s9::from_bits(7_000_000_000); // 7.0
     assert!(v == 7_i64);

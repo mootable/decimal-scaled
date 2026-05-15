@@ -524,12 +524,12 @@ fn main() -> std::io::Result<()> {
     quarter_pi37.div_u64(4);
     let e37 = e_const(37);
     let phi37 = golden(37);
-    emit_constant(&mut f, "PI_D128_S37", &pi37, 37, 1)?;
-    emit_constant(&mut f, "TAU_D128_S37", &tau37, 37, 1)?;
-    emit_constant(&mut f, "HALF_PI_D128_S37", &half_pi37, 37, 1)?;
-    emit_constant(&mut f, "QUARTER_PI_D128_S37", &quarter_pi37, 37, 1)?;
-    emit_constant(&mut f, "E_D128_S37", &e37, 37, 1)?;
-    emit_constant(&mut f, "GOLDEN_D128_S37", &phi37, 37, 1)?;
+    emit_constant(&mut f, "PI_D38_S37", &pi37, 37, 1)?;
+    emit_constant(&mut f, "TAU_D38_S37", &tau37, 37, 1)?;
+    emit_constant(&mut f, "HALF_PI_D38_S37", &half_pi37, 37, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D38_S37", &quarter_pi37, 37, 1)?;
+    emit_constant(&mut f, "E_D38_S37", &e37, 37, 1)?;
+    emit_constant(&mut f, "GOLDEN_D38_S37", &phi37, 37, 1)?;
 
     // D76: SCALE_REF=75.
     let pi75 = pi(75);
@@ -541,12 +541,12 @@ fn main() -> std::io::Result<()> {
     quarter_pi75.div_u64(4);
     let e75 = e_const(75);
     let phi75 = golden(75);
-    emit_constant(&mut f, "PI_D256_S75", &pi75, 75, 1)?;
-    emit_constant(&mut f, "TAU_D256_S75", &tau75, 75, 1)?;
-    emit_constant(&mut f, "HALF_PI_D256_S75", &half_pi75, 75, 1)?;
-    emit_constant(&mut f, "QUARTER_PI_D256_S75", &quarter_pi75, 75, 1)?;
-    emit_constant(&mut f, "E_D256_S75", &e75, 75, 1)?;
-    emit_constant(&mut f, "GOLDEN_D256_S75", &phi75, 75, 1)?;
+    emit_constant(&mut f, "PI_D76_S75", &pi75, 75, 1)?;
+    emit_constant(&mut f, "TAU_D76_S75", &tau75, 75, 1)?;
+    emit_constant(&mut f, "HALF_PI_D76_S75", &half_pi75, 75, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D76_S75", &quarter_pi75, 75, 1)?;
+    emit_constant(&mut f, "E_D76_S75", &e75, 75, 1)?;
+    emit_constant(&mut f, "GOLDEN_D76_S75", &phi75, 75, 1)?;
 
     // D153: SCALE_REF=153.
     let pi153 = pi(153);
@@ -558,12 +558,12 @@ fn main() -> std::io::Result<()> {
     quarter_pi153.div_u64(4);
     let e153 = e_const(153);
     let phi153 = golden(153);
-    emit_constant(&mut f, "PI_D512_S153", &pi153, 153, 1)?;
-    emit_constant(&mut f, "TAU_D512_S153", &tau153, 153, 1)?;
-    emit_constant(&mut f, "HALF_PI_D512_S153", &half_pi153, 153, 1)?;
-    emit_constant(&mut f, "QUARTER_PI_D512_S153", &quarter_pi153, 153, 1)?;
-    emit_constant(&mut f, "E_D512_S153", &e153, 153, 1)?;
-    emit_constant(&mut f, "GOLDEN_D512_S153", &phi153, 153, 1)?;
+    emit_constant(&mut f, "PI_D153_S153", &pi153, 153, 1)?;
+    emit_constant(&mut f, "TAU_D153_S153", &tau153, 153, 1)?;
+    emit_constant(&mut f, "HALF_PI_D153_S153", &half_pi153, 153, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D153_S153", &quarter_pi153, 153, 1)?;
+    emit_constant(&mut f, "E_D153_S153", &e153, 153, 1)?;
+    emit_constant(&mut f, "GOLDEN_D153_S153", &phi153, 153, 1)?;
 
     // D307: SCALE_REF=307.
     let pi307 = pi(307);
@@ -575,12 +575,12 @@ fn main() -> std::io::Result<()> {
     quarter_pi307.div_u64(4);
     let e307 = e_const(307);
     let phi307 = golden(307);
-    emit_constant(&mut f, "PI_D1024_S307", &pi307, 307, 1)?;
-    emit_constant(&mut f, "TAU_D1024_S307", &tau307, 307, 1)?;
-    emit_constant(&mut f, "HALF_PI_D1024_S307", &half_pi307, 307, 1)?;
-    emit_constant(&mut f, "QUARTER_PI_D1024_S307", &quarter_pi307, 307, 1)?;
-    emit_constant(&mut f, "E_D1024_S307", &e307, 307, 1)?;
-    emit_constant(&mut f, "GOLDEN_D1024_S307", &phi307, 307, 1)?;
+    emit_constant(&mut f, "PI_D307_S307", &pi307, 307, 1)?;
+    emit_constant(&mut f, "TAU_D307_S307", &tau307, 307, 1)?;
+    emit_constant(&mut f, "HALF_PI_D307_S307", &half_pi307, 307, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D307_S307", &quarter_pi307, 307, 1)?;
+    emit_constant(&mut f, "E_D307_S307", &e307, 307, 1)?;
+    emit_constant(&mut f, "GOLDEN_D307_S307", &phi307, 307, 1)?;
 
     println!("cargo:rerun-if-changed=build.rs");
     Ok(())

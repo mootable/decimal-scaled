@@ -57,7 +57,7 @@ macro_rules! decl_decimal_full {
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
             $Type, $Storage, $Work, $core
         );
-        $crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!($Type);
+        $crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!($Type);
         $crate::macros::pow::decl_decimal_pow!($Type);
         $crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide $Type, $Storage);
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i8);

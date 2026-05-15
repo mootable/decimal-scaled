@@ -1,6 +1,22 @@
 # decimal-scaled
 
-A Rust library providing const-generic base-10 fixed-point decimal types with deterministic, bit-exact arithmetic.
+A Rust library providing const-generic base-10 fixed-point decimal
+types with **correctly-rounded (≤ 0.5 ULP) integer-only
+transcendentals**, deterministic across every platform, and
+`no_std`-friendly.
+
+> **0.5 ULP** — the strongest accuracy guarantee a finite numeric
+> type can give — is the headline feature. Every `ln` / `exp` /
+> `sin` / `cos` / `sqrt` / `cbrt` / `powf` / `atan` / `atan2` /
+> `sinh` / `cosh` / `tanh` / `asinh` / `acosh` / `atanh` /
+> `to_degrees` / `to_radians` lands within half an [ULP][ULP] of
+> the exact result and the bit pattern is identical on every
+> machine. No baseline numeric crate offers this for
+> transcendentals. The algorithms, citations and per-function
+> implementation notes are catalogued in
+> [`ALGORITHMS.md`](ALGORITHMS.md).
+>
+> [ULP]: https://en.wikipedia.org/wiki/Unit_in_the_last_place
 
 ---
 
@@ -13,18 +29,23 @@ Add to your `Cargo.toml`:
 decimal-scaled = "0.1.1"
 ```
 
-For `no_std` targets (disables `std` and `serde`):
+The default build pulls in the correctly-rounded transcendentals
+(the `strict` feature is on by default). To opt in to the faster
+`f64`-bridge ("fast") path instead — ~700× quicker on series
+functions, but only ≈ 16 decimal digits of platform-libm precision
+and **not** platform-deterministic — disable default features and
+pick what you actually want:
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.1.1", default-features = false }
+decimal-scaled = { version = "0.1.1", default-features = false, features = ["std", "serde"] }
 ```
 
-To enable `serde` without `std`:
+For `no_std` targets (`alloc` is still required):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.1.1", default-features = false, features = ["serde", "alloc"] }
+decimal-scaled = { version = "0.1.1", default-features = false, features = ["serde", "alloc", "strict"] }
 ```
 
 ---
@@ -212,11 +233,17 @@ The wide `D76` tier keeps add / sub almost free but its mul / div pay
 for a 256-bit hand-rolled-integer divide — roughly 20× the `D38` cost.
 
 Transcendentals (`ln`, `exp`, `sqrt`, trig, …) come in two forms. The
-**lossy** `f64` bridge is fast (~40 ns) but inherits `f64`'s precision
+**fast** `f64`-bridge form (~40 ns) inherits `f64`'s precision
 ceiling and is not platform-independent. The **strict** integer-only
-form is **correctly rounded to within 0.5 ULP** of the exact result —
-the IEEE-754 round-to-nearest contract — and is `no_std` and
-platform-deterministic.
+form — **on by default** — is **correctly rounded to within 0.5 ULP**
+of the exact result (the IEEE-754 round-to-nearest contract) and is
+`no_std` and platform-deterministic. Build with `default-features =
+false, features = ["std", "serde"]` to switch the plain `ln` / `exp` /
+… surface to the fast f64 bridge.
+
+The full per-algorithm catalogue with citations, equations, and the
+Wikipedia / Wolfram MathWorld / author-homepage links lives in
+[`ALGORITHMS.md`](ALGORITHMS.md).
 
 ### Transcendental accuracy comparison
 
@@ -231,11 +258,11 @@ and the capability the alternatives do not offer:
 | `fixed` (`I64F64`, …) | none | — | — |
 | `bigdecimal` | none | — | — |
 | `rust_decimal` (`MathematicalOps`) | yes | no — accurate, but not to the last place | yes |
-| `decimal-scaled` — lossy (`f64` bridge) | yes | no — inherits `f64` | no |
-| `decimal-scaled` — **strict** (`*_strict`) | yes | **yes — within 0.5 ULP** | **yes** |
+| `decimal-scaled` — fast (`f64` bridge, opt-in) | yes | no — inherits `f64` | no |
+| `decimal-scaled` — **strict** (default, `*_strict`) | yes | **yes — within 0.5 ULP** | **yes** |
 
-For series functions the strict form costs ~700× the lossy bridge;
-`sqrt_strict` is the exception — algebraic, so it ties the lossy form.
+For series functions the strict form costs ~700× the fast bridge;
+`sqrt_strict` is the exception — algebraic, so it ties the fast form.
 Full head-to-head measurements against `bnum`, `ruint`, `rust_decimal`,
 and `fixed` are in [`docs/benchmarks.md`](docs/benchmarks.md).
 
@@ -278,15 +305,15 @@ See [`docs/widths.md`](docs/widths.md).
 
 ## Compile-time literals
 
-With the `macros` feature, `d128!` writes `D38` values at compile time
+With the `macros` feature, `d38!` writes `D38` values at compile time
 with automatic scale inference:
 
 ```rust
-use decimal_scaled::d128;
+use decimal_scaled::d38;
 
-let price = d128!(19.99);              // D38<2>
-let micro = d128!(1.234_567, scale 6); // D38<6>
-let rnd   = d128!(1.235, scale 2, rounded); // 1.24 (half-to-even)
+let price = d38!(19.99);              // D38<2>
+let micro = d38!(1.234_567, scale 6); // D38<6>
+let rnd   = d38!(1.235, scale 2, rounded); // 1.24 (half-to-even)
 ```
 
 See [`docs/macros.md`](docs/macros.md).
@@ -297,12 +324,12 @@ See [`docs/macros.md`](docs/macros.md).
 
 | Feature | Default | Description |
 |---|---|---|
-| `std` | yes | `f64`-bridge transcendentals (trig, log/exp, sqrt). Pulls in `alloc`. |
+| `std` | yes | Platform `f64`-bridge transcendentals (used when `strict` is off). Pulls in `alloc`. |
 | `alloc` | yes | String formatting and parsing on `no_std`. Required. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers`. |
-| `macros` | no | The `d128!` compile-time decimal-literal macro. |
-| `strict` | no | Plain transcendentals dispatch to the integer-only, platform-independent `*_strict` path instead of the `f64` bridge. `no_std`-compatible. |
-| `no_strict` | no | Drops the `*_strict` transcendental surface for a smaller build. Overrides `strict`. |
+| `strict` | **yes** | Plain transcendentals dispatch to the integer-only, 0.5 ULP, platform-deterministic `*_strict` path. `no_std`-compatible. Turn off (via `default-features = false`) to use the faster `f64` bridge. |
+| `macros` | no | The `d38!` compile-time decimal-literal macro. |
+| `fast` | no | Drops the `*_strict` transcendental surface for a smaller build. Overrides `strict`. |
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
 | `d76` / `d153` / `d307` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by an in-tree hand-rolled wide-integer type. |
 | `wide` | no | Umbrella over `d76` + `d153` + `d307`. |
@@ -322,9 +349,9 @@ In-depth usage guides live in [`docs/`](docs/README.md):
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing.
 - [Rounding](docs/rounding.md) — `RoundingMode`, `rescale`, the `rounding-*` features.
 - [Strict mode](docs/strict-mode.md) — integer-only transcendentals.
-- [The `d128!` macro](docs/macros.md) — compile-time decimal literals.
+- [The `d38!` macro](docs/macros.md) — compile-time decimal literals.
 - [Cargo features](docs/features.md) — every feature flag.
-- [Benchmarks](docs/benchmarks.md) — head-to-head against `bnum`, `ruint`, `rust_decimal`, and `fixed`, plus lossy vs strict.
+- [Benchmarks](docs/benchmarks.md) — head-to-head against `bnum`, `ruint`, `rust_decimal`, and `fixed`, plus fast vs strict.
 
 API reference: <https://docs.rs/decimal-scaled/>.
 

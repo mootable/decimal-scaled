@@ -2,7 +2,7 @@
 
 Head-to-head matrix sweep of `decimal-scaled` against the wider Rust
 numeric ecosystem (`bnum`, `ruint`, `rust_decimal`, `fixed`), plus
-the crate's own lossy / strict transcendental variants. Every
+the crate's own fast / strict transcendental variants. Every
 decimal width is exercised at three scales (smallest / midpoint /
 largest) so the reader can see how cost scales with both storage
 width and `SCALE`.
@@ -40,7 +40,7 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 | `ns` | nanosecond | 10⁻⁹ s | ×1 |
 
 `1 µs` = `1 000 ns`. A `27 µs` strict `ln` is `27 000 ns` — about
-700× a `37 ns` lossy `ln`.
+700× a `37 ns` fast `ln`.
 
 ---
 
@@ -142,7 +142,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 
 ### D76 + `bnum`-backed D76 baseline
 
-| op | s = 0 | s = 35 | s = 76 | `bnum_d256` (s = 35) |
+| op | s = 0 | s = 35 | s = 76 | `bnum_d76` (s = 35) |
 |---|---|---|---|---|
 | add | 1.60 ns | **1.53 ns** | 1.55 ns | 1.79 ns |
 | sub | 1.81 ns | **1.77 ns** | 1.91 ns | 1.82 ns |
@@ -194,7 +194,7 @@ algorithm cost. The crate keeps SCALE 38 as the *correct* path
 
 ---
 
-## 2. Lossy transcendentals (`f64`-bridge)
+## 2. Fast transcendentals (`f64`-bridge)
 
 Available on D9 / D18 / D38 only — the wide tiers ship no lossy
 form (f64 can't carry their precision; the strict path is the
@@ -211,14 +211,14 @@ not the full series.
 Accuracy: ~16 decimal digits of f64 precision. **Not** correctly
 rounded; results vary with platform libm.
 
-### D9 / D18 / D38 lossy
+### D9 / D18 / D38 fast
 
 | fn | D9 s=9 | D18 s=18 | D38 s=38 | `rust_decimal` |
 |---|---|---|---|---|
-| ln | `__LOSSY_D32_LN__` | `__LOSSY_D64_LN__` | `__LOSSY_D128_LN__` | **3.75 µs** |
-| exp | `__LOSSY_D32_EXP__` | `__LOSSY_D64_EXP__` | `__LOSSY_D128_EXP__` | **145 ns** |
-| sin | `__LOSSY_D32_SIN__` | `__LOSSY_D64_SIN__` | `__LOSSY_D128_SIN__` | **2.55 µs** |
-| sqrt | `__LOSSY_D32_SQRT__` | `__LOSSY_D64_SQRT__` | `__LOSSY_D128_SQRT__` | **578 ns** |
+| ln | `__LOSSY_D9_LN__` | `__LOSSY_D18_LN__` | `__LOSSY_D38_LN__` | **3.75 µs** |
+| exp | `__LOSSY_D9_EXP__` | `__LOSSY_D18_EXP__` | `__LOSSY_D38_EXP__` | **145 ns** |
+| sin | `__LOSSY_D9_SIN__` | `__LOSSY_D18_SIN__` | `__LOSSY_D38_SIN__` | **2.55 µs** |
+| sqrt | `__LOSSY_D9_SQRT__` | `__LOSSY_D18_SQRT__` | `__LOSSY_D38_SQRT__` | **578 ns** |
 
 `rust_decimal`'s transcendentals are software-implemented (no f64
 bridge) — accurate but not correctly rounded to the last place,
@@ -229,7 +229,7 @@ and substantially slower than the f64 path.
 ## 3. Strict transcendentals (integer-only, correctly rounded)
 
 Functions: `ln_strict`, `exp_strict`, `sin_strict`,
-`sqrt_strict`. Same argument convention as the lossy block (1.5
+`sqrt_strict`. Same argument convention as the fast block (1.5
 for ln / sin / sqrt, 0.5 for exp). Deterministic across
 platforms, `no_std`-compatible, 0.5 ULP at storage.
 
@@ -240,10 +240,10 @@ their cost is dominated by D38 plus the narrow-tier round-trip.
 
 | fn | D9 s=9 | D18 s=18 | D38 s=0 | D38 s=19 | D38 s=38 |
 |---|---|---|---|---|---|
-| ln | `__STRICT_D32_LN__` | `__STRICT_D64_LN__` | **1.13 µs** | 58.3 µs | 60.8 µs |
-| exp | `__STRICT_D32_EXP__` | `__STRICT_D64_EXP__` | **1.08×10⁻³ µs** | 49.6 µs | 28.9 µs |
-| sin | `__STRICT_D32_SIN__` | `__STRICT_D64_SIN__` | 20.0 µs | 44.1 µs | **17.7 µs** |
-| sqrt | `__STRICT_D32_SQRT__` | `__STRICT_D64_SQRT__` | **13.6 ns** | 37.9 ns | 3,248 ns |
+| ln | `__STRICT_D9_LN__` | `__STRICT_D18_LN__` | **1.13 µs** | 58.3 µs | 60.8 µs |
+| exp | `__STRICT_D9_EXP__` | `__STRICT_D18_EXP__` | **1.08×10⁻³ µs** | 49.6 µs | 28.9 µs |
+| sin | `__STRICT_D9_SIN__` | `__STRICT_D18_SIN__` | 20.0 µs | 44.1 µs | **17.7 µs** |
+| sqrt | `__STRICT_D9_SQRT__` | `__STRICT_D18_SQRT__` | **13.6 ns** | 37.9 ns | 3,248 ns |
 
 ### Wide-tier strict — D76 / D153 / D307
 
@@ -285,7 +285,7 @@ maximum-scale columns. There:
 
 ## 4. What the strict variants buy
 
-Versus the lossy `f64` bridge:
+Versus the fast `f64` bridge:
 
 - **0.5 ULP correctly-rounded last place** at storage scale (D38;
   wide tiers at typical scales).
@@ -293,7 +293,7 @@ Versus the lossy `f64` bridge:
 - **`no_std`**-compatible.
 
 The cost is throughput — typically 100–1000× the f64 bridge. For
-latency-sensitive code that doesn't need determinism, lossy is the
+latency-sensitive code that doesn't need determinism, fast is the
 better default; for finance, regulated computation, reproducible
 research, or `no_std` targets, strict is the reason the crate
 exists.
@@ -339,5 +339,5 @@ At 1024 bits the native back-end takes div / rem on its own
   no debug-assertions).
 - **Default features.** Stock `wide` + `x-wide` enabled. `strict`
   feature off — both `*` (lossy) and `*_strict` are exercised on
-  the narrow tiers; with `strict` the lossy block would dispatch
+  the narrow tiers; with `strict` the fast block would dispatch
   to strict.

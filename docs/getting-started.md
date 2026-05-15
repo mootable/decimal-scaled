@@ -45,10 +45,10 @@ tiers, see [the width family](widths.md).
 ## Constructing values
 
 ```rust
-use decimal_scaled::{D38s2, d128};
+use decimal_scaled::{D38s2, d38};
 
 // 1. Compile-time literal macro (scale inferred — see the macro guide).
-let a = d128!(19.99);
+let a = d38!(19.99);
 
 // 2. From an integer, scaled by 10^SCALE.
 let b = D38s2::from_int(20);            // 20.00
@@ -143,4 +143,4 @@ To round to a *different* scale, use `rescale` — see the
 
 - [Conversions](conversions.md) — integers, floats, and cross-width.
 - [The width family](widths.md) — choosing D9 … D307.
-- [The `d128!` macro](macros.md) — ergonomic compile-time literals.
+- [The `d38!` macro](macros.md) — ergonomic compile-time literals.

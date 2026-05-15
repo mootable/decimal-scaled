@@ -11,22 +11,31 @@ keywords = ["decimal", "deterministic", "no_std", "fixed", "precision"]
 categories = ["mathematics", "no-std", "science", "finance"]
 
 [features]
-default = ["std", "serde"]
+# `strict` is on by default — the crate's headline feature is the
+# correctly-rounded (0.5 ULP) integer-only transcendentals. To opt
+# in to the faster f64-bridge ("fast") path instead, build with
+# `default-features = false, features = ["std", "serde"]` and the
+# plain `ln` / `exp` / `sin` / … methods will dispatch through f64
+# (giving ≈ 16 decimal digits of platform-libm precision rather
+# than 0.5 ULP).
+default = ["std", "serde", "strict"]
 std = ["alloc"]
 alloc = []
 serde = ["dep:serde"]
 macros = ["dep:decimal_scaled_macros"]
-# When enabled, only integer-only (strict) implementations of transcendental
-# functions (trig, log, exp, sqrt, cbrt, powf, hypot) are compiled.
-# Float-to-decimal and decimal-to-float conversion methods are not compiled.
-# Strict mode does not require `std`; transcendental methods compile under
-# `no_std + alloc` using integer algorithms.
+# Routes every transcendental through the integer-only correctly-
+# rounded path. On by default (see `default` above). Drops the
+# `f64`-bridge transcendentals to keep the build small; explicit
+# float-conversion methods (`to_f64_lossy`, `from_f64_lossy`, …)
+# stay available regardless. Strict mode does not require `std`;
+# the integer-only transcendentals compile under `no_std + alloc`.
 strict = []
-# Drops the integer-only `*_strict` transcendental surface entirely for
-# a smaller build. `no_strict` overrides `strict`: when both are set the
-# crate behaves as if neither were — the f64-bridge transcendentals are
-# used (when `std` is available) and no `*_strict` methods are emitted.
-no_strict = []
+# Drops the integer-only `*_strict` transcendental surface entirely
+# for a smaller build. `fast` overrides `strict`: when both
+# are set the crate behaves as if neither were — the f64-bridge
+# (fast) transcendentals are used (when `std` is available) and no
+# `*_strict` methods are emitted.
+fast = []
 # Compiles BOTH the macro-default and the per-type override
 # implementations for every method that has them. Default builds compile
 # only the chosen winner (see OVERRIDE_POLICY.md). With `bench-alt` on
@@ -110,7 +119,7 @@ required-features = ["wide"]
 
 # Decimal / fixed-point backend comparison: native `D38` / `D76` vs
 # `bnum`-backed `D76`, `rust_decimal`, and `fixed` — arithmetic and
-# transcendentals (including the lossy vs strict variants). Needs the
+# transcendentals (including the fast vs strict variants). Needs the
 # wide tier.
 [[bench]]
 name = "decimal_backends"
@@ -133,7 +142,7 @@ harness = false
 required-features = ["x-wide"]
 
 # Comprehensive matrix: every decimal width × three scales (smallest /
-# midpoint / largest) × arithmetic + strict + lossy transcendentals,
+# midpoint / largest) × arithmetic + strict + fast transcendentals,
 # plus cross-crate baselines. Drives the `docs/benchmarks.md` rewrite.
 [[bench]]
 name = "full_matrix"

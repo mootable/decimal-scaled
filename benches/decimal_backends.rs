@@ -7,13 +7,13 @@
 //! div / rem / neg primitives across every available width and pits
 //! them against the established baselines:
 //!
-//! - `BnumD256` — `bnum`-backed 256-bit decimal (benchmark baseline,
+//! - `BnumD76` — `bnum`-backed 256-bit decimal (benchmark baseline,
 //!   see `benches/bnum/`);
 //! - `rust_decimal::Decimal` — a 96-bit-mantissa decimal crate;
 //! - `fixed::I64F64` — a binary fixed-point crate.
 //!
 //! `rust_decimal` and `fixed` do not have wide-tier counterparts, so
-//! they appear only in the D38-and-narrower groups. `BnumD256` only
+//! they appear only in the D38-and-narrower groups. `BnumD76` only
 //! compares with D76.
 //!
 //! Transcendentals (`ln`, `exp`, `sqrt`, `sin`, `cos`, `atan2`, `pow`)
@@ -25,7 +25,7 @@
 
 mod bnum;
 
-use bnum::BnumD256;
+use bnum::BnumD76;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
 use decimal_scaled::{D38, D76, D9, D18};
 #[cfg(feature = "d153")]
@@ -87,9 +87,9 @@ fn bench_arithmetic(c: &mut Criterion) {
     // Baselines.
     six_ops!(
         g,
-        "bnum_d256",
-        BnumD256::<12>::from_int(A as i128),
-        BnumD256::<12>::from_int(B as i128)
+        "bnum_d76",
+        BnumD76::<12>::from_int(A as i128),
+        BnumD76::<12>::from_int(B as i128)
     );
     six_ops!(g, "rust_decimal", Decimal::from(A), Decimal::from(B));
     six_ops!(g, "fixed_i64f64", I64F64::from_num(A), I64F64::from_num(B));
@@ -98,7 +98,7 @@ fn bench_arithmetic(c: &mut Criterion) {
 }
 
 /// `ln` / `exp` / `sqrt` / `sin` / `cos` / `atan2` / `pow`, comparing
-/// the crate's D38 / D76 (lossy and strict) variants against
+/// the crate's D38 / D76 (fast and strict) variants against
 /// `rust_decimal`. The wide-tier strict variants quantify the
 /// correctly-rounded-to-0.5-ULP cost.
 fn bench_transcendentals(c: &mut Criterion) {

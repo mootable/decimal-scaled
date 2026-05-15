@@ -26,10 +26,10 @@
 //!
 //! # The `*_strict` dual API
 //!
-//! - `<method>_strict` — always present unless the `no_strict` feature
+//! - `<method>_strict` — always present unless the `fast` feature
 //! is set; integer-only and `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//! `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
+//! `#[cfg(all(feature = "strict", not(feature = "fast")))]`,
 //! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
 //! transcendentals of their own.
 //!
@@ -76,7 +76,7 @@ macro_rules! decl_wide_transcendental {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
         /// passed explicitly alongside the value.
-        #[cfg(not(feature = "no_strict"))]
+        #[cfg(not(feature = "fast"))]
         mod $core {
             #![allow(unused)]
 
@@ -643,7 +643,7 @@ macro_rules! decl_wide_transcendental {
             }
         }
 
-        #[cfg(not(feature = "no_strict"))]
+        #[cfg(not(feature = "fast"))]
         impl<const SCALE: u32> $Type<SCALE> {
             /// Natural logarithm (base e). Strict: integer-only and
             /// correctly rounded. Panics if `self <= 0`.
@@ -1466,10 +1466,10 @@ macro_rules! decl_wide_transcendental {
         }
 
         // Strict-feature dispatchers: the plain method routes to
-        // `*_strict` when `strict` is on (and `no_strict` is not). The
+        // `*_strict` when `strict` is on (and `fast` is not). The
         // wide tiers have no f64-bridge transcendentals, so there is no
         // non-strict plain form.
-        #[cfg(all(feature = "strict", not(feature = "no_strict")))]
+        #[cfg(all(feature = "strict", not(feature = "fast")))]
         impl<const SCALE: u32> $Type<SCALE> {
             /// With `strict`, dispatches to [`Self::ln_strict`].
             #[inline]
@@ -1609,7 +1609,7 @@ macro_rules! decl_wide_transcendental {
 
 pub(crate) use decl_wide_transcendental;
 
-#[cfg(all(test, not(feature = "no_strict")))]
+#[cfg(all(test, not(feature = "fast")))]
 mod tests {
     use crate::{D38, D76, D153, D307};
 
@@ -1619,18 +1619,18 @@ mod tests {
     /// absorbs the two paths' independent final-rounding of values that
     /// land near a half-ULP boundary).
     #[test]
-    fn wide_transcendentals_match_d128() {
+    fn wide_transcendentals_match_d38() {
         // Raw bit-patterns at SCALE = 6 spanning a useful range.
         let positives = [1i64, 250_000, 500_000, 1_000_000, 2_718_282, 7_500_000];
         let unit_range = [-900_000i64, -250_000, 1, 250_000, 900_000];
         let all = [-3_000_000i64, -500_000, 1, 500_000, 1_500_000, 4_000_000];
 
-        // `wide` and `d128` are both `i128`-valued raw results at the
+        // `wide` and `d38` are both `i128`-valued raw results at the
         // same scale; compare with a 2-ULP slack.
-        fn agree(label: &str, ctx: i64, wide: i128, d128: i128) {
+        fn agree(label: &str, ctx: i64, wide: i128, d38: i128) {
             assert!(
-                (wide - d128).abs() <= 2,
-                "{label} mismatch at {ctx}: wide {wide} vs d128 {d128}"
+                (wide - d38).abs() <= 2,
+                "{label} mismatch at {ctx}: wide {wide} vs d38 {d38}"
             );
         }
 
