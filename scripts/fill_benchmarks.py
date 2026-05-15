@@ -85,19 +85,40 @@ def parse_logs(paths: list[Path]) -> dict[str, float]:
     return out
 
 
-def fmt(ns: float) -> str:
-    """Format a nanosecond value with the most readable unit."""
+def pick_unit(ns: float) -> str:
+    """The most readable unit for a single value."""
     if ns < 1.0:
-        return f"{ns * 1000:.1f} ps"
+        return "ps"
     if ns < 1e3:
-        if ns < 10:
-            return f"{ns:.2f} ns"
-        return f"{ns:.1f} ns"
+        return "ns"
     if ns < 1e6:
-        return f"{ns / 1e3:.2f} µs"
+        return "µs"
     if ns < 1e9:
-        return f"{ns / 1e6:.2f} ms"
-    return f"{ns / 1e9:.2f} s"
+        return "ms"
+    return "s"
+
+
+_UNIT_DIV = {"ps": 1e-3, "ns": 1.0, "µs": 1e3, "ms": 1e6, "s": 1e9}
+
+
+def fmt(ns: float, unit: str | None = None) -> str:
+    """Format `ns` in the given unit (defaulting to the most readable
+    one for that value alone). Adds thousands separators when the
+    formatted value crosses 1 000 in its chosen unit."""
+    if unit is None:
+        unit = pick_unit(ns)
+    val = ns / _UNIT_DIV[unit]
+    if val < 10:
+        s = f"{val:.2f}"
+    elif val < 100:
+        s = f"{val:.1f}"
+    elif val < 1000:
+        s = f"{val:.0f}"
+    else:
+        # Comma-separated integer for readability when a row's
+        # cells are all rendered in the winner's (small) unit.
+        s = f"{val:,.0f}"
+    return f"{s} {unit}"
 
 
 # Mapping from markdown placeholder → bench name in the criterion log.
@@ -256,7 +277,9 @@ def main() -> None:
 
     placeholder_map = build_placeholder_map()
 
-    # Decide which cells to bold.
+    # Per-placeholder: which unit to render in (the unit of the row's
+    # winner) and whether to bold (the row's winner itself).
+    unit_for: dict[str, str] = {}
     bold_set: set[str] = set()
     for row in ROWS:
         cells = []
@@ -270,8 +293,11 @@ def main() -> None:
             cells.append((ph, t))
         if not cells:
             continue
-        winner = min(cells, key=lambda c: c[1])
-        bold_set.add(winner[0])
+        winner_ph, winner_t = min(cells, key=lambda c: c[1])
+        winner_unit = pick_unit(winner_t)
+        bold_set.add(winner_ph)
+        for ph, _ in cells:
+            unit_for[ph] = winner_unit
 
     # Format every placeholder.
     text = DRAFT.read_text(encoding="utf-8")
@@ -283,7 +309,8 @@ def main() -> None:
             missing.append(f"{ph} -> {bench}")
             substitute = "—"
         else:
-            s = fmt(t)
+            unit = unit_for.get(ph)
+            s = fmt(t, unit)
             substitute = f"**{s}**" if ph in bold_set else s
         text = text.replace(f"`__{ph}__`", substitute)
 

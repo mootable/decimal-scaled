@@ -107,67 +107,67 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
-| add | 401 ps | **384 ps** | 386 ps |
-| sub | 393 ps | 386 ps | **377 ps** |
-| mul | **395 ps** | 764 ps | 767 ps |
-| div | **1.59 ns** | 2.51 ns | 2.44 ns |
-| rem | 1.54 ns | 1.50 ns | **1.48 ns** |
-| neg | **282 ps** | 293 ps | 303 ps |
+| add | `__ARITH_D32_S0_ADD__` | `__ARITH_D32_S5_ADD__` | `__ARITH_D32_S9_ADD__` |
+| sub | `__ARITH_D32_S0_SUB__` | `__ARITH_D32_S5_SUB__` | `__ARITH_D32_S9_SUB__` |
+| mul | `__ARITH_D32_S0_MUL__` | `__ARITH_D32_S5_MUL__` | `__ARITH_D32_S9_MUL__` |
+| div | `__ARITH_D32_S0_DIV__` | `__ARITH_D32_S5_DIV__` | `__ARITH_D32_S9_DIV__` |
+| rem | `__ARITH_D32_S0_REM__` | `__ARITH_D32_S5_REM__` | `__ARITH_D32_S9_REM__` |
+| neg | `__ARITH_D32_S0_NEG__` | `__ARITH_D32_S5_NEG__` | `__ARITH_D32_S9_NEG__` |
 
 ### D64
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
-| add | **372 ps** | 384 ps | 378 ps |
-| sub | 455 ps | **452 ps** | 472 ps |
-| mul | **383 ps** | 9,608 ps | 9,628 ps |
-| div | **9.67 ns** | 10.3 ns | 11.1 ns |
-| rem | **1.46 ns** | 1.58 ns | 2.72 ns |
-| neg | 251 ps | **250 ps** | 266 ps |
+| add | `__ARITH_D64_S0_ADD__` | `__ARITH_D64_S9_ADD__` | `__ARITH_D64_S18_ADD__` |
+| sub | `__ARITH_D64_S0_SUB__` | `__ARITH_D64_S9_SUB__` | `__ARITH_D64_S18_SUB__` |
+| mul | `__ARITH_D64_S0_MUL__` | `__ARITH_D64_S9_MUL__` | `__ARITH_D64_S18_MUL__` |
+| div | `__ARITH_D64_S0_DIV__` | `__ARITH_D64_S9_DIV__` | `__ARITH_D64_S18_DIV__` |
+| rem | `__ARITH_D64_S0_REM__` | `__ARITH_D64_S9_REM__` | `__ARITH_D64_S18_REM__` |
+| neg | `__ARITH_D64_S0_NEG__` | `__ARITH_D64_S9_NEG__` | `__ARITH_D64_S18_NEG__` |
 
 ### D128 + cross-crate baselines
 
 | op | s = 0 | s = 19 | s = 38 | `rust_decimal` | `fixed::I64F64` |
 |---|---|---|---|---|---|
-| add | 923 ps | 934 ps | 876 ps | 5,138 ps | **842 ps** |
-| sub | 917 ps | 912 ps | **847 ps** | 5,288 ps | 849 ps |
-| mul | 2.46 ns | 13.1 ns | 13.8 ns | 2.78 ns | **1.49 ns** |
-| div | 10.4 ns | 8.99 ns | 456 ns | **3.32 ns** | 23.2 ns |
-| rem | 9.30 ns | 8.67 ns | 10.3 ns | **8.56 ns** | 14.2 ns |
-| neg | 528 ps | 508 ps | 505 ps | 4,438 ps | **500 ps** |
+| add | `__ARITH_D128_S0_ADD__` | `__ARITH_D128_S19_ADD__` | `__ARITH_D128_S38_ADD__` | `__ARITH_RD_ADD__` | `__ARITH_FX_ADD__` |
+| sub | `__ARITH_D128_S0_SUB__` | `__ARITH_D128_S19_SUB__` | `__ARITH_D128_S38_SUB__` | `__ARITH_RD_SUB__` | `__ARITH_FX_SUB__` |
+| mul | `__ARITH_D128_S0_MUL__` | `__ARITH_D128_S19_MUL__` | `__ARITH_D128_S38_MUL__` | `__ARITH_RD_MUL__` | `__ARITH_FX_MUL__` |
+| div | `__ARITH_D128_S0_DIV__` | `__ARITH_D128_S19_DIV__` | `__ARITH_D128_S38_DIV__` | `__ARITH_RD_DIV__` | `__ARITH_FX_DIV__` |
+| rem | `__ARITH_D128_S0_REM__` | `__ARITH_D128_S19_REM__` | `__ARITH_D128_S38_REM__` | `__ARITH_RD_REM__` | `__ARITH_FX_REM__` |
+| neg | `__ARITH_D128_S0_NEG__` | `__ARITH_D128_S19_NEG__` | `__ARITH_D128_S38_NEG__` | `__ARITH_RD_NEG__` | `__ARITH_FX_NEG__` |
 
 ### D256 + `bnum`-backed D256 baseline
 
 | op | s = 0 | s = 35 | s = 76 | `bnum_d256` (s = 35) |
 |---|---|---|---|---|
-| add | 1.60 ns | **1.53 ns** | 1.55 ns | 1.79 ns |
-| sub | 1.81 ns | **1.77 ns** | 1.91 ns | 1.82 ns |
-| mul | **27.0 ns** | 60.7 ns | 8,898 ns | 332 ns |
-| div | **99.9 ns** | 4,602 ns | 8,771 ns | 351 ns |
-| rem | **15.2 ns** | 17.8 ns | 1,122 ns | 50.7 ns |
-| neg | 1.60 ns | 1.57 ns | **1.56 ns** | 4.09 ns |
+| add | `__ARITH_D256_S0_ADD__` | `__ARITH_D256_S35_ADD__` | `__ARITH_D256_S76_ADD__` | `__ARITH_BD_ADD__` |
+| sub | `__ARITH_D256_S0_SUB__` | `__ARITH_D256_S35_SUB__` | `__ARITH_D256_S76_SUB__` | `__ARITH_BD_SUB__` |
+| mul | `__ARITH_D256_S0_MUL__` | `__ARITH_D256_S35_MUL__` | `__ARITH_D256_S76_MUL__` | `__ARITH_BD_MUL__` |
+| div | `__ARITH_D256_S0_DIV__` | `__ARITH_D256_S35_DIV__` | `__ARITH_D256_S76_DIV__` | `__ARITH_BD_DIV__` |
+| rem | `__ARITH_D256_S0_REM__` | `__ARITH_D256_S35_REM__` | `__ARITH_D256_S76_REM__` | `__ARITH_BD_REM__` |
+| neg | `__ARITH_D256_S0_NEG__` | `__ARITH_D256_S35_NEG__` | `__ARITH_D256_S76_NEG__` | `__ARITH_BD_NEG__` |
 
 ### D512
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
-| add | 2.93 ns | **2.92 ns** | 3.00 ns |
-| sub | **3.83 ns** | 4.01 ns | 4.23 ns |
-| mul | **32.6 ns** | 16,602 ns | 30,038 ns |
-| div | **138 ns** | 16,198 ns | 30,158 ns |
-| rem | **19.9 ns** | 1,892 ns | 3,010 ns |
-| neg | **2.60 ns** | 2.63 ns | 2.65 ns |
+| add | `__ARITH_D512_S0_ADD__` | `__ARITH_D512_S75_ADD__` | `__ARITH_D512_S153_ADD__` |
+| sub | `__ARITH_D512_S0_SUB__` | `__ARITH_D512_S75_SUB__` | `__ARITH_D512_S153_SUB__` |
+| mul | `__ARITH_D512_S0_MUL__` | `__ARITH_D512_S75_MUL__` | `__ARITH_D512_S153_MUL__` |
+| div | `__ARITH_D512_S0_DIV__` | `__ARITH_D512_S75_DIV__` | `__ARITH_D512_S153_DIV__` |
+| rem | `__ARITH_D512_S0_REM__` | `__ARITH_D512_S75_REM__` | `__ARITH_D512_S153_REM__` |
+| neg | `__ARITH_D512_S0_NEG__` | `__ARITH_D512_S75_NEG__` | `__ARITH_D512_S153_NEG__` |
 
 ### D1024
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
-| add | **7.84 ns** | 7.93 ns | 7.95 ns |
-| sub | **14.2 ns** | 14.4 ns | 14.2 ns |
-| mul | **56.3 ns** | 63,593 ns | 113,200 ns |
-| div | **250 ns** | 62,640 ns | 110,740 ns |
-| rem | **35.8 ns** | 6,474 ns | 10,174 ns |
-| neg | **5.05 ns** | 5.28 ns | 5.25 ns |
+| add | `__ARITH_D1024_S0_ADD__` | `__ARITH_D1024_S150_ADD__` | `__ARITH_D1024_S307_ADD__` |
+| sub | `__ARITH_D1024_S0_SUB__` | `__ARITH_D1024_S150_SUB__` | `__ARITH_D1024_S307_SUB__` |
+| mul | `__ARITH_D1024_S0_MUL__` | `__ARITH_D1024_S150_MUL__` | `__ARITH_D1024_S307_MUL__` |
+| div | `__ARITH_D1024_S0_DIV__` | `__ARITH_D1024_S150_DIV__` | `__ARITH_D1024_S307_DIV__` |
+| rem | `__ARITH_D1024_S0_REM__` | `__ARITH_D1024_S150_REM__` | `__ARITH_D1024_S307_REM__` |
+| neg | `__ARITH_D1024_S0_NEG__` | `__ARITH_D1024_S150_NEG__` | `__ARITH_D1024_S307_NEG__` |
 
 **Reading the arithmetic tables.** Add / sub / neg are exact;
 mul / div round per `DEFAULT_ROUNDING_MODE`. Add / sub / neg are
@@ -211,10 +211,10 @@ rounded; results vary with platform libm.
 
 | fn | D32 s=9 | D64 s=18 | D128 s=38 | `rust_decimal` |
 |---|---|---|---|---|
-| ln | 7.70 ns | **7.40 ns** | 38.4 ns | 3,752 ns |
-| exp | 7.55 ns | **7.46 ns** | 40.6 ns | 145 ns |
-| sin | 8.75 ns | **8.51 ns** | 31.7 ns | 2,545 ns |
-| sqrt | **3.17 ns** | 3.31 ns | 29.3 ns | 578 ns |
+| ln | `__LOSSY_D32_LN__` | `__LOSSY_D64_LN__` | `__LOSSY_D128_LN__` | `__LOSSY_RD_LN__` |
+| exp | `__LOSSY_D32_EXP__` | `__LOSSY_D64_EXP__` | `__LOSSY_D128_EXP__` | `__LOSSY_RD_EXP__` |
+| sin | `__LOSSY_D32_SIN__` | `__LOSSY_D64_SIN__` | `__LOSSY_D128_SIN__` | `__LOSSY_RD_SIN__` |
+| sqrt | `__LOSSY_D32_SQRT__` | `__LOSSY_D64_SQRT__` | `__LOSSY_D128_SQRT__` | `__LOSSY_RD_SQRT__` |
 
 `rust_decimal`'s transcendentals are software-implemented (no f64
 bridge) — accurate but not correctly rounded to the last place,
@@ -236,10 +236,10 @@ their cost is dominated by D128 plus the narrow-tier round-trip.
 
 | fn | D32 s=9 | D64 s=18 | D128 s=0 | D128 s=19 | D128 s=38 |
 |---|---|---|---|---|---|
-| ln | 40.3 µs | 54.9 µs | **1.13 µs** | 58.3 µs | 60.8 µs |
-| exp | 36,440 ns | 48,519 ns | **1.08 ns** | 49,590 ns | 28,894 ns |
-| sin | 32.1 µs | 40.9 µs | 20.0 µs | 44.1 µs | **17.7 µs** |
-| sqrt | 33.1 ns | 38.0 ns | **13.6 ns** | 37.9 ns | 3,248 ns |
+| ln | `__STRICT_D32_LN__` | `__STRICT_D64_LN__` | `__STRICT_D128_S0_LN__` | `__STRICT_D128_S19_LN__` | `__STRICT_D128_S38_LN__` |
+| exp | `__STRICT_D32_EXP__` | `__STRICT_D64_EXP__` | `__STRICT_D128_S0_EXP__` | `__STRICT_D128_S19_EXP__` | `__STRICT_D128_S38_EXP__` |
+| sin | `__STRICT_D32_SIN__` | `__STRICT_D64_SIN__` | `__STRICT_D128_S0_SIN__` | `__STRICT_D128_S19_SIN__` | `__STRICT_D128_S38_SIN__` |
+| sqrt | `__STRICT_D32_SQRT__` | `__STRICT_D64_SQRT__` | `__STRICT_D128_S0_SQRT__` | `__STRICT_D128_S19_SQRT__` | `__STRICT_D128_S38_SQRT__` |
 
 ### Wide-tier strict — D256 / D512 / D1024
 
@@ -248,10 +248,10 @@ guard-digit budget at each scale.
 
 | fn | D256 s=0 | D256 s=35 | D256 s=76 | D512 s=0 | D512 s=75 | D512 s=153 | D1024 s=0 | D1024 s=150 | D1024 s=307 |
 |---|---|---|---|---|---|---|---|---|---|
-| ln | **152 µs** | 1,352 µs | 3,252 µs | 297 µs | 6,006 µs | 17,051 µs | 528 µs | 33,339 µs | 112,160 µs |
-| exp | **12.6 ns** | 1,293,400 ns | 2,978,900 ns | 17.1 ns | 5,579,900 ns | 15,386,000 ns | 27.8 ns | 31,671,000 ns | 98,844,000 ns |
-| sin | **224 µs** | 1,042 µs | 2,454 µs | 413 µs | 4,633 µs | 12,980 µs | 763 µs | 24,437 µs | 78,599 µs |
-| sqrt | **123 ns** | 19,860 ns | 46,066 ns | 187 ns | 77,558 ns | 168,310 ns | 362 ns | 304,080 ns | 702,570 ns |
+| ln | `__STRICT_D256_S0_LN__` | `__STRICT_D256_S35_LN__` | `__STRICT_D256_S76_LN__` | `__STRICT_D512_S0_LN__` | `__STRICT_D512_S75_LN__` | `__STRICT_D512_S153_LN__` | `__STRICT_D1024_S0_LN__` | `__STRICT_D1024_S150_LN__` | `__STRICT_D1024_S307_LN__` |
+| exp | `__STRICT_D256_S0_EXP__` | `__STRICT_D256_S35_EXP__` | `__STRICT_D256_S76_EXP__` | `__STRICT_D512_S0_EXP__` | `__STRICT_D512_S75_EXP__` | `__STRICT_D512_S153_EXP__` | `__STRICT_D1024_S0_EXP__` | `__STRICT_D1024_S150_EXP__` | `__STRICT_D1024_S307_EXP__` |
+| sin | `__STRICT_D256_S0_SIN__` | `__STRICT_D256_S35_SIN__` | `__STRICT_D256_S76_SIN__` | `__STRICT_D512_S0_SIN__` | `__STRICT_D512_S75_SIN__` | `__STRICT_D512_S153_SIN__` | `__STRICT_D1024_S0_SIN__` | `__STRICT_D1024_S150_SIN__` | `__STRICT_D1024_S307_SIN__` |
+| sqrt | `__STRICT_D256_S0_SQRT__` | `__STRICT_D256_S35_SQRT__` | `__STRICT_D256_S76_SQRT__` | `__STRICT_D512_S0_SQRT__` | `__STRICT_D512_S75_SQRT__` | `__STRICT_D512_S153_SQRT__` | `__STRICT_D1024_S0_SQRT__` | `__STRICT_D1024_S150_SQRT__` | `__STRICT_D1024_S307_SQRT__` |
 
 **Reading the strict tables.** A few cells reflect *fast paths*
 rather than the full series evaluation — the bold winner per row
