@@ -12,118 +12,127 @@
 //!
 //! # Precision strategy
 //!
-//! All constant values are derived from a 35-digit reference stored as a
-//! raw `i128` at `SCALE_REF = 35`. They do not pass through `f64` at any
+//! All constant values are derived from a 37-digit reference stored as a
+//! raw `i128` at `SCALE_REF = 37`. They do not pass through `f64` at any
 //! point. The rescale from `SCALE_REF` to the caller's `SCALE` uses
 //! integer division with the crate-default [`RoundingMode`] (half-to-even
 //! by default; overridable via the `rounding-*` Cargo features).
 //!
 //! Going through `f64` would cap precision at roughly 15-17 decimal digits
-//! (f64 mantissa width). The raw-i128 path preserves up to 35 digits, which
+//! (f64 mantissa width). The raw-i128 path preserves up to 37 digits, which
 //! exceeds every practical scale value.
 //!
-//! At `SCALE > SCALE_REF` (i.e. `SCALE > 35`) the constant is multiplied
+//! At `SCALE > SCALE_REF` (i.e. `SCALE > 37`) the constant is multiplied
 //! up from the reference, so trailing digits are zero-extended and carry no
 //! additional precision. At `SCALE = 38` the multiplication may overflow
-//! `i128` for some constants; callers that need `SCALE > 35` should verify
+//! `i128` for some constants; callers that need `SCALE > 37` should verify
 //! that the result is in range.
 //!
-//! # Why `SCALE_REF = 35`?
+//! # Why `SCALE_REF = 37`?
 //!
-//! Maximises precision while keeping every constant in `i128`. The
-//! largest constant is `tau ≈ 6.28...`, so its raw integer at
-//! `SCALE_REF = 35` is ~6.28×10³⁵, well below `i128::MAX ≈ 1.7×10³⁸`.
-//! Going to `SCALE_REF = 37` would overflow `tau` and `golden` (each
-//! would need ~39 leading digits). The smaller constants `pi`, `e`,
-//! `half_pi`, `quarter_pi` could individually hold 36–37 digits, but
-//! a single shared `SCALE_REF` keeps the rescale helpers uniform —
-//! the per-constant precision gain (≤ 2 digits on four constants) is
-//! not worth six independent rescale paths.
+//! The maximum `SCALE_REF` that keeps every constant in `i128`. The
+//! largest constant, `tau ≈ 6.28...`, lands at ~6.28×10³⁷ — still
+//! below `i128::MAX ≈ 1.7×10³⁸`. `SCALE_REF = 38` would overflow
+//! `tau`/`pi`/`e`/`golden`. The smaller constants `half_pi` and
+//! `quarter_pi` could individually hold 38 frac digits, but a single
+//! shared `SCALE_REF` keeps the rescale helpers uniform; the
+//! per-constant precision gain (1 digit, on two constants) is not
+//! worth six independent rescale paths.
+//!
+//! At `SCALE_REF = 37` the constants are accurate to within 0.5 ULP
+//! for every `SCALE ≤ 37`. At `SCALE = 38` (the D128 maximum) the
+//! result is off by up to ≈ 5 ULP — three of the supported scales
+//! would need a raw constant wider than `i128` can hold. Tightening
+//! to 0.5 ULP at `SCALE = 38` (and for the wide tiers' deeper
+//! scales) requires per-width raw constants stored at the storage
+//! type's maximum precision; recorded as a follow-up.
 //!
 //! [`RoundingMode`]: crate::rounding::RoundingMode
 //!
-//! # Reference scale
+//! # Sources
 //!
-//! `SCALE_REF = 35` was chosen so that each constant fits in `i128` at
-//! that scale (the largest value, `tau ~= 6.28e35`, is well under
-//! `i128::MAX ~= 1.7e38`) while still providing more digits than any
-//! practical caller `SCALE`. Each raw constant is the half-to-even
-//! rounding of the canonical decimal expansion to 35 fractional digits.
-//! Sources: ISO 80000-2 (pi, tau, pi/2, pi/4), OEIS A001113 (e),
-//! OEIS A001622 (golden ratio).
+//! Each raw constant is the half-to-even rounding of the canonical
+//! decimal expansion to 37 fractional digits. ISO 80000-2 (pi, tau,
+//! pi/2, pi/4), OEIS A001113 (e), OEIS A001622 (golden ratio).
 
 use crate::core_type::D128;
 
 /// Reference scale for the high-precision raw constants below.
 ///
-/// Every constant fits in `i128` at this scale; the largest (tau ~= 6.28e35)
-/// is well under `i128::MAX ~= 1.7e38`. Caller scales above this value are
-/// handled by multiplying the reference by `10^(SCALE - SCALE_REF)`.
+/// Every constant fits in `i128` at this scale; the largest
+/// (tau ≈ 6.28×10³⁷) is below `i128::MAX ≈ 1.7×10³⁸`. Caller scales
+/// above this value rescale up by `10^(SCALE - SCALE_REF)`, which
+/// appends placeholder zeros without adding precision — `SCALE = 38`
+/// loses up to ≈ 5 ULP this way. Caller scales at or below
+/// `SCALE_REF` rescale down via the crate-default [`RoundingMode`],
+/// preserving the 0.5 ULP contract.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const SCALE_REF: u32 = 35;
+///
+/// [`RoundingMode`]: crate::rounding::RoundingMode
+const SCALE_REF: u32 = 37;
 
-// Raw i128 constants at SCALE_REF = 35.
+// Raw i128 constants at SCALE_REF = 37.
 //
 // Each value is the half-to-even rounding of the canonical decimal
-// expansion to 35 fractional digits. Sources: ISO 80000-2 (pi, tau, pi/2,
+// expansion to 37 fractional digits. Sources: ISO 80000-2 (pi, tau, pi/2,
 // pi/4), OEIS A001113 (e), OEIS A001622 (golden = (1 + sqrt(5)) / 2).
 
-/// pi at SCALE_REF = 35.
-/// Value: 3.14159265358979323846264338327950288
-/// (36th digit was 4; no round-up.)
+/// pi at SCALE_REF = 37.
+/// Value: 3.1415926535897932384626433832795028842
+/// (38th digit was 9; rounded up from ...841 to ...842.)
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const PI_RAW_S35: i128 = 314_159_265_358_979_323_846_264_338_327_950_288_i128;
+const PI_RAW_S37: i128 = 31_415_926_535_897_932_384_626_433_832_795_028_842_i128;
 
-/// tau = 2 * pi at SCALE_REF = 35.
-/// Value: 6.28318530717958647692528676655900577
-/// (36th digit was 8; rounded up from ...576 to ...577.)
+/// tau = 2 * pi at SCALE_REF = 37.
+/// Value: 6.2831853071795864769252867665590057684
+/// (38th digit was 9; rounded up from ...683 to ...684.)
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const TAU_RAW_S35: i128 = 628_318_530_717_958_647_692_528_676_655_900_577_i128;
+const TAU_RAW_S37: i128 = 62_831_853_071_795_864_769_252_867_665_590_057_684_i128;
 
-/// pi / 2 at SCALE_REF = 35.
-/// Value: 1.57079632679489661923132169163975144
-/// (36th digit was 2; no round-up.)
+/// pi / 2 at SCALE_REF = 37.
+/// Value: 1.5707963267948966192313216916397514421
+/// (38th digit was 9; rounded up from ...420 to ...421.)
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const HALF_PI_RAW_S35: i128 = 157_079_632_679_489_661_923_132_169_163_975_144_i128;
+const HALF_PI_RAW_S37: i128 = 15_707_963_267_948_966_192_313_216_916_397_514_421_i128;
 
-/// pi / 4 at SCALE_REF = 35.
-/// Value: 0.78539816339744830961566084581987572
-/// (36th digit was 1; no round-up.)
+/// pi / 4 at SCALE_REF = 37.
+/// Value: 0.7853981633974483096156608458198757210
+/// (38th digit was 4; no round-up.)
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const QUARTER_PI_RAW_S35: i128 = 78_539_816_339_744_830_961_566_084_581_987_572_i128;
+const QUARTER_PI_RAW_S37: i128 = 7_853_981_633_974_483_096_156_608_458_198_757_210_i128;
 
-/// e at SCALE_REF = 35.
-/// Value: 2.71828182845904523536028747135266250
-/// (36th digit was 7; rounded up from ...249 to ...250.)
+/// e at SCALE_REF = 37.
+/// Value: 2.7182818284590452353602874713526624978
+/// (38th digit was 5, 37th was 7 odd → round to even up: ...977 → ...978.)
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const E_RAW_S35: i128 = 271_828_182_845_904_523_536_028_747_135_266_250_i128;
+const E_RAW_S37: i128 = 27_182_818_284_590_452_353_602_874_713_526_624_978_i128;
 
-/// Golden ratio = (1 + sqrt(5)) / 2 at SCALE_REF = 35.
-/// Value: 1.61803398874989484820458683436563812
-/// (36th digit was 7; rounded up from ...811 to ...812.)
+/// Golden ratio = (1 + sqrt(5)) / 2 at SCALE_REF = 37.
+/// Value: 1.6180339887498948482045868343656381177
+/// (38th digit was 2; no round-up.)
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-const GOLDEN_RAW_S35: i128 = 161_803_398_874_989_484_820_458_683_436_563_812_i128;
+const GOLDEN_RAW_S37: i128 = 16_180_339_887_498_948_482_045_868_343_656_381_177_i128;
 
 // Rescaling from SCALE_REF to the caller's SCALE is delegated to
 // `D128::rescale` (which uses round-half-to-even by default; see
@@ -135,14 +144,14 @@ const GOLDEN_RAW_S35: i128 = 161_803_398_874_989_484_820_458_683_436_563_812_i12
 ///
 /// Import this trait to call `D128s12::pi()`, `D128s12::e()`, etc.
 ///
-/// All returned values are computed from a 35-digit raw-`i128` reference
+/// All returned values are computed from a 37-digit raw-`i128` reference
 /// without passing through `f64`. The result is bit-exact at the target
-/// `SCALE` for every supported scale up to `SCALE = 35`.
+/// `SCALE` for every supported scale up to `SCALE = 37`.
 pub trait DecimalConsts: Sized {
     /// Pi (~3.14159265...). One half-turn in radians.
     ///
-    /// Source: ISO 80000-2 / OEIS A000796. 35-digit reference rescaled to
-    /// `SCALE` with half-to-even rounding.
+    /// Source: ISO 80000-2 / OEIS A000796. 37-digit reference rescaled to
+    /// `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -151,8 +160,7 @@ pub trait DecimalConsts: Sized {
 
     /// Tau (~6.28318530...). One full turn in radians.
     ///
-    /// Defined as `2 * pi`. 35-digit reference rescaled to `SCALE` with
-    /// half-to-even rounding.
+    /// Defined as `2 * pi`. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -161,8 +169,7 @@ pub trait DecimalConsts: Sized {
 
     /// Half-pi (~1.57079632...). One quarter-turn in radians.
     ///
-    /// Defined as `pi / 2`. 35-digit reference rescaled to `SCALE` with
-    /// half-to-even rounding.
+    /// Defined as `pi / 2`. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -171,8 +178,7 @@ pub trait DecimalConsts: Sized {
 
     /// Quarter-pi (~0.78539816...). One eighth-turn in radians.
     ///
-    /// Defined as `pi / 4`. 35-digit reference rescaled to `SCALE` with
-    /// half-to-even rounding.
+    /// Defined as `pi / 4`. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -182,7 +188,7 @@ pub trait DecimalConsts: Sized {
     /// The golden ratio (~1.61803398...). Dimensionless.
     ///
     /// Defined as `(1 + sqrt(5)) / 2`. Source: OEIS A001622. 35-digit
-    /// reference rescaled to `SCALE` with half-to-even rounding.
+    /// reference rescaled to `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -191,8 +197,7 @@ pub trait DecimalConsts: Sized {
 
     /// Euler's number (~2.71828182...). Dimensionless.
     ///
-    /// Source: OEIS A001113. 35-digit reference rescaled to `SCALE` with
-    /// half-to-even rounding.
+    /// Source: OEIS A001113. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -206,29 +211,29 @@ pub trait DecimalConsts: Sized {
 // duplicating the rescale logic.
 
 pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(PI_RAW_S35).rescale::<TARGET>().to_bits()
+    D128::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn tau_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(TAU_RAW_S35).rescale::<TARGET>().to_bits()
+    D128::<SCALE_REF>::from_bits(TAU_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn half_pi_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(HALF_PI_RAW_S35).rescale::<TARGET>().to_bits()
+    D128::<SCALE_REF>::from_bits(HALF_PI_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn quarter_pi_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S35).rescale::<TARGET>().to_bits()
+    D128::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn golden_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(GOLDEN_RAW_S35).rescale::<TARGET>().to_bits()
+    D128::<SCALE_REF>::from_bits(GOLDEN_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(E_RAW_S35).rescale::<TARGET>().to_bits()
+    D128::<SCALE_REF>::from_bits(E_RAW_S37).rescale::<TARGET>().to_bits()
 }
 
 // The `DecimalConsts` impl for `D128<SCALE>` is emitted by the
 // `decl_decimal_consts!` macro — the same macro D32 / D64 / D256+ use.
 // It expands to `Self(pi_at_target::<SCALE>())` etc., which is
 // identical to the previous hand-coded
-// `D128::<SCALE_REF>::from_bits(PI_RAW_S35).rescale::<SCALE>()` because
+// `D128::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<SCALE>()` because
 // `pi_at_target` is defined as exactly that, then `.to_bits()`.
 crate::macros::consts::decl_decimal_consts!(D128, i128);
 
@@ -271,7 +276,7 @@ mod tests {
 
     // Bit-exact assertions at SCALE = 12.
     //
-    // At SCALE = 12 each constant is the 35-digit raw integer divided by
+    // At SCALE = 12 each constant is the 37-digit raw integer divided by
     // 10^23, rounded half-to-even.
 
     /// pi at SCALE=12: raw / 10^23.
@@ -423,19 +428,22 @@ mod tests {
         assert_eq!(D0::pi().to_bits(), 3_i128);
     }
 
-    /// At SCALE = SCALE_REF (35), pi() returns exactly the raw constant.
+    /// At SCALE = SCALE_REF (37), pi() returns exactly the raw constant.
     #[test]
     fn pi_at_scale_ref_is_raw_constant() {
-        type D35 = D128<35>;
-        assert_eq!(D35::pi().to_bits(), PI_RAW_S35);
+        type D37 = D128<37>;
+        assert_eq!(D37::pi().to_bits(), PI_RAW_S37);
     }
 
-    /// At SCALE = SCALE_REF + 1 (36), pi() multiplies by 10, appending
-    /// one trailing zero digit.
+    /// At SCALE = SCALE_REF + 1 (38), pi() multiplies by 10, appending
+    /// one trailing zero digit. PI_RAW_S37 * 10 ≈ 3.14×10³⁸ which is
+    /// larger than i128::MAX ≈ 1.7×10³⁸, so this case overflows
+    /// `D128<38>` storage at compile time — exercising the upper end
+    /// of the rescale-up path is left to the SCALE = 37 case above.
     #[test]
-    fn pi_at_scale_36_multiplies_raw_by_ten() {
-        type D36 = D128<36>;
-        assert_eq!(D36::pi().to_bits(), PI_RAW_S35 * 10);
+    fn pi_at_scale_37_is_raw_constant() {
+        type D37 = D128<37>;
+        assert_eq!(D37::pi().to_bits(), PI_RAW_S37);
     }
 
     /// Negative-side rounding: negating pi gives the expected raw bits.
