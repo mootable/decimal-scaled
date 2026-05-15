@@ -512,12 +512,22 @@ fn main() -> std::io::Result<()> {
     writeln!(&mut f, "// `Int*::from_str_radix` at compile time.")?;
     writeln!(&mut f)?;
 
-    // D128: SCALE_REF=37 (sanity self-check against the hand-written
-    // constants in src/consts.rs).
+    // D128: SCALE_REF=37 — the i128 ceiling. All six constants get
+    // the full surface here so src/consts.rs can drop its hand-written
+    // raw values entirely.
     let pi37 = pi(37);
+    let mut tau37 = pi37.clone();
+    tau37.mul_u64(2);
+    let mut half_pi37 = pi37.clone();
+    half_pi37.div_u64(2);
+    let mut quarter_pi37 = pi37.clone();
+    quarter_pi37.div_u64(4);
     let e37 = e_const(37);
     let phi37 = golden(37);
     emit_constant(&mut f, "PI_D128_S37", &pi37, 37, 1)?;
+    emit_constant(&mut f, "TAU_D128_S37", &tau37, 37, 1)?;
+    emit_constant(&mut f, "HALF_PI_D128_S37", &half_pi37, 37, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D128_S37", &quarter_pi37, 37, 1)?;
     emit_constant(&mut f, "E_D128_S37", &e37, 37, 1)?;
     emit_constant(&mut f, "GOLDEN_D128_S37", &phi37, 37, 1)?;
 

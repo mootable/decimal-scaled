@@ -74,65 +74,39 @@ use crate::core_type::D128;
 /// [`RoundingMode`]: crate::rounding::RoundingMode
 const SCALE_REF: u32 = 37;
 
-// Raw i128 constants at SCALE_REF = 37.
+// Raw i128 constants at SCALE_REF = 37, materialised at build time
+// by `build.rs` (the same hand-rolled multi-precision generator that
+// emits the wide-tier constants). Sources: ISO 80000-2 (pi, tau,
+// pi/2, pi/4), OEIS A001113 (e), OEIS A001622 (golden ratio).
 //
-// Each value is the half-to-even rounding of the canonical decimal
-// expansion to 37 fractional digits. Sources: ISO 80000-2 (pi, tau, pi/2,
-// pi/4), OEIS A001113 (e), OEIS A001622 (golden = (1 + sqrt(5)) / 2).
+// The build-time string -> i128 parse is `const fn` (Rust 1.83+).
 
-/// pi at SCALE_REF = 37.
-/// Value: 3.1415926535897932384626433832795028842
-/// (38th digit was 9; rounded up from ...841 to ...842.)
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-const PI_RAW_S37: i128 = 31_415_926_535_897_932_384_626_433_832_795_028_842_i128;
+include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
-/// tau = 2 * pi at SCALE_REF = 37.
-/// Value: 6.2831853071795864769252867665590057684
-/// (38th digit was 9; rounded up from ...683 to ...684.)
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-const TAU_RAW_S37: i128 = 62_831_853_071_795_864_769_252_867_665_590_057_684_i128;
-
-/// pi / 2 at SCALE_REF = 37.
-/// Value: 1.5707963267948966192313216916397514421
-/// (38th digit was 9; rounded up from ...420 to ...421.)
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-const HALF_PI_RAW_S37: i128 = 15_707_963_267_948_966_192_313_216_916_397_514_421_i128;
-
-/// pi / 4 at SCALE_REF = 37.
-/// Value: 0.7853981633974483096156608458198757210
-/// (38th digit was 4; no round-up.)
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-const QUARTER_PI_RAW_S37: i128 = 7_853_981_633_974_483_096_156_608_458_198_757_210_i128;
-
-/// e at SCALE_REF = 37.
-/// Value: 2.7182818284590452353602874713526624978
-/// (38th digit was 5, 37th was 7 odd → round to even up: ...977 → ...978.)
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-const E_RAW_S37: i128 = 27_182_818_284_590_452_353_602_874_713_526_624_978_i128;
-
-/// Golden ratio = (1 + sqrt(5)) / 2 at SCALE_REF = 37.
-/// Value: 1.6180339887498948482045868343656381177
-/// (38th digit was 2; no round-up.)
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-const GOLDEN_RAW_S37: i128 = 16_180_339_887_498_948_482_045_868_343_656_381_177_i128;
+const PI_RAW_S37: i128 = match i128::from_str_radix(PI_D128_S37, 10) {
+    Ok(v) => v,
+    Err(_) => panic!("consts: PI_D128_S37 not parseable"),
+};
+const TAU_RAW_S37: i128 = match i128::from_str_radix(TAU_D128_S37, 10) {
+    Ok(v) => v,
+    Err(_) => panic!("consts: TAU_D128_S37 not parseable"),
+};
+const HALF_PI_RAW_S37: i128 = match i128::from_str_radix(HALF_PI_D128_S37, 10) {
+    Ok(v) => v,
+    Err(_) => panic!("consts: HALF_PI_D128_S37 not parseable"),
+};
+const QUARTER_PI_RAW_S37: i128 = match i128::from_str_radix(QUARTER_PI_D128_S37, 10) {
+    Ok(v) => v,
+    Err(_) => panic!("consts: QUARTER_PI_D128_S37 not parseable"),
+};
+const E_RAW_S37: i128 = match i128::from_str_radix(E_D128_S37, 10) {
+    Ok(v) => v,
+    Err(_) => panic!("consts: E_D128_S37 not parseable"),
+};
+const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D128_S37, 10) {
+    Ok(v) => v,
+    Err(_) => panic!("consts: GOLDEN_D128_S37 not parseable"),
+};
 
 // Rescaling from SCALE_REF to the caller's SCALE is delegated to
 // `D128::rescale` (which uses round-half-to-even by default; see
