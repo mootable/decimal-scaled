@@ -1356,11 +1356,11 @@ mod tests {
         assert_eq!(neg.ceil(), -D6::ONE);
         assert_eq!(neg.round(), -(D6::ONE + D6::ONE));
         // float bridge
-        let from_f = D6::from_f64_fast(2.5);
+        let from_f = D6::from_f64(2.5);
         assert_eq!(from_f.to_bits(), I256::from_str_radix("2500000", 10).unwrap());
-        assert_eq!(D6::from_f64_fast(f64::NAN), D6::ZERO);
-        assert_eq!(D6::from_f64_fast(f64::INFINITY), D6::MAX);
-        let round_trip = D6::ONE.to_f64_fast();
+        assert_eq!(D6::from_f64(f64::NAN), D6::ZERO);
+        assert_eq!(D6::from_f64(f64::INFINITY), D6::MAX);
+        let round_trip = D6::ONE.to_f64();
         assert!((round_trip - 1.0).abs() < 1e-9);
     }
 

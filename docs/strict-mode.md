@@ -64,7 +64,7 @@ decimal-scaled = { version = "0.1.1", features = ["strict"] }
 With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
 dispatch to their `*_strict` form. `strict` does not require `std`; the
 integer algorithms compile under `no_std + alloc`. The explicit
-float-conversion methods (`to_f64_fast`, `from_f64_fast`,
+float-conversion methods (`to_f64`, `from_f64`,
 `TryFrom<f64>`, …) remain available — they are type conversions, not
 transcendental operations.
 

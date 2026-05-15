@@ -317,27 +317,27 @@ mod tests {
     /// the f64 conversion step.
     #[test]
     fn pi_close_to_f64_pi() {
-        let diff = (D38s12::pi().to_f64_fast() - core::f64::consts::PI).abs();
+        let diff = (D38s12::pi().to_f64() - core::f64::consts::PI).abs();
         assert!(diff < 1e-11, "pi diverges from f64 PI by {diff}");
     }
 
     #[test]
     fn tau_close_to_f64_tau() {
-        let diff = (D38s12::tau().to_f64_fast() - core::f64::consts::TAU).abs();
+        let diff = (D38s12::tau().to_f64() - core::f64::consts::TAU).abs();
         assert!(diff < 1e-11, "tau diverges from f64 TAU by {diff}");
     }
 
     #[test]
     fn half_pi_close_to_f64_frac_pi_2() {
         let diff =
-            (D38s12::half_pi().to_f64_fast() - core::f64::consts::FRAC_PI_2).abs();
+            (D38s12::half_pi().to_f64() - core::f64::consts::FRAC_PI_2).abs();
         assert!(diff < 1e-11, "half_pi diverges from f64 FRAC_PI_2 by {diff}");
     }
 
     #[test]
     fn quarter_pi_close_to_f64_frac_pi_4() {
         let diff =
-            (D38s12::quarter_pi().to_f64_fast() - core::f64::consts::FRAC_PI_4).abs();
+            (D38s12::quarter_pi().to_f64() - core::f64::consts::FRAC_PI_4).abs();
         assert!(
             diff < 1e-11,
             "quarter_pi diverges from f64 FRAC_PI_4 by {diff}"
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn e_close_to_f64_e() {
-        let diff = (D38s12::e().to_f64_fast() - core::f64::consts::E).abs();
+        let diff = (D38s12::e().to_f64() - core::f64::consts::E).abs();
         assert!(diff < 1e-11, "e diverges from f64 E by {diff}");
     }
 
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn golden_close_to_closed_form() {
         let expected = (1.0_f64 + 5.0_f64.sqrt()) / 2.0;
-        let diff = (D38s12::golden().to_f64_fast() - expected).abs();
+        let diff = (D38s12::golden().to_f64() - expected).abs();
         assert!(diff < 1e-11, "golden diverges from closed-form by {diff}");
     }
 

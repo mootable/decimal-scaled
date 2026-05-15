@@ -54,8 +54,8 @@
 //! - `strict`: enables integer-only implementations of all transcendental
 //! functions. When `strict` is active each function that would otherwise
 //! route through `f64` is instead implemented using integer-only
-//! algorithms. Explicit float-conversion methods (`to_f64_fast`,
-//! `from_f64_fast`, etc.) remain available regardless; they are type
+//! algorithms. Explicit float-conversion methods (`to_f64`,
+//! `from_f64`, etc.) remain available regardless; they are type
 //! conversions, not mathematical operations. `strict` does not require
 //! `std`; the integer transcendental implementations compile under
 //! `no_std + alloc`.

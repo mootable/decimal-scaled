@@ -222,7 +222,7 @@ pub(crate) use decl_try_from_u128;
 /// `NotFinite`; finite values whose scaled magnitude exceeds the
 /// storage range return `Overflow`. Truncates toward zero (matches the
 /// historical D38 behaviour). For rounding-mode-aware float
-/// construction, use `from_f64_fast_with`.
+/// construction, use `from_f64_with`.
 macro_rules! decl_try_from_f64 {
     // Wide storage. The multiplier and storage bounds
     // round-trip through `f64` via the `WideInt` cast; the final

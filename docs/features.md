@@ -9,7 +9,7 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["all
 
 | Feature | Default | Enables |
 |---|---|---|
-| `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64_fast` constructors. Pulls in `alloc`. |
+| `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64` constructors. Pulls in `alloc`. |
 | `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` (canonical-string form). |
 | `macros` | no | The `d38!` compile-time literal macro. See [the macro guide](macros.md). |
@@ -64,7 +64,7 @@ only when a wide feature is active.
 
 | Feature | Enables |
 |---|---|
-| `experimental-floats` | `f16` / `f128` entry points on the float bridge (`from_f16_fast`, `to_f128_fast`, …). Requires a nightly toolchain. |
+| `experimental-floats` | `f16` / `f128` entry points on the float bridge (`from_f16`, `to_f128`, …). Requires a nightly toolchain. |
 
 ## Common configurations
 
