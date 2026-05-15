@@ -84,12 +84,6 @@ mod mg_divide;
 mod d128_kernels;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide_int;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
-mod wide;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
-mod wide_roots;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
-mod wide_transcendental;
 mod num_traits_impls;
 mod overflow_variants;
 mod powers;

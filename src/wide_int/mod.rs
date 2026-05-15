@@ -551,6 +551,22 @@ decl_wide_int!(Uint4096, Int4096, 32, 64);
 decl_wide_int!(Uint6144, Int6144, 48, 96);
 decl_wide_int!(Uint8192, Int8192, 64, 128);
 
+// Short aliases used by the decimal-tier macros (replacing the former
+// `crate::wide` re-export shim). The signed alias is exposed at each
+// width where it backs storage *or* serves as the next-width mul/div
+// widening step; the unsigned alias only where `Display`'s magnitude
+// path needs it. The feature gates mirror the call-site features.
+#[cfg(any(feature = "d256", feature = "wide"))]
+pub(crate) use self::{Int256 as I256, Uint256 as U256};
+#[cfg(any(feature = "d256", feature = "d512", feature = "wide"))]
+pub(crate) use self::Int512 as I512;
+#[cfg(any(feature = "d512", feature = "wide"))]
+pub(crate) use self::Uint512 as U512;
+#[cfg(any(feature = "d512", feature = "d1024", feature = "wide"))]
+pub(crate) use self::Int1024 as I1024;
+#[cfg(any(feature = "d1024", feature = "wide"))]
+pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
+
 #[cfg(test)]
 mod hint_tests {
     use super::*;

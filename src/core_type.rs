@@ -616,7 +616,7 @@ pub type D64s18 = D64<18>;
 #[cfg(any(feature = "d256", feature = "wide"))]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D256<const SCALE: u32>(pub crate::wide::I256);
+pub struct D256<const SCALE: u32>(pub crate::wide_int::I256);
 
 #[cfg(any(feature = "d256", feature = "wide"))]
 impl<const SCALE: u32> Default for D256<SCALE> {
@@ -627,40 +627,40 @@ impl<const SCALE: u32> Default for D256<SCALE> {
 }
 
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::basics::decl_decimal_basics!(wide D256, crate::wide::I256, 76);
+crate::macros::basics::decl_decimal_basics!(wide D256, crate::wide_int::I256, 76);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::arithmetic::decl_decimal_arithmetic!(wide D256, crate::wide::I256, crate::wide::I512);
+crate::macros::arithmetic::decl_decimal_arithmetic!(wide D256, crate::wide_int::I256, crate::wide_int::I512);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::display::decl_decimal_display!(wide D256, crate::wide::U256);
+crate::macros::display::decl_decimal_display!(wide D256, crate::wide_int::U256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::overflow::decl_decimal_overflow_variants!(wide D256, crate::wide::I256, crate::wide::I512);
+crate::macros::overflow::decl_decimal_overflow_variants!(wide D256, crate::wide_int::I256, crate::wide_int::I512);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::sign::decl_decimal_sign_methods!(wide D256, crate::wide::I256);
+crate::macros::sign::decl_decimal_sign_methods!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::consts::decl_decimal_consts!(wide D256, crate::wide::I256);
+crate::macros::consts::decl_decimal_consts!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::from_str::decl_decimal_from_str!(wide D256, crate::wide::I256);
+crate::macros::from_str::decl_decimal_from_str!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::bitwise::decl_decimal_bitwise!(wide D256, crate::wide::I256);
+crate::macros::bitwise::decl_decimal_bitwise!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::int_methods::decl_decimal_int_methods!(wide D256, crate::wide::I256);
+crate::macros::int_methods::decl_decimal_int_methods!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::wide_roots::decl_wide_roots!(
+crate::macros::wide_roots::decl_wide_roots!(
     D256,
-    crate::wide::I256,
+    crate::wide_int::I256,
     crate::wide_int::Int512,
     crate::wide_int::Int1024
 );
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::wide_transcendental::decl_wide_transcendental!(
+crate::macros::wide_transcendental::decl_wide_transcendental!(
     D256,
-    crate::wide::I256,
+    crate::wide_int::I256,
     crate::wide_int::Int1024,
     wide_trig_d256
 );
@@ -669,51 +669,51 @@ crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::pow::decl_decimal_pow!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D256, crate::wide::I256);
+crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i8);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, i8);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i16);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, i16);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i32);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, i32);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, i64);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, i64);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u8);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, u8);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u16);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, u16);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u32);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, u32);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide::I256, u64);
+crate::macros::conversions::decl_from_primitive!(wide D256, crate::wide_int::I256, u64);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_try_from_i128!(wide D256, crate::wide::I256);
+crate::macros::conversions::decl_try_from_i128!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_try_from_u128!(wide D256, crate::wide::I256);
+crate::macros::conversions::decl_try_from_u128!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_try_from_f64!(wide D256, crate::wide::I256);
+crate::macros::conversions::decl_try_from_f64!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_try_from_f32!(wide D256, crate::wide::I256);
+crate::macros::conversions::decl_try_from_f32!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D256, crate::wide::I256, i128);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D256, crate::wide_int::I256, i128);
 // Cross-width widening into D256 (lossless): D32 / D64 / D128 -> D256.
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide::I256, D32, i32);
+crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide_int::I256, D32, i32);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide::I256, D64, i64);
+crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide_int::I256, D64, i64);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide::I256, D128, i128);
+crate::macros::conversions::decl_cross_width_widening!(wide D256, crate::wide_int::I256, D128, i128);
 // Cross-width narrowing from D256 (fallible): D256 -> D128 / D64 / D32.
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D128, i128, D256, crate::wide::I256);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D128, i128, D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D64, i64, D256, crate::wide::I256);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D64, i64, D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D32, i32, D256, crate::wide::I256);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D32, i32, D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::float_bridge::decl_decimal_float_bridge!(wide D256, crate::wide::I256);
+crate::macros::float_bridge::decl_decimal_float_bridge!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::rescale::decl_decimal_rescale!(wide D256, crate::wide::I256);
+crate::macros::rescale::decl_decimal_rescale!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D256);
 
@@ -756,7 +756,7 @@ pub type D256s76 = D256<76>;
 #[cfg(any(feature = "d512", feature = "wide"))]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D512<const SCALE: u32>(pub crate::wide::I512);
+pub struct D512<const SCALE: u32>(pub crate::wide_int::I512);
 
 #[cfg(any(feature = "d512", feature = "wide"))]
 impl<const SCALE: u32> Default for D512<SCALE> {
@@ -767,40 +767,40 @@ impl<const SCALE: u32> Default for D512<SCALE> {
 }
 
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::basics::decl_decimal_basics!(wide D512, crate::wide::I512, 153);
+crate::macros::basics::decl_decimal_basics!(wide D512, crate::wide_int::I512, 153);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::arithmetic::decl_decimal_arithmetic!(wide D512, crate::wide::I512, crate::wide::I1024);
+crate::macros::arithmetic::decl_decimal_arithmetic!(wide D512, crate::wide_int::I512, crate::wide_int::I1024);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::display::decl_decimal_display!(wide D512, crate::wide::U512);
+crate::macros::display::decl_decimal_display!(wide D512, crate::wide_int::U512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::overflow::decl_decimal_overflow_variants!(wide D512, crate::wide::I512, crate::wide::I1024);
+crate::macros::overflow::decl_decimal_overflow_variants!(wide D512, crate::wide_int::I512, crate::wide_int::I1024);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::sign::decl_decimal_sign_methods!(wide D512, crate::wide::I512);
+crate::macros::sign::decl_decimal_sign_methods!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::consts::decl_decimal_consts!(wide D512, crate::wide::I512);
+crate::macros::consts::decl_decimal_consts!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::from_str::decl_decimal_from_str!(wide D512, crate::wide::I512);
+crate::macros::from_str::decl_decimal_from_str!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::bitwise::decl_decimal_bitwise!(wide D512, crate::wide::I512);
+crate::macros::bitwise::decl_decimal_bitwise!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::int_methods::decl_decimal_int_methods!(wide D512, crate::wide::I512);
+crate::macros::int_methods::decl_decimal_int_methods!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::wide_roots::decl_wide_roots!(
+crate::macros::wide_roots::decl_wide_roots!(
     D512,
-    crate::wide::I512,
+    crate::wide_int::I512,
     crate::wide_int::Int1024,
     crate::wide_int::Int2048
 );
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::wide_transcendental::decl_wide_transcendental!(
+crate::macros::wide_transcendental::decl_wide_transcendental!(
     D512,
-    crate::wide::I512,
+    crate::wide_int::I512,
     crate::wide_int::Int2048,
     wide_trig_d512
 );
@@ -809,47 +809,47 @@ crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::pow::decl_decimal_pow!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D512, crate::wide::I512);
+crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i8);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, i8);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i16);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, i16);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i32);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, i32);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i64);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, i64);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, u8);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, u8);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, u16);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, u16);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, u32);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, u32);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, u64);
+crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide_int::I512, u64);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_try_from_i128!(wide D512, crate::wide::I512);
+crate::macros::conversions::decl_try_from_i128!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_try_from_u128!(wide D512, crate::wide::I512);
+crate::macros::conversions::decl_try_from_u128!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_try_from_f64!(wide D512, crate::wide::I512);
+crate::macros::conversions::decl_try_from_f64!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_try_from_f32!(wide D512, crate::wide::I512);
+crate::macros::conversions::decl_try_from_f32!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D512, crate::wide::I512, i128);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D512, crate::wide_int::I512, i128);
 // Cross-width widening into D512 (lossless): D128 / D256 -> D512.
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D512, crate::wide::I512, D128, i128);
+crate::macros::conversions::decl_cross_width_widening!(wide D512, crate::wide_int::I512, D128, i128);
 #[cfg(all(any(feature = "d512", feature = "wide"), any(feature = "d256", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D512, crate::wide::I512, D256, crate::wide::I256);
+crate::macros::conversions::decl_cross_width_widening!(wide D512, crate::wide_int::I512, D256, crate::wide_int::I256);
 // Cross-width narrowing from D512 (fallible): D512 -> D256 / D128.
 #[cfg(all(any(feature = "d512", feature = "wide"), any(feature = "d256", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D256, crate::wide::I256, D512, crate::wide::I512);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D256, crate::wide_int::I256, D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D128, i128, D512, crate::wide::I512);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D128, i128, D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::float_bridge::decl_decimal_float_bridge!(wide D512, crate::wide::I512);
+crate::macros::float_bridge::decl_decimal_float_bridge!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::rescale::decl_decimal_rescale!(wide D512, crate::wide::I512);
+crate::macros::rescale::decl_decimal_rescale!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D512);
 
@@ -883,7 +883,7 @@ pub type D512s153 = D512<153>;
 #[cfg(any(feature = "d1024", feature = "wide"))]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D1024<const SCALE: u32>(pub crate::wide::I1024);
+pub struct D1024<const SCALE: u32>(pub crate::wide_int::I1024);
 
 #[cfg(any(feature = "d1024", feature = "wide"))]
 impl<const SCALE: u32> Default for D1024<SCALE> {
@@ -894,40 +894,40 @@ impl<const SCALE: u32> Default for D1024<SCALE> {
 }
 
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::basics::decl_decimal_basics!(wide D1024, crate::wide::I1024, 307);
+crate::macros::basics::decl_decimal_basics!(wide D1024, crate::wide_int::I1024, 307);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::arithmetic::decl_decimal_arithmetic!(wide D1024, crate::wide::I1024, crate::wide::I2048);
+crate::macros::arithmetic::decl_decimal_arithmetic!(wide D1024, crate::wide_int::I1024, crate::wide_int::I2048);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::display::decl_decimal_display!(wide D1024, crate::wide::U1024);
+crate::macros::display::decl_decimal_display!(wide D1024, crate::wide_int::U1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::overflow::decl_decimal_overflow_variants!(wide D1024, crate::wide::I1024, crate::wide::I2048);
+crate::macros::overflow::decl_decimal_overflow_variants!(wide D1024, crate::wide_int::I1024, crate::wide_int::I2048);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::sign::decl_decimal_sign_methods!(wide D1024, crate::wide::I1024);
+crate::macros::sign::decl_decimal_sign_methods!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::consts::decl_decimal_consts!(wide D1024, crate::wide::I1024);
+crate::macros::consts::decl_decimal_consts!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::from_str::decl_decimal_from_str!(wide D1024, crate::wide::I1024);
+crate::macros::from_str::decl_decimal_from_str!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::helpers::decl_decimal_helpers!(wide D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::bitwise::decl_decimal_bitwise!(wide D1024, crate::wide::I1024);
+crate::macros::bitwise::decl_decimal_bitwise!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::int_methods::decl_decimal_int_methods!(wide D1024, crate::wide::I1024);
+crate::macros::int_methods::decl_decimal_int_methods!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::wide_roots::decl_wide_roots!(
+crate::macros::wide_roots::decl_wide_roots!(
     D1024,
-    crate::wide::I1024,
+    crate::wide_int::I1024,
     crate::wide_int::Int2048,
     crate::wide_int::Int4096
 );
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::wide_transcendental::decl_wide_transcendental!(
+crate::macros::wide_transcendental::decl_wide_transcendental!(
     D1024,
-    crate::wide::I1024,
+    crate::wide_int::I1024,
     crate::wide_int::Int4096,
     wide_trig_d1024
 );
@@ -936,47 +936,47 @@ crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D1024)
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::pow::decl_decimal_pow!(D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D1024, crate::wide::I1024);
+crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, i8);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, i8);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, i16);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, i16);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, i32);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, i32);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, i64);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, i64);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, u8);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, u8);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, u16);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, u16);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, u32);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, u32);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide::I1024, u64);
+crate::macros::conversions::decl_from_primitive!(wide D1024, crate::wide_int::I1024, u64);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_try_from_i128!(wide D1024, crate::wide::I1024);
+crate::macros::conversions::decl_try_from_i128!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_try_from_u128!(wide D1024, crate::wide::I1024);
+crate::macros::conversions::decl_try_from_u128!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_try_from_f64!(wide D1024, crate::wide::I1024);
+crate::macros::conversions::decl_try_from_f64!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_try_from_f32!(wide D1024, crate::wide::I1024);
+crate::macros::conversions::decl_try_from_f32!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D1024, crate::wide::I1024, i128);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D1024, crate::wide_int::I1024, i128);
 // Cross-width widening into D1024 (lossless): D256 / D512 -> D1024.
 #[cfg(all(any(feature = "d1024", feature = "wide"), any(feature = "d256", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D1024, crate::wide::I1024, D256, crate::wide::I256);
+crate::macros::conversions::decl_cross_width_widening!(wide D1024, crate::wide_int::I1024, D256, crate::wide_int::I256);
 #[cfg(all(any(feature = "d1024", feature = "wide"), any(feature = "d512", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D1024, crate::wide::I1024, D512, crate::wide::I512);
+crate::macros::conversions::decl_cross_width_widening!(wide D1024, crate::wide_int::I1024, D512, crate::wide_int::I512);
 // Cross-width narrowing from D1024 (fallible): D1024 -> D512 / D256.
 #[cfg(all(any(feature = "d1024", feature = "wide"), any(feature = "d512", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D512, crate::wide::I512, D1024, crate::wide::I1024);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D512, crate::wide_int::I512, D1024, crate::wide_int::I1024);
 #[cfg(all(any(feature = "d1024", feature = "wide"), any(feature = "d256", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D256, crate::wide::I256, D1024, crate::wide::I1024);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D256, crate::wide_int::I256, D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::float_bridge::decl_decimal_float_bridge!(wide D1024, crate::wide::I1024);
+crate::macros::float_bridge::decl_decimal_float_bridge!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::rescale::decl_decimal_rescale!(wide D1024, crate::wide::I1024);
+crate::macros::rescale::decl_decimal_rescale!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D1024);
 
@@ -1279,7 +1279,7 @@ mod tests {
     #[test]
     fn d256_basics() {
         use crate::decimal_trait::Decimal;
-        use crate::wide::I256;
+        use crate::wide_int::I256;
         assert_eq!(super::D256s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
         assert_eq!(super::D256s2::ONE.to_bits(), I256::from_str_radix("100", 10).unwrap());
         assert_eq!(super::D256s2::MAX.to_bits(), I256::MAX);
@@ -1305,13 +1305,13 @@ mod tests {
         type D = super::D256<12>;
         let one = D::ONE;
         let two = D::from_bits(D::multiplier() + D::multiplier());
-        let three = D::from_bits(D::multiplier() * crate::wide::I256::from_str_radix("3", 10).unwrap());
+        let three = D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("3", 10).unwrap());
         // add / sub / neg
         assert_eq!((one + two), three);
         assert_eq!((three - one), two);
         assert_eq!((-one).to_bits(), -D::multiplier());
         // mul: 2 * 3 == 6
-        let six = D::from_bits(D::multiplier() * crate::wide::I256::from_str_radix("6", 10).unwrap());
+        let six = D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("6", 10).unwrap());
         assert_eq!((two * three), six);
         // div: 6 / 2 == 3
         assert_eq!((six / two), three);
@@ -1330,12 +1330,12 @@ mod tests {
         v %= two;
         assert_eq!(v, D::ZERO);
         // fractional: 1.5 * 1.5 == 2.25 at scale 12
-        let half = D::from_bits(D::multiplier() / crate::wide::I256::from_str_radix("2", 10).unwrap());
+        let half = D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
         let one_and_half = one + half;
         let product = one_and_half * one_and_half;
         let expected = D::from_bits(
-            D::multiplier() * crate::wide::I256::from_str_radix("2", 10).unwrap()
-                + D::multiplier() / crate::wide::I256::from_str_radix("4", 10).unwrap(),
+            D::multiplier() * crate::wide_int::I256::from_str_radix("2", 10).unwrap()
+                + D::multiplier() / crate::wide_int::I256::from_str_radix("4", 10).unwrap(),
         );
         assert_eq!(product, expected);
     }
@@ -1348,7 +1348,7 @@ mod tests {
         assert_eq!(alloc::format!("{}", one), "1.000000000000");
         assert_eq!(alloc::format!("{}", -one), "-1.000000000000");
         assert_eq!(alloc::format!("{}", D::ZERO), "0.000000000000");
-        let half = D::from_bits(D::multiplier() / crate::wide::I256::from_str_radix("2", 10).unwrap());
+        let half = D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
         assert_eq!(alloc::format!("{}", half), "0.500000000000");
         assert_eq!(alloc::format!("{:?}", one), "D256<12>(1.000000000000)");
         // scale 0 prints no fractional part
@@ -1382,7 +1382,7 @@ mod tests {
         assert_eq!(D::ONE.copysign(neg), neg);
         assert_eq!(neg.copysign(D::ONE), D::ONE);
         // recip: 1/2 at scale 6
-        let half = D::from_bits(D::multiplier() / crate::wide::I256::from_str_radix("2", 10).unwrap());
+        let half = D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
         assert_eq!(two.recip(), half);
     }
 
@@ -1402,11 +1402,11 @@ mod tests {
         // checked_mul / checked_div
         let two = D::ONE + D::ONE;
         let three = two + D::ONE;
-        assert_eq!(two.checked_mul(three), Some(D::from_bits(D::multiplier() * crate::wide::I256::from_str_radix("6", 10).unwrap())));
+        assert_eq!(two.checked_mul(three), Some(D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("6", 10).unwrap())));
         assert_eq!(D::ONE.checked_div(D::ZERO), None);
         assert_eq!((three).checked_div(D::ONE), Some(three));
         // wrapping_add of one storage LSB at MAX wraps around to MIN.
-        let one_lsb = D::from_bits(crate::wide::I256::from_str_radix("1", 10).unwrap());
+        let one_lsb = D::from_bits(crate::wide_int::I256::from_str_radix("1", 10).unwrap());
         assert_eq!(D::MAX.wrapping_add(one_lsb), D::MIN);
         // overflowing
         assert_eq!(D::ONE.overflowing_add(D::ONE), (two, false));
@@ -1421,17 +1421,17 @@ mod tests {
         // pi at scale 12 matches the D128 reference.
         assert_eq!(
             super::D256::<12>::pi().to_bits(),
-            crate::wide::I256::from_str_radix("3141592653590", 10).unwrap()
+            crate::wide_int::I256::from_str_radix("3141592653590", 10).unwrap()
         );
         assert_eq!(
             super::D256::<4>::e().to_bits(),
-            crate::wide::I256::from_str_radix("27183", 10).unwrap()
+            crate::wide_int::I256::from_str_radix("27183", 10).unwrap()
         );
         // FromStr within i128 range
         let v = super::D256::<2>::from_str("1.50").unwrap();
-        assert_eq!(v.to_bits(), crate::wide::I256::from_str_radix("150", 10).unwrap());
+        assert_eq!(v.to_bits(), crate::wide_int::I256::from_str_radix("150", 10).unwrap());
         let neg = super::D256::<2>::from_str("-20.50").unwrap();
-        assert_eq!(neg.to_bits(), crate::wide::I256::from_str_radix("-2050", 10).unwrap());
+        assert_eq!(neg.to_bits(), crate::wide_int::I256::from_str_radix("-2050", 10).unwrap());
         // num_traits Zero / One
         use num_traits::{One, Zero};
         assert!(super::D256::<6>::zero().is_zero());
@@ -1441,7 +1441,7 @@ mod tests {
     #[cfg(any(feature = "d256", feature = "wide"))]
     #[test]
     fn d256_conversions() {
-        use crate::wide::I256;
+        use crate::wide_int::I256;
         type D = super::D256<6>;
         // From<primitive int>
         let from_i32: D = 5i32.into();
@@ -1494,7 +1494,7 @@ mod tests {
     #[test]
     fn d256_rescale_rounding_floats() {
         use crate::rounding::RoundingMode;
-        use crate::wide::I256;
+        use crate::wide_int::I256;
         type D6 = super::D256<6>;
         // rescale up (lossless): scale 6 -> scale 9
         let v = D6::from_bits(I256::from_str_radix("1500000", 10).unwrap()); // 1.5
@@ -1533,7 +1533,7 @@ mod tests {
     #[test]
     fn d512_smoke() {
         use crate::decimal_trait::Decimal;
-        use crate::wide::I512;
+        use crate::wide_int::I512;
         type D = super::D512<35>;
         assert_eq!(<D as Decimal>::MAX_SCALE, 153);
         assert_eq!(D::ZERO.to_bits(), I512::from_str_radix("0", 10).unwrap());
@@ -1555,7 +1555,7 @@ mod tests {
     #[test]
     fn d1024_smoke() {
         use crate::decimal_trait::Decimal;
-        use crate::wide::I1024;
+        use crate::wide_int::I1024;
         type D = super::D1024<35>;
         assert_eq!(<D as Decimal>::MAX_SCALE, 307);
         let one = D::ONE;

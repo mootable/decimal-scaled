@@ -389,7 +389,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn ln_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw <= $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::ln: argument must be positive"));
                 }
                 let w = SCALE + $core::GUARD;
@@ -405,7 +405,7 @@ macro_rules! decl_wide_transcendental {
             pub fn log_strict(self, base: Self) -> Self {
                 let raw = self.to_bits();
                 let braw = base.to_bits();
-                let z = $crate::wide_roots::wide_lit!($Storage, "0");
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 if raw <= z {
                     panic!(concat!(stringify!($Type), "::log: argument must be positive"));
                 }
@@ -427,7 +427,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn log2_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw <= $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 let w = SCALE + $core::GUARD;
@@ -441,7 +441,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn log10_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw <= $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 let w = SCALE + $core::GUARD;
@@ -455,7 +455,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn exp_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw == $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
                 let w = SCALE + $core::GUARD;
@@ -469,7 +469,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn exp2_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw == $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
                 let w = SCALE + $core::GUARD;
@@ -486,7 +486,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
                 let raw = self.to_bits();
-                if raw <= $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
                 let w = SCALE + $core::GUARD;
@@ -597,7 +597,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let z = $crate::wide_roots::wide_lit!($Storage, "0");
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 let yraw = self.to_bits();
                 let xraw = other.to_bits();
                 let r = if xraw == z {
@@ -632,7 +632,7 @@ macro_rules! decl_wide_transcendental {
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
                 let enx = $core::exp_fixed(-v, w);
-                let r = (ex - enx) / $crate::wide_roots::wide_lit!($Work, "2");
+                let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -645,7 +645,7 @@ macro_rules! decl_wide_transcendental {
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
                 let enx = $core::exp_fixed(-v, w);
-                let r = (ex + enx) / $crate::wide_roots::wide_lit!($Work, "2");
+                let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -670,7 +670,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn asinh_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw == $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
                 let w = SCALE + $core::GUARD;
@@ -685,7 +685,7 @@ macro_rules! decl_wide_transcendental {
                     let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
                     $core::ln_fixed(ax + root, w)
                 };
-                let signed = if raw < $crate::wide_roots::wide_lit!($Storage, "0") {
+                let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
                 } else {
                     inner
@@ -731,7 +731,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                 }
                 let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) / $crate::wide_roots::wide_lit!($Work, "2");
+                let r = $core::ln_fixed(ratio, w) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -743,7 +743,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let r = $core::div(
-                    v * $crate::wide_roots::wide_lit!($Work, "180"),
+                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
                     $core::pi(w),
                     w,
                 );
@@ -758,7 +758,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let r = $core::mul(v, $core::pi(w), w)
-                    / $crate::wide_roots::wide_lit!($Work, "180");
+                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
         }
@@ -934,14 +934,14 @@ mod tests {
 
         for raw in positives {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
             agree("ln", raw, w.ln_strict().to_bits().resize::<i128>(), n.ln_strict().to_bits());
             agree("log2", raw, w.log2_strict().to_bits().resize::<i128>(), n.log2_strict().to_bits());
             agree("log10", raw, w.log10_strict().to_bits().resize::<i128>(), n.log10_strict().to_bits());
         }
         for raw in all {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
             agree("exp", raw, w.exp_strict().to_bits().resize::<i128>(), n.exp_strict().to_bits());
             agree("sin", raw, w.sin_strict().to_bits().resize::<i128>(), n.sin_strict().to_bits());
             agree("cos", raw, w.cos_strict().to_bits().resize::<i128>(), n.cos_strict().to_bits());
@@ -952,7 +952,7 @@ mod tests {
         }
         for raw in unit_range {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
             agree("asin", raw, w.asin_strict().to_bits().resize::<i128>(), n.asin_strict().to_bits());
             agree("acos", raw, w.acos_strict().to_bits().resize::<i128>(), n.acos_strict().to_bits());
             agree("atanh", raw, w.atanh_strict().to_bits().resize::<i128>(), n.atanh_strict().to_bits());

@@ -70,11 +70,11 @@ macro_rules! decl_wide_roots {
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
                 let raw = self.to_bits();
-                if raw <= $crate::wide_roots::wide_lit!($Storage, "0") {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
-                let one = $crate::wide_roots::wide_lit!($SqrtWide, "1");
-                let ten = $crate::wide_roots::wide_lit!($SqrtWide, "10");
+                let one = $crate::macros::wide_roots::wide_lit!($SqrtWide, "1");
+                let ten = $crate::macros::wide_roots::wide_lit!($SqrtWide, "10");
                 // N = r · 10^SCALE, formed exactly one width up.
                 let n: $SqrtWide = raw.resize::<$SqrtWide>() * ten.pow(SCALE);
                 // q = floor(sqrt(N)). Round up to q+1 iff N is closer to
@@ -99,14 +99,14 @@ macro_rules! decl_wide_roots {
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
                 let raw = self.to_bits();
-                let storage_zero = $crate::wide_roots::wide_lit!($Storage, "0");
+                let storage_zero = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 if raw == storage_zero {
                     return Self::ZERO;
                 }
-                let zero = $crate::wide_roots::wide_lit!($CbrtWide, "0");
-                let one = $crate::wide_roots::wide_lit!($CbrtWide, "1");
-                let three = $crate::wide_roots::wide_lit!($CbrtWide, "3");
-                let ten = $crate::wide_roots::wide_lit!($CbrtWide, "10");
+                let zero = $crate::macros::wide_roots::wide_lit!($CbrtWide, "0");
+                let one = $crate::macros::wide_roots::wide_lit!($CbrtWide, "1");
+                let three = $crate::macros::wide_roots::wide_lit!($CbrtWide, "3");
+                let ten = $crate::macros::wide_roots::wide_lit!($CbrtWide, "10");
 
                 // Work on the magnitude two widths up; the radicand
                 // `r · 10^(2·SCALE)` needs the extra room.
