@@ -23,8 +23,12 @@ cargo bench --features wide --bench d128_mul_div_paths
 > implementations on the same machine, in the same run, are what
 > matters. Operands are `black_box`-ed to defeat constant folding;
 > outputs are returned from the closure so the optimiser cannot drop
-> the call. **Winning cell on each row is bold. Every row uses the
-> winner's unit so cells compare directly.**
+> the call. **Winning cell on each row is bold. Every row uses one
+> unit — the median natural unit across that row's cells — so
+> values compare directly; cells whose natural unit is much smaller
+> than the row's chosen one are rendered in scientific notation
+> (e.g. `1.26×10⁻⁵ ms` for a 12 ns fast-path cell in an `ms`-scale
+> row).**
 
 ## Time units
 
@@ -120,7 +124,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 |---|---|---|---|
 | add | **372 ps** | 384 ps | 378 ps |
 | sub | 455 ps | **452 ps** | 472 ps |
-| mul | **383 ps** | 9,608 ps | 9,628 ps |
+| mul | **0.38 ns** | 9.61 ns | 9.63 ns |
 | div | **9.67 ns** | 10.3 ns | 11.1 ns |
 | rem | **1.46 ns** | 1.58 ns | 2.72 ns |
 | neg | 251 ps | **250 ps** | 266 ps |
@@ -153,9 +157,9 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 |---|---|---|---|
 | add | 2.93 ns | **2.92 ns** | 3.00 ns |
 | sub | **3.83 ns** | 4.01 ns | 4.23 ns |
-| mul | **32.6 ns** | 16,602 ns | 30,038 ns |
-| div | **138 ns** | 16,198 ns | 30,158 ns |
-| rem | **19.9 ns** | 1,892 ns | 3,010 ns |
+| mul | **0.033 µs** | 16.6 µs | 30.0 µs |
+| div | **0.14 µs** | 16.2 µs | 30.2 µs |
+| rem | **0.020 µs** | 1.89 µs | 3.01 µs |
 | neg | **2.60 ns** | 2.63 ns | 2.65 ns |
 
 ### D1024
@@ -164,9 +168,9 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 |---|---|---|---|
 | add | **7.84 ns** | 7.93 ns | 7.95 ns |
 | sub | **14.2 ns** | 14.4 ns | 14.2 ns |
-| mul | **56.3 ns** | 63,593 ns | 113,200 ns |
-| div | **250 ns** | 62,640 ns | 110,740 ns |
-| rem | **35.8 ns** | 6,474 ns | 10,174 ns |
+| mul | **0.056 µs** | 63.6 µs | 113 µs |
+| div | **0.25 µs** | 62.6 µs | 111 µs |
+| rem | **0.036 µs** | 6.47 µs | 10.2 µs |
 | neg | **5.05 ns** | 5.28 ns | 5.25 ns |
 
 **Reading the arithmetic tables.** Add / sub / neg are exact;
@@ -237,7 +241,7 @@ their cost is dominated by D128 plus the narrow-tier round-trip.
 | fn | D32 s=9 | D64 s=18 | D128 s=0 | D128 s=19 | D128 s=38 |
 |---|---|---|---|---|---|
 | ln | 40.3 µs | 54.9 µs | **1.13 µs** | 58.3 µs | 60.8 µs |
-| exp | 36,440 ns | 48,519 ns | **1.08 ns** | 49,590 ns | 28,894 ns |
+| exp | 36.4 µs | 48.5 µs | **1.08×10⁻³ µs** | 49.6 µs | 28.9 µs |
 | sin | 32.1 µs | 40.9 µs | 20.0 µs | 44.1 µs | **17.7 µs** |
 | sqrt | 33.1 ns | 38.0 ns | **13.6 ns** | 37.9 ns | 3,248 ns |
 
@@ -248,10 +252,10 @@ guard-digit budget at each scale.
 
 | fn | D256 s=0 | D256 s=35 | D256 s=76 | D512 s=0 | D512 s=75 | D512 s=153 | D1024 s=0 | D1024 s=150 | D1024 s=307 |
 |---|---|---|---|---|---|---|---|---|---|
-| ln | **152 µs** | 1,352 µs | 3,252 µs | 297 µs | 6,006 µs | 17,051 µs | 528 µs | 33,339 µs | 112,160 µs |
-| exp | **12.6 ns** | 1,293,400 ns | 2,978,900 ns | 17.1 ns | 5,579,900 ns | 15,386,000 ns | 27.8 ns | 31,671,000 ns | 98,844,000 ns |
-| sin | **224 µs** | 1,042 µs | 2,454 µs | 413 µs | 4,633 µs | 12,980 µs | 763 µs | 24,437 µs | 78,599 µs |
-| sqrt | **123 ns** | 19,860 ns | 46,066 ns | 187 ns | 77,558 ns | 168,310 ns | 362 ns | 304,080 ns | 702,570 ns |
+| ln | **0.15 ms** | 1.35 ms | 3.25 ms | 0.30 ms | 6.01 ms | 17.1 ms | 0.53 ms | 33.3 ms | 112 ms |
+| exp | **1.26×10⁻⁵ ms** | 1.29 ms | 2.98 ms | 1.71×10⁻⁵ ms | 5.58 ms | 15.4 ms | 2.78×10⁻⁵ ms | 31.7 ms | 98.8 ms |
+| sin | **0.22 ms** | 1.04 ms | 2.45 ms | 0.41 ms | 4.63 ms | 13.0 ms | 0.76 ms | 24.4 ms | 78.6 ms |
+| sqrt | **0.12 µs** | 19.9 µs | 46.1 µs | 0.19 µs | 77.6 µs | 168 µs | 0.36 µs | 304 µs | 703 µs |
 
 **Reading the strict tables.** A few cells reflect *fast paths*
 rather than the full series evaluation — the bold winner per row

@@ -103,20 +103,37 @@ _UNIT_DIV = {"ps": 1e-3, "ns": 1.0, "µs": 1e3, "ms": 1e6, "s": 1e9}
 
 def fmt(ns: float, unit: str | None = None) -> str:
     """Format `ns` in the given unit (defaulting to the most readable
-    one for that value alone). Adds thousands separators when the
-    formatted value crosses 1 000 in its chosen unit."""
+    one for that value alone).
+
+    - Scientific notation `m×10ⁿ` for values < 0.01 of the row unit
+      (the row's natural unit is much bigger than this cell — keeps
+      the order-of-magnitude legible).
+    - 1–2 fractional decimals in the comfortable 0.1–100 range.
+    - Comma-grouped integer when a row's chosen unit lands much
+      smaller than this cell and the value crosses 1 000."""
     if unit is None:
         unit = pick_unit(ns)
     val = ns / _UNIT_DIV[unit]
-    if val < 10:
+    if val < 0.01:
+        # Scientific notation: e.g. 1.26×10⁻⁵
+        mantissa = val
+        exp = 0
+        while mantissa < 1.0 and exp > -12:
+            mantissa *= 10.0
+            exp -= 1
+        sup_digits = "⁻" + "".join("⁰¹²³⁴⁵⁶⁷⁸⁹"[int(d)] for d in str(-exp))
+        s = f"{mantissa:.2f}×10{sup_digits}"
+    elif val < 0.1:
+        s = f"{val:.3f}"
+    elif val < 10:
         s = f"{val:.2f}"
     elif val < 100:
         s = f"{val:.1f}"
     elif val < 1000:
         s = f"{val:.0f}"
     else:
-        # Comma-separated integer for readability when a row's
-        # cells are all rendered in the winner's (small) unit.
+        # Comma-separated integer for readability when a row spans
+        # many orders of magnitude and the median unit lands small.
         s = f"{val:,.0f}"
     return f"{s} {unit}"
 
@@ -277,8 +294,11 @@ def main() -> None:
 
     placeholder_map = build_placeholder_map()
 
-    # Per-placeholder: which unit to render in (the unit of the row's
-    # winner) and whether to bold (the row's winner itself).
+    # Per-placeholder: which unit to render in (the row's MEDIAN
+    # natural unit — strikes a balance between the winner's tiny
+    # numbers and the slowest cell's giant ones) and whether to bold
+    # (the row's winner — the minimum time, regardless of unit).
+    _UNIT_ORDER = ["ps", "ns", "µs", "ms", "s"]
     unit_for: dict[str, str] = {}
     bold_set: set[str] = set()
     for row in ROWS:
@@ -293,11 +313,17 @@ def main() -> None:
             cells.append((ph, t))
         if not cells:
             continue
-        winner_ph, winner_t = min(cells, key=lambda c: c[1])
-        winner_unit = pick_unit(winner_t)
+        winner_ph, _ = min(cells, key=lambda c: c[1])
         bold_set.add(winner_ph)
+        # Median of each cell's natural unit, using the ordering
+        # ps < ns < µs < ms < s. Even-count rows pick the lower
+        # midpoint (favouring readability over precision in the
+        # slowest cell).
+        unit_indices = sorted(_UNIT_ORDER.index(pick_unit(t)) for _, t in cells)
+        median_idx = unit_indices[(len(unit_indices) - 1) // 2]
+        row_unit = _UNIT_ORDER[median_idx]
         for ph, _ in cells:
-            unit_for[ph] = winner_unit
+            unit_for[ph] = row_unit
 
     # Format every placeholder.
     text = DRAFT.read_text(encoding="utf-8")

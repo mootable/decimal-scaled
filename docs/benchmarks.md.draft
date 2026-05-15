@@ -23,8 +23,12 @@ cargo bench --features wide --bench d128_mul_div_paths
 > implementations on the same machine, in the same run, are what
 > matters. Operands are `black_box`-ed to defeat constant folding;
 > outputs are returned from the closure so the optimiser cannot drop
-> the call. **Winning cell on each row is bold. Every row uses the
-> winner's unit so cells compare directly.**
+> the call. **Winning cell on each row is bold. Every row uses one
+> unit — the median natural unit across that row's cells — so
+> values compare directly; cells whose natural unit is much smaller
+> than the row's chosen one are rendered in scientific notation
+> (e.g. `1.26×10⁻⁵ ms` for a 12 ns fast-path cell in an `ms`-scale
+> row).**
 
 ## Time units
 
