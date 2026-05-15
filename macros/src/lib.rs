@@ -1,6 +1,6 @@
 //! Construction macros for `decimal-scaled`.
 //!
-//! See `macros/Macros.md` for the full spec. Current sub-phase ships:
+//! See `macros/README.md` for the full spec. Current sub-phase ships:
 //!
 //! - `d38!(literal)` — auto-scale inference from the literal's
 //!   fractional-digit count.
@@ -32,7 +32,7 @@ const D38_MAX_SCALE: u32 = 38;
 /// inline-expression input, by evaluating the expression at runtime
 /// and scaling it).
 ///
-/// See the crate-level docs and `macros/Macros.md` for the full spec.
+/// See the crate-level docs and `macros/README.md` for the full spec.
 #[proc_macro]
 pub fn d38(input: TokenStream) -> TokenStream {
     match syn::parse::<D38Invocation>(input) {

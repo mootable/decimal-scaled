@@ -127,4 +127,4 @@ is genuinely identical, so each operation is written once.
 The discipline: anything uniform across widths lives in a macro;
 anything genuinely width-specific (e.g. `D38`'s hand-rolled
 `mg_divide` multiply/divide path) stays hand-coded. See
-`macros/Macros.md` for the full specification.
+[`macros/README.md`](../macros/README.md) for the full specification.

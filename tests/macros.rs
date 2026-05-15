@@ -1,11 +1,11 @@
 #![cfg(feature = "macros")]
 //! Integration tests for the `d38!` proc-macro.
 //!
-//! See `macros/Macros.md` for the macro spec. This corpus covers the
-//! Phase 1C feature set: decimal literals (positive/negative,
-//! fractional, underscore separators), scientific notation, the
-//! `scale N` and `rounded` qualifiers, and the compile-time error path
-//! when a literal is lossy without `rounded`.
+//! See `macros/README.md` for the macro spec. This corpus covers
+//! decimal literals (positive / negative, fractional, underscore
+//! separators), scientific notation, the `scale N` and `rounded`
+//! qualifiers, and the compile-time error path when a literal is
+//! lossy without `rounded`.
 
 use decimal_scaled::{D38, D38s0, D38s2, D38s5, D38s6, D38s12, d38};
 
