@@ -406,3 +406,38 @@ fn d76_hex_prefix() {
     let v: D76s0 = d76!(0xDEAD_BEEF);
     assert_eq!(v.to_string(), "3735928559");
 }
+
+// ── Fractional radix literals ─────────────────────────────────────────
+
+#[test]
+fn d38_hex_fractional_literal() {
+    use decimal_scaled::{d38, D38};
+    // 1.A3 in hex = 0x1A3 magnitude = 419. The decimal point split
+    // gives 2 hex fractional digits. Scale must be supplied — the
+    // bits ARE the parsed magnitude (no scale shift).
+    let v: D38<2> = d38!(1.A3, radix 16, scale 2);
+    assert_eq!(v.to_bits(), 419);
+}
+
+#[test]
+fn d38_bin_fractional_literal() {
+    use decimal_scaled::{d38, D38};
+    // 11.0110 in binary = 0b110110 = 54. Stored at scale 4 → 0.0054.
+    let v: D38<4> = d38!(11.0110, radix 2, scale 4);
+    assert_eq!(v.to_bits(), 54);
+}
+
+#[test]
+fn d38_oct_fractional_literal() {
+    use decimal_scaled::{d38, D38};
+    // 17.3 in octal: digits "173" in base 8 = 1*64 + 7*8 + 3 = 123.
+    let v: D38<2> = d38!(17.3, radix 8, scale 2);
+    assert_eq!(v.to_bits(), 123);
+}
+
+#[test]
+fn d38_negative_hex_fractional() {
+    use decimal_scaled::{d38, D38};
+    let v: D38<2> = d38!(-1.A3, radix 16, scale 2);
+    assert_eq!(v.to_bits(), -419);
+}

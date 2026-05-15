@@ -27,11 +27,10 @@
 //!   `scale N` is mandatory.
 
 use proc_macro::TokenStream;
-use proc_macro2::Span;
+use proc_macro2::{Span, TokenStream as TokenStream2, TokenTree};
 use quote::quote;
 use syn::{
-    Expr, ExprLit, ExprUnary, Lit, LitInt, Result, Token, UnOp,
-    parse::ParseStream,
+    Expr, ExprLit, ExprUnary, Lit, Result, UnOp,
 };
 
 // ── Width descriptor ───────────────────────────────────────────────────
@@ -147,10 +146,378 @@ pub fn d307(input: TokenStream) -> TokenStream {
 }
 
 fn expand_for(width: Width, input: TokenStream) -> TokenStream {
-    let parser = |stream: ParseStream| Invocation::parse_at(stream, width);
-    match syn::parse::Parser::parse(parser, input) {
+    // Convert to proc_macro2::TokenStream so we can manipulate
+    // token trees directly. Rust's lexer won't accept
+    // `1.A3` as a single token, so we have to do our own
+    // splitting for the radix-fractional case.
+    let tokens: TokenStream2 = input.into();
+    match parse_invocation(tokens, width) {
         Ok(inv) => inv.expand(),
         Err(e) => e.into_compile_error().into(),
+    }
+}
+
+/// Split the input on top-level commas, scan qualifier segments
+/// to find any `radix N`, then dispatch the value segment to the
+/// right parser. The radix-fractional path (`1.A3, radix 16`)
+/// goes through a custom token walker because the value position
+/// isn't valid Rust syntax. Decimal / radix-prefixed / expression
+/// shapes go through the standard Rust-Expr path.
+fn parse_invocation(tokens: TokenStream2, width: Width) -> Result<Invocation> {
+    let segments = split_top_commas(tokens);
+    if segments.is_empty() || segments[0].is_empty() {
+        return Err(syn::Error::new(
+            Span::call_site(),
+            format!("{}!() requires a value argument", width.name),
+        ));
+    }
+
+    // Quick pre-scan over qualifier segments: did the user pass
+    // an explicit `radix N`? We need that to decide which value
+    // parser to use, since `radix 16` lets `1.A3` be a literal.
+    let mut explicit_radix: Option<(u32, Span)> = None;
+    for seg in &segments[1..] {
+        if let Some((kw, _)) = seg.first().zip(seg.get(1)) {
+            if let TokenTree::Ident(id) = kw {
+                if id.to_string() == "radix" {
+                    if let TokenTree::Literal(lit) = &seg[1] {
+                        if let Ok(r) = lit.to_string().parse::<u32>() {
+                            explicit_radix = Some((r, lit.span()));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // Parse the value segment. The custom radix-fractional walker
+    // only fires when the user passed a non-decimal `radix N`
+    // *and* the segment doesn't already parse as a Rust Expr.
+    let value_segment = &segments[0];
+    let value_parse = try_radix_fractional(value_segment, explicit_radix)?;
+
+    if let Some((digits, sign, natural_scale, value_span)) = value_parse {
+        // Custom radix-fractional path. We've already established
+        // a non-decimal radix, so parse the qualifiers normally and
+        // skip pick_radix.
+        let (scale_qualifier, _radix_q, rounded) =
+            parse_qualifier_segments(&segments[1..], width)?;
+        return Ok(Invocation::Literal {
+            width,
+            digits,
+            sign,
+            natural_scale,
+            scale_qualifier,
+            rounded,
+            radix_literal: true,
+            value_span,
+        });
+    }
+
+    // Standard Rust-Expr path. Re-assemble the value tokens for the
+    // syn Expr parser.
+    let value_ts: TokenStream2 = value_segment.iter().cloned().collect();
+    let value_expr: Expr = syn::parse2(value_ts)?;
+    let value_span = expr_span(&value_expr);
+
+    let (scale_qualifier, radix_qualifier, rounded) =
+        parse_qualifier_segments(&segments[1..], width)?;
+
+    if let Some((sign, raw_str, lit_span)) = try_decimal_literal(&value_expr) {
+        let radix = pick_radix(&raw_str, radix_qualifier, lit_span)?;
+        let (digits, natural_scale) =
+            parse_value_token(&raw_str, lit_span, radix)?;
+        Ok(Invocation::Literal {
+            width,
+            digits,
+            sign,
+            natural_scale,
+            scale_qualifier,
+            rounded,
+            radix_literal: radix != 10,
+            value_span,
+        })
+    } else {
+        if let Some((_, radix_span)) = radix_qualifier {
+            return Err(syn::Error::new(
+                radix_span,
+                "`radix` qualifier is only valid with a literal value",
+            ));
+        }
+        let (scale, scale_span) = scale_qualifier.ok_or_else(|| {
+            syn::Error::new(
+                value_span,
+                format!(
+                    "scale must be specified for an expression value: `{}!(expr, scale N)`",
+                    width.name
+                ),
+            )
+        })?;
+        let _ = rounded;
+        Ok(Invocation::Expression {
+            width,
+            expr: value_expr,
+            scale,
+            scale_span,
+        })
+    }
+}
+
+/// Split a token stream on top-level commas (commas inside
+/// brackets / parens / braces stay with their content). Returns
+/// a vector of segments; each segment is a `Vec<TokenTree>`.
+fn split_top_commas(tokens: TokenStream2) -> Vec<Vec<TokenTree>> {
+    let mut out: Vec<Vec<TokenTree>> = vec![Vec::new()];
+    for tt in tokens {
+        match &tt {
+            TokenTree::Punct(p) if p.as_char() == ',' && p.spacing() == proc_macro2::Spacing::Alone => {
+                out.push(Vec::new());
+            }
+            _ => out.last_mut().unwrap().push(tt),
+        }
+    }
+    out
+}
+
+/// If the value segment looks like a radix-fractional literal
+/// (possibly sign-prefixed `INT . IDENT-or-INT`) *and* an explicit
+/// non-decimal radix was requested, return the parsed
+/// `(digit-string, sign, natural_scale, span)`. Returns `Ok(None)`
+/// to defer to the standard Rust-Expr parser when the shape
+/// doesn't match.
+fn try_radix_fractional(
+    segment: &[TokenTree],
+    explicit_radix: Option<(u32, Span)>,
+) -> Result<Option<(String, i128, u32, Span)>> {
+    let Some((radix, _radix_span)) = explicit_radix else {
+        return Ok(None);
+    };
+    if radix == 10 {
+        return Ok(None);
+    }
+
+    let mut i = 0;
+    let mut sign: i128 = 1;
+    if let Some(TokenTree::Punct(p)) = segment.first() {
+        if p.as_char() == '-' {
+            sign = -1;
+            i += 1;
+        } else if p.as_char() == '+' {
+            i += 1;
+        }
+    }
+
+    // After the optional sign, we accept any of:
+    //   single Float literal — e.g. `11.0110` (Rust tokenises this
+    //       as one Float token; we split on the embedded `.`)
+    //   `INT . IDENT` — e.g. `1.A3` in radix 16 (Rust can't lex
+    //       this as one token, so it arrives as three)
+    //   `INT . INT`   — same situation, e.g. `1.10` where the
+    //       fractional part happens to be digit-only
+    //   single INT    — pure integer in the given radix
+    let int_tok = segment.get(i);
+    let dot_tok = segment.get(i + 1);
+    let frac_tok = segment.get(i + 2);
+    let extra = segment.get(i + 3);
+
+    let int_lit = match int_tok {
+        Some(TokenTree::Literal(lit)) => lit.to_string(),
+        Some(TokenTree::Ident(id)) => id.to_string(),
+        _ => return Ok(None),
+    };
+
+    let (int_part, frac_part, span) = if int_lit.contains('.') && dot_tok.is_none() {
+        // Single literal that already contains the dot (`11.0110`).
+        let span = match int_tok.unwrap() {
+            TokenTree::Literal(lit) => lit.span(),
+            _ => Span::call_site(),
+        };
+        let (head, tail) = int_lit.split_once('.').unwrap();
+        (head.to_string(), tail.to_string(), span)
+    } else {
+        match (dot_tok, frac_tok, extra) {
+            (Some(TokenTree::Punct(p)), Some(frac), None) if p.as_char() == '.' => {
+                let frac_str = match frac {
+                    TokenTree::Literal(lit) => lit.to_string(),
+                    TokenTree::Ident(id) => id.to_string(),
+                    _ => return Ok(None),
+                };
+                let span = match int_tok.unwrap() {
+                    TokenTree::Literal(lit) => lit.span(),
+                    TokenTree::Ident(id) => id.span(),
+                    _ => Span::call_site(),
+                };
+                (int_lit, frac_str, span)
+            }
+            (None, None, _) => {
+                let span = match int_tok.unwrap() {
+                    TokenTree::Literal(lit) => lit.span(),
+                    TokenTree::Ident(id) => id.span(),
+                    _ => Span::call_site(),
+                };
+                (int_lit, String::new(), span)
+            }
+            _ => return Ok(None),
+        }
+    };
+
+    // Strip a Rust integer prefix (`0x`, `0o`, `0b`) on the
+    // integer part — it must match the explicit radix or it's an
+    // error. The fractional part doesn't carry a prefix.
+    let cleaned_int = if let Some((prefix_r, rest)) = strip_radix_prefix(&int_part) {
+        if prefix_r != radix {
+            return Err(syn::Error::new(
+                span,
+                format!(
+                    "radix qualifier ({radix}) disagrees with integer-part prefix (radix {prefix_r})"
+                ),
+            ));
+        }
+        rest.to_string()
+    } else {
+        int_part
+    };
+
+    let int_cleaned: String =
+        cleaned_int.chars().filter(|c| *c != '_').collect();
+    let frac_cleaned: String =
+        frac_part.chars().filter(|c| *c != '_').collect();
+
+    if int_cleaned.is_empty() {
+        return Err(syn::Error::new(
+            span,
+            "decimal literals require a digit on each side of the dot (write `0.A3` not `.A3`)",
+        ));
+    }
+    for c in int_cleaned.chars().chain(frac_cleaned.chars()) {
+        if !is_radix_digit(c, radix) {
+            return Err(syn::Error::new(
+                span,
+                format!("digit `{c}` not valid for radix {radix}"),
+            ));
+        }
+    }
+
+    // Concatenate int + frac digits, parse as a magnitude in `radix`.
+    // `natural_scale` is the number of fractional digits in the
+    // source — the user must still supply `, scale N` because the
+    // bits at the source's natural scale are not normally what they
+    // want as storage bits anyway.
+    let combined = format!("{int_cleaned}{frac_cleaned}");
+    let magnitude = match i128::from_str_radix(&combined, radix) {
+        Ok(v) => v,
+        Err(_) => {
+            return Err(syn::Error::new(
+                span,
+                format!(
+                    "digit string `{combined}` overflows i128 when parsed in radix {radix}"
+                ),
+            ));
+        }
+    };
+    Ok(Some((
+        magnitude.to_string(),
+        sign,
+        frac_cleaned.len() as u32,
+        span,
+    )))
+}
+
+fn is_radix_digit(c: char, radix: u32) -> bool {
+    c.to_digit(radix).is_some()
+}
+
+/// Re-parse the qualifier segments to find `scale N` / `radix N` /
+/// `rounded`. Equivalent to the old `parse_qualifiers` but works on
+/// token-vec segments instead of a `ParseStream`.
+fn parse_qualifier_segments(
+    segments: &[Vec<TokenTree>],
+    width: Width,
+) -> Result<(Option<(u32, Span)>, Option<(u32, Span)>, bool)> {
+    let _ = width;
+    let mut scale: Option<(u32, Span)> = None;
+    let mut radix: Option<(u32, Span)> = None;
+    let mut rounded = false;
+    for seg in segments {
+        if seg.is_empty() {
+            continue;
+        }
+        let TokenTree::Ident(kw) = &seg[0] else {
+            return Err(syn::Error::new(
+                tt_span(&seg[0]),
+                "expected qualifier identifier (scale | radix | rounded)",
+            ));
+        };
+        match kw.to_string().as_str() {
+            "scale" => {
+                let lit = seg.get(1).and_then(|t| match t {
+                    TokenTree::Literal(l) => Some(l),
+                    _ => None,
+                });
+                let lit = lit.ok_or_else(|| {
+                    syn::Error::new(kw.span(), "`scale` requires an integer literal: `scale N`")
+                })?;
+                let n: u32 = lit.to_string().parse().map_err(|_| {
+                    syn::Error::new(lit.span(), "scale must be a non-negative integer")
+                })?;
+                if scale.is_some() {
+                    return Err(syn::Error::new(kw.span(), "duplicate `scale` qualifier"));
+                }
+                scale = Some((n, lit.span()));
+            }
+            "radix" => {
+                let lit = seg.get(1).and_then(|t| match t {
+                    TokenTree::Literal(l) => Some(l),
+                    _ => None,
+                });
+                let lit = lit.ok_or_else(|| {
+                    syn::Error::new(kw.span(), "`radix` requires an integer literal: `radix N`")
+                })?;
+                let r: u32 = lit.to_string().parse().map_err(|_| {
+                    syn::Error::new(lit.span(), "radix must be one of 2, 8, 10, 16")
+                })?;
+                if !matches!(r, 2 | 8 | 10 | 16) {
+                    return Err(syn::Error::new(
+                        lit.span(),
+                        format!("radix must be one of 2, 8, 10, 16 (got {r})"),
+                    ));
+                }
+                if radix.is_some() {
+                    return Err(syn::Error::new(kw.span(), "duplicate `radix` qualifier"));
+                }
+                radix = Some((r, lit.span()));
+            }
+            "rounded" => {
+                if rounded {
+                    return Err(syn::Error::new(kw.span(), "duplicate `rounded` qualifier"));
+                }
+                if seg.len() > 1 {
+                    return Err(syn::Error::new(
+                        tt_span(&seg[1]),
+                        "`rounded` takes no argument",
+                    ));
+                }
+                rounded = true;
+            }
+            other => {
+                return Err(syn::Error::new(
+                    kw.span(),
+                    format!(
+                        "unknown qualifier `{other}`; expected one of: scale, radix, rounded"
+                    ),
+                ));
+            }
+        }
+    }
+    Ok((scale, radix, rounded))
+}
+
+fn tt_span(tt: &TokenTree) -> Span {
+    match tt {
+        TokenTree::Group(g) => g.span(),
+        TokenTree::Ident(i) => i.span(),
+        TokenTree::Punct(p) => p.span(),
+        TokenTree::Literal(l) => l.span(),
     }
 }
 
@@ -183,54 +550,6 @@ enum Invocation {
 }
 
 impl Invocation {
-    fn parse_at(input: ParseStream, width: Width) -> Result<Self> {
-        let value_expr: Expr = input.parse()?;
-        let value_span = expr_span(&value_expr);
-
-        let (scale_qualifier, radix_qualifier, rounded) = parse_qualifiers(input)?;
-
-        // Literal vs expression detection.
-        if let Some((sign, raw_str, lit_span)) = try_decimal_literal(&value_expr) {
-            // Radix from either the qualifier or the literal prefix.
-            let radix = pick_radix(&raw_str, radix_qualifier, lit_span)?;
-            let (digits, natural_scale) =
-                parse_value_token(&raw_str, lit_span, radix)?;
-            Ok(Invocation::Literal {
-                width,
-                digits,
-                sign,
-                natural_scale,
-                scale_qualifier,
-                rounded,
-                radix_literal: radix != 10,
-                value_span,
-            })
-        } else {
-            if let Some((_, radix_span)) = radix_qualifier {
-                return Err(syn::Error::new(
-                    radix_span,
-                    "`radix` qualifier is only valid with a literal value",
-                ));
-            }
-            let (scale, scale_span) = scale_qualifier.ok_or_else(|| {
-                syn::Error::new(
-                    value_span,
-                    format!(
-                        "scale must be specified for an expression value: `{}!(expr, scale N)`",
-                        width.name
-                    ),
-                )
-            })?;
-            let _ = rounded; // future: rounded-expression mode
-            Ok(Invocation::Expression {
-                width,
-                expr: value_expr,
-                scale,
-                scale_span,
-            })
-        }
-    }
-
     fn expand(self) -> TokenStream {
         match self {
             Invocation::Literal {
@@ -263,66 +582,6 @@ impl Invocation {
 }
 
 // ── Qualifier parsing ─────────────────────────────────────────────────
-
-fn parse_qualifiers(
-    input: ParseStream,
-) -> Result<(Option<(u32, Span)>, Option<(u32, Span)>, bool)> {
-    let mut scale_qualifier: Option<(u32, Span)> = None;
-    let mut radix_qualifier: Option<(u32, Span)> = None;
-    let mut rounded = false;
-    while !input.is_empty() {
-        let _: Token![,] = input.parse()?;
-        let ident: syn::Ident = input.parse()?;
-        match ident.to_string().as_str() {
-            "scale" => {
-                if scale_qualifier.is_some() {
-                    return Err(syn::Error::new(
-                        ident.span(),
-                        "duplicate `scale` qualifier",
-                    ));
-                }
-                let lit: LitInt = input.parse()?;
-                let n: u32 = lit.base10_parse()?;
-                scale_qualifier = Some((n, lit.span()));
-            }
-            "radix" => {
-                if radix_qualifier.is_some() {
-                    return Err(syn::Error::new(
-                        ident.span(),
-                        "duplicate `radix` qualifier",
-                    ));
-                }
-                let lit: LitInt = input.parse()?;
-                let r: u32 = lit.base10_parse()?;
-                if !matches!(r, 2 | 8 | 10 | 16) {
-                    return Err(syn::Error::new(
-                        lit.span(),
-                        format!("radix must be one of 2, 8, 10, 16 (got {r})"),
-                    ));
-                }
-                radix_qualifier = Some((r, lit.span()));
-            }
-            "rounded" => {
-                if rounded {
-                    return Err(syn::Error::new(
-                        ident.span(),
-                        "duplicate `rounded` qualifier",
-                    ));
-                }
-                rounded = true;
-            }
-            other => {
-                return Err(syn::Error::new(
-                    ident.span(),
-                    format!(
-                        "unknown qualifier `{other}`; expected one of: scale, radix, rounded"
-                    ),
-                ));
-            }
-        }
-    }
-    Ok((scale_qualifier, radix_qualifier, rounded))
-}
 
 /// Resolve the effective radix for a literal. Reconciles an explicit
 /// `radix N` qualifier with a Rust prefix (`0x`, `0o`, `0b`); reports

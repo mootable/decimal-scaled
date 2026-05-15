@@ -121,25 +121,34 @@ digits it can safely represent**, *not* the bit-width of the
 underlying integer. The crate's home is decimal arithmetic, so it
 names its types in the unit users actually reason about. Mapping:
 
-| type | underlying signed integer | safe decimal digits (= the `<N>`) | max value at SCALE 0 |
-|---|---|---|---|
-| `D9<S>` | `i32` (32 bits) | 9 | ±2.1 × 10⁹ |
-| `D18<S>` | `i64` (64 bits) | 18 | ±9.2 × 10¹⁸ |
-| `D38<S>` | `i128` (128 bits) | 38 | ±1.7 × 10³⁸ |
-| `D76<S>` | `Int256` (256 bits, in-tree wide-int) | 76 | ±5.8 × 10⁷⁶ |
-| `D153<S>` | `Int512` (512 bits) | 153 | ±6.7 × 10¹⁵³ |
-| `D307<S>` | `Int1024` (1024 bits) | 307 | ±9.0 × 10³⁰⁷ |
+| type | constructor macro | underlying signed integer | safe decimal digits (= `MAX_SCALE`) | max value at SCALE 0 | required feature | curated per-scale macros |
+|---|---|---|---|---|---|---|
+| `D9<S>`   | `d9!`   | `i32` (32 bits) | 9 | ±2.1 × 10⁹ | always available | `d9s0!`, `d9s2!`, `d9s4!`, `d9s6!`, `d9s9!` |
+| `D18<S>`  | `d18!`  | `i64` (64 bits) | 18 | ±9.2 × 10¹⁸ | always available | `d18s0!`, `d18s2!`, `d18s4!`, `d18s6!`, `d18s9!`, `d18s12!`, `d18s18!` |
+| `D38<S>`  | `d38!`  | `i128` (128 bits) | 38 | ±1.7 × 10³⁸ | always available | `d38s0!`, `d38s2!`, `d38s4!`, `d38s6!`, `d38s8!`, `d38s9!`, `d38s12!`, `d38s15!`, `d38s18!`, `d38s24!`, `d38s35!`, `d38s38!` |
+| `D76<S>`  | `d76!`  | `Int256` (256 bits, in-tree wide-int) | 76 | ±5.8 × 10⁷⁶ | `d76` / `wide` | `d76s0!`, `d76s2!`, `d76s6!`, `d76s12!`, `d76s18!`, `d76s35!`, `d76s50!`, `d76s76!` |
+| `D153<S>` | `d153!` | `Int512` (512 bits) | 153 | ±6.7 × 10¹⁵³ | `d153` / `wide` | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s153!` |
+| `D307<S>` | `d307!` | `Int1024` (1024 bits) | 307 | ±9.0 × 10³⁰⁷ | `d307` / `x-wide` | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s307!` |
 
-The "safe decimal digits" count is `⌊(bits − 1) · log₁₀ 2⌋` — the
-largest `N` such that *every* `N`-digit decimal value (`±999…9`)
-fits the signed storage. That's also the `MAX_SCALE` of the type:
-at `SCALE = N`, every fractional digit lands inside the storage
-range. (`D38<38>` represents values in `[−1.7, 1.7]` with 38
-fractional digits; `D38<0>` represents integers up to `±10³⁸`.)
+The number in each type name (`9`, `18`, `38`, …) is the type's
+`MAX_SCALE` — equivalently, the safe-decimal-digits count
+`⌊(bits − 1) · log₁₀ 2⌋`. The largest scale at which every
+`MAX_SCALE`-digit decimal value (`±999…9`) fits the signed
+storage; also the largest `S` you can pass as the const generic
+parameter. `D38<38>` therefore represents values in `[−1.7, 1.7]`
+with 38 fractional digits; `D38<0>` represents integers up to
+`±10³⁸`.
+
+All constructor macros require the `macros` feature in addition
+to any per-tier feature listed above. Per-scale macros pre-bake
+`scale N` and forward every other qualifier (`rounded`,
+`radix N`) to the underlying constructor. Scales outside the
+curated subset remain reachable via the explicit `, scale N`
+qualifier on the main constructor.
 
 Pick the narrowest tier whose range covers your values at the
-scale you need. Widening is free (`From`/`widen()`); narrowing is
-fallible (`TryFrom`/`narrow()`).
+scale you need. Widening is free (`From` / `widen()`); narrowing
+is fallible (`TryFrom` / `narrow()`).
 
 ---
 

@@ -82,10 +82,27 @@ must be one of `2`, `8`, `10`, `16`. Default is `10`. If a Rust
 prefix (`0x` / `0o` / `0b`) is also present, the prefix's implied
 radix and the explicit qualifier must agree.
 
-Fractional non-decimal literals (`1.A3, radix 16`) are not
-accepted — Rust's tokeniser doesn't recognise them as a single
-literal. Pass the digit string through an integer with an
-explicit `scale N` instead.
+Fractional non-decimal literals like `1.A3, radix 16` *are*
+supported: the macro splits the value at the `.`, treats the
+left side as the integer-portion digits and the right side as
+the fractional-portion digits, parses both halves under the
+given radix, and concatenates them into the storage bits. The
+target scale must be supplied explicitly with `, scale N` —
+nothing about the source string tells us what target scale you
+want, since the parsed magnitude IS the storage bits.
+
+```rust
+d38!(1.A3, radix 16, scale 2)    // → D38<2>::from_bits(0x1A3) == 419
+d38!(11.0110, radix 2, scale 4)  // → D38<4>::from_bits(0b110110) == 54
+d38!(17.3, radix 8, scale 2)     // → D38<2>::from_bits(0o173)  == 123
+```
+
+The `radix` qualifier requires a literal value — it doesn't
+combine with the inline-expression form. (`d38!(my_var, radix
+16, scale 2)` is a compile error: `radix qualifier is only
+valid with a literal value`.) Radix is a property of the source
+*digit string*, and an expression doesn't have one — it's
+already a typed integer at runtime.
 
 ### `rounded`
 
