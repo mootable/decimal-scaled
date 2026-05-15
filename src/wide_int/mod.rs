@@ -194,12 +194,20 @@ pub(crate) const fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
             let mut carry = 0u128;
             let mut j = 0;
             while j < b.len() {
-                let (hi, lo) = mul_128(a[i], b[j]);
-                let idx = i + j;
-                let (s1, c1) = out[idx].overflowing_add(lo);
-                let (s2, c2) = s1.overflowing_add(carry);
-                out[idx] = s2;
-                carry = hi + (c1 as u128) + (c2 as u128);
+                // Skip zero-limb contributions: every `*` for `b[j] = 0`
+                // produces (0, 0) and the only effect is propagating the
+                // carry. Adds a hot fast path for widened-from-narrower
+                // operands (their upper limbs are zero) and for
+                // small-magnitude multipliers like `10^SCALE` at modest
+                // scales (one nonzero limb in `b`).
+                if b[j] != 0 || carry != 0 {
+                    let (hi, lo) = mul_128(a[i], b[j]);
+                    let idx = i + j;
+                    let (s1, c1) = out[idx].overflowing_add(lo);
+                    let (s2, c2) = s1.overflowing_add(carry);
+                    out[idx] = s2;
+                    carry = hi + (c1 as u128) + (c2 as u128);
+                }
                 j += 1;
             }
             let mut idx = i + b.len();
