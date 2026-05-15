@@ -15,7 +15,8 @@
 //! All constant values are derived from a 35-digit reference stored as a
 //! raw `i128` at `SCALE_REF = 35`. They do not pass through `f64` at any
 //! point. The rescale from `SCALE_REF` to the caller's `SCALE` uses
-//! integer division with half-to-even rounding.
+//! integer division with the crate-default [`RoundingMode`] (half-to-even
+//! by default; overridable via the `rounding-*` Cargo features).
 //!
 //! Going through `f64` would cap precision at roughly 15-17 decimal digits
 //! (f64 mantissa width). The raw-i128 path preserves up to 35 digits, which
@@ -26,6 +27,20 @@
 //! additional precision. At `SCALE = 38` the multiplication may overflow
 //! `i128` for some constants; callers that need `SCALE > 35` should verify
 //! that the result is in range.
+//!
+//! # Why `SCALE_REF = 35`?
+//!
+//! Maximises precision while keeping every constant in `i128`. The
+//! largest constant is `tau ≈ 6.28...`, so its raw integer at
+//! `SCALE_REF = 35` is ~6.28×10³⁵, well below `i128::MAX ≈ 1.7×10³⁸`.
+//! Going to `SCALE_REF = 37` would overflow `tau` and `golden` (each
+//! would need ~39 leading digits). The smaller constants `pi`, `e`,
+//! `half_pi`, `quarter_pi` could individually hold 36–37 digits, but
+//! a single shared `SCALE_REF` keeps the rescale helpers uniform —
+//! the per-constant precision gain (≤ 2 digits on four constants) is
+//! not worth six independent rescale paths.
+//!
+//! [`RoundingMode`]: crate::rounding::RoundingMode
 //!
 //! # Reference scale
 //!
