@@ -27,6 +27,13 @@ strict = []
 # crate behaves as if neither were — the f64-bridge transcendentals are
 # used (when `std` is available) and no `*_strict` methods are emitted.
 no_strict = []
+# Compiles BOTH the macro-default and the per-type override
+# implementations for every method that has them. Default builds compile
+# only the chosen winner (see OVERRIDE_POLICY.md). With `bench-alt` on
+# benchmarks can call `*_strict_default` and `*_strict_override` side by
+# side without recompiling. Off by default — adds build time and binary
+# size for no runtime benefit unless you're benching.
+bench-alt = []
 # Compile-time selector for the default RoundingMode used by the
 # no-arg `rescale` family (and any future default-rounding methods).
 # If none of these is enabled, the default is HalfToEven (IEEE-754

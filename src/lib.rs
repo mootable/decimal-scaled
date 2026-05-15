@@ -68,6 +68,8 @@
 extern crate alloc;
 
 mod arithmetic;
+#[cfg(feature = "bench-alt")]
+mod bench_alt;
 mod consts;
 mod consts_wide;
 mod core_type;
