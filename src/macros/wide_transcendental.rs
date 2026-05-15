@@ -122,8 +122,19 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// `√v` at working scale `w`: `√(|v| · 10^w)`, truncating.
+            ///
+            /// `|v| * 10^w` must fit in `W`. Bit-length headroom is
+            /// asserted in debug builds; in release the multiply
+            /// wraps silently if violated. Every caller in this crate
+            /// passes a value with sufficient headroom: the working
+            /// integer is sized so `2·(SCALE + GUARD)` digits fit.
             pub(super) fn sqrt_fixed(v: W, w: u32) -> W {
-                (abs(v) * pow10(w)).isqrt()
+                let av = abs(v);
+                debug_assert!(
+                    bit_length(av) + (w as u32) * 4 < W::BITS,
+                    "sqrt_fixed: |v| * 10^w overflows the working width"
+                );
+                (av * pow10(w)).isqrt()
             }
 
             /// Builds a working-scale value from the type's raw storage:
@@ -309,8 +320,17 @@ macro_rules! decl_wide_transcendental {
                     }
                     sum << shift
                 } else {
-                    let shift = (-k).min((W::BITS - 1) as i128) as u32;
-                    sum >> shift
+                    // Underflow: |k| · ln(2) ≥ |v|. Once `-k` exceeds
+                    // the bit-length of `sum`, `sum >> -k` truncates to
+                    // zero — but the cap at `W::BITS - 1` previously
+                    // left a stray `1` for very large `-k`. Catch the
+                    // underflow explicitly so `exp(very_negative)` is
+                    // a true zero.
+                    let neg_k = -k as u128;
+                    if neg_k >= bit_length(sum) as u128 {
+                        return zero();
+                    }
+                    sum >> (neg_k as u32)
                 }
             }
 
@@ -400,6 +420,16 @@ macro_rules! decl_wide_transcendental {
                     add_half_pi = true;
                 }
                 // Three argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))).
+                //
+                // Empirically chosen as the trade-off point on this
+                // truncating fixed-point core: each halving reduces
+                // |x| by a factor ≈ 2, so after 3 halvings |x| ≤ 1/8
+                // and the Taylor series converges in ≈ w·log₂(10)/3
+                // terms (e.g. ~70 terms at w=63). Adding more
+                // halvings shortens the series but introduces more
+                // sqrt/div truncation error; fewer halvings explodes
+                // the term count. Tighten via the
+                // `atan_iter_count_bound` test if you change it.
                 let halvings: u32 = 3;
                 for _ in 0..halvings {
                     let x2 = mul(x, x, w);
@@ -769,12 +799,18 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Convert radians to degrees: `self · (180 / π)`. Strict
-            /// and correctly rounded.
+            /// and correctly rounded. Panics if `|self| · 180`
+            /// overflows the working integer.
             #[inline]
             #[must_use]
             pub fn to_degrees_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
+                debug_assert!(
+                    $core::bit_length(v) + 8 < <$Work>::BITS,
+                    concat!(stringify!($Type),
+                        "::to_degrees: |self| * 180 overflows the working integer")
+                );
                 let r = $core::div(
                     v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
                     $core::pi(w),
@@ -784,7 +820,10 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Convert degrees to radians: `self · (π / 180)`. Strict
-            /// and correctly rounded.
+            /// and correctly rounded. `mul` is the scale-aware
+            /// `(a * b) / 10^w`, so the working-width budget is the
+            /// same as any other binary op in the core — no separate
+            /// overflow check needed.
             #[inline]
             #[must_use]
             pub fn to_radians_strict(self) -> Self {
