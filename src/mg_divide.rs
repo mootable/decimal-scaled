@@ -56,6 +56,21 @@ use crate::core_type::D128;
 /// Index 0 is a placeholder `(0, 0)`. Callers must not pass `SCALE = 0`
 /// into the magic-divide functions; both public entry points guard that
 /// case before indexing this table.
+/// `10^i` for `i = 0..=38`. Indexed by `scale` to skip the
+/// runtime `u128::pow` (which is a 4-multiplication square-and-multiply
+/// loop for the typical scale range) in hot paths like
+/// `div_wide_pow10_with`. Last entry `10^38` is the largest power of
+/// ten that fits in `u128`.
+const POW10_U128: [u128; 39] = {
+    let mut t = [1u128; 39];
+    let mut i = 1;
+    while i < 39 {
+        t[i] = t[i - 1] * 10;
+        i += 1;
+    }
+    t
+};
+
 const MG_EXP_MAGICS: [(u128, u32); 39] = [
     (0, 0),
     (0x99999999999999999999999999999999, 124),
@@ -219,8 +234,8 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
 ) -> W {
     debug_assert!((1..=38).contains(&scale));
     let (mut mag, neg) = n.to_mag_sign();
-    let exp = 10u128.pow(scale);
     let scale_idx = scale as usize;
+    let exp = POW10_U128[scale_idx];
 
     // The magnitude buffer is fixed at 64 limbs to fit the widest wide
     // integer in the crate, but most calls operate on far narrower
@@ -466,7 +481,7 @@ pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
         return 0;
     }
     // N = r · 10^SCALE as a 256-bit value.
-    let (hi, lo) = mul2(r, 10u128.pow(scale));
+    let (hi, lo) = mul2(r, POW10_U128[scale as usize]);
     let q = isqrt_256(hi, lo);
     // q = floor(sqrt(N)). Round up to q+1 iff N is closer to (q+1)²
     // than to q², i.e. iff N ≥ (q + 0.5)² = q² + q + 0.25, i.e. (in
