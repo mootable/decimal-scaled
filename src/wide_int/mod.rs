@@ -333,7 +333,15 @@ pub(crate) const fn limbs_divmod(
     if den_one_limb && den[0] <= u64::MAX as u128 {
         let d = den[0];
         let mut r: u128 = 0;
-        let mut i = num.len();
+        // Skip leading zero limbs of the numerator — every wide-tier
+        // call widens narrower operands into a `2 × $L`-limb buffer,
+        // so the top limbs are zero by construction. Each skipped
+        // limb saves two hardware divides.
+        let mut top = num.len();
+        while top > 0 && num[top - 1] == 0 {
+            top -= 1;
+        }
+        let mut i = top;
         while i > 0 {
             i -= 1;
             let hi = num[i] >> 64;
