@@ -448,7 +448,11 @@ macro_rules! decl_wide_int {
                 let a = self.unsigned_abs();
                 let b = rhs.unsigned_abs();
                 let mut prod = [0u128; $D];
-                $crate::wide_int::limbs_mul(&a.0, &b.0, &mut prod);
+                // limbs_mul_fast dispatches to Karatsuba above n=16
+                // (Int2048 and wider); schoolbook below. Karatsuba's
+                // half-sum scratch needs alloc; under !alloc the fast
+                // function falls back to limbs_mul anyway.
+                $crate::wide_int::limbs_mul_fast(&a.0, &b.0, &mut prod);
                 W::from_mag_sign(&prod, negative)
             }
             /// `self / rhs` truncating toward zero. `rhs` must be nonzero.
