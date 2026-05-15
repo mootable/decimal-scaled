@@ -460,12 +460,27 @@ impl Fixed {
     }
 
     /// Rounds the working-scale magnitude to a narrower decimal scale
-    /// `target` (`target <= w`), half-to-even, and returns the result
-    /// as a signed `i128` raw storage value. Used to land a guard-digit
-    /// computation back on the caller's `D128<SCALE>`.
+    /// `target` (`target <= w`) using the crate-default
+    /// [`RoundingMode`] and returns the result as a signed `i128`
+    /// raw storage value. Used to land a guard-digit computation back
+    /// on the caller's `D128<SCALE>`.
     ///
     /// Returns `None` if the rounded magnitude does not fit `i128`.
+    ///
+    /// [`RoundingMode`]: crate::rounding::RoundingMode
     pub(crate) fn round_to_i128(self, w: u32, target: u32) -> Option<i128> {
+        self.round_to_i128_with(w, target, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Mode-aware variant of [`Self::round_to_i128`]. Mode dispatch
+    /// runs through [`crate::rounding::should_bump`], matching the
+    /// rest of the crate's rounding sites.
+    pub(crate) fn round_to_i128_with(
+        self,
+        w: u32,
+        target: u32,
+        mode: crate::rounding::RoundingMode,
+    ) -> Option<i128> {
         let shift = w - target;
         if shift == 0 {
             // No rounding; just narrow.
@@ -482,20 +497,20 @@ impl Fixed {
             };
         }
         let divisor = Fixed::pow10(shift);
-        // quotient + remainder of mag / 10^shift via the small-or-wide path.
         let (q, r) = divmod_u256(self.mag, divisor);
-        let half = halve_u256(divisor);
-        // round half-to-even on the magnitude.
-        let round_up = match cmp_u256(r, half) {
-            core::cmp::Ordering::Less => false,
-            core::cmp::Ordering::Greater => true,
-            core::cmp::Ordering::Equal => q[0] & 1 == 1,
-        };
-        let rounded = if round_up {
-            let (s, _c) = add_u256(q, [1, 0]);
-            s
-        } else {
+        let rounded = if is_zero_u256(r) {
             q
+        } else {
+            // |r| is r (already a magnitude); comp = divisor - r.
+            let comp = sub_u256(divisor, r);
+            let cmp_r = cmp_u256(r, comp);
+            let q_is_odd = (q[0] & 1) == 1;
+            let result_positive = !self.negative;
+            if crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+                add_u256(q, [1, 0]).0
+            } else {
+                q
+            }
         };
         if rounded[1] != 0 {
             return None;
@@ -733,25 +748,29 @@ mod tests {
 
     #[test]
     fn fixed_round_to_i128_half_to_even() {
-        // Working scale 6, round to scale 0.
+        use crate::rounding::RoundingMode;
+        // Working scale 6, round to scale 0. Pin the mode so this
+        // test asserts HalfToEven specifically regardless of the
+        // active `rounding-*` feature.
         let w = 6;
+        let hte = RoundingMode::HalfToEven;
         // 2.5 -> 2 (tie to even)
         let v = Fixed::from_u128_mag(2_500_000, false);
-        assert_eq!(v.round_to_i128(w, 0), Some(2));
+        assert_eq!(v.round_to_i128_with(w, 0, hte), Some(2));
         // 3.5 -> 4 (tie to even)
         let v = Fixed::from_u128_mag(3_500_000, false);
-        assert_eq!(v.round_to_i128(w, 0), Some(4));
+        assert_eq!(v.round_to_i128_with(w, 0, hte), Some(4));
         // 2.4 -> 2
         let v = Fixed::from_u128_mag(2_400_000, false);
-        assert_eq!(v.round_to_i128(w, 0), Some(2));
+        assert_eq!(v.round_to_i128_with(w, 0, hte), Some(2));
         // 2.6 -> 3
         let v = Fixed::from_u128_mag(2_600_000, false);
-        assert_eq!(v.round_to_i128(w, 0), Some(3));
+        assert_eq!(v.round_to_i128_with(w, 0, hte), Some(3));
         // negative: -2.5 -> -2
         let v = Fixed::from_u128_mag(2_500_000, true);
-        assert_eq!(v.round_to_i128(w, 0), Some(-2));
-        // same-scale narrowing
+        assert_eq!(v.round_to_i128_with(w, 0, hte), Some(-2));
+        // same-scale narrowing (no rounding needed)
         let v = Fixed::from_u128_mag(123_456, false);
-        assert_eq!(v.round_to_i128(w, w), Some(123_456));
+        assert_eq!(v.round_to_i128_with(w, w, hte), Some(123_456));
     }
 }
