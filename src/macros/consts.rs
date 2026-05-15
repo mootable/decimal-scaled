@@ -18,9 +18,9 @@
 //! rescale path's intermediate `i128 * 10^k` overflows and panics.
 //! Practical impact:
 //!
-//! - D76<S>`::pi()` works correctly for `S ≤ 37`; at `S = 50` / `76`
+//! - `D76<S>::pi()` works correctly for `S ≤ 37`; at `S = 50` / `76`
 //!   (the D76 max) it panics on rescale-up.
-//! - D153<S>`::pi()` and D307<S>`::pi()` have the same panic past
+//! - `D153<S>::pi()` and `D307<S>::pi()` have the same panic past
 //!   `S = 37`.
 //!
 //! Closing this needs per-width raw constants stored in the storage

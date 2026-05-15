@@ -3,7 +3,7 @@
 //! D38 has a dedicated [`Serialize`] / [`Deserialize`] pair plus the
 //! richer [`decimal_serde::DecimalVisitor`] used for `#[serde(with =
 //! "...")]` field annotations. The wide tiers (D76 / D153 / D307)
-//! use a slimmer implementation emitted by [`decl_wide_serde!`]: a
+//! use a slimmer implementation emitted by `decl_wide_serde!`: a
 //! decimal-string wire format for human-readable serializers and a
 //! little-endian limb-bytes wire format for binary serializers.
 //! Cross-tier wire-format parity is intentional — a D38 produced

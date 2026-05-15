@@ -171,10 +171,9 @@ macro_rules! decl_decimal_arithmetic {
             ///
             /// For `SCALE ≤ 38` the divide-by-`10^SCALE` step routes
             /// through the Möller-Granlund magic-divide kernel shared
-            /// with D38 ([`crate::mg_divide::div_wide_pow10_with`]) —
-            /// avoiding the generic schoolbook divide for the common
-            /// case. Larger scales fall through to the slower
-            /// `n / (10^SCALE)` path.
+            /// with D38 — avoiding the generic schoolbook divide for
+            /// the common case. Larger scales fall through to the
+            /// slower `n / (10^SCALE)` path.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 // `widen_mul` does the `$Storage × $Storage → $Wider`

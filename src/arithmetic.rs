@@ -145,9 +145,9 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Multiply two values of the same scale, rounding the
     /// scale-narrowing divide by `10^SCALE` according to `mode`.
     ///
-    /// The default `Mul` operator delegates to this with
-    /// [`crate::rounding::DEFAULT_ROUNDING_MODE`]; call `mul_with`
-    /// directly when you need a non-default rounding rule (e.g.
+    /// The default `Mul` operator delegates to this with the
+    /// crate-default rounding mode; call `mul_with` directly when
+    /// you need a non-default rounding rule (e.g.
     /// `HalfAwayFromZero` for commercial rounding, `Floor`/`Ceiling`
     /// for one-sided bracketing).
     ///
@@ -172,8 +172,8 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Divide two values of the same scale, rounding the final
     /// divide step according to `mode`.
     ///
-    /// The default `Div` operator delegates to this with
-    /// [`crate::rounding::DEFAULT_ROUNDING_MODE`].
+    /// The default `Div` operator delegates to this with the
+    /// crate-default rounding mode.
     ///
     /// # Panics
     ///

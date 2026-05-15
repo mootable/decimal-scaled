@@ -441,3 +441,39 @@ fn d38_negative_hex_fractional() {
     let v: D38<2> = d38!(-1.A3, radix 16, scale 2);
     assert_eq!(v.to_bits(), -419);
 }
+
+#[test]
+fn d38_hex_fractional_ident_dot_ident() {
+    use decimal_scaled::{d38, D38};
+    // `FF.AA` in radix 16: Rust tokenises both halves as idents
+    // (no leading digit on either side). Magnitude in base 16 is
+    // 0xFFAA = 65450.
+    let v: D38<2> = d38!(FF.AA, radix 16, scale 2);
+    assert_eq!(v.to_bits(), 65450);
+}
+
+#[test]
+fn d38_hex_fractional_int_dot_ident() {
+    use decimal_scaled::{d38, D38};
+    // `7.AB` in radix 16: 7 is an Int literal, AB an Ident.
+    // 0x7AB = 1963.
+    let v: D38<3> = d38!(7.AB, radix 16, scale 3);
+    assert_eq!(v.to_bits(), 1963);
+}
+
+#[test]
+fn d38_hex_fractional_ident_dot_int() {
+    use decimal_scaled::{d38, D38};
+    // `AB.7` in radix 16: AB is an Ident, 7 is an Int literal.
+    // 0xAB7 = 2743.
+    let v: D38<3> = d38!(AB.7, radix 16, scale 3);
+    assert_eq!(v.to_bits(), 2743);
+}
+
+#[test]
+fn d38_hex_integer_only_radix() {
+    use decimal_scaled::{d38, D38};
+    // Bare IDENT (no prefix, no dot) under explicit `radix 16`.
+    let v: D38<0> = d38!(BEEF, radix 16);
+    assert_eq!(v.to_bits(), 0xBEEF);
+}
