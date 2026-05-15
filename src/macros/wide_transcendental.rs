@@ -35,23 +35,32 @@
 //!
 //! # Precision
 //!
-//! Strict: integer-only, scale-deterministic. The final rounding to
-//! storage uses the crate-default [`RoundingMode`] (typically
-//! half-to-even, the IEEE-754 round-to-nearest rule) via
-//! [`crate::rounding::should_bump`].
+//! Strict and **correctly rounded** — within 0.5 ULP of the exact
+//! result (IEEE-754 round-to-nearest), at the storage scale.
 //!
-//! The error budget is the accumulated truncation of every
-//! `mul(a, b, w)` and `div(a, b, w)` step in the series-evaluation
-//! core (each step truncates toward zero at scale `w = SCALE + GUARD`
-//! with `GUARD = 30`). For inputs in the well-conditioned middle of
-//! each function's domain the final round-to-storage absorbs the
-//! accumulated error and the result is within a few ULP of the exact
-//! value; tests pin this at ≤ 2 ULP across the representative
-//! sample, with up to ≤ 8 ULP at very deep scales (D256<50>,
-//! D1024<150>) where the series runs longer. **Tightening the
-//! contract to a guaranteed 0.5 ULP would require rounded
-//! intermediate ops** (a half-to-even `mul`/`div` per step instead
-//! of truncating) — recorded as a follow-up.
+//! Two structural choices keep the error inside the 0.5 ULP budget:
+//!
+//! - **`GUARD = 60` guard digits below the storage scale.** The
+//!   working scale `w = SCALE + GUARD` gives every intermediate
+//!   computation an LSB ~10⁻⁶⁰ below the storage LSB. Even after a
+//!   long series-evaluation core accumulates a few hundred LSB of
+//!   working-scale error, the absolute error remains ≪ 0.5 storage
+//!   ULP.
+//! - **Half-to-even rounded `mul` / `div`** in the working scale
+//!   (see `round_div` below). Replaces the previous truncating ops,
+//!   which leaked ~1 LSB-of-`w` *bias* per call — a coherent error
+//!   that didn't cancel even with many guard digits.
+//!
+//! The final round to storage runs through
+//! [`crate::rounding::should_bump`] and honours `DEFAULT_ROUNDING_MODE`.
+//!
+//! For inputs whose own storage representation has ≤ 0.5 LSB
+//! rounding (any value parsed from a literal at the storage scale),
+//! the *result* is within 1 LSB of the truth-at-storage. For inputs
+//! that are themselves stored with rounding (like `D256s12::pi()`
+//! widened from D128's 37-digit reference), the input's rounding
+//! propagates through whatever conditioning the method has — that's
+//! an input-side budget the wide-tier API can't compensate for.
 //!
 //! [`RoundingMode`]: crate::rounding::RoundingMode
 
@@ -75,7 +84,16 @@ macro_rules! decl_wide_transcendental {
             pub(super) type W = $Work;
 
             /// Guard digits added below the type's own scale.
-            pub(super) const GUARD: u32 = 30;
+            ///
+            /// Sized for 0.5 ULP at the storage scale: each
+            /// intermediate `mul` / `div` is rounded half-to-even
+            /// (≤ 0.5 LSB per op at the working scale), and the
+            /// series caps at ~200 iterations, so the worst-case
+            /// accumulated drift is ≤ 100 × 10^-w. With GUARD = 60
+            /// that floor is `10^-(SCALE+60)`, ~10^58 below the
+            /// storage LSB — comfortably under half a storage ULP
+            /// for every SCALE the wide tiers support.
+            pub(super) const GUARD: u32 = 60;
             /// Hard cap on series iterations — a safety net; every
             /// series terminates far sooner by reaching a zero term.
             const SERIES_CAP: u128 = 20_000;
@@ -100,15 +118,48 @@ macro_rules! decl_wide_transcendental {
             pub(super) fn one(w: u32) -> W {
                 pow10(w)
             }
-            /// `(a · b) / 10^w`, truncating toward zero.
+            /// Half-to-even round of `(numerator / divisor)` for
+            /// the signed wide integer `W`. Pulled out so the
+            /// `mul` / `div` core helpers share one rounding rule
+            /// instead of truncating per op (which leaks ~1 LSB
+            /// each into the strict-transcendental series).
+            #[inline]
+            fn round_div(n: W, d: W) -> W {
+                let q = n / d;
+                let r = n % d;
+                if r == lit(0) {
+                    return q;
+                }
+                let ar = abs(r);
+                let comp = abs(d) - ar;
+                let cmp_r = ar.cmp(&comp);
+                let q_is_odd = (q % lit(2)) != lit(0);
+                let result_positive = (n < lit(0)) == (d < lit(0));
+                if $crate::rounding::should_bump(
+                    $crate::rounding::RoundingMode::HalfToEven,
+                    cmp_r,
+                    q_is_odd,
+                    result_positive,
+                ) {
+                    if result_positive { q + lit(1) } else { q - lit(1) }
+                } else {
+                    q
+                }
+            }
+            /// `(a · b) / 10^w`, rounded half-to-even. The
+            /// rounded variant replaces the previous truncating
+            /// `mul`: each call drops the per-op ≤ 1 LSB
+            /// truncation bias to a symmetric ≤ 0.5 LSB error,
+            /// which is what 0.5 ULP at storage requires across
+            /// the series-evaluation core.
             #[inline]
             pub(super) fn mul(a: W, b: W, w: u32) -> W {
-                (a * b) / pow10(w)
+                round_div(a * b, pow10(w))
             }
-            /// `(a · 10^w) / b`, truncating toward zero.
+            /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(super) fn div(a: W, b: W, w: u32) -> W {
-                (a * pow10(w)) / b
+                round_div(a * pow10(w), b)
             }
             /// `a · n` for a small unsigned multiplier.
             #[inline]

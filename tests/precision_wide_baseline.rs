@@ -19,9 +19,10 @@ const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-
     || cfg!(feature = "rounding-floor")
     || cfg!(feature = "rounding-ceiling"));
 
-/// Current wide-tier ULP gap allowance. Once truncating intermediate
-/// `mul` / `div` are replaced with rounded ops this drops to 1.
-const WIDE_TOLERANCE_LSB: i128 = 10;
+/// Wide-tier ULP gap allowance. After the GUARD bump (30 → 60) and
+/// the truncating → half-to-even `mul`/`div` swap in
+/// `decl_wide_transcendental!`, the contract tightens to ≤ 1 LSB.
+const WIDE_TOLERANCE_LSB: i128 = 1;
 
 #[track_caller]
 fn agree_within(label: &str, wide: i128, narrow: i128) {
