@@ -1117,13 +1117,11 @@ mod tests {
     use crate::consts::DecimalConsts;
     use crate::core_type::D128s12;
 
-    // Tolerance for single-operation results. In the f64-bridge build
-    // each op is one f64 round-trip (≤ 2 LSB). The integer-only `strict`
     // Tolerance for single-operation results. The f64-bridge build is
     // one f64 round-trip (≤ 2 LSB); the integer-only `strict` build is
-    // now correctly rounded (≤ 0.5 ULP per call), so it is held to the
-    // same 2-LSB bound — a couple of LSB for the test's own
-    // expected-value rounding.
+    // correctly rounded (≤ 0.5 ULP per call) and is held to the same
+    // 2-LSB bound — a couple of LSB for the test's own expected-value
+    // rounding.
     const TWO_LSB: i128 = 2;
 
     // Tolerance for results that chain multiple trig calls (e.g.

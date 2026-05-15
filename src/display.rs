@@ -54,8 +54,8 @@ extern crate alloc;
 
 // ──────────────────────────────────────────────────────────────────────
 // Display and Debug are emitted by the `decl_decimal_display!` macro
-// in `core_type.rs` (see `src/decimal_display_macro.rs`). The macro
-// handles all widths uniformly.
+// invoked from `core_type.rs`; the macro itself lives in
+// `src/macros/display.rs` and handles all widths uniformly.
 // ──────────────────────────────────────────────────────────────────────
 
 // ──────────────────────────────────────────────────────────────────────

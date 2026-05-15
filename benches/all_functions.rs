@@ -249,7 +249,7 @@ fn bench_powers(c: &mut Criterion) {
         bn.iter(|| black_box(A).hypot(black_box(B)))
     });
 
-    // Overflow-variant `pow` family (slice 242.14).
+    // Overflow-variant `pow` family.
     g.bench_function("checked_pow_8", |bn| {
         bn.iter(|| black_box(POS).checked_pow(black_box(8_u32)))
     });
@@ -350,7 +350,7 @@ fn bench_bitwise(c: &mut Criterion) {
 }
 
 // =============================================================================
-// overflow_variants (slice 242.14)
+// overflow_variants
 // =============================================================================
 fn bench_overflow_variants(c: &mut Criterion) {
     let mut g = c.benchmark_group("overflow");
