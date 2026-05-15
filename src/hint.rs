@@ -276,6 +276,654 @@ fn set_bit(a: &mut [u128], b: u32) {
     }
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// decl_hint! — concrete fixed-width signed/unsigned integer newtypes.
+//
+// Each invocation emits an unsigned `$U` ([u128; L]) and a
+// two's-complement signed `$S` ([u128; L]), both delegating their
+// arithmetic to the slice primitives above. The API surface mirrors
+// the subset of `bnum`'s integer types the wide decimal macros depend
+// on, so the existing `wide`-arm macros need only their `bnum::cast`
+// call sites swapped for the conversion helpers emitted here.
+// ─────────────────────────────────────────────────────────────────────
+
+/// Emits the `$U` / `$S` integer pair for a fixed limb count.
+///
+/// - `$U` / `$S` — the unsigned and signed type names.
+/// - `$L` — limb count (`[u128; $L]`); the bit width is `$L * 128`.
+/// - `$D` — `2 * $L`, the buffer width for widening multiply/divide
+///   intermediates.
+macro_rules! decl_hint {
+    ($U:ident, $S:ident, $L:tt, $D:tt) => {
+        // ── Unsigned ──────────────────────────────────────────────────
+        /// Hand-rolled fixed-width unsigned integer, little-endian limbs.
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+        pub(crate) struct $U(pub(crate) [u128; $L]);
+
+        impl $U {
+            pub(crate) const ZERO: $U = $U([0; $L]);
+            pub(crate) const MAX: $U = $U([u128::MAX; $L]);
+            pub(crate) const BITS: u32 = $L * 128;
+
+            #[inline]
+            pub(crate) fn is_zero(self) -> bool {
+                $crate::hint::limbs_is_zero(&self.0)
+            }
+            #[inline]
+            pub(crate) fn leading_zeros(self) -> u32 {
+                Self::BITS - $crate::hint::limbs_bit_len(&self.0)
+            }
+            #[inline]
+            pub(crate) fn count_ones(self) -> u32 {
+                self.0.iter().map(|l| l.count_ones()).sum()
+            }
+            #[inline]
+            pub(crate) fn is_power_of_two(self) -> bool {
+                self.count_ones() == 1
+            }
+            pub(crate) fn next_power_of_two(self) -> $U {
+                if self.is_zero() || self.is_power_of_two() {
+                    if self.is_zero() {
+                        let mut o = [0u128; $L];
+                        o[0] = 1;
+                        return $U(o);
+                    }
+                    return self;
+                }
+                let bits = $crate::hint::limbs_bit_len(&self.0);
+                let mut out = [0u128; $L];
+                if (bits as usize) < $L * 128 {
+                    out[(bits / 128) as usize] = 1u128 << (bits % 128);
+                }
+                $U(out)
+            }
+            /// Reinterprets the bit pattern as the signed sibling.
+            #[inline]
+            pub(crate) fn cast_signed(self) -> $S {
+                $S(self.0)
+            }
+            /// Builds `10^exp` (or any `radix^…`): parses a decimal
+            /// string. Only base 10 is supported.
+            pub(crate) fn from_str_radix(
+                s: &str,
+                radix: u32,
+            ) -> ::core::result::Result<$U, ()> {
+                if radix != 10 {
+                    return ::core::result::Result::Err(());
+                }
+                let mut acc = [0u128; $L];
+                let ten = [10u128; 1];
+                for ch in s.bytes() {
+                    let d = match ch {
+                        b'0'..=b'9' => (ch - b'0') as u128,
+                        _ => return ::core::result::Result::Err(()),
+                    };
+                    let mut scaled = [0u128; $D];
+                    $crate::hint::limbs_mul(&acc, &ten, &mut scaled);
+                    let mut next = [0u128; $L];
+                    next.copy_from_slice(&scaled[..$L]);
+                    $crate::hint::limbs_add_assign(&mut next, &[d]);
+                    acc = next;
+                }
+                ::core::result::Result::Ok($U(acc))
+            }
+            pub(crate) fn pow(self, mut exp: u32) -> $U {
+                let mut acc = {
+                    let mut o = [0u128; $L];
+                    o[0] = 1;
+                    $U(o)
+                };
+                let mut base = self;
+                while exp > 0 {
+                    if exp & 1 == 1 {
+                        acc = acc.wrapping_mul(base);
+                    }
+                    exp >>= 1;
+                    if exp > 0 {
+                        base = base.wrapping_mul(base);
+                    }
+                }
+                acc
+            }
+            #[inline]
+            pub(crate) fn wrapping_mul(self, rhs: $U) -> $U {
+                let mut prod = [0u128; $D];
+                $crate::hint::limbs_mul(&self.0, &rhs.0, &mut prod);
+                let mut out = [0u128; $L];
+                out.copy_from_slice(&prod[..$L]);
+                $U(out)
+            }
+            #[inline]
+            pub(crate) fn isqrt(self) -> $U {
+                let mut out = [0u128; $L];
+                $crate::hint::limbs_isqrt(&self.0, &mut out);
+                $U(out)
+            }
+        }
+
+        impl ::core::cmp::Ord for $U {
+            #[inline]
+            fn cmp(&self, other: &$U) -> ::core::cmp::Ordering {
+                $crate::hint::limbs_cmp(&self.0, &other.0)
+            }
+        }
+        impl ::core::cmp::PartialOrd for $U {
+            #[inline]
+            fn partial_cmp(&self, other: &$U) -> ::core::option::Option<::core::cmp::Ordering> {
+                ::core::option::Option::Some(self.cmp(other))
+            }
+        }
+        impl ::core::ops::Shr<u32> for $U {
+            type Output = $U;
+            #[inline]
+            fn shr(self, n: u32) -> $U {
+                let mut out = [0u128; $L];
+                $crate::hint::limbs_shr(&self.0, n, &mut out);
+                $U(out)
+            }
+        }
+        impl ::core::ops::Shl<u32> for $U {
+            type Output = $U;
+            #[inline]
+            fn shl(self, n: u32) -> $U {
+                let mut out = [0u128; $L];
+                $crate::hint::limbs_shl(&self.0, n, &mut out);
+                $U(out)
+            }
+        }
+        impl ::core::ops::Sub for $U {
+            type Output = $U;
+            #[inline]
+            fn sub(mut self, rhs: $U) -> $U {
+                $crate::hint::limbs_sub_assign(&mut self.0, &rhs.0);
+                self
+            }
+        }
+        impl ::core::ops::Rem for $U {
+            type Output = $U;
+            #[inline]
+            fn rem(self, rhs: $U) -> $U {
+                let mut q = [0u128; $L];
+                let mut r = [0u128; $L];
+                $crate::hint::limbs_divmod(&self.0, &rhs.0, &mut q, &mut r);
+                $U(r)
+            }
+        }
+
+        // ── Signed ────────────────────────────────────────────────────
+        /// Hand-rolled fixed-width two's-complement signed integer.
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+        pub(crate) struct $S(pub(crate) [u128; $L]);
+
+        impl $S {
+            pub(crate) const ZERO: $S = $S([0; $L]);
+            pub(crate) const ONE: $S = {
+                let mut a = [0u128; $L];
+                a[0] = 1;
+                $S(a)
+            };
+            pub(crate) const BITS: u32 = $L * 128;
+            pub(crate) const MAX: $S = {
+                let mut a = [u128::MAX; $L];
+                a[$L - 1] = i128::MAX as u128;
+                $S(a)
+            };
+            pub(crate) const MIN: $S = {
+                let mut a = [0u128; $L];
+                a[$L - 1] = 1u128 << 127;
+                $S(a)
+            };
+
+            #[inline]
+            pub(crate) fn is_negative(self) -> bool {
+                self.0[$L - 1] >> 127 == 1
+            }
+            #[inline]
+            pub(crate) fn is_zero(self) -> bool {
+                $crate::hint::limbs_is_zero(&self.0)
+            }
+            #[inline]
+            pub(crate) fn is_positive(self) -> bool {
+                !self.is_negative() && !self.is_zero()
+            }
+            /// Two's-complement negation (wrapping; `MIN.negate() == MIN`).
+            #[inline]
+            pub(crate) fn negate(self) -> $S {
+                let mut out = [0u128; $L];
+                for i in 0..$L {
+                    out[i] = !self.0[i];
+                }
+                $crate::hint::limbs_add_assign(&mut out, &[1]);
+                $S(out)
+            }
+            /// `|self|` as the unsigned sibling. `MIN` maps to `2^(BITS-1)`.
+            #[inline]
+            pub(crate) fn unsigned_abs(self) -> $U {
+                if self.is_negative() {
+                    $U(self.negate().0)
+                } else {
+                    $U(self.0)
+                }
+            }
+            /// Reinterprets the bit pattern as the unsigned sibling.
+            #[inline]
+            pub(crate) fn cast_unsigned(self) -> $U {
+                $U(self.0)
+            }
+            /// Builds a signed value from a non-negative magnitude limb
+            /// slice and a sign, truncating the magnitude into `$L`
+            /// limbs.
+            pub(crate) fn from_mag_limbs(mag: &[u128], negative: bool) -> $S {
+                let mut out = [0u128; $L];
+                let n = mag.len().min($L);
+                out[..n].copy_from_slice(&mag[..n]);
+                let v = $S(out);
+                if negative && !v.is_zero() {
+                    v.negate()
+                } else {
+                    v
+                }
+            }
+            #[inline]
+            pub(crate) fn leading_zeros(self) -> u32 {
+                Self::BITS - $crate::hint::limbs_bit_len(&self.unsigned_abs().0)
+            }
+            #[inline]
+            pub(crate) fn count_ones(self) -> u32 {
+                self.0.iter().map(|l| l.count_ones()).sum()
+            }
+            pub(crate) fn from_str_radix(
+                s: &str,
+                radix: u32,
+            ) -> ::core::result::Result<$S, ()> {
+                let (neg, digits) = match s.strip_prefix('-') {
+                    ::core::option::Option::Some(rest) => (true, rest),
+                    ::core::option::Option::None => (false, s),
+                };
+                let mag = $U::from_str_radix(digits, radix)?;
+                ::core::result::Result::Ok($S::from_mag_limbs(&mag.0, neg))
+            }
+            pub(crate) fn pow(self, mut exp: u32) -> $S {
+                let mut acc = $S::ONE;
+                let mut base = self;
+                while exp > 0 {
+                    if exp & 1 == 1 {
+                        acc = acc.wrapping_mul(base);
+                    }
+                    exp >>= 1;
+                    if exp > 0 {
+                        base = base.wrapping_mul(base);
+                    }
+                }
+                acc
+            }
+            #[inline]
+            pub(crate) fn wrapping_add(self, rhs: $S) -> $S {
+                let mut out = self.0;
+                $crate::hint::limbs_add_assign(&mut out, &rhs.0);
+                $S(out)
+            }
+            #[inline]
+            pub(crate) fn wrapping_sub(self, rhs: $S) -> $S {
+                self.wrapping_add(rhs.negate())
+            }
+            #[inline]
+            pub(crate) fn wrapping_neg(self) -> $S {
+                self.negate()
+            }
+            pub(crate) fn wrapping_mul(self, rhs: $S) -> $S {
+                let negative = self.is_negative() ^ rhs.is_negative();
+                let prod = self.unsigned_abs().wrapping_mul(rhs.unsigned_abs());
+                $S::from_mag_limbs(&prod.0, negative)
+            }
+            /// `self / rhs` truncating toward zero. `rhs` must be nonzero.
+            pub(crate) fn wrapping_div(self, rhs: $S) -> $S {
+                let negative = self.is_negative() ^ rhs.is_negative();
+                let mut q = [0u128; $L];
+                let mut r = [0u128; $L];
+                $crate::hint::limbs_divmod(
+                    &self.unsigned_abs().0,
+                    &rhs.unsigned_abs().0,
+                    &mut q,
+                    &mut r,
+                );
+                $S::from_mag_limbs(&q, negative)
+            }
+            /// `self % rhs`, result carries the sign of `self`.
+            pub(crate) fn wrapping_rem(self, rhs: $S) -> $S {
+                let mut q = [0u128; $L];
+                let mut r = [0u128; $L];
+                $crate::hint::limbs_divmod(
+                    &self.unsigned_abs().0,
+                    &rhs.unsigned_abs().0,
+                    &mut q,
+                    &mut r,
+                );
+                $S::from_mag_limbs(&r, self.is_negative())
+            }
+            #[inline]
+            fn add_overflows(self, rhs: $S, result: $S) -> bool {
+                // Overflow iff operands share a sign and the result's
+                // sign differs from it.
+                self.is_negative() == rhs.is_negative()
+                    && result.is_negative() != self.is_negative()
+            }
+            #[inline]
+            pub(crate) fn checked_add(self, rhs: $S) -> ::core::option::Option<$S> {
+                let r = self.wrapping_add(rhs);
+                if self.add_overflows(rhs, r) {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(r)
+                }
+            }
+            #[inline]
+            pub(crate) fn checked_sub(self, rhs: $S) -> ::core::option::Option<$S> {
+                let r = self.wrapping_sub(rhs);
+                if self.is_negative() != rhs.is_negative()
+                    && r.is_negative() != self.is_negative()
+                {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(r)
+                }
+            }
+            #[inline]
+            pub(crate) fn checked_neg(self) -> ::core::option::Option<$S> {
+                if self == $S::MIN {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(self.negate())
+                }
+            }
+            pub(crate) fn checked_mul(self, rhs: $S) -> ::core::option::Option<$S> {
+                let negative = self.is_negative() ^ rhs.is_negative();
+                let mut prod = [0u128; $D];
+                $crate::hint::limbs_mul(
+                    &self.unsigned_abs().0,
+                    &rhs.unsigned_abs().0,
+                    &mut prod,
+                );
+                // Overflow if any limb above the low `$L` is set, or the
+                // magnitude exceeds the signed range for its sign.
+                if !$crate::hint::limbs_is_zero(&prod[$L..]) {
+                    return ::core::option::Option::None;
+                }
+                let r = $S::from_mag_limbs(&prod[..$L], negative);
+                // `from_mag_limbs` of an out-of-range magnitude flips the
+                // sign; detect that.
+                if r.is_zero() || r.is_negative() == negative {
+                    ::core::option::Option::Some(r)
+                } else {
+                    ::core::option::Option::None
+                }
+            }
+            #[inline]
+            pub(crate) fn checked_div(self, rhs: $S) -> ::core::option::Option<$S> {
+                if rhs.is_zero() {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(self.wrapping_div(rhs))
+                }
+            }
+            #[inline]
+            pub(crate) fn checked_rem(self, rhs: $S) -> ::core::option::Option<$S> {
+                if rhs.is_zero() {
+                    ::core::option::Option::None
+                } else {
+                    ::core::option::Option::Some(self.wrapping_rem(rhs))
+                }
+            }
+            #[inline]
+            pub(crate) fn isqrt(self) -> $S {
+                $S(self.unsigned_abs().isqrt().0)
+            }
+            // ── Conversions (replace `bnum::cast::As`) ────────────────
+            /// Builds from a signed 128-bit value.
+            #[inline]
+            pub(crate) fn from_i128(v: i128) -> $S {
+                $S::from_mag_limbs(&[v.unsigned_abs()], v < 0)
+            }
+            /// Builds from an unsigned 128-bit value.
+            #[inline]
+            pub(crate) fn from_u128(v: u128) -> $S {
+                $S::from_mag_limbs(&[v], false)
+            }
+            /// Truncating cast to `i128` (low 128 bits, sign-applied).
+            #[inline]
+            pub(crate) fn as_i128(self) -> i128 {
+                let mag = self.unsigned_abs().0[0];
+                if self.is_negative() {
+                    (mag as i128).wrapping_neg()
+                } else {
+                    mag as i128
+                }
+            }
+            /// Widening / narrowing reinterpretation to another `decl_hint!`
+            /// signed type via magnitude + sign.
+            #[inline]
+            pub(crate) fn resize<T: $crate::hint::HIntFromMag>(self) -> T {
+                T::from_mag_and_sign(&self.unsigned_abs().0, self.is_negative())
+            }
+            /// Approximate `f64` value.
+            pub(crate) fn as_f64(self) -> f64 {
+                let mag = self.unsigned_abs().0;
+                let mut acc = 0.0f64;
+                for i in (0..$L).rev() {
+                    acc = acc * 340_282_366_920_938_463_463_374_607_431_768_211_456.0
+                        + mag[i] as f64;
+                }
+                if self.is_negative() {
+                    -acc
+                } else {
+                    acc
+                }
+            }
+            /// Builds from an `f64`, truncating toward zero. Saturates
+            /// to `MIN` / `MAX` on out-of-range / non-finite input.
+            pub(crate) fn from_f64(v: f64) -> $S {
+                if !v.is_finite() {
+                    return $S::ZERO;
+                }
+                let negative = v < 0.0;
+                let mut m = v.abs().trunc();
+                let radix = 340_282_366_920_938_463_463_374_607_431_768_211_456.0;
+                let mut limbs = [0u128; $L];
+                let mut i = 0;
+                while m >= 1.0 && i < $L {
+                    let limb = (m % radix) as u128;
+                    limbs[i] = limb;
+                    m = (m / radix).trunc();
+                    i += 1;
+                }
+                if m >= 1.0 {
+                    // Overflowed the width — saturate.
+                    return if negative { $S::MIN } else { $S::MAX };
+                }
+                $S::from_mag_limbs(&limbs, negative)
+            }
+        }
+
+        impl $crate::hint::HIntFromMag for $S {
+            #[inline]
+            fn from_mag_and_sign(mag: &[u128], negative: bool) -> $S {
+                $S::from_mag_limbs(mag, negative)
+            }
+        }
+
+        impl ::core::cmp::Ord for $S {
+            #[inline]
+            fn cmp(&self, other: &$S) -> ::core::cmp::Ordering {
+                match (self.is_negative(), other.is_negative()) {
+                    (true, false) => ::core::cmp::Ordering::Less,
+                    (false, true) => ::core::cmp::Ordering::Greater,
+                    _ => $crate::hint::limbs_cmp(&self.0, &other.0),
+                }
+            }
+        }
+        impl ::core::cmp::PartialOrd for $S {
+            #[inline]
+            fn partial_cmp(&self, other: &$S) -> ::core::option::Option<::core::cmp::Ordering> {
+                ::core::option::Option::Some(self.cmp(other))
+            }
+        }
+        impl ::core::ops::Add for $S {
+            type Output = $S;
+            #[inline]
+            fn add(self, rhs: $S) -> $S {
+                self.checked_add(rhs).expect(concat!(stringify!($S), ": add overflow"))
+            }
+        }
+        impl ::core::ops::Sub for $S {
+            type Output = $S;
+            #[inline]
+            fn sub(self, rhs: $S) -> $S {
+                self.checked_sub(rhs).expect(concat!(stringify!($S), ": sub overflow"))
+            }
+        }
+        impl ::core::ops::Mul for $S {
+            type Output = $S;
+            #[inline]
+            fn mul(self, rhs: $S) -> $S {
+                self.checked_mul(rhs).expect(concat!(stringify!($S), ": mul overflow"))
+            }
+        }
+        impl ::core::ops::Div for $S {
+            type Output = $S;
+            #[inline]
+            fn div(self, rhs: $S) -> $S {
+                self.wrapping_div(rhs)
+            }
+        }
+        impl ::core::ops::Rem for $S {
+            type Output = $S;
+            #[inline]
+            fn rem(self, rhs: $S) -> $S {
+                self.wrapping_rem(rhs)
+            }
+        }
+        impl ::core::ops::Neg for $S {
+            type Output = $S;
+            #[inline]
+            fn neg(self) -> $S {
+                self.checked_neg().expect(concat!(stringify!($S), ": neg overflow"))
+            }
+        }
+        impl ::core::ops::Shl<u32> for $S {
+            type Output = $S;
+            #[inline]
+            fn shl(self, n: u32) -> $S {
+                let mut out = [0u128; $L];
+                $crate::hint::limbs_shl(&self.0, n, &mut out);
+                $S(out)
+            }
+        }
+        impl ::core::ops::Shr<u32> for $S {
+            type Output = $S;
+            /// Arithmetic right shift (sign-preserving).
+            #[inline]
+            fn shr(self, n: u32) -> $S {
+                if self.is_negative() {
+                    // −((−self − 1) >> n) − 1  keeps the floor semantics.
+                    let mag = self.unsigned_abs();
+                    let shifted = mag >> n;
+                    $S::from_mag_limbs(&shifted.0, true)
+                } else {
+                    let mut out = [0u128; $L];
+                    $crate::hint::limbs_shr(&self.0, n, &mut out);
+                    $S(out)
+                }
+            }
+        }
+    };
+}
+
+pub(crate) use decl_hint;
+
+/// Trait that lets a `decl_hint!` signed type be rebuilt from another
+/// width's magnitude + sign — the basis of `resize` (widen / narrow).
+pub(crate) trait HIntFromMag {
+    fn from_mag_and_sign(mag: &[u128], negative: bool) -> Self;
+}
+
+// The concrete wide integer types. `HInt256` (the existing
+// hand-rolled D256H storage) is generalised to this family;
+// `HInt2048` / `HInt4096` exist for the strict-transcendental work
+// integers.
+decl_hint!(WInt256, SInt256, 2, 4);
+decl_hint!(WInt512, SInt512, 4, 8);
+decl_hint!(WInt1024, SInt1024, 8, 16);
+decl_hint!(WInt2048, SInt2048, 16, 32);
+decl_hint!(WInt4096, SInt4096, 32, 64);
+
+#[cfg(test)]
+mod hint_tests {
+    use super::*;
+
+    #[test]
+    fn signed_add_sub_neg() {
+        let a = SInt256::from_i128(5);
+        let b = SInt256::from_i128(3);
+        assert_eq!(a.wrapping_add(b), SInt256::from_i128(8));
+        assert_eq!(a.wrapping_sub(b), SInt256::from_i128(2));
+        assert_eq!(b.wrapping_sub(a), SInt256::from_i128(-2));
+        assert_eq!(a.negate(), SInt256::from_i128(-5));
+        assert_eq!(SInt256::ZERO.negate(), SInt256::ZERO);
+    }
+
+    #[test]
+    fn signed_mul_div_rem() {
+        let six = SInt512::from_i128(6);
+        let two = SInt512::from_i128(2);
+        let three = SInt512::from_i128(3);
+        assert_eq!(six.wrapping_mul(three), SInt512::from_i128(18));
+        assert_eq!(six.wrapping_div(two), three);
+        assert_eq!(SInt512::from_i128(7).wrapping_rem(three), SInt512::from_i128(1));
+        assert_eq!(SInt512::from_i128(-7).wrapping_rem(three), SInt512::from_i128(-1));
+        assert_eq!(six.negate().wrapping_mul(three), SInt512::from_i128(-18));
+    }
+
+    #[test]
+    fn checked_overflow() {
+        assert_eq!(SInt256::MAX.checked_add(SInt256::ONE), None);
+        assert_eq!(SInt256::MIN.checked_sub(SInt256::ONE), None);
+        assert_eq!(SInt256::MIN.checked_neg(), None);
+        assert_eq!(SInt256::from_i128(2).checked_add(SInt256::from_i128(3)),
+                   Some(SInt256::from_i128(5)));
+    }
+
+    #[test]
+    fn from_str_and_pow() {
+        let ten = SInt1024::from_str_radix("10", 10).unwrap();
+        assert_eq!(ten, SInt1024::from_i128(10));
+        assert_eq!(ten.pow(3), SInt1024::from_i128(1000));
+        // 10^40 overflows i128 — check via round-trip string.
+        let big = SInt1024::from_str_radix("10", 10).unwrap().pow(40);
+        let from_str = SInt1024::from_str_radix(
+            "10000000000000000000000000000000000000000", 10).unwrap();
+        assert_eq!(big, from_str);
+    }
+
+    #[test]
+    fn ordering_and_resize() {
+        assert!(SInt256::from_i128(-1) < SInt256::ZERO);
+        assert!(SInt256::MIN < SInt256::MAX);
+        // resize widen then narrow round-trips a small value.
+        let v = SInt256::from_i128(-123_456_789);
+        let wide: SInt1024 = v.resize();
+        let back: SInt256 = wide.resize();
+        assert_eq!(back, v);
+        assert_eq!(wide, SInt1024::from_i128(-123_456_789));
+    }
+
+    #[test]
+    fn isqrt_and_f64() {
+        assert_eq!(SInt512::from_i128(144).isqrt(), SInt512::from_i128(12));
+        assert_eq!(SInt256::from_i128(1_000_000).as_f64(), 1_000_000.0);
+        assert_eq!(SInt256::from_f64(-2_500.0), SInt256::from_i128(-2500));
+    }
+}
+
 #[cfg(test)]
 mod slice_tests {
     use super::*;
