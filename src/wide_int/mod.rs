@@ -254,6 +254,130 @@ pub(crate) const fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
     }
 }
 
+/// Karatsuba multiplication threshold. For `a.len() <= KARATSUBA_MIN`
+/// schoolbook wins on constant factors; above that recursive splitting
+/// pays off. Tuned empirically for the `[u128]` limb layout — at 8
+/// limbs (Int1024) schoolbook is 64 limb-mul + carry chains vs
+/// Karatsuba's 3 sub-products of 4 limbs each (48 limb-mul) plus three
+/// shift-and-add merges; the cross-over is here.
+const KARATSUBA_MIN: usize = 16;
+
+/// `out = a · b` for equal-length inputs, dispatching to Karatsuba
+/// when the operand size warrants it.
+///
+/// Not `const fn` — Karatsuba's half-sum scratch needs heap allocation.
+/// Callers in `const` context (parsing string-literal constants, etc.)
+/// keep using [`limbs_mul`].
+///
+/// `out.len() >= 2 · a.len()`. `a.len() == b.len()` required for the
+/// Karatsuba path; mismatched lengths fall through to schoolbook.
+#[cfg(feature = "alloc")]
+pub(crate) fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
+    if a.len() == b.len() && a.len() >= KARATSUBA_MIN {
+        limbs_mul_karatsuba(a, b, out);
+    } else {
+        limbs_mul(a, b, out);
+    }
+}
+
+#[cfg(not(feature = "alloc"))]
+pub(crate) fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
+    limbs_mul(a, b, out);
+}
+
+/// Karatsuba multiplication, equal-length inputs.
+///
+/// Split `a = a_hi·B^h + a_lo`, `b = b_hi·B^h + b_lo` with
+/// `B = 2^128` and `h = a.len() / 2`. Compute three sub-products:
+///
+/// - `z0 = a_lo · b_lo`
+/// - `z2 = a_hi · b_hi`
+/// - `z1 = (a_lo + a_hi)·(b_lo + b_hi) − z0 − z2`
+///
+/// Then `a·b = z2·B^(2h) + z1·B^h + z0`.
+///
+/// Reference: Karatsuba, A. and Ofman, Yu. (1962). "Multiplication of
+/// Multidigit Numbers on Automata." *Doklady Akad. Nauk SSSR* 145,
+/// 293–294.
+#[cfg(feature = "alloc")]
+fn limbs_mul_karatsuba(a: &[u128], b: &[u128], out: &mut [u128]) {
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert!(out.len() >= 2 * a.len());
+    let n = a.len();
+    if n < KARATSUBA_MIN {
+        // Zero out and run schoolbook.
+        for o in out.iter_mut().take(2 * n) {
+            *o = 0;
+        }
+        limbs_mul(a, b, out);
+        return;
+    }
+    let h = n / 2;
+    let (a_lo, a_hi_full) = a.split_at(h);
+    let (b_lo, b_hi_full) = b.split_at(h);
+    let a_hi = a_hi_full;
+    let b_hi = b_hi_full;
+
+    // z0 = a_lo · b_lo (length 2h)
+    let mut z0 = alloc::vec![0u128; 2 * h];
+    limbs_mul_karatsuba_padded(a_lo, b_lo, &mut z0);
+
+    // z2 = a_hi · b_hi (length 2*(n-h))
+    let hi_len = n - h;
+    let mut z2 = alloc::vec![0u128; 2 * hi_len];
+    limbs_mul_karatsuba_padded(a_hi, b_hi, &mut z2);
+
+    // sum_a = a_lo + a_hi (length max(h, hi_len) + 1)
+    let sum_len = core::cmp::max(h, hi_len) + 1;
+    let mut sum_a = alloc::vec![0u128; sum_len];
+    let mut sum_b = alloc::vec![0u128; sum_len];
+    sum_a[..h].copy_from_slice(a_lo);
+    sum_b[..h].copy_from_slice(b_lo);
+    limbs_add_assign(&mut sum_a[..], a_hi);
+    limbs_add_assign(&mut sum_b[..], b_hi);
+
+    // z1 = sum_a · sum_b (length 2 * sum_len)
+    let mut z1 = alloc::vec![0u128; 2 * sum_len];
+    limbs_mul_karatsuba_padded(&sum_a, &sum_b, &mut z1);
+
+    // z1 -= z0
+    limbs_sub_assign(&mut z1[..], &z0);
+    // z1 -= z2
+    limbs_sub_assign(&mut z1[..], &z2);
+
+    // Combine: out[..2h] = z0; out[2h..] = z2 shifted up by 2h;
+    // then add z1 shifted up by h.
+    for o in out.iter_mut().take(2 * n) {
+        *o = 0;
+    }
+    let z0_take = core::cmp::min(z0.len(), out.len());
+    out[..z0_take].copy_from_slice(&z0[..z0_take]);
+    let z2_take = core::cmp::min(z2.len(), out.len().saturating_sub(2 * h));
+    if z2_take > 0 {
+        out[2 * h..2 * h + z2_take].copy_from_slice(&z2[..z2_take]);
+    }
+    // Add z1 << h.
+    let z1_take = core::cmp::min(z1.len(), out.len().saturating_sub(h));
+    if z1_take > 0 {
+        limbs_add_assign(&mut out[h..h + z1_take], &z1[..z1_take]);
+    }
+}
+
+/// Karatsuba helper that pads to equal lengths if the caller passes
+/// uneven slices (happens at the recursion boundary when `n` is odd
+/// and `n_hi = n - h > h`).
+#[cfg(feature = "alloc")]
+fn limbs_mul_karatsuba_padded(a: &[u128], b: &[u128], out: &mut [u128]) {
+    if a.len() == b.len() && a.len() >= KARATSUBA_MIN {
+        limbs_mul_karatsuba(a, b, out);
+    } else {
+        for o in out.iter_mut() {
+            *o = 0;
+        }
+        limbs_mul(a, b, out);
+    }
+}
+
 /// Single-bit left shift in place; returns the bit shifted out of the
 /// top.
 #[inline]
@@ -566,6 +690,46 @@ pub(crate) use self::Uint512 as U512;
 pub(crate) use self::Int1024 as I1024;
 #[cfg(any(feature = "d1024", feature = "wide"))]
 pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
+
+#[cfg(test)]
+mod karatsuba_tests {
+    use super::*;
+
+    /// Karatsuba and schoolbook must agree bit-for-bit on every
+    /// equal-length input that meets the threshold.
+    #[test]
+    fn karatsuba_matches_schoolbook_at_n16() {
+        let a: [u128; 16] = core::array::from_fn(|i| (i as u128) * 0xdead_beef + 1);
+        let b: [u128; 16] = core::array::from_fn(|i| 0xcafe_babe ^ ((i as u128) << 5));
+        let mut s = [0u128; 32];
+        let mut k = [0u128; 32];
+        limbs_mul(&a, &b, &mut s);
+        limbs_mul_karatsuba(&a, &b, &mut k);
+        assert_eq!(s, k);
+    }
+
+    #[test]
+    fn karatsuba_matches_schoolbook_at_n32() {
+        let a: [u128; 32] = core::array::from_fn(|i| (i as u128).wrapping_mul(0x1234_5678_9abc));
+        let b: [u128; 32] = core::array::from_fn(|i| (i as u128 + 1).wrapping_mul(0xfedc_ba98));
+        let mut s = [0u128; 64];
+        let mut k = [0u128; 64];
+        limbs_mul(&a, &b, &mut s);
+        limbs_mul_karatsuba(&a, &b, &mut k);
+        assert_eq!(s, k);
+    }
+
+    #[test]
+    fn karatsuba_handles_zero_inputs() {
+        let a = [0u128; 16];
+        let b: [u128; 16] = core::array::from_fn(|i| (i as u128) + 1);
+        let mut k = [0u128; 32];
+        limbs_mul_karatsuba(&a, &b, &mut k);
+        for o in &k {
+            assert_eq!(*o, 0);
+        }
+    }
+}
 
 #[cfg(test)]
 mod hint_tests {
