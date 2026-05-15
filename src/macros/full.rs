@@ -1,0 +1,77 @@
+//! Umbrella `decl_decimal_full!` macro: emits the *common* per-width
+//! surface in one invocation, replacing ~15 individual `decl_*!` calls
+//! per type in `core_type.rs`.
+//!
+//! Not all per-width macro invocations are inside the umbrella:
+//!
+//! - **Cross-width conversions** (`decl_cross_width_widening!` /
+//!   `decl_cross_width_narrowing!`) take pairs of `(source, target)`
+//!   types — they're emitted at the call site once per pair, outside
+//!   the umbrella.
+//! - **`decl_from_primitive!`** is invoked once per primitive
+//!   (i8..i64, u8..u64). Could be inlined into the umbrella but the
+//!   eight-line repetition is already terse.
+//!
+//! The umbrella is feature-gated implicitly via its callers; D256 /
+//! D512 / D1024 invocations live behind `#[cfg(any(feature = "d256",
+//! feature = "wide"))]` etc. in `core_type.rs`.
+
+/// Wide-tier umbrella. Emits every macro that takes only
+/// `($Type, $Storage[, ...])` args plus the wide-specific
+/// `decl_wide_roots!` and `decl_wide_transcendental!` invocations.
+///
+/// Args:
+/// - `$Type`       — decimal type name (`D256`, `D512`, `D1024`).
+/// - `$Storage`    — signed storage int (`Int256`, `Int512`, `Int1024`).
+/// - `$Unsigned`   — matching unsigned int for `Display` (`Uint256`, …).
+/// - `$Wider`      — next-up signed int for mul/div (`Int512`, `Int1024`, `Int2048`).
+/// - `$SqrtWide`   — wide int for `sqrt`'s `r·10^SCALE` (usually `$Storage`).
+/// - `$CbrtWide`   — wide int for `cbrt`'s `r·10^(2·SCALE)` (next-up usually).
+/// - `$Work`       — wide int for the transcendental core (`Int1024` for D256, …).
+/// - `$core`       — unique module name for the transcendental core.
+/// - `$max_scale`  — the type's maximum supported `SCALE`.
+macro_rules! decl_decimal_full {
+    (
+        wide $Type:ident,
+        $Storage:ty,
+        $Unsigned:ty,
+        $Wider:ty,
+        $SqrtWide:ty,
+        $CbrtWide:ty,
+        $Work:ty,
+        $core:ident,
+        $max_scale:literal
+    ) => {
+        $crate::macros::basics::decl_decimal_basics!(wide $Type, $Storage, $max_scale);
+        $crate::macros::arithmetic::decl_decimal_arithmetic!(wide $Type, $Storage, $Wider);
+        $crate::macros::display::decl_decimal_display!(wide $Type, $Unsigned);
+        $crate::macros::overflow::decl_decimal_overflow_variants!(wide $Type, $Storage, $Wider);
+        $crate::macros::sign::decl_decimal_sign_methods!(wide $Type, $Storage);
+        $crate::macros::from_str::decl_decimal_from_str!(wide $Type, $Storage);
+        $crate::macros::bitwise::decl_decimal_bitwise!(wide $Type, $Storage);
+        $crate::macros::int_methods::decl_decimal_int_methods!(wide $Type, $Storage);
+        $crate::macros::wide_roots::decl_wide_roots!($Type, $Storage, $SqrtWide, $CbrtWide);
+        $crate::macros::wide_transcendental::decl_wide_transcendental!(
+            $Type, $Storage, $Work, $core
+        );
+        $crate::macros::num_traits::decl_decimal_num_traits_basics!(wide $Type, $Storage);
+        $crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_i128!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_u128!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_f64!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_f32!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_decimal_int_conversion_methods!(wide $Type, $Storage, i128);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i8);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i16);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i32);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i64);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u8);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u16);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u32);
+        $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u64);
+        $crate::macros::float_bridge::decl_decimal_float_bridge!(wide $Type, $Storage);
+        $crate::macros::rescale::decl_decimal_rescale!(wide $Type, $Storage);
+    };
+}
+
+pub(crate) use decl_decimal_full;
