@@ -153,6 +153,47 @@ required-features = ["wide", "x-wide"]
 unused_variables = "allow"
 dead_code = "allow"
 
+# Crate-wide clippy policy — applies to lib code, tests, benches,
+# and the build script. Mirrors the `#![allow(...)]` block at the
+# top of `src/lib.rs` (which is still needed because `lints.clippy`
+# was introduced in Cargo 1.74 and the per-file directive supports
+# Rust toolchains that don't yet have the manifest-level feature).
+[lints.clippy]
+module_name_repetitions = "allow"
+doc_lazy_continuation = "allow"
+empty_line_after_outer_attr = "allow"
+cast_possible_truncation = "allow"
+cast_possible_wrap = "allow"
+cast_sign_loss = "allow"
+cast_lossless = "allow"
+cast_precision_loss = "allow"
+unreadable_literal = "allow"
+manual_assert = "allow"
+result_unit_err = "allow"
+collapsible_if = "allow"
+similar_names = "allow"
+many_single_char_names = "allow"
+too_many_lines = "allow"
+inline_always = "allow"
+float_cmp = "allow"
+manual_let_else = "allow"
+format_push_string = "allow"
+comparison_chain = "allow"
+must_use_candidate = "allow"
+return_self_not_must_use = "allow"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+doc_markdown = "allow"
+# Lints relevant only to tests / benches.
+items_after_statements = "allow"
+uninlined_format_args = "allow"
+semicolon_if_nothing_returned = "allow"
+should_panic_without_expect = "allow"
+nonminimal_bool = "allow"
+assertions_on_constants = "allow"
+bool_assert_comparison = "allow"
+bool_to_int_with_if = "allow"
+
 [workspace]
 members = [
     ".",

@@ -442,10 +442,10 @@ pub(crate) const fn limbs_divmod(
 
     // Fast path A: both dividend and divisor fit one 128-bit word.
     if den_one_limb && limbs_fit_one(num) {
-        if quot.len() > 0 {
+        if !quot.is_empty() {
             quot[0] = num[0] / den[0];
         }
-        if rem.len() > 0 {
+        if !rem.is_empty() {
             rem[0] = num[0] % den[0];
         }
         return;
@@ -480,7 +480,7 @@ pub(crate) const fn limbs_divmod(
                 quot[i] = (q_hi << 64) | q_lo;
             }
         }
-        if rem.len() > 0 {
+        if !rem.is_empty() {
             rem[0] = r;
         }
         return;
@@ -610,16 +610,12 @@ pub(crate) fn limbs_divmod_knuth(
 
     let mut u = [0u128; SCRATCH_LIMBS];
     let mut v = [0u128; SCRATCH_LIMBS];
-    debug_assert!(top + 1 <= SCRATCH_LIMBS && n <= SCRATCH_LIMBS);
+    debug_assert!(top < SCRATCH_LIMBS && n <= SCRATCH_LIMBS);
 
     if shift == 0 {
-        for i in 0..top {
-            u[i] = num[i];
-        }
+        u[..top].copy_from_slice(&num[..top]);
         u[top] = 0;
-        for i in 0..n {
-            v[i] = den[i];
-        }
+        v[..n].copy_from_slice(&den[..n]);
     } else {
         let mut carry: u128 = 0;
         for i in 0..top {
@@ -699,17 +695,17 @@ pub(crate) fn limbs_divmod_knuth(
         for i in 0..n {
             let (hi, lo) = mul_128(q_hat, v[i]);
             let (prod_lo, c1) = lo.overflowing_add(mul_carry);
-            let new_mul_carry = hi + c1 as u128;
+            let new_mul_carry = hi + u128::from(c1);
             let (s1, b1) = u[j + i].overflowing_sub(prod_lo);
             let (s2, b2) = s1.overflowing_sub(borrow);
             u[j + i] = s2;
-            borrow = b1 as u128 + b2 as u128;
+            borrow = u128::from(b1) + u128::from(b2);
             mul_carry = new_mul_carry;
         }
         let (s1, b1) = u[j + n].overflowing_sub(mul_carry);
         let (s2, b2) = s1.overflowing_sub(borrow);
         u[j + n] = s2;
-        let final_borrow = b1 as u128 + b2 as u128;
+        let final_borrow = u128::from(b1) + u128::from(b2);
 
         // D5/D6. If multiply-subtract went negative, decrement q̂ and
         // add v back.
@@ -720,7 +716,7 @@ pub(crate) fn limbs_divmod_knuth(
                 let (s1, c1) = u[j + i].overflowing_add(v[i]);
                 let (s2, c2) = s1.overflowing_add(carry);
                 u[j + i] = s2;
-                carry = c1 as u128 + c2 as u128;
+                carry = u128::from(c1) + u128::from(c2);
             }
             // Final carry cancels with the earlier borrow.
             u[j + n] = u[j + n].wrapping_add(carry);
@@ -734,9 +730,7 @@ pub(crate) fn limbs_divmod_knuth(
     // D8. Denormalise the remainder: u[0..n] >> shift → rem.
     if shift == 0 {
         let copy_n = n.min(rem.len());
-        for i in 0..copy_n {
-            rem[i] = u[i];
-        }
+        rem[..copy_n].copy_from_slice(&u[..copy_n]);
     } else {
         for i in 0..n {
             if i < rem.len() {
@@ -825,16 +819,10 @@ pub(crate) fn limbs_divmod_bz(
         let hi = ((idx + 1) * n).min(top);
         // buf = carry · 2^(n·128) + num[lo..hi]. carry holds the
         // running remainder from the previous step (≤ n limbs).
-        for b in buf.iter_mut() {
-            *b = 0;
-        }
+        buf.fill(0);
         let chunk_len = hi - lo;
-        for i in 0..chunk_len {
-            buf[i] = num[lo + i];
-        }
-        for i in 0..n {
-            buf[chunk_len + i] = carry[i];
-        }
+        buf[..chunk_len].copy_from_slice(&num[lo..lo + chunk_len]);
+        buf[chunk_len..chunk_len + n].copy_from_slice(&carry[..n]);
         let buf_len = chunk_len + n;
         // Divide.
         limbs_divmod_knuth(
@@ -844,19 +832,14 @@ pub(crate) fn limbs_divmod_bz(
             &mut r_chunk[..n],
         );
         // Store quotient chunk.
-        for i in 0..n {
-            if lo + i < quot.len() {
-                quot[lo + i] = q_chunk[i];
-            }
-        }
+        let store_end = (lo + n).min(quot.len());
+        let store_len = store_end.saturating_sub(lo);
+        quot[lo..lo + store_len].copy_from_slice(&q_chunk[..store_len]);
         // Carry the remainder.
-        for i in 0..n {
-            carry[i] = r_chunk[i];
-        }
+        carry[..n].copy_from_slice(&r_chunk[..n]);
     }
-    for i in 0..n.min(rem.len()) {
-        rem[i] = carry[i];
-    }
+    let rem_n = n.min(rem.len());
+    rem[..rem_n].copy_from_slice(&carry[..rem_n]);
 }
 
 /// `out = floor(sqrt(n))` via Newton's method. `out` is zeroed then
@@ -900,7 +883,7 @@ fn limbs_div_small(limbs: &mut [u128], radix: u128) -> u128 {
     let mut rem = 0u128;
     for limb in limbs.iter_mut().rev() {
         let hi = (*limb) >> 64;
-        let lo = (*limb) & u64::MAX as u128;
+        let lo = (*limb) & u128::from(u64::MAX);
         let acc_hi = (rem << 64) | hi;
         let q_hi = acc_hi / radix;
         let r1 = acc_hi % radix;
@@ -1276,13 +1259,14 @@ mod slice_tests {
         // Builds a 16-limb dividend with a 10-limb divisor — well
         // above BZ_THRESHOLD so the recursive path is exercised.
         let mut num = [0u128; 16];
-        for i in 0..16 {
-            num[i] = (i as u128).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+        for (i, slot) in num.iter_mut().enumerate() {
+            *slot = (i as u128)
+                .wrapping_mul(0x9E37_79B9_7F4A_7C15)
                 .wrapping_add(i as u128);
         }
         let mut den = [0u128; 10];
-        for i in 0..10 {
-            den[i] = ((i + 1) as u128).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        for (i, slot) in den.iter_mut().enumerate() {
+            *slot = ((i + 1) as u128).wrapping_mul(0xBF58_476D_1CE4_E5B9);
         }
         let mut q_canon = [0u128; 16];
         let mut r_canon = [0u128; 16];

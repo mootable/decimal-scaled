@@ -653,8 +653,12 @@ impl<const SCALE: u32> D18<SCALE> {
     }
 
     /// Demote to the previous storage tier ([`D9`]) at the same
-    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
-    /// doesn't fit `i32`'s range at the given scale.
+    /// `SCALE`.
+    ///
+    /// # Errors
+    ///
+    /// Returns `Err(ConvertError::OutOfRange)` if the value doesn't
+    /// fit `i32`'s range at the given scale.
     ///
     /// ```
     /// use decimal_scaled::D18s5;

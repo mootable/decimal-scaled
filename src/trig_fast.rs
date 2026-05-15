@@ -1,6 +1,6 @@
 //! Lossy (f64-bridge) trig methods for D38.
 //!
-//! Companion to trig_strict.rs. The plain methods here are the
+//! Companion to `trig_strict.rs`. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.

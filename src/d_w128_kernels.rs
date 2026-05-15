@@ -44,7 +44,7 @@ const fn mul_128(a: u128, b: u128) -> (u128, u128) {
 fn add_u256(a: U256, b: U256) -> (U256, bool) {
     let (lo, c0) = a[0].overflowing_add(b[0]);
     let (hi1, c1) = a[1].overflowing_add(b[1]);
-    let (hi, c2) = hi1.overflowing_add(c0 as u128);
+    let (hi, c2) = hi1.overflowing_add(u128::from(c0));
     ([lo, hi], c1 || c2)
 }
 
@@ -52,7 +52,7 @@ fn add_u256(a: U256, b: U256) -> (U256, bool) {
 #[inline]
 fn sub_u256(a: U256, b: U256) -> U256 {
     let (lo, borrow) = a[0].overflowing_sub(b[0]);
-    let hi = a[1].wrapping_sub(b[1]).wrapping_sub(borrow as u128);
+    let hi = a[1].wrapping_sub(b[1]).wrapping_sub(u128::from(borrow));
     [lo, hi]
 }
 
@@ -81,12 +81,12 @@ pub(crate) fn mul_u256(a: U256, b: U256) -> U512 {
     // limb1 = p00_hi + p01_lo + p10_lo
     let (s1, c1a) = p00_hi.overflowing_add(p01_lo);
     let (r1, c1b) = s1.overflowing_add(p10_lo);
-    let carry1 = c1a as u128 + c1b as u128;
+    let carry1 = u128::from(c1a) + u128::from(c1b);
     // limb2 = p01_hi + p10_hi + p11_lo + carry1
     let (s2, c2a) = p01_hi.overflowing_add(p10_hi);
     let (s2b, c2b) = s2.overflowing_add(p11_lo);
     let (r2, c2c) = s2b.overflowing_add(carry1);
-    let carry2 = c2a as u128 + c2b as u128 + c2c as u128;
+    let carry2 = u128::from(c2a) + u128::from(c2b) + u128::from(c2c);
     // limb3 = p11_hi + carry2
     let r3 = p11_hi + carry2;
     [r0, r1, r2, r3]
@@ -142,7 +142,7 @@ fn shl_u512(n: U512, shift: u32) -> U512 {
 /// covers every `10^scale` divisor for `scale <= 19` — the common
 /// decimal multiply path.
 fn div_u512_by_word(num: U512, d: u64) -> U512 {
-    let dd = d as u128;
+    let dd = u128::from(d);
     let mut limbs = [0u64; 8];
     for i in 0..4 {
         limbs[i << 1] = num[i] as u64;
@@ -152,13 +152,13 @@ fn div_u512_by_word(num: U512, d: u64) -> U512 {
     let mut i = 8;
     while i > 0 {
         i -= 1;
-        let cur = (rem << 64) | limbs[i] as u128;
+        let cur = (rem << 64) | u128::from(limbs[i]);
         limbs[i] = (cur / dd) as u64;
         rem = cur % dd;
     }
     let mut out = [0u128; 4];
     for i in 0..4 {
-        out[i] = limbs[i << 1] as u128 | ((limbs[(i << 1) | 1] as u128) << 64);
+        out[i] = u128::from(limbs[i << 1]) | (u128::from(limbs[(i << 1) | 1]) << 64);
     }
     out
 }
@@ -184,7 +184,7 @@ pub(crate) fn div_u512_by_u256(num: U512, d: U256) -> U512 {
     }
     // Word-divisor path: a wide dividend divided by a divisor that
     // fits in 64 bits (every `10^scale` for `scale <= 19`).
-    if d[1] == 0 && d[0] <= u64::MAX as u128 {
+    if d[1] == 0 && d[0] <= u128::from(u64::MAX) {
         return div_u512_by_word(num, d[0] as u64);
     }
     let bits = bitlen_u512(num);
@@ -309,7 +309,7 @@ impl Fixed {
     /// `self * 2` (magnitude doubled). Caller guarantees no overflow.
     #[inline]
     pub(crate) fn double(self) -> Fixed {
-        let mag = [self.mag[0] << 1 | 0, (self.mag[1] << 1) | (self.mag[0] >> 127)];
+        let mag = [(self.mag[0] << 1), (self.mag[1] << 1) | (self.mag[0] >> 127)];
         Fixed { negative: self.negative, mag }
     }
 
@@ -569,7 +569,7 @@ fn isqrt_u512(n: U512) -> U256 {
     };
     // Initial overestimate y0 = 2^ceil(bits/2) >= sqrt(n); for n < 2^452
     // this is at most 2^226, comfortably inside U256.
-    let half_bits = (bits + 1) / 2;
+    let half_bits = bits.div_ceil(2);
     let mut y: U256 = if half_bits >= 128 {
         [0, 1u128 << (half_bits - 128)]
     } else {

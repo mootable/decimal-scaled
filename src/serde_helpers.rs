@@ -131,7 +131,7 @@ impl<'de, const SCALE: u32> Deserialize<'de> for D38<SCALE> {
 /// `#[serde(with = ...)]` on fields in generic containing types or in
 /// newtype wrappers where the trait impl may be shadowed.
 pub mod decimal_serde {
-    use super::*;
+    use super::{Serializer, D38, Serialize, Deserializer, Deserialize, PhantomData, Visitor};
 
     /// Serialise `v` using the `D38` wire format.
     ///
@@ -270,19 +270,19 @@ pub mod decimal_serde {
         // serialise path.
 
         fn visit_i8<E: serde::de::Error>(self, v: i8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_i16<E: serde::de::Error>(self, v: i16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Self::Value, E> {
@@ -290,19 +290,19 @@ pub mod decimal_serde {
         }
 
         fn visit_u8<E: serde::de::Error>(self, v: u8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_u16<E: serde::de::Error>(self, v: u16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v as i128))
+            Ok(D38::<SCALE>::from_bits(i128::from(v)))
         }
 
         fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Self::Value, E> {

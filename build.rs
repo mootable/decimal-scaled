@@ -1,3 +1,21 @@
+// Build-script-local clippy allowances. The BigU multi-precision
+// helpers below routinely cast between u64 / u128 / i128 widths and
+// use single-letter limb-loop variables — the patterns are intentional
+// and pervasive in big-integer arithmetic.
+#![allow(
+    clippy::cast_possible_truncation,
+    clippy::cast_sign_loss,
+    clippy::cast_lossless,
+    clippy::similar_names,
+    clippy::many_single_char_names,
+    clippy::format_push_string,
+    clippy::doc_markdown,
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use,
+)]
+
 //! Build-time high-precision constant generator.
 //!
 //! Computes π, τ, π/2, π/4, e, and the golden ratio at up to ~320
@@ -33,7 +51,7 @@ use std::path::PathBuf;
 /// limbs). Resizing is automatic on overflow / leading-zero trimming.
 #[derive(Clone, Debug)]
 struct BigU {
-    /// Little-endian base-2^64 limbs. limbs.last() != Some(&0) unless
+    /// Little-endian base-2^64 limbs. `limbs.last()` != Some(&0) unless
     /// the value is zero (in which case limbs is empty).
     limbs: Vec<u64>,
 }
@@ -59,9 +77,9 @@ impl BigU {
     /// In-place add of a single u64.
     fn add_u64(&mut self, v: u64) {
         if v == 0 { return; }
-        let mut carry = v as u128;
-        for limb in self.limbs.iter_mut() {
-            let s = *limb as u128 + carry;
+        let mut carry = u128::from(v);
+        for limb in &mut self.limbs {
+            let s = u128::from(*limb) + carry;
             *limb = s as u64;
             carry = s >> 64;
             if carry == 0 { break; }
@@ -70,15 +88,15 @@ impl BigU {
             self.limbs.push(carry as u64);
         }
     }
-    /// In-place add of another BigU.
+    /// In-place add of another `BigU`.
     fn add_assign(&mut self, rhs: &BigU) {
         if rhs.limbs.len() > self.limbs.len() {
             self.limbs.resize(rhs.limbs.len(), 0);
         }
         let mut carry: u128 = 0;
         for i in 0..self.limbs.len() {
-            let r = if i < rhs.limbs.len() { rhs.limbs[i] as u128 } else { 0 };
-            let s = self.limbs[i] as u128 + r + carry;
+            let r = if i < rhs.limbs.len() { u128::from(rhs.limbs[i]) } else { 0 };
+            let s = u128::from(self.limbs[i]) + r + carry;
             self.limbs[i] = s as u64;
             carry = s >> 64;
         }
@@ -87,12 +105,12 @@ impl BigU {
         }
         self.trim();
     }
-    /// In-place subtract of another BigU. Requires self >= rhs.
+    /// In-place subtract of another `BigU`. Requires self >= rhs.
     fn sub_assign(&mut self, rhs: &BigU) {
         let mut borrow: i128 = 0;
         for i in 0..self.limbs.len() {
-            let r = if i < rhs.limbs.len() { rhs.limbs[i] as i128 } else { 0 };
-            let s = self.limbs[i] as i128 - r - borrow;
+            let r = if i < rhs.limbs.len() { i128::from(rhs.limbs[i]) } else { 0 };
+            let s = i128::from(self.limbs[i]) - r - borrow;
             if s < 0 {
                 self.limbs[i] = (s + (1i128 << 64)) as u64;
                 borrow = 1;
@@ -109,8 +127,8 @@ impl BigU {
         if v == 0 { self.limbs.clear(); return; }
         if v == 1 { return; }
         let mut carry: u128 = 0;
-        for limb in self.limbs.iter_mut() {
-            let p = *limb as u128 * v as u128 + carry;
+        for limb in &mut self.limbs {
+            let p = u128::from(*limb) * u128::from(v) + carry;
             *limb = p as u64;
             carry = p >> 64;
         }
@@ -124,9 +142,9 @@ impl BigU {
         assert!(v != 0);
         let mut rem: u128 = 0;
         for limb in self.limbs.iter_mut().rev() {
-            let acc = (rem << 64) | (*limb as u128);
-            *limb = (acc / v as u128) as u64;
-            rem = acc % v as u128;
+            let acc = (rem << 64) | u128::from(*limb);
+            *limb = (acc / u128::from(v)) as u64;
+            rem = acc % u128::from(v);
         }
         self.trim();
         rem as u64
@@ -137,8 +155,8 @@ impl BigU {
         assert!(v != 0);
         let mut rem: u128 = 0;
         for limb in self.limbs.iter().rev() {
-            let acc = (rem << 64) | (*limb as u128);
-            rem = acc % v as u128;
+            let acc = (rem << 64) | u128::from(*limb);
+            rem = acc % u128::from(v);
         }
         rem as u64
     }
@@ -210,12 +228,12 @@ fn fixed_mul(a: &BigU, b: &BigU, digits: u32) -> BigU {
         if a.limbs[i] == 0 { continue; }
         let mut carry: u128 = 0;
         for j in 0..b.limbs.len() {
-            let p = a.limbs[i] as u128 * b.limbs[j] as u128 + carry;
+            let p = u128::from(a.limbs[i]) * u128::from(b.limbs[j]) + carry;
             let pos = i + j;
             while acc.limbs.len() <= pos {
                 acc.limbs.push(0);
             }
-            let s = acc.limbs[pos] as u128 + (p as u64) as u128;
+            let s = u128::from(acc.limbs[pos]) + u128::from(p as u64);
             acc.limbs[pos] = s as u64;
             carry = (p >> 64) + (s >> 64);
         }
@@ -224,7 +242,7 @@ fn fixed_mul(a: &BigU, b: &BigU, digits: u32) -> BigU {
             while acc.limbs.len() <= pos {
                 acc.limbs.push(0);
             }
-            let s = acc.limbs[pos] as u128 + carry;
+            let s = u128::from(acc.limbs[pos]) + carry;
             acc.limbs[pos] = s as u64;
             carry = s >> 64;
             pos += 1;
@@ -255,12 +273,12 @@ fn mul_full(a: &BigU, b: &BigU) -> BigU {
         if a.limbs[i] == 0 { continue; }
         let mut carry: u128 = 0;
         for j in 0..b.limbs.len() {
-            let p = a.limbs[i] as u128 * b.limbs[j] as u128 + carry;
+            let p = u128::from(a.limbs[i]) * u128::from(b.limbs[j]) + carry;
             let pos = i + j;
             while acc.limbs.len() <= pos {
                 acc.limbs.push(0);
             }
-            let s = acc.limbs[pos] as u128 + (p as u64) as u128;
+            let s = u128::from(acc.limbs[pos]) + u128::from(p as u64);
             acc.limbs[pos] = s as u64;
             carry = (p >> 64) + (s >> 64);
         }
@@ -269,7 +287,7 @@ fn mul_full(a: &BigU, b: &BigU) -> BigU {
             while acc.limbs.len() <= pos {
                 acc.limbs.push(0);
             }
-            let s = acc.limbs[pos] as u128 + carry;
+            let s = u128::from(acc.limbs[pos]) + carry;
             acc.limbs[pos] = s as u64;
             carry = s >> 64;
             pos += 1;
@@ -326,7 +344,7 @@ fn get_bit(a: &BigU, i: u32) -> bool {
 
 fn shl1(a: &mut BigU) {
     let mut carry = 0u64;
-    for limb in a.limbs.iter_mut() {
+    for limb in &mut a.limbs {
         let new = (*limb << 1) | carry;
         carry = *limb >> 63;
         *limb = new;

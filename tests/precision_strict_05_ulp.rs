@@ -612,7 +612,7 @@ fn powf_strict_at_scale_12() {
     assert_05_ulp(
         "2^10",
         two.powf_strict(D38s12::from_int(10)).to_bits(),
-        1024_000_000_000_000,
+        1_024_000_000_000_000,
     );
     // 2^0.5 = sqrt(2)
     let half = D38s12::from_bits(500_000_000_000);

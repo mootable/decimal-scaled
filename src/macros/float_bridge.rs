@@ -5,7 +5,7 @@
 //!
 //! - `from_f64(value)` — uses
 //! `crate::rounding::DEFAULT_ROUNDING_MODE` (controlled by the
-//! `rounding-*` Cargo features; HalfToEven by default).
+//! `rounding-*` Cargo features; `HalfToEven` by default).
 //! - `from_f64_with(value, mode)` — explicit `RoundingMode`.
 //!
 //! Output saturation policy is uniform across modes: NaN -> ZERO,

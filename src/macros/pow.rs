@@ -25,7 +25,7 @@ macro_rules! decl_decimal_pow {
                 let mut e = exp;
                 while e > 0 {
                     if e & 1 == 1 {
-                        acc = acc * base;
+                        acc *= base;
                     }
                     e >>= 1;
                     if e > 0 {

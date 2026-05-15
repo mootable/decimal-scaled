@@ -31,32 +31,32 @@ const D76_SCALE_REF: u32 = 75;
 #[cfg(any(feature = "d76", feature = "wide"))]
 const PI_RAW_D256: Int256 = match Int256::from_str_radix(PI_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: PI_D76_S75 not parseable"),
+    Err(()) => panic!("consts_wide: PI_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
 const TAU_RAW_D256: Int256 = match Int256::from_str_radix(TAU_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: TAU_D76_S75 not parseable"),
+    Err(()) => panic!("consts_wide: TAU_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
 const HALF_PI_RAW_D256: Int256 = match Int256::from_str_radix(HALF_PI_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: HALF_PI_D76_S75 not parseable"),
+    Err(()) => panic!("consts_wide: HALF_PI_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
 const QUARTER_PI_RAW_D256: Int256 = match Int256::from_str_radix(QUARTER_PI_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: QUARTER_PI_D76_S75 not parseable"),
+    Err(()) => panic!("consts_wide: QUARTER_PI_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
 const E_RAW_D256: Int256 = match Int256::from_str_radix(E_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: E_D76_S75 not parseable"),
+    Err(()) => panic!("consts_wide: E_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
 const GOLDEN_RAW_D256: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: GOLDEN_D76_S75 not parseable"),
+    Err(()) => panic!("consts_wide: GOLDEN_D76_S75 not parseable"),
 };
 
 #[cfg(any(feature = "d76", feature = "wide"))]
@@ -110,32 +110,32 @@ const D153_SCALE_REF: u32 = 153;
 #[cfg(any(feature = "d153", feature = "wide"))]
 const PI_RAW_D512: Int512 = match Int512::from_str_radix(PI_D153_S153, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: PI_D153_S153 not parseable"),
+    Err(()) => panic!("consts_wide: PI_D153_S153 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
 const TAU_RAW_D512: Int512 = match Int512::from_str_radix(TAU_D153_S153, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: TAU_D153_S153 not parseable"),
+    Err(()) => panic!("consts_wide: TAU_D153_S153 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
 const HALF_PI_RAW_D512: Int512 = match Int512::from_str_radix(HALF_PI_D153_S153, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: HALF_PI_D153_S153 not parseable"),
+    Err(()) => panic!("consts_wide: HALF_PI_D153_S153 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
 const QUARTER_PI_RAW_D512: Int512 = match Int512::from_str_radix(QUARTER_PI_D153_S153, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: QUARTER_PI_D153_S153 not parseable"),
+    Err(()) => panic!("consts_wide: QUARTER_PI_D153_S153 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
 const E_RAW_D512: Int512 = match Int512::from_str_radix(E_D153_S153, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: E_D153_S153 not parseable"),
+    Err(()) => panic!("consts_wide: E_D153_S153 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
 const GOLDEN_RAW_D512: Int512 = match Int512::from_str_radix(GOLDEN_D153_S153, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: GOLDEN_D153_S153 not parseable"),
+    Err(()) => panic!("consts_wide: GOLDEN_D153_S153 not parseable"),
 };
 
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -189,32 +189,32 @@ const D307_SCALE_REF: u32 = 307;
 #[cfg(any(feature = "d307", feature = "wide"))]
 const PI_RAW_D1024: Int1024 = match Int1024::from_str_radix(PI_D307_S307, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: PI_D307_S307 not parseable"),
+    Err(()) => panic!("consts_wide: PI_D307_S307 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
 const TAU_RAW_D1024: Int1024 = match Int1024::from_str_radix(TAU_D307_S307, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: TAU_D307_S307 not parseable"),
+    Err(()) => panic!("consts_wide: TAU_D307_S307 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
 const HALF_PI_RAW_D1024: Int1024 = match Int1024::from_str_radix(HALF_PI_D307_S307, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: HALF_PI_D307_S307 not parseable"),
+    Err(()) => panic!("consts_wide: HALF_PI_D307_S307 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
 const QUARTER_PI_RAW_D1024: Int1024 = match Int1024::from_str_radix(QUARTER_PI_D307_S307, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: QUARTER_PI_D307_S307 not parseable"),
+    Err(()) => panic!("consts_wide: QUARTER_PI_D307_S307 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
 const E_RAW_D1024: Int1024 = match Int1024::from_str_radix(E_D307_S307, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: E_D307_S307 not parseable"),
+    Err(()) => panic!("consts_wide: E_D307_S307 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
 const GOLDEN_RAW_D1024: Int1024 = match Int1024::from_str_radix(GOLDEN_D307_S307, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts_wide: GOLDEN_D307_S307 not parseable"),
+    Err(()) => panic!("consts_wide: GOLDEN_D307_S307 not parseable"),
 };
 
 #[cfg(any(feature = "d307", feature = "wide"))]

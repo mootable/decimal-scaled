@@ -187,9 +187,7 @@ pub(crate) fn exp_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w
     // exp(v) = 2^k · exp(s).
     if k >= 0 {
         let shift = k as u32;
-        if sum.bit_length() + shift > 256 {
-            panic!("D38::exp: result overflows the representable range");
-        }
+        assert!(sum.bit_length() + shift <= 256, "D38::exp: result overflows the representable range");
         sum.shl(shift)
     } else {
         sum.shr((-k) as u32)
@@ -232,9 +230,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[cfg(not(feature = "fast"))]
     pub fn ln_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
-        if self.0 <= 0 {
-            panic!("D38::ln: argument must be positive");
-        }
+        assert!(self.0 > 0, "D38::ln: argument must be positive");
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
@@ -271,20 +267,14 @@ impl<const SCALE: u32> D38<SCALE> {
     #[cfg(not(feature = "fast"))]
     pub fn log_strict(self, base: Self) -> Self {
         use crate::d_w128_kernels::Fixed;
-        if self.0 <= 0 {
-            panic!("D38::log: argument must be positive");
-        }
-        if base.0 <= 0 {
-            panic!("D38::log: base must be positive");
-        }
+        assert!(self.0 > 0, "D38::log: argument must be positive");
+        assert!(base.0 > 0, "D38::log: base must be positive");
         let w = SCALE + STRICT_GUARD;
         let pow = 10u128.pow(STRICT_GUARD);
         let v_w = Fixed::from_u128_mag(self.0 as u128, false).mul_u128(pow);
         let b_w = Fixed::from_u128_mag(base.0 as u128, false).mul_u128(pow);
         let ln_b = ln_fixed(b_w, w);
-        if ln_b.is_zero() {
-            panic!("D38::log: base must not equal 1 (ln(1) is zero)");
-        }
+        assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
         let raw = ln_fixed(v_w, w)
             .div(ln_b, w)
             .round_to_i128(w, SCALE)
@@ -317,9 +307,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[cfg(not(feature = "fast"))]
     pub fn log2_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
-        if self.0 <= 0 {
-            panic!("D38::log2: argument must be positive");
-        }
+        assert!(self.0 > 0, "D38::log2: argument must be positive");
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
@@ -355,9 +343,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[cfg(not(feature = "fast"))]
     pub fn log10_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
-        if self.0 <= 0 {
-            panic!("D38::log10: argument must be positive");
-        }
+        assert!(self.0 > 0, "D38::log10: argument must be positive");
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
@@ -851,7 +837,7 @@ mod strict_tests {
         let ten = D38s12::from_bits(10_000_000_000_000);
         let result = ten.exp2();
         assert!(
-            within(result, 1024_000_000_000_000, EXP_TOLERANCE_LSB * 10),
+            within(result, 1_024_000_000_000_000, EXP_TOLERANCE_LSB * 10),
             "exp2(10) bits = {}",
             result.to_bits()
         );

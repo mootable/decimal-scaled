@@ -107,11 +107,10 @@ impl<const SCALE: u32> D38<SCALE> {
             None
         };
         // Early exit: NaN maps to ZERO. Only reachable on the float path.
-        if let Some(f) = float_signal {
-            if f.is_nan() {
+        if let Some(f) = float_signal
+            && f.is_nan() {
                 return Self::ZERO;
             }
-        }
         if let Some(d) = <Self as NumCast>::from(value) {
             return d;
         }
@@ -163,6 +162,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::MAX.to_num::<i32>(), i32::MAX);
     /// assert_eq!(D38s12::MIN.to_num::<i32>(), i32::MIN);
     /// ```
+    #[must_use] 
     pub fn to_num<T: NumCast + Bounded>(self) -> T {
         match T::from(self) {
             Some(t) => t,

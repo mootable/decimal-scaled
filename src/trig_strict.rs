@@ -225,9 +225,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let v = to_fixed(self.0);
         let sin_w = sin_fixed(v, w);
         let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
-        if cos_w.is_zero() {
-            panic!("D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
-        }
+        assert!(!cos_w.is_zero(), "D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
         let raw = sin_w
             .div(cos_w, w)
             .round_to_i128(w, SCALE)
@@ -265,9 +263,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         let abs_v = Fixed { negative: false, mag: v.mag };
-        if abs_v.ge_mag(one_w) && abs_v != one_w {
-            panic!("D38::asin: argument out of domain [-1, 1]");
-        }
+        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::asin: argument out of domain [-1, 1]");
         if abs_v == one_w {
             // asin(±1) = ±π/2.
             let hp = wide_half_pi(w);
@@ -300,9 +296,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         let abs_v = Fixed { negative: false, mag: v.mag };
-        if abs_v.ge_mag(one_w) && abs_v != one_w {
-            panic!("D38::acos: argument out of domain [-1, 1]");
-        }
+        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::acos: argument out of domain [-1, 1]");
         // asin(v) in the wide intermediate, then π/2 − asin(v).
         let asin_w = if abs_v == one_w {
             let hp = wide_half_pi(w);
@@ -462,9 +456,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
-        if v.negative || !v.ge_mag(one_w) {
-            panic!("D38::acosh: argument must be >= 1");
-        }
+        assert!(!v.negative && v.ge_mag(one_w), "D38::acosh: argument must be >= 1");
         let two_w = one_w.double();
         let inner = if v.ge_mag(two_w) {
             // ln(x) + ln(1 + √(1 − 1/x²)).
@@ -498,9 +490,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         let ax = Fixed { negative: false, mag: v.mag };
-        if ax.ge_mag(one_w) {
-            panic!("D38::atanh: argument out of domain (-1, 1)");
-        }
+        assert!(!ax.ge_mag(one_w), "D38::atanh: argument out of domain (-1, 1)");
         // ln((1 + x) / (1 − x)) / 2.
         let ratio = one_w.add(v).div(one_w.sub(v), w);
         let raw = crate::log_exp_strict::ln_fixed(ratio, w)

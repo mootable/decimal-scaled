@@ -1,6 +1,6 @@
-//! Lossy (f64-bridge) log_exp methods for D38.
+//! Lossy (f64-bridge) `log_exp` methods for D38.
 //!
-//! Companion to log_exp_strict.rs. The plain methods here are the
+//! Companion to `log_exp_strict.rs`. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.

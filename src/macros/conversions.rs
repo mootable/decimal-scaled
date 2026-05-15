@@ -181,7 +181,7 @@ macro_rules! decl_try_from_i128 {
 pub(crate) use decl_try_from_i128;
 
 /// Emits `TryFrom<u128> for $Type<SCALE>`. First narrows u128 to i128
-/// (rejecting if the value exceeds i128::MAX) then delegates to the
+/// (rejecting if the value exceeds `i128::MAX`) then delegates to the
 /// i128 path.
 macro_rules! decl_try_from_u128 {
     // Wide storage. `u128` always widens losslessly into

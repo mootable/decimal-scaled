@@ -120,10 +120,8 @@ impl<const SCALE: u32> Div for D38<SCALE> {
     /// ```
     #[inline]
     fn div(self, rhs: Self) -> Self {
-        if rhs.0 == 0 {
-            // Match the panic message from `i128 /`.
-            panic!("attempt to divide by zero");
-        }
+        // Match the panic message from `i128 /`.
+        assert!(rhs.0 != 0, "attempt to divide by zero");
         match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
             None => Self(panic_or_wrap_div::<SCALE>(self.0, rhs.0)),
@@ -189,9 +187,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn div_with(self, rhs: Self, mode: crate::rounding::RoundingMode) -> Self {
-        if rhs.0 == 0 {
-            panic!("attempt to divide by zero");
-        }
+        assert!(rhs.0 != 0, "attempt to divide by zero");
         match crate::mg_divide::div_pow10_div_with::<SCALE>(self.0, rhs.0, mode) {
             Some(q) => Self(q),
             None => Self(panic_or_wrap_div::<SCALE>(self.0, rhs.0)),

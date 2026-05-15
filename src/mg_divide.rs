@@ -193,16 +193,16 @@ fn div_exp_fast_2word_with_rem(
     let (m2_high, m2_low) = mul2(z_high, magic);
 
     let (m_low, carry) = m2_low.overflowing_add(m1_high);
-    let m_high = m2_high + carry as u128;
+    let m_high = m2_high + u128::from(carry);
 
     // Step 3: extract the 128-bit quotient estimate.
     let (_, carry) = m_low.overflowing_add(z_low);
-    let q = m_high + z_high + carry as u128;
+    let q = m_high + z_high + u128::from(carry);
 
     // Step 4: single add-back correction. The estimate can be off by 1.
     let (pp_high, pp_low) = mul2(q, exp);
     let (r_low, borrow) = n_low.overflowing_sub(pp_low);
-    debug_assert!(n_high == pp_high + borrow as u128);
+    debug_assert!(n_high == pp_high + u128::from(borrow));
 
     if r_low < exp {
         Some((q, r_low))
@@ -284,7 +284,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
             // magnitude buffer; callers narrow afterwards, so the
             // overflow surfaces in the final narrowing cast.
             let mut carry: u128 = 1;
-            for limb in mag.iter_mut() {
+            for limb in &mut mag {
                 let (s, c) = limb.overflowing_add(carry);
                 *limb = s;
                 if !c {
@@ -374,7 +374,7 @@ fn div_long_256_by_128_with_rem(
     // schoolbook base-2^64 long division — one hardware divide per
     // 64-bit limb instead of a 256-iteration bit loop. Every
     // `10^scale` for `scale <= 19` lands here.
-    if d <= u64::MAX as u128 {
+    if d <= u128::from(u64::MAX) {
         let limbs = [
             n_low as u64,
             (n_low >> 64) as u64,
@@ -388,11 +388,11 @@ fn div_long_256_by_128_with_rem(
         let mut i = 4;
         while i > 0 {
             i -= 1;
-            let cur = (rem << 64) | limbs[i] as u128;
+            let cur = (rem << 64) | u128::from(limbs[i]);
             out[i] = (cur / d) as u64;
             rem = cur % d;
         }
-        return Some((out[0] as u128 | ((out[1] as u128) << 64), rem));
+        return Some((u128::from(out[0]) | (u128::from(out[1]) << 64), rem));
     }
 
     // Shift-subtract over only the significant bits of the dividend.
@@ -452,7 +452,7 @@ pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
     // Initial overestimate q0 = 2^ceil(bits/2) ≥ sqrt(N). With N < 2^254
     // this is at most 2^127, so it fits in u128 and `N / q0` cannot
     // overflow 128 bits.
-    let mut q: u128 = 1u128 << ((bits + 1) / 2);
+    let mut q: u128 = 1u128 << bits.div_ceil(2);
     loop {
         // q ≥ sqrt(N) on every iteration, so N / q ≤ sqrt(N) < 2^127
         // and the divide always succeeds.
@@ -542,7 +542,7 @@ fn mul_u128_by_256(a: u128, m: [u128; 2]) -> [u128; 3] {
     let (p1_hi, p1_lo) = mul2(a, m[1]);
     let limb0 = p0_lo;
     let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
-    let limb2 = p1_hi + c1 as u128;
+    let limb2 = p1_hi + u128::from(c1);
     [limb0, limb1, limb2]
 }
 
@@ -552,7 +552,7 @@ fn mul_u256_by_u128(s: [u128; 2], b: u128) -> [u128; 3] {
     let (p1_hi, p1_lo) = mul2(s[1], b);
     let limb0 = p0_lo;
     let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
-    let limb2 = p1_hi + c1 as u128;
+    let limb2 = p1_hi + u128::from(c1);
     [limb0, limb1, limb2]
 }
 
@@ -585,7 +585,7 @@ fn ge_256(a: [u128; 2], b: [u128; 2]) -> bool {
 /// `a - b` for 256-bit values `[lo, hi]`; caller guarantees `a >= b`.
 fn sub_256(a: [u128; 2], b: [u128; 2]) -> [u128; 2] {
     let (lo, borrow) = a[0].overflowing_sub(b[0]);
-    let hi = a[1] - b[1] - borrow as u128;
+    let hi = a[1] - b[1] - u128::from(borrow);
     [lo, hi]
 }
 
@@ -626,7 +626,7 @@ fn floor_div3(mut carry: u128, mut val: u128) -> u128 {
         // carry·2^128 + val = 3·carry·K + (carry + val).
         q += carry * K;
         let (next_val, c) = val.overflowing_add(carry);
-        carry = c as u128;
+        carry = u128::from(c);
         val = next_val;
     }
 }
@@ -652,7 +652,7 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
         128 - n[0].leading_zeros()
     };
     // Overestimate y0 = 2^ceil(bits/3) >= cbrt(N); <= 2^127 for N < 2^381.
-    let mut y: u128 = 1u128 << (((bits + 2) / 3).min(127));
+    let mut y: u128 = 1u128 << (bits.div_ceil(3).min(127));
     loop {
         // y² as a 256-bit divisor.
         let (yy_hi, yy_lo) = mul2(y, y);
@@ -662,7 +662,7 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
         // the up-to-130-bit intermediate never overflows `u128`.
         let (two_y, c0) = y.overflowing_add(y);
         let (sum, c1) = two_y.overflowing_add(nq);
-        let carry = c0 as u128 + c1 as u128;
+        let carry = u128::from(c0) + u128::from(c1);
         let y_next = floor_div3(carry, sum);
         if y_next >= y {
             return y;

@@ -95,7 +95,7 @@ fn eq_float_zero_and_one() {
 
 #[cfg(feature = "std")]
 #[test]
-#[allow(clippy::incorrect_partial_cmp_impl_on_ord_type, clippy::eq_op)]
+#[allow(clippy::eq_op)]
 fn eq_float_nan_is_false() {
     // Intentional: tests the crate's `D38 == f64` impl rejects NaN
     // (any NaN comparison returns false). The lint flags direct

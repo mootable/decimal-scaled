@@ -557,22 +557,16 @@ impl<const SCALE: u32> D38<SCALE> {
         let mult = Self::multiplier();
         while e > 0 {
             if e & 1 == 1 {
-                acc = match mul_div_pow10::<SCALE>(acc, base) {
-                    Some(q) => q,
-                    None => {
-                        overflowed = true;
-                        acc.wrapping_mul(base).wrapping_div(mult)
-                    }
+                acc = if let Some(q) = mul_div_pow10::<SCALE>(acc, base) { q } else {
+                    overflowed = true;
+                    acc.wrapping_mul(base).wrapping_div(mult)
                 };
             }
             e >>= 1;
             if e > 0 {
-                base = match mul_div_pow10::<SCALE>(base, base) {
-                    Some(q) => q,
-                    None => {
-                        overflowed = true;
-                        base.wrapping_mul(base).wrapping_div(mult)
-                    }
+                base = if let Some(q) = mul_div_pow10::<SCALE>(base, base) { q } else {
+                    overflowed = true;
+                    base.wrapping_mul(base).wrapping_div(mult)
                 };
             }
         }

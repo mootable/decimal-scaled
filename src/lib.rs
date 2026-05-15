@@ -62,7 +62,90 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "experimental-floats", feature(f16, f128))]
-#![allow(clippy::module_name_repetitions)]
+// ── Clippy allow-list ─────────────────────────────────────────────────
+//
+// These are pedantic lints whose patterns this crate uses
+// intentionally and pervasively. Each is justified inline; allowing
+// them at the crate level is preferable to spraying per-site
+// `#[allow]` attributes or rewriting against the crate's domain.
+#![allow(
+    // Decimal width names overlap with type prefixes; the lint adds no
+    // signal here.
+    clippy::module_name_repetitions,
+    // We use unindented Markdown continuation in module docs.
+    clippy::doc_lazy_continuation,
+    // We routinely place a blank line between a method's `#[cfg]`
+    // attribute and its doc/body for readability.
+    clippy::empty_line_after_outer_attr,
+    // Big-integer arithmetic regularly casts between signed/unsigned
+    // and between widths. The wraps / truncations / sign flips are
+    // intentional — `unsigned_abs` paths, two's-complement tricks,
+    // narrowing the final result back to storage after a widened mul.
+    clippy::cast_possible_truncation,
+    clippy::cast_possible_wrap,
+    clippy::cast_sign_loss,
+    // We prefer `as` casts over `T::from(x)` in arithmetic-heavy
+    // inner loops for readability and to match the surrounding
+    // big-integer idiom.
+    clippy::cast_lossless,
+    // Float bridges (`to_f64`, `to_f32`) are explicitly lossy by
+    // contract. The lint is a tautology here.
+    clippy::cast_precision_loss,
+    // Literals like `1_000_000_000_000` carry the scale visually and
+    // are kept unseparated when they encode `10^SCALE`.
+    clippy::unreadable_literal,
+    // `if cond { panic!(…) }` is the crate's canonical bounds-check
+    // shape; `assert!(…)` would lose the dynamic message.
+    clippy::manual_assert,
+    // `Result<_, ()>` is the only honest error type for `const fn`
+    // digit-validity checks where no allocator is available.
+    clippy::result_unit_err,
+    // `if …; if …` chains read more cleanly than `if … && …` in the
+    // const-fn limb-arithmetic helpers.
+    clippy::collapsible_if,
+    // Big-int / fixed-point inner loops use `i`, `j`, `k`, `n`, `m`
+    // as conventional names. Renaming to `outer_index` etc. hurts
+    // readability without payoff.
+    clippy::similar_names,
+    clippy::many_single_char_names,
+    // Strict-transcendental kernels exceed 100 lines because they
+    // unroll a series-evaluation loop; splitting them just to please
+    // the line-count lint would scatter the algorithm.
+    clippy::too_many_lines,
+    // `#[inline(always)]` is set deliberately on small hot-path
+    // helpers (`apply_rounding`, `panic_or_wrap_*`). The lint
+    // assumes the inliner knows better; here we override on purpose.
+    clippy::inline_always,
+    // Strict-vs-fast comparisons in `tests/` deliberately compare
+    // raw `f64` results bit-for-bit. The lint can't tell test code
+    // from production.
+    clippy::float_cmp,
+    // Some narrow helpers `let result = …; result + 1` are flagged
+    // as let-else candidates; the explicit form is clearer in the
+    // big-int helpers.
+    clippy::manual_let_else,
+    // `format!("{x}") + "y"` is fine when both pieces stay tiny.
+    clippy::format_push_string,
+    // `if-else-if` chains over disjoint conditions sometimes read
+    // more clearly than `match` (especially with `<` / `>=` arms).
+    clippy::comparison_chain,
+    // Macro-emitted methods that return `Self` are wrapped with
+    // `#[must_use]` where it would catch bugs; the lint's
+    // recommendation on tiny constructors is noise.
+    clippy::must_use_candidate,
+    clippy::return_self_not_must_use,
+    // `# Errors` / `# Panics` sections: every public function's
+    // behaviour on error / panic is described in its main doc
+    // paragraph (and matches the pattern of the std-library
+    // primitive it shadows). The lint's per-section requirement
+    // adds boilerplate without information.
+    clippy::missing_errors_doc,
+    clippy::missing_panics_doc,
+    // Doc-comment backticks are added where they matter (type and
+    // function names); the lint flags every identifier-looking
+    // word, including math symbols and abbreviations.
+    clippy::doc_markdown,
+)]
 
 #[cfg(feature = "alloc")]
 extern crate alloc;

@@ -26,7 +26,7 @@
 //! value. For example, `D38s12::ONE` (storage `10^12`) prints in lower-hex
 //! as `e8d4a51000`.
 //!
-//! # FromStr
+//! # `FromStr`
 //!
 //! Parses canonical decimal literals. Accepted forms:
 //! - Integer-only: `42` parses as `42 * 10^SCALE`.
@@ -178,7 +178,7 @@ fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) ->
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
-    parse_decimal::<SCALE>(s).map(|v| v.to_bits())
+    parse_decimal::<SCALE>(s).map(super::core_type::D38::to_bits)
 }
 
 fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
@@ -263,7 +263,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
     // Parse the integer part and scale it by 10^SCALE.
     let mut int_value: u128 = 0;
     for &b in int_str {
-        let digit = (b - b'0') as u128;
+        let digit = u128::from(b - b'0');
         int_value = match int_value.checked_mul(10).and_then(|v| v.checked_add(digit)) {
             Some(v) => v,
             None => return Err(ParseError::OutOfRange),
@@ -279,7 +279,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
     let mut frac_value: u128 = 0;
     let frac_len = frac_str.len();
     for &b in frac_str {
-        let digit = (b - b'0') as u128;
+        let digit = u128::from(b - b'0');
         frac_value = match frac_value
             .checked_mul(10)
             .and_then(|v| v.checked_add(digit))

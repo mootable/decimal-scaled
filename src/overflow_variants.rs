@@ -127,14 +127,11 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn saturating_mul(self, rhs: Self) -> Self {
-        match crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
-            Some(q) => Self(q),
-            None => {
-                // Clamp direction: negative result iff exactly one operand
-                // is negative (a zero operand cannot produce overflow).
-                let neg = (self.0 < 0) ^ (rhs.0 < 0);
-                if neg { Self::MIN } else { Self::MAX }
-            }
+        if let Some(q) = crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) { Self(q) } else {
+            // Clamp direction: negative result iff exactly one operand
+            // is negative (a zero operand cannot produce overflow).
+            let neg = (self.0 < 0) ^ (rhs.0 < 0);
+            if neg { Self::MIN } else { Self::MAX }
         }
     }
 
@@ -225,9 +222,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn wrapping_div(self, rhs: Self) -> Self {
-        if rhs.0 == 0 {
-            panic!("attempt to divide by zero");
-        }
+        assert!(rhs.0 != 0, "attempt to divide by zero");
         match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
             None => Self(
@@ -266,16 +261,11 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn saturating_div(self, rhs: Self) -> Self {
-        if rhs.0 == 0 {
-            panic!("attempt to divide by zero");
-        }
-        match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
-            Some(q) => Self(q),
-            None => {
-                // Clamp direction: negative iff exactly one operand is negative.
-                let neg = (self.0 < 0) ^ (rhs.0 < 0);
-                if neg { Self::MIN } else { Self::MAX }
-            }
+        assert!(rhs.0 != 0, "attempt to divide by zero");
+        if let Some(q) = crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) { Self(q) } else {
+            // Clamp direction: negative iff exactly one operand is negative.
+            let neg = (self.0 < 0) ^ (rhs.0 < 0);
+            if neg { Self::MIN } else { Self::MAX }
         }
     }
 
@@ -305,9 +295,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
-        if rhs.0 == 0 {
-            panic!("attempt to divide by zero");
-        }
+        assert!(rhs.0 != 0, "attempt to divide by zero");
         match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => (Self(q), false),
             None => (self.wrapping_div(rhs), true),
