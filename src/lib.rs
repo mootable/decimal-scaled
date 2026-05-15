@@ -68,7 +68,6 @@
 extern crate alloc;
 
 mod arithmetic;
-mod bitwise;
 mod consts;
 mod core_type;
 mod decimal_trait;
@@ -78,13 +77,17 @@ mod error;
 mod macros;
 mod fixed_compat;
 mod log_exp;
+// `bitwise` and `num_traits_impls` used to live here as test-only
+// modules; their tests now run as Cargo integration tests under
+// `tests/`. The macro-generated impls themselves are emitted by
+// `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
+// `core_type.rs`, alongside every other surface.
 mod rescale;
 mod rounding;
 mod mg_divide;
 mod d128_kernels;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide_int;
-mod num_traits_impls;
 mod overflow_variants;
 mod powers;
 #[cfg(feature = "serde")]
