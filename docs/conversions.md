@@ -21,9 +21,9 @@ let ok  = D38s2::try_from(100_i128);          // Ok
 let bad = D38s2::try_from(i128::MAX);         // Err(ConvertError::Overflow)
 ```
 
-## To integers — `to_int_lossy`
+## To integers — `to_int`
 
-`to_int_lossy` rounds to the nearest integer and returns an `i64`,
+`to_int` rounds to the nearest integer and returns an `i64`,
 saturating if the integer part is out of `i64` range. It is a lossy
 method, so it comes as a `_with` pair:
 
@@ -31,9 +31,9 @@ method, so it comes as a `_with` pair:
 use decimal_scaled::{D38s2, RoundingMode};
 
 let v = D38s2::from_bits(250);   // 2.50
-assert_eq!(v.to_int_lossy(), 2);                                  // HalfToEven
-assert_eq!(v.to_int_lossy_with(RoundingMode::HalfAwayFromZero), 3);
-assert_eq!(v.to_int_lossy_with(RoundingMode::Ceiling), 3);
+assert_eq!(v.to_int(), 2);                                  // HalfToEven
+assert_eq!(v.to_int_with(RoundingMode::HalfAwayFromZero), 3);
+assert_eq!(v.to_int_with(RoundingMode::Ceiling), 3);
 ```
 
 ## The float bridge

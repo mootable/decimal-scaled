@@ -18,7 +18,7 @@
 //!
 //! - `core_type`   -- `from_bits` / `to_bits` / `multiplier` / `Default`
 //! - `arithmetic`  -- operators + math methods + predicates
-//! - `conversions` -- From / TryFrom / `from_int` / `from_f64` / `to_int_lossy` / `to_f64` / `to_f32`
+//! - `conversions` -- From / TryFrom / `from_int` / `from_f64` / `to_int` / `to_f64` / `to_f32`
 //! - `consts`      -- `pi` / `tau` / `half_pi` / `quarter_pi` / `golden` / `e`
 //! - `powers`      -- `pow` / `powi` / `powf` / `sqrt` / `cbrt` / `mul_add` / `hypot` + checked/wrapping/saturating/overflowing `pow`
 //! - `log_exp`     -- `ln` / `log` / `log2` / `log10` / `exp` / `exp2`
@@ -193,8 +193,8 @@ fn bench_conversions(c: &mut Criterion) {
     g.bench_function("from_f64", |bn| {
         bn.iter(|| D::from_f64(black_box(1.5_f64)))
     });
-    g.bench_function("to_int_lossy", |bn| {
-        bn.iter(|| black_box(A).to_int_lossy())
+    g.bench_function("to_int", |bn| {
+        bn.iter(|| black_box(A).to_int())
     });
     g.bench_function("to_f64", |bn| {
         bn.iter(|| black_box(A).to_f64())

@@ -16,7 +16,7 @@ pitch and the "why another numeric type" comparison, see the
 |---|---|
 | [Getting started](getting-started.md) | Installing, constructing values, basic arithmetic, formatting, parsing. |
 | [The width family](widths.md) | `D9` / `D18` / `D38` / `D76` / `D153` / `D307` — when to pick which, scale ranges, the `Decimal` trait. |
-| [Conversions](conversions.md) | Integer / float conversions, cross-width widening and narrowing, `to_int_lossy`, the float bridge. |
+| [Conversions](conversions.md) | Integer / float conversions, cross-width widening and narrowing, `to_int`, the float bridge. |
 | [Rounding](rounding.md) | `RoundingMode`, the `_with` method pairs, `rescale`, and the compile-time `rounding-*` feature flags. |
 | [Strict mode](strict-mode.md) | Integer-only transcendentals (`ln`, `exp`, `sqrt`, trig, …) under `--features strict`. |
 | [The `d38!` macro](macros.md) | Compile-time decimal literals with automatic scale inference, scientific notation, explicit scale, rounding, and inline expressions. |

@@ -253,8 +253,8 @@ mod tests {
     fn from_num_does_not_panic_on_wider_range_than_i64f64() {
         let v: i64 = 10_000_000_000_i64;
         let d = D38s12::from_num(v);
-        // Round-trip: to_int_lossy must return the original value.
-        assert_eq!(d.to_int_lossy(), v);
+        // Round-trip: to_int must return the original value.
+        assert_eq!(d.to_int(), v);
     }
 
     // to_num -- thin delegate over NumCast / ToPrimitive

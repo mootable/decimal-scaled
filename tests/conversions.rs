@@ -1,6 +1,6 @@
 //! Integration tests for the conversion surface
 //! (From<integer> / TryFrom<i128|u128|f32|f64> / from_int /
-//! from_i32 / to_int_lossy / from_f64 / to_f64 /
+//! from_i32 / to_int / from_f64 / to_f64 /
 //! to_f32).
 //!
 //! Bodies live in src/macros/conversions.rs and float_bridge.rs;
@@ -60,20 +60,20 @@ fn from_u64_at_boundary_is_lossless() {
     assert_eq!(v.to_bits(), (u64::MAX as i128) * 1_000_000_000_000);
 }
 
-// to_int_lossy
+// to_int
 
 #[test]
 fn to_int_lossy_default_rounds_half_to_even() {
     // 2.5 with HalfToEven default -> 2 (even neighbour).
-    assert_eq!(D38s12::from_bits(2_500_000_000_000).to_int_lossy(), 2);
+    assert_eq!(D38s12::from_bits(2_500_000_000_000).to_int(), 2);
     // 3.5 with HalfToEven -> 4 (even).
-    assert_eq!(D38s12::from_bits(3_500_000_000_000).to_int_lossy(), 4);
+    assert_eq!(D38s12::from_bits(3_500_000_000_000).to_int(), 4);
 }
 
 #[test]
 fn to_int_lossy_saturates() {
-    assert_eq!(D38s12::MAX.to_int_lossy(), i64::MAX);
-    assert_eq!(D38s12::MIN.to_int_lossy(), i64::MIN);
+    assert_eq!(D38s12::MAX.to_int(), i64::MAX);
+    assert_eq!(D38s12::MIN.to_int(), i64::MIN);
 }
 
 // from_f64 + to_f64
@@ -172,7 +172,7 @@ fn from_int_works_at_scale_6() {
     type D6 = D38<6>;
     let v: D6 = D6::from(1_000_i64);
     assert_eq!(v.to_bits(), 1_000_000_000); // 10^9
-    assert_eq!(v.to_int_lossy(), 1_000);
+    assert_eq!(v.to_int(), 1_000);
 }
 
 #[test]
@@ -180,5 +180,5 @@ fn from_int_works_at_scale_0() {
     type D0 = D38<0>;
     let v: D0 = D0::from(42_i64);
     assert_eq!(v.to_bits(), 42);
-    assert_eq!(v.to_int_lossy(), 42);
+    assert_eq!(v.to_int(), 42);
 }

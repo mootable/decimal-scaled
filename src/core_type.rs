@@ -1301,16 +1301,16 @@ mod tests {
         // from_int / from_i32
         assert_eq!(D::from_int(9i128), D::from(9i32));
         assert_eq!(D::from_i32(-4), D::from(-4i32));
-        // to_int_lossy: 2.5 with HalfToEven -> 2
+        // to_int: 2.5 with HalfToEven -> 2
         use crate::rounding::RoundingMode;
         let two_and_half = D::from_bits(I256::from_str_radix("2500000", 10).unwrap());
-        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::HalfToEven), 2);
-        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::HalfAwayFromZero), 3);
-        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::Ceiling), 3);
-        assert_eq!(two_and_half.to_int_lossy_with(RoundingMode::Floor), 2);
+        assert_eq!(two_and_half.to_int_with(RoundingMode::HalfToEven), 2);
+        assert_eq!(two_and_half.to_int_with(RoundingMode::HalfAwayFromZero), 3);
+        assert_eq!(two_and_half.to_int_with(RoundingMode::Ceiling), 3);
+        assert_eq!(two_and_half.to_int_with(RoundingMode::Floor), 2);
         let neg_two_and_half = -two_and_half;
-        assert_eq!(neg_two_and_half.to_int_lossy_with(RoundingMode::Floor), -3);
-        assert_eq!(neg_two_and_half.to_int_lossy_with(RoundingMode::Trunc), -2);
+        assert_eq!(neg_two_and_half.to_int_with(RoundingMode::Floor), -3);
+        assert_eq!(neg_two_and_half.to_int_with(RoundingMode::Trunc), -2);
         // cross-width widening D38 -> D76 (lossless)
         let d38: super::D38s6 = super::D38s6::from_bits(-150);
         let widened: super::D76<6> = d38.into();
@@ -1378,7 +1378,7 @@ mod tests {
         assert_eq!(two * three, D::from_int(6i128));
         assert_eq!((three * two) / two, three);
         assert_eq!(alloc::format!("{}", one).len(), "1.".len() + 35);
-        assert_eq!(D::from_int(5i128).to_int_lossy(), 5);
+        assert_eq!(D::from_int(5i128).to_int(), 5);
         // rescale across the wide range
         let up: super::D153<150> = one.rescale::<150>();
         assert_eq!(up, super::D153::<150>::ONE);

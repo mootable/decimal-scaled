@@ -299,8 +299,8 @@ macro_rules! decl_try_from_f32 {
 pub(crate) use decl_try_from_f32;
 pub(crate) use decl_try_from_f64;
 
-/// Emits the named integer constructors and `to_int_lossy` /
-/// `to_int_lossy_with` on a decimal type. `$Storage` is the storage
+/// Emits the named integer constructors and `to_int` /
+/// `to_int_with` on a decimal type. `$Storage` is the storage
 /// integer; `$IntSrc` is the wider integer source for `from_int`
 /// (typically `i64` for D18/D38 and `i32` for D9). `from_int` and
 /// `from_i32` scale directly (they do not depend on a `From<iN>` impl
@@ -331,15 +331,15 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// Saturates to `i64::MAX` / `i64::MIN` when the rounded
             /// integer part falls outside `i64`'s range.
             #[inline]
-            pub fn to_int_lossy(self) -> i64 {
-                self.to_int_lossy_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn to_int(self) -> i64 {
+                self.to_int_with($crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Converts to `i64` using the supplied rounding mode for the
             /// fractional discard step. Saturates to `i64::MAX` /
             /// `i64::MIN` when the rounded integer is out of `i64` range.
             #[inline]
-            pub fn to_int_lossy_with(
+            pub fn to_int_with(
                 self,
                 mode: $crate::rounding::RoundingMode,
             ) -> i64 {
@@ -433,15 +433,15 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// Saturates to `i64::MAX` / `i64::MIN` when the integer part
             /// of the rounded value falls outside `i64`'s range.
             #[inline]
-            pub fn to_int_lossy(self) -> i64 {
-                self.to_int_lossy_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn to_int(self) -> i64 {
+                self.to_int_with($crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Converts to `i64` using the supplied rounding mode for the
             /// fractional discard step. Saturates to `i64::MAX` /
             /// `i64::MIN` when the rounded integer is out of `i64` range.
             #[inline]
-            pub fn to_int_lossy_with(
+            pub fn to_int_with(
                 self,
                 mode: $crate::rounding::RoundingMode,
             ) -> i64 {

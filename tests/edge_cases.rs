@@ -272,13 +272,13 @@ fn try_from_i128_overflow_boundary() {
 fn to_int_lossy_saturates_and_rounds() {
     // 2.5 at scale 1 rounds per mode; the integer part saturates to i64.
     let v = D38::<1>::from_bits(25); // 2.5
-    assert_eq!(v.to_int_lossy_with(RoundingMode::HalfToEven), 2);
-    assert_eq!(v.to_int_lossy_with(RoundingMode::HalfAwayFromZero), 3);
+    assert_eq!(v.to_int_with(RoundingMode::HalfToEven), 2);
+    assert_eq!(v.to_int_with(RoundingMode::HalfAwayFromZero), 3);
     // A value whose integer part exceeds i64 saturates.
     let huge = D38s0::MAX;
-    assert_eq!(huge.to_int_lossy(), i64::MAX);
+    assert_eq!(huge.to_int(), i64::MAX);
     let tiny = D38s0::MIN;
-    assert_eq!(tiny.to_int_lossy(), i64::MIN);
+    assert_eq!(tiny.to_int(), i64::MIN);
 }
 
 // ─────────────────────────────────────────────────────────────────────

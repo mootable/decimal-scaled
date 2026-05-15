@@ -44,7 +44,7 @@ let b: D38s2 = v.rescale_with::<2>(RoundingMode::Floor);
 let c: D38s2 = v.rescale_with::<2>(RoundingMode::Ceiling);
 ```
 
-The same pairing applies to `to_int_lossy` / `to_int_lossy_with`,
+The same pairing applies to `to_int` / `to_int_with`,
 `from_f64` / `from_f64_with`, and any other lossy method.
 
 ## `rescale` — changing the scale of a value
