@@ -1,16 +1,14 @@
-//! `serde` integration for [`D128`].
+//! `serde` integration for every decimal width.
 //!
-//! # Wide-tier coverage gap (follow-up)
-//!
-//! Currently only `D128<SCALE>` has `Serialize` / `Deserialize`
-//! impls. The wide tiers (`D256<SCALE>`, `D512<SCALE>`, `D1024<SCALE>`)
-//! do not — there is no `serde` macro that fans the impl across
-//! widths yet. A `decl_decimal_serde!` macro family parallel to
-//! `decl_decimal_display!` would close the gap; it needs to handle
-//! the human-readable path (the storage's `to_string` already works
-//! for the wide types, since they implement `Display`) and a binary
-//! path that serialises the limb array little-endian. Recorded for
-//! a follow-up.
+//! D128 has a dedicated [`Serialize`] / [`Deserialize`] pair plus the
+//! richer [`decimal_serde::DecimalVisitor`] used for `#[serde(with =
+//! "...")]` field annotations. The wide tiers (D256 / D512 / D1024)
+//! use a slimmer implementation emitted by [`decl_wide_serde!`]: a
+//! decimal-string wire format for human-readable serializers and a
+//! little-endian limb-bytes wire format for binary serializers.
+//! Cross-tier wire-format parity is intentional — a D128 produced
+//! at SCALE = 12 serialises to the same string as a D256 at SCALE =
+//! 12 carrying the same logical value.
 //!
 //!
 //! # Wire format
@@ -620,5 +618,141 @@ mod tests {
         assert_eq!(json, r#"{"length":"7000000000000"}"#);
         let back: Holder = serde_json::from_str(&json).unwrap();
         assert_eq!(back, h);
+    }
+}
+
+// ─── Wide-tier serde (D256 / D512 / D1024) ────────────────────────────
+//
+// The wide-tier wire format mirrors D128's: a base-10 integer string
+// of the raw storage value for human-readable serializers, and the
+// raw little-endian limb bytes for binary serializers. The
+// implementation is intentionally slimmer than D128's — no
+// native-integer visit methods, since no native int can losslessly
+// carry the >128-bit storage anyway.
+
+/// Emits `Serialize` / `Deserialize` for a wide-tier decimal type
+/// (D256 / D512 / D1024). `$bytes_len` is `mem::size_of::<$Storage>()`
+/// (e.g. 32 for `Int256`).
+macro_rules! decl_wide_serde {
+    ($Type:ident, $Storage:ty, $bytes_len:literal) => {
+        impl<const SCALE: u32> Serialize for $crate::core_type::$Type<SCALE> {
+            /// Serialise as a base-10 integer string for human-
+            /// readable formats, or as `$bytes_len` little-endian
+            /// bytes for binary formats.
+            #[inline]
+            fn serialize<S: Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+                if s.is_human_readable() {
+                    #[cfg(feature = "alloc")]
+                    {
+                        s.serialize_str(&self.0.to_string())
+                    }
+                    #[cfg(not(feature = "alloc"))]
+                    {
+                        let _ = s;
+                        Err(serde::ser::Error::custom(
+                            "decimal-scaled: human-readable serialisation requires `alloc`",
+                        ))
+                    }
+                } else {
+                    let mut bytes = [0u8; $bytes_len];
+                    let limbs = self.0.limbs_le();
+                    for (i, limb) in limbs.iter().enumerate() {
+                        bytes[i * 16..(i + 1) * 16].copy_from_slice(&limb.to_le_bytes());
+                    }
+                    s.serialize_bytes(&bytes)
+                }
+            }
+        }
+
+        impl<'de, const SCALE: u32> Deserialize<'de> for $crate::core_type::$Type<SCALE> {
+            #[inline]
+            fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+                struct V<const S: u32>;
+                impl<'de, const S: u32> Visitor<'de> for V<S> {
+                    type Value = $crate::core_type::$Type<S>;
+                    fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+                        f.write_str(concat!(
+                            "a base-10 integer string or ",
+                            stringify!($bytes_len),
+                            " little-endian bytes for ",
+                            stringify!($Type),
+                        ))
+                    }
+                    fn visit_str<E: serde::de::Error>(self, v: &str) -> Result<Self::Value, E> {
+                        let parsed = <$Storage>::from_str_radix(v, 10).map_err(|_| {
+                            serde::de::Error::custom(concat!(
+                                stringify!($Type),
+                                ": invalid base-10 integer string",
+                            ))
+                        })?;
+                        Ok(<$crate::core_type::$Type<S>>::from_bits(parsed))
+                    }
+                    fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
+                        self.visit_str(v)
+                    }
+                    #[cfg(feature = "alloc")]
+                    fn visit_string<E: serde::de::Error>(self, v: alloc::string::String) -> Result<Self::Value, E> {
+                        self.visit_str(&v)
+                    }
+                    fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
+                        if v.len() != $bytes_len {
+                            return Err(serde::de::Error::invalid_length($bytes_len, &self));
+                        }
+                        let mut limbs = [0u128; $bytes_len / 16];
+                        for (i, limb) in limbs.iter_mut().enumerate() {
+                            let mut buf = [0u8; 16];
+                            buf.copy_from_slice(&v[i * 16..(i + 1) * 16]);
+                            *limb = u128::from_le_bytes(buf);
+                        }
+                        Ok(<$crate::core_type::$Type<S>>::from_bits(<$Storage>::from_limbs_le(limbs)))
+                    }
+                    fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
+                        self.visit_bytes(v)
+                    }
+                }
+                if d.is_human_readable() {
+                    d.deserialize_str(V::<SCALE>)
+                } else {
+                    d.deserialize_bytes(V::<SCALE>)
+                }
+            }
+        }
+    };
+}
+
+#[cfg(any(feature = "d256", feature = "wide"))]
+decl_wide_serde!(D256, crate::wide_int::Int256, 32);
+#[cfg(any(feature = "d512", feature = "wide"))]
+decl_wide_serde!(D512, crate::wide_int::Int512, 64);
+#[cfg(any(feature = "d1024", feature = "wide"))]
+decl_wide_serde!(D1024, crate::wide_int::Int1024, 128);
+
+#[cfg(all(test, feature = "wide"))]
+mod wide_serde_tests {
+    use crate::D256;
+
+    #[test]
+    fn d256_human_readable_round_trip() {
+        let v = D256::<12>::from_int(1_234_567_i128);
+        let json = serde_json::to_string(&v).unwrap();
+        let back: D256<12> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn d256_negative_human_readable_round_trip() {
+        let v = -D256::<12>::from_int(987_654_321_i128);
+        let json = serde_json::to_string(&v).unwrap();
+        let back: D256<12> = serde_json::from_str(&json).unwrap();
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn d256_binary_round_trip() {
+        // postcard is a binary, non-self-describing format.
+        let v = D256::<12>::from_int(42_i128);
+        let bytes = postcard::to_allocvec(&v).unwrap();
+        let back: D256<12> = postcard::from_bytes(&bytes).unwrap();
+        assert_eq!(back, v);
     }
 }

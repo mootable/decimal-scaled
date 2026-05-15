@@ -703,6 +703,22 @@ macro_rules! decl_wide_int {
             pub const fn from_i128(v: i128) -> $S {
                 $S::from_mag_limbs(&[v.unsigned_abs()], v < 0)
             }
+            /// Builds directly from the limb array. The limbs are
+            /// interpreted as a little-endian two's-complement
+            /// signed integer (i.e. the same in-memory shape
+            /// `decl_wide_int!` uses). Useful for the serde binary
+            /// path, which transports the raw limbs unchanged.
+            #[inline]
+            pub const fn from_limbs_le(limbs: [u128; $L]) -> $S {
+                $S(limbs)
+            }
+            /// Read-only access to the underlying limbs. The
+            /// little-endian two's-complement signed shape;
+            /// symmetric with [`Self::from_limbs_le`].
+            #[inline]
+            pub const fn limbs_le(self) -> [u128; $L] {
+                self.0
+            }
             /// Builds from an unsigned 128-bit value.
             #[inline]
             pub const fn from_u128(v: u128) -> $S {
@@ -922,6 +938,22 @@ macro_rules! decl_wide_int {
                 let mut buf = [0u8; $L * 128];
                 let s = $crate::wide_int::limbs_fmt_into(&self.0, 10, true, &mut buf);
                 f.pad_integral(true, "", s)
+            }
+        }
+        impl ::core::fmt::Display for $S {
+            /// Decimal string of the signed value with a leading `-`
+            /// for negatives. Needed by the serde wire-format path
+            /// for wide-tier decimals, and useful in its own right
+            /// for printing raw storage values.
+            fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
+                let mag = self.unsigned_abs();
+                if self.is_negative() && !mag.is_zero() {
+                    let mut buf = [0u8; $L * 128];
+                    let s = $crate::wide_int::limbs_fmt_into(&mag.0, 10, true, &mut buf);
+                    f.pad_integral(false, "", s)
+                } else {
+                    ::core::fmt::Display::fmt(&mag, f)
+                }
             }
         }
         impl ::core::fmt::LowerHex for $S {
