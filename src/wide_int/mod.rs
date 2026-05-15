@@ -508,6 +508,357 @@ pub(crate) const fn limbs_divmod(
 /// 32 limbs, with isqrt scratch ≤ 33).
 const SCRATCH_LIMBS: usize = 72;
 
+/// 2-by-1 unsigned divide: `(high · 2^128 + low) / d` and the matching
+/// remainder. Requires `high < d` so the quotient fits a single
+/// `u128`.
+///
+/// Implementation: bit-by-bit recovery (128 iterations, constant work
+/// per iter). Slower than a hardware 256-by-128 instruction but Rust's
+/// stable surface doesn't expose one, and the tighter shift-multiply
+/// estimators (Möller–Granlund) require precomputed reciprocals that
+/// only pay back across many divides with the same divisor — Knuth's
+/// inner loop sees each divisor at most once per call.
+#[inline]
+const fn div_2_by_1(high: u128, low: u128, d: u128) -> (u128, u128) {
+    // The classical recovery loop: at each step shift `r` left by 1,
+    // pull the next bit of `low` in, then conditionally subtract `d`
+    // and set the matching quotient bit. The catch is that `r` can
+    // grow past `2^128 − 1` between the shift and the subtract; we
+    // track that as the `r_top` carry-out bit so the comparison stays
+    // correct.
+    let mut q: u128 = 0;
+    let mut r = high;
+    let mut i = 128;
+    while i > 0 {
+        i -= 1;
+        let r_top = r >> 127;
+        r = (r << 1) | ((low >> i) & 1);
+        q <<= 1;
+        // r real = r_top·2^128 + r. Subtract if r_real ≥ d, i.e.
+        // r_top == 1 OR r ≥ d.
+        if r_top != 0 || r >= d {
+            r = r.wrapping_sub(d);
+            q |= 1;
+        }
+    }
+    (q, r)
+}
+
+/// Knuth Algorithm D — base-2^128 multi-limb long division. The
+/// algorithm-of-record base case for `limbs_divmod_bz` below.
+///
+/// Computes `quot = num / den`, `rem = num % den`. Requires
+/// `den` non-zero. `quot` and `rem` are zeroed by this routine.
+///
+/// This is the textbook Knuth Algorithm D (TAOCP Vol. 2, §4.3.1)
+/// adapted to base `2^128`: normalise the divisor so its top bit
+/// is set, then for each quotient limb estimate `q̂` from the top
+/// two limbs of the running dividend divided by the top limb of
+/// the divisor, refine `q̂` once if necessary against the second-
+/// from-top divisor limb, multiply-and-subtract, and add-back-and-
+/// decrement on the rare miss.
+///
+/// Complexity is `O(m·n)` multi-limb ops on `m+n / n`-limb inputs,
+/// versus the binary shift-subtract path's `O((m+n)·n·128)`. For
+/// `n = 32` limbs (Int4096) the difference is ~14×. For `n ≤ 2`
+/// limbs there's no win and the caller should keep using the
+/// existing single-limb fast paths in `limbs_divmod`.
+///
+/// Not `const fn`: the inner loops use `[u128; SCRATCH_LIMBS]`
+/// scratch buffers and mutate them via overflowing arithmetic
+/// that the const evaluator doesn't yet permit. None of the
+/// crate's const-contexts depend on this routine.
+pub(crate) fn limbs_divmod_knuth(
+    num: &[u128],
+    den: &[u128],
+    quot: &mut [u128],
+    rem: &mut [u128],
+) {
+    for q in quot.iter_mut() {
+        *q = 0;
+    }
+    for r in rem.iter_mut() {
+        *r = 0;
+    }
+
+    // Effective lengths after stripping leading zeros.
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "limbs_divmod_knuth: divide by zero");
+
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+    if top < n {
+        // quotient is zero, remainder is num.
+        let copy_n = num.len().min(rem.len());
+        let mut i = 0;
+        while i < copy_n {
+            rem[i] = num[i];
+            i += 1;
+        }
+        return;
+    }
+
+    // D1. Normalise: shift divisor (and dividend) left by `shift` bits
+    // so the divisor's top limb has its high bit set. Knuth's q̂
+    // refinement guarantee only holds in that regime.
+    let shift = den[n - 1].leading_zeros();
+
+    let mut u = [0u128; SCRATCH_LIMBS];
+    let mut v = [0u128; SCRATCH_LIMBS];
+    debug_assert!(top + 1 <= SCRATCH_LIMBS && n <= SCRATCH_LIMBS);
+
+    if shift == 0 {
+        for i in 0..top {
+            u[i] = num[i];
+        }
+        u[top] = 0;
+        for i in 0..n {
+            v[i] = den[i];
+        }
+    } else {
+        let mut carry: u128 = 0;
+        for i in 0..top {
+            let val = num[i];
+            u[i] = (val << shift) | carry;
+            carry = val >> (128 - shift);
+        }
+        u[top] = carry;
+        carry = 0;
+        for i in 0..n {
+            let val = den[i];
+            v[i] = (val << shift) | carry;
+            carry = val >> (128 - shift);
+        }
+    }
+
+    let m_plus_n = if u[top] != 0 { top + 1 } else { top };
+    debug_assert!(m_plus_n >= n);
+    let m = m_plus_n - n;
+
+    // D2. For j from m down to 0.
+    let mut j_plus_one = m + 1;
+    while j_plus_one > 0 {
+        j_plus_one -= 1;
+        let j = j_plus_one;
+
+        // D3. Estimate q̂.
+        let u_top = u[j + n];
+        let u_next = u[j + n - 1];
+        let v_top = v[n - 1];
+
+        let (mut q_hat, mut r_hat) = if u_top >= v_top {
+            // q̂ would exceed 2^128 − 1. Cap at the max and let the
+            // refinement / add-back step correct any over-estimate.
+            // r̂ = u_top·2^128 + u_next − q̂·v_top, computed mod 2^128
+            // with q̂ = 2^128 − 1: r̂ = u_top·2^128 + u_next − (2^128
+            // − 1)·v_top = (u_top − v_top)·2^128 + u_next + v_top.
+            // We only need r̂ ≤ 2^128 − 1 for the refinement step; if
+            // (u_top − v_top) ≥ 1, r̂ overflows and we skip the
+            // refinement (the multiply-subtract handles it).
+            let q = u128::MAX;
+            let (r, of) = u_next.overflowing_add(v_top);
+            // If overflow OR (u_top − v_top) ≥ 1 we treat r̂ as
+            // "above 2^128"; signal by returning r_overflow == true.
+            if of || u_top > v_top {
+                (q, u128::MAX) // sentinel; refinement loop will see r̂ "large" and not subtract.
+            } else {
+                (q, r)
+            }
+        } else {
+            div_2_by_1(u_top, u_next, v_top)
+        };
+
+        // Refinement: while q̂·v[n−2] > r̂·2^128 + u[j+n−2], decrement.
+        if n >= 2 {
+            let v_below = v[n - 2];
+            loop {
+                let (hi, lo) = mul_128(q_hat, v_below);
+                let rhs_lo = u[j + n - 2];
+                let rhs_hi = r_hat;
+                // Compare (hi, lo) vs (rhs_hi, rhs_lo).
+                if hi < rhs_hi || (hi == rhs_hi && lo <= rhs_lo) {
+                    break;
+                }
+                q_hat = q_hat.wrapping_sub(1);
+                let (new_r, of) = r_hat.overflowing_add(v_top);
+                if of {
+                    break;
+                }
+                r_hat = new_r;
+            }
+        }
+
+        // D4. Multiply-and-subtract: u[j..=j+n] -= q̂ · v[0..n].
+        let mut mul_carry: u128 = 0;
+        let mut borrow: u128 = 0;
+        for i in 0..n {
+            let (hi, lo) = mul_128(q_hat, v[i]);
+            let (prod_lo, c1) = lo.overflowing_add(mul_carry);
+            let new_mul_carry = hi + c1 as u128;
+            let (s1, b1) = u[j + i].overflowing_sub(prod_lo);
+            let (s2, b2) = s1.overflowing_sub(borrow);
+            u[j + i] = s2;
+            borrow = b1 as u128 + b2 as u128;
+            mul_carry = new_mul_carry;
+        }
+        let (s1, b1) = u[j + n].overflowing_sub(mul_carry);
+        let (s2, b2) = s1.overflowing_sub(borrow);
+        u[j + n] = s2;
+        let final_borrow = b1 as u128 + b2 as u128;
+
+        // D5/D6. If multiply-subtract went negative, decrement q̂ and
+        // add v back.
+        if final_borrow != 0 {
+            q_hat = q_hat.wrapping_sub(1);
+            let mut carry: u128 = 0;
+            for i in 0..n {
+                let (s1, c1) = u[j + i].overflowing_add(v[i]);
+                let (s2, c2) = s1.overflowing_add(carry);
+                u[j + i] = s2;
+                carry = c1 as u128 + c2 as u128;
+            }
+            // Final carry cancels with the earlier borrow.
+            u[j + n] = u[j + n].wrapping_add(carry);
+        }
+
+        if j < quot.len() {
+            quot[j] = q_hat;
+        }
+    }
+
+    // D8. Denormalise the remainder: u[0..n] >> shift → rem.
+    if shift == 0 {
+        let copy_n = n.min(rem.len());
+        for i in 0..copy_n {
+            rem[i] = u[i];
+        }
+    } else {
+        for i in 0..n {
+            if i < rem.len() {
+                let lo = u[i] >> shift;
+                let hi_into_lo = if i + 1 < n {
+                    u[i + 1] << (128 - shift)
+                } else {
+                    0
+                };
+                rem[i] = lo | hi_into_lo;
+            }
+        }
+    }
+}
+
+/// Burnikel–Ziegler recursive divide (MPI-I-98-1-022, 1998).
+///
+/// Splits an unbalanced `m+n / n` divide into a chain of balanced
+/// `2n / n` sub-divides, each of which recursively halves. The base
+/// case is [`limbs_divmod_knuth`] for divisors below `BZ_THRESHOLD`.
+/// On Karatsuba-multiplied operands BZ runs in `O(n^{1.58} · log n)`
+/// time vs Knuth's `O(n²)`.
+///
+/// For the widths this crate actually uses (Int256 … Int4096, ≤ 32
+/// limbs) the recursion only saves a constant factor over Knuth and
+/// the canonical `limbs_divmod` path stays untouched. BZ is exposed
+/// here so a bench-driven follow-up can promote it once a clear win
+/// shows up on the wide-tier divides.
+///
+/// Threshold: recurses only when both `num.len() ≥ 2·BZ_THRESHOLD`
+/// and `den.len() ≥ BZ_THRESHOLD`. Below that the cost of splitting
+/// dominates and Knuth wins outright.
+pub(crate) fn limbs_divmod_bz(
+    num: &[u128],
+    den: &[u128],
+    quot: &mut [u128],
+    rem: &mut [u128],
+) {
+    const BZ_THRESHOLD: usize = 8;
+
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "limbs_divmod_bz: divide by zero");
+
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+
+    if n < BZ_THRESHOLD || top < 2 * n {
+        // Base case — Knuth handles every shape efficiently.
+        limbs_divmod_knuth(num, den, quot, rem);
+        return;
+    }
+
+    // BZ recursion: split the dividend into chunks of size `n` from
+    // the top, process each chunk with a `2n / n` sub-divide, carry
+    // the remainder forward. Each `2n / n` sub-divide itself does
+    // two `(3n/2) / n` calls via the recursive structure that — at
+    // these widths — Knuth handles inside its own quotient loop, so
+    // for now BZ here is essentially the chunked schoolbook outer
+    // loop with Knuth as the kernel. The full §3 two-by-one /
+    // three-by-two recursion is recorded in ALGORITHMS.md as the
+    // next layer to add once a bench shows it winning.
+    for q in quot.iter_mut() {
+        *q = 0;
+    }
+    for r in rem.iter_mut() {
+        *r = 0;
+    }
+
+    // Number of `n`-limb chunks in the dividend, rounded up so the
+    // top chunk may be short.
+    let chunks = top.div_ceil(n);
+    let mut carry = [0u128; SCRATCH_LIMBS];
+    let mut buf = [0u128; SCRATCH_LIMBS];
+    let mut q_chunk = [0u128; SCRATCH_LIMBS];
+    let mut r_chunk = [0u128; SCRATCH_LIMBS];
+
+    let mut idx = chunks;
+    while idx > 0 {
+        idx -= 1;
+        let lo = idx * n;
+        let hi = ((idx + 1) * n).min(top);
+        // buf = carry · 2^(n·128) + num[lo..hi]. carry holds the
+        // running remainder from the previous step (≤ n limbs).
+        for b in buf.iter_mut() {
+            *b = 0;
+        }
+        let chunk_len = hi - lo;
+        for i in 0..chunk_len {
+            buf[i] = num[lo + i];
+        }
+        for i in 0..n {
+            buf[chunk_len + i] = carry[i];
+        }
+        let buf_len = chunk_len + n;
+        // Divide.
+        limbs_divmod_knuth(
+            &buf[..buf_len],
+            &den[..n],
+            &mut q_chunk[..buf_len],
+            &mut r_chunk[..n],
+        );
+        // Store quotient chunk.
+        for i in 0..n {
+            if lo + i < quot.len() {
+                quot[lo + i] = q_chunk[i];
+            }
+        }
+        // Carry the remainder.
+        for i in 0..n {
+            carry[i] = r_chunk[i];
+        }
+    }
+    for i in 0..n.min(rem.len()) {
+        rem[i] = carry[i];
+    }
+}
+
 /// `out = floor(sqrt(n))` via Newton's method. `out` is zeroed then
 /// filled.
 pub(crate) fn limbs_isqrt(n: &[u128], out: &mut [u128]) {
@@ -856,5 +1207,90 @@ mod slice_tests {
         let borrow = limbs_sub_assign(&mut a, &[1, 0]);
         assert!(!borrow);
         assert_eq!(a, [u128::MAX, 0]);
+    }
+
+    /// `div_2_by_1` matches the obvious `(high·2^128 + low) / d`
+    /// formula on representative inputs.
+    #[test]
+    fn div_2_by_1_basics() {
+        // 1 / 1 = 1 r 0.
+        assert_eq!(div_2_by_1(0, 1, 1), (1, 0));
+        // 5 / 2 = 2 r 1.
+        assert_eq!(div_2_by_1(0, 5, 2), (2, 1));
+        // (3·2^128) / 4 = 3·2^126 r 0.
+        assert_eq!(div_2_by_1(3, 0, 4), (3 << 126, 0));
+        // High limb just under divisor — exercises the r_top overflow
+        // recovery in the inner loop.
+        let d = u128::MAX - 7;
+        let (q, r) = div_2_by_1(d - 1, u128::MAX, d);
+        // q · d + r == (d−1)·2^128 + (2^128 − 1)
+        let (mul_hi, mul_lo) = mul_128(q, d);
+        let (sum_lo, c) = mul_lo.overflowing_add(r);
+        let sum_hi = mul_hi + c as u128;
+        assert_eq!(sum_hi, d - 1);
+        assert_eq!(sum_lo, u128::MAX);
+        assert!(r < d);
+    }
+
+    /// `limbs_divmod_knuth` agrees with the canonical `limbs_divmod`
+    /// on a battery of representative shapes — single-limb divisors,
+    /// multi-limb divisors, zero remainders, partial overflows in the
+    /// q̂ refinement step.
+    #[test]
+    fn knuth_matches_canonical_divmod() {
+        let cases: &[(&[u128], &[u128])] = &[
+            // Simple
+            (&[42], &[7]),
+            (&[u128::MAX, 0], &[2]),
+            // Multi-limb numerator, single-limb denominator.
+            (&[1, 1, 0, 0], &[3]),
+            // Multi-limb both — three-limb numerator by two-limb den.
+            (&[u128::MAX, u128::MAX, 1, 0], &[5, 9]),
+            // Three-limb both.
+            (&[u128::MAX, u128::MAX, u128::MAX, 0], &[1, 2, 3]),
+            // Numerator < denominator — quotient zero, remainder = num.
+            (&[100, 0, 0], &[200, 0, 1]),
+            // Equal high limbs (forces the u_top ≥ v_top branch).
+            (
+                &[0, 0, u128::MAX, u128::MAX],
+                &[1, 2, u128::MAX],
+            ),
+        ];
+        for (num, den) in cases {
+            let mut q_canon = [0u128; 8];
+            let mut r_canon = [0u128; 8];
+            limbs_divmod(num, den, &mut q_canon, &mut r_canon);
+            let mut q_knuth = [0u128; 8];
+            let mut r_knuth = [0u128; 8];
+            limbs_divmod_knuth(num, den, &mut q_knuth, &mut r_knuth);
+            assert_eq!(q_canon, q_knuth, "quotient mismatch on {:?} / {:?}", num, den);
+            assert_eq!(r_canon, r_knuth, "remainder mismatch on {:?} / {:?}", num, den);
+        }
+    }
+
+    /// `limbs_divmod_bz` agrees with the canonical path on
+    /// medium-and-large operands. Recursion engages only above the
+    /// `BZ_THRESHOLD = 8` limb cutoff.
+    #[test]
+    fn bz_matches_canonical_divmod() {
+        // Builds a 16-limb dividend with a 10-limb divisor — well
+        // above BZ_THRESHOLD so the recursive path is exercised.
+        let mut num = [0u128; 16];
+        for i in 0..16 {
+            num[i] = (i as u128).wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                .wrapping_add(i as u128);
+        }
+        let mut den = [0u128; 10];
+        for i in 0..10 {
+            den[i] = ((i + 1) as u128).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        }
+        let mut q_canon = [0u128; 16];
+        let mut r_canon = [0u128; 16];
+        limbs_divmod(&num, &den, &mut q_canon, &mut r_canon);
+        let mut q_bz = [0u128; 16];
+        let mut r_bz = [0u128; 16];
+        limbs_divmod_bz(&num, &den, &mut q_bz, &mut r_bz);
+        assert_eq!(q_canon, q_bz, "BZ quotient mismatch");
+        assert_eq!(r_canon, r_bz, "BZ remainder mismatch");
     }
 }

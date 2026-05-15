@@ -212,10 +212,21 @@ largest of the six). Sources:
   raising intermediate AGM precision; recorded as a follow-up.
   (Brent, R. P. (1976). "Fast multiple-precision evaluation of
   elementary functions." *J. ACM* 23(2), 242–251.)
-- **Burnikel–Ziegler recursive division.** Asymptotically faster
-  than schoolbook for very wide divisors. Useful only past Int4096.
-  (Burnikel, C. and Ziegler, J. (1998). "Fast recursive division."
-  MPI-I-98-1-022.)
+- **Burnikel–Ziegler recursive division.** `limbs_divmod_bz` in
+  `src/wide_int/mod.rs` is the recursive wrapper; its base case is
+  the in-crate Knuth Algorithm D port (`limbs_divmod_knuth`,
+  TAOCP §4.3.1 adapted to base 2^128). Both functions sit
+  alongside the canonical const-fn binary `limbs_divmod` — the
+  canonical path is unchanged, and `_knuth` / `_bz` are exposed for
+  bench-driven promotion. Knuth's `O(m·n)` multi-limb shape beats
+  the binary path's `O((m+n)·n·128)` for any multi-limb divisor;
+  BZ's recursion adds value only past the threshold (currently
+  `BZ_THRESHOLD = 8` limbs) and the full §3 two-by-one /
+  three-by-two recursion is recorded as the next layer to add once
+  a bench shows it winning at this crate's widths. (Burnikel, C.
+  and Ziegler, J. (1998). "Fast recursive division." MPI-I-98-1-022;
+  Knuth, D. E. (1981). *The Art of Computer Programming, Vol. 2:
+  Seminumerical Algorithms*, §4.3.1.)
 - **CORDIC.** Common in hardware floating-point; not competitive
   with Taylor + reduction in a software fixed-point context.
 
