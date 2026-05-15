@@ -155,6 +155,36 @@ macro_rules! decl_wide_roots {
             pub fn cbrt(self) -> Self {
                 self.cbrt_strict()
             }
+
+            /// `sqrt(self² + other²)` without intermediate overflow,
+            /// computed integer-only via the correctly-rounded
+            /// [`Self::sqrt_strict`]. Uses the scale-trick algorithm:
+            ///
+            /// ```text
+            /// hypot(a, b) = max(|a|,|b|) · sqrt(1 + (min(|a|,|b|)/max(|a|,|b|))²)
+            /// ```
+            ///
+            /// The `min/max` ratio lies in `[0, 1]`, so `ratio² + 1` is
+            /// always in `[1, 2]` — the inner sqrt never overflows. The
+            /// outer multiply by `large` only overflows when the true
+            /// hypotenuse genuinely exceeds the type's range.
+            ///
+            /// `hypot(0, 0) = 0` (bit-exact); `hypot(0, x) = |x|`.
+            #[cfg(not(feature = "no_strict"))]
+            #[inline]
+            #[must_use]
+            pub fn hypot_strict(self, other: Self) -> Self {
+                let a = self.abs();
+                let b = other.abs();
+                let (large, small) = if a >= b { (a, b) } else { (b, a) };
+                if large == Self::ZERO {
+                    Self::ZERO
+                } else {
+                    let ratio = small / large;
+                    let one_plus_sq = Self::ONE + ratio * ratio;
+                    large * one_plus_sq.sqrt_strict()
+                }
+            }
         }
     };
 }

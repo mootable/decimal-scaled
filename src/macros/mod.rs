@@ -29,3 +29,4 @@ pub(crate) mod rounding_methods;
 pub(crate) mod sign;
 pub(crate) mod storage_formatters;
 pub(crate) mod strict_transcendentals;
+pub(crate) mod lossy_transcendentals;
