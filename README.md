@@ -5,6 +5,12 @@ types with **correctly-rounded (≤ 0.5 ULP) integer-only
 transcendentals**, deterministic across every platform, and
 `no_std`-friendly.
 
+📚 In-depth guides — getting started, scale aliases, the width
+family, conversions, rounding modes, strict mode, the `d38!`
+macro, every Cargo feature, benchmarks — live in
+[**`docs/README.md`**](docs/README.md). API reference on
+[docs.rs](https://docs.rs/decimal-scaled/).
+
 > **0.5 ULP** — the strongest accuracy guarantee a finite numeric
 > type can give — is the headline feature. Every `ln` / `exp` /
 > `sin` / `cos` / `sqrt` / `cbrt` / `powf` / `atan` / `atan2` /
