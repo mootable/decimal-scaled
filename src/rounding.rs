@@ -107,13 +107,56 @@ pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::Ceiling;
 )))]
 pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfToEven;
 
+/// Strategy hook for the rounding-mode family.
+///
+/// Given a *truncated-toward-zero* quotient and the per-operation
+/// numerator / divisor context, returns `true` if the quotient should
+/// be bumped one step "away from zero" in the result's direction to
+/// satisfy this mode. Caller is responsible for the actual bump (it
+/// is `q + 1` when the result is positive, `q − 1` when negative).
+///
+/// The three inputs collapse the per-step numerics that every mode
+/// cares about into mode-independent booleans / orderings:
+///
+/// - `cmp_r` — three-way comparison of `|r|` against `|m| − |r|`. This
+///   is exactly the round-up condition (`|r| > |m| − |r|` ⇔ `2·|r| > |m|`)
+///   without the doubling-overflow risk. `Equal` flags the half-way tie,
+///   which only occurs when the divisor is even.
+/// - `q_is_odd` — parity of the truncated quotient. Drives the
+///   half-to-even tie break.
+/// - `result_positive` — sign of the true result (`sign(n) == sign(m)`).
+///   Drives `Floor` / `Ceiling`.
+///
+/// Caller pre-handles the `r == 0` case (no rounding needed).
+#[inline]
+pub(crate) fn should_bump(
+    mode: RoundingMode,
+    cmp_r: ::core::cmp::Ordering,
+    q_is_odd: bool,
+    result_positive: bool,
+) -> bool {
+    use ::core::cmp::Ordering;
+    match mode {
+        RoundingMode::HalfToEven => match cmp_r {
+            Ordering::Less => false,
+            Ordering::Greater => true,
+            Ordering::Equal => q_is_odd,
+        },
+        RoundingMode::HalfAwayFromZero => !matches!(cmp_r, Ordering::Less),
+        RoundingMode::HalfTowardZero => matches!(cmp_r, Ordering::Greater),
+        RoundingMode::Trunc => false,
+        RoundingMode::Floor => !result_positive,
+        RoundingMode::Ceiling => result_positive,
+    }
+}
+
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
-/// `divisor` must be positive and at most `10^38` (i.e. `< i128::MAX`),
-/// so `divisor / 2` and `raw % divisor` are safe operations.
-///
-/// Used internally by [`D128::rescale_with`].
+/// Used by [`D128::rescale_with`] and by the multiplier-and-divide
+/// fast paths in `mg_divide`. The whole mode-specific logic is
+/// delegated to [`should_bump`]; this function is just the i128
+/// arithmetic wrapper that builds its inputs and applies the bump.
 #[inline]
 pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i128 {
     let quotient = raw / divisor;
@@ -124,45 +167,16 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
     }
 
     let abs_rem = remainder.unsigned_abs();
-    let half = (divisor / 2) as u128;
+    let abs_div = divisor.unsigned_abs();
+    let comp = abs_div - abs_rem;
+    let cmp_r = abs_rem.cmp(&comp);
+    let q_is_odd = (quotient & 1) != 0;
+    let result_positive = (raw < 0) == (divisor < 0);
 
-    match mode {
-        RoundingMode::HalfToEven => {
-            if abs_rem < half {
-                quotient
-            } else if abs_rem > half {
-                if raw >= 0 { quotient + 1 } else { quotient - 1 }
-            } else if quotient % 2 == 0 {
-                quotient
-            } else if raw >= 0 {
-                quotient + 1
-            } else {
-                quotient - 1
-            }
-        }
-        RoundingMode::HalfAwayFromZero => {
-            if abs_rem < half {
-                quotient
-            } else if raw >= 0 {
-                quotient + 1
-            } else {
-                quotient - 1
-            }
-        }
-        RoundingMode::HalfTowardZero => {
-            if abs_rem > half {
-                if raw >= 0 { quotient + 1 } else { quotient - 1 }
-            } else {
-                quotient
-            }
-        }
-        RoundingMode::Trunc => quotient,
-        RoundingMode::Floor => {
-            if raw >= 0 { quotient } else { quotient - 1 }
-        }
-        RoundingMode::Ceiling => {
-            if raw >= 0 { quotient + 1 } else { quotient }
-        }
+    if should_bump(mode, cmp_r, q_is_odd, result_positive) {
+        if result_positive { quotient + 1 } else { quotient - 1 }
+    } else {
+        quotient
     }
 }
 

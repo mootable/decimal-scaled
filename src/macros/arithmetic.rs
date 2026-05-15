@@ -23,72 +23,91 @@
 //! variants (`checked_*`, `saturating_*`, `wrapping_*`) live in a
 //! companion module.
 
-/// Rounds `n / m` (truncating-toward-zero quotient) to nearest, ties
-/// to even — the IEEE-754 round-to-nearest contract — for *primitive*
-/// signed integer types (`i32` / `i64` / `i128`).
+/// Rounds `n / m` (truncating-toward-zero quotient) according to
+/// `$mode` (a [`RoundingMode`]) for *primitive* signed integer types
+/// (`i32` / `i64` / `i128`).
 ///
-/// The decision is made by comparing `|r|` against `|m| − |r|`
-/// (equivalent to comparing `2·|r|` against `|m|` but without the
-/// doubling-overflow risk).
-macro_rules! round_half_to_even_native {
-    ($n:expr, $m:expr) => {{
+/// Mode-specific behaviour is delegated to
+/// [`crate::rounding::should_bump`], which receives the three
+/// pre-computed inputs every mode needs: the `|r|` vs `|m|−|r|`
+/// ordering (the round-up test without the `2·|r|` overflow risk),
+/// the parity of the truncated quotient, and the result sign. The
+/// caller bumps the quotient by ±1 in the result direction.
+///
+/// Passing `crate::rounding::DEFAULT_ROUNDING_MODE` yields the
+/// crate-wide default (IEEE-754 round-half-to-even unless a
+/// `rounding-*` feature overrides it).
+///
+/// [`RoundingMode`]: crate::rounding::RoundingMode
+macro_rules! round_with_mode_native {
+    ($n:expr, $m:expr, $mode:expr) => {{
         let n = $n;
         let m = $m;
+        let mode = $mode;
         let q = n / m;
         let r = n % m;
-        let abs_r = if r < 0 { -r } else { r };
-        let abs_m = if m < 0 { -m } else { m };
-        let comp = abs_m - abs_r;
-        if abs_r > comp || (abs_r == comp && abs_r > 0 && (q & 1) != 0) {
-            if q < 0 {
-                q - 1
-            } else if q > 0 {
-                q + 1
-            } else if (n < 0) != (m < 0) {
-                q - 1
-            } else {
-                q + 1
-            }
-        } else {
+        if r == 0 {
             q
+        } else {
+            let abs_r = if r < 0 { -r } else { r };
+            let abs_m = if m < 0 { -m } else { m };
+            let comp = abs_m - abs_r;
+            let cmp_r = abs_r.cmp(&comp);
+            let q_is_odd = (q & 1) != 0;
+            let result_positive = (n < 0) == (m < 0);
+            if $crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+                if result_positive {
+                    q + 1
+                } else {
+                    q - 1
+                }
+            } else {
+                q
+            }
         }
     }};
 }
-pub(crate) use round_half_to_even_native;
+pub(crate) use round_with_mode_native;
 
-/// Wide-storage counterpart of `round_half_to_even_native!` — the same
-/// half-to-even rounding algorithm on a hand-rolled wide integer
-/// `$W`. Uses `<$W>::from_i128` for the small integer constants and
-/// the type's operators throughout.
-macro_rules! round_half_to_even_wide {
-    ($n:expr, $m:expr, $W:ty) => {{
+/// Wide-storage counterpart of [`round_with_mode_native!`] — the same
+/// strategy-pattern dispatch over [`crate::rounding::should_bump`],
+/// adapted to a hand-rolled wide integer `$W`. Uses
+/// `<$W>::from_i128(0/1)` for the small constants and the type's
+/// operators throughout.
+macro_rules! round_with_mode_wide {
+    ($n:expr, $m:expr, $W:ty, $mode:expr) => {{
         let n = $n;
         let m = $m;
+        let mode = $mode;
         let q = n / m;
         let r = n % m;
         let zero = <$W>::from_i128(0);
-        let one = <$W>::from_i128(1);
-        let two = <$W>::from_i128(2);
-        let abs_r = if r < zero { -r } else { r };
-        let abs_m = if m < zero { -m } else { m };
-        let comp = abs_m - abs_r;
-        let q_odd = (q % two) != zero;
-        if abs_r > comp || (abs_r == comp && abs_r > zero && q_odd) {
-            if q < zero {
-                q - one
-            } else if q > zero {
-                q + one
-            } else if (n < zero) != (m < zero) {
-                q - one
-            } else {
-                q + one
-            }
-        } else {
+        if r == zero {
             q
+        } else {
+            let one = <$W>::from_i128(1);
+            let abs_r = if r < zero { -r } else { r };
+            let abs_m = if m < zero { -m } else { m };
+            let comp = abs_m - abs_r;
+            let cmp_r = abs_r.cmp(&comp);
+            let q_is_odd = {
+                let two = <$W>::from_i128(2);
+                (q % two) != zero
+            };
+            let result_positive = (n < zero) == (m < zero);
+            if $crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+                if result_positive {
+                    q + one
+                } else {
+                    q - one
+                }
+            } else {
+                q
+            }
         }
     }};
 }
-pub(crate) use round_half_to_even_wide;
+pub(crate) use round_with_mode_wide;
 
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
@@ -108,20 +127,15 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
             type Output = Self;
             /// Multiply two values of the same scale. Widens to `$Wider`
-            /// to hold `a · b` exactly, divides by `10^SCALE` rounded
-            /// half-to-even (the IEEE-754 round-to-nearest contract;
-            /// within 0.5 ULP), and narrows back to `$Storage`.
+            /// to hold `a · b` exactly, divides by `10^SCALE` using the
+            /// crate-default [`RoundingMode`] (IEEE-754 round-to-nearest;
+            /// within 0.5 ULP), and narrows back to `$Storage`. See
+            /// [`Self::mul_with`] to choose a non-default rounding mode.
+            ///
+            /// [`RoundingMode`]: $crate::rounding::RoundingMode
             #[inline]
             fn mul(self, rhs: Self) -> Self {
-                let a: $Wider = self.0.resize::<$Wider>();
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
-                let n = a * b;
-                let scaled =
-                    $crate::macros::arithmetic::round_half_to_even_wide!(n, m, $Wider);
-                Self(scaled.resize::<$Storage>())
+                self.mul_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
             }
         }
 
@@ -134,12 +148,42 @@ macro_rules! decl_decimal_arithmetic {
 
         impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
             type Output = Self;
-            /// Divide two values of the same scale. Numerator is widened
-            /// to `$Wider`, multiplied by `10^SCALE`, then divided by
-            /// `b` rounded half-to-even (within 0.5 ULP), preserving
-            /// the `value · 10^SCALE` form.
+            /// Divide two values of the same scale using the crate-default
+            /// [`RoundingMode`] (within 0.5 ULP). Numerator is widened to
+            /// `$Wider`, multiplied by `10^SCALE`, then divided by `b`
+            /// preserving the `value · 10^SCALE` form. See
+            /// [`Self::div_with`] for a non-default rounding mode.
+            ///
+            /// [`RoundingMode`]: $crate::rounding::RoundingMode
             #[inline]
             fn div(self, rhs: Self) -> Self {
+                self.div_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+        }
+
+        impl<const SCALE: u32> $Type<SCALE> {
+            /// Multiply two values of the same scale, rounding the
+            /// scale-narrowing step according to `mode`. Result is
+            /// within 0.5 ULP for the half-* family and bounded by the
+            /// directed-rounding rule otherwise.
+            #[inline]
+            pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
+                let m: $Wider = <$Wider>::from_str_radix("10", 10)
+                    .expect("wide decimal: invalid base-10 literal")
+                    .pow(SCALE);
+                let n = a * b;
+                let scaled =
+                    $crate::macros::arithmetic::round_with_mode_wide!(n, m, $Wider, mode);
+                Self(scaled.resize::<$Storage>())
+            }
+
+            /// Divide two values of the same scale, rounding the
+            /// scale-narrowing step according to `mode`. Within 0.5 ULP
+            /// for the half-* family.
+            #[inline]
+            pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
@@ -147,7 +191,7 @@ macro_rules! decl_decimal_arithmetic {
                     .pow(SCALE);
                 let n = a * m;
                 let result =
-                    $crate::macros::arithmetic::round_half_to_even_wide!(n, b, $Wider);
+                    $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
                 Self(result.resize::<$Storage>())
             }
         }
@@ -167,19 +211,15 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
             type Output = Self;
             /// Multiply two values of the same scale. Widens to `$Wider`
-            /// to hold `a · b` exactly, divides by `10^SCALE` rounded
-            /// half-to-even (within 0.5 ULP — the IEEE-754
-            /// round-to-nearest contract), and narrows back to
-            /// `$Storage`.
+            /// to hold `a · b` exactly, divides by `10^SCALE` using the
+            /// crate-default [`RoundingMode`] (IEEE-754 round-to-nearest;
+            /// within 0.5 ULP), and narrows back to `$Storage`. See
+            /// [`Self::mul_with`] to choose a non-default rounding mode.
+            ///
+            /// [`RoundingMode`]: $crate::rounding::RoundingMode
             #[inline]
             fn mul(self, rhs: Self) -> Self {
-                let a = self.0 as $Wider;
-                let b = rhs.0 as $Wider;
-                let m = (10 as $Wider).pow(SCALE);
-                let n = a * b;
-                let scaled =
-                    $crate::macros::arithmetic::round_half_to_even_native!(n, m);
-                Self(scaled as $Storage)
+                self.mul_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
             }
         }
 
@@ -192,18 +232,45 @@ macro_rules! decl_decimal_arithmetic {
 
         impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
             type Output = Self;
-            /// Divide two values of the same scale. Numerator is widened
-            /// to `$Wider`, multiplied by `10^SCALE`, then divided by
-            /// `b` rounded half-to-even (within 0.5 ULP), preserving
-            /// the `value · 10^SCALE` form.
+            /// Divide two values of the same scale using the crate-default
+            /// [`RoundingMode`] (within 0.5 ULP). Numerator is widened to
+            /// `$Wider`, multiplied by `10^SCALE`, then divided by `b`
+            /// preserving the `value · 10^SCALE` form. See
+            /// [`Self::div_with`] for a non-default rounding mode.
+            ///
+            /// [`RoundingMode`]: $crate::rounding::RoundingMode
             #[inline]
             fn div(self, rhs: Self) -> Self {
+                self.div_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+        }
+
+        impl<const SCALE: u32> $Type<SCALE> {
+            /// Multiply two values of the same scale, rounding the
+            /// scale-narrowing step according to `mode`. Within 0.5 ULP
+            /// for the half-* family.
+            #[inline]
+            pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let a = self.0 as $Wider;
+                let b = rhs.0 as $Wider;
+                let m = (10 as $Wider).pow(SCALE);
+                let n = a * b;
+                let scaled =
+                    $crate::macros::arithmetic::round_with_mode_native!(n, m, mode);
+                Self(scaled as $Storage)
+            }
+
+            /// Divide two values of the same scale, rounding the
+            /// scale-narrowing step according to `mode`. Within 0.5 ULP
+            /// for the half-* family.
+            #[inline]
+            pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a = self.0 as $Wider;
                 let b = rhs.0 as $Wider;
                 let m = (10 as $Wider).pow(SCALE);
                 let n = a * m;
                 let result =
-                    $crate::macros::arithmetic::round_half_to_even_native!(n, b);
+                    $crate::macros::arithmetic::round_with_mode_native!(n, b, mode);
                 Self(result as $Storage)
             }
         }

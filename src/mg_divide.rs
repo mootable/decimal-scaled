@@ -148,6 +148,20 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
 fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) -> Option<u128> {
+    div_exp_fast_2word_with_rem(n_high, n_low, exp, scale_idx).map(|(q, _)| q)
+}
+
+/// Same as `div_exp_fast_2word` but also returns the exact remainder
+/// `n - q · exp`, so callers can apply round-to-nearest in addition to
+/// the floor division. The remainder always fits in a `u128` because
+/// `r < exp ≤ 10^38 < 2^127`.
+#[inline]
+fn div_exp_fast_2word_with_rem(
+    n_high: u128,
+    n_low: u128,
+    exp: u128,
+    scale_idx: usize,
+) -> Option<(u128, u128)> {
     // Overflow check: quotient must fit in 128 bits.
     if n_high >= exp {
         return None;
@@ -156,12 +170,10 @@ fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) ->
     let (magic, zeros) = MG_EXP_MAGICS[scale_idx];
 
     // Step 1: align n to the top of the 256-bit word.
-    // (z_high, z_low) = n << zeros
     let z_high = (n_high << zeros) | (n_low >> (128 - zeros));
     let z_low = n_low << zeros;
 
     // Step 2: approximate quotient via magic multiplication.
-    // (m_high, m_low) = (magic * z) >> 128
     let (m1_high, _) = mul2(z_low, magic);
     let (m2_high, m2_low) = mul2(z_high, magic);
 
@@ -169,20 +181,46 @@ fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) ->
     let m_high = m2_high + carry as u128;
 
     // Step 3: extract the 128-bit quotient estimate.
-    // q = (m + z) >> 128
     let (_, carry) = m_low.overflowing_add(z_low);
     let q = m_high + z_high + carry as u128;
 
-    // Step 4: single add-back correction. The estimate can be off by 1;
-    // check the remainder and increment if needed.
+    // Step 4: single add-back correction. The estimate can be off by 1.
     let (pp_high, pp_low) = mul2(q, exp);
     let (r_low, borrow) = n_low.overflowing_sub(pp_low);
     debug_assert!(n_high == pp_high + borrow as u128);
 
     if r_low < exp {
-        Some(q)
+        Some((q, r_low))
     } else {
-        Some(q + 1)
+        Some((q + 1, r_low - exp))
+    }
+}
+
+/// Mode-aware rounding for an *unsigned* magnitude `q` with remainder
+/// `r` against divisor `m`, given the result sign — returns the
+/// rounded magnitude. Caller applies the sign afterwards.
+///
+/// All mode-specific behaviour is delegated to
+/// [`crate::rounding::should_bump`]; this function only assembles
+/// the inputs from the unsigned-magnitude representation.
+#[inline]
+fn round_mag_with_mode(
+    q: u128,
+    r: u128,
+    m: u128,
+    mode: crate::rounding::RoundingMode,
+    result_positive: bool,
+) -> u128 {
+    if r == 0 {
+        return q;
+    }
+    let comp = m - r;
+    let cmp_r = r.cmp(&comp);
+    let q_is_odd = (q & 1) != 0;
+    if crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+        q + 1
+    } else {
+        q
     }
 }
 
@@ -202,13 +240,26 @@ fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) ->
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u128> {
+fn div_long_256_by_128(n_high: u128, n_low: u128, d: u128) -> Option<u128> {
+    div_long_256_by_128_with_rem(n_high, n_low, d).map(|(q, _)| q)
+}
+
+/// Remainder-returning companion of [`div_long_256_by_128`]. Same
+/// algorithm; the per-bit / per-limb remainder is already maintained
+/// inside the loop, so exposing it costs nothing. Required by the
+/// 0.5-ULP rounding path in [`div_pow10_div_with`].
+#[inline]
+fn div_long_256_by_128_with_rem(
+    mut n_high: u128,
+    mut n_low: u128,
+    d: u128,
+) -> Option<(u128, u128)> {
     if d == 0 {
         return None;
     }
     // Fast path: dividend already fits 128 bits.
     if n_high == 0 {
-        return Some(n_low / d);
+        return Some((n_low / d, n_low % d));
     }
     // Overflow check: quotient must fit in 128 bits, so n_high < d.
     if n_high >= d {
@@ -237,13 +288,10 @@ fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u12
             out[i] = (cur / d) as u64;
             rem = cur % d;
         }
-        return Some(out[0] as u128 | ((out[1] as u128) << 64));
+        return Some((out[0] as u128 | ((out[1] as u128) << 64), rem));
     }
 
     // Shift-subtract over only the significant bits of the dividend.
-    // Pre-shift so the top set bit is aligned, then iterate exactly
-    // that many times (the leading iterations of the naive 256-step
-    // loop are provably no-ops).
     let bits = if n_high != 0 {
         256 - n_high.leading_zeros()
     } else {
@@ -271,7 +319,7 @@ fn div_long_256_by_128(mut n_high: u128, mut n_low: u128, d: u128) -> Option<u12
             q |= 1;
         }
     }
-    Some(q)
+    Some((q, rem))
 }
 
 /// `floor(sqrt(N))` for the unsigned 256-bit value `N = hi·2^128 + lo`.
@@ -591,27 +639,46 @@ pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 /// ```
 #[inline]
 pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
-    // SCALE = 0: multiplier is 1, result is just a * b.
+    mul_div_pow10_with::<SCALE>(a, b, crate::rounding::DEFAULT_ROUNDING_MODE)
+}
+
+/// Mode-aware variant of [`mul_div_pow10`]: rounds the
+/// divide-by-`10^SCALE` step according to `mode`. The default
+/// `mul_div_pow10` is a thin wrapper that passes
+/// [`crate::rounding::DEFAULT_ROUNDING_MODE`].
+#[inline]
+pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
+    a: i128,
+    b: i128,
+    mode: crate::rounding::RoundingMode,
+) -> Option<i128> {
+    // SCALE = 0: multiplier is 1, result is just a * b. No rounding
+    // step possible.
     if SCALE == 0 {
         return a.checked_mul(b);
     }
 
-    // Fast path: i128 * i128 didn't overflow; finish with i128 /.
+    // Fast path: i128 * i128 didn't overflow. Apply `mode` at the
+    // divide-by-10^SCALE step.
     if let Some(prod) = a.checked_mul(b) {
-        return Some(prod / D128::<SCALE>::multiplier());
+        return Some(crate::rounding::apply_rounding(
+            prod,
+            D128::<SCALE>::multiplier(),
+            mode,
+        ));
     }
 
     // Widening path: |a*b| > i128::MAX. Compute the unsigned 256-bit
-    // product, magic-divide by 10^SCALE, restore sign.
+    // product, magic-divide by 10^SCALE, round per `mode`, restore sign.
     let ua = a.unsigned_abs();
     let ub = b.unsigned_abs();
     let (mhigh, mlow) = mul2(ua, ub);
 
     let exp = D128::<SCALE>::multiplier() as u128;
-    let q = div_exp_fast_2word(mhigh, mlow, exp, SCALE as usize)?;
-
+    let (q_floor, r) = div_exp_fast_2word_with_rem(mhigh, mlow, exp, SCALE as usize)?;
     // Sign: result is negative iff exactly one operand is negative.
     let neg = (a < 0) ^ (b < 0);
+    let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
     if neg {
         // -q must fit in i128. q == 2^127 is fine (that is i128::MIN).
         if q <= i128::MAX as u128 {
@@ -658,13 +725,28 @@ pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
 /// ```
 #[inline]
 pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
+    div_pow10_div_with::<SCALE>(a, b, crate::rounding::DEFAULT_ROUNDING_MODE)
+}
+
+/// Mode-aware variant of [`div_pow10_div`]: rounds the final divide
+/// step according to `mode`. The default `div_pow10_div` is a thin
+/// wrapper that passes [`crate::rounding::DEFAULT_ROUNDING_MODE`].
+#[inline]
+pub(crate) fn div_pow10_div_with<const SCALE: u32>(
+    a: i128,
+    b: i128,
+    mode: crate::rounding::RoundingMode,
+) -> Option<i128> {
     if b == 0 {
         return None;
     }
+    // Probe for the `i128::MIN / -1` overflow case so the rounding path
+    // below can rely on `a / b` not panicking.
+    a.checked_div(b)?;
 
-    // SCALE = 0: just a / b.
+    // SCALE = 0: scale-narrowing step is `a / b` itself; apply mode.
     if SCALE == 0 {
-        return a.checked_div(b);
+        return Some(crate::rounding::apply_rounding(a, b, mode));
     }
 
     let mult = D128::<SCALE>::multiplier();
@@ -673,21 +755,23 @@ pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> 
     // fits with headroom; for larger SCALE the overflow check below
     // handles the fallthrough.
     if let Some(num) = a.checked_mul(mult) {
-        return Some(num / b);
+        return Some(crate::rounding::apply_rounding(num, b, mode));
     }
 
     // Widening path: a*mult overflows i128. Compute it as a 256-bit
-    // unsigned, divide by |b|, restore sign.
+    // unsigned, divide by |b| keeping the remainder, round per `mode`,
+    // restore sign.
     let ua = a.unsigned_abs();
     let umult = mult as u128;
     let (mhigh, mlow) = mul2(ua, umult);
 
     let ub = b.unsigned_abs();
-    let q = div_long_256_by_128(mhigh, mlow, ub)?;
+    let (q_floor, r) = div_long_256_by_128_with_rem(mhigh, mlow, ub)?;
 
     // Sign: result is negative iff exactly one of `a` and `b` is
     // negative. (mult is always positive.)
     let neg = (a < 0) ^ (b < 0);
+    let q = round_mag_with_mode(q_floor, r, ub, mode, !neg);
     if neg {
         if q <= i128::MAX as u128 {
             Some(-(q as i128))
@@ -830,14 +914,37 @@ mod tests {
         assert_eq!(div_pow10_div::<SCALE>(123, 0), None);
     }
 
-    /// `SCALE = 0`: reduces to plain truncating divide.
+    /// `SCALE = 0`: scale-narrowing step is `a / b`, rounded by the
+    /// crate-default rounding mode (HalfToEven by default).
     #[test]
     fn div_pow10_div_scale_zero() {
         const SCALE: u32 = 0;
-        assert_eq!(div_pow10_div::<SCALE>(15, 4), Some(3));
-        assert_eq!(div_pow10_div::<SCALE>(-15, 4), Some(-3));
+        // 15 / 4 = 3.75 -> 4 under half-* family (no tie, .75 > .5).
+        assert_eq!(div_pow10_div::<SCALE>(15, 4), Some(4));
+        // -15 / 4 = -3.75 -> -4 by symmetry.
+        assert_eq!(div_pow10_div::<SCALE>(-15, 4), Some(-4));
+        // Exact: 16 / 4 = 4 with zero remainder, no rounding.
+        assert_eq!(div_pow10_div::<SCALE>(16, 4), Some(4));
         // i128::MIN / -1 overflows -> checked_div returns None.
         assert_eq!(div_pow10_div::<SCALE>(i128::MIN, -1), None);
+    }
+
+    /// `div_pow10_div_with` honours the explicit mode argument.
+    #[test]
+    fn div_pow10_div_with_modes() {
+        use crate::rounding::RoundingMode::*;
+        const SCALE: u32 = 0;
+        // 15 / 4 = 3.75
+        assert_eq!(div_pow10_div_with::<SCALE>(15, 4, HalfToEven), Some(4));
+        assert_eq!(div_pow10_div_with::<SCALE>(15, 4, HalfAwayFromZero), Some(4));
+        assert_eq!(div_pow10_div_with::<SCALE>(15, 4, HalfTowardZero), Some(4));
+        assert_eq!(div_pow10_div_with::<SCALE>(15, 4, Trunc), Some(3));
+        assert_eq!(div_pow10_div_with::<SCALE>(15, 4, Floor), Some(3));
+        assert_eq!(div_pow10_div_with::<SCALE>(15, 4, Ceiling), Some(4));
+        // -15 / 4 = -3.75
+        assert_eq!(div_pow10_div_with::<SCALE>(-15, 4, Trunc), Some(-3));
+        assert_eq!(div_pow10_div_with::<SCALE>(-15, 4, Floor), Some(-4));
+        assert_eq!(div_pow10_div_with::<SCALE>(-15, 4, Ceiling), Some(-3));
     }
 
     /// Wide-operand divide: `(10^22 * 10^12) / 2 = 5e33`.

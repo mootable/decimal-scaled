@@ -143,6 +143,62 @@ impl<const SCALE: u32> DivAssign for D128<SCALE> {
     }
 }
 
+impl<const SCALE: u32> D128<SCALE> {
+    /// Multiply two values of the same scale, rounding the
+    /// scale-narrowing divide by `10^SCALE` according to `mode`.
+    ///
+    /// The default `Mul` operator delegates to this with
+    /// [`crate::rounding::DEFAULT_ROUNDING_MODE`]; call `mul_with`
+    /// directly when you need a non-default rounding rule (e.g.
+    /// `HalfAwayFromZero` for commercial rounding, `Floor`/`Ceiling`
+    /// for one-sided bracketing).
+    ///
+    /// # Panics
+    ///
+    /// Panics in debug builds when the rescaled quotient overflows
+    /// `i128`. Wraps two's-complement in release builds.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only arithmetic. Within 0.5 ULP for the half-*
+    /// family; directed rounding otherwise.
+    #[inline]
+    #[must_use]
+    pub fn mul_with(self, rhs: Self, mode: crate::rounding::RoundingMode) -> Self {
+        match crate::mg_divide::mul_div_pow10_with::<SCALE>(self.0, rhs.0, mode) {
+            Some(q) => Self(q),
+            None => Self(panic_or_wrap_mul::<SCALE>(self.0, rhs.0)),
+        }
+    }
+
+    /// Divide two values of the same scale, rounding the final
+    /// divide step according to `mode`.
+    ///
+    /// The default `Div` operator delegates to this with
+    /// [`crate::rounding::DEFAULT_ROUNDING_MODE`].
+    ///
+    /// # Panics
+    ///
+    /// Panics on division by zero (matching `i128 /`). Panics in debug
+    /// builds when the quotient overflows `i128`; wraps in release.
+    ///
+    /// # Precision
+    ///
+    /// Strict: integer-only arithmetic. Within 0.5 ULP for the half-*
+    /// family; directed rounding otherwise.
+    #[inline]
+    #[must_use]
+    pub fn div_with(self, rhs: Self, mode: crate::rounding::RoundingMode) -> Self {
+        if rhs.0 == 0 {
+            panic!("attempt to divide by zero");
+        }
+        match crate::mg_divide::div_pow10_div_with::<SCALE>(self.0, rhs.0, mode) {
+            Some(q) => Self(q),
+            None => Self(panic_or_wrap_div::<SCALE>(self.0, rhs.0)),
+        }
+    }
+}
+
 // Overflow fallback helpers for Mul and Div.
 //
 // The widening multiply/divide paths return `None` when the final `i128`
@@ -570,14 +626,19 @@ mod tests {
         assert_eq!(q, expected);
     }
 
-    /// Div at SCALE = 0: reduces to plain `i128 /`.
+    /// Div at SCALE = 0: scale-narrowing step is `a / b`, rounded per
+    /// the crate-default mode (HalfToEven by default).
     #[test]
     fn div_scale_zero_matches_i128_div() {
         type D0 = crate::core_type::D128<0>;
         let a = D0::from_bits(15);
         let b = D0::from_bits(4);
-        assert_eq!(a / b, D0::from_bits(3));
-        assert_eq!((-a) / b, D0::from_bits(-3));
+        // 15 / 4 = 3.75 -> 4 under HalfToEven (no tie at .75).
+        assert_eq!(a / b, D0::from_bits(4));
+        assert_eq!((-a) / b, D0::from_bits(-4));
+        // Exact divide is unchanged.
+        let c = D0::from_bits(16);
+        assert_eq!(c / b, D0::from_bits(4));
     }
 
     /// Mul at SCALE = 0: reduces to plain `i128 *`.
