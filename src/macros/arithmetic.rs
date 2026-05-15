@@ -23,6 +23,73 @@
 //! variants (`checked_*`, `saturating_*`, `wrapping_*`) live in a
 //! companion module.
 
+/// Rounds `n / m` (truncating-toward-zero quotient) to nearest, ties
+/// to even — the IEEE-754 round-to-nearest contract — for *primitive*
+/// signed integer types (`i32` / `i64` / `i128`).
+///
+/// The decision is made by comparing `|r|` against `|m| − |r|`
+/// (equivalent to comparing `2·|r|` against `|m|` but without the
+/// doubling-overflow risk).
+macro_rules! round_half_to_even_native {
+    ($n:expr, $m:expr) => {{
+        let n = $n;
+        let m = $m;
+        let q = n / m;
+        let r = n % m;
+        let abs_r = if r < 0 { -r } else { r };
+        let abs_m = if m < 0 { -m } else { m };
+        let comp = abs_m - abs_r;
+        if abs_r > comp || (abs_r == comp && abs_r > 0 && (q & 1) != 0) {
+            if q < 0 {
+                q - 1
+            } else if q > 0 {
+                q + 1
+            } else if (n < 0) != (m < 0) {
+                q - 1
+            } else {
+                q + 1
+            }
+        } else {
+            q
+        }
+    }};
+}
+pub(crate) use round_half_to_even_native;
+
+/// Wide-storage counterpart of `round_half_to_even_native!` — the same
+/// half-to-even rounding algorithm on a hand-rolled wide integer
+/// `$W`. Uses `<$W>::from_i128` for the small integer constants and
+/// the type's operators throughout.
+macro_rules! round_half_to_even_wide {
+    ($n:expr, $m:expr, $W:ty) => {{
+        let n = $n;
+        let m = $m;
+        let q = n / m;
+        let r = n % m;
+        let zero = <$W>::from_i128(0);
+        let one = <$W>::from_i128(1);
+        let two = <$W>::from_i128(2);
+        let abs_r = if r < zero { -r } else { r };
+        let abs_m = if m < zero { -m } else { m };
+        let comp = abs_m - abs_r;
+        let q_odd = (q % two) != zero;
+        if abs_r > comp || (abs_r == comp && abs_r > zero && q_odd) {
+            if q < zero {
+                q - one
+            } else if q > zero {
+                q + one
+            } else if (n < zero) != (m < zero) {
+                q - one
+            } else {
+                q + one
+            }
+        } else {
+            q
+        }
+    }};
+}
+pub(crate) use round_half_to_even_wide;
+
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
@@ -41,8 +108,9 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
             type Output = Self;
             /// Multiply two values of the same scale. Widens to `$Wider`
-            /// to hold `a * b` without intermediate overflow, divides
-            /// by `10^SCALE`, then narrows back to `$Storage`.
+            /// to hold `a · b` exactly, divides by `10^SCALE` rounded
+            /// half-to-even (the IEEE-754 round-to-nearest contract;
+            /// within 0.5 ULP), and narrows back to `$Storage`.
             #[inline]
             fn mul(self, rhs: Self) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
@@ -50,7 +118,9 @@ macro_rules! decl_decimal_arithmetic {
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
-                let scaled = (a * b) / m;
+                let n = a * b;
+                let scaled =
+                    $crate::macros::arithmetic::round_half_to_even_wide!(n, m, $Wider);
                 Self(scaled.resize::<$Storage>())
             }
         }
@@ -65,8 +135,9 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
             type Output = Self;
             /// Divide two values of the same scale. Numerator is widened
-            /// to `$Wider` and multiplied by `10^SCALE` before dividing
-            /// by `b`, preserving the `value * 10^SCALE` form.
+            /// to `$Wider`, multiplied by `10^SCALE`, then divided by
+            /// `b` rounded half-to-even (within 0.5 ULP), preserving
+            /// the `value · 10^SCALE` form.
             #[inline]
             fn div(self, rhs: Self) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
@@ -74,7 +145,9 @@ macro_rules! decl_decimal_arithmetic {
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
-                let result = (a * m) / b;
+                let n = a * m;
+                let result =
+                    $crate::macros::arithmetic::round_half_to_even_wide!(n, b, $Wider);
                 Self(result.resize::<$Storage>())
             }
         }
@@ -94,17 +167,18 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
             type Output = Self;
             /// Multiply two values of the same scale. Widens to `$Wider`
-            /// to hold `a * b` without intermediate overflow, divides
-            /// by `10^SCALE`, then narrows back to `$Storage`. The
-            /// narrowing cast wraps (release) / panics (debug) when the
-            /// result is out of range, matching Rust's `as`-cast.
+            /// to hold `a · b` exactly, divides by `10^SCALE` rounded
+            /// half-to-even (within 0.5 ULP — the IEEE-754
+            /// round-to-nearest contract), and narrows back to
+            /// `$Storage`.
             #[inline]
             fn mul(self, rhs: Self) -> Self {
                 let a = self.0 as $Wider;
                 let b = rhs.0 as $Wider;
                 let m = (10 as $Wider).pow(SCALE);
-                let prod = a * b;
-                let scaled = prod / m;
+                let n = a * b;
+                let scaled =
+                    $crate::macros::arithmetic::round_half_to_even_native!(n, m);
                 Self(scaled as $Storage)
             }
         }
@@ -119,14 +193,17 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
             type Output = Self;
             /// Divide two values of the same scale. Numerator is widened
-            /// to `$Wider` and multiplied by `10^SCALE` before dividing
-            /// by `b`, preserving the `value * 10^SCALE` form.
+            /// to `$Wider`, multiplied by `10^SCALE`, then divided by
+            /// `b` rounded half-to-even (within 0.5 ULP), preserving
+            /// the `value · 10^SCALE` form.
             #[inline]
             fn div(self, rhs: Self) -> Self {
                 let a = self.0 as $Wider;
                 let b = rhs.0 as $Wider;
                 let m = (10 as $Wider).pow(SCALE);
-                let result = (a * m) / b;
+                let n = a * m;
+                let result =
+                    $crate::macros::arithmetic::round_half_to_even_native!(n, b);
                 Self(result as $Storage)
             }
         }
