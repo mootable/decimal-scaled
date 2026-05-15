@@ -67,7 +67,7 @@ decimal_scaled_macros = { path = "macros" }
 # None of these are normal dependencies.
 bnum = { version = "0.14", default-features = false }
 ruint = { version = "1", default-features = false }
-rust_decimal = { version = "1", default-features = false }
+rust_decimal = { version = "1", default-features = false, features = ["maths"] }
 fixed = "1"
 
 [[bench]]
@@ -86,16 +86,13 @@ harness = false
 required-features = ["wide"]
 
 # Decimal / fixed-point backend comparison: native `D128` / `D256` vs
-# `bnum`-backed `D256`, `rust_decimal`, and `fixed`. Needs the wide tier.
+# `bnum`-backed `D256`, `rust_decimal`, and `fixed` — arithmetic and
+# transcendentals (including the lossy vs strict variants). Needs the
+# wide tier.
 [[bench]]
 name = "decimal_backends"
 harness = false
 required-features = ["wide"]
-
-# Lossy (f64-bridge) vs strict (integer-only) transcendentals on `D128`.
-[[bench]]
-name = "lossy_vs_strict"
-harness = false
 
 [lints.rust]
 unused_variables = "allow"
