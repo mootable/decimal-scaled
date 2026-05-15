@@ -1,12 +1,34 @@
-//! Macro-generated `DecimalConsts` impls for narrow decimal widths.
+//! Macro-generated `DecimalConsts` impls for every decimal width.
 //!
-//! The constants are stored once as `i128` literals at `SCALE_REF = 35`
-//! in `src/consts.rs` (D128's path). For narrower widths the macro
-//! delegates rescaling to D128 (via `D128::<35>::from_bits(...)
-//! .rescale::<SCALE>()`) and then narrows the resulting `i128` to the
-//! target storage. Narrowing overflows silently in release builds and
-//! panics in debug; downstream callers requesting a SCALE that does
-//! not fit the chosen constant should pick a wider type.
+//! The constants are stored once as `i128` literals at `SCALE_REF = 37`
+//! in `src/consts.rs` (D128's path). For other widths the macro
+//! delegates rescaling to D128 (via `D128::<37>::from_bits(...)
+//! .rescale::<SCALE>()`) and then narrows or widens the resulting
+//! `i128` to the target storage. Narrowing overflows silently in
+//! release builds and panics in debug; downstream callers
+//! requesting a SCALE that does not fit the chosen constant should
+//! pick a wider type.
+//!
+//! # Known precision gap (wide tier, follow-up)
+//!
+//! Wide tiers (D256, D512, D1024) widen the same 37-digit `i128`
+//! reference into their wider storage. At `SCALE ≤ 37` they get the
+//! full 0.5 ULP contract; at `SCALE > 37` the rescale appends
+//! trailing zeros — no extra precision — and at `SCALE > 38` the
+//! rescale path's intermediate `i128 * 10^k` overflows and panics.
+//! Practical impact:
+//!
+//! - D256<S>::pi() works correctly for `S ≤ 37`; at `S = 50` / `76`
+//!   (the D256 max) it panics on rescale-up.
+//! - D512<S>::pi() and D1024<S>::pi() have the same panic past
+//!   `S = 37`.
+//!
+//! Closing this needs per-width raw constants stored in the storage
+//! type itself (e.g. a 75-digit raw `Int256` for D256 built via
+//! `Int256::from_str_radix`), with the precision growing to 153
+//! digits for D512 and 307 for D1024. Recorded as a substantial
+//! follow-up — verifying ~308 digits of each constant for D1024 is
+//! the bulk of the work.
 
 /// Emits `DecimalConsts` for a decimal type. Requires the
 /// `D128::<SCALE_REF>::from_bits(_).rescale::<SCALE>()` path to be
