@@ -210,17 +210,21 @@ place. `fixed` has no transcendentals.
 
 ### D256 lossy vs strict
 
-| fn   | D256 lossy    | D256 strict     |
-|------|---------------|-----------------|
-| ln   | 208.15 ns     | 166.36 µs       |
-| exp  | 218.02 ns     | 252.95 µs       |
-| sqrt | 200.68 ns     | 484.05 ns       |
-| sin  | 215.29 ns     | 238.51 µs       |
+| fn   | D256 lossy    | D256 strict (0.5 ULP) |
+|------|---------------|-----------------------|
+| ln   | 208.15 ns     | 337 µs                |
+| exp  | 218.02 ns     | 506 µs                |
+| sqrt | 200.68 ns     | 484.05 ns             |
+| sin  | 215.29 ns     | 461 µs                |
 
 The wide-tier strict path uses a separate guard-digit core
-(`decl_wide_transcendental!`) with `$Work = Int1024`. It's roughly
-6–8× the D128 strict cost — the larger working width plus the
-generic limb-array arithmetic add up.
+(`decl_wide_transcendental!`) with `$Work = Int1024`. The strict
+numbers shown here are the **post-tightening** figures: every
+intermediate `mul` / `div` rounds half-to-even (the truncating
+predecessors leaked a coherent per-op bias that broke the 0.5 ULP
+budget). The cost is ~2× the original truncating-intermediate
+numbers (`ln` was 166 µs); precision now matches the D128 strict
+contract.
 
 ---
 
