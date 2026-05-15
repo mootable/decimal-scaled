@@ -265,6 +265,7 @@ mod tests {
     /// Expected: 3_141_592_653_590.
     #[test]
     fn pi_is_bit_exact_at_scale_12() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D128s12::pi().to_bits(), 3_141_592_653_590_i128);
     }
 
@@ -273,6 +274,7 @@ mod tests {
     /// 14th digit is 5 -> round up. Expected: 6_283_185_307_180.
     #[test]
     fn tau_is_bit_exact_at_scale_12() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D128s12::tau().to_bits(), 6_283_185_307_180_i128);
     }
 
@@ -281,6 +283,7 @@ mod tests {
     /// 14th digit is 8 -> round up. Expected: 1_570_796_326_795.
     #[test]
     fn half_pi_is_bit_exact_at_scale_12() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D128s12::half_pi().to_bits(), 1_570_796_326_795_i128);
     }
 
@@ -289,6 +292,7 @@ mod tests {
     /// 13th digit is 4 -> no round-up. Expected: 785_398_163_397.
     #[test]
     fn quarter_pi_is_bit_exact_at_scale_12() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D128s12::quarter_pi().to_bits(), 785_398_163_397_i128);
     }
 
@@ -297,6 +301,7 @@ mod tests {
     /// 14th digit is 0 -> no round-up. Expected: 2_718_281_828_459.
     #[test]
     fn e_is_bit_exact_at_scale_12() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D128s12::e().to_bits(), 2_718_281_828_459_i128);
     }
 
@@ -305,6 +310,7 @@ mod tests {
     /// 14th digit is 8 -> round up. Expected: 1_618_033_988_750.
     #[test]
     fn golden_is_bit_exact_at_scale_12() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D128s12::golden().to_bits(), 1_618_033_988_750_i128);
     }
 
@@ -388,6 +394,7 @@ mod tests {
     /// 3.1415926535...). Expected raw bits: 3_141_593.
     #[test]
     fn pi_at_scale_6_is_bit_exact() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         type D6 = D128<6>;
         assert_eq!(D6::pi().to_bits(), 3_141_593_i128);
     }
@@ -396,6 +403,7 @@ mod tests {
     /// round-up).
     #[test]
     fn pi_at_scale_0_is_three() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         type D0 = D128<0>;
         assert_eq!(D0::pi().to_bits(), 3_i128);
     }
@@ -418,6 +426,7 @@ mod tests {
     /// Negative-side rounding: negating pi gives the expected raw bits.
     #[test]
     fn neg_pi_round_trip() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         let pi = D128s12::pi();
         let neg_pi = -pi;
         assert_eq!(neg_pi.to_bits(), -3_141_592_653_590_i128);

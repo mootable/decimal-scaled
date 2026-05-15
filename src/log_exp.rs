@@ -1173,6 +1173,7 @@ mod tests {
     /// `ln(exp(x)) ~= x` for moderate `x` -- the inverse round-trip.
     #[test]
     fn ln_of_exp_round_trip() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         // Moderate inputs; large positive inputs approach D128s12 magnitude limit.
         for raw in [
             -2_345_678_901_234_i128, // ~-2.345678

@@ -185,6 +185,17 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
     }
 }
 
+/// `true` when the crate is built with [`DEFAULT_ROUNDING_MODE`] set to
+/// [`RoundingMode::HalfToEven`] — i.e. none of the `rounding-*` feature
+/// flags is selected. Used by tests whose expected values assume the
+/// default IEEE-754 rounding to short-circuit themselves under a
+/// non-default rounding feature build.
+#[cfg(test)]
+pub(crate) const DEFAULT_IS_HALF_TO_EVEN: bool = matches!(
+    DEFAULT_ROUNDING_MODE,
+    RoundingMode::HalfToEven
+);
+
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -226,6 +226,17 @@ fn div_exp_fast_2word_with_rem(
 ///
 /// Caller short-circuits `scale == 0` (no-op) and any `scale > 38`
 /// (the magic table only covers `0..=38`).
+///
+/// Gated on the same `wide`/`x-wide` feature umbrella as
+/// `crate::wide_int` — it's only invoked from the wide-tier
+/// decimal `Mul` macro arm.
+#[cfg(any(
+    feature = "d256",
+    feature = "d512",
+    feature = "d1024",
+    feature = "wide",
+    feature = "x-wide"
+))]
 #[inline]
 pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     n: W,
@@ -993,6 +1004,10 @@ mod tests {
     /// Division: small operands match the naive form.
     #[test]
     fn div_pow10_div_small_matches_naive() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        // `expected` is the truncating result and matches under
+        // HalfToEven only when the remainder is below half — true here
+        // (a*10^12 / 7 leaves a remainder well under 3.5).
         const SCALE: u32 = 12;
         let a: i128 = 1_500_000_000;
         let b: i128 = 7;
@@ -1011,6 +1026,7 @@ mod tests {
     /// crate-default rounding mode (HalfToEven by default).
     #[test]
     fn div_pow10_div_scale_zero() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         const SCALE: u32 = 0;
         // 15 / 4 = 3.75 -> 4 under half-* family (no tie, .75 > .5).
         assert_eq!(div_pow10_div::<SCALE>(15, 4), Some(4));

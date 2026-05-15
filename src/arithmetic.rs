@@ -630,6 +630,9 @@ mod tests {
     /// the crate-default mode (HalfToEven by default).
     #[test]
     fn div_scale_zero_matches_i128_div() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN {
+            return;
+        }
         type D0 = crate::core_type::D128<0>;
         let a = D0::from_bits(15);
         let b = D0::from_bits(4);

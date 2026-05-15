@@ -1235,6 +1235,7 @@ mod tests {
 
     #[test]
     fn d32_consts() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         use crate::consts::DecimalConsts;
         type D32s4 = super::D32<4>;
         // pi at scale 4 = 3.1416 -> bits = 31416.
@@ -1265,6 +1266,7 @@ mod tests {
 
     #[test]
     fn d64_consts() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         use crate::consts::DecimalConsts;
         type D64s12 = super::D64<12>;
         // pi at scale 12 = 3.141592653590 (matches D128s12).

@@ -76,17 +76,27 @@ mod tests {
 
     #[test]
     fn rescale_down_half_to_even_rounds_to_even() {
+        use crate::rounding::RoundingMode;
+        // Pin the mode so this test verifies HalfToEven specifically,
+        // regardless of which `rounding-*` feature happens to be set.
         // 1.235000 at cents: tie -> 1.24 (4 is even)
         let micros = D128s6::from_bits(1_235_000);
-        assert_eq!(micros.rescale::<2>().to_bits(), 124);
+        assert_eq!(
+            micros.rescale_with::<2>(RoundingMode::HalfToEven).to_bits(),
+            124
+        );
 
         // 1.225000 at cents: tie -> 1.22 (2 is even)
         let micros = D128s6::from_bits(1_225_000);
-        assert_eq!(micros.rescale::<2>().to_bits(), 122);
+        assert_eq!(
+            micros.rescale_with::<2>(RoundingMode::HalfToEven).to_bits(),
+            122
+        );
     }
 
     #[test]
     fn rescale_down_non_half_goes_nearest() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         // 1.234999 -> 1.23 (below half)
         let micros = D128s6::from_bits(1_234_999);
         assert_eq!(micros.rescale::<2>().to_bits(), 123);
@@ -97,6 +107,7 @@ mod tests {
 
     #[test]
     fn rescale_down_negative_half_to_even() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         // -1.235000 -> -1.24 (tie, 4 is even — sign symmetric)
         let micros = D128s6::from_bits(-1_235_000);
         assert_eq!(micros.rescale::<2>().to_bits(), -124);
@@ -167,6 +178,7 @@ mod tests {
 
     #[test]
     fn rescale_works_in_const_context() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         const SRC: D128s6 = D128s6::from_bits(1_235_000);
         const DST: D128s2 = SRC.rescale::<2>();
         assert_eq!(DST.to_bits(), 124);

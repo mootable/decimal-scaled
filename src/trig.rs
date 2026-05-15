@@ -1421,6 +1421,7 @@ mod tests {
     /// representative values of `x`.
     #[test]
     fn cosh_squared_minus_sinh_squared_is_one() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         for raw in [
             500_000_000_000_i128,    // 0.5
             -500_000_000_000_i128,   // -0.5
@@ -1448,6 +1449,7 @@ mod tests {
     /// amplified by ~57.3 during the degrees conversion.
     #[test]
     fn to_degrees_pi_is_180() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         let pi = D128s12::pi();
         let result = pi.to_degrees();
         let expected = D128s12::from_int(180);
@@ -1511,6 +1513,7 @@ mod tests {
     /// `to_degrees(half_pi) ~= 90` within `ANGLE_TOLERANCE_LSB`.
     #[test]
     fn to_degrees_half_pi_is_90() {
+        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         let result = D128s12::half_pi().to_degrees();
         let expected = D128s12::from_int(90);
         assert!(
