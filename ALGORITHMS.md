@@ -34,6 +34,13 @@ was adapted from the
 [`primitive_fixed_point_decimal`](https://github.com/WuBingzheng/primitive_fixed_point_decimal)
 crate — see `LICENSE-THIRD-PARTY` for the verbatim attribution.
 
+Further reading:
+
+- Wikipedia — [Division algorithm § Division by a constant](https://en.wikipedia.org/wiki/Division_algorithm#Division_by_a_constant)
+- Wolfram MathWorld — [Division](https://mathworld.wolfram.com/Division.html)
+- Niels Möller's homepage: <https://www.lysator.liu.se/~nisse/>
+- Torbjörn Granlund's homepage (GMP project): <https://gmplib.org/~tege/>
+
 ### Base-2¹²⁸ schoolbook multiplication
 
 Standard `O(n²)` algorithm; for `n ≤ 4` limbs the constant factor is
@@ -41,6 +48,11 @@ small enough that more sophisticated algorithms (Karatsuba,
 Toom-Cook) lose to it on this crate's operand sizes.
 Implementation: `src/wide_int/mod.rs::limbs_mul`, with a hand-unrolled
 2×2 fast path.
+
+Further reading:
+
+- Wikipedia — [Multiplication algorithm](https://en.wikipedia.org/wiki/Multiplication_algorithm)
+- Wolfram MathWorld — [Multiplication](https://mathworld.wolfram.com/Multiplication.html)
 
 ### Base-2⁶⁴ schoolbook long division (u64-divisor fast path)
 
@@ -50,6 +62,11 @@ schoolbook long division, transcribed for `[u128]` limb storage.
 Implementation: `src/wide_int/mod.rs::limbs_divmod` (fast path B);
 `src/mg_divide.rs::div_long_256_by_128` (256-bit specialisation).
 
+Further reading:
+
+- Wikipedia — [Long division](https://en.wikipedia.org/wiki/Long_division)
+- Wolfram MathWorld — [Long division](https://mathworld.wolfram.com/LongDivision.html)
+
 ### Binary shift-subtract long division (fallback)
 
 Last-resort divide for arbitrary 128+ bit divisors. One bit per
@@ -57,6 +74,11 @@ iteration, total iterations equal to the dividend's actual bit
 length (precomputed via `leading_zeros`).
 Implementation: `src/wide_int/mod.rs::limbs_divmod` general path;
 `src/mg_divide.rs::div_long_256_by_128` general path.
+
+Further reading:
+
+- Wikipedia — [Division algorithm § Restoring division](https://en.wikipedia.org/wiki/Division_algorithm#Restoring_division)
+- Wolfram MathWorld — [Division](https://mathworld.wolfram.com/Division.html)
 
 ## Roots
 
@@ -67,12 +89,23 @@ overestimate so the sequence decreases monotonically. Converges
 quadratically. Implementation: `src/mg_divide.rs::isqrt_256`,
 `src/wide_int/mod.rs::limbs_isqrt`.
 
+Further reading:
+
+- Wikipedia — [Methods of computing square roots § Heron's method](https://en.wikipedia.org/wiki/Methods_of_computing_square_roots#Heron's_method)
+- Wikipedia — [Newton's method § Description](https://en.wikipedia.org/wiki/Newton%27s_method#Description) (the parent recurrence)
+- Wolfram MathWorld — [Square Root](https://mathworld.wolfram.com/SquareRoot.html), [Newton's Method](https://mathworld.wolfram.com/NewtonsMethod.html)
+
 ### Newton iteration for integer cube root (`icbrt`)
 
 `x_{k+1} = (2·x_k + N / x_k²) / 3`. Same monotone-decreasing setup
 as `isqrt`. Implementation: `src/mg_divide.rs::icbrt_384`,
 `src/macros/wide_roots.rs` (decl_wide_roots! emits a 384/512-bit
 variant per wide tier).
+
+Further reading:
+
+- Wikipedia — [Cube root § Numerical methods](https://en.wikipedia.org/wiki/Cube_root#Numerical_methods)
+- Wolfram MathWorld — [Cube Root](https://mathworld.wolfram.com/CubeRoot.html)
 
 ### Correctly-rounded sqrt / cbrt
 
@@ -86,6 +119,10 @@ every `RoundingMode` agrees with the half-to-nearest choice.
 Implementation: `src/mg_divide.rs::sqrt_raw_correctly_rounded` /
 `cbrt_raw_correctly_rounded`; the wide-tier counterparts in
 `src/macros/wide_roots.rs`.
+
+Further reading:
+
+- Wikipedia — [IEEE 754 § Roundings to nearest](https://en.wikipedia.org/wiki/IEEE_754#Roundings_to_nearest) (the "correctly rounded" contract the crate emulates at the storage scale)
 
 ## Transcendentals
 
@@ -112,6 +149,12 @@ after the influential 1980 implementation:
 Implementation: `src/log_exp_strict.rs::ln_fixed` (D38),
 `src/macros/wide_transcendental.rs::ln_fixed` (D76/D153/D307).
 
+Further reading:
+
+- Wikipedia — [Mercator series](https://en.wikipedia.org/wiki/Mercator_series) (the `ln(1+x)` expansion at the top)
+- Wikipedia — [Inverse hyperbolic functions § Series expansions](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions#Series_expansions) (the `artanh` series the crate evaluates)
+- Wolfram MathWorld — [Mercator Series](https://mathworld.wolfram.com/MercatorSeries.html), [Inverse Hyperbolic Tangent](https://mathworld.wolfram.com/InverseHyperbolicTangent.html)
+
 ### `exp` via range-reduced Taylor series
 
 Range-reduce `x = k · ln 2 + s` with `|s| ≤ ln 2 / 2`, then
@@ -119,6 +162,12 @@ Range-reduce `x = k · ln 2 + s` with `|s| ≤ ln 2 / 2`, then
 absolutely on the reduced interval. The same Cody–Waite shape.
 Implementation: `src/log_exp_strict.rs::exp_fixed`,
 `src/macros/wide_transcendental.rs::exp_fixed`.
+
+Further reading:
+
+- Wikipedia — [Exponential function § Computation](https://en.wikipedia.org/wiki/Exponential_function#Computation) (the Taylor series and the `2^k · exp(s)` reduction)
+- Wikipedia — [Taylor series § Exponential function](https://en.wikipedia.org/wiki/Taylor_series#Exponential_function)
+- Wolfram MathWorld — [Exponential Function](https://mathworld.wolfram.com/ExponentialFunction.html), [Maclaurin Series](https://mathworld.wolfram.com/MaclaurinSeries.html)
 
 ### `sin` / `cos` via range-reduced Taylor
 
@@ -128,6 +177,11 @@ slower convergence), Taylor-expand `sin`, recover `cos` from
 Implementation: `src/trig_strict.rs::sin_fixed`,
 `src/macros/wide_transcendental.rs::sin_fixed` / `sin_taylor`.
 
+Further reading:
+
+- Wikipedia — [Taylor series § Trigonometric functions](https://en.wikipedia.org/wiki/Taylor_series#Trigonometric_functions) (the `sin x = x − x³/3! + …` and `cos x = 1 − x²/2! + …` series)
+- Wolfram MathWorld — [Sine](https://mathworld.wolfram.com/Sine.html), [Cosine](https://mathworld.wolfram.com/Cosine.html), [Maclaurin Series](https://mathworld.wolfram.com/MaclaurinSeries.html)
+
 ### `atan` via three argument halvings + Taylor
 
 The identity `atan(x) = 2·atan(x / (1 + √(1 + x²)))` halves the
@@ -136,6 +190,12 @@ Taylor series for `atan` converges in ≈ `w · log₂(10) / 3` terms
 at working scale `w`. Re-multiply by `2^3 = 8` at the end.
 Implementation: `src/trig_strict.rs::atan_fixed`,
 `src/macros/wide_transcendental.rs::atan_fixed`.
+
+Further reading:
+
+- Wikipedia — [Inverse trigonometric functions § Infinite series](https://en.wikipedia.org/wiki/Inverse_trigonometric_functions#Infinite_series) (the `atan` Taylor series)
+- Wikipedia — [Inverse trigonometric functions § Argument halving](https://en.wikipedia.org/wiki/Inverse_trigonometric_functions) (the halving identity)
+- Wolfram MathWorld — [Inverse Tangent](https://mathworld.wolfram.com/InverseTangent.html)
 
 ### `π` via Machin's formula (wide tier only)
 
@@ -149,6 +209,11 @@ converges fast.
 Implementation: `src/macros/wide_transcendental.rs::pi`. (D38
 embeds `π` to 63 fractional digits as a literal — no series at run
 time, since the constant fits the working width comfortably.)
+
+Further reading:
+
+- Wikipedia — [Machin-like formula](https://en.wikipedia.org/wiki/Machin-like_formula) (the `π = 16 atan(1/5) − 4 atan(1/239)` equation at the top)
+- Wolfram MathWorld — [Machin's Formula](https://mathworld.wolfram.com/MachinsFormula.html), [Pi Formulas](https://mathworld.wolfram.com/PiFormulas.html)
 
 ### Hyperbolic functions
 
@@ -164,6 +229,12 @@ Composed from `exp`/`ln`:
 All textbook identities — no specific paper attribution.
 Implementation: `src/trig_strict.rs`, `src/macros/wide_transcendental.rs`.
 
+Further reading:
+
+- Wikipedia — [Hyperbolic functions § Definitions in terms of the exponential function](https://en.wikipedia.org/wiki/Hyperbolic_functions#Definitions) (the `sinh`/`cosh`/`tanh` identities)
+- Wikipedia — [Inverse hyperbolic functions § Logarithmic forms](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions#Logarithmic_representation) (the `asinh`/`acosh`/`atanh` log-forms)
+- Wolfram MathWorld — [Hyperbolic Functions](https://mathworld.wolfram.com/HyperbolicFunctions.html), [Inverse Hyperbolic Functions](https://mathworld.wolfram.com/InverseHyperbolicFunctions.html)
+
 ## Rounding
 
 ### Half-to-even (banker's rounding) and the IEEE-754 family
@@ -174,6 +245,11 @@ The crate's default rounding rule. Implementation in
 
 > IEEE Std 754-2019. **"IEEE Standard for Floating-Point Arithmetic."**
 > IEEE Standards Association.
+
+Further reading:
+
+- Wikipedia — [Rounding § Round half to even](https://en.wikipedia.org/wiki/Rounding#Round_half_to_even) (the tie-breaking rule the crate uses by default)
+- Wikipedia — [IEEE 754 § Roundings to nearest](https://en.wikipedia.org/wiki/IEEE_754#Roundings_to_nearest)
 
 ## Constants
 
@@ -193,7 +269,15 @@ largest of the six). Sources:
   path mul is Int1024 (8 limbs of u128). Below cross-over schoolbook
   wins. Karatsuba kicks in at D616 and above; recorded as a future
   optimisation. (Karatsuba, A. and Ofman, Yu. (1962). *Doklady Akad.
-  Nauk SSSR* 145, 293–294.)
+  Nauk SSSR* 145, 293–294.) Anatoly Karatsuba (1937–2008) and Yuri
+  Ofman are both deceased; see the Wikipedia biography links below.
+  Further reading:
+  [Karatsuba algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm)
+  (the `(a₁b₁, (a₁+a₀)(b₁+b₀) − a₁b₁ − a₀b₀, a₀b₀)` decomposition is the
+  first equation under "The algorithm"),
+  [Anatoly Karatsuba bio](https://en.wikipedia.org/wiki/Anatoly_Karatsuba),
+  [Yuri Ofman bio](https://en.wikipedia.org/wiki/Yuri_Ofman),
+  [MathWorld — Karatsuba Algorithm](https://mathworld.wolfram.com/KaratsubaAlgorithm.html).
 - **AGM-based ln / exp (Brent–Salamin 1976).** `ln_strict_agm`
   (D76 / D153 / D307) uses Brent's identity
   `ln(s) ≈ π / (2 · AGM(1, 4/s))` with range reduction
@@ -211,7 +295,14 @@ largest of the six). Sources:
   output drops to ~p/2 bits of precision. Brent §3 fixes this by
   raising intermediate AGM precision; recorded as a follow-up.
   (Brent, R. P. (1976). "Fast multiple-precision evaluation of
-  elementary functions." *J. ACM* 23(2), 242–251.)
+  elementary functions." *J. ACM* 23(2), 242–251.) Richard Brent
+  is at ANU — homepage: <https://maths-people.anu.edu.au/~brent/>.
+  Further reading:
+  [Arithmetic–geometric mean](https://en.wikipedia.org/wiki/Arithmetic%E2%80%93geometric_mean#Definition)
+  (the `aₙ₊₁ = (aₙ+bₙ)/2`, `bₙ₊₁ = √(aₙ bₙ)` recurrence),
+  [Gauss–Legendre algorithm](https://en.wikipedia.org/wiki/Gauss%E2%80%93Legendre_algorithm)
+  (the same AGM iteration applied to π),
+  [MathWorld — Arithmetic-Geometric Mean](https://mathworld.wolfram.com/Arithmetic-GeometricMean.html).
 - **Burnikel–Ziegler recursive division.** `limbs_divmod_bz` in
   `src/wide_int/mod.rs` is the recursive wrapper; its base case is
   the in-crate Knuth Algorithm D port (`limbs_divmod_knuth`,
@@ -226,9 +317,20 @@ largest of the six). Sources:
   a bench shows it winning at this crate's widths. (Burnikel, C.
   and Ziegler, J. (1998). "Fast recursive division." MPI-I-98-1-022;
   Knuth, D. E. (1981). *The Art of Computer Programming, Vol. 2:
-  Seminumerical Algorithms*, §4.3.1.)
+  Seminumerical Algorithms*, §4.3.1.) Donald Knuth's homepage:
+  <https://www-cs-faculty.stanford.edu/~knuth/>. Further reading:
+  [Division algorithm § Newton–Raphson division and recursive
+   division](https://en.wikipedia.org/wiki/Division_algorithm)
+  (no dedicated BZ article, but the parent page lists the
+   recursive-division family),
+  [MathWorld — Long Division](https://mathworld.wolfram.com/LongDivision.html).
+  The Burnikel–Ziegler tech report is the canonical algorithm
+  reference: [MPI-I-98-1-022](https://pure.mpg.de/rest/items/item_1819444_4/component/file_2599480/content).
 - **CORDIC.** Common in hardware floating-point; not competitive
   with Taylor + reduction in a software fixed-point context.
+  Further reading: [CORDIC](https://en.wikipedia.org/wiki/CORDIC)
+  (the rotation-mode and vectoring-mode iterations are the central
+  equations there), [MathWorld — CORDIC](https://mathworld.wolfram.com/CORDIC.html).
 
 ## Related external crates (benchmark baselines only)
 
