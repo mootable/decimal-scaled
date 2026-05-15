@@ -478,6 +478,7 @@ crate::macros::float_bridge::decl_decimal_float_bridge!(D32, i32);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D32);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D32);
 crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D32);
+crate::macros::pow::decl_decimal_pow!(D32);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D32);
 crate::macros::helpers::decl_decimal_helpers!(D32);
 crate::macros::bitwise::decl_decimal_bitwise!(D32, i32);
@@ -542,6 +543,7 @@ crate::macros::float_bridge::decl_decimal_float_bridge!(D64, i64);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D64);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d128!(D64);
 crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D64);
+crate::macros::pow::decl_decimal_pow!(D64);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D64);
 crate::macros::helpers::decl_decimal_helpers!(D64);
 crate::macros::bitwise::decl_decimal_bitwise!(D64, i64);
@@ -664,6 +666,8 @@ crate::wide_transcendental::decl_wide_transcendental!(
 );
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D256);
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::pow::decl_decimal_pow!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D256, crate::wide::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -803,6 +807,8 @@ crate::wide_transcendental::decl_wide_transcendental!(
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
+crate::macros::pow::decl_decimal_pow!(D512);
+#[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D512, crate::wide::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::conversions::decl_from_primitive!(wide D512, crate::wide::I512, i8);
@@ -927,6 +933,8 @@ crate::wide_transcendental::decl_wide_transcendental!(
 );
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!(D1024);
+#[cfg(any(feature = "d1024", feature = "wide"))]
+crate::macros::pow::decl_decimal_pow!(D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D1024, crate::wide::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
@@ -1454,8 +1462,8 @@ mod tests {
         assert_eq!(from_f64.to_bits(), I256::from_str_radix("2500000", 10).unwrap());
         assert!(D::try_from(f64::NAN).is_err());
         // from_int / from_i32
-        assert_eq!(D::from_int(9i128), 9i32.into());
-        assert_eq!(D::from_i32(-4), (-4i32).into());
+        assert_eq!(D::from_int(9i128), D::from(9i32));
+        assert_eq!(D::from_i32(-4), D::from(-4i32));
         // to_int_lossy: 2.5 with HalfToEven -> 2
         use crate::rounding::RoundingMode;
         let two_and_half = D::from_bits(I256::from_str_radix("2500000", 10).unwrap());

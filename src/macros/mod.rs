@@ -24,6 +24,7 @@ pub(crate) mod helpers;
 pub(crate) mod int_methods;
 pub(crate) mod num_traits;
 pub(crate) mod overflow;
+pub(crate) mod pow;
 pub(crate) mod rescale;
 pub(crate) mod rounding_methods;
 pub(crate) mod sign;

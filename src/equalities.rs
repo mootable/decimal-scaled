@@ -40,6 +40,20 @@ crate::macros::equalities::decl_eq_all_integers!(D128);
 crate::macros::equalities::decl_eq_all_integers!(D64);
 crate::macros::equalities::decl_eq_all_integers!(D32);
 
+#[cfg(any(feature = "d256", feature = "wide"))]
+use crate::core_type::D256;
+#[cfg(any(feature = "d512", feature = "wide"))]
+use crate::core_type::D512;
+#[cfg(any(feature = "d1024", feature = "wide"))]
+use crate::core_type::D1024;
+
+#[cfg(any(feature = "d256", feature = "wide"))]
+crate::macros::equalities::decl_eq_all_integers!(wide D256);
+#[cfg(any(feature = "d512", feature = "wide"))]
+crate::macros::equalities::decl_eq_all_integers!(wide D512);
+#[cfg(any(feature = "d1024", feature = "wide"))]
+crate::macros::equalities::decl_eq_all_integers!(wide D1024);
+
 // Float equality requires the f64 bridge (`from_f64_lossy` /
 // `to_f64_lossy`), which is only present when `std` is on and
 // `strict` is off. Gate the float impls accordingly. Float impls are
@@ -57,6 +71,21 @@ crate::macros::equalities::decl_eq_float!(D64, f64);
 crate::macros::equalities::decl_eq_float!(D32, f32);
 #[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D32, f64);
+
+// Wide tiers share the same float-bridge surface, so the same macro
+// applies unchanged.
+#[cfg(all(feature = "std", any(feature = "d256", feature = "wide")))]
+crate::macros::equalities::decl_eq_float!(D256, f32);
+#[cfg(all(feature = "std", any(feature = "d256", feature = "wide")))]
+crate::macros::equalities::decl_eq_float!(D256, f64);
+#[cfg(all(feature = "std", any(feature = "d512", feature = "wide")))]
+crate::macros::equalities::decl_eq_float!(D512, f32);
+#[cfg(all(feature = "std", any(feature = "d512", feature = "wide")))]
+crate::macros::equalities::decl_eq_float!(D512, f64);
+#[cfg(all(feature = "std", any(feature = "d1024", feature = "wide")))]
+crate::macros::equalities::decl_eq_float!(D1024, f32);
+#[cfg(all(feature = "std", any(feature = "d1024", feature = "wide")))]
+crate::macros::equalities::decl_eq_float!(D1024, f64);
 
 #[cfg(test)]
 mod tests {

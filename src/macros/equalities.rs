@@ -25,6 +25,31 @@ macro_rules! decl_eq_signed_int {
             }
         }
     };
+    // Wide storage: arithmetic stays in the wide integer; the quotient
+    // narrows to `i128` for the primitive comparison.
+    (wide $Type:ident, $Src:ty) => {
+        impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
+            #[inline]
+            fn eq(&self, other: &$Src) -> bool {
+                let m = Self::multiplier();
+                let bits = self.to_bits();
+                let r = bits % m;
+                if !r.is_zero() {
+                    return false;
+                }
+                match (bits / m).to_i128_checked() {
+                    ::core::option::Option::Some(v) => v == *other as i128,
+                    ::core::option::Option::None => false,
+                }
+            }
+        }
+        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {
+            #[inline]
+            fn eq(&self, other: &$Type<SCALE>) -> bool {
+                other == self
+            }
+        }
+    };
 }
 
 /// Emits `PartialEq<i128> for $Type<SCALE>` and the reciprocal. Has its
@@ -38,6 +63,29 @@ macro_rules! decl_eq_i128 {
                 let m = Self::multiplier() as i128;
                 let self_bits = self.to_bits() as i128;
                 self_bits % m == 0 && self_bits / m == *other
+            }
+        }
+        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for i128 {
+            #[inline]
+            fn eq(&self, other: &$Type<SCALE>) -> bool {
+                other == self
+            }
+        }
+    };
+    (wide $Type:ident) => {
+        impl<const SCALE: u32> ::core::cmp::PartialEq<i128> for $Type<SCALE> {
+            #[inline]
+            fn eq(&self, other: &i128) -> bool {
+                let m = Self::multiplier();
+                let bits = self.to_bits();
+                let r = bits % m;
+                if !r.is_zero() {
+                    return false;
+                }
+                match (bits / m).to_i128_checked() {
+                    ::core::option::Option::Some(v) => v == *other,
+                    ::core::option::Option::None => false,
+                }
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for i128 {
@@ -72,6 +120,32 @@ macro_rules! decl_eq_unsigned_int {
             }
         }
     };
+    (wide $Type:ident, $Src:ty) => {
+        impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
+            #[inline]
+            fn eq(&self, other: &$Src) -> bool {
+                let bits = self.to_bits();
+                if bits.is_negative() {
+                    return false;
+                }
+                let m = Self::multiplier();
+                let r = bits % m;
+                if !r.is_zero() {
+                    return false;
+                }
+                match (bits / m).to_u128_checked() {
+                    ::core::option::Option::Some(v) => v == *other as u128,
+                    ::core::option::Option::None => false,
+                }
+            }
+        }
+        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {
+            #[inline]
+            fn eq(&self, other: &$Type<SCALE>) -> bool {
+                other == self
+            }
+        }
+    };
 }
 
 /// Emits `PartialEq<u128> for $Type<SCALE>` and the reciprocal. u128
@@ -91,6 +165,32 @@ macro_rules! decl_eq_u128 {
                     return false;
                 }
                 (self_bits / m) as u128 == *other
+            }
+        }
+        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for u128 {
+            #[inline]
+            fn eq(&self, other: &$Type<SCALE>) -> bool {
+                other == self
+            }
+        }
+    };
+    (wide $Type:ident) => {
+        impl<const SCALE: u32> ::core::cmp::PartialEq<u128> for $Type<SCALE> {
+            #[inline]
+            fn eq(&self, other: &u128) -> bool {
+                let bits = self.to_bits();
+                if bits.is_negative() {
+                    return false;
+                }
+                let m = Self::multiplier();
+                let r = bits % m;
+                if !r.is_zero() {
+                    return false;
+                }
+                match (bits / m).to_u128_checked() {
+                    ::core::option::Option::Some(v) => v == *other,
+                    ::core::option::Option::None => false,
+                }
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for u128 {
@@ -148,6 +248,20 @@ macro_rules! decl_eq_all_integers {
         $crate::macros::equalities::decl_eq_unsigned_int!($Type, u64);
         $crate::macros::equalities::decl_eq_unsigned_int!($Type, usize);
         $crate::macros::equalities::decl_eq_u128!($Type);
+    };
+    (wide $Type:ident) => {
+        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i8);
+        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i16);
+        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i32);
+        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i64);
+        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, isize);
+        $crate::macros::equalities::decl_eq_i128!(wide $Type);
+        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u8);
+        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u16);
+        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u32);
+        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u64);
+        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, usize);
+        $crate::macros::equalities::decl_eq_u128!(wide $Type);
     };
 }
 
