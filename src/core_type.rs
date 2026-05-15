@@ -639,7 +639,7 @@ crate::macros::num_traits::decl_decimal_num_traits_basics!(D256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::sign::decl_decimal_sign_methods!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
-crate::macros::consts::decl_decimal_consts!(wide D256, crate::wide_int::I256);
+// Superseded by consts_wide.rs DecimalConsts impl: crate::macros::consts::decl_decimal_consts!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::macros::from_str::decl_decimal_from_str!(wide D256, crate::wide_int::I256);
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -779,7 +779,7 @@ crate::macros::num_traits::decl_decimal_num_traits_basics!(D512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::sign::decl_decimal_sign_methods!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
-crate::macros::consts::decl_decimal_consts!(wide D512, crate::wide_int::I512);
+// Superseded by consts_wide.rs DecimalConsts impl: crate::macros::consts::decl_decimal_consts!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::macros::from_str::decl_decimal_from_str!(wide D512, crate::wide_int::I512);
 #[cfg(any(feature = "d512", feature = "wide"))]
@@ -906,7 +906,7 @@ crate::macros::num_traits::decl_decimal_num_traits_basics!(D1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::sign::decl_decimal_sign_methods!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
-crate::macros::consts::decl_decimal_consts!(wide D1024, crate::wide_int::I1024);
+// Superseded by consts_wide.rs DecimalConsts impl: crate::macros::consts::decl_decimal_consts!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::macros::from_str::decl_decimal_from_str!(wide D1024, crate::wide_int::I1024);
 #[cfg(any(feature = "d1024", feature = "wide"))]

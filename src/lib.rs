@@ -69,6 +69,7 @@ extern crate alloc;
 
 mod arithmetic;
 mod consts;
+mod consts_wide;
 mod core_type;
 mod decimal_trait;
 mod display;
