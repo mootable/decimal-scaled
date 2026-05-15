@@ -177,7 +177,11 @@ macro_rules! decl_decimal_arithmetic {
             pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let n = a * b;
+                // `a` and `b` each carry at most `$Storage`'s bits in
+                // the lower half of `$Wider`, so the full product fits
+                // `$Wider` with no overflow — skip `checked_mul`'s
+                // overflow detection and use the wrapping multiply.
+                let n = a.wrapping_mul(b);
                 let scaled = if SCALE == 0 {
                     n
                 } else if SCALE <= 38 {
@@ -206,7 +210,11 @@ macro_rules! decl_decimal_arithmetic {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                let n = a * m;
+                // `a` carries at most `$Storage` bits in the lower
+                // half of `$Wider`, and `m = 10^SCALE` fits the
+                // storage type, so `a * m` fits `$Wider`. Skip the
+                // overflow check.
+                let n = a.wrapping_mul(m);
                 let result =
                     $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
                 Self(result.resize::<$Storage>())
