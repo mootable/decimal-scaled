@@ -85,15 +85,21 @@ macro_rules! decl_wide_transcendental {
 
             /// Guard digits added below the type's own scale.
             ///
-            /// Sized for 0.5 ULP at the storage scale: each
-            /// intermediate `mul` / `div` is rounded half-to-even
-            /// (≤ 0.5 LSB per op at the working scale), and the
-            /// series caps at ~200 iterations, so the worst-case
-            /// accumulated drift is ≤ 100 × 10^-w. With GUARD = 60
-            /// that floor is `10^-(SCALE+60)`, ~10^58 below the
-            /// storage LSB — comfortably under half a storage ULP
-            /// for every SCALE the wide tiers support.
-            pub(super) const GUARD: u32 = 60;
+            /// Sized for 0.5 ULP at the storage scale with the
+            /// rounded-intermediate `mul`/`div` (see `round_div`
+            /// below). Each rounded op introduces ≤ 0.5 LSB-of-w
+            /// of *uncorrelated* error (half-to-even is symmetric,
+            /// so the random walk is the worst case). Across a
+            /// 200-iteration series the accumulated worst-case
+            /// drift is ~200 × 0.5 = 100 LSB-of-w; at GUARD = 30
+            /// that's ~10⁻²⁸ in storage units — many orders of
+            /// magnitude below half a storage ULP for any SCALE
+            /// the wide tiers support. The truncating-intermediate
+            /// path that preceded this used GUARD = 30 too but
+            /// leaked a coherent bias (always toward zero) that
+            /// blew the budget; with rounded ops we recovered the
+            /// margin and didn't need the doubled width.
+            pub(super) const GUARD: u32 = 30;
             /// Hard cap on series iterations — a safety net; every
             /// series terminates far sooner by reaching a zero term.
             const SERIES_CAP: u128 = 20_000;
