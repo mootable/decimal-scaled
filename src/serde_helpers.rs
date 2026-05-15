@@ -1,5 +1,18 @@
 //! `serde` integration for [`D128`].
 //!
+//! # Wide-tier coverage gap (follow-up)
+//!
+//! Currently only `D128<SCALE>` has `Serialize` / `Deserialize`
+//! impls. The wide tiers (`D256<SCALE>`, `D512<SCALE>`, `D1024<SCALE>`)
+//! do not — there is no `serde` macro that fans the impl across
+//! widths yet. A `decl_decimal_serde!` macro family parallel to
+//! `decl_decimal_display!` would close the gap; it needs to handle
+//! the human-readable path (the storage's `to_string` already works
+//! for the wide types, since they implement `Display`) and a binary
+//! path that serialises the limb array little-endian. Recorded for
+//! a follow-up.
+//!
+//!
 //! # Wire format
 //!
 //! `D128<SCALE>` chooses its wire encoding based on the serializer's
