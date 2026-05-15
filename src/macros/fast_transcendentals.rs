@@ -30,25 +30,25 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn ln(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().ln())
+                Self::from_f64_fast(self.to_f64_fast().ln())
             }
             /// Logarithm in the given base via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn log(self, base: Self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().log(base.to_f64_lossy()))
+                Self::from_f64_fast(self.to_f64_fast().log(base.to_f64_fast()))
             }
             /// Base-2 logarithm via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn log2(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().log2())
+                Self::from_f64_fast(self.to_f64_fast().log2())
             }
             /// Base-10 logarithm via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn log10(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().log10())
+                Self::from_f64_fast(self.to_f64_fast().log10())
             }
 
             // ── Exponentials ─────────────────────────────────────────
@@ -56,13 +56,13 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn exp(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().exp())
+                Self::from_f64_fast(self.to_f64_fast().exp())
             }
             /// `2^self` via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn exp2(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().exp2())
+                Self::from_f64_fast(self.to_f64_fast().exp2())
             }
 
             // ── Powers / roots ───────────────────────────────────────
@@ -70,25 +70,25 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn sqrt(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().sqrt())
+                Self::from_f64_fast(self.to_f64_fast().sqrt())
             }
             /// Cube root via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn cbrt(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().cbrt())
+                Self::from_f64_fast(self.to_f64_fast().cbrt())
             }
             /// `self ^ exp` via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn powf(self, exp: Self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().powf(exp.to_f64_lossy()))
+                Self::from_f64_fast(self.to_f64_fast().powf(exp.to_f64_fast()))
             }
             /// `sqrt(self^2 + other^2)` via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn hypot(self, other: Self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().hypot(other.to_f64_lossy()))
+                Self::from_f64_fast(self.to_f64_fast().hypot(other.to_f64_fast()))
             }
 
             // ── Forward trig ─────────────────────────────────────────
@@ -96,19 +96,19 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn sin(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().sin())
+                Self::from_f64_fast(self.to_f64_fast().sin())
             }
             /// Cosine (radians) via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn cos(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().cos())
+                Self::from_f64_fast(self.to_f64_fast().cos())
             }
             /// Tangent (radians) via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn tan(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().tan())
+                Self::from_f64_fast(self.to_f64_fast().tan())
             }
 
             // ── Inverse trig ─────────────────────────────────────────
@@ -116,25 +116,25 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn asin(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().asin())
+                Self::from_f64_fast(self.to_f64_fast().asin())
             }
             /// Arccosine via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn acos(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().acos())
+                Self::from_f64_fast(self.to_f64_fast().acos())
             }
             /// Arctangent via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn atan(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().atan())
+                Self::from_f64_fast(self.to_f64_fast().atan())
             }
             /// Four-quadrant arctangent via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn atan2(self, other: Self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().atan2(other.to_f64_lossy()))
+                Self::from_f64_fast(self.to_f64_fast().atan2(other.to_f64_fast()))
             }
 
             // ── Hyperbolic ───────────────────────────────────────────
@@ -142,37 +142,37 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn sinh(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().sinh())
+                Self::from_f64_fast(self.to_f64_fast().sinh())
             }
             /// Hyperbolic cosine via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn cosh(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().cosh())
+                Self::from_f64_fast(self.to_f64_fast().cosh())
             }
             /// Hyperbolic tangent via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn tanh(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().tanh())
+                Self::from_f64_fast(self.to_f64_fast().tanh())
             }
             /// Inverse hyperbolic sine via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn asinh(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().asinh())
+                Self::from_f64_fast(self.to_f64_fast().asinh())
             }
             /// Inverse hyperbolic cosine via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn acosh(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().acosh())
+                Self::from_f64_fast(self.to_f64_fast().acosh())
             }
             /// Inverse hyperbolic tangent via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn atanh(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().atanh())
+                Self::from_f64_fast(self.to_f64_fast().atanh())
             }
 
             // ── Angle conversions ────────────────────────────────────
@@ -180,13 +180,13 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             #[inline]
             #[must_use]
             pub fn to_degrees(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().to_degrees())
+                Self::from_f64_fast(self.to_f64_fast().to_degrees())
             }
             /// Degrees → radians via the f64 bridge.
             #[inline]
             #[must_use]
             pub fn to_radians(self) -> Self {
-                Self::from_f64_lossy(self.to_f64_lossy().to_radians())
+                Self::from_f64_fast(self.to_f64_fast().to_radians())
             }
         }
     };

@@ -168,7 +168,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// [`Self::powi`], which are bit-exact.
     ///
     /// NaN results map to `ZERO`; infinities clamp to `MAX` or `MIN`,
-    /// following the saturate-vs-error policy of [`Self::from_f64_lossy`].
+    /// following the saturate-vs-error policy of [`Self::from_f64_fast`].
     ///
     /// # Precision
     ///
@@ -181,7 +181,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let two = D38s12::from_int(2);
     /// let three = D38s12::from_int(3);
     /// // 2^3 = 8, within f64 precision.
-    /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
+    /// assert!((two.powf(three).to_f64_fast() - 8.0).abs() < 1e-9);
     /// ```
     /// Raises `self` to the power `exp`, computed integer-only as
     /// `exp(exp · ln(self))` — the `ln`, the `· exp`, and the `exp` all
@@ -236,12 +236,12 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// IEEE 754 mandates that `f64::sqrt` is correctly-rounded
     /// (round-to-nearest, ties-to-even). Combined with the deterministic
-    /// `to_f64_lossy` / `from_f64_lossy` round-trip, this makes
+    /// `to_f64_fast` / `from_f64_fast` round-trip, this makes
     /// `D38::sqrt` bit-deterministic: the same input produces the same
     /// output bit-pattern on every IEEE-754-conformant platform.
     ///
     /// Negative inputs produce a NaN from `f64::sqrt`, which
-    /// [`Self::from_f64_lossy`] maps to `ZERO` per the saturate-vs-error
+    /// [`Self::from_f64_fast`] maps to `ZERO` per the saturate-vs-error
     /// policy. No panic is raised for negative inputs.
     ///
     /// # Precision

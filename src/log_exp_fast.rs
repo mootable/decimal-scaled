@@ -28,7 +28,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().ln())
+        Self::from_f64_fast(self.to_f64_fast().ln())
     }
 
     /// Returns the logarithm of `self` in the given `base`.
@@ -54,7 +54,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log(self, base: Self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().log(base.to_f64_lossy()))
+        Self::from_f64_fast(self.to_f64_fast().log(base.to_f64_fast()))
     }
 
     /// Returns the base-2 logarithm of `self`.
@@ -77,7 +77,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log2(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().log2())
+        Self::from_f64_fast(self.to_f64_fast().log2())
     }
 
     /// Returns the base-10 logarithm of `self`.
@@ -98,7 +98,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log10(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().log10())
+        Self::from_f64_fast(self.to_f64_fast().log10())
     }
 
     /// Returns `e^self` (natural exponential).
@@ -121,7 +121,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().exp())
+        Self::from_f64_fast(self.to_f64_fast().exp())
     }
 
     /// Returns `2^self` (base-2 exponential).
@@ -143,7 +143,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp2(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().exp2())
+        Self::from_f64_fast(self.to_f64_fast().exp2())
     }
 }
 

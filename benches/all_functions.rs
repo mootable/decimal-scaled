@@ -18,7 +18,7 @@
 //!
 //! - `core_type`   -- `from_bits` / `to_bits` / `multiplier` / `Default`
 //! - `arithmetic`  -- operators + math methods + predicates
-//! - `conversions` -- From / TryFrom / `from_int` / `from_f64_lossy` / `to_int_lossy` / `to_f64_lossy` / `to_f32_lossy`
+//! - `conversions` -- From / TryFrom / `from_int` / `from_f64_fast` / `to_int_lossy` / `to_f64_fast` / `to_f32_fast`
 //! - `consts`      -- `pi` / `tau` / `half_pi` / `quarter_pi` / `golden` / `e`
 //! - `powers`      -- `pow` / `powi` / `powf` / `sqrt` / `cbrt` / `mul_add` / `hypot` + checked/wrapping/saturating/overflowing `pow`
 //! - `log_exp`     -- `ln` / `log` / `log2` / `log10` / `exp` / `exp2`
@@ -190,17 +190,17 @@ fn bench_conversions(c: &mut Criterion) {
     g.bench_function("from_i32", |bn| {
         bn.iter(|| D::from_i32(black_box(424_242_i32)))
     });
-    g.bench_function("from_f64_lossy", |bn| {
-        bn.iter(|| D::from_f64_lossy(black_box(1.5_f64)))
+    g.bench_function("from_f64_fast", |bn| {
+        bn.iter(|| D::from_f64_fast(black_box(1.5_f64)))
     });
     g.bench_function("to_int_lossy", |bn| {
         bn.iter(|| black_box(A).to_int_lossy())
     });
-    g.bench_function("to_f64_lossy", |bn| {
-        bn.iter(|| black_box(A).to_f64_lossy())
+    g.bench_function("to_f64_fast", |bn| {
+        bn.iter(|| black_box(A).to_f64_fast())
     });
-    g.bench_function("to_f32_lossy", |bn| {
-        bn.iter(|| black_box(A).to_f32_lossy())
+    g.bench_function("to_f32_fast", |bn| {
+        bn.iter(|| black_box(A).to_f32_fast())
     });
 
     g.finish();

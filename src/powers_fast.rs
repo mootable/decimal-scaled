@@ -16,7 +16,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// [`Self::powi`], which are bit-exact.
     ///
     /// NaN results map to `ZERO`; infinities clamp to `MAX` or `MIN`,
-    /// following the saturate-vs-error policy of [`Self::from_f64_lossy`].
+    /// following the saturate-vs-error policy of [`Self::from_f64_fast`].
     ///
     /// # Precision
     ///
@@ -29,25 +29,25 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let two = D38s12::from_int(2);
     /// let three = D38s12::from_int(3);
     /// // 2^3 = 8, within f64 precision.
-    /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
+    /// assert!((two.powf(three).to_f64_fast() - 8.0).abs() < 1e-9);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn powf(self, exp: D38<SCALE>) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().powf(exp.to_f64_lossy()))
+        Self::from_f64_fast(self.to_f64_fast().powf(exp.to_f64_fast()))
     }
 
     /// Returns the square root of `self` via the f64 bridge.
     ///
     /// IEEE 754 mandates that `f64::sqrt` is correctly-rounded
     /// (round-to-nearest, ties-to-even). Combined with the deterministic
-    /// `to_f64_lossy` / `from_f64_lossy` round-trip, this makes
+    /// `to_f64_fast` / `from_f64_fast` round-trip, this makes
     /// `D38::sqrt` bit-deterministic: the same input produces the same
     /// output bit-pattern on every IEEE-754-conformant platform.
     ///
     /// Negative inputs produce a NaN from `f64::sqrt`, which
-    /// [`Self::from_f64_lossy`] maps to `ZERO` per the saturate-vs-error
+    /// [`Self::from_f64_fast`] maps to `ZERO` per the saturate-vs-error
     /// policy. No panic is raised for negative inputs.
     ///
     /// # Precision
@@ -66,7 +66,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sqrt(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().sqrt())
+        Self::from_f64_fast(self.to_f64_fast().sqrt())
     }
 
     /// Returns the cube root of `self` via the f64 bridge.
@@ -86,13 +86,13 @@ impl<const SCALE: u32> D38<SCALE> {
     /// use decimal_scaled::D38s12;
     /// let neg_eight = D38s12::from_int(-8);
     /// let result = neg_eight.cbrt();
-    /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
+    /// assert!((result.to_f64_fast() - (-2.0_f64)).abs() < 1e-9);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]
     #[must_use]
     pub fn cbrt(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().cbrt())
+        Self::from_f64_fast(self.to_f64_fast().cbrt())
     }
 
     // Integer power variant family.
@@ -130,7 +130,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let three = D38s12::from_int(3);
     /// let four = D38s12::from_int(4);
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
-    /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
+    /// assert!((three.hypot(four).to_f64_fast() - 5.0).abs() < 1e-9);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
     #[inline]

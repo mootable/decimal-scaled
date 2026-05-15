@@ -367,7 +367,7 @@ fn to_primitive_u128_in_range() {
 fn to_primitive_f64_round_trip_within_lsb() {
     let lsb = 1.0 / (D38s12::multiplier() as f64);
     // Use a value not close to any well-known math constant.
-    let v = D38s12::from_f64_lossy(1.234567890123_f64);
+    let v = D38s12::from_f64_fast(1.234567890123_f64);
     let back = <D38s12 as ToPrimitive>::to_f64(&v).expect("to_f64 always returns Some");
     assert!(
         (back - 1.234567890123_f64).abs() <= lsb * 2.0,
@@ -380,7 +380,7 @@ fn to_primitive_f32_matches_to_f32_lossy() {
     let v = D38s12::from_bits(1_500_000_000_000);
     assert_eq!(
         <D38s12 as ToPrimitive>::to_f32(&v),
-        Some(v.to_f32_lossy())
+        Some(v.to_f32_fast())
     );
 }
 
@@ -726,7 +726,7 @@ fn numcast_from_i32() {
 #[test]
 fn numcast_from_f64_preserves_fractional() {
     let v: D38s12 = <D38s12 as NumCast>::from(1.5_f64).expect("in-range");
-    assert_eq!(v, D38s12::from_f64_lossy(1.5_f64));
+    assert_eq!(v, D38s12::from_f64_fast(1.5_f64));
 }
 
     /// `NumCast::from` returns `None` for `f64::NAN`.

@@ -1,5 +1,5 @@
 """Rename the f64-bridge transcendental dispatch path from "lossy"
-to "fast". Float conversion methods (to_f64_lossy etc.) keep their
+to "fast". Float conversion methods (to_f64_fast etc.) keep their
 "lossy" suffix because their precision-loss semantics is a
 separate concept from the strict/fast implementation dispatch.
 
@@ -20,7 +20,7 @@ Patterns rewritten:
 
 Patterns explicitly *preserved*:
 
-- `to_f64_lossy`, `from_f64_lossy`, `to_f32_lossy`, …, including the
+- `to_f64_fast`, `from_f64_fast`, `to_f32_fast`, …, including the
   experimental f16 / f128 conversions — these are precision-lossy
   conversions, not dispatch-strategy lossy.
 - `to_i128_lossy`, `from_i128_lossy`, etc. — same reason.
@@ -60,7 +60,7 @@ SUBSTS: list[tuple[str, str]] = [
     # Bench macro identifier.
     (r"\blossy_block\b", "fast_block"),
     # Prose tokens — guarded by the preserve-prefix so float-conversion
-    # names like `to_f64_lossy` aren't touched.
+    # names like `to_f64_fast` aren't touched.
     (rf"{_PRESERVE_PREFIX}\blossy transcendentals\b", "fast transcendentals"),
     (rf"{_PRESERVE_PREFIX}\bLossy transcendentals\b", "Fast transcendentals"),
     (rf"{_PRESERVE_PREFIX}\blossy variant\b", "fast variant"),

@@ -45,20 +45,20 @@ values saturate by sign.
 ```rust
 use decimal_scaled::{D38s4, RoundingMode};
 
-let v = D38s4::from_f64_lossy(3.14159);
-let w = D38s4::from_f64_lossy_with(3.14159, RoundingMode::Trunc);
+let v = D38s4::from_f64_fast(3.14159);
+let w = D38s4::from_f64_fast_with(3.14159, RoundingMode::Trunc);
 
-let back: f64 = v.to_f64_lossy();
-let back32: f32 = v.to_f32_lossy();
+let back: f64 = v.to_f64_fast();
+let back32: f32 = v.to_f32_fast();
 ```
 
-`to_f64_lossy` / `to_f32_lossy` are available in `no_std`; the
+`to_f64_fast` / `to_f32_fast` are available in `no_std`; the
 `from_f64*` constructors need `std`. `TryFrom<f64>` / `TryFrom<f32>` are
 also provided — they truncate and return `ConvertError` for non-finite
 or out-of-range inputs.
 
 On nightly with the `experimental-floats` feature, `f16` and `f128`
-entry points (`from_f16_lossy`, `to_f128_lossy`, …) are also available.
+entry points (`from_f16_fast`, `to_f128_fast`, …) are also available.
 
 > The float bridge is a *conversion*, not a transcendental operation —
 > it is available regardless of the `strict` feature.

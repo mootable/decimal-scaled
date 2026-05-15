@@ -201,11 +201,11 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn to_f32(&self) -> ::core::option::Option<f32> {
-                ::core::option::Option::Some((*self).to_f32_lossy())
+                ::core::option::Option::Some((*self).to_f32_fast())
             }
             #[inline]
             fn to_f64(&self) -> ::core::option::Option<f64> {
-                ::core::option::Option::Some((*self).to_f64_lossy())
+                ::core::option::Option::Some((*self).to_f64_fast())
             }
         }
 
@@ -269,11 +269,11 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn to_f32(&self) -> ::core::option::Option<f32> {
-                ::core::option::Option::Some((*self).to_f32_lossy())
+                ::core::option::Option::Some((*self).to_f32_fast())
             }
             #[inline]
             fn to_f64(&self) -> ::core::option::Option<f64> {
-                ::core::option::Option::Some((*self).to_f64_lossy())
+                ::core::option::Option::Some((*self).to_f64_fast())
             }
         }
 

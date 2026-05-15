@@ -30,7 +30,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sin(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().sin())
+        Self::from_f64_fast(self.to_f64_fast().sin())
     }
 
     /// Cosine of `self`, where `self` is in radians.
@@ -53,7 +53,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cos(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().cos())
+        Self::from_f64_fast(self.to_f64_fast().cos())
     }
 
     /// Tangent of `self`, where `self` is in radians.
@@ -61,7 +61,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// `f64::tan` returns very large magnitudes near odd multiples of
     /// `pi/2` and infinity at the limit. Inputs that drive the f64
     /// result outside `[D38::MIN, D38::MAX]` saturate per
-    /// [`Self::from_f64_lossy`].
+    /// [`Self::from_f64_fast`].
     ///
     /// # Precision
     ///
@@ -81,7 +81,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tan(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().tan())
+        Self::from_f64_fast(self.to_f64_fast().tan())
     }
 
     // ── Inverse trig (returns radians) ────────────────────────────────
@@ -89,7 +89,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Arcsine of `self`. Returns radians in `[-pi/2, pi/2]`.
     ///
     /// `f64::asin` returns NaN for inputs outside `[-1, 1]`, which
-    /// [`Self::from_f64_lossy`] maps to `D38::ZERO`.
+    /// [`Self::from_f64_fast`] maps to `D38::ZERO`.
     ///
     /// # Precision
     ///
@@ -109,13 +109,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asin(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().asin())
+        Self::from_f64_fast(self.to_f64_fast().asin())
     }
 
     /// Arccosine of `self`. Returns radians in `[0, pi]`.
     ///
     /// `f64::acos` returns NaN for inputs outside `[-1, 1]`, which
-    /// [`Self::from_f64_lossy`] maps to `D38::ZERO`.
+    /// [`Self::from_f64_fast`] maps to `D38::ZERO`.
     ///
     /// # Precision
     ///
@@ -135,7 +135,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().acos())
+        Self::from_f64_fast(self.to_f64_fast().acos())
     }
 
     /// Arctangent of `self`. Returns radians in `(-pi/2, pi/2)`.
@@ -160,7 +160,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().atan())
+        Self::from_f64_fast(self.to_f64_fast().atan())
     }
 
     /// Four-quadrant arctangent of `self` (`y`) over `other` (`x`).
@@ -188,7 +188,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan2(self, other: Self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().atan2(other.to_f64_lossy()))
+        Self::from_f64_fast(self.to_f64_fast().atan2(other.to_f64_fast()))
     }
 
     // ── Hyperbolic ────────────────────────────────────────────────────
@@ -196,7 +196,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Hyperbolic sine of `self`.
     ///
     /// Defined for the entire real line. Saturates at large magnitudes
-    /// per [`Self::from_f64_lossy`].
+    /// per [`Self::from_f64_fast`].
     ///
     /// # Precision
     ///
@@ -216,13 +216,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sinh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().sinh())
+        Self::from_f64_fast(self.to_f64_fast().sinh())
     }
 
     /// Hyperbolic cosine of `self`.
     ///
     /// Defined for the entire real line; result is always >= 1.
-    /// Saturates at large magnitudes per [`Self::from_f64_lossy`].
+    /// Saturates at large magnitudes per [`Self::from_f64_fast`].
     ///
     /// # Precision
     ///
@@ -242,7 +242,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cosh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().cosh())
+        Self::from_f64_fast(self.to_f64_fast().cosh())
     }
 
     /// Hyperbolic tangent of `self`.
@@ -267,7 +267,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tanh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().tanh())
+        Self::from_f64_fast(self.to_f64_fast().tanh())
     }
 
     /// Inverse hyperbolic sine of `self`.
@@ -292,13 +292,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asinh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().asinh())
+        Self::from_f64_fast(self.to_f64_fast().asinh())
     }
 
     /// Inverse hyperbolic cosine of `self`.
     ///
     /// `f64::acosh` returns NaN for inputs less than 1, which
-    /// [`Self::from_f64_lossy`] maps to `D38::ZERO`.
+    /// [`Self::from_f64_fast`] maps to `D38::ZERO`.
     ///
     /// # Precision
     ///
@@ -318,13 +318,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().acosh())
+        Self::from_f64_fast(self.to_f64_fast().acosh())
     }
 
     /// Inverse hyperbolic tangent of `self`.
     ///
     /// `f64::atanh` returns NaN for inputs outside `(-1, 1)`, which
-    /// [`Self::from_f64_lossy`] maps to `D38::ZERO`.
+    /// [`Self::from_f64_fast`] maps to `D38::ZERO`.
     ///
     /// # Precision
     ///
@@ -344,7 +344,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().atanh())
+        Self::from_f64_fast(self.to_f64_fast().atanh())
     }
 
     // ── Angle conversions ─────────────────────────────────────────────
@@ -376,7 +376,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_degrees(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().to_degrees())
+        Self::from_f64_fast(self.to_f64_fast().to_degrees())
     }
 
     /// Convert degrees to radians: `self * (pi / 180)`.
@@ -402,6 +402,6 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_radians(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().to_radians())
+        Self::from_f64_fast(self.to_f64_fast().to_radians())
     }
 }

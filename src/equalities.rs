@@ -23,7 +23,7 @@
 //! Note that f64 cannot represent decimals like `1.1` exactly; the nearest
 //! f64 to `1.1` is `1.1000000000000000888...`. The implementation treats
 //! that nearest f64 as equal to `D38s12::from_bits(1_100_000_000_000)`
-//! because the round-trip through `from_f64_lossy`/`to_f64_lossy` agrees.
+//! because the round-trip through `from_f64_fast`/`to_f64_fast` agrees.
 //! Callers who need true rational equality should convert and compare
 //! explicitly.
 //!
@@ -54,8 +54,8 @@ crate::macros::equalities::decl_eq_all_integers!(wide D153);
 #[cfg(any(feature = "d307", feature = "wide"))]
 crate::macros::equalities::decl_eq_all_integers!(wide D307);
 
-// Float equality requires the f64 bridge (`from_f64_lossy` /
-// `to_f64_lossy`), which is only present when `std` is on and
+// Float equality requires the f64 bridge (`from_f64_fast` /
+// `to_f64_fast`), which is only present when `std` is on and
 // `strict` is off. Gate the float impls accordingly. Float impls are
 // emitted for D38 only at present — the D9/D18 conversion bridge
 // covers will follow in a later commit.

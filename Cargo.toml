@@ -26,7 +26,7 @@ macros = ["dep:decimal_scaled_macros"]
 # Routes every transcendental through the integer-only correctly-
 # rounded path. On by default (see `default` above). Drops the
 # `f64`-bridge transcendentals to keep the build small; explicit
-# float-conversion methods (`to_f64_lossy`, `from_f64_lossy`, …)
+# float-conversion methods (`to_f64_fast`, `from_f64_fast`, …)
 # stay available regardless. Strict mode does not require `std`;
 # the integer-only transcendentals compile under `no_std + alloc`.
 strict = []
@@ -54,8 +54,8 @@ rounding-half-toward-zero = []
 rounding-trunc = []
 rounding-floor = []
 rounding-ceiling = []
-# Nightly-only: expose `from_f16_lossy` / `to_f16_lossy` /
-# `from_f128_lossy` / `to_f128_lossy` on each decimal type. f16 and
+# Nightly-only: expose `from_f16_fast` / `to_f16_fast` /
+# `from_f128_fast` / `to_f128_fast` on each decimal type. f16 and
 # f128 are experimental in Rust; this feature requires the nightly
 # toolchain. On stable, leave the feature off.
 experimental-floats = []

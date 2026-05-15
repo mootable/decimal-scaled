@@ -1,19 +1,19 @@
-//! Macro-generated `from_f64_lossy` / `to_f64_lossy` / `to_f32_lossy`
+//! Macro-generated `from_f64_fast` / `to_f64_fast` / `to_f32_fast`
 //! for narrow decimal widths, with rounding-mode-aware variants.
 //!
 //! Two `from_f64` surfaces are emitted:
 //!
-//! - `from_f64_lossy(value)` — uses
+//! - `from_f64_fast(value)` — uses
 //! `crate::rounding::DEFAULT_ROUNDING_MODE` (controlled by the
 //! `rounding-*` Cargo features; HalfToEven by default).
-//! - `from_f64_lossy_with(value, mode)` — explicit `RoundingMode`.
+//! - `from_f64_fast_with(value, mode)` — explicit `RoundingMode`.
 //!
 //! Output saturation policy is uniform across modes: NaN -> ZERO,
 //! +Infinity -> MAX, -Infinity -> MIN, finite out-of-range -> MAX/MIN
 //! by sign. Float methods are `std`-only.
 
-/// Emits `from_f64_lossy(value)`, `from_f64_lossy_with(value, mode)`,
-/// `to_f64_lossy(self)`, `to_f32_lossy(self)` for a decimal type.
+/// Emits `from_f64_fast(value)`, `from_f64_fast_with(value, mode)`,
+/// `to_f64_fast(self)`, `to_f32_fast(self)` for a decimal type.
 ///
 /// - `decl_decimal_float_bridge!(D9, i32)` — *native* storage; the
 /// `f64` <-> storage conversions use `as`-casts.
@@ -32,16 +32,16 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_lossy(value: f64) -> Self {
-                Self::from_f64_lossy_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn from_f64_fast(value: f64) -> Self {
+                Self::from_f64_fast_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Constructs from an `f64` using the supplied rounding
-            /// mode. Saturation policy as in [`Self::from_f64_lossy`].
+            /// mode. Saturation policy as in [`Self::from_f64_fast`].
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_lossy_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn from_f64_fast_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
                 }
@@ -80,7 +80,7 @@ macro_rules! decl_decimal_float_bridge {
             /// wide-storage precision.
             #[inline]
             #[must_use]
-            pub fn to_f64_lossy(self) -> f64 {
+            pub fn to_f64_fast(self) -> f64 {
                 let raw_f64: f64 = self.0.as_f64();
                 let mult_f64: f64 = Self::multiplier().as_f64();
                 raw_f64 / mult_f64
@@ -89,8 +89,8 @@ macro_rules! decl_decimal_float_bridge {
             /// Converts to `f32` via `f64`, then narrows.
             #[inline]
             #[must_use]
-            pub fn to_f32_lossy(self) -> f32 {
-                self.to_f64_lossy() as f32
+            pub fn to_f32_fast(self) -> f32 {
+                self.to_f64_fast() as f32
             }
 
             /// Construct from an `f16` using the crate default rounding
@@ -98,16 +98,16 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn from_f16_lossy(value: f16) -> Self {
-                Self::from_f64_lossy(value as f64)
+            pub fn from_f16_fast(value: f16) -> Self {
+                Self::from_f64_fast(value as f64)
             }
 
             /// Convert to `f16` (lossy). Nightly + `experimental-floats`.
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn to_f16_lossy(self) -> f16 {
-                self.to_f64_lossy() as f16
+            pub fn to_f16_fast(self) -> f16 {
+                self.to_f64_fast() as f16
             }
 
             /// Construct from an `f128` using the crate default rounding
@@ -117,8 +117,8 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn from_f128_lossy(value: f128) -> Self {
-                Self::from_f128_lossy_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn from_f128_fast(value: f128) -> Self {
+                Self::from_f128_fast_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Construct from an `f128` using the supplied rounding mode.
@@ -126,11 +126,11 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn from_f128_lossy_with(
+            pub fn from_f128_fast_with(
                 value: f128,
                 mode: $crate::rounding::RoundingMode,
             ) -> Self {
-                Self::from_f64_lossy_with(value as f64, mode)
+                Self::from_f64_fast_with(value as f64, mode)
             }
 
             /// Convert to `f128`. Routes through `f64` for wide storage.
@@ -138,8 +138,8 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn to_f128_lossy(self) -> f128 {
-                self.to_f64_lossy() as f128
+            pub fn to_f128_fast(self) -> f128 {
+                self.to_f64_fast() as f128
             }
         }
     };
@@ -154,16 +154,16 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_lossy(value: f64) -> Self {
-                Self::from_f64_lossy_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn from_f64_fast(value: f64) -> Self {
+                Self::from_f64_fast_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Constructs from an `f64` using the supplied rounding
-            /// mode. Saturation policy as in [`Self::from_f64_lossy`].
+            /// mode. Saturation policy as in [`Self::from_f64_fast`].
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_lossy_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn from_f64_fast_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
                 }
@@ -203,15 +203,15 @@ macro_rules! decl_decimal_float_bridge {
             /// division are part of `core`.
             #[inline]
             #[must_use]
-            pub fn to_f64_lossy(self) -> f64 {
+            pub fn to_f64_fast(self) -> f64 {
                 (self.0 as f64) / (Self::multiplier() as f64)
             }
 
             /// Converts to `f32` via `f64`, then narrows. `no_std`-safe.
             #[inline]
             #[must_use]
-            pub fn to_f32_lossy(self) -> f32 {
-                self.to_f64_lossy() as f32
+            pub fn to_f32_fast(self) -> f32 {
+                self.to_f64_fast() as f32
             }
 
             /// Construct from an `f16` using the crate default rounding
@@ -220,16 +220,16 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn from_f16_lossy(value: f16) -> Self {
-                Self::from_f64_lossy(value as f64)
+            pub fn from_f16_fast(value: f16) -> Self {
+                Self::from_f64_fast(value as f64)
             }
 
             /// Convert to `f16` (lossy; f16 has only a 10-bit mantissa).
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn to_f16_lossy(self) -> f16 {
-                self.to_f64_lossy() as f16
+            pub fn to_f16_fast(self) -> f16 {
+                self.to_f64_fast() as f16
             }
 
             /// Construct from an `f128` using the crate default rounding
@@ -240,15 +240,15 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn from_f128_lossy(value: f128) -> Self {
-                Self::from_f128_lossy_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            pub fn from_f128_fast(value: f128) -> Self {
+                Self::from_f128_fast_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Construct from an `f128` using the supplied rounding mode.
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn from_f128_lossy_with(
+            pub fn from_f128_fast_with(
                 value: f128,
                 mode: $crate::rounding::RoundingMode,
             ) -> Self {
@@ -290,7 +290,7 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
-            pub fn to_f128_lossy(self) -> f128 {
+            pub fn to_f128_fast(self) -> f128 {
                 (self.0 as f128) / (Self::multiplier() as f128)
             }
         }

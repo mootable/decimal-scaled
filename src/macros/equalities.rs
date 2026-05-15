@@ -204,7 +204,7 @@ macro_rules! decl_eq_u128 {
 
 /// Emits `PartialEq<$Src> for $Type<SCALE>` for float sources `f32`
 /// and `f64`. Equality holds when the float is finite and round-trips
-/// through `from_f64_lossy`/`to_f64_lossy` exactly. NaN and ±inf are
+/// through `from_f64_fast`/`to_f64_fast` exactly. NaN and ±inf are
 /// always unequal.
 ///
 /// Only available when the lossy f64 bridge is present (i.e. not
@@ -219,8 +219,8 @@ macro_rules! decl_eq_float {
                     return false;
                 }
                 let f = *other as f64;
-                let from_f = $Type::<SCALE>::from_f64_lossy(f);
-                from_f.to_bits() == self.to_bits() && self.to_f64_lossy() == f
+                let from_f = $Type::<SCALE>::from_f64_fast(f);
+                from_f.to_bits() == self.to_bits() && self.to_f64_fast() == f
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {

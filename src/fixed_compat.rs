@@ -201,11 +201,11 @@ mod tests {
         assert_eq!(d, D38s12::from(1_000_i64));
     }
 
-    /// `from_num(f64)` for an in-range value matches `from_f64_lossy`.
+    /// `from_num(f64)` for an in-range value matches `from_f64_fast`.
     #[test]
     fn from_num_f64_within_range() {
         let d = D38s12::from_num(1.5_f64);
-        assert_eq!(d, D38s12::from_f64_lossy(1.5_f64));
+        assert_eq!(d, D38s12::from_f64_fast(1.5_f64));
     }
 
     /// `from_num(f64::INFINITY)` saturates to `MAX`.

@@ -1,7 +1,7 @@
 //! Integration tests for the conversion surface
 //! (From<integer> / TryFrom<i128|u128|f32|f64> / from_int /
-//! from_i32 / to_int_lossy / from_f64_lossy / to_f64_lossy /
-//! to_f32_lossy).
+//! from_i32 / to_int_lossy / from_f64_fast / to_f64_fast /
+//! to_f32_fast).
 //!
 //! Bodies live in src/macros/conversions.rs and float_bridge.rs;
 //! these tests exercise the resulting public API for D38 specifically.
@@ -76,47 +76,47 @@ fn to_int_lossy_saturates() {
     assert_eq!(D38s12::MIN.to_int_lossy(), i64::MIN);
 }
 
-// from_f64_lossy + to_f64_lossy
+// from_f64_fast + to_f64_fast
 
 #[test]
 fn from_f64_lossy_zero_is_zero() {
-    assert_eq!(D38s12::from_f64_lossy(0.0), D38s12::ZERO);
+    assert_eq!(D38s12::from_f64_fast(0.0), D38s12::ZERO);
 }
 
 #[test]
 fn zero_to_f64_lossy_is_zero() {
-    assert_eq!(D38s12::ZERO.to_f64_lossy(), 0.0);
+    assert_eq!(D38s12::ZERO.to_f64_fast(), 0.0);
 }
 
 #[test]
 fn from_f64_lossy_one_is_one() {
-    assert_eq!(D38s12::from_f64_lossy(1.0), D38s12::ONE);
+    assert_eq!(D38s12::from_f64_fast(1.0), D38s12::ONE);
 }
 
 #[test]
 fn from_f64_lossy_negative() {
-    assert_eq!(D38s12::from_f64_lossy(-1.0), -D38s12::ONE);
+    assert_eq!(D38s12::from_f64_fast(-1.0), -D38s12::ONE);
 }
 
 #[test]
 fn from_f64_lossy_infinity_saturates_max() {
-    assert_eq!(D38s12::from_f64_lossy(f64::INFINITY), D38s12::MAX);
+    assert_eq!(D38s12::from_f64_fast(f64::INFINITY), D38s12::MAX);
 }
 
 #[test]
 fn from_f64_lossy_neg_infinity_saturates_min() {
-    assert_eq!(D38s12::from_f64_lossy(f64::NEG_INFINITY), D38s12::MIN);
+    assert_eq!(D38s12::from_f64_fast(f64::NEG_INFINITY), D38s12::MIN);
 }
 
 #[test]
 fn from_f64_lossy_nan_is_zero() {
-    assert_eq!(D38s12::from_f64_lossy(f64::NAN), D38s12::ZERO);
+    assert_eq!(D38s12::from_f64_fast(f64::NAN), D38s12::ZERO);
 }
 
 #[test]
 fn from_f64_lossy_finite_out_of_range_saturates() {
-    assert_eq!(D38s12::from_f64_lossy(1e30), D38s12::MAX);
-    assert_eq!(D38s12::from_f64_lossy(-1e30), D38s12::MIN);
+    assert_eq!(D38s12::from_f64_fast(1e30), D38s12::MAX);
+    assert_eq!(D38s12::from_f64_fast(-1e30), D38s12::MIN);
 }
 
 // TryFrom<i128> / TryFrom<u128>
