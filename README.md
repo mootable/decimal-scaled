@@ -161,17 +161,19 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 
 ## Numeric comparison table
 
-| Type                           | Storage | Base | `0.1` exact | `1.1` exact | Range | `no_std` |
-|--------------------------------|---|---|---|---|---|---|
-| `f32`                          | 32-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±3.4 × 10³⁸ | Yes |
-| `f64`                          | 64-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.8 × 10³⁰⁸ | Yes |
-| `f128`                         | 128-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.2 × 10⁴⁹³² | Partial |
-| `fixed::I64F64`                | 128-bit binary fixed | 2 | No | No | ~±9.2 × 10¹⁸ | Yes |
-| `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | Yes |
-| `rust_decimal`                 | 96-bit + scale byte | 10 | Yes | Yes | ±7.9 × 10²⁸ | Yes |
-| `bigdecimal`                   | heap-allocated | 10 | Yes | Yes | Unbounded | No |
-| `D128<12>` or `D128s12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | Yes |
-| `D128<6>` or `D128s6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | Yes |
+| Type                           | Storage | Base | `0.1` exact | `1.1` exact | Range | ULP at 1.0 | `no_std` |
+|--------------------------------|---|---|---|---|---|---|---|
+| `f32`                          | 32-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±3.4 × 10³⁸ | 2⁻²³ ≈ 1.2 × 10⁻⁷ (relative) | Yes |
+| `f64`                          | 64-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.8 × 10³⁰⁸ | 2⁻⁵² ≈ 2.2 × 10⁻¹⁶ (relative) | Yes |
+| `f128`                         | 128-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.2 × 10⁴⁹³² | 2⁻¹¹² ≈ 1.9 × 10⁻³⁴ (relative) | Partial |
+| `fixed::I64F64`                | 128-bit binary fixed | 2 | No | No | ~±9.2 × 10¹⁸ | 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰ | Yes |
+| `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | 2⁻³² ≈ 2.3 × 10⁻¹⁰ | Yes |
+| `rust_decimal`                 | 96-bit + scale byte | 10 | Yes | Yes | ±7.9 × 10²⁸ | 10⁻²⁸ (variable, per-value scale) | Yes |
+| `bigdecimal`                   | heap-allocated | 10 | Yes | Yes | Unbounded | 10⁻ˢ (arbitrary scale) | No |
+| `D128<12>` or `D128s12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | 10⁻¹² (exact, constant) | Yes |
+| `D128<6>` or `D128s6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | 10⁻⁶ (exact, constant) | Yes |
+
+The ULP — [unit in the last place](https://en.wikipedia.org/wiki/Unit_in_the_last_place) — is the gap between two consecutive representable values. For the binary floats and `f128` it is *relative* (it scales with the value's magnitude, so the absolute precision degrades for large values); for the fixed-point and decimal types it is *absolute* (the same gap at any magnitude inside the range). The `D128<S>` ULP is `10⁻ˢ` exactly, fixed at compile time by the scale.
 
 ### Hash and equality contracts
 
@@ -212,18 +214,16 @@ for a 256-bit hand-rolled-integer divide — roughly 20× the `D128` cost.
 Transcendentals (`ln`, `exp`, `sqrt`, trig, …) come in two forms. The
 **lossy** `f64` bridge is fast (~40 ns) but inherits `f64`'s precision
 ceiling and is not platform-independent. The **strict** integer-only
-form is **correctly rounded to within 0.5
-[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)** of the
-exact result — the IEEE-754 round-to-nearest contract — and is
-`no_std` and platform-deterministic.
+form is **correctly rounded to within 0.5 ULP** of the exact result —
+the IEEE-754 round-to-nearest contract — and is `no_std` and
+platform-deterministic.
 
 ### Transcendental accuracy comparison
 
 A *correctly rounded* result is the exact mathematical value rounded
 to the nearest representable number — i.e. the error is at most half a
-[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (unit in
-the last place). It is the strongest accuracy guarantee a finite type
-can give, and the capability the alternatives do not offer:
+ULP. It is the strongest accuracy guarantee a finite type can give,
+and the capability the alternatives do not offer:
 
 | Type | Transcendentals | Correctly rounded to 0.5 ULP | Platform-deterministic |
 |---|---|---|---|
