@@ -468,6 +468,27 @@ crate::macros::num_traits::decl_decimal_num_traits_basics!(D38);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D18, i64, i64);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D9, i32, i32);
 
+// ─── D38 narrow ───────────────────────────────────────────────────────
+// D38::widen is wide-tier-only and is emitted further down in the
+// wide block. D38::narrow is always available.
+
+impl<const SCALE: u32> D38<SCALE> {
+    /// Demote to the previous storage tier ([`D18`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// doesn't fit `i64`'s range at the given scale.
+    ///
+    /// ```
+    /// use decimal_scaled::D38s9;
+    /// let a = D38s9::from_int(1_000_000);
+    /// let b = a.narrow().unwrap();
+    /// assert_eq!(b.to_bits() as i128, a.to_bits());
+    /// ```
+    #[inline]
+    pub fn narrow(self) -> Result<D18<SCALE>, crate::error::ConvertError> {
+        self.try_into()
+    }
+}
+
 // ---------------------------------------------------------------------
 // D9 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger
 // type. SCALE = 9 fits ~21.5 with 9 decimal digits of precision; SCALE
@@ -587,6 +608,66 @@ crate::macros::conversions::decl_cross_width_narrowing!(D18, i64, D38, i128);
 crate::macros::conversions::decl_cross_width_narrowing!(D9, i32, D38, i128);
 crate::macros::conversions::decl_cross_width_narrowing!(D9, i32, D18, i64);
 
+// ─── `widen` / `narrow` — hop one storage tier at a time ──────────────
+//
+// `widen` always succeeds (the next-larger storage strictly covers
+// every value the smaller one can hold). `narrow` returns
+// `Result<NarrowerType<SCALE>, ConvertError>` because the value may
+// not fit. Both keep the scale unchanged; combine with `rescale` if
+// you need to change scale and width together.
+
+impl<const SCALE: u32> D9<SCALE> {
+    /// Promote to the next storage tier ([`D18`]) at the same `SCALE`.
+    ///
+    /// Lossless — every `D9<SCALE>` value fits `D18<SCALE>` by
+    /// construction (`i32::MAX` < `i64::MAX`). Chains via further
+    /// `widen` calls if you need to climb to D38 / D76 / etc.
+    ///
+    /// ```
+    /// use decimal_scaled::D9s6;
+    /// let a = D9s6::from_int(123);
+    /// let b = a.widen();              // D18<6>
+    /// assert_eq!(b.to_bits(), a.to_bits() as i64);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D18<SCALE> {
+        self.into()
+    }
+}
+
+impl<const SCALE: u32> D18<SCALE> {
+    /// Promote to the next storage tier ([`D38`]) at the same `SCALE`.
+    /// Lossless.
+    ///
+    /// ```
+    /// use decimal_scaled::D18s9;
+    /// let a = D18s9::from_int(7);
+    /// let b = a.widen();              // D38<9>
+    /// assert_eq!(b.to_bits(), a.to_bits() as i128);
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D38<SCALE> {
+        self.into()
+    }
+
+    /// Demote to the previous storage tier ([`D9`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// doesn't fit `i32`'s range at the given scale.
+    ///
+    /// ```
+    /// use decimal_scaled::D18s5;
+    /// let a = D18s5::from_int(7);
+    /// let b = a.narrow().unwrap();    // D9<5>
+    /// assert_eq!(b.to_bits() as i64, a.to_bits());
+    /// ```
+    #[inline]
+    pub fn narrow(self) -> Result<D9<SCALE>, crate::error::ConvertError> {
+        self.try_into()
+    }
+}
+
 /// Scale alias: `D18<0>`. 1 LSB = 1. Range ±9.2 × 10¹⁸.
 pub type D18s0 = D18<0>;
 /// Scale alias: `D18<1>`. 1 LSB = 10^-1. Range ±9.2 × 10¹⁷.
@@ -680,6 +761,39 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D18, i64, D76, crat
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D9, i32, D76, crate::wide_int::I256);
 
+// ─── D38::widen / D76 hop methods ─────────────────────────────────────
+
+#[cfg(any(feature = "d76", feature = "wide"))]
+impl<const SCALE: u32> D38<SCALE> {
+    /// Promote to the next storage tier ([`D76`]) at the same `SCALE`.
+    /// Lossless. Available with the `d76` (or umbrella `wide`) Cargo
+    /// feature enabled.
+    ///
+    /// ```
+    /// # #[cfg(feature = "wide")] {
+    /// use decimal_scaled::D38s12;
+    /// let a = D38s12::from_int(1_000_000);
+    /// let _wider = a.widen();  // D76<12>
+    /// # }
+    /// ```
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D76<SCALE> {
+        self.into()
+    }
+}
+
+#[cfg(any(feature = "d76", feature = "wide"))]
+impl<const SCALE: u32> D76<SCALE> {
+    /// Demote to the previous storage tier ([`D38`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// doesn't fit `i128`'s range at the given scale.
+    #[inline]
+    pub fn narrow(self) -> Result<D38<SCALE>, crate::error::ConvertError> {
+        self.try_into()
+    }
+}
+
 /// Scale alias: `D76<0>`. 1 LSB = 1 (256-bit integer ledger).
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub type D76s0 = D76<0>;
@@ -752,6 +866,31 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_in
 #[cfg(any(feature = "d153", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D153, crate::wide_int::I512);
 
+// ─── D76::widen / D153 hop methods ────────────────────────────────────
+
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d153", feature = "wide")))]
+impl<const SCALE: u32> D76<SCALE> {
+    /// Promote to the next storage tier ([`D153`]) at the same
+    /// `SCALE`. Lossless.
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D153<SCALE> {
+        self.into()
+    }
+}
+
+#[cfg(any(feature = "d153", feature = "wide"))]
+impl<const SCALE: u32> D153<SCALE> {
+    /// Demote to the previous storage tier ([`D76`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// doesn't fit the narrower storage's range at the given scale.
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[inline]
+    pub fn narrow(self) -> Result<D76<SCALE>, crate::error::ConvertError> {
+        self.try_into()
+    }
+}
+
 /// Scale alias: `D153<0>`. 1 LSB = 1 (512-bit integer ledger).
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub type D153s0 = D153<0>;
@@ -814,6 +953,31 @@ crate::macros::conversions::decl_cross_width_widening!(wide D307, crate::wide_in
 crate::macros::conversions::decl_cross_width_narrowing!(wide D153, crate::wide_int::I512, D307, crate::wide_int::I1024);
 #[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d76", feature = "wide")))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D307, crate::wide_int::I1024);
+
+// ─── D153::widen / D307 hop methods ───────────────────────────────────
+
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d307", feature = "wide")))]
+impl<const SCALE: u32> D153<SCALE> {
+    /// Promote to the next storage tier ([`D307`]) at the same
+    /// `SCALE`. Lossless.
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D307<SCALE> {
+        self.into()
+    }
+}
+
+#[cfg(any(feature = "d307", feature = "wide"))]
+impl<const SCALE: u32> D307<SCALE> {
+    /// Demote to the previous storage tier ([`D153`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// doesn't fit the narrower storage's range at the given scale.
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    #[inline]
+    pub fn narrow(self) -> Result<D153<SCALE>, crate::error::ConvertError> {
+        self.try_into()
+    }
+}
 
 /// Scale alias: `D307<0>`. 1 LSB = 1 (1024-bit integer ledger).
 #[cfg(any(feature = "d307", feature = "wide"))]

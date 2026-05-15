@@ -8,6 +8,38 @@
 
 use decimal_scaled::{ConvertError, D38, D38s12};
 
+// --- widen / narrow ergonomic methods -------------------------------
+
+#[test]
+fn widen_narrow_one_tier_hop_narrow_arm() {
+    use decimal_scaled::{D9s6, D18s6};
+    let a = D9s6::from_int(123);
+    let b = a.widen();                         // D9 → D18
+    let c = b.widen();                         // D18 → D38
+    assert_eq!(b.to_bits() as i128, c.to_bits());
+    let d18: D18s6 = c.narrow().unwrap();      // D38 → D18
+    let d9: D9s6 = d18.narrow().unwrap();      // D18 → D9
+    assert_eq!(d9.to_bits(), a.to_bits());
+}
+
+#[test]
+fn narrow_overflow_is_err() {
+    use decimal_scaled::D18s0;
+    // 5 × 10⁹ doesn't fit i32 (max ~2.147 × 10⁹).
+    let big = D18s0::from_int(5_000_000_000_i64);
+    assert!(big.narrow().is_err());
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn widen_narrow_into_wide_tier() {
+    use decimal_scaled::{D38s12, D76s12};
+    let a = D38s12::from_int(1_000_000);
+    let b: D76s12 = a.widen();                 // D38 → D76
+    let back = b.narrow().unwrap();            // D76 → D38
+    assert_eq!(back, a);
+}
+
 // from_int / from_i32 -- foundation wrappers around From<iN>
 
 #[test]
