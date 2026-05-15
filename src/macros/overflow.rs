@@ -36,9 +36,7 @@ macro_rules! decl_decimal_overflow_variants {
             pub fn checked_mul(self, rhs: Self) -> Option<Self> {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
+                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let prod = a.checked_mul(b)?;
                 let scaled = prod / m;
                 let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
@@ -55,9 +53,7 @@ macro_rules! decl_decimal_overflow_variants {
             pub fn wrapping_mul(self, rhs: Self) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
+                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let prod = a.wrapping_mul(b);
                 let scaled = prod / m;
                 Self(scaled.resize::<$Storage>())
@@ -95,9 +91,7 @@ macro_rules! decl_decimal_overflow_variants {
                 }
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
+                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let scaled_numer = a.checked_mul(m)?;
                 let result = scaled_numer / b;
                 let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
@@ -114,9 +108,7 @@ macro_rules! decl_decimal_overflow_variants {
             pub fn wrapping_div(self, rhs: Self) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
+                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let scaled_numer = a.wrapping_mul(m);
                 let result = scaled_numer / b;
                 Self(result.resize::<$Storage>())

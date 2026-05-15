@@ -183,9 +183,7 @@ macro_rules! decl_decimal_arithmetic {
                 } else if SCALE <= 38 {
                     $crate::mg_divide::div_wide_pow10_with::<$Wider>(n, SCALE, mode)
                 } else {
-                    let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                        .expect("wide decimal: invalid base-10 literal")
-                        .pow(SCALE);
+                    let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                     $crate::macros::arithmetic::round_with_mode_wide!(n, m, $Wider, mode)
                 };
                 Self(scaled.resize::<$Storage>())
