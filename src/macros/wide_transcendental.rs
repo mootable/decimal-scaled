@@ -35,9 +35,25 @@
 //!
 //! # Precision
 //!
-//! Strict and **correctly rounded** — within 0.5 ULP of the exact
-//! result (IEEE-754 round-to-nearest), to the same accuracy contract as
-//! the D128 strict family.
+//! Strict: integer-only, scale-deterministic. The final rounding to
+//! storage uses the crate-default [`RoundingMode`] (typically
+//! half-to-even, the IEEE-754 round-to-nearest rule) via
+//! [`crate::rounding::should_bump`].
+//!
+//! The error budget is the accumulated truncation of every
+//! `mul(a, b, w)` and `div(a, b, w)` step in the series-evaluation
+//! core (each step truncates toward zero at scale `w = SCALE + GUARD`
+//! with `GUARD = 30`). For inputs in the well-conditioned middle of
+//! each function's domain the final round-to-storage absorbs the
+//! accumulated error and the result is within a few ULP of the exact
+//! value; tests pin this at ≤ 2 ULP across the representative
+//! sample, with up to ≤ 8 ULP at very deep scales (D256<50>,
+//! D1024<150>) where the series runs longer. **Tightening the
+//! contract to a guaranteed 0.5 ULP would require rounded
+//! intermediate ops** (a half-to-even `mul`/`div` per step instead
+//! of truncating) — recorded as a follow-up.
+//!
+//! [`RoundingMode`]: crate::rounding::RoundingMode
 
 /// Emits the strict transcendental surface for a wide decimal tier.
 ///
@@ -117,29 +133,46 @@ macro_rules! decl_wide_transcendental {
                 raw.resize::<W>() * pow10(GUARD)
             }
 
-            /// Rounds a working-scale value down to scale `target`,
-            /// half-to-even, and narrows to the type's storage. Panics
-            /// if the rounded value does not fit.
+            /// Rounds a working-scale value down to scale `target` using
+            /// the crate-default rounding mode and narrows to the
+            /// type's storage. Panics if the rounded value does not
+            /// fit.
+            ///
+            /// Mode dispatch goes through [`crate::rounding::should_bump`]
+            /// (the same strategy the operator path uses), so a
+            /// wide-tier `*_strict` honours the active `rounding-*`
+            /// feature flag instead of always rounding half-to-even.
             pub(super) fn round_to_storage(v: W, w: u32, target: u32) -> $Storage {
+                round_to_storage_with(v, w, target, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Mode-aware variant of [`round_to_storage`].
+            pub(super) fn round_to_storage_with(
+                v: W,
+                w: u32,
+                target: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> $Storage {
                 let divisor = pow10(w - target);
                 let q = v / divisor;
                 let r = v % divisor;
-                let half = divisor / lit(2);
-                let ar = abs(r);
-                let round_away = if ar < half {
-                    false
-                } else if ar > half {
-                    true
-                } else {
-                    // Exact tie: round to even.
-                    (q % lit(2)) != lit(0)
-                };
-                let rounded = if round_away {
-                    if v < lit(0) { q - lit(1) } else { q + lit(1) }
-                } else {
+                let rounded = if r == lit(0) {
                     q
+                } else {
+                    let ar = abs(r);
+                    let comp = divisor - ar;
+                    let cmp_r = ar.cmp(&comp);
+                    let q_is_odd = (q % lit(2)) != lit(0);
+                    let result_positive = v >= lit(0);
+                    if $crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+                        if result_positive { q + lit(1) } else { q - lit(1) }
+                    } else {
+                        q
+                    }
                 };
-                if rounded > <$Storage>::MAX.resize::<W>() || rounded < <$Storage>::MIN.resize::<W>() {
+                if rounded > <$Storage>::MAX.resize::<W>()
+                    || rounded < <$Storage>::MIN.resize::<W>()
+                {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
