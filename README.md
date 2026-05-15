@@ -120,7 +120,7 @@ All numeric types have a finite number space. The choice is which region of the 
 **Use `f64` or `f128` when:**
 - Values come from sensors, physics engines, or mathematical operations
 - The number space is continuous and decimal fractions are not special
-- You need the dynamic range of IEEE 754 binary floating-point (from ~10⁻³⁰⁸ to ~10³⁰⁸)
+- You need the dynamic range of [IEEE 754](https://en.wikipedia.org/wiki/IEEE_754) binary floating-point (from ~10⁻³⁰⁸ to ~10³⁰⁸)
 
 **Use `fixed` when:**
 - Values are in a known integer-and-fraction format from binary protocols
@@ -212,8 +212,8 @@ for a 256-bit hand-rolled-integer divide — roughly 20× the `D128` cost.
 Transcendentals come in two forms. The **lossy** `f64` bridge is fast
 (~40 ns) but inherits `f64`'s precision ceiling and is not
 platform-independent. The **strict** integer-only form is
-**correctly rounded to within 0.5 ULP** of the exact result — the
-IEEE-754 round-to-nearest contract — and is `no_std` and
+**correctly rounded to within 0.5 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)**
+of the exact result — the IEEE-754 round-to-nearest contract — and is `no_std` and
 platform-deterministic. That accuracy guarantee is the capability the
 binary-fixed-point and software-decimal alternatives do not offer:
 `f64`-bridge results are not correctly rounded to the last place,

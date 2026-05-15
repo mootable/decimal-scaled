@@ -24,10 +24,12 @@ Notes:
   `ln`, …) dispatch to the strict path.
 - With `strict` on, the plain transcendentals use the integer path even
   if `std` is also enabled.
-- The strict methods are held to the IEEE-754 correctly-rounded
-  standard (within 0.5 ULP of the exact result). See
-  [strict mode](strict-mode.md) for the dual-API rules and the current
-  per-function implementation status.
+- The strict methods are held to the
+  [IEEE 754](https://en.wikipedia.org/wiki/IEEE_754) correctly-rounded
+  standard (within 0.5
+  [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) of the
+  exact result). See [strict mode](strict-mode.md) for the dual-API
+  rules and the current per-function implementation status.
 
 ## Default-rounding-mode features
 

@@ -88,10 +88,12 @@ and no `*_strict` methods are emitted at all.
 
 ## The 0.5 ULP accuracy guarantee
 
-Every strict method is held to the **IEEE-754 correctly-rounded
-standard**: the returned value is within **0.5 ULP** of the
-mathematically exact result — i.e. it is the exact result rounded to
-the nearest representable value at the type's last decimal place.
+Every strict method is held to the **[IEEE 754](https://en.wikipedia.org/wiki/IEEE_754)
+correctly-rounded standard**: the returned value is within **0.5
+[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)** (unit in
+the last place) of the mathematically exact result — i.e. it is the
+exact result rounded to the nearest representable value at the type's
+last decimal place.
 
 How it is achieved, per function family:
 

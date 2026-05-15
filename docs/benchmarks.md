@@ -86,8 +86,10 @@ variants against `rust_decimal`'s `MathematicalOps`:
   and not correctly rounded.
 - **strict** — the integer-only form: range reduction plus an integer
   series evaluated in a guard-digit intermediate. Platform-independent,
-  `no_std`-compatible, and **correctly rounded to within 0.5 ULP** of
-  the exact result (the IEEE-754 round-to-nearest contract).
+  `no_std`-compatible, and **correctly rounded to within 0.5
+  [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)** of the
+  exact result (the [IEEE 754](https://en.wikipedia.org/wiki/IEEE_754)
+  round-to-nearest contract).
 
 Each row is shown in a single unit, chosen from the row's median
 value, so the columns can be read off directly.
