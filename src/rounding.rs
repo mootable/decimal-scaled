@@ -1,13 +1,13 @@
 //! Rounding-mode selector for scale-narrowing operations.
 //!
-//! Used by [`D128::rescale_with`] to control how fractional digits are
+//! Used by [`D38::rescale_with`] to control how fractional digits are
 //! discarded when the target scale is less than the source scale. The
 //! six modes cover IEEE-754's five rounding rules (`HalfToEven`,
 //! `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`) plus the commercial
 //! `HalfAwayFromZero` rule expected by users coming from
 //! `bigdecimal` / `rust_decimal`.
 //!
-//! [`D128::rescale`] always uses [`RoundingMode::HalfToEven`] — the
+//! [`D38::rescale`] always uses [`RoundingMode::HalfToEven`] — the
 //! IEEE-754 default and the rule with no systematic bias. Choose a
 //! non-default mode only when your accounting rules require it.
 
@@ -158,7 +158,7 @@ pub(crate) fn should_bump(
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
-/// Used by [`D128::rescale_with`] and by the multiplier-and-divide
+/// Used by [`D38::rescale_with`] and by the multiplier-and-divide
 /// fast paths in `mg_divide`. The whole mode-specific logic is
 /// delegated to [`should_bump`]; this function is just the i128
 /// arithmetic wrapper that builds its inputs and applies the bump.

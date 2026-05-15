@@ -1,15 +1,15 @@
 //! Macro-generated arithmetic operator overloads for the decimal
-//! widths that use a *uniform* mul/div pattern (D32, D64, and the wide
-//! tier D256 / D512 / D1024).
+//! widths that use a *uniform* mul/div pattern (D9, D18, and the wide
+//! tier D76 / D153 / D307).
 //!
-//! For D32 / D64 the storage type is a primitive (`i32` / `i64`) and a
+//! For D9 / D18 the storage type is a primitive (`i32` / `i64`) and a
 //! native wider integer (`i64` / `i128`) carries the mul/div widening
-//! step. For D256 / D512 / D1024 the storage type is a hand-rolled wide integer
+//! step. For D76 / D153 / D307 the storage type is a hand-rolled wide integer
 //! fixed-width integer and the widening type is the next size up
 //! up; the only thing that changes is *how* the `10^SCALE` literal and
 //! the width casts are spelled.
 //!
-//! D128 is the exception: its mul/div go through the hand-rolled
+//! D38 is the exception: its mul/div go through the hand-rolled
 //! 256-bit `mg_divide` path and are not generated here.
 //!
 //! Add / Sub / Neg / Rem (and their `*Assign` forms) are identical for
@@ -112,10 +112,10 @@ pub(crate) use round_with_mode_wide;
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
-/// - `decl_decimal_arithmetic!(D32, i32, i64)` — *native* storage; the
+/// - `decl_decimal_arithmetic!(D9, i32, i64)` — *native* storage; the
 /// widening type is a primitive integer, `as`-casts and the
 /// `(10 as $Wider)` literal carry the mul/div step.
-/// - `decl_decimal_arithmetic!(wide D256, I256, I512)` — *wide*
+/// - `decl_decimal_arithmetic!(wide D76, I256, I512)` — *wide*
 /// storage; the widening type is a hand-rolled wide integer, the `WideInt` cast
 /// carries the width casts and `from_str_radix` builds the
 /// `10^SCALE` factor.
@@ -169,7 +169,7 @@ macro_rules! decl_decimal_arithmetic {
             ///
             /// For `SCALE ≤ 38` the divide-by-`10^SCALE` step routes
             /// through the Möller-Granlund magic-divide kernel shared
-            /// with D128 ([`crate::mg_divide::div_wide_pow10_with`]) —
+            /// with D38 ([`crate::mg_divide::div_wide_pow10_with`]) —
             /// avoiding the generic schoolbook divide for the common
             /// case. Larger scales fall through to the slower
             /// `n / (10^SCALE)` path.

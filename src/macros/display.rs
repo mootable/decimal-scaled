@@ -1,15 +1,15 @@
 //! Macro-generated `Display` and `Debug` for the decimal widths.
 //!
-//! The algorithm is the same as `D128`'s hand-coded `Display` (in
+//! The algorithm is the same as `D38`'s hand-coded `Display` (in
 //! `src/display.rs`): split the unsigned magnitude into integer and
 //! fractional parts, format the fractional part zero-padded to `SCALE`
 //! digits.
 //!
 //! Two arms exist:
 //!
-//! - `decl_decimal_display!(D32)` — *native* storage. The magnitude
+//! - `decl_decimal_display!(D9)` — *native* storage. The magnitude
 //! fits in `u128`, so the split arithmetic is done there.
-//! - `decl_decimal_display!(wide D256, U256)` — *wide* storage. The
+//! - `decl_decimal_display!(wide D76, U256)` — *wide* storage. The
 //! magnitude is an unsigned wide integer (`unsigned_abs()` handles
 //! the `MIN` corner case without overflow); the split arithmetic is
 //! done at that width and the `10^SCALE` factor is built via

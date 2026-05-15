@@ -32,16 +32,16 @@ pub enum RoundingMode {
 ## The `_with` pairs
 
 ```rust
-use decimal_scaled::{D128s4, D128s2, RoundingMode};
+use decimal_scaled::{D38s4, D38s2, RoundingMode};
 
-let v = D128s4::from_bits(12_345);   // 1.2345
+let v = D38s4::from_bits(12_345);   // 1.2345
 
 // Default mode (HalfToEven unless a `rounding-*` feature changes it):
-let a: D128s2 = v.rescale::<2>();
+let a: D38s2 = v.rescale::<2>();
 
 // Explicit mode:
-let b: D128s2 = v.rescale_with::<2>(RoundingMode::Floor);
-let c: D128s2 = v.rescale_with::<2>(RoundingMode::Ceiling);
+let b: D38s2 = v.rescale_with::<2>(RoundingMode::Floor);
+let c: D38s2 = v.rescale_with::<2>(RoundingMode::Ceiling);
 ```
 
 The same pairing applies to `to_int_lossy` / `to_int_lossy_with`,
@@ -59,9 +59,9 @@ The same pairing applies to `to_int_lossy` / `to_int_lossy_with`,
   the rounding mode to the discarded fractional digits.
 
 ```rust
-use decimal_scaled::{D128s3, RoundingMode};
+use decimal_scaled::{D38s3, RoundingMode};
 
-let v = D128s3::from_bits(1_235);            // 1.235
+let v = D38s3::from_bits(1_235);            // 1.235
 
 // Scale down to 2 digits — the trailing `5` must be rounded.
 let down  = v.rescale::<2>();                // HalfToEven -> 1.24

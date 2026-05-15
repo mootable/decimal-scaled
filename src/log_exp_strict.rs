@@ -1,9 +1,9 @@
-//! Logarithm and exponential methods for [`D128`].
+//! Logarithm and exponential methods for [`D38`].
 //!
 //! # Methods
 //!
-//! - **Logarithms:** [`D128::ln`] / [`D128::log`] / [`D128::log2`] / [`D128::log10`].
-//! - **Exponentials:** [`D128::exp`] / [`D128::exp2`].
+//! - **Logarithms:** [`D38::ln`] / [`D38::log`] / [`D38::log2`] / [`D38::log10`].
+//! - **Exponentials:** [`D38::exp`] / [`D38::exp2`].
 //!
 //! # The `*_strict` dual API
 //!
@@ -27,17 +27,17 @@
 //! The f64-bridge forms are **Lossy** — `self` round-trips through
 //! `f64`. The `*_strict` forms are **correctly rounded**: the result
 //! is within 0.5 ULP of the exact value (IEEE-754 round-to-nearest).
-//! They evaluate the series in the `d128_kernels::Fixed` guard-digit
+//! They evaluate the series in the `d_w128_kernels::Fixed` guard-digit
 //! intermediate and round once at the end.
 //!
 //! # Domain handling
 //!
 //! `f64::ln`, `f64::log2`, `f64::log10`, and `f64::log` return `-Infinity`
 //! for `0.0` and `NaN` for negative inputs. The f64 bridge maps `NaN` to
-//! `D128::ZERO` and saturates infinities to `D128::MAX` or `D128::MIN`.
+//! `D38::ZERO` and saturates infinities to `D38::MAX` or `D38::MIN`.
 //! The `*_strict` forms panic on out-of-domain inputs (`self <= 0`).
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
 // ─────────────────────────────────────────────────────────────────────
 // Correctly-rounded strict log / exp core.
@@ -60,9 +60,9 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 /// `ln(2)` as a `Fixed` at working scale `w` (`w <= 64`). The constant
 /// is embedded to 64 fractional digits and narrowed to `w`.
 #[cfg(not(feature = "no_strict"))]
-pub(crate) fn wide_ln2(w: u32) -> crate::d128_kernels::Fixed {
+pub(crate) fn wide_ln2(w: u32) -> crate::d_w128_kernels::Fixed {
     // ln 2 = 0.693147180559945309417232121458176568075500134360255254120680 0094
-    crate::d128_kernels::Fixed::from_decimal_split(
+    crate::d_w128_kernels::Fixed::from_decimal_split(
         69_314_718_055_994_530_941_723_212_145_817_u128,
         65_680_755_001_343_602_552_541_206_800_094_u128,
     )
@@ -73,9 +73,9 @@ pub(crate) fn wide_ln2(w: u32) -> crate::d128_kernels::Fixed {
 /// 63 fractional digits (`ln 10 ≈ 2.30…` has an integer digit) and
 /// narrowed to `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_ln10(w: u32) -> crate::d128_kernels::Fixed {
+fn wide_ln10(w: u32) -> crate::d_w128_kernels::Fixed {
     // ln 10 = 2.302585092994045684017991454684364207601101488628772976033327 901
-    crate::d128_kernels::Fixed::from_decimal_split(
+    crate::d_w128_kernels::Fixed::from_decimal_split(
         23_025_850_929_940_456_840_179_914_546_843_u128,
         64_207_601_101_488_628_772_976_033_327_901_u128,
     )
@@ -90,8 +90,8 @@ fn wide_ln10(w: u32) -> crate::d128_kernels::Fixed {
 /// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
 /// and returns `k·ln(2) + ln(m)`.
 #[cfg(not(feature = "no_strict"))]
-pub(crate) fn ln_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
-    use crate::d128_kernels::Fixed;
+pub(crate) fn ln_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
+    use crate::d_w128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let two_w = one_w.double();
 
@@ -154,8 +154,8 @@ pub(crate) fn ln_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_k
 /// Panics if `2^k · exp(s)` cannot fit a 256-bit working value — i.e.
 /// the caller's result would overflow its representable range.
 #[cfg(not(feature = "no_strict"))]
-pub(crate) fn exp_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
-    use crate::d128_kernels::Fixed;
+pub(crate) fn exp_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
+    use crate::d_w128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let ln2 = wide_ln2(w);
 
@@ -188,7 +188,7 @@ pub(crate) fn exp_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_
     if k >= 0 {
         let shift = k as u32;
         if sum.bit_length() + shift > 256 {
-            panic!("D128::exp: result overflows the representable range");
+            panic!("D38::exp: result overflows the representable range");
         }
         sum.shl(shift)
     } else {
@@ -196,7 +196,7 @@ pub(crate) fn exp_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_
     }
 }
 
-impl<const SCALE: u32> D128<SCALE> {
+impl<const SCALE: u32> D38<SCALE> {
     // Logarithms
 
     /// Returns the natural logarithm (base e) of `self`.
@@ -231,16 +231,16 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn ln_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 <= 0 {
-            panic!("D128::ln: argument must be positive");
+            panic!("D38::ln: argument must be positive");
         }
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
         let raw = ln_fixed(v_w, w)
             .round_to_i128(w, SCALE)
-            .expect("D128::ln: result out of range");
+            .expect("D38::ln: result out of range");
         Self::from_bits(raw)
     }
 
@@ -270,12 +270,12 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log_strict(self, base: Self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 <= 0 {
-            panic!("D128::log: argument must be positive");
+            panic!("D38::log: argument must be positive");
         }
         if base.0 <= 0 {
-            panic!("D128::log: base must be positive");
+            panic!("D38::log: base must be positive");
         }
         let w = SCALE + STRICT_GUARD;
         let pow = 10u128.pow(STRICT_GUARD);
@@ -283,12 +283,12 @@ impl<const SCALE: u32> D128<SCALE> {
         let b_w = Fixed::from_u128_mag(base.0 as u128, false).mul_u128(pow);
         let ln_b = ln_fixed(b_w, w);
         if ln_b.is_zero() {
-            panic!("D128::log: base must not equal 1 (ln(1) is zero)");
+            panic!("D38::log: base must not equal 1 (ln(1) is zero)");
         }
         let raw = ln_fixed(v_w, w)
             .div(ln_b, w)
             .round_to_i128(w, SCALE)
-            .expect("D128::log: result out of range");
+            .expect("D38::log: result out of range");
         Self::from_bits(raw)
     }
 
@@ -316,9 +316,9 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log2_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 <= 0 {
-            panic!("D128::log2: argument must be positive");
+            panic!("D38::log2: argument must be positive");
         }
         let w = SCALE + STRICT_GUARD;
         let v_w =
@@ -326,7 +326,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let raw = ln_fixed(v_w, w)
             .div(wide_ln2(w), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::log2: result out of range");
+            .expect("D38::log2: result out of range");
         Self::from_bits(raw)
     }
 
@@ -354,9 +354,9 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log10_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 <= 0 {
-            panic!("D128::log10: argument must be positive");
+            panic!("D38::log10: argument must be positive");
         }
         let w = SCALE + STRICT_GUARD;
         let v_w =
@@ -364,7 +364,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let raw = ln_fixed(v_w, w)
             .div(wide_ln10(w), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::log10: result out of range");
+            .expect("D38::log10: result out of range");
         Self::from_bits(raw)
     }
 
@@ -407,7 +407,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn exp_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
         }
@@ -418,7 +418,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let v_w = if negative_input { v_w.neg() } else { v_w };
         let raw = exp_fixed(v_w, w)
             .round_to_i128(w, SCALE)
-            .expect("D128::exp: result overflows the representable range");
+            .expect("D38::exp: result overflows the representable range");
         Self::from_bits(raw)
     }
 
@@ -442,12 +442,12 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// # Panics
     ///
-    /// Panics if the result overflows D128's representable range.
+    /// Panics if the result overflows D38's representable range.
     #[inline]
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn exp2_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
         }
@@ -460,7 +460,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let arg_w = v_w.mul(wide_ln2(w), w);
         let raw = exp_fixed(arg_w, w)
             .round_to_i128(w, SCALE)
-            .expect("D128::exp2: result overflows the representable range");
+            .expect("D38::exp2: result overflows the representable range");
         Self::from_bits(raw)
     }
 
@@ -480,21 +480,21 @@ impl<const SCALE: u32> D128<SCALE> {
 
 #[cfg(all(test, feature = "strict", not(feature = "no_strict")))]
 mod strict_tests {
-    use crate::core_type::D128s12;
+    use crate::core_type::D38s12;
 
     /// Tolerance in ULPs for the strict transcendentals. They are
     /// correctly rounded (≤ 0.5 ULP); 2 LSB of slack absorbs the
     /// test's own expected-value rounding.
     const STRICT_TOLERANCE_LSB: i128 = 2;
 
-    fn within(actual: D128s12, expected_bits: i128, tolerance: i128) -> bool {
+    fn within(actual: D38s12, expected_bits: i128, tolerance: i128) -> bool {
         (actual.to_bits() - expected_bits).abs() <= tolerance
     }
 
     /// ln(1) == 0 exactly (no series terms contribute).
     #[test]
     fn ln_of_one_is_zero() {
-        assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
+        assert_eq!(D38s12::ONE.ln(), D38s12::ZERO);
     }
 
     /// `ln_strict` is correctly rounded: cross-check against the f64
@@ -503,12 +503,12 @@ mod strict_tests {
     /// correctly-rounded integer result must agree to within 1 ULP.
     #[test]
     fn ln_strict_is_correctly_rounded_vs_f64() {
-        use crate::core_type::D128;
-        // D128<9>: ULP is 1e-9; f64 ln is good to ~1e-15 over this
+        use crate::core_type::D38;
+        // D38<9>: ULP is 1e-9; f64 ln is good to ~1e-15 over this
         // range, so the correctly-rounded result is within 1 ULP of the
         // f64 reference (allow 1 for the f64 reference's own rounding).
         fn check(raw: i128) {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             let strict = x.ln_strict().to_bits();
             let reference = {
                 let v = raw as f64 / 1e9;
@@ -536,14 +536,14 @@ mod strict_tests {
     }
 
     /// `exp_strict` / `log2_strict` / `log10_strict` agree with the f64
-    /// bridge to within 1 ULP at D128<9>, where f64 is comfortably more
+    /// bridge to within 1 ULP at D38<9>, where f64 is comfortably more
     /// precise than the type's ULP — strong evidence of correct
     /// rounding for the whole log/exp family.
     #[test]
     fn strict_log_exp_family_matches_f64() {
-        use crate::core_type::D128;
+        use crate::core_type::D38;
         fn check_exp(raw: i128) {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             let strict = x.exp_strict().to_bits();
             let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
             assert!(
@@ -552,7 +552,7 @@ mod strict_tests {
             );
         }
         fn check_log2(raw: i128) {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             let strict = x.log2_strict().to_bits();
             let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
             assert!(
@@ -561,7 +561,7 @@ mod strict_tests {
             );
         }
         fn check_log10(raw: i128) {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             let strict = x.log10_strict().to_bits();
             let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
             assert!(
@@ -589,9 +589,9 @@ mod strict_tests {
     /// `exp2_strict` is exact at integer arguments: `2^10` is `1024`.
     #[test]
     fn strict_exp2_at_integers() {
-        use crate::core_type::D128;
+        use crate::core_type::D38;
         for k in 0_i128..=12 {
-            let x = D128::<12>::from_bits(k * 10i128.pow(12));
+            let x = D38::<12>::from_bits(k * 10i128.pow(12));
             let got = x.exp2_strict().to_bits();
             let expected = (1i128 << k) * 10i128.pow(12);
             // Correctly rounded: exactly the integer power of two.
@@ -603,12 +603,12 @@ mod strict_tests {
     /// `ln(2^k)` rounds to `k · ln(2)` at the type's scale.
     #[test]
     fn ln_strict_of_powers_of_two() {
-        use crate::core_type::D128;
+        use crate::core_type::D38;
         // ln(2) at scale 18, correctly rounded:
         // 0.693147180559945309… -> 693147180559945309.
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
-            let x = D128::<18>::from_bits((1i128 << k) * 10i128.pow(18));
+            let x = D38::<18>::from_bits((1i128 << k) * 10i128.pow(18));
             let got = x.ln_strict().to_bits();
             let expected = k * ln2_s18;
             // k·ln(2) accumulates k roundings of the scale-18 ln(2);
@@ -625,7 +625,7 @@ mod strict_tests {
     /// ln(2) at scale 12 = 693_147_180_560 (canonical rounded to 12 places).
     #[test]
     fn ln_of_two_close_to_canonical() {
-        let two = D128s12::from_bits(2_000_000_000_000);
+        let two = D38s12::from_bits(2_000_000_000_000);
         let result = two.ln();
         // ln(2) = 0.693147180559945... so at scale 12, bits = 693_147_180_560.
         assert!(
@@ -639,7 +639,7 @@ mod strict_tests {
     #[test]
     fn ln_of_e_close_to_one() {
         // e at scale 12 = 2_718_281_828_459 (canonical 35-digit reference rescaled).
-        let e_at_s12 = D128s12::from_bits(2_718_281_828_459);
+        let e_at_s12 = D38s12::from_bits(2_718_281_828_459);
         let result = e_at_s12.ln();
         // ln(e) = 1.0 -> bits = 1_000_000_000_000 at scale 12.
         assert!(
@@ -652,7 +652,7 @@ mod strict_tests {
     /// ln(10) at scale 12 = 2_302_585_092_994 (canonical).
     #[test]
     fn ln_of_ten_close_to_canonical() {
-        let ten = D128s12::from_bits(10_000_000_000_000);
+        let ten = D38s12::from_bits(10_000_000_000_000);
         let result = ten.ln();
         assert!(
             within(result, 2_302_585_092_994, STRICT_TOLERANCE_LSB),
@@ -664,7 +664,7 @@ mod strict_tests {
     /// ln of a value > 1 is positive.
     #[test]
     fn ln_above_one_is_positive() {
-        let v = D128s12::from_bits(1_500_000_000_000); // 1.5
+        let v = D38s12::from_bits(1_500_000_000_000); // 1.5
         let result = v.ln();
         assert!(result.to_bits() > 0);
     }
@@ -672,7 +672,7 @@ mod strict_tests {
     /// ln of a value in (0, 1) is negative.
     #[test]
     fn ln_below_one_is_negative() {
-        let v = D128s12::from_bits(500_000_000_000); // 0.5
+        let v = D38s12::from_bits(500_000_000_000); // 0.5
         let result = v.ln();
         assert!(result.to_bits() < 0);
         // ln(0.5) = -ln(2) ~= -0.693147...
@@ -686,13 +686,13 @@ mod strict_tests {
     #[test]
     #[should_panic(expected = "argument must be positive")]
     fn ln_of_zero_panics() {
-        let _ = D128s12::ZERO.ln();
+        let _ = D38s12::ZERO.ln();
     }
 
     #[test]
     #[should_panic(expected = "argument must be positive")]
     fn ln_of_negative_panics() {
-        let neg = D128s12::from_bits(-1_000_000_000_000);
+        let neg = D38s12::from_bits(-1_000_000_000_000);
         let _ = neg.ln();
     }
 
@@ -703,7 +703,7 @@ mod strict_tests {
     /// log2(2) ~= 1.
     #[test]
     fn log2_of_two_is_one() {
-        let two = D128s12::from_bits(2_000_000_000_000);
+        let two = D38s12::from_bits(2_000_000_000_000);
         let result = two.log2();
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -715,7 +715,7 @@ mod strict_tests {
     /// log2(8) ~= 3.
     #[test]
     fn log2_of_eight_is_three() {
-        let eight = D128s12::from_bits(8_000_000_000_000);
+        let eight = D38s12::from_bits(8_000_000_000_000);
         let result = eight.log2();
         assert!(
             within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -727,7 +727,7 @@ mod strict_tests {
     /// log10(10) ~= 1.
     #[test]
     fn log10_of_ten_is_one() {
-        let ten = D128s12::from_bits(10_000_000_000_000);
+        let ten = D38s12::from_bits(10_000_000_000_000);
         let result = ten.log10();
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -739,7 +739,7 @@ mod strict_tests {
     /// log10(100) ~= 2.
     #[test]
     fn log10_of_hundred_is_two() {
-        let hundred = D128s12::from_bits(100_000_000_000_000);
+        let hundred = D38s12::from_bits(100_000_000_000_000);
         let result = hundred.log10();
         assert!(
             within(result, 2_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -751,7 +751,7 @@ mod strict_tests {
     /// log_base_b(b) == 1 for any b > 0, b != 1.
     #[test]
     fn log_self_is_one() {
-        let base = D128s12::from_bits(5_000_000_000_000); // 5
+        let base = D38s12::from_bits(5_000_000_000_000); // 5
         let result = base.log(base);
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -763,8 +763,8 @@ mod strict_tests {
     /// log_2(8) == 3 via the generic log.
     #[test]
     fn log_with_base_two() {
-        let eight = D128s12::from_bits(8_000_000_000_000);
-        let two = D128s12::from_bits(2_000_000_000_000);
+        let eight = D38s12::from_bits(8_000_000_000_000);
+        let two = D38s12::from_bits(2_000_000_000_000);
         let result = eight.log(two);
         assert!(
             within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -776,26 +776,26 @@ mod strict_tests {
     #[test]
     #[should_panic(expected = "base must not equal 1")]
     fn log_base_one_panics() {
-        let x = D128s12::from_bits(5_000_000_000_000);
-        let one = D128s12::ONE;
+        let x = D38s12::from_bits(5_000_000_000_000);
+        let one = D38s12::ONE;
         let _ = x.log(one);
     }
 
     // exp / exp2: tolerance accounts for Taylor truncation, 2^k bit-shift
-    // exactness, and the range-reduction rounding step. ~20 LSB at D128s12.
+    // exactness, and the range-reduction rounding step. ~20 LSB at D38s12.
     const EXP_TOLERANCE_LSB: i128 = 20;
 
     /// exp(0) == 1 exactly.
     #[test]
     fn exp_of_zero_is_one() {
-        assert_eq!(D128s12::ZERO.exp(), D128s12::ONE);
+        assert_eq!(D38s12::ZERO.exp(), D38s12::ONE);
     }
 
     /// exp(1) ~= e.
     #[test]
     fn exp_of_one_is_e() {
-        let result = D128s12::ONE.exp();
-        // e ~= 2.718281828459 at D128s12.
+        let result = D38s12::ONE.exp();
+        // e ~= 2.718281828459 at D38s12.
         assert!(
             within(result, 2_718_281_828_459, EXP_TOLERANCE_LSB),
             "exp(1) bits = {}",
@@ -806,7 +806,7 @@ mod strict_tests {
     /// exp(ln(2)) ~= 2.
     #[test]
     fn exp_of_ln_2_is_two() {
-        let ln_2 = D128s12::from_bits(693_147_180_560);
+        let ln_2 = D38s12::from_bits(693_147_180_560);
         let result = ln_2.exp();
         assert!(
             within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
@@ -818,9 +818,9 @@ mod strict_tests {
     /// exp(-1) ~= 1/e ~= 0.367879441171.
     #[test]
     fn exp_of_negative_one_is_reciprocal_e() {
-        let neg_one = D128s12::from_bits(-1_000_000_000_000);
+        let neg_one = D38s12::from_bits(-1_000_000_000_000);
         let result = neg_one.exp();
-        // 1/e ~= 0.367879441171 at D128s12 -> bits ~= 367_879_441_171.
+        // 1/e ~= 0.367879441171 at D38s12 -> bits ~= 367_879_441_171.
         assert!(
             within(result, 367_879_441_171, EXP_TOLERANCE_LSB),
             "exp(-1) bits = {}",
@@ -831,13 +831,13 @@ mod strict_tests {
     /// exp2(0) == 1 exactly.
     #[test]
     fn exp2_of_zero_is_one() {
-        assert_eq!(D128s12::ZERO.exp2(), D128s12::ONE);
+        assert_eq!(D38s12::ZERO.exp2(), D38s12::ONE);
     }
 
     /// exp2(1) ~= 2.
     #[test]
     fn exp2_of_one_is_two() {
-        let result = D128s12::ONE.exp2();
+        let result = D38s12::ONE.exp2();
         assert!(
             within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
             "exp2(1) bits = {}",
@@ -848,7 +848,7 @@ mod strict_tests {
     /// exp2(10) ~= 1024.
     #[test]
     fn exp2_of_ten_is_1024() {
-        let ten = D128s12::from_bits(10_000_000_000_000);
+        let ten = D38s12::from_bits(10_000_000_000_000);
         let result = ten.exp2();
         assert!(
             within(result, 1024_000_000_000_000, EXP_TOLERANCE_LSB * 10),

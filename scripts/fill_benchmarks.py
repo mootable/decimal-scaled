@@ -149,12 +149,12 @@ def build_placeholder_map() -> dict[str, str]:
 
     # Arithmetic. Per-type table; six ops per type×scale.
     arith_specs = [
-        ("D32",   "ARITH_D32",   [(0, "S0"), (5, "S5"), (9, "S9")]),
-        ("D64",   "ARITH_D64",   [(0, "S0"), (9, "S9"), (18, "S18")]),
-        ("D128",  "ARITH_D128",  [(0, "S0"), (19, "S19"), (38, "S38")]),
-        ("D256",  "ARITH_D256",  [(0, "S0"), (35, "S35"), (76, "S76")]),
-        ("D512",  "ARITH_D512",  [(0, "S0"), (75, "S75"), (153, "S153")]),
-        ("D1024", "ARITH_D1024", [(0, "S0"), (150, "S150"), (307, "S307")]),
+        ("D9",   "ARITH_D32",   [(0, "S0"), (5, "S5"), (9, "S9")]),
+        ("D18",   "ARITH_D64",   [(0, "S0"), (9, "S9"), (18, "S18")]),
+        ("D38",  "ARITH_D128",  [(0, "S0"), (19, "S19"), (38, "S38")]),
+        ("D76",  "ARITH_D256",  [(0, "S0"), (35, "S35"), (76, "S76")]),
+        ("D153",  "ARITH_D512",  [(0, "S0"), (75, "S75"), (153, "S153")]),
+        ("D307", "ARITH_D1024", [(0, "S0"), (150, "S150"), (307, "S307")]),
     ]
     ops = ["ADD", "SUB", "MUL", "DIV", "REM", "NEG"]
     for type_name, prefix, scales in arith_specs:
@@ -173,9 +173,9 @@ def build_placeholder_map() -> dict[str, str]:
 
     # Lossy.
     lossy_specs = [
-        ("D32",  "D32_s9"),
-        ("D64",  "D64_s18"),
-        ("D128", "D128_s38"),
+        ("D9",  "D9_s9"),
+        ("D18",  "D18_s18"),
+        ("D38", "D38_s38"),
     ]
     for type_name, bench_tag in lossy_specs:
         for fn in ["LN", "EXP", "SIN", "SQRT"]:
@@ -185,11 +185,11 @@ def build_placeholder_map() -> dict[str, str]:
 
     # Strict (narrow).
     narrow_strict_specs = [
-        ("D32",  "D32_s9",   "D32"),
-        ("D64",  "D64_s18",  "D64"),
-        ("D128_S0",  "D128_s0",  "D128"),
-        ("D128_S19", "D128_s19", "D128"),
-        ("D128_S38", "D128_s38", "D128"),
+        ("D9",  "D9_s9",   "D9"),
+        ("D18",  "D18_s18",  "D18"),
+        ("D128_S0",  "D38_s0",  "D38"),
+        ("D128_S19", "D38_s19", "D38"),
+        ("D128_S38", "D38_s38", "D38"),
     ]
     for ph_tag, bench_tag, _typ in narrow_strict_specs:
         for fn in ["LN", "EXP", "SIN", "SQRT"]:
@@ -197,15 +197,15 @@ def build_placeholder_map() -> dict[str, str]:
 
     # Strict (wide).
     wide_strict_specs = [
-        ("D256_S0",   "D256_s0"),
-        ("D256_S35",  "D256_s35"),
-        ("D256_S76",  "D256_s76"),
-        ("D512_S0",   "D512_s0"),
-        ("D512_S75",  "D512_s75"),
-        ("D512_S153", "D512_s153"),
-        ("D1024_S0",   "D1024_s0"),
-        ("D1024_S150", "D1024_s150"),
-        ("D1024_S307", "D1024_s307"),
+        ("D256_S0",   "D76_s0"),
+        ("D256_S35",  "D76_s35"),
+        ("D256_S76",  "D76_s76"),
+        ("D512_S0",   "D153_s0"),
+        ("D512_S75",  "D153_s75"),
+        ("D512_S153", "D153_s153"),
+        ("D1024_S0",   "D307_s0"),
+        ("D1024_S150", "D307_s150"),
+        ("D1024_S307", "D307_s307"),
     ]
     for ph_tag, bench_tag in wide_strict_specs:
         for fn in ["LN", "EXP", "SIN", "SQRT"]:
@@ -219,17 +219,17 @@ def build_placeholder_map() -> dict[str, str]:
 ROWS: list[list[str]] = []
 
 # Arithmetic rows: one per (type, op). Columns = scales (+ baselines
-# for the D128 / D256 tables).
+# for the D38 / D76 tables).
 def add_arith_rows() -> None:
     ops = ["ADD", "SUB", "MUL", "DIV", "REM", "NEG"]
 
-    # D32: three scales.
+    # D9: three scales.
     for op in ops:
         ROWS.append([f"ARITH_D32_S0_{op}", f"ARITH_D32_S5_{op}", f"ARITH_D32_S9_{op}"])
-    # D64.
+    # D18.
     for op in ops:
         ROWS.append([f"ARITH_D64_S0_{op}", f"ARITH_D64_S9_{op}", f"ARITH_D64_S18_{op}"])
-    # D128 + rust_decimal + fixed.
+    # D38 + rust_decimal + fixed.
     for op in ops:
         ROWS.append([
             f"ARITH_D128_S0_{op}",
@@ -238,7 +238,7 @@ def add_arith_rows() -> None:
             f"ARITH_RD_{op}",
             f"ARITH_FX_{op}",
         ])
-    # D256 + bnum_d256.
+    # D76 + bnum_d256.
     for op in ops:
         ROWS.append([
             f"ARITH_D256_S0_{op}",
@@ -246,10 +246,10 @@ def add_arith_rows() -> None:
             f"ARITH_D256_S76_{op}",
             f"ARITH_BD_{op}",
         ])
-    # D512.
+    # D153.
     for op in ops:
         ROWS.append([f"ARITH_D512_S0_{op}", f"ARITH_D512_S75_{op}", f"ARITH_D512_S153_{op}"])
-    # D1024.
+    # D307.
     for op in ops:
         ROWS.append([f"ARITH_D1024_S0_{op}", f"ARITH_D1024_S150_{op}", f"ARITH_D1024_S307_{op}"])
 

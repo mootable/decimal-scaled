@@ -1,48 +1,48 @@
-//! Native D128 mul/div (Möller–Granlund) vs the wide-arm algorithm
+//! Native D38 mul/div (Möller–Granlund) vs the wide-arm algorithm
 //! (widen to `Int256`, multiply, divide by `10^SCALE` via the generic
 //! `limbs_divmod`, narrow back).
 //!
-//! D128 currently uses its hand-written `mg_divide::mul_div_pow10` /
+//! D38 currently uses its hand-written `mg_divide::mul_div_pow10` /
 //! `div_pow10_div` path — a 256-bit schoolbook product followed by a
 //! Möller–Granlund magic-number divide for `10^SCALE`. The wide tiers
-//! (D256 / D384 / …) take a different path through
+//! (D76 / D115 / …) take a different path through
 //! `decl_decimal_arithmetic!(wide …)`: widen to the next-up `Int*`,
 //! multiply, divide by `10^SCALE` using the generic `limbs_divmod`
 //! (which has hardware fast paths for divisors fitting `u64`).
 //!
-//! This bench applies the *wide-arm* algorithm to a D128-sized
+//! This bench applies the *wide-arm* algorithm to a D38-sized
 //! problem using `Int256`, so the two paths can be compared
 //! head-to-head on identical operands.
 //!
-//! Run with: `cargo bench --features wide --bench d128_mul_div_paths`.
+//! Run with: `cargo bench --features wide --bench d_w128_mul_div_paths`.
 
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D128, Int256};
+use decimal_scaled::{D38, Int256};
 
 /// `(a · b) / 10^SCALE`, computed wide-arm style with `Int256` as the
 /// widening intermediate — mirroring `decl_decimal_arithmetic!(wide D,
 /// I, Int256)`.
 #[inline]
-fn mul_wide_style<const SCALE: u32>(a: D128<SCALE>, b: D128<SCALE>) -> D128<SCALE> {
+fn mul_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> {
     let a256 = Int256::from_i128(a.to_bits());
     let b256 = Int256::from_i128(b.to_bits());
     let m = Int256::from_str_radix("10", 10)
         .expect("base-10 literal")
         .pow(SCALE);
     let r = (a256 * b256) / m;
-    D128::<SCALE>::from_bits(r.to_i128_checked().expect("fits i128"))
+    D38::<SCALE>::from_bits(r.to_i128_checked().expect("fits i128"))
 }
 
 /// `(a · 10^SCALE) / b`, wide-arm style.
 #[inline]
-fn div_wide_style<const SCALE: u32>(a: D128<SCALE>, b: D128<SCALE>) -> D128<SCALE> {
+fn div_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> {
     let a256 = Int256::from_i128(a.to_bits());
     let b256 = Int256::from_i128(b.to_bits());
     let m = Int256::from_str_radix("10", 10)
         .expect("base-10 literal")
         .pow(SCALE);
     let r = (a256 * m) / b256;
-    D128::<SCALE>::from_bits(r.to_i128_checked().expect("fits i128"))
+    D38::<SCALE>::from_bits(r.to_i128_checked().expect("fits i128"))
 }
 
 /// Mid-range operands at SCALE = 12: comfortably above the i64
@@ -53,8 +53,8 @@ const B_BITS: i128 = 9_876_543_210_987;
 
 fn bench_d128_mul(c: &mut Criterion) {
     let mut g = c.benchmark_group("d128/mul");
-    let a = D128::<12>::from_bits(A_BITS);
-    let b = D128::<12>::from_bits(B_BITS);
+    let a = D38::<12>::from_bits(A_BITS);
+    let b = D38::<12>::from_bits(B_BITS);
 
     g.bench_function("native_mg_divide", |bn| {
         bn.iter(|| black_box(a) * black_box(b))
@@ -68,8 +68,8 @@ fn bench_d128_mul(c: &mut Criterion) {
 
 fn bench_d128_div(c: &mut Criterion) {
     let mut g = c.benchmark_group("d128/div");
-    let a = D128::<12>::from_bits(A_BITS);
-    let b = D128::<12>::from_bits(B_BITS);
+    let a = D38::<12>::from_bits(A_BITS);
+    let b = D38::<12>::from_bits(B_BITS);
 
     g.bench_function("native_mg_divide", |bn| {
         bn.iter(|| black_box(a) / black_box(b))

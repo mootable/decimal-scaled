@@ -1,6 +1,6 @@
 //! Macro-generated overflow-aware arithmetic variants for the decimal
-//! widths that use a *uniform* mul/div pattern (D32, D64, and the wide
-//! tier D256 / D512 / D1024).
+//! widths that use a *uniform* mul/div pattern (D9, D18, and the wide
+//! tier D76 / D153 / D307).
 //!
 //! Emits the four standard families (`checked_*`, `wrapping_*`,
 //! `saturating_*`, `overflowing_*`) for `add`, `sub`, `neg`, `mul`,
@@ -14,14 +14,14 @@
 //! widening *spelling* differs (native `as`-casts vs the `WideInt` cast),
 //! so they are written inline per front-end arm.
 //!
-//! D128 is the exception: its overflow mul/div go through the
+//! D38 is the exception: its overflow mul/div go through the
 //! hand-rolled `mg_divide` path and are not generated here.
 
 /// Emits overflow variants for a decimal type.
 ///
-/// - `decl_decimal_overflow_variants!(D32, i32, i64)` — *native*
+/// - `decl_decimal_overflow_variants!(D9, i32, i64)` — *native*
 /// storage; `$Wider` is a primitive integer.
-/// - `decl_decimal_overflow_variants!(wide D256, I256, I512)` — *wide*
+/// - `decl_decimal_overflow_variants!(wide D76, I256, I512)` — *wide*
 /// storage; `$Wider` is the next size up.
 macro_rules! decl_decimal_overflow_variants {
     // Wide storage.

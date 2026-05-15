@@ -9,8 +9,8 @@
 //! valid canonical decimal literal. One variant per failure mode so
 //! callers can surface a precise diagnostic.
 //!
-//! Both types are width-neutral — the same enum is returned by D32,
-//! D64, D128, and the future wider widths.
+//! Both types are width-neutral — the same enum is returned by D9,
+//! D18, D38, and the future wider widths.
 
 /// Error returned by the fallible [`TryFrom`] impls.
 ///

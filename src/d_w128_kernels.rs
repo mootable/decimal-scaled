@@ -3,7 +3,7 @@
 //!
 //! The strict `ln` / `exp` / trig family must be accurate to within
 //! 0.5 ULP of the exact result (the IEEE-754 round-to-nearest
-//! contract). Achieving that for `D128<SCALE>` at the larger scales
+//! contract). Achieving that for `D38<SCALE>` at the larger scales
 //! means evaluating the series in a fixed-point intermediate with
 //! *guard digits* beyond `SCALE` — which at `SCALE` near 38 overflows
 //! `i128`. This module provides exactly the wide-integer primitives the
@@ -463,7 +463,7 @@ impl Fixed {
     /// `target` (`target <= w`) using the crate-default
     /// [`RoundingMode`] and returns the result as a signed `i128`
     /// raw storage value. Used to land a guard-digit computation back
-    /// on the caller's `D128<SCALE>`.
+    /// on the caller's `D38<SCALE>`.
     ///
     /// Returns `None` if the rounded magnitude does not fit `i128`.
     ///

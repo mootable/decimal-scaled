@@ -1,13 +1,13 @@
-//! Lossy (f64-bridge) powers methods for D128.
+//! Lossy (f64-bridge) powers methods for D38.
 //!
 //! Companion to powers_strict.rs. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
 //! no_strict set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
-impl<const SCALE: u32> D128<SCALE> {
+impl<const SCALE: u32> D38<SCALE> {
 
     /// Raises `self` to the power `exp` via the f64 bridge.
     ///
@@ -25,16 +25,16 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// let two = D128s12::from_int(2);
-    /// let three = D128s12::from_int(3);
+    /// use decimal_scaled::D38s12;
+    /// let two = D38s12::from_int(2);
+    /// let three = D38s12::from_int(3);
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64_lossy() - 8.0).abs() < 1e-9);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
     #[must_use]
-    pub fn powf(self, exp: D128<SCALE>) -> Self {
+    pub fn powf(self, exp: D38<SCALE>) -> Self {
         Self::from_f64_lossy(self.to_f64_lossy().powf(exp.to_f64_lossy()))
     }
 
@@ -43,7 +43,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// IEEE 754 mandates that `f64::sqrt` is correctly-rounded
     /// (round-to-nearest, ties-to-even). Combined with the deterministic
     /// `to_f64_lossy` / `from_f64_lossy` round-trip, this makes
-    /// `D128::sqrt` bit-deterministic: the same input produces the same
+    /// `D38::sqrt` bit-deterministic: the same input produces the same
     /// output bit-pattern on every IEEE-754-conformant platform.
     ///
     /// Negative inputs produce a NaN from `f64::sqrt`, which
@@ -57,10 +57,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// assert_eq!(D128s12::ZERO.sqrt(), D128s12::ZERO);
+    /// use decimal_scaled::D38s12;
+    /// assert_eq!(D38s12::ZERO.sqrt(), D38s12::ZERO);
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
-    /// assert_eq!(D128s12::ONE.sqrt(), D128s12::ONE);
+    /// assert_eq!(D38s12::ONE.sqrt(), D38s12::ONE);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
@@ -83,8 +83,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// let neg_eight = D128s12::from_int(-8);
+    /// use decimal_scaled::D38s12;
+    /// let neg_eight = D38s12::from_int(-8);
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64_lossy() - (-2.0_f64)).abs() < 1e-9);
     /// ```
@@ -101,7 +101,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
     ///
     /// The naive form `(self * self + other * other).sqrt()` overflows
-    /// `i128` once either operand approaches `sqrt(D128::MAX)`. This
+    /// `i128` once either operand approaches `sqrt(D38::MAX)`. This
     /// method uses the scale trick to avoid that:
     ///
     /// ```text
@@ -110,7 +110,7 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// The `min/max` ratio is in `[0, 1]`, so `ratio^2` is also in
     /// `[0, 1]` and cannot overflow. The outer multiply by `large` only
-    /// overflows when the true hypotenuse genuinely exceeds `D128::MAX`,
+    /// overflows when the true hypotenuse genuinely exceeds `D38::MAX`,
     /// which matches `f64::hypot`'s contract.
     ///
     /// Both inputs are absolute-valued before processing, so
@@ -126,9 +126,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
-    /// let three = D128s12::from_int(3);
-    /// let four = D128s12::from_int(4);
+    /// use decimal_scaled::D38s12;
+    /// let three = D38s12::from_int(3);
+    /// let four = D38s12::from_int(4);
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
     /// ```
@@ -147,7 +147,7 @@ impl<const SCALE: u32> D128<SCALE> {
             let ratio = small / large;
             // ratio^2 is in [0, 1]; ONE + ratio^2 is in [1, 2]; no overflow.
             // The outer sqrt is in [1, sqrt(2)]; the final multiply by large
-            // only overflows when the true hypotenuse exceeds D128::MAX.
+            // only overflows when the true hypotenuse exceeds D38::MAX.
             let one_plus_sq = Self::ONE + ratio * ratio;
             large * one_plus_sq.sqrt()
         }

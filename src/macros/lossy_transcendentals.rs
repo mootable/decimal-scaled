@@ -1,9 +1,9 @@
 //! Macro-generated f64-bridge (lossy) transcendentals for every width
-//! except D128.
+//! except D38.
 //!
-//! D128 has the lossy transcendentals hand-written in
-//! `log_exp.rs` / `trig.rs` / `powers.rs`; D32 / D64 and the wide tiers
-//! D256 / D512 / D1024 all share the same delegation shape — convert
+//! D38 has the lossy transcendentals hand-written in
+//! `log_exp.rs` / `trig.rs` / `powers.rs`; D9 / D18 and the wide tiers
+//! D76 / D153 / D307 all share the same delegation shape — convert
 //! to `f64`, call the platform intrinsic, convert back — so it lives
 //! in one macro reused per width.
 //!
@@ -11,7 +11,7 @@
 //! overrides strict)": exactly the configuration in which the plain
 //! method dispatches to the lossy bridge rather than the integer-only
 //! `*_strict` path. The `*_strict` methods themselves are emitted by
-//! `strict_transcendentals.rs` (for D32 / D64, via the D128 path) and
+//! `strict_transcendentals.rs` (for D9 / D18, via the D38 path) and
 //! by `wide_transcendental.rs` (for the wide tiers).
 //!
 //! # Precision

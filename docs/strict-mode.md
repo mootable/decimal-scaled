@@ -17,9 +17,9 @@ compiled** — it does *not* depend on the `strict` Cargo feature being
 enabled (it is only removed by `no_strict`, below).
 
 ```rust
-use decimal_scaled::D128s12;
+use decimal_scaled::D38s12;
 
-let x = D128s12::from_int(2);
+let x = D38s12::from_int(2);
 
 // Always available — the integer-only path, explicitly:
 let r1 = x.sqrt_strict();
@@ -41,7 +41,7 @@ Why a dual API:
   means strict, full stop; it cannot be silently swapped for the f64
   bridge by a downstream crate flipping a feature.
 
-The `*_strict` surface covers, on `D128` (and on `D32` / `D64` by
+The `*_strict` surface covers, on `D38` (and on `D9` / `D18` by
 widen-compute-narrow delegation):
 
 | Group | `*_strict` methods |
@@ -114,10 +114,10 @@ How it is achieved, per function family:
 This holds across the whole `SCALE` range, including `SCALE = 38`,
 because the guard-digit intermediate is wider than `i128`. Every
 strict transcendental is cross-checked against the platform `f64`
-implementation at `D128<9>` (where `f64` is comfortably more precise
+implementation at `D38<9>` (where `f64` is comfortably more precise
 than the type's ULP) — see the in-crate tests.
 
-The wide tiers (`D256` / `D512` / `D1024`) do not yet have the strict
+The wide tiers (`D76` / `D153` / `D307`) do not yet have the strict
 transcendental surface; that follow-up is tracked in
 `research/strict_transcendentals_research.md`.
 

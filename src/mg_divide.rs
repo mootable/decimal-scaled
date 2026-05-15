@@ -1,4 +1,4 @@
-//! Moller-Granlund magic-number division for `D128` rescale operations.
+//! Moller-Granlund magic-number division for `D38` rescale operations.
 //!
 //! This module provides two `pub(crate)` entry points used by the
 //! arithmetic layer:
@@ -36,7 +36,7 @@
 //! public entry points short-circuit at `SCALE == 0` before touching the
 //! table.
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
 /// Pre-computed magic constants for divide-by-`10^i` via the
 /// Moller-Granlund algorithm. Index `i` covers `i = 0..=38`.
@@ -231,9 +231,9 @@ fn div_exp_fast_2word_with_rem(
 /// `crate::wide_int` — it's only invoked from the wide-tier
 /// decimal `Mul` macro arm.
 #[cfg(any(
-    feature = "d256",
-    feature = "d512",
-    feature = "d1024",
+    feature = "d76",
+    feature = "d153",
+    feature = "d307",
     feature = "wide",
     feature = "x-wide"
 ))]
@@ -732,7 +732,7 @@ pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 /// # Examples
 ///
 /// ```ignore
-/// use decimal_scaled::D128;
+/// use decimal_scaled::D38;
 /// // 50_000_000_000_000_000_000_000 * 30_000_000_000_000_000_000_000
 /// // overflows i128 but fits after dividing by 10^12.
 /// let result = mul_div_pow10::<12>(
@@ -767,7 +767,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     if let Some(prod) = a.checked_mul(b) {
         return Some(crate::rounding::apply_rounding(
             prod,
-            D128::<SCALE>::multiplier(),
+            D38::<SCALE>::multiplier(),
             mode,
         ));
     }
@@ -778,7 +778,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     let ub = b.unsigned_abs();
     let (mhigh, mlow) = mul2(ua, ub);
 
-    let exp = D128::<SCALE>::multiplier() as u128;
+    let exp = D38::<SCALE>::multiplier() as u128;
     let (q_floor, r) = div_exp_fast_2word_with_rem(mhigh, mlow, exp, SCALE as usize)?;
     // Sign: result is negative iff exactly one operand is negative.
     let neg = (a < 0) ^ (b < 0);
@@ -822,7 +822,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
 /// # Examples
 ///
 /// ```ignore
-/// use decimal_scaled::D128;
+/// use decimal_scaled::D38;
 /// // (10^22 * 10^12) / 2 = 5e33, which requires 256-bit intermediates.
 /// let result = div_pow10_div::<12>(10_i128.pow(22), 2);
 /// assert_eq!(result, Some(5 * 10_i128.pow(33)));
@@ -853,7 +853,7 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
         return Some(crate::rounding::apply_rounding(a, b, mode));
     }
 
-    let mult = D128::<SCALE>::multiplier();
+    let mult = D38::<SCALE>::multiplier();
 
     // Fast path: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
     // fits with headroom; for larger SCALE the overflow check below

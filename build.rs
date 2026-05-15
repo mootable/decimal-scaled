@@ -512,7 +512,7 @@ fn main() -> std::io::Result<()> {
     writeln!(&mut f, "// `Int*::from_str_radix` at compile time.")?;
     writeln!(&mut f)?;
 
-    // D128: SCALE_REF=37 — the i128 ceiling. All six constants get
+    // D38: SCALE_REF=37 — the i128 ceiling. All six constants get
     // the full surface here so src/consts.rs can drop its hand-written
     // raw values entirely.
     let pi37 = pi(37);
@@ -531,7 +531,7 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "E_D128_S37", &e37, 37, 1)?;
     emit_constant(&mut f, "GOLDEN_D128_S37", &phi37, 37, 1)?;
 
-    // D256: SCALE_REF=75.
+    // D76: SCALE_REF=75.
     let pi75 = pi(75);
     let mut tau75 = pi75.clone();
     tau75.mul_u64(2);
@@ -548,7 +548,7 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "E_D256_S75", &e75, 75, 1)?;
     emit_constant(&mut f, "GOLDEN_D256_S75", &phi75, 75, 1)?;
 
-    // D512: SCALE_REF=153.
+    // D153: SCALE_REF=153.
     let pi153 = pi(153);
     let mut tau153 = pi153.clone();
     tau153.mul_u64(2);
@@ -565,7 +565,7 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "E_D512_S153", &e153, 153, 1)?;
     emit_constant(&mut f, "GOLDEN_D512_S153", &phi153, 153, 1)?;
 
-    // D1024: SCALE_REF=307.
+    // D307: SCALE_REF=307.
     let pi307 = pi(307);
     let mut tau307 = pi307.clone();
     tau307.mul_u64(2);

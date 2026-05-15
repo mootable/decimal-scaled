@@ -1,18 +1,18 @@
 //! Correctly-rounded strict transcendentals for the wide decimal tiers
-//! (D256 / D512 / D1024).
+//! (D76 / D153 / D307).
 //!
-//! D128 and the narrow tiers run their strict transcendentals on the
-//! 256-bit `d128_kernels::Fixed` guard-digit intermediate; D32 / D64
-//! delegate into D128. The wide tiers cannot widen into D128 — their
+//! D38 and the narrow tiers run their strict transcendentals on the
+//! 256-bit `d_w128_kernels::Fixed` guard-digit intermediate; D9 / D18
+//! delegate into D38. The wide tiers cannot widen into D38 — their
 //! scale range exceeds it — so they need their own guard-digit core.
 //!
 //! This module provides one, generic over a hand-rolled signed wide integer
 //! `$Work` chosen per tier to be wide enough to hold the working-scale
 //! products without overflow:
 //!
-//! - D256 → `I1024` (working scale ≤ 106 digits);
-//! - D512 → `I2048` (working scale ≤ 183 digits);
-//! - D1024 → `I4096` (working scale ≤ 337 digits).
+//! - D76 → `I1024` (working scale ≤ 106 digits);
+//! - D153 → `I2048` (working scale ≤ 183 digits);
+//! - D307 → `I4096` (working scale ≤ 337 digits).
 //!
 //! A working value `x` is held as the `$Work` integer `x · 10^w`, where
 //! `w = SCALE + GUARD` and `GUARD = 30` guard digits. the wide integers
@@ -57,8 +57,8 @@
 //! For inputs whose own storage representation has ≤ 0.5 LSB
 //! rounding (any value parsed from a literal at the storage scale),
 //! the *result* is within 1 LSB of the truth-at-storage. For inputs
-//! that are themselves stored with rounding (like `D256s12::pi()`
-//! widened from D128's 37-digit reference), the input's rounding
+//! that are themselves stored with rounding (like `D76s12::pi()`
+//! widened from D38's 37-digit reference), the input's rounding
 //! propagates through whatever conditioning the method has — that's
 //! an input-side budget the wide-tier API can't compensate for.
 //!
@@ -200,7 +200,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Uses [`wide_cast`] instead of `.resize::<W>()` so the
             /// macro accepts both wide-int and primitive `$Storage`
-            /// (`i128` for D128).
+            /// (`i128` for D38).
             ///
             /// [`wide_cast`]: $crate::wide_int::wide_cast
             pub(super) fn to_work(raw: $Storage) -> W {
@@ -1611,10 +1611,10 @@ pub(crate) use decl_wide_transcendental;
 
 #[cfg(all(test, not(feature = "no_strict")))]
 mod tests {
-    use crate::{D128, D256, D512, D1024};
+    use crate::{D38, D76, D153, D307};
 
     /// The wide-tier strict transcendentals are correctly rounded, so
-    /// at any scale they must agree with the D128 strict path — itself
+    /// at any scale they must agree with the D38 strict path — itself
     /// correctly rounded — to within a couple of ULP (a small slack
     /// absorbs the two paths' independent final-rounding of values that
     /// land near a half-ULP boundary).
@@ -1635,15 +1635,15 @@ mod tests {
         }
 
         for raw in positives {
-            let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
+            let n = D38::<6>::from_bits(raw as i128);
+            let w = D76::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
             agree("ln", raw, w.ln_strict().to_bits().resize::<i128>(), n.ln_strict().to_bits());
             agree("log2", raw, w.log2_strict().to_bits().resize::<i128>(), n.log2_strict().to_bits());
             agree("log10", raw, w.log10_strict().to_bits().resize::<i128>(), n.log10_strict().to_bits());
         }
         for raw in all {
-            let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
+            let n = D38::<6>::from_bits(raw as i128);
+            let w = D76::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
             agree("exp", raw, w.exp_strict().to_bits().resize::<i128>(), n.exp_strict().to_bits());
             agree("sin", raw, w.sin_strict().to_bits().resize::<i128>(), n.sin_strict().to_bits());
             agree("cos", raw, w.cos_strict().to_bits().resize::<i128>(), n.cos_strict().to_bits());
@@ -1653,8 +1653,8 @@ mod tests {
             agree("tanh", raw, w.tanh_strict().to_bits().resize::<i128>(), n.tanh_strict().to_bits());
         }
         for raw in unit_range {
-            let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
+            let n = D38::<6>::from_bits(raw as i128);
+            let w = D76::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128));
             agree("asin", raw, w.asin_strict().to_bits().resize::<i128>(), n.asin_strict().to_bits());
             agree("acos", raw, w.acos_strict().to_bits().resize::<i128>(), n.acos_strict().to_bits());
             agree("atanh", raw, w.atanh_strict().to_bits().resize::<i128>(), n.atanh_strict().to_bits());
@@ -1664,19 +1664,19 @@ mod tests {
     /// Bit-exact identity points hold across all three wide tiers.
     #[test]
     fn wide_transcendental_identities() {
-        assert_eq!(D256::<6>::ONE.ln_strict(), D256::<6>::ZERO);
-        assert_eq!(D256::<6>::ZERO.exp_strict(), D256::<6>::ONE);
-        assert_eq!(D256::<6>::ZERO.sin_strict(), D256::<6>::ZERO);
-        assert_eq!(D256::<6>::ZERO.sinh_strict(), D256::<6>::ZERO);
-        assert_eq!(D256::<6>::ZERO.atan_strict(), D256::<6>::ZERO);
+        assert_eq!(D76::<6>::ONE.ln_strict(), D76::<6>::ZERO);
+        assert_eq!(D76::<6>::ZERO.exp_strict(), D76::<6>::ONE);
+        assert_eq!(D76::<6>::ZERO.sin_strict(), D76::<6>::ZERO);
+        assert_eq!(D76::<6>::ZERO.sinh_strict(), D76::<6>::ZERO);
+        assert_eq!(D76::<6>::ZERO.atan_strict(), D76::<6>::ZERO);
 
-        assert_eq!(D512::<6>::ONE.ln_strict(), D512::<6>::ZERO);
-        assert_eq!(D512::<6>::ZERO.exp_strict(), D512::<6>::ONE);
-        assert_eq!(D512::<6>::ZERO.cos_strict(), D512::<6>::ONE);
+        assert_eq!(D153::<6>::ONE.ln_strict(), D153::<6>::ZERO);
+        assert_eq!(D153::<6>::ZERO.exp_strict(), D153::<6>::ONE);
+        assert_eq!(D153::<6>::ZERO.cos_strict(), D153::<6>::ONE);
 
-        assert_eq!(D1024::<6>::ONE.ln_strict(), D1024::<6>::ZERO);
-        assert_eq!(D1024::<6>::ZERO.exp_strict(), D1024::<6>::ONE);
-        assert_eq!(D1024::<6>::ZERO.cosh_strict(), D1024::<6>::ONE);
+        assert_eq!(D307::<6>::ONE.ln_strict(), D307::<6>::ZERO);
+        assert_eq!(D307::<6>::ZERO.exp_strict(), D307::<6>::ONE);
+        assert_eq!(D307::<6>::ZERO.cosh_strict(), D307::<6>::ONE);
     }
 
     /// AGM-based `ln_strict_agm` and `exp_strict_agm` (Brent–Salamin
@@ -1696,7 +1696,7 @@ mod tests {
         }
 
         for raw in positives {
-            let w = D256::<6>::from_bits(
+            let w = D76::<6>::from_bits(
                 crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128),
             );
             agree(
@@ -1707,7 +1707,7 @@ mod tests {
             );
         }
         for raw in all {
-            let w = D256::<6>::from_bits(
+            let w = D76::<6>::from_bits(
                 crate::wide_int::wide_cast::<i128, crate::wide_int::I256>(raw as i128),
             );
             agree(
@@ -1722,12 +1722,12 @@ mod tests {
     /// Identity points: AGM `ln(1) = 0`, AGM `exp(0) = 1`.
     #[test]
     fn wide_agm_identity_points() {
-        assert_eq!(D256::<6>::ONE.ln_strict_agm(), D256::<6>::ZERO);
-        assert_eq!(D256::<6>::ZERO.exp_strict_agm(), D256::<6>::ONE);
-        assert_eq!(D512::<6>::ONE.ln_strict_agm(), D512::<6>::ZERO);
-        assert_eq!(D512::<6>::ZERO.exp_strict_agm(), D512::<6>::ONE);
-        assert_eq!(D1024::<6>::ONE.ln_strict_agm(), D1024::<6>::ZERO);
-        assert_eq!(D1024::<6>::ZERO.exp_strict_agm(), D1024::<6>::ONE);
+        assert_eq!(D76::<6>::ONE.ln_strict_agm(), D76::<6>::ZERO);
+        assert_eq!(D76::<6>::ZERO.exp_strict_agm(), D76::<6>::ONE);
+        assert_eq!(D153::<6>::ONE.ln_strict_agm(), D153::<6>::ZERO);
+        assert_eq!(D153::<6>::ZERO.exp_strict_agm(), D153::<6>::ONE);
+        assert_eq!(D307::<6>::ONE.ln_strict_agm(), D307::<6>::ZERO);
+        assert_eq!(D307::<6>::ZERO.exp_strict_agm(), D307::<6>::ONE);
     }
 
     /// `*_strict_with(mode)` siblings honour the explicit rounding
@@ -1749,7 +1749,7 @@ mod tests {
         // A clean way: positive number with HTE rounding up. exp(1) =
         // 2.7182818... at SCALE=6: 2.718281 cut, fractional 0.8 →
         // HTE rounds up to 2.718282, Trunc keeps 2.718281.
-        let n = D256::<6>::ONE;
+        let n = D76::<6>::ONE;
         let hte = n.exp_strict_with(RoundingMode::HalfToEven);
         let trunc = n.exp_strict_with(RoundingMode::Trunc);
         assert!(
@@ -1776,33 +1776,33 @@ mod tests {
     /// precision (see the precision caveat on `ln_strict_agm`).
     #[test]
     fn wide_agm_moderate_scale_round_trip() {
-        let x = D256::<20>::from_int(3);
+        let x = D76::<20>::from_int(3);
         let back = x.ln_strict_agm().exp_strict_agm();
         let delta = (back.to_bits().resize::<i128>() - x.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "AGM exp(ln(3)) at D256<20> delta {delta}");
+        assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
 
-        let y = D512::<20>::from_int(2);
+        let y = D153::<20>::from_int(2);
         let back = y.exp_strict_agm().ln_strict_agm();
         let delta = (back.to_bits().resize::<i128>() - y.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "AGM ln(exp(2)) at D512<20> delta {delta}");
+        assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
     }
 
-    /// Exercises a scale beyond D128's range, where delegation is
+    /// Exercises a scale beyond D38's range, where delegation is
     /// impossible and the wide guard-digit core is the only path.
     /// `exp(ln(x)) ≈ x` and `ln(exp(x)) ≈ x` round-trips.
     #[test]
     fn wide_only_scale_round_trips() {
-        // D256<50>: well past D128's max scale of 38. The round-trip
+        // D76<50>: well past D38's max scale of 38. The round-trip
         // result fits i128 comfortably, so compare there.
-        let x = D256::<50>::from_int(3);
+        let x = D76::<50>::from_int(3);
         let back = x.ln_strict().exp_strict();
         let delta = (back.to_bits().resize::<i128>() - x.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "exp(ln(3)) at D256<50> delta {delta}");
+        assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
 
-        // D1024<150>: deep scale, only the wide core can serve it.
-        let y = D1024::<150>::from_int(2);
+        // D307<150>: deep scale, only the wide core can serve it.
+        let y = D307::<150>::from_int(2);
         let back = y.exp_strict().ln_strict();
         let delta = (back.to_bits().resize::<i128>() - y.to_bits().resize::<i128>()).abs();
-        assert!(delta <= 8, "ln(exp(2)) at D1024<150> delta {delta}");
+        assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");
     }
 }

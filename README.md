@@ -32,19 +32,19 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["ser
 ## Quick start
 
 ```rust
-use decimal_scaled::D128s12;
+use decimal_scaled::D38s12;
 
 // Construct from raw integer storage (value × 10^12)
-let a = D128s12::from_bits(1_100_000_000_000); // exactly 1.1
-let b = D128s12::from_bits(2_200_000_000_000); // exactly 2.2
+let a = D38s12::from_bits(1_100_000_000_000); // exactly 1.1
+let b = D38s12::from_bits(2_200_000_000_000); // exactly 2.2
 
 // Constants
-let zero = D128s12::ZERO;
-let one  = D128s12::ONE;
+let zero = D38s12::ZERO;
+let one  = D38s12::ONE;
 
 // Raw storage
 assert_eq!(a.to_bits(), 1_100_000_000_000);
-assert_eq!(D128s12::multiplier(), 1_000_000_000_000);
+assert_eq!(D38s12::multiplier(), 1_000_000_000_000);
 ```
 
 ---
@@ -108,7 +108,7 @@ All numeric types have a finite number space. The choice is which region of the 
 | `fixed::I64F64` | fixed (64 binary fractional bits, not decimal) | binary fixed fractions | decimal fractions | digital signal processing, physics, binary data |
 | `rust_decimal` | variable per value (0–28, stored alongside each number) | decimal fractions up to 28 digits | repeating decimals | finance, variable scale |
 | `bigdecimal` | variable per value (unbounded, heap-allocated) | any terminating decimal | repeating decimals | arbitrary-precision decimal work |
-| `D128<S>` (this crate) | **fixed to `S` at compile time** | decimal fractions up to `S` digits | repeating decimals | finance, computer-aided design, human-entered values |
+| `D38<S>` (this crate) | **fixed to `S` at compile time** | decimal fractions up to `S` digits | repeating decimals | finance, computer-aided design, human-entered values |
 
 **Use `decimal-scaled` when:**
 - Values are entered by humans as decimal strings (prices, measurements, quantities)
@@ -140,7 +140,7 @@ All numeric types have a finite number space. The choice is which region of the 
 
 ## What `decimal-scaled` provides
 
-`D128<const SCALE: u32>` is a `#[repr(transparent)]` newtype around `i128`. The const generic `SCALE` is the base-10 exponent baked into the type at compile time. There is exactly one representation per value: no normalisation, no variable scale, no heap allocation.
+`D38<const SCALE: u32>` is a `#[repr(transparent)]` newtype around `i128`. The const generic `SCALE` is the base-10 exponent baked into the type at compile time. There is exactly one representation per value: no normalisation, no variable scale, no heap allocation.
 
 ```
 stored = logical_value × 10^SCALE
@@ -155,7 +155,7 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 - **`no_std` compatible** - compiles with `no_std + alloc` when default features are disabled.
 - **`num-traits` compatible** - implements `Zero`, `One`, `Num`, `Bounded`, `Signed`, `FromPrimitive`, `ToPrimitive`, and the `Checked*` family.
 - **`serde` support** - canonical-string serialize/deserialize behind the `serde` feature (on by default).
-- **Const-generic scale** - future scale variants (`D128<6>`, `D128<18>`) are free type aliases, not separate implementations.
+- **Const-generic scale** - future scale variants (`D38<6>`, `D38<18>`) are free type aliases, not separate implementations.
 
 ---
 
@@ -170,10 +170,10 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 | `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | add/sub: exact; mul/div: ≤ 1 ULP; no transcendentals | Yes |
 | `rust_decimal`                 | 96-bit + per-value scale (0..=28) | 10 | Yes | Yes | ±7.9 × 10²⁸ | add/sub: exact at common scale; mul/div: ≤ 1 ULP; transcendentals: software, **not** correctly rounded | Yes |
 | `bigdecimal`                   | heap-allocated arbitrary precision | 10 | Yes | Yes | Unbounded | exact at the configured precision; transcendentals: limited | No |
-| `D128<S>` (this)               | 128-bit integer, scale fixed at compile time, S ∈ 0..=38 | 10 | Yes | Yes | ±i128::MAX / 10ˢ | add/sub: **exact**; mul/div: ≤ 1 ULP; **strict transcendentals: ≤ 0.5 ULP (correctly rounded)** | Yes |
-| `D256<S>` / `D512<S>` / `D1024<S>` (this, `wide`) | 256 / 512 / 1024-bit integer, S up to 76 / 153 / 307 | 10 | Yes | Yes | wider, S-dependent | same accuracy as `D128<S>` | Yes |
+| `D38<S>` (this)               | 128-bit integer, scale fixed at compile time, S ∈ 0..=38 | 10 | Yes | Yes | ±i128::MAX / 10ˢ | add/sub: **exact**; mul/div: ≤ 1 ULP; **strict transcendentals: ≤ 0.5 ULP (correctly rounded)** | Yes |
+| `D76<S>` / `D153<S>` / `D307<S>` (this, `wide`) | 256 / 512 / 1024-bit integer, S up to 76 / 153 / 307 | 10 | Yes | Yes | wider, S-dependent | same accuracy as `D38<S>` | Yes |
 
-The accuracy column gives the error bound on computed results, in [ULPs](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (units in the last place). A 0.5 ULP bound — "correctly rounded" — is the IEEE-754 round-to-nearest contract and the strongest accuracy guarantee a finite numeric type can give. The floats meet it for basic arithmetic but not for transcendentals; `decimal-scaled`'s strict transcendentals meet it for transcendentals as well, which is the capability the alternatives do not offer. The position of the ULP — the absolute size of `1 ULP` — is the type's *scale*: for `f64` it's a relative ~2⁻⁵² of the value's magnitude, for `D128<S>` it's exactly `10⁻ˢ` at every value, fixed at compile time.
+The accuracy column gives the error bound on computed results, in [ULPs](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (units in the last place). A 0.5 ULP bound — "correctly rounded" — is the IEEE-754 round-to-nearest contract and the strongest accuracy guarantee a finite numeric type can give. The floats meet it for basic arithmetic but not for transcendentals; `decimal-scaled`'s strict transcendentals meet it for transcendentals as well, which is the capability the alternatives do not offer. The position of the ULP — the absolute size of `1 ULP` — is the type's *scale*: for `f64` it's a relative ~2⁻⁵² of the value's magnitude, for `D38<S>` it's exactly `10⁻ˢ` at every value, fixed at compile time.
 
 ### Hash and equality contracts
 
@@ -186,30 +186,30 @@ A well-behaved numeric type must satisfy: if `a == b` then `hash(a) == hash(b)`.
 | `fixed::I64F64` | Yes (same binary approximation) | Yes | Yes | structural (one representation) |
 | `rust_decimal` | Yes | Yes | Yes | normalises trailing zeros at comparison and hash time |
 | `bigdecimal` | Yes | Yes | Yes | normalises at comparison and hash time |
-| `D128<S>` (this) | Yes | Yes | Yes | structural - scale is fixed, one bit pattern per value |
+| `D38<S>` (this) | Yes | Yes | Yes | structural - scale is fixed, one bit pattern per value |
 
 `f32`, `f64`, and `f128` do not implement `Hash` in the Rust standard library because Not-a-Number values are not equal to themselves (`NaN != NaN`) while a structural hash would make all such values collide - the contract cannot be satisfied without special-casing.
 
 For `rust_decimal` and `bigdecimal`, the normalisation is correct but carries a runtime cost on every comparison and hash call, and it means the stored representation is not canonical - you cannot memcmp two values.
 
-`D128<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because the scale is fixed at compile time there is exactly one `i128` value per logical number. `1.10` and `1.1` parsed via `FromStr` both produce `D128s12(1_100_000_000_000)` - the same bit pattern - so equality and hashing are a single integer comparison with no runtime normalisation.
+`D38<S>` derives `Hash`, `Eq`, and `Ord` directly from `i128`. Because the scale is fixed at compile time there is exactly one `i128` value per logical number. `1.10` and `1.1` parsed via `FromStr` both produce `D38s12(1_100_000_000_000)` - the same bit pattern - so equality and hashing are a single integer comparison with no runtime normalisation.
 
 ### Key differences from `fixed`
 
 The `fixed` crate's `I64F64` has 64 bits of integer and 64 bits of binary fraction. Its least significant bit is 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰, and its maximum value is 2⁶³ - 1 ≈ 9.2 × 10¹⁸.
 
-`D128<20>` has a least significant decimal digit of 10⁻²⁰ and a maximum value of i128::MAX / 10²⁰ ≈ 1.7 × 10¹⁸ model units. The two types offer comparable precision and range in this configuration, but with opposite trade-offs: `I64F64` represents its fractional part in binary (exact for powers of two, rounded for decimal fractions), while `D128<20>` represents it in decimal (exact for decimal fractions, rounded for fractions like 1/3).
+`D38<20>` has a least significant decimal digit of 10⁻²⁰ and a maximum value of i128::MAX / 10²⁰ ≈ 1.7 × 10¹⁸ model units. The two types offer comparable precision and range in this configuration, but with opposite trade-offs: `I64F64` represents its fractional part in binary (exact for powers of two, rounded for decimal fractions), while `D38<20>` represents it in decimal (exact for decimal fractions, rounded for fractions like 1/3).
 
-For human-scale decimal values `D128` gives decimal-exact results with no rounding on input or output. For values derived from binary arithmetic or mathematical operations, `I64F64` avoids the binary-to-decimal rounding boundary entirely.
+For human-scale decimal values `D38` gives decimal-exact results with no rounding on input or output. For values derived from binary arithmetic or mathematical operations, `I64F64` avoids the binary-to-decimal rounding boundary entirely.
 
 ---
 
 ## Performance and accuracy
 
-`D128` arithmetic is a thin wrapper over `i128`: add / sub are a single
+`D38` arithmetic is a thin wrapper over `i128`: add / sub are a single
 instruction (~1 ns), mul / div carry a 256-bit widening step (~10 ns).
-The wide `D256` tier keeps add / sub almost free but its mul / div pay
-for a 256-bit hand-rolled-integer divide — roughly 20× the `D128` cost.
+The wide `D76` tier keeps add / sub almost free but its mul / div pay
+for a 256-bit hand-rolled-integer divide — roughly 20× the `D38` cost.
 
 Transcendentals (`ln`, `exp`, `sqrt`, trig, …) come in two forms. The
 **lossy** `f64` bridge is fast (~40 ns) but inherits `f64`'s precision
@@ -245,30 +245,30 @@ and `fixed` are in [`docs/benchmarks.md`](docs/benchmarks.md).
 
 | Alias | `SCALE` | 1 least significant decimal digit | Approximate range |
 |---|---|---|---|
-| `D128s0` | 0 | 1 | ±1.7 × 10³⁸ |
-| `D128s2` | 2 | 0.01 (cents) | ±1.7 × 10³⁶ |
-| `D128s6` | 6 | 10⁻⁶ (µ) | ±1.7 × 10³² |
-| `D128s12` | 12 | 10⁻¹² (p) | ±1.7 × 10²⁶ |
-| `D128s18` | 18 | 10⁻¹⁸ (a) | ±1.7 × 10²⁰ |
-| `D128s38` | 38 | 10⁻³⁸ | ±1.7 |
+| `D38s0` | 0 | 1 | ±1.7 × 10³⁸ |
+| `D38s2` | 2 | 0.01 (cents) | ±1.7 × 10³⁶ |
+| `D38s6` | 6 | 10⁻⁶ (µ) | ±1.7 × 10³² |
+| `D38s12` | 12 | 10⁻¹² (p) | ±1.7 × 10²⁶ |
+| `D38s18` | 18 | 10⁻¹⁸ (a) | ±1.7 × 10²⁰ |
+| `D38s38` | 38 | 10⁻³⁸ | ±1.7 |
 
-Aliases `D128s0` through `D128s38` are all provided. `SCALE = 39` would overflow `i128`.
+Aliases `D38s0` through `D38s38` are all provided. `SCALE = 39` would overflow `i128`.
 
 ---
 
 ## The width family
 
-`D128` is the foundation, but it is one of six storage widths that share
+`D38` is the foundation, but it is one of six storage widths that share
 an identical API and the `Decimal` trait:
 
 | Type | Storage | `MAX_SCALE` | Feature gate |
 |---|---|---|---|
-| `D32`   | 32-bit  | 9   | always on |
-| `D64`   | 64-bit  | 18  | always on |
-| `D128`  | 128-bit | 38  | always on |
-| `D256`  | 256-bit | 76  | `d256` / `wide` |
-| `D512`  | 512-bit | 153 | `d512` / `wide` |
-| `D1024` | 1024-bit| 307 | `d1024` / `wide` |
+| `D9`   | 32-bit  | 9   | always on |
+| `D18`   | 64-bit  | 18  | always on |
+| `D38`  | 128-bit | 38  | always on |
+| `D76`  | 256-bit | 76  | `d76` / `wide` |
+| `D153`  | 512-bit | 153 | `d153` / `wide` |
+| `D307` | 1024-bit| 307 | `d307` / `wide` |
 
 Pick the narrowest width whose range covers your values at the scale you
 need. Widening between widths is lossless (`From`); narrowing is fallible
@@ -278,14 +278,14 @@ See [`docs/widths.md`](docs/widths.md).
 
 ## Compile-time literals
 
-With the `macros` feature, `d128!` writes `D128` values at compile time
+With the `macros` feature, `d128!` writes `D38` values at compile time
 with automatic scale inference:
 
 ```rust
 use decimal_scaled::d128;
 
-let price = d128!(19.99);              // D128<2>
-let micro = d128!(1.234_567, scale 6); // D128<6>
+let price = d128!(19.99);              // D38<2>
+let micro = d128!(1.234_567, scale 6); // D38<6>
 let rnd   = d128!(1.235, scale 2, rounded); // 1.24 (half-to-even)
 ```
 
@@ -304,8 +304,8 @@ See [`docs/macros.md`](docs/macros.md).
 | `strict` | no | Plain transcendentals dispatch to the integer-only, platform-independent `*_strict` path instead of the `f64` bridge. `no_std`-compatible. |
 | `no_strict` | no | Drops the `*_strict` transcendental surface for a smaller build. Overrides `strict`. |
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
-| `d256` / `d512` / `d1024` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by an in-tree hand-rolled wide-integer type. |
-| `wide` | no | Umbrella over `d256` + `d512` + `d1024`. |
+| `d76` / `d153` / `d307` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by an in-tree hand-rolled wide-integer type. |
+| `wide` | no | Umbrella over `d76` + `d153` + `d307`. |
 | `experimental-floats` | no | Nightly-only `f16` / `f128` entry points on the float bridge. |
 
 See [`docs/features.md`](docs/features.md) for the full reference and
@@ -318,7 +318,7 @@ common configurations.
 In-depth usage guides live in [`docs/`](docs/README.md):
 
 - [Getting started](docs/getting-started.md) — constructing values, arithmetic, formatting, parsing.
-- [The width family](docs/widths.md) — `D32` … `D1024`, scale ranges, the `Decimal` trait.
+- [The width family](docs/widths.md) — `D9` … `D307`, scale ranges, the `Decimal` trait.
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing.
 - [Rounding](docs/rounding.md) — `RoundingMode`, `rescale`, the `rounding-*` features.
 - [Strict mode](docs/strict-mode.md) — integer-only transcendentals.

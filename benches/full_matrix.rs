@@ -3,18 +3,18 @@
 //! family.
 //!
 //! Companion to the `docs/benchmarks.md` rewrite. Where the per-
-//! topic benches (`d128_mul_div_paths`, `wide_int_backends`, etc.)
+//! topic benches (`d_w128_mul_div_paths`, `wide_int_backends`, etc.)
 //! drill into one slice of the surface, this bench fans wide so the
 //! report can show how each width and scale behaves uniformly.
 //!
 //! Scope per type:
 //!
-//! - `D32`: scales 0, 5, 9 (max).
-//! - `D64`: scales 0, 9, 18 (max).
-//! - `D128`: scales 0, 19, 38 (max).
-//! - `D256`: scales 0, 35, 76 (max).
-//! - `D512`: scales 0, 75, 153 (max).
-//! - `D1024`: scales 0, 150, 307 (max).
+//! - `D9`: scales 0, 5, 9 (max).
+//! - `D18`: scales 0, 9, 18 (max).
+//! - `D38`: scales 0, 19, 38 (max).
+//! - `D76`: scales 0, 35, 76 (max).
+//! - `D153`: scales 0, 75, 153 (max).
+//! - `D307`: scales 0, 150, 307 (max).
 //!
 //! Three operation families:
 //!
@@ -25,7 +25,7 @@
 //!   `sin_strict` / `sqrt_strict` on every type×scale combo where
 //!   they're meaningful (positive argument that fits storage).
 //! - **lossy transcendentals** — same four functions via the `f64`
-//!   bridge. Available on D32 / D64 / D128 only — the wide tiers
+//!   bridge. Available on D9 / D18 / D38 only — the wide tiers
 //!   don't ship lossy paths.
 //!
 //! Cross-crate baselines:
@@ -48,7 +48,7 @@ mod bnum;
 
 use bnum::BnumD256;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D1024, D128, D256, D32, D512, D64};
+use decimal_scaled::{D307, D38, D76, D9, D153, D18};
 use fixed::types::I64F64;
 use rust_decimal::{Decimal, MathematicalOps};
 
@@ -85,29 +85,29 @@ fn bench_arith(c: &mut Criterion) {
     let mut g = c.benchmark_group("arith");
     g.sample_size(50);
 
-    arith_block!(g, "D32_s0", D32<0>);
-    arith_block!(g, "D32_s5", D32<5>);
-    arith_block!(g, "D32_s9", D32<9>);
+    arith_block!(g, "D9_s0", D9<0>);
+    arith_block!(g, "D9_s5", D9<5>);
+    arith_block!(g, "D9_s9", D9<9>);
 
-    arith_block!(g, "D64_s0", D64<0>);
-    arith_block!(g, "D64_s9", D64<9>);
-    arith_block!(g, "D64_s18", D64<18>);
+    arith_block!(g, "D18_s0", D18<0>);
+    arith_block!(g, "D18_s9", D18<9>);
+    arith_block!(g, "D18_s18", D18<18>);
 
-    arith_block!(g, "D128_s0", D128<0>);
-    arith_block!(g, "D128_s19", D128<19>);
-    arith_block!(g, "D128_s38", D128<38>);
+    arith_block!(g, "D38_s0", D38<0>);
+    arith_block!(g, "D38_s19", D38<19>);
+    arith_block!(g, "D38_s38", D38<38>);
 
-    arith_block!(g, "D256_s0", D256<0>);
-    arith_block!(g, "D256_s35", D256<35>);
-    arith_block!(g, "D256_s76", D256<76>);
+    arith_block!(g, "D76_s0", D76<0>);
+    arith_block!(g, "D76_s35", D76<35>);
+    arith_block!(g, "D76_s76", D76<76>);
 
-    arith_block!(g, "D512_s0", D512<0>);
-    arith_block!(g, "D512_s75", D512<75>);
-    arith_block!(g, "D512_s153", D512<153>);
+    arith_block!(g, "D153_s0", D153<0>);
+    arith_block!(g, "D153_s75", D153<75>);
+    arith_block!(g, "D153_s153", D153<153>);
 
-    arith_block!(g, "D1024_s0", D1024<0>);
-    arith_block!(g, "D1024_s150", D1024<150>);
-    arith_block!(g, "D1024_s307", D1024<307>);
+    arith_block!(g, "D307_s0", D307<0>);
+    arith_block!(g, "D307_s150", D307<150>);
+    arith_block!(g, "D307_s307", D307<307>);
 
     // Cross-crate baselines.
     {
@@ -145,7 +145,7 @@ fn bench_arith(c: &mut Criterion) {
 }
 
 // ─────────────────────────────────────────────────────────────────────
-// Lossy transcendentals — f64-bridge form. D32 / D64 / D128 only.
+// Lossy transcendentals — f64-bridge form. D9 / D18 / D38 only.
 // (The wide tiers don't ship a lossy path: f64 can't carry their
 // precision and the strict path is the only correct one.)
 // ─────────────────────────────────────────────────────────────────────
@@ -153,8 +153,8 @@ fn bench_arith(c: &mut Criterion) {
 macro_rules! lossy_block {
     ($g:ident, $tag:literal, $T:ty) => {{
         // Arguments are picked so the result fits at every type×
-        // scale combo the bench fans out across — D128<38> with
-        // max ≈ 1.7 is the tightest, then D32<9> at ≈ 2.14.
+        // scale combo the bench fans out across — D38<38> with
+        // max ≈ 1.7 is the tightest, then D9<9> at ≈ 2.14.
         //
         // ln / sin / sqrt: arg = 1.5 (constructed as 1 + 1/2).
         //   At scale 0 the 1/2 division floors to 0 so the arg is
@@ -163,7 +163,7 @@ macro_rules! lossy_block {
         //   and the series runs in full.
         // exp: arg = 0.5 (constructed as 1/2). At scale 0 this is
         //   0 and `exp(0) = 1` hits a fast path; at scale ≥ 1 the
-        //   series runs and `exp(0.5) ≈ 1.65` clears D128<38>'s
+        //   series runs and `exp(0.5) ≈ 1.65` clears D38<38>'s
         //   1.7 ceiling.
         let half: $T = <$T>::from_int(1) / <$T>::from_int(2);
         let x: $T = <$T>::from_int(1) + half;
@@ -180,17 +180,17 @@ fn bench_lossy(c: &mut Criterion) {
     let mut g = c.benchmark_group("lossy");
     g.sample_size(80);
 
-    lossy_block!(g, "D32_s0", D32<0>);
-    lossy_block!(g, "D32_s5", D32<5>);
-    lossy_block!(g, "D32_s9", D32<9>);
+    lossy_block!(g, "D9_s0", D9<0>);
+    lossy_block!(g, "D9_s5", D9<5>);
+    lossy_block!(g, "D9_s9", D9<9>);
 
-    lossy_block!(g, "D64_s0", D64<0>);
-    lossy_block!(g, "D64_s9", D64<9>);
-    lossy_block!(g, "D64_s18", D64<18>);
+    lossy_block!(g, "D18_s0", D18<0>);
+    lossy_block!(g, "D18_s9", D18<9>);
+    lossy_block!(g, "D18_s18", D18<18>);
 
-    lossy_block!(g, "D128_s0", D128<0>);
-    lossy_block!(g, "D128_s19", D128<19>);
-    lossy_block!(g, "D128_s38", D128<38>);
+    lossy_block!(g, "D38_s0", D38<0>);
+    lossy_block!(g, "D38_s19", D38<19>);
+    lossy_block!(g, "D38_s38", D38<38>);
 
     {
         let r = Decimal::from(2);
@@ -213,7 +213,7 @@ fn bench_lossy(_c: &mut Criterion) {
 // ─────────────────────────────────────────────────────────────────────
 // Strict transcendentals — integer-only, correctly-rounded.
 //
-// At D1024<307> a single strict-ln call is ~123 ms (see the
+// At D307<307> a single strict-ln call is ~123 ms (see the
 // agm_vs_taylor bench), so the wide tiers use a smaller sample size
 // to keep the run finite. Functions kept to the headline four:
 // ln, exp, sin, sqrt.
@@ -238,17 +238,17 @@ fn bench_strict(c: &mut Criterion) {
     let mut g = c.benchmark_group("strict");
     g.sample_size(50);
 
-    strict_block!(g, "D32_s0", D32<0>);
-    strict_block!(g, "D32_s5", D32<5>);
-    strict_block!(g, "D32_s9", D32<9>);
+    strict_block!(g, "D9_s0", D9<0>);
+    strict_block!(g, "D9_s5", D9<5>);
+    strict_block!(g, "D9_s9", D9<9>);
 
-    strict_block!(g, "D64_s0", D64<0>);
-    strict_block!(g, "D64_s9", D64<9>);
-    strict_block!(g, "D64_s18", D64<18>);
+    strict_block!(g, "D18_s0", D18<0>);
+    strict_block!(g, "D18_s9", D18<9>);
+    strict_block!(g, "D18_s18", D18<18>);
 
-    strict_block!(g, "D128_s0", D128<0>);
-    strict_block!(g, "D128_s19", D128<19>);
-    strict_block!(g, "D128_s38", D128<38>);
+    strict_block!(g, "D38_s0", D38<0>);
+    strict_block!(g, "D38_s19", D38<19>);
+    strict_block!(g, "D38_s38", D38<38>);
 
     g.finish();
 
@@ -258,17 +258,17 @@ fn bench_strict(c: &mut Criterion) {
     g.sample_size(20);
     g.measurement_time(std::time::Duration::from_secs(5));
 
-    strict_block!(g, "D256_s0", D256<0>);
-    strict_block!(g, "D256_s35", D256<35>);
-    strict_block!(g, "D256_s76", D256<76>);
+    strict_block!(g, "D76_s0", D76<0>);
+    strict_block!(g, "D76_s35", D76<35>);
+    strict_block!(g, "D76_s76", D76<76>);
 
-    strict_block!(g, "D512_s0", D512<0>);
-    strict_block!(g, "D512_s75", D512<75>);
-    strict_block!(g, "D512_s153", D512<153>);
+    strict_block!(g, "D153_s0", D153<0>);
+    strict_block!(g, "D153_s75", D153<75>);
+    strict_block!(g, "D153_s153", D153<153>);
 
-    strict_block!(g, "D1024_s0", D1024<0>);
-    strict_block!(g, "D1024_s150", D1024<150>);
-    strict_block!(g, "D1024_s307", D1024<307>);
+    strict_block!(g, "D307_s0", D307<0>);
+    strict_block!(g, "D307_s150", D307<150>);
+    strict_block!(g, "D307_s307", D307<307>);
 
     g.finish();
 }

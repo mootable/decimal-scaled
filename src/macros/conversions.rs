@@ -43,7 +43,7 @@ macro_rules! decl_from_primitive {
 pub(crate) use decl_from_primitive;
 
 /// Generates `From<$Src<SCALE>> for $Dest<SCALE>` for a lossless
-/// widening conversion (e.g. D32 -> D64, D64 -> D128). `$SrcStorage`
+/// widening conversion (e.g. D9 -> D18, D18 -> D38). `$SrcStorage`
 /// must widen losslessly to `$DestStorage` via an `as` cast.
 macro_rules! decl_cross_width_widening {
     // Widening *into* wide storage. The source storage is
@@ -86,8 +86,8 @@ pub(crate) use decl_cross_width_widening;
 /// narrowed value bit-for-bit (same logical decimal value).
 macro_rules! decl_cross_width_narrowing {
     // Narrowing *from* wide storage. The destination may
-    // be a primitive integer (e.g. D256 -> D128) or a narrower wide integer
-    // integer (e.g. D512 -> D256); the `WideInt` cast handles the bound
+    // be a primitive integer (e.g. D76 -> D38) or a narrower wide integer
+    // integer (e.g. D153 -> D76); the `WideInt` cast handles the bound
     // widening and the final narrowing cast in both cases.
     (wide $Dest:ident, $DestStorage:ty, $Src:ident, $SrcStorage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<$Src<SCALE>> for $Dest<SCALE> {
@@ -221,7 +221,7 @@ pub(crate) use decl_try_from_u128;
 /// Emits `TryFrom<f64> for $Type<SCALE>`. NaN / ±inf return
 /// `NotFinite`; finite values whose scaled magnitude exceeds the
 /// storage range return `Overflow`. Truncates toward zero (matches the
-/// historical D128 behaviour). For rounding-mode-aware float
+/// historical D38 behaviour). For rounding-mode-aware float
 /// construction, use `from_f64_lossy_with`.
 macro_rules! decl_try_from_f64 {
     // Wide storage. The multiplier and storage bounds
@@ -302,7 +302,7 @@ pub(crate) use decl_try_from_f64;
 /// Emits the named integer constructors and `to_int_lossy` /
 /// `to_int_lossy_with` on a decimal type. `$Storage` is the storage
 /// integer; `$IntSrc` is the wider integer source for `from_int`
-/// (typically `i64` for D64/D128 and `i32` for D32). `from_int` and
+/// (typically `i64` for D18/D38 and `i32` for D9). `from_int` and
 /// `from_i32` scale directly (they do not depend on a `From<iN>` impl
 /// existing for the width).
 macro_rules! decl_decimal_int_conversion_methods {

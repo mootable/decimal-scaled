@@ -12,8 +12,8 @@
 //!   (i8..i64, u8..u64). Could be inlined into the umbrella but the
 //!   eight-line repetition is already terse.
 //!
-//! The umbrella is feature-gated implicitly via its callers; D256 /
-//! D512 / D1024 invocations live behind `#[cfg(any(feature = "d256",
+//! The umbrella is feature-gated implicitly via its callers; D76 /
+//! D153 / D307 invocations live behind `#[cfg(any(feature = "d76",
 //! feature = "wide"))]` etc. in `core_type.rs`.
 
 /// Wide-tier umbrella. Emits every macro that takes only
@@ -21,13 +21,13 @@
 /// `decl_wide_roots!` and `decl_wide_transcendental!` invocations.
 ///
 /// Args:
-/// - `$Type`       — decimal type name (`D256`, `D512`, `D1024`).
+/// - `$Type`       — decimal type name (`D76`, `D153`, `D307`).
 /// - `$Storage`    — signed storage int (`Int256`, `Int512`, `Int1024`).
 /// - `$Unsigned`   — matching unsigned int for `Display` (`Uint256`, …).
 /// - `$Wider`      — next-up signed int for mul/div (`Int512`, `Int1024`, `Int2048`).
 /// - `$SqrtWide`   — wide int for `sqrt`'s `r·10^SCALE` (usually `$Storage`).
 /// - `$CbrtWide`   — wide int for `cbrt`'s `r·10^(2·SCALE)` (next-up usually).
-/// - `$Work`       — wide int for the transcendental core (`Int1024` for D256, …).
+/// - `$Work`       — wide int for the transcendental core (`Int1024` for D76, …).
 /// - `$core`       — unique module name for the transcendental core.
 /// - `$max_scale`  — the type's maximum supported `SCALE`.
 macro_rules! decl_decimal_full {

@@ -16,7 +16,7 @@
 //! - `radix N` qualifier (`d128!(0x7B, radix 16, scale 2)`).
 //! - Per-scale variants `d128s2!`, `d128s12!`, etc. as macro_rules in
 //!   the parent crate.
-//! - Wide-tier macros `d256!`, `d512!`, `d1024!` (Phase 5+).
+//! - Wide-tier macros `d76!`, `d153!`, `d307!` (Phase 5+).
 
 use proc_macro::TokenStream;
 use proc_macro2::Span;
@@ -28,7 +28,7 @@ use syn::{
 
 const D128_MAX_SCALE: u32 = 38;
 
-/// `d128!` — construct a `D128<SCALE>` value at compile time (or, for
+/// `d128!` — construct a `D38<SCALE>` value at compile time (or, for
 /// inline-expression input, by evaluating the expression at runtime
 /// and scaling it).
 ///
@@ -220,7 +220,7 @@ fn expand_literal(
         return error(
             scale_span,
             format!(
-                "scale {target_scale} exceeds max for D128 (max = {D128_MAX_SCALE})"
+                "scale {target_scale} exceeds max for D38 (max = {D128_MAX_SCALE})"
             ),
         );
     }
@@ -262,7 +262,7 @@ fn expand_literal(
             None => {
                 return error(
                     value_span,
-                    "scaled value overflows D128 storage (i128)".to_string(),
+                    "scaled value overflows D38 storage (i128)".to_string(),
                 );
             }
         }
@@ -285,7 +285,7 @@ fn expand_literal(
     };
 
     let expanded = quote! {
-        ::decimal_scaled::D128::<#target_scale>::from_bits(#bits)
+        ::decimal_scaled::D38::<#target_scale>::from_bits(#bits)
     };
     expanded.into()
 }
@@ -295,7 +295,7 @@ fn expand_expression(expr: Expr, scale: u32, scale_span: Span) -> TokenStream {
         return error(
             scale_span,
             format!(
-                "scale {scale} exceeds max for D128 (max = {D128_MAX_SCALE})"
+                "scale {scale} exceeds max for D38 (max = {D128_MAX_SCALE})"
             ),
         );
     }
@@ -303,7 +303,7 @@ fn expand_expression(expr: Expr, scale: u32, scale_span: Span) -> TokenStream {
     let expanded = if scale == 0 {
         // Scale 0: no multiply needed; just bind to enforce i128 type.
         quote! {
-            ::decimal_scaled::D128::<0>::from_bits({
+            ::decimal_scaled::D38::<0>::from_bits({
                 let _v: i128 = (#expr);
                 _v
             })
@@ -312,7 +312,7 @@ fn expand_expression(expr: Expr, scale: u32, scale_span: Span) -> TokenStream {
         // General case: scale-factor multiply with overflow check.
         let multiplier = 10i128.pow(scale);
         quote! {
-            ::decimal_scaled::D128::<#scale>::from_bits({
+            ::decimal_scaled::D38::<#scale>::from_bits({
                 let _v: i128 = (#expr);
                 _v.checked_mul(#multiplier)
                     .expect("d128! overflow: expression * 10^SCALE exceeds i128 range")

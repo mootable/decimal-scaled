@@ -1,4 +1,4 @@
-//! Benchmark candidates for the D128s12 multiply-rescale step.
+//! Benchmark candidates for the D38s12 multiply-rescale step.
 //!
 //! Background: MOOCAD-242.17 replaced the naive form
 //! `Self((self.0 * rhs.0) / multiplier())` with a widening intermediate
@@ -23,9 +23,9 @@
 //!      Translates the 1994 Granlund-Montgomery + 2011 Moller-Granlund
 //!      papers; precomputed magic constant for divisor 10^12 baked in
 //!      const. We hand-code one entry of their 38-entry table here for
-//!      D128s12.
-//!   E. **Production `D128<12>` operators** -- the actual shipping
-//!      `core_type::D128::Mul` / `Div` impls, which route through
+//!      D38s12.
+//!   E. **Production `D38<12>` operators** -- the actual shipping
+//!      `core_type::D38::Mul` / `Div` impls, which route through
 //!      `mg_divide::mul_div_pow10` / `div_pow10_div`. Includes the
 //!      full 38-entry MG magic table lookup, panic-on-final-overflow
 //!      branch, and any function-call / module-boundary overhead the
@@ -50,9 +50,9 @@
 //! shows --- for naive.
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
-use decimal_scaled::D128;
+use decimal_scaled::D38;
 
-type D = D128<12>;
+type D = D38<12>;
 const MULT: i128 = 1_000_000_000_000;
 
 // -----------------------------------------------------------------------------
@@ -312,7 +312,7 @@ fn mg_mul(a: i128, b: i128) -> i128 {
     }
 }
 
-// MG-style divide for D128s12::div: numerator = a * MULT (256-bit),
+// MG-style divide for D38s12::div: numerator = a * MULT (256-bit),
 // divisor = b (128-bit). MG magic-divide doesn't apply (b is variable).
 // We use the same hand-rolled binary long divide as Candidate B.
 #[inline(always)]
@@ -321,7 +321,7 @@ fn mg_div(a: i128, b: i128) -> i128 {
 }
 
 // -----------------------------------------------------------------------------
-// Candidate E: production `D128<12>` operators (the actual shipping path).
+// Candidate E: production `D38<12>` operators (the actual shipping path).
 // Calls `D::Mul` / `D::Div` so we measure inclusive of the production
 // `mg_divide::mul_div_pow10` / `div_pow10_div` helpers, the 38-entry magic
 // table lookup, and the overflow-handling branch.
@@ -421,7 +421,7 @@ fn sanity_check_consistency() {
 
 fn bench_mul(c: &mut Criterion) {
     sanity_check_consistency();
-    let mut group = c.benchmark_group("D128s12::mul");
+    let mut group = c.benchmark_group("D38s12::mul");
 
     for inp in [SMALL, MID, BOUND, WIDE] {
         // Candidate A -- skip at WIDE (overflows)
@@ -447,7 +447,7 @@ fn bench_mul(c: &mut Criterion) {
 }
 
 fn bench_div(c: &mut Criterion) {
-    let mut group = c.benchmark_group("D128s12::div");
+    let mut group = c.benchmark_group("D38s12::div");
 
     for inp in [SMALL, MID, BOUND, WIDE] {
         if inp.label != "wide_1e22" {

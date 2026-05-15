@@ -1,16 +1,16 @@
-//! Trigonometric, hyperbolic, and angle-conversion methods for [`D128`].
+//! Trigonometric, hyperbolic, and angle-conversion methods for [`D38`].
 //!
 //! # Methods
 //!
 //! Fifteen methods:
 //!
-//! - **Forward trig (radians input):** [`D128::sin`] / [`D128::cos`] /
-//! [`D128::tan`].
-//! - **Inverse trig (returns radians):** [`D128::asin`] / [`D128::acos`]
-//! / [`D128::atan`] / [`D128::atan2`].
-//! - **Hyperbolic:** [`D128::sinh`] / [`D128::cosh`] / [`D128::tanh`] /
-//! [`D128::asinh`] / [`D128::acosh`] / [`D128::atanh`].
-//! - **Angle conversions:** [`D128::to_degrees`] / [`D128::to_radians`].
+//! - **Forward trig (radians input):** [`D38::sin`] / [`D38::cos`] /
+//! [`D38::tan`].
+//! - **Inverse trig (returns radians):** [`D38::asin`] / [`D38::acos`]
+//! / [`D38::atan`] / [`D38::atan2`].
+//! - **Hyperbolic:** [`D38::sinh`] / [`D38::cosh`] / [`D38::tanh`] /
+//! [`D38::asinh`] / [`D38::acosh`] / [`D38::atanh`].
+//! - **Angle conversions:** [`D38::to_degrees`] / [`D38::to_radians`].
 //!
 //! # The `*_strict` dual API
 //!
@@ -32,22 +32,22 @@
 //!
 //! # Precision
 //!
-//! The f64-bridge forms are **Lossy** — the `D128` value round-trips
+//! The f64-bridge forms are **Lossy** — the `D38` value round-trips
 //! through `f64`, which introduces up to one LSB of quantisation per
 //! conversion. The `*_strict` forms are **correctly rounded**: within
 //! 0.5 ULP of the exact result (IEEE-754 round-to-nearest). They
-//! evaluate every reduction and series step in the `d128_kernels::Fixed`
+//! evaluate every reduction and series step in the `d_w128_kernels::Fixed`
 //! guard-digit intermediate and round once at the end.
 //!
 //! # `atan2` signature
 //!
 //! `f64::atan2(self, other)` treats `self` as `y` and `other` as `x`.
 //! This module matches that signature exactly so generic numeric code
-//! calling `y.atan2(x)` works with `T = D128`.
+//! calling `y.atan2(x)` works with `T = D38`.
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
-impl<const SCALE: u32> D128<SCALE> {
+impl<const SCALE: u32> D38<SCALE> {
 #[cfg(all(feature = "strict", not(feature = "no_strict")))]
     /// With `strict` this dispatches to [`Self::sin_strict`]; without
     /// it, the f64-bridge form is used instead.
@@ -192,7 +192,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = sin_fixed(to_fixed(self.0), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::sin: result out of range");
+            .expect("D38::sin: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -206,7 +206,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let arg = to_fixed(self.0).add(wide_half_pi(w));
         let raw = sin_fixed(arg, w)
             .round_to_i128(w, SCALE)
-            .expect("D128::cos: result out of range");
+            .expect("D38::cos: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -226,12 +226,12 @@ impl<const SCALE: u32> D128<SCALE> {
         let sin_w = sin_fixed(v, w);
         let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
         if cos_w.is_zero() {
-            panic!("D128::tan: cosine is zero (argument is an odd multiple of pi/2)");
+            panic!("D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
         }
         let raw = sin_w
             .div(cos_w, w)
             .round_to_i128(w, SCALE)
-            .expect("D128::tan: result out of range");
+            .expect("D38::tan: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -244,7 +244,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = atan_fixed(to_fixed(self.0), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::atan: result out of range");
+            .expect("D38::atan: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -260,13 +260,13 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn asin_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         let abs_v = Fixed { negative: false, mag: v.mag };
         if abs_v.ge_mag(one_w) && abs_v != one_w {
-            panic!("D128::asin: argument out of domain [-1, 1]");
+            panic!("D38::asin: argument out of domain [-1, 1]");
         }
         if abs_v == one_w {
             // asin(±1) = ±π/2.
@@ -274,14 +274,14 @@ impl<const SCALE: u32> D128<SCALE> {
             let hp = if v.negative { hp.neg() } else { hp };
             let raw = hp
                 .round_to_i128(w, SCALE)
-                .expect("D128::asin: result out of range");
+                .expect("D38::asin: result out of range");
             return Self::from_bits(raw);
         }
         // √(1 − x²); x² ≤ 1 so 1 − x² ∈ [0, 1].
         let denom = one_w.sub(v.mul(v, w)).sqrt(w);
         let raw = atan_fixed(v.div(denom, w), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::asin: result out of range");
+            .expect("D38::asin: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -295,13 +295,13 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         let abs_v = Fixed { negative: false, mag: v.mag };
         if abs_v.ge_mag(one_w) && abs_v != one_w {
-            panic!("D128::acos: argument out of domain [-1, 1]");
+            panic!("D38::acos: argument out of domain [-1, 1]");
         }
         // asin(v) in the wide intermediate, then π/2 − asin(v).
         let asin_w = if abs_v == one_w {
@@ -318,7 +318,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let raw = wide_half_pi(w)
             .sub(asin_w)
             .round_to_i128(w, SCALE)
-            .expect("D128::acos: result out of range");
+            .expect("D38::acos: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -338,7 +338,7 @@ impl<const SCALE: u32> D128<SCALE> {
             } else if self.0 < 0 {
                 wide_half_pi(w).neg()
             } else {
-                crate::d128_kernels::Fixed::ZERO
+                crate::d_w128_kernels::Fixed::ZERO
             }
         } else {
             let base = atan_fixed(y.div(x, w), w);
@@ -352,7 +352,7 @@ impl<const SCALE: u32> D128<SCALE> {
         };
         let raw = result_w
             .round_to_i128(w, SCALE)
-            .expect("D128::atan2: result out of range");
+            .expect("D38::atan2: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -371,7 +371,7 @@ impl<const SCALE: u32> D128<SCALE> {
             .sub(enx)
             .halve()
             .round_to_i128(w, SCALE)
-            .expect("D128::sinh: result out of range");
+            .expect("D38::sinh: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -389,7 +389,7 @@ impl<const SCALE: u32> D128<SCALE> {
             .add(enx)
             .halve()
             .round_to_i128(w, SCALE)
-            .expect("D128::cosh: result out of range");
+            .expect("D38::cosh: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -408,7 +408,7 @@ impl<const SCALE: u32> D128<SCALE> {
             .sub(enx)
             .div(ex.add(enx), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::tanh: result out of range");
+            .expect("D38::tanh: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -421,7 +421,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn asinh_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -442,7 +442,7 @@ impl<const SCALE: u32> D128<SCALE> {
         let signed = if self.0 < 0 { inner.neg() } else { inner };
         let raw = signed
             .round_to_i128(w, SCALE)
-            .expect("D128::asinh: result out of range");
+            .expect("D38::asinh: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -458,12 +458,12 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         if v.negative || !v.ge_mag(one_w) {
-            panic!("D128::acosh: argument must be >= 1");
+            panic!("D38::acosh: argument must be >= 1");
         }
         let two_w = one_w.double();
         let inner = if v.ge_mag(two_w) {
@@ -478,7 +478,7 @@ impl<const SCALE: u32> D128<SCALE> {
         };
         let raw = inner
             .round_to_i128(w, SCALE)
-            .expect("D128::acosh: result out of range");
+            .expect("D38::acosh: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -493,20 +493,20 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
+        use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
         let ax = Fixed { negative: false, mag: v.mag };
         if ax.ge_mag(one_w) {
-            panic!("D128::atanh: argument out of domain (-1, 1)");
+            panic!("D38::atanh: argument out of domain (-1, 1)");
         }
         // ln((1 + x) / (1 − x)) / 2.
         let ratio = one_w.add(v).div(one_w.sub(v), w);
         let raw = crate::log_exp_strict::ln_fixed(ratio, w)
             .halve()
             .round_to_i128(w, SCALE)
-            .expect("D128::atanh: result out of range");
+            .expect("D38::atanh: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -522,7 +522,7 @@ impl<const SCALE: u32> D128<SCALE> {
             .mul_u128(180)
             .div(wide_pi(w), w)
             .round_to_i128(w, SCALE)
-            .expect("D128::to_degrees: result out of range");
+            .expect("D38::to_degrees: result out of range");
         Self::from_bits(raw)
     }
 #[cfg(not(feature = "no_strict"))]
@@ -537,7 +537,7 @@ impl<const SCALE: u32> D128<SCALE> {
             .mul(wide_pi(w), w)
             .div_small(180)
             .round_to_i128(w, SCALE)
-            .expect("D128::to_radians: result out of range");
+            .expect("D38::to_radians: result out of range");
         Self::from_bits(raw)
     }
 }
@@ -550,7 +550,7 @@ impl<const SCALE: u32> D128<SCALE> {
 // These mirror the f64-bridge surface above but are integer-only,
 // `no_std`-compatible, and **correctly rounded** — within 0.5 ULP of
 // the exact result. Every reduction and series step runs in the
-// `d128_kernels::Fixed` guard-digit intermediate (the same machinery the
+// `d_w128_kernels::Fixed` guard-digit intermediate (the same machinery the
 // log/exp family uses) and the value is rounded once at the end.
 //
 // Composition strategy:
@@ -571,7 +571,7 @@ impl<const SCALE: u32> D128<SCALE> {
 // ─────────────────────────────────────────────────────────────────────
 // Correctly-rounded strict trigonometric core.
 //
-// Every strict trig method runs on the shared `d128_kernels::Fixed`
+// Every strict trig method runs on the shared `d_w128_kernels::Fixed`
 // guard-digit intermediate at `SCALE + STRICT_GUARD` working digits,
 // the same machinery the log/exp family uses, and rounds once at the
 // end — so each result is within 0.5 ULP of the exact value.
@@ -579,9 +579,9 @@ impl<const SCALE: u32> D128<SCALE> {
 
 /// π at working scale `w` (`w <= 63`), from a 63-digit embedded value.
 #[cfg(not(feature = "no_strict"))]
-fn wide_pi(w: u32) -> crate::d128_kernels::Fixed {
+fn wide_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     // π = 3.141592653589793238462643383279502884197169399375105820974944 592
-    crate::d128_kernels::Fixed::from_decimal_split(
+    crate::d_w128_kernels::Fixed::from_decimal_split(
         31_415_926_535_897_932_384_626_433_832_795_u128,
         2_884_197_169_399_375_105_820_974_944_592_u128,
     )
@@ -590,21 +590,21 @@ fn wide_pi(w: u32) -> crate::d128_kernels::Fixed {
 
 /// τ = 2π at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_tau(w: u32) -> crate::d128_kernels::Fixed {
+fn wide_tau(w: u32) -> crate::d_w128_kernels::Fixed {
     wide_pi(w).double()
 }
 
 /// π/2 at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_half_pi(w: u32) -> crate::d128_kernels::Fixed {
+fn wide_half_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     wide_pi(w).halve()
 }
 
-/// Builds a working-scale `Fixed` from a signed `D128` raw value `r`:
+/// Builds a working-scale `Fixed` from a signed `D38` raw value `r`:
 /// `r · 10^STRICT_GUARD`, carrying the sign.
 #[cfg(not(feature = "no_strict"))]
-fn to_fixed(raw: i128) -> crate::d128_kernels::Fixed {
-    use crate::d128_kernels::Fixed;
+fn to_fixed(raw: i128) -> crate::d_w128_kernels::Fixed {
+    use crate::d_w128_kernels::Fixed;
     let m = Fixed::from_u128_mag(raw.unsigned_abs(), false)
         .mul_u128(10u128.pow(crate::log_exp_strict::STRICT_GUARD));
     if raw < 0 {
@@ -617,7 +617,7 @@ fn to_fixed(raw: i128) -> crate::d128_kernels::Fixed {
 /// Taylor series for `sin` on a reduced non-negative argument
 /// `r ∈ [0, π/2]`, evaluated at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn sin_taylor(r: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
+fn sin_taylor(r: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     let r2 = r.mul(r, w);
     let mut sum = r;
     let mut term = r; // term = r^(2k-1)
@@ -647,8 +647,8 @@ fn sin_taylor(r: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fix
 /// `[0, π/2]` tracking sign and the `π − x` reflection, then evaluates
 /// the Taylor series.
 #[cfg(not(feature = "no_strict"))]
-fn sin_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
-    use crate::d128_kernels::Fixed;
+fn sin_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
+    use crate::d_w128_kernels::Fixed;
     let tau = wide_tau(w);
     let pi = wide_pi(w);
     let half_pi = wide_half_pi(w);
@@ -681,7 +681,7 @@ fn sin_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fi
 /// Taylor series for `atan` on a reduced non-negative argument
 /// `x ∈ [0, ~1/8]`, evaluated at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn atan_taylor(x: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
+fn atan_taylor(x: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     let x2 = x.mul(x, w);
     let mut sum = x;
     let mut term = x; // term = x^(2k-1)
@@ -712,8 +712,8 @@ fn atan_taylor(x: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fi
 /// `atan(x) = π/2 − atan(1/x)` for `x > 1`; three rounds of argument
 /// halving `atan(x) = 2·atan(x / (1 + √(1+x²)))`; then the series.
 #[cfg(not(feature = "no_strict"))]
-fn atan_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
-    use crate::d128_kernels::Fixed;
+fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
+    use crate::d_w128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let sign = v_w.negative;
     let mut x = Fixed { negative: false, mag: v_w.mag };
@@ -744,7 +744,7 @@ fn atan_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::F
 #[cfg(test)]
 mod tests {
     use crate::consts::DecimalConsts;
-    use crate::core_type::D128s12;
+    use crate::core_type::D38s12;
 
     // Tolerance for single-operation results. The f64-bridge build is
     // one f64 round-trip (≤ 2 LSB); the integer-only `strict` build is
@@ -767,7 +767,7 @@ mod tests {
     // conversion: `to_degrees` itself is correctly rounded in `strict`.)
     const ANGLE_TOLERANCE_LSB: i128 = 32;
 
-    fn within_lsb(actual: D128s12, expected: D128s12, lsb: i128) -> bool {
+    fn within_lsb(actual: D38s12, expected: D38s12, lsb: i128) -> bool {
         let diff = (actual.to_bits() - expected.to_bits()).abs();
         diff <= lsb
     }
@@ -775,7 +775,7 @@ mod tests {
     // ── Forward trig ──────────────────────────────────────────────────
 
     /// The strict trig / hyperbolic family is correctly rounded:
-    /// cross-check every method against the f64 bridge at D128<9>,
+    /// cross-check every method against the f64 bridge at D38<9>,
     /// where f64 (≈ 15–16 significant digits) is comfortably more
     /// precise than the type's ULP, so a correctly-rounded integer
     /// result must agree to within 1 ULP (allow 1 more for the f64
@@ -783,7 +783,7 @@ mod tests {
     #[cfg(all(feature = "strict", not(feature = "no_strict")))]
     #[test]
     fn strict_trig_family_matches_f64() {
-        use crate::core_type::D128;
+        use crate::core_type::D38;
         macro_rules! check {
             ($name:literal, $raw:expr, $strict:expr, $f64expr:expr) => {{
                 let strict: i128 = $strict;
@@ -804,7 +804,7 @@ mod tests {
             500_000_000, 1_000_000_000, 1_570_796_327, 3_000_000_000,
             6_283_185_307, 12_000_000_000,
         ] {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             check!("sin", raw, x.sin_strict().to_bits(), f64::sin);
             check!("cos", raw, x.cos_strict().to_bits(), f64::cos);
             check!("atan", raw, x.atan_strict().to_bits(), f64::atan);
@@ -818,23 +818,23 @@ mod tests {
             -1_000_000_000_i128, -700_000_000, -100_000_000, 0,
             250_000_000, 500_000_000, 999_999_999,
         ] {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             check!("asin", raw, x.asin_strict().to_bits(), f64::asin);
             check!("acos", raw, x.acos_strict().to_bits(), f64::acos);
         }
         // atanh — domain (-1, 1).
         for &raw in &[-900_000_000_i128, -300_000_000, 1, 300_000_000, 900_000_000] {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             check!("atanh", raw, x.atanh_strict().to_bits(), f64::atanh);
         }
         // acosh — domain [1, ∞).
         for &raw in &[1_000_000_000_i128, 1_500_000_000, 3_000_000_000, 50_000_000_000] {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             check!("acosh", raw, x.acosh_strict().to_bits(), f64::acosh);
         }
         // tan — avoid the poles.
         for &raw in &[-1_000_000_000_i128, 1, 500_000_000, 1_000_000_000, 1_400_000_000] {
-            let x = D128::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(raw);
             check!("tan", raw, x.tan_strict().to_bits(), f64::tan);
         }
     }
@@ -842,19 +842,19 @@ mod tests {
     /// `sin(0) == 0` -- bit-exact via `f64::sin(0.0) == 0.0`.
     #[test]
     fn sin_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.sin(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.sin(), D38s12::ZERO);
     }
 
     /// `cos(0) == 1` -- bit-exact via `f64::cos(0.0) == 1.0`.
     #[test]
     fn cos_zero_is_one() {
-        assert_eq!(D128s12::ZERO.cos(), D128s12::ONE);
+        assert_eq!(D38s12::ZERO.cos(), D38s12::ONE);
     }
 
     /// `tan(0) == 0` -- bit-exact via `f64::tan(0.0) == 0.0`.
     #[test]
     fn tan_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.tan(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.tan(), D38s12::ZERO);
     }
 
     /// Pythagorean identity: `sin^2(x) + cos^2(x) ~= 1` within 4 LSB
@@ -869,15 +869,15 @@ mod tests {
             -500_000_000_000_i128,   // -0.5
             4_567_891_234_567_i128,  // ~4.567891...
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let s = x.sin();
             let c = x.cos();
             let sum = (s * s) + (c * c);
             assert!(
-                within_lsb(sum, D128s12::ONE, FOUR_LSB),
+                within_lsb(sum, D38s12::ONE, FOUR_LSB),
                 "sin^2 + cos^2 != 1 for raw={raw}: got bits {} (delta {})",
                 sum.to_bits(),
-                (sum.to_bits() - D128s12::ONE.to_bits()).abs(),
+                (sum.to_bits() - D38s12::ONE.to_bits()).abs(),
             );
         }
     }
@@ -887,31 +887,31 @@ mod tests {
     /// `asin(0) == 0` -- bit-exact.
     #[test]
     fn asin_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.asin(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.asin(), D38s12::ZERO);
     }
 
     /// `acos(1) == 0` -- bit-exact via `f64::acos(1.0) == 0.0`.
     #[test]
     fn acos_one_is_zero() {
-        assert_eq!(D128s12::ONE.acos(), D128s12::ZERO);
+        assert_eq!(D38s12::ONE.acos(), D38s12::ZERO);
     }
 
     /// `acos(0) ~= pi/2` within 4 LSB.
     #[test]
     fn acos_zero_is_half_pi() {
-        let result = D128s12::ZERO.acos();
+        let result = D38s12::ZERO.acos();
         assert!(
-            within_lsb(result, D128s12::half_pi(), FOUR_LSB),
+            within_lsb(result, D38s12::half_pi(), FOUR_LSB),
             "acos(0) bits {}, half_pi bits {}",
             result.to_bits(),
-            D128s12::half_pi().to_bits(),
+            D38s12::half_pi().to_bits(),
         );
     }
 
     /// `atan(0) == 0` -- bit-exact via `f64::atan(0.0) == 0.0`.
     #[test]
     fn atan_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.atan(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.atan(), D38s12::ZERO);
     }
 
     /// Round-trip identity: `asin(sin(x)) ~= x` for `x` in
@@ -926,7 +926,7 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567... (well inside pi/2)
             -1_234_567_890_123_i128, // ~-1.234567...
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let recovered = x.sin().asin();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -942,23 +942,23 @@ mod tests {
     /// `atan2(1, 1) ~= pi/4` (first-quadrant 45 degrees).
     #[test]
     fn atan2_first_quadrant_diagonal() {
-        let one = D128s12::ONE;
+        let one = D38s12::ONE;
         let result = one.atan2(one);
         assert!(
-            within_lsb(result, D128s12::quarter_pi(), TWO_LSB),
+            within_lsb(result, D38s12::quarter_pi(), TWO_LSB),
             "atan2(1, 1) bits {}, quarter_pi bits {}",
             result.to_bits(),
-            D128s12::quarter_pi().to_bits(),
+            D38s12::quarter_pi().to_bits(),
         );
     }
 
     /// `atan2(-1, -1) ~= -3*pi/4` (third-quadrant correctness).
     #[test]
     fn atan2_third_quadrant_diagonal() {
-        let neg_one = -D128s12::ONE;
+        let neg_one = -D38s12::ONE;
         let result = neg_one.atan2(neg_one);
-        let three = D128s12::from_int(3);
-        let expected = -(D128s12::quarter_pi() * three);
+        let three = D38s12::from_int(3);
+        let expected = -(D38s12::quarter_pi() * three);
         assert!(
             within_lsb(result, expected, TWO_LSB),
             "atan2(-1, -1) bits {}, expected -3pi/4 bits {}",
@@ -970,11 +970,11 @@ mod tests {
     /// `atan2(1, -1) ~= 3*pi/4` (second-quadrant correctness).
     #[test]
     fn atan2_second_quadrant_diagonal() {
-        let one = D128s12::ONE;
-        let neg_one = -D128s12::ONE;
+        let one = D38s12::ONE;
+        let neg_one = -D38s12::ONE;
         let result = one.atan2(neg_one);
-        let three = D128s12::from_int(3);
-        let expected = D128s12::quarter_pi() * three;
+        let three = D38s12::from_int(3);
+        let expected = D38s12::quarter_pi() * three;
         assert!(
             within_lsb(result, expected, TWO_LSB),
             "atan2(1, -1) bits {}, expected 3pi/4 bits {}",
@@ -986,10 +986,10 @@ mod tests {
     /// `atan2(-1, 1) ~= -pi/4` (fourth-quadrant correctness).
     #[test]
     fn atan2_fourth_quadrant_diagonal() {
-        let one = D128s12::ONE;
-        let neg_one = -D128s12::ONE;
+        let one = D38s12::ONE;
+        let neg_one = -D38s12::ONE;
         let result = neg_one.atan2(one);
-        let expected = -D128s12::quarter_pi();
+        let expected = -D38s12::quarter_pi();
         assert!(
             within_lsb(result, expected, TWO_LSB),
             "atan2(-1, 1) bits {}, expected -pi/4 bits {}",
@@ -1001,9 +1001,9 @@ mod tests {
     /// `atan2(0, 1) == 0` (positive x-axis is bit-exact).
     #[test]
     fn atan2_positive_x_axis_is_zero() {
-        let zero = D128s12::ZERO;
-        let one = D128s12::ONE;
-        assert_eq!(zero.atan2(one), D128s12::ZERO);
+        let zero = D38s12::ZERO;
+        let one = D38s12::ONE;
+        assert_eq!(zero.atan2(one), D38s12::ZERO);
     }
 
     // ── Hyperbolic ────────────────────────────────────────────────────
@@ -1011,37 +1011,37 @@ mod tests {
     /// `sinh(0) == 0` -- bit-exact via `f64::sinh(0.0) == 0.0`.
     #[test]
     fn sinh_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.sinh(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.sinh(), D38s12::ZERO);
     }
 
     /// `cosh(0) == 1` -- bit-exact via `f64::cosh(0.0) == 1.0`.
     #[test]
     fn cosh_zero_is_one() {
-        assert_eq!(D128s12::ZERO.cosh(), D128s12::ONE);
+        assert_eq!(D38s12::ZERO.cosh(), D38s12::ONE);
     }
 
     /// `tanh(0) == 0` -- bit-exact via `f64::tanh(0.0) == 0.0`.
     #[test]
     fn tanh_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.tanh(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.tanh(), D38s12::ZERO);
     }
 
     /// `asinh(0) == 0` -- bit-exact.
     #[test]
     fn asinh_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.asinh(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.asinh(), D38s12::ZERO);
     }
 
     /// `acosh(1) == 0` -- bit-exact via `f64::acosh(1.0) == 0.0`.
     #[test]
     fn acosh_one_is_zero() {
-        assert_eq!(D128s12::ONE.acosh(), D128s12::ZERO);
+        assert_eq!(D38s12::ONE.acosh(), D38s12::ZERO);
     }
 
     /// `atanh(0) == 0` -- bit-exact.
     #[test]
     fn atanh_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.atanh(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.atanh(), D38s12::ZERO);
     }
 
     /// Identity: `cosh^2(x) - sinh^2(x) == 1` within 4 LSB for
@@ -1056,15 +1056,15 @@ mod tests {
             -1_234_567_890_123_i128, // ~-1.234567
             2_500_000_000_000_i128,  // 2.5
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let ch = x.cosh();
             let sh = x.sinh();
             let diff = (ch * ch) - (sh * sh);
             assert!(
-                within_lsb(diff, D128s12::ONE, FOUR_LSB),
+                within_lsb(diff, D38s12::ONE, FOUR_LSB),
                 "cosh^2 - sinh^2 != 1 for raw={raw}: got bits {} (delta {})",
                 diff.to_bits(),
-                (diff.to_bits() - D128s12::ONE.to_bits()).abs(),
+                (diff.to_bits() - D38s12::ONE.to_bits()).abs(),
             );
         }
     }
@@ -1077,9 +1077,9 @@ mod tests {
     #[test]
     fn to_degrees_pi_is_180() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        let pi = D128s12::pi();
+        let pi = D38s12::pi();
         let result = pi.to_degrees();
-        let expected = D128s12::from_int(180);
+        let expected = D38s12::from_int(180);
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(pi) bits {}, expected 180 bits {} (delta {})",
@@ -1092,9 +1092,9 @@ mod tests {
     /// `to_radians(180) ~= pi` within `ANGLE_TOLERANCE_LSB`.
     #[test]
     fn to_radians_180_is_pi() {
-        let one_eighty = D128s12::from_int(180);
+        let one_eighty = D38s12::from_int(180);
         let result = one_eighty.to_radians();
-        let expected = D128s12::pi();
+        let expected = D38s12::pi();
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_radians(180) bits {}, expected pi bits {} (delta {})",
@@ -1107,13 +1107,13 @@ mod tests {
     /// `to_degrees(0) == 0` -- bit-exact (0 * anything == 0).
     #[test]
     fn to_degrees_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.to_degrees(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.to_degrees(), D38s12::ZERO);
     }
 
     /// `to_radians(0) == 0` -- bit-exact.
     #[test]
     fn to_radians_zero_is_zero() {
-        assert_eq!(D128s12::ZERO.to_radians(), D128s12::ZERO);
+        assert_eq!(D38s12::ZERO.to_radians(), D38s12::ZERO);
     }
 
     /// Round-trip: `to_radians(to_degrees(x)) ~= x` within 4 LSB
@@ -1126,7 +1126,7 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567
             -2_345_678_901_234_i128, // ~-2.345678
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let recovered = x.to_degrees().to_radians();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -1141,8 +1141,8 @@ mod tests {
     #[test]
     fn to_degrees_half_pi_is_90() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        let result = D128s12::half_pi().to_degrees();
-        let expected = D128s12::from_int(90);
+        let result = D38s12::half_pi().to_degrees();
+        let expected = D38s12::from_int(90);
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(half_pi) bits {}, expected 90 bits {} (delta {})",
@@ -1155,8 +1155,8 @@ mod tests {
     /// `to_degrees(quarter_pi) ~= 45` within `ANGLE_TOLERANCE_LSB`.
     #[test]
     fn to_degrees_quarter_pi_is_45() {
-        let result = D128s12::quarter_pi().to_degrees();
-        let expected = D128s12::from_int(45);
+        let result = D38s12::quarter_pi().to_degrees();
+        let expected = D38s12::from_int(45);
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(quarter_pi) bits {}, expected 45 bits {} (delta {})",
@@ -1179,7 +1179,7 @@ mod tests {
             -1_000_000_000_000_i128, // -1.0
             123_456_789_012_i128,    // ~0.123456
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let t = x.tan();
             let sc = x.sin() / x.cos();
             assert!(
@@ -1201,7 +1201,7 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567
             -2_345_678_901_234_i128, // ~-2.345678
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let t = x.tanh();
             let sc = x.sinh() / x.cosh();
             assert!(

@@ -29,51 +29,51 @@ With `SCALE = 2`, the integer `1999` is the logical value `19.99`. There
 is exactly one representation per value — no normalisation, no per-value
 scale byte, no heap allocation.
 
-The primary type is `D128<const SCALE: u32>` (128-bit storage). The
-scale aliases `D128s0` … `D128s38` name specific scales:
+The primary type is `D38<const SCALE: u32>` (128-bit storage). The
+scale aliases `D38s0` … `D38s38` name specific scales:
 
 ```rust
-use decimal_scaled::{D128, D128s2, D128s12};
+use decimal_scaled::{D38, D38s2, D38s12};
 
-type Cents = D128s2;          // == D128<2>
-type Pico  = D128<12>;        // same as D128s12
+type Cents = D38s2;          // == D38<2>
+type Pico  = D38<12>;        // same as D38s12
 ```
 
-For the narrower (`D32`, `D64`) and wider (`D256`, `D512`, `D1024`)
+For the narrower (`D9`, `D18`) and wider (`D76`, `D153`, `D307`)
 tiers, see [the width family](widths.md).
 
 ## Constructing values
 
 ```rust
-use decimal_scaled::{D128s2, d128};
+use decimal_scaled::{D38s2, d128};
 
 // 1. Compile-time literal macro (scale inferred — see the macro guide).
 let a = d128!(19.99);
 
 // 2. From an integer, scaled by 10^SCALE.
-let b = D128s2::from_int(20);            // 20.00
-let c = D128s2::from_i32(-5);            // -5.00
+let b = D38s2::from_int(20);            // 20.00
+let c = D38s2::from_i32(-5);            // -5.00
 
 // 3. From the raw storage integer directly (raw = value × 10^SCALE).
-let d = D128s2::from_bits(1999);         // 19.99
+let d = D38s2::from_bits(1999);         // 19.99
 
 // 4. Parsing a string.
 use core::str::FromStr;
-let e = D128s2::from_str("19.99").unwrap();
+let e = D38s2::from_str("19.99").unwrap();
 
 // 5. Constants.
-let zero = D128s2::ZERO;
-let one  = D128s2::ONE;                  // raw = 100 at scale 2
+let zero = D38s2::ZERO;
+let one  = D38s2::ONE;                  // raw = 100 at scale 2
 ```
 
 `from_bits` / `to_bits` are the exact round-trip into and out of the
 storage integer:
 
 ```rust
-# use decimal_scaled::D128s2;
-let v = D128s2::from_bits(1999);
+# use decimal_scaled::D38s2;
+let v = D38s2::from_bits(1999);
 assert_eq!(v.to_bits(), 1999);
-assert_eq!(D128s2::multiplier(), 100);   // 10^SCALE
+assert_eq!(D38s2::multiplier(), 100);   // 10^SCALE
 assert_eq!(v.scale(), 2);                // the const generic, as a value
 ```
 
@@ -84,9 +84,9 @@ implemented. Operands must share the same type (same width *and* scale)
 — mixing scales is deliberately a compile error; convert explicitly.
 
 ```rust
-# use decimal_scaled::D128s2;
-let x = D128s2::from_bits(1050);   // 10.50
-let y = D128s2::from_bits(300);    //  3.00
+# use decimal_scaled::D38s2;
+let x = D38s2::from_bits(1050);   // 10.50
+let y = D38s2::from_bits(300);    //  3.00
 
 assert_eq!((x + y).to_bits(), 1350);   // 13.50
 assert_eq!((x - y).to_bits(),  750);   //  7.50
@@ -99,9 +99,9 @@ builds wrap. For explicit control there is the full
 `checked_* / wrapping_* / saturating_* / overflowing_*` family:
 
 ```rust
-# use decimal_scaled::D128s2;
-assert_eq!(D128s2::MAX.checked_add(D128s2::ONE), None);
-assert_eq!(D128s2::MAX.saturating_add(D128s2::ONE), D128s2::MAX);
+# use decimal_scaled::D38s2;
+assert_eq!(D38s2::MAX.checked_add(D38s2::ONE), None);
+assert_eq!(D38s2::MAX.saturating_add(D38s2::ONE), D38s2::MAX);
 ```
 
 ## Formatting and parsing
@@ -111,10 +111,10 @@ and value; `LowerHex` / `UpperHex` / `Octal` / `Binary` format the raw
 storage integer.
 
 ```rust
-# use decimal_scaled::D128s2;
-let v = D128s2::from_bits(-2050);
+# use decimal_scaled::D38s2;
+let v = D38s2::from_bits(-2050);
 assert_eq!(format!("{v}"), "-20.50");
-assert_eq!(format!("{v:?}"), "D128<2>(-20.50)");
+assert_eq!(format!("{v:?}"), "D38<2>(-20.50)");
 ```
 
 `FromStr` parses the same canonical form. `1.10` and `1.1` parsed at the
@@ -127,8 +127,8 @@ single integer comparison.
 operate at the type's scale:
 
 ```rust
-# use decimal_scaled::D128s2;
-let v = D128s2::from_bits(1250);   // 12.50
+# use decimal_scaled::D38s2;
+let v = D38s2::from_bits(1250);   // 12.50
 assert_eq!(v.floor().to_bits(), 1200);
 assert_eq!(v.ceil().to_bits(),  1300);
 assert_eq!(v.round().to_bits(), 1300);
@@ -142,5 +142,5 @@ To round to a *different* scale, use `rescale` — see the
 ## Next steps
 
 - [Conversions](conversions.md) — integers, floats, and cross-width.
-- [The width family](widths.md) — choosing D32 … D1024.
+- [The width family](widths.md) — choosing D9 … D307.
 - [The `d128!` macro](macros.md) — ergonomic compile-time literals.

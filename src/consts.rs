@@ -1,14 +1,14 @@
-//! Mathematical constants and float-compatibility constants for [`D128`].
+//! Mathematical constants and float-compatibility constants for [`D38`].
 //!
 //! # Constants provided
 //!
 //! The [`DecimalConsts`] trait exposes `pi`, `tau`, `half_pi`,
-//! `quarter_pi`, `golden`, and `e` as methods on `D128<SCALE>`.
+//! `quarter_pi`, `golden`, and `e` as methods on `D38<SCALE>`.
 //!
 //! Two inherent associated constants, `EPSILON` and `MIN_POSITIVE`, are
 //! provided as analogues to `f64::EPSILON` and `f64::MIN_POSITIVE` so
 //! that generic code parameterised over numeric types continues to compile
-//! when `T = D128<SCALE>`.
+//! when `T = D38<SCALE>`.
 //!
 //! # Precision strategy
 //!
@@ -40,7 +40,7 @@
 //! worth six independent rescale paths.
 //!
 //! At `SCALE_REF = 37` the constants are accurate to within 0.5 ULP
-//! for every `SCALE ≤ 37`. At `SCALE = 38` (the D128 maximum) the
+//! for every `SCALE ≤ 37`. At `SCALE = 38` (the D38 maximum) the
 //! result is off by up to ≈ 5 ULP — three of the supported scales
 //! would need a raw constant wider than `i128` can hold. Tightening
 //! to 0.5 ULP at `SCALE = 38` (and for the wide tiers' deeper
@@ -55,7 +55,7 @@
 //! decimal expansion to 37 fractional digits. ISO 80000-2 (pi, tau,
 //! pi/2, pi/4), OEIS A001113 (e), OEIS A001622 (golden ratio).
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
 /// Reference scale for the high-precision raw constants below.
 ///
@@ -109,14 +109,14 @@ const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D128_S37, 10) {
 };
 
 // Rescaling from SCALE_REF to the caller's SCALE is delegated to
-// `D128::rescale` (which uses round-half-to-even by default; see
-// `src/rescale.rs`). The constants below construct a `D128<SCALE_REF>`
+// `D38::rescale` (which uses round-half-to-even by default; see
+// `src/rescale.rs`). The constants below construct a `D38<SCALE_REF>`
 // from the raw integer literal and then rescale to the caller's
-// `D128<SCALE>`.
+// `D38<SCALE>`.
 
-/// Well-known mathematical constants available on any [`D128<SCALE>`].
+/// Well-known mathematical constants available on any [`D38<SCALE>`].
 ///
-/// Import this trait to call `D128s12::pi()`, `D128s12::e()`, etc.
+/// Import this trait to call `D38s12::pi()`, `D38s12::e()`, etc.
 ///
 /// All returned values are computed from a 37-digit raw-`i128` reference
 /// without passing through `f64`. The result is bit-exact at the target
@@ -181,49 +181,49 @@ pub trait DecimalConsts: Sized {
 
 // Public-to-crate helpers that return each constant's rescaled bits at
 // the caller's target SCALE. Used by the `decl_decimal_consts!` macro
-// to provide DecimalConsts for narrower widths (D32, D64) without
+// to provide DecimalConsts for narrower widths (D9, D18) without
 // duplicating the rescale logic.
 
 pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<TARGET>().to_bits()
+    D38::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn tau_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(TAU_RAW_S37).rescale::<TARGET>().to_bits()
+    D38::<SCALE_REF>::from_bits(TAU_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn half_pi_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(HALF_PI_RAW_S37).rescale::<TARGET>().to_bits()
+    D38::<SCALE_REF>::from_bits(HALF_PI_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn quarter_pi_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S37).rescale::<TARGET>().to_bits()
+    D38::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn golden_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(GOLDEN_RAW_S37).rescale::<TARGET>().to_bits()
+    D38::<SCALE_REF>::from_bits(GOLDEN_RAW_S37).rescale::<TARGET>().to_bits()
 }
 pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
-    D128::<SCALE_REF>::from_bits(E_RAW_S37).rescale::<TARGET>().to_bits()
+    D38::<SCALE_REF>::from_bits(E_RAW_S37).rescale::<TARGET>().to_bits()
 }
 
-// The `DecimalConsts` impl for `D128<SCALE>` is emitted by the
-// `decl_decimal_consts!` macro — the same macro D32 / D64 / D256+ use.
+// The `DecimalConsts` impl for `D38<SCALE>` is emitted by the
+// `decl_decimal_consts!` macro — the same macro D9 / D18 / D76+ use.
 // It expands to `Self(pi_at_target::<SCALE>())` etc., which is
 // identical to the previous hand-coded
-// `D128::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<SCALE>()` because
+// `D38::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<SCALE>()` because
 // `pi_at_target` is defined as exactly that, then `.to_bits()`.
-crate::macros::consts::decl_decimal_consts!(D128, i128);
+crate::macros::consts::decl_decimal_consts!(D38, i128);
 
 // Inherent associated constants: EPSILON / MIN_POSITIVE.
 //
 // These mirror `f64::EPSILON` and `f64::MIN_POSITIVE` so that generic
 // numeric code that calls `T::EPSILON` or `T::MIN_POSITIVE` compiles
-// when `T = D128<SCALE>`. For D128 both equal `D128(1)` -- the smallest
+// when `T = D38<SCALE>`. For D38 both equal `D38(1)` -- the smallest
 // representable positive value (1 LSB = 10^-SCALE). There are no subnormals.
 
-impl<const SCALE: u32> D128<SCALE> {
+impl<const SCALE: u32> D38<SCALE> {
     /// Smallest representable positive value: 1 LSB = `10^-SCALE`.
     ///
     /// Provided as an analogue to `f64::EPSILON` for generic numeric code.
     /// Note that this differs from the f64 definition ("difference between
-    /// 1.0 and the next-larger f64"): for `D128` the LSB is uniform across
+    /// 1.0 and the next-larger f64"): for `D38` the LSB is uniform across
     /// the entire representable range.
     ///
     /// # Precision
@@ -234,7 +234,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// Smallest positive value (equal to [`Self::EPSILON`]).
     ///
     /// Provided as an analogue to `f64::MIN_POSITIVE` for generic numeric
-    /// code. Unlike `f64`, `D128` has no subnormals, so `MIN_POSITIVE`
+    /// code. Unlike `f64`, `D38` has no subnormals, so `MIN_POSITIVE`
     /// and `EPSILON` are the same value.
     ///
     /// # Precision
@@ -246,7 +246,7 @@ impl<const SCALE: u32> D128<SCALE> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::D128s12;
+    use crate::core_type::D38s12;
 
     // Bit-exact assertions at SCALE = 12.
     //
@@ -260,7 +260,7 @@ mod tests {
     #[test]
     fn pi_is_bit_exact_at_scale_12() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        assert_eq!(D128s12::pi().to_bits(), 3_141_592_653_590_i128);
+        assert_eq!(D38s12::pi().to_bits(), 3_141_592_653_590_i128);
     }
 
     /// tau at SCALE=12: raw / 10^23.
@@ -269,7 +269,7 @@ mod tests {
     #[test]
     fn tau_is_bit_exact_at_scale_12() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        assert_eq!(D128s12::tau().to_bits(), 6_283_185_307_180_i128);
+        assert_eq!(D38s12::tau().to_bits(), 6_283_185_307_180_i128);
     }
 
     /// half_pi at SCALE=12: raw / 10^23.
@@ -278,7 +278,7 @@ mod tests {
     #[test]
     fn half_pi_is_bit_exact_at_scale_12() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        assert_eq!(D128s12::half_pi().to_bits(), 1_570_796_326_795_i128);
+        assert_eq!(D38s12::half_pi().to_bits(), 1_570_796_326_795_i128);
     }
 
     /// quarter_pi at SCALE=12: raw / 10^23.
@@ -287,7 +287,7 @@ mod tests {
     #[test]
     fn quarter_pi_is_bit_exact_at_scale_12() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        assert_eq!(D128s12::quarter_pi().to_bits(), 785_398_163_397_i128);
+        assert_eq!(D38s12::quarter_pi().to_bits(), 785_398_163_397_i128);
     }
 
     /// e at SCALE=12: raw / 10^23.
@@ -296,7 +296,7 @@ mod tests {
     #[test]
     fn e_is_bit_exact_at_scale_12() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        assert_eq!(D128s12::e().to_bits(), 2_718_281_828_459_i128);
+        assert_eq!(D38s12::e().to_bits(), 2_718_281_828_459_i128);
     }
 
     /// golden at SCALE=12: raw / 10^23.
@@ -305,7 +305,7 @@ mod tests {
     #[test]
     fn golden_is_bit_exact_at_scale_12() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        assert_eq!(D128s12::golden().to_bits(), 1_618_033_988_750_i128);
+        assert_eq!(D38s12::golden().to_bits(), 1_618_033_988_750_i128);
     }
 
     // Closeness checks against core::f64::consts.
@@ -317,27 +317,27 @@ mod tests {
     /// the f64 conversion step.
     #[test]
     fn pi_close_to_f64_pi() {
-        let diff = (D128s12::pi().to_f64_lossy() - core::f64::consts::PI).abs();
+        let diff = (D38s12::pi().to_f64_lossy() - core::f64::consts::PI).abs();
         assert!(diff < 1e-11, "pi diverges from f64 PI by {diff}");
     }
 
     #[test]
     fn tau_close_to_f64_tau() {
-        let diff = (D128s12::tau().to_f64_lossy() - core::f64::consts::TAU).abs();
+        let diff = (D38s12::tau().to_f64_lossy() - core::f64::consts::TAU).abs();
         assert!(diff < 1e-11, "tau diverges from f64 TAU by {diff}");
     }
 
     #[test]
     fn half_pi_close_to_f64_frac_pi_2() {
         let diff =
-            (D128s12::half_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_2).abs();
+            (D38s12::half_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_2).abs();
         assert!(diff < 1e-11, "half_pi diverges from f64 FRAC_PI_2 by {diff}");
     }
 
     #[test]
     fn quarter_pi_close_to_f64_frac_pi_4() {
         let diff =
-            (D128s12::quarter_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_4).abs();
+            (D38s12::quarter_pi().to_f64_lossy() - core::f64::consts::FRAC_PI_4).abs();
         assert!(
             diff < 1e-11,
             "quarter_pi diverges from f64 FRAC_PI_4 by {diff}"
@@ -346,7 +346,7 @@ mod tests {
 
     #[test]
     fn e_close_to_f64_e() {
-        let diff = (D128s12::e().to_f64_lossy() - core::f64::consts::E).abs();
+        let diff = (D38s12::e().to_f64_lossy() - core::f64::consts::E).abs();
         assert!(diff < 1e-11, "e diverges from f64 E by {diff}");
     }
 
@@ -356,7 +356,7 @@ mod tests {
     #[test]
     fn golden_close_to_closed_form() {
         let expected = (1.0_f64 + 5.0_f64.sqrt()) / 2.0;
-        let diff = (D128s12::golden().to_f64_lossy() - expected).abs();
+        let diff = (D38s12::golden().to_f64_lossy() - expected).abs();
         assert!(diff < 1e-11, "golden diverges from closed-form by {diff}");
     }
 
@@ -364,20 +364,20 @@ mod tests {
 
     #[test]
     fn epsilon_is_one_ulp() {
-        assert_eq!(D128s12::EPSILON.to_bits(), 1_i128);
-        assert!(D128s12::EPSILON > D128s12::ZERO);
+        assert_eq!(D38s12::EPSILON.to_bits(), 1_i128);
+        assert!(D38s12::EPSILON > D38s12::ZERO);
     }
 
     #[test]
     fn min_positive_is_one_ulp() {
-        assert_eq!(D128s12::MIN_POSITIVE.to_bits(), 1_i128);
-        assert_eq!(D128s12::MIN_POSITIVE, D128s12::EPSILON);
+        assert_eq!(D38s12::MIN_POSITIVE.to_bits(), 1_i128);
+        assert_eq!(D38s12::MIN_POSITIVE, D38s12::EPSILON);
     }
 
     /// At SCALE = 6 the LSB is 10^-6; EPSILON is still raw 1.
     #[test]
     fn epsilon_at_scale_6_is_one_ulp() {
-        type D6 = D128<6>;
+        type D6 = D38<6>;
         assert_eq!(D6::EPSILON.to_bits(), 1_i128);
         assert_eq!(D6::MIN_POSITIVE.to_bits(), 1_i128);
     }
@@ -389,7 +389,7 @@ mod tests {
     #[test]
     fn pi_at_scale_6_is_bit_exact() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        type D6 = D128<6>;
+        type D6 = D38<6>;
         assert_eq!(D6::pi().to_bits(), 3_141_593_i128);
     }
 
@@ -398,25 +398,25 @@ mod tests {
     #[test]
     fn pi_at_scale_0_is_three() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        type D0 = D128<0>;
+        type D0 = D38<0>;
         assert_eq!(D0::pi().to_bits(), 3_i128);
     }
 
     /// At SCALE = SCALE_REF (37), pi() returns exactly the raw constant.
     #[test]
     fn pi_at_scale_ref_is_raw_constant() {
-        type D37 = D128<37>;
+        type D37 = D38<37>;
         assert_eq!(D37::pi().to_bits(), PI_RAW_S37);
     }
 
     /// At SCALE = SCALE_REF + 1 (38), pi() multiplies by 10, appending
     /// one trailing zero digit. PI_RAW_S37 * 10 ≈ 3.14×10³⁸ which is
     /// larger than i128::MAX ≈ 1.7×10³⁸, so this case overflows
-    /// `D128<38>` storage at compile time — exercising the upper end
+    /// `D38<38>` storage at compile time — exercising the upper end
     /// of the rescale-up path is left to the SCALE = 37 case above.
     #[test]
     fn pi_at_scale_37_is_raw_constant() {
-        type D37 = D128<37>;
+        type D37 = D38<37>;
         assert_eq!(D37::pi().to_bits(), PI_RAW_S37);
     }
 
@@ -424,12 +424,12 @@ mod tests {
     #[test]
     fn neg_pi_round_trip() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        let pi = D128s12::pi();
+        let pi = D38s12::pi();
         let neg_pi = -pi;
         assert_eq!(neg_pi.to_bits(), -3_141_592_653_590_i128);
     }
 
     // (`rescale_from_ref` boundary tests removed: the rounding logic now
-    // lives in `D128::rescale` / `src/rounding.rs::apply_rounding` and is
+    // lives in `D38::rescale` / `src/rounding.rs::apply_rounding` and is
     // covered by the tests in those modules.)
 }

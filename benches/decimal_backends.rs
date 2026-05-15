@@ -1,9 +1,9 @@
 //! Decimal / fixed-point backend comparison across every width and
 //! every comparable operation.
 //!
-//! The crate ships twelve decimal widths (D32, D64, D128 plus the
-//! wide tier D256/D384/D512/D768/D1024 and the x-wide tier
-//! D1536/D2048/D3072/D4096). This bench fans the add / sub / mul /
+//! The crate ships twelve decimal widths (D9, D18, D38 plus the
+//! wide tier D76/D115/D153/D230/D307 and the x-wide tier
+//! D462/D616/D924/D1232). This bench fans the add / sub / mul /
 //! div / rem / neg primitives across every available width and pits
 //! them against the established baselines:
 //!
@@ -13,11 +13,11 @@
 //! - `fixed::I64F64` — a binary fixed-point crate.
 //!
 //! `rust_decimal` and `fixed` do not have wide-tier counterparts, so
-//! they appear only in the D128-and-narrower groups. `BnumD256` only
-//! compares with D256.
+//! they appear only in the D38-and-narrower groups. `BnumD256` only
+//! compares with D76.
 //!
 //! Transcendentals (`ln`, `exp`, `sqrt`, `sin`, `cos`, `atan2`, `pow`)
-//! cover D128 and D256 in both the lossy (f64-bridge) and strict
+//! cover D38 and D76 in both the lossy (f64-bridge) and strict
 //! (integer-only, correctly-rounded to 0.5 ULP) forms, alongside
 //! `rust_decimal` and the crate's native fast-paths.
 //!
@@ -27,11 +27,11 @@ mod bnum;
 
 use bnum::BnumD256;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D128, D256, D32, D64};
-#[cfg(feature = "d512")]
-use decimal_scaled::D512;
-#[cfg(feature = "d1024")]
-use decimal_scaled::D1024;
+use decimal_scaled::{D38, D76, D9, D18};
+#[cfg(feature = "d153")]
+use decimal_scaled::D153;
+#[cfg(feature = "d307")]
+use decimal_scaled::D307;
 use fixed::types::I64F64;
 use rust_decimal::{Decimal, MathematicalOps};
 
@@ -71,18 +71,18 @@ fn bench_arithmetic(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal/arith");
 
     // Native-storage tier: i32, i64, i128.
-    six_ops!(g, "D32",  D32::<6>::from_int(A as i32),  D32::<6>::from_int(B as i32));
-    six_ops!(g, "D64",  D64::<12>::from_int(A),        D64::<12>::from_int(B));
-    six_ops!(g, "D128", D128::<12>::from_int(A),       D128::<12>::from_int(B));
+    six_ops!(g, "D9",  D9::<6>::from_int(A as i32),  D9::<6>::from_int(B as i32));
+    six_ops!(g, "D18",  D18::<12>::from_int(A),        D18::<12>::from_int(B));
+    six_ops!(g, "D38", D38::<12>::from_int(A),       D38::<12>::from_int(B));
 
     // Wide tier (256-bit and up, hand-rolled wide integers). Only
     // the powers-of-two D types are exposed publicly so far; the
-    // intermediate widths (D384, D768, D1536, D3072) are queued.
-    six_ops!(g, "D256", D256::<12>::from_int(A as i128), D256::<12>::from_int(B as i128));
-    #[cfg(feature = "d512")]
-    six_ops!(g, "D512", D512::<12>::from_int(A as i128), D512::<12>::from_int(B as i128));
-    #[cfg(feature = "d1024")]
-    six_ops!(g, "D1024", D1024::<12>::from_int(A as i128), D1024::<12>::from_int(B as i128));
+    // intermediate widths (D115, D230, D462, D924) are queued.
+    six_ops!(g, "D76", D76::<12>::from_int(A as i128), D76::<12>::from_int(B as i128));
+    #[cfg(feature = "d153")]
+    six_ops!(g, "D153", D153::<12>::from_int(A as i128), D153::<12>::from_int(B as i128));
+    #[cfg(feature = "d307")]
+    six_ops!(g, "D307", D307::<12>::from_int(A as i128), D307::<12>::from_int(B as i128));
 
     // Baselines.
     six_ops!(
@@ -98,15 +98,15 @@ fn bench_arithmetic(c: &mut Criterion) {
 }
 
 /// `ln` / `exp` / `sqrt` / `sin` / `cos` / `atan2` / `pow`, comparing
-/// the crate's D128 / D256 (lossy and strict) variants against
+/// the crate's D38 / D76 (lossy and strict) variants against
 /// `rust_decimal`. The wide-tier strict variants quantify the
 /// correctly-rounded-to-0.5-ULP cost.
 fn bench_transcendentals(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal/transc");
 
     // `≈ 2.345678901` in each representation.
-    let ours128 = D128::<9>::from_bits(2_345_678_901);
-    let ours256 = D256::<9>::from_int(2);
+    let ours128 = D38::<9>::from_bits(2_345_678_901);
+    let ours256 = D76::<9>::from_int(2);
     let rd = Decimal::new(2_345_678_901, 9);
 
     macro_rules! one_arg {
@@ -132,7 +132,7 @@ fn bench_transcendentals(c: &mut Criterion) {
     g.bench_function("rust_decimal/cos",  |b| b.iter(|| black_box(rd).cos()));
     g.bench_function("rust_decimal/tan",  |b| b.iter(|| black_box(rd).tan()));
 
-    // Wide tier: D256 transcendentals. Strict variants are
+    // Wide tier: D76 transcendentals. Strict variants are
     // correctly-rounded; lossy paths route through f64.
     g.bench_function("D256_lossy/ln",     |b| b.iter(|| black_box(ours256).ln()));
     g.bench_function("D256_strict/ln",    |b| b.iter(|| black_box(ours256).ln_strict()));
@@ -144,7 +144,7 @@ fn bench_transcendentals(c: &mut Criterion) {
     g.bench_function("D256_strict/sin",   |b| b.iter(|| black_box(ours256).sin_strict()));
 
     // Two-arg ops: pow, atan2.
-    let p = D128::<9>::from_bits(3_000_000_000); // 3.0
+    let p = D38::<9>::from_bits(3_000_000_000); // 3.0
     g.bench_function("D128_lossy/powf",  |b| b.iter(|| black_box(ours128).powf(black_box(p))));
     g.bench_function("D128_strict/powf", |b| b.iter(|| black_box(ours128).powf_strict(black_box(p))));
     g.bench_function("D128_lossy/atan2", |b| b.iter(|| black_box(ours128).atan2(black_box(p))));

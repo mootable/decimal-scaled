@@ -14,8 +14,8 @@
 
 /// Emits the bitwise operator + method surface for a decimal type.
 ///
-/// - `decl_decimal_bitwise!(D128, i128)` — *native* storage.
-/// - `decl_decimal_bitwise!(wide D256, I256)` — *wide* storage.
+/// - `decl_decimal_bitwise!(D38, i128)` — *native* storage.
+/// - `decl_decimal_bitwise!(wide D76, I256)` — *wide* storage.
 macro_rules! decl_decimal_bitwise {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {

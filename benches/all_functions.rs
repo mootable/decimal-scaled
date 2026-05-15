@@ -1,4 +1,4 @@
-//! Per-function benchmark sweep over every public surface of `D128<12>`.
+//! Per-function benchmark sweep over every public surface of `D38<12>`.
 //!
 //! Companion to `mul_div_candidates.rs`. Where that bench compares
 //! several candidate algorithms against the production `Mul` / `Div`
@@ -38,9 +38,9 @@
 //! `mul_div_candidates.rs`.
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D128, D128s12, DecimalConsts};
+use decimal_scaled::{D38, D38s12, DecimalConsts};
 
-type D = D128<12>;
+type D = D38<12>;
 
 // Representative inputs. RAW_A and RAW_B are mid-magnitude (well within
 // i128 range, above i64 boundary) so the production fast paths stay
@@ -451,7 +451,7 @@ fn bench_display(c: &mut Criterion) {
     });
     g.bench_function("FromStr_parse", |bn| {
         let s = "1.5";
-        bn.iter(|| black_box(s).parse::<D128s12>())
+        bn.iter(|| black_box(s).parse::<D38s12>())
     });
 
     g.finish();

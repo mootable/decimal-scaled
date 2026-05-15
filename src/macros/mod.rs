@@ -1,7 +1,7 @@
 //! Internal `decl_*!` macros that emit per-width surface for the
 //! decimal type family.
 //!
-//! Every macro takes the target `$Type` (e.g. `D32`, `D64`, `D128`)
+//! Every macro takes the target `$Type` (e.g. `D9`, `D18`, `D38`)
 //! and the relevant storage / widening types as parameters, then
 //! emits the corresponding impl block. Each width's `core_type.rs`
 //! entry then becomes a series of one-line macro invocations.
@@ -32,7 +32,7 @@ pub(crate) mod storage_formatters;
 pub(crate) mod strict_transcendentals;
 pub(crate) mod lossy_transcendentals;
 pub(crate) mod full;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
 pub(crate) mod wide_roots;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
 pub(crate) mod wide_transcendental;

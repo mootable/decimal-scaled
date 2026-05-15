@@ -51,29 +51,29 @@ rounding-ceiling = []
 # toolchain. On stable, leave the feature off.
 experimental-floats = []
 # Wide decimal tiers. Each width is independently opt-in; `wide` is the
-# umbrella up to D1024, `x-wide` is the umbrella for the very wide
-# (`d1536` and above) tiers. They are backed by the in-tree hand-rolled
-# wide-integer types — no external big-integer dependency. D32 / D64 /
-# D128 use primitive storage and need none of this.
+# umbrella up to D307, `x-wide` is the umbrella for the very wide
+# (`d462` and above) tiers. They are backed by the in-tree hand-rolled
+# wide-integer types — no external big-integer dependency. D9 / D18 /
+# D38 use primitive storage and need none of this.
 #
-# Powers of two: D256, D512, D1024 (wide); D2048, D4096 (x-wide).
-# Halfway widths `(2^n + 2^(n+1))/2`: D384, D768 (wide); D1536, D3072
+# Powers of two: D76, D153, D307 (wide); D616, D1232 (x-wide).
+# Halfway widths `(2^n + 2^(n+1))/2`: D115, D230 (wide); D462, D924
 # (x-wide). Halfway widths under 384 are skipped — they would require
 # u64-aligned storage, breaking the u128-limb model.
-wide = ["d256", "d384", "d512", "d768"]
-d256 = []
-d384 = []
-d512 = []
-d768 = []
-# Very wide tiers (D1024 and above). Gated separately because their
+wide = ["d76", "d115", "d153", "d230"]
+d76 = []
+d115 = []
+d153 = []
+d230 = []
+# Very wide tiers (D307 and above). Gated separately because their
 # strict-transcendental work integers run into many thousands of bits
 # and pull in large wide-integer types.
-x-wide = ["d1024", "d1536", "d2048", "d3072", "d4096"]
-d1024 = []
-d1536 = []
-d2048 = []
-d3072 = []
-d4096 = []
+x-wide = ["d307", "d462", "d616", "d924", "d1232"]
+d307 = []
+d462 = []
+d616 = []
+d924 = []
+d1232 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
@@ -108,8 +108,8 @@ name = "wide_int_backends"
 harness = false
 required-features = ["wide"]
 
-# Decimal / fixed-point backend comparison: native `D128` / `D256` vs
-# `bnum`-backed `D256`, `rust_decimal`, and `fixed` — arithmetic and
+# Decimal / fixed-point backend comparison: native `D38` / `D76` vs
+# `bnum`-backed `D76`, `rust_decimal`, and `fixed` — arithmetic and
 # transcendentals (including the lossy vs strict variants). Needs the
 # wide tier.
 [[bench]]
@@ -117,15 +117,15 @@ name = "decimal_backends"
 harness = false
 required-features = ["wide"]
 
-# D128 mul / div: native Moller-Granlund path vs the wide-arm
+# D38 mul / div: native Moller-Granlund path vs the wide-arm
 # (Int256-widening) algorithm head-to-head.
 [[bench]]
-name = "d128_mul_div_paths"
+name = "d_w128_mul_div_paths"
 harness = false
 required-features = ["wide"]
 
 # AGM vs artanh / Taylor strict transcendentals at the deepest tier
-# (D1024<300>). Tracks the AGM path's throughput so a future bench-
+# (D307<300>). Tracks the AGM path's throughput so a future bench-
 # driven promotion has a data point.
 [[bench]]
 name = "agm_vs_taylor"

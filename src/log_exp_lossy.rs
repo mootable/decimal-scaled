@@ -1,28 +1,28 @@
-//! Lossy (f64-bridge) log_exp methods for D128.
+//! Lossy (f64-bridge) log_exp methods for D38.
 //!
 //! Companion to log_exp_strict.rs. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
 //! no_strict set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
-impl<const SCALE: u32> D128<SCALE> {
+impl<const SCALE: u32> D38<SCALE> {
 
     /// Returns the natural logarithm (base e) of `self`.
     ///
     /// # Precision
     ///
     /// Lossy: converts to f64, calls `f64::ln`, converts back. `f64::ln`
-    /// returns `-Infinity` for `0.0` (saturates to `D128::MIN`) and `NaN`
-    /// for negative inputs (maps to `D128::ZERO`).
+    /// returns `-Infinity` for `0.0` (saturates to `D38::MIN`) and `NaN`
+    /// for negative inputs (maps to `D38::ZERO`).
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
+    /// use decimal_scaled::D38s12;
     /// // ln(1) == 0 (f64::ln(1.0) == 0.0 exactly).
-    /// assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
+    /// assert_eq!(D38s12::ONE.ln(), D38s12::ZERO);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
@@ -44,10 +44,10 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
+    /// use decimal_scaled::D38s12;
     /// // log_2(8) is approximately 3 within f64 precision.
-    /// let eight = D128s12::from_int(8);
-    /// let two = D128s12::from_int(2);
+    /// let eight = D38s12::from_int(8);
+    /// let two = D38s12::from_int(2);
     /// let result = eight.log(two);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
@@ -69,9 +69,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
+    /// use decimal_scaled::D38s12;
     /// // log2(1) == 0 (f64::log2(1.0) == 0.0 exactly).
-    /// assert_eq!(D128s12::ONE.log2(), D128s12::ZERO);
+    /// assert_eq!(D38s12::ONE.log2(), D38s12::ZERO);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
@@ -90,9 +90,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
+    /// use decimal_scaled::D38s12;
     /// // log10(1) == 0 (f64::log10(1.0) == 0.0 exactly).
-    /// assert_eq!(D128s12::ONE.log10(), D128s12::ZERO);
+    /// assert_eq!(D38s12::ONE.log10(), D38s12::ZERO);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
@@ -107,15 +107,15 @@ impl<const SCALE: u32> D128<SCALE> {
     ///
     /// Lossy: involves f64 at some point; result may lose precision.
     /// Large positive inputs overflow f64 to `+Infinity`, which saturates
-    /// to `D128::MAX`. Large negative inputs underflow to `0.0` in f64,
-    /// which maps to `D128::ZERO`.
+    /// to `D38::MAX`. Large negative inputs underflow to `0.0` in f64,
+    /// which maps to `D38::ZERO`.
     ///
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
+    /// use decimal_scaled::D38s12;
     /// // exp(0) == 1 (f64::exp(0.0) == 1.0 exactly).
-    /// assert_eq!(D128s12::ZERO.exp(), D128s12::ONE);
+    /// assert_eq!(D38s12::ZERO.exp(), D38s12::ONE);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
@@ -135,9 +135,9 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Examples
     ///
     /// ```ignore
-    /// use decimal_scaled::D128s12;
+    /// use decimal_scaled::D38s12;
     /// // exp2(0) == 1 (f64::exp2(0.0) == 1.0 exactly).
-    /// assert_eq!(D128s12::ZERO.exp2(), D128s12::ONE);
+    /// assert_eq!(D38s12::ZERO.exp2(), D38s12::ONE);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
     #[inline]
@@ -150,7 +150,7 @@ impl<const SCALE: u32> D128<SCALE> {
 #[cfg(all(test, any(not(feature = "strict"), feature = "no_strict")))]
 mod tests {
     use crate::consts::DecimalConsts;
-    use crate::core_type::D128s12;
+    use crate::core_type::D38s12;
 
     /// Tolerance for f64-bridge log/exp tests against integer-valued
     /// expectations.
@@ -161,7 +161,7 @@ mod tests {
     /// worst-case slack is around 16 LSB; 32 gives comfortable margin.
     /// At SCALE=12 this is 32 picometers, nine orders of magnitude below
     /// any physical measurement. The test margin reflects f64 arithmetic
-    /// noise, not D128 imprecision.
+    /// noise, not D38 imprecision.
     const LOG_EXP_TOLERANCE_LSB: i128 = 32;
 
     /// Looser tolerance for round-trips like `exp(ln(x)) ~= x`.
@@ -176,7 +176,7 @@ mod tests {
     /// Each f64 step adds up to ~1 LSB; 4 LSB absorbs two quantisation steps.
     const FOUR_LSB: i128 = 4;
 
-    fn within_lsb(actual: D128s12, expected: D128s12, lsb: i128) -> bool {
+    fn within_lsb(actual: D38s12, expected: D38s12, lsb: i128) -> bool {
         let diff = (actual.to_bits() - expected.to_bits()).abs();
         diff <= lsb
     }
@@ -186,31 +186,31 @@ mod tests {
     /// `exp(0) == 1` -- bit-exact via `f64::exp(0.0) == 1.0`.
     #[test]
     fn exp_zero_is_one() {
-        assert_eq!(D128s12::ZERO.exp(), D128s12::ONE);
+        assert_eq!(D38s12::ZERO.exp(), D38s12::ONE);
     }
 
     /// `exp2(0) == 1` -- bit-exact via `f64::exp2(0.0) == 1.0`.
     #[test]
     fn exp2_zero_is_one() {
-        assert_eq!(D128s12::ZERO.exp2(), D128s12::ONE);
+        assert_eq!(D38s12::ZERO.exp2(), D38s12::ONE);
     }
 
     /// `ln(1) == 0` -- bit-exact via `f64::ln(1.0) == 0.0`.
     #[test]
     fn ln_one_is_zero() {
-        assert_eq!(D128s12::ONE.ln(), D128s12::ZERO);
+        assert_eq!(D38s12::ONE.ln(), D38s12::ZERO);
     }
 
     /// `log2(1) == 0` -- bit-exact via `f64::log2(1.0) == 0.0`.
     #[test]
     fn log2_one_is_zero() {
-        assert_eq!(D128s12::ONE.log2(), D128s12::ZERO);
+        assert_eq!(D38s12::ONE.log2(), D38s12::ZERO);
     }
 
     /// `log10(1) == 0` -- bit-exact via `f64::log10(1.0) == 0.0`.
     #[test]
     fn log10_one_is_zero() {
-        assert_eq!(D128s12::ONE.log10(), D128s12::ZERO);
+        assert_eq!(D38s12::ONE.log10(), D38s12::ZERO);
     }
 
     // Integer-power identities (within tolerance)
@@ -218,9 +218,9 @@ mod tests {
     /// `log2(8) ~= 3` within tolerance.
     #[test]
     fn log2_of_eight_is_three() {
-        let eight = D128s12::from_int(8);
+        let eight = D38s12::from_int(8);
         let result = eight.log2();
-        let expected = D128s12::from_int(3);
+        let expected = D38s12::from_int(3);
         assert!(
             within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
             "log2(8) bits {}, expected 3 bits {} (delta {})",
@@ -233,9 +233,9 @@ mod tests {
     /// `log10(1000) ~= 3` within tolerance.
     #[test]
     fn log10_of_thousand_is_three() {
-        let thousand = D128s12::from_int(1000);
+        let thousand = D38s12::from_int(1000);
         let result = thousand.log10();
-        let expected = D128s12::from_int(3);
+        let expected = D38s12::from_int(3);
         assert!(
             within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
             "log10(1000) bits {}, expected 3 bits {} (delta {})",
@@ -250,9 +250,9 @@ mod tests {
     fn log10_of_power_of_ten() {
         // n = 1, 2, 4, 6 chosen to stay well within f64's range at SCALE=12.
         for n in [1_i64, 2, 4, 6] {
-            let pow_of_ten = D128s12::from_int(10_i64.pow(n as u32));
+            let pow_of_ten = D38s12::from_int(10_i64.pow(n as u32));
             let result = pow_of_ten.log10();
-            let expected = D128s12::from_int(n);
+            let expected = D38s12::from_int(n);
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "log10(10^{n}) bits {}, expected {n} bits {} (delta {})",
@@ -267,9 +267,9 @@ mod tests {
     #[test]
     fn log2_of_power_of_two() {
         for n in [1_i64, 2, 4, 8, 16] {
-            let pow_of_two = D128s12::from_int(2_i64.pow(n as u32));
+            let pow_of_two = D38s12::from_int(2_i64.pow(n as u32));
             let result = pow_of_two.log2();
-            let expected = D128s12::from_int(n);
+            let expected = D38s12::from_int(n);
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "log2(2^{n}) bits {}, expected {n} bits {} (delta {})",
@@ -298,7 +298,7 @@ mod tests {
             45_678_912_345_679_i128, // ~45.678912
             78_901_234_567_890_i128, // ~78.901234
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let recovered = x.ln().exp();
             assert!(
                 within_lsb(recovered, x, ROUND_TRIP_TOLERANCE_LSB),
@@ -309,12 +309,12 @@ mod tests {
         }
     }
 
-    /// `exp(D128::e().ln()) ~= D128::e()` round-trip within tolerance.
+    /// `exp(D38::e().ln()) ~= D38::e()` round-trip within tolerance.
     ///
     /// `e ~= 2.718`, so the error stays inside `LOG_EXP_TOLERANCE_LSB`.
     #[test]
     fn exp_of_ln_e_round_trip() {
-        let e = D128s12::e();
+        let e = D38s12::e();
         let recovered = e.ln().exp();
         assert!(
             within_lsb(recovered, e, LOG_EXP_TOLERANCE_LSB),
@@ -328,7 +328,7 @@ mod tests {
     #[test]
     fn ln_of_exp_round_trip() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        // Moderate inputs; large positive inputs approach D128s12 magnitude limit.
+        // Moderate inputs; large positive inputs approach D38s12 magnitude limit.
         for raw in [
             -2_345_678_901_234_i128, // ~-2.345678
             -500_000_000_000_i128,   // -0.5
@@ -336,7 +336,7 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let recovered = x.exp().ln();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -352,14 +352,14 @@ mod tests {
     /// `log(self, e) ~= ln(self)` -- base-aware form is consistent with `ln`.
     #[test]
     fn log_base_e_matches_ln() {
-        let e = D128s12::e();
+        let e = D38s12::e();
         for raw in [
             500_000_000_000_i128,    // 0.5
             1_234_567_890_123_i128,  // ~1.234567
             4_567_891_234_567_i128,  // ~4.567891
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let via_log = x.log(e);
             let via_ln = x.ln();
             assert!(
@@ -374,14 +374,14 @@ mod tests {
     /// `log(self, 2) ~= log2(self)` -- consistency check for base 2.
     #[test]
     fn log_base_two_matches_log2() {
-        let two = D128s12::from_int(2);
+        let two = D38s12::from_int(2);
         for raw in [
             500_000_000_000_i128,    // 0.5
             1_234_567_890_123_i128,  // ~1.234567
             4_567_891_234_567_i128,  // ~4.567891
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let via_log = x.log(two);
             let via_log2 = x.log2();
             assert!(
@@ -396,14 +396,14 @@ mod tests {
     /// `log(self, 10) ~= log10(self)` -- consistency check for base 10.
     #[test]
     fn log_base_ten_matches_log10() {
-        let ten = D128s12::from_int(10);
+        let ten = D38s12::from_int(10);
         for raw in [
             500_000_000_000_i128,    // 0.5
             1_234_567_890_123_i128,  // ~1.234567
             4_567_891_234_567_i128,  // ~4.567891
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D128s12::from_bits(raw);
+            let x = D38s12::from_bits(raw);
             let via_log = x.log(ten);
             let via_log10 = x.log10();
             assert!(
@@ -420,8 +420,8 @@ mod tests {
     #[test]
     fn exp2_matches_integer_power_of_two() {
         for n in [0_i64, 1, 2, 4, 8] {
-            let result = D128s12::from_int(n).exp2();
-            let expected = D128s12::from_int(2_i64.pow(n as u32));
+            let result = D38s12::from_int(n).exp2();
+            let expected = D38s12::from_int(2_i64.pow(n as u32));
             assert!(
                 within_lsb(result, expected, LOG_EXP_TOLERANCE_LSB),
                 "exp2({n}) bits {}, expected 2^{n} bits {} (delta {})",

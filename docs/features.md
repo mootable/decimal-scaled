@@ -52,12 +52,12 @@ opt-in per width, with `wide` as an umbrella over all three.
 
 | Feature | Enables |
 |---|---|
-| `d256` | `D256` (256-bit storage, `MAX_SCALE = 76`) |
-| `d512` | `D512` (512-bit storage, `MAX_SCALE = 153`) |
-| `d1024` | `D1024` (1024-bit storage, `MAX_SCALE = 307`) |
+| `d76` | `D76` (256-bit storage, `MAX_SCALE = 76`) |
+| `d153` | `D153` (512-bit storage, `MAX_SCALE = 153`) |
+| `d307` | `D307` (1024-bit storage, `MAX_SCALE = 307`) |
 | `wide` | all three of the above |
 
-`D32` / `D64` / `D128` never pull in `bnum` — the dependency is added
+`D9` / `D18` / `D38` never pull in `bnum` — the dependency is added
 only when a wide feature is active.
 
 ## Nightly-only

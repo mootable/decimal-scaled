@@ -1,8 +1,8 @@
 //! The [`Decimal`] trait — width-generic surface across the
 //! `decimal-scaled` type family.
 //!
-//! At present, only `D128<SCALE>` implements this trait. As the family
-//! grows (per the design plan: D32, D64, D256, D512, D1024), each new
+//! At present, only `D38<SCALE>` implements this trait. As the family
+//! grows (per the design plan: D9, D18, D76, D153, D307), each new
 //! width's macro-generated impl will also implement `Decimal`, letting
 //! downstream code write generic numeric helpers like
 //!
@@ -18,8 +18,8 @@
 //! width-generic helpers (`sum`, `mean`, `total_cmp`, etc.) once
 //! multiple concrete widths exist to validate the abstraction.
 //!
-//! For most users the concrete type (`D128<SCALE>` or one of its
-//! aliases like `D128s12`) is the canonical surface. Reach for
+//! For most users the concrete type (`D38<SCALE>` or one of its
+//! aliases like `D38s12`) is the canonical surface. Reach for
 //! `Decimal` only when writing code that must work across widths.
 
 /// A scaled fixed-point decimal type with a compile-time `SCALE` and a
@@ -28,7 +28,7 @@
 /// Every implementor exposes:
 ///
 /// - An associated [`Self::Storage`] type — the underlying integer
-/// representation. For `D128<SCALE>` this is `i128`.
+/// representation. For `D38<SCALE>` this is `i128`.
 /// - The compile-time [`Self::SCALE`] of the value, equal to the
 /// const-generic parameter.
 /// - The width-specific [`Self::MAX_SCALE`] cap, equal to the largest
@@ -41,7 +41,7 @@
 ///
 /// N/A: this is a trait definition, no arithmetic is performed.
 pub trait Decimal: Copy + PartialEq + Eq {
-    /// Underlying integer storage type (e.g. `i128` for `D128<SCALE>`).
+    /// Underlying integer storage type (e.g. `i128` for `D38<SCALE>`).
     type Storage: Copy + PartialEq + Eq;
 
     /// The decimal scale of this type, equal to the const-generic
@@ -49,7 +49,7 @@ pub trait Decimal: Copy + PartialEq + Eq {
     const SCALE: u32;
 
     /// The maximum legal `SCALE` for this width. Equal to the largest
-    /// `k` such that `10^k` fits in `Self::Storage`. For `D128`,
+    /// `k` such that `10^k` fits in `Self::Storage`. For `D38`,
     /// this is `38`.
     const MAX_SCALE: u32;
 
@@ -106,33 +106,33 @@ pub trait Decimal: Copy + PartialEq + Eq {
     }
 }
 
-// The `Decimal` trait impl for `D128<SCALE>` is emitted by the
+// The `Decimal` trait impl for `D38<SCALE>` is emitted by the
 // `decl_decimal_basics!` macro invocation in `core_type.rs`. Future
 // widths' impls are emitted by the same macro.
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::D128s12;
+    use crate::core_type::D38s12;
 
     /// Trait-dispatch accessors agree with inherent methods.
     #[test]
     fn trait_dispatch_matches_inherent() {
-        let v: D128s12 = D128s12::from_bits(1_500_000_000_000);
-        assert_eq!(<D128s12 as Decimal>::SCALE, 12);
-        assert_eq!(<D128s12 as Decimal>::MAX_SCALE, 38);
-        assert_eq!(<D128s12 as Decimal>::multiplier(), 1_000_000_000_000_i128);
-        assert_eq!(<D128s12 as Decimal>::to_bits(v), 1_500_000_000_000);
-        assert_eq!(<D128s12 as Decimal>::scale(v), 12);
+        let v: D38s12 = D38s12::from_bits(1_500_000_000_000);
+        assert_eq!(<D38s12 as Decimal>::SCALE, 12);
+        assert_eq!(<D38s12 as Decimal>::MAX_SCALE, 38);
+        assert_eq!(<D38s12 as Decimal>::multiplier(), 1_000_000_000_000_i128);
+        assert_eq!(<D38s12 as Decimal>::to_bits(v), 1_500_000_000_000);
+        assert_eq!(<D38s12 as Decimal>::scale(v), 12);
     }
 
     /// Trait constants line up with inherent constants.
     #[test]
     fn trait_constants_match_inherent() {
-        assert_eq!(<D128s12 as Decimal>::ZERO, D128s12::ZERO);
-        assert_eq!(<D128s12 as Decimal>::ONE, D128s12::ONE);
-        assert_eq!(<D128s12 as Decimal>::MAX, D128s12::MAX);
-        assert_eq!(<D128s12 as Decimal>::MIN, D128s12::MIN);
+        assert_eq!(<D38s12 as Decimal>::ZERO, D38s12::ZERO);
+        assert_eq!(<D38s12 as Decimal>::ONE, D38s12::ONE);
+        assert_eq!(<D38s12 as Decimal>::MAX, D38s12::MAX);
+        assert_eq!(<D38s12 as Decimal>::MIN, D38s12::MIN);
     }
 
     /// Trait works in width-generic context.
@@ -142,8 +142,8 @@ mod tests {
 
     #[test]
     fn width_generic_zero() {
-        let z: D128s12 = return_zero();
-        assert_eq!(z, D128s12::ZERO);
+        let z: D38s12 = return_zero();
+        assert_eq!(z, D38s12::ZERO);
     }
 
     /// Storage associated type is reachable.
@@ -153,7 +153,7 @@ mod tests {
 
     #[test]
     fn width_generic_with_storage_bound() {
-        let v = D128s12::from_bits(7);
+        let v = D38s12::from_bits(7);
         assert_eq!(double_bits(v), 14);
     }
 }

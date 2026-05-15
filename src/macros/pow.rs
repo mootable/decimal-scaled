@@ -4,7 +4,7 @@
 //!
 //! All six methods are square-and-multiply built on the type's `Mul`
 //! operator (or the matching overflow-variant of multiplication), so
-//! they apply unchanged to every storage kind. D128 keeps its
+//! they apply unchanged to every storage kind. D38 keeps its
 //! hand-written versions, which sit closer to the `mg_divide` path;
 //! every other width takes them from this macro.
 

@@ -109,8 +109,8 @@ after the influential 1980 implementation:
 > Cody, W. J. and Waite, W. (1980). **"Software Manual for the
 > Elementary Functions."** Prentice-Hall.
 
-Implementation: `src/log_exp_strict.rs::ln_fixed` (D128),
-`src/macros/wide_transcendental.rs::ln_fixed` (D256/D512/D1024).
+Implementation: `src/log_exp_strict.rs::ln_fixed` (D38),
+`src/macros/wide_transcendental.rs::ln_fixed` (D76/D153/D307).
 
 ### `exp` via range-reduced Taylor series
 
@@ -146,7 +146,7 @@ converges fast.
 > Machin, J. (1706). Cited via Beckmann, P. (1971). *A History of π*.
 > St. Martin's Press.
 
-Implementation: `src/macros/wide_transcendental.rs::pi`. (D128
+Implementation: `src/macros/wide_transcendental.rs::pi`. (D38
 embeds `π` to 63 fractional digits as a literal — no series at run
 time, since the constant fits the working width comfortably.)
 
@@ -191,11 +191,11 @@ largest of the six). Sources:
 - **Karatsuba multiplication.** For 1024-bit multiplicands the
   schoolbook cross-over is at ~16+ limbs; the crate's widest fast-
   path mul is Int1024 (8 limbs of u128). Below cross-over schoolbook
-  wins. Karatsuba kicks in at D2048 and above; recorded as a future
+  wins. Karatsuba kicks in at D616 and above; recorded as a future
   optimisation. (Karatsuba, A. and Ofman, Yu. (1962). *Doklady Akad.
   Nauk SSSR* 145, 293–294.)
 - **AGM-based ln / exp (Brent–Salamin 1976).** `ln_strict_agm`
-  (D256 / D512 / D1024) uses Brent's identity
+  (D76 / D153 / D307) uses Brent's identity
   `ln(s) ≈ π / (2 · AGM(1, 4/s))` with range reduction
   `ln(x) = ln(x · 2^m) − m·ln 2`. `exp_strict_agm` uses Newton's
   iteration on `ln_strict_agm`. Both converge quadratically — `O(log

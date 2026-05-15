@@ -11,8 +11,8 @@
 //! lossy, in which case the relevant rounding contract is asserted.
 
 use decimal_scaled::{
-    D128, D128s0, D128s12, D128s2, D128s38, D128s9, D32s0, D32s2, D32s4, D32s9, D64s0, D64s18,
-    D64s6, D64s9, Decimal, RoundingMode,
+    D38, D38s0, D38s12, D38s2, D38s38, D38s9, D9s0, D9s2, D9s4, D9s9, D18s0, D18s18,
+    D18s6, D18s9, Decimal, RoundingMode,
 };
 
 // ─────────────────────────────────────────────────────────────────────
@@ -23,35 +23,35 @@ use decimal_scaled::{
 fn zero_one_max_min_storage_patterns() {
     // ZERO is always raw 0; ONE is always raw 10^SCALE; MAX/MIN are the
     // storage type's own MAX/MIN.
-    assert_eq!(D128s0::ZERO.to_bits(), 0);
-    assert_eq!(D128s0::ONE.to_bits(), 1);
-    assert_eq!(D128s12::ONE.to_bits(), 1_000_000_000_000);
-    assert_eq!(D128s38::ONE.to_bits(), 10_i128.pow(38));
-    assert_eq!(D128s12::MAX.to_bits(), i128::MAX);
-    assert_eq!(D128s12::MIN.to_bits(), i128::MIN);
+    assert_eq!(D38s0::ZERO.to_bits(), 0);
+    assert_eq!(D38s0::ONE.to_bits(), 1);
+    assert_eq!(D38s12::ONE.to_bits(), 1_000_000_000_000);
+    assert_eq!(D38s38::ONE.to_bits(), 10_i128.pow(38));
+    assert_eq!(D38s12::MAX.to_bits(), i128::MAX);
+    assert_eq!(D38s12::MIN.to_bits(), i128::MIN);
 
-    assert_eq!(D32s0::ONE.to_bits(), 1);
-    assert_eq!(D32s9::ONE.to_bits(), 10_i32.pow(9));
-    assert_eq!(D32s0::MAX.to_bits(), i32::MAX);
-    assert_eq!(D32s0::MIN.to_bits(), i32::MIN);
+    assert_eq!(D9s0::ONE.to_bits(), 1);
+    assert_eq!(D9s9::ONE.to_bits(), 10_i32.pow(9));
+    assert_eq!(D9s0::MAX.to_bits(), i32::MAX);
+    assert_eq!(D9s0::MIN.to_bits(), i32::MIN);
 
-    assert_eq!(D64s18::ONE.to_bits(), 10_i64.pow(18));
-    assert_eq!(D64s0::MAX.to_bits(), i64::MAX);
+    assert_eq!(D18s18::ONE.to_bits(), 10_i64.pow(18));
+    assert_eq!(D18s0::MAX.to_bits(), i64::MAX);
 }
 
 #[test]
 fn multiplier_at_scale_extremes() {
-    assert_eq!(D128s0::multiplier(), 1);
-    assert_eq!(D128s38::multiplier(), 10_i128.pow(38));
-    assert_eq!(D32s9::multiplier(), 10_i32.pow(9));
-    assert_eq!(D64s18::multiplier(), 10_i64.pow(18));
+    assert_eq!(D38s0::multiplier(), 1);
+    assert_eq!(D38s38::multiplier(), 10_i128.pow(38));
+    assert_eq!(D9s9::multiplier(), 10_i32.pow(9));
+    assert_eq!(D18s18::multiplier(), 10_i64.pow(18));
 }
 
 #[test]
 fn max_scale_per_width() {
-    assert_eq!(<D32s0 as Decimal>::MAX_SCALE, 9);
-    assert_eq!(<D64s0 as Decimal>::MAX_SCALE, 18);
-    assert_eq!(<D128s0 as Decimal>::MAX_SCALE, 38);
+    assert_eq!(<D9s0 as Decimal>::MAX_SCALE, 9);
+    assert_eq!(<D18s0 as Decimal>::MAX_SCALE, 18);
+    assert_eq!(<D38s0 as Decimal>::MAX_SCALE, 38);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -60,62 +60,62 @@ fn max_scale_per_width() {
 
 #[test]
 fn add_at_max_boundary() {
-    let one_lsb = D128s12::from_bits(1);
-    assert_eq!(D128s12::MAX.checked_add(one_lsb), None);
-    assert_eq!(D128s12::MAX.saturating_add(one_lsb), D128s12::MAX);
-    assert_eq!(D128s12::MAX.wrapping_add(one_lsb), D128s12::MIN);
-    assert_eq!(D128s12::MAX.overflowing_add(one_lsb), (D128s12::MIN, true));
+    let one_lsb = D38s12::from_bits(1);
+    assert_eq!(D38s12::MAX.checked_add(one_lsb), None);
+    assert_eq!(D38s12::MAX.saturating_add(one_lsb), D38s12::MAX);
+    assert_eq!(D38s12::MAX.wrapping_add(one_lsb), D38s12::MIN);
+    assert_eq!(D38s12::MAX.overflowing_add(one_lsb), (D38s12::MIN, true));
     // One short of the boundary does not overflow.
-    let near_max = D128s12::from_bits(i128::MAX - 1);
-    assert_eq!(near_max.checked_add(one_lsb), Some(D128s12::MAX));
+    let near_max = D38s12::from_bits(i128::MAX - 1);
+    assert_eq!(near_max.checked_add(one_lsb), Some(D38s12::MAX));
 }
 
 #[test]
 fn sub_at_min_boundary() {
-    let one_lsb = D128s12::from_bits(1);
-    assert_eq!(D128s12::MIN.checked_sub(one_lsb), None);
-    assert_eq!(D128s12::MIN.saturating_sub(one_lsb), D128s12::MIN);
-    assert_eq!(D128s12::MIN.wrapping_sub(one_lsb), D128s12::MAX);
+    let one_lsb = D38s12::from_bits(1);
+    assert_eq!(D38s12::MIN.checked_sub(one_lsb), None);
+    assert_eq!(D38s12::MIN.saturating_sub(one_lsb), D38s12::MIN);
+    assert_eq!(D38s12::MIN.wrapping_sub(one_lsb), D38s12::MAX);
 }
 
 #[test]
 fn neg_of_min_overflows() {
     // Two's-complement MIN has no positive counterpart.
-    assert_eq!(D128s12::MIN.checked_neg(), None);
-    assert_eq!(D128s12::MIN.saturating_neg(), D128s12::MAX);
-    assert_eq!(D128s12::MIN.wrapping_neg(), D128s12::MIN);
-    assert_eq!(D128s12::MIN.overflowing_neg(), (D128s12::MIN, true));
+    assert_eq!(D38s12::MIN.checked_neg(), None);
+    assert_eq!(D38s12::MIN.saturating_neg(), D38s12::MAX);
+    assert_eq!(D38s12::MIN.wrapping_neg(), D38s12::MIN);
+    assert_eq!(D38s12::MIN.overflowing_neg(), (D38s12::MIN, true));
     // Neg of MAX is fine.
-    assert_eq!(D128s12::MAX.checked_neg(), Some(D128s12::from_bits(i128::MIN + 1)));
+    assert_eq!(D38s12::MAX.checked_neg(), Some(D38s12::from_bits(i128::MIN + 1)));
 }
 
 #[test]
 fn checked_div_by_zero_is_none() {
-    assert_eq!(D128s12::ONE.checked_div(D128s12::ZERO), None);
-    assert_eq!(D32s0::ONE.checked_div(D32s0::ZERO), None);
-    assert_eq!(D64s0::ONE.checked_div(D64s0::ZERO), None);
+    assert_eq!(D38s12::ONE.checked_div(D38s12::ZERO), None);
+    assert_eq!(D9s0::ONE.checked_div(D9s0::ZERO), None);
+    assert_eq!(D18s0::ONE.checked_div(D18s0::ZERO), None);
 }
 
 #[test]
 fn checked_mul_overflow_at_max() {
-    let two = D128s12::from_int(2);
-    assert_eq!(D128s12::MAX.checked_mul(two), None);
+    let two = D38s12::from_int(2);
+    assert_eq!(D38s12::MAX.checked_mul(two), None);
     // Saturating picks the sign-correct extreme.
-    assert_eq!(D128s12::MAX.saturating_mul(two), D128s12::MAX);
-    assert_eq!(D128s12::MIN.saturating_mul(two), D128s12::MIN);
+    assert_eq!(D38s12::MAX.saturating_mul(two), D38s12::MAX);
+    assert_eq!(D38s12::MIN.saturating_mul(two), D38s12::MIN);
 }
 
 #[test]
 #[should_panic]
 fn add_overflow_panics_in_debug() {
     // Debug builds panic on operator overflow (release wraps).
-    let _ = D128s12::MAX + D128s12::from_bits(1);
+    let _ = D38s12::MAX + D38s12::from_bits(1);
 }
 
 #[test]
 #[should_panic]
 fn div_by_zero_operator_panics() {
-    let _ = D128s12::ONE / D128s12::ZERO;
+    let _ = D38s12::ONE / D38s12::ZERO;
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -126,15 +126,15 @@ fn div_by_zero_operator_panics() {
 fn rescale_up_is_lossless_to_max_scale() {
     // 1 at scale 0 -> scale 38 is exactly 10^38 (which fits i128).
     // A larger integer would overflow when scaled up by 10^38.
-    let v = D128s0::from_bits(1);
-    let up: D128<38> = v.rescale::<38>();
+    let v = D38s0::from_bits(1);
+    let up: D38<38> = v.rescale::<38>();
     assert_eq!(up.to_bits(), 10_i128.pow(38));
 }
 
 #[test]
 fn rescale_same_scale_is_identity() {
-    let v = D128s12::from_bits(123_456_789_012);
-    let same: D128s12 = v.rescale::<12>();
+    let v = D38s12::from_bits(123_456_789_012);
+    let same: D38s12 = v.rescale::<12>();
     assert_eq!(same.to_bits(), 123_456_789_012);
 }
 
@@ -142,7 +142,7 @@ fn rescale_same_scale_is_identity() {
 fn rescale_down_every_mode_at_exact_half() {
     // 1.5 at scale 1 -> scale 0. The fractional digit is exactly the
     // half-way tie, so the modes diverge predictably.
-    let half_tie = D128::<1>::from_bits(15); // 1.5
+    let half_tie = D38::<1>::from_bits(15); // 1.5
     let modes_and_bits = [
         (RoundingMode::HalfToEven, 2),       // ties to even (2)
         (RoundingMode::HalfAwayFromZero, 2), // ties away from zero
@@ -152,17 +152,17 @@ fn rescale_down_every_mode_at_exact_half() {
         (RoundingMode::Ceiling, 2),          // toward +inf
     ];
     for (mode, expected) in modes_and_bits {
-        let r: D128<0> = half_tie.rescale_with::<0>(mode);
+        let r: D38<0> = half_tie.rescale_with::<0>(mode);
         assert_eq!(r.to_bits(), expected, "mode {mode:?}");
     }
     // 2.5 -> ties-to-even rounds down to 2 (2 is even).
-    let other_tie = D128::<1>::from_bits(25);
+    let other_tie = D38::<1>::from_bits(25);
     assert_eq!(other_tie.rescale_with::<0>(RoundingMode::HalfToEven).to_bits(), 2);
 }
 
 #[test]
 fn rescale_down_negative_tie_is_sign_symmetric() {
-    let neg_tie = D128::<1>::from_bits(-15); // -1.5
+    let neg_tie = D38::<1>::from_bits(-15); // -1.5
     assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::HalfAwayFromZero).to_bits(), -2);
     assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::HalfTowardZero).to_bits(), -1);
     assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::Floor).to_bits(), -2);
@@ -173,7 +173,7 @@ fn rescale_down_negative_tie_is_sign_symmetric() {
 #[should_panic]
 fn rescale_up_overflow_panics() {
     // Scaling i128::MAX up by another 10^26 cannot fit.
-    let _ = D128s12::MAX.rescale::<38>();
+    let _ = D38s12::MAX.rescale::<38>();
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -183,7 +183,7 @@ fn rescale_up_overflow_panics() {
 #[test]
 fn floor_ceil_round_trunc_fract_signs() {
     // -2.5 at scale 1.
-    let neg = D128::<1>::from_bits(-25);
+    let neg = D38::<1>::from_bits(-25);
     assert_eq!(neg.floor().to_bits(), -30); // toward -inf
     assert_eq!(neg.ceil().to_bits(), -20); // toward +inf
     assert_eq!(neg.round().to_bits(), -30); // half away from zero
@@ -191,12 +191,12 @@ fn floor_ceil_round_trunc_fract_signs() {
     assert_eq!(neg.fract().to_bits(), -5); // keeps sign of self
 
     // Exact integers are fixed points of all five.
-    let exact = D128::<1>::from_bits(40); // 4.0
+    let exact = D38::<1>::from_bits(40); // 4.0
     assert_eq!(exact.floor(), exact);
     assert_eq!(exact.ceil(), exact);
     assert_eq!(exact.round(), exact);
     assert_eq!(exact.trunc(), exact);
-    assert_eq!(exact.fract(), D128::<1>::ZERO);
+    assert_eq!(exact.fract(), D38::<1>::ZERO);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -205,32 +205,32 @@ fn floor_ceil_round_trunc_fract_signs() {
 
 #[test]
 fn signum_abs_at_extremes() {
-    assert_eq!(D128s12::ZERO.signum(), D128s12::ZERO);
-    assert_eq!(D128s12::ONE.signum(), D128s12::ONE);
-    assert_eq!((-D128s12::ONE).signum(), -D128s12::ONE);
-    assert_eq!(D128s12::MAX.signum(), D128s12::ONE);
-    assert_eq!(D128s12::MIN.signum(), -D128s12::ONE);
+    assert_eq!(D38s12::ZERO.signum(), D38s12::ZERO);
+    assert_eq!(D38s12::ONE.signum(), D38s12::ONE);
+    assert_eq!((-D38s12::ONE).signum(), -D38s12::ONE);
+    assert_eq!(D38s12::MAX.signum(), D38s12::ONE);
+    assert_eq!(D38s12::MIN.signum(), -D38s12::ONE);
     // abs(MAX) is fine; abs(MIN) is the documented overflow case.
-    assert_eq!(D128s12::MAX.abs(), D128s12::MAX);
+    assert_eq!(D38s12::MAX.abs(), D38s12::MAX);
 }
 
 #[test]
 #[should_panic]
 fn abs_of_min_panics_in_debug() {
-    let _ = D128s12::MIN.abs();
+    let _ = D38s12::MIN.abs();
 }
 
 #[test]
 fn is_positive_is_negative_is_zero_partition() {
     // Every value is in exactly one of the three classes.
     for v in [
-        D128s12::ZERO,
-        D128s12::ONE,
-        -D128s12::ONE,
-        D128s12::MAX,
-        D128s12::MIN,
-        D128s12::from_bits(1),
-        D128s12::from_bits(-1),
+        D38s12::ZERO,
+        D38s12::ONE,
+        -D38s12::ONE,
+        D38s12::MAX,
+        D38s12::MIN,
+        D38s12::from_bits(1),
+        D38s12::from_bits(-1),
     ] {
         let p = v.is_positive() as u8;
         let n = v.is_negative() as u8;
@@ -245,18 +245,18 @@ fn is_positive_is_negative_is_zero_partition() {
 
 #[test]
 fn cross_width_narrowing_at_boundary() {
-    // A D128 value exactly at i64::MAX narrows; one past it does not.
-    let at_edge = D128s0::from_bits(i64::MAX as i128);
-    let narrowed: Result<D64s0, _> = at_edge.try_into();
+    // A D38 value exactly at i64::MAX narrows; one past it does not.
+    let at_edge = D38s0::from_bits(i64::MAX as i128);
+    let narrowed: Result<D18s0, _> = at_edge.try_into();
     assert!(narrowed.is_ok());
 
-    let past_edge = D128s0::from_bits(i64::MAX as i128 + 1);
-    let fail: Result<D64s0, _> = past_edge.try_into();
+    let past_edge = D38s0::from_bits(i64::MAX as i128 + 1);
+    let fail: Result<D18s0, _> = past_edge.try_into();
     assert!(fail.is_err());
 
     // Widening is always lossless.
-    let small = D32s0::from_bits(i32::MIN);
-    let wide: D128s0 = small.into();
+    let small = D9s0::from_bits(i32::MIN);
+    let wide: D38s0 = small.into();
     assert_eq!(wide.to_bits(), i32::MIN as i128);
 }
 
@@ -264,20 +264,20 @@ fn cross_width_narrowing_at_boundary() {
 fn try_from_i128_overflow_boundary() {
     // At scale 12, the largest exact integer is i128::MAX / 10^12.
     let max_int = i128::MAX / 10_i128.pow(12);
-    assert!(D128s12::try_from(max_int).is_ok());
-    assert!(D128s12::try_from(max_int + 1).is_err());
+    assert!(D38s12::try_from(max_int).is_ok());
+    assert!(D38s12::try_from(max_int + 1).is_err());
 }
 
 #[test]
 fn to_int_lossy_saturates_and_rounds() {
     // 2.5 at scale 1 rounds per mode; the integer part saturates to i64.
-    let v = D128::<1>::from_bits(25); // 2.5
+    let v = D38::<1>::from_bits(25); // 2.5
     assert_eq!(v.to_int_lossy_with(RoundingMode::HalfToEven), 2);
     assert_eq!(v.to_int_lossy_with(RoundingMode::HalfAwayFromZero), 3);
     // A value whose integer part exceeds i64 saturates.
-    let huge = D128s0::MAX;
+    let huge = D38s0::MAX;
     assert_eq!(huge.to_int_lossy(), i64::MAX);
-    let tiny = D128s0::MIN;
+    let tiny = D38s0::MIN;
     assert_eq!(tiny.to_int_lossy(), i64::MIN);
 }
 
@@ -303,19 +303,19 @@ fn additive_and_multiplicative_identities() {
             assert_eq!(v - v, zero);
         }};
     }
-    check!(D32s9);
-    check!(D64s18);
-    check!(D128s12);
-    check!(D128s38);
+    check!(D9s9);
+    check!(D18s18);
+    check!(D38s12);
+    check!(D38s38);
 }
 
 #[test]
 fn from_bits_to_bits_round_trips_at_extremes() {
     for raw in [0_i128, 1, -1, i128::MAX, i128::MIN, i128::MAX - 1, i128::MIN + 1] {
-        assert_eq!(D128s12::from_bits(raw).to_bits(), raw);
+        assert_eq!(D38s12::from_bits(raw).to_bits(), raw);
     }
     for raw in [0_i32, 1, -1, i32::MAX, i32::MIN] {
-        assert_eq!(D32s0::from_bits(raw).to_bits(), raw);
+        assert_eq!(D9s0::from_bits(raw).to_bits(), raw);
     }
 }
 
@@ -329,14 +329,14 @@ fn from_bits_to_bits_round_trips_at_extremes() {
 fn cross_width_widen_then_narrow_round_trips() {
     // Widening is lossless; narrowing back recovers the original when
     // the value is in range.
-    let v32 = D32s2::from_bits(-12_345);
-    let wide: D128s2 = v32.into();
-    let back: D32s2 = wide.try_into().unwrap();
+    let v32 = D9s2::from_bits(-12_345);
+    let wide: D38s2 = v32.into();
+    let back: D9s2 = wide.try_into().unwrap();
     assert_eq!(back, v32);
 
-    let v64 = D64s9::from_bits(i64::MIN + 1);
-    let wide: D128s9 = v64.into();
-    let back: D64s9 = wide.try_into().unwrap();
+    let v64 = D18s9::from_bits(i64::MIN + 1);
+    let wide: D38s9 = v64.into();
+    let back: D18s9 = wide.try_into().unwrap();
     assert_eq!(back, v64);
 }
 
@@ -358,9 +358,9 @@ fn overflow_variants_consistency_across_widths() {
             assert_eq!(a.overflowing_add(b), (a.wrapping_add(b), false));
         }};
     }
-    check!(D32s4);
-    check!(D64s9);
-    check!(D128s12);
+    check!(D9s4);
+    check!(D18s9);
+    check!(D38s12);
 }
 
 #[test]
@@ -382,9 +382,9 @@ fn rounding_methods_on_every_width() {
             assert_eq!(n.fract(), n - n.trunc());
         }};
     }
-    check!(D32s2, 250);
-    check!(D64s6, 2_500_000);
-    check!(D128s12, 2_500_000_000_000);
+    check!(D9s2, 250);
+    check!(D18s6, 2_500_000);
+    check!(D38s12, 2_500_000_000_000);
 }
 
 #[test]
@@ -398,14 +398,14 @@ fn div_euclid_rem_euclid_invariant() {
         (-7, -3),
         (123_456_789, 1_000),
     ] {
-        let da = D128s0::from_bits(a);
-        let db = D128s0::from_bits(b);
+        let da = D38s0::from_bits(a);
+        let db = D38s0::from_bits(b);
         let q = da.div_euclid(db);
         let r = da.rem_euclid(db);
         // q is an integer multiple of ONE; r in [0, |b|).
         assert!(!r.is_negative(), "rem_euclid({a},{b}) negative");
         // b * (q / ONE) + r == a
-        let q_int = q.to_bits() / D128s0::multiplier();
+        let q_int = q.to_bits() / D38s0::multiplier();
         assert_eq!(b * q_int + r.to_bits(), a, "euclid identity ({a},{b})");
     }
 }
@@ -414,10 +414,10 @@ fn div_euclid_rem_euclid_invariant() {
 fn midpoint_is_overflow_free_at_extremes() {
     // midpoint must not overflow even at MAX/MIN — the whole point of
     // the branch-free identity.
-    assert_eq!(D128s0::MAX.midpoint(D128s0::MAX), D128s0::MAX);
-    assert_eq!(D128s0::MIN.midpoint(D128s0::MIN), D128s0::MIN);
+    assert_eq!(D38s0::MAX.midpoint(D38s0::MAX), D38s0::MAX);
+    assert_eq!(D38s0::MIN.midpoint(D38s0::MIN), D38s0::MIN);
     // midpoint(MAX, MIN) is -1 raw (floor of -0.5) — no overflow.
-    let mid = D128s0::MAX.midpoint(D128s0::MIN);
+    let mid = D38s0::MAX.midpoint(D38s0::MIN);
     assert_eq!(mid.to_bits(), -1);
 }
 
@@ -426,10 +426,10 @@ fn from_str_round_trips_display_at_scale_extremes() {
     use core::str::FromStr;
     // A value with the maximum fractional digits round-trips exactly.
     let s = "1.23456789012345678901234567890123456789"; // 38 frac digits
-    let v = D128s38::from_str(s).unwrap();
+    let v = D38s38::from_str(s).unwrap();
     assert_eq!(format!("{v}"), s);
     // Scale 0 has no fractional part.
-    let v0 = D128s0::from_str("-42").unwrap();
+    let v0 = D38s0::from_str("-42").unwrap();
     assert_eq!(format!("{v0}"), "-42");
     assert_eq!(v0.to_bits(), -42);
 }
@@ -437,18 +437,18 @@ fn from_str_round_trips_display_at_scale_extremes() {
 #[test]
 fn bitwise_storage_semantics() {
     // Bitwise ops act on the raw storage, not the logical value.
-    let a = D128s12::from_bits(0b1100);
-    let b = D128s12::from_bits(0b1010);
+    let a = D38s12::from_bits(0b1100);
+    let b = D38s12::from_bits(0b1010);
     assert_eq!((a & b).to_bits(), 0b1000);
     assert_eq!((a | b).to_bits(), 0b1110);
     assert_eq!((a ^ b).to_bits(), 0b0110);
-    assert_eq!((!D128s12::ZERO).to_bits(), -1);
+    assert_eq!((!D38s12::ZERO).to_bits(), -1);
     // Arithmetic `>>` is sign-extending: -8 >> 1 == -4.
-    assert_eq!((D128s12::from_bits(-8) >> 1u32).to_bits(), -4);
+    assert_eq!((D38s12::from_bits(-8) >> 1u32).to_bits(), -4);
     // `unsigned_shr` is logical: -8 (all-ones tail) viewed as u128 is
     // 2^128 - 8; >> 1 is 2^127 - 4, which fits i128 as i128::MAX - 3.
     assert_eq!(
-        D128s12::from_bits(-8).unsigned_shr(1).to_bits(),
+        D38s12::from_bits(-8).unsigned_shr(1).to_bits(),
         i128::MAX - 3
     );
 }
@@ -457,7 +457,7 @@ fn bitwise_storage_semantics() {
 fn float_shape_predicates_are_total() {
     // is_nan / is_infinite are always false; is_finite always true; a
     // fixed-point decimal has no special values.
-    for v in [D128s12::ZERO, D128s12::ONE, D128s12::MAX, D128s12::MIN, -D128s12::ONE] {
+    for v in [D38s12::ZERO, D38s12::ONE, D38s12::MAX, D38s12::MIN, -D38s12::ONE] {
         assert!(!v.is_nan());
         assert!(!v.is_infinite());
         assert!(v.is_finite());
@@ -470,21 +470,21 @@ fn float_shape_predicates_are_total() {
 #[cfg(feature = "wide")]
 #[test]
 fn wide_tier_boundaries() {
-    use decimal_scaled::{D256, D256s0, D512s0, D1024s0};
+    use decimal_scaled::{D76, D76s0, D153s0, D307s0};
     // ONE / MAX / MIN round-trip through to_bits / from_bits.
-    let one = D256s0::ONE;
-    assert_eq!(D256::<0>::from_bits(one.to_bits()), one);
+    let one = D76s0::ONE;
+    assert_eq!(D76::<0>::from_bits(one.to_bits()), one);
     // Arithmetic identities hold on the wide tier.
-    let v = D256s0::from_int(7i128);
-    assert_eq!(v + D256s0::ZERO, v);
-    assert_eq!(v * D256s0::ONE, v);
-    assert_eq!(v - v, D256s0::ZERO);
+    let v = D76s0::from_int(7i128);
+    assert_eq!(v + D76s0::ZERO, v);
+    assert_eq!(v * D76s0::ONE, v);
+    assert_eq!(v - v, D76s0::ZERO);
     // Overflow at the wide MAX is still checked.
-    assert_eq!(D256s0::MAX.checked_add(D256s0::ONE), None);
-    assert_eq!(D512s0::MAX.checked_add(D512s0::ONE), None);
-    assert_eq!(D1024s0::MAX.checked_add(D1024s0::ONE), None);
+    assert_eq!(D76s0::MAX.checked_add(D76s0::ONE), None);
+    assert_eq!(D153s0::MAX.checked_add(D153s0::ONE), None);
+    assert_eq!(D307s0::MAX.checked_add(D307s0::ONE), None);
     // Cross-tier widen/narrow round-trip.
-    let mid: D256s0 = D128s0::from_bits(123_456).into();
-    let back: D128s0 = mid.try_into().unwrap();
+    let mid: D76s0 = D38s0::from_bits(123_456).into();
+    let back: D38s0 = mid.try_into().unwrap();
     assert_eq!(back.to_bits(), 123_456);
 }

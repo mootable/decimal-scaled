@@ -2,7 +2,7 @@
 //!
 //! # Overview
 //!
-//! `decimal-scaled` provides `D128<const SCALE: u32>`, a fixed-point decimal
+//! `decimal-scaled` provides `D38<const SCALE: u32>`, a fixed-point decimal
 //! type backed by `i128`. The stored integer encodes `actual_value * 10^SCALE`,
 //! so decimal literals like `1.1` round-trip exactly without any binary
 //! approximation. All core arithmetic is integer-only and produces identical
@@ -10,26 +10,26 @@
 //!
 //! # Primary types
 //!
-//! - [`D128<SCALE>`] is the const-generic foundation. Every method is
+//! - [`D38<SCALE>`] is the const-generic foundation. Every method is
 //! implemented once and is available at any scale.
-//! - [`D128s12`] is the concrete alias `D128<12>`. At `SCALE = 12`, one LSB
+//! - [`D38s12`] is the concrete alias `D38<12>`. At `SCALE = 12`, one LSB
 //! equals `10^-12` model units and the representable range is roughly
 //! +/-1.7e14 model units.
-//! - Scale aliases [`D128s0`] through [`D128s38`] cover every supported scale.
+//! - Scale aliases [`D38s0`] through [`D38s38`] cover every supported scale.
 //! `SCALE = 39` is not supported because `10^39` overflows `i128`.
 //!
 //! # Equality and hashing
 //!
 //! Because each logical value has exactly one representation at a fixed scale,
 //! `Hash`, `Eq`, `PartialEq`, `PartialOrd`, and `Ord` are all derived from
-//! the underlying `i128`. Two `D128<S>` values compare equal if and only if
+//! the underlying `i128`. Two `D38<S>` values compare equal if and only if
 //! their raw bit patterns are identical. This gives predictable behaviour when
-//! `D128` values are used as `HashMap` keys, unlike variable-scale decimal
+//! `D38` values are used as `HashMap` keys, unlike variable-scale decimal
 //! types where `1.10` and `1.1` may hash differently.
 //!
 //! # `num-traits` compatibility
 //!
-//! [`D128<SCALE>`] implements the standard `num-traits` 0.2 surface,
+//! [`D38<SCALE>`] implements the standard `num-traits` 0.2 surface,
 //! including [`num_traits::Zero`], [`num_traits::One`], [`num_traits::Num`],
 //! [`num_traits::Bounded`], [`num_traits::Signed`],
 //! [`num_traits::FromPrimitive`], [`num_traits::ToPrimitive`], and the
@@ -90,10 +90,10 @@ mod log_exp_lossy;
 mod rescale;
 mod rounding;
 mod mg_divide;
-mod d128_kernels;
-// `wide_int` is now unconditional. D128's strict transcendentals use
+mod d_w128_kernels;
+// `wide_int` is now unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
-// `d128_kernels::Fixed` 256-bit sign-magnitude type), so the wide-
+// `d_w128_kernels::Fixed` 256-bit sign-magnitude type), so the wide-
 // integer family must be available in every feature configuration —
 // not just `feature = "wide"` builds. Compile-time impact is modest:
 // ~2k LOC of self-contained limb arithmetic plus the per-width
@@ -118,45 +118,45 @@ pub use decimal_trait::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;
 
-// D128 — the 128-bit foundation, plus every scale alias D128s0..=D128s38.
+// D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s38.
 pub use core_type::{
-    D128, D128s0, D128s1, D128s2, D128s3, D128s4, D128s5, D128s6, D128s7, D128s8, D128s9, D128s10,
-    D128s11, D128s12, D128s13, D128s14, D128s15, D128s16, D128s17, D128s18, D128s19, D128s20,
-    D128s21, D128s22, D128s23, D128s24, D128s25, D128s26, D128s27, D128s28, D128s29, D128s30,
-    D128s31, D128s32, D128s33, D128s34, D128s35, D128s36, D128s37, D128s38,
+    D38, D38s0, D38s1, D38s2, D38s3, D38s4, D38s5, D38s6, D38s7, D38s8, D38s9, D38s10,
+    D38s11, D38s12, D38s13, D38s14, D38s15, D38s16, D38s17, D38s18, D38s19, D38s20,
+    D38s21, D38s22, D38s23, D38s24, D38s25, D38s26, D38s27, D38s28, D38s29, D38s30,
+    D38s31, D38s32, D38s33, D38s34, D38s35, D38s36, D38s37, D38s38,
 };
 
-// D32 — 32-bit storage, scale 0..=9.
+// D9 — 32-bit storage, scale 0..=9.
 pub use core_type::{
-    D32, D32s0, D32s1, D32s2, D32s3, D32s4, D32s5, D32s6, D32s7, D32s8, D32s9,
+    D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8, D9s9,
 };
 
-// D64 — 64-bit storage, scale 0..=18.
+// D18 — 64-bit storage, scale 0..=18.
 pub use core_type::{
-    D64, D64s0, D64s1, D64s2, D64s3, D64s4, D64s5, D64s6, D64s7, D64s8, D64s9, D64s10, D64s11,
-    D64s12, D64s13, D64s14, D64s15, D64s16, D64s17, D64s18,
+    D18, D18s0, D18s1, D18s2, D18s3, D18s4, D18s5, D18s6, D18s7, D18s8, D18s9, D18s10, D18s11,
+    D18s12, D18s13, D18s14, D18s15, D18s16, D18s17, D18s18,
 };
 
-// D256 — 256-bit storage, behind the `d256` / `wide` features.
-#[cfg(any(feature = "d256", feature = "wide"))]
+// D76 — 256-bit storage, behind the `d76` / `wide` features.
+#[cfg(any(feature = "d76", feature = "wide"))]
 pub use core_type::{
-    D256, D256s0, D256s2, D256s6, D256s12, D256s18, D256s35, D256s50, D256s76,
+    D76, D76s0, D76s2, D76s6, D76s12, D76s18, D76s35, D76s50, D76s76,
 };
 
 // The hand-rolled wide-integer types — the storage backend for the
 // wide decimal tiers, also useful on their own.
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
 pub use wide_int::{
     Int256, Int512, Int1024, Int2048, Int4096, Uint256, Uint512, Uint1024, Uint2048, Uint4096,
 };
 
-// D512 — 512-bit storage, behind the `d512` / `wide` features.
-#[cfg(any(feature = "d512", feature = "wide"))]
-pub use core_type::{D512, D512s0, D512s35, D512s75, D512s150, D512s153};
+// D153 — 512-bit storage, behind the `d153` / `wide` features.
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub use core_type::{D153, D153s0, D153s35, D153s75, D153s150, D153s153};
 
-// D1024 — 1024-bit storage, behind the `d1024` / `wide` features.
-#[cfg(any(feature = "d1024", feature = "wide"))]
-pub use core_type::{D1024, D1024s0, D1024s35, D1024s150, D1024s300, D1024s307};
+// D307 — 1024-bit storage, behind the `d307` / `wide` features.
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 
 #[cfg(feature = "macros")]
 pub use decimal_scaled_macros::d128;

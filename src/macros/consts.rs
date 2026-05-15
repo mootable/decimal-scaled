@@ -1,8 +1,8 @@
 //! Macro-generated `DecimalConsts` impls for every decimal width.
 //!
 //! The constants are stored once as `i128` literals at `SCALE_REF = 37`
-//! in `src/consts.rs` (D128's path). For other widths the macro
-//! delegates rescaling to D128 (via `D128::<37>::from_bits(...)
+//! in `src/consts.rs` (D38's path). For other widths the macro
+//! delegates rescaling to D38 (via `D38::<37>::from_bits(...)
 //! .rescale::<SCALE>()`) and then narrows or widens the resulting
 //! `i128` to the target storage. Narrowing overflows silently in
 //! release builds and panics in debug; downstream callers
@@ -11,37 +11,37 @@
 //!
 //! # Known precision gap (wide tier, follow-up)
 //!
-//! Wide tiers (D256, D512, D1024) widen the same 37-digit `i128`
+//! Wide tiers (D76, D153, D307) widen the same 37-digit `i128`
 //! reference into their wider storage. At `SCALE ≤ 37` they get the
 //! full 0.5 ULP contract; at `SCALE > 37` the rescale appends
 //! trailing zeros — no extra precision — and at `SCALE > 38` the
 //! rescale path's intermediate `i128 * 10^k` overflows and panics.
 //! Practical impact:
 //!
-//! - D256<S>::pi() works correctly for `S ≤ 37`; at `S = 50` / `76`
-//!   (the D256 max) it panics on rescale-up.
-//! - D512<S>::pi() and D1024<S>::pi() have the same panic past
+//! - D76<S>::pi() works correctly for `S ≤ 37`; at `S = 50` / `76`
+//!   (the D76 max) it panics on rescale-up.
+//! - D153<S>::pi() and D307<S>::pi() have the same panic past
 //!   `S = 37`.
 //!
 //! Closing this needs per-width raw constants stored in the storage
-//! type itself (e.g. a 75-digit raw `Int256` for D256 built via
+//! type itself (e.g. a 75-digit raw `Int256` for D76 built via
 //! `Int256::from_str_radix`), with the precision growing to 153
-//! digits for D512 and 307 for D1024. Recorded as a substantial
-//! follow-up — verifying ~308 digits of each constant for D1024 is
+//! digits for D153 and 307 for D307. Recorded as a substantial
+//! follow-up — verifying ~308 digits of each constant for D307 is
 //! the bulk of the work.
 
 /// Emits `DecimalConsts` for a decimal type. Requires the
-/// `D128::<SCALE_REF>::from_bits(_).rescale::<SCALE>()` path to be
-/// available (i.e. the rescale macro is already invoked for D128).
+/// `D38::<SCALE_REF>::from_bits(_).rescale::<SCALE>()` path to be
+/// available (i.e. the rescale macro is already invoked for D38).
 ///
-/// - `decl_decimal_consts!(D32, i32)` — *native* storage; the `i128`
+/// - `decl_decimal_consts!(D9, i32)` — *native* storage; the `i128`
 /// reference bits narrow via an `as`-cast.
-/// - `decl_decimal_consts!(wide D256, I256)` — *wide* storage; the
+/// - `decl_decimal_consts!(wide D76, I256)` — *wide* storage; the
 /// `i128` reference bits widen via the `WideInt` cast. Because the
 /// reference constants are only carried to `SCALE_REF = 35` digits,
 /// wide widths gain no extra precision above that scale (the trailing
 /// digits are zero-extended) — the value is still correct, just not
-/// more precise than the D128 reference.
+/// more precise than the D38 reference.
 macro_rules! decl_decimal_consts {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {

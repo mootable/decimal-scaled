@@ -15,13 +15,13 @@
 /// Emits `from_f64_lossy(value)`, `from_f64_lossy_with(value, mode)`,
 /// `to_f64_lossy(self)`, `to_f32_lossy(self)` for a decimal type.
 ///
-/// - `decl_decimal_float_bridge!(D32, i32)` — *native* storage; the
+/// - `decl_decimal_float_bridge!(D9, i32)` — *native* storage; the
 /// `f64` <-> storage conversions use `as`-casts.
-/// - `decl_decimal_float_bridge!(wide D256, I256)` — *wide* storage;
+/// - `decl_decimal_float_bridge!(wide D76, I256)` — *wide* storage;
 /// the conversions use the `WideInt` cast. The experimental `f16` /
 /// `f128` entry points route through `f64` for wide storage (the wide integer
 /// only provides `f32` / `f64` casts), so they are lossier on the
-/// wide tier than on D128-and-narrower.
+/// wide tier than on D38-and-narrower.
 macro_rules! decl_decimal_float_bridge {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
@@ -113,7 +113,7 @@ macro_rules! decl_decimal_float_bridge {
             /// Construct from an `f128` using the crate default rounding
             /// mode. For wide storage this routes through `f64` (the wide integer
             /// provides no `f128` cast), so it is lossier than the
-            /// D128-and-narrower path. Nightly + `experimental-floats`.
+            /// D38-and-narrower path. Nightly + `experimental-floats`.
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]
@@ -285,8 +285,8 @@ macro_rules! decl_decimal_float_bridge {
             }
 
             /// Convert to `f128`. Lossless when the storage fits in the
-            /// f128 mantissa (113 bits), which holds for D128 and
-            /// narrower; D256 / D512 / D1024 narrowing is lossy.
+            /// f128 mantissa (113 bits), which holds for D38 and
+            /// narrower; D76 / D153 / D307 narrowing is lossy.
             #[cfg(all(feature = "std", feature = "experimental-floats"))]
             #[inline]
             #[must_use]

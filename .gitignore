@@ -1,3 +1,7 @@
 /target
 Cargo.lock
 .idea
+# Local planning scratch — kept out of the published crate.
+FOLLOWUPS.md
+OVERRIDE_POLICY.md
+STRUCTURE_EVALUATION.md

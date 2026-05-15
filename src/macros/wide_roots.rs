@@ -1,9 +1,9 @@
 //! Correctly-rounded strict square root and cube root for the wide
-//! decimal tiers (D256 / D512 / D1024).
+//! decimal tiers (D76 / D153 / D307).
 //!
-//! D128 and the narrow tiers get their roots from the 128/256/384-bit
-//! integer machinery in `mg_divide.rs`, and D32 / D64 delegate into
-//! D128. The wide tiers cannot widen into D128 — their scale range
+//! D38 and the narrow tiers get their roots from the 128/256/384-bit
+//! integer machinery in `mg_divide.rs`, and D9 / D18 delegate into
+//! D38. The wide tiers cannot widen into D38 — their scale range
 //! exceeds it — so they compute roots directly on a hand-rolled wide integer one
 //! or two sizes up.
 //!
@@ -193,94 +193,94 @@ pub(crate) use {decl_wide_roots, wide_lit};
 
 #[cfg(all(test, not(feature = "no_strict")))]
 mod tests {
-    use crate::{D128, D256, D512, D1024};
+    use crate::{D38, D76, D153, D307};
 
     #[test]
     fn sqrt_perfect_squares_are_exact() {
-        assert_eq!(D256::<6>::from_int(4).sqrt_strict(), D256::<6>::from_int(2));
-        assert_eq!(D256::<6>::from_int(9).sqrt_strict(), D256::<6>::from_int(3));
+        assert_eq!(D76::<6>::from_int(4).sqrt_strict(), D76::<6>::from_int(2));
+        assert_eq!(D76::<6>::from_int(9).sqrt_strict(), D76::<6>::from_int(3));
         assert_eq!(
-            D256::<6>::from_int(144).sqrt_strict(),
-            D256::<6>::from_int(12)
+            D76::<6>::from_int(144).sqrt_strict(),
+            D76::<6>::from_int(12)
         );
-        assert_eq!(D512::<6>::from_int(25).sqrt_strict(), D512::<6>::from_int(5));
+        assert_eq!(D153::<6>::from_int(25).sqrt_strict(), D153::<6>::from_int(5));
         assert_eq!(
-            D1024::<6>::from_int(81).sqrt_strict(),
-            D1024::<6>::from_int(9)
+            D307::<6>::from_int(81).sqrt_strict(),
+            D307::<6>::from_int(9)
         );
     }
 
     #[test]
     fn sqrt_zero_and_negative_saturate() {
-        assert_eq!(D256::<6>::ZERO.sqrt_strict(), D256::<6>::ZERO);
-        assert_eq!(D256::<6>::from_int(-4).sqrt_strict(), D256::<6>::ZERO);
-        assert_eq!(D1024::<6>::from_int(-1).sqrt_strict(), D1024::<6>::ZERO);
+        assert_eq!(D76::<6>::ZERO.sqrt_strict(), D76::<6>::ZERO);
+        assert_eq!(D76::<6>::from_int(-4).sqrt_strict(), D76::<6>::ZERO);
+        assert_eq!(D307::<6>::from_int(-1).sqrt_strict(), D307::<6>::ZERO);
     }
 
     #[test]
     fn cbrt_perfect_cubes_are_exact() {
-        assert_eq!(D256::<6>::from_int(8).cbrt_strict(), D256::<6>::from_int(2));
+        assert_eq!(D76::<6>::from_int(8).cbrt_strict(), D76::<6>::from_int(2));
         assert_eq!(
-            D256::<6>::from_int(27).cbrt_strict(),
-            D256::<6>::from_int(3)
+            D76::<6>::from_int(27).cbrt_strict(),
+            D76::<6>::from_int(3)
         );
         assert_eq!(
-            D256::<6>::from_int(-8).cbrt_strict(),
-            D256::<6>::from_int(-2)
+            D76::<6>::from_int(-8).cbrt_strict(),
+            D76::<6>::from_int(-2)
         );
         assert_eq!(
-            D512::<6>::from_int(125).cbrt_strict(),
-            D512::<6>::from_int(5)
+            D153::<6>::from_int(125).cbrt_strict(),
+            D153::<6>::from_int(5)
         );
         assert_eq!(
-            D1024::<6>::from_int(-64).cbrt_strict(),
-            D1024::<6>::from_int(-4)
+            D307::<6>::from_int(-64).cbrt_strict(),
+            D307::<6>::from_int(-4)
         );
     }
 
     #[test]
     fn cbrt_zero_is_zero() {
-        assert_eq!(D256::<6>::ZERO.cbrt_strict(), D256::<6>::ZERO);
-        assert_eq!(D512::<6>::ZERO.cbrt_strict(), D512::<6>::ZERO);
-        assert_eq!(D1024::<6>::ZERO.cbrt_strict(), D1024::<6>::ZERO);
+        assert_eq!(D76::<6>::ZERO.cbrt_strict(), D76::<6>::ZERO);
+        assert_eq!(D153::<6>::ZERO.cbrt_strict(), D153::<6>::ZERO);
+        assert_eq!(D307::<6>::ZERO.cbrt_strict(), D307::<6>::ZERO);
     }
 
     /// The wide-tier roots are correctly rounded, so for any scale the
-    /// D128 and D256 results must agree bit-for-bit (both land on the
+    /// D38 and D76 results must agree bit-for-bit (both land on the
     /// IEEE-754 round-to-nearest value).
     #[test]
     fn wide_roots_match_d128() {
         for raw in [2i64, 3, 5, 7, 10, 123, 1_000, 999_983] {
-            let narrow = D128::<6>::from_int(raw);
-            let wide: D256<6> = narrow.into();
-            let narrow_sqrt: D256<6> = narrow.sqrt_strict().into();
+            let narrow = D38::<6>::from_int(raw);
+            let wide: D76<6> = narrow.into();
+            let narrow_sqrt: D76<6> = narrow.sqrt_strict().into();
             assert_eq!(wide.sqrt_strict(), narrow_sqrt, "sqrt mismatch for {raw}");
-            let narrow_cbrt: D256<6> = narrow.cbrt_strict().into();
+            let narrow_cbrt: D76<6> = narrow.cbrt_strict().into();
             assert_eq!(wide.cbrt_strict(), narrow_cbrt, "cbrt mismatch for {raw}");
         }
     }
 
-    /// Exercises a scale beyond D128's range, where delegation is
+    /// Exercises a scale beyond D38's range, where delegation is
     /// impossible and the wide path is the only implementation.
     #[test]
     fn sqrt_cbrt_at_wide_only_scale() {
-        // D256<50>: 4.0 -> 2.0, 8.0 -> 2.0.
+        // D76<50>: 4.0 -> 2.0, 8.0 -> 2.0.
         assert_eq!(
-            D256::<50>::from_int(4).sqrt_strict(),
-            D256::<50>::from_int(2)
+            D76::<50>::from_int(4).sqrt_strict(),
+            D76::<50>::from_int(2)
         );
         assert_eq!(
-            D256::<50>::from_int(8).cbrt_strict(),
-            D256::<50>::from_int(2)
+            D76::<50>::from_int(8).cbrt_strict(),
+            D76::<50>::from_int(2)
         );
-        // D1024<150>: well past any narrower tier.
+        // D307<150>: well past any narrower tier.
         assert_eq!(
-            D1024::<150>::from_int(9).sqrt_strict(),
-            D1024::<150>::from_int(3)
+            D307::<150>::from_int(9).sqrt_strict(),
+            D307::<150>::from_int(3)
         );
         assert_eq!(
-            D1024::<150>::from_int(27).cbrt_strict(),
-            D1024::<150>::from_int(3)
+            D307::<150>::from_int(27).cbrt_strict(),
+            D307::<150>::from_int(3)
         );
     }
 }

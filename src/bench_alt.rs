@@ -18,16 +18,16 @@
 
 #![cfg(feature = "bench-alt")]
 
-use crate::core_type::D128;
+use crate::core_type::D38;
 
-// D128 — every strict transcendental is an `override` (hand-tuned
-// per `d128_kernels.rs`). The `_default` alias would be the
+// D38 — every strict transcendental is an `override` (hand-tuned
+// per `d_w128_kernels.rs`). The `_default` alias would be the
 // macro-generated `decl_wide_transcendental!` path; that path is
-// not invoked for D128 because it's more than 1.5× slower than the
+// not invoked for D38 because it's more than 1.5× slower than the
 // override. With `bench-alt` a separate invocation could add the
 // `_default` aliases — recorded as a follow-up so the macro can
 // emit suffix-renamed methods.
-impl<const SCALE: u32> D128<SCALE> {
+impl<const SCALE: u32> D38<SCALE> {
     #[inline] pub fn ln_strict_override(self) -> Self { self.ln_strict() }
     #[inline] pub fn log_strict_override(self, base: Self) -> Self { self.log_strict(base) }
     #[inline] pub fn log2_strict_override(self) -> Self { self.log2_strict() }
@@ -87,9 +87,9 @@ macro_rules! decl_default_aliases {
     };
 }
 
-#[cfg(any(feature = "d256", feature = "wide"))]
-decl_default_aliases!(D256);
-#[cfg(any(feature = "d512", feature = "wide"))]
-decl_default_aliases!(D512);
-#[cfg(any(feature = "d1024", feature = "wide"))]
-decl_default_aliases!(D1024);
+#[cfg(any(feature = "d76", feature = "wide"))]
+decl_default_aliases!(D76);
+#[cfg(any(feature = "d153", feature = "wide"))]
+decl_default_aliases!(D153);
+#[cfg(any(feature = "d307", feature = "wide"))]
+decl_default_aliases!(D307);
