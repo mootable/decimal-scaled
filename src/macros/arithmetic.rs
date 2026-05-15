@@ -45,13 +45,13 @@ macro_rules! decl_decimal_arithmetic {
             /// by `10^SCALE`, then narrows back to `$Storage`.
             #[inline]
             fn mul(self, rhs: Self) -> Self {
-                let a: $Wider = ::bnum::cast::As::as_(self.0);
-                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
                 let scaled = (a * b) / m;
-                Self(::bnum::cast::As::as_(scaled))
+                Self(scaled.resize::<$Storage>())
             }
         }
 
@@ -69,13 +69,13 @@ macro_rules! decl_decimal_arithmetic {
             /// by `b`, preserving the `value * 10^SCALE` form.
             #[inline]
             fn div(self, rhs: Self) -> Self {
-                let a: $Wider = ::bnum::cast::As::as_(self.0);
-                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
                 let result = (a * m) / b;
-                Self(::bnum::cast::As::as_(result))
+                Self(result.resize::<$Storage>())
             }
         }
 

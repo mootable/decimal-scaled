@@ -54,7 +54,6 @@ macro_rules! decl_wide_transcendental {
         #[cfg(not(feature = "no_strict"))]
         mod $core {
             #![allow(unused)]
-            use ::bnum::cast::As;
 
             /// The working integer: a value `x` is held as `x · 10^w`.
             pub(super) type W = $Work;
@@ -67,7 +66,7 @@ macro_rules! decl_wide_transcendental {
 
             #[inline]
             fn lit(n: u128) -> W {
-                n.as_::<W>()
+                $crate::hint::wide_cast(n)
             }
             #[inline]
             pub(super) fn zero() -> W {
@@ -115,7 +114,7 @@ macro_rules! decl_wide_transcendental {
             /// `raw · 10^GUARD` (raw is `value · 10^SCALE`, the result
             /// is `value · 10^(SCALE+GUARD)`).
             pub(super) fn to_work(raw: $Storage) -> W {
-                raw.as_::<W>() * pow10(GUARD)
+                raw.resize::<W>() * pow10(GUARD)
             }
 
             /// Rounds a working-scale value down to scale `target`,
@@ -140,13 +139,13 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     q
                 };
-                if rounded > <$Storage>::MAX.as_::<W>() || rounded < <$Storage>::MIN.as_::<W>() {
+                if rounded > <$Storage>::MAX.resize::<W>() || rounded < <$Storage>::MIN.resize::<W>() {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
                     ));
                 }
-                rounded.as_::<$Storage>()
+                rounded.resize::<$Storage>()
             }
 
             /// Rounds a working-scale value to the nearest integer (ties
@@ -161,7 +160,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     q
                 };
-                qi.as_::<i128>()
+                qi.resize::<i128>()
             }
 
             /// `k · c` where `k` is a signed range-reduction count.
@@ -911,7 +910,6 @@ pub(crate) use decl_wide_transcendental;
 #[cfg(all(test, not(feature = "no_strict")))]
 mod tests {
     use crate::{D128, D256, D512, D1024};
-    use ::bnum::cast::As;
 
     /// The wide-tier strict transcendentals are correctly rounded, so
     /// at any scale they must agree with the D128 strict path — itself
@@ -936,28 +934,28 @@ mod tests {
 
         for raw in positives {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits((raw as i128).as_::<crate::wide::I256>());
-            agree("ln", raw, w.ln_strict().to_bits().as_::<i128>(), n.ln_strict().to_bits());
-            agree("log2", raw, w.log2_strict().to_bits().as_::<i128>(), n.log2_strict().to_bits());
-            agree("log10", raw, w.log10_strict().to_bits().as_::<i128>(), n.log10_strict().to_bits());
+            let w = D256::<6>::from_bits(crate::hint::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            agree("ln", raw, w.ln_strict().to_bits().resize::<i128>(), n.ln_strict().to_bits());
+            agree("log2", raw, w.log2_strict().to_bits().resize::<i128>(), n.log2_strict().to_bits());
+            agree("log10", raw, w.log10_strict().to_bits().resize::<i128>(), n.log10_strict().to_bits());
         }
         for raw in all {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits((raw as i128).as_::<crate::wide::I256>());
-            agree("exp", raw, w.exp_strict().to_bits().as_::<i128>(), n.exp_strict().to_bits());
-            agree("sin", raw, w.sin_strict().to_bits().as_::<i128>(), n.sin_strict().to_bits());
-            agree("cos", raw, w.cos_strict().to_bits().as_::<i128>(), n.cos_strict().to_bits());
-            agree("atan", raw, w.atan_strict().to_bits().as_::<i128>(), n.atan_strict().to_bits());
-            agree("sinh", raw, w.sinh_strict().to_bits().as_::<i128>(), n.sinh_strict().to_bits());
-            agree("cosh", raw, w.cosh_strict().to_bits().as_::<i128>(), n.cosh_strict().to_bits());
-            agree("tanh", raw, w.tanh_strict().to_bits().as_::<i128>(), n.tanh_strict().to_bits());
+            let w = D256::<6>::from_bits(crate::hint::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            agree("exp", raw, w.exp_strict().to_bits().resize::<i128>(), n.exp_strict().to_bits());
+            agree("sin", raw, w.sin_strict().to_bits().resize::<i128>(), n.sin_strict().to_bits());
+            agree("cos", raw, w.cos_strict().to_bits().resize::<i128>(), n.cos_strict().to_bits());
+            agree("atan", raw, w.atan_strict().to_bits().resize::<i128>(), n.atan_strict().to_bits());
+            agree("sinh", raw, w.sinh_strict().to_bits().resize::<i128>(), n.sinh_strict().to_bits());
+            agree("cosh", raw, w.cosh_strict().to_bits().resize::<i128>(), n.cosh_strict().to_bits());
+            agree("tanh", raw, w.tanh_strict().to_bits().resize::<i128>(), n.tanh_strict().to_bits());
         }
         for raw in unit_range {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits((raw as i128).as_::<crate::wide::I256>());
-            agree("asin", raw, w.asin_strict().to_bits().as_::<i128>(), n.asin_strict().to_bits());
-            agree("acos", raw, w.acos_strict().to_bits().as_::<i128>(), n.acos_strict().to_bits());
-            agree("atanh", raw, w.atanh_strict().to_bits().as_::<i128>(), n.atanh_strict().to_bits());
+            let w = D256::<6>::from_bits(crate::hint::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            agree("asin", raw, w.asin_strict().to_bits().resize::<i128>(), n.asin_strict().to_bits());
+            agree("acos", raw, w.acos_strict().to_bits().resize::<i128>(), n.acos_strict().to_bits());
+            agree("atanh", raw, w.atanh_strict().to_bits().resize::<i128>(), n.atanh_strict().to_bits());
         }
     }
 
@@ -988,13 +986,13 @@ mod tests {
         // result fits i128 comfortably, so compare there.
         let x = D256::<50>::from_int(3);
         let back = x.ln_strict().exp_strict();
-        let delta = (back.to_bits().as_::<i128>() - x.to_bits().as_::<i128>()).abs();
+        let delta = (back.to_bits().resize::<i128>() - x.to_bits().resize::<i128>()).abs();
         assert!(delta <= 8, "exp(ln(3)) at D256<50> delta {delta}");
 
         // D1024<150>: deep scale, only the wide core can serve it.
         let y = D1024::<150>::from_int(2);
         let back = y.exp_strict().ln_strict();
-        let delta = (back.to_bits().as_::<i128>() - y.to_bits().as_::<i128>()).abs();
+        let delta = (back.to_bits().resize::<i128>() - y.to_bits().resize::<i128>()).abs();
         assert!(delta <= 8, "ln(exp(2)) at D1024<150> delta {delta}");
     }
 }

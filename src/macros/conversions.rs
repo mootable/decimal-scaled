@@ -20,7 +20,7 @@ macro_rules! decl_from_primitive {
             /// (debug-mode panic, release-mode wrap).
             #[inline]
             fn from(value: $Src) -> Self {
-                let widened: $Storage = ::bnum::cast::As::as_(value);
+                let widened: $Storage = $crate::hint::wide_cast(value as i128);
                 Self(widened * Self::multiplier())
             }
         }
@@ -57,7 +57,7 @@ macro_rules! decl_cross_width_widening {
             /// a subset of the destination).
             #[inline]
             fn from(value: $Src<SCALE>) -> Self {
-                Self(::bnum::cast::As::as_(value.to_bits()))
+                Self($crate::hint::wide_cast(value.to_bits()))
             }
         }
     };
@@ -98,14 +98,14 @@ macro_rules! decl_cross_width_narrowing {
             #[inline]
             fn try_from(value: $Src<SCALE>) -> ::core::result::Result<Self, Self::Error> {
                 let bits = value.to_bits();
-                let dest_max: $SrcStorage = ::bnum::cast::As::as_(<$DestStorage>::MAX);
-                let dest_min: $SrcStorage = ::bnum::cast::As::as_(<$DestStorage>::MIN);
+                let dest_max: $SrcStorage = $crate::hint::wide_cast(<$DestStorage>::MAX);
+                let dest_min: $SrcStorage = $crate::hint::wide_cast(<$DestStorage>::MIN);
                 if bits > dest_max || bits < dest_min {
                     return ::core::result::Result::Err(
                         $crate::error::ConvertError::Overflow,
                     );
                 }
-                ::core::result::Result::Ok(Self(::bnum::cast::As::as_(bits)))
+                ::core::result::Result::Ok(Self($crate::hint::wide_cast(bits)))
             }
         }
     };
@@ -148,7 +148,7 @@ macro_rules! decl_try_from_i128 {
             type Error = $crate::error::ConvertError;
             #[inline]
             fn try_from(value: i128) -> ::core::result::Result<Self, Self::Error> {
-                let widened: $Storage = ::bnum::cast::As::as_(value);
+                let widened: $Storage = $crate::hint::wide_cast(value);
                 let scaled = widened
                     .checked_mul(Self::multiplier())
                     .ok_or($crate::error::ConvertError::Overflow)?;
@@ -193,7 +193,7 @@ macro_rules! decl_try_from_u128 {
             type Error = $crate::error::ConvertError;
             #[inline]
             fn try_from(value: u128) -> ::core::result::Result<Self, Self::Error> {
-                let widened: $Storage = ::bnum::cast::As::as_(value);
+                let widened: $Storage = <$Storage>::from_u128(value);
                 let scaled = widened
                     .checked_mul(Self::multiplier())
                     .ok_or($crate::error::ConvertError::Overflow)?;
@@ -237,16 +237,16 @@ macro_rules! decl_try_from_f64 {
                         $crate::error::ConvertError::NotFinite,
                     );
                 }
-                let mult_f64: f64 = ::bnum::cast::As::as_(Self::multiplier());
+                let mult_f64: f64 = Self::multiplier().as_f64();
                 let scaled = value * mult_f64;
-                let storage_max_f64: f64 = ::bnum::cast::As::as_(<$Storage>::MAX);
-                let storage_min_f64: f64 = ::bnum::cast::As::as_(<$Storage>::MIN);
+                let storage_max_f64: f64 = <$Storage>::MAX.as_f64();
+                let storage_min_f64: f64 = <$Storage>::MIN.as_f64();
                 if !(storage_min_f64..storage_max_f64).contains(&scaled) {
                     return ::core::result::Result::Err(
                         $crate::error::ConvertError::Overflow,
                     );
                 }
-                ::core::result::Result::Ok(Self(::bnum::cast::As::as_(scaled)))
+                ::core::result::Result::Ok(Self(<$Storage>::from_f64(scaled)))
             }
         }
     };
@@ -316,14 +316,14 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// Overflow follows `bnum`'s default arithmetic semantics.
             #[inline]
             pub fn from_int(value: $IntSrc) -> Self {
-                let widened: $Storage = ::bnum::cast::As::as_(value);
+                let widened: $Storage = $crate::hint::wide_cast(value as i128);
                 Self(widened * Self::multiplier())
             }
 
             /// Constructs from an `i32`, scaling by `10^SCALE`.
             #[inline]
             pub fn from_i32(value: i32) -> Self {
-                let widened: $Storage = ::bnum::cast::As::as_(value);
+                let widened: $Storage = $crate::hint::wide_cast(value as i128);
                 Self(widened * Self::multiplier())
             }
 
@@ -399,14 +399,14 @@ macro_rules! decl_decimal_int_conversion_methods {
                         }
                     }
                 };
-                let i64_max: $Storage = ::bnum::cast::As::as_(i64::MAX);
-                let i64_min: $Storage = ::bnum::cast::As::as_(i64::MIN);
+                let i64_max: $Storage = $crate::hint::wide_cast(i64::MAX);
+                let i64_min: $Storage = $crate::hint::wide_cast(i64::MIN);
                 if int_rounded > i64_max {
                     i64::MAX
                 } else if int_rounded < i64_min {
                     i64::MIN
                 } else {
-                    ::bnum::cast::As::as_(int_rounded)
+                    $crate::hint::wide_cast::<_, i64>(int_rounded)
                 }
             }
         }

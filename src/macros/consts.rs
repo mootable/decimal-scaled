@@ -26,27 +26,27 @@ macro_rules! decl_decimal_consts {
         impl<const SCALE: u32> $crate::consts::DecimalConsts for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
-                Self(::bnum::cast::As::as_($crate::consts::pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::consts::pi_at_target::<SCALE>()))
             }
             #[inline]
             fn tau() -> Self {
-                Self(::bnum::cast::As::as_($crate::consts::tau_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::consts::tau_at_target::<SCALE>()))
             }
             #[inline]
             fn half_pi() -> Self {
-                Self(::bnum::cast::As::as_($crate::consts::half_pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::consts::half_pi_at_target::<SCALE>()))
             }
             #[inline]
             fn quarter_pi() -> Self {
-                Self(::bnum::cast::As::as_($crate::consts::quarter_pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::consts::quarter_pi_at_target::<SCALE>()))
             }
             #[inline]
             fn golden() -> Self {
-                Self(::bnum::cast::As::as_($crate::consts::golden_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::consts::golden_at_target::<SCALE>()))
             }
             #[inline]
             fn e() -> Self {
-                Self(::bnum::cast::As::as_($crate::consts::e_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::consts::e_at_target::<SCALE>()))
             }
         }
     };

@@ -152,12 +152,12 @@ macro_rules! decl_decimal_num_traits_conversions {
         impl<const SCALE: u32> ::num_traits::FromPrimitive for $Type<SCALE> {
             #[inline]
             fn from_i64(n: i64) -> ::core::option::Option<Self> {
-                let widened: $Storage = ::bnum::cast::As::as_(n);
+                let widened: $Storage = <$Storage>::from_i128(n as i128);
                 widened.checked_mul(Self::multiplier()).map(Self)
             }
             #[inline]
             fn from_u64(n: u64) -> ::core::option::Option<Self> {
-                let widened: $Storage = ::bnum::cast::As::as_(n);
+                let widened: $Storage = <$Storage>::from_u128(n as u128);
                 widened.checked_mul(Self::multiplier()).map(Self)
             }
             #[inline]
@@ -181,25 +181,23 @@ macro_rules! decl_decimal_num_traits_conversions {
         impl<const SCALE: u32> ::num_traits::ToPrimitive for $Type<SCALE> {
             #[inline]
             fn to_i64(&self) -> ::core::option::Option<i64> {
-                i64::try_from(self.0 / Self::multiplier()).ok()
+                (self.0 / Self::multiplier())
+                    .to_i128_checked()
+                    .and_then(|v| i64::try_from(v).ok())
             }
             #[inline]
             fn to_u64(&self) -> ::core::option::Option<u64> {
-                if self.0.is_negative() {
-                    return ::core::option::Option::None;
-                }
-                u64::try_from(self.0 / Self::multiplier()).ok()
+                (self.0 / Self::multiplier())
+                    .to_u128_checked()
+                    .and_then(|v| u64::try_from(v).ok())
             }
             #[inline]
             fn to_i128(&self) -> ::core::option::Option<i128> {
-                i128::try_from(self.0 / Self::multiplier()).ok()
+                (self.0 / Self::multiplier()).to_i128_checked()
             }
             #[inline]
             fn to_u128(&self) -> ::core::option::Option<u128> {
-                if self.0.is_negative() {
-                    return ::core::option::Option::None;
-                }
-                u128::try_from(self.0 / Self::multiplier()).ok()
+                (self.0 / Self::multiplier()).to_u128_checked()
             }
             #[inline]
             fn to_f32(&self) -> ::core::option::Option<f32> {

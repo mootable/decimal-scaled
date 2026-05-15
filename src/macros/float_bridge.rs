@@ -48,10 +48,10 @@ macro_rules! decl_decimal_float_bridge {
                 if value.is_infinite() {
                     return if value > 0.0 { Self::MAX } else { Self::MIN };
                 }
-                let mult_f64: f64 = ::bnum::cast::As::as_(Self::multiplier());
+                let mult_f64: f64 = Self::multiplier().as_f64();
                 let scaled = value * mult_f64;
-                let storage_max_f64: f64 = ::bnum::cast::As::as_(<$Storage>::MAX);
-                let storage_min_f64: f64 = ::bnum::cast::As::as_(<$Storage>::MIN);
+                let storage_max_f64: f64 = <$Storage>::MAX.as_f64();
+                let storage_min_f64: f64 = <$Storage>::MIN.as_f64();
                 if scaled >= storage_max_f64 {
                     return Self::MAX;
                 }
@@ -72,7 +72,7 @@ macro_rules! decl_decimal_float_bridge {
                     $crate::rounding::RoundingMode::Floor => scaled.floor(),
                     $crate::rounding::RoundingMode::Ceiling => scaled.ceil(),
                 };
-                Self(::bnum::cast::As::as_(rounded))
+                Self(<$Storage>::from_f64(rounded))
             }
 
             /// Converts to `f64` by dividing the raw storage by
@@ -81,8 +81,8 @@ macro_rules! decl_decimal_float_bridge {
             #[inline]
             #[must_use]
             pub fn to_f64_lossy(self) -> f64 {
-                let raw_f64: f64 = ::bnum::cast::As::as_(self.0);
-                let mult_f64: f64 = ::bnum::cast::As::as_(Self::multiplier());
+                let raw_f64: f64 = self.0.as_f64();
+                let mult_f64: f64 = Self::multiplier().as_f64();
                 raw_f64 / mult_f64
             }
 

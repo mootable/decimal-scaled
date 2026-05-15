@@ -34,33 +34,33 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub fn checked_mul(self, rhs: Self) -> Option<Self> {
-                let a: $Wider = ::bnum::cast::As::as_(self.0);
-                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
                 let prod = a.checked_mul(b)?;
                 let scaled = prod / m;
-                let storage_max: $Wider = ::bnum::cast::As::as_(<$Storage>::MAX);
-                let storage_min: $Wider = ::bnum::cast::As::as_(<$Storage>::MIN);
+                let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
+                let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
                 if scaled > storage_max || scaled < storage_min {
                     None
                 } else {
-                    Some(Self(::bnum::cast::As::as_(scaled)))
+                    Some(Self(scaled.resize::<$Storage>()))
                 }
             }
 
             #[inline]
             #[must_use]
             pub fn wrapping_mul(self, rhs: Self) -> Self {
-                let a: $Wider = ::bnum::cast::As::as_(self.0);
-                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
                 let prod = a.wrapping_mul(b);
                 let scaled = prod / m;
-                Self(::bnum::cast::As::as_(scaled))
+                Self(scaled.resize::<$Storage>())
             }
 
             #[inline]
@@ -93,33 +93,33 @@ macro_rules! decl_decimal_overflow_variants {
                 if rhs == Self::ZERO {
                     return None;
                 }
-                let a: $Wider = ::bnum::cast::As::as_(self.0);
-                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
                 let scaled_numer = a.checked_mul(m)?;
                 let result = scaled_numer / b;
-                let storage_max: $Wider = ::bnum::cast::As::as_(<$Storage>::MAX);
-                let storage_min: $Wider = ::bnum::cast::As::as_(<$Storage>::MIN);
+                let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
+                let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
                 if result > storage_max || result < storage_min {
                     None
                 } else {
-                    Some(Self(::bnum::cast::As::as_(result)))
+                    Some(Self(result.resize::<$Storage>()))
                 }
             }
 
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
-                let a: $Wider = ::bnum::cast::As::as_(self.0);
-                let b: $Wider = ::bnum::cast::As::as_(rhs.0);
+                let a: $Wider = self.0.resize::<$Wider>();
+                let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = <$Wider>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal")
                     .pow(SCALE);
                 let scaled_numer = a.wrapping_mul(m);
                 let result = scaled_numer / b;
-                Self(::bnum::cast::As::as_(result))
+                Self(result.resize::<$Storage>())
             }
 
             #[inline]

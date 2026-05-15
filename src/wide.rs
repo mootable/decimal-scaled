@@ -2,15 +2,14 @@
 //! decimal tiers.
 //!
 //! These widths are gated behind the `d256` / `d512` / `d1024` Cargo
-//! features (or the `wide` umbrella). The interim storage backend is
-//! `bnum`'s fixed-width signed integers; a hand-rolled in-tree backend
-//! is planned alongside it for benchmark comparison (see
-//! `research/multi_width_decimals.md` §3).
+//! features (or the `wide` umbrella). The storage backend is the
+//! in-tree hand-rolled `hint` integer family — `bnum` is no longer
+//! compiled into normal builds (it is kept only as a benchmark
+//! baseline; see `src/benchmark/`).
 //!
-//! `bnum` is signed by construction, so two's-complement semantics
-//! (signed compare, arithmetic shift, signed divide) come for free.
-//! The `bnum` dependency is only pulled in when a wide feature is
-//! active.
+//! The `hint` signed types are two's-complement by construction, so
+//! signed compare, arithmetic shift, and signed divide all behave like
+//! the primitive signed integers.
 //!
 //! Each tier's multiply / divide widens one size up to hold the
 //! intermediate product, so a width's signed storage alias is exposed
@@ -26,16 +25,16 @@
 //! `unsigned_abs()` to handle the `MIN` corner case without overflow.
 
 #[cfg(any(feature = "d256", feature = "wide"))]
-pub(crate) use bnum::types::{I256, U256};
+pub(crate) use crate::hint::{SInt256 as I256, WInt256 as U256};
 
 #[cfg(any(feature = "d256", feature = "d512", feature = "wide"))]
-pub(crate) use bnum::types::I512;
+pub(crate) use crate::hint::SInt512 as I512;
 
 #[cfg(any(feature = "d512", feature = "wide"))]
-pub(crate) use bnum::types::U512;
+pub(crate) use crate::hint::WInt512 as U512;
 
 #[cfg(any(feature = "d512", feature = "d1024", feature = "wide"))]
-pub(crate) use bnum::types::I1024;
+pub(crate) use crate::hint::SInt1024 as I1024;
 
 #[cfg(any(feature = "d1024", feature = "wide"))]
-pub(crate) use bnum::types::{I2048, U1024};
+pub(crate) use crate::hint::{SInt2048 as I2048, WInt1024 as U1024};

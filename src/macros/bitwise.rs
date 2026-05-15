@@ -34,42 +34,42 @@ macro_rules! decl_decimal_bitwise {
             /// Rotate the raw storage left by `n` bits.
             #[inline]
             #[must_use]
-            pub const fn rotate_left(self, n: u32) -> Self {
+            pub fn rotate_left(self, n: u32) -> Self {
                 Self(self.0.rotate_left(n))
             }
 
             /// Rotate the raw storage right by `n` bits.
             #[inline]
             #[must_use]
-            pub const fn rotate_right(self, n: u32) -> Self {
+            pub fn rotate_right(self, n: u32) -> Self {
                 Self(self.0.rotate_right(n))
             }
 
             /// Number of leading zero bits in the raw storage.
             #[inline]
             #[must_use]
-            pub const fn leading_zeros(self) -> u32 {
+            pub fn leading_zeros(self) -> u32 {
                 self.0.leading_zeros()
             }
 
             /// Number of trailing zero bits in the raw storage.
             #[inline]
             #[must_use]
-            pub const fn trailing_zeros(self) -> u32 {
+            pub fn trailing_zeros(self) -> u32 {
                 self.0.trailing_zeros()
             }
 
             /// Population count of the raw storage.
             #[inline]
             #[must_use]
-            pub const fn count_ones(self) -> u32 {
+            pub fn count_ones(self) -> u32 {
                 self.0.count_ones()
             }
 
             /// Number of zero bits in the raw storage.
             #[inline]
             #[must_use]
-            pub const fn count_zeros(self) -> u32 {
+            pub fn count_zeros(self) -> u32 {
                 self.0.count_zeros()
             }
 
@@ -77,7 +77,7 @@ macro_rules! decl_decimal_bitwise {
             /// of two.
             #[inline]
             #[must_use]
-            pub const fn is_power_of_two(self) -> bool {
+            pub fn is_power_of_two(self) -> bool {
                 self.0.cast_unsigned().is_power_of_two()
             }
 

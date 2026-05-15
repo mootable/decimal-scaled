@@ -650,14 +650,14 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D256, crate::wide::I2
 crate::wide_roots::decl_wide_roots!(
     D256,
     crate::wide::I256,
-    ::bnum::types::I512,
-    ::bnum::types::I1024
+    crate::hint::SInt512,
+    crate::hint::SInt1024
 );
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::wide_transcendental::decl_wide_transcendental!(
     D256,
     crate::wide::I256,
-    ::bnum::types::I1024,
+    crate::hint::SInt1024,
     wide_trig_d256
 );
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -786,14 +786,14 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D512, crate::wide::I5
 crate::wide_roots::decl_wide_roots!(
     D512,
     crate::wide::I512,
-    ::bnum::types::I1024,
-    ::bnum::types::I2048
+    crate::hint::SInt1024,
+    crate::hint::SInt2048
 );
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::wide_transcendental::decl_wide_transcendental!(
     D512,
     crate::wide::I512,
-    ::bnum::types::I2048,
+    crate::hint::SInt2048,
     wide_trig_d512
 );
 #[cfg(any(feature = "d512", feature = "wide"))]
@@ -909,14 +909,14 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D1024, crate::wide::I
 crate::wide_roots::decl_wide_roots!(
     D1024,
     crate::wide::I1024,
-    ::bnum::types::I2048,
-    ::bnum::types::I4096
+    crate::hint::SInt2048,
+    crate::hint::SInt4096
 );
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::wide_transcendental::decl_wide_transcendental!(
     D1024,
     crate::wide::I1024,
-    ::bnum::types::I4096,
+    crate::hint::SInt4096,
     wide_trig_d1024
 );
 #[cfg(any(feature = "d1024", feature = "wide"))]

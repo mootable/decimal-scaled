@@ -69,7 +69,6 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
-                use ::bnum::cast::As;
                 let raw = self.to_bits();
                 if raw <= $crate::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
@@ -77,13 +76,13 @@ macro_rules! decl_wide_roots {
                 let one = $crate::wide_roots::wide_lit!($SqrtWide, "1");
                 let ten = $crate::wide_roots::wide_lit!($SqrtWide, "10");
                 // N = r · 10^SCALE, formed exactly one width up.
-                let n: $SqrtWide = raw.as_::<$SqrtWide>() * ten.pow(SCALE);
+                let n: $SqrtWide = raw.resize::<$SqrtWide>() * ten.pow(SCALE);
                 // q = floor(sqrt(N)). Round up to q+1 iff N is closer to
                 // (q+1)² than to q², i.e. iff N − q² > q.
                 let q = n.isqrt();
                 let diff = n - q * q;
                 let q = if diff > q { q + one } else { q };
-                Self::from_bits(q.as_::<$Storage>())
+                Self::from_bits(q.resize::<$Storage>())
             }
 
             /// Correctly-rounded cube root.
@@ -99,7 +98,6 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
-                use ::bnum::cast::As;
                 let raw = self.to_bits();
                 let storage_zero = $crate::wide_roots::wide_lit!($Storage, "0");
                 if raw == storage_zero {
@@ -112,7 +110,7 @@ macro_rules! decl_wide_roots {
 
                 // Work on the magnitude two widths up; the radicand
                 // `r · 10^(2·SCALE)` needs the extra room.
-                let widened = raw.as_::<$CbrtWide>();
+                let widened = raw.resize::<$CbrtWide>();
                 let negative = widened < zero;
                 let mag = if negative { -widened } else { widened };
                 let n: $CbrtWide = mag * ten.pow(2 * SCALE);
@@ -137,7 +135,7 @@ macro_rules! decl_wide_roots {
                 let t = q + q + one;
                 let q = if eight_n >= t * t * t { q + one } else { q };
                 let signed = if negative { -q } else { q };
-                Self::from_bits(signed.as_::<$Storage>())
+                Self::from_bits(signed.resize::<$Storage>())
             }
 
             /// Square root. With `strict` enabled this is the

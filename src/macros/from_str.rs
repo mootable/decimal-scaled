@@ -22,7 +22,7 @@ macro_rules! decl_decimal_from_str {
             type Err = $crate::core_type::ParseError;
             fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
                 let bits_i128 = $crate::display::parse_decimal_bits::<SCALE>(s)?;
-                ::core::result::Result::Ok(Self(::bnum::cast::As::as_(bits_i128)))
+                ::core::result::Result::Ok(Self(<$Storage>::from_i128(bits_i128)))
             }
         }
     };
