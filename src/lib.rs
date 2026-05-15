@@ -76,7 +76,9 @@ mod equalities;
 mod error;
 mod macros;
 mod fixed_compat;
-mod log_exp;
+mod log_exp_strict;
+mod log_exp_lossy;
+
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
 // `tests/`. The macro-generated impls themselves are emitted by
@@ -89,14 +91,18 @@ mod d128_kernels;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide_int;
 mod overflow_variants;
-mod powers;
+mod powers_strict;
+mod powers_lossy;
+
 #[cfg(feature = "serde")]
 pub mod serde_helpers;
 // `trig` is compiled when it has any surface to emit: the integer-only
 // `*_strict` methods (present unless `no_strict`) or the f64-bridge
 // methods (present with `std`).
 #[cfg(any(not(feature = "no_strict"), feature = "std"))]
-mod trig;
+mod trig_strict;
+mod trig_lossy;
+
 
 pub use consts::DecimalConsts;
 pub use decimal_trait::Decimal;

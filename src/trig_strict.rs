@@ -48,403 +48,500 @@
 use crate::core_type::D128;
 
 impl<const SCALE: u32> D128<SCALE> {
-    // ── Forward trig (radians input) ──────────────────────────────────
-
-    /// Sine of `self`, where `self` is in radians.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // sin(0) == 0 (bit-exact: f64::sin(0.0) == 0.0).
-    /// assert_eq!(D128s12::ZERO.sin(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::sin_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn sin(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().sin())
+        self.sin_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Cosine of `self`, where `self` is in radians.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // cos(0) == 1 (bit-exact: f64::cos(0.0) == 1.0).
-    /// assert_eq!(D128s12::ZERO.cos(), D128s12::ONE);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::cos_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn cos(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().cos())
+        self.cos_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Tangent of `self`, where `self` is in radians.
-    ///
-    /// `f64::tan` returns very large magnitudes near odd multiples of
-    /// `pi/2` and infinity at the limit. Inputs that drive the f64
-    /// result outside `[D128::MIN, D128::MAX]` saturate per
-    /// [`Self::from_f64_lossy`].
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // tan(0) == 0 (bit-exact: f64::tan(0.0) == 0.0).
-    /// assert_eq!(D128s12::ZERO.tan(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::tan_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn tan(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().tan())
+        self.tan_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    // ── Inverse trig (returns radians) ────────────────────────────────
-
-    /// Arcsine of `self`. Returns radians in `[-pi/2, pi/2]`.
-    ///
-    /// `f64::asin` returns NaN for inputs outside `[-1, 1]`, which
-    /// [`Self::from_f64_lossy`] maps to `D128::ZERO`.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // asin(0) == 0.
-    /// assert_eq!(D128s12::ZERO.asin(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::asin_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn asin(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().asin())
+        self.asin_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Arccosine of `self`. Returns radians in `[0, pi]`.
-    ///
-    /// `f64::acos` returns NaN for inputs outside `[-1, 1]`, which
-    /// [`Self::from_f64_lossy`] maps to `D128::ZERO`.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::{D128s12, DecimalConsts};
-    /// // acos(1) == 0.
-    /// assert_eq!(D128s12::ONE.acos(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::acos_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn acos(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().acos())
+        self.acos_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Arctangent of `self`. Returns radians in `(-pi/2, pi/2)`.
-    ///
-    /// Defined for the entire real line.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // atan(0) == 0.
-    /// assert_eq!(D128s12::ZERO.atan(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::atan_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn atan(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().atan())
+        self.atan_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Four-quadrant arctangent of `self` (`y`) over `other` (`x`).
-    /// Returns radians in `(-pi, pi]`.
-    ///
-    /// Signature matches `f64::atan2(self, other)`: the receiver is
-    /// `y` and the argument is `x`.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::{D128s12, DecimalConsts};
-    /// // atan2(1, 1) ~= pi/4 (45 degrees, first quadrant).
-    /// let one = D128s12::ONE;
-    /// let result = one.atan2(one); // approximately D128s12::quarter_pi()
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`).
+    /// With `strict` this dispatches to [`Self::atan2_strict`];
+    /// without it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn atan2(self, other: Self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().atan2(other.to_f64_lossy()))
+        self.atan2_strict(other)
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    // ── Hyperbolic ────────────────────────────────────────────────────
-
-    /// Hyperbolic sine of `self`.
-    ///
-    /// Defined for the entire real line. Saturates at large magnitudes
-    /// per [`Self::from_f64_lossy`].
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // sinh(0) == 0.
-    /// assert_eq!(D128s12::ZERO.sinh(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::sinh_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn sinh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().sinh())
+        self.sinh_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Hyperbolic cosine of `self`.
-    ///
-    /// Defined for the entire real line; result is always >= 1.
-    /// Saturates at large magnitudes per [`Self::from_f64_lossy`].
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // cosh(0) == 1.
-    /// assert_eq!(D128s12::ZERO.cosh(), D128s12::ONE);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::cosh_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn cosh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().cosh())
+        self.cosh_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Hyperbolic tangent of `self`.
-    ///
-    /// Defined for the entire real line; range is `(-1, 1)`.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // tanh(0) == 0.
-    /// assert_eq!(D128s12::ZERO.tanh(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::tanh_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn tanh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().tanh())
+        self.tanh_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Inverse hyperbolic sine of `self`.
-    ///
-    /// Defined for the entire real line.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // asinh(0) == 0.
-    /// assert_eq!(D128s12::ZERO.asinh(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::asinh_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn asinh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().asinh())
+        self.asinh_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Inverse hyperbolic cosine of `self`.
-    ///
-    /// `f64::acosh` returns NaN for inputs less than 1, which
-    /// [`Self::from_f64_lossy`] maps to `D128::ZERO`.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // acosh(1) == 0.
-    /// assert_eq!(D128s12::ONE.acosh(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::acosh_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn acosh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().acosh())
+        self.acosh_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Inverse hyperbolic tangent of `self`.
-    ///
-    /// `f64::atanh` returns NaN for inputs outside `(-1, 1)`, which
-    /// [`Self::from_f64_lossy`] maps to `D128::ZERO`.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // atanh(0) == 0.
-    /// assert_eq!(D128s12::ZERO.atanh(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::atanh_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn atanh(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().atanh())
+        self.atanh_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    // ── Angle conversions ─────────────────────────────────────────────
-
-    /// Convert radians to degrees: `self * (180 / pi)`.
-    ///
-    /// Routed through `f64::to_degrees` so results match the de facto
-    /// reference produced by the rest of the Rust ecosystem. Multiplying
-    /// by a precomputed `D128` factor derived from `D128::pi()` would
-    /// diverge from f64 by a 1-LSB rescale rounding without any
-    /// practical determinism gain, since the f64 bridge is already the
-    /// precision floor.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // to_degrees(0) == 0.
-    /// assert_eq!(D128s12::ZERO.to_degrees(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::to_degrees_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn to_degrees(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().to_degrees())
+        self.to_degrees_strict()
     }
+#[cfg(all(feature = "strict", not(feature = "no_strict")))]
 
-    /// Convert degrees to radians: `self * (pi / 180)`.
-    ///
-    /// Routed through `f64::to_radians`. See [`Self::to_degrees`] for
-    /// the rationale.
-    ///
-    /// # Precision
-    ///
-    /// Lossy: involves f64 at some point; result may lose precision.
-    ///
-    /// # Examples
-    ///
-    /// ```ignore
-    /// # #[cfg(feature = "std")]
-    /// # {
-    /// use decimal_scaled::D128s12;
-    /// // to_radians(0) == 0.
-    /// assert_eq!(D128s12::ZERO.to_radians(), D128s12::ZERO);
-    /// # }
-    /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
+    /// With `strict` this dispatches to [`Self::to_radians_strict`]; without
+    /// it, the f64-bridge form is used instead.
     #[inline]
     #[must_use]
     pub fn to_radians(self) -> Self {
-        Self::from_f64_lossy(self.to_f64_lossy().to_radians())
+        self.to_radians_strict()
+    }
+#[cfg(not(feature = "no_strict"))]
+    /// Sine of `self` (radians). Strict: integer-only and correctly
+    /// rounded — the result is within 0.5 ULP of the exact sine.
+    #[inline]
+    #[must_use]
+    pub fn sin_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let raw = sin_fixed(to_fixed(self.0), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::sin: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Cosine of `self` (radians). Strict: `cos(x) = sin(x + π/2)`,
+    /// correctly rounded.
+    #[inline]
+    #[must_use]
+    pub fn cos_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let arg = to_fixed(self.0).add(wide_half_pi(w));
+        let raw = sin_fixed(arg, w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::cos: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Tangent of `self` (radians). Strict: `tan(x) = sin(x) / cos(x)`,
+    /// with the division carried in the wide intermediate so the result
+    /// is correctly rounded.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `cos(self)` is zero (an odd multiple of π/2).
+    #[inline]
+    #[must_use]
+    pub fn tan_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let v = to_fixed(self.0);
+        let sin_w = sin_fixed(v, w);
+        let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
+        if cos_w.is_zero() {
+            panic!("D128::tan: cosine is zero (argument is an odd multiple of pi/2)");
+        }
+        let raw = sin_w
+            .div(cos_w, w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::tan: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Arctangent of `self`, in radians, in `(−π/2, π/2)`. Strict:
+    /// integer-only and correctly rounded.
+    #[inline]
+    #[must_use]
+    pub fn atan_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let raw = atan_fixed(to_fixed(self.0), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::atan: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Arcsine of `self`, in radians, in `[−π/2, π/2]`. Strict.
+    ///
+    /// `asin(x) = atan(x / √(1 − x²))`; the endpoints `±1` map directly
+    /// to `±π/2`.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `|self| > 1`.
+    #[inline]
+    #[must_use]
+    pub fn asin_strict(self) -> Self {
+        use crate::d128_kernels::Fixed;
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed(self.0);
+        let abs_v = Fixed { negative: false, mag: v.mag };
+        if abs_v.ge_mag(one_w) && abs_v != one_w {
+            panic!("D128::asin: argument out of domain [-1, 1]");
+        }
+        if abs_v == one_w {
+            // asin(±1) = ±π/2.
+            let hp = wide_half_pi(w);
+            let hp = if v.negative { hp.neg() } else { hp };
+            let raw = hp
+                .round_to_i128(w, SCALE)
+                .expect("D128::asin: result out of range");
+            return Self::from_bits(raw);
+        }
+        // √(1 − x²); x² ≤ 1 so 1 − x² ∈ [0, 1].
+        let denom = one_w.sub(v.mul(v, w)).sqrt(w);
+        let raw = atan_fixed(v.div(denom, w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::asin: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Arccosine of `self`, in radians, in `[0, π]`. Strict:
+    /// `acos(x) = π/2 − asin(x)`, correctly rounded.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `|self| > 1`.
+    #[inline]
+    #[must_use]
+    pub fn acos_strict(self) -> Self {
+        use crate::d128_kernels::Fixed;
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed(self.0);
+        let abs_v = Fixed { negative: false, mag: v.mag };
+        if abs_v.ge_mag(one_w) && abs_v != one_w {
+            panic!("D128::acos: argument out of domain [-1, 1]");
+        }
+        // asin(v) in the wide intermediate, then π/2 − asin(v).
+        let asin_w = if abs_v == one_w {
+            let hp = wide_half_pi(w);
+            if v.negative {
+                hp.neg()
+            } else {
+                hp
+            }
+        } else {
+            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
+            atan_fixed(v.div(denom, w), w)
+        };
+        let raw = wide_half_pi(w)
+            .sub(asin_w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::acos: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`), in
+    /// radians, in `(−π, π]`. Strict: integer-only and correctly
+    /// rounded.
+    #[inline]
+    #[must_use]
+    pub fn atan2_strict(self, other: Self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let y = to_fixed(self.0);
+        let x = to_fixed(other.0);
+        let result_w = if x.is_zero() {
+            if self.0 > 0 {
+                wide_half_pi(w)
+            } else if self.0 < 0 {
+                wide_half_pi(w).neg()
+            } else {
+                crate::d128_kernels::Fixed::ZERO
+            }
+        } else {
+            let base = atan_fixed(y.div(x, w), w);
+            if !x.negative {
+                base
+            } else if !y.negative {
+                base.add(wide_pi(w))
+            } else {
+                base.sub(wide_pi(w))
+            }
+        };
+        let raw = result_w
+            .round_to_i128(w, SCALE)
+            .expect("D128::atan2: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Hyperbolic sine of `self`. Strict: `sinh(x) = (eˣ − e⁻ˣ)/2`,
+    /// composed in the wide intermediate from the correctly-rounded
+    /// `exp`, so the result is itself correctly rounded.
+    #[inline]
+    #[must_use]
+    pub fn sinh_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let v = to_fixed(self.0);
+        let ex = crate::log_exp_strict::exp_fixed(v, w);
+        let enx = crate::log_exp_strict::exp_fixed(v.neg(), w);
+        let raw = ex
+            .sub(enx)
+            .halve()
+            .round_to_i128(w, SCALE)
+            .expect("D128::sinh: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Hyperbolic cosine of `self`. Strict: `cosh(x) = (eˣ + e⁻ˣ)/2`,
+    /// correctly rounded.
+    #[inline]
+    #[must_use]
+    pub fn cosh_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let v = to_fixed(self.0);
+        let ex = crate::log_exp_strict::exp_fixed(v, w);
+        let enx = crate::log_exp_strict::exp_fixed(v.neg(), w);
+        let raw = ex
+            .add(enx)
+            .halve()
+            .round_to_i128(w, SCALE)
+            .expect("D128::cosh: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Hyperbolic tangent of `self`. Strict: `tanh(x) = sinh(x)/cosh(x)`
+    /// with the division in the wide intermediate. `cosh ≥ 1`, so the
+    /// division never traps.
+    #[inline]
+    #[must_use]
+    pub fn tanh_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let v = to_fixed(self.0);
+        let ex = crate::log_exp_strict::exp_fixed(v, w);
+        let enx = crate::log_exp_strict::exp_fixed(v.neg(), w);
+        let raw = ex
+            .sub(enx)
+            .div(ex.add(enx), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::tanh: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Inverse hyperbolic sine of `self`. Strict:
+    /// `asinh(x) = sign · ln(|x| + √(x² + 1))`, correctly rounded.
+    /// For `|x| ≥ 1` the radicand is factored as
+    /// `|x|·(1 + √(1 + 1/x²))` to keep `x²` from overflowing the wide
+    /// intermediate.
+    #[inline]
+    #[must_use]
+    pub fn asinh_strict(self) -> Self {
+        use crate::d128_kernels::Fixed;
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed(self.0);
+        let ax = Fixed { negative: false, mag: v.mag };
+        let inner = if ax.ge_mag(one_w) {
+            // ln(|x|) + ln(1 + √(1 + 1/x²)).
+            let inv = one_w.div(ax, w);
+            let root = one_w.add(inv.mul(inv, w)).sqrt(w);
+            crate::log_exp_strict::ln_fixed(ax, w).add(crate::log_exp_strict::ln_fixed(one_w.add(root), w))
+        } else {
+            // ln(|x| + √(x² + 1)).
+            let root = ax.mul(ax, w).add(one_w).sqrt(w);
+            crate::log_exp_strict::ln_fixed(ax.add(root), w)
+        };
+        let signed = if self.0 < 0 { inner.neg() } else { inner };
+        let raw = signed
+            .round_to_i128(w, SCALE)
+            .expect("D128::asinh: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Inverse hyperbolic cosine of `self`. Strict:
+    /// `acosh(x) = ln(x + √(x² − 1))`, defined for `x ≥ 1`, correctly
+    /// rounded. For `x ≥ 2` the radicand is factored as
+    /// `x·(1 + √(1 − 1/x²))` to keep `x²` in range.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `self < 1`.
+    #[inline]
+    #[must_use]
+    pub fn acosh_strict(self) -> Self {
+        use crate::d128_kernels::Fixed;
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed(self.0);
+        if v.negative || !v.ge_mag(one_w) {
+            panic!("D128::acosh: argument must be >= 1");
+        }
+        let two_w = one_w.double();
+        let inner = if v.ge_mag(two_w) {
+            // ln(x) + ln(1 + √(1 − 1/x²)).
+            let inv = one_w.div(v, w);
+            let root = one_w.sub(inv.mul(inv, w)).sqrt(w);
+            crate::log_exp_strict::ln_fixed(v, w).add(crate::log_exp_strict::ln_fixed(one_w.add(root), w))
+        } else {
+            // ln(x + √(x² − 1)).
+            let root = v.mul(v, w).sub(one_w).sqrt(w);
+            crate::log_exp_strict::ln_fixed(v.add(root), w)
+        };
+        let raw = inner
+            .round_to_i128(w, SCALE)
+            .expect("D128::acosh: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Inverse hyperbolic tangent of `self`. Strict:
+    /// `atanh(x) = ln((1 + x) / (1 − x)) / 2`, defined for `|x| < 1`,
+    /// correctly rounded.
+    ///
+    /// # Panics
+    ///
+    /// Panics if `|self| >= 1`.
+    #[inline]
+    #[must_use]
+    pub fn atanh_strict(self) -> Self {
+        use crate::d128_kernels::Fixed;
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed(self.0);
+        let ax = Fixed { negative: false, mag: v.mag };
+        if ax.ge_mag(one_w) {
+            panic!("D128::atanh: argument out of domain (-1, 1)");
+        }
+        // ln((1 + x) / (1 − x)) / 2.
+        let ratio = one_w.add(v).div(one_w.sub(v), w);
+        let raw = crate::log_exp_strict::ln_fixed(ratio, w)
+            .halve()
+            .round_to_i128(w, SCALE)
+            .expect("D128::atanh: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Convert radians to degrees: `self · (180 / π)`. Strict: the
+    /// multiply and divide run in the wide intermediate, so the result
+    /// is correctly rounded.
+    #[inline]
+    #[must_use]
+    pub fn to_degrees_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let raw = to_fixed(self.0)
+            .mul_u128(180)
+            .div(wide_pi(w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D128::to_degrees: result out of range");
+        Self::from_bits(raw)
+    }
+#[cfg(not(feature = "no_strict"))]
+
+    /// Convert degrees to radians: `self · (π / 180)`. Strict:
+    /// correctly rounded.
+    #[inline]
+    #[must_use]
+    pub fn to_radians_strict(self) -> Self {
+        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let raw = to_fixed(self.0)
+            .mul(wide_pi(w), w)
+            .div_small(180)
+            .round_to_i128(w, SCALE)
+            .expect("D128::to_radians: result out of range");
+        Self::from_bits(raw)
     }
 }
+
 
 // ─────────────────────────────────────────────────────────────────────
 // Strict-mode (integer-only) trigonometric, hyperbolic, and angle-
@@ -470,129 +567,6 @@ impl<const SCALE: u32> D128<SCALE> {
 // Strict-feature dispatchers. When `strict` is enabled (and
 // `no_strict` is not), the plain trig methods route to the
 // integer-only `*_strict` implementations below.
-#[cfg(all(feature = "strict", not(feature = "no_strict")))]
-impl<const SCALE: u32> D128<SCALE> {
-    /// With `strict` this dispatches to [`Self::sin_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn sin(self) -> Self {
-        self.sin_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::cos_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn cos(self) -> Self {
-        self.cos_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::tan_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn tan(self) -> Self {
-        self.tan_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::asin_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn asin(self) -> Self {
-        self.asin_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::acos_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn acos(self) -> Self {
-        self.acos_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::atan_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn atan(self) -> Self {
-        self.atan_strict()
-    }
-
-    /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`).
-    /// With `strict` this dispatches to [`Self::atan2_strict`];
-    /// without it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn atan2(self, other: Self) -> Self {
-        self.atan2_strict(other)
-    }
-
-    /// With `strict` this dispatches to [`Self::sinh_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn sinh(self) -> Self {
-        self.sinh_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::cosh_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn cosh(self) -> Self {
-        self.cosh_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::tanh_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn tanh(self) -> Self {
-        self.tanh_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::asinh_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn asinh(self) -> Self {
-        self.asinh_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::acosh_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn acosh(self) -> Self {
-        self.acosh_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::atanh_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn atanh(self) -> Self {
-        self.atanh_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::to_degrees_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn to_degrees(self) -> Self {
-        self.to_degrees_strict()
-    }
-
-    /// With `strict` this dispatches to [`Self::to_radians_strict`]; without
-    /// it, the f64-bridge form is used instead.
-    #[inline]
-    #[must_use]
-    pub fn to_radians(self) -> Self {
-        self.to_radians_strict()
-    }
-}
 
 // ─────────────────────────────────────────────────────────────────────
 // Correctly-rounded strict trigonometric core.
@@ -632,7 +606,7 @@ fn wide_half_pi(w: u32) -> crate::d128_kernels::Fixed {
 fn to_fixed(raw: i128) -> crate::d128_kernels::Fixed {
     use crate::d128_kernels::Fixed;
     let m = Fixed::from_u128_mag(raw.unsigned_abs(), false)
-        .mul_u128(10u128.pow(crate::log_exp::STRICT_GUARD));
+        .mul_u128(10u128.pow(crate::log_exp_strict::STRICT_GUARD));
     if raw < 0 {
         m.neg()
     } else {
@@ -767,351 +741,6 @@ fn atan_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::F
     }
 }
 
-#[cfg(not(feature = "no_strict"))]
-impl<const SCALE: u32> D128<SCALE> {
-    /// Sine of `self` (radians). Strict: integer-only and correctly
-    /// rounded — the result is within 0.5 ULP of the exact sine.
-    #[inline]
-    #[must_use]
-    pub fn sin_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let raw = sin_fixed(to_fixed(self.0), w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::sin: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Cosine of `self` (radians). Strict: `cos(x) = sin(x + π/2)`,
-    /// correctly rounded.
-    #[inline]
-    #[must_use]
-    pub fn cos_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let arg = to_fixed(self.0).add(wide_half_pi(w));
-        let raw = sin_fixed(arg, w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::cos: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Tangent of `self` (radians). Strict: `tan(x) = sin(x) / cos(x)`,
-    /// with the division carried in the wide intermediate so the result
-    /// is correctly rounded.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `cos(self)` is zero (an odd multiple of π/2).
-    #[inline]
-    #[must_use]
-    pub fn tan_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let v = to_fixed(self.0);
-        let sin_w = sin_fixed(v, w);
-        let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
-        if cos_w.is_zero() {
-            panic!("D128::tan: cosine is zero (argument is an odd multiple of pi/2)");
-        }
-        let raw = sin_w
-            .div(cos_w, w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::tan: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Arctangent of `self`, in radians, in `(−π/2, π/2)`. Strict:
-    /// integer-only and correctly rounded.
-    #[inline]
-    #[must_use]
-    pub fn atan_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let raw = atan_fixed(to_fixed(self.0), w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::atan: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Arcsine of `self`, in radians, in `[−π/2, π/2]`. Strict.
-    ///
-    /// `asin(x) = atan(x / √(1 − x²))`; the endpoints `±1` map directly
-    /// to `±π/2`.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `|self| > 1`.
-    #[inline]
-    #[must_use]
-    pub fn asin_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        let abs_v = Fixed { negative: false, mag: v.mag };
-        if abs_v.ge_mag(one_w) && abs_v != one_w {
-            panic!("D128::asin: argument out of domain [-1, 1]");
-        }
-        if abs_v == one_w {
-            // asin(±1) = ±π/2.
-            let hp = wide_half_pi(w);
-            let hp = if v.negative { hp.neg() } else { hp };
-            let raw = hp
-                .round_to_i128(w, SCALE)
-                .expect("D128::asin: result out of range");
-            return Self::from_bits(raw);
-        }
-        // √(1 − x²); x² ≤ 1 so 1 − x² ∈ [0, 1].
-        let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-        let raw = atan_fixed(v.div(denom, w), w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::asin: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Arccosine of `self`, in radians, in `[0, π]`. Strict:
-    /// `acos(x) = π/2 − asin(x)`, correctly rounded.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `|self| > 1`.
-    #[inline]
-    #[must_use]
-    pub fn acos_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        let abs_v = Fixed { negative: false, mag: v.mag };
-        if abs_v.ge_mag(one_w) && abs_v != one_w {
-            panic!("D128::acos: argument out of domain [-1, 1]");
-        }
-        // asin(v) in the wide intermediate, then π/2 − asin(v).
-        let asin_w = if abs_v == one_w {
-            let hp = wide_half_pi(w);
-            if v.negative {
-                hp.neg()
-            } else {
-                hp
-            }
-        } else {
-            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-            atan_fixed(v.div(denom, w), w)
-        };
-        let raw = wide_half_pi(w)
-            .sub(asin_w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::acos: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`), in
-    /// radians, in `(−π, π]`. Strict: integer-only and correctly
-    /// rounded.
-    #[inline]
-    #[must_use]
-    pub fn atan2_strict(self, other: Self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let y = to_fixed(self.0);
-        let x = to_fixed(other.0);
-        let result_w = if x.is_zero() {
-            if self.0 > 0 {
-                wide_half_pi(w)
-            } else if self.0 < 0 {
-                wide_half_pi(w).neg()
-            } else {
-                crate::d128_kernels::Fixed::ZERO
-            }
-        } else {
-            let base = atan_fixed(y.div(x, w), w);
-            if !x.negative {
-                base
-            } else if !y.negative {
-                base.add(wide_pi(w))
-            } else {
-                base.sub(wide_pi(w))
-            }
-        };
-        let raw = result_w
-            .round_to_i128(w, SCALE)
-            .expect("D128::atan2: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Hyperbolic sine of `self`. Strict: `sinh(x) = (eˣ − e⁻ˣ)/2`,
-    /// composed in the wide intermediate from the correctly-rounded
-    /// `exp`, so the result is itself correctly rounded.
-    #[inline]
-    #[must_use]
-    pub fn sinh_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let v = to_fixed(self.0);
-        let ex = crate::log_exp::exp_fixed(v, w);
-        let enx = crate::log_exp::exp_fixed(v.neg(), w);
-        let raw = ex
-            .sub(enx)
-            .halve()
-            .round_to_i128(w, SCALE)
-            .expect("D128::sinh: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Hyperbolic cosine of `self`. Strict: `cosh(x) = (eˣ + e⁻ˣ)/2`,
-    /// correctly rounded.
-    #[inline]
-    #[must_use]
-    pub fn cosh_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let v = to_fixed(self.0);
-        let ex = crate::log_exp::exp_fixed(v, w);
-        let enx = crate::log_exp::exp_fixed(v.neg(), w);
-        let raw = ex
-            .add(enx)
-            .halve()
-            .round_to_i128(w, SCALE)
-            .expect("D128::cosh: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Hyperbolic tangent of `self`. Strict: `tanh(x) = sinh(x)/cosh(x)`
-    /// with the division in the wide intermediate. `cosh ≥ 1`, so the
-    /// division never traps.
-    #[inline]
-    #[must_use]
-    pub fn tanh_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let v = to_fixed(self.0);
-        let ex = crate::log_exp::exp_fixed(v, w);
-        let enx = crate::log_exp::exp_fixed(v.neg(), w);
-        let raw = ex
-            .sub(enx)
-            .div(ex.add(enx), w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::tanh: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Inverse hyperbolic sine of `self`. Strict:
-    /// `asinh(x) = sign · ln(|x| + √(x² + 1))`, correctly rounded.
-    /// For `|x| ≥ 1` the radicand is factored as
-    /// `|x|·(1 + √(1 + 1/x²))` to keep `x²` from overflowing the wide
-    /// intermediate.
-    #[inline]
-    #[must_use]
-    pub fn asinh_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        let ax = Fixed { negative: false, mag: v.mag };
-        let inner = if ax.ge_mag(one_w) {
-            // ln(|x|) + ln(1 + √(1 + 1/x²)).
-            let inv = one_w.div(ax, w);
-            let root = one_w.add(inv.mul(inv, w)).sqrt(w);
-            crate::log_exp::ln_fixed(ax, w).add(crate::log_exp::ln_fixed(one_w.add(root), w))
-        } else {
-            // ln(|x| + √(x² + 1)).
-            let root = ax.mul(ax, w).add(one_w).sqrt(w);
-            crate::log_exp::ln_fixed(ax.add(root), w)
-        };
-        let signed = if self.0 < 0 { inner.neg() } else { inner };
-        let raw = signed
-            .round_to_i128(w, SCALE)
-            .expect("D128::asinh: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Inverse hyperbolic cosine of `self`. Strict:
-    /// `acosh(x) = ln(x + √(x² − 1))`, defined for `x ≥ 1`, correctly
-    /// rounded. For `x ≥ 2` the radicand is factored as
-    /// `x·(1 + √(1 − 1/x²))` to keep `x²` in range.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `self < 1`.
-    #[inline]
-    #[must_use]
-    pub fn acosh_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        if v.negative || !v.ge_mag(one_w) {
-            panic!("D128::acosh: argument must be >= 1");
-        }
-        let two_w = one_w.double();
-        let inner = if v.ge_mag(two_w) {
-            // ln(x) + ln(1 + √(1 − 1/x²)).
-            let inv = one_w.div(v, w);
-            let root = one_w.sub(inv.mul(inv, w)).sqrt(w);
-            crate::log_exp::ln_fixed(v, w).add(crate::log_exp::ln_fixed(one_w.add(root), w))
-        } else {
-            // ln(x + √(x² − 1)).
-            let root = v.mul(v, w).sub(one_w).sqrt(w);
-            crate::log_exp::ln_fixed(v.add(root), w)
-        };
-        let raw = inner
-            .round_to_i128(w, SCALE)
-            .expect("D128::acosh: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Inverse hyperbolic tangent of `self`. Strict:
-    /// `atanh(x) = ln((1 + x) / (1 − x)) / 2`, defined for `|x| < 1`,
-    /// correctly rounded.
-    ///
-    /// # Panics
-    ///
-    /// Panics if `|self| >= 1`.
-    #[inline]
-    #[must_use]
-    pub fn atanh_strict(self) -> Self {
-        use crate::d128_kernels::Fixed;
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        let ax = Fixed { negative: false, mag: v.mag };
-        if ax.ge_mag(one_w) {
-            panic!("D128::atanh: argument out of domain (-1, 1)");
-        }
-        // ln((1 + x) / (1 − x)) / 2.
-        let ratio = one_w.add(v).div(one_w.sub(v), w);
-        let raw = crate::log_exp::ln_fixed(ratio, w)
-            .halve()
-            .round_to_i128(w, SCALE)
-            .expect("D128::atanh: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Convert radians to degrees: `self · (180 / π)`. Strict: the
-    /// multiply and divide run in the wide intermediate, so the result
-    /// is correctly rounded.
-    #[inline]
-    #[must_use]
-    pub fn to_degrees_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let raw = to_fixed(self.0)
-            .mul_u128(180)
-            .div(wide_pi(w), w)
-            .round_to_i128(w, SCALE)
-            .expect("D128::to_degrees: result out of range");
-        Self::from_bits(raw)
-    }
-
-    /// Convert degrees to radians: `self · (π / 180)`. Strict:
-    /// correctly rounded.
-    #[inline]
-    #[must_use]
-    pub fn to_radians_strict(self) -> Self {
-        let w = SCALE + crate::log_exp::STRICT_GUARD;
-        let raw = to_fixed(self.0)
-            .mul(wide_pi(w), w)
-            .div_small(180)
-            .round_to_i128(w, SCALE)
-            .expect("D128::to_radians: result out of range");
-        Self::from_bits(raw)
-    }
-}
 #[cfg(test)]
 mod tests {
     use crate::consts::DecimalConsts;
@@ -1584,3 +1213,4 @@ mod tests {
         }
     }
 }
+
