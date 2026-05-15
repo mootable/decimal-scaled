@@ -202,6 +202,32 @@ For human-scale decimal values `D128` gives decimal-exact results with no roundi
 
 ---
 
+## Performance and accuracy
+
+`D128` arithmetic is a thin wrapper over `i128`: add / sub are a single
+instruction (~1 ns), mul / div carry a 256-bit widening step (~10 ns).
+The wide `D256` tier keeps add / sub almost free but its mul / div pay
+for a 256-bit hand-rolled-integer divide — roughly 20× the `D128` cost.
+
+Transcendentals come in two forms. The **lossy** `f64` bridge is fast
+(~40 ns) but inherits `f64`'s precision ceiling and is not
+platform-independent. The **strict** integer-only form is
+**correctly rounded to within 0.5 ULP** of the exact result — the
+IEEE-754 round-to-nearest contract — and is `no_std` and
+platform-deterministic. That accuracy guarantee is the capability the
+binary-fixed-point and software-decimal alternatives do not offer:
+`f64`-bridge results are not correctly rounded to the last place,
+`rust_decimal`'s software transcendentals are accurate but not
+correctly rounded to 0.5 ULP, and `fixed` has no transcendentals at
+all. For series functions the strict form costs ~700× the lossy
+bridge; `sqrt_strict` is the exception — algebraic, so it ties the
+lossy form.
+
+Full head-to-head measurements against `bnum`, `ruint`, `rust_decimal`,
+and `fixed` are in [`docs/benchmarks.md`](docs/benchmarks.md).
+
+---
+
 ## Scale aliases
 
 | Alias | `SCALE` | 1 least significant decimal digit | Approximate range |
@@ -233,8 +259,9 @@ an identical API and the `Decimal` trait:
 
 Pick the narrowest width whose range covers your values at the scale you
 need. Widening between widths is lossless (`From`); narrowing is fallible
-(`TryFrom`). The wide tier is backed by the `bnum` big-integer crate and
-is opt-in. See [`docs/widths.md`](docs/widths.md).
+(`TryFrom`). The wide tier is backed by an in-tree hand-rolled
+wide-integer type — no external big-integer dependency — and is opt-in.
+See [`docs/widths.md`](docs/widths.md).
 
 ## Compile-time literals
 
@@ -264,7 +291,7 @@ See [`docs/macros.md`](docs/macros.md).
 | `strict` | no | Plain transcendentals dispatch to the integer-only, platform-independent `*_strict` path instead of the `f64` bridge. `no_std`-compatible. |
 | `no_strict` | no | Drops the `*_strict` transcendental surface for a smaller build. Overrides `strict`. |
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
-| `d256` / `d512` / `d1024` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by `bnum`. |
+| `d256` / `d512` / `d1024` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by an in-tree hand-rolled wide-integer type. |
 | `wide` | no | Umbrella over `d256` + `d512` + `d1024`. |
 | `experimental-floats` | no | Nightly-only `f16` / `f128` entry points on the float bridge. |
 
@@ -284,6 +311,7 @@ In-depth usage guides live in [`docs/`](docs/README.md):
 - [Strict mode](docs/strict-mode.md) — integer-only transcendentals.
 - [The `d128!` macro](docs/macros.md) — compile-time decimal literals.
 - [Cargo features](docs/features.md) — every feature flag.
+- [Benchmarks](docs/benchmarks.md) — head-to-head against `bnum`, `ruint`, `rust_decimal`, and `fixed`, plus lossy vs strict.
 
 API reference: <https://docs.rs/decimal-scaled/>.
 
