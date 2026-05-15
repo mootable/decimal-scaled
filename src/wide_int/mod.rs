@@ -229,9 +229,34 @@ const fn limbs_shl1(a: &mut [u128]) -> u128 {
     carry
 }
 
-/// `quot = num / den`, `rem = num % den`. Binary shift-subtract long
-/// division. `quot.len() >= num.len()`, `rem.len() >= num.len()`;
-/// both are zeroed by this routine. `den` must be non-zero.
+/// `true` if every limb above index 0 is zero — the value fits a
+/// single 128-bit word.
+#[inline]
+const fn limbs_fit_one(a: &[u128]) -> bool {
+    let mut i = 1;
+    while i < a.len() {
+        if a[i] != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// `quot = num / den`, `rem = num % den`. `quot.len() >= num.len()`,
+/// `rem.len() >= num.len()`; both are zeroed by this routine. `den`
+/// must be non-zero.
+///
+/// Two hardware fast paths short-circuit the binary long-division
+/// loop — they cover the dominant decimal cases (moderate magnitudes,
+/// divisor `10^scale` for `scale <= 19`):
+///
+/// - both operands fit a single 128-bit word → one hardware divide;
+/// - the divisor fits a 64-bit word → schoolbook base-2^64 division,
+///   one hardware divide per limb-half.
+///
+/// Otherwise it falls back to a binary shift-subtract loop bounded by
+/// the dividend's actual bit length.
 pub(crate) const fn limbs_divmod(
     num: &[u128],
     den: &[u128],
@@ -248,6 +273,49 @@ pub(crate) const fn limbs_divmod(
         rem[z] = 0;
         z += 1;
     }
+
+    let den_one_limb = limbs_fit_one(den);
+
+    // Fast path A: both dividend and divisor fit one 128-bit word.
+    if den_one_limb && limbs_fit_one(num) {
+        if quot.len() > 0 {
+            quot[0] = num[0] / den[0];
+        }
+        if rem.len() > 0 {
+            rem[0] = num[0] % den[0];
+        }
+        return;
+    }
+
+    // Fast path B: divisor fits a 64-bit word — schoolbook base-2^64
+    // long division, one hardware divide per 64-bit half of the
+    // dividend. Every `10^scale` for `scale <= 19` lands here.
+    if den_one_limb && den[0] <= u64::MAX as u128 {
+        let d = den[0];
+        let mut r: u128 = 0;
+        let mut i = num.len();
+        while i > 0 {
+            i -= 1;
+            let hi = num[i] >> 64;
+            let acc_hi = (r << 64) | hi;
+            let q_hi = acc_hi / d;
+            r = acc_hi % d;
+            let lo = num[i] & u64::MAX as u128;
+            let acc_lo = (r << 64) | lo;
+            let q_lo = acc_lo / d;
+            r = acc_lo % d;
+            if i < quot.len() {
+                quot[i] = (q_hi << 64) | q_lo;
+            }
+        }
+        if rem.len() > 0 {
+            rem[0] = r;
+        }
+        return;
+    }
+
+    // General path: binary shift-subtract, bounded by the dividend's
+    // actual bit length.
     let bits = limbs_bit_len(num);
     let mut i = bits;
     while i > 0 {
