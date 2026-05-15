@@ -197,8 +197,14 @@ macro_rules! decl_wide_transcendental {
             /// Builds a working-scale value from the type's raw storage:
             /// `raw · 10^GUARD` (raw is `value · 10^SCALE`, the result
             /// is `value · 10^(SCALE+GUARD)`).
+            ///
+            /// Uses [`wide_cast`] instead of `.resize::<W>()` so the
+            /// macro accepts both wide-int and primitive `$Storage`
+            /// (`i128` for D128).
+            ///
+            /// [`wide_cast`]: $crate::wide_int::wide_cast
             pub(super) fn to_work(raw: $Storage) -> W {
-                raw.resize::<W>() * pow10(GUARD)
+                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10(GUARD)
             }
 
             /// Rounds a working-scale value down to scale `target` using
@@ -238,15 +244,15 @@ macro_rules! decl_wide_transcendental {
                         q
                     }
                 };
-                if rounded > <$Storage>::MAX.resize::<W>()
-                    || rounded < <$Storage>::MIN.resize::<W>()
-                {
+                let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
+                let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                if rounded > max_w || rounded < min_w {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
                     ));
                 }
-                rounded.resize::<$Storage>()
+                $crate::wide_int::wide_cast::<W, $Storage>(rounded)
             }
 
             /// Rounds a working-scale value to the nearest integer (ties
@@ -261,7 +267,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     q
                 };
-                qi.resize::<i128>()
+                $crate::wide_int::wide_cast::<W, i128>(qi)
             }
 
             /// `k · c` where `k` is a signed range-reduction count.
