@@ -76,3 +76,19 @@ impl<const SCALE: u32> core::ops::Div for BnumD256<SCALE> {
         BnumD256((a * m / b).as_())
     }
 }
+
+impl<const SCALE: u32> core::ops::Rem for BnumD256<SCALE> {
+    type Output = Self;
+    #[inline]
+    fn rem(self, rhs: Self) -> Self {
+        BnumD256(self.0 % rhs.0)
+    }
+}
+
+impl<const SCALE: u32> core::ops::Neg for BnumD256<SCALE> {
+    type Output = Self;
+    #[inline]
+    fn neg(self) -> Self {
+        BnumD256(-self.0)
+    }
+}
