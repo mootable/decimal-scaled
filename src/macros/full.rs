@@ -46,21 +46,20 @@ macro_rules! decl_decimal_full {
         $crate::macros::arithmetic::decl_decimal_arithmetic!(wide $Type, $Storage, $Wider);
         $crate::macros::display::decl_decimal_display!(wide $Type, $Unsigned);
         $crate::macros::overflow::decl_decimal_overflow_variants!(wide $Type, $Storage, $Wider);
+        $crate::macros::num_traits::decl_decimal_num_traits_basics!($Type);
         $crate::macros::sign::decl_decimal_sign_methods!(wide $Type, $Storage);
         $crate::macros::from_str::decl_decimal_from_str!(wide $Type, $Storage);
+        $crate::macros::storage_formatters::decl_decimal_storage_formatters!($Type);
+        $crate::macros::helpers::decl_decimal_helpers!(wide $Type);
         $crate::macros::bitwise::decl_decimal_bitwise!(wide $Type, $Storage);
         $crate::macros::int_methods::decl_decimal_int_methods!(wide $Type, $Storage);
         $crate::macros::wide_roots::decl_wide_roots!($Type, $Storage, $SqrtWide, $CbrtWide);
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
             $Type, $Storage, $Work, $core
         );
-        $crate::macros::num_traits::decl_decimal_num_traits_basics!(wide $Type, $Storage);
+        $crate::macros::lossy_transcendentals::decl_lossy_transcendentals_via_f64!($Type);
+        $crate::macros::pow::decl_decimal_pow!($Type);
         $crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_try_from_i128!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_try_from_u128!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_try_from_f64!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_try_from_f32!(wide $Type, $Storage);
-        $crate::macros::conversions::decl_decimal_int_conversion_methods!(wide $Type, $Storage, i128);
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i8);
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i16);
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, i32);
@@ -69,8 +68,14 @@ macro_rules! decl_decimal_full {
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u16);
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u32);
         $crate::macros::conversions::decl_from_primitive!(wide $Type, $Storage, u64);
+        $crate::macros::conversions::decl_try_from_i128!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_u128!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_f64!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_try_from_f32!(wide $Type, $Storage);
+        $crate::macros::conversions::decl_decimal_int_conversion_methods!(wide $Type, $Storage, i128);
         $crate::macros::float_bridge::decl_decimal_float_bridge!(wide $Type, $Storage);
         $crate::macros::rescale::decl_decimal_rescale!(wide $Type, $Storage);
+        $crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide $Type);
     };
 }
 
