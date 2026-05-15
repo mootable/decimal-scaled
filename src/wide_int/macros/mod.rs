@@ -674,12 +674,12 @@ macro_rules! decl_hint {
             }
             /// Builds from a signed 128-bit value.
             #[inline]
-            pub(crate) const fn from_i128(v: i128) -> $S {
+            pub const fn from_i128(v: i128) -> $S {
                 $S::from_mag_limbs(&[v.unsigned_abs()], v < 0)
             }
             /// Builds from an unsigned 128-bit value.
             #[inline]
-            pub(crate) const fn from_u128(v: u128) -> $S {
+            pub const fn from_u128(v: u128) -> $S {
                 $S::from_mag_limbs(&[v], false)
             }
             /// Truncating cast to `i128` (low 128 bits, sign-applied).
