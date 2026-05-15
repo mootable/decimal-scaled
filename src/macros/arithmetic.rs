@@ -166,22 +166,40 @@ macro_rules! decl_decimal_arithmetic {
             /// scale-narrowing step according to `mode`. Result is
             /// within 0.5 ULP for the half-* family and bounded by the
             /// directed-rounding rule otherwise.
+            ///
+            /// For `SCALE ≤ 38` the divide-by-`10^SCALE` step routes
+            /// through the Möller-Granlund magic-divide kernel shared
+            /// with D128 ([`crate::mg_divide::div_wide_pow10_with`]) —
+            /// avoiding the generic schoolbook divide for the common
+            /// case. Larger scales fall through to the slower
+            /// `n / (10^SCALE)` path.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
                 let n = a * b;
-                let scaled =
-                    $crate::macros::arithmetic::round_with_mode_wide!(n, m, $Wider, mode);
+                let scaled = if SCALE == 0 {
+                    n
+                } else if SCALE <= 38 {
+                    $crate::mg_divide::div_wide_pow10_with::<$Wider>(n, SCALE, mode)
+                } else {
+                    let m: $Wider = <$Wider>::from_str_radix("10", 10)
+                        .expect("wide decimal: invalid base-10 literal")
+                        .pow(SCALE);
+                    $crate::macros::arithmetic::round_with_mode_wide!(n, m, $Wider, mode)
+                };
                 Self(scaled.resize::<$Storage>())
             }
 
             /// Divide two values of the same scale, rounding the
             /// scale-narrowing step according to `mode`. Within 0.5 ULP
             /// for the half-* family.
+            ///
+            /// The divisor here is the runtime operand `rhs.0`, not
+            /// `10^SCALE`, so the MG magic-divide doesn't apply; the
+            /// final step uses the wide integer's schoolbook
+            /// `limbs_divmod` (which has its own hardware fast paths
+            /// for sub-word divisors).
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();

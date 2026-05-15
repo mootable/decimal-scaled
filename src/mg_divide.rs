@@ -196,6 +196,84 @@ fn div_exp_fast_2word_with_rem(
     }
 }
 
+/// Magic-divide a wide signed integer by `10^scale`
+/// (`1 ≤ scale ≤ 38`), returning the quotient as the same wide type
+/// with `mode`-aware rounding.
+///
+/// This is the wide-tier counterpart of [`mul_div_pow10`]'s magic
+/// step. The divisor `10^scale` fits a single `u128` limb (and an
+/// entry in [`MG_EXP_MAGICS`]); the work is base-`2^128` schoolbook
+/// long division over the input's magnitude, with each
+/// `(rem, limb) / exp` step served by the existing
+/// [`div_exp_fast_2word_with_rem`] kernel. The magnitude buffer is
+/// 64 limbs, so the same routine serves every width from `Int256`
+/// to `Int8192`.
+///
+/// Caller short-circuits `scale == 0` (no-op) and any `scale > 38`
+/// (the magic table only covers `0..=38`).
+#[inline]
+pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
+    n: W,
+    scale: u32,
+    mode: crate::rounding::RoundingMode,
+) -> W {
+    debug_assert!((1..=38).contains(&scale));
+    let (mut mag, neg) = n.to_mag_sign();
+    let exp = 10u128.pow(scale);
+    let scale_idx = scale as usize;
+
+    // The magnitude buffer is fixed at 64 limbs to fit the widest wide
+    // integer in the crate, but most calls operate on far narrower
+    // widths (`Int512` ≤ 4 limbs, `Int1024` ≤ 8 limbs, …). Skip the
+    // leading zeros — for them every iteration would yield `q=0, r=0`
+    // and waste a 256-bit / 128-bit MG divide.
+    let mut top = mag.len();
+    while top > 0 && mag[top - 1] == 0 {
+        top -= 1;
+    }
+
+    // Base-2^128 long divide of `mag[..top]` by `exp`, top-limb first.
+    // The post-step `rem < exp` invariant carries `n_high < exp` into
+    // the next call to `div_exp_fast_2word_with_rem`.
+    let mut rem: u128 = 0;
+    let mut i = top;
+    while i > 0 {
+        i -= 1;
+        let limb = mag[i];
+        let (q_limb, r_limb) = div_exp_fast_2word_with_rem(rem, limb, exp, scale_idx)
+            .expect("MG: rem < exp invariant violated");
+        mag[i] = q_limb;
+        rem = r_limb;
+    }
+
+    // Round the magnitude per `mode`. Result is positive when the
+    // input sign was non-negative.
+    if rem != 0 {
+        let q_is_odd = (mag[0] & 1) != 0;
+        let comp = exp - rem;
+        let cmp_r = rem.cmp(&comp);
+        if crate::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
+            // Magnitude +1 with carry propagation across the 64 limbs.
+            // Carry past the top limb means the result overflowed the
+            // magnitude buffer; callers narrow afterwards, so the
+            // overflow surfaces in the final narrowing cast.
+            let mut carry: u128 = 1;
+            for limb in mag.iter_mut() {
+                let (s, c) = limb.overflowing_add(carry);
+                *limb = s;
+                if !c {
+                    carry = 0;
+                    break;
+                }
+                carry = 1;
+            }
+            let _ = carry;
+        }
+    }
+
+    W::from_mag_sign(&mag, neg)
+}
+
 /// Mode-aware rounding for an *unsigned* magnitude `q` with remainder
 /// `r` against divisor `m`, given the result sign — returns the
 /// rounded magnitude. Caller applies the sign afterwards.
