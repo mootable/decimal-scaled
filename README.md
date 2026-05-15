@@ -161,19 +161,19 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 
 ## Numeric comparison table
 
-| Type                           | Storage | Base | `0.1` exact | `1.1` exact | Range | ULP at 1.0 | `no_std` |
+| Type                           | Storage | Base | `0.1` exact | `1.1` exact | Range | Accuracy (error bound) | `no_std` |
 |--------------------------------|---|---|---|---|---|---|---|
-| `f32`                          | 32-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±3.4 × 10³⁸ | 2⁻²³ ≈ 1.2 × 10⁻⁷ (relative) | Yes |
-| `f64`                          | 64-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.8 × 10³⁰⁸ | 2⁻⁵² ≈ 2.2 × 10⁻¹⁶ (relative) | Yes |
-| `f128`                         | 128-bit IEEE 754 (binary floating-point standard) | 2 | No | No | ~±1.2 × 10⁴⁹³² | 2⁻¹¹² ≈ 1.9 × 10⁻³⁴ (relative) | Partial |
-| `fixed::I64F64`                | 128-bit binary fixed | 2 | No | No | ~±9.2 × 10¹⁸ | 2⁻⁶⁴ ≈ 5.4 × 10⁻²⁰ | Yes |
-| `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | 2⁻³² ≈ 2.3 × 10⁻¹⁰ | Yes |
-| `rust_decimal`                 | 96-bit + scale byte | 10 | Yes | Yes | ±7.9 × 10²⁸ | 10⁻²⁸ (variable, per-value scale) | Yes |
-| `bigdecimal`                   | heap-allocated | 10 | Yes | Yes | Unbounded | 10⁻ˢ (arbitrary scale) | No |
-| `D128<12>` or `D128s12` (this) | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10²⁶ | 10⁻¹² (exact, constant) | Yes |
-| `D128<6>` or `D128s6` (this)   | 128-bit integer | 10 | Yes | Yes | ~±1.7 × 10³² | 10⁻⁶ (exact, constant) | Yes |
+| `f32`                          | 32-bit IEEE 754 | 2 | No | No | ~±3.4 × 10³⁸ | basic ops: ≤ 0.5 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (IEEE 754); transcendentals: libm-defined, not guaranteed | Yes |
+| `f64`                          | 64-bit IEEE 754 | 2 | No | No | ~±1.8 × 10³⁰⁸ | basic ops: ≤ 0.5 ULP (IEEE 754); transcendentals: libm-defined, not guaranteed | Yes |
+| `f128`                         | 128-bit IEEE 754 | 2 | No | No | ~±1.2 × 10⁴⁹³² | basic ops: ≤ 0.5 ULP (IEEE 754); transcendentals: libm-defined, not guaranteed | Partial |
+| `fixed::I64F64`                | 128-bit binary fixed | 2 | No | No | ~±9.2 × 10¹⁸ | add/sub: exact; mul/div: ≤ 1 ULP; no transcendentals | Yes |
+| `fixed::I32F32`                | 64-bit binary fixed | 2 | No | No | ~±2.1 × 10⁹ | add/sub: exact; mul/div: ≤ 1 ULP; no transcendentals | Yes |
+| `rust_decimal`                 | 96-bit + per-value scale (0..=28) | 10 | Yes | Yes | ±7.9 × 10²⁸ | add/sub: exact at common scale; mul/div: ≤ 1 ULP; transcendentals: software, **not** correctly rounded | Yes |
+| `bigdecimal`                   | heap-allocated arbitrary precision | 10 | Yes | Yes | Unbounded | exact at the configured precision; transcendentals: limited | No |
+| `D128<S>` (this)               | 128-bit integer, scale fixed at compile time, S ∈ 0..=38 | 10 | Yes | Yes | ±i128::MAX / 10ˢ | add/sub: **exact**; mul/div: ≤ 1 ULP; **strict transcendentals: ≤ 0.5 ULP (correctly rounded)** | Yes |
+| `D256<S>` / `D512<S>` / `D1024<S>` (this, `wide`) | 256 / 512 / 1024-bit integer, S up to 76 / 153 / 307 | 10 | Yes | Yes | wider, S-dependent | same accuracy as `D128<S>` | Yes |
 
-The ULP — [unit in the last place](https://en.wikipedia.org/wiki/Unit_in_the_last_place) — is the gap between two consecutive representable values. For the binary floats and `f128` it is *relative* (it scales with the value's magnitude, so the absolute precision degrades for large values); for the fixed-point and decimal types it is *absolute* (the same gap at any magnitude inside the range). The `D128<S>` ULP is `10⁻ˢ` exactly, fixed at compile time by the scale.
+The accuracy column gives the error bound on computed results, in [ULPs](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (units in the last place). A 0.5 ULP bound — "correctly rounded" — is the IEEE-754 round-to-nearest contract and the strongest accuracy guarantee a finite numeric type can give. The floats meet it for basic arithmetic but not for transcendentals; `decimal-scaled`'s strict transcendentals meet it for transcendentals as well, which is the capability the alternatives do not offer. The position of the ULP — the absolute size of `1 ULP` — is the type's *scale*: for `f64` it's a relative ~2⁻⁵² of the value's magnitude, for `D128<S>` it's exactly `10⁻ˢ` at every value, fixed at compile time.
 
 ### Hash and equality contracts
 
