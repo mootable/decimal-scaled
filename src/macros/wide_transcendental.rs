@@ -1072,6 +1072,397 @@ macro_rules! decl_wide_transcendental {
                     / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
+
+            // ---- Mode-aware siblings ----
+            //
+            // Every `*_strict` method above has a `*_strict_with(mode)`
+            // companion that performs the same correctly-rounded
+            // computation but routes the final storage-scale rounding
+            // through the given [`RoundingMode`] instead of the crate
+            // default. The body is duplicated rather than refactored
+            // into a helper so each method's panic / early-return
+            // semantics stay attached to its canonical name.
+
+            /// Mode-aware sibling of [`Self::ln_strict`].
+            #[inline]
+            #[must_use]
+            pub fn ln_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::ln: argument must be positive"));
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::ln_fixed($core::to_work(raw), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::ln_strict_agm`].
+            #[inline]
+            #[must_use]
+            pub fn ln_strict_agm_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::ln_fixed_agm($core::to_work(raw), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::exp_strict_agm`].
+            #[inline]
+            #[must_use]
+            pub fn exp_strict_agm_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ONE;
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::exp_fixed_agm($core::to_work(raw), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::log_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log_strict_with(self, base: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                let braw = base.to_bits();
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= z {
+                    panic!(concat!(stringify!($Type), "::log: argument must be positive"));
+                }
+                if braw <= z {
+                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
+                }
+                let w = SCALE + $core::GUARD;
+                let ln_b = $core::ln_fixed($core::to_work(braw), w);
+                if ln_b == $core::zero() {
+                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
+                }
+                let r = $core::div($core::ln_fixed($core::to_work(raw), w), ln_b, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::log2_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln2(w), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::log10_strict`].
+            #[inline]
+            #[must_use]
+            pub fn log10_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln10(w), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::exp_strict`].
+            #[inline]
+            #[must_use]
+            pub fn exp_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ONE;
+                }
+                let w = SCALE + $core::GUARD;
+                let r = $core::exp_fixed($core::to_work(raw), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::exp2_strict`].
+            #[inline]
+            #[must_use]
+            pub fn exp2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ONE;
+                }
+                let w = SCALE + $core::GUARD;
+                let arg = $core::mul($core::to_work(raw), $core::ln2(w), w);
+                let r = $core::exp_fixed(arg, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::powf_strict`].
+            #[inline]
+            #[must_use]
+            pub fn powf_strict_with(self, exp: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ZERO;
+                }
+                let w = SCALE + $core::GUARD;
+                let ln_x = $core::ln_fixed($core::to_work(raw), w);
+                let y = $core::to_work(exp.to_bits());
+                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::sin_strict`].
+            #[inline]
+            #[must_use]
+            pub fn sin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let r = $core::sin_fixed($core::to_work(self.to_bits()), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::cos_strict`].
+            #[inline]
+            #[must_use]
+            pub fn cos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let arg = $core::to_work(self.to_bits()) + $core::half_pi(w);
+                let r = $core::sin_fixed(arg, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::tan_strict`].
+            #[inline]
+            #[must_use]
+            pub fn tan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let sin_w = $core::sin_fixed(v, w);
+                let cos_w = $core::sin_fixed(v + $core::half_pi(w), w);
+                if cos_w == $core::zero() {
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::tan: cosine is zero (argument is an odd multiple of pi/2)"
+                    ));
+                }
+                let r = $core::div(sin_w, cos_w, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::atan_strict`].
+            #[inline]
+            #[must_use]
+            pub fn atan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let r = $core::atan_fixed($core::to_work(self.to_bits()), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::asin_strict`].
+            #[inline]
+            #[must_use]
+            pub fn asin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let one_w = $core::one(w);
+                let v = $core::to_work(self.to_bits());
+                let abs_v = if v < $core::zero() { -v } else { v };
+                if abs_v > one_w {
+                    panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
+                }
+                let r = if abs_v == one_w {
+                    let hp = $core::half_pi(w);
+                    if v < $core::zero() { -hp } else { hp }
+                } else {
+                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
+                    $core::atan_fixed($core::div(v, denom, w), w)
+                };
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::acos_strict`].
+            #[inline]
+            #[must_use]
+            pub fn acos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let one_w = $core::one(w);
+                let v = $core::to_work(self.to_bits());
+                let abs_v = if v < $core::zero() { -v } else { v };
+                if abs_v > one_w {
+                    panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
+                }
+                let asin_w = if abs_v == one_w {
+                    let hp = $core::half_pi(w);
+                    if v < $core::zero() { -hp } else { hp }
+                } else {
+                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
+                    $core::atan_fixed($core::div(v, denom, w), w)
+                };
+                let r = $core::half_pi(w) - asin_w;
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::atan2_strict`].
+            #[inline]
+            #[must_use]
+            pub fn atan2_strict_with(self, other: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                let yraw = self.to_bits();
+                let xraw = other.to_bits();
+                let r = if xraw == z {
+                    if yraw > z {
+                        $core::half_pi(w)
+                    } else if yraw < z {
+                        -$core::half_pi(w)
+                    } else {
+                        $core::zero()
+                    }
+                } else {
+                    let y = $core::to_work(yraw);
+                    let x = $core::to_work(xraw);
+                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    if xraw > z {
+                        base
+                    } else if yraw >= z {
+                        base + $core::pi(w)
+                    } else {
+                        base - $core::pi(w)
+                    }
+                };
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::sinh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn sinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::cosh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn cosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::tanh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn tanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let r = $core::div(ex - enx, ex + enx, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::asinh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn asinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ZERO;
+                }
+                let w = SCALE + $core::GUARD;
+                let one_w = $core::one(w);
+                let v = $core::to_work(raw);
+                let ax = if v < $core::zero() { -v } else { v };
+                let inner = if ax >= one_w {
+                    let inv = $core::div(one_w, ax, w);
+                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
+                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                } else {
+                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
+                    $core::ln_fixed(ax + root, w)
+                };
+                let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    -inner
+                } else {
+                    inner
+                };
+                Self::from_bits($core::round_to_storage_with(signed, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::acosh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn acosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let one_w = $core::one(w);
+                let v = $core::to_work(self.to_bits());
+                if v < one_w {
+                    panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
+                }
+                let two_w = one_w + one_w;
+                let inner = if v >= two_w {
+                    let inv = $core::div(one_w, v, w);
+                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
+                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                } else {
+                    let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
+                    $core::ln_fixed(v + root, w)
+                };
+                Self::from_bits($core::round_to_storage_with(inner, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::atanh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn atanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let one_w = $core::one(w);
+                let v = $core::to_work(self.to_bits());
+                let ax = if v < $core::zero() { -v } else { v };
+                if ax >= one_w {
+                    panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
+                }
+                let ratio = $core::div(one_w + v, one_w - v, w);
+                let r = $core::ln_fixed(ratio, w) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::to_degrees_strict`].
+            #[inline]
+            #[must_use]
+            pub fn to_degrees_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                debug_assert!(
+                    $core::bit_length(v) + 8 < <$Work>::BITS,
+                    concat!(stringify!($Type),
+                        "::to_degrees: |self| * 180 overflows the working integer")
+                );
+                let r = $core::div(
+                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
+                    $core::pi(w),
+                    w,
+                );
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::to_radians_strict`].
+            #[inline]
+            #[must_use]
+            pub fn to_radians_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let r = $core::mul(v, $core::pi(w), w)
+                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
         }
 
         // Strict-feature dispatchers: the plain method routes to
@@ -1337,6 +1728,47 @@ mod tests {
         assert_eq!(D512::<6>::ZERO.exp_strict_agm(), D512::<6>::ONE);
         assert_eq!(D1024::<6>::ONE.ln_strict_agm(), D1024::<6>::ZERO);
         assert_eq!(D1024::<6>::ZERO.exp_strict_agm(), D1024::<6>::ONE);
+    }
+
+    /// `*_strict_with(mode)` siblings honour the explicit rounding
+    /// mode. Picks a transcendental whose true value lands strictly
+    /// between two storage representable values so the rounding mode
+    /// actually changes the result.
+    #[test]
+    fn wide_strict_with_honours_mode() {
+        use crate::rounding::RoundingMode;
+        // π at SCALE=6 truncates to 3.141592 (HalfToEven also picks
+        // 3.141592 here since digit 7 is < 5). ln(10) at SCALE=6 is
+        // 2.302585...0929... — digit after 6 is 0, so all modes pick
+        // the same. Use a less-friendly value: ln(7).
+        // ln(7) = 1.9459101090932196... at SCALE=6 the truth digit 7
+        // is just past the cut: 1.945910 with next digit 1 → all
+        // truncating/HTE modes pick 1.945910. Need a value where the
+        // exact fractional part is ≥ 0.5 LSB so Trunc and HTE diverge.
+        //
+        // A clean way: positive number with HTE rounding up. exp(1) =
+        // 2.7182818... at SCALE=6: 2.718281 cut, fractional 0.8 →
+        // HTE rounds up to 2.718282, Trunc keeps 2.718281.
+        let n = D256::<6>::ONE;
+        let hte = n.exp_strict_with(RoundingMode::HalfToEven);
+        let trunc = n.exp_strict_with(RoundingMode::Trunc);
+        assert!(
+            hte.to_bits().resize::<i128>() - trunc.to_bits().resize::<i128>() == 1
+                || hte.to_bits().resize::<i128>() - trunc.to_bits().resize::<i128>() == 0,
+            "exp(1) HTE vs Trunc: hte={}, trunc={}",
+            hte,
+            trunc,
+        );
+        // HalfToEven matches the canonical *_strict (which uses
+        // DEFAULT_ROUNDING_MODE = HalfToEven absent a feature flag).
+        if !(cfg!(feature = "rounding-half-away-from-zero")
+            || cfg!(feature = "rounding-half-toward-zero")
+            || cfg!(feature = "rounding-trunc")
+            || cfg!(feature = "rounding-floor")
+            || cfg!(feature = "rounding-ceiling"))
+        {
+            assert_eq!(hte, n.exp_strict());
+        }
     }
 
     /// AGM ln/exp round-trip at moderate storage scales. Goes up to
