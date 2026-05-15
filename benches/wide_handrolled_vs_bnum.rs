@@ -81,5 +81,32 @@ fn bench_div(c: &mut Criterion) {
     group.finish();
 }
 
-criterion_group!(benches, bench_add, bench_sub, bench_mul, bench_div);
+/// Large-scale operands (`SCALE = 50`). The divisor `10^50` no longer
+/// fits a 64-bit word, so `div` falls through the hardware fast paths
+/// onto the bounded bit-loop — this group characterises that fallback
+/// against `bnum`.
+fn bench_large_scale(c: &mut Criterion) {
+    let mut group = c.benchmark_group("wide256/scale50");
+
+    let a = D256::<50>::from_int(A_INT);
+    let b = D256::<50>::from_int(B_INT);
+    group.bench_function("bnum/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+    group.bench_function("bnum/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+
+    let a = D256H::<50>::from_int(A_INT);
+    let b = D256H::<50>::from_int(B_INT);
+    group.bench_function("handrolled/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+    group.bench_function("handrolled/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+
+    group.finish();
+}
+
+criterion_group!(
+    benches,
+    bench_add,
+    bench_sub,
+    bench_mul,
+    bench_div,
+    bench_large_scale
+);
 criterion_main!(benches);
