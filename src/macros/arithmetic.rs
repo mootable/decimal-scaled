@@ -199,14 +199,15 @@ macro_rules! decl_decimal_arithmetic {
             /// `10^SCALE`, so the MG magic-divide doesn't apply; the
             /// final step uses the wide integer's schoolbook
             /// `limbs_divmod` (which has its own hardware fast paths
-            /// for sub-word divisors).
+            /// for sub-word divisors). Scaling the numerator uses the
+            /// type's `multiplier()` const (already evaluated at the
+            /// `$Storage` width) widened to `$Wider`, avoiding the
+            /// per-call `pow(SCALE)` on the wider type.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = <$Wider>::from_str_radix("10", 10)
-                    .expect("wide decimal: invalid base-10 literal")
-                    .pow(SCALE);
+                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let n = a * m;
                 let result =
                     $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
