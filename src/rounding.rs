@@ -128,7 +128,12 @@ pub const DEFAULT_ROUNDING_MODE: RoundingMode = RoundingMode::HalfToEven;
 ///   Drives `Floor` / `Ceiling`.
 ///
 /// Caller pre-handles the `r == 0` case (no rounding needed).
-#[inline]
+///
+/// `#[inline(always)]` because the entire body is one match on a
+/// 6-variant enum. The hot operator path instantiates this with a
+/// const `mode` (`DEFAULT_ROUNDING_MODE`), so const-propagation can
+/// collapse the match away once inlined.
+#[inline(always)]
 pub(crate) fn should_bump(
     mode: RoundingMode,
     cmp_r: ::core::cmp::Ordering,
@@ -157,7 +162,7 @@ pub(crate) fn should_bump(
 /// fast paths in `mg_divide`. The whole mode-specific logic is
 /// delegated to [`should_bump`]; this function is just the i128
 /// arithmetic wrapper that builds its inputs and applies the bump.
-#[inline]
+#[inline(always)]
 pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i128 {
     let quotient = raw / divisor;
     let remainder = raw % divisor;
