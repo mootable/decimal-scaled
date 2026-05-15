@@ -175,13 +175,11 @@ macro_rules! decl_decimal_arithmetic {
             /// `n / (10^SCALE)` path.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
-                let a: $Wider = self.0.resize::<$Wider>();
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                // `a` and `b` each carry at most `$Storage`'s bits in
-                // the lower half of `$Wider`, so the full product fits
-                // `$Wider` with no overflow — skip `checked_mul`'s
-                // overflow detection and use the wrapping multiply.
-                let n = a.wrapping_mul(b);
+                // `widen_mul` does the `$Storage × $Storage → $Wider`
+                // product in one step — no Int{2W} wrapping mul with
+                // half-empty operands, and no double trip through the
+                // 64-limb `WideInt::to_mag_sign` buffer.
+                let n: $Wider = self.0.widen_mul::<$Wider>(rhs.0);
                 let scaled = if SCALE == 0 {
                     n
                 } else if SCALE <= 38 {
@@ -207,14 +205,12 @@ macro_rules! decl_decimal_arithmetic {
             /// per-call `pow(SCALE)` on the wider type.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
-                let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                // `a` carries at most `$Storage` bits in the lower
-                // half of `$Wider`, and `m = 10^SCALE` fits the
-                // storage type, so `a * m` fits `$Wider`. Skip the
-                // overflow check.
-                let n = a.wrapping_mul(m);
+                // `self.0 * multiplier()` both fit `$Storage` for any
+                // representable `SCALE`, so the full product fits
+                // `$Wider` exactly; `widen_mul` avoids the
+                // resize-to-`$Wider` round trip on both operands.
+                let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
                 let result =
                     $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
                 Self(result.resize::<$Storage>())

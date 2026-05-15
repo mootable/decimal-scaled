@@ -188,6 +188,38 @@ pub(crate) const fn limbs_shr(a: &[u128], shift: u32, out: &mut [u128]) {
 /// `out = a · b` (schoolbook). `out.len() >= a.len() + b.len()` and
 /// `out` must be zeroed by the caller.
 pub(crate) const fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
+    // Fast path for the 2-limb × 2-limb → 4-limb shape used by
+    // `Int256::wrapping_mul` (the densest wide-int call site). Hand
+    // unrolled so the compiler sees four independent `mul_128`
+    // sub-products that can issue in parallel; the inner loop variant
+    // can't express that.
+    if a.len() == 2 && b.len() == 2 && out.len() >= 4 {
+        let (a0, a1) = (a[0], a[1]);
+        let (b0, b1) = (b[0], b[1]);
+        // (a1·2^128 + a0)·(b1·2^128 + b0) = h3·2^384 + (h1+h2+l3)·2^256
+        // + (h0+l1+l2)·2^128 + l0
+        let (h0, l0) = mul_128(a0, b0);
+        let (h1, l1) = mul_128(a0, b1);
+        let (h2, l2) = mul_128(a1, b0);
+        let (h3, l3) = mul_128(a1, b1);
+
+        out[0] = l0;
+
+        let (s1, c1a) = h0.overflowing_add(l1);
+        let (s1, c1b) = s1.overflowing_add(l2);
+        out[1] = s1;
+        let mid_carry = (c1a as u128) + (c1b as u128);
+
+        let (s2, c2a) = h1.overflowing_add(h2);
+        let (s2, c2b) = s2.overflowing_add(l3);
+        let (s2, c2c) = s2.overflowing_add(mid_carry);
+        out[2] = s2;
+        let top_carry = (c2a as u128) + (c2b as u128) + (c2c as u128);
+
+        out[3] = h3.wrapping_add(top_carry);
+        return;
+    }
+
     let mut i = 0;
     while i < a.len() {
         if a[i] != 0 {

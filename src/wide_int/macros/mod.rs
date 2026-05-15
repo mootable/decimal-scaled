@@ -433,6 +433,24 @@ macro_rules! decl_wide_int {
                 let prod = self.unsigned_abs().wrapping_mul(rhs.unsigned_abs());
                 $S::from_mag_limbs(&prod.0, negative)
             }
+            /// Full `self · rhs` product widened into a `W: WideInt`,
+            /// without going through the `WideInt::to_mag_sign` /
+            /// `from_mag_sign` 64-limb buffer twice (once for `self`,
+            /// once for `rhs`). Used by the wide-tier `Mul` operator
+            /// to compute a `$Storage * $Storage → $Wider` step using
+            /// the dedicated `$L × $L → 2$L` schoolbook in
+            /// [`crate::wide_int::limbs_mul`] (which has a 2×2 fast
+            /// path) instead of widening both operands then wrapping a
+            /// `2$L × 2$L` multiply.
+            #[inline]
+            pub(crate) fn widen_mul<W: $crate::wide_int::WideInt>(self, rhs: $S) -> W {
+                let negative = self.is_negative() ^ rhs.is_negative();
+                let a = self.unsigned_abs();
+                let b = rhs.unsigned_abs();
+                let mut prod = [0u128; $D];
+                $crate::wide_int::limbs_mul(&a.0, &b.0, &mut prod);
+                W::from_mag_sign(&prod, negative)
+            }
             /// `self / rhs` truncating toward zero. `rhs` must be nonzero.
             pub(crate) const fn wrapping_div(self, rhs: $S) -> $S {
                 if rhs.is_zero() {
