@@ -8,16 +8,16 @@
 //! Two arms exist:
 //!
 //! - `decl_decimal_display!(D32)` — *native* storage. The magnitude
-//!   fits in `u128`, so the split arithmetic is done there.
+//! fits in `u128`, so the split arithmetic is done there.
 //! - `decl_decimal_display!(wide D256, U256)` — *wide* storage. The
-//!   magnitude is a `bnum` unsigned integer (`unsigned_abs()` handles
-//!   the `MIN` corner case without overflow); the split arithmetic is
-//!   done at that width and the `10^SCALE` factor is built via
-//!   `from_str_radix`.
+//! magnitude is an unsigned wide integer (`unsigned_abs()` handles
+//! the `MIN` corner case without overflow); the split arithmetic is
+//! done at that width and the `10^SCALE` factor is built via
+//! `from_str_radix`.
 
 /// Emits `Display` and `Debug` impls for a decimal type.
 macro_rules! decl_decimal_display {
-    // Wide (bnum-backed) storage. `$Unsigned` is the storage type's
+    // Wide storage. `$Unsigned` is the storage type's
     // unsigned counterpart (e.g. `U256` for `I256`).
     (wide $Type:ident, $Unsigned:ty) => {
         impl<const SCALE: u32> ::core::fmt::Display for $Type<SCALE> {

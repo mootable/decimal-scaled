@@ -164,7 +164,7 @@ pub type D128s11 = D128<11>;
 /// - 1 LSB is `10^-12` model units.
 /// - The representable integer range is approximately +/-1.7e14 model units.
 /// - Squared-component operations (e.g. dot products) overflow beyond
-///   roughly 13,000 km at mm units.
+/// roughly 13,000 km at mm units.
 ///
 /// # Precision
 ///
@@ -596,7 +596,7 @@ pub type D64s17 = D64<17>;
 pub type D64s18 = D64<18>;
 
 // ---------------------------------------------------------------------
-// D256 — 256-bit storage (bnum `I256`), scale 0..=76. First of the
+// D256 — 256-bit storage (`Int256`), scale 0..=76. First of the
 // wide tier; gated behind the `d256` / `wide` Cargo features. Covers
 // the full IEEE-754 decimal128 range and gives 35-digit fractional
 // precision with integer-part headroom (see research doc §1).
@@ -607,7 +607,7 @@ pub type D64s18 = D64<18>;
 /// signed integer and `MAX_SCALE = 76`.
 ///
 /// Gated behind the `d256` (or umbrella `wide`) Cargo feature. The
-/// storage backend is `bnum`'s `I256`; this is the interim backend per
+/// storage backend is `Int256`; this is the interim backend per
 /// `research/multi_width_decimals.md` §3.
 #[cfg(any(feature = "d256", feature = "wide"))]
 #[repr(transparent)]
@@ -650,14 +650,14 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D256, crate::wide::I2
 crate::wide_roots::decl_wide_roots!(
     D256,
     crate::wide::I256,
-    crate::hint::SInt512,
-    crate::hint::SInt1024
+    crate::wide_int::Int512,
+    crate::wide_int::Int1024
 );
 #[cfg(any(feature = "d256", feature = "wide"))]
 crate::wide_transcendental::decl_wide_transcendental!(
     D256,
     crate::wide::I256,
-    crate::hint::SInt1024,
+    crate::wide_int::Int1024,
     wide_trig_d256
 );
 #[cfg(any(feature = "d256", feature = "wide"))]
@@ -735,7 +735,7 @@ pub type D256s50 = D256<50>;
 pub type D256s76 = D256<76>;
 
 // ---------------------------------------------------------------------
-// D512 — 512-bit storage (bnum `I512`), scale 0..=153. Wide-scientific
+// D512 — 512-bit storage (`Int512`), scale 0..=153. Wide-scientific
 // tier; gated behind the `d512` / `wide` Cargo features.
 // ---------------------------------------------------------------------
 
@@ -744,7 +744,7 @@ pub type D256s76 = D256<76>;
 /// signed integer and `MAX_SCALE = 153`.
 ///
 /// Gated behind the `d512` (or umbrella `wide`) Cargo feature. The
-/// storage backend is `bnum`'s `I512`.
+/// storage backend is `Int512`.
 #[cfg(any(feature = "d512", feature = "wide"))]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -786,14 +786,14 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D512, crate::wide::I5
 crate::wide_roots::decl_wide_roots!(
     D512,
     crate::wide::I512,
-    crate::hint::SInt1024,
-    crate::hint::SInt2048
+    crate::wide_int::Int1024,
+    crate::wide_int::Int2048
 );
 #[cfg(any(feature = "d512", feature = "wide"))]
 crate::wide_transcendental::decl_wide_transcendental!(
     D512,
     crate::wide::I512,
-    crate::hint::SInt2048,
+    crate::wide_int::Int2048,
     wide_trig_d512
 );
 #[cfg(any(feature = "d512", feature = "wide"))]
@@ -858,7 +858,7 @@ pub type D512s150 = D512<150>;
 pub type D512s153 = D512<153>;
 
 // ---------------------------------------------------------------------
-// D1024 — 1024-bit storage (bnum `I1024`), scale 0..=307. Deep
+// D1024 — 1024-bit storage (`Int1024`), scale 0..=307. Deep
 // arbitrary-precision tier; gated behind the `d1024` / `wide` features.
 // ---------------------------------------------------------------------
 
@@ -867,7 +867,7 @@ pub type D512s153 = D512<153>;
 /// 1024-bit signed integer and `MAX_SCALE = 307`.
 ///
 /// Gated behind the `d1024` (or umbrella `wide`) Cargo feature. The
-/// storage backend is `bnum`'s `I1024`.
+/// storage backend is `Int1024`.
 #[cfg(any(feature = "d1024", feature = "wide"))]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -909,14 +909,14 @@ crate::macros::int_methods::decl_decimal_int_methods!(wide D1024, crate::wide::I
 crate::wide_roots::decl_wide_roots!(
     D1024,
     crate::wide::I1024,
-    crate::hint::SInt2048,
-    crate::hint::SInt4096
+    crate::wide_int::Int2048,
+    crate::wide_int::Int4096
 );
 #[cfg(any(feature = "d1024", feature = "wide"))]
 crate::wide_transcendental::decl_wide_transcendental!(
     D1024,
     crate::wide::I1024,
-    crate::hint::SInt4096,
+    crate::wide_int::Int4096,
     wide_trig_d1024
 );
 #[cfg(any(feature = "d1024", feature = "wide"))]
@@ -1297,7 +1297,7 @@ mod tests {
         assert_eq!((two * three), six);
         // div: 6 / 2 == 3
         assert_eq!((six / two), three);
-        // rem: 6 % 2 == 0  (storage-level remainder)
+        // rem: 6 % 2 == 0 (storage-level remainder)
         assert_eq!((six % two), D::ZERO);
         // assign forms
         let mut v = one;

@@ -2,15 +2,15 @@
 //! `is_positive`, `is_negative`) for the decimal widths.
 //!
 //! The native arm delegates to the primitive integer intrinsics. The
-//! `wide` arm delegates to `bnum`'s equivalents: `signum` on a `bnum`
+//! `wide` arm delegates to the wide integer's equivalents: `signum` on a wide
 //! integer returns the storage type (not a primitive `i32`), and
-//! integer literals cannot be compared against `bnum` values, so the
+//! integer literals cannot be compared against wide-integer values, so the
 //! bodies are spelled with `is_positive()` / `is_negative()` instead.
 
 /// Emits `abs`, `signum`, `is_positive`, `is_negative` for a decimal
 /// type with the given storage.
 macro_rules! decl_decimal_sign_methods {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Returns the absolute value of `self`.

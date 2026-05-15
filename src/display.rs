@@ -41,7 +41,7 @@
 //! - More than `SCALE` fractional digits: [`ParseError::OverlongFractional`].
 //! - Scientific notation (`1e3`): [`ParseError::ScientificNotation`].
 //! - Missing digits on either side of the point (`.5`, `5.`):
-//!   [`ParseError::MissingDigits`].
+//! [`ParseError::MissingDigits`].
 //! - Non-digit, non-sign, non-dot characters: [`ParseError::InvalidChar`].
 //! - Magnitudes outside `[D128::MIN, D128::MAX]`: [`ParseError::OutOfRange`].
 

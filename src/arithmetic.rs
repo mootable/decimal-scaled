@@ -742,10 +742,10 @@ mod tests {
     // ── round ──
 
     /// Half-away-from-zero locked policy. Property test asserting:
-    /// - 2.5 -> 3.0  (positive half rounds up)
+    /// - 2.5 -> 3.0 (positive half rounds up)
     /// - 2.4 -> 2.0
     /// - 2.6 -> 3.0
-    /// - -2.5 -> -3.0  (negative half rounds away from zero, i.e. down)
+    /// - -2.5 -> -3.0 (negative half rounds away from zero, i.e. down)
     /// - -2.4 -> -2.0
     /// - -2.6 -> -3.0
     #[test]

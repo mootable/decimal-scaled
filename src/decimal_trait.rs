@@ -8,9 +8,9 @@
 //!
 //! ```ignore
 //! fn average<D: Decimal>(values: &[D]) -> D {
-//!     let mut sum = D::ZERO;
-//!     for v in values { sum = /* width-generic add */; }
-//!     sum
+//! let mut sum = D::ZERO;
+//! for v in values { sum = /* width-generic add */; }
+//! sum
 //! }
 //! ```
 //!
@@ -28,14 +28,14 @@
 /// Every implementor exposes:
 ///
 /// - An associated [`Self::Storage`] type — the underlying integer
-///   representation. For `D128<SCALE>` this is `i128`.
+/// representation. For `D128<SCALE>` this is `i128`.
 /// - The compile-time [`Self::SCALE`] of the value, equal to the
-///   const-generic parameter.
+/// const-generic parameter.
 /// - The width-specific [`Self::MAX_SCALE`] cap, equal to the largest
-///   `SCALE` such that `10^SCALE` fits in `Self::Storage`.
+/// `SCALE` such that `10^SCALE` fits in `Self::Storage`.
 /// - `ZERO`, `ONE`, `MAX`, `MIN` constants typed as `Self`.
 /// - Round-trip constructors / accessors `from_bits` and `to_bits`,
-///   plus `multiplier()` returning `10^SCALE`.
+/// plus `multiplier()` returning `10^SCALE`.
 ///
 /// # Precision
 ///

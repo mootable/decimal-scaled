@@ -9,30 +9,30 @@
 //! Each operation is available in four forms:
 //!
 //! - **`checked_*`** — returns `Option<Self>`; `None` on overflow or
-//!   div-by-zero; never panics.
+//! div-by-zero; never panics.
 //! - **`wrapping_*`** — returns `Self` with two's-complement wrap on
-//!   overflow; never panics. `div` and `rem` variants still panic on
-//!   `rhs == ZERO` to match `i128::wrapping_div` / `i128::wrapping_rem`
-//!   semantics.
+//! overflow; never panics. `div` and `rem` variants still panic on
+//! `rhs == ZERO` to match `i128::wrapping_div` / `i128::wrapping_rem`
+//! semantics.
 //! - **`saturating_*`** — clamps to `MAX` / `MIN` on overflow; never
-//!   panics. No `saturating_rem` is provided because remainder is always
-//!   bounded by `|rhs|` and the standard library does not define one for
-//!   primitive integers. `div` variants still panic on `rhs == ZERO`.
+//! panics. No `saturating_rem` is provided because remainder is always
+//! bounded by `|rhs|` and the standard library does not define one for
+//! primitive integers. `div` variants still panic on `rhs == ZERO`.
 //! - **`overflowing_*`** — returns `(Self, bool)` where the `bool`
-//!   indicates overflow and `Self` is the wrapping result. `div` and
-//!   `rem` variants panic on `rhs == ZERO`.
+//! indicates overflow and `Self` is the wrapping result. `div` and
+//! `rem` variants panic on `rhs == ZERO`.
 //!
 //! # Algorithm notes
 //!
 //! - `add`, `sub`, `neg`, `rem` variants delegate directly to the
-//!   corresponding `i128` intrinsics on the raw storage field.
+//! corresponding `i128` intrinsics on the raw storage field.
 //! - `mul` variants route through the same widening multiply-then-divide
-//!   helper (`crate::mg_divide::mul_div_pow10`) as the default `Mul`
-//!   operator. The intermediate product uses 256-bit arithmetic and
-//!   cannot observably overflow; the only failure mode is a final `i128`
-//!   quotient that does not fit.
+//! helper (`crate::mg_divide::mul_div_pow10`) as the default `Mul`
+//! operator. The intermediate product uses 256-bit arithmetic and
+//! cannot observably overflow; the only failure mode is a final `i128`
+//! quotient that does not fit.
 //! - `div` variants route through the same widening long-divide helper
-//!   (`crate::mg_divide::div_pow10_div`) as the default `Div` operator.
+//! (`crate::mg_divide::div_pow10_div`) as the default `Div` operator.
 
 use crate::core_type::D128;
 
@@ -168,9 +168,9 @@ impl<const SCALE: u32> D128<SCALE> {
     //
     // All div variants use `div_pow10_div` as the default `Div` operator.
     // Div-by-zero policy:
-    //   - `checked_div(_, ZERO)` returns `None`.
-    //   - `wrapping_div`, `saturating_div`, `overflowing_div` panic on
-    //     `rhs == ZERO`, matching their `i128` counterparts.
+    // - `checked_div(_, ZERO)` returns `None`.
+    // - `wrapping_div`, `saturating_div`, `overflowing_div` panic on
+    // `rhs == ZERO`, matching their `i128` counterparts.
 
     /// Returns `self / rhs`, or `None` on division by zero or if the
     /// rescaled quotient does not fit in `i128`.

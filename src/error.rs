@@ -3,11 +3,11 @@
 //! Two enums live here:
 //!
 //! - [`ConvertError`] — returned by fallible `TryFrom` impls between
-//!   primitive types (`i128`, `u128`, `f32`, `f64`) and any decimal
-//!   width. Distinguishes overflow from non-finite float input.
+//! primitive types (`i128`, `u128`, `f32`, `f64`) and any decimal
+//! width. Distinguishes overflow from non-finite float input.
 //! - [`ParseError`] — returned by `FromStr` when the input is not a
-//!   valid canonical decimal literal. One variant per failure mode so
-//!   callers can surface a precise diagnostic.
+//! valid canonical decimal literal. One variant per failure mode so
+//! callers can surface a precise diagnostic.
 //!
 //! Both types are width-neutral — the same enum is returned by D32,
 //! D64, D128, and the future wider widths.
@@ -16,9 +16,9 @@
 ///
 /// Covers the two distinct failure modes:
 /// - [`ConvertError::Overflow`] — the input, after scaling by
-///   `10^SCALE`, exceeds the destination's representable range.
+/// `10^SCALE`, exceeds the destination's representable range.
 /// - [`ConvertError::NotFinite`] — the float input is `NaN`,
-///   `+inf`, or `-inf`.
+/// `+inf`, or `-inf`.
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum ConvertError {
     /// Input magnitude is outside the destination type's range after scaling.

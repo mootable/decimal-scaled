@@ -2,20 +2,20 @@
 //! (D256 / D512 / D1024).
 //!
 //! D128 and the narrow tiers run their strict transcendentals on the
-//! 256-bit `wide_int::Fixed` guard-digit intermediate; D32 / D64
+//! 256-bit `d128_kernels::Fixed` guard-digit intermediate; D32 / D64
 //! delegate into D128. The wide tiers cannot widen into D128 — their
 //! scale range exceeds it — so they need their own guard-digit core.
 //!
-//! This module provides one, generic over a `bnum` signed integer
+//! This module provides one, generic over a hand-rolled signed wide integer
 //! `$Work` chosen per tier to be wide enough to hold the working-scale
 //! products without overflow:
 //!
-//! - D256  → `I1024` (working scale ≤ 106 digits);
-//! - D512  → `I2048` (working scale ≤ 183 digits);
+//! - D256 → `I1024` (working scale ≤ 106 digits);
+//! - D512 → `I2048` (working scale ≤ 183 digits);
 //! - D1024 → `I4096` (working scale ≤ 337 digits).
 //!
 //! A working value `x` is held as the `$Work` integer `x · 10^w`, where
-//! `w = SCALE + GUARD` and `GUARD = 30` guard digits. `bnum` integers
+//! `w = SCALE + GUARD` and `GUARD = 30` guard digits. the wide integers
 //! are signed, so sign handling is native — no sign-magnitude struct is
 //! needed. Every reduction and series step runs at scale `w`; the value
 //! is rounded once, half-to-even, back to `SCALE` at the end.
@@ -27,11 +27,11 @@
 //! # The `*_strict` dual API
 //!
 //! - `<method>_strict` — always present unless the `no_strict` feature
-//!   is set; integer-only and `no_std`-compatible.
+//! is set; integer-only and `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//!   `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
-//!   forwarding to `<method>_strict`. The wide tiers have no f64-bridge
-//!   transcendentals of their own.
+//! `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
+//! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
+//! transcendentals of their own.
 //!
 //! # Precision
 //!
@@ -41,11 +41,11 @@
 
 /// Emits the strict transcendental surface for a wide decimal tier.
 ///
-/// - `$Type` / `$Storage` — the decimal type and its `bnum` storage.
-/// - `$Work` — a `bnum` signed integer wide enough for working-scale
-///   products: at least `2·(SCALE_max + 30)` decimal digits.
+/// - `$Type` / `$Storage` — the decimal type and its wide storage.
+/// - `$Work` — a hand-rolled signed wide integer wide enough for working-scale
+/// products: at least `2·(SCALE_max + 30)` decimal digits.
 /// - `$core` — the name of the private module the per-tier guard-digit
-///   core is emitted into.
+/// core is emitted into.
 macro_rules! decl_wide_transcendental {
     ($Type:ident, $Storage:ty, $Work:ty, $core:ident) => {
         /// Per-tier guard-digit transcendental core. Every function
@@ -66,7 +66,7 @@ macro_rules! decl_wide_transcendental {
 
             #[inline]
             fn lit(n: u128) -> W {
-                $crate::hint::wide_cast(n)
+                $crate::wide_int::wide_cast(n)
             }
             #[inline]
             pub(super) fn zero() -> W {
@@ -934,14 +934,14 @@ mod tests {
 
         for raw in positives {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::hint::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide::I256>(raw as i128));
             agree("ln", raw, w.ln_strict().to_bits().resize::<i128>(), n.ln_strict().to_bits());
             agree("log2", raw, w.log2_strict().to_bits().resize::<i128>(), n.log2_strict().to_bits());
             agree("log10", raw, w.log10_strict().to_bits().resize::<i128>(), n.log10_strict().to_bits());
         }
         for raw in all {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::hint::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide::I256>(raw as i128));
             agree("exp", raw, w.exp_strict().to_bits().resize::<i128>(), n.exp_strict().to_bits());
             agree("sin", raw, w.sin_strict().to_bits().resize::<i128>(), n.sin_strict().to_bits());
             agree("cos", raw, w.cos_strict().to_bits().resize::<i128>(), n.cos_strict().to_bits());
@@ -952,7 +952,7 @@ mod tests {
         }
         for raw in unit_range {
             let n = D128::<6>::from_bits(raw as i128);
-            let w = D256::<6>::from_bits(crate::hint::wide_cast::<i128, crate::wide::I256>(raw as i128));
+            let w = D256::<6>::from_bits(crate::wide_int::wide_cast::<i128, crate::wide::I256>(raw as i128));
             agree("asin", raw, w.asin_strict().to_bits().resize::<i128>(), n.asin_strict().to_bits());
             agree("acos", raw, w.acos_strict().to_bits().resize::<i128>(), n.acos_strict().to_bits());
             agree("atanh", raw, w.atanh_strict().to_bits().resize::<i128>(), n.atanh_strict().to_bits());

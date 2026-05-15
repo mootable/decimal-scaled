@@ -6,7 +6,7 @@
 //! - The `SCALE` associated const + `scale()` method.
 //! - The `ZERO`, `ONE`, `MAX`, `MIN` constants.
 //! - The [`crate::decimal_trait::Decimal`] trait impl, delegating to
-//!   the inherent surface.
+//! the inherent surface.
 //!
 //! Invoke once per width (see `core_type.rs` for the per-width
 //! invocations).
@@ -14,19 +14,19 @@
 //! Two front-end arms exist:
 //!
 //! - `decl_decimal_basics!(D128, i128, 38)` — *native* storage. The
-//!   storage type is a primitive signed integer that supports the
-//!   `(10 as $Storage)` literal cast and a const-fn `pow`.
+//! storage type is a primitive signed integer that supports the
+//! `(10 as $Storage)` literal cast and a const-fn `pow`.
 //! - `decl_decimal_basics!(wide D256, I256, 76)` — *wide* storage. The
-//!   storage type is a `bnum` fixed-width integer, which has no `as`
-//!   cast from integer literals; the `10` and `0` constants are built
-//!   via the const-fn `from_str_radix` instead.
+//! storage type is a hand-rolled wide integer fixed-width integer, which has no `as`
+//! cast from integer literals; the `10` and `0` constants are built
+//! via the const-fn `from_str_radix` instead.
 //!
 //! Both arms forward to a shared `@impl` arm so the bulk of the surface
 //! is defined exactly once.
 
 macro_rules! decl_decimal_basics {
-    // Wide (bnum-backed) storage: literal `10` / `0` are constructed via
-    // the const-fn `from_str_radix` because `bnum` integers have no
+    // Wide storage: literal `10` / `0` are constructed via
+    // the const-fn `from_str_radix` because the wide integers have no
     // `as`-cast from a primitive literal.
     (wide $Type:ident, $Storage:ty, $max_scale:literal) => {
         $crate::macros::basics::decl_decimal_basics! {

@@ -11,12 +11,12 @@
 //! f64-bridge form:
 //!
 //! - `<method>_strict` — always compiled (unless the `no_strict`
-//!   feature is set), `no_std`-compatible, platform-deterministic.
-//!   `ln_strict` uses range reduction plus a Mercator series;
-//!   `exp_strict` uses range reduction plus a Taylor series; the
-//!   remaining methods compose those two.
+//! feature is set), `no_std`-compatible, platform-deterministic.
+//! `ln_strict` uses range reduction plus a Mercator series;
+//! `exp_strict` uses range reduction plus a Taylor series; the
+//! remaining methods compose those two.
 //! - The f64-bridge form is gated on `std` and calls the inherent
-//!   `f64` intrinsic.
+//! `f64` intrinsic.
 //!
 //! The plain `<method>` is a dispatcher: with the `strict` feature it
 //! calls `<method>_strict`, otherwise the f64 bridge. See
@@ -27,7 +27,7 @@
 //! The f64-bridge forms are **Lossy** — `self` round-trips through
 //! `f64`. The `*_strict` forms are **correctly rounded**: the result
 //! is within 0.5 ULP of the exact value (IEEE-754 round-to-nearest).
-//! They evaluate the series in the `wide_int::Fixed` guard-digit
+//! They evaluate the series in the `d128_kernels::Fixed` guard-digit
 //! intermediate and round once at the end.
 //!
 //! # Domain handling
@@ -60,9 +60,9 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 /// `ln(2)` as a `Fixed` at working scale `w` (`w <= 64`). The constant
 /// is embedded to 64 fractional digits and narrowed to `w`.
 #[cfg(not(feature = "no_strict"))]
-pub(crate) fn wide_ln2(w: u32) -> crate::wide_int::Fixed {
+pub(crate) fn wide_ln2(w: u32) -> crate::d128_kernels::Fixed {
     // ln 2 = 0.693147180559945309417232121458176568075500134360255254120680 0094
-    crate::wide_int::Fixed::from_decimal_split(
+    crate::d128_kernels::Fixed::from_decimal_split(
         69_314_718_055_994_530_941_723_212_145_817_u128,
         65_680_755_001_343_602_552_541_206_800_094_u128,
     )
@@ -73,9 +73,9 @@ pub(crate) fn wide_ln2(w: u32) -> crate::wide_int::Fixed {
 /// 63 fractional digits (`ln 10 ≈ 2.30…` has an integer digit) and
 /// narrowed to `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_ln10(w: u32) -> crate::wide_int::Fixed {
+fn wide_ln10(w: u32) -> crate::d128_kernels::Fixed {
     // ln 10 = 2.302585092994045684017991454684364207601101488628772976033327 901
-    crate::wide_int::Fixed::from_decimal_split(
+    crate::d128_kernels::Fixed::from_decimal_split(
         23_025_850_929_940_456_840_179_914_546_843_u128,
         64_207_601_101_488_628_772_976_033_327_901_u128,
     )
@@ -90,8 +90,8 @@ fn wide_ln10(w: u32) -> crate::wide_int::Fixed {
 /// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
 /// and returns `k·ln(2) + ln(m)`.
 #[cfg(not(feature = "no_strict"))]
-pub(crate) fn ln_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
-    use crate::wide_int::Fixed;
+pub(crate) fn ln_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
+    use crate::d128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let two_w = one_w.double();
 
@@ -154,8 +154,8 @@ pub(crate) fn ln_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::
 /// Panics if `2^k · exp(s)` cannot fit a 256-bit working value — i.e.
 /// the caller's result would overflow its representable range.
 #[cfg(not(feature = "no_strict"))]
-pub(crate) fn exp_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
-    use crate::wide_int::Fixed;
+pub(crate) fn exp_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
+    use crate::d128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let ln2 = wide_ln2(w);
 
@@ -231,7 +231,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn ln_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 <= 0 {
             panic!("D128::ln: argument must be positive");
         }
@@ -292,7 +292,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log_strict(self, base: Self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 <= 0 {
             panic!("D128::log: argument must be positive");
         }
@@ -330,7 +330,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// use decimal_scaled::D128s12;
     /// // log_2(8) is approximately 3 within f64 precision.
     /// let eight = D128s12::from_int(8);
-    /// let two   = D128s12::from_int(2);
+    /// let two = D128s12::from_int(2);
     /// let result = eight.log(two);
     /// ```
     #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "no_strict")))]
@@ -364,7 +364,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log2_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 <= 0 {
             panic!("D128::log2: argument must be positive");
         }
@@ -425,7 +425,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn log10_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 <= 0 {
             panic!("D128::log10: argument must be positive");
         }
@@ -499,7 +499,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn exp_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
         }
@@ -562,7 +562,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[must_use]
     #[cfg(not(feature = "no_strict"))]
     pub fn exp2_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
         }

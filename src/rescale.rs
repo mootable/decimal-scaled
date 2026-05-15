@@ -7,10 +7,10 @@
 //! Two surfaces:
 //!
 //! - [`D128::rescale`] is a `const fn` shorthand that uses
-//!   round-half-to-even (IEEE-754 default; banker's rounding). Suitable
-//!   for the overwhelming majority of cases.
+//! round-half-to-even (IEEE-754 default; banker's rounding). Suitable
+//! for the overwhelming majority of cases.
 //! - [`D128::rescale_with`] takes an explicit [`RoundingMode`] for users
-//!   whose accounting rules mandate a non-default rule.
+//! whose accounting rules mandate a non-default rule.
 //!
 //! Scale-up direction (target > source) is always exact: the stored
 //! integer is multiplied by `10^diff`. Scale-down direction (target <

@@ -135,19 +135,19 @@ pub(crate) use decl_decimal_num_traits_basics;
 /// a decimal type.
 ///
 /// - `decl_decimal_num_traits_conversions!(D128, i128)` — native
-///   storage. `from_i64` / `from_u64` scale via an `as`-cast and
-///   `checked_mul`; the `to_*` integer methods divide the raw storage
-///   by `10^SCALE` and narrow with `TryFrom`.
+/// storage. `from_i64` / `from_u64` scale via an `as`-cast and
+/// `checked_mul`; the `to_*` integer methods divide the raw storage
+/// by `10^SCALE` and narrow with `TryFrom`.
 /// - `decl_decimal_num_traits_conversions!(wide D256, I256)` — wide
-///   storage. `from_i64` / `from_u64` widen via `bnum::cast::As`; the
-///   `to_*` methods divide the bnum storage and narrow with the
-///   bnum-to-primitive `TryFrom` impls.
+/// storage. `from_i64` / `from_u64` widen via the `WideInt` cast; the
+/// `to_*` methods divide the wide storage and narrow with the
+/// wide-to-primitive `TryFrom` impls.
 ///
 /// `from_i128` / `from_u128` / `from_f32` / `from_f64` delegate to the
 /// width's `TryFrom` impls in both arms, and `NumCast` is fully
 /// storage-agnostic, so those parts are shared via the `@numcast` arm.
 macro_rules! decl_decimal_num_traits_conversions {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::num_traits::FromPrimitive for $Type<SCALE> {
             #[inline]

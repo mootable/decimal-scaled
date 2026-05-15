@@ -23,12 +23,12 @@
 //! # Operator semantics
 //!
 //! - `Shr` is **arithmetic** (sign-extending), matching `i128`'s default.
-//!   Negative values remain negative after a right shift.
+//! Negative values remain negative after a right shift.
 //! - [`D128::unsigned_shr`] is the **logical** (zero-fill) right shift:
-//!   the storage is reinterpreted as `u128`, shifted, then cast back.
+//! the storage is reinterpreted as `u128`, shifted, then cast back.
 //! - `Not` (`!self`) flips every bit of the underlying `i128`.
 //! - `Shl` and `Shr` panic in debug builds when the shift amount is >= 128
-//!   (standard Rust integer-shift overflow contract).
+//! (standard Rust integer-shift overflow contract).
 //!
 //! # `no_std` compatibility
 //!

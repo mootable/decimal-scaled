@@ -26,7 +26,7 @@
 //! - `+Infinity` maps to [`D128::MAX`].
 //! - `-Infinity` maps to [`D128::MIN`].
 //! - Finite values outside the representable range saturate to `MAX` or `MIN`
-//!   by sign.
+//! by sign.
 //!
 //! `D128`'s storage range (~+/-1.7e26 model units at `SCALE = 12`) is wider
 //! than `I64F64`'s (~+/-9.2e18), so values that would have panicked in
@@ -94,11 +94,11 @@ impl<const SCALE: u32> D128<SCALE> {
         //
         // Three cases cover all ToPrimitive implementors:
         // - to_i128 returns Some(i): all signed primitives and unsigned
-        //   primitives that fit in i128 (u8 through u64).
+        // primitives that fit in i128 (u8 through u64).
         // - to_i128 returns None but to_u128 returns Some: unsigned values
-        //   exceeding i128::MAX; sign is non-negative.
+        // exceeding i128::MAX; sign is non-negative.
         // - Both return None: input is f32 or f64; inspect to_f64 for NaN
-        //   and sign classification.
+        // and sign classification.
         let int_signal = value.to_i128();
         let uint_signal = value.to_u128();
         let float_signal = if int_signal.is_none() && uint_signal.is_none() {

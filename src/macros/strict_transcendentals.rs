@@ -12,12 +12,12 @@
 //! Two surfaces are emitted per method, mirroring the D128 layout:
 //!
 //! - `<method>_strict` — always present unless the `no_strict` feature
-//!   is set. Integer-only; `no_std`-compatible.
+//! is set. Integer-only; `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//!   `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
-//!   forwarding to `<method>_strict`. (D32 / D64 have no f64-bridge
-//!   transcendentals of their own, so there is no non-strict `<method>`
-//!   for these widths.)
+//! `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
+//! forwarding to `<method>_strict`. (D32 / D64 have no f64-bridge
+//! transcendentals of their own, so there is no non-strict `<method>`
+//! for these widths.)
 
 /// Emits the strict-mode transcendental surface for `$Type<SCALE>` by
 /// delegating to the D128 `*_strict` implementations.

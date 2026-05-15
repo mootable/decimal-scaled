@@ -9,20 +9,20 @@
 //! # Trait coverage
 //!
 //! - [`num_traits::Zero`] / [`num_traits::One`] — additive and
-//!   multiplicative identities.
+//! multiplicative identities.
 //! - [`num_traits::Num`] — umbrella numeric trait combining
-//!   `Zero + One + PartialEq + Add + Sub + Mul + Div + Rem` with a
-//!   `from_str_radix` constructor.
+//! `Zero + One + PartialEq + Add + Sub + Mul + Div + Rem` with a
+//! `from_str_radix` constructor.
 //! - [`num_traits::Bounded`] — `min_value()` / `max_value()` for
-//!   generic clamping code.
+//! generic clamping code.
 //! - [`num_traits::Signed`] — `abs`, `signum`, `is_positive`,
-//!   `is_negative`, `abs_sub`.
+//! `is_negative`, `abs_sub`.
 //! - [`num_traits::FromPrimitive`] / [`num_traits::ToPrimitive`] —
-//!   fallible conversions to and from the primitive numeric types.
+//! fallible conversions to and from the primitive numeric types.
 //! - [`num_traits::CheckedAdd`] / [`num_traits::CheckedSub`] /
-//!   [`num_traits::CheckedMul`] / [`num_traits::CheckedDiv`] /
-//!   [`num_traits::CheckedRem`] / [`num_traits::CheckedNeg`] —
-//!   overflow-safe variants returning `Option<Self>`.
+//! [`num_traits::CheckedMul`] / [`num_traits::CheckedDiv`] /
+//! [`num_traits::CheckedRem`] / [`num_traits::CheckedNeg`] —
+//! overflow-safe variants returning `Option<Self>`.
 //!
 //! # `from_str_radix`
 //!

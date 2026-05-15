@@ -63,9 +63,12 @@ i256 = { version = "0.2", default-features = false }
 serde_json = "1"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 decimal_scaled_macros = { path = "macros" }
-# Benchmark-only baseline for the wide-integer backend comparison
-# (see benches/bnum/). Not a normal dependency.
+# Benchmark-only baselines for the backend comparisons (see benches/).
+# None of these are normal dependencies.
 bnum = { version = "0.14", default-features = false }
+ruint = { version = "1", default-features = false }
+rust_decimal = { version = "1", default-features = false }
+fixed = "1"
 
 [[bench]]
 name = "mul_div_candidates"

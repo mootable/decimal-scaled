@@ -4,7 +4,7 @@
 //! D128 and the narrow tiers get their roots from the 128/256/384-bit
 //! integer machinery in `mg_divide.rs`, and D32 / D64 delegate into
 //! D128. The wide tiers cannot widen into D128 — their scale range
-//! exceeds it — so they compute roots directly on a `bnum` integer one
+//! exceeds it — so they compute roots directly on a hand-rolled wide integer one
 //! or two sizes up.
 //!
 //! For a `D*<SCALE>` value with raw storage `r`, the logical value is
@@ -13,7 +13,7 @@
 //! - the square-root raw storage is `round(sqrt(r · 10^SCALE))`;
 //! - the cube-root raw storage is `round(cbrt(r · 10^(2·SCALE)))`.
 //!
-//! The radicand is formed exactly in a wider `bnum` integer, the exact
+//! The radicand is formed exactly in a wider integer, the exact
 //! integer root is taken, and a single round-to-nearest step lands the
 //! result on the type's last representable place (within 0.5 ULP — the
 //! IEEE-754 round-to-nearest result).
@@ -22,16 +22,16 @@
 //! strict family:
 //!
 //! - `<method>_strict` — always present unless the `no_strict` feature
-//!   is set. Integer-only; `no_std`-compatible.
+//! is set. Integer-only; `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//!   `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
-//!   forwarding to `<method>_strict`. The wide tiers have no f64-bridge
-//!   transcendentals of their own, so there is no non-strict
-//!   `<method>` for these widths.
+//! `#[cfg(all(feature = "strict", not(feature = "no_strict")))]`,
+//! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
+//! transcendentals of their own, so there is no non-strict
+//! `<method>` for these widths.
 
-/// Builds a small `bnum` integer constant from a base-10 literal.
+/// Builds a small wide-integer constant from a base-10 literal.
 ///
-/// `bnum`'s `ZERO` / `ONE` associated constants are private and its
+/// Building wide-integer constants in `const` context is done
 /// integers have no `From<u8>`, so the const-fn `from_str_radix` is the
 /// portable way to materialise a literal.
 macro_rules! wide_lit {
@@ -48,10 +48,10 @@ macro_rules! wide_lit {
 /// Emits the correctly-rounded strict `sqrt` / `cbrt` surface for a
 /// wide decimal tier.
 ///
-/// - `$Type` / `$Storage` — the decimal type and its `bnum` storage.
-/// - `$SqrtWide` — a `bnum` integer wide enough to hold `r · 10^SCALE`.
-/// - `$CbrtWide` — a `bnum` integer wide enough to hold
-///   `r · 10^(2·SCALE)`.
+/// - `$Type` / `$Storage` — the decimal type and its wide storage.
+/// - `$SqrtWide` — a hand-rolled wide integer wide enough to hold `r · 10^SCALE`.
+/// - `$CbrtWide` — a hand-rolled wide integer wide enough to hold
+/// `r · 10^(2·SCALE)`.
 macro_rules! decl_wide_roots {
     ($Type:ident, $Storage:ty, $SqrtWide:ty, $CbrtWide:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {

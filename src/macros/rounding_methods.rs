@@ -3,16 +3,16 @@
 //!
 //! `floor` / `ceil` / `trunc` / `fract` are storage-agnostic — they
 //! only use `div_euclid`, multiply, subtract and negate, which both
-//! primitive integers and `bnum` integers support with identical
+//! primitive integers and the wide integers support with identical
 //! spelling — so they live in a shared `@common` arm. Only `round`
 //! differs: it needs the half-LSB threshold and a sign test, which a
-//! `bnum` integer cannot express against the `0` / `2` literals, so it
+//! a wide integer cannot express against the `0` / `2` literals, so it
 //! is written inline per front-end arm.
 
 /// Emits `floor`, `ceil`, `round` (half-away-from-zero), `trunc`,
 /// `fract` for `$Type<SCALE>`.
 macro_rules! decl_decimal_rounding_methods {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident) => {
         $crate::macros::rounding_methods::decl_decimal_rounding_methods!(@common $Type);
 

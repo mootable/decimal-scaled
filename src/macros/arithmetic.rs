@@ -4,8 +4,8 @@
 //!
 //! For D32 / D64 the storage type is a primitive (`i32` / `i64`) and a
 //! native wider integer (`i64` / `i128`) carries the mul/div widening
-//! step. For D256 / D512 / D1024 the storage type is a `bnum`
-//! fixed-width integer and the widening type is the next `bnum` size
+//! step. For D256 / D512 / D1024 the storage type is a hand-rolled wide integer
+//! fixed-width integer and the widening type is the next size up
 //! up; the only thing that changes is *how* the `10^SCALE` literal and
 //! the width casts are spelled.
 //!
@@ -27,14 +27,14 @@
 /// width `$Type<SCALE>`.
 ///
 /// - `decl_decimal_arithmetic!(D32, i32, i64)` — *native* storage; the
-///   widening type is a primitive integer, `as`-casts and the
-///   `(10 as $Wider)` literal carry the mul/div step.
+/// widening type is a primitive integer, `as`-casts and the
+/// `(10 as $Wider)` literal carry the mul/div step.
 /// - `decl_decimal_arithmetic!(wide D256, I256, I512)` — *wide*
-///   storage; the widening type is a `bnum` integer, `bnum::cast::As`
-///   carries the width casts and `from_str_radix` builds the
-///   `10^SCALE` factor.
+/// storage; the widening type is a hand-rolled wide integer, the `WideInt` cast
+/// carries the width casts and `from_str_radix` builds the
+/// `10^SCALE` factor.
 macro_rules! decl_decimal_arithmetic {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty, $Wider:ty) => {
         $crate::macros::arithmetic::decl_decimal_arithmetic!(@common $Type, $Storage);
 
@@ -140,7 +140,7 @@ macro_rules! decl_decimal_arithmetic {
     };
 
     // Add / Sub / Neg / Rem and their assign forms — identical for
-    // native and wide storage (the `core::ops` impls on `bnum` integers
+    // native and wide storage (the `core::ops` impls on the wide integers
     // match the primitive integer surface).
     (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::ops::Add for $Type<SCALE> {

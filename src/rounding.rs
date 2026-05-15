@@ -195,10 +195,10 @@ mod tests {
     #[test]
     fn half_to_even_ties() {
         let m = RoundingMode::HalfToEven;
-        assert_eq!(apply_rounding(5, 10, m), 0);     // 0.5  -> 0 (even)
-        assert_eq!(apply_rounding(15, 10, m), 2);    // 1.5  -> 2
-        assert_eq!(apply_rounding(25, 10, m), 2);    // 2.5  -> 2 (even)
-        assert_eq!(apply_rounding(35, 10, m), 4);    // 3.5  -> 4
+        assert_eq!(apply_rounding(5, 10, m), 0);     // 0.5 -> 0 (even)
+        assert_eq!(apply_rounding(15, 10, m), 2);    // 1.5 -> 2
+        assert_eq!(apply_rounding(25, 10, m), 2);    // 2.5 -> 2 (even)
+        assert_eq!(apply_rounding(35, 10, m), 4);    // 3.5 -> 4
         assert_eq!(apply_rounding(-5, 10, m), 0);    // -0.5 -> 0
         assert_eq!(apply_rounding(-15, 10, m), -2);  // -1.5 -> -2
         assert_eq!(apply_rounding(-25, 10, m), -2);  // -2.5 -> -2

@@ -3,24 +3,24 @@
 //! # Methods
 //!
 //! - [`D128::pow`] — unsigned integer power via square-and-multiply over
-//!   the `Mul` operator. Panics on overflow in debug builds; wraps in
-//!   release builds. Matches `i128::pow` semantics.
+//! the `Mul` operator. Panics on overflow in debug builds; wraps in
+//! release builds. Matches `i128::pow` semantics.
 //! - [`D128::powi`] — signed integer power. For negative `exp`, returns
-//!   `D128::ONE / self.pow(exp.unsigned_abs())`.
+//! `D128::ONE / self.pow(exp.unsigned_abs())`.
 //! - [`D128::powf`] — floating-point power via the f64 bridge. Lossy.
-//!   Requires the `std` feature.
+//! Requires the `std` feature.
 //! - [`D128::sqrt`] — square root via the f64 bridge. IEEE 754 mandates
-//!   that `f64::sqrt` is correctly-rounded, so identical inputs produce
-//!   identical output bit-patterns on every conformant platform.
-//!   Requires the `std` feature.
+//! that `f64::sqrt` is correctly-rounded, so identical inputs produce
+//! identical output bit-patterns on every conformant platform.
+//! Requires the `std` feature.
 //! - [`D128::cbrt`] — cube root via the f64 bridge. Defined for negative
-//!   inputs. Requires the `std` feature.
+//! inputs. Requires the `std` feature.
 //! - [`D128::mul_add`] — `self * a + b` in one call. No hardware FMA;
-//!   mirrors the `f64::mul_add` call shape so generic numeric code can
-//!   monomorphise to `D128`. Always available.
+//! mirrors the `f64::mul_add` call shape so generic numeric code can
+//! monomorphise to `D128`. Always available.
 //! - [`D128::hypot`] — `sqrt(self^2 + other^2)` without intermediate
-//!   overflow, using the scale-trick algorithm. Requires the `std`
-//!   feature via `sqrt`.
+//! overflow, using the scale-trick algorithm. Requires the `std`
+//! feature via `sqrt`.
 //!
 //! # The `*_strict` dual API
 //!
@@ -30,9 +30,9 @@
 //! the exact result:
 //!
 //! - `sqrt_strict` / `cbrt_strict` form the exact 256-/384-bit
-//!   radicand and take its exact integer root, rounding to nearest;
-//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `wide_int`
-//!   guard-digit intermediate;
+//! radicand and take its exact integer root, rounding to nearest;
+//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `d128_kernels`
+//! guard-digit intermediate;
 //! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
 //!
 //! `pow` / `powi` (integer exponents) are exact at any feature
@@ -44,12 +44,12 @@
 //! # Variant family for `pow`
 //!
 //! - [`D128::checked_pow`] — `Option<Self>`, `None` on overflow at any
-//!   step.
+//! step.
 //! - [`D128::wrapping_pow`] — two's-complement wrap at every step.
 //! - [`D128::saturating_pow`] — clamps to `D128::MAX` or `D128::MIN`
-//!   based on the sign of the would-be result.
+//! based on the sign of the would-be result.
 //! - [`D128::overflowing_pow`] — `(Self, bool)`; the bool is `true` if
-//!   any step overflowed, with the value equal to the wrapping form.
+//! any step overflowed, with the value equal to the wrapping form.
 //!
 //! # Square-and-multiply algorithm
 //!
@@ -138,7 +138,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// # Panics
     ///
     /// - Overflow of `i128` storage at any step in debug builds (matches
-    ///   [`Self::pow`]).
+    /// [`Self::pow`]).
     /// - Division by zero when `self == ZERO` and `exp < 0`.
     ///
     /// # Examples
@@ -198,7 +198,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_strict(self, exp: D128<SCALE>) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.to_bits() <= 0 {
             return Self::ZERO;
         }
@@ -294,8 +294,8 @@ impl<const SCALE: u32> D128<SCALE> {
         // For a `D128<SCALE>` with raw storage `r`, the logical value is
         // `r / 10^SCALE`, and the raw storage of its square root is
         //
-        //   round( sqrt(r / 10^SCALE) · 10^SCALE )
-        //     = round( sqrt(r · 10^SCALE) ).
+        // round( sqrt(r / 10^SCALE) · 10^SCALE )
+        // = round( sqrt(r · 10^SCALE) ).
         //
         // `r · 10^SCALE` is formed exactly as a 256-bit product and its
         // integer square root is computed exactly, so the result is the
@@ -400,8 +400,8 @@ impl<const SCALE: u32> D128<SCALE> {
     /// For a `D128<SCALE>` with raw storage `r`, the raw storage of the
     /// cube root is
     ///
-    ///   round( cbrt(r / 10^SCALE) · 10^SCALE )
-    ///     = round( cbrt(r · 10^(2·SCALE)) ).
+    /// round( cbrt(r / 10^SCALE) · 10^SCALE )
+    /// = round( cbrt(r · 10^(2·SCALE)) ).
     ///
     /// `r · 10^(2·SCALE)` is formed exactly as a 384-bit value and its
     /// integer cube root is computed exactly, so the result is the
@@ -461,7 +461,7 @@ impl<const SCALE: u32> D128<SCALE> {
     /// ```ignore
     /// use decimal_scaled::D128s12;
     /// let three = D128s12::from_int(3);
-    /// let four  = D128s12::from_int(4);
+    /// let four = D128s12::from_int(4);
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64_lossy() - 5.0).abs() < 1e-9);
     /// ```
@@ -934,9 +934,9 @@ mod tests {
     #[cfg(not(feature = "no_strict"))]
     #[test]
     fn strict_sqrt_is_correctly_rounded() {
-        // (q - 0.5)^2 = q^2 - q + 0.25  → lower bound  N ≥ q^2 - q + 1 (ints, when q>0)
-        // (q + 0.5)^2 = q^2 + q + 0.25  → upper bound  N ≤ q^2 + q
-        // So a correctly-rounded q satisfies  q^2 - q < N ≤ q^2 + q  (q>0),
+        // (q - 0.5)^2 = q^2 - q + 0.25 → lower bound  N ≥ q^2 - q + 1 (ints, when q>0)
+        // (q + 0.5)^2 = q^2 + q + 0.25 → upper bound  N ≤ q^2 + q
+        // So a correctly-rounded q satisfies q^2 - q < N ≤ q^2 + q  (q>0),
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
             let x = crate::core_type::D128::<S>::from_bits(raw);
@@ -946,10 +946,10 @@ mod tests {
             let mult = 10u128.pow(S);
             let (n_hi, n_lo) = crate::mg_divide::mul2(raw as u128, mult);
             let (qsq_hi, qsq_lo) = crate::mg_divide::mul2(q as u128, q as u128);
-            // lower: N > q^2 - q   ⇔   N + q > q^2   (q ≥ 0)
+            // lower: N > q^2 - q ⇔   N + q > q^2   (q ≥ 0)
             // upper: N ≤ q^2 + q
             let q_u = q as u128;
-            // q^2 + q  (256-bit)
+            // q^2 + q (256-bit)
             let (uphi, uplo) = {
                 let (lo, c) = qsq_lo.overflowing_add(q_u);
                 (qsq_hi + c as u128, lo)
@@ -958,7 +958,7 @@ mod tests {
             let n_le_upper = n_hi < uphi || (n_hi == uphi && n_lo <= uplo);
             assert!(n_le_upper, "sqrt({raw} @ s{S}) = {q}: N exceeds (q+0.5)^2");
             if q > 0 {
-                // N + q  (256-bit)
+                // N + q (256-bit)
                 let (nphi, nplo) = {
                     let (lo, c) = n_lo.overflowing_add(q_u);
                     (n_hi + c as u128, lo)
@@ -1000,8 +1000,8 @@ mod tests {
     #[cfg(not(feature = "no_strict"))]
     #[test]
     fn strict_cbrt_is_correctly_rounded() {
-        // q correctly rounded  ⇔  q − 0.5 < cbrt(N) ≤ q + 0.5
-        //                      ⇔  (2q − 1)³ < 8N ≤ (2q + 1)³.
+        // q correctly rounded ⇔  q − 0.5 < cbrt(N) ≤ q + 0.5
+        // ⇔  (2q − 1)³ < 8N ≤ (2q + 1)³.
         // 384-bit comparison via num-bigint-free manual limbs would be
         // verbose, so this check leans on the i256 dev-dependency to
         // hold the 384-bit cubes (i256 is already a dev-dependency).

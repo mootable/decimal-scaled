@@ -6,20 +6,20 @@
 //! [`serde::Serializer::is_human_readable`] flag:
 //!
 //! - **Human-readable formats** (JSON, TOML, YAML): a base-10 integer
-//!   string of the underlying `i128` storage value. For example,
-//!   `D128s12::ONE` (storage `1_000_000_000_000`) serialises as the
-//!   JSON string `"1000000000000"`. This is not a decimal string like
-//!   `"1.0"` — that is the job of `Display`, not the wire format.
+//! string of the underlying `i128` storage value. For example,
+//! `D128s12::ONE` (storage `1_000_000_000_000`) serialises as the
+//! JSON string `"1000000000000"`. This is not a decimal string like
+//! `"1.0"` — that is the job of `Display`, not the wire format.
 //!
-//!   A string rather than a JSON number is used because JSON numbers
-//!   are effectively `f64` in most runtimes (max safe integer =
-//!   `2^53 - 1`), while `i128` storage requires up to 127 bits. A
-//!   BigInt-compatible integer string is the only lossless option for
-//!   interoperability with JavaScript, where `BigInt(s).toString()`
-//!   round-trips the same digits.
+//! A string rather than a JSON number is used because JSON numbers
+//! are effectively `f64` in most runtimes (max safe integer =
+//! `2^53 - 1`), while `i128` storage requires up to 127 bits. A
+//! BigInt-compatible integer string is the only lossless option for
+//! interoperability with JavaScript, where `BigInt(s).toString()`
+//! round-trips the same digits.
 //!
 //! - **Binary formats** (postcard, bincode, etc.): 16 little-endian
-//!   bytes from `i128::to_le_bytes`. Compact and endian-canonical.
+//! bytes from `i128::to_le_bytes`. Compact and endian-canonical.
 //!
 //! On deserialise, the internal `DecimalVisitor` handles both wire forms plus
 //! `visit_i64` / `visit_u64` / `visit_i128` / `visit_u128` callbacks,
@@ -110,8 +110,8 @@ impl<'de, const SCALE: u32> Deserialize<'de> for D128<SCALE> {
 ///
 /// #[derive(serde::Serialize, serde::Deserialize)]
 /// struct MyStruct {
-///     #[serde(with = "decimal_scaled::serde_helpers::decimal_serde")]
-///     length: D128<12>,
+/// #[serde(with = "decimal_scaled::serde_helpers::decimal_serde")]
+/// length: D128<12>,
 /// }
 /// ```
 ///
@@ -160,12 +160,12 @@ pub mod decimal_serde {
     /// Accepted inputs:
     ///
     /// - `&str` / borrowed string: parsed as a strict base-10 `i128`
-    ///   integer (no decimal point, no whitespace, no leading `+`).
+    /// integer (no decimal point, no whitespace, no leading `+`).
     /// - `&[u8]` / byte buf: interpreted as exactly 16 little-endian
-    ///   `i128` bytes.
+    /// `i128` bytes.
     /// - Native integer (`i8` through `i128`, `u8` through `u128`):
-    ///   widened into `i128` storage directly. The integer is treated as
-    ///   the scaled storage value, not as a logical decimal value.
+    /// widened into `i128` storage directly. The integer is treated as
+    /// the scaled storage value, not as a logical decimal value.
     pub struct DecimalVisitor<const SCALE: u32>(pub PhantomData<()>);
 
     impl<'de, const SCALE: u32> Visitor<'de> for DecimalVisitor<SCALE> {

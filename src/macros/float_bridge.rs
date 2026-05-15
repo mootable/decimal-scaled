@@ -4,8 +4,8 @@
 //! Two `from_f64` surfaces are emitted:
 //!
 //! - `from_f64_lossy(value)` — uses
-//!   `crate::rounding::DEFAULT_ROUNDING_MODE` (controlled by the
-//!   `rounding-*` Cargo features; HalfToEven by default).
+//! `crate::rounding::DEFAULT_ROUNDING_MODE` (controlled by the
+//! `rounding-*` Cargo features; HalfToEven by default).
 //! - `from_f64_lossy_with(value, mode)` — explicit `RoundingMode`.
 //!
 //! Output saturation policy is uniform across modes: NaN -> ZERO,
@@ -16,14 +16,14 @@
 /// `to_f64_lossy(self)`, `to_f32_lossy(self)` for a decimal type.
 ///
 /// - `decl_decimal_float_bridge!(D32, i32)` — *native* storage; the
-///   `f64` <-> storage conversions use `as`-casts.
+/// `f64` <-> storage conversions use `as`-casts.
 /// - `decl_decimal_float_bridge!(wide D256, I256)` — *wide* storage;
-///   the conversions use `bnum::cast::As`. The experimental `f16` /
-///   `f128` entry points route through `f64` for wide storage (`bnum`
-///   only provides `f32` / `f64` casts), so they are lossier on the
-///   wide tier than on D128-and-narrower.
+/// the conversions use the `WideInt` cast. The experimental `f16` /
+/// `f128` entry points route through `f64` for wide storage (the wide integer
+/// only provides `f32` / `f64` casts), so they are lossier on the
+/// wide tier than on D128-and-narrower.
 macro_rules! decl_decimal_float_bridge {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Constructs from an `f64` using the crate default rounding
@@ -111,7 +111,7 @@ macro_rules! decl_decimal_float_bridge {
             }
 
             /// Construct from an `f128` using the crate default rounding
-            /// mode. For wide storage this routes through `f64` (`bnum`
+            /// mode. For wide storage this routes through `f64` (the wide integer
             /// provides no `f128` cast), so it is lossier than the
             /// D128-and-narrower path. Nightly + `experimental-floats`.
             #[cfg(all(feature = "std", feature = "experimental-floats"))]

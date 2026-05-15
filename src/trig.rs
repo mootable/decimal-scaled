@@ -5,11 +5,11 @@
 //! Fifteen methods:
 //!
 //! - **Forward trig (radians input):** [`D128::sin`] / [`D128::cos`] /
-//!   [`D128::tan`].
+//! [`D128::tan`].
 //! - **Inverse trig (returns radians):** [`D128::asin`] / [`D128::acos`]
-//!   / [`D128::atan`] / [`D128::atan2`].
+//! / [`D128::atan`] / [`D128::atan2`].
 //! - **Hyperbolic:** [`D128::sinh`] / [`D128::cosh`] / [`D128::tanh`] /
-//!   [`D128::asinh`] / [`D128::acosh`] / [`D128::atanh`].
+//! [`D128::asinh`] / [`D128::acosh`] / [`D128::atanh`].
 //! - **Angle conversions:** [`D128::to_degrees`] / [`D128::to_radians`].
 //!
 //! # The `*_strict` dual API
@@ -17,13 +17,13 @@
 //! Each method has two implementations:
 //!
 //! - An integer-only `<method>_strict` form — always compiled (unless
-//!   the `no_strict` feature is set), `no_std`-compatible, and
-//!   platform-deterministic. `sin`/`cos`/`tan` range-reduce and
-//!   evaluate a Taylor series; `atan`/`asin`/`acos`/`atan2` derive from
-//!   a reciprocal-reduced Taylor `atan`; the hyperbolic family composes
-//!   the strict `exp` / `ln` / `sqrt`.
+//! the `no_strict` feature is set), `no_std`-compatible, and
+//! platform-deterministic. `sin`/`cos`/`tan` range-reduce and
+//! evaluate a Taylor series; `atan`/`asin`/`acos`/`atan2` derive from
+//! a reciprocal-reduced Taylor `atan`; the hyperbolic family composes
+//! the strict `exp` / `ln` / `sqrt`.
 //! - An f64-bridge form — converts to `f64`, calls the platform
-//!   intrinsic, converts back. Gated on `std`.
+//! intrinsic, converts back. Gated on `std`.
 //!
 //! The plain `<method>` is a dispatcher: with the `strict` feature it
 //! calls `<method>_strict`; otherwise it is the f64 bridge. See
@@ -36,7 +36,7 @@
 //! through `f64`, which introduces up to one LSB of quantisation per
 //! conversion. The `*_strict` forms are **correctly rounded**: within
 //! 0.5 ULP of the exact result (IEEE-754 round-to-nearest). They
-//! evaluate every reduction and series step in the `wide_int::Fixed`
+//! evaluate every reduction and series step in the `d128_kernels::Fixed`
 //! guard-digit intermediate and round once at the end.
 //!
 //! # `atan2` signature
@@ -453,18 +453,18 @@ impl<const SCALE: u32> D128<SCALE> {
 // These mirror the f64-bridge surface above but are integer-only,
 // `no_std`-compatible, and **correctly rounded** — within 0.5 ULP of
 // the exact result. Every reduction and series step runs in the
-// `wide_int::Fixed` guard-digit intermediate (the same machinery the
+// `d128_kernels::Fixed` guard-digit intermediate (the same machinery the
 // log/exp family uses) and the value is rounded once at the end.
 //
 // Composition strategy:
 //
 // - Hyperbolic functions are composed from the strict `exp` / `ln` /
-//   `sqrt` already implemented in `log_exp.rs` / `powers.rs`.
+// `sqrt` already implemented in `log_exp.rs` / `powers.rs`.
 // - `cos` is `sin` phase-shifted by π/2; `tan` is `sin / cos`.
 // - `sin` uses range reduction modulo τ into one π/2 octant followed by
-//   a Taylor series.
+// a Taylor series.
 // - `atan` uses reciprocal reduction for |x| > 1 plus argument halving,
-//   then a Taylor series; `asin` / `acos` / `atan2` are derived from it.
+// then a Taylor series; `asin` / `acos` / `atan2` are derived from it.
 // ─────────────────────────────────────────────────────────────────────
 
 // Strict-feature dispatchers. When `strict` is enabled (and
@@ -597,7 +597,7 @@ impl<const SCALE: u32> D128<SCALE> {
 // ─────────────────────────────────────────────────────────────────────
 // Correctly-rounded strict trigonometric core.
 //
-// Every strict trig method runs on the shared `wide_int::Fixed`
+// Every strict trig method runs on the shared `d128_kernels::Fixed`
 // guard-digit intermediate at `SCALE + STRICT_GUARD` working digits,
 // the same machinery the log/exp family uses, and rounds once at the
 // end — so each result is within 0.5 ULP of the exact value.
@@ -605,9 +605,9 @@ impl<const SCALE: u32> D128<SCALE> {
 
 /// π at working scale `w` (`w <= 63`), from a 63-digit embedded value.
 #[cfg(not(feature = "no_strict"))]
-fn wide_pi(w: u32) -> crate::wide_int::Fixed {
+fn wide_pi(w: u32) -> crate::d128_kernels::Fixed {
     // π = 3.141592653589793238462643383279502884197169399375105820974944 592
-    crate::wide_int::Fixed::from_decimal_split(
+    crate::d128_kernels::Fixed::from_decimal_split(
         31_415_926_535_897_932_384_626_433_832_795_u128,
         2_884_197_169_399_375_105_820_974_944_592_u128,
     )
@@ -616,21 +616,21 @@ fn wide_pi(w: u32) -> crate::wide_int::Fixed {
 
 /// τ = 2π at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_tau(w: u32) -> crate::wide_int::Fixed {
+fn wide_tau(w: u32) -> crate::d128_kernels::Fixed {
     wide_pi(w).double()
 }
 
 /// π/2 at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn wide_half_pi(w: u32) -> crate::wide_int::Fixed {
+fn wide_half_pi(w: u32) -> crate::d128_kernels::Fixed {
     wide_pi(w).halve()
 }
 
 /// Builds a working-scale `Fixed` from a signed `D128` raw value `r`:
 /// `r · 10^STRICT_GUARD`, carrying the sign.
 #[cfg(not(feature = "no_strict"))]
-fn to_fixed(raw: i128) -> crate::wide_int::Fixed {
-    use crate::wide_int::Fixed;
+fn to_fixed(raw: i128) -> crate::d128_kernels::Fixed {
+    use crate::d128_kernels::Fixed;
     let m = Fixed::from_u128_mag(raw.unsigned_abs(), false)
         .mul_u128(10u128.pow(crate::log_exp::STRICT_GUARD));
     if raw < 0 {
@@ -643,7 +643,7 @@ fn to_fixed(raw: i128) -> crate::wide_int::Fixed {
 /// Taylor series for `sin` on a reduced non-negative argument
 /// `r ∈ [0, π/2]`, evaluated at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn sin_taylor(r: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
+fn sin_taylor(r: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
     let r2 = r.mul(r, w);
     let mut sum = r;
     let mut term = r; // term = r^(2k-1)
@@ -673,13 +673,13 @@ fn sin_taylor(r: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
 /// `[0, π/2]` tracking sign and the `π − x` reflection, then evaluates
 /// the Taylor series.
 #[cfg(not(feature = "no_strict"))]
-fn sin_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
-    use crate::wide_int::Fixed;
+fn sin_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
+    use crate::d128_kernels::Fixed;
     let tau = wide_tau(w);
     let pi = wide_pi(w);
     let half_pi = wide_half_pi(w);
 
-    // r = v - round(v/τ)·τ  ∈ [-π, π].
+    // r = v - round(v/τ)·τ ∈ [-π, π].
     let q = v_w.div(tau, w).round_to_nearest_int(w);
     let q_tau = if q >= 0 {
         tau.mul_u128(q as u128)
@@ -707,7 +707,7 @@ fn sin_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
 /// Taylor series for `atan` on a reduced non-negative argument
 /// `x ∈ [0, ~1/8]`, evaluated at working scale `w`.
 #[cfg(not(feature = "no_strict"))]
-fn atan_taylor(x: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
+fn atan_taylor(x: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
     let x2 = x.mul(x, w);
     let mut sum = x;
     let mut term = x; // term = x^(2k-1)
@@ -738,8 +738,8 @@ fn atan_taylor(x: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
 /// `atan(x) = π/2 − atan(1/x)` for `x > 1`; three rounds of argument
 /// halving `atan(x) = 2·atan(x / (1 + √(1+x²)))`; then the series.
 #[cfg(not(feature = "no_strict"))]
-fn atan_fixed(v_w: crate::wide_int::Fixed, w: u32) -> crate::wide_int::Fixed {
-    use crate::wide_int::Fixed;
+fn atan_fixed(v_w: crate::d128_kernels::Fixed, w: u32) -> crate::d128_kernels::Fixed {
+    use crate::d128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let sign = v_w.negative;
     let mut x = Fixed { negative: false, mag: v_w.mag };
@@ -841,7 +841,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn asin_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         let w = SCALE + crate::log_exp::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
@@ -875,7 +875,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         let w = SCALE + crate::log_exp::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
@@ -917,7 +917,7 @@ impl<const SCALE: u32> D128<SCALE> {
             } else if self.0 < 0 {
                 wide_half_pi(w).neg()
             } else {
-                crate::wide_int::Fixed::ZERO
+                crate::d128_kernels::Fixed::ZERO
             }
         } else {
             let base = atan_fixed(y.div(x, w), w);
@@ -996,7 +996,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn asinh_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -1032,7 +1032,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         let w = SCALE + crate::log_exp::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);
@@ -1066,7 +1066,7 @@ impl<const SCALE: u32> D128<SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh_strict(self) -> Self {
-        use crate::wide_int::Fixed;
+        use crate::d128_kernels::Fixed;
         let w = SCALE + crate::log_exp::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
         let v = to_fixed(self.0);

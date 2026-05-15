@@ -11,12 +11,12 @@
 //! # Primary types
 //!
 //! - [`D128<SCALE>`] is the const-generic foundation. Every method is
-//!   implemented once and is available at any scale.
+//! implemented once and is available at any scale.
 //! - [`D128s12`] is the concrete alias `D128<12>`. At `SCALE = 12`, one LSB
-//!   equals `10^-12` model units and the representable range is roughly
-//!   +/-1.7e14 model units.
+//! equals `10^-12` model units and the representable range is roughly
+//! +/-1.7e14 model units.
 //! - Scale aliases [`D128s0`] through [`D128s38`] cover every supported scale.
-//!   `SCALE = 39` is not supported because `10^39` overflows `i128`.
+//! `SCALE = 39` is not supported because `10^39` overflows `i128`.
 //!
 //! # Equality and hashing
 //!
@@ -46,19 +46,19 @@
 //! # Feature flags
 //!
 //! - `std` (default): enables the lossy implementations of transcendental
-//!   functions (trigonometry, logarithms, exponentials, square root, cube
-//!   root, float power) that delegate to platform `f64` intrinsics.
+//! functions (trigonometry, logarithms, exponentials, square root, cube
+//! root, float power) that delegate to platform `f64` intrinsics.
 //! - `alloc`: pulled in automatically; required for string formatting and
-//!   parsing.
+//! parsing.
 //! - `serde`: enables `serde_helpers` for serialisation and deserialisation.
 //! - `strict`: enables integer-only implementations of all transcendental
-//!   functions. When `strict` is active each function that would otherwise
-//!   route through `f64` is instead implemented using integer-only
-//!   algorithms. Explicit float-conversion methods (`to_f64_lossy`,
-//!   `from_f64_lossy`, etc.) remain available regardless; they are type
-//!   conversions, not mathematical operations. `strict` does not require
-//!   `std`; the integer transcendental implementations compile under
-//!   `no_std + alloc`.
+//! functions. When `strict` is active each function that would otherwise
+//! route through `f64` is instead implemented using integer-only
+//! algorithms. Explicit float-conversion methods (`to_f64_lossy`,
+//! `from_f64_lossy`, etc.) remain available regardless; they are type
+//! conversions, not mathematical operations. `strict` does not require
+//! `std`; the integer transcendental implementations compile under
+//! `no_std + alloc`.
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "experimental-floats", feature(f16, f128))]
@@ -81,13 +81,11 @@ mod log_exp;
 mod rescale;
 mod rounding;
 mod mg_divide;
+mod d128_kernels;
+#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide_int;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
-mod hint;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide;
-#[cfg(any(feature = "d256", feature = "wide"))]
-mod hand_decimal;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide_roots;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
@@ -127,24 +125,24 @@ pub use core_type::{
     D64s12, D64s13, D64s14, D64s15, D64s16, D64s17, D64s18,
 };
 
-// D256 — 256-bit storage (bnum-backed), behind the `d256` / `wide` features.
+// D256 — 256-bit storage, behind the `d256` / `wide` features.
 #[cfg(any(feature = "d256", feature = "wide"))]
 pub use core_type::{
     D256, D256s0, D256s2, D256s6, D256s12, D256s18, D256s35, D256s50, D256s76,
 };
 
-// D256H — the hand-rolled 256-bit decimal (in-tree `HInt256` storage),
-// kept alongside the bnum-backed `D256` for backend benchmarking.
-#[cfg(any(feature = "d256", feature = "wide"))]
-pub use hand_decimal::{
-    D256H, D256Hs0, D256Hs12, D256Hs18, D256Hs2, D256Hs35, D256Hs6, D256Hs76,
+// The hand-rolled wide-integer types — the storage backend for the
+// wide decimal tiers, also useful on their own.
+#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+pub use wide_int::{
+    Int256, Int512, Int1024, Int2048, Int4096, Uint256, Uint512, Uint1024, Uint2048, Uint4096,
 };
 
-// D512 — 512-bit storage (bnum-backed), behind the `d512` / `wide` features.
+// D512 — 512-bit storage, behind the `d512` / `wide` features.
 #[cfg(any(feature = "d512", feature = "wide"))]
 pub use core_type::{D512, D512s0, D512s35, D512s75, D512s150, D512s153};
 
-// D1024 — 1024-bit storage (bnum-backed), behind the `d1024` / `wide` features.
+// D1024 — 1024-bit storage, behind the `d1024` / `wide` features.
 #[cfg(any(feature = "d1024", feature = "wide"))]
 pub use core_type::{D1024, D1024s0, D1024s35, D1024s150, D1024s300, D1024s307};
 

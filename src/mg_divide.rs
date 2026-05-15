@@ -4,11 +4,11 @@
 //! arithmetic layer:
 //!
 //! - [`mul_div_pow10`] -- computes `(a * b) / 10^SCALE` with a 256-bit
-//!   intermediate product to avoid silent overflow from the naive
-//!   `(a * b) / multiplier()` form.
+//! intermediate product to avoid silent overflow from the naive
+//! `(a * b) / multiplier()` form.
 //!
 //! - [`div_pow10_div`] -- computes `(a * 10^SCALE) / b` with a 256-bit
-//!   intermediate numerator, used for the division rescale.
+//! intermediate numerator, used for the division rescale.
 //!
 //! Both functions return `None` when the final `i128` quotient would
 //! overflow; the caller maps `None` to a panic (debug) or wrapping
@@ -17,12 +17,12 @@
 //! # Algorithm references
 //!
 //! - Moller, N. and Granlund, T. (2011). "Improved Division by Invariant
-//!   Integers." IEEE Transactions on Computers, 60(2), 165-175.
-//!   DOI: 10.1109/TC.2010.143. (The magic-number table and the
-//!   256-bit-dividend divide algorithm used in [`div_exp_fast_2word`].)
+//! Integers." IEEE Transactions on Computers, 60(2), 165-175.
+//! DOI: 10.1109/TC.2010.143. (The magic-number table and the
+//! 256-bit-dividend divide algorithm used in [`div_exp_fast_2word`].)
 //! - Granlund, T. and Montgomery, P. L. (1994). "Division by Invariant
-//!   Integers using Multiplication." PLDI '94. (Basis for the 1-word
-//!   fast path that the upstream library also references.)
+//! Integers using Multiplication." PLDI '94. (Basis for the 1-word
+//! fast path that the upstream library also references.)
 //!
 //! The 128x128->256 multiply ([`mul2`]) and the magic-number table
 //! ([`MG_EXP_MAGICS`]) are adapted from the `primitive_fixed_point_decimal`
@@ -47,10 +47,10 @@ use crate::core_type::D128;
 ///
 /// ```python
 /// def gen(d):
-///     zeros = 128 - d.bit_length()
-///     magic = pow(2, 256) // (d << zeros)
-///     magic = magic - pow(2, 128)  # fits in 128 bits
-///     return (magic, zeros)
+/// zeros = 128 - d.bit_length()
+/// magic = pow(2, 256) // (d << zeros)
+/// magic = magic - pow(2, 128)  # fits in 128 bits
+/// return (magic, zeros)
 /// ```
 ///
 /// Index 0 is a placeholder `(0, 0)`. Callers must not pass `SCALE = 0`
@@ -139,9 +139,9 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 /// # Preconditions
 ///
 /// - `1 <= scale_idx <= 38`. The public entry points enforce this;
-///   `scale_idx == 0` must be handled by the caller before calling here.
+/// `scale_idx == 0` must be handled by the caller before calling here.
 /// - `exp == 10u128.pow(scale_idx)`. The caller computes this once to
-///   avoid redundant work.
+/// avoid redundant work.
 ///
 /// # Precision
 ///
@@ -156,12 +156,12 @@ fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) ->
     let (magic, zeros) = MG_EXP_MAGICS[scale_idx];
 
     // Step 1: align n to the top of the 256-bit word.
-    //   (z_high, z_low) = n << zeros
+    // (z_high, z_low) = n << zeros
     let z_high = (n_high << zeros) | (n_low >> (128 - zeros));
     let z_low = n_low << zeros;
 
     // Step 2: approximate quotient via magic multiplication.
-    //   (m_high, m_low) = (magic * z) >> 128
+    // (m_high, m_low) = (magic * z) >> 128
     let (m1_high, _) = mul2(z_low, magic);
     let (m2_high, m2_low) = mul2(z_high, magic);
 
@@ -169,7 +169,7 @@ fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) ->
     let m_high = m2_high + carry as u128;
 
     // Step 3: extract the 128-bit quotient estimate.
-    //   q = (m + z) >> 128
+    // q = (m + z) >> 128
     let (_, carry) = m_low.overflowing_add(z_low);
     let q = m_high + z_high + carry as u128;
 
@@ -346,7 +346,7 @@ pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
     // than to q², i.e. iff N ≥ (q + 0.5)² = q² + q + 0.25, i.e. (in
     // integers) iff N − q² > q.
     let (q_sq_hi, q_sq_lo) = mul2(q, q);
-    // diff = N − q²  (non-negative because q = floor(sqrt(N))).
+    // diff = N − q² (non-negative because q = floor(sqrt(N))).
     let (diff_hi, diff_lo) = if lo >= q_sq_lo {
         (hi - q_sq_hi, lo - q_sq_lo)
     } else {
@@ -584,8 +584,8 @@ pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 /// // 50_000_000_000_000_000_000_000 * 30_000_000_000_000_000_000_000
 /// // overflows i128 but fits after dividing by 10^12.
 /// let result = mul_div_pow10::<12>(
-///     50_000_000_000_000_000_000_000_i128,
-///     30_000_000_000_000_000_000_000_i128,
+/// 50_000_000_000_000_000_000_000_i128,
+/// 30_000_000_000_000_000_000_000_i128,
 /// );
 /// assert_eq!(result, Some(1_500_000_000_000_000_000_000_000_000_000_000_i128));
 /// ```
@@ -855,7 +855,7 @@ mod tests {
     #[test]
     fn div_pow10_div_round_trip_small() {
         const SCALE: u32 = 12;
-        // 6.0 / 2.0 == 3.0  (raw: 6e12 / 2e12 -> in scaled space:
+        // 6.0 / 2.0 == 3.0 (raw: 6e12 / 2e12 -> in scaled space:
         // (6e12 * 1e12) / 2e12 == 3e12)
         let a: i128 = 6_000_000_000_000;
         let b: i128 = 2_000_000_000_000;

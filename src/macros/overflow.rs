@@ -8,10 +8,10 @@
 //!
 //! Add / sub / neg / rem delegate to the storage type's `checked_*` /
 //! `wrapping_*` / `saturating_*` / `overflowing_*` intrinsics, which
-//! `bnum` integers expose with the same names and `const`-ness as the
+//! the wide integers expose with the same names and `const`-ness as the
 //! primitive integers — so those families live in a shared `@common`
 //! arm. Mul / div widen to `$Wider` for the intermediate; only the
-//! widening *spelling* differs (native `as`-casts vs `bnum::cast::As`),
+//! widening *spelling* differs (native `as`-casts vs the `WideInt` cast),
 //! so they are written inline per front-end arm.
 //!
 //! D128 is the exception: its overflow mul/div go through the
@@ -20,11 +20,11 @@
 /// Emits overflow variants for a decimal type.
 ///
 /// - `decl_decimal_overflow_variants!(D32, i32, i64)` — *native*
-///   storage; `$Wider` is a primitive integer.
+/// storage; `$Wider` is a primitive integer.
 /// - `decl_decimal_overflow_variants!(wide D256, I256, I512)` — *wide*
-///   storage; `$Wider` is the next `bnum` size up.
+/// storage; `$Wider` is the next size up.
 macro_rules! decl_decimal_overflow_variants {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty, $Wider:ty) => {
         $crate::macros::overflow::decl_decimal_overflow_variants!(@common $Type, $Storage);
 
@@ -257,7 +257,7 @@ macro_rules! decl_decimal_overflow_variants {
     };
 
     // Shared: add / sub / neg / rem and their overflow families.
-    // `bnum` integers expose these intrinsics with the same names and
+    // the wide integers expose these intrinsics with the same names and
     // `const`-ness as the primitive integers.
     (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {

@@ -6,18 +6,18 @@
 //!
 //! The operator surface (`BitAnd` / `BitOr` / `BitXor` / `Not` / `Shl`
 //! / `Shr` and the `*Assign` forms) is textually identical for
-//! primitive-integer and `bnum` storage, so it lives in a shared
+//! primitive-integer and wide storage, so it lives in a shared
 //! `@common` arm. The inherent bit-manipulation methods differ only in
 //! how the "reinterpret as unsigned" step is spelled — an `as u128`
-//! cast for native storage, `bnum`'s `cast_unsigned` / `cast_signed`
+//! cast for native storage, the wide integer's `cast_unsigned` / `cast_signed`
 //! for wide storage — so they are written per front-end arm.
 
 /// Emits the bitwise operator + method surface for a decimal type.
 ///
 /// - `decl_decimal_bitwise!(D128, i128)` — *native* storage.
-/// - `decl_decimal_bitwise!(wide D256, I256)` — *wide* (`bnum`) storage.
+/// - `decl_decimal_bitwise!(wide D256, I256)` — *wide* storage.
 macro_rules! decl_decimal_bitwise {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
         $crate::macros::bitwise::decl_decimal_bitwise!(@common $Type, $Storage);
 
@@ -168,7 +168,7 @@ macro_rules! decl_decimal_bitwise {
         }
     };
 
-    // Shared operator surface — identical for native and `bnum` storage.
+    // Shared operator surface — identical for native and wide storage.
     (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::ops::BitAnd for $Type<SCALE> {
             type Output = Self;

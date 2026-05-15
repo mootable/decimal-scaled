@@ -6,16 +6,16 @@
 //! `rounding-*` Cargo feature selects something else.
 //!
 //! - The *native* arm emits `rescale` / `rescale_with` as `const fn`,
-//!   since primitive integer arithmetic is `const`.
-//! - The *wide* arm emits them as ordinary `fn`: `bnum`'s `Div` / `Rem`
-//!   operators are not `const`, so the wide rescale path cannot be a
-//!   `const fn`. The semantics are otherwise identical.
+//! since primitive integer arithmetic is `const`.
+//! - The *wide* arm emits them as ordinary `fn`: the wide integer's `Div` / `Rem`
+//! operators are not `const`, so the wide rescale path cannot be a
+//! `const fn`. The semantics are otherwise identical.
 
 /// Emits `rescale` (no-arg, uses `DEFAULT_ROUNDING_MODE`) and
 /// `rescale_with` (explicit mode) methods for `$Type<SCALE>` with
 /// storage `$Storage`.
 macro_rules! decl_decimal_rescale {
-    // Wide (bnum-backed) storage. Not `const` — `bnum`'s `Div`/`Rem`
+    // Wide storage. Not `const` — the wide integer's `Div`/`Rem`
     // operators are not const fns.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
@@ -33,9 +33,9 @@ macro_rules! decl_decimal_rescale {
             ///
             /// - `TARGET_SCALE == SCALE`: bit-identity.
             /// - `TARGET_SCALE > SCALE`: scale-up multiplies by
-            ///   `10^(TARGET - SCALE)`; lossless; panics on overflow.
+            /// `10^(TARGET - SCALE)`; lossless; panics on overflow.
             /// - `TARGET_SCALE < SCALE`: scale-down divides by
-            ///   `10^(SCALE - TARGET)` with the requested rounding rule.
+            /// `10^(SCALE - TARGET)` with the requested rounding rule.
             #[inline]
             #[must_use]
             pub fn rescale_with<const TARGET_SCALE: u32>(
@@ -134,9 +134,9 @@ macro_rules! decl_decimal_rescale {
             ///
             /// - `TARGET_SCALE == SCALE`: bit-identity.
             /// - `TARGET_SCALE > SCALE`: scale-up multiplies by
-            ///   `10^(TARGET - SCALE)`; lossless; panics on overflow.
+            /// `10^(TARGET - SCALE)`; lossless; panics on overflow.
             /// - `TARGET_SCALE < SCALE`: scale-down divides by
-            ///   `10^(SCALE - TARGET)` with the requested rounding rule.
+            /// `10^(SCALE - TARGET)` with the requested rounding rule.
             #[inline]
             #[must_use]
             pub const fn rescale_with<const TARGET_SCALE: u32>(

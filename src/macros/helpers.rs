@@ -1,14 +1,14 @@
 //! Macro-generated helper methods: min/max/clamp/recip/copysign.
 //!
 //! `min` / `max` / `clamp` / `recip` are identical across native and
-//! `bnum` storage (both surfaces support `Ord::min` etc. and the `/`
-//! operator). Only `copysign` differs: a `bnum` integer cannot be
+//! wide storage (both surfaces support `Ord::min` etc. and the `/`
+//! operator). Only `copysign` differs: a hand-rolled wide integer cannot be
 //! compared against the `0` literal, so the `wide` arm uses
 //! `is_negative()` instead.
 
 /// Emits `min`, `max`, `clamp`, `recip`, `copysign` for `$Type<SCALE>`.
 macro_rules! decl_decimal_helpers {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident) => {
         $crate::macros::helpers::decl_decimal_helpers!(@common $Type);
 

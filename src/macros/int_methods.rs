@@ -3,9 +3,9 @@
 //! absolute difference, midpoint, and the `is_zero` predicate.
 //!
 //! `div_euclid` / `rem_euclid` / `abs_diff` / `midpoint` are spelled
-//! identically for primitive-integer and `bnum` storage and live in a
+//! identically for primitive-integer and wide storage and live in a
 //! shared `@common` arm. `div_floor` / `div_ceil` / `is_zero` compare
-//! against the integer literal `0`, which a `bnum` value cannot, so
+//! against the integer literal `0`, which a wide-integer value cannot, so
 //! they are written per front-end arm.
 
 /// Emits `div_euclid`, `rem_euclid`, `div_floor`, `div_ceil`,
@@ -14,7 +14,7 @@
 /// - `decl_decimal_int_methods!(D128, i128)` — *native* storage.
 /// - `decl_decimal_int_methods!(wide D256, I256)` — *wide* storage.
 macro_rules! decl_decimal_int_methods {
-    // Wide (bnum-backed) storage.
+    // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
         $crate::macros::int_methods::decl_decimal_int_methods!(@common $Type, $Storage);
 
