@@ -88,7 +88,13 @@ mod rescale;
 mod rounding;
 mod mg_divide;
 mod d128_kernels;
-#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+// `wide_int` is now unconditional. D128's strict transcendentals use
+// `Int512` as their guard-digit work integer (replacing the previous
+// `d128_kernels::Fixed` 256-bit sign-magnitude type), so the wide-
+// integer family must be available in every feature configuration —
+// not just `feature = "wide"` builds. Compile-time impact is modest:
+// ~2k LOC of self-contained limb arithmetic plus the per-width
+// `decl_wide_int!` instantiations.
 mod wide_int;
 mod overflow_variants;
 mod powers_strict;
