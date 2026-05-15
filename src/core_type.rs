@@ -438,6 +438,33 @@ crate::macros::arithmetic::decl_decimal_arithmetic!(@common D128, i128);
 // equivalent. FromPrimitive / ToPrimitive / NumCast stay hand-coded in
 // `src/num_traits_impls.rs` (not part of the macro surface).
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D128);
+
+// D128 strict transcendentals: hand-tuned per-type kernels.
+//
+// The canonical public `*_strict` surface (`ln_strict`, `exp_strict`,
+// `sin_strict`, `powf_strict`, …) is emitted by the per-type files
+// `log_exp_strict.rs` / `trig_strict.rs` / `powers_strict.rs` using
+// the hand-tuned 256-bit `d128_kernels::Fixed` work integer. They
+// are the **chosen winners** per the per-type-kernel policy:
+//
+// - `decl_wide_transcendental!(D128, i128, Int512, …)` would deliver
+//   the same surface using the generic limb arithmetic. Bench
+//   analysis (ln 29 µs hand-tuned vs ≈ 100+ µs macro path) puts the
+//   macro firmly past the 1.5× crossover, so the hand-tuned kernel
+//   wins.
+//
+// The alternative macro implementation is **not compiled** in normal
+// builds — invoking the macro here unconditionally would emit
+// duplicate-name methods that conflict with the canonical override.
+// Under a future `bench-alt` feature the macro can be re-invoked
+// with a renamed-suffix shape (`*_strict_macro_alt`) so a benchmark
+// can compare both paths in one binary; until that knob exists the
+// macro path stays dormant for D128.
+//
+// Same naming convention applies to per-type lossy overrides as
+// they land: `*_lossy_override` opt-in companion, canonical name
+// reserved for the chosen-winner implementation.
+
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D64, i64, i64);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D32, i32, i32);
 
