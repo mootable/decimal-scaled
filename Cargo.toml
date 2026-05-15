@@ -13,8 +13,8 @@ categories = ["mathematics", "no-std", "science", "finance"]
 [features]
 default = ["std", "serde"]
 std = ["alloc"]
-alloc = ["bnum?/alloc"]
-serde = ["dep:serde", "bnum?/serde"]
+alloc = []
+serde = ["dep:serde"]
 macros = ["dep:decimal_scaled_macros"]
 # When enabled, only integer-only (strict) implementations of transcendental
 # functions (trig, log, exp, sqrt, cbrt, powf, hypot) are compiled.
@@ -44,18 +44,18 @@ rounding-ceiling = []
 # toolchain. On stable, leave the feature off.
 experimental-floats = []
 # Wide decimal tiers. Each width is independently opt-in; `wide` is an
-# umbrella over all three. They pull in `bnum` for the big-integer
-# storage backend. D32 / D64 / D128 never need `bnum`.
+# umbrella over all three. They are backed by the in-tree hand-rolled
+# wide-integer types — no external big-integer dependency. D32 / D64 /
+# D128 use primitive storage and need none of this.
 wide = ["d256", "d512", "d1024"]
-d256 = ["dep:bnum", "bnum/numtraits"]
-d512 = ["dep:bnum", "bnum/numtraits"]
-d1024 = ["dep:bnum", "bnum/numtraits"]
+d256 = []
+d512 = []
+d1024 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
 decimal_scaled_macros = { path = "macros", default-features = false, optional = true }
-bnum = { version = "0.14", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
@@ -63,6 +63,9 @@ i256 = { version = "0.2", default-features = false }
 serde_json = "1"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 decimal_scaled_macros = { path = "macros" }
+# Benchmark-only baseline for the wide-integer backend comparison
+# (see benches/bnum/). Not a normal dependency.
+bnum = { version = "0.14", default-features = false }
 
 [[bench]]
 name = "mul_div_candidates"
