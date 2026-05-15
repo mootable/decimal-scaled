@@ -4,7 +4,16 @@
 //!
 //! Emits the four standard families (`checked_*`, `wrapping_*`,
 //! `saturating_*`, `overflowing_*`) for `add`, `sub`, `neg`, `mul`,
-//! `div`, `rem`.
+//! `div`, `rem`. Behaviour mirrors the corresponding `i128::*` method
+//! per the Rust standard library convention:
+//!
+//! - `checked_*` returns `Some(result)` on success or `None` on
+//!   overflow / division-by-zero.
+//! - `wrapping_*` returns the result modulo the storage's
+//!   `MAX − MIN` range.
+//! - `saturating_*` clamps to [`Self::MIN`] / [`Self::MAX`] on
+//!   overflow.
+//! - `overflowing_*` returns `(wrapping_result, overflowed_flag)`.
 //!
 //! Add / sub / neg / rem delegate to the storage type's `checked_*` /
 //! `wrapping_*` / `saturating_*` / `overflowing_*` intrinsics, which
@@ -31,6 +40,11 @@ macro_rules! decl_decimal_overflow_variants {
         impl<const SCALE: u32> $Type<SCALE> {
             // ----- mul (uses widening) ------------------------------
 
+            /// Checked multiplication. Computes `self * rhs` rounded
+            /// toward zero, returning `None` if the result doesn't fit
+            /// in `Self`. The intermediate product is computed in
+            /// `$Wider` so widening overflow is detected before the
+            /// final narrowing.
             #[inline]
             #[must_use]
             pub fn checked_mul(self, rhs: Self) -> Option<Self> {
@@ -48,6 +62,10 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping multiplication. Computes `self * rhs` modulo
+            /// the storage type's `MAX − MIN` range. The intermediate
+            /// product still widens to `$Wider`; only the *narrowing*
+            /// step wraps.
             #[inline]
             #[must_use]
             pub fn wrapping_mul(self, rhs: Self) -> Self {
@@ -59,6 +77,10 @@ macro_rules! decl_decimal_overflow_variants {
                 Self(scaled.resize::<$Storage>())
             }
 
+            /// Saturating multiplication. Computes `self * rhs`,
+            /// clamping to [`Self::MIN`] / [`Self::MAX`] on overflow.
+            /// Sign of the saturated bound matches the sign of the
+            /// exact mathematical product.
             #[inline]
             #[must_use]
             pub fn saturating_mul(self, rhs: Self) -> Self {
@@ -72,6 +94,9 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Overflowing multiplication. Returns the wrapped result
+            /// together with a boolean flag — `true` if the
+            /// mathematical product was out of range.
             #[inline]
             #[must_use]
             pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
@@ -83,6 +108,11 @@ macro_rules! decl_decimal_overflow_variants {
 
             // ----- div ----------------------------------------------
 
+            /// Checked division. Returns `None` if `rhs` is zero or
+            /// the result would overflow [`Self`]. Rounded toward
+            /// zero. The numerator is pre-multiplied by `10^SCALE`
+            /// in `$Wider` so the intermediate carries the scale-up
+            /// step without losing precision.
             #[inline]
             #[must_use]
             pub fn checked_div(self, rhs: Self) -> Option<Self> {
@@ -103,6 +133,10 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping division. Computes `self / rhs` with the
+            /// scale-up step done modulo `$Wider`'s range and the
+            /// final narrowing wrapping. **Panics** on divide-by-zero
+            /// (matches `i128::wrapping_div` semantics).
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
@@ -114,6 +148,9 @@ macro_rules! decl_decimal_overflow_variants {
                 Self(result.resize::<$Storage>())
             }
 
+            /// Saturating division. Computes `self / rhs`, clamping to
+            /// [`Self::MIN`] / [`Self::MAX`] on overflow.
+            /// Divide-by-zero saturates to the appropriate-sign bound.
             #[inline]
             #[must_use]
             pub fn saturating_div(self, rhs: Self) -> Self {
@@ -127,6 +164,9 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Overflowing division. Returns the wrapped result
+            /// together with a boolean flag — `true` if the exact
+            /// quotient was out of range *or* `rhs` was zero.
             #[inline]
             #[must_use]
             pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
@@ -145,6 +185,11 @@ macro_rules! decl_decimal_overflow_variants {
         impl<const SCALE: u32> $Type<SCALE> {
             // ----- mul (uses widening) ------------------------------
 
+            /// Checked multiplication. Computes `self * rhs` rounded
+            /// toward zero, returning `None` if the result doesn't fit
+            /// in `Self`. The intermediate product widens to `$Wider`
+            /// so widening overflow is detected before the narrowing
+            /// step.
             #[inline]
             #[must_use]
             pub fn checked_mul(self, rhs: Self) -> Option<Self> {
@@ -160,6 +205,8 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping multiplication. Computes `self * rhs` modulo
+            /// the storage type's `MAX − MIN` range.
             #[inline]
             #[must_use]
             pub fn wrapping_mul(self, rhs: Self) -> Self {
@@ -171,6 +218,9 @@ macro_rules! decl_decimal_overflow_variants {
                 Self(scaled as $Storage)
             }
 
+            /// Saturating multiplication. Clamps to [`Self::MIN`] /
+            /// [`Self::MAX`] on overflow, matching the sign of the
+            /// exact mathematical product.
             #[inline]
             #[must_use]
             pub fn saturating_mul(self, rhs: Self) -> Self {
@@ -184,6 +234,9 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Overflowing multiplication. Returns the wrapped result
+            /// together with a boolean — `true` if the exact product
+            /// would be out of `Self`'s range.
             #[inline]
             #[must_use]
             pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
@@ -195,6 +248,10 @@ macro_rules! decl_decimal_overflow_variants {
 
             // ----- div ----------------------------------------------
 
+            /// Checked division. Returns `None` if `rhs` is zero or
+            /// the quotient would overflow `Self`. Rounded toward
+            /// zero. The numerator is pre-multiplied by `10^SCALE`
+            /// in `$Wider`.
             #[inline]
             #[must_use]
             pub fn checked_div(self, rhs: Self) -> Option<Self> {
@@ -213,6 +270,8 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping division. **Panics** on divide-by-zero
+            /// (matches `i128::wrapping_div` semantics).
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
@@ -224,6 +283,9 @@ macro_rules! decl_decimal_overflow_variants {
                 Self(result as $Storage)
             }
 
+            /// Saturating division. Clamps to [`Self::MIN`] /
+            /// [`Self::MAX`] on overflow. Divide-by-zero saturates to
+            /// the appropriate-sign bound.
             #[inline]
             #[must_use]
             pub fn saturating_div(self, rhs: Self) -> Self {
@@ -237,6 +299,9 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Overflowing division. Returns the wrapped result with
+            /// a boolean — `true` if the exact quotient was out of
+            /// range *or* `rhs` was zero.
             #[inline]
             #[must_use]
             pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
@@ -255,6 +320,8 @@ macro_rules! decl_decimal_overflow_variants {
         impl<const SCALE: u32> $Type<SCALE> {
             // ----- add ----------------------------------------------
 
+            /// Checked addition. `Some(self + rhs)`, or `None` if the
+            /// sum would overflow [`Self`].
             #[inline]
             #[must_use]
             pub const fn checked_add(self, rhs: Self) -> Option<Self> {
@@ -264,18 +331,24 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping addition. `self + rhs` modulo the storage
+            /// type's `MAX − MIN` range.
             #[inline]
             #[must_use]
             pub const fn wrapping_add(self, rhs: Self) -> Self {
                 Self(self.0.wrapping_add(rhs.0))
             }
 
+            /// Saturating addition. Clamps to [`Self::MIN`] /
+            /// [`Self::MAX`] on overflow.
             #[inline]
             #[must_use]
             pub const fn saturating_add(self, rhs: Self) -> Self {
                 Self(self.0.saturating_add(rhs.0))
             }
 
+            /// Overflowing addition. Returns `(self.wrapping_add(rhs),
+            /// overflowed)`.
             #[inline]
             #[must_use]
             pub const fn overflowing_add(self, rhs: Self) -> (Self, bool) {
@@ -285,6 +358,8 @@ macro_rules! decl_decimal_overflow_variants {
 
             // ----- sub ----------------------------------------------
 
+            /// Checked subtraction. `Some(self - rhs)`, or `None` if
+            /// the difference would overflow [`Self`].
             #[inline]
             #[must_use]
             pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
@@ -294,18 +369,23 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping subtraction.
             #[inline]
             #[must_use]
             pub const fn wrapping_sub(self, rhs: Self) -> Self {
                 Self(self.0.wrapping_sub(rhs.0))
             }
 
+            /// Saturating subtraction. Clamps to [`Self::MIN`] /
+            /// [`Self::MAX`] on overflow.
             #[inline]
             #[must_use]
             pub const fn saturating_sub(self, rhs: Self) -> Self {
                 Self(self.0.saturating_sub(rhs.0))
             }
 
+            /// Overflowing subtraction. Returns
+            /// `(self.wrapping_sub(rhs), overflowed)`.
             #[inline]
             #[must_use]
             pub const fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
@@ -315,6 +395,9 @@ macro_rules! decl_decimal_overflow_variants {
 
             // ----- neg ----------------------------------------------
 
+            /// Checked negation. `Some(-self)`, or `None` when
+            /// `self == Self::MIN` (whose negation is unrepresentable
+            /// in two's-complement).
             #[inline]
             #[must_use]
             pub const fn checked_neg(self) -> Option<Self> {
@@ -324,18 +407,25 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping negation. `Self::MIN.wrapping_neg() == Self::MIN`
+            /// (same as `i128::wrapping_neg`).
             #[inline]
             #[must_use]
             pub const fn wrapping_neg(self) -> Self {
                 Self(self.0.wrapping_neg())
             }
 
+            /// Saturating negation. `Self::MIN.saturating_neg() ==
+            /// Self::MAX`.
             #[inline]
             #[must_use]
             pub const fn saturating_neg(self) -> Self {
                 Self(self.0.saturating_neg())
             }
 
+            /// Overflowing negation. Returns
+            /// `(self.wrapping_neg(), overflowed)`; `overflowed` is
+            /// `true` only when `self == Self::MIN`.
             #[inline]
             #[must_use]
             pub const fn overflowing_neg(self) -> (Self, bool) {
@@ -345,6 +435,9 @@ macro_rules! decl_decimal_overflow_variants {
 
             // ----- rem ----------------------------------------------
 
+            /// Checked remainder. `Some(self % rhs)`, or `None` if
+            /// `rhs == 0` *or* the operation would overflow (the
+            /// pathological case `Self::MIN % -ONE`).
             #[inline]
             #[must_use]
             pub const fn checked_rem(self, rhs: Self) -> Option<Self> {
@@ -354,12 +447,17 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
+            /// Wrapping remainder. **Panics** on divide-by-zero
+            /// (matches `i128::wrapping_rem`).
             #[inline]
             #[must_use]
             pub const fn wrapping_rem(self, rhs: Self) -> Self {
                 Self(self.0.wrapping_rem(rhs.0))
             }
 
+            /// Overflowing remainder. Returns
+            /// `(self.wrapping_rem(rhs), overflowed)`; `overflowed`
+            /// is `true` only at the `Self::MIN % -ONE` boundary.
             #[inline]
             #[must_use]
             pub const fn overflowing_rem(self, rhs: Self) -> (Self, bool) {

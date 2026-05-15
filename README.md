@@ -58,21 +58,54 @@ decimal-scaled = { version = "0.1.1", default-features = false, features = ["ser
 
 ## Quick start
 
-```rust
-use decimal_scaled::D38s12;
-
-// Construct from raw integer storage (value × 10^12)
-let a = D38s12::from_bits(1_100_000_000_000); // exactly 1.1
-let b = D38s12::from_bits(2_200_000_000_000); // exactly 2.2
-
-// Constants
-let zero = D38s12::ZERO;
-let one  = D38s12::ONE;
-
-// Raw storage
-assert_eq!(a.to_bits(), 1_100_000_000_000);
-assert_eq!(D38s12::multiplier(), 1_000_000_000_000);
+```toml
+[dependencies]
+decimal-scaled = { version = "0.1.1", features = ["macros"] }
 ```
+
+There are three idiomatic ways to construct a value. Use whichever
+fits your call site.
+
+```rust
+use decimal_scaled::{d38, D38s12};
+
+// 1) `d38!` macro — the ergonomic constructor. Write the literal
+//    as you'd read it; scale is inferred from the fractional
+//    digits, or pinned explicitly with `, scale N`. (Requires the
+//    `macros` feature.)
+let a = d38!(1.1, scale 12);                        // D38<12> — exactly 1.1
+
+// 2) `FromStr` — parse a decimal string. Works without the
+//    `macros` feature and accepts user input directly.
+let b: D38s12 = "2.2".parse().unwrap();             // D38<12> — exactly 2.2
+
+// 3) `from_bits` — for hot paths or when you already have the
+//    raw integer (value × 10^SCALE). No parsing, no allocation.
+let c = D38s12::from_bits(3_300_000_000_000);       // D38<12> — exactly 3.3
+
+// Aliases like `D38s12` are just type aliases over `D38<12>`. The
+// generic form works identically and is what you'd use when SCALE
+// is itself a const generic in your code:
+let _generic: decimal_scaled::D38<12> = D38s12::from_int(42);
+
+// Arithmetic is plain operator overloads — exact for + / − / %,
+// rounded (half-to-even) for × / ÷.
+let sum     = a + b;                                // 3.3 exactly
+let product = a * b;                                // 2.42 exactly
+let half    = a / d38!(2, scale 12);
+
+assert_eq!(sum, c);
+assert_eq!(sum.to_string(), "3.3");
+assert_eq!(a.to_bits(), 1_100_000_000_000);         // value × 10^12
+
+// Constants are available where you need them.
+let _zero = D38s12::ZERO;
+let _one  = D38s12::ONE;
+```
+
+The `macros` feature is opt-in (it pulls in a `proc_macro` build
+dependency). Without it, the `FromStr` and `from_bits` paths are
+always available.
 
 ---
 

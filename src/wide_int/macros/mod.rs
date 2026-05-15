@@ -362,6 +362,12 @@ macro_rules! decl_wide_int {
                 }
                 Self::BITS
             }
+            /// Parse a signed decimal magnitude from `s`. Mirrors
+            /// `i128::from_str_radix` in shape: accepts an optional
+            /// leading `-`, then ASCII digits. Currently only `radix
+            /// == 10` is supported; any other value returns `Err(())`.
+            /// `const fn` so the consts module can parse the build-
+            /// time generated string literals.
             pub const fn from_str_radix(
                 s: &str,
                 radix: u32,
@@ -400,6 +406,10 @@ macro_rules! decl_wide_int {
                 }
                 ::core::result::Result::Ok($S::from_mag_limbs(&acc, negative))
             }
+            /// Integer power: `self^exp` via right-to-left binary
+            /// exponentiation. Wraps on overflow (same semantics as
+            /// `i128::wrapping_pow`). `const fn`; runs at compile
+            /// time when both inputs are const.
             pub const fn pow(self, mut exp: u32) -> $S {
                 let mut acc = $S::ONE;
                 let mut base = self;
