@@ -124,6 +124,22 @@ name = "d128_mul_div_paths"
 harness = false
 required-features = ["wide"]
 
+# AGM vs artanh / Taylor strict transcendentals at the deepest tier
+# (D1024<300>). Tracks the AGM path's throughput so a future bench-
+# driven promotion has a data point.
+[[bench]]
+name = "agm_vs_taylor"
+harness = false
+required-features = ["x-wide"]
+
+# Comprehensive matrix: every decimal width × three scales (smallest /
+# midpoint / largest) × arithmetic + strict + lossy transcendentals,
+# plus cross-crate baselines. Drives the `docs/benchmarks.md` rewrite.
+[[bench]]
+name = "full_matrix"
+harness = false
+required-features = ["wide", "x-wide"]
+
 [lints.rust]
 unused_variables = "allow"
 dead_code = "allow"
