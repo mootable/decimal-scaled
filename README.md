@@ -72,7 +72,12 @@ use decimal_scaled::{d38, D38s12};
 // 1) `d38!` macro — the ergonomic constructor. Write the literal
 //    as you'd read it; scale is inferred from the fractional
 //    digits, or pinned explicitly with `, scale N`. (Requires the
-//    `macros` feature.)
+//    `macros` feature.) One macro per width: `d9!`, `d18!`,
+//    `d38!`, plus `d76!` / `d153!` / `d307!` under the wide
+//    features. Pre-baked per-scale wrappers (`d38s12!`, `d18s6!`,
+//    …) skip the `, scale N` and read more tersely at the call
+//    site. Full grammar including the `radix N` qualifier in
+//    [`macros/README.md`](macros/README.md).
 let a = d38!(1.1, scale 12);                        // D38<12> — exactly 1.1
 
 // 2) `FromStr` — parse a decimal string. Works without the

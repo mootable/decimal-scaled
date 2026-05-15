@@ -1,11 +1,20 @@
-# The `d38!` macro
+# The `d*!` macros
 
-`d38!` is a procedural macro for writing `D38` literals at compile
-time. It parses the literal you write, picks (or is told) a scale, and
-expands to a `D38<SCALE>::from_bits(...)` call — so there is no runtime
-parsing and the scale lands in the type.
+The crate exposes one proc-macro per public width — `d9!`, `d18!`,
+`d38!`, plus `d76!` / `d153!` / `d307!` under the wide-tier feature
+flags. Each parses a numeric literal (or inline expression),
+picks or is told a scale, and expands to a
+`D<N><SCALE>::from_bits(...)` call. There is no runtime parsing and
+the scale lands in the type.
 
-Enable it with the `macros` feature (off by default):
+This page focuses on `d38!` because most examples in the crate use
+the 128-bit tier; everything below applies identically to the other
+entry points (substitute `MAX_SCALE` per-width). The full
+specification — including radix-prefix integers and the curated
+per-scale wrappers (`d38s12!`, `d18s6!`, …) — lives in
+[`macros/README.md`](../macros/README.md).
+
+Enable the macros with the `macros` feature (off by default):
 
 ```toml
 [dependencies]

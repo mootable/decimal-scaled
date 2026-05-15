@@ -241,5 +241,168 @@ pub use core_type::{D153, D153s0, D153s35, D153s75, D153s150, D153s153};
 #[cfg(any(feature = "d307", feature = "wide"))]
 pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 
+// ─── Construction macros (re-exports + per-scale wrappers) ────────────
+
+/// The narrow-tier proc-macros are always available with the
+/// `macros` feature; the wide-tier proc-macros are additionally
+/// feature-gated to match their target type's availability.
 #[cfg(feature = "macros")]
-pub use decimal_scaled_macros::d38;
+pub use decimal_scaled_macros::{d9, d18, d38};
+
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+pub use decimal_scaled_macros::d76;
+
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))]
+pub use decimal_scaled_macros::d153;
+
+#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))]
+pub use decimal_scaled_macros::d307;
+
+// Per-scale wrappers — curated subset of pre-baked
+// `<dN>s<SCALE>!` macros that forward to the corresponding
+// proc-macro with `scale N` added. Long-tail scales remain
+// reachable via the explicit `, scale N` qualifier.
+//
+// Each alias is a tiny `macro_rules!`. We don't generate them
+// through a nested macro because `macro_rules!` doesn't support
+// directly emitting another `macro_rules!` without `$$` escapes
+// that aren't available in stable Rust; explicit per-line
+// declarations keep things debuggable and only cost ~40 lines.
+
+// D9 curated scales.
+/// `d9s0!(value)` — equivalent to `d9!(value, scale 0)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d9s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 0  $(, $($rest)*)?) }; }
+/// `d9s2!(value)` — equivalent to `d9!(value, scale 2)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d9s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 2  $(, $($rest)*)?) }; }
+/// `d9s4!(value)` — equivalent to `d9!(value, scale 4)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d9s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 4  $(, $($rest)*)?) }; }
+/// `d9s6!(value)` — equivalent to `d9!(value, scale 6)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d9s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 6  $(, $($rest)*)?) }; }
+/// `d9s9!(value)` — equivalent to `d9!(value, scale 9)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d9s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 9  $(, $($rest)*)?) }; }
+
+// D18 curated scales.
+/// `d18s0!(value)` — equivalent to `d18!(value, scale 0)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 0  $(, $($rest)*)?) }; }
+/// `d18s2!(value)` — equivalent to `d18!(value, scale 2)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 2  $(, $($rest)*)?) }; }
+/// `d18s4!(value)` — equivalent to `d18!(value, scale 4)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 4  $(, $($rest)*)?) }; }
+/// `d18s6!(value)` — equivalent to `d18!(value, scale 6)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 6  $(, $($rest)*)?) }; }
+/// `d18s9!(value)` — equivalent to `d18!(value, scale 9)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 9  $(, $($rest)*)?) }; }
+/// `d18s12!(value)` — equivalent to `d18!(value, scale 12)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 12 $(, $($rest)*)?) }; }
+/// `d18s18!(value)` — equivalent to `d18!(value, scale 18)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d18s18 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 18 $(, $($rest)*)?) }; }
+
+// D38 curated scales.
+/// `d38s0!(value)` — equivalent to `d38!(value, scale 0)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 0  $(, $($rest)*)?) }; }
+/// `d38s2!(value)` — equivalent to `d38!(value, scale 2)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 2  $(, $($rest)*)?) }; }
+/// `d38s4!(value)` — equivalent to `d38!(value, scale 4)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 4  $(, $($rest)*)?) }; }
+/// `d38s6!(value)` — equivalent to `d38!(value, scale 6)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 6  $(, $($rest)*)?) }; }
+/// `d38s8!(value)` — equivalent to `d38!(value, scale 8)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s8  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 8  $(, $($rest)*)?) }; }
+/// `d38s9!(value)` — equivalent to `d38!(value, scale 9)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 9  $(, $($rest)*)?) }; }
+/// `d38s12!(value)` — equivalent to `d38!(value, scale 12)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 12 $(, $($rest)*)?) }; }
+/// `d38s15!(value)` — equivalent to `d38!(value, scale 15)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s15 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 15 $(, $($rest)*)?) }; }
+/// `d38s18!(value)` — equivalent to `d38!(value, scale 18)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s18 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 18 $(, $($rest)*)?) }; }
+/// `d38s24!(value)` — equivalent to `d38!(value, scale 24)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s24 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 24 $(, $($rest)*)?) }; }
+/// `d38s35!(value)` — equivalent to `d38!(value, scale 35)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s35 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 35 $(, $($rest)*)?) }; }
+/// `d38s38!(value)` — equivalent to `d38!(value, scale 38)`.
+#[cfg(feature = "macros")] #[macro_export]
+macro_rules! d38s38 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 38 $(, $($rest)*)?) }; }
+
+// D76 curated scales.
+/// `d76s0!(value)` — equivalent to `d76!(value, scale 0)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 0  $(, $($rest)*)?) }; }
+/// `d76s2!(value)` — equivalent to `d76!(value, scale 2)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 2  $(, $($rest)*)?) }; }
+/// `d76s6!(value)` — equivalent to `d76!(value, scale 6)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 6  $(, $($rest)*)?) }; }
+/// `d76s12!(value)` — equivalent to `d76!(value, scale 12)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 12 $(, $($rest)*)?) }; }
+/// `d76s18!(value)` — equivalent to `d76!(value, scale 18)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s18 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 18 $(, $($rest)*)?) }; }
+/// `d76s35!(value)` — equivalent to `d76!(value, scale 35)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s35 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 35 $(, $($rest)*)?) }; }
+/// `d76s50!(value)` — equivalent to `d76!(value, scale 50)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s50 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 50 $(, $($rest)*)?) }; }
+/// `d76s76!(value)` — equivalent to `d76!(value, scale 76)`.
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+macro_rules! d76s76 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 76 $(, $($rest)*)?) }; }
+
+// D153 curated scales.
+/// `d153s0!(value)` — equivalent to `d153!(value, scale 0)`.
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+macro_rules! d153s0   { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 0   $(, $($rest)*)?) }; }
+/// `d153s35!(value)` — equivalent to `d153!(value, scale 35)`.
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+macro_rules! d153s35  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 35  $(, $($rest)*)?) }; }
+/// `d153s75!(value)` — equivalent to `d153!(value, scale 75)`.
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+macro_rules! d153s75  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 75  $(, $($rest)*)?) }; }
+/// `d153s150!(value)` — equivalent to `d153!(value, scale 150)`.
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+macro_rules! d153s150 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 150 $(, $($rest)*)?) }; }
+/// `d153s153!(value)` — equivalent to `d153!(value, scale 153)`.
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+macro_rules! d153s153 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 153 $(, $($rest)*)?) }; }
+
+// D307 curated scales.
+/// `d307s0!(value)` — equivalent to `d307!(value, scale 0)`.
+#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+macro_rules! d307s0   { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 0   $(, $($rest)*)?) }; }
+/// `d307s35!(value)` — equivalent to `d307!(value, scale 35)`.
+#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+macro_rules! d307s35  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 35  $(, $($rest)*)?) }; }
+/// `d307s150!(value)` — equivalent to `d307!(value, scale 150)`.
+#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+macro_rules! d307s150 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 150 $(, $($rest)*)?) }; }
+/// `d307s300!(value)` — equivalent to `d307!(value, scale 300)`.
+#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+macro_rules! d307s300 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 300 $(, $($rest)*)?) }; }
+/// `d307s307!(value)` — equivalent to `d307!(value, scale 307)`.
+#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+macro_rules! d307s307 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 307 $(, $($rest)*)?) }; }

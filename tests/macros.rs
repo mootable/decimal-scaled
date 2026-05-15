@@ -245,3 +245,164 @@ fn expression_const_context_works() {
     const V: D38s2 = d38!(N * 3, scale 2);
     assert_eq!(V, D38s2::from_bits(12_600));
 }
+
+// ── Per-width entry points: narrow tiers ──────────────────────────────
+
+#[test]
+fn d9_literal_inferred_scale() {
+    use decimal_scaled::{d9, D9s2};
+    let v = d9!(1.23);
+    assert_eq!(v, D9s2::from_bits(123));
+}
+
+#[test]
+fn d9_max_scale_9() {
+    use decimal_scaled::{d9, D9s9};
+    let v = d9!(0.000_000_001);  // raw 1 at scale 9
+    assert_eq!(v, D9s9::from_bits(1));
+}
+
+#[test]
+fn d18_literal_inferred_scale() {
+    use decimal_scaled::{d18, D18s4};
+    let v = d18!(1234.5678);
+    assert_eq!(v, D18s4::from_bits(12_345_678));
+}
+
+#[test]
+fn d18_explicit_scale_pad() {
+    use decimal_scaled::{d18, D18s9};
+    let v = d18!(1.5, scale 9);
+    assert_eq!(v, D18s9::from_bits(1_500_000_000));
+}
+
+#[test]
+fn d18_expression_form() {
+    use decimal_scaled::{d18, D18s4};
+    let raw: i64 = 12345;
+    let v = d18!(raw, scale 4);
+    assert_eq!(v.to_bits(), 12345i64 * 10_000);
+    let _: D18s4 = v;
+}
+
+// ── Per-width entry points: wide tiers ────────────────────────────────
+
+#[cfg(feature = "wide")]
+#[test]
+fn d76_literal_inferred_scale() {
+    use decimal_scaled::{d76, D76s2};
+    let v: D76s2 = d76!(1.23);
+    assert_eq!(v.to_string(), "1.23");
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn d76_explicit_scale() {
+    use decimal_scaled::{d76, D76s12};
+    let v: D76s12 = d76!(0.000_000_000_001);  // scale 12 inferred and matched
+    assert_eq!(v.to_string(), "0.000000000001");
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn d153_literal_inferred() {
+    use decimal_scaled::{d153, D153s35};
+    // Use a value whose natural scale matches the alias.
+    let v: D153s35 = d153!(2.71828182845904523536028747135266250);
+    assert!(v.to_string().starts_with("2.71828182845904523536028747"));
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn d307_literal_inferred() {
+    use decimal_scaled::{d307, D307s35};
+    let v: D307s35 = d307!(3.14159265358979323846264338327950288);
+    assert!(v.to_string().starts_with("3.14159265358979323846264338327950288"));
+}
+
+// ── Per-scale wrapper macros ──────────────────────────────────────────
+
+#[test]
+fn d9_per_scale_wrapper_d9s2() {
+    use decimal_scaled::{d9s2, D9s2};
+    let v: D9s2 = d9s2!(1.23);
+    assert_eq!(v, D9s2::from_bits(123));
+}
+
+#[test]
+fn d18_per_scale_wrapper_d18s12() {
+    use decimal_scaled::{d18s12, D18s12};
+    let v: D18s12 = d18s12!(1.5);
+    assert_eq!(v, D18s12::from_bits(1_500_000_000_000));
+}
+
+#[test]
+fn d38_per_scale_wrapper_d38s12() {
+    use decimal_scaled::{d38s12, D38s12};
+    let v: D38s12 = d38s12!(1.5);
+    assert_eq!(v, D38s12::from_bits(1_500_000_000_000));
+}
+
+#[test]
+fn d38_per_scale_wrapper_forwards_qualifiers() {
+    use decimal_scaled::{d38s2, D38s2};
+    // Scale 2 is pre-baked; `rounded` is forwarded as a tail
+    // qualifier.
+    let v: D38s2 = d38s2!(1.234_567, rounded);
+    assert_eq!(v, D38s2::from_bits(123));
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn d76_per_scale_wrapper_d76s35() {
+    use decimal_scaled::{d76s35, D76s35};
+    let v: D76s35 = d76s35!(1.5);
+    // 1.5 at scale 35 = 1.5 * 10^35.
+    assert_eq!(v.to_string(), "1.50000000000000000000000000000000000");
+}
+
+// ── Radix-prefixed literals ───────────────────────────────────────────
+
+#[test]
+fn d38_hex_prefix_integer() {
+    use decimal_scaled::{d38, D38s0};
+    // 0xFF == 255 — scale defaults to 0 for radix-prefixed integers.
+    let v: D38s0 = d38!(0xFF);
+    assert_eq!(v.to_bits(), 255);
+}
+
+#[test]
+fn d38_oct_prefix_integer() {
+    use decimal_scaled::{d38, D38s0};
+    let v: D38s0 = d38!(0o755);  // == 493
+    assert_eq!(v.to_bits(), 493);
+}
+
+#[test]
+fn d38_bin_prefix_integer() {
+    use decimal_scaled::{d38, D38s0};
+    let v: D38s0 = d38!(0b1010_0110);  // == 166
+    assert_eq!(v.to_bits(), 166);
+}
+
+#[test]
+fn d38_hex_with_explicit_scale() {
+    use decimal_scaled::{d38, D38s2};
+    let v: D38s2 = d38!(0x7B, scale 2);  // 123 at scale 2 = 1.23
+    assert_eq!(v.to_string(), "1.23");
+}
+
+#[test]
+fn d38_explicit_radix_qualifier() {
+    use decimal_scaled::{d38, D38s0};
+    let v: D38s0 = d38!(123, radix 8);  // octal: 1*64 + 2*8 + 3 = 83
+    assert_eq!(v.to_bits(), 83);
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn d76_hex_prefix() {
+    use decimal_scaled::{d76, D76s0};
+    let v: D76s0 = d76!(0xDEAD_BEEF);
+    assert_eq!(v.to_string(), "3735928559");
+}
