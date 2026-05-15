@@ -83,6 +83,8 @@ mod rounding;
 mod mg_divide;
 mod wide_int;
 #[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
+mod hint;
+#[cfg(any(feature = "d256", feature = "d512", feature = "d1024", feature = "wide"))]
 mod wide;
 #[cfg(any(feature = "d256", feature = "wide"))]
 mod hand_decimal;
