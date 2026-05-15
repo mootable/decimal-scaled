@@ -209,20 +209,33 @@ instruction (~1 ns), mul / div carry a 256-bit widening step (~10 ns).
 The wide `D256` tier keeps add / sub almost free but its mul / div pay
 for a 256-bit hand-rolled-integer divide — roughly 20× the `D128` cost.
 
-Transcendentals come in two forms. The **lossy** `f64` bridge is fast
-(~40 ns) but inherits `f64`'s precision ceiling and is not
-platform-independent. The **strict** integer-only form is
-**correctly rounded to within 0.5 [ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)**
-of the exact result — the IEEE-754 round-to-nearest contract — and is `no_std` and
-platform-deterministic. That accuracy guarantee is the capability the
-binary-fixed-point and software-decimal alternatives do not offer:
-`f64`-bridge results are not correctly rounded to the last place,
-`rust_decimal`'s software transcendentals are accurate but not
-correctly rounded to 0.5 ULP, and `fixed` has no transcendentals at
-all. For series functions the strict form costs ~700× the lossy
-bridge; `sqrt_strict` is the exception — algebraic, so it ties the
-lossy form.
+Transcendentals (`ln`, `exp`, `sqrt`, trig, …) come in two forms. The
+**lossy** `f64` bridge is fast (~40 ns) but inherits `f64`'s precision
+ceiling and is not platform-independent. The **strict** integer-only
+form is **correctly rounded to within 0.5
+[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place)** of the
+exact result — the IEEE-754 round-to-nearest contract — and is
+`no_std` and platform-deterministic.
 
+### Transcendental accuracy comparison
+
+A *correctly rounded* result is the exact mathematical value rounded
+to the nearest representable number — i.e. the error is at most half a
+[ULP](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (unit in
+the last place). It is the strongest accuracy guarantee a finite type
+can give, and the capability the alternatives do not offer:
+
+| Type | Transcendentals | Correctly rounded to 0.5 ULP | Platform-deterministic |
+|---|---|---|---|
+| `f32` / `f64` (platform libm) | yes | no — `libm` is not guaranteed correctly rounded | no |
+| `fixed` (`I64F64`, …) | none | — | — |
+| `bigdecimal` | none | — | — |
+| `rust_decimal` (`MathematicalOps`) | yes | no — accurate, but not to the last place | yes |
+| `decimal-scaled` — lossy (`f64` bridge) | yes | no — inherits `f64` | no |
+| `decimal-scaled` — **strict** (`*_strict`) | yes | **yes — within 0.5 ULP** | **yes** |
+
+For series functions the strict form costs ~700× the lossy bridge;
+`sqrt_strict` is the exception — algebraic, so it ties the lossy form.
 Full head-to-head measurements against `bnum`, `ruint`, `rust_decimal`,
 and `fixed` are in [`docs/benchmarks.md`](docs/benchmarks.md).
 
