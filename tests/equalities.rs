@@ -2,7 +2,7 @@
 //! Moved out of `src/equalities.rs` so that file carries only macro
 //! invocations.
 
-use decimal_scaled::{D38, D38s12};
+use decimal_scaled::D38s12;
 
 // --- signed integers --------------------------------------------------
 
@@ -95,9 +95,17 @@ fn eq_float_zero_and_one() {
 
 #[cfg(feature = "std")]
 #[test]
+#[allow(clippy::incorrect_partial_cmp_impl_on_ord_type, clippy::eq_op)]
 fn eq_float_nan_is_false() {
-    assert!(!(D38s12::ZERO == f64::NAN));
-    assert!(!(D38s12::ZERO == f32::NAN));
+    // Intentional: tests the crate's `D38 == f64` impl rejects NaN
+    // (any NaN comparison returns false). The lint flags direct
+    // `nan == nan` style code in general; this is the correct
+    // semantics for the type's PartialEq impl with a NaN operand.
+    #[allow(invalid_nan_comparisons)]
+    {
+        assert!(!(D38s12::ZERO == f64::NAN));
+        assert!(!(D38s12::ZERO == f32::NAN));
+    }
 }
 
 #[cfg(feature = "std")]

@@ -47,10 +47,13 @@
 mod bnum;
 
 use bnum::BnumD76;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, Criterion};
 use decimal_scaled::{D307, D38, D76, D9, D153, D18};
 use fixed::types::I64F64;
-use rust_decimal::{Decimal, MathematicalOps};
+use rust_decimal::Decimal;
+#[cfg(not(feature = "strict"))]
+use rust_decimal::MathematicalOps;
 
 // ─────────────────────────────────────────────────────────────────────
 // Arithmetic — six ops × eighteen type×scale configs.
@@ -150,6 +153,7 @@ fn bench_arith(c: &mut Criterion) {
 // precision and the strict path is the only correct one.)
 // ─────────────────────────────────────────────────────────────────────
 
+#[cfg(not(feature = "strict"))]
 macro_rules! fast_block {
     ($g:ident, $tag:literal, $T:ty) => {{
         // Arguments are picked so the result fits at every type×

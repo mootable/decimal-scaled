@@ -30,6 +30,7 @@
 /// - `$Work`       — wide int for the transcendental core (`Int1024` for D76, …).
 /// - `$core`       — unique module name for the transcendental core.
 /// - `$max_scale`  — the type's maximum supported `SCALE`.
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 macro_rules! decl_decimal_full {
     (
         wide $Type:ident,
@@ -79,4 +80,5 @@ macro_rules! decl_decimal_full {
     };
 }
 
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) use decl_decimal_full;

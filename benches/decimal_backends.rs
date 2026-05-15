@@ -26,7 +26,8 @@
 mod bnum;
 
 use bnum::BnumD76;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, Criterion};
 use decimal_scaled::{D38, D76, D9, D18};
 #[cfg(feature = "d153")]
 use decimal_scaled::D153;

@@ -9,7 +9,8 @@
 //! Run with: `cargo bench --features wide --bench wide_int_backends`.
 
 use bnum::cast::As;
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use std::hint::black_box;
+use criterion::{criterion_group, criterion_main, Criterion};
 use decimal_scaled::{Int256, Int512, Int1024};
 
 const A: i128 = 1_234_567_890_123_456_789;

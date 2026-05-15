@@ -12,7 +12,13 @@
 //! tightens the 0.5 ULP contract on `DecimalConsts` for every
 //! wide-tier scale.
 
+// These imports are only reachable when at least one wide-tier
+// feature is enabled — every item in this module is per-tier
+// `#[cfg]`-gated below. Narrow-only builds compile the module
+// empty.
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 use crate::wide_int::{Int256, Int512, Int1024};
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 use crate::consts::DecimalConsts;
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));

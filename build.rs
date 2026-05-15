@@ -383,7 +383,7 @@ fn atan_recip(n: u64, digits: u32) -> BigU {
 
 /// Rescale-down with half-to-even rounding. `value` carries
 /// `true * 10^from`; returns `true * 10^to` for `to <= from`.
-fn rescale_down_hte(mut value: BigU, from: u32, to: u32) -> BigU {
+fn rescale_down_hte(value: BigU, from: u32, to: u32) -> BigU {
     if to >= from { return value; }
     let shift = from - to;
     // Divide by 10^shift, keeping the remainder for the round step.
@@ -405,7 +405,6 @@ fn rescale_down_hte(mut value: BigU, from: u32, to: u32) -> BigU {
     if round_up {
         result.add_u64(1);
     }
-    let _ = value; // silence the unused-mut lint when shift == 0 returns early
     result
 }
 

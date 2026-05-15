@@ -1,7 +1,7 @@
 //! `D38::rescale` / `rescale_with` integration tests. Moved out of
 //! `src/rescale.rs` so that file carries only macro invocations.
 
-use decimal_scaled::{D38, D38s2, D38s6, D38s12, RoundingMode};
+use decimal_scaled::{D38s2, D38s6, D38s12, RoundingMode};
 
 /// `true` when the build's default rounding mode is HalfToEven.
 const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-zero")

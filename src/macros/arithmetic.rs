@@ -74,6 +74,7 @@ pub(crate) use round_with_mode_native;
 /// adapted to a hand-rolled wide integer `$W`. Uses
 /// `<$W>::from_i128(0/1)` for the small constants and the type's
 /// operators throughout.
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 macro_rules! round_with_mode_wide {
     ($n:expr, $m:expr, $W:ty, $mode:expr) => {{
         let n = $n;
@@ -107,6 +108,7 @@ macro_rules! round_with_mode_wide {
         }
     }};
 }
+#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) use round_with_mode_wide;
 
 /// Generates the standard arithmetic operator overloads for a decimal

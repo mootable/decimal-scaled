@@ -57,8 +57,6 @@ enum D38Invocation {
         expr: Expr,
         scale: u32,
         scale_span: Span,
-        rounded: bool,
-        value_span: Span,
     },
 }
 
@@ -102,12 +100,12 @@ impl Parse for D38Invocation {
                         ));
                     }
                 };
+                let _ = rounded; // future: rounded-expression mode
+                let _ = value_span;
                 Ok(D38Invocation::Expression {
                     expr: value_expr,
                     scale,
                     scale_span,
-                    rounded,
-                    value_span,
                 })
             }
         }
@@ -186,8 +184,6 @@ impl D38Invocation {
                 expr,
                 scale,
                 scale_span,
-                rounded: _,
-                value_span: _,
             } => expand_expression(expr, scale, scale_span),
         }
     }
