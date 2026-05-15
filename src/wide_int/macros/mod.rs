@@ -1,9 +1,9 @@
-//! The `decl_hint!` macro — emits a concrete fixed-width signed /
+//! The `decl_wide_int!` macro — emits a concrete fixed-width signed /
 //! unsigned integer type pair, delegating its arithmetic to the slice
 //! primitives in the parent module.
 
 // ─────────────────────────────────────────────────────────────────────
-// decl_hint! — concrete fixed-width signed/unsigned integer newtypes.
+// decl_wide_int! — concrete fixed-width signed/unsigned integer newtypes.
 //
 // Each invocation emits an unsigned `$U` ([u128; L]) and a
 // two's-complement signed `$S` ([u128; L]), both delegating their
@@ -17,12 +17,20 @@
 /// - `$L` — limb count (`[u128; $L]`); the bit width is `$L * 128`.
 /// - `$D` — `2 * $L`, the buffer width for widening multiply/divide
 /// intermediates.
-macro_rules! decl_hint {
+macro_rules! decl_wide_int {
     ($U:ident, $S:ident, $L:tt, $D:tt) => {
         // ── Unsigned ──────────────────────────────────────────────────
         /// Hand-rolled fixed-width unsigned integer, little-endian limbs.
-        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug, Default)]
+        // `Default` is derived manually rather than via `#[derive]` so it
+        // works for any limb count — the standard library only emits
+        // `Default` for arrays up to `N = 32`.
+        #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
         pub struct $U(pub(crate) [u128; $L]);
+
+        impl ::core::default::Default for $U {
+            #[inline]
+            fn default() -> Self { Self::ZERO }
+        }
 
         impl $U {
             pub(crate) const ZERO: $U = $U([0; $L]);
@@ -354,7 +362,7 @@ macro_rules! decl_hint {
                 }
                 Self::BITS
             }
-            pub(crate) const fn from_str_radix(
+            pub const fn from_str_radix(
                 s: &str,
                 radix: u32,
             ) -> ::core::result::Result<$S, ()> {
@@ -392,7 +400,7 @@ macro_rules! decl_hint {
                 }
                 ::core::result::Result::Ok($S::from_mag_limbs(&acc, negative))
             }
-            pub(crate) const fn pow(self, mut exp: u32) -> $S {
+            pub const fn pow(self, mut exp: u32) -> $S {
                 let mut acc = $S::ONE;
                 let mut base = self;
                 while exp > 0 {
@@ -644,7 +652,7 @@ macro_rules! decl_hint {
                 }
             }
             /// Exact `i128` value, or `None` if it does not fit.
-            pub(crate) const fn to_i128_checked(self) -> ::core::option::Option<i128> {
+            pub const fn to_i128_checked(self) -> ::core::option::Option<i128> {
                 let negative = self.is_negative();
                 let mag = self.unsigned_abs().0;
                 let (lo, hi) = mag.split_at(1);
@@ -664,7 +672,7 @@ macro_rules! decl_hint {
                 }
             }
             /// Exact `u128` value, or `None` if negative / too large.
-            pub(crate) const fn to_u128_checked(self) -> ::core::option::Option<u128> {
+            pub const fn to_u128_checked(self) -> ::core::option::Option<u128> {
                 let (lo, hi) = self.0.split_at(1);
                 if self.is_negative() || !$crate::wide_int::limbs_is_zero(hi) {
                     ::core::option::Option::None
@@ -744,8 +752,8 @@ macro_rules! decl_hint {
 
         impl $crate::wide_int::WideInt for $S {
             #[inline]
-            fn to_mag_sign(self) -> ([u128; 32], bool) {
-                let mut out = [0u128; 32];
+            fn to_mag_sign(self) -> ([u128; 64], bool) {
+                let mut out = [0u128; 64];
                 let mag = self.unsigned_abs().0;
                 out[..$L].copy_from_slice(&mag);
                 (out, self.is_negative())
@@ -929,4 +937,4 @@ macro_rules! decl_hint {
     };
 }
 
-pub(crate) use decl_hint;
+pub(crate) use decl_wide_int;

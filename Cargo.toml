@@ -43,14 +43,30 @@ rounding-ceiling = []
 # f128 are experimental in Rust; this feature requires the nightly
 # toolchain. On stable, leave the feature off.
 experimental-floats = []
-# Wide decimal tiers. Each width is independently opt-in; `wide` is an
-# umbrella over all three. They are backed by the in-tree hand-rolled
+# Wide decimal tiers. Each width is independently opt-in; `wide` is the
+# umbrella up to D1024, `x-wide` is the umbrella for the very wide
+# (`d1536` and above) tiers. They are backed by the in-tree hand-rolled
 # wide-integer types — no external big-integer dependency. D32 / D64 /
 # D128 use primitive storage and need none of this.
-wide = ["d256", "d512", "d1024"]
+#
+# Powers of two: D256, D512, D1024 (wide); D2048, D4096 (x-wide).
+# Halfway widths `(2^n + 2^(n+1))/2`: D384, D768 (wide); D1536, D3072
+# (x-wide). Halfway widths under 384 are skipped — they would require
+# u64-aligned storage, breaking the u128-limb model.
+wide = ["d256", "d384", "d512", "d768"]
 d256 = []
+d384 = []
 d512 = []
+d768 = []
+# Very wide tiers (D1024 and above). Gated separately because their
+# strict-transcendental work integers run into many thousands of bits
+# and pull in large wide-integer types.
+x-wide = ["d1024", "d1536", "d2048", "d3072", "d4096"]
 d1024 = []
+d1536 = []
+d2048 = []
+d3072 = []
+d4096 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
@@ -91,6 +107,13 @@ required-features = ["wide"]
 # wide tier.
 [[bench]]
 name = "decimal_backends"
+harness = false
+required-features = ["wide"]
+
+# D128 mul / div: native Moller-Granlund path vs the wide-arm
+# (Int256-widening) algorithm head-to-head.
+[[bench]]
+name = "d128_mul_div_paths"
 harness = false
 required-features = ["wide"]
 
