@@ -109,6 +109,35 @@ always available.
 
 ---
 
+## Type names
+
+The number in each `D<N>` type name is **the number of base-10
+digits it can safely represent**, *not* the bit-width of the
+underlying integer. The crate's home is decimal arithmetic, so it
+names its types in the unit users actually reason about. Mapping:
+
+| type | underlying signed integer | safe decimal digits (= the `<N>`) | max value at SCALE 0 |
+|---|---|---|---|
+| `D9<S>` | `i32` (32 bits) | 9 | ±2.1 × 10⁹ |
+| `D18<S>` | `i64` (64 bits) | 18 | ±9.2 × 10¹⁸ |
+| `D38<S>` | `i128` (128 bits) | 38 | ±1.7 × 10³⁸ |
+| `D76<S>` | `Int256` (256 bits, in-tree wide-int) | 76 | ±5.8 × 10⁷⁶ |
+| `D153<S>` | `Int512` (512 bits) | 153 | ±6.7 × 10¹⁵³ |
+| `D307<S>` | `Int1024` (1024 bits) | 307 | ±9.0 × 10³⁰⁷ |
+
+The "safe decimal digits" count is `⌊(bits − 1) · log₁₀ 2⌋` — the
+largest `N` such that *every* `N`-digit decimal value (`±999…9`)
+fits the signed storage. That's also the `MAX_SCALE` of the type:
+at `SCALE = N`, every fractional digit lands inside the storage
+range. (`D38<38>` represents values in `[−1.7, 1.7]` with 38
+fractional digits; `D38<0>` represents integers up to `±10³⁸`.)
+
+Pick the narrowest tier whose range covers your values at the
+scale you need. Widening is free (`From`/`widen()`); narrowing is
+fallible (`TryFrom`/`narrow()`).
+
+---
+
 ## Why another numeric type?
 
 Every numeric type makes a choice about which numbers it can represent exactly. There is no universal answer - the right choice depends on where the numbers come from.
