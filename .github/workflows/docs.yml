@@ -41,6 +41,9 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install pandoc
+        run: sudo apt-get update && sudo apt-get install -y pandoc
+
       - name: Build rustdoc
         # `--all-features` is avoided: `experimental-floats` needs the
         # nightly toolchain. `wide` + `macros` is the widest
@@ -66,16 +69,106 @@ jobs:
             cp -r docs "$site/guides"
           fi
 
-          # README + ROADMAP + CHANGELOG at predictable URLs.
-          [ -f README.md ]    && cp README.md    "$site/README.md"
-          [ -f ROADMAP.md ]   && cp ROADMAP.md   "$site/ROADMAP.md"
-          [ -f CHANGELOG.md ] && cp CHANGELOG.md "$site/CHANGELOG.md"
-
-          # Mootable design assets — already copied into _site under
-          # guides/assets/ above (via the docs/ tree), but the landing
-          # page expects them at /assets too. Symlink saves bytes.
+          # Mootable design assets — landing page + every rendered
+          # markdown page references /assets/site.css.
           if [ -d docs/assets ]; then
             cp -r docs/assets "$site/assets"
+          fi
+
+          # Pandoc template wrapping every rendered markdown page in
+          # the Mootable dusk shell. Inline so it ships with the
+          # workflow and stays in sync with the index.html below.
+          cat > /tmp/page.html <<'TMPL'
+          <!doctype html>
+          <html lang="en">
+          <head>
+            <meta charset="utf-8">
+            <title>$title$ — decimal-scaled</title>
+            <meta name="viewport" content="width=device-width, initial-scale=1">
+            <link rel="icon" type="image/svg+xml" href="$assets$/mootable-cow-dusk.svg">
+            <link rel="stylesheet" href="$assets$/site.css">
+            <style>
+              .page { max-width: 64rem; margin: 0 auto; padding: var(--space-7) var(--space-5); }
+              .page h1 { font-size: var(--font-size-3xl); margin-bottom: var(--space-5); color: var(--accent); }
+              .page h2 { margin: var(--space-7) 0 var(--space-3); color: var(--accent); border-bottom: 1px solid var(--border-1); padding-bottom: var(--space-2); }
+              .page h3 { margin: var(--space-5) 0 var(--space-2); }
+              .page p, .page ul, .page ol { margin-bottom: var(--space-3); line-height: var(--line-loose); }
+              .page table { border-collapse: collapse; margin: var(--space-3) 0; width: 100%; font-size: var(--font-size-sm); }
+              .page th, .page td { border: 1px solid var(--border-1); padding: var(--space-2) var(--space-3); text-align: left; vertical-align: top; }
+              .page th { background: var(--bg-2); font-family: var(--font-display); font-weight: var(--weight-semibold); }
+              .page pre { background: var(--bg-2); padding: var(--space-3); border-radius: var(--radius-md); overflow-x: auto; font-size: var(--font-size-sm); }
+              .page pre code { background: transparent; padding: 0; }
+              .page blockquote { border-left: 4px solid var(--accent-secondary); margin: var(--space-3) 0; padding: var(--space-2) var(--space-4); background: var(--accent-tint); color: var(--fg-2); }
+              .page img { max-width: 100%; height: auto; }
+            </style>
+          </head>
+          <body>
+            <header class="topbar">
+              <a class="crest" href="$root$/index.html">
+                <img src="$assets$/mootable-cow-dusk.svg" alt="Mootable">
+                <span class="label">decimal-scaled</span>
+              </a>
+              <nav class="nav">
+                <a href="$root$/api/decimal_scaled/index.html">API</a>
+                <a href="$root$/guides/README.html">Guides</a>
+                <a href="$root$/guides/benchmarks.html">Benchmarks</a>
+                <a href="https://github.com/mootable/decimal-scaled">GitHub</a>
+              </nav>
+            </header>
+            <main class="page">
+              $body$
+            </main>
+            <footer class="footer">
+              <div class="left"><img src="$assets$/mootable-cow-dusk.svg" width="20" height="20" alt=""><small>A <a href="https://mootable.dev" style="color:inherit">Mootable</a> open-source project.</small></div>
+              <div class="right"><a href="https://github.com/mootable/decimal-scaled">GitHub</a> <a href="https://crates.io/crates/decimal-scaled">crates.io</a> <a href="https://docs.rs/decimal-scaled">docs.rs</a></div>
+            </footer>
+          </body>
+          </html>
+          TMPL
+
+          # Render every tracked markdown file to HTML, preserving
+          # directory layout and rewriting *.md links to *.html.
+          render_md() {
+            local src="$1" out="$2" assets_rel="$3" root_rel="$4" title
+            title=$(head -n 1 "$src" | sed 's/^#* *//' | head -c 100)
+            [ -z "$title" ] && title="$(basename "$src" .md)"
+            mkdir -p "$(dirname "$out")"
+            pandoc --from gfm+pipe_tables \
+                   --to html5 \
+                   --metadata title="$title" \
+                   --variable assets="$assets_rel" \
+                   --variable root="$root_rel" \
+                   --template /tmp/page.html \
+                   "$src" -o "$out"
+            # Rewrite href="...md" → href="...html" so cross-doc
+            # links stay inside the rendered set.
+            sed -i 's|\.md"|.html"|g; s|\.md#|.html#|g' "$out"
+          }
+
+          # Root-level pages.
+          [ -f README.md ]    && render_md README.md    "$site/README.html"    "assets" "."
+          [ -f ROADMAP.md ]   && render_md ROADMAP.md   "$site/ROADMAP.html"   "assets" "."
+          [ -f CHANGELOG.md ] && render_md CHANGELOG.md "$site/CHANGELOG.html" "assets" "."
+
+          # docs/ → /guides/ HTML tree.
+          if [ -d docs ]; then
+            mkdir -p "$site/guides"
+            # Copy figures + assets through unchanged (binary).
+            (cd docs && find . -type f ! -name '*.md' -print0) | \
+              while IFS= read -r -d '' f; do
+                mkdir -p "$site/guides/$(dirname "$f")"
+                cp "docs/$f" "$site/guides/$f"
+              done
+            # Render every .md, computing the asset-relative depth.
+            (cd docs && find . -type f -name '*.md' -print0) | \
+              while IFS= read -r -d '' f; do
+                # Depth = number of slashes in f → number of `..`s.
+                depth=$(echo "$f" | tr -cd '/' | wc -c)
+                # depth=0 means file at docs/ root → assets at "../assets".
+                # depth=1 means docs/sub/foo.md → assets at "../../assets".
+                rel=""; for _ in $(seq 0 "$depth"); do rel="../$rel"; done
+                render_md "docs/$f" "$site/guides/${f%.md}.html" "${rel}assets" "${rel%/}"
+              done
           fi
 
           # Root landing page — Mootable design system, dusk theme.
@@ -97,8 +190,8 @@ jobs:
               </a>
               <nav class="nav">
                 <a href="api/decimal_scaled/index.html">API</a>
-                <a href="guides/README.md">Guides</a>
-                <a href="guides/benchmarks.md">Benchmarks</a>
+                <a href="guides/README.html">Guides</a>
+                <a href="guides/benchmarks.html">Benchmarks</a>
                 <a href="https://github.com/mootable/decimal-scaled">GitHub</a>
               </nav>
             </header>
@@ -119,27 +212,27 @@ jobs:
                 <p>Full rustdoc for every type, trait, and method on every supported width.</p>
                 <span class="glyph">docs.rs mirror</span>
               </a>
-              <a class="card" href="README.md">
+              <a class="card" href="README.html">
                 <h3>README</h3>
                 <p>The headline pitch, install snippet, feature flags, and quick examples.</p>
                 <span class="glyph">README.md</span>
               </a>
-              <a class="card" href="guides/README.md">
+              <a class="card" href="guides/README.html">
                 <h3>Usage guides</h3>
                 <p>Per-topic deep-dives: widths, scales, strict-vs-fast, rounding, macros.</p>
                 <span class="glyph">docs/</span>
               </a>
-              <a class="card" href="guides/benchmarks.md">
+              <a class="card" href="guides/benchmarks.html">
                 <h3>Benchmarks</h3>
                 <p>Per-width speed tables plus the §5 library-comparison vs the top crates.io peers.</p>
                 <span class="glyph">docs/benchmarks.md</span>
               </a>
-              <a class="card" href="ROADMAP.md">
+              <a class="card" href="ROADMAP.html">
                 <h3>Roadmap</h3>
                 <p>Known throughput gaps at D76+ and the planned algorithmic fix per item.</p>
                 <span class="glyph">ROADMAP.md</span>
               </a>
-              <a class="card" href="CHANGELOG.md">
+              <a class="card" href="CHANGELOG.html">
                 <h3>Changelog</h3>
                 <p>What changed in every release, including the 0.2.x docs and benchmark series.</p>
                 <span class="glyph">CHANGELOG.md</span>
