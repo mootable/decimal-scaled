@@ -117,9 +117,7 @@
     gap: 1rem;
   }
   .md-typeset .hero-mark {
-    order: -1;            /* mark first on narrow screens */
-    width: 40%;
-    justify-self: start;
+    display: none;        /* mobile: hide the cow entirely */
   }
 }
 

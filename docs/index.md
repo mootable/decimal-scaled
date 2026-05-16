@@ -4,26 +4,22 @@ hide:
   - toc
 ---
 
-<div class="hero-row">
-  <div class="hero-copy">
-    <div class="hero-tagline">Bit-exact decimal arithmetic for Rust</div>
-    <h1 class="hero-wordmark"><span class="a">decimal</span><span class="b">-scaled</span></h1>
+<div class="hero-row" markdown>
+<div class="hero-copy" markdown>
+<div class="hero-tagline">Bit-exact decimal arithmetic for Rust</div>
+<h1 class="hero-wordmark"><span class="a">decimal</span><span class="b">-scaled</span></h1>
 
-    <p class="hero-lede">
-      Const-generic base-10 fixed-point decimals - D9 through D307 - with
-      <strong>0.5 ULP correctly-rounded</strong> integer-only transcendentals.
-      Deterministic across every platform. <code>no_std</code>-friendly.
-    </p>
+Const-generic base-10 fixed-point decimals - D9 through D307 - with **0.5 ULP correctly-rounded** integer-only transcendentals. Deterministic across every platform. `no_std`-friendly.
+{ .hero-lede }
 
-    <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
+<div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
 
-    <div class="hero-actions" markdown>
 [:material-rocket-launch: Get started](getting-started.md){ .md-button .md-button--primary }
 [:material-chart-line: Benchmarks](benchmarks.md){ .md-button }
 [:fontawesome-brands-github: GitHub](https://github.com/mootable/decimal-scaled){ .md-button }
-    </div>
-  </div>
-  <img class="hero-mark" src="assets/mootable-cow-dusk.svg" alt="Mootable">
+{ .hero-actions }
+</div>
+<img class="hero-mark" src="assets/mootable-cow-dusk.svg" alt="Mootable">
 </div>
 
 ---
