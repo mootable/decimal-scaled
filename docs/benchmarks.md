@@ -24,11 +24,12 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > matters. Operands are `black_box`-ed to defeat constant folding;
 > outputs are returned from the closure so the optimiser cannot drop
 > the call. **Every row uses one unit — the median natural unit
-> across that row's cells — so values compare directly; cells whose
-> natural unit is much smaller than the row's chosen one are
-> rendered in scientific notation (e.g. `1.26×10⁻⁵ ms` for a 12 ns
-> fast-path cell in an `ms`-scale row). In §1 the winning cell per
-> row is bold. In §2 onwards (transcendental tables) each width gets
+> across that row's cells — so values compare directly. Cells whose
+> natural unit is smaller than the row's chosen one are rendered as
+> plain decimals (e.g. `0.00146 µs` for a 1.5 ns cell in a µs-scale
+> row); scientific notation is reserved for cells smaller than
+> 10⁻⁵ of the row's unit. In §1 the winning cell per row is bold.
+> In §2 onwards (transcendental tables) each width gets
 > a single column showing the `s = 0 < s = mid < s = max` triple in
 > the row's natural unit, and the bold mark goes on whichever
 > width's s = mid wins the row — s = mid is the honest series-cost
@@ -256,7 +257,7 @@ widths.
 | fn | D9 (s=0 < s=5 < s=9) | D18 (s=0 < s=9 < s=18) | D38 (s=0 < s=19 < s=38) |
 |---|---|---|---|
 | ln | 1.18 µs < **32.0 µs** < 40.2 µs | 1.13 µs < 38.9 µs < 52.2 µs | 1.08 µs < 58.9 µs < 63.2 µs |
-| exp | 1.46×10⁻³ µs < **29.5 µs** < 35.5 µs | 1.10×10⁻³ µs < 34.8 µs < 45.3 µs | 1.03×10⁻³ µs < 47.5 µs < 28.6 µs |
+| exp | 0.00146 µs < **29.5 µs** < 35.5 µs | 0.00110 µs < 34.8 µs < 45.3 µs | 0.00103 µs < 47.5 µs < 28.6 µs |
 | sin | 19.1 µs < **27.2 µs** < 31.4 µs | 18.5 µs < 30.6 µs < 40.2 µs | 19.1 µs < 42.7 µs < 17.9 µs |
 | sqrt | 14.9 ns < **18.6 ns** < 33.2 ns | 14.4 ns < 31.9 ns < 35.4 ns | 13.5 ns < 37.7 ns < 3,125 ns |
 
@@ -273,7 +274,7 @@ widths.
 | fn | D76 (s=0 < s=35 < s=76) | D153 (s=0 < s=75 < s=153) | D307 (s=0 < s=150 < s=307) |
 |---|---|---|---|
 | ln | 0.152 ms < **1.37 ms** < 3.38 ms | 0.291 ms < 6.40 ms < 18.1 ms | 0.540 ms < 34.1 ms < 115 ms |
-| exp | 1.25×10⁻⁵ ms < **1.27 ms** < 3.10 ms | 1.72×10⁻⁵ ms < 5.87 ms < 15.7 ms | 2.80×10⁻⁵ ms < 31.2 ms < 94.6 ms |
+| exp | 0.0000125 ms < **1.27 ms** < 3.10 ms | 0.0000172 ms < 5.87 ms < 15.7 ms | 0.0000280 ms < 31.2 ms < 94.6 ms |
 | sin | 0.226 ms < **1.08 ms** < 2.53 ms | 0.428 ms < 4.82 ms < 13.0 ms | 0.808 ms < 25.5 ms < 77.4 ms |
 | sqrt | 0.118 µs < **20.5 µs** < 47.4 µs | 0.196 µs < 83.6 µs < 173 µs | 0.369 µs < 313 µs < 688 µs |
 

@@ -52,6 +52,12 @@ on-wire format are byte-identical to 0.2.4.
   row and reframed the third column as "Relative to a second"
   instead of "Relative to `ns`" for consistency across the
   table.
+- **`docs/benchmarks.md` data-cell rendering** — scientific
+  notation in data cells (e.g. `1.46×10⁻³ µs`) replaced with
+  plain decimals (`0.00146 µs`). Scientific notation is now
+  reserved for values smaller than 10⁻⁵ of the row's unit
+  (none in the current tables). Time units table is unchanged
+  (still uses `10⁻³ s`, `10⁻⁶ s`, etc. for second relationships).
 
 ## [0.2.4]
 
