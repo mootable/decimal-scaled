@@ -33,18 +33,22 @@
 //! All tests short-circuit when a non-default `rounding-*` feature is
 //! active (the per-mode contract differs).
 
-#![cfg(not(feature = "fast"))]
+// The 0.5 ULP truth values in this file assume the crate-default
+// rounding mode is `HalfToEven`. Compile-gate the entire suite to that
+// configuration so every test always runs at least one assertion when
+// present (no silent skip under a `rounding-*` feature build).
+#![cfg(all(
+    not(feature = "fast"),
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling",
+    )),
+))]
 
 use decimal_scaled::{D38, D38s12, DecimalConsts};
-
-/// `true` when the crate is built with `DEFAULT_ROUNDING_MODE =
-/// HalfToEven` — i.e. none of the `rounding-*` features is set.
-/// Tests in this file assume that contract.
-const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-zero")
-    || cfg!(feature = "rounding-half-toward-zero")
-    || cfg!(feature = "rounding-trunc")
-    || cfg!(feature = "rounding-floor")
-    || cfg!(feature = "rounding-ceiling"));
 
 /// Check that `actual` is within 1 LSB of `expected_truth` (both as
 /// raw storage bits) — the 0.5-ULP contract.
@@ -69,7 +73,6 @@ fn assert_05_ulp(label: &str, actual: i128, expected_truth: i128) {
 ///   φ    = 1.618033988749894848204586834365638118...
 #[test]
 fn constants_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("pi",         D38s12::pi().to_bits(),         3_141_592_653_590);
     assert_05_ulp("tau",        D38s12::tau().to_bits(),        6_283_185_307_180);
     assert_05_ulp("half_pi",    D38s12::half_pi().to_bits(),    1_570_796_326_795);
@@ -85,7 +88,6 @@ fn constants_at_scale_12() {
 /// Truth = a · b rounded half-to-even at SCALE precision.
 #[test]
 fn mul_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // 1.5 × 2.0 = 3.0 (exact)
     let a = D38s12::from_int(3) / D38s12::from_int(2); // 1.5 from rescale
     let b = D38s12::from_int(2);
@@ -116,7 +118,6 @@ fn mul_strict_at_scale_12() {
 
 #[test]
 fn div_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // 1.0 / 3.0 = 0.333333333333... → at SCALE=12: 333_333_333_333
     let r = D38s12::from_int(1) / D38s12::from_int(3);
     assert_05_ulp("1/3", r.to_bits(), 333_333_333_333);
@@ -151,7 +152,6 @@ fn div_strict_at_scale_12() {
 
 #[test]
 fn rescale_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38s6;
     type D2 = D38<2>;
 
@@ -191,7 +191,6 @@ fn rescale_strict_at_scale_12() {
 ///   ln(0.1) = -ln(10) = -2.302585092994  → -2_302_585_092_994
 #[test]
 fn ln_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("ln(1)", D38s12::ONE.ln_strict().to_bits(), 0);
     assert_05_ulp("ln(2)", D38s12::from_int(2).ln_strict().to_bits(), 693_147_180_560);
     let e = D38s12::e();
@@ -216,7 +215,6 @@ fn ln_strict_at_scale_12() {
 ///   exp(ln(10)) = 10
 #[test]
 fn exp_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("exp(0)", D38s12::ZERO.exp_strict().to_bits(), 1_000_000_000_000);
     assert_05_ulp("exp(1)", D38s12::ONE.exp_strict().to_bits(), 2_718_281_828_459);
     assert_05_ulp(
@@ -251,7 +249,6 @@ fn exp_strict_at_scale_12() {
 ///   tan(π/4)  = 1
 #[test]
 fn sin_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("sin(0)", D38s12::ZERO.sin_strict().to_bits(), 0);
     let half_pi = D38s12::half_pi();
     assert_05_ulp("sin(π/2)", half_pi.sin_strict().to_bits(), 1_000_000_000_000);
@@ -269,7 +266,6 @@ fn sin_strict_at_scale_12() {
 
 #[test]
 fn cos_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("cos(0)", D38s12::ZERO.cos_strict().to_bits(), 1_000_000_000_000);
     let pi = D38s12::pi();
     assert_05_ulp("cos(π)", pi.cos_strict().to_bits(), -1_000_000_000_000);
@@ -281,7 +277,6 @@ fn cos_strict_at_scale_12() {
 
 #[test]
 fn tan_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("tan(0)", D38s12::ZERO.tan_strict().to_bits(), 0);
     let quarter_pi = D38s12::quarter_pi();
     let r = quarter_pi.tan_strict();
@@ -304,7 +299,6 @@ fn tan_strict_at_scale_12() {
 ///   acos(-1) = π                              → 3_141_592_653_590
 #[test]
 fn atan_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("atan(0)", D38s12::ZERO.atan_strict().to_bits(), 0);
     assert_05_ulp("atan(1)", D38s12::ONE.atan_strict().to_bits(), 785_398_163_397);
     assert_05_ulp(
@@ -316,7 +310,6 @@ fn atan_strict_at_scale_12() {
 
 #[test]
 fn asin_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("asin(0)", D38s12::ZERO.asin_strict().to_bits(), 0);
     assert_05_ulp(
         "asin(1)",
@@ -330,7 +323,6 @@ fn asin_strict_at_scale_12() {
 
 #[test]
 fn acos_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("acos(1)", D38s12::ONE.acos_strict().to_bits(), 0);
     assert_05_ulp(
         "acos(0)",
@@ -348,7 +340,6 @@ fn acos_strict_at_scale_12() {
 
 #[test]
 fn atan2_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let one = D38s12::ONE;
     let zero = D38s12::ZERO;
     // atan2(1, 1) = π/4
@@ -383,7 +374,6 @@ fn atan2_strict_at_scale_12() {
 ///   cbrt(27) = 3 (exact)
 #[test]
 fn sqrt_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("sqrt(0)", D38s12::ZERO.sqrt_strict().to_bits(), 0);
     assert_05_ulp("sqrt(1)", D38s12::ONE.sqrt_strict().to_bits(), 1_000_000_000_000);
     assert_05_ulp(
@@ -410,7 +400,6 @@ fn sqrt_strict_at_scale_12() {
 
 #[test]
 fn cbrt_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("cbrt(0)", D38s12::ZERO.cbrt_strict().to_bits(), 0);
     assert_05_ulp("cbrt(1)", D38s12::ONE.cbrt_strict().to_bits(), 1_000_000_000_000);
     assert_05_ulp(
@@ -447,7 +436,6 @@ fn cbrt_strict_at_scale_12() {
 ///   tanh(1) = 0.761594155955764888...   → 761_594_155_956 (13th=8 round up)
 #[test]
 fn sinh_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("sinh(0)", D38s12::ZERO.sinh_strict().to_bits(), 0);
     assert_05_ulp(
         "sinh(1)",
@@ -463,7 +451,6 @@ fn sinh_strict_at_scale_12() {
 
 #[test]
 fn cosh_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp(
         "cosh(0)",
         D38s12::ZERO.cosh_strict().to_bits(),
@@ -484,7 +471,6 @@ fn cosh_strict_at_scale_12() {
 
 #[test]
 fn tanh_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("tanh(0)", D38s12::ZERO.tanh_strict().to_bits(), 0);
     assert_05_ulp(
         "tanh(1)",
@@ -510,7 +496,6 @@ fn tanh_strict_at_scale_12() {
 ///   to_radians(57.295779513082 deg) ≈ 1 rad (exact-at-storage of 180/π)
 #[test]
 fn angle_conversion_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp(
         "to_degrees(0)",
         D38s12::ZERO.to_degrees_strict().to_bits(),
@@ -559,7 +544,6 @@ fn angle_conversion_strict_at_scale_12() {
 ///     12 frac = 301029995663, 13th = 9 → round up to 664. So 301_029_995_664.
 #[test]
 fn log_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp(
         "log2(1)",
         D38s12::ONE.log2_strict().to_bits(),
@@ -606,7 +590,6 @@ fn log_strict_at_scale_12() {
 ///   powf(10, 2) = 100
 #[test]
 fn powf_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let two = D38s12::from_int(2);
     let ten = D38s12::from_int(10);
     assert_05_ulp(
@@ -639,7 +622,6 @@ fn powf_strict_at_scale_12() {
 ///   atanh(0.5) = 0.549306144334054846...  → 549_306_144_334 (13th=0 no round)
 #[test]
 fn asinh_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("asinh(0)", D38s12::ZERO.asinh_strict().to_bits(), 0);
     assert_05_ulp(
         "asinh(1)",
@@ -650,7 +632,6 @@ fn asinh_strict_at_scale_12() {
 
 #[test]
 fn acosh_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("acosh(1)", D38s12::ONE.acosh_strict().to_bits(), 0);
     assert_05_ulp(
         "acosh(2)",
@@ -661,7 +642,6 @@ fn acosh_strict_at_scale_12() {
 
 #[test]
 fn atanh_strict_at_scale_12() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_05_ulp("atanh(0)", D38s12::ZERO.atanh_strict().to_bits(), 0);
     let half = D38s12::from_bits(500_000_000_000);
     assert_05_ulp("atanh(0.5)", half.atanh_strict().to_bits(), 549_306_144_334);

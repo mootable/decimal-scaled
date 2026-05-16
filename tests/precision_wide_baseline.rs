@@ -9,15 +9,22 @@
 //! Storage values at SCALE=6 fit `i128` cleanly, so comparison goes
 //! through `to_i128_checked().unwrap()` on each wide-int result.
 
-#![cfg(all(not(feature = "fast"), feature = "wide"))]
+// Truth values in this suite assume the crate-default rounding mode is
+// `HalfToEven`. Compile-gate the file so each test always asserts when
+// present (no silent skip under a non-default `rounding-*` feature).
+#![cfg(all(
+    not(feature = "fast"),
+    feature = "wide",
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling",
+    )),
+))]
 
 use decimal_scaled::D76;
-
-const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-zero")
-    || cfg!(feature = "rounding-half-toward-zero")
-    || cfg!(feature = "rounding-trunc")
-    || cfg!(feature = "rounding-floor")
-    || cfg!(feature = "rounding-ceiling"));
 
 /// Wide-tier ULP gap allowance. After the GUARD bump (30 → 60) and
 /// the truncating → half-to-even `mul`/`div` swap in
@@ -41,7 +48,6 @@ fn wide_bits(d: D76<6>) -> i128 {
 
 #[test]
 fn ln_d76_baseline() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     let n = D38_6::from_int(2);
@@ -55,7 +61,6 @@ fn ln_d76_baseline() {
 
 #[test]
 fn exp_d76_baseline() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     let n = D38_6::ONE;
@@ -69,7 +74,6 @@ fn exp_d76_baseline() {
 
 #[test]
 fn sin_d76_baseline() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     for raw in [1_000_000i64, 2_345_678i64, 7_500_000i64] {
@@ -81,7 +85,6 @@ fn sin_d76_baseline() {
 
 #[test]
 fn atan_d76_baseline() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     for raw in [1_000_000i64, -1_500_000i64, 3_000_000i64] {
@@ -94,7 +97,6 @@ fn atan_d76_baseline() {
 #[test]
 fn sqrt_d76_tight() {
     // Roots are exact; should be within 1 LSB always.
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     for raw in [4_000_000i64, 9_000_000i64, 16_000_000i64, 25_000_000i64] {

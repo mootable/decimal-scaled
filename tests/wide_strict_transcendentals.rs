@@ -8,15 +8,22 @@
 //! `WIDE_TOLERANCE_LSB = 1` used by the existing
 //! `precision_wide_baseline.rs` — within one LSB of the D38 result.
 
-#![cfg(all(not(feature = "fast"), feature = "wide"))]
+// The 0.5 ULP cross-witness uses the default `HalfToEven` truth from
+// `precision_strict_05_ulp.rs`. Compile-gate to the default-rounding
+// build so every test executes its assertions when present.
+#![cfg(all(
+    not(feature = "fast"),
+    feature = "wide",
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling",
+    )),
+))]
 
 use decimal_scaled::{D38, D76};
-
-const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-zero")
-    || cfg!(feature = "rounding-half-toward-zero")
-    || cfg!(feature = "rounding-trunc")
-    || cfg!(feature = "rounding-floor")
-    || cfg!(feature = "rounding-ceiling"));
 
 const WIDE_TOL_LSB: i128 = 1;
 
@@ -44,59 +51,59 @@ type D38_6 = D38<6>;
 
 fn lift(n: D38_6) -> D76_6 { n.into() }
 
-#[test] fn d76_ln() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_ln() {
     let n = D38_6::from_int(2);
     agree("ln(2)", d76_bits_at_scale_6(lift(n).ln_strict()), n.ln_strict().to_bits());
 }
-#[test] fn d76_log2() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_log2() {
     let n = D38_6::from_int(8);
     agree("log2(8)", d76_bits_at_scale_6(lift(n).log2_strict()), n.log2_strict().to_bits());
 }
-#[test] fn d76_log10() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_log10() {
     let n = D38_6::from_int(1000);
     agree("log10(1000)", d76_bits_at_scale_6(lift(n).log10_strict()), n.log10_strict().to_bits());
 }
-#[test] fn d76_log() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_log() {
     let n = D38_6::from_int(8);
     let b = D38_6::from_int(2);
     agree("log_2(8)", d76_bits_at_scale_6(lift(n).log_strict(lift(b))), n.log_strict(b).to_bits());
 }
-#[test] fn d76_exp() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_exp() {
     let n = D38_6::ONE;
     agree("exp(1)", d76_bits_at_scale_6(lift(n).exp_strict()), n.exp_strict().to_bits());
     assert_eq!(D76_6::ZERO.exp_strict(), D76_6::ONE);
 }
-#[test] fn d76_exp2() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_exp2() {
     let n = D38_6::from_int(10);
     agree("exp2(10)", d76_bits_at_scale_6(lift(n).exp2_strict()), n.exp2_strict().to_bits());
     assert_eq!(D76_6::ZERO.exp2_strict(), D76_6::ONE);
 }
-#[test] fn d76_sqrt() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_sqrt() {
     for v in [2_i64, 4, 5, 9] {
         let n = D38_6::from_int(v);
         agree(&format!("sqrt({v})"), d76_bits_at_scale_6(lift(n).sqrt_strict()), n.sqrt_strict().to_bits());
     }
 }
-#[test] fn d76_cbrt() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_cbrt() {
     for v in [2_i64, 8, 27, -8] {
         let n = D38_6::from_int(v);
         agree(&format!("cbrt({v})"), d76_bits_at_scale_6(lift(n).cbrt_strict()), n.cbrt_strict().to_bits());
     }
 }
-#[test] fn d76_powf() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_powf() {
     let two = D38_6::from_int(2);
     let ten = D38_6::from_int(10);
     agree("2^10", d76_bits_at_scale_6(lift(two).powf_strict(lift(ten))), two.powf_strict(ten).to_bits());
     // Negative base → ZERO
     assert_eq!(lift(D38_6::from_int(-2)).powf_strict(lift(two)), D76_6::ZERO);
 }
-#[test] fn d76_sin_cos_tan() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_sin_cos_tan() {
     let n = D38_6::ONE;
     agree("sin(1)", d76_bits_at_scale_6(lift(n).sin_strict()), n.sin_strict().to_bits());
     agree("cos(1)", d76_bits_at_scale_6(lift(n).cos_strict()), n.cos_strict().to_bits());
     agree("tan(1)", d76_bits_at_scale_6(lift(n).tan_strict()), n.tan_strict().to_bits());
 }
-#[test] fn d76_atan_asin_acos() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_atan_asin_acos() {
     let one = D38_6::ONE;
     let half = D38_6::from_bits(500_000);
     agree("atan(1)", d76_bits_at_scale_6(lift(one).atan_strict()), one.atan_strict().to_bits());
@@ -107,7 +114,7 @@ fn lift(n: D38_6) -> D76_6 { n.into() }
     agree("asin(-1)", d76_bits_at_scale_6(lift(-one).asin_strict()), (-one).asin_strict().to_bits());
     agree("acos(-1)", d76_bits_at_scale_6(lift(-one).acos_strict()), (-one).acos_strict().to_bits());
 }
-#[test] fn d76_atan2_quadrants() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_atan2_quadrants() {
     let one = D38_6::ONE;
     let zero = D38_6::ZERO;
     // four-quadrant + axis cases
@@ -118,14 +125,14 @@ fn lift(n: D38_6) -> D76_6 { n.into() }
     agree("atan2(0,-1)", d76_bits_at_scale_6(lift(zero).atan2_strict(lift(-one))), zero.atan2_strict(-one).to_bits());
     agree("atan2(-1,-1)", d76_bits_at_scale_6(lift(-one).atan2_strict(lift(-one))), (-one).atan2_strict(-one).to_bits());
 }
-#[test] fn d76_hyperbolic() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_hyperbolic() {
     let n = D38_6::ONE;
     agree("sinh(1)", d76_bits_at_scale_6(lift(n).sinh_strict()), n.sinh_strict().to_bits());
     agree("cosh(1)", d76_bits_at_scale_6(lift(n).cosh_strict()), n.cosh_strict().to_bits());
     agree("tanh(1)", d76_bits_at_scale_6(lift(n).tanh_strict()), n.tanh_strict().to_bits());
     agree("sinh(-1)", d76_bits_at_scale_6(lift(-n).sinh_strict()), (-n).sinh_strict().to_bits());
 }
-#[test] fn d76_inverse_hyperbolic() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_inverse_hyperbolic() {
     let one = D38_6::ONE;
     let two = D38_6::from_int(2);
     let half = D38_6::from_bits(500_000);
@@ -141,7 +148,7 @@ fn lift(n: D38_6) -> D76_6 { n.into() }
     let three = D38_6::from_int(3);
     agree("acosh(3)", d76_bits_at_scale_6(lift(three).acosh_strict()), three.acosh_strict().to_bits());
 }
-#[test] fn d76_angle_conversion() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_angle_conversion() {
     let n = D38_6::ONE;
     agree("to_degrees(1)", d76_bits_at_scale_6(lift(n).to_degrees_strict()), n.to_degrees_strict().to_bits());
     let d180 = D38_6::from_int(180);
@@ -150,7 +157,7 @@ fn lift(n: D38_6) -> D76_6 { n.into() }
 
 // ─── AGM alternates ────────────────────────────────────────────────────
 
-#[test] fn d76_ln_agm() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_ln_agm() {
     for v in [2_i64, 7, 100] {
         let n = D38_6::from_int(v);
         let agm = lift(n).ln_strict_agm();
@@ -160,7 +167,7 @@ fn lift(n: D38_6) -> D76_6 { n.into() }
     }
 }
 
-#[test] fn d76_exp_agm() { if !DEFAULT_IS_HALF_TO_EVEN { return; }
+#[test] fn d76_exp_agm() {
     let n = D38_6::ONE;
     let agm = lift(n).exp_strict_agm();
     let canonical = lift(n).exp_strict();
@@ -179,7 +186,6 @@ use decimal_scaled::RoundingMode;
 
 #[test]
 fn d76_strict_with_modes() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let two = lift(D38_6::from_int(2));
     let ten = lift(D38_6::from_int(10));
     let one = lift(D38_6::ONE);
@@ -242,7 +248,6 @@ fn d76_strict_with_modes() {
 #[cfg(feature = "strict")]
 #[test]
 fn d76_plain_dispatcher_matches_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let one = lift(D38_6::ONE);
     let two = lift(D38_6::from_int(2));
     let ten = lift(D38_6::from_int(10));
@@ -419,7 +424,6 @@ fn d76_atanh_strict_with_boundary_panics() {
 
 #[test]
 fn d76_asinh_strict_with_abs_ge_one_branch() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let two = lift(D38_6::from_int(2));
     let _ = two.asinh_strict_with(RoundingMode::HalfToEven);
     let neg_two = lift(D38_6::from_int(-2));
@@ -431,7 +435,6 @@ fn d76_asinh_strict_with_abs_ge_one_branch() {
 
 #[test]
 fn d76_acosh_strict_with_v_ge_two_branch() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     let three = lift(D38_6::from_int(3));
     let _ = three.acosh_strict_with(RoundingMode::HalfToEven);
 }
@@ -460,12 +463,10 @@ fn d76_strict_result_out_of_range_panics() {
 
 #[cfg(feature = "x-wide")]
 mod x_wide {
-    use super::DEFAULT_IS_HALF_TO_EVEN;
     use decimal_scaled::{D153, D307, D38};
 
     #[test]
     fn d153_d307_strict_surface_callable() {
-        if !DEFAULT_IS_HALF_TO_EVEN { return; }
         type D38_6 = D38<6>;
         type D153_6 = D153<6>;
         type D307_6 = D307<6>;

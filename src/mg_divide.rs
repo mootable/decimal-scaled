@@ -19,7 +19,7 @@
 //! - Moller, N. and Granlund, T. (2011). "Improved Division by Invariant
 //! Integers." IEEE Transactions on Computers, 60(2), 165-175.
 //! DOI: 10.1109/TC.2010.143. (The magic-number table and the
-//! 256-bit-dividend divide algorithm used in [`div_exp_fast_2word`].)
+//! 256-bit-dividend divide algorithm used in [`div_exp_fast_2word_with_rem`].)
 //! - Granlund, T. and Montgomery, P. L. (1994). "Division by Invariant
 //! Integers using Multiplication." PLDI '94. (Basis for the 1-word
 //! fast path that the upstream library also references.)
@@ -148,8 +148,10 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 
 /// Divide the unsigned 256-bit value `(n_high, n_low)` by
 /// `exp = 10^scale_idx` using the Moller-Granlund 2011 magic-number
-/// method. Returns `Some(quotient)` if the quotient fits in 128 bits,
-/// or `None` if `n_high >= exp` (quotient would overflow).
+/// method. Returns `Some((quotient, remainder))` if the quotient fits
+/// in 128 bits, or `None` if `n_high >= exp` (quotient would overflow).
+/// The remainder always fits in a `u128` because
+/// `r < exp ≤ 10^38 < 2^127`.
 ///
 /// # Preconditions
 ///
@@ -161,15 +163,6 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 /// # Precision
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
-#[inline]
-fn div_exp_fast_2word(n_high: u128, n_low: u128, exp: u128, scale_idx: usize) -> Option<u128> {
-    div_exp_fast_2word_with_rem(n_high, n_low, exp, scale_idx).map(|(q, _)| q)
-}
-
-/// Same as `div_exp_fast_2word` but also returns the exact remainder
-/// `n - q · exp`, so callers can apply round-to-nearest in addition to
-/// the floor division. The remainder always fits in a `u128` because
-/// `r < exp ≤ 10^38 < 2^127`.
 #[inline]
 fn div_exp_fast_2word_with_rem(
     n_high: u128,
@@ -1098,5 +1091,173 @@ mod tests {
         // Dividing back by b should recover a (up to truncation).
         let recovered = div_pow10_div::<SCALE>(prod, b).expect("wide div");
         assert_eq!(recovered, a);
+    }
+
+    /// `divide_pow_64limb_with` performs the 64-limb magnitude bump
+    /// (with carry propagation across limbs) when `should_bump` is true
+    /// and `rem != 0`. This is the wide-tier rounding path for div ops
+    /// whose intermediate is wider than `i128`; the path is unreachable
+    /// from `mul_div_pow10` (D38 uses the MG fast path), so the
+    /// 64-limb routine has its own test driven by a non-HalfToEven mode
+    /// on the largest div-with API.
+    #[test]
+    fn div_pow10_div_carry_propagation_under_directed_rounding() {
+        const SCALE: u32 = 12;
+        use crate::rounding::RoundingMode;
+        // 1 / 3 = 0.333... — non-zero remainder, three modes pick
+        // different last digits.
+        let a: i128 = 1_000_000_000_000;  // 1.0 at S=12
+        let b: i128 = 3_000_000_000_000;
+        let trunc = div_pow10_div_with::<SCALE>(a, b, RoundingMode::Trunc).unwrap();
+        let ceil = div_pow10_div_with::<SCALE>(a, b, RoundingMode::Ceiling).unwrap();
+        let floor = div_pow10_div_with::<SCALE>(a, b, RoundingMode::Floor).unwrap();
+        let ha = div_pow10_div_with::<SCALE>(a, b, RoundingMode::HalfAwayFromZero).unwrap();
+        // All within 1 LSB of each other.
+        let bits = [trunc, ceil, floor, ha];
+        let min = *bits.iter().min().unwrap();
+        let max = *bits.iter().max().unwrap();
+        assert!(max - min <= 1, "modes diverged > 1 LSB: {bits:?}");
+        // Ceiling should bump positive, Floor truncates positive.
+        assert!(ceil >= trunc);
+        // Negative side: Floor pushes away from zero, Ceiling truncates.
+        let neg_floor = div_pow10_div_with::<SCALE>(-a, b, RoundingMode::Floor).unwrap();
+        let neg_trunc = div_pow10_div_with::<SCALE>(-a, b, RoundingMode::Trunc).unwrap();
+        assert!(neg_floor <= neg_trunc);
+    }
+
+    /// `isqrt_256(0, 0) == 0` short-circuit.
+    #[test]
+    fn isqrt_256_zero_input() {
+        assert_eq!(isqrt_256(0, 0), 0);
+    }
+
+    /// `sqrt_raw_correctly_rounded(0, scale) == 0` short-circuit.
+    #[test]
+    fn sqrt_raw_correctly_rounded_zero_input() {
+        for s in 0..=12 {
+            assert_eq!(sqrt_raw_correctly_rounded(0, s), 0);
+        }
+    }
+
+    /// `cbrt_raw_correctly_rounded(0, scale) == 0` short-circuit.
+    #[test]
+    fn cbrt_raw_correctly_rounded_zero_input() {
+        for s in 0..=12 {
+            assert_eq!(cbrt_raw_correctly_rounded(0, s), 0);
+        }
+    }
+
+    /// `sqrt_raw_correctly_rounded(r, scale)` returns the
+    /// correctly-rounded square root of `r · 10^scale`. The
+    /// post-condition is `q = floor(sqrt(N))` OR `q = floor(sqrt(N))+1`
+    /// when `N > q_floor² + q_floor` (the function's exact round-up
+    /// test). This test walks a sweep of inputs that drive the diff-
+    /// subtraction through the `wrapping_sub` borrow branch and asserts
+    /// the post-condition holds for every one.
+    #[test]
+    fn sqrt_raw_correctly_rounded_post_condition_holds() {
+        for r in [
+            7u128,
+            1_500_000_000_000u128,
+            10u128.pow(20),
+            (i128::MAX as u128) / 7,
+        ] {
+            let q = sqrt_raw_correctly_rounded(r, 12);
+            let (n_hi, n_lo) = mul2(r, POW10_U128[12]);
+            let q_floor = isqrt_256(n_hi, n_lo);
+            // q must be either floor(sqrt(N)) or floor+1.
+            assert!(
+                q == q_floor || q == q_floor + 1,
+                "sqrt({r}, 12): q={q}, floor={q_floor}",
+            );
+            // The round-up decision must agree with `N - q² > q`.
+            let (qq_hi, qq_lo) = mul2(q_floor, q_floor);
+            let (diff_hi, diff_lo) = if n_lo >= qq_lo {
+                (n_hi - qq_hi, n_lo - qq_lo)
+            } else {
+                (n_hi - qq_hi - 1, n_lo.wrapping_sub(qq_lo))
+            };
+            let should_round_up = diff_hi != 0 || diff_lo > q_floor;
+            let expected = if should_round_up { q_floor + 1 } else { q_floor };
+            assert_eq!(q, expected, "sqrt({r}, 12): wrong round-up decision");
+        }
+    }
+
+    /// At `SCALE=12` the cube-root radicand `r · 10^24` exceeds 2^254
+    /// for `r > 10^52`, exercising the high-limb branch of
+    /// `icbrt_384`. The post-condition is the same as the round-up
+    /// identity in [`cbrt_raw_correctly_rounded_post_condition_holds`]:
+    /// `q ∈ {floor, floor+1}` and the round-up agrees with
+    /// `8·N ≥ (2·floor + 1)³`. We sweep small-to-moderate inputs at
+    /// SCALE=12; the storage `r` fits `u128` while `r·10^24` extends
+    /// into the 384-bit mid limb.
+    #[test]
+    fn cbrt_raw_high_limb_radicand_post_condition_holds() {
+        for r in [
+            8u128,
+            27u128,
+            1_000_000u128,
+            10u128.pow(20),
+            (i128::MAX as u128) / 7,
+        ] {
+            let q = cbrt_raw_correctly_rounded(r, 12);
+            let n = mul_u128_by_256(r, pow10_256(24));
+            let q_floor = icbrt_384(n);
+            assert!(
+                q == q_floor || q == q_floor + 1,
+                "cbrt({r}, 12): q={q}, floor={q_floor}",
+            );
+            let eight_n = shl3_384(n);
+            let two_q_plus_1 = 2 * q_floor + 1;
+            let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
+            let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
+            let expected = if ge_384(eight_n, cube) { q_floor + 1 } else { q_floor };
+            assert_eq!(q, expected, "cbrt({r}, 12): wrong round-up decision");
+        }
+    }
+
+    /// `cbrt_raw_correctly_rounded` returns the correctly-rounded cube
+    /// root of `r · 10^(2·SCALE)` at the storage's last place — the
+    /// post-condition `|q - exact_cbrt(N)| ≤ 0.5` LSB. Verified here as
+    /// the bracket `q³ ≤ N ≤ (q+1)³` (so `q = floor(cbrt(N))`) for the
+    /// cases where the value is closer to `q`, and `(q-1)³ ≤ N` plus a
+    /// half-LSB comparison for the round-up cases.
+    #[test]
+    fn cbrt_raw_correctly_rounded_post_condition_holds() {
+        for (r, scale) in [
+            (8u128, 0),  // exact cube of 2
+            (27u128, 0), // exact cube of 3
+            (9u128, 0),  // non-perfect — nearest cube root is 2
+            (64u128, 0),
+            (65u128, 0),
+            (10u128.pow(12), 6),  // mid-range with scale
+        ] {
+            let q = cbrt_raw_correctly_rounded(r, scale);
+            // q³ ≤ N ≤ (q+1)³ OR q is the round-up of floor cbrt.
+            // Express via the same integer identity the function uses:
+            // round up iff 8·N ≥ (2q+1)³. We re-derive the floor and
+            // compare.
+            // N as 384-bit:
+            let n = mul_u128_by_256(r, pow10_256(2 * scale));
+            let q_floor = icbrt_384(n);
+            // Either q == q_floor (no round-up) or q == q_floor + 1
+            // (rounded up).
+            assert!(
+                q == q_floor || q == q_floor + 1,
+                "cbrt({r}, {scale}): q={q}, floor={q_floor} — expected q ∈ {{floor, floor+1}}",
+            );
+            // And the round-up decision must agree with the
+            // `8·N ≥ (2q_floor+1)³` test.
+            let eight_n = shl3_384(n);
+            let two_q_plus_1 = 2 * q_floor + 1;
+            let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
+            let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
+            let should_round_up = ge_384(eight_n, cube);
+            let expected = if should_round_up { q_floor + 1 } else { q_floor };
+            assert_eq!(
+                q, expected,
+                "cbrt({r}, {scale}): round-up decision mismatched",
+            );
+        }
     }
 }

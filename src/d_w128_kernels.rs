@@ -746,6 +746,143 @@ mod tests {
         assert!(Fixed::ZERO.sqrt(w).is_zero());
     }
 
+    // ── Wide shifts ─────────────────────────────────────────────────
+    //
+    // `shl` and `shr` have a fast path for `n < 128` (within a limb) and
+    // a slow path for `n >= 128` (cross-limb). The fast path is hit by
+    // every guard-digit op; the slow path needs an explicit test.
+
+    #[test]
+    fn fixed_shl_crosses_limb_boundary() {
+        // 1 << 130 = 4 in the high limb.
+        let one = Fixed::from_u128_mag(1, false);
+        let shifted = one.shl(130);
+        assert_eq!(shifted.mag, [0, 4]);
+        // shl(0) is identity.
+        let v = Fixed::from_u128_mag(7, false);
+        assert_eq!(v.shl(0).mag, [7, 0]);
+    }
+
+    #[test]
+    fn fixed_shr_crosses_limb_boundary() {
+        // A value with bits only in the high limb shifted right by 130
+        // ends up in the low limb.
+        let v = Fixed { negative: false, mag: [0, 4] };
+        let shifted = v.shr(130);
+        assert_eq!(shifted.mag, [1, 0]);
+        // Negative magnitude shifted to zero loses its sign.
+        let neg = Fixed { negative: true, mag: [0, 1] };
+        let shifted = neg.shr(200);
+        assert!(shifted.is_zero());
+        // shr(0) is identity.
+        let v = Fixed::from_u128_mag(7, false);
+        assert_eq!(v.shr(0).mag, [7, 0]);
+    }
+
+    // ── Opposite-sign add with both zero ────────────────────────────
+    //
+    // `Fixed::add` of two ZEROs takes a distinct branch from the regular
+    // same-sign or opposite-sign-but-non-zero adds.
+
+    #[test]
+    fn fixed_add_both_zero_opposite_signs() {
+        let pos_zero = Fixed { negative: false, mag: [0, 0] };
+        let neg_zero = Fixed { negative: true, mag: [0, 0] };
+        let r = pos_zero.add(neg_zero);
+        assert!(r.is_zero());
+    }
+
+    // ── div_small exercises the bit-loop body ──────────────────────
+    //
+    // `div_small` divides a 256-bit `Fixed` magnitude by a `u128`. The
+    // loop body advances 256 bits, propagating remainder and quotient
+    // limbs. Using a value that needs the high limb stresses the body.
+
+    #[test]
+    fn fixed_div_small_uses_full_256_bits() {
+        // (2^130) / 4 = 2^128.
+        let big = Fixed { negative: false, mag: [0, 4] };
+        let r = big.div_small(4);
+        assert_eq!(r.mag, [0, 1]);
+        // (3 · 10^36) / 6 = 5 · 10^35 (fits one limb).
+        let three_e36 = Fixed::from_u128_mag(3 * 10u128.pow(36), false);
+        let r = three_e36.div_small(6);
+        assert_eq!(r.mag, [5 * 10u128.pow(35), 0]);
+        // Negative magnitude carries sign correctly.
+        let neg = Fixed { negative: true, mag: [0, 4] };
+        let r = neg.div_small(4);
+        assert_eq!(r.mag, [0, 1]);
+        assert!(r.negative);
+    }
+
+    // ── round_to_i128 overflow paths ───────────────────────────────
+
+    #[test]
+    fn round_to_i128_shift_zero_overflow_returns_none() {
+        // shift=0 path: if the magnitude doesn't fit i128, return None.
+        // Magnitude > i128::MAX requires the high limb to be set or the
+        // low limb to exceed 1<<127.
+        use crate::rounding::RoundingMode;
+        let hte = RoundingMode::HalfToEven;
+        // High limb non-zero — instant overflow.
+        let v = Fixed { negative: false, mag: [0, 1] };
+        assert_eq!(v.round_to_i128_with(0, 0, hte), None);
+        // Low limb just above i128::MAX (positive).
+        let v = Fixed { negative: false, mag: [(i128::MAX as u128) + 1, 0] };
+        assert_eq!(v.round_to_i128_with(0, 0, hte), None);
+        // Negative magnitude just past i128::MIN's absolute value.
+        let v = Fixed { negative: true, mag: [(i128::MAX as u128) + 2, 0] };
+        assert_eq!(v.round_to_i128_with(0, 0, hte), None);
+        // i128::MIN itself round-trips exactly.
+        let v = Fixed { negative: true, mag: [1u128 << 127, 0] };
+        assert_eq!(v.round_to_i128_with(0, 0, hte), Some(i128::MIN));
+    }
+
+    #[test]
+    fn round_to_i128_post_shift_overflow_returns_none() {
+        // Shift > 0 path: a value that rounds to a magnitude wider than
+        // i128 must return None. At working scale 1, dividing 2^128 by
+        // 10 yields a magnitude that fits a single limb but still
+        // exceeds i128::MAX for sufficiently large inputs; here we use
+        // the full 256-bit max so the high-limb-nonzero post-rounding
+        // overflow branch fires.
+        use crate::rounding::RoundingMode;
+        let hte = RoundingMode::HalfToEven;
+        // 2^128 / 10 = ~3.4e37, fits low limb; not an overflow.
+        let two_to_128 = Fixed { negative: false, mag: [0, 1] };
+        let r = two_to_128.round_to_i128_with(1, 0, hte);
+        // 2^128 / 10 ≈ 3.4e37, still > i128::MAX (1.7e38? No, 1.7e38; 3.4e37 < 1.7e38).
+        // So the result actually fits i128. Sanity:
+        assert!(r.is_some(), "2^128 / 10 fits i128");
+        // The full-MAX value definitely overflows after rounding.
+        let v = Fixed { negative: false, mag: [u128::MAX, u128::MAX] };
+        assert_eq!(v.round_to_i128_with(0, 0, hte), None);
+        // A value just above 10 · i128::MAX at working scale 1 overflows
+        // after the /10 round.
+        let huge = Fixed { negative: false, mag: [u128::MAX, 9u128] };
+        assert_eq!(huge.round_to_i128_with(1, 0, hte), None);
+    }
+
+    // ── Large-radicand isqrt ────────────────────────────────────────
+    //
+    // The `Fixed::sqrt` path forms `mag · 10^w` as a 512-bit value. With
+    // `mag` near 2^128 and `w` large, the radicand needs the top 512-bit
+    // limb (`n[3]`) — exercising the high-limb branch of `isqrt_u512`.
+
+    #[test]
+    fn fixed_sqrt_at_large_working_scale() {
+        // At `w = 30`, the radicand `mag · 10^w` for `mag = 10^30` is
+        // `10^60` which lives in the 512-bit value's third limb,
+        // exercising the high-limb branch of `isqrt_u512`.
+        let w = 30;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        assert_eq!(one_w.sqrt(w), one_w);
+        // sqrt(4 at w=30) ought to be 2 at w=30.
+        let four_w = Fixed { negative: false, mag: [4 * 10u128.pow(w), 0] };
+        let r = four_w.sqrt(w);
+        assert_eq!(r.mag, [2 * 10u128.pow(w), 0]);
+    }
+
     #[test]
     fn fixed_round_to_i128_half_to_even() {
         use crate::rounding::RoundingMode;

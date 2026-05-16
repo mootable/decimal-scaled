@@ -1,14 +1,20 @@
 //! `D38::rescale` / `rescale_with` integration tests. Moved out of
 //! `src/rescale.rs` so that file carries only macro invocations.
+//!
+//! Several tests below use the plain `rescale::<N>()` form, whose
+//! rounding behaviour depends on the crate-default mode. Compile-gate
+//! the whole file to the `HalfToEven` default so every test always
+//! executes its assertions (no silent skip under a `rounding-*` build).
+
+#![cfg(not(any(
+    feature = "rounding-half-away-from-zero",
+    feature = "rounding-half-toward-zero",
+    feature = "rounding-trunc",
+    feature = "rounding-floor",
+    feature = "rounding-ceiling",
+)))]
 
 use decimal_scaled::{D38s2, D38s6, D38s12, RoundingMode};
-
-/// `true` when the build's default rounding mode is HalfToEven.
-const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-zero")
-    || cfg!(feature = "rounding-half-toward-zero")
-    || cfg!(feature = "rounding-trunc")
-    || cfg!(feature = "rounding-floor")
-    || cfg!(feature = "rounding-ceiling"));
 
 // --- with_scale alias ----------------------------------------------
 
@@ -88,7 +94,6 @@ fn rescale_down_half_to_even_rounds_to_even() {
 
 #[test]
 fn rescale_down_non_half_goes_nearest() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // 1.234999 -> 1.23 (below half)
     let micros = D38s6::from_bits(1_234_999);
     assert_eq!(micros.rescale::<2>().to_bits(), 123);
@@ -99,7 +104,6 @@ fn rescale_down_non_half_goes_nearest() {
 
 #[test]
 fn rescale_down_negative_half_to_even() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // -1.235000 -> -1.24 (tie, 4 is even — sign symmetric)
     let micros = D38s6::from_bits(-1_235_000);
     assert_eq!(micros.rescale::<2>().to_bits(), -124);
@@ -170,7 +174,6 @@ fn rescale_with_same_scale_is_bit_identity_for_every_mode() {
 
 #[test]
 fn rescale_works_in_const_context() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     const SRC: D38s6 = D38s6::from_bits(1_235_000);
     const DST: D38s2 = SRC.rescale::<2>();
     assert_eq!(DST.to_bits(), 124);

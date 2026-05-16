@@ -19,15 +19,18 @@
 //! `tests/precision_strict_05_ulp.rs` (the truth itself is rounded to
 //! storage, so the slack absorbs a single-LSB transcription error).
 
-#![cfg(not(feature = "fast"))]
+#![cfg(all(
+    not(feature = "fast"),
+    not(any(
+        feature = "rounding-half-away-from-zero",
+        feature = "rounding-half-toward-zero",
+        feature = "rounding-trunc",
+        feature = "rounding-floor",
+        feature = "rounding-ceiling",
+    )),
+))]
 
 use decimal_scaled::{D9, D18, D38, DecimalConsts};
-
-const DEFAULT_IS_HALF_TO_EVEN: bool = !(cfg!(feature = "rounding-half-away-from-zero")
-    || cfg!(feature = "rounding-half-toward-zero")
-    || cfg!(feature = "rounding-trunc")
-    || cfg!(feature = "rounding-floor")
-    || cfg!(feature = "rounding-ceiling"));
 
 #[track_caller]
 fn assert_le_1_lsb_i32(label: &str, actual: i32, truth: i32) {
@@ -55,7 +58,6 @@ type D9_4 = D9<4>;
 
 #[test]
 fn d9_ln_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ONE.ln_strict().to_bits(), 0, "ln(1)=0");
     // ln(2) = 0.69314718... → at S=4: 6_931
     assert_le_1_lsb_i32("ln(2) D9<4>", D9_4::from_int(2).ln_strict().to_bits(), 6_931);
@@ -65,7 +67,6 @@ fn d9_ln_strict() {
 
 #[test]
 fn d9_log2_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ONE.log2_strict().to_bits(), 0);
     assert_eq!(D9_4::from_int(2).log2_strict().to_bits(), 10_000);
     assert_eq!(D9_4::from_int(4).log2_strict().to_bits(), 20_000);
@@ -73,7 +74,6 @@ fn d9_log2_strict() {
 
 #[test]
 fn d9_log10_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ONE.log10_strict().to_bits(), 0);
     assert_eq!(D9_4::from_int(10).log10_strict().to_bits(), 10_000);
     assert_eq!(D9_4::from_int(100).log10_strict().to_bits(), 20_000);
@@ -81,7 +81,6 @@ fn d9_log10_strict() {
 
 #[test]
 fn d9_log_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // log_2(8) = 3
     assert_eq!(
         D9_4::from_int(8).log_strict(D9_4::from_int(2)).to_bits(),
@@ -91,7 +90,6 @@ fn d9_log_strict() {
 
 #[test]
 fn d9_exp_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.exp_strict().to_bits(), 10_000, "exp(0)=1");
     // exp(1)=e ≈ 2.7183 → 27_183
     assert_le_1_lsb_i32("exp(1) D9<4>", D9_4::ONE.exp_strict().to_bits(), 27_183);
@@ -99,7 +97,6 @@ fn d9_exp_strict() {
 
 #[test]
 fn d9_exp2_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.exp2_strict().to_bits(), 10_000);
     // 2^10 = 1024 → 10_240_000
     assert_eq!(D9_4::from_int(10).exp2_strict().to_bits(), 10_240_000);
@@ -107,7 +104,6 @@ fn d9_exp2_strict() {
 
 #[test]
 fn d9_sqrt_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.sqrt_strict().to_bits(), 0);
     assert_eq!(D9_4::ONE.sqrt_strict().to_bits(), 10_000);
     assert_eq!(D9_4::from_int(4).sqrt_strict().to_bits(), 20_000);
@@ -117,7 +113,6 @@ fn d9_sqrt_strict() {
 
 #[test]
 fn d9_cbrt_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.cbrt_strict().to_bits(), 0);
     assert_eq!(D9_4::from_int(8).cbrt_strict().to_bits(), 20_000);
     assert_eq!(D9_4::from_int(27).cbrt_strict().to_bits(), 30_000);
@@ -126,7 +121,6 @@ fn d9_cbrt_strict() {
 
 #[test]
 fn d9_trig_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.sin_strict().to_bits(), 0);
     assert_eq!(D9_4::ZERO.cos_strict().to_bits(), 10_000);
     assert_eq!(D9_4::ZERO.tan_strict().to_bits(), 0);
@@ -138,7 +132,6 @@ fn d9_trig_strict() {
 
 #[test]
 fn d9_inverse_trig_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.asin_strict().to_bits(), 0);
     assert_eq!(D9_4::ONE.acos_strict().to_bits(), 0);
     assert_eq!(D9_4::ZERO.atan_strict().to_bits(), 0);
@@ -154,7 +147,6 @@ fn d9_inverse_trig_strict() {
 
 #[test]
 fn d9_hyperbolic_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.sinh_strict().to_bits(), 0);
     assert_eq!(D9_4::ZERO.cosh_strict().to_bits(), 10_000);
     assert_eq!(D9_4::ZERO.tanh_strict().to_bits(), 0);
@@ -172,7 +164,6 @@ fn d9_hyperbolic_strict() {
 
 #[test]
 fn d9_angle_conversion_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ZERO.to_degrees_strict().to_bits(), 0);
     assert_eq!(D9_4::ZERO.to_radians_strict().to_bits(), 0);
     // to_radians(180) = π ≈ 3.1416 → 31_416
@@ -185,7 +176,6 @@ fn d9_angle_conversion_strict() {
 
 #[test]
 fn d9_powf_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // 2^10 = 1024
     assert_eq!(
         D9_4::from_int(2).powf_strict(D9_4::from_int(10)).to_bits(),
@@ -202,7 +192,6 @@ fn d9_powf_strict() {
 #[cfg(feature = "strict")]
 #[test]
 fn d9_dispatcher_matches_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D9_4::ONE.ln(), D9_4::ONE.ln_strict());
     assert_eq!(D9_4::ONE.sin(), D9_4::ONE.sin_strict());
     assert_eq!(D9_4::ONE.cos(), D9_4::ONE.cos_strict());
@@ -244,7 +233,6 @@ type D18_8 = D18<8>;
 
 #[test]
 fn d18_ln_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::ONE.ln_strict().to_bits(), 0);
     // ln(2) = 0.69314718... → at S=8: 69_314_718
     assert_le_1_lsb_i64("ln(2)", D18_8::from_int(2).ln_strict().to_bits(), 69_314_718);
@@ -252,7 +240,6 @@ fn d18_ln_strict() {
 
 #[test]
 fn d18_exp_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::ZERO.exp_strict().to_bits(), 100_000_000);
     // exp(1)=e ≈ 2.71828183 → 271_828_183
     assert_le_1_lsb_i64("exp(1)", D18_8::ONE.exp_strict().to_bits(), 271_828_183);
@@ -260,14 +247,12 @@ fn d18_exp_strict() {
 
 #[test]
 fn d18_log2_log10_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::from_int(2).log2_strict().to_bits(), 100_000_000);
     assert_eq!(D18_8::from_int(10).log10_strict().to_bits(), 100_000_000);
 }
 
 #[test]
 fn d18_sqrt_cbrt_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::from_int(4).sqrt_strict().to_bits(), 200_000_000);
     assert_eq!(D18_8::from_int(27).cbrt_strict().to_bits(), 300_000_000);
     // sqrt(2)=1.41421356... → 141_421_356
@@ -280,7 +265,6 @@ fn d18_sqrt_cbrt_strict() {
 
 #[test]
 fn d18_trig_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::ZERO.sin_strict().to_bits(), 0);
     assert_eq!(D18_8::ZERO.cos_strict().to_bits(), 100_000_000);
     // sin(1) ≈ 0.84147098 → 84_147_098
@@ -289,7 +273,6 @@ fn d18_trig_strict() {
 
 #[test]
 fn d18_inverse_trig_hyperbolic_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     // atan(1)=π/4 ≈ 0.78539816 → 78_539_816
     assert_le_1_lsb_i64("atan(1)", D18_8::ONE.atan_strict().to_bits(), 78_539_816);
     assert_le_1_lsb_i64(
@@ -312,7 +295,6 @@ fn d18_inverse_trig_hyperbolic_strict() {
 
 #[test]
 fn d18_angle_powf_log_exp2_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::ZERO.to_degrees_strict().to_bits(), 0);
     assert_eq!(D18_8::ZERO.to_radians_strict().to_bits(), 0);
     // 2^10 = 1024
@@ -332,7 +314,6 @@ fn d18_angle_powf_log_exp2_strict() {
 #[cfg(feature = "strict")]
 #[test]
 fn d18_dispatcher_matches_strict() {
-    if !DEFAULT_IS_HALF_TO_EVEN { return; }
     assert_eq!(D18_8::ONE.ln(), D18_8::ONE.ln_strict());
     assert_eq!(D18_8::ONE.exp(), D18_8::ONE.exp_strict());
     assert_eq!(D18_8::ONE.sin(), D18_8::ONE.sin_strict());
@@ -376,10 +357,6 @@ fn d18_dispatcher_matches_strict() {
 #[test]
 #[should_panic(expected = "exp_strict: result out of range")]
 fn d9_exp_strict_overflow_panics() {
-    if !DEFAULT_IS_HALF_TO_EVEN {
-        // Force a panic anyway so the should_panic harness is satisfied.
-        panic!("exp_strict: result out of range");
-    }
     let _ = D9::<8>::from_int(20).exp_strict();
 }
 
