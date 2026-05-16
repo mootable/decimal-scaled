@@ -1135,6 +1135,83 @@ mod hint_tests {
         assert_eq!(Int256::from_i128(1_000_000).as_f64(), 1_000_000.0);
         assert_eq!(Int256::from_f64(-2_500.0), Int256::from_i128(-2500));
     }
+
+    /// `Uint256` (the unsigned macro emission) supports the same
+    /// bit/sign-manipulation surface as the signed sibling. Methods
+    /// here are reachable through the wide decimal types but not always
+    /// exercised by name; verify the contracts directly.
+    #[test]
+    fn uint256_is_zero_and_bit_helpers() {
+        let zero = Uint256::ZERO;
+        let one = Uint256::from_str_radix("1", 10).unwrap();
+        let two = Uint256::from_str_radix("2", 10).unwrap();
+        assert!(zero.is_zero());
+        assert!(!one.is_zero());
+        assert!(one.is_power_of_two());
+        assert!(two.is_power_of_two());
+        let three = Uint256::from_str_radix("3", 10).unwrap();
+        assert!(!three.is_power_of_two());
+        // next_power_of_two(0) == 1
+        assert_eq!(zero.next_power_of_two(), one);
+        // next_power_of_two(1) == 1 (already power of two)
+        assert_eq!(one.next_power_of_two(), one);
+        // next_power_of_two(3) == 4
+        let four = Uint256::from_str_radix("4", 10).unwrap();
+        assert_eq!(three.next_power_of_two(), four);
+        // count_ones / leading_zeros
+        assert_eq!(zero.count_ones(), 0);
+        assert_eq!(one.count_ones(), 1);
+        assert_eq!(zero.leading_zeros(), Uint256::BITS);
+        assert_eq!(one.leading_zeros(), Uint256::BITS - 1);
+    }
+
+    #[test]
+    fn uint256_parse_arithmetic_and_pow() {
+        // from_str_radix only accepts radix 10.
+        assert!(Uint256::from_str_radix("10", 2).is_err());
+        // Non-digit byte rejected.
+        assert!(Uint256::from_str_radix("1a", 10).is_err());
+        // Arithmetic: 3 - 2 = 1, 6 / 2 = 3, 7 % 3 = 1, 3·3 = 9.
+        let two = Uint256::from_str_radix("2", 10).unwrap();
+        let three = Uint256::from_str_radix("3", 10).unwrap();
+        let six = Uint256::from_str_radix("6", 10).unwrap();
+        let seven = Uint256::from_str_radix("7", 10).unwrap();
+        assert_eq!(three - two, Uint256::from_str_radix("1", 10).unwrap());
+        assert_eq!(six / two, three);
+        assert_eq!(seven % three, Uint256::from_str_radix("1", 10).unwrap());
+        // BitAnd / BitOr / BitXor
+        let five = Uint256::from_str_radix("5", 10).unwrap();  // 101
+        let four = Uint256::from_str_radix("4", 10).unwrap();  // 100
+        let one = Uint256::from_str_radix("1", 10).unwrap();   // 001
+        assert_eq!(five & four, four);                       // 100
+        assert_eq!(five | one, five);                        // 101
+        assert_eq!(five ^ four, one);                        // 001
+        // pow: 2^10 = 1024
+        let p10 = two.pow(10);
+        assert_eq!(p10, Uint256::from_str_radix("1024", 10).unwrap());
+        // cast_signed round-trip
+        let signed = three.cast_signed();
+        assert_eq!(signed, Int256::from_i128(3));
+    }
+
+    /// `Int256::bit` reports the two's-complement bit at any index;
+    /// indices past the storage width return the sign bit.
+    #[test]
+    fn signed_bit_and_trailing_zeros() {
+        let v = Int256::from_i128(0b1100);
+        assert!(v.bit(2));
+        assert!(v.bit(3));
+        assert!(!v.bit(0));
+        assert!(!v.bit(1));
+        // Out-of-range bit returns the sign — non-negative for v.
+        assert!(!v.bit(1000));
+        // Negative input: sign bit returns true past the storage.
+        let n = Int256::from_i128(-1);
+        assert!(n.bit(1000));
+        // trailing_zeros
+        assert_eq!(Int256::from_i128(8).trailing_zeros(), 3);
+        assert_eq!(Int256::ZERO.trailing_zeros(), Int256::BITS);
+    }
 }
 
 #[cfg(test)]
@@ -1276,5 +1353,130 @@ mod slice_tests {
         limbs_divmod_bz(&num, &den, &mut q_bz, &mut r_bz);
         assert_eq!(q_canon, q_bz, "BZ quotient mismatch");
         assert_eq!(r_canon, r_bz, "BZ remainder mismatch");
+    }
+
+    /// `limbs_mul_fast` dispatches to Karatsuba when both operands are
+    /// equal-length ≥ `KARATSUBA_MIN`. Verify by comparing the result
+    /// against schoolbook (`limbs_mul`) on a 16-limb pair.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn fast_mul_dispatches_to_karatsuba_at_threshold() {
+        let a: [u128; 16] = core::array::from_fn(|i| (i as u128).wrapping_mul(0xABCD) + 1);
+        let b: [u128; 16] = core::array::from_fn(|i| (i as u128).wrapping_mul(0xBEEF) + 7);
+        let mut fast = [0u128; 32];
+        let mut school = [0u128; 32];
+        limbs_mul_fast(&a, &b, &mut fast);
+        limbs_mul(&a, &b, &mut school);
+        assert_eq!(fast, school, "fast (Karatsuba) and schoolbook disagree");
+    }
+
+    /// `limbs_mul_fast` falls through to schoolbook for unequal lengths
+    /// or below the threshold. The 8-limb pair below skips Karatsuba.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn fast_mul_falls_through_to_schoolbook_below_threshold() {
+        let a: [u128; 8] = core::array::from_fn(|i| (i as u128).wrapping_mul(0x1234) + 1);
+        let b: [u128; 8] = core::array::from_fn(|i| (i as u128).wrapping_mul(0x5678) + 3);
+        let mut fast = [0u128; 16];
+        let mut school = [0u128; 16];
+        limbs_mul_fast(&a, &b, &mut fast);
+        limbs_mul(&a, &b, &mut school);
+        assert_eq!(fast, school);
+    }
+
+    /// Karatsuba called directly below the threshold should still
+    /// produce the correct product via its internal schoolbook
+    /// fall-through. This exercises the safety branch in
+    /// `limbs_mul_karatsuba` that zeros out and delegates back to
+    /// schoolbook when `n < KARATSUBA_MIN`.
+    #[cfg(feature = "alloc")]
+    #[test]
+    fn karatsuba_safety_fallback_below_threshold() {
+        let a: [u128; 4] = [123, 456, 789, 0];
+        let b: [u128; 4] = [987, 654, 321, 0];
+        let mut karatsuba_out = [0u128; 8];
+        let mut school_out = [0u128; 8];
+        limbs_mul_karatsuba(&a, &b, &mut karatsuba_out);
+        limbs_mul(&a, &b, &mut school_out);
+        assert_eq!(karatsuba_out, school_out);
+    }
+
+    /// `limbs_isqrt` of `1` returns `1` via the `bits <= 1` short-
+    /// circuit.
+    #[test]
+    fn isqrt_one_short_circuit() {
+        let n = [1u128, 0];
+        let mut out = [0u128; 2];
+        limbs_isqrt(&n, &mut out);
+        assert_eq!(out, [1, 0]);
+    }
+
+    /// `limbs_isqrt` of `0` returns `0` via the `bits == 0` short-
+    /// circuit.
+    #[test]
+    fn isqrt_zero_short_circuit() {
+        let n = [0u128, 0];
+        let mut out = [0u128; 2];
+        limbs_isqrt(&n, &mut out);
+        assert_eq!(out, [0, 0]);
+    }
+
+    /// `WideInt::from_mag_sign` for `u128` reads the first limb and
+    /// ignores the sign flag. Exercised through a chained `wide_cast`
+    /// `Int256 → u128`.
+    #[test]
+    fn wide_cast_into_u128_returns_first_limb() {
+        let src = Int256::from_i128(123_456_789);
+        let dst: u128 = wide_cast(src);
+        assert_eq!(dst, 123_456_789);
+        // Casting ZERO yields 0.
+        let dst: u128 = wide_cast(Int256::ZERO);
+        assert_eq!(dst, 0);
+    }
+
+    /// Knuth's q̂-cap path fires when `u_top >= v_top` in the
+    /// per-quotient-limb loop. We engineer a dividend whose normalised
+    /// top limb equals the normalised divisor top so the cap (`q̂ =
+    /// u128::MAX`, plus the subsequent multiply-subtract correction)
+    /// runs, then verify the resulting quotient matches the canonical
+    /// `limbs_divmod`.
+    #[test]
+    fn knuth_q_hat_cap_branch_matches_canonical() {
+        // num top limb == den top limb; div quotient's first chunk hits
+        // the cap. Picking the divisor's top close to u128::MAX
+        // tightens the normalisation shift.
+        let num: [u128; 4] = [0, 0, u128::MAX, u128::MAX >> 1];
+        let den: [u128; 3] = [1, 2, u128::MAX >> 1];
+        let mut q_canon = [0u128; 4];
+        let mut r_canon = [0u128; 4];
+        limbs_divmod(&num, &den, &mut q_canon, &mut r_canon);
+        let mut q_knuth = [0u128; 4];
+        let mut r_knuth = [0u128; 4];
+        limbs_divmod_knuth(&num, &den, &mut q_knuth, &mut r_knuth);
+        assert_eq!(q_canon, q_knuth);
+        assert_eq!(r_canon, r_knuth);
+    }
+
+    /// `limbs_divmod_bz` with a numerator that has trailing zero limbs
+    /// strips them off in its top-non-zero scan before deciding whether
+    /// to recurse.
+    #[test]
+    fn bz_strips_numerator_trailing_zeros() {
+        // 16-limb buffer but only the low half is non-zero; den is 10 limbs.
+        // BZ should recognise top < 2*n and fall back to Knuth.
+        let mut num = [0u128; 16];
+        for slot in &mut num[..8] {
+            *slot = 0xCAFE_F00D;
+        }
+        let mut den = [0u128; 10];
+        den[0] = 7;
+        let mut q_canon = [0u128; 16];
+        let mut r_canon = [0u128; 16];
+        limbs_divmod(&num, &den, &mut q_canon, &mut r_canon);
+        let mut q_bz = [0u128; 16];
+        let mut r_bz = [0u128; 16];
+        limbs_divmod_bz(&num, &den, &mut q_bz, &mut r_bz);
+        assert_eq!(q_canon, q_bz);
+        assert_eq!(r_canon, r_bz);
     }
 }
