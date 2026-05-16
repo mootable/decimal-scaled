@@ -77,6 +77,50 @@ width - a precision cliff that's hard to communicate.
 
 ---
 
+## More decimal widths - fill the tier ladder
+
+Current widths cover the power-of-two storage sequence
+(32 / 64 / 128 / 256 / 512 / 1024 bits). Real-world picks
+often fall between these - e.g. a `D57` covers IEEE 754 binary192
+mantissa precision, a `D462` covers cryptographic-class
+high-precision intermediates without paying the full D616 cost.
+
+Plan:
+
+- **Double the top end up to 4096 bits.** D307 (1024 bit) is the
+  current ceiling; add D616 (2048 bit) and D1232 (4096 bit).
+- **Fill in the half-step widths between each existing pair.**
+
+Resulting tier ladder:
+
+| storage bits | type | safe decimal digits | status |
+|---|---|---|---|
+| 32   | `D9`    | 9    | shipped |
+| 48   | `D14`   | 14   | TODO |
+| 64   | `D18`   | 18   | shipped |
+| 96   | `D28`   | 28   | TODO |
+| 128  | `D38`   | 38   | shipped |
+| 192  | `D57`   | 57   | TODO |
+| 256  | `D76`   | 76   | shipped |
+| 384  | `D115`  | 115  | TODO |
+| 512  | `D153`  | 153  | shipped |
+| 768  | `D230`  | 230  | TODO |
+| 1024 | `D307`  | 307  | shipped |
+| 1536 | `D462`  | 462  | TODO |
+| 2048 | `D616`  | 616  | TODO |
+| 3072 | `D924`  | 924  | TODO |
+| 4096 | `D1232` | 1232 | TODO |
+
+Each new tier needs its own `IntN` storage in `crate::wide_int`,
+the corresponding `MAX_SCALE` plumbing, and matching wide-int +
+strict transcendental kernels (the macros already generate the
+per-tier code once the storage type exists). Cargo features
+follow the existing `wide` / `x-wide` pattern - probably a new
+`xx-wide` / `xxx-wide` gate for the additions past D307 to keep
+default build times sane.
+
+---
+
 ## Narrow-tier - already competitive
 
 D9 / D18 / D38 arithmetic already matches or beats
