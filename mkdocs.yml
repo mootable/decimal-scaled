@@ -61,7 +61,7 @@ nav:
   - Home: index.md
   - Getting started: getting-started.md
   - Guides:
-      - Index: README.md
+      - Index: guides.md
       - Widths: widths.md
       - Strict mode: strict-mode.md
       - Rounding: rounding.md

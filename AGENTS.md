@@ -244,6 +244,6 @@ let up: D38s2 = v.rescale_with::<2>(RoundingMode::Ceiling); // 1.24
 - Crate: <https://crates.io/crates/decimal-scaled>
 - Docs: <https://docs.rs/decimal-scaled>
 - Repo: <https://github.com/mootable/decimal-scaled>
-- In-repo guides: [`docs/README.md`](docs/README.md), [`docs/widths.md`](docs/widths.md), [`docs/strict-mode.md`](docs/strict-mode.md), [`docs/rounding.md`](docs/rounding.md), [`docs/macros.md`](docs/macros.md), [`docs/features.md`](docs/features.md), [`docs/benchmarks.md`](docs/benchmarks.md)
+- In-repo guides: [`docs/guides.md`](docs/guides.md), [`docs/widths.md`](docs/widths.md), [`docs/strict-mode.md`](docs/strict-mode.md), [`docs/rounding.md`](docs/rounding.md), [`docs/macros.md`](docs/macros.md), [`docs/features.md`](docs/features.md), [`docs/benchmarks.md`](docs/benchmarks.md)
 - Algorithm catalogue: [`ALGORITHMS.md`](ALGORITHMS.md)
 - Headline benchmark vs another fixed-point crate (`g_math`): [`benches/g_math_comparison.rs`](benches/g_math_comparison.rs) — run with `cargo bench --bench g_math_comparison --features wide`

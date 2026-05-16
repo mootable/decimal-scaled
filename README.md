@@ -10,7 +10,7 @@ transcendentals**, deterministic across every platform, and
 📚 In-depth guides — getting started, scale aliases, the width
 family, conversions, rounding modes, strict mode, the `d38!`
 macro, every Cargo feature, benchmarks — live in
-[**`docs/README.md`**](docs/README.md). API reference on
+[**`docs/guides.md`**](docs/guides.md). API reference on
 [docs.rs](https://docs.rs/decimal-scaled/).
 
 > **0.5 ULP** — the strongest accuracy guarantee a finite numeric
@@ -426,7 +426,7 @@ common configurations.
 
 ## Documentation
 
-In-depth usage guides live in [`docs/`](docs/README.md):
+In-depth usage guides live in [`docs/`](docs/guides.md):
 
 - [Getting started](docs/getting-started.md) — constructing values, arithmetic, formatting, parsing.
 - [The width family](docs/widths.md) — `D9` … `D307`, scale ranges, the `Decimal` trait.

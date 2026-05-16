@@ -260,6 +260,6 @@ let cents = v.rescale_with::<2>(RoundingMode::Ceiling);    // 1.24
 - Crate: https://crates.io/crates/decimal-scaled
 - Docs: https://docs.rs/decimal-scaled
 - Repo: https://github.com/mootable/decimal-scaled
-- In-repo guides: `docs/README.md`, `docs/widths.md`, `docs/strict-mode.md`, `docs/rounding.md`, `docs/macros.md`, `docs/features.md`, `docs/benchmarks.md`
+- In-repo guides: `docs/guides.md`, `docs/widths.md`, `docs/strict-mode.md`, `docs/rounding.md`, `docs/macros.md`, `docs/features.md`, `docs/benchmarks.md`
 - Algorithm catalogue: `ALGORITHMS.md`
 - Headline benchmark vs other fixed-point crates: `benches/g_math_comparison.rs` (run with `cargo bench --bench g_math_comparison --features wide`)
