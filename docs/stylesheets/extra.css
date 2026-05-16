@@ -97,14 +97,15 @@
 /* ── Hero / landing page motifs ────────────────────────────── */
 .md-typeset .hero-row {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-columns: 75% 25%;
   gap: 2rem;
   align-items: center;
   margin: 1.5rem 0 2rem;
 }
 .md-typeset .hero-copy { min-width: 0; }
 .md-typeset .hero-mark {
-  width: clamp(180px, 28vw, 320px);
+  width: 100%;
+  max-width: 100%;
   height: auto;
   display: block;
   justify-self: end;
@@ -117,7 +118,7 @@
   }
   .md-typeset .hero-mark {
     order: -1;            /* mark first on narrow screens */
-    width: clamp(120px, 40vw, 200px);
+    width: 40%;
     justify-self: start;
   }
 }
