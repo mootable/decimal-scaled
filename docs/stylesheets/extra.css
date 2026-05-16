@@ -90,6 +90,20 @@
   padding-bottom: 0.3em;
 }
 
+/* ── Header autohide: leave a 4px sliver so hover can reveal ── */
+/* Material's `header.autohide` hides the header on scroll-down
+   via `transform: translateY(-100%)`. Override to keep a 4px
+   strip visible — enough to act as a hover hotzone — and slide
+   the full bar back into view when the user mouses over it.
+   Restores the scroll-up reveal behaviour as well. */
+.md-header[data-md-state="hidden"] {
+  transform: translateY(calc(-100% + 4px));
+  transition: transform 200ms ease-out;
+}
+.md-header[data-md-state="hidden"]:hover {
+  transform: translateY(0);
+}
+
 /* ── Site header: lift the brand mark a touch ──────────────── */
 .md-header__button.md-logo img,
 .md-header__button.md-logo svg {

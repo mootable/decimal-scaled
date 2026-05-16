@@ -50,6 +50,7 @@ theme:
         icon: material/weather-night
         name: Switch to light mode
   features:
+    - header.autohide        # header slides away on scroll-down
     - navigation.tabs
     - navigation.sections
     - navigation.top
