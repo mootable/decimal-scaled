@@ -174,24 +174,29 @@
    the opening 1-18 seconds — front-loading the show without
    making panels chatter at each other afterwards.
    Formula:  animation-delay = T_first_peak - (cycle / 2)        */
-.md-typeset .hero-mark .cpath-0  { animation: hero-flicker  31s linear -14.5s infinite; } /* first peak  1s */
-.md-typeset .hero-mark .cpath-1  { animation: hero-flicker  37s linear -16.5s infinite; } /* first peak  2s */
-.md-typeset .hero-mark .cpath-2  { animation: hero-flicker  41s linear -17.5s infinite; } /* first peak  3s */
-.md-typeset .hero-mark .cpath-3  { animation: hero-flicker  43s linear -17.5s infinite; } /* first peak  4s */
-.md-typeset .hero-mark .cpath-4  { animation: hero-flicker  47s linear -18.5s infinite; } /* first peak  5s */
-.md-typeset .hero-mark .cpath-5  { animation: hero-flicker  53s linear -20.5s infinite; } /* first peak  6s */
-.md-typeset .hero-mark .cpath-6  { animation: hero-flicker  59s linear -22.5s infinite; } /* first peak  7s */
-.md-typeset .hero-mark .cpath-7  { animation: hero-flicker  61s linear -22.5s infinite; } /* first peak  8s */
-.md-typeset .hero-mark .cpath-8  { animation: hero-flicker  67s linear -24.5s infinite; } /* first peak  9s */
-.md-typeset .hero-mark .cpath-9  { animation: hero-flicker  71s linear -25.5s infinite; } /* first peak 10s */
-.md-typeset .hero-mark .cpath-10 { animation: hero-flicker  73s linear -25.5s infinite; } /* first peak 11s */
-.md-typeset .hero-mark .cpath-11 { animation: hero-flicker  79s linear -27.5s infinite; } /* first peak 12s */
-.md-typeset .hero-mark .cpath-12 { animation: hero-flicker  83s linear -28.5s infinite; } /* first peak 13s */
-.md-typeset .hero-mark .cpath-13 { animation: hero-flicker  89s linear -30.5s infinite; } /* first peak 14s */
-.md-typeset .hero-mark .cpath-14 { animation: hero-flicker  97s linear -33.5s infinite; } /* first peak 15s */
-.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 101s linear -34.5s infinite; } /* first peak 16s */
-.md-typeset .hero-mark .cpath-16 { animation: hero-flicker 103s linear -34.5s infinite; } /* first peak 17s */
-.md-typeset .hero-mark .cpath-17 { animation: hero-flicker 107s linear -35.5s infinite; } /* first peak 18s */
+/* Cycles bumped to 1-3 minutes per panel — same panel repeats
+   roughly once a minute or two. Combined with the negative
+   delay so the first peak still lands in the opening 18s,
+   this gives an "opening reveal" feel followed by a calm
+   pulse rate (~one blip every 10s across all 18 panels). */
+.md-typeset .hero-mark .cpath-0  { animation: hero-flicker  61s linear -29.5s infinite; } /* first peak  1s */
+.md-typeset .hero-mark .cpath-1  { animation: hero-flicker  67s linear -31.5s infinite; } /* first peak  2s */
+.md-typeset .hero-mark .cpath-2  { animation: hero-flicker  73s linear -33.5s infinite; } /* first peak  3s */
+.md-typeset .hero-mark .cpath-3  { animation: hero-flicker  79s linear -35.5s infinite; } /* first peak  4s */
+.md-typeset .hero-mark .cpath-4  { animation: hero-flicker  83s linear -36.5s infinite; } /* first peak  5s */
+.md-typeset .hero-mark .cpath-5  { animation: hero-flicker  89s linear -38.5s infinite; } /* first peak  6s */
+.md-typeset .hero-mark .cpath-6  { animation: hero-flicker  97s linear -41.5s infinite; } /* first peak  7s */
+.md-typeset .hero-mark .cpath-7  { animation: hero-flicker 101s linear -42.5s infinite; } /* first peak  8s */
+.md-typeset .hero-mark .cpath-8  { animation: hero-flicker 109s linear -45.5s infinite; } /* first peak  9s */
+.md-typeset .hero-mark .cpath-9  { animation: hero-flicker 113s linear -46.5s infinite; } /* first peak 10s */
+.md-typeset .hero-mark .cpath-10 { animation: hero-flicker 127s linear -52.5s infinite; } /* first peak 11s */
+.md-typeset .hero-mark .cpath-11 { animation: hero-flicker 131s linear -53.5s infinite; } /* first peak 12s */
+.md-typeset .hero-mark .cpath-12 { animation: hero-flicker 139s linear -56.5s infinite; } /* first peak 13s */
+.md-typeset .hero-mark .cpath-13 { animation: hero-flicker 149s linear -60.5s infinite; } /* first peak 14s */
+.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 157s linear -63.5s infinite; } /* first peak 15s */
+.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 163s linear -65.5s infinite; } /* first peak 16s */
+.md-typeset .hero-mark .cpath-16 { animation: hero-flicker 173s linear -69.5s infinite; } /* first peak 17s */
+.md-typeset .hero-mark .cpath-17 { animation: hero-flicker 179s linear -71.5s infinite; } /* first peak 18s */
 
 /* Respect users who've opted out of motion: hold the cow steady. */
 @media (prefers-reduced-motion: reduce) {
