@@ -150,6 +150,46 @@ fn wrapping_div_rem_non_zero() {
 
 // ─── overflow: saturating_div sign-aware ───────────────────────────────
 
+#[cfg(feature = "wide")]
+#[test]
+fn wide_overflow_variants_success_cases() {
+    use decimal_scaled::D76;
+    type D76_2 = D76<2>;
+    let a: D76_2 = D38_2::from_int(7).into();
+    let b: D76_2 = D38_2::from_int(2).into();
+    // saturating_mul success path
+    let _ = a.saturating_mul(b);
+    // saturating_div success path
+    let _ = a.saturating_div(b);
+    // overflowing_div success path
+    let (_, ov) = a.overflowing_div(b);
+    assert!(!ov);
+    // saturating_div with non-overflow + div-by-zero
+    let z = D76_2::ZERO;
+    let r = a.saturating_div(z);
+    assert!(r == D76_2::MAX || r == D76_2::MIN);
+    // overflowing_div with non-zero rhs (success)
+    let (q, ov) = a.overflowing_div(b);
+    assert!(!ov);
+    assert_eq!(q, a / b);
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn wide_checked_div_quotient_overflow() {
+    // Engineer rhs so that the quotient exceeds wide storage. With
+    // D76<74>, multiplier=10^74; q = (a*10^74)/b. If b is tiny and a is
+    // near MAX, q can overflow.
+    use decimal_scaled::D76;
+    type D = D76<74>;
+    let a = D::MAX;
+    // 1.0 at S=74 is 10^74 — make rhs = 1 LSB so q = a * 10^74 / 1 → way past storage.
+    // Build a 1-LSB tiny value by lifting D38<74> from_bits(1).
+    let tiny: D = D38::<74>::from_bits(1).into();
+    let r = a.checked_div(tiny);
+    assert!(r.is_none(), "tiny divisor on huge dividend should overflow");
+}
+
 #[test]
 fn saturating_div_overflow_signs() {
     // D9<2>::MIN / -ONE wraps because MIN's negation is unrepresentable.

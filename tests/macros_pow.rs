@@ -110,6 +110,25 @@ fn powi_negative_exponent_d38_scale12() {
 }
 
 #[test]
+fn powi_d9_d18_positive_negative_exp() {
+    use decimal_scaled::{D9, D18};
+    type D9_4 = D9<4>;
+    type D18_8 = D18<8>;
+    // D9<4>: 2^3 = 8 → 80_000
+    let two = D9_4::from_int(2);
+    assert_eq!(two.powi(3).to_bits(), 80_000);
+    assert_eq!(two.powi(0).to_bits(), 10_000);
+    // 2^-3 = 0.125 → 1_250
+    assert_eq!(two.powi(-3).to_bits(), 1_250);
+
+    // D18
+    let two18 = D18_8::from_int(2);
+    assert_eq!(two18.powi(3).to_bits(), 800_000_000);
+    assert_eq!(two18.powi(0).to_bits(), 100_000_000);
+    assert_eq!(two18.powi(-3).to_bits(), 12_500_000);
+}
+
+#[test]
 fn powi_handles_i32_min_without_signed_negation_overflow_d38() {
     // The `powi` code path uses `i32::unsigned_abs` to avoid the
     // signed-negation overflow that `(-i32::MIN) as u32` would cause.
