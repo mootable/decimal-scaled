@@ -7,7 +7,7 @@ decimal width is exercised at three scales (smallest / midpoint /
 largest) so the reader can see how cost scales with both storage
 width and `SCALE`.
 
-The benches live in [`benches/`](https://github.com/mootable/decimal-scaled/blob/main/benches/) and run under
+The benches live in [`benches/`](../benches/) and run under
 [criterion](https://docs.rs/criterion/). The baseline crates
 (`bnum`, `ruint`, `rust_decimal`, `fixed`, `i256`) are
 **dev-dependencies only** — they are never compiled into a normal
@@ -334,8 +334,8 @@ exists.
 >
 > **If you maintain one of the libraries below and disagree
 > with the analysis**, please review
-> [`benches/library_comparison.rs`](https://github.com/mootable/decimal-scaled/blob/main/benches/library_comparison.rs)
-> and [`examples/ulp_report.rs`](https://github.com/mootable/decimal-scaled/blob/main/examples/ulp_report.rs). If
+> [`benches/library_comparison.rs`](../benches/library_comparison.rs)
+> and [`examples/ulp_report.rs`](../examples/ulp_report.rs). If
 > we've called the wrong constructor, used the wrong scale,
 > mis-configured the precision context, or otherwise failed to
 > exercise the crate the way its docs intend — open a PR with

@@ -9,7 +9,7 @@ integer `raw` such that the logical value is `raw × 10^(-SCALE)`, where
 
 These guides cover how to use the library in depth. For the high-level
 pitch and the "why another numeric type" comparison, see the
-[crate README](https://github.com/mootable/decimal-scaled/blob/main/README.md). For the full API, see the
+[crate README](../README.md). For the full API, see the
 [rustdoc](https://docs.rs/decimal-scaled/).
 
 ## Guides

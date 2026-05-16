@@ -241,7 +241,7 @@ Further reading:
 
 The crate's default rounding rule. Implementation in
 `src/rounding.rs::should_bump`, dispatched per
-[`RoundingMode`](https://github.com/mootable/decimal-scaled/blob/main/src/rounding.rs) via a strategy hook.
+[`RoundingMode`](src/rounding.rs) via a strategy hook.
 
 > IEEE Std 754-2019. **"IEEE Standard for Floating-Point Arithmetic."**
 > IEEE Standards Association.
