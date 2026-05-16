@@ -1,5 +1,7 @@
 # `decimal-scaled` — usage guides
 
+**[Docs](https://mootable.github.io/decimal-scaled/)** • **[Benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/)** • **[Algorithms](https://mootable.github.io/decimal-scaled/ALGORITHMS/)** • **[Roadmap](https://mootable.github.io/decimal-scaled/ROADMAP/)** • **[API reference](https://docs.rs/decimal-scaled)**
+
 `decimal-scaled` provides const-generic, base-10 fixed-point decimal
 types with deterministic, bit-exact arithmetic. A value is stored as an
 integer `raw` such that the logical value is `raw × 10^(-SCALE)`, where

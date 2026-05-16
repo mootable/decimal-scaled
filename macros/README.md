@@ -1,5 +1,7 @@
 # `decimal_scaled_macros`
 
+**[Docs](https://mootable.github.io/decimal-scaled/)** • **[Benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/)** • **[Algorithms](https://mootable.github.io/decimal-scaled/ALGORITHMS/)** • **[Roadmap](https://mootable.github.io/decimal-scaled/ROADMAP/)** • **[API reference](https://docs.rs/decimal_scaled_macros)**
+
 Compile-time construction macros for the [`decimal-scaled`](..)
 type family. The crate exists so users can write decimal literals
 the way they read them — `d38!(19.99, scale 2)` — instead of

@@ -1,0 +1,175 @@
+/* ─────────────────────────────────────────────────────────────
+   decimal-scaled — MkDocs Material overrides
+   Mootable design system, dusk theme.
+   Sampled from mootable-cow-dusk.svg (#3F4A6E + #C68A2E + #7A6A8E).
+   ───────────────────────────────────────────────────────────── */
+
+@import url("https://fonts.googleapis.com/css2?family=Outfit:wght@400;500;600;700;800&family=Manrope:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;600&display=swap");
+
+:root {
+  /* Mootable brand tokens (referenced by the overrides below). */
+  --moo-blue:     #374E94;
+  --moo-teal:     #367594;
+  --moo-purple:   #563794;
+  --moo-silver:   #787A79;
+  --moo-charcoal: #2B2D2C;
+  --moo-ink:      #1A1A1A;
+  --moo-paper:    #F4F4F2;
+
+  /* Dusk accents (per-library, this project) */
+  --dusk-primary:        #3F4A6E;
+  --dusk-primary-strong: #2D3656;
+  --dusk-accent:         #C68A2E;
+  --dusk-purple:         #7A6A8E;
+}
+
+/* ── Light scheme: paper background, dusk primary ──────────── */
+[data-md-color-scheme="default"] {
+  --md-primary-fg-color:        var(--dusk-primary);
+  --md-primary-fg-color--light: #5A6595;
+  --md-primary-fg-color--dark:  var(--dusk-primary-strong);
+  --md-primary-bg-color:        #FFFFFF;
+  --md-primary-bg-color--light: rgba(255, 255, 255, 0.7);
+
+  --md-accent-fg-color:         var(--dusk-accent);
+  --md-accent-fg-color--transparent: rgba(198, 138, 46, 0.1);
+
+  --md-default-bg-color:        var(--moo-paper);
+  --md-typeset-a-color:         var(--dusk-primary);
+}
+
+/* ── Dark scheme: slightly-lifted dusk for legibility ──────── */
+[data-md-color-scheme="slate"] {
+  --md-primary-fg-color:        #5A6595;
+  --md-primary-fg-color--light: #7480B0;
+  --md-primary-fg-color--dark:  var(--dusk-primary);
+
+  --md-accent-fg-color:         #D4A35E;
+  --md-accent-fg-color--transparent: rgba(212, 163, 94, 0.12);
+
+  --md-default-bg-color:        #1F2128;
+  --md-default-bg-color--light: #262932;
+  --md-typeset-a-color:         #B7C0E5;
+}
+
+/* ── Display type uses Outfit for headings ─────────────────── */
+.md-typeset h1,
+.md-typeset h2,
+.md-typeset h3,
+.md-typeset h4,
+.md-typeset h5 {
+  font-family: "Outfit", "Manrope", system-ui, sans-serif;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+.md-typeset h1 { color: var(--md-primary-fg-color); }
+.md-typeset h2 {
+  color: var(--md-primary-fg-color);
+  border-bottom: 1px solid var(--md-default-fg-color--lightest);
+  padding-bottom: 0.3em;
+}
+
+/* ── Site header: lift the brand mark a touch ──────────────── */
+.md-header__button.md-logo img,
+.md-header__button.md-logo svg {
+  height: 1.6rem;
+  width: auto;
+}
+
+/* ── Code blocks tone-match the paper background ───────────── */
+[data-md-color-scheme="default"] .md-typeset code {
+  background: #ECECE8;
+  color: #1F2128;
+}
+
+/* ── Tables: tighten + brand-tint header row ───────────────── */
+.md-typeset table:not([class]) {
+  font-size: 0.78rem;
+}
+.md-typeset table:not([class]) th {
+  background: var(--md-accent-fg-color--transparent);
+  font-family: "Outfit", sans-serif;
+  font-weight: 600;
+  color: var(--md-primary-fg-color);
+}
+
+/* ── Hero / landing page motifs ────────────────────────────── */
+.md-typeset .hero-tagline {
+  font-family: "Outfit", sans-serif;
+  font-weight: 600;
+  font-size: 0.85rem;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--md-default-fg-color--light);
+  margin-bottom: 0.6rem;
+}
+.md-typeset .hero-wordmark {
+  font-family: "Outfit", sans-serif;
+  font-weight: 800;
+  font-size: 3rem;
+  line-height: 1.1;
+  letter-spacing: -0.02em;
+  margin: 0 0 0.8rem;
+}
+.md-typeset .hero-wordmark .a { color: var(--dusk-primary); }
+.md-typeset .hero-wordmark .b { color: var(--dusk-accent); }
+.md-typeset .hero-lede {
+  font-size: 1.1rem;
+  line-height: 1.5;
+  max-width: 38em;
+  color: var(--md-default-fg-color);
+}
+
+/* Hero action button row */
+.md-typeset .hero-actions {
+  display: flex;
+  gap: 0.6rem;
+  margin-top: 1.4rem;
+  flex-wrap: wrap;
+}
+.md-typeset .hero-actions .md-button {
+  margin: 0;
+}
+
+/* Hero install snippet */
+.md-typeset .hero-install {
+  display: inline-block;
+  margin-top: 1.4rem;
+  padding: 0.75rem 1.1rem;
+  font-family: "JetBrains Mono", monospace;
+  font-size: 0.95rem;
+  background: var(--md-code-bg-color);
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+}
+.md-typeset .hero-install .prompt {
+  color: var(--md-default-fg-color--light);
+  user-select: none;
+}
+
+/* Grid of cards (Material's grid-cards class extended) */
+.md-typeset .grid.cards > :is(ul, ol) {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  gap: 1rem;
+  margin: 1.2rem 0;
+  padding: 0;
+  list-style: none;
+}
+.md-typeset .grid.cards > :is(ul, ol) > li {
+  border: 1px solid var(--md-default-fg-color--lightest);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+  background: var(--md-default-bg-color);
+  transition: border-color 200ms, box-shadow 200ms;
+}
+.md-typeset .grid.cards > :is(ul, ol) > li:hover {
+  border-color: var(--md-primary-fg-color);
+  box-shadow: 0 2px 8px rgba(26, 26, 26, 0.06);
+}
+
+/* Footer: keep brand attribution */
+.md-footer-meta {
+  background: var(--md-primary-fg-color--dark);
+}

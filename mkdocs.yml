@@ -1,0 +1,101 @@
+site_name: decimal-scaled
+site_description: Const-generic base-10 fixed-point decimals for Rust — bit-exact, 0.5 ULP, no_std-friendly.
+site_url: https://mootable.github.io/decimal-scaled/
+site_author: John Moxley
+repo_url: https://github.com/mootable/decimal-scaled
+repo_name: mootable/decimal-scaled
+edit_uri: edit/main/docs/
+copyright: A Mootable open-source project.
+
+theme:
+  name: material
+  logo: assets/mootable-cow-dusk.svg
+  favicon: assets/mootable-cow-dusk.svg
+  font:
+    text: Manrope
+    code: JetBrains Mono
+  icon:
+    repo: fontawesome/brands/github
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-sunny
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: custom
+      accent: custom
+      toggle:
+        icon: material/weather-night
+        name: Switch to light mode
+  features:
+    - navigation.tabs
+    - navigation.sections
+    - navigation.top
+    - navigation.tracking
+    - navigation.indexes
+    - search.suggest
+    - search.highlight
+    - search.share
+    - content.code.copy
+    - content.code.annotate
+    - content.tabs.link
+    - content.action.edit
+    - toc.follow
+
+extra_css:
+  - stylesheets/extra.css
+
+extra:
+  social:
+    - icon: fontawesome/brands/github
+      link: https://github.com/mootable/decimal-scaled
+    - icon: fontawesome/brands/rust
+      link: https://crates.io/crates/decimal-scaled
+  generator: false
+
+nav:
+  - Home: index.md
+  - Getting started: getting-started.md
+  - Guides:
+      - Index: README.md
+      - Widths: widths.md
+      - Strict mode: strict-mode.md
+      - Rounding: rounding.md
+      - Macros: macros.md
+      - Conversions: conversions.md
+      - Cargo features: features.md
+  - Benchmarks: benchmarks.md
+  - Algorithms: ALGORITHMS.md
+  - Roadmap: ROADMAP.md
+  - Changelog: CHANGELOG.md
+  - API reference (rustdoc): https://mootable.github.io/decimal-scaled/api/decimal_scaled/
+
+markdown_extensions:
+  - tables
+  - admonition
+  - footnotes
+  - attr_list
+  - md_in_html
+  - def_list
+  - pymdownx.details
+  - pymdownx.superfences
+  - pymdownx.tabbed:
+      alternate_style: true
+  - pymdownx.highlight:
+      anchor_linenums: true
+      line_spans: __span
+      pygments_lang_class: true
+  - pymdownx.inlinehilite
+  - pymdownx.snippets
+  - pymdownx.tasklist:
+      custom_checkbox: true
+  - pymdownx.emoji:
+      emoji_index: !!python/name:material.extensions.emoji.twemoji
+      emoji_generator: !!python/name:material.extensions.emoji.to_svg
+  - toc:
+      permalink: true
+      toc_depth: 3

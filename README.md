@@ -1,5 +1,7 @@
 # decimal-scaled
 
+**[Docs](https://mootable.github.io/decimal-scaled/)** • **[Benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/)** • **[Algorithms](https://mootable.github.io/decimal-scaled/ALGORITHMS/)** • **[Roadmap](https://mootable.github.io/decimal-scaled/ROADMAP/)** • **[API reference](https://docs.rs/decimal-scaled)**
+
 A Rust library providing const-generic base-10 fixed-point decimal
 types with **correctly-rounded (≤ 0.5 ULP) integer-only
 transcendentals**, deterministic across every platform, and
