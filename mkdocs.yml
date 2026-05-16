@@ -63,6 +63,7 @@ theme:
     - content.tabs.link
     - content.action.edit
     - toc.follow
+    - toc.integrate          # TOC lives inside the left nav, below the page list
 
 extra_css:
   - stylesheets/extra.css
