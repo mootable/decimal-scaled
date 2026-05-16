@@ -5,6 +5,35 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.3]
+
+Documentation patch (and matching test additions). The 0.2.2 docs
+incorrectly listed `golden` among the constants that don't fit
+`D38<38>`'s storage range — the code was correct (golden ≈ 1.618 is
+inside the ±1.70141 storage range, so the method returns the
+correctly-rounded value), but the prose and CHANGELOG copy claimed it
+panicked. Fixed.
+
+### Fixed
+
+- Documentation in `consts.rs` (module preamble + `DecimalConsts`
+  trait doc) and `CHANGELOG.md` for 0.2.2 said the
+  larger-magnitude constants that overflow `D38<38>` storage were
+  "pi, tau, e, **golden**". `golden ≈ 1.61803` actually fits the
+  ±1.70141 storage range and the method returns the
+  correctly-rounded value; only `pi` (3.14), `tau` (6.28), and
+  `e` (2.72) overflow. Docs corrected.
+
+### Added
+
+- `tests/consts.rs` inline mod: explicit `#[should_panic]` tests
+  pinning `D38<38>::pi()`, `D38<38>::tau()`, and `D38<38>::e()` to
+  the storage-overflow panic. Promotes the prior single-constant
+  spot test to cover all three.
+- The `fitting_constants_at_scale_38_are_correctly_rounded` test now
+  also asserts `D38<38>::golden()` is correctly rounded to 0.5 ULP
+  (= 1 LSB) of the canonical 38-digit value.
+
 ## [0.2.2]
 
 `DecimalConsts` 0.5-ULP contract is now uniform across every supported

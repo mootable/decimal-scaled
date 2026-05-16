@@ -38,12 +38,12 @@
 //! exceptions in the precision contract. The only constraint is the
 //! width's *storage range*: a value that mathematically exceeds the
 //! type's `Storage::MAX / 10^SCALE` cannot be represented at all. At
-//! `D38<38>` the storage range is approximately ±1.7, so the four
-//! larger-magnitude constants — `pi ≈ 3.14`, `tau ≈ 6.28`, `e ≈ 2.72`,
-//! `golden ≈ 1.62` — overflow `i128` and the corresponding methods
-//! panic with a clear "constant out of storage range" message;
-//! `half_pi ≈ 1.57` and `quarter_pi ≈ 0.79` fit and remain
-//! correctly-rounded to 0.5 ULP.
+//! `D38<38>` the storage range is approximately ±1.70141, so the three
+//! larger-magnitude constants — `pi ≈ 3.14159`, `tau ≈ 6.28318`,
+//! `e ≈ 2.71828` — overflow `i128` and the corresponding methods panic
+//! with a clear "constant out of storage range" message;
+//! `half_pi ≈ 1.57080`, `quarter_pi ≈ 0.78540`, and `golden ≈ 1.61803`
+//! all fit inside ±1.70141 and remain correctly-rounded to 0.5 ULP.
 //!
 //! [`RoundingMode`]: crate::rounding::RoundingMode
 //!
@@ -446,21 +446,43 @@ mod tests {
         assert_eq!(D37::pi().to_bits(), expected);
     }
 
-    /// `D38<38>` cannot represent pi (storage range is ~±1.7 at
-    /// SCALE=38, pi is 3.14). The method panics with a clear
-    /// "constant out of storage range" message rather than silently
-    /// returning a fudged value.
+    // `D38<38>` storage range is approximately ±1.70141 (i128::MAX /
+    // 10^38). The three constants whose magnitude exceeds that bound
+    // must panic with a clear "out of storage range" message:
+    //
+    // - pi    ≈ 3.14159    > 1.70141 → must panic
+    // - tau   ≈ 6.28318    > 1.70141 → must panic
+    // - e     ≈ 2.71828    > 1.70141 → must panic
+    //
+    // The three that DO fit must be correctly rounded to 0.5 ULP:
+    //
+    // - half_pi    ≈ 1.57079   < 1.70141 → must round to 0.5 ULP
+    // - quarter_pi ≈ 0.78540   < 1.70141 → must round to 0.5 ULP
+    // - golden     ≈ 1.61803   < 1.70141 → must round to 0.5 ULP
+
     #[test]
     #[should_panic(expected = "out of storage range")]
     fn pi_at_scale_38_panics_storage_range() {
         let _ = D38::<38>::pi();
     }
 
-    /// `D38<38>` storage range covers ±1.7, which DOES include
-    /// `half_pi ≈ 1.57` and `quarter_pi ≈ 0.79`. They must be
-    /// correctly rounded to 0.5 ULP (= 1 LSB).
     #[test]
-    fn half_pi_and_quarter_pi_at_scale_38_are_correctly_rounded() {
+    #[should_panic(expected = "out of storage range")]
+    fn tau_at_scale_38_panics_storage_range() {
+        let _ = D38::<38>::tau();
+    }
+
+    #[test]
+    #[should_panic(expected = "out of storage range")]
+    fn e_at_scale_38_panics_storage_range() {
+        let _ = D38::<38>::e();
+    }
+
+    /// `half_pi` / `quarter_pi` / `golden` at `D38<38>` must not panic
+    /// (their magnitudes are inside the type's ±1.7 storage range) and
+    /// each must be correctly rounded to 0.5 ULP (= 1 LSB).
+    #[test]
+    fn fitting_constants_at_scale_38_are_correctly_rounded() {
         // half_pi to 38 digits: 1.57079632679489661923132169163975144210
         let expected_half_pi: i128 = 157_079_632_679_489_661_923_132_169_163_975_144_210;
         let got = D38::<38>::half_pi().to_bits();
@@ -472,6 +494,12 @@ mod tests {
         let got = D38::<38>::quarter_pi().to_bits();
         let diff = (got - expected_quarter_pi).abs();
         assert!(diff <= 1, "quarter_pi: got {got}, expected {expected_quarter_pi}, diff {diff} > 1 LSB");
+
+        // golden to 38 digits: 1.61803398874989484820458683436563811772
+        let expected_golden: i128 = 161_803_398_874_989_484_820_458_683_436_563_811_772;
+        let got = D38::<38>::golden().to_bits();
+        let diff = (got - expected_golden).abs();
+        assert!(diff <= 1, "golden: got {got}, expected {expected_golden}, diff {diff} > 1 LSB");
     }
 
     /// Negative-side rounding: negating pi gives the expected raw bits.

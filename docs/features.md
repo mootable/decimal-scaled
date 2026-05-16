@@ -2,7 +2,7 @@
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.2", default-features = false, features = ["alloc"] }
+decimal-scaled = { version = "0.2.3", default-features = false, features = ["alloc"] }
 ```
 
 ## Core features
@@ -69,17 +69,17 @@ are opt-in per width, with `wide` as an umbrella over all three.
 
 ```toml
 # Default — std, serde, f64-bridge transcendentals.
-decimal-scaled = "0.2.2"
+decimal-scaled = "0.2.3"
 
 # no_std, still with serde.
-decimal-scaled = { version = "0.2.2", default-features = false, features = ["serde", "alloc"] }
+decimal-scaled = { version = "0.2.3", default-features = false, features = ["serde", "alloc"] }
 
 # Deterministic, platform-independent transcendentals, no_std.
-decimal-scaled = { version = "0.2.2", default-features = false, features = ["alloc", "strict"] }
+decimal-scaled = { version = "0.2.3", default-features = false, features = ["alloc", "strict"] }
 
 # All six widths, with the literal macro.
-decimal-scaled = { version = "0.2.2", features = ["wide", "macros"] }
+decimal-scaled = { version = "0.2.3", features = ["wide", "macros"] }
 
 # Smallest build — no strict surface at all.
-decimal-scaled = { version = "0.2.2", features = ["fast"] }
+decimal-scaled = { version = "0.2.3", features = ["fast"] }
 ```

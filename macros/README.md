@@ -12,7 +12,7 @@ only.
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.2", features = ["macros"] }
+decimal-scaled = { version = "0.2.3", features = ["macros"] }
 ```
 
 ```rust
