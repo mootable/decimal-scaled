@@ -1,12 +1,22 @@
-//! Core type definition: [`D38`] and the concrete scale aliases
-//! [`D38s0`] through [`D38s38`].
+//! Core type definitions for every decimal width and their scale aliases.
 //!
-//! `D38<const SCALE: u32>` is a `#[repr(transparent)]` newtype around
-//! `i128`. The stored integer equals `actual_value * 10^SCALE`.
+//! Each width is a `#[repr(transparent)]` newtype around an integer
+//! storage of the matching size. The stored integer equals
+//! `actual_value * 10^SCALE`. Widths:
+//!
+//! | Type | Storage | `MAX_SCALE` |
+//! |------|---------|-------------|
+//! | [`D9<SCALE>`]  | `i32`             | 9   |
+//! | [`D18<SCALE>`] | `i64`             | 18  |
+//! | [`D38<SCALE>`] | `i128`            | 38  |
+//! | [`D76<SCALE>`] | `crate::wide_int::I256` | 76 |
+//! | [`D153<SCALE>`] | `crate::wide_int::I512` | 153 |
+//! | [`D307<SCALE>`] | `crate::wide_int::I1024` | 307 |
 //!
 //! The `#[repr(transparent)]` annotation is load-bearing: it guarantees
-//! the same ABI as a bare `i128`, so `from_bits` / `to_bits` round-trips
-//! are exact and the type is safe to embed in C-ABI plugin payloads.
+//! the same ABI as the underlying integer, so `from_bits` / `to_bits`
+//! round-trips are exact and the types are safe to embed in C-ABI
+//! plugin payloads when the underlying integer matches a primitive.
 
 /// Scaled fixed-point decimal with 128-bit storage.
 ///
@@ -1436,7 +1446,7 @@ mod tests {
         let neg = super::D76::<2>::from_str("-20.50").unwrap();
         assert_eq!(neg.to_bits(), crate::wide_int::I256::from_str_radix("-2050", 10).unwrap());
         // num_traits Zero / One
-        use num_traits::{One, Zero};
+        use ::num_traits::{One, Zero};
         assert!(super::D76::<6>::zero().is_zero());
         assert!(super::D76::<6>::one().is_one());
     }

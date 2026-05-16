@@ -2,35 +2,50 @@
 //!
 //! # Overview
 //!
-//! `decimal-scaled` provides `D38<const SCALE: u32>`, a fixed-point decimal
-//! type backed by `i128`. The stored integer encodes `actual_value * 10^SCALE`,
-//! so decimal literals like `1.1` round-trip exactly without any binary
-//! approximation. All core arithmetic is integer-only and produces identical
-//! bit-patterns on every platform.
+//! `decimal-scaled` provides a family of fixed-point decimal types whose stored
+//! integer encodes `actual_value * 10^SCALE`. Decimal literals like `1.1`
+//! round-trip exactly without any binary approximation, and all core arithmetic
+//! is integer-only — identical bit-patterns on every platform.
 //!
 //! # Primary types
 //!
-//! - [`D38<SCALE>`] is the const-generic foundation. Every method is
-//! implemented once and is available at any scale.
-//! - [`D38s12`] is the concrete alias `D38<12>`. At `SCALE = 12`, one LSB
-//! equals `10^-12` model units and the representable range is roughly
-//! +/-1.7e14 model units.
-//! - Scale aliases [`D38s0`] through [`D38s38`] cover every supported scale.
-//! `SCALE = 39` is not supported because `10^39` overflows `i128`.
+//! Each width has a `D<digits><const SCALE: u32>` const-generic shape with the
+//! same method surface; pick the narrowest that fits your range.
+//!
+//! | Type | Storage | Max safe decimal digits | Feature gate |
+//! |------|---------|-------------------------|--------------|
+//! | [`D9<SCALE>`]  | `i32`    | 9   | always on |
+//! | [`D18<SCALE>`] | `i64`    | 18  | always on |
+//! | [`D38<SCALE>`] | `i128`   | 38  | always on |
+//! | [`D76<SCALE>`] | 256-bit  | 76  | `d76` or `wide` |
+//! | [`D153<SCALE>`] | 512-bit | 153 | `d153` or `wide` |
+//! | [`D307<SCALE>`] | 1024-bit | 307 | `d307` or `wide` |
+//!
+//! Concrete scale aliases such as `D38s12 = D38<12>` are emitted for every
+//! supported `SCALE`. `SCALE = MAX_SCALE + 1` is rejected at compile time —
+//! `10^(MAX_SCALE+1)` overflows the storage type.
+//!
+//! The width-generic [`Decimal`] trait carries the surface that is identical
+//! across widths (constants, arithmetic operators, sign methods, integer
+//! variants, pow / checked / wrapping / saturating / overflowing, float bridge,
+//! Euclidean / floor / ceil division, etc.). Use it to write helpers that work
+//! across widths; reach for the concrete type for width-specific operations
+//! like `rescale::<TARGET>()` whose const-generic parameter cannot live on a
+//! trait method.
 //!
 //! # Equality and hashing
 //!
 //! Because each logical value has exactly one representation at a fixed scale,
-//! `Hash`, `Eq`, `PartialEq`, `PartialOrd`, and `Ord` are all derived from
-//! the underlying `i128`. Two `D38<S>` values compare equal if and only if
-//! their raw bit patterns are identical. This gives predictable behaviour when
-//! `D38` values are used as `HashMap` keys, unlike variable-scale decimal
-//! types where `1.10` and `1.1` may hash differently.
+//! `Hash`, `Eq`, `PartialEq`, `PartialOrd`, and `Ord` are all derived from the
+//! underlying integer storage. Two `Dxx<S>` values compare equal if and only
+//! if their raw bit patterns are identical. This gives predictable behaviour
+//! when decimal values are used as `HashMap` keys, unlike variable-scale
+//! decimal types where `1.10` and `1.1` may hash differently.
 //!
 //! # `num-traits` compatibility
 //!
-//! [`D38<SCALE>`] implements the standard `num-traits` 0.2 surface,
-//! including [`num_traits::Zero`], [`num_traits::One`], [`num_traits::Num`],
+//! Every width implements the standard `num-traits` 0.2 surface:
+//! [`num_traits::Zero`], [`num_traits::One`], [`num_traits::Num`],
 //! [`num_traits::Bounded`], [`num_traits::Signed`],
 //! [`num_traits::FromPrimitive`], [`num_traits::ToPrimitive`], and the
 //! `Checked{Add,Sub,Mul,Div,Rem,Neg}` family. These impls are unconditional
@@ -161,7 +176,7 @@ mod display;
 mod equalities;
 mod error;
 mod macros;
-mod fixed_compat;
+mod num_traits;
 mod log_exp_strict;
 mod log_exp_fast;
 

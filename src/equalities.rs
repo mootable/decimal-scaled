@@ -1,4 +1,6 @@
-//! `PartialEq` impls between `D38<SCALE>` and primitive numeric types.
+//! `PartialEq` impls between every decimal width and primitive numeric
+//! types. Wires the macro emissions in `src/macros/equalities.rs` to
+//! each concrete width.
 //!
 //! # Semantics
 //!
@@ -33,9 +35,8 @@
 use crate::core_type::{D38, D9, D18};
 
 // Cross-equality with primitive integer types is emitted by the
-// `decl_eq_all_integers!` macro family — see
-// `src/decimal_equalities_macro.rs`. The same surface is generated for
-// every decimal width.
+// `decl_eq_all_integers!` macro family in `src/macros/equalities.rs`.
+// The same surface is generated for every decimal width.
 crate::macros::equalities::decl_eq_all_integers!(D38);
 crate::macros::equalities::decl_eq_all_integers!(D18);
 crate::macros::equalities::decl_eq_all_integers!(D9);
@@ -54,11 +55,9 @@ crate::macros::equalities::decl_eq_all_integers!(wide D153);
 #[cfg(any(feature = "d307", feature = "wide"))]
 crate::macros::equalities::decl_eq_all_integers!(wide D307);
 
-// Float equality requires the f64 bridge (`from_f64` /
-// `to_f64`), which is only present when `std` is on and
-// `strict` is off. Gate the float impls accordingly. Float impls are
-// emitted for D38 only at present — the D9/D18 conversion bridge
-// covers will follow in a later commit.
+// Float equality requires the f64 bridge (`from_f64` / `to_f64`),
+// which is gated on `std`. Float impls are emitted for every width
+// below.
 #[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D38, f32);
 #[cfg(feature = "std")]

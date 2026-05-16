@@ -1,10 +1,25 @@
-//! Macro-generated `From` impls for primitive integer inputs.
+//! Macro-generated conversions between primitive types and the decimal
+//! widths.
 //!
-//! Each impl multiplies the input by `multiplier()` (= `10^SCALE`) and
-//! stores the result in the width's native integer storage. Overflow
-//! follows Rust's default integer arithmetic: debug-mode panic,
-//! release-mode wrap. Users with overflow risk should reach for the
-//! eventual `TryFrom` variants (Phase 3D pending).
+//! Two surfaces live here:
+//!
+//! - **Infallible `From<$Src>`** — emitted by [`decl_from_primitive!`]
+//! for source types that always fit the destination. Multiplies the
+//! input by `multiplier()` (= `10^SCALE`); overflow follows Rust's
+//! default integer arithmetic (debug-mode panic, release-mode wrap).
+//! - **Fallible `TryFrom<$Src>`** — emitted by [`decl_try_from_i128!`],
+//! [`decl_try_from_u128!`], [`decl_try_from_f64!`], and
+//! [`decl_try_from_f32!`] for sources where the scaled magnitude may
+//! exceed the destination's range, or where the input may be
+//! non-finite (`f32` / `f64`). Returns
+//! [`ConvertError::Overflow`] / [`ConvertError::NotFinite`] instead of
+//! panicking.
+//!
+//! Plus [`decl_decimal_int_conversion_methods!`] which emits
+//! `from_int` / `from_i32` / `to_int` / `to_int_with` on each width.
+//!
+//! [`ConvertError::Overflow`]: $crate::error::ConvertError::Overflow
+//! [`ConvertError::NotFinite`]: $crate::error::ConvertError::NotFinite
 
 /// Generates `From<$Src> for $Type<SCALE>` that scales the value by
 /// `10^SCALE` and stores it in `$Storage`. The cast `value as $Storage`

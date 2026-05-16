@@ -164,24 +164,161 @@ macro_rules! decl_decimal_basics {
             const MIN: Self = $Type::<SCALE>::MIN;
 
             #[inline]
-            fn multiplier() -> $Storage {
-                $Type::<SCALE>::multiplier()
+            fn multiplier() -> $Storage { $Type::<SCALE>::multiplier() }
+            #[inline]
+            fn from_bits(raw: $Storage) -> Self { $Type::<SCALE>::from_bits(raw) }
+            #[inline]
+            fn to_bits(self) -> $Storage { self.0 }
+            #[inline]
+            fn scale(self) -> u32 { SCALE }
+
+            // Sign — delegate to inherent.
+            #[inline]
+            fn abs(self) -> Self { $Type::<SCALE>::abs(self) }
+            #[inline]
+            fn signum(self) -> Self { $Type::<SCALE>::signum(self) }
+            #[inline]
+            fn is_positive(self) -> bool { $Type::<SCALE>::is_positive(self) }
+            #[inline]
+            fn is_negative(self) -> bool { $Type::<SCALE>::is_negative(self) }
+
+            // Integer-shape predicates.
+            #[inline]
+            fn is_nan(self) -> bool { $Type::<SCALE>::is_nan(self) }
+            #[inline]
+            fn is_infinite(self) -> bool { $Type::<SCALE>::is_infinite(self) }
+            #[inline]
+            fn is_finite(self) -> bool { $Type::<SCALE>::is_finite(self) }
+
+            // Integer methods.
+            #[inline]
+            fn div_euclid(self, rhs: Self) -> Self { $Type::<SCALE>::div_euclid(self, rhs) }
+            #[inline]
+            fn rem_euclid(self, rhs: Self) -> Self { $Type::<SCALE>::rem_euclid(self, rhs) }
+            #[inline]
+            fn div_floor(self, rhs: Self) -> Self { $Type::<SCALE>::div_floor(self, rhs) }
+            #[inline]
+            fn div_ceil(self, rhs: Self) -> Self { $Type::<SCALE>::div_ceil(self, rhs) }
+            #[inline]
+            fn abs_diff(self, rhs: Self) -> Self { $Type::<SCALE>::abs_diff(self, rhs) }
+            #[inline]
+            fn midpoint(self, rhs: Self) -> Self { $Type::<SCALE>::midpoint(self, rhs) }
+            #[inline]
+            fn mul_add(self, a: Self, b: Self) -> Self { $Type::<SCALE>::mul_add(self, a, b) }
+
+            // Pow.
+            #[inline]
+            fn pow(self, exp: u32) -> Self { $Type::<SCALE>::pow(self, exp) }
+            #[inline]
+            fn powi(self, exp: i32) -> Self { $Type::<SCALE>::powi(self, exp) }
+            #[inline]
+            fn checked_pow(self, exp: u32) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_pow(self, exp)
+            }
+            #[inline]
+            fn wrapping_pow(self, exp: u32) -> Self { $Type::<SCALE>::wrapping_pow(self, exp) }
+            #[inline]
+            fn saturating_pow(self, exp: u32) -> Self { $Type::<SCALE>::saturating_pow(self, exp) }
+            #[inline]
+            fn overflowing_pow(self, exp: u32) -> (Self, bool) {
+                $Type::<SCALE>::overflowing_pow(self, exp)
             }
 
+            // Overflow-variant arithmetic.
             #[inline]
-            fn from_bits(raw: $Storage) -> Self {
-                $Type::<SCALE>::from_bits(raw)
+            fn checked_add(self, rhs: Self) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_add(self, rhs)
+            }
+            #[inline]
+            fn checked_sub(self, rhs: Self) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_sub(self, rhs)
+            }
+            #[inline]
+            fn checked_mul(self, rhs: Self) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_mul(self, rhs)
+            }
+            #[inline]
+            fn checked_div(self, rhs: Self) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_div(self, rhs)
+            }
+            #[inline]
+            fn checked_neg(self) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_neg(self)
+            }
+            #[inline]
+            fn checked_rem(self, rhs: Self) -> ::core::option::Option<Self> {
+                $Type::<SCALE>::checked_rem(self, rhs)
+            }
+            #[inline]
+            fn wrapping_add(self, rhs: Self) -> Self { $Type::<SCALE>::wrapping_add(self, rhs) }
+            #[inline]
+            fn wrapping_sub(self, rhs: Self) -> Self { $Type::<SCALE>::wrapping_sub(self, rhs) }
+            #[inline]
+            fn wrapping_mul(self, rhs: Self) -> Self { $Type::<SCALE>::wrapping_mul(self, rhs) }
+            #[inline]
+            fn wrapping_div(self, rhs: Self) -> Self { $Type::<SCALE>::wrapping_div(self, rhs) }
+            #[inline]
+            fn wrapping_neg(self) -> Self { $Type::<SCALE>::wrapping_neg(self) }
+            #[inline]
+            fn wrapping_rem(self, rhs: Self) -> Self { $Type::<SCALE>::wrapping_rem(self, rhs) }
+            #[inline]
+            fn saturating_add(self, rhs: Self) -> Self { $Type::<SCALE>::saturating_add(self, rhs) }
+            #[inline]
+            fn saturating_sub(self, rhs: Self) -> Self { $Type::<SCALE>::saturating_sub(self, rhs) }
+            #[inline]
+            fn saturating_mul(self, rhs: Self) -> Self { $Type::<SCALE>::saturating_mul(self, rhs) }
+            #[inline]
+            fn saturating_div(self, rhs: Self) -> Self { $Type::<SCALE>::saturating_div(self, rhs) }
+            #[inline]
+            fn saturating_neg(self) -> Self { $Type::<SCALE>::saturating_neg(self) }
+            #[inline]
+            fn overflowing_add(self, rhs: Self) -> (Self, bool) {
+                $Type::<SCALE>::overflowing_add(self, rhs)
+            }
+            #[inline]
+            fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
+                $Type::<SCALE>::overflowing_sub(self, rhs)
+            }
+            #[inline]
+            fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
+                $Type::<SCALE>::overflowing_mul(self, rhs)
+            }
+            #[inline]
+            fn overflowing_div(self, rhs: Self) -> (Self, bool) {
+                $Type::<SCALE>::overflowing_div(self, rhs)
+            }
+            #[inline]
+            fn overflowing_neg(self) -> (Self, bool) { $Type::<SCALE>::overflowing_neg(self) }
+            #[inline]
+            fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
+                $Type::<SCALE>::overflowing_rem(self, rhs)
             }
 
+            // Integer conversion.
             #[inline]
-            fn to_bits(self) -> $Storage {
-                self.0
+            fn from_i32(value: i32) -> Self { $Type::<SCALE>::from_i32(value) }
+            #[inline]
+            fn to_int(self) -> i64 { $Type::<SCALE>::to_int(self) }
+            #[inline]
+            fn to_int_with(self, mode: $crate::rounding::RoundingMode) -> i64 {
+                $Type::<SCALE>::to_int_with(self, mode)
             }
 
+            // Float bridge (lossy).
+            #[cfg(feature = "std")]
             #[inline]
-            fn scale(self) -> u32 {
-                SCALE
+            fn from_f64(value: f64) -> Self { $Type::<SCALE>::from_f64(value) }
+            #[cfg(feature = "std")]
+            #[inline]
+            fn from_f64_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
+                $Type::<SCALE>::from_f64_with(value, mode)
             }
+            #[cfg(feature = "std")]
+            #[inline]
+            fn to_f64(self) -> f64 { $Type::<SCALE>::to_f64(self) }
+            #[cfg(feature = "std")]
+            #[inline]
+            fn to_f32(self) -> f32 { $Type::<SCALE>::to_f32(self) }
         }
     };
 }

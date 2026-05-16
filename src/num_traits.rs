@@ -1,22 +1,15 @@
-//! Compatibility layer for migrating call sites from the `fixed` crate
-//! (`fixed::types::I64F64`, `I32F32`, `FixedI128`, etc.) to [`D38`].
+//! `num_traits`-bridge methods on every decimal width.
 //!
-//! # Purpose
+//! `from_num` / `to_num` are saturating, never-panicking constructors
+//! and readers that thread the input through the [`num_traits::NumCast`]
+//! ecosystem, dispatching to the width's [`num_traits::FromPrimitive`] /
+//! [`num_traits::ToPrimitive`] impls.
 //!
-//! The `fixed` crate's binary fixed-point types share a `from_num` /
-//! `to_num` constructor/reader convention. This module provides the same
-//! method names on [`D38`] so call sites can swap the underlying type
-//! without renaming every occurrence:
-//!
-//! ```ignore
-//! let d = Decimal::from_num(some_i32);
-//! let f: f32 = d.to_num();
-//! ```
-//!
-//! When `Decimal` is aliased to [`D38`], existing call sites compile
-//! unchanged. New code should prefer the idiomatic [`From<T>`] /
-//! [`num_traits::FromPrimitive`] / [`num_traits::ToPrimitive`] surface
-//! instead.
+//! Idiomatic call sites should prefer the direct surface — `From<T>`,
+//! `TryFrom<T>`, the named integer constructors, `from_f64` / `to_f64` —
+//! for readability and stricter overflow handling. The `from_num` /
+//! `to_num` pair is provided for code that needs a single saturating
+//! `NumCast`-style entry point regardless of input type.
 //!
 //! # Saturation policy
 //!
@@ -25,47 +18,39 @@
 //! - `NaN` maps to [`D38::ZERO`].
 //! - `+Infinity` maps to [`D38::MAX`].
 //! - `-Infinity` maps to [`D38::MIN`].
-//! - Finite values outside the representable range saturate to `MAX` or `MIN`
-//! by sign.
-//!
-//! `D38`'s storage range (~+/-1.7e26 model units at `SCALE = 12`) is wider
-//! than `I64F64`'s (~+/-9.2e18), so values that would have panicked in
-//! `I64F64::from_num` may succeed here. That is correct behaviour.
+//! - Finite values outside the representable range saturate to `MAX` or
+//!   `MIN` by sign.
 //!
 //! # Examples
 //!
 //! ```
 //! use decimal_scaled::D38s12;
 //!
-//! // Constructor mirrors `I64F64::from_num`:
+//! // `from_num` routes any `T: ToPrimitive` through `NumCast`:
 //! let d = D38s12::from_num(42_i32);
 //! assert_eq!(d, D38s12::from(42_i32));
 //!
-//! // Reader mirrors `I64F64::to_num`:
+//! // `to_num` returns any `T: NumCast + Bounded`, saturating on
+//! // out-of-range targets.
 //! let f: f32 = d.to_num();
 //! assert_eq!(f, 42.0_f32);
-//!
-//! // Saturation: `f64::INFINITY` -> `D38::MAX` (not panic):
 //! assert_eq!(D38s12::from_num(f64::INFINITY), D38s12::MAX);
 //! ```
 
-use num_traits::{Bounded, NumCast, ToPrimitive};
+use ::num_traits::{Bounded, NumCast, ToPrimitive};
 
 use crate::core_type::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
-    /// Constructs a `D38<SCALE>` from any `T: ToPrimitive`.
-    ///
-    /// This is a compatibility alias for the idiomatic [`From<T>`] /
-    /// [`num_traits::FromPrimitive`] surface. Routes through
-    /// [`num_traits::NumCast::from`], which dispatches to the
-    /// [`num_traits::FromPrimitive`] impl on `D38`.
+    /// Constructs a `D38<SCALE>` from any `T: ToPrimitive`, routing
+    /// through [`num_traits::NumCast`]. Never panics — out-of-range
+    /// inputs saturate.
     ///
     /// # Precision
     ///
-    /// Lossy: involves f32 or f64 at some point when `T` is a float type;
-    /// result may lose precision. For integer `T`, the conversion is Strict:
-    /// all arithmetic is integer-only; result is bit-exact.
+    /// Lossy: involves f32 or f64 at some point when `T` is a float
+    /// type; result may lose precision. For integer `T`, the conversion
+    /// is Strict (integer-only, bit-exact).
     ///
     /// # Saturation policy
     ///
@@ -87,18 +72,18 @@ impl<const SCALE: u32> D38<SCALE> {
     /// ```
     pub fn from_num<T: ToPrimitive>(value: T) -> Self {
         // Determine sign and NaN status before consuming `value` through
-        // NumCast. Integer signals (to_i128 / to_u128) are checked first so
-        // that integer-typed inputs never route through f64 -- D38's storage
-        // is wider than f64's mantissa and f64 sign-detection would lose
+        // NumCast. Integer signals (to_i128 / to_u128) are checked first
+        // so integer inputs never route through f64 — D38's storage is
+        // wider than f64's mantissa and f64 sign-detection would lose
         // precision at large integer values.
         //
         // Three cases cover all ToPrimitive implementors:
-        // - to_i128 returns Some(i): all signed primitives and unsigned
-        // primitives that fit in i128 (u8 through u64).
-        // - to_i128 returns None but to_u128 returns Some: unsigned values
-        // exceeding i128::MAX; sign is non-negative.
-        // - Both return None: input is f32 or f64; inspect to_f64 for NaN
-        // and sign classification.
+        // - `to_i128` returns Some(i): all signed primitives and
+        //   unsigned primitives that fit in i128 (u8 through u64).
+        // - `to_i128` returns None but `to_u128` returns Some: unsigned
+        //   values exceeding i128::MAX; sign is non-negative.
+        // - Both return None: input is f32 or f64; inspect `to_f64` for
+        //   NaN and sign classification.
         let int_signal = value.to_i128();
         let uint_signal = value.to_u128();
         let float_signal = if int_signal.is_none() && uint_signal.is_none() {
@@ -114,9 +99,9 @@ impl<const SCALE: u32> D38<SCALE> {
         if let Some(d) = <Self as NumCast>::from(value) {
             return d;
         }
-        // NumCast returned None -- saturate by sign of the original input.
-        // Prefer integer signals (lossless); fall back to float only for
-        // genuinely float-typed inputs.
+        // NumCast returned None — saturate by sign of the original
+        // input. Prefer integer signals (lossless); fall back to float
+        // only for genuinely float-typed inputs.
         if let Some(i) = int_signal {
             return if i < 0 { Self::MIN } else { Self::MAX };
         }
@@ -127,24 +112,21 @@ impl<const SCALE: u32> D38<SCALE> {
         match float_signal {
             Some(f) if f.is_sign_negative() => Self::MIN,
             Some(_) => Self::MAX,
-            // No representation at all (exotic ToPrimitive impl). Default
-            // to ZERO rather than picking a sign.
+            // No representation at all (exotic ToPrimitive impl).
+            // Default to ZERO rather than picking a sign.
             None => Self::ZERO,
         }
     }
 
-    /// Converts `self` to any `T: NumCast + Bounded`.
-    ///
-    /// This is a compatibility alias for the idiomatic
-    /// [`num_traits::ToPrimitive`] / `to_X_lossy` surface. Routes through
-    /// [`num_traits::NumCast::from`], which dispatches to the
-    /// [`num_traits::ToPrimitive`] impl on `D38`.
+    /// Converts `self` to any `T: NumCast + Bounded`, routing through
+    /// [`num_traits::NumCast`]. Never panics — out-of-range targets
+    /// saturate to `T::min_value()` / `T::max_value()`.
     ///
     /// # Precision
     ///
-    /// Lossy: involves f32 or f64 at some point when `T` is a float type;
-    /// result may lose precision. For integer `T`, the conversion is Strict:
-    /// all arithmetic is integer-only; result is bit-exact.
+    /// Lossy: involves f32 or f64 at some point when `T` is a float
+    /// type; result may lose precision. For integer `T`, the conversion
+    /// is Strict (integer-only, bit-exact).
     ///
     /// # Saturation policy
     ///
@@ -162,14 +144,14 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::MAX.to_num::<i32>(), i32::MAX);
     /// assert_eq!(D38s12::MIN.to_num::<i32>(), i32::MIN);
     /// ```
-    #[must_use] 
+    #[must_use]
     pub fn to_num<T: NumCast + Bounded>(self) -> T {
         match T::from(self) {
             Some(t) => t,
             None => {
-                // Saturate to T::MAX or T::MIN based on the sign of self.
-                // Read sign directly from the raw i128 field to avoid a
-                // Signed-trait dispatch round-trip.
+                // Saturate to T::MAX or T::MIN based on the sign of
+                // self. Read sign directly from the raw i128 field to
+                // avoid a Signed-trait dispatch round-trip.
                 if self.0 >= 0 {
                     T::max_value()
                 } else {
@@ -184,7 +166,7 @@ impl<const SCALE: u32> D38<SCALE> {
 mod tests {
     use crate::core_type::{D38, D38s12};
 
-    // from_num -- thin delegate over NumCast / FromPrimitive
+    // from_num — thin delegate over NumCast / FromPrimitive.
 
     /// `from_num(i32)` matches the idiomatic `From<i32>` impl.
     #[test]
@@ -229,9 +211,9 @@ mod tests {
     /// Finite out-of-range f64 saturates by sign.
     #[test]
     fn from_num_f64_finite_oor_saturates() {
-        // 1e30 * 10^12 = 1e42 > i128::MAX ~1.7e38; positive -> MAX.
+        // 1e30 * 10^12 = 1e42 > i128::MAX ~1.7e38; positive → MAX.
         assert_eq!(D38s12::from_num(1e30_f64), D38s12::MAX);
-        // negative -> MIN.
+        // negative → MIN.
         assert_eq!(D38s12::from_num(-1e30_f64), D38s12::MIN);
     }
 
@@ -243,21 +225,17 @@ mod tests {
         assert_eq!(D38s12::from_num(f32::NAN), D38s12::ZERO);
     }
 
-    // from_num -- wider range than I64F64
-
-    /// At `SCALE = 12`, `D38`'s integer range is ~+/-1.7e14 model units.
-    /// `I64F64`'s integer range is ~+/-9.2e9. A value of 1e10 is within
-    /// D38's range but exceeds I64F64's representable bound -- this call
-    /// must succeed without saturation.
+    /// `from_num` accepts values past i64's range that still fit
+    /// `D38<SCALE>`'s storage — at `SCALE = 12`, D38's integer range is
+    /// roughly ±1.7e14 model units.
     #[test]
-    fn from_num_does_not_panic_on_wider_range_than_i64f64() {
+    fn from_num_does_not_saturate_for_wider_than_i64_decimal_range() {
         let v: i64 = 10_000_000_000_i64;
         let d = D38s12::from_num(v);
-        // Round-trip: to_int must return the original value.
         assert_eq!(d.to_int(), v);
     }
 
-    // to_num -- thin delegate over NumCast / ToPrimitive
+    // to_num — thin delegate over NumCast / ToPrimitive.
 
     /// `D38::ONE.to_num::<f64>() == 1.0`.
     #[test]
@@ -305,13 +283,12 @@ mod tests {
     }
 
     /// `to_num::<u32>()` returns 0 for negative values (saturates to
-    /// u32::MIN = 0).
+    /// `u32::MIN = 0`).
     #[test]
     fn to_num_u32_negative_saturates_to_zero() {
-        // u32::MIN is 0, so negative D38 values saturate to 0.
         assert_eq!((-D38s12::ONE).to_num::<u32>(), u32::MIN);
         assert_eq!(D38s12::MIN.to_num::<u32>(), u32::MIN);
-        // Positive out-of-range -> u32::MAX.
+        // Positive out-of-range → u32::MAX.
         assert_eq!(D38s12::MAX.to_num::<u32>(), u32::MAX);
     }
 
@@ -324,7 +301,7 @@ mod tests {
         }
     }
 
-    // Cross-scale exercise -- non-default SCALE
+    // Cross-scale exercise — non-default SCALE.
 
     /// Compat surface works at non-default SCALE.
     #[test]
@@ -335,18 +312,20 @@ mod tests {
         assert_eq!(d.to_num::<i32>(), 7_i32);
     }
 
-    // Integer-typed inputs must not route through f64 for sign detection.
+    // Integer-typed inputs must not route through f64 for sign
+    // detection.
 
     /// `from_num(i128::MAX)` saturates to `D38::MAX` via the i128 sign
-    /// signal, not through a f64 round-trip. `i128::MAX * 10^12` overflows
-    /// i128 storage, so NumCast::from returns None; the saturation fallback
-    /// reads sign directly from i128.
+    /// signal, not through a f64 round-trip. `i128::MAX * 10^12`
+    /// overflows i128 storage, so `NumCast::from` returns `None`; the
+    /// saturation fallback reads sign directly from i128.
     #[test]
     fn from_num_i128_max_saturates_via_int_signal() {
         assert_eq!(D38s12::from_num(i128::MAX), D38s12::MAX);
     }
 
-    /// `from_num(i128::MIN)` saturates to `D38::MIN` via the i128 sign signal.
+    /// `from_num(i128::MIN)` saturates to `D38::MIN` via the i128 sign
+    /// signal.
     #[test]
     fn from_num_i128_min_saturates_via_int_signal() {
         assert_eq!(D38s12::from_num(i128::MIN), D38s12::MIN);
@@ -360,8 +339,8 @@ mod tests {
         assert_eq!(D38s12::from_num(u128::MAX), D38s12::MAX);
     }
 
-    /// `from_num(u64::MAX)` succeeds without saturation -- u64::MAX fits
-    /// in D38's storage at SCALE = 12.
+    /// `from_num(u64::MAX)` succeeds without saturation — u64::MAX fits
+    /// in D38's storage at `SCALE = 12`.
     #[test]
     fn from_num_u64_max_succeeds_without_saturation() {
         let d = D38s12::from_num(u64::MAX);
