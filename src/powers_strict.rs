@@ -194,7 +194,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// A zero or negative base saturates to `ZERO` (a negative base
     /// with an arbitrary fractional exponent is not real-valued),
     /// matching the f64-bridge NaN-to-ZERO policy.
-    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn powf_strict(self, exp: D38<SCALE>) -> Self {
@@ -256,7 +255,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
     /// assert_eq!(D38s12::ONE.sqrt(), D38s12::ONE);
     /// ```
-    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn sqrt_strict(self) -> Self {
@@ -325,7 +323,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// # Precision
     ///
     /// Strict: integer-only; correctly rounded.
-    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn cbrt_strict(self) -> Self {
@@ -348,7 +345,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// f64-bridge [`Self::hypot`]; available in `no_std`.
     ///
     /// Always available, regardless of the `strict` feature.
-    #[cfg(not(feature = "fast"))]
     #[inline]
     #[must_use]
     pub fn hypot_strict(self, other: Self) -> Self {
@@ -782,7 +778,6 @@ mod tests {
     /// `(q − 0.5)² ≤ N ≤ (q + 0.5)²`, i.e. `q` is the exact square root
     /// rounded to nearest. Checked exactly in 256-bit integer space
     /// across several scales and magnitudes.
-    #[cfg(not(feature = "fast"))]
     #[test]
     fn strict_sqrt_is_correctly_rounded() {
         // (q - 0.5)^2 = q^2 - q + 0.25 → lower bound  N ≥ q^2 - q + 1 (ints, when q>0)
@@ -848,7 +843,6 @@ mod tests {
     /// scaled radicand `N = |r| · 10^(2·SCALE)` must satisfy
     /// `(2q − 1)³ < 8·N ≤ (2q + 1)³`, i.e. `q` is the exact cube root
     /// rounded to nearest. Checked exactly in 384-bit integer space.
-    #[cfg(not(feature = "fast"))]
     #[test]
     fn strict_cbrt_is_correctly_rounded() {
         // q correctly rounded ⇔  q − 0.5 < cbrt(N) ≤ q + 0.5

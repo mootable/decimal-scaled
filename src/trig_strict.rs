@@ -183,7 +183,6 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn to_radians(self) -> Self {
         self.to_radians_strict()
     }
-#[cfg(not(feature = "fast"))]
     /// Sine of `self` (radians). Strict: integer-only and correctly
     /// rounded — the result is within 0.5 ULP of the exact sine.
     #[inline]
@@ -195,7 +194,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::sin: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Cosine of `self` (radians). Strict: `cos(x) = sin(x + π/2)`,
     /// correctly rounded.
@@ -209,7 +207,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::cos: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Tangent of `self` (radians). Strict: `tan(x) = sin(x) / cos(x)`,
     /// with the division carried in the wide intermediate so the result
@@ -232,7 +229,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::tan: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Arctangent of `self`, in radians, in `(−π/2, π/2)`. Strict:
     /// integer-only and correctly rounded.
@@ -245,7 +241,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::atan: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Arcsine of `self`, in radians, in `[−π/2, π/2]`. Strict.
     ///
@@ -280,7 +275,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::asin: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Arccosine of `self`, in radians, in `[0, π]`. Strict:
     /// `acos(x) = π/2 − asin(x)`, correctly rounded.
@@ -315,7 +309,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::acos: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`), in
     /// radians, in `(−π, π]`. Strict: integer-only and correctly
@@ -349,7 +342,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::atan2: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Hyperbolic sine of `self`. Strict: `sinh(x) = (eˣ − e⁻ˣ)/2`,
     /// composed in the wide intermediate from the correctly-rounded
@@ -368,7 +360,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::sinh: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Hyperbolic cosine of `self`. Strict: `cosh(x) = (eˣ + e⁻ˣ)/2`,
     /// correctly rounded.
@@ -386,7 +377,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::cosh: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Hyperbolic tangent of `self`. Strict: `tanh(x) = sinh(x)/cosh(x)`
     /// with the division in the wide intermediate. `cosh ≥ 1`, so the
@@ -405,7 +395,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::tanh: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Inverse hyperbolic sine of `self`. Strict:
     /// `asinh(x) = sign · ln(|x| + √(x² + 1))`, correctly rounded.
@@ -439,7 +428,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::asinh: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Inverse hyperbolic cosine of `self`. Strict:
     /// `acosh(x) = ln(x + √(x² − 1))`, defined for `x ≥ 1`, correctly
@@ -473,7 +461,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::acosh: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Inverse hyperbolic tangent of `self`. Strict:
     /// `atanh(x) = ln((1 + x) / (1 − x)) / 2`, defined for `|x| < 1`,
@@ -499,7 +486,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::atanh: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Convert radians to degrees: `self · (180 / π)`. Strict: the
     /// multiply and divide run in the wide intermediate, so the result
@@ -515,7 +501,6 @@ impl<const SCALE: u32> D38<SCALE> {
             .expect("D38::to_degrees: result out of range");
         Self::from_bits(raw)
     }
-#[cfg(not(feature = "fast"))]
 
     /// Convert degrees to radians: `self · (π / 180)`. Strict:
     /// correctly rounded.
@@ -568,7 +553,6 @@ impl<const SCALE: u32> D38<SCALE> {
 // ─────────────────────────────────────────────────────────────────────
 
 /// π at working scale `w` (`w <= 63`), from a 63-digit embedded value.
-#[cfg(not(feature = "fast"))]
 fn wide_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     // π = 3.141592653589793238462643383279502884197169399375105820974944 592
     crate::d_w128_kernels::Fixed::from_decimal_split(
@@ -579,20 +563,17 @@ fn wide_pi(w: u32) -> crate::d_w128_kernels::Fixed {
 }
 
 /// τ = 2π at working scale `w`.
-#[cfg(not(feature = "fast"))]
 fn wide_tau(w: u32) -> crate::d_w128_kernels::Fixed {
     wide_pi(w).double()
 }
 
 /// π/2 at working scale `w`.
-#[cfg(not(feature = "fast"))]
 fn wide_half_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     wide_pi(w).halve()
 }
 
 /// Builds a working-scale `Fixed` from a signed `D38` raw value `r`:
 /// `r · 10^STRICT_GUARD`, carrying the sign.
-#[cfg(not(feature = "fast"))]
 fn to_fixed(raw: i128) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let m = Fixed::from_u128_mag(raw.unsigned_abs(), false)
@@ -606,7 +587,6 @@ fn to_fixed(raw: i128) -> crate::d_w128_kernels::Fixed {
 
 /// Taylor series for `sin` on a reduced non-negative argument
 /// `r ∈ [0, π/2]`, evaluated at working scale `w`.
-#[cfg(not(feature = "fast"))]
 fn sin_taylor(r: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     let r2 = r.mul(r, w);
     let mut sum = r;
@@ -636,7 +616,6 @@ fn sin_taylor(r: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels:
 /// Reduces `v` modulo τ via `q = round(v/τ)`, folds the remainder into
 /// `[0, π/2]` tracking sign and the `π − x` reflection, then evaluates
 /// the Taylor series.
-#[cfg(not(feature = "fast"))]
 fn sin_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let tau = wide_tau(w);
@@ -670,7 +649,6 @@ fn sin_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels
 
 /// Taylor series for `atan` on a reduced non-negative argument
 /// `x ∈ [0, ~1/8]`, evaluated at working scale `w`.
-#[cfg(not(feature = "fast"))]
 fn atan_taylor(x: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     let x2 = x.mul(x, w);
     let mut sum = x;
@@ -701,7 +679,6 @@ fn atan_taylor(x: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels
 /// Odd-function fold to `x ≥ 0`; reciprocal reduction
 /// `atan(x) = π/2 − atan(1/x)` for `x > 1`; three rounds of argument
 /// halving `atan(x) = 2·atan(x / (1 + √(1+x²)))`; then the series.
-#[cfg(not(feature = "fast"))]
 fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };

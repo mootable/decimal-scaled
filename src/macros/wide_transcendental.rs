@@ -76,7 +76,6 @@ macro_rules! decl_wide_transcendental {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
         /// passed explicitly alongside the value.
-        #[cfg(not(feature = "fast"))]
         mod $core {
             #![allow(unused)]
 
@@ -643,7 +642,6 @@ macro_rules! decl_wide_transcendental {
             }
         }
 
-        #[cfg(not(feature = "fast"))]
         impl<const SCALE: u32> $Type<SCALE> {
             /// Natural logarithm (base e). Strict: integer-only and
             /// correctly rounded. Panics if `self <= 0`.

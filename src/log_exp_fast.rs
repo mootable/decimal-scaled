@@ -24,10 +24,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // ln(1) == 0 (f64::ln(1.0) == 0.0 exactly).
     /// assert_eq!(D38s12::ONE.ln(), D38s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn ln(self) -> Self {
+    pub fn ln_fast(self) -> Self {
         Self::from_f64(self.to_f64().ln())
     }
 
@@ -50,10 +50,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let two = D38s12::from_int(2);
     /// let result = eight.log(two);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn log(self, base: Self) -> Self {
+    pub fn log_fast(self, base: Self) -> Self {
         Self::from_f64(self.to_f64().log(base.to_f64()))
     }
 
@@ -73,10 +73,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // log2(1) == 0 (f64::log2(1.0) == 0.0 exactly).
     /// assert_eq!(D38s12::ONE.log2(), D38s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn log2(self) -> Self {
+    pub fn log2_fast(self) -> Self {
         Self::from_f64(self.to_f64().log2())
     }
 
@@ -94,10 +94,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // log10(1) == 0 (f64::log10(1.0) == 0.0 exactly).
     /// assert_eq!(D38s12::ONE.log10(), D38s12::ZERO);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn log10(self) -> Self {
+    pub fn log10_fast(self) -> Self {
         Self::from_f64(self.to_f64().log10())
     }
 
@@ -117,10 +117,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // exp(0) == 1 (f64::exp(0.0) == 1.0 exactly).
     /// assert_eq!(D38s12::ZERO.exp(), D38s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn exp(self) -> Self {
+    pub fn exp_fast(self) -> Self {
         Self::from_f64(self.to_f64().exp())
     }
 
@@ -139,12 +139,28 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // exp2(0) == 1 (f64::exp2(0.0) == 1.0 exactly).
     /// assert_eq!(D38s12::ZERO.exp2(), D38s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn exp2(self) -> Self {
+    pub fn exp2_fast(self) -> Self {
         Self::from_f64(self.to_f64().exp2())
     }
+}
+
+#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+impl<const SCALE: u32> D38<SCALE> {
+    /// Plain dispatcher: forwards to [`Self::ln_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn ln(self) -> Self { self.ln_fast() }
+    /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn log(self, base: Self) -> Self { self.log_fast(base) }
+    /// Plain dispatcher: forwards to [`Self::log2_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn log2(self) -> Self { self.log2_fast() }
+    /// Plain dispatcher: forwards to [`Self::log10_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn log10(self) -> Self { self.log10_fast() }
+    /// Plain dispatcher: forwards to [`Self::exp_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn exp(self) -> Self { self.exp_fast() }
+    /// Plain dispatcher: forwards to [`Self::exp2_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn exp2(self) -> Self { self.exp2_fast() }
 }
 
 #[cfg(all(test, any(not(feature = "strict"), feature = "fast")))]

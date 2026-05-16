@@ -26,10 +26,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.sin(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn sin(self) -> Self {
+    pub fn sin_fast(self) -> Self {
         Self::from_f64(self.to_f64().sin())
     }
 
@@ -49,10 +49,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.cos(), D38s12::ONE);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn cos(self) -> Self {
+    pub fn cos_fast(self) -> Self {
         Self::from_f64(self.to_f64().cos())
     }
 
@@ -77,10 +77,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.tan(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn tan(self) -> Self {
+    pub fn tan_fast(self) -> Self {
         Self::from_f64(self.to_f64().tan())
     }
 
@@ -105,10 +105,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.asin(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn asin(self) -> Self {
+    pub fn asin_fast(self) -> Self {
         Self::from_f64(self.to_f64().asin())
     }
 
@@ -131,10 +131,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ONE.acos(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn acos(self) -> Self {
+    pub fn acos_fast(self) -> Self {
         Self::from_f64(self.to_f64().acos())
     }
 
@@ -156,10 +156,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.atan(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn atan(self) -> Self {
+    pub fn atan_fast(self) -> Self {
         Self::from_f64(self.to_f64().atan())
     }
 
@@ -184,10 +184,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let result = one.atan2(one); // approximately D38s12::quarter_pi()
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn atan2(self, other: Self) -> Self {
+    pub fn atan2_fast(self, other: Self) -> Self {
         Self::from_f64(self.to_f64().atan2(other.to_f64()))
     }
 
@@ -212,10 +212,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.sinh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn sinh(self) -> Self {
+    pub fn sinh_fast(self) -> Self {
         Self::from_f64(self.to_f64().sinh())
     }
 
@@ -238,10 +238,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.cosh(), D38s12::ONE);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn cosh(self) -> Self {
+    pub fn cosh_fast(self) -> Self {
         Self::from_f64(self.to_f64().cosh())
     }
 
@@ -263,10 +263,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.tanh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn tanh(self) -> Self {
+    pub fn tanh_fast(self) -> Self {
         Self::from_f64(self.to_f64().tanh())
     }
 
@@ -288,10 +288,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.asinh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn asinh(self) -> Self {
+    pub fn asinh_fast(self) -> Self {
         Self::from_f64(self.to_f64().asinh())
     }
 
@@ -314,10 +314,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ONE.acosh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn acosh(self) -> Self {
+    pub fn acosh_fast(self) -> Self {
         Self::from_f64(self.to_f64().acosh())
     }
 
@@ -340,10 +340,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.atanh(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn atanh(self) -> Self {
+    pub fn atanh_fast(self) -> Self {
         Self::from_f64(self.to_f64().atanh())
     }
 
@@ -372,10 +372,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.to_degrees(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn to_degrees(self) -> Self {
+    pub fn to_degrees_fast(self) -> Self {
         Self::from_f64(self.to_f64().to_degrees())
     }
 
@@ -398,10 +398,44 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(D38s12::ZERO.to_radians(), D38s12::ZERO);
     /// # }
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn to_radians(self) -> Self {
+    pub fn to_radians_fast(self) -> Self {
         Self::from_f64(self.to_f64().to_radians())
     }
+}
+
+#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+impl<const SCALE: u32> D38<SCALE> {
+    /// Plain dispatcher: forwards to [`Self::sin_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn sin(self) -> Self { self.sin_fast() }
+    /// Plain dispatcher: forwards to [`Self::cos_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn cos(self) -> Self { self.cos_fast() }
+    /// Plain dispatcher: forwards to [`Self::tan_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn tan(self) -> Self { self.tan_fast() }
+    /// Plain dispatcher: forwards to [`Self::asin_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn asin(self) -> Self { self.asin_fast() }
+    /// Plain dispatcher: forwards to [`Self::acos_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn acos(self) -> Self { self.acos_fast() }
+    /// Plain dispatcher: forwards to [`Self::atan_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn atan(self) -> Self { self.atan_fast() }
+    /// Plain dispatcher: forwards to [`Self::atan2_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn atan2(self, other: Self) -> Self { self.atan2_fast(other) }
+    /// Plain dispatcher: forwards to [`Self::sinh_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn sinh(self) -> Self { self.sinh_fast() }
+    /// Plain dispatcher: forwards to [`Self::cosh_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn cosh(self) -> Self { self.cosh_fast() }
+    /// Plain dispatcher: forwards to [`Self::tanh_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn tanh(self) -> Self { self.tanh_fast() }
+    /// Plain dispatcher: forwards to [`Self::asinh_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn asinh(self) -> Self { self.asinh_fast() }
+    /// Plain dispatcher: forwards to [`Self::acosh_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn acosh(self) -> Self { self.acosh_fast() }
+    /// Plain dispatcher: forwards to [`Self::atanh_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn atanh(self) -> Self { self.atanh_fast() }
+    /// Plain dispatcher: forwards to [`Self::to_degrees_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn to_degrees(self) -> Self { self.to_degrees_fast() }
+    /// Plain dispatcher: forwards to [`Self::to_radians_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn to_radians(self) -> Self { self.to_radians_fast() }
 }

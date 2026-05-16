@@ -1,0 +1,9 @@
+[default]
+exclude-files = [
+    "benches/*",
+    "tests/*",
+    "scripts/*",
+    "build.rs",
+    "examples/*",
+    "macros/tests/*",
+]

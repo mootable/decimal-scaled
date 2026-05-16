@@ -54,12 +54,10 @@ use crate::core_type::D38;
 // intermediates never overflow.
 // ─────────────────────────────────────────────────────────────────────
 
-#[cfg(not(feature = "fast"))]
 pub(crate) const STRICT_GUARD: u32 = 30;
 
 /// `ln(2)` as a `Fixed` at working scale `w` (`w <= 64`). The constant
 /// is embedded to 64 fractional digits and narrowed to `w`.
-#[cfg(not(feature = "fast"))]
 pub(crate) fn wide_ln2(w: u32) -> crate::d_w128_kernels::Fixed {
     // ln 2 = 0.693147180559945309417232121458176568075500134360255254120680 0094
     crate::d_w128_kernels::Fixed::from_decimal_split(
@@ -72,7 +70,6 @@ pub(crate) fn wide_ln2(w: u32) -> crate::d_w128_kernels::Fixed {
 /// `ln(10)` as a `Fixed` at working scale `w` (`w <= 63`). Embedded to
 /// 63 fractional digits (`ln 10 ≈ 2.30…` has an integer digit) and
 /// narrowed to `w`.
-#[cfg(not(feature = "fast"))]
 fn wide_ln10(w: u32) -> crate::d_w128_kernels::Fixed {
     // ln 10 = 2.302585092994045684017991454684364207601101488628772976033327 901
     crate::d_w128_kernels::Fixed::from_decimal_split(
@@ -89,7 +86,6 @@ fn wide_ln10(w: u32) -> crate::d_w128_kernels::Fixed {
 /// recomputed exactly from `v_w` once `k` is known — then evaluates
 /// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
 /// and returns `k·ln(2) + ln(m)`.
-#[cfg(not(feature = "fast"))]
 pub(crate) fn ln_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -153,7 +149,6 @@ pub(crate) fn ln_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w1
 ///
 /// Panics if `2^k · exp(s)` cannot fit a 256-bit working value — i.e.
 /// the caller's result would overflow its representable range.
-#[cfg(not(feature = "fast"))]
 pub(crate) fn exp_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -227,7 +222,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// `strict` is enabled, the plain [`Self::ln`] delegates here.
     #[inline]
     #[must_use]
-    #[cfg(not(feature = "fast"))]
     pub fn ln_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::ln: argument must be positive");
@@ -264,7 +258,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// (division by `ln(1) = 0`).
     #[inline]
     #[must_use]
-    #[cfg(not(feature = "fast"))]
     pub fn log_strict(self, base: Self) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log: argument must be positive");
@@ -304,7 +297,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Panics if `self <= 0`.
     #[inline]
     #[must_use]
-    #[cfg(not(feature = "fast"))]
     pub fn log2_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log2: argument must be positive");
@@ -340,7 +332,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Panics if `self <= 0`.
     #[inline]
     #[must_use]
-    #[cfg(not(feature = "fast"))]
     pub fn log10_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log10: argument must be positive");
@@ -391,7 +382,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Panics if the result overflows the type's representable range.
     #[inline]
     #[must_use]
-    #[cfg(not(feature = "fast"))]
     pub fn exp_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
@@ -431,7 +421,6 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Panics if the result overflows D38's representable range.
     #[inline]
     #[must_use]
-    #[cfg(not(feature = "fast"))]
     pub fn exp2_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {

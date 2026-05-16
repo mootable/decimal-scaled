@@ -25,7 +25,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
     ($Type:ident) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// `ln_strict` — delegates to [`crate::core_type::D38::ln_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn ln_strict(self) -> Self {
@@ -34,7 +33,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::ln_strict: result out of range"))
             }
             /// `log2_strict` — delegates to [`crate::core_type::D38::log2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn log2_strict(self) -> Self {
@@ -43,7 +41,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::log2_strict: result out of range"))
             }
             /// `log10_strict` — delegates to [`crate::core_type::D38::log10_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn log10_strict(self) -> Self {
@@ -52,7 +49,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::log10_strict: result out of range"))
             }
             /// `exp_strict` — delegates to [`crate::core_type::D38::exp_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn exp_strict(self) -> Self {
@@ -61,7 +57,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::exp_strict: result out of range"))
             }
             /// `exp2_strict` — delegates to [`crate::core_type::D38::exp2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn exp2_strict(self) -> Self {
@@ -70,7 +65,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::exp2_strict: result out of range"))
             }
             /// `sqrt_strict` — delegates to [`crate::core_type::D38::sqrt_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
@@ -79,7 +73,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::sqrt_strict: result out of range"))
             }
             /// `cbrt_strict` — delegates to [`crate::core_type::D38::cbrt_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
@@ -88,7 +81,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::cbrt_strict: result out of range"))
             }
             /// `sin_strict` — delegates to [`crate::core_type::D38::sin_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn sin_strict(self) -> Self {
@@ -97,7 +89,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::sin_strict: result out of range"))
             }
             /// `cos_strict` — delegates to [`crate::core_type::D38::cos_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
@@ -106,7 +97,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::cos_strict: result out of range"))
             }
             /// `tan_strict` — delegates to [`crate::core_type::D38::tan_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn tan_strict(self) -> Self {
@@ -115,7 +105,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::tan_strict: result out of range"))
             }
             /// `asin_strict` — delegates to [`crate::core_type::D38::asin_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
@@ -124,7 +113,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::asin_strict: result out of range"))
             }
             /// `acos_strict` — delegates to [`crate::core_type::D38::acos_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
@@ -133,7 +121,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::acos_strict: result out of range"))
             }
             /// `atan_strict` — delegates to [`crate::core_type::D38::atan_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn atan_strict(self) -> Self {
@@ -142,7 +129,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::atan_strict: result out of range"))
             }
             /// `sinh_strict` — delegates to [`crate::core_type::D38::sinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn sinh_strict(self) -> Self {
@@ -151,7 +137,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::sinh_strict: result out of range"))
             }
             /// `cosh_strict` — delegates to [`crate::core_type::D38::cosh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn cosh_strict(self) -> Self {
@@ -160,7 +145,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::cosh_strict: result out of range"))
             }
             /// `tanh_strict` — delegates to [`crate::core_type::D38::tanh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn tanh_strict(self) -> Self {
@@ -169,7 +153,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::tanh_strict: result out of range"))
             }
             /// `asinh_strict` — delegates to [`crate::core_type::D38::asinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn asinh_strict(self) -> Self {
@@ -178,7 +161,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::asinh_strict: result out of range"))
             }
             /// `acosh_strict` — delegates to [`crate::core_type::D38::acosh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn acosh_strict(self) -> Self {
@@ -187,7 +169,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::acosh_strict: result out of range"))
             }
             /// `atanh_strict` — delegates to [`crate::core_type::D38::atanh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn atanh_strict(self) -> Self {
@@ -196,7 +177,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::atanh_strict: result out of range"))
             }
             /// `to_degrees_strict` — delegates to [`crate::core_type::D38::to_degrees_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn to_degrees_strict(self) -> Self {
@@ -205,7 +185,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::to_degrees_strict: result out of range"))
             }
             /// `to_radians_strict` — delegates to [`crate::core_type::D38::to_radians_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn to_radians_strict(self) -> Self {
@@ -214,7 +193,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::to_radians_strict: result out of range"))
             }
             /// `log_strict` — delegates to [`crate::core_type::D38::log_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn log_strict(self, base: Self) -> Self {
@@ -224,7 +202,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::log_strict: result out of range"))
             }
             /// `atan2_strict` — delegates to [`crate::core_type::D38::atan2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
@@ -234,7 +211,6 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::atan2_strict: result out of range"))
             }
             /// `powf_strict` — delegates to [`crate::core_type::D38::powf_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {

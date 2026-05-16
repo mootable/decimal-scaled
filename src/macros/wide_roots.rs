@@ -65,7 +65,6 @@ macro_rules! decl_wide_roots {
             /// Strict: integer-only; the result is the exact square
             /// root correctly rounded to the type's last place (within
             /// 0.5 ULP).
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
@@ -94,7 +93,6 @@ macro_rules! decl_wide_roots {
             /// Strict: integer-only; the result is the exact cube root
             /// correctly rounded to the type's last place (within 0.5
             /// ULP).
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
@@ -170,7 +168,6 @@ macro_rules! decl_wide_roots {
             /// hypotenuse genuinely exceeds the type's range.
             ///
             /// `hypot(0, 0) = 0` (bit-exact); `hypot(0, x) = |x|`.
-            #[cfg(not(feature = "fast"))]
             #[inline]
             #[must_use]
             pub fn hypot_strict(self, other: Self) -> Self {

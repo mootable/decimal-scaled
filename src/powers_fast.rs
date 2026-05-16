@@ -31,10 +31,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // 2^3 = 8, within f64 precision.
     /// assert!((two.powf(three).to_f64() - 8.0).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn powf(self, exp: D38<SCALE>) -> Self {
+    pub fn powf_fast(self, exp: D38<SCALE>) -> Self {
         Self::from_f64(self.to_f64().powf(exp.to_f64()))
     }
 
@@ -62,10 +62,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // f64::sqrt(1.0) == 1.0 exactly, so the result is bit-exact.
     /// assert_eq!(D38s12::ONE.sqrt(), D38s12::ONE);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn sqrt(self) -> Self {
+    pub fn sqrt_fast(self) -> Self {
         Self::from_f64(self.to_f64().sqrt())
     }
 
@@ -88,10 +88,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// let result = neg_eight.cbrt();
     /// assert!((result.to_f64() - (-2.0_f64)).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn cbrt(self) -> Self {
+    pub fn cbrt_fast(self) -> Self {
         Self::from_f64(self.to_f64().cbrt())
     }
 
@@ -132,10 +132,10 @@ impl<const SCALE: u32> D38<SCALE> {
     /// // Pythagorean triple: hypot(3, 4) ~= 5.
     /// assert!((three.hypot(four).to_f64() - 5.0).abs() < 1e-9);
     /// ```
-    #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+    #[cfg(feature = "std")]
     #[inline]
     #[must_use]
-    pub fn hypot(self, other: Self) -> Self {
+    pub fn hypot_fast(self, other: Self) -> Self {
         let a = self.abs();
         let b = other.abs();
         let (large, small) = if a >= b { (a, b) } else { (b, a) };
@@ -149,7 +149,19 @@ impl<const SCALE: u32> D38<SCALE> {
             // The outer sqrt is in [1, sqrt(2)]; the final multiply by large
             // only overflows when the true hypotenuse exceeds D38::MAX.
             let one_plus_sq = Self::ONE + ratio * ratio;
-            large * one_plus_sq.sqrt()
+            large * one_plus_sq.sqrt_fast()
         }
     }
+}
+
+#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+impl<const SCALE: u32> D38<SCALE> {
+    /// Plain dispatcher: forwards to [`Self::powf_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn powf(self, exp: D38<SCALE>) -> Self { self.powf_fast(exp) }
+    /// Plain dispatcher: forwards to [`Self::sqrt_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn sqrt(self) -> Self { self.sqrt_fast() }
+    /// Plain dispatcher: forwards to [`Self::cbrt_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn cbrt(self) -> Self { self.cbrt_fast() }
+    /// Plain dispatcher: forwards to [`Self::hypot_fast`] in this feature mode.
+    #[inline] #[must_use] pub fn hypot(self, other: Self) -> Self { self.hypot_fast(other) }
 }
