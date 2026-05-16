@@ -19,7 +19,9 @@ Const-generic base-10 fixed-point decimals - D9 through D307 - with **0.5 ULP co
 [:fontawesome-brands-github: GitHub](https://github.com/mootable/decimal-scaled){ .md-button }
 { .hero-actions }
 </div>
-<img class="hero-mark" src="assets/mootable-cow-dusk.svg" alt="Mootable">
+<div class="hero-mark">
+--8<-- "assets/mootable-cow-dusk.svg"
+</div>
 </div>
 
 ---
