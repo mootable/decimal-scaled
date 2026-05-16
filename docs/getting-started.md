@@ -4,14 +4,14 @@
 
 ```toml
 [dependencies]
-decimal-scaled = "0.2.3"
+decimal-scaled = "0.2.4"
 ```
 
 `no_std` (drops `std` and `serde`, keeps `alloc`):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.3", default-features = false }
+decimal-scaled = { version = "0.2.4", default-features = false }
 ```
 
 See [Cargo features](features.md) for the full list.

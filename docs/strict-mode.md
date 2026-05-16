@@ -68,7 +68,7 @@ widen-compute-narrow delegation):
 ## The `strict` feature
 
 ```toml
-decimal-scaled = { version = "0.2.3", features = ["strict"] }
+decimal-scaled = { version = "0.2.4", features = ["strict"] }
 ```
 
 With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
@@ -81,7 +81,7 @@ transcendental operations.
 ## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.2.3", features = ["fast"] }
+decimal-scaled = { version = "0.2.4", features = ["fast"] }
 ```
 
 `fast` forces the plain methods (`sqrt`, `ln`, `sin`, …) to dispatch

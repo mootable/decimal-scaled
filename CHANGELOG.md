@@ -5,6 +5,26 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.4]
+
+Agent-ecosystem additions. No library code changes — the crate's
+public API, behaviour, and on-wire format are byte-identical to
+0.2.3. The bump exists so the new agent-facing assets ship in the
+crates.io tarball.
+
+### Added
+
+- `AGENTS.md` (top level) — tool-agnostic usage guide consumable by
+  Cursor, Continue, Aider, Codeium and any other agent runner that
+  crawls a repo for `AGENTS.md`. Covers width / scale picking, the
+  strict-vs-fast dual API, rounding modes, `DecimalConsts`,
+  rescaling, serde format, common anti-patterns, Cargo feature
+  cheat sheet, and quick recipes.
+- `.claude/skills/decimal-scaled.md` — Claude Code skill (same
+  content as `AGENTS.md`) with `name` / `description` frontmatter
+  so Claude Code can auto-discover and invoke the skill when a user
+  prompt mentions the crate.
+
 ## [0.2.3]
 
 Documentation patch (and matching test additions). The 0.2.2 docs
