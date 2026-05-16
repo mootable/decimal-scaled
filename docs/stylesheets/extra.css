@@ -159,9 +159,13 @@
    First delays kept under 2s so the user sees a flicker within
    a couple of seconds of landing on the page. */
 @keyframes hero-flicker {
-  0%, 47%   { filter: brightness(1); }
-  50%       { filter: brightness(2) drop-shadow(0 0 8px rgba(255,255,255,0.7)); }
-  53%, 100% { filter: brightness(1); }
+  /* Tight 0.5%-of-cycle peak window so the brightening reads
+     as a snap, not a ramp. Absolute duration of the flash is
+     0.5% × cycle — at the 31s shortest cycle that's ~150ms,
+     at the 107s longest cycle ~535ms. Both snap-like. */
+  0%, 49.75%      { filter: brightness(1); }
+  50%             { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255,255,255,0.7)); }
+  50.25%, 100%    { filter: brightness(1); }
 }
 /* Cycle = how long between repeats for the SAME panel. We use
    prime-second cycles in the 30-100s range so a given panel
