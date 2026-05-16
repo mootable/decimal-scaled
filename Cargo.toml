@@ -99,6 +99,10 @@ bnum = { version = "0.14", default-features = false }
 ruint = { version = "1", default-features = false }
 rust_decimal = { version = "1", default-features = false, features = ["maths"] }
 fixed = "1"
+# g_math: another fixed-point arithmetic crate that claims "0 ULP
+# transcendentals". Used as a benchmark baseline + accuracy comparison
+# (see benches/g_math_comparison.rs).
+g_math = "0.4"
 
 [[bench]]
 name = "mul_div_candidates"
@@ -146,6 +150,16 @@ required-features = ["x-wide"]
 name = "full_matrix"
 harness = false
 required-features = ["wide", "x-wide"]
+
+# Like-for-like comparison vs `g_math` (another fixed-point crate that
+# claims "0 ULP transcendentals"). Runs at decimal precision matched
+# to g_math's default Q64.64 (~19 decimal digits = D38<19>) and reports
+# both timing and an accuracy delta against the higher-precision
+# D76<35> baseline.
+[[bench]]
+name = "g_math_comparison"
+harness = false
+required-features = ["wide"]
 
 [lints.rust]
 unused_variables = "allow"
