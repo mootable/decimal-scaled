@@ -319,6 +319,29 @@ exists.
 
 ## 5. Library comparison
 
+> **A note on intent.** This chapter is not an attempt to poke
+> holes in other people's libraries. The goal is a true,
+> reproducible side-by-side at matched storage width and
+> midpoint scale so that (a) `decimal-scaled` knows where it
+> needs to improve, and (b) readers picking a crate for their
+> own job have honest data to work from.
+>
+> Where a library's published claim doesn't match what the
+> bench measures — `g_math`'s "0 ULP transcendentals" being
+> the example surfaced at 0.2.5 — we'll say so, plainly, with
+> the numbers attached. We're not trying to be unkind; we just
+> think load-bearing accuracy claims deserve to be checked.
+>
+> **If you maintain one of the libraries below and disagree
+> with the analysis**, please review
+> [`benches/library_comparison.rs`](../benches/library_comparison.rs)
+> and [`examples/ulp_report.rs`](../examples/ulp_report.rs). If
+> we've called the wrong constructor, used the wrong scale,
+> mis-configured the precision context, or otherwise failed to
+> exercise the crate the way its docs intend — open a PR with
+> the correction. We'll happily re-run the bench, refresh the
+> tables, and credit the fix in the changelog.
+
 Speed + correctly-rounded-to-storage-place (ULP) accuracy of
 `decimal-scaled` against the top numeric peers on crates.io,
 matched on **storage width** at each tier's **midpoint scale**.
