@@ -1,8 +1,8 @@
 # The width family
 
 `decimal-scaled` ships six storage widths. They all have the same API
-shape — the same methods, the same const generic `SCALE`, the same
-`Decimal` trait impl — and differ only in the size of the backing
+shape - the same methods, the same const generic `SCALE`, the same
+`Decimal` trait impl - and differ only in the size of the backing
 integer, which sets the range and the maximum usable scale.
 
 | Type | Storage | `MAX_SCALE` | Feature gate | Typical use |
@@ -21,15 +21,15 @@ integer. Using a larger `SCALE` is a compile-time error (the
 ## Choosing a width
 
 The range at a given scale is roughly `storage_max / 10^SCALE`. Pick the
-*narrowest* width whose range covers your values at the scale you need —
+*narrowest* width whose range covers your values at the scale you need -
 narrower storage is faster and smaller.
 
-- **`D9` / `D18`** — native integer storage, single-instruction add /
+- **`D9` / `D18`** - native integer storage, single-instruction add /
   sub / compare. `D18` at `SCALE = 9` covers ±9.2 × 10⁹ with
   nanosecond-grade fractional precision.
-- **`D38`** — the default choice. At `SCALE = 12` the range is roughly
-  ±1.7 × 10²⁶ — far beyond global-GDP-scale money.
-- **`D76` / `D153` / `D307`** — the *wide tier*. Backed by an in-tree
+- **`D38`** - the default choice. At `SCALE = 12` the range is roughly
+  ±1.7 × 10²⁶ - far beyond global-GDP-scale money.
+- **`D76` / `D153` / `D307`** - the *wide tier*. Backed by an in-tree
   hand-rolled wide-integer module; no external big-integer dependency.
   Opt-in via the matching feature (`d76`, `d153`, `d307`, or umbrella
   `wide`). `D76` at `SCALE ≈ 70` still leaves ~10⁵ integer headroom.
@@ -83,7 +83,7 @@ fn sum_all<D: Decimal + core::ops::Add<Output = D>>(xs: &[D]) -> D {
   `product`.
 
 A few methods are deliberately not on the trait because their
-signature varies per width or the trait can't represent them — see
+signature varies per width or the trait can't represent them - see
 the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
 for the full out-of-scope list (`rescale<TARGET>` needs a const-generic
 method param; `from_int` takes a per-width source integer;
@@ -109,7 +109,7 @@ let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 - Enable per width (`d76`, `d153`, `d307`) or all at once (`wide`).
 - Storage is the in-tree hand-rolled wide-integer module
   (`crate::wide_int`); there is no external big-integer dependency. The
-  wide-int type never appears in your code — you work through
+  wide-int type never appears in your code - you work through
   `from_bits` / `to_bits` and the normal arithmetic.
 - The full surface is shipped on the wide tier: cross-type `PartialEq`
   against every primitive integer and float, the 0.5-ULP-correctly-

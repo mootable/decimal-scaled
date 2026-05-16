@@ -26,7 +26,7 @@ logical value  =  raw_integer × 10^(-SCALE)
 ```
 
 With `SCALE = 2`, the integer `1999` is the logical value `19.99`. There
-is exactly one representation per value — no normalisation, no per-value
+is exactly one representation per value - no normalisation, no per-value
 scale byte, no heap allocation.
 
 The primary type is `D38<const SCALE: u32>` (128-bit storage). The
@@ -47,7 +47,7 @@ tiers, see [the width family](widths.md).
 ```rust
 use decimal_scaled::{D38s2, d38};
 
-// 1. Compile-time literal macro (scale inferred — see the macro guide).
+// 1. Compile-time literal macro (scale inferred - see the macro guide).
 let a = d38!(19.99);
 
 // 2. From an integer, scaled by 10^SCALE.
@@ -81,7 +81,7 @@ assert_eq!(v.scale(), 2);                // the const generic, as a value
 
 `Add`, `Sub`, `Mul`, `Div`, `Rem`, `Neg` and their `*Assign` forms are
 implemented. Operands must share the same type (same width *and* scale)
-— mixing scales is deliberately a compile error; convert explicitly.
+- mixing scales is deliberately a compile error; convert explicitly.
 
 ```rust
 # use decimal_scaled::D38s2;
@@ -136,11 +136,11 @@ assert_eq!(v.trunc().to_bits(), 1200);
 assert_eq!(v.fract().to_bits(),   50);
 ```
 
-To round to a *different* scale, use `rescale` — see the
+To round to a *different* scale, use `rescale` - see the
 [rounding guide](rounding.md).
 
 ## Next steps
 
-- [Conversions](conversions.md) — integers, floats, and cross-width.
-- [The width family](widths.md) — choosing D9 … D307.
-- [The `d38!` macro](macros.md) — ergonomic compile-time literals.
+- [Conversions](conversions.md) - integers, floats, and cross-width.
+- [The width family](widths.md) - choosing D9 … D307.
+- [The `d38!` macro](macros.md) - ergonomic compile-time literals.

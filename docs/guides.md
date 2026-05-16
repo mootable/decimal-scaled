@@ -1,4 +1,4 @@
-# `decimal-scaled` — usage guides
+# `decimal-scaled` - usage guides
 
 **[Docs](https://mootable.github.io/decimal-scaled/)** • **[Benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/)** • **[Algorithms](https://mootable.github.io/decimal-scaled/ALGORITHMS/)** • **[Roadmap](https://mootable.github.io/decimal-scaled/ROADMAP/)** • **[API reference](https://docs.rs/decimal-scaled)**
 
@@ -17,7 +17,7 @@ pitch and the "why another numeric type" comparison, see the
 | Guide | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Installing, constructing values, basic arithmetic, formatting, parsing. |
-| [The width family](widths.md) | `D9` / `D18` / `D38` / `D76` / `D153` / `D307` — when to pick which, scale ranges, the `Decimal` trait. |
+| [The width family](widths.md) | `D9` / `D18` / `D38` / `D76` / `D153` / `D307` - when to pick which, scale ranges, the `Decimal` trait. |
 | [Conversions](conversions.md) | Integer / float conversions, cross-width widening and narrowing, `to_int`, the float bridge. |
 | [Rounding](rounding.md) | `RoundingMode`, the `_with` method pairs, `rescale`, and the compile-time `rounding-*` feature flags. |
 | [Strict mode](strict-mode.md) | Integer-only transcendentals (`ln`, `exp`, `sqrt`, trig, …) under `--features strict`. |
@@ -30,11 +30,11 @@ pitch and the "why another numeric type" comparison, see the
 ```rust
 use decimal_scaled::{D38s2, d38};
 
-// Compile-time literal — scale inferred from the written digits.
+// Compile-time literal - scale inferred from the written digits.
 let price = d38!(19.99);              // D38s2, exactly 19.99
 let qty   = D38s2::from_int(3);       // 3.00
 
-let total = price * qty;               // 59.97, exact — no binary rounding
+let total = price * qty;               // 59.97, exact - no binary rounding
 assert_eq!(total, d38!(59.97));
 
 // Deterministic: identical bit pattern on every platform.

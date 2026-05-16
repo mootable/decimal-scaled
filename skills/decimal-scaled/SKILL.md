@@ -3,7 +3,7 @@ name: decimal-scaled
 description: Invoke when working with the `decimal-scaled` crate (const-generic base-10 fixed-point decimals D9/D18/D38/D76/D153/D307 with 0.5-ULP correctly-rounded integer-only transcendentals). Covers when to pick the crate over alternatives, picking the right width and SCALE, construction (`d38!` / FromStr / `from_bits` / `from_int`), strict-vs-fast routing, rounding modes via `*_with(mode)`, the `Decimal` trait for width-generic code, the `DecimalConsts` trait for pi/tau/e/etc, and common anti-patterns. Apply when the user writes Rust code involving currency, prices, measurements, scientific values that must round-trip exactly through human-readable decimals, or anywhere they need deterministic bit-identical arithmetic across platforms.
 ---
 
-# `decimal-scaled` — agent usage guide
+# `decimal-scaled` - agent usage guide
 
 This skill teaches you how to use the `decimal-scaled` crate effectively. Apply it whenever the user's Rust code touches the crate, or whenever you're considering recommending it.
 
@@ -20,7 +20,7 @@ A family of const-generic base-10 fixed-point decimal types:
 | `D153<S>` | in-tree `Int512`  | 153 | `d153` / `wide` |
 | `D307<S>` | in-tree `Int1024` | 307 | `d307` / `x-wide` |
 
-The const generic `SCALE` is the number of fractional digits, baked into the type. The number in the type name (`9`, `18`, `38`, …) is `MAX_SCALE` — the largest scale that fits the storage at every value.
+The const generic `SCALE` is the number of fractional digits, baked into the type. The number in the type name (`9`, `18`, `38`, …) is `MAX_SCALE` - the largest scale that fits the storage at every value.
 
 Stored as `value × 10^SCALE`. Decimals like `1.1` round-trip exactly. `0.1 + 0.2 == 0.3` holds.
 
@@ -40,7 +40,7 @@ Stored as `value × 10^SCALE`. Decimals like `1.1` round-trip exactly. `0.1 + 0.
 ## Picking a width
 
 - **`D38<S>`** is the default. 38 digits handles every reasonable money-or-measurement scenario with comfortable headroom.
-- **`D9<S>` / `D18<S>`** when you need compact storage and your values fit (e.g. cents in a single tax-line table — `D18<2>` covers ±9.2×10¹⁶).
+- **`D9<S>` / `D18<S>`** when you need compact storage and your values fit (e.g. cents in a single tax-line table - `D18<2>` covers ±9.2×10¹⁶).
 - **`D76` and above** for scientific work needing > 38 digits. Wide tiers are opt-in via the matching Cargo feature; widening (`From`) is free, narrowing (`TryFrom`) is fallible.
 
 ## Picking a scale
@@ -56,21 +56,21 @@ Stored as `value × 10^SCALE`. Decimals like `1.1` round-trip exactly. `0.1 + 0.
 use decimal_scaled::{d38, D38s12};
 use std::str::FromStr;
 
-// 1. `d38!` macro — compile-time literal, scale inferred from the
+// 1. `d38!` macro - compile-time literal, scale inferred from the
 //    written digits. Requires the `macros` Cargo feature.
 let a = d38!(1.1, scale 12);          // D38<12>, exactly 1.1
 let b = d38!(19.99);                  // D38<2>,  inferred from digits
 
-// 2. FromStr — runtime parse. Works without `macros`.
+// 2. FromStr - runtime parse. Works without `macros`.
 let c: D38s12 = "2.2".parse().unwrap();
 
-// 3. from_bits — for hot paths or when you already have the raw integer.
+// 3. from_bits - for hot paths or when you already have the raw integer.
 let d = D38s12::from_bits(3_300_000_000_000);  // 3.3 exactly
 
-// 4. from_int — from a primitive integer.
+// 4. from_int - from a primitive integer.
 let e = D38s12::from_int(42);
 
-// 5. from_f64 — LOSSY (round-half-to-even via crate default).
+// 5. from_f64 - LOSSY (round-half-to-even via crate default).
 //    Use sparingly: defeats the determinism guarantee for downstream
 //    arithmetic IF the f64 was itself produced by binary math.
 let f = D38s12::from_f64(1.5);
@@ -90,8 +90,8 @@ Curated per-scale wrappers exist for the common scales; long-tail scales remain 
 
 ## Arithmetic
 
-- `+`, `-`, `%`, unary `-` — **exact** (no rounding).
-- `*`, `/` — **correctly rounded** (half-to-even by default).
+- `+`, `-`, `%`, unary `-` - **exact** (no rounding).
+- `*`, `/` - **correctly rounded** (half-to-even by default).
 - Operands must share the same `SCALE`. Cross-scale needs `value.rescale::<TARGET>()`.
 - Overflow: debug-panic / release-wrap (matches Rust integer semantics). Use `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*` for explicit handling.
 
@@ -116,7 +116,7 @@ let same = micros.with_scale::<6>();                       // alias for rescale
 - Scale-up (target > source): **exact**, panics on storage overflow.
 - Scale-down (target < source): rounds per the supplied mode (default `HalfToEven`).
 
-## Strict vs Fast transcendentals — the dual API
+## Strict vs Fast transcendentals - the dual API
 
 Every transcendental method exists in **two named forms**, **both always compiled**:
 
@@ -129,7 +129,7 @@ Every transcendental method exists in **two named forms**, **both always compile
 **Default Cargo features include `strict`**, so plain `.ln()` resolves to `ln_strict`.
 
 **Rules of thumb:**
-- **Need cross-platform bit-determinism (consensus, audit, replay) → ALWAYS call `*_strict` explicitly.** Don't rely on the feature flag — a downstream crate could flip it.
+- **Need cross-platform bit-determinism (consensus, audit, replay) → ALWAYS call `*_strict` explicitly.** Don't rely on the feature flag - a downstream crate could flip it.
 - **Need maximum throughput and platform-libm precision is fine → call `*_fast` explicitly**, or enable the `fast` feature so plain `*` dispatches there.
 - The `*_strict` family is also the one you want under `no_std`.
 
@@ -153,7 +153,7 @@ The `rounding-*` Cargo features change the **crate-wide default**:
 decimal-scaled = { version = "0.2", features = ["rounding-half-away-from-zero"] }
 ```
 
-## Mathematical constants — `DecimalConsts`
+## Mathematical constants - `DecimalConsts`
 
 ```rust
 use decimal_scaled::DecimalConsts;
@@ -162,7 +162,7 @@ let e  = D38s12::e();       // 2.718281828459
 let _  = D76::<35>::pi();   // 75-digit reference rescaled to 35
 ```
 
-Every constant is **0.5-ULP correctly-rounded** at every supported scale on every width — except where the value's magnitude exceeds the type's storage range, in which case the method panics with a clear `out of storage range` message (e.g. `D38<38>::pi()` panics because π ≈ 3.14 doesn't fit ±1.70141).
+Every constant is **0.5-ULP correctly-rounded** at every supported scale on every width - except where the value's magnitude exceeds the type's storage range, in which case the method panics with a clear `out of storage range` message (e.g. `D38<38>::pi()` panics because π ≈ 3.14 doesn't fit ±1.70141).
 
 ## Width-generic code via the `Decimal` trait
 
@@ -185,9 +185,9 @@ The `Decimal` trait carries the uniform surface every width implements:
 - default reductions (`is_zero`, `is_one`, `is_normal`, `sum`, `product`).
 
 **Out of scope for the trait** (use the concrete type):
-- `rescale<TARGET>` — needs a const-generic method parameter,
-- `from_int` — source-integer type varies per width (`i32` / `i64` / `i128`),
-- transcendentals — feature-gated.
+- `rescale<TARGET>` - needs a const-generic method parameter,
+- `from_int` - source-integer type varies per width (`i32` / `i64` / `i128`),
+- transcendentals - feature-gated.
 
 ## Serde
 
@@ -201,9 +201,9 @@ let back: D38s12 = serde_json::from_str(&json).unwrap();
 assert_eq!(back, v);
 ```
 
-The string form is bit-faithful and round-trips exactly. Floats are rejected by the deserializer — keep everything in `D38` end-to-end.
+The string form is bit-faithful and round-trips exactly. Floats are rejected by the deserializer - keep everything in `D38` end-to-end.
 
-## Common mistakes — avoid these
+## Common mistakes - avoid these
 
 | Anti-pattern | Why bad | Fix |
 |---|---|---|
@@ -212,7 +212,7 @@ The string form is bit-faithful and round-trips exactly. Floats are rejected by 
 | Calling `.ln()` then expecting identical bits on Linux and macOS | With `strict` default it IS deterministic, but a downstream crate could flip `fast` | Call `.ln_strict()` **explicitly** when determinism is required |
 | `D38::<38>::pi()` | Storage range is ~±1.7, π doesn't fit; panics | Use `D76::<38>::pi()` (or any wider tier) |
 | `dN!` literal in a `no_std` build without `macros` feature | Compile error | Enable the `macros` feature or fall back to `FromStr` / `from_bits` |
-| Serialising a `D38` via `serde_json::to_string(&v.to_f64())` | Lossy round-trip through `f64` | Serialise the `D38` directly — the impl emits a decimal string |
+| Serialising a `D38` via `serde_json::to_string(&v.to_f64())` | Lossy round-trip through `f64` | Serialise the `D38` directly - the impl emits a decimal string |
 | Calling plain `.sin()` under `feature = "fast"` and expecting 0.5 ULP | `fast` flips the dispatcher to f64 bridge | Either: don't enable `fast`, or call `.sin_strict()` explicitly |
 
 ## Cargo features cheat sheet

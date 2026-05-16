@@ -7,7 +7,7 @@
 ```rust
 # use decimal_scaled::D38s2;
 let a: D38s2 = 7i32.into();          // 7.00
-let b = D38s2::from_int(7i64);       // 7.00 — widest integer source
+let b = D38s2::from_int(7i64);       // 7.00 - widest integer source
 let c = D38s2::from_i32(-3);         // -3.00
 ```
 
@@ -21,7 +21,7 @@ let ok  = D38s2::try_from(100_i128);          // Ok
 let bad = D38s2::try_from(i128::MAX);         // Err(ConvertError::Overflow)
 ```
 
-## To integers — `to_int`
+## To integers - `to_int`
 
 `to_int` rounds to the nearest integer and returns an `i64`,
 saturating if the integer part is out of `i64` range. It is a lossy
@@ -38,7 +38,7 @@ assert_eq!(v.to_int_with(RoundingMode::Ceiling), 3);
 
 ## The float bridge
 
-Float conversions are explicit and lossy — never silent. NaN maps to
+Float conversions are explicit and lossy - never silent. NaN maps to
 `ZERO`, ±infinity saturate to `MAX` / `MIN`, and out-of-range finite
 values saturate by sign.
 
@@ -54,18 +54,18 @@ let back32: f32 = v.to_f32();
 
 `to_f64` / `to_f32` are available in `no_std`; the
 `from_f64*` constructors need `std`. `TryFrom<f64>` / `TryFrom<f32>` are
-also provided — they truncate and return `ConvertError` for non-finite
+also provided - they truncate and return `ConvertError` for non-finite
 or out-of-range inputs.
 
 On nightly with the `experimental-floats` feature, `f16` and `f128`
 entry points (`from_f16`, `to_f128`, …) are also available.
 
-> The float bridge is a *conversion*, not a transcendental operation —
+> The float bridge is a *conversion*, not a transcendental operation -
 > it is available regardless of the `strict` feature.
 
 ## Cross-width conversions
 
-Widening (to a larger storage) is lossless and infallible — `From`:
+Widening (to a larger storage) is lossless and infallible - `From`:
 
 ```rust
 # use decimal_scaled::{D9s2, D18s2, D38s2};
@@ -74,7 +74,7 @@ let mid:   D18s2  = small.into();
 let wide:  D38s2 = small.into();      // skip-widening works too
 ```
 
-Narrowing (to a smaller storage) is fallible — `TryFrom` — because the
+Narrowing (to a smaller storage) is fallible - `TryFrom` - because the
 value may not fit:
 
 ```rust
@@ -87,7 +87,7 @@ let err: Result<D18s2, _> = huge.try_into();
 assert!(err.is_err());
 ```
 
-There is deliberately no infallible `From` for the narrowing direction —
+There is deliberately no infallible `From` for the narrowing direction -
 a silent saturating conversion would violate the crate's exact-decimal
 promise, so narrowing failure is always loud at the call site.
 

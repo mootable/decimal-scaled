@@ -4,7 +4,7 @@
 
 Compile-time construction macros for the [`decimal-scaled`](..)
 type family. The crate exists so users can write decimal literals
-the way they read them — `d38!(19.99, scale 2)` — instead of
+the way they read them - `d38!(19.99, scale 2)` - instead of
 hand-computing the scaled `i128` storage value.
 
 This is the proc-macro implementation crate. The parent crate
@@ -58,7 +58,7 @@ Qualifiers are unordered. Each may appear at most once.
   `0.5`, `1_234.567_89`. Scientific notation `1.5e3`, `1.5e-3`,
   `6.022e23`, `1e-9` also accepted.
 - **Radix-prefixed integer**: `0x...`, `0o...`, `0b...`. The parsed
-  magnitude is the storage bits *directly* — the target scale
+  magnitude is the storage bits *directly* - the target scale
   only labels the resulting type, no scale-shift is applied.
   Equivalent to `radix 16 / 8 / 2` with the appropriate base.
 - **Inline expression**: `my_var`, `a + b * 2`. Scale is mandatory
@@ -98,13 +98,13 @@ radix-value := [ + | - ]  ( IDENT-or-INT . IDENT-or-INT | IDENT-or-INT )
 
 where the trailing `IDENT-or-INT` alternative is the
 non-fractional (integer-only) case. `IDENT-or-INT` means either
-a Rust identifier or an integer literal token — important
+a Rust identifier or an integer literal token - important
 because Rust's tokeniser splits a value like `1.A3` into three
 tokens (`1`, `.`, `A3`) and a value like `FF.AA` into another
 three (`FF`, `.`, `AA`), neither of which is a valid Rust
 literal; the macro reassembles them itself.
 
-The target scale must be supplied explicitly with `, scale N` —
+The target scale must be supplied explicitly with `, scale N` -
 nothing about the source string tells us what target scale you
 want, since the parsed magnitude IS the storage bits.
 
@@ -117,11 +117,11 @@ d38!(BEEF,   radix 16)            // → D38<0>::from_bits(0xBEEF)   == 48879
 d38!(-1.A3,  radix 16, scale 2)   // → D38<2>::from_bits(-0x1A3)   == -419
 ```
 
-The `radix` qualifier requires a literal value — it doesn't
+The `radix` qualifier requires a literal value - it doesn't
 combine with the inline-expression form. (`d38!(my_var, radix
 16, scale 2)` is a compile error: `radix qualifier is only
 valid with a literal value`.) Radix is a property of the source
-*digit string*, and an expression doesn't have one — it's
+*digit string*, and an expression doesn't have one - it's
 already a typed integer at runtime.
 
 ### `rounded`
@@ -139,7 +139,7 @@ d38!(1.234_567, scale 2, rounded)   // ✅ → 1.23 (half-to-even)
 Scale-up (target > literal scale) is always exact (trailing
 zeros) and needs no opt-in.
 
-`rounded` has no effect on radix-prefixed literals — they don't
+`rounded` has no effect on radix-prefixed literals - they don't
 do scale arithmetic.
 
 ---
@@ -161,7 +161,7 @@ do scale arithmetic.
 | `1e-9` | 9 | `max(0, 0 − (−9))` |
 
 If the inferred scale exceeds the entry point's `MAX_SCALE`, the
-macro emits a compile error pointing at the literal — switch to
+macro emits a compile error pointing at the literal - switch to
 an explicit `scale N` (with `rounded` if precision is lost), or
 use a wider entry point.
 
@@ -182,14 +182,14 @@ let c = d18!(1.5e-9);                // D18<10>... wait, 10 > D18::MAX_SCALE
 let cents = d38!(1.234_567, scale 2, rounded);  // 1.23
 let micros: D38<6> = d38!(2.5, scale 6);        // 2.500000 exactly
 
-// Radix-prefix literal — storage bits = parsed magnitude.
+// Radix-prefix literal - storage bits = parsed magnitude.
 let raw_hex: D38<0> = d38!(0xFF);    // 255 at scale 0
 let raw_oct: D38<0> = d38!(0o755);   // 493
 let raw_bin: D38<0> = d38!(0b1010);  // 10
 let labelled: D38<2> = d38!(0x7B, scale 2);
                        // 123 at scale 2 → Display "1.23"
 
-// Inline expression form — scale mandatory.
+// Inline expression form - scale mandatory.
 let basis: i128 = 12_345;
 let with_scale = d38!(basis, scale 4);  // basis × 10^4 at runtime
 
@@ -214,7 +214,7 @@ Wide-tier (requires `wide` / `x-wide`):
 ## Curated per-scale wrappers
 
 These pre-bake `, scale N` for the most common scale at each
-width — the long tail remains reachable via the explicit
+width - the long tail remains reachable via the explicit
 `, scale N` qualifier.
 
 | width | wrappers |

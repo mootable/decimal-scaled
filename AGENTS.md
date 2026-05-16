@@ -1,4 +1,4 @@
-# AGENTS.md — `decimal-scaled` usage guide
+# AGENTS.md - `decimal-scaled` usage guide
 
 Project-wide guidance for AI coding assistants (Claude Code, Cursor, Continue, Codeium, Aider, …) working with the `decimal-scaled` crate. Read this before suggesting code that uses the crate or recommending it as a dependency.
 
@@ -34,7 +34,7 @@ Decimals like `1.1` round-trip exactly. `0.1 + 0.2 == 0.3` holds. Transcendental
 | `D153<S>` | in-tree `Int512`  | 153         | `d153` / `wide`        |
 | `D307<S>` | in-tree `Int1024` | 307         | `d307` / `x-wide`      |
 
-The number in the type name (`9`, `18`, `38`, …) is the type's `MAX_SCALE` — the largest scale at which every value of that digit count fits storage. Stored value = `logical_value × 10^SCALE`.
+The number in the type name (`9`, `18`, `38`, …) is the type's `MAX_SCALE` - the largest scale at which every value of that digit count fits storage. Stored value = `logical_value × 10^SCALE`.
 
 Pick the **narrowest tier** that fits your value range at the scale you need. Widening between tiers is lossless (`From` / `widen()`); narrowing is fallible (`TryFrom` / `narrow()`).
 
@@ -53,7 +53,7 @@ Pick the **narrowest tier** that fits your value range at the scale you need. Wi
 
 ## Picking a scale
 
-The scale is the number of fractional decimal digits, fixed at compile time. Pick the smallest scale that covers your precision needs — each extra digit halves the integer-part range.
+The scale is the number of fractional decimal digits, fixed at compile time. Pick the smallest scale that covers your precision needs - each extra digit halves the integer-part range.
 
 Common picks: `2` (cents / percent), `6` (µ / ppm), `12` (financial, picometres), `18` (atto), `35` (deep scientific).
 
@@ -65,21 +65,21 @@ Per-scale aliases ship for D38 (`D38s0` … `D38s38`) and curated subsets for th
 use decimal_scaled::{d38, D38s12};
 use std::str::FromStr;
 
-// 1. The `dN!` macro — compile-time literal, scale inferred from the
+// 1. The `dN!` macro - compile-time literal, scale inferred from the
 //    written digits. Requires the `macros` Cargo feature.
 let a = d38!(1.1, scale 12);          // D38<12>, exactly 1.1
 let b = d38!(19.99);                  // D38<2>,  inferred
 
-// 2. FromStr — runtime parse, works without `macros`.
+// 2. FromStr - runtime parse, works without `macros`.
 let c: D38s12 = "2.2".parse().unwrap();
 
-// 3. from_bits — for hot paths or when you already have the raw integer.
+// 3. from_bits - for hot paths or when you already have the raw integer.
 let d = D38s12::from_bits(3_300_000_000_000);  // 3.3 exactly
 
-// 4. from_int — from a primitive integer.
+// 4. from_int - from a primitive integer.
 let e = D38s12::from_int(42);
 
-// 5. from_f64 — LOSSY. Avoid for values that originated as decimals;
+// 5. from_f64 - LOSSY. Avoid for values that originated as decimals;
 //    parse the decimal string instead.
 let f = D38s12::from_f64(1.5);
 ```
@@ -88,8 +88,8 @@ Each width has its matching macro (`d9!`, `d18!`, `d38!`, `d76!`, `d153!`, `d307
 
 ## Arithmetic
 
-- `+`, `-`, `%`, unary `-` — **exact** (no rounding).
-- `*`, `/` — **correctly rounded** (half-to-even by default).
+- `+`, `-`, `%`, unary `-` - **exact** (no rounding).
+- `*`, `/` - **correctly rounded** (half-to-even by default).
 - Operands must share the same `SCALE`. Cross-scale needs `value.rescale::<TARGET>()`.
 - Overflow: debug-panic / release-wrap (Rust integer semantics). Use `checked_*` / `wrapping_*` / `saturating_*` / `overflowing_*` for explicit handling.
 
@@ -112,7 +112,7 @@ let same = micros.with_scale::<6>();                       // alias for rescale
 - Scale-up (target > source): **exact** (appends zeros); panics on storage overflow.
 - Scale-down (target < source): rounds per the supplied mode.
 
-## Strict vs Fast transcendentals — the dual API (read carefully)
+## Strict vs Fast transcendentals - the dual API (read carefully)
 
 Every transcendental method exists in **two named forms**, **both always compiled**:
 
@@ -126,9 +126,9 @@ Default Cargo features include `strict`, so plain `.ln()` resolves to `ln_strict
 
 **Operational rules for agents:**
 
-1. **If the user needs cross-platform bit-determinism** (consensus protocols, financial audit trails, deterministic replay) — call `*_strict` **explicitly**. Don't rely on the feature flag; a downstream crate could enable `fast` and silently flip the dispatcher.
-2. **If the user wants max throughput and tolerates platform-libm precision** — call `*_fast` explicitly, or enable the `fast` Cargo feature so plain `*` dispatches there.
-3. **For `no_std`** — use `*_strict` (it doesn't need `std`).
+1. **If the user needs cross-platform bit-determinism** (consensus protocols, financial audit trails, deterministic replay) - call `*_strict` **explicitly**. Don't rely on the feature flag; a downstream crate could enable `fast` and silently flip the dispatcher.
+2. **If the user wants max throughput and tolerates platform-libm precision** - call `*_fast` explicitly, or enable the `fast` Cargo feature so plain `*` dispatches there.
+3. **For `no_std`** - use `*_strict` (it doesn't need `std`).
 
 ## Rounding modes via `*_with(mode)`
 
@@ -150,7 +150,7 @@ The `rounding-*` Cargo features change the **crate-wide default** for the no-arg
 decimal-scaled = { version = "0.2", features = ["rounding-half-away-from-zero"] }
 ```
 
-## Mathematical constants — `DecimalConsts`
+## Mathematical constants - `DecimalConsts`
 
 ```rust
 use decimal_scaled::DecimalConsts;
@@ -182,14 +182,14 @@ Behind `feature = "serde"` (on by default). Human-readable formats use a **decim
 ```rust
 let v = D38s12::from_int(42);
 let json: String = serde_json::to_string(&v).unwrap();
-// "42000000000000" — the raw i128 as a decimal string
+// "42000000000000" - the raw i128 as a decimal string
 let back: D38s12 = serde_json::from_str(&json).unwrap();
 assert_eq!(back, v);
 ```
 
-The string form is bit-faithful and round-trips exactly. The deserializer rejects floats — keep everything in `D38` end-to-end.
+The string form is bit-faithful and round-trips exactly. The deserializer rejects floats - keep everything in `D38` end-to-end.
 
-## Common mistakes — surface these in PR review
+## Common mistakes - surface these in PR review
 
 | Anti-pattern | Why bad | Fix |
 |---|---|---|
@@ -225,7 +225,7 @@ let price: D38s2 = "19.99".parse()?;
 let total = price * D38s2::from_int(3);
 println!("{total}");  // "59.97"
 
-// 2. Pi rendered to 12 fractional digits — deterministic everywhere.
+// 2. Pi rendered to 12 fractional digits - deterministic everywhere.
 use decimal_scaled::{D38s12, DecimalConsts};
 println!("{}", D38s12::pi());  // "3.141592653590"
 
@@ -246,4 +246,4 @@ let up: D38s2 = v.rescale_with::<2>(RoundingMode::Ceiling); // 1.24
 - Repo: <https://github.com/mootable/decimal-scaled>
 - In-repo guides: [`docs/guides.md`](docs/guides.md), [`docs/widths.md`](docs/widths.md), [`docs/strict-mode.md`](docs/strict-mode.md), [`docs/rounding.md`](docs/rounding.md), [`docs/macros.md`](docs/macros.md), [`docs/features.md`](docs/features.md), [`docs/benchmarks.md`](docs/benchmarks.md)
 - Algorithm catalogue: [`ALGORITHMS.md`](ALGORITHMS.md)
-- Headline benchmark vs another fixed-point crate (`g_math`): [`benches/g_math_comparison.rs`](benches/g_math_comparison.rs) — run with `cargo bench --bench g_math_comparison --features wide`
+- Headline benchmark vs another fixed-point crate (`g_math`): [`benches/g_math_comparison.rs`](benches/g_math_comparison.rs) - run with `cargo bench --bench g_math_comparison --features wide`

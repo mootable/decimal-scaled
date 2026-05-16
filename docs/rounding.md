@@ -47,15 +47,15 @@ let c: D38s2 = v.rescale_with::<2>(RoundingMode::Ceiling);
 The same pairing applies to `to_int` / `to_int_with`,
 `from_f64` / `from_f64_with`, and any other lossy method.
 
-## `rescale` — changing the scale of a value
+## `rescale` - changing the scale of a value
 
 `rescale::<TARGET>()` converts a value to a different `SCALE` of the
 *same width*:
 
-- `TARGET == SCALE` — bit-identity.
-- `TARGET > SCALE` — scale up: multiply by `10^(TARGET-SCALE)`.
+- `TARGET == SCALE` - bit-identity.
+- `TARGET > SCALE` - scale up: multiply by `10^(TARGET-SCALE)`.
   Lossless; panics on overflow.
-- `TARGET < SCALE` — scale down: divide by `10^(SCALE-TARGET)`, applying
+- `TARGET < SCALE` - scale down: divide by `10^(SCALE-TARGET)`, applying
   the rounding mode to the discarded fractional digits.
 
 ```rust
@@ -63,7 +63,7 @@ use decimal_scaled::{D38s3, RoundingMode};
 
 let v = D38s3::from_bits(1_235);            // 1.235
 
-// Scale down to 2 digits — the trailing `5` must be rounded.
+// Scale down to 2 digits - the trailing `5` must be rounded.
 let down  = v.rescale::<2>();                // HalfToEven -> 1.24
 let trunc = v.rescale_with::<2>(RoundingMode::Trunc);   // -> 1.23
 assert_eq!(down.to_bits(),  124);
@@ -77,8 +77,8 @@ assert_eq!(up.to_bits(), 1_235_000);
 ## Compile-time default selection: the `rounding-*` features
 
 The crate default is `HalfToEven`. To change it *globally at compile
-time* — so every plain (non-`_with`) lossy method uses a different mode
-— enable exactly one `rounding-*` feature:
+time* - so every plain (non-`_with`) lossy method uses a different mode
+- enable exactly one `rounding-*` feature:
 
 | Feature | Sets the default to |
 |---|---|
@@ -96,7 +96,7 @@ decimal-scaled = { version = "0.2.5", features = ["rounding-half-away-from-zero"
 
 The features are mutually exclusive in intent. If more than one is
 enabled, a fixed priority order in `src/rounding.rs` picks one
-deterministically — but you should enable at most one.
+deterministically - but you should enable at most one.
 
 The `_with` methods are unaffected by these features: they always honour
 the mode you pass.

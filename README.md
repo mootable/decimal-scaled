@@ -7,14 +7,14 @@ types with **correctly-rounded (≤ 0.5 ULP) integer-only
 transcendentals**, deterministic across every platform, and
 `no_std`-friendly.
 
-📚 In-depth guides — getting started, scale aliases, the width
+📚 In-depth guides - getting started, scale aliases, the width
 family, conversions, rounding modes, strict mode, the `d38!`
-macro, every Cargo feature, benchmarks — live in
+macro, every Cargo feature, benchmarks - live in
 [**`docs/guides.md`**](docs/guides.md). API reference on
 [docs.rs](https://docs.rs/decimal-scaled/).
 
-> **0.5 ULP** — the strongest accuracy guarantee a finite numeric
-> type can give — is the headline feature. Every `ln` / `exp` /
+> **0.5 ULP** - the strongest accuracy guarantee a finite numeric
+> type can give - is the headline feature. Every `ln` / `exp` /
 > `sin` / `cos` / `sqrt` / `cbrt` / `powf` / `atan` / `atan2` /
 > `sinh` / `cosh` / `tanh` / `asinh` / `acosh` / `atanh` /
 > `to_degrees` / `to_radians` lands within half an [ULP][ULP] of
@@ -39,9 +39,9 @@ decimal-scaled = "0.2.5"
 
 The default build pulls in the correctly-rounded transcendentals
 (the `strict` feature is on by default). To opt in to the faster
-`f64`-bridge ("fast") path instead — ~700× quicker on series
+`f64`-bridge ("fast") path instead - ~700× quicker on series
 functions, but only ≈ 16 decimal digits of platform-libm precision
-and **not** platform-deterministic — disable default features and
+and **not** platform-deterministic - disable default features and
 pick what you actually want:
 
 ```toml
@@ -71,7 +71,7 @@ fits your call site.
 ```rust
 use decimal_scaled::{d38, D38s12};
 
-// 1) `d38!` macro — the ergonomic constructor. Write the literal
+// 1) `d38!` macro - the ergonomic constructor. Write the literal
 //    as you'd read it; scale is inferred from the fractional
 //    digits, or pinned explicitly with `, scale N`. (Requires the
 //    `macros` feature.) One macro per width: `d9!`, `d18!`,
@@ -80,22 +80,22 @@ use decimal_scaled::{d38, D38s12};
 //    …) skip the `, scale N` and read more tersely at the call
 //    site. Full grammar including the `radix N` qualifier in
 //    [`macros/README.md`](macros/README.md).
-let a = d38!(1.1, scale 12);                        // D38<12> — exactly 1.1
+let a = d38!(1.1, scale 12);                        // D38<12> - exactly 1.1
 
-// 2) `FromStr` — parse a decimal string. Works without the
+// 2) `FromStr` - parse a decimal string. Works without the
 //    `macros` feature and accepts user input directly.
-let b: D38s12 = "2.2".parse().unwrap();             // D38<12> — exactly 2.2
+let b: D38s12 = "2.2".parse().unwrap();             // D38<12> - exactly 2.2
 
-// 3) `from_bits` — for hot paths or when you already have the
+// 3) `from_bits` - for hot paths or when you already have the
 //    raw integer (value × 10^SCALE). No parsing, no allocation.
-let c = D38s12::from_bits(3_300_000_000_000);       // D38<12> — exactly 3.3
+let c = D38s12::from_bits(3_300_000_000_000);       // D38<12> - exactly 3.3
 
 // Aliases like `D38s12` are just type aliases over `D38<12>`. The
 // generic form works identically and is what you'd use when SCALE
 // is itself a const generic in your code:
 let _generic: decimal_scaled::D38<12> = D38s12::from_int(42);
 
-// Arithmetic is plain operator overloads — exact for + / − / %,
+// Arithmetic is plain operator overloads - exact for + / − / %,
 // rounded (half-to-even) for × / ÷.
 let sum     = a + b;                                // 3.3 exactly
 let product = a * b;                                // 2.42 exactly
@@ -133,7 +133,7 @@ names its types in the unit users actually reason about. Mapping:
 | `D307<S>` | `d307!` | `Int1024` (1024 bits) | 307 | ±9.0 × 10³⁰⁷ | `d307` / `x-wide` | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s307!` |
 
 The number in each type name (`9`, `18`, `38`, …) is the type's
-`MAX_SCALE` — equivalently, the safe-decimal-digits count
+`MAX_SCALE` - equivalently, the safe-decimal-digits count
 `⌊(bits − 1) · log₁₀ 2⌋`. The largest scale at which every
 `MAX_SCALE`-digit decimal value (`±999…9`) fits the signed
 storage; also the largest `S` you can pass as the const generic
@@ -278,7 +278,7 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 | `D38<S>` (this)               | 128-bit integer, scale fixed at compile time, S ∈ 0..=38 | 10 | Yes | Yes | ±i128::MAX / 10ˢ | add/sub: **exact**; mul/div: ≤ 1 ULP; **strict transcendentals: ≤ 0.5 ULP (correctly rounded)** | Yes |
 | `D76<S>` / `D153<S>` / `D307<S>` (this, `wide`) | 256 / 512 / 1024-bit integer, S up to 76 / 153 / 307 | 10 | Yes | Yes | wider, S-dependent | same accuracy as `D38<S>` | Yes |
 
-The accuracy column gives the error bound on computed results, in [ULPs](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (units in the last place). A 0.5 ULP bound — "correctly rounded" — is the IEEE-754 round-to-nearest contract and the strongest accuracy guarantee a finite numeric type can give. The floats meet it for basic arithmetic but not for transcendentals; `decimal-scaled`'s strict transcendentals meet it for transcendentals as well, which is the capability the alternatives do not offer. The position of the ULP — the absolute size of `1 ULP` — is the type's *scale*: for `f64` it's a relative ~2⁻⁵² of the value's magnitude, for `D38<S>` it's exactly `10⁻ˢ` at every value, fixed at compile time.
+The accuracy column gives the error bound on computed results, in [ULPs](https://en.wikipedia.org/wiki/Unit_in_the_last_place) (units in the last place). A 0.5 ULP bound - "correctly rounded" - is the IEEE-754 round-to-nearest contract and the strongest accuracy guarantee a finite numeric type can give. The floats meet it for basic arithmetic but not for transcendentals; `decimal-scaled`'s strict transcendentals meet it for transcendentals as well, which is the capability the alternatives do not offer. The position of the ULP - the absolute size of `1 ULP` - is the type's *scale*: for `f64` it's a relative ~2⁻⁵² of the value's magnitude, for `D38<S>` it's exactly `10⁻ˢ` at every value, fixed at compile time.
 
 ### Hash and equality contracts
 
@@ -314,12 +314,12 @@ For human-scale decimal values `D38` gives decimal-exact results with no roundin
 `D38` arithmetic is a thin wrapper over `i128`: add / sub are a single
 instruction (~1 ns), mul / div carry a 256-bit widening step (~10 ns).
 The wide `D76` tier keeps add / sub almost free but its mul / div pay
-for a 256-bit hand-rolled-integer divide — roughly 20× the `D38` cost.
+for a 256-bit hand-rolled-integer divide - roughly 20× the `D38` cost.
 
 Transcendentals (`ln`, `exp`, `sqrt`, trig, …) come in two forms. The
 **fast** `f64`-bridge form (~40 ns) inherits `f64`'s precision
 ceiling and is not platform-independent. The **strict** integer-only
-form — **on by default** — is **correctly rounded to within 0.5 ULP**
+form - **on by default** - is **correctly rounded to within 0.5 ULP**
 of the exact result (the IEEE-754 round-to-nearest contract) and is
 `no_std` and platform-deterministic. Build with `default-features =
 false, features = ["std", "serde"]` to switch the plain `ln` / `exp` /
@@ -332,21 +332,21 @@ Wikipedia / Wolfram MathWorld / author-homepage links lives in
 ### Transcendental accuracy comparison
 
 A *correctly rounded* result is the exact mathematical value rounded
-to the nearest representable number — i.e. the error is at most half a
+to the nearest representable number - i.e. the error is at most half a
 ULP. It is the strongest accuracy guarantee a finite type can give,
 and the capability the alternatives do not offer:
 
 | Type | Transcendentals | Correctly rounded to 0.5 ULP | Platform-deterministic |
 |---|---|---|---|
-| `f32` / `f64` (platform libm) | yes | no — `libm` is not guaranteed correctly rounded | no |
-| `fixed` (`I64F64`, …) | none | — | — |
-| `bigdecimal` | none | — | — |
-| `rust_decimal` (`MathematicalOps`) | yes | no — accurate, but not to the last place | yes |
-| `decimal-scaled` — fast (`f64` bridge, opt-in) | yes | no — inherits `f64` | no |
-| `decimal-scaled` — **strict** (default, `*_strict`) | yes | **yes — within 0.5 ULP** | **yes** |
+| `f32` / `f64` (platform libm) | yes | no - `libm` is not guaranteed correctly rounded | no |
+| `fixed` (`I64F64`, …) | none | - | - |
+| `bigdecimal` | none | - | - |
+| `rust_decimal` (`MathematicalOps`) | yes | no - accurate, but not to the last place | yes |
+| `decimal-scaled` - fast (`f64` bridge, opt-in) | yes | no - inherits `f64` | no |
+| `decimal-scaled` - **strict** (default, `*_strict`) | yes | **yes - within 0.5 ULP** | **yes** |
 
 For series functions the strict form costs ~700× the fast bridge;
-`sqrt_strict` is the exception — algebraic, so it ties the fast form.
+`sqrt_strict` is the exception - algebraic, so it ties the fast form.
 Full head-to-head measurements against `bnum`, `ruint`, `rust_decimal`,
 and `fixed` are in [`docs/benchmarks.md`](docs/benchmarks.md).
 
@@ -384,7 +384,7 @@ an identical API and the `Decimal` trait:
 Pick the narrowest width whose range covers your values at the scale you
 need. Widening between widths is lossless (`From`); narrowing is fallible
 (`TryFrom`). The wide tier is backed by an in-tree hand-rolled
-wide-integer type — no external big-integer dependency — and is opt-in.
+wide-integer type - no external big-integer dependency - and is opt-in.
 See [`docs/widths.md`](docs/widths.md).
 
 ## Compile-time literals
@@ -428,14 +428,14 @@ common configurations.
 
 In-depth usage guides live in [`docs/`](docs/guides.md):
 
-- [Getting started](docs/getting-started.md) — constructing values, arithmetic, formatting, parsing.
-- [The width family](docs/widths.md) — `D9` … `D307`, scale ranges, the `Decimal` trait.
-- [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing.
-- [Rounding](docs/rounding.md) — `RoundingMode`, `rescale`, the `rounding-*` features.
-- [Strict mode](docs/strict-mode.md) — integer-only transcendentals.
-- [The `d38!` macro](docs/macros.md) — compile-time decimal literals.
-- [Cargo features](docs/features.md) — every feature flag.
-- [Benchmarks](docs/benchmarks.md) — head-to-head against `bnum`, `ruint`, `rust_decimal`, and `fixed`, plus fast vs strict.
+- [Getting started](docs/getting-started.md) - constructing values, arithmetic, formatting, parsing.
+- [The width family](docs/widths.md) - `D9` … `D307`, scale ranges, the `Decimal` trait.
+- [Conversions](docs/conversions.md) - integers, floats, cross-width widening / narrowing.
+- [Rounding](docs/rounding.md) - `RoundingMode`, `rescale`, the `rounding-*` features.
+- [Strict mode](docs/strict-mode.md) - integer-only transcendentals.
+- [The `d38!` macro](docs/macros.md) - compile-time decimal literals.
+- [Cargo features](docs/features.md) - every feature flag.
+- [Benchmarks](docs/benchmarks.md) - head-to-head against `bnum`, `ruint`, `rust_decimal`, and `fixed`, plus fast vs strict.
 
 API reference: <https://docs.rs/decimal-scaled/>.
 

@@ -3,18 +3,18 @@
 Known performance gaps and planned improvements. Tracked by tier
 of the §5 Library-comparison benchmark in
 [`docs/benchmarks.md`](docs/benchmarks.md). Cells where
-`decimal-scaled` already wins are out of scope — these are the
+`decimal-scaled` already wins are out of scope - these are the
 loss columns and how we plan to close them.
 
 The crate's **accuracy** invariants are not on this roadmap.
 `decimal-scaled` is 0 ULP correctly-rounded on every
 transcendental tested at every tier, and stays that way. The
-roadmap is throughput-only — give people a way to keep the
+roadmap is throughput-only - give people a way to keep the
 exactness when they need it and an opt-out when they don't.
 
 ---
 
-## Wide-tier `÷ 10^SCALE` — primary bottleneck
+## Wide-tier `÷ 10^SCALE` - primary bottleneck
 
 The Möller–Granlund magic-multiply (`mg_divide`) is the kernel
 behind every wide-tier `mul` and `div` (they both end with a
@@ -35,7 +35,7 @@ Concrete symptom: at 256-bit / s=35, `decimal-scaled` `div` is
 
 ---
 
-## Wide-tier multiplication — Karatsuba / Toom-Cook
+## Wide-tier multiplication - Karatsuba / Toom-Cook
 
 At D76 / D153 / D307 the multiplication kernel is straight
 schoolbook over `[u64; 4]` / `[u64; 8]` / `[u64; 16]`. The
@@ -56,7 +56,7 @@ vs 141 ns in `bigdecimal`. The crate carries the cost of
 
 ---
 
-## Wide-tier transcendentals — give callers an opt-out
+## Wide-tier transcendentals - give callers an opt-out
 
 `decimal-scaled` deliberately keeps every transcendental at
 **0 ULP correctly rounded**, regardless of tier. At D76+ that
@@ -67,22 +67,22 @@ curve, doing approximate convergence checks) this is overkill.
 `*_fast` already exists on every width, but on the wide tiers
 it routes through `to_f64` / `f64::ln` / `from_f64` and the
 result collapses to 16 decimal digits regardless of the storage
-width — a precision cliff that's hard to communicate.
+width - a precision cliff that's hard to communicate.
 
 | approach | status | expected win |
 |---|---|---|
-| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | TODO | linear cost reduction proportional to the requested digit cut |
+| `*_approx(working_digits: u32)` family - same series as `*_strict` but with caller-controlled working-scale cutoff | TODO | linear cost reduction proportional to the requested digit cut |
 | Document the precision cliff of `*_fast` on wide tiers more loudly | TODO | non-code; reader expectations |
-| Newton-on-AGM `ln` / `exp` paths past D153 — quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | not yet promoted by the dispatcher; crossover point measured in `benches/agm_vs_taylor.rs` |
+| Newton-on-AGM `ln` / `exp` paths past D153 - quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | not yet promoted by the dispatcher; crossover point measured in `benches/agm_vs_taylor.rs` |
 
 ---
 
-## Narrow-tier — already competitive
+## Narrow-tier - already competitive
 
 D9 / D18 / D38 arithmetic already matches or beats
 `fixed::I*F*` (the only directly-comparable competitor at these
 widths). D38 transcendentals are 1.47 µs `ln`, 40.5 µs `exp` at
-s=19, vs `fastnum`'s 16 ns / 8.92 µs — but those are
+s=19, vs `fastnum`'s 16 ns / 8.92 µs - but those are
 f64-bridge for fastnum (1 ULP off) vs 0 ULP for us. No
 roadmap item here unless the accuracy contract changes.
 
