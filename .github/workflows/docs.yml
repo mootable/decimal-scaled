@@ -56,36 +56,107 @@ jobs:
           set -euo pipefail
           site=_site
           mkdir -p "$site"
+
           # rustdoc output -> /api
           cp -r target/doc "$site/api"
+
           # prose guides -> /guides (raw markdown; GitHub Pages serves
-          # them, and the docs/README.md is the guide index)
+          # them and docs/README.md is the guide index)
           if [ -d docs ]; then
             cp -r docs "$site/guides"
           fi
-          # Root landing page: link to the API docs and the guides.
+
+          # README + ROADMAP + CHANGELOG at predictable URLs.
+          [ -f README.md ]    && cp README.md    "$site/README.md"
+          [ -f ROADMAP.md ]   && cp ROADMAP.md   "$site/ROADMAP.md"
+          [ -f CHANGELOG.md ] && cp CHANGELOG.md "$site/CHANGELOG.md"
+
+          # Mootable design assets — already copied into _site under
+          # guides/assets/ above (via the docs/ tree), but the landing
+          # page expects them at /assets too. Symlink saves bytes.
+          if [ -d docs/assets ]; then
+            cp -r docs/assets "$site/assets"
+          fi
+
+          # Root landing page — Mootable design system, dusk theme.
           cat > "$site/index.html" <<'HTML'
           <!doctype html>
           <html lang="en">
           <head>
             <meta charset="utf-8">
-            <title>decimal-scaled documentation</title>
+            <title>decimal-scaled — Mootable</title>
             <meta name="viewport" content="width=device-width, initial-scale=1">
-            <style>
-              body { font-family: system-ui, sans-serif; max-width: 40rem;
-                     margin: 4rem auto; padding: 0 1rem; line-height: 1.5; }
-              code { background: #f3f3f3; padding: 0.1rem 0.3rem; border-radius: 3px; }
-              a { color: #3060c0; }
-            </style>
+            <link rel="icon" type="image/svg+xml" href="assets/mootable-cow-dusk.svg">
+            <link rel="stylesheet" href="assets/site.css">
           </head>
           <body>
-            <h1>decimal-scaled</h1>
-            <p>Const-generic base-10 fixed-point decimal types for
-               deterministic, bit-exact arithmetic.</p>
-            <ul>
-              <li><a href="api/decimal_scaled/index.html">API reference (rustdoc)</a></li>
-              <li><a href="guides/README.md">Usage guides</a></li>
-            </ul>
+            <header class="topbar">
+              <a class="crest" href="https://mootable.dev" title="Mootable">
+                <img src="assets/mootable-cow-dusk.svg" alt="Mootable">
+                <span class="label">Mootable Open Source</span>
+              </a>
+              <nav class="nav">
+                <a href="api/decimal_scaled/index.html">API</a>
+                <a href="guides/README.md">Guides</a>
+                <a href="guides/benchmarks.md">Benchmarks</a>
+                <a href="https://github.com/mootable/decimal-scaled">GitHub</a>
+              </nav>
+            </header>
+
+            <main class="hero">
+              <img class="mark" src="assets/mootable-cow-dusk.svg" alt="">
+              <div class="tagline">Bit-exact decimal arithmetic for Rust</div>
+              <h1 class="wordmark"><span class="a">decimal</span><span class="b">-scaled</span></h1>
+              <p class="lede">
+                Const-generic base-10 fixed-point decimals — D9 through D307 — with 0.5 ULP correctly-rounded integer-only transcendentals. Deterministic across every platform. <code>no_std</code>-friendly.
+              </p>
+              <div class="install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
+            </main>
+
+            <section class="cards">
+              <a class="card" href="api/decimal_scaled/index.html">
+                <h3>API reference</h3>
+                <p>Full rustdoc for every type, trait, and method on every supported width.</p>
+                <span class="glyph">docs.rs mirror</span>
+              </a>
+              <a class="card" href="README.md">
+                <h3>README</h3>
+                <p>The headline pitch, install snippet, feature flags, and quick examples.</p>
+                <span class="glyph">README.md</span>
+              </a>
+              <a class="card" href="guides/README.md">
+                <h3>Usage guides</h3>
+                <p>Per-topic deep-dives: widths, scales, strict-vs-fast, rounding, macros.</p>
+                <span class="glyph">docs/</span>
+              </a>
+              <a class="card" href="guides/benchmarks.md">
+                <h3>Benchmarks</h3>
+                <p>Per-width speed tables plus the §5 library-comparison vs the top crates.io peers.</p>
+                <span class="glyph">docs/benchmarks.md</span>
+              </a>
+              <a class="card" href="ROADMAP.md">
+                <h3>Roadmap</h3>
+                <p>Known throughput gaps at D76+ and the planned algorithmic fix per item.</p>
+                <span class="glyph">ROADMAP.md</span>
+              </a>
+              <a class="card" href="CHANGELOG.md">
+                <h3>Changelog</h3>
+                <p>What changed in every release, including the 0.2.x docs and benchmark series.</p>
+                <span class="glyph">CHANGELOG.md</span>
+              </a>
+            </section>
+
+            <footer class="footer">
+              <div class="left">
+                <img src="assets/mootable-cow-dusk.svg" width="20" height="20" alt="">
+                <small>A <a href="https://mootable.dev" style="color:inherit">Mootable</a> open-source project.</small>
+              </div>
+              <div class="right">
+                <a href="https://github.com/mootable/decimal-scaled">GitHub</a>
+                <a href="https://crates.io/crates/decimal-scaled">crates.io</a>
+                <a href="https://docs.rs/decimal-scaled">docs.rs</a>
+              </div>
+            </footer>
           </body>
           </html>
           HTML
