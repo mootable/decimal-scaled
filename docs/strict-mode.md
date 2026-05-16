@@ -9,12 +9,15 @@ trigonometry) come in two forms:
 - the **strict** form — an integer-only implementation. Platform-
   independent, bit-identical on every target, `no_std`-compatible.
 
-## The `*_strict` dual API
+## The `*_strict` / `*_fast` dual API
 
 **Every transcendental that has a strict implementation exposes it
-under a `*_strict` name, and that `*_strict` method is always
-compiled** — it does *not* depend on the `strict` Cargo feature being
-enabled (it is only removed by `fast`, below).
+under a `*_strict` name; every transcendental that has an f64-bridge
+implementation exposes it under a `*_fast` name. Both surfaces are
+always compiled regardless of which Cargo feature is active** (subject
+only to dependency gates — `*_fast` needs `feature = "std"`). The
+`strict` / `fast` Cargo features only choose what the plain `*` form
+resolves to.
 
 ```rust
 use decimal_scaled::D38s12;
@@ -25,10 +28,16 @@ let x = D38s12::from_int(2);
 let r1 = x.sqrt_strict();
 let l1 = x.ln_strict();
 
+// Also always available — the f64-bridge path, explicitly (needs
+// `feature = "std"`):
+let r2 = x.sqrt_fast();
+let l2 = x.ln_fast();
+
 // The plain method dispatches by feature:
-//   * with `strict`      -> calls `*_strict`
-//   * without `strict`   -> the f64 bridge (needs `std`)
-let r2 = x.sqrt();
+//   * with `strict` (default)             -> calls `*_strict`
+//   * with `fast` (overrides `strict`)    -> calls `*_fast`
+//   * with neither + `std`                -> calls `*_fast`
+let r3 = x.sqrt();
 ```
 
 Why a dual API:
@@ -36,10 +45,11 @@ Why a dual API:
 - **Run both side by side** — benchmark or cross-check the strict path
   against the f64 bridge in the same build.
 - **Mix and match** — call `ln_strict()` for the values that must be
-  deterministic and `ln()` for the rest.
+  deterministic and `ln_fast()` (or plain `ln()`) for the rest.
 - **Guaranteed strict regardless of feature toggles** — `*_strict`
   means strict, full stop; it cannot be silently swapped for the f64
-  bridge by a downstream crate flipping a feature.
+  bridge by a downstream crate flipping a feature. The same applies in
+  reverse: `*_fast` always reaches the f64 bridge.
 
 The `*_strict` surface covers, on `D38` (and on `D9` / `D18` by
 widen-compute-narrow delegation):
@@ -58,7 +68,7 @@ widen-compute-narrow delegation):
 ## The `strict` feature
 
 ```toml
-decimal-scaled = { version = "0.1.1", features = ["strict"] }
+decimal-scaled = { version = "0.2.0", features = ["strict"] }
 ```
 
 With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
@@ -71,20 +81,20 @@ transcendental operations.
 ## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.1.1", features = ["fast"] }
+decimal-scaled = { version = "0.2.0", features = ["fast"] }
 ```
 
-`fast` drops the entire `*_strict` surface for a smaller build. It
-**overrides `strict`**: with both set, the crate behaves as if neither
-were — the plain methods are the f64 bridge (when `std` is available),
-and no `*_strict` methods are emitted at all.
+`fast` forces the plain methods (`sqrt`, `ln`, `sin`, …) to dispatch
+to the f64 bridge, even if `strict` is also on. **Both the `*_strict`
+integer-only methods and the `*_fast` f64-bridge methods are always
+emitted** — the feature only affects what plain `*` resolves to.
 
-| Features | `*_strict` methods | plain `sqrt` / `ln` / … |
-|---|---|---|
-| *(none)* | present | f64 bridge (needs `std`) |
-| `strict` | present | dispatch to `*_strict` |
-| `fast` | **absent** | f64 bridge (needs `std`) |
-| `strict`, `fast` | **absent** | f64 bridge (needs `std`) |
+| Features | `*_strict` named methods | `*_fast` named methods (needs `std`) | plain `sqrt` / `ln` / … |
+|---|---|---|---|
+| *(none)* | present | present | dispatches to `*_fast` (needs `std`) |
+| `strict` | present | present | dispatches to `*_strict` |
+| `fast` | present | present | dispatches to `*_fast` (needs `std`) |
+| `strict`, `fast` | present | present | `fast` wins — dispatches to `*_fast` |
 
 ## The 0.5 ULP accuracy guarantee
 

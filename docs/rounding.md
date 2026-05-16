@@ -91,7 +91,7 @@ time* — so every plain (non-`_with`) lossy method uses a different mode
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.1.1", features = ["rounding-half-away-from-zero"] }
+decimal-scaled = { version = "0.2.0", features = ["rounding-half-away-from-zero"] }
 ```
 
 The features are mutually exclusive in intent. If more than one is

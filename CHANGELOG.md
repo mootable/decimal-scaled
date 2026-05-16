@@ -1,0 +1,183 @@
+# Changelog
+
+All notable changes to `decimal-scaled` are documented here.
+
+The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
+and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
+
+## [0.2.0]
+
+The 0.2 release rounds out the family the 0.1 line scaffolded: every
+width ships the full method surface, the `Decimal` trait carries the
+width-generic API, and the strict / fast routing is symmetric and
+explicit.
+
+### Added
+
+- **Wide tier (D76 / D153 / D307)** — the 256 / 512 / 1024-bit decimal
+  widths are now feature-complete. Each implements every surface D38
+  has: arithmetic and bitwise operators, sign methods, integer
+  methods, overflow variants, pow + powi + the four pow overflow
+  variants, cross-type `PartialEq` against every primitive integer
+  and float, the float bridge (`from_f64`, `from_f64_with`, `to_f64`,
+  `to_f32`), serde round-trip, and the full strict-transcendental
+  surface — every `*_strict` method plus a mode-aware
+  `*_strict_with(mode)` sibling. Two AGM alternates `ln_strict_agm` /
+  `exp_strict_agm` (Brent–Salamin 1976, Newton-on-AGM-ln) are exposed
+  alongside the canonical artanh / Taylor paths.
+- **In-tree wide-integer module** (`crate::wide_int`) — the wide tier
+  is now backed by a hand-rolled `Int256` / `Int512` / `Int1024` /
+  `Int2048` / `Int4096` family (plus unsigned siblings) emitted by a
+  macro. No external big-integer dependency. Includes Karatsuba
+  multiplication (dispatched at the 16-limb threshold), Knuth
+  Algorithm D, and a Burnikel–Ziegler recursive divide wrapper.
+- **`Decimal` trait — expanded surface** — the trait now carries every
+  uniform method every width implements: arithmetic, bitwise, and
+  shift operators as supertrait bounds; sign (`abs`, `signum`,
+  `is_positive`, `is_negative`); integer methods (`div_euclid`,
+  `rem_euclid`, `div_floor`, `div_ceil`, `abs_diff`, `midpoint`,
+  `mul_add`); integer-shape predicates (`is_nan`, `is_infinite`,
+  `is_finite`); the full pow + checked/wrapping/saturating/overflowing
+  pow family; the full `checked_*`/`wrapping_*`/`saturating_*`/`overflowing_*`
+  of `add`/`sub`/`mul`/`div`/`neg`/`rem`; integer conversion
+  (`from_i32`, `to_int`, `to_int_with`); the float bridge gated on
+  `std`; and default reductions (`is_zero`, `is_one`, `is_normal`,
+  `sum`, `product`). Plus `Debug`/`Display`/`Hash` supertraits.
+- **`d9!` / `d18!` / `d76!` / `d153!` / `d307!` proc-macros** —
+  matching `d38!` per-width entry points, including:
+  - per-scale wrappers (`d38s12!`, `d18s6!`, etc.) that pre-bake the
+    scale qualifier;
+  - radix prefix integers (`0xFF`, `0o755`, `0b1010`);
+  - the explicit `radix N` qualifier;
+  - fractional radix literals (`d76!(1.A3, radix 16, scale 12)`);
+  - explicit `scale N` and `rounded` qualifiers.
+- **`*_strict` and `*_fast` named methods always available** — both
+  surfaces compile in every feature configuration (subject only to
+  dependency gates — `*_fast` needs `feature = "std"`). The plain
+  `*` form is the only thing the `strict` / `fast` features control.
+- **`widen()` / `narrow()` hop methods** — promote to the next storage
+  tier or demote with a fallible narrowing, without the longhand
+  `From::from` / `TryFrom::try_from` syntax.
+- **`rescale_with(mode)` mode-aware sibling** on every width.
+- **`with_scale<TARGET>()` builder-style alias** for `rescale`.
+- **`*_with(mode)` siblings throughout** — every default-rounding
+  operation (`from_f64`, `to_int`, `rescale`, etc.) now has a sibling
+  taking an explicit `RoundingMode`.
+- **`from_num` / `to_num`** on D38 (in `src/num_traits.rs`, renamed
+  from `fixed_compat`) — saturating, never-panicking constructors and
+  readers that thread through `num_traits::NumCast`.
+- **`hypot_strict`** on every width — integer-only, correctly-rounded
+  `sqrt(a² + b²)` via the scale-trick algorithm.
+
+### Changed
+
+- **Type names** — public types now name themselves by *safe decimal
+  digit capacity* (`D9` / `D18` / `D38` / `D76` / `D153` / `D307`)
+  rather than by underlying integer bit-width. The number in the
+  type name is also the type's `MAX_SCALE`.
+- **Strict mode is the default** — `default = ["std", "serde", "strict"]`.
+  Build without default features to get the f64-bridge path.
+- **`*_fast` (formerly suffix-free)** — the f64-bridge methods are
+  now named `*_fast` (`ln_fast`, `sin_fast`, …) for symmetry with
+  `*_strict`. Plain `*` is the feature-driven dispatcher.
+- **`fast` feature contract** — no longer drops the `*_strict`
+  surface; only forces plain `*` to resolve to `*_fast`.
+- **`Decimal` trait supertrait bounds** — extended with `Default`,
+  `Debug`, `Display`, `Hash`, all arithmetic / `*Assign` operators,
+  and the full bitwise / shift operator set.
+- **`fixed_compat.rs` → `num_traits.rs`** — file renamed; module docs
+  no longer reference the `fixed` crate. The `from_num` / `to_num`
+  methods themselves are unchanged.
+- **README, docs/, and crate-level documentation** rewritten to
+  reflect the all-six-widths reality. Stale claims about
+  D38-only-implements-trait, bnum-backed wide tier, "wide tier not
+  yet wired", "Karatsuba is a future optimisation", and "fast drops
+  the strict surface" are all corrected.
+
+### Removed
+
+- **The `bnum` dependency** — wide-tier storage migrated to the
+  in-tree `wide_int` module. `bnum` and friends remain as
+  `[dev-dependencies]` for the benchmark baselines only.
+- **`_lossy` / `_fast` float-conversion suffixes** — the float
+  conversion methods are now `to_f64`, `from_f64`, `to_f32`,
+  `from_f64_with`. The historic `_lossy` / `_fast` suffixes were
+  redundant since there is no strict counterpart for these (they
+  are type conversions, not transcendentals).
+- **`_lossy` / `_int` integer-conversion suffixes** dropped for the
+  same reason — `from_int` / `to_int` / `to_int_with` are the only
+  variants.
+- **Placeholder wide-tier feature flags** (`d115`, `d230`, `d462`,
+  `d616`, `d924`, `d1232`) — these were forward-planned widths that
+  were never implemented. Shipping no-op feature flags would mislead
+  users pinning to them. Will be re-added when the corresponding
+  storage types land.
+- **Dead code in `mg_divide`** — the unused `div_exp_fast_2word`
+  wrapper (only the `_with_rem` variant has callers).
+- **Inline test mods that ran without asserting** — the runtime
+  `if !DEFAULT_IS_HALF_TO_EVEN { return; }` guard pattern was
+  replaced with module-level `#![cfg(...)]` so tests never silently
+  no-op under a non-default `rounding-*` feature.
+
+### Fixed
+
+- **Strict/fast routing defect** — pre-0.2 the `*_strict` methods
+  were `cfg(not(feature = "fast"))` and the `*_fast` methods were
+  `cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))`,
+  so in the default-strict build there was no way to call the
+  f64-bridge methods by name, and vice versa. Both surfaces now
+  always compile (subject to `std` for `*_fast`).
+- **Module-level doc comment staleness** — six modules contained
+  D38-only narratives / "Phase N will add" / "future widths" /
+  broken file-path references; rewritten to match the all-six-widths
+  reality.
+- **Broken intra-doc links** — `[Self::MIN]` at module scope,
+  `[FromStr]` without `core::str::` prefix, `[D38::rescale]` at
+  module scope, `[num_traits::Zero]` shadowed by the post-rename
+  `crate::num_traits` mod — all fixed. `cargo doc --no-deps
+  --document-private-items` now reports zero warnings.
+- **Crate-wide warning-clean build** under every feature
+  combination — `default`, `--no-default-features`, `fast`, `strict`,
+  `wide`, `x-wide`, and combinations thereof.
+- **Coverage hardening** — comprehensive functional tests added for
+  every public surface, the wide-integer kernels, `mg_divide`, the
+  guard-digit `d_w128_kernels`, and every transcendental's domain
+  panic. Tests are functional (named by behaviour, not by uncovered
+  line) and topic-organised in `tests/`.
+
+### Compile-time / MSRV
+
+- **MSRV** declared as **Rust 1.85** (lower bound for the 2024
+  edition).
+
+### Migration notes
+
+- The `D128` (etc.) type names are gone — they were renamed to their
+  digit-capacity counterparts in the 0.1 line. If you pinned to a
+  pre-rename name, update to the new spelling.
+- Code that called `.ln()` / `.sin()` etc. and relied on the f64
+  bridge being present in the default strict build now still
+  compiles, but the routing has been clarified — call `.ln_fast()`
+  / `.sin_fast()` directly if you specifically want the f64 path
+  regardless of the build's feature set.
+- The `_lossy` / `_fast` suffixes on float conversion methods
+  (`to_f64_lossy`, `from_f64_fast`, …) have been removed across two
+  prior renames; the methods are now just `to_f64` / `from_f64` /
+  etc. Update any leftover suffixed call sites.
+- If you depended on a placeholder wide-tier feature flag (`d115`,
+  `d230`, `d462`, `d616`, `d924`, `d1232`), the flag no longer
+  exists. Use `wide` or `x-wide` to cover the implemented widths.
+
+## [0.1.1] — 2025-12
+
+Bug-fix release of the initial public 0.1 line. Refer to the git
+history under tag `v0.1.1` for the full commit log; the changes
+focused on the repo URL / documentation metadata.
+
+## [0.1.0] — 2025-12
+
+Initial public release. Established the core `D38<const SCALE: u32>`
+type, the strict-vs-fast transcendental dual API, the 256-bit
+Möller-Granlund magic-number divide path for mul/div, the
+correctly-rounded sqrt / cbrt via exact-integer radicand, the serde
+helpers, the `d128!` macro, and the docs/benchmarks scaffolding.

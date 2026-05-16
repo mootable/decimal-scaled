@@ -1,6 +1,6 @@
 [package]
 name = "decimal-scaled"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -33,18 +33,16 @@ std = ["alloc"]
 alloc = []
 serde = ["dep:serde"]
 macros = ["dep:decimal_scaled_macros"]
-# Routes every transcendental through the integer-only correctly-
-# rounded path. On by default (see `default` above). Drops the
-# `f64`-bridge transcendentals to keep the build small; explicit
-# float-conversion methods (`to_f64`, `from_f64`, …)
-# stay available regardless. Strict mode does not require `std`;
-# the integer-only transcendentals compile under `no_std + alloc`.
+# Plain transcendentals (`sin`, `ln`, …) dispatch to the integer-only,
+# 0.5-ULP, platform-deterministic `*_strict` path. On by default
+# (see `default` above). The `*_strict` and `*_fast` named methods
+# are both always available regardless of this feature; `strict` only
+# controls what the plain `*` form resolves to. Does not require
+# `std`; the integer-only transcendentals compile under `no_std`.
 strict = []
-# Drops the integer-only `*_strict` transcendental surface entirely
-# for a smaller build. `fast` overrides `strict`: when both
-# are set the crate behaves as if neither were — the f64-bridge
-# (fast) transcendentals are used (when `std` is available) and no
-# `*_strict` methods are emitted.
+# Forces plain transcendentals to dispatch to the f64 bridge instead
+# of `*_strict`, even when `strict` is also on. Same caveat as above:
+# `*_strict` and `*_fast` named methods stay available either way.
 fast = []
 # Compiles BOTH the macro-default and the per-type override
 # implementations for every method that has them. Default builds compile
@@ -87,7 +85,7 @@ d307 = []
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
-decimal_scaled_macros = { path = "macros", default-features = false, optional = true }
+decimal_scaled_macros = { path = "macros", version = "0.2.0", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
