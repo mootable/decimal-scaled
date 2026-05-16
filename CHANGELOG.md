@@ -43,11 +43,11 @@ on-wire format are byte-identical to 0.2.4.
   50 or 20 samples depending on tier).
 - **`docs/benchmarks.md` §3 strict transcendental tables** —
   collapsed from one column per (width, scale) to one column per
-  width, with each cell showing the
-  **`s = 0 < s = mid < s = max`** triple in the row's natural
-  unit. Bold-winner rule now keys off the midpoint scale, which
-  is the honest series-cost measurement (s = 0 hits fast paths;
-  s = max sometimes shortens via Cody-Waite range reduction).
+  width, each cell showing only the **s = mid** measurement (the
+  honest series-cost scale — s = 0 hits fast-path early returns
+  and s = max sometimes shortens via Cody-Waite range reduction,
+  so neither is a fair comparator). The chosen mid is listed in
+  the column header (e.g. `D76 (s=35)`).
 - **`docs/benchmarks.md` Time units table** — added picosecond
   row and reframed the third column as "Relative to a second"
   instead of "Relative to `ns`" for consistency across the
