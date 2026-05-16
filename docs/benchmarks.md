@@ -30,8 +30,9 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > row); scientific notation is reserved for cells smaller than
 > 10⁻⁵ of the row's unit. In §1 the winning cell per row is bold.
 > In §2 onwards (transcendental tables) each width gets
-> a single column showing the `s = 0 < s = mid < s = max` triple in
-> the row's natural unit, and the bold mark goes on whichever
+> a single column whose cell stacks three lines vertically:
+> **top is s = 0**, **middle is s = mid**, **bottom is s = max**,
+> all in the row's natural unit. The bold mark goes on whichever
 > width's s = mid wins the row — s = mid is the honest series-cost
 > measurement (s = 0 hits fast paths, s = max is sometimes shorter
 > via range-reduction shortcuts).**
@@ -247,19 +248,17 @@ platforms, `no_std`-compatible, 0.5 ULP at storage.
 D9 / D18 strict delegate up to D38's 256-bit guard-digit kernel;
 their cost is dominated by D38 plus the narrow-tier round-trip.
 
-Each cell shows the **s = 0 < s = mid < s = max** triple in the
-row's natural unit; the `<` is the scale ordering, not numerical
-(values aren't monotone — the storage-max column sometimes beats
-the midpoint via a Cody-Waite / range-reduction shortcut).
+Each cell stacks three lines vertically — top: **s = 0**, middle:
+**s = mid**, bottom: **s = max** — in the row's natural unit.
 **Bold** marks the row's winning s = mid value across the three
 widths.
 
-| fn | D9 (s=0 < s=5 < s=9) | D18 (s=0 < s=9 < s=18) | D38 (s=0 < s=19 < s=38) |
+| fn | D9 (0 / 5 / 9) | D18 (0 / 9 / 18) | D38 (0 / 19 / 38) |
 |---|---|---|---|
-| ln | 1.18 µs < **32.0 µs** < 40.2 µs | 1.13 µs < 38.9 µs < 52.2 µs | 1.08 µs < 58.9 µs < 63.2 µs |
-| exp | 0.00146 µs < **29.5 µs** < 35.5 µs | 0.00110 µs < 34.8 µs < 45.3 µs | 0.00103 µs < 47.5 µs < 28.6 µs |
-| sin | 19.1 µs < **27.2 µs** < 31.4 µs | 18.5 µs < 30.6 µs < 40.2 µs | 19.1 µs < 42.7 µs < 17.9 µs |
-| sqrt | 14.9 ns < **18.6 ns** < 33.2 ns | 14.4 ns < 31.9 ns < 35.4 ns | 13.5 ns < 37.7 ns < 3,125 ns |
+| ln   | 1.18 µs<br>**32.0 µs**<br>40.2 µs       | 1.13 µs<br>38.9 µs<br>52.2 µs       | 1.08 µs<br>58.9 µs<br>63.2 µs |
+| exp  | 0.00146 µs<br>**29.5 µs**<br>35.5 µs   | 0.00110 µs<br>34.8 µs<br>45.3 µs   | 0.00103 µs<br>47.5 µs<br>28.6 µs |
+| sin  | 19.1 µs<br>**27.2 µs**<br>31.4 µs       | 18.5 µs<br>30.6 µs<br>40.2 µs       | 19.1 µs<br>42.7 µs<br>17.9 µs |
+| sqrt | 14.9 ns<br>**18.6 ns**<br>33.2 ns       | 14.4 ns<br>31.9 ns<br>35.4 ns       | 13.5 ns<br>37.7 ns<br>3,125 ns |
 
 ### Wide-tier strict — D76 / D153 / D307
 
@@ -267,16 +266,16 @@ Cost grows with both the work integer's bit width and the
 guard-digit budget at each scale.
 
 Same convention as the narrow-tier strict table above: each cell
-is **s = 0 < s = mid < s = max** in the row's natural unit;
-**bold** marks the winning s = mid value across the three
-widths.
+stacks **s = 0** / **s = mid** / **s = max** top-to-bottom in
+the row's natural unit; **bold** marks the winning s = mid value
+across the three widths.
 
-| fn | D76 (s=0 < s=35 < s=76) | D153 (s=0 < s=75 < s=153) | D307 (s=0 < s=150 < s=307) |
+| fn | D76 (0 / 35 / 76) | D153 (0 / 75 / 153) | D307 (0 / 150 / 307) |
 |---|---|---|---|
-| ln | 0.152 ms < **1.37 ms** < 3.38 ms | 0.291 ms < 6.40 ms < 18.1 ms | 0.540 ms < 34.1 ms < 115 ms |
-| exp | 0.0000125 ms < **1.27 ms** < 3.10 ms | 0.0000172 ms < 5.87 ms < 15.7 ms | 0.0000280 ms < 31.2 ms < 94.6 ms |
-| sin | 0.226 ms < **1.08 ms** < 2.53 ms | 0.428 ms < 4.82 ms < 13.0 ms | 0.808 ms < 25.5 ms < 77.4 ms |
-| sqrt | 0.118 µs < **20.5 µs** < 47.4 µs | 0.196 µs < 83.6 µs < 173 µs | 0.369 µs < 313 µs < 688 µs |
+| ln   | 0.152 ms<br>**1.37 ms**<br>3.38 ms       | 0.291 ms<br>6.40 ms<br>18.1 ms       | 0.540 ms<br>34.1 ms<br>115 ms |
+| exp  | 0.0000125 ms<br>**1.27 ms**<br>3.10 ms   | 0.0000172 ms<br>5.87 ms<br>15.7 ms   | 0.0000280 ms<br>31.2 ms<br>94.6 ms |
+| sin  | 0.226 ms<br>**1.08 ms**<br>2.53 ms       | 0.428 ms<br>4.82 ms<br>13.0 ms       | 0.808 ms<br>25.5 ms<br>77.4 ms |
+| sqrt | 0.118 µs<br>**20.5 µs**<br>47.4 µs       | 0.196 µs<br>83.6 µs<br>173 µs       | 0.369 µs<br>313 µs<br>688 µs |
 
 **Reading the strict tables.** The s = 0 component of each
 triple reflects a *fast path* rather than the full series
