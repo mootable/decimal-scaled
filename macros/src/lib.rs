@@ -102,42 +102,42 @@ const D307: Width = Width {
 
 // ── Public proc-macro entry points ────────────────────────────────────
 
-/// `d9!` — construct a [`decimal_scaled::D9`]`<SCALE>` value at
+/// `d9!` — construct a `decimal_scaled::D9<SCALE>` value at
 /// compile time. See the crate-level docs and `macros/README.md`.
 #[proc_macro]
 pub fn d9(input: TokenStream) -> TokenStream {
     expand_for(D9, input)
 }
 
-/// `d18!` — construct a [`decimal_scaled::D18`]`<SCALE>` value at
+/// `d18!` — construct a `decimal_scaled::D18<SCALE>` value at
 /// compile time. See the crate-level docs and `macros/README.md`.
 #[proc_macro]
 pub fn d18(input: TokenStream) -> TokenStream {
     expand_for(D18, input)
 }
 
-/// `d38!` — construct a [`decimal_scaled::D38`]`<SCALE>` value at
+/// `d38!` — construct a `decimal_scaled::D38<SCALE>` value at
 /// compile time. See the crate-level docs and `macros/README.md`.
 #[proc_macro]
 pub fn d38(input: TokenStream) -> TokenStream {
     expand_for(D38, input)
 }
 
-/// `d76!` — construct a [`decimal_scaled::D76`]`<SCALE>` value at
+/// `d76!` — construct a `decimal_scaled::D76<SCALE>` value at
 /// compile time. Requires the parent crate's `d76` / `wide` feature.
 #[proc_macro]
 pub fn d76(input: TokenStream) -> TokenStream {
     expand_for(D76, input)
 }
 
-/// `d153!` — construct a [`decimal_scaled::D153`]`<SCALE>` value at
+/// `d153!` — construct a `decimal_scaled::D153<SCALE>` value at
 /// compile time. Requires the parent crate's `d153` / `wide` feature.
 #[proc_macro]
 pub fn d153(input: TokenStream) -> TokenStream {
     expand_for(D153, input)
 }
 
-/// `d307!` — construct a [`decimal_scaled::D307`]`<SCALE>` value at
+/// `d307!` — construct a `decimal_scaled::D307<SCALE>` value at
 /// compile time. Requires the parent crate's `d307` / `x-wide`
 /// feature.
 #[proc_macro]
