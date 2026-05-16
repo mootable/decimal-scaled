@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json.schemastore.org/claude-code-plugin-manifest.json",
+  "name": "decimal-scaled",
+  "version": "0.2.4",
+  "description": "Usage guide and best practices for the decimal-scaled Rust crate (const-generic base-10 fixed-point decimals D9/D18/D38/D76/D153/D307 with 0.5-ULP correctly-rounded integer-only transcendentals).",
+  "author": {
+    "name": "John Moxley",
+    "email": "jackokmoxley@gmail.com",
+    "url": "https://github.com/mootable"
+  },
+  "homepage": "https://github.com/mootable/decimal-scaled",
+  "repository": "https://github.com/mootable/decimal-scaled",
+  "license": "MIT OR Apache-2.0",
+  "keywords": [
+    "decimal",
+    "fixed-point",
+    "deterministic",
+    "no-std",
+    "precision",
+    "rust",
+    "numerics"
+  ]
+}
