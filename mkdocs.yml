@@ -110,7 +110,9 @@ markdown_extensions:
       line_spans: __span
       pygments_lang_class: true
   - pymdownx.inlinehilite
-  - pymdownx.snippets
+  - pymdownx.snippets:
+      base_path: ['docs']
+      check_paths: true
   - pymdownx.tasklist:
       custom_checkbox: true
   - pymdownx.emoji:
