@@ -857,6 +857,33 @@ macro_rules! decl_wide_int {
                     .expect(concat!(stringify!($S), ": mul overflow"))
             }
         }
+        impl $S {
+            /// Quotient + remainder in a single divmod call. Saves
+            /// every caller that needs both (notably the decimal
+            /// `round_with_mode_wide!` rounding pass) from calling
+            /// `n / m` and `n % m` separately, which would do the
+            /// full divmod twice.
+            #[inline]
+            pub(crate) fn div_rem(self, rhs: $S) -> ($S, $S) {
+                if rhs.is_zero() {
+                    panic!(concat!(stringify!($S), ": division by zero"));
+                }
+                let neg_q = self.is_negative() ^ rhs.is_negative();
+                let neg_r = self.is_negative();
+                let mut q = [0u128; $L];
+                let mut r = [0u128; $L];
+                $crate::wide_int::limbs_divmod_dispatch(
+                    &self.unsigned_abs().0,
+                    &rhs.unsigned_abs().0,
+                    &mut q,
+                    &mut r,
+                );
+                (
+                    $S::from_mag_limbs(&q, neg_q),
+                    $S::from_mag_limbs(&r, neg_r),
+                )
+            }
+        }
         impl ::core::ops::Div for $S {
             type Output = $S;
             #[inline]

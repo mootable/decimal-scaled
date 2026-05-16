@@ -80,8 +80,9 @@ macro_rules! round_with_mode_wide {
         let n = $n;
         let m = $m;
         let mode = $mode;
-        let q = n / m;
-        let r = n % m;
+        // Single divmod call instead of `n / m` + `n % m` (which
+        // would do the full multi-limb divide twice).
+        let (q, r) = n.div_rem(m);
         let zero = <$W>::from_i128(0);
         if r == zero {
             q
