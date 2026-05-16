@@ -32,12 +32,12 @@
   background-image:
     linear-gradient(var(--grid-line-color, rgba(0, 0, 0, 0.04)) 1px, transparent 1px),
     linear-gradient(90deg, var(--grid-line-color, rgba(0, 0, 0, 0.04)) 1px, transparent 1px);
-  background-size: 32px 32px;
+  background-size: 64px 64px;
   background-position: -1px -1px;
 }
 
 [data-md-color-scheme="default"] {
-  --grid-line-color: rgba(63, 74, 110, 0.07);   /* dusk-blue at 7% on paper */
+  --grid-line-color: rgba(63, 74, 110, 0.04);   /* dusk-blue at 4% on paper */
 }
 [data-md-color-scheme="slate"] {
   --grid-line-color: rgba(183, 192, 229, 0.06); /* dusk-tint at 6% on slate */
