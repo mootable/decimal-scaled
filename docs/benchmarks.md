@@ -440,7 +440,6 @@ proportional limb-arithmetic cost.
 
 ![mul @ 256bit](figures/library_comparison/mul_256bit.png)
 ![div @ 256bit](figures/library_comparison/div_256bit.png)
-![ln @ 256bit](figures/library_comparison/ln_256bit.png)
 
 ### 512-bit storage (s = 75 midpoint)
 
@@ -460,8 +459,8 @@ proportional limb-arithmetic cost.
 `fastnum`'s transcendentals stay sub-µs by punting to f64 —
 fast but loses precision against the underlying decimal width.
 
-![ln @ 512bit](figures/library_comparison/ln_512bit.png)
-![sqrt @ 512bit](figures/library_comparison/sqrt_512bit.png)
+![mul @ 512bit](figures/library_comparison/mul_512bit.png)
+![div @ 512bit](figures/library_comparison/div_512bit.png)
 
 ### 1024-bit storage (s = 150 midpoint)
 
@@ -486,7 +485,7 @@ keeps add / sub / neg in the ns range (the limb array is still
 stack-allocated) but pays serially for mul / div.
 
 ![mul @ 1024bit](figures/library_comparison/mul_1024bit.png)
-![ln @ 1024bit](figures/library_comparison/ln_1024bit.png)
+![div @ 1024bit](figures/library_comparison/div_1024bit.png)
 
 ### Reading the library comparison
 

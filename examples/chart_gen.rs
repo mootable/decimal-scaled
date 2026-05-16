@@ -67,12 +67,22 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // verify the scale-invariant ops (add / sub / neg) really are
     // flat.
     let mut count = 0;
+    let mut skipped = 0;
     for ((op, width), by_lib) in &data {
+        // Skip charts where no library has ≥2 data points — a chart
+        // with only single dots and no lines is meaningless. This
+        // typically catches transcendentals that are benched only at
+        // s=mid per library.
+        let has_a_line = by_lib.values().any(|points| points.len() >= 2);
+        if !has_a_line {
+            skipped += 1;
+            continue;
+        }
         let path = format!("{out_dir}/{op}_{width}.png");
         render_chart(&path, op, width, by_lib)?;
         count += 1;
     }
-    println!("wrote {count} charts to {out_dir}/");
+    println!("wrote {count} charts to {out_dir}/ (skipped {skipped} single-point cases)");
     Ok(())
 }
 
