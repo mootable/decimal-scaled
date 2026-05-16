@@ -111,67 +111,67 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
-| add | 401 ps | **384 ps** | 386 ps |
-| sub | 393 ps | 386 ps | **377 ps** |
-| mul | **395 ps** | 764 ps | 767 ps |
-| div | **1.59 ns** | 2.51 ns | 2.44 ns |
-| rem | 1.54 ns | 1.50 ns | **1.48 ns** |
-| neg | **282 ps** | 293 ps | 303 ps |
+| add | **379 ps** | 384 ps | 382 ps |
+| sub | 392 ps | **381 ps** | 382 ps |
+| mul | **422 ps** | 777 ps | 785 ps |
+| div | **1.49 ns** | 2.48 ns | 2.49 ns |
+| rem | 1.57 ns | 1.52 ns | **1.51 ns** |
+| neg | **256 ps** | 261 ps | 256 ps |
 
 ### D18
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
-| add | **372 ps** | 384 ps | 378 ps |
-| sub | 455 ps | **452 ps** | 472 ps |
-| mul | **0.38 ns** | 9.61 ns | 9.63 ns |
-| div | **9.67 ns** | 10.3 ns | 11.1 ns |
-| rem | **1.46 ns** | 1.58 ns | 2.72 ns |
-| neg | 251 ps | **250 ps** | 266 ps |
+| add | 387 ps | 384 ps | **382 ps** |
+| sub | 377 ps | **372 ps** | 384 ps |
+| mul | **0.38 ns** | 9.18 ns | 9.06 ns |
+| div | 10.2 ns | 10.2 ns | **9.94 ns** |
+| rem | **1.49 ns** | 1.52 ns | 2.43 ns |
+| neg | 284 ps | 281 ps | **279 ps** |
 
 ### D38 + cross-crate baselines
 
 | op | s = 0 | s = 19 | s = 38 | `rust_decimal` | `fixed::I64F64` |
 |---|---|---|---|---|---|
-| add | 923 ps | 934 ps | 876 ps | 5,138 ps | **842 ps** |
-| sub | 917 ps | 912 ps | **847 ps** | 5,288 ps | 849 ps |
-| mul | 2.46 ns | 13.1 ns | 13.8 ns | 2.78 ns | **1.49 ns** |
-| div | 10.4 ns | 8.99 ns | 456 ns | **3.32 ns** | 23.2 ns |
-| rem | 9.30 ns | 8.67 ns | 10.3 ns | **8.56 ns** | 14.2 ns |
-| neg | 528 ps | 508 ps | 505 ps | 4,438 ps | **500 ps** |
+| add | 888 ps | 931 ps | 894 ps | 5,293 ps | **883 ps** |
+| sub | 930 ps | 937 ps | 982 ps | 5,364 ps | **882 ps** |
+| mul | 2.96 ns | 13.0 ns | 13.0 ns | 2.80 ns | **1.46 ns** |
+| div | 10.1 ns | 9.18 ns | 482 ns | **3.20 ns** | 23.7 ns |
+| rem | 8.32 ns | **8.16 ns** | 11.8 ns | 8.81 ns | 14.4 ns |
+| neg | 505 ps | 507 ps | 510 ps | 4,252 ps | **493 ps** |
 
 ### D76 + `bnum`-backed D76 baseline
 
 | op | s = 0 | s = 35 | s = 76 | `bnum_d76` (s = 35) |
 |---|---|---|---|---|
-| add | 1.60 ns | **1.53 ns** | 1.55 ns | 1.79 ns |
-| sub | 1.81 ns | **1.77 ns** | 1.91 ns | 1.82 ns |
-| mul | **27.0 ns** | 60.7 ns | 8,898 ns | 332 ns |
-| div | **99.9 ns** | 4,602 ns | 8,771 ns | 351 ns |
-| rem | **15.2 ns** | 17.8 ns | 1,122 ns | 50.7 ns |
-| neg | 1.60 ns | 1.57 ns | **1.56 ns** | 4.09 ns |
+| add | 1.74 ns | 1.62 ns | **1.60 ns** | 1.79 ns |
+| sub | 1.99 ns | 1.83 ns | 1.84 ns | **1.81 ns** |
+| mul | **29.2 ns** | 62.2 ns | 9,287 ns | 326 ns |
+| div | **106 ns** | 4,815 ns | 9,477 ns | 335 ns |
+| rem | **15.4 ns** | 18.2 ns | 1,148 ns | 50.2 ns |
+| neg | 1.65 ns | 1.64 ns | **1.59 ns** | 4.21 ns |
 
 ### D153
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
-| add | 2.93 ns | **2.92 ns** | 3.00 ns |
-| sub | **3.83 ns** | 4.01 ns | 4.23 ns |
-| mul | **0.033 µs** | 16.6 µs | 30.0 µs |
-| div | **0.14 µs** | 16.2 µs | 30.2 µs |
-| rem | **0.020 µs** | 1.89 µs | 3.01 µs |
-| neg | **2.60 ns** | 2.63 ns | 2.65 ns |
+| add | 3.12 ns | 3.15 ns | **3.11 ns** |
+| sub | **4.01 ns** | 4.24 ns | 4.13 ns |
+| mul | **0.035 µs** | 16.9 µs | 31.8 µs |
+| div | **0.148 µs** | 17.5 µs | 31.7 µs |
+| rem | **0.020 µs** | 2.02 µs | 3.17 µs |
+| neg | 2.59 ns | 2.68 ns | **2.55 ns** |
 
 ### D307
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
-| add | **7.84 ns** | 7.93 ns | 7.95 ns |
-| sub | **14.2 ns** | 14.4 ns | 14.2 ns |
-| mul | **0.056 µs** | 63.6 µs | 113 µs |
-| div | **0.25 µs** | 62.6 µs | 111 µs |
-| rem | **0.036 µs** | 6.47 µs | 10.2 µs |
-| neg | **5.05 ns** | 5.28 ns | 5.25 ns |
+| add | 8.09 ns | **7.81 ns** | 8.10 ns |
+| sub | **14.2 ns** | 14.3 ns | 14.5 ns |
+| mul | **0.056 µs** | 59.6 µs | 112 µs |
+| div | **0.242 µs** | 59.9 µs | 112 µs |
+| rem | **0.036 µs** | 6.28 µs | 9.73 µs |
+| neg | **4.83 ns** | 5.09 ns | 5.15 ns |
 
 **Reading the arithmetic tables.** Add / sub / neg are exact;
 mul / div round per `DEFAULT_ROUNDING_MODE`. Add / sub / neg are
@@ -196,29 +196,31 @@ algorithm cost. The crate keeps SCALE 38 as the *correct* path
 
 ## 2. Fast transcendentals (`f64`-bridge)
 
-Available on D9 / D18 / D38 only — the wide tiers ship no lossy
-form (f64 can't carry their precision; the strict path is the
-only correct one). Functions: `ln`, `exp`, `sin`, `sqrt`.
+The `*_fast` methods route through `f64::ln` / `f64::sin` / etc.
+Available at every width — narrow tiers (D9 / D18 / D38) and wide
+tiers (D76 / D153 / D307) all expose them — but only useful below
+D38 where the f64 mantissa carries enough precision; on wide
+tiers the result collapses to ~16 decimal digits regardless of
+the storage width.
 
-Arguments: `1.5` for ln / sin / sqrt, `0.5` for exp — picked so the
-result stays in range at every type×scale combo the sweep
-exercises (`D38<38>` has max ≈ 1.7, the tightest). At `SCALE = 0`
-the arguments built by `from_int(1) / from_int(2)` floor to `0`
-and `from_int(1) + 0 = 1`, which makes a few cells hit fast
-paths — those rows are still useful but reflect the early-return
-not the full series.
+Bench arguments: D38 at `SCALE = 9` (`≈ 2.345678901`) and D76 at
+`SCALE = 9` (`= 2`). Functions called explicitly via their
+`*_fast` name so the result is the f64-bridge path regardless of
+which crate feature flips the plain `*` dispatcher.
 
 Accuracy: ~16 decimal digits of f64 precision. **Not** correctly
 rounded; results vary with platform libm.
 
-### D9 / D18 / D38 fast
+| fn | D38 `*_fast` | D76 `*_fast` | `rust_decimal` |
+|---|---|---|---|
+| ln   | **35.8 ns** | 201 ns | 3,000 ns |
+| exp  | **42.6 ns** | 211 ns | 2,124 ns |
+| sin  | **43.5 ns** | 226 ns | 2,955 ns |
+| sqrt | **31.0 ns** | 197 ns |   658 ns |
 
-| fn | D9 s=9 | D18 s=18 | D38 s=38 | `rust_decimal` |
-|---|---|---|---|---|
-| ln | `__LOSSY_D9_LN__` | `__LOSSY_D18_LN__` | `__LOSSY_D38_LN__` | **3.75 µs** |
-| exp | `__LOSSY_D9_EXP__` | `__LOSSY_D18_EXP__` | `__LOSSY_D38_EXP__` | **145 ns** |
-| sin | `__LOSSY_D9_SIN__` | `__LOSSY_D18_SIN__` | `__LOSSY_D38_SIN__` | **2.55 µs** |
-| sqrt | `__LOSSY_D9_SQRT__` | `__LOSSY_D18_SQRT__` | `__LOSSY_D38_SQRT__` | **578 ns** |
+D9 / D18 `*_fast` aren't separately benched: they share the D38
+f64-bridge kernel through `to_f64` / `from_f64` and incur only a
+sub-ns round-trip on top of the D38 numbers above.
 
 `rust_decimal`'s transcendentals are software-implemented (no f64
 bridge) — accurate but not correctly rounded to the last place,
@@ -240,10 +242,10 @@ their cost is dominated by D38 plus the narrow-tier round-trip.
 
 | fn | D9 s=9 | D18 s=18 | D38 s=0 | D38 s=19 | D38 s=38 |
 |---|---|---|---|---|---|
-| ln | `__STRICT_D9_LN__` | `__STRICT_D18_LN__` | **1.13 µs** | 58.3 µs | 60.8 µs |
-| exp | `__STRICT_D9_EXP__` | `__STRICT_D18_EXP__` | **1.08×10⁻³ µs** | 49.6 µs | 28.9 µs |
-| sin | `__STRICT_D9_SIN__` | `__STRICT_D18_SIN__` | 20.0 µs | 44.1 µs | **17.7 µs** |
-| sqrt | `__STRICT_D9_SQRT__` | `__STRICT_D18_SQRT__` | **13.6 ns** | 37.9 ns | 3,248 ns |
+| ln | 40.2 µs | 52.2 µs | **1.08 µs** | 58.9 µs | 63.2 µs |
+| exp | 35.5 µs | 45.3 µs | **1.03×10⁻³ µs** | 47.5 µs | 28.6 µs |
+| sin | 31.4 µs | 40.2 µs | 19.1 µs | 42.7 µs | **17.9 µs** |
+| sqrt | 33.2 ns | 35.4 ns | **13.5 ns** | 37.7 ns | 3,125 ns |
 
 ### Wide-tier strict — D76 / D153 / D307
 
@@ -252,10 +254,10 @@ guard-digit budget at each scale.
 
 | fn | D76 s=0 | D76 s=35 | D76 s=76 | D153 s=0 | D153 s=75 | D153 s=153 | D307 s=0 | D307 s=150 | D307 s=307 |
 |---|---|---|---|---|---|---|---|---|---|
-| ln | **0.15 ms** | 1.35 ms | 3.25 ms | 0.30 ms | 6.01 ms | 17.1 ms | 0.53 ms | 33.3 ms | 112 ms |
-| exp | **1.26×10⁻⁵ ms** | 1.29 ms | 2.98 ms | 1.71×10⁻⁵ ms | 5.58 ms | 15.4 ms | 2.78×10⁻⁵ ms | 31.7 ms | 98.8 ms |
-| sin | **0.22 ms** | 1.04 ms | 2.45 ms | 0.41 ms | 4.63 ms | 13.0 ms | 0.76 ms | 24.4 ms | 78.6 ms |
-| sqrt | **0.12 µs** | 19.9 µs | 46.1 µs | 0.19 µs | 77.6 µs | 168 µs | 0.36 µs | 304 µs | 703 µs |
+| ln | **0.152 ms** | 1.37 ms | 3.38 ms | 0.291 ms | 6.40 ms | 18.1 ms | 0.540 ms | 34.1 ms | 115 ms |
+| exp | **1.25×10⁻⁵ ms** | 1.27 ms | 3.10 ms | 1.72×10⁻⁵ ms | 5.87 ms | 15.7 ms | 2.80×10⁻⁵ ms | 31.2 ms | 94.6 ms |
+| sin | **0.226 ms** | 1.08 ms | 2.53 ms | 0.428 ms | 4.82 ms | 13.0 ms | 0.808 ms | 25.5 ms | 77.4 ms |
+| sqrt | **0.118 µs** | 20.5 µs | 47.4 µs | 0.196 µs | 83.6 µs | 173 µs | 0.369 µs | 313 µs | 688 µs |
 
 **Reading the strict tables.** A few cells reflect *fast paths*
 rather than the full series evaluation — the bold winner per row
@@ -307,12 +309,12 @@ For raw signed integer arithmetic without the decimal layer see
 
 | op | `Int256` (this crate) | `bnum` I256 | `ruint` U256 |
 |---|---|---|---|
-| add | **1.66 ns** | 1.94 ns | 5.75 ns |
-| sub | 1.95 ns | **1.88 ns** | 5.96 ns |
-| mul | 14.84 ns | 4.23 ns | **3.51 ns** |
-| div | 15.21 ns | 69.32 ns | **5.68 ns** |
-| rem | 14.89 ns | 64.46 ns | **5.90 ns** |
-| neg | **1.85 ns** | 4.69 ns | — |
+| add | **1.51 ns** | 1.74 ns | 5.54 ns |
+| sub | **1.77 ns** | 1.78 ns | 5.53 ns |
+| mul | 13.57 ns | 3.57 ns | **3.19 ns** |
+| div | 14.43 ns | 61.30 ns | **4.96 ns** |
+| rem | 14.13 ns | 60.62 ns | **5.20 ns** |
+| neg | **1.63 ns** | 4.29 ns | — |
 
 At 1024 bits the native back-end takes div / rem on its own
 (`bnum`'s falls off ~4×); `ruint` doesn't ship a 1024-bit type.
@@ -322,10 +324,11 @@ At 1024 bits the native back-end takes div / rem on its own
 ## Methodology
 
 - **Bench runner.** Criterion. Each row's measurement is the
-  median wall-clock; warm-up 1 s, measurement 2 s, sample size 50
-  (arithmetic / D38-and-narrower strict) or 20 (wide-tier
-  strict). Wide-tier strict at deepest scale uses 5 s measurement
-  window to absorb the larger per-iter cost.
+  median wall-clock; warm-up 3 s (criterion default), measurement
+  window auto-tuned per function (5 s for cheap ops, scaled up to
+  ~110 s for the deepest D307 strict transcendentals). Sample
+  size 50 for arithmetic and D38-and-narrower strict; 20 for the
+  wide-tier strict block where each iteration is expensive.
 - **Operand choice.** Arithmetic: `from_int(2)` and `from_int(1)`
   — universally in range at every width and scale. Transcendentals:
   `1.5` (= `from_int(1) + from_int(1)/from_int(2)`) for ln / sin /
@@ -337,7 +340,9 @@ At 1024 bits the native back-end takes div / rem on its own
   call.
 - **Build profile.** `bench` (= `release` with `opt-level=3`,
   no debug-assertions).
-- **Default features.** Stock `wide` + `x-wide` enabled. `strict`
-  feature off — both `*` (lossy) and `*_strict` are exercised on
-  the narrow tiers; with `strict` the fast block would dispatch
-  to strict.
+- **Default features.** Stock `wide` + `x-wide` + `strict`
+  enabled (crate defaults). The fast block calls `*_fast`
+  explicitly (e.g. `.ln_fast()`) and the strict block calls
+  `*_strict` explicitly, so both paths are exercised
+  unambiguously regardless of which dispatcher the plain `*`
+  methods resolve to under the active feature set.

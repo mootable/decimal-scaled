@@ -5,6 +5,43 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.5]
+
+Docs + benchmark accuracy patch. Library code, public API, and
+on-wire format are byte-identical to 0.2.4.
+
+### Fixed
+
+- **`docs/benchmarks.md`** — every numeric cell in the
+  arithmetic, fast-transcendental, strict-transcendental, and
+  wide-integer-backend tables was re-measured on a single
+  machine in one criterion run with the default 3 s warm-up,
+  50-sample (D38-and-narrower) or 20-sample (wide tier) windows.
+  The previous numbers were collected with a much shorter warm-up
+  / fewer samples and several rows shipped unsubstituted
+  `__LOSSY_*__` / `__STRICT_*__` template placeholders.
+- **`benches/decimal_backends.rs`** — the `D128_lossy` and
+  `D256_lossy` rows called the plain `*` dispatcher methods,
+  which with the default `strict` Cargo feature flip to the
+  `*_strict` integer kernel. The rows therefore measured the
+  strict path twice instead of contrasting fast vs strict. They
+  now call `*_fast` explicitly, so the fast / strict distinction
+  shown in the docs is honest.
+
+### Changed
+
+- **`docs/benchmarks.md` §2 "Fast transcendentals"** — table
+  reshaped from the unsubstituted "D9 / D18 / D38 fast"
+  placeholders to the actually-benched
+  "D38 `*_fast` / D76 `*_fast` / `rust_decimal`" comparison,
+  with a prose note that D9 / D18 `*_fast` share the D38
+  f64-bridge kernel via `to_f64` / `from_f64` and incur only a
+  sub-ns round-trip on top of the listed D38 numbers.
+- **`docs/benchmarks.md` methodology section** — warm-up /
+  sample-size text updated to match the bench harness's actual
+  configuration (3 s warm-up, auto-tuned measurement window,
+  50 or 20 samples depending on tier).
+
 ## [0.2.4]
 
 Agent-ecosystem additions. No library code changes — the crate's
