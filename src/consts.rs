@@ -5,10 +5,8 @@
 //!
 //! The [`DecimalConsts`] trait exposes `pi`, `tau`, `half_pi`,
 //! `quarter_pi`, `golden`, and `e` as methods on every width. The
-//! native-tier (`D38` and narrower) impls live here against a 37-digit
-//! `i128` reference; the wide tier (`D76` / `D153` / `D307`) impls
-//! live in `consts_wide.rs` against per-tier raw constants stored at
-//! each storage type's maximum precision.
+//! native-tier (`D38` and narrower) impls live here; the wide tier
+//! (`D76` / `D153` / `D307`) impls live in `consts_wide.rs`.
 //!
 //! Two inherent associated constants, `EPSILON` and `MIN_POSITIVE`, are
 //! provided as analogues to `f64::EPSILON` and `f64::MIN_POSITIVE` so
@@ -17,48 +15,42 @@
 //!
 //! # Precision strategy
 //!
-//! All constant values are derived from a 37-digit reference stored as a
-//! raw `i128` at `SCALE_REF = 37`. They do not pass through `f64` at any
-//! point. The rescale from `SCALE_REF` to the caller's `SCALE` uses
-//! integer division with the crate-default [`RoundingMode`] (half-to-even
-//! by default; overridable via the `rounding-*` Cargo features).
+//! Constants are derived from raw integer references — no `f64`
+//! anywhere. Each tier has its own reference at the tier's maximum
+//! storage precision:
 //!
-//! Going through `f64` would cap precision at roughly 15-17 decimal digits
-//! (f64 mantissa width). The raw-i128 path preserves up to 37 digits, which
-//! exceeds every practical scale value.
+//! | Tier           | Storage of reference | `SCALE_REF` (= reference digits) | Source file       |
+//! |----------------|---------------------|----------------------------------|-------------------|
+//! | D9 / D18 / D38 | `i128`              | 37                               | this file         |
+//! | D76            | `Int256`            | 75                               | `consts_wide.rs`  |
+//! | D153           | `Int512`            | 153                              | `consts_wide.rs`  |
+//! | D307           | `Int1024`           | 307                              | `consts_wide.rs`  |
 //!
-//! At `SCALE > SCALE_REF` (i.e. `SCALE > 37`) the constant is multiplied
-//! up from the reference, so trailing digits are zero-extended and carry no
-//! additional precision. At `SCALE = 38` the multiplication may overflow
-//! `i128` for some constants; callers that need `SCALE > 37` should verify
-//! that the result is in range.
+//! The rescale from `SCALE_REF` to the caller's `SCALE` uses integer
+//! division with the crate-default [`RoundingMode`] (half-to-even by
+//! default; overridable via the `rounding-*` Cargo features). Going
+//! through `f64` would cap precision at ~15–17 decimal digits; the
+//! raw-integer path preserves the full per-tier reference width.
 //!
-//! # Why `SCALE_REF = 37`?
-//!
-//! The maximum `SCALE_REF` that keeps every constant in `i128`. The
-//! largest constant, `tau ≈ 6.28...`, lands at ~6.28×10³⁷ — still
-//! below `i128::MAX ≈ 1.7×10³⁸`. `SCALE_REF = 38` would overflow
-//! `tau`/`pi`/`e`/`golden`. The smaller constants `half_pi` and
-//! `quarter_pi` could individually hold 38 frac digits, but a single
-//! shared `SCALE_REF` keeps the rescale helpers uniform; the
-//! per-constant precision gain (1 digit, on two constants) is not
-//! worth six independent rescale paths.
-//!
-//! At `SCALE_REF = 37` the constants are accurate to within 0.5 ULP
-//! for every `SCALE ≤ 37`. At `SCALE = 38` (the D38 maximum) the
-//! result is off by up to ≈ 5 ULP — three of the supported scales
-//! would need a raw constant wider than `i128` can hold. Tightening
-//! to 0.5 ULP at `SCALE = 38` (and for the wide tiers' deeper
-//! scales) requires per-width raw constants stored at the storage
-//! type's maximum precision; recorded as a follow-up.
+//! At `SCALE ≤ SCALE_REF` (every supported scale on D9 / D18 / D76 /
+//! D153 / D307, and every D38 scale up to 37) the result is within
+//! **0.5 ULP** of the canonical decimal expansion. The single
+//! exception is `D38<38>`: the largest D38 reference fits 37 fractional
+//! digits in `i128` (`tau ≈ 6.28×10³⁷` is below `i128::MAX ≈
+//! 1.7×10³⁸`), so `SCALE = 38` (the D38 maximum) is rescaled
+//! upward — multiplying the 37-digit reference by 10 — which appends
+//! a placeholder zero rather than adding precision. The error there
+//! is bounded at ≈ 5 ULP for `pi` / `tau` / `e` / `golden`; `half_pi`
+//! and `quarter_pi` (smaller in magnitude) remain inside 0.5 ULP.
 //!
 //! [`RoundingMode`]: crate::rounding::RoundingMode
 //!
 //! # Sources
 //!
 //! Each raw constant is the half-to-even rounding of the canonical
-//! decimal expansion to 37 fractional digits. ISO 80000-2 (pi, tau,
-//! pi/2, pi/4), OEIS A001113 (e), OEIS A001622 (golden ratio).
+//! decimal expansion to the tier's `SCALE_REF` fractional digits. ISO
+//! 80000-2 (pi, tau, pi/2, pi/4), OEIS A001113 (e), OEIS A001622
+//! (golden ratio).
 
 use crate::core_type::D38;
 
@@ -119,18 +111,26 @@ const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D38_S37, 10) {
 // from the raw integer literal and then rescale to the caller's
 // `D38<SCALE>`.
 
-/// Well-known mathematical constants available on any [`D38<SCALE>`].
+/// Well-known mathematical constants available on every decimal width
+/// (`D9` / `D18` / `D38` / `D76` / `D153` / `D307`).
 ///
-/// Import this trait to call `D38s12::pi()`, `D38s12::e()`, etc.
+/// Import this trait to call `D38s12::pi()`, `D76::<35>::e()`, etc.
 ///
-/// All returned values are computed from a 37-digit raw-`i128` reference
-/// without passing through `f64`. The result is bit-exact at the target
-/// `SCALE` for every supported scale up to `SCALE = 37`.
+/// All returned values are computed from a raw integer reference at
+/// each tier's maximum storage precision (37 digits for D9/D18/D38, 75
+/// for D76, 153 for D153, 307 for D307) without passing through `f64`.
+/// The result is within 0.5 ULP of the canonical decimal expansion at
+/// the target `SCALE` for every supported scale, with one exception:
+/// `D38<38>` (the D38 maximum) rescales the 37-digit reference upward
+/// by 10, appending a placeholder zero rather than adding precision;
+/// the error there is bounded at ≈ 5 ULP for the larger-magnitude
+/// constants. See the module-level docs for the per-tier table.
 pub trait DecimalConsts: Sized {
     /// Pi (~3.14159265...). One half-turn in radians.
     ///
-    /// Source: ISO 80000-2 / OEIS A000796. 37-digit reference rescaled to
-    /// `SCALE` via the crate-default rounding mode.
+    /// Source: ISO 80000-2 / OEIS A000796. Rescaled per-tier (see the
+    /// module-level table) to the caller's `SCALE` via the crate-default
+    /// rounding mode.
     ///
     /// # Precision
     ///
@@ -139,7 +139,7 @@ pub trait DecimalConsts: Sized {
 
     /// Tau (~6.28318530...). One full turn in radians.
     ///
-    /// Defined as `2 * pi`. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
+    /// Defined as `2 * pi`. Rescaled per-tier (see the module-level table) to the caller's `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -148,7 +148,7 @@ pub trait DecimalConsts: Sized {
 
     /// Half-pi (~1.57079632...). One quarter-turn in radians.
     ///
-    /// Defined as `pi / 2`. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
+    /// Defined as `pi / 2`. Rescaled per-tier (see the module-level table) to the caller's `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -157,7 +157,7 @@ pub trait DecimalConsts: Sized {
 
     /// Quarter-pi (~0.78539816...). One eighth-turn in radians.
     ///
-    /// Defined as `pi / 4`. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
+    /// Defined as `pi / 4`. Rescaled per-tier (see the module-level table) to the caller's `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -166,8 +166,9 @@ pub trait DecimalConsts: Sized {
 
     /// The golden ratio (~1.61803398...). Dimensionless.
     ///
-    /// Defined as `(1 + sqrt(5)) / 2`. Source: OEIS A001622. 35-digit
-    /// reference rescaled to `SCALE` via the crate-default rounding mode.
+    /// Defined as `(1 + sqrt(5)) / 2`. Source: OEIS A001622. Rescaled
+    /// per-tier (see the module-level table) to the caller's `SCALE`
+    /// via the crate-default rounding mode.
     ///
     /// # Precision
     ///
@@ -176,7 +177,7 @@ pub trait DecimalConsts: Sized {
 
     /// Euler's number (~2.71828182...). Dimensionless.
     ///
-    /// Source: OEIS A001113. 37-digit reference rescaled to `SCALE` via the crate-default rounding mode.
+    /// Source: OEIS A001113. Rescaled per-tier (see the module-level table) to the caller's `SCALE` via the crate-default rounding mode.
     ///
     /// # Precision
     ///

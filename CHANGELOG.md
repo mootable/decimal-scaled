@@ -5,6 +5,30 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.1]
+
+Documentation patch — no API changes.
+
+### Fixed
+
+- **docs.rs build**: the rendered crate page on https://docs.rs/decimal-scaled
+  was only showing the default-feature surface, so the wide-tier types
+  (`D76` / `D153` / `D307`), the `dNN!` proc-macros, and the `serde_helpers`
+  module were missing. Added a `[package.metadata.docs.rs]` block that
+  enables `std`, `serde`, `strict`, `macros`, `wide`, and `x-wide` for the
+  docs build. The matching `docsrs` cfg is also wired so future
+  `#[cfg(docsrs)]` doc-cfg badges can highlight feature-gated items.
+- **`consts` module + `DecimalConsts` trait docs**: the preamble and per-
+  method blurbs claimed every constant was rescaled from a single
+  37-digit `i128` reference. That was true for D9/D18/D38 but ignored
+  the per-tier raw references shipped for D76 (75 digits), D153 (153
+  digits), and D307 (307 digits) under `consts_wide.rs`. The new docs
+  include a per-tier reference table and an explicit statement of the
+  precision contract: within 0.5 ULP at every supported scale on every
+  width, with the documented exception of `D38<38>` (the D38 maximum,
+  rescaled upward by 10 from the 37-digit reference — ≈ 5 ULP bound
+  on `pi` / `tau` / `e` / `golden`).
+
 ## [0.2.0]
 
 The 0.2 release rounds out the family the 0.1 line scaffolded: every
