@@ -163,7 +163,7 @@
      ~400ms; at 179s longest cycle ~1.2s — matching the
      "400-1200ms" target across the mix. */
   0%, 49.67%      { filter: brightness(1); }
-  50%             { filter: brightness(2.2) drop-shadow(0 0 8px rgba(255,255,255,0.7)); }
+  50%             { filter: brightness(2) drop-shadow(0 0 8px rgba(255,255,255,0.7)); }
   50.33%, 100%    { filter: brightness(1); }
 }
 /* Cycle = how long between repeats for the SAME panel. We use
