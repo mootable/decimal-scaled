@@ -126,9 +126,9 @@ Most macros have two front-end arms:
 
 - a **native** arm for primitive-integer storage (`i32` / `i64` /
   `i128`), which uses `as`-casts and integer literals;
-- a **`wide`** arm for the `bnum`-backed storage (`D76` / `D153` /
-  `D307`), which has no `as`-casts from literals — it builds constants
-  via `from_str_radix` and widens via `bnum::cast::As`.
+- a **`wide`** arm for the in-tree wide-integer storage (`D76` /
+  `D153` / `D307`), which has no `as`-casts from literals — it builds
+  constants via `from_str_radix` and widens via `crate::wide_int::wide_cast`.
 
 Both arms forward to a shared `@impl` / `@common` arm wherever the logic
 is genuinely identical, so each operation is written once.

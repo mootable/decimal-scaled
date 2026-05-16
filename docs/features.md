@@ -47,8 +47,9 @@ Exactly one of these may be enabled to change the crate-wide default
 
 ## Wide-tier features
 
-The wide decimal types pull in the `bnum` big-integer crate. They are
-opt-in per width, with `wide` as an umbrella over all three.
+The wide decimal types use an in-tree, hand-rolled wide-integer module
+(`crate::wide_int`); there is no external big-integer dependency. They
+are opt-in per width, with `wide` as an umbrella over all three.
 
 | Feature | Enables |
 |---|---|
@@ -56,9 +57,7 @@ opt-in per width, with `wide` as an umbrella over all three.
 | `d153` | `D153` (512-bit storage, `MAX_SCALE = 153`) |
 | `d307` | `D307` (1024-bit storage, `MAX_SCALE = 307`) |
 | `wide` | all three of the above |
-
-`D9` / `D18` / `D38` never pull in `bnum` — the dependency is added
-only when a wide feature is active.
+| `x-wide` | umbrella alias historically used in wide-feature builds; kept for compatibility |
 
 ## Nightly-only
 

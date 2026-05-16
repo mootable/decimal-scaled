@@ -262,19 +262,22 @@ largest of the six). Sources:
 - `e`: OEIS A001113.
 - `golden`: OEIS A001622.
 
-## Algorithms surveyed but not currently used
+## Cross-over algorithms
 
-- **Karatsuba multiplication.** For 1024-bit multiplicands the
-  schoolbook cross-over is at ~16+ limbs; the crate's widest fast-
-  path mul is Int1024 (8 limbs of u128). Below cross-over schoolbook
-  wins. Karatsuba kicks in at D616 and above; recorded as a future
-  optimisation. (Karatsuba, A. and Ofman, Yu. (1962). *Doklady Akad.
-  Nauk SSSR* 145, 293–294.) Anatoly Karatsuba (1937–2008) and Yuri
-  Ofman are both deceased; see the Wikipedia biography links below.
-  Further reading:
-  [Karatsuba algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm)
-  (the `(a₁b₁, (a₁+a₀)(b₁+b₀) − a₁b₁ − a₀b₀, a₀b₀)` decomposition is the
-  first equation under "The algorithm"),
+- **Karatsuba multiplication.** Implemented in
+  `wide_int::limbs_mul_karatsuba` and dispatched to by
+  `wide_int::limbs_mul_fast` when both operands are equal-length and at
+  least `KARATSUBA_MIN = 16` limbs. Below that threshold, schoolbook
+  wins outright; at or above it, the recursive
+  `(a₁b₁, (a₁+a₀)(b₁+b₀) − a₁b₁ − a₀b₀, a₀b₀)` decomposition reduces
+  the asymptotic cost. In practice the threshold means storage tiers
+  through Int1024 (8 limbs) use schoolbook; the 2048-/4096-bit work
+  integers behind the wide-tier strict transcendentals (Int2048 = 16
+  limbs, Int4096 = 32 limbs) hit the Karatsuba path. (Karatsuba, A. and
+  Ofman, Yu. (1962). *Doklady Akad. Nauk SSSR* 145, 293–294.) Anatoly
+  Karatsuba (1937–2008) and Yuri Ofman are both deceased; see the
+  Wikipedia biography links below. Further reading:
+  [Karatsuba algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm),
   [Anatoly Karatsuba bio](https://en.wikipedia.org/wiki/Anatoly_Karatsuba),
   [Yuri Ofman bio](https://en.wikipedia.org/wiki/Yuri_Ofman),
   [MathWorld — Karatsuba Algorithm](https://mathworld.wolfram.com/KaratsubaAlgorithm.html).

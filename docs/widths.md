@@ -29,9 +29,10 @@ narrower storage is faster and smaller.
   nanosecond-grade fractional precision.
 - **`D38`** — the default choice. At `SCALE = 12` the range is roughly
   ±1.7 × 10²⁶ — far beyond global-GDP-scale money.
-- **`D76` / `D153` / `D307`** — the *wide tier*. Backed by the `bnum`
-  big-integer crate, pulled in only when you enable the matching
-  feature. `D76` at `SCALE ≈ 70` still leaves ~10⁵ integer headroom.
+- **`D76` / `D153` / `D307`** — the *wide tier*. Backed by an in-tree
+  hand-rolled wide-integer module; no external big-integer dependency.
+  Opt-in via the matching feature (`d76`, `d153`, `d307`, or umbrella
+  `wide`). `D76` at `SCALE ≈ 70` still leaves ~10⁵ integer headroom.
 
 ## Scale aliases
 
@@ -59,11 +60,37 @@ fn sum_all<D: Decimal + core::ops::Add<Output = D>>(xs: &[D]) -> D {
 }
 ```
 
-`Decimal` exposes `Storage`, `SCALE`, `MAX_SCALE`, the `ZERO` / `ONE` /
-`MAX` / `MIN` constants, `multiplier()`, `from_bits` / `to_bits`,
-`scale()`, and the `is_zero` / `is_one` / `sum` helpers. Reach for it
-when writing code that must work across widths; otherwise the concrete
-type is the canonical surface.
+`Decimal` carries the full uniform surface every width implements:
+
+- **Type info**: `Storage`, `SCALE`, `MAX_SCALE`.
+- **Constants**: `ZERO`, `ONE`, `MAX`, `MIN`, plus `multiplier()`.
+- **Round-trip**: `from_bits` / `to_bits` / `scale`.
+- **Arithmetic & bitwise operators** (via supertrait bounds):
+  `+` `-` `*` `/` `%` `-` (unary) and the `*Assign` variants;
+  `&` `|` `^` `!` `<<u32>` `>>u32`.
+- **Sign**: `abs`, `signum`, `is_positive`, `is_negative`.
+- **Integer methods**: `div_euclid`, `rem_euclid`, `div_floor`,
+  `div_ceil`, `abs_diff`, `midpoint`, `mul_add`; the float-shape
+  predicates `is_nan` / `is_infinite` / `is_finite`.
+- **Pow**: `pow`, `powi`, and the four `*_pow` overflow variants.
+- **Overflow variants**: every `checked_*` / `wrapping_*` /
+  `saturating_*` / `overflowing_*` of `add` / `sub` / `mul` / `div` /
+  `rem` / `neg`.
+- **Integer conversion**: `from_i32`, `to_int`, `to_int_with`.
+- **Float bridge** (gated on `std`): `from_f64`, `from_f64_with`,
+  `to_f64`, `to_f32`.
+- **Default reductions**: `is_zero`, `is_one`, `is_normal`, `sum`,
+  `product`.
+
+A few methods are deliberately not on the trait because their
+signature varies per width or the trait can't represent them — see
+the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
+for the full out-of-scope list (`rescale<TARGET>` needs a const-generic
+method param; `from_int` takes a per-width source integer;
+transcendentals are feature-gated).
+
+Reach for `Decimal` when writing code that must work across widths;
+otherwise the concrete type is the canonical surface.
 
 ## Moving between widths
 
@@ -80,9 +107,13 @@ let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 ## Wide-tier notes (`D76` / `D153` / `D307`)
 
 - Enable per width (`d76`, `d153`, `d307`) or all at once (`wide`).
-- The storage backend is `bnum`; it never appears in your code — you
-  work through `from_bits` / `to_bits` and the normal arithmetic.
-- A few surfaces are still interim on the wide tier: cross-type
-  `PartialEq` against primitive integers, and strict-mode
-  transcendentals, are not yet wired for `D76+`. Arithmetic,
-  conversions, formatting, rescaling, and rounding are complete.
+- Storage is the in-tree hand-rolled wide-integer module
+  (`crate::wide_int`); there is no external big-integer dependency. The
+  wide-int type never appears in your code — you work through
+  `from_bits` / `to_bits` and the normal arithmetic.
+- The full surface is shipped on the wide tier: cross-type `PartialEq`
+  against every primitive integer and float, the 0.5-ULP-correctly-
+  rounded strict transcendentals (with mode-aware `*_strict_with`
+  siblings and AGM alternates `ln_strict_agm` / `exp_strict_agm`),
+  arithmetic, conversions, formatting, rescaling, rounding, and the
+  full overflow-variant family.

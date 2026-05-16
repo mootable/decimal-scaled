@@ -258,7 +258,7 @@ With `SCALE = 12`, the value `1.5` is stored as `1_500_000_000_000i128`.
 - **`no_std` compatible** - compiles with `no_std + alloc` when default features are disabled.
 - **`num-traits` compatible** - implements `Zero`, `One`, `Num`, `Bounded`, `Signed`, `FromPrimitive`, `ToPrimitive`, and the `Checked*` family.
 - **`serde` support** - canonical-string serialize/deserialize behind the `serde` feature (on by default).
-- **Const-generic scale** - future scale variants (`D38<6>`, `D38<18>`) are free type aliases, not separate implementations.
+- **Const-generic scale** - additional scale variants (`D38<6>`, `D38<18>`) are free type aliases, not separate implementations.
 
 ---
 
@@ -409,9 +409,9 @@ See [`docs/macros.md`](docs/macros.md).
 | `std` | yes | Platform `f64`-bridge transcendentals (used when `strict` is off). Pulls in `alloc`. |
 | `alloc` | yes | String formatting and parsing on `no_std`. Required. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers`. |
-| `strict` | **yes** | Plain transcendentals dispatch to the integer-only, 0.5 ULP, platform-deterministic `*_strict` path. `no_std`-compatible. Turn off (via `default-features = false`) to use the faster `f64` bridge. |
+| `strict` | **yes** | Plain transcendentals (`ln` / `sin` / …) dispatch to the integer-only, 0.5 ULP, platform-deterministic path. `no_std`-compatible. The `*_strict` and `*_fast` named entry points are both always available; this feature only chooses what plain `*` resolves to. |
 | `macros` | no | The `d38!` compile-time decimal-literal macro. |
-| `fast` | no | Drops the `*_strict` transcendental surface for a smaller build. Overrides `strict`. |
+| `fast` | no | Forces plain transcendentals to dispatch to the f64 bridge instead of `*_strict`, even when `strict` is also on. The integer-only `*_strict` and f64 `*_fast` named methods stay available either way. |
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
 | `d76` / `d153` / `d307` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by an in-tree hand-rolled wide-integer type. |
 | `wide` | no | Umbrella over `d76` + `d153` + `d307`. |
