@@ -59,6 +59,41 @@ on-wire format are byte-identical to 0.2.4.
   (none in the current tables). Time units table is unchanged
   (still uses `10⁻³ s`, `10⁻⁶ s`, etc. for second relationships).
 
+### Added
+
+- **`benches/library_comparison.rs`** — new bench that pits
+  `decimal-scaled` against every viable peer on crates.io
+  (`fastnum`, `bigdecimal`, `dashu-float`, `decimal-rs`,
+  `rust_decimal`, `fixed::I*F*`, `g_math`) across all six
+  decimal-scaled width tiers (32 / 64 / 128 / 256 / 512 /
+  1024 bit) at three scales per tier (s=0, s=mid, s=max).
+- **`examples/ulp_report.rs`** — one-shot accuracy report
+  measuring ULP error for each library's
+  `ln(2)` / `exp(1)` / `sin(1)` / `sqrt(2)` against a
+  `D76<19>` integer-only `*_strict` baseline. Confirms
+  `decimal-scaled` is 0 ULP on every transcendental tested
+  and shows `g_math`'s "0 ULP transcendentals" marketing
+  claim is 6–46 ULP off at the matched precision.
+- **`examples/chart_gen.rs`** — pure-Rust (`plotters`) chart
+  generator that reads `target/medians.tsv` and emits one
+  layered line chart per (op × width) to
+  `docs/figures/library_comparison/`. 60 PNGs total; the
+  meaningful-variation subset is embedded in `docs/benchmarks.md`
+  §5.
+- **`docs/figures/library_comparison/*.png`** — 52 generated
+  charts (every op × width combination that has measurements).
+- **`docs/benchmarks.md` §5 Library comparison** — new
+  chapter with one speed table per width tier (s=mid
+  representative scale, library-by-library), an accuracy
+  table at the 128-bit tier (ULP errors for every supported
+  transcendental across every library), embedded charts for
+  the meaningful-variation ops, and a "reading the comparison"
+  buyers-guide paragraph that maps "what do you need" →
+  "which crate".
+- **Dev-dependencies**: `fastnum`, `bigdecimal`,
+  `dashu-float`, `decimal-rs`, `scientific`, `plotters` —
+  all bench/example-only, none compiled into a normal build.
+
 ## [0.2.4]
 
 Agent-ecosystem additions. No library code changes — the crate's

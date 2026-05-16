@@ -115,6 +115,16 @@ fixed = "1"
 # transcendentals". Used as a benchmark baseline + accuracy comparison
 # (see benches/g_math_comparison.rs).
 g_math = "0.4"
+# Library-comparison comparators for the §5 chapter in docs/benchmarks.md.
+# All bench-only; never compiled into a normal build.
+fastnum = { version = "0.4", default-features = false, features = ["std"] }
+bigdecimal = "0.4"
+dashu-float = "0.4"
+decimal-rs = "0.1"
+scientific = "0.5"
+# Chart generation for docs/figures/library_comparison/*.png — pure
+# Rust, no Python dep. Driven by examples/chart_gen.rs.
+plotters = { version = "0.3", default-features = false, features = ["bitmap_backend", "bitmap_encoder", "line_series", "ttf"] }
 
 [[bench]]
 name = "mul_div_candidates"
@@ -172,6 +182,15 @@ required-features = ["wide", "x-wide"]
 name = "g_math_comparison"
 harness = false
 required-features = ["wide"]
+
+# Full library-comparison matrix — speed + ULP accuracy of
+# `decimal-scaled` against every top-10 crates.io numeric peer
+# at every shared width tier. Drives the §5 Library comparison
+# chapter in docs/benchmarks.md.
+[[bench]]
+name = "library_comparison"
+harness = false
+required-features = ["wide", "x-wide"]
 
 [lints.rust]
 unused_variables = "allow"

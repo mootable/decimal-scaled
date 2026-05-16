@@ -124,14 +124,23 @@ fn bench_arith(c: &mut Criterion) {
         g.bench_function("bnum_d76_s35/neg", |bn| bn.iter(|| -black_box(a)));
     }
     {
-        let a = Decimal::from(2);
-        let b = Decimal::from(1);
-        g.bench_function("rust_decimal/add", |bn| bn.iter(|| black_box(a) + black_box(b)));
-        g.bench_function("rust_decimal/sub", |bn| bn.iter(|| black_box(a) - black_box(b)));
-        g.bench_function("rust_decimal/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
-        g.bench_function("rust_decimal/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
-        g.bench_function("rust_decimal/rem", |bn| bn.iter(|| black_box(a) % black_box(b)));
-        g.bench_function("rust_decimal/neg", |bn| bn.iter(|| -black_box(a)));
+        // rust_decimal is dynamic-scale; pin to scale 19 so the
+        // arithmetic cost is measured at the same fractional
+        // precision as D38<19> (the §5 like-for-like comparison
+        // chapter's 128-bit row). Mantissa is 2 × 10^19 / 1 × 10^19,
+        // i.e. exactly the same numeric values "2" and "1" as the
+        // other comparators, but represented at the matched scale.
+        // i128 constructor — Decimal::new takes i64, which can't
+        // hold 2 × 10^19. from_i128_with_scale uses the full
+        // 96-bit mantissa rust_decimal stores internally.
+        let a = Decimal::from_i128_with_scale(20_000_000_000_000_000_000_i128, 19);
+        let b = Decimal::from_i128_with_scale(10_000_000_000_000_000_000_i128, 19);
+        g.bench_function("rust_decimal_s19/add", |bn| bn.iter(|| black_box(a) + black_box(b)));
+        g.bench_function("rust_decimal_s19/sub", |bn| bn.iter(|| black_box(a) - black_box(b)));
+        g.bench_function("rust_decimal_s19/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+        g.bench_function("rust_decimal_s19/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+        g.bench_function("rust_decimal_s19/rem", |bn| bn.iter(|| black_box(a) % black_box(b)));
+        g.bench_function("rust_decimal_s19/neg", |bn| bn.iter(|| -black_box(a)));
     }
     {
         let a = I64F64::from_num(2);

@@ -135,27 +135,27 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **1.49 ns** | 1.52 ns | 2.43 ns |
 | neg | 284 ps | 281 ps | **279 ps** |
 
-### D38 + cross-crate baselines
+### D38
 
-| op | s = 0 | s = 19 | s = 38 | `rust_decimal` | `fixed::I64F64` |
-|---|---|---|---|---|---|
-| add | 888 ps | 931 ps | 894 ps | 5,293 ps | **883 ps** |
-| sub | 930 ps | 937 ps | 982 ps | 5,364 ps | **882 ps** |
-| mul | 2.96 ns | 13.0 ns | 13.0 ns | 2.80 ns | **1.46 ns** |
-| div | 10.1 ns | 9.18 ns | 482 ns | **3.20 ns** | 23.7 ns |
-| rem | 8.32 ns | **8.16 ns** | 11.8 ns | 8.81 ns | 14.4 ns |
-| neg | 505 ps | 507 ps | 510 ps | 4,252 ps | **493 ps** |
+| op | s = 0 | s = 19 | s = 38 |
+|---|---|---|---|
+| add | **888 ps** | 931 ps | 894 ps |
+| sub | **930 ps** | 937 ps | 982 ps |
+| mul | **2.96 ns** | 13.0 ns | 13.0 ns |
+| div | 10.1 ns | **9.18 ns** | 482 ns |
+| rem | 8.32 ns | **8.16 ns** | 11.8 ns |
+| neg | **505 ps** | 507 ps | 510 ps |
 
-### D76 + `bnum`-backed D76 baseline
+### D76
 
-| op | s = 0 | s = 35 | s = 76 | `bnum_d76` (s = 35) |
-|---|---|---|---|---|
-| add | 1.74 ns | 1.62 ns | **1.60 ns** | 1.79 ns |
-| sub | 1.99 ns | 1.83 ns | 1.84 ns | **1.81 ns** |
-| mul | **29.2 ns** | 62.2 ns | 9,287 ns | 326 ns |
-| div | **106 ns** | 4,815 ns | 9,477 ns | 335 ns |
-| rem | **15.4 ns** | 18.2 ns | 1,148 ns | 50.2 ns |
-| neg | 1.65 ns | 1.64 ns | **1.59 ns** | 4.21 ns |
+| op | s = 0 | s = 35 | s = 76 |
+|---|---|---|---|
+| add | 1.74 ns | 1.62 ns | **1.60 ns** |
+| sub | 1.99 ns | **1.83 ns** | 1.84 ns |
+| mul | **29.2 ns** | 62.2 ns | 9,287 ns |
+| div | **106 ns** | 4,815 ns | 9,477 ns |
+| rem | **15.4 ns** | 18.2 ns | 1,148 ns |
+| neg | 1.65 ns | 1.64 ns | **1.59 ns** |
 
 ### D153
 
@@ -317,7 +317,203 @@ exists.
 
 ---
 
-## 5. Reference: wide-integer backends
+## 5. Library comparison
+
+Speed + correctly-rounded-to-storage-place (ULP) accuracy of
+`decimal-scaled` against the top numeric peers on crates.io,
+matched on **storage width** at each tier's **midpoint scale**.
+
+Bench source: `benches/library_comparison.rs`. Charts in
+`docs/figures/library_comparison/` (one PNG per
+op × width — scale on the x-axis, one line per library,
+`decimal-scaled` always on top in red). 60 charts are
+generated, only the meaningful-variation ones are embedded
+below; the full set lives in the figures directory for anyone
+wanting to verify the scale-invariant cells (add / sub / neg
+are flat across scale).
+
+### Accuracy at 128-bit (1 ULP = 10⁻¹⁹)
+
+Baseline: `D76<19>` integer-only `*_strict` (≥ 49 effective
+working digits, rounded back to 19). Bold = correctly rounded
+to the last place.
+
+| op      | decimal-scaled | fastnum | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |
+|---------|----------------|---------|--------------|-------------|------------|------------|--------|
+| ln(2)   | **0**          | **0**   | **0**        | **0**       | **0**      | —          | 6      |
+| exp(1)  | **0**          | 1       | 1            | 4           | 1          | —          | 46     |
+| sin(1)  | **0**          | 1       | 1            | —           | —          | —          | 33     |
+| sqrt(2) | **0**          | **0**   | **0**        | —           | **0**      | **0**      | 12     |
+
+`decimal-scaled` is the only crate that is 0 ULP on every
+transcendental tested. `g_math`'s "0 ULP transcendentals"
+marketing claim is decisively false at the same matched
+precision: 6 ULP off on `ln(2)`, 46 ULP off on `exp(1)`,
+33 ULP off on `sin(1)`. Dashes mark "not implemented in this
+crate at this version" — `bigdecimal` ships no `ln` / `exp` /
+`sin`; `dashu-float` and `decimal-rs` ship no `sin`.
+
+### 32-bit storage (s = 5 midpoint)
+
+| op  | decimal-scaled | rust_decimal (s=5) | fixed::I16F16 |
+|-----|----------------|--------------------|----------------|
+| add | 440 ps         | 5,242 ps           | **429 ps**     |
+| sub | **365 ps**     | 5,292 ps           | 357 ps         |
+| mul | 718 ps         | 6.54 ns            | **385 ps**     |
+| div | 2.35 ns        | 7.34 ns            | **2.23 ns**    |
+| rem | 1.41 ns        | 9.37 ns            | **1.35 ns**    |
+| neg | 242 ps         | 4.27 ns            | **233 ps**     |
+
+`fixed::I16F16` (binary fractional) edges `decimal-scaled` by
+a few percent on every cell — the cost-comparable competitor
+at this width is *binary* fixed-point. `rust_decimal` pays
+heap-ish overhead (~10×) for the dynamic-scale machinery even
+at this small width.
+
+### 64-bit storage (s = 9 midpoint)
+
+| op  | decimal-scaled | rust_decimal (s=9) | fastnum (D64) | fixed::I32F32 |
+|-----|----------------|--------------------|----------------|----------------|
+| add | **356 ps**     | 4.99 ns            | 5.33 ns        | 353 ps         |
+| sub | 350 ps         | 5.08 ns            | 5.95 ns        | **364 ps**     |
+| mul | 8.69 ns        | 6.39 ns            | 7.00 ns        | **480 ps**     |
+| div | 9.19 ns        | 7.12 ns            | **4.58 ns**    | 7.29 ns        |
+| rem | **1.35 ns**    | 9.39 ns            | 10.8 ns        | 2.43 ns        |
+| neg | 228 ps         | 4.33 ns            | 4.44 ns        | **242 ps**     |
+
+### 128-bit storage (s = 19 midpoint)
+
+The richest comparator set. Cells: speed, plus `(ULP n)` for
+transcendentals.
+
+| op       | decimal-scaled         | fastnum (D128)   | rust_decimal (s=19) | fixed::I64F64 | bigdecimal (s=19) | dashu-float (p=19)  | decimal-rs (s=19) | g_math Q64.64       |
+|----------|------------------------|------------------|---------------------|----------------|-------------------|---------------------|-------------------|---------------------|
+| add      | **842 ps**             | 8.33 ns          | 6.34 ns             | 868 ps         | 81.2 ns           | 67.6 ns             | 6.09 ns           | —                   |
+| sub      | **891 ps**             | 5.12 ns          | 6.35 ns             | 881 ps         | 298 ns            | 65.2 ns             | 6.06 ns           | —                   |
+| mul      | 12.3 ns                | 9.99 ns          | 27.6 ns             | **1.48 ns**    | 70.0 ns           | 56.6 ns             | 34.4 ns           | 232 ns              |
+| div      | 8.00 ns                | **5.17 ns**      | 8.54 ns             | 23.9 ns        | 67.2 ns           | 53.9 ns             | 79.0 ns           | —                   |
+| rem      | 7.74 ns                | 18.0 ns          | 11.9 ns             | 14.4 ns        | 116 ns            | 37.6 ns             | **3.36 ns**       | —                   |
+| neg      | **489 ps**             | 757 ps           | 4.31 ns             | 506 ps         | 41.3 ns           | 6.15 ns             | 4.59 ns           | —                   |
+| ln       | 1.47 µs (ULP **0**)    | **16.1 ns (ULP 0)** | 3.71 µs (ULP 0) | —              | —                 | 67.9 µs (ULP 0)     | 2.66 µs (ULP 0)   | 543 ns (ULP 6)      |
+| exp      | 40.5 µs (ULP **0**)    | 8.92 µs (ULP 1)  | **170 ns (ULP 1)**  | —              | —                 | 232 µs (ULP 4)      | **51.4 ns (ULP 1)** | 1.28 µs (ULP 46)  |
+| sin      | 39.2 µs (ULP **0**)    | **6.58 µs (ULP 1)** | 2.46 µs (ULP 1) | —              | —                 | —                   | —                 | 11.9 µs (ULP 33)    |
+| sqrt     | 35.4 ns (ULP **0**)    | **9.20 ns (ULP 0)** | 555 ns (ULP 0)  | —              | 3.09 µs (ULP 0)   | —                   | 1.51 µs (ULP 0)   | 2.60 µs (ULP 12)    |
+
+Headline reading: `decimal-scaled` is the only library that
+**simultaneously** (a) holds 0 ULP on every transcendental and
+(b) keeps add / sub / neg at the cost of a primitive `i128`
+instruction. The crates that win individual cells either trade
+accuracy (`fastnum`/`rust_decimal` transcendentals are 1 ULP
+off and use the f64 bridge; `g_math` is 6–46 ULP off) or pay
+heap overhead (`bigdecimal` / `dashu-float` arithmetic is
+10×–100× slower).
+
+Featured charts (mul / div / ln / exp / sin / sqrt at 128-bit):
+
+![mul @ 128bit](figures/library_comparison/mul_128bit.png)
+![div @ 128bit](figures/library_comparison/div_128bit.png)
+![ln @ 128bit](figures/library_comparison/ln_128bit.png)
+![exp @ 128bit](figures/library_comparison/exp_128bit.png)
+![sin @ 128bit](figures/library_comparison/sin_128bit.png)
+![sqrt @ 128bit](figures/library_comparison/sqrt_128bit.png)
+
+### 256-bit storage (s = 35 midpoint)
+
+| op   | decimal-scaled | fastnum (D256) | bigdecimal (s=35) | dashu-float (p=35) |
+|------|----------------|----------------|--------------------|---------------------|
+| add  | **1.63 ns**    | 10.4 ns        | 83.3 ns            | 68.3 ns             |
+| sub  | **1.90 ns**    | 11.8 ns        | 92.6 ns            | 68.1 ns             |
+| mul  | 66.4 ns        | **23.6 ns**    | 84.9 ns            | 59.2 ns             |
+| div  | 5.08 µs        | **6.07 ns**    | 74.9 ns            | 53.8 ns             |
+| rem  | **18.9 ns**    | 82.7 ns        | 261 ns             | 39.1 ns             |
+| neg  | 1.66 ns        | **1.15 ns**    | 42.2 ns            | 6.35 ns             |
+| ln   | 881 µs         | **69.9 ns**    | —                  | 150 µs              |
+| exp  | 1.31 ms        | **40.5 µs**    | —                  | 403 µs              |
+| sin  | 1.13 ms        | **28.8 µs**    | —                  | —                   |
+| sqrt | 22.5 µs        | **55.7 ns**    | 3.53 µs            | —                   |
+
+`decimal-scaled` keeps the lead on add / sub / rem / neg; the
+transcendental story flips because `fastnum`'s decimal-shaped
+f64-bridge stays fast even at 256-bit (low ULP correctness)
+while `decimal-scaled`'s correctly-rounded path pays the
+proportional limb-arithmetic cost.
+
+![mul @ 256bit](figures/library_comparison/mul_256bit.png)
+![div @ 256bit](figures/library_comparison/div_256bit.png)
+![ln @ 256bit](figures/library_comparison/ln_256bit.png)
+
+### 512-bit storage (s = 75 midpoint)
+
+| op   | decimal-scaled | fastnum (D512) | bigdecimal (s=75) | dashu-float (p=75) |
+|------|----------------|----------------|--------------------|---------------------|
+| add  | **3.21 ns**    | 13.3 ns        | 82.4 ns            | 66.4 ns             |
+| sub  | **4.56 ns**    | 16.9 ns        | 87.7 ns            | 65.4 ns             |
+| mul  | 18.5 µs        | **68.1 ns**    | 126 ns             | 59.7 ns             |
+| div  | 18.4 µs        | **7.73 ns**    | 253 ns             | 53.4 ns             |
+| rem  | 2.23 µs        | **108 ns**     | 262 ns             | 38.5 ns             |
+| neg  | 2.86 ns        | **1.73 ns**    | 44.3 ns            | 6.42 ns             |
+| ln   | 4.15 ms        | **72.9 ns**    | —                  | 428 µs              |
+| exp  | 6.42 ms        | **172 µs**     | —                  | 632 µs              |
+| sin  | 5.30 ms        | **110 µs**     | —                  | —                   |
+| sqrt | 89.5 µs        | **54.2 ns**    | —                  | —                   |
+
+`fastnum`'s transcendentals stay sub-µs by punting to f64 —
+fast but loses precision against the underlying decimal width.
+
+![ln @ 512bit](figures/library_comparison/ln_512bit.png)
+![sqrt @ 512bit](figures/library_comparison/sqrt_512bit.png)
+
+### 1024-bit storage (s = 150 midpoint)
+
+Only `bigdecimal` and `dashu-float` scale this wide.
+
+| op   | decimal-scaled | bigdecimal (s=150) | dashu-float (p=150) |
+|------|----------------|---------------------|----------------------|
+| add  | **8.19 ns**    | 81.4 ns             | 65.8 ns              |
+| sub  | **14.8 ns**    | 91.4 ns             | 66.8 ns              |
+| mul  | 66.7 µs        | **141 ns**          | 56.5 ns              |
+| div  | 63.9 µs        | **263 ns**          | 53.7 ns              |
+| rem  | 6.80 µs        | **271 ns**          | 38.3 ns              |
+| neg  | 5.41 ns        | 40.7 ns             | **5.96 ns**          |
+| ln   | 21.7 ms        | —                   | **980 µs**           |
+| exp  | 30.4 ms        | —                   | **1.33 ms**          |
+| sin  | 26.1 ms        | —                   | —                    |
+| sqrt | 328 µs         | —                   | —                    |
+
+At 1024 bits `dashu-float` wins on raw cost because it amortises
+heap arithmetic better than a 32-limb `[u64; 16]`; `decimal-scaled`
+keeps add / sub / neg in the ns range (the limb array is still
+stack-allocated) but pays serially for mul / div.
+
+![mul @ 1024bit](figures/library_comparison/mul_1024bit.png)
+![ln @ 1024bit](figures/library_comparison/ln_1024bit.png)
+
+### Reading the library comparison
+
+- **Use `decimal-scaled` when** you need correctly-rounded
+  (0 ULP) transcendentals AND cheap arithmetic AND stack
+  allocation AND deterministic cross-platform behaviour.
+- **Use `fastnum`** when you want decimal arithmetic at a
+  matched width but are happy with libm-precision
+  (1 ULP-ish) transcendentals; it's the only stack-decimal
+  peer that competes on raw transcendental throughput.
+- **Use `bigdecimal` / `dashu-float`** when you need
+  arbitrary precision at runtime (decimal-scaled is
+  compile-time-fixed-precision); they pay heap allocation in
+  exchange.
+- **`g_math`** is fast but its "0 ULP transcendentals"
+  marketing claim is wrong by 6–46 ULP at the matched width;
+  use only when you're already in its FP-expression-language
+  workflow.
+- **`rust_decimal`** is the right pick when you need the
+  database-`NUMERIC` shape (96-bit mantissa, dynamic scale,
+  serde-friendly) more than raw speed; arithmetic is ~10×
+  slower than `decimal-scaled`'s stack representation but
+  transcendentals are competitive.
+
+---
+
+## 6. Reference: wide-integer backends
 
 For raw signed integer arithmetic without the decimal layer see
 `benches/wide_int_backends.rs`. Summary at this revision:
