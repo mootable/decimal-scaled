@@ -195,7 +195,10 @@ macro_rules! decl_wide_int {
             fn div(self, rhs: $U) -> $U {
                 let mut q = [0u128; $L];
                 let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod(&self.0, &rhs.0, &mut q, &mut r);
+                // Runtime dispatcher: Knuth for multi-limb divisors
+                // and BZ for very-wide ones. The const-fn
+                // `limbs_divmod` is kept for compile-time callers.
+                $crate::wide_int::limbs_divmod_dispatch(&self.0, &rhs.0, &mut q, &mut r);
                 $U(q)
             }
         }
@@ -205,7 +208,7 @@ macro_rules! decl_wide_int {
             fn rem(self, rhs: $U) -> $U {
                 let mut q = [0u128; $L];
                 let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod(&self.0, &rhs.0, &mut q, &mut r);
+                $crate::wide_int::limbs_divmod_dispatch(&self.0, &rhs.0, &mut q, &mut r);
                 $U(r)
             }
         }

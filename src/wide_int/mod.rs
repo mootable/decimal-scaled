@@ -508,6 +508,57 @@ pub(crate) const fn limbs_divmod(
 /// 32 limbs, with isqrt scratch ≤ 33).
 const SCRATCH_LIMBS: usize = 72;
 
+/// Runtime divide dispatcher. Picks the cheapest correct algorithm
+/// for the operand shape:
+///
+/// * **Single-limb divisor** — defer to the existing `const fn`
+///   [`limbs_divmod`] which carries hardware-divide fast paths for
+///   `1 / 1` and `n / u64` (every `10^scale` with `scale ≤ 19`).
+/// * **Multi-limb divisor below `BZ_THRESHOLD`** — [`limbs_divmod_knuth`].
+///   Algorithm D in base 2^128: `O(m·n)` multi-limb ops, vs the
+///   const path's `O((m+n)·n·128)` shift-subtract fallback. Net win
+///   on every wide-tier divide (D76 and above) with `SCALE > 19`.
+/// * **Very-wide divisor (`n ≥ BZ_THRESHOLD` and `top ≥ 2·n`)** —
+///   [`limbs_divmod_bz`]. Burnikel–Ziegler chunked schoolbook over
+///   Knuth. Wins at D307 deep scales where the divisor exceeds 8
+///   limbs.
+///
+/// Not `const fn` (the kernels aren't either). The wide-int
+/// `Div` / `Rem` operator impls take this path; the const-fn
+/// `wrapping_div` / `wrapping_rem` siblings stay on
+/// [`limbs_divmod`] for compile-time evaluation.
+pub(crate) fn limbs_divmod_dispatch(
+    num: &[u128],
+    den: &[u128],
+    quot: &mut [u128],
+    rem: &mut [u128],
+) {
+    const BZ_THRESHOLD: usize = 8;
+
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "limbs_divmod_dispatch: divide by zero");
+
+    if n == 1 {
+        // Single-limb divisor — hit the const fast paths (A or B).
+        limbs_divmod(num, den, quot, rem);
+        return;
+    }
+
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+
+    if n >= BZ_THRESHOLD && top >= 2 * n {
+        limbs_divmod_bz(num, den, quot, rem);
+    } else {
+        limbs_divmod_knuth(num, den, quot, rem);
+    }
+}
+
 /// 2-by-1 unsigned divide: `(high · 2^128 + low) / d` and the matching
 /// remainder. Requires `high < d` so the quotient fits a single
 /// `u128`.
