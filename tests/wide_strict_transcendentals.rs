@@ -337,7 +337,11 @@ fn d76_atanh_at_boundary_panics() {
     let _ = lift(D38_6::ONE).atanh_strict();
 }
 
-// ─── _with-mode domain panics: exercise the panic paths in _with too ───
+// ─── _with-mode domain panics ──────────────────────────────────────────
+//
+// Each *_strict_with sibling has its own assertion guards; we exercise
+// every one so caller errors surface with the expected message even when
+// a non-default rounding mode is in flight.
 
 #[test]
 #[should_panic(expected = "ln: argument must be positive")]
@@ -349,6 +353,101 @@ fn d76_ln_with_zero_panics() {
 #[should_panic(expected = "asin: argument out of domain")]
 fn d76_asin_with_oob_panics() {
     let _ = lift(D38_6::from_int(2)).asin_strict_with(RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "log: argument must be positive")]
+fn d76_log_strict_with_zero_panics() {
+    let _ = D76_6::ZERO.log_strict_with(lift(D38_6::from_int(2)), RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "log: base must be positive")]
+fn d76_log_strict_with_base_zero_panics() {
+    let one: D76_6 = D38_6::ONE.into();
+    let _ = one.log_strict_with(D76_6::ZERO, RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "log: base must not equal 1")]
+fn d76_log_strict_with_base_one_panics() {
+    let one: D76_6 = D38_6::ONE.into();
+    let _ = one.log_strict_with(one, RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "log2: argument must be positive")]
+fn d76_log2_strict_with_zero_panics() {
+    let _ = D76_6::ZERO.log2_strict_with(RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "log10: argument must be positive")]
+fn d76_log10_strict_with_zero_panics() {
+    let _ = D76_6::ZERO.log10_strict_with(RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "ln_agm: argument must be positive")]
+fn d76_ln_agm_with_zero_panics() {
+    let _ = D76_6::ZERO.ln_strict_agm_with(RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "acos: argument out of domain")]
+fn d76_acos_strict_with_oob_panics() {
+    let _ = lift(D38_6::from_int(2)).acos_strict_with(RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "acosh: argument must be >= 1")]
+fn d76_acosh_strict_with_below_one_panics() {
+    let _ = D76_6::ZERO.acosh_strict_with(RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "atanh: argument out of domain")]
+fn d76_atanh_strict_with_boundary_panics() {
+    let _ = lift(D38_6::ONE).atanh_strict_with(RoundingMode::HalfToEven);
+}
+
+// ─── _with-mode algorithmic branches ──────────────────────────────────
+//
+// `asinh` and `acosh` switch algorithm shape at `|x| >= 1` and `v >= 2`
+// respectively (re-arranging the radicand to avoid overflow). These
+// inputs exercise that branch on the `_with` sibling.
+
+#[test]
+fn d76_asinh_strict_with_abs_ge_one_branch() {
+    if !DEFAULT_IS_HALF_TO_EVEN { return; }
+    let two = lift(D38_6::from_int(2));
+    let _ = two.asinh_strict_with(RoundingMode::HalfToEven);
+    let neg_two = lift(D38_6::from_int(-2));
+    let _ = neg_two.asinh_strict_with(RoundingMode::HalfToEven);
+    // Canonical body too
+    let _ = two.asinh_strict();
+    let _ = neg_two.asinh_strict();
+}
+
+#[test]
+fn d76_acosh_strict_with_v_ge_two_branch() {
+    if !DEFAULT_IS_HALF_TO_EVEN { return; }
+    let three = lift(D38_6::from_int(3));
+    let _ = three.acosh_strict_with(RoundingMode::HalfToEven);
+}
+
+// ─── Out-of-range result: storage overflow on a strict transcendental ──
+//
+// At SCALE=74 the `D76` storage range is ~5.78e2 in logical units;
+// `exp(70)` is ~2.5e30, well beyond. The wide-tier guard-digit core
+// panics with a result-out-of-range message when the rounded result
+// can't fit `$Storage`.
+
+#[test]
+#[should_panic]
+fn d76_strict_result_out_of_range_panics() {
+    let v: D76<74> = D38::<74>::from_int(70).into();
+    let _ = v.exp_strict();
 }
 
 // ─── D153 / D307 smoke pass for the same surface (x-wide feature) ──────

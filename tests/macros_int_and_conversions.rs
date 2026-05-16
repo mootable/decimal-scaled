@@ -358,6 +358,27 @@ fn try_from_f32_narrow() {
 }
 
 #[cfg(feature = "wide")]
+#[cfg(feature = "std")]
+#[test]
+fn try_from_f64_overflow_wide() {
+    use decimal_scaled::D76;
+    // 1e76 exceeds D76<2>'s storage range (~5.78e74 logical).
+    let r: Result<D76<2>, _> = (1e76_f64).try_into();
+    assert!(r.is_err());
+}
+
+#[cfg(feature = "wide")]
+#[test]
+fn to_int_wide_half_away_from_zero_negative() {
+    // Hits the `HalfAwayFromZero` negative branch in the wide-arm
+    // `to_int_with` body (the body has the same shape per-tier so D76 is
+    // representative).
+    use decimal_scaled::{D76, RoundingMode};
+    let v: D76<2> = D38_2::from_bits(-150).into();
+    assert_eq!(v.to_int_with(RoundingMode::HalfAwayFromZero), -2);
+}
+
+#[cfg(feature = "wide")]
 #[test]
 fn try_from_wide_paths() {
     use decimal_scaled::D76;

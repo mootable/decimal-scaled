@@ -65,6 +65,25 @@ fn mul_assign_div_assign() {
 
 // ─── Overflow panic paths (debug builds: panic; release: wrap) ─────────
 
+// `mul_with` / `div_with` share the same overflow contract as the plain
+// `*` / `/` operators: panic in debug, wrap in release. The mode argument
+// influences only the rounding step, not the overflow policy.
+
+#[test]
+#[should_panic(expected = "attempt to multiply with overflow")]
+fn mul_with_overflow_panics_in_debug() {
+    let a = decimal_scaled::D38::<0>::MAX;
+    let _ = a.mul_with(a, RoundingMode::HalfToEven);
+}
+
+#[test]
+#[should_panic(expected = "attempt to divide with overflow")]
+fn div_with_overflow_panics_in_debug() {
+    use decimal_scaled::D38;
+    let a = D38::<0>::MIN;
+    let _ = a.div_with(D38::<0>::from_int(-1), RoundingMode::HalfToEven);
+}
+
 #[test]
 #[should_panic(expected = "attempt to multiply with overflow")]
 fn mul_overflow_panics_in_debug() {
