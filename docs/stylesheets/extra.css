@@ -174,10 +174,12 @@
   100% { opacity: 1; }
 }
 
-/* All coloured panels start invisible; each panel's reveal
-   plays only when its first flicker hits, so the cow appears
-   to build itself up in the same rhythm as the flicker. */
-.md-typeset .hero-mark [class^="cpath-"] {
+/* All coloured panels AND their matching white-stroke halos
+   start invisible; each panel's reveal plays only when its
+   first flicker hits, so the cow appears to build itself up
+   in the same rhythm as the flicker. */
+.md-typeset .hero-mark [class^="cpath-"],
+.md-typeset .hero-mark [class^="hpath-"] {
   opacity: 0;
 }
 /* Cycle = how long between repeats for the SAME panel. We use
@@ -195,28 +197,52 @@
    Clusters land near 0-3s, 5-8s, 10-13s, 15-18s.            */
 /* Each cpath: TWO animations. hero-flicker (infinite brightness
    blip) + hero-reveal (one-shot fade-in, fill-mode forwards).
-   reveal delay = first-peak-time - 0.3s so the 0.6s opacity
+   reveal delay = first-peak-time - 0.2s so the 0.4s opacity
    ramp centres on the flicker peak — panel "lights up" at the
    exact moment the flash hits. After reveal completes, opacity
-   stays at 1 (forwards) and only the flicker keeps running. */
-.md-typeset .hero-mark .cpath-0  { animation: hero-flicker  61s linear -30.5s infinite, hero-reveal 0.6s ease-out -0.3s forwards; } /* peak  0.0s */
-.md-typeset .hero-mark .cpath-1  { animation: hero-flicker  67s linear -30.6s infinite, hero-reveal 0.6s ease-out  2.6s forwards; } /* peak  2.9s */
-.md-typeset .hero-mark .cpath-2  { animation: hero-flicker  73s linear -33.3s infinite, hero-reveal 0.6s ease-out  2.9s forwards; } /* peak  3.2s */
-.md-typeset .hero-mark .cpath-3  { animation: hero-flicker  79s linear -37.7s infinite, hero-reveal 0.6s ease-out  1.5s forwards; } /* peak  1.8s */
-.md-typeset .hero-mark .cpath-4  { animation: hero-flicker  83s linear -39.4s infinite, hero-reveal 0.6s ease-out  1.8s forwards; } /* peak  2.1s */
-.md-typeset .hero-mark .cpath-5  { animation: hero-flicker  89s linear -39.5s infinite, hero-reveal 0.6s ease-out  4.7s forwards; } /* peak  5.0s */
-.md-typeset .hero-mark .cpath-6  { animation: hero-flicker  97s linear -40.6s infinite, hero-reveal 0.6s ease-out  7.6s forwards; } /* peak  7.9s */
-.md-typeset .hero-mark .cpath-7  { animation: hero-flicker 101s linear -42.3s infinite, hero-reveal 0.6s ease-out  7.9s forwards; } /* peak  8.2s */
-.md-typeset .hero-mark .cpath-8  { animation: hero-flicker 109s linear -47.7s infinite, hero-reveal 0.6s ease-out  6.5s forwards; } /* peak  6.8s */
-.md-typeset .hero-mark .cpath-9  { animation: hero-flicker 113s linear -49.4s infinite, hero-reveal 0.6s ease-out  6.8s forwards; } /* peak  7.1s */
-.md-typeset .hero-mark .cpath-10 { animation: hero-flicker 127s linear -53.5s infinite, hero-reveal 0.6s ease-out  9.7s forwards; } /* peak 10.0s */
-.md-typeset .hero-mark .cpath-11 { animation: hero-flicker 131s linear -52.6s infinite, hero-reveal 0.6s ease-out 12.6s forwards; } /* peak 12.9s */
-.md-typeset .hero-mark .cpath-12 { animation: hero-flicker 139s linear -56.3s infinite, hero-reveal 0.6s ease-out 12.9s forwards; } /* peak 13.2s */
-.md-typeset .hero-mark .cpath-13 { animation: hero-flicker 149s linear -62.7s infinite, hero-reveal 0.6s ease-out 11.5s forwards; } /* peak 11.8s */
-.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 157s linear -66.4s infinite, hero-reveal 0.6s ease-out 11.8s forwards; } /* peak 12.1s */
-.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 163s linear -66.5s infinite, hero-reveal 0.6s ease-out 14.7s forwards; } /* peak 15.0s */
-.md-typeset .hero-mark .cpath-16 { animation: hero-flicker 173s linear -68.6s infinite, hero-reveal 0.6s ease-out 17.6s forwards; } /* peak 17.9s */
-.md-typeset .hero-mark .cpath-17 { animation: hero-flicker 179s linear -71.3s infinite, hero-reveal 0.6s ease-out 17.9s forwards; } /* peak 18.2s */
+   stays at 1 (forwards) and only the flicker keeps running.
+   The matching white-stroke halo (hpath-N) gets the same
+   reveal animation — see the .hpath-N rules below. */
+.md-typeset .hero-mark .cpath-0  { animation: hero-flicker  61s linear -30.5s infinite, hero-reveal 0.4s ease-out -0.3s forwards; } /* peak  0.0s */
+.md-typeset .hero-mark .cpath-1  { animation: hero-flicker  67s linear -30.6s infinite, hero-reveal 0.4s ease-out  2.6s forwards; } /* peak  2.9s */
+.md-typeset .hero-mark .cpath-2  { animation: hero-flicker  73s linear -33.3s infinite, hero-reveal 0.4s ease-out  2.9s forwards; } /* peak  3.2s */
+.md-typeset .hero-mark .cpath-3  { animation: hero-flicker  79s linear -37.7s infinite, hero-reveal 0.4s ease-out  1.5s forwards; } /* peak  1.8s */
+.md-typeset .hero-mark .cpath-4  { animation: hero-flicker  83s linear -39.4s infinite, hero-reveal 0.4s ease-out  1.8s forwards; } /* peak  2.1s */
+.md-typeset .hero-mark .cpath-5  { animation: hero-flicker  89s linear -39.5s infinite, hero-reveal 0.4s ease-out  4.7s forwards; } /* peak  5.0s */
+.md-typeset .hero-mark .cpath-6  { animation: hero-flicker  97s linear -40.6s infinite, hero-reveal 0.4s ease-out  7.6s forwards; } /* peak  7.9s */
+.md-typeset .hero-mark .cpath-7  { animation: hero-flicker 101s linear -42.3s infinite, hero-reveal 0.4s ease-out  7.9s forwards; } /* peak  8.2s */
+.md-typeset .hero-mark .cpath-8  { animation: hero-flicker 109s linear -47.7s infinite, hero-reveal 0.4s ease-out  6.5s forwards; } /* peak  6.8s */
+.md-typeset .hero-mark .cpath-9  { animation: hero-flicker 113s linear -49.4s infinite, hero-reveal 0.4s ease-out  6.8s forwards; } /* peak  7.1s */
+.md-typeset .hero-mark .cpath-10 { animation: hero-flicker 127s linear -53.5s infinite, hero-reveal 0.4s ease-out  9.7s forwards; } /* peak 10.0s */
+.md-typeset .hero-mark .cpath-11 { animation: hero-flicker 131s linear -52.6s infinite, hero-reveal 0.4s ease-out 12.6s forwards; } /* peak 12.9s */
+.md-typeset .hero-mark .cpath-12 { animation: hero-flicker 139s linear -56.3s infinite, hero-reveal 0.4s ease-out 12.9s forwards; } /* peak 13.2s */
+.md-typeset .hero-mark .cpath-13 { animation: hero-flicker 149s linear -62.7s infinite, hero-reveal 0.4s ease-out 11.5s forwards; } /* peak 11.8s */
+.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 157s linear -66.4s infinite, hero-reveal 0.4s ease-out 11.8s forwards; } /* peak 12.1s */
+.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 163s linear -66.5s infinite, hero-reveal 0.4s ease-out 14.7s forwards; } /* peak 15.0s */
+.md-typeset .hero-mark .cpath-16 { animation: hero-flicker 173s linear -68.6s infinite, hero-reveal 0.4s ease-out 17.6s forwards; } /* peak 17.9s */
+.md-typeset .hero-mark .cpath-17 { animation: hero-flicker 179s linear -71.3s infinite, hero-reveal 0.4s ease-out 17.9s forwards; } /* peak 18.2s */
+
+/* Matching white-stroke halos — same reveal delay as cpath-N
+   so each halo fades in at the moment its panel lights up.
+   Halos don't flicker (they're outlines, not bodies). */
+.md-typeset .hero-mark .hpath-0  { animation: hero-reveal 0.4s ease-out -0.3s forwards; }
+.md-typeset .hero-mark .hpath-1  { animation: hero-reveal 0.4s ease-out  2.6s forwards; }
+.md-typeset .hero-mark .hpath-2  { animation: hero-reveal 0.4s ease-out  2.9s forwards; }
+.md-typeset .hero-mark .hpath-3  { animation: hero-reveal 0.4s ease-out  1.5s forwards; }
+.md-typeset .hero-mark .hpath-4  { animation: hero-reveal 0.4s ease-out  1.8s forwards; }
+.md-typeset .hero-mark .hpath-5  { animation: hero-reveal 0.4s ease-out  4.7s forwards; }
+.md-typeset .hero-mark .hpath-6  { animation: hero-reveal 0.4s ease-out  7.6s forwards; }
+.md-typeset .hero-mark .hpath-7  { animation: hero-reveal 0.4s ease-out  7.9s forwards; }
+.md-typeset .hero-mark .hpath-8  { animation: hero-reveal 0.4s ease-out  6.5s forwards; }
+.md-typeset .hero-mark .hpath-9  { animation: hero-reveal 0.4s ease-out  6.8s forwards; }
+.md-typeset .hero-mark .hpath-10 { animation: hero-reveal 0.4s ease-out  9.7s forwards; }
+.md-typeset .hero-mark .hpath-11 { animation: hero-reveal 0.4s ease-out 12.6s forwards; }
+.md-typeset .hero-mark .hpath-12 { animation: hero-reveal 0.4s ease-out 12.9s forwards; }
+.md-typeset .hero-mark .hpath-13 { animation: hero-reveal 0.4s ease-out 11.5s forwards; }
+.md-typeset .hero-mark .hpath-14 { animation: hero-reveal 0.4s ease-out 11.8s forwards; }
+.md-typeset .hero-mark .hpath-15 { animation: hero-reveal 0.4s ease-out 14.7s forwards; }
+.md-typeset .hero-mark .hpath-16 { animation: hero-reveal 0.4s ease-out 17.6s forwards; }
+.md-typeset .hero-mark .hpath-17 { animation: hero-reveal 0.4s ease-out 17.9s forwards; }
 
 /* Respect users who've opted out of motion: hold the cow steady,
    fully visible from the start (skip the reveal AND the
