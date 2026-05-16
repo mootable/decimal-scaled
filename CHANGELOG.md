@@ -93,6 +93,11 @@ on-wire format are byte-identical to 0.2.4.
 - **Dev-dependencies**: `fastnum`, `bigdecimal`,
   `dashu-float`, `decimal-rs`, `scientific`, `plotters` —
   all bench/example-only, none compiled into a normal build.
+- **`ROADMAP.md`** (repo root) — tracked list of throughput
+  gaps surfaced by the §5 library comparison and the planned
+  fix per item (Burnikel-Ziegler divide, Karatsuba/Toom-3
+  mul, `*_approx(working_digits)` transcendental family).
+  Cross-linked from `docs/benchmarks.md` Roadmap section.
 
 ## [0.2.4]
 

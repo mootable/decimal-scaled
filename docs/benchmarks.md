@@ -556,3 +556,29 @@ At 1024 bits the native back-end takes div / rem on its own
   `*_strict` explicitly, so both paths are exercised
   unambiguously regardless of which dispatcher the plain `*`
   methods resolve to under the active feature set.
+
+---
+
+## Roadmap
+
+`decimal-scaled` already wins the narrow tier (D9 / D18 / D38)
+and the 0-ULP accuracy column at every tier. The honest losses
+are at D76 and above on `mul` / `div`, and on the throughput of
+the correctly-rounded wide-tier transcendentals. They aren't
+fundamental — they're algorithmic catch-up work, each with a
+known fix waiting to be implemented:
+
+- **Wide-tier `÷ 10^SCALE`** — Burnikel–Ziegler recursive
+  divide and a Newton-reciprocal fast path are the right
+  asymptote for D153+. Today's MG magic-multiply pays a
+  serialised carry-propagation cost above D38.
+- **Wide-tier `mul`** — Karatsuba (D153) and Toom-3 (D307)
+  haven't been wired up yet; the kernel is straight schoolbook
+  on the limb array.
+- **Wide-tier transcendentals** — a planned `*_approx(working_digits)`
+  family lets callers buy back throughput when they don't need
+  the 0-ULP guarantee, without falling off the f64-bridge
+  precision cliff that today's `*_fast` has at wide widths.
+
+See [`ROADMAP.md`](../ROADMAP.md) at the repo root for the full
+list with expected wins per item and current status.
