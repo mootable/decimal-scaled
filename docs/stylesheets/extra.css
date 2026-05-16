@@ -204,22 +204,26 @@
    stays at 1 (forwards) and only the flicker keeps running.
    The matching white-stroke halo (hpath-N) gets the same
    reveal animation — see the .hpath-N rules below. */
+/* Reveal-time distribution: ease-in-out across the 4s window
+   instead of sine clustering. Curve T(n) = 2·(1-cos(π·n/17))
+   gives slow start, fast middle, slow finish — a couple of
+   panels at first, then a quick crescendo, then a soft tail. */
 .md-typeset .hero-mark .cpath-0  { animation: hero-flicker 30.0s linear -15.0s infinite, hero-reveal 0.4s ease-out -0.2s forwards; } /* peak 0.0s, flash 300ms */
-.md-typeset .hero-mark .cpath-1  { animation: hero-flicker 31.5s linear -15.1s infinite, hero-reveal 0.4s ease-out  0.5s forwards; } /* peak 0.7s, flash 315ms */
-.md-typeset .hero-mark .cpath-2  { animation: hero-flicker 33.0s linear -15.8s infinite, hero-reveal 0.4s ease-out  0.5s forwards; } /* peak 0.7s, flash 330ms */
-.md-typeset .hero-mark .cpath-3  { animation: hero-flicker 34.5s linear -16.9s infinite, hero-reveal 0.4s ease-out  0.2s forwards; } /* peak 0.4s, flash 345ms */
+.md-typeset .hero-mark .cpath-1  { animation: hero-flicker 31.5s linear -15.8s infinite, hero-reveal 0.4s ease-out -0.2s forwards; } /* peak 0.0s, flash 315ms */
+.md-typeset .hero-mark .cpath-2  { animation: hero-flicker 33.0s linear -16.4s infinite, hero-reveal 0.4s ease-out -0.1s forwards; } /* peak 0.1s, flash 330ms */
+.md-typeset .hero-mark .cpath-3  { animation: hero-flicker 34.5s linear -17.0s infinite, hero-reveal 0.4s ease-out  0.1s forwards; } /* peak 0.3s, flash 345ms */
 .md-typeset .hero-mark .cpath-4  { animation: hero-flicker 36.0s linear -17.5s infinite, hero-reveal 0.4s ease-out  0.3s forwards; } /* peak 0.5s, flash 360ms */
-.md-typeset .hero-mark .cpath-5  { animation: hero-flicker 37.5s linear -17.7s infinite, hero-reveal 0.4s ease-out  0.9s forwards; } /* peak 1.1s, flash 375ms */
-.md-typeset .hero-mark .cpath-6  { animation: hero-flicker 39.0s linear -17.7s infinite, hero-reveal 0.4s ease-out  1.6s forwards; } /* peak 1.8s, flash 390ms */
-.md-typeset .hero-mark .cpath-7  { animation: hero-flicker 40.5s linear -18.5s infinite, hero-reveal 0.4s ease-out  1.6s forwards; } /* peak 1.8s, flash 405ms */
-.md-typeset .hero-mark .cpath-8  { animation: hero-flicker 42.0s linear -19.5s infinite, hero-reveal 0.4s ease-out  1.3s forwards; } /* peak 1.5s, flash 420ms */
-.md-typeset .hero-mark .cpath-9  { animation: hero-flicker 43.5s linear -20.2s infinite, hero-reveal 0.4s ease-out  1.4s forwards; } /* peak 1.6s, flash 435ms */
-.md-typeset .hero-mark .cpath-10 { animation: hero-flicker 45.0s linear -20.3s infinite, hero-reveal 0.4s ease-out  2.0s forwards; } /* peak 2.2s, flash 450ms */
+.md-typeset .hero-mark .cpath-5  { animation: hero-flicker 37.5s linear -18.0s infinite, hero-reveal 0.4s ease-out  0.6s forwards; } /* peak 0.8s, flash 375ms */
+.md-typeset .hero-mark .cpath-6  { animation: hero-flicker 39.0s linear -18.4s infinite, hero-reveal 0.4s ease-out  0.9s forwards; } /* peak 1.1s, flash 390ms */
+.md-typeset .hero-mark .cpath-7  { animation: hero-flicker 40.5s linear -18.8s infinite, hero-reveal 0.4s ease-out  1.3s forwards; } /* peak 1.5s, flash 405ms */
+.md-typeset .hero-mark .cpath-8  { animation: hero-flicker 42.0s linear -19.2s infinite, hero-reveal 0.4s ease-out  1.6s forwards; } /* peak 1.8s, flash 420ms */
+.md-typeset .hero-mark .cpath-9  { animation: hero-flicker 43.5s linear -19.6s infinite, hero-reveal 0.4s ease-out  2.0s forwards; } /* peak 2.2s, flash 435ms */
+.md-typeset .hero-mark .cpath-10 { animation: hero-flicker 45.0s linear -19.9s infinite, hero-reveal 0.4s ease-out  2.4s forwards; } /* peak 2.6s, flash 450ms */
 .md-typeset .hero-mark .cpath-11 { animation: hero-flicker 46.5s linear -20.4s infinite, hero-reveal 0.4s ease-out  2.7s forwards; } /* peak 2.9s, flash 465ms */
-.md-typeset .hero-mark .cpath-12 { animation: hero-flicker 48.0s linear -21.1s infinite, hero-reveal 0.4s ease-out  2.7s forwards; } /* peak 2.9s, flash 480ms */
-.md-typeset .hero-mark .cpath-13 { animation: hero-flicker 49.5s linear -22.2s infinite, hero-reveal 0.4s ease-out  2.4s forwards; } /* peak 2.6s, flash 495ms */
-.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 51.0s linear -22.8s infinite, hero-reveal 0.4s ease-out  2.5s forwards; } /* peak 2.7s, flash 510ms */
-.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 52.5s linear -23.0s infinite, hero-reveal 0.4s ease-out  3.1s forwards; } /* peak 3.3s, flash 525ms */
+.md-typeset .hero-mark .cpath-12 { animation: hero-flicker 48.0s linear -20.8s infinite, hero-reveal 0.4s ease-out  3.0s forwards; } /* peak 3.2s, flash 480ms */
+.md-typeset .hero-mark .cpath-13 { animation: hero-flicker 49.5s linear -21.3s infinite, hero-reveal 0.4s ease-out  3.3s forwards; } /* peak 3.5s, flash 495ms */
+.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 51.0s linear -21.8s infinite, hero-reveal 0.4s ease-out  3.5s forwards; } /* peak 3.7s, flash 510ms */
+.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 52.5s linear -22.4s infinite, hero-reveal 0.4s ease-out  3.7s forwards; } /* peak 3.9s, flash 525ms */
 .md-typeset .hero-mark .cpath-16 { animation: hero-flicker 55.0s linear -23.5s infinite, hero-reveal 0.4s ease-out  3.8s forwards; } /* peak 4.0s, flash 550ms */
 .md-typeset .hero-mark .cpath-17 { animation: hero-flicker 60.0s linear -26.0s infinite, hero-reveal 0.4s ease-out  3.8s forwards; } /* peak 4.0s, flash 600ms */
 
