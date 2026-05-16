@@ -23,21 +23,27 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > implementations on the same machine, in the same run, are what
 > matters. Operands are `black_box`-ed to defeat constant folding;
 > outputs are returned from the closure so the optimiser cannot drop
-> the call. **Winning cell on each row is bold. Every row uses one
-> unit — the median natural unit across that row's cells — so
-> values compare directly; cells whose natural unit is much smaller
-> than the row's chosen one are rendered in scientific notation
-> (e.g. `1.26×10⁻⁵ ms` for a 12 ns fast-path cell in an `ms`-scale
-> row).**
+> the call. **Every row uses one unit — the median natural unit
+> across that row's cells — so values compare directly; cells whose
+> natural unit is much smaller than the row's chosen one are
+> rendered in scientific notation (e.g. `1.26×10⁻⁵ ms` for a 12 ns
+> fast-path cell in an `ms`-scale row). In §1 the winning cell per
+> row is bold. In §2 onwards (transcendental tables) each width gets
+> a single column showing the `s = 0 < s = mid < s = max` triple in
+> the row's natural unit, and the bold mark goes on whichever
+> width's s = mid wins the row — s = mid is the honest series-cost
+> measurement (s = 0 hits fast paths, s = max is sometimes shorter
+> via range-reduction shortcuts).**
 
 ## Time units
 
-| Symbol | Unit | Seconds | Relative to `ns` |
-|---|---|---|---|
-| `s` | second | 10⁰ s | ×1 000 000 000 |
-| `ms` | millisecond | 10⁻³ s | ×1 000 000 |
-| `µs` | microsecond | 10⁻⁶ s | ×1 000 |
-| `ns` | nanosecond | 10⁻⁹ s | ×1 |
+| Symbol | Unit | Relative to a second |
+|---|---|---|
+| `s`  | second      | 10⁰  s |
+| `ms` | millisecond | 10⁻³ s |
+| `µs` | microsecond | 10⁻⁶ s |
+| `ns` | nanosecond  | 10⁻⁹ s |
+| `ps` | picosecond  | 10⁻¹² s |
 
 `1 µs` = `1 000 ns`. A `27 µs` strict `ln` is `27 000 ns` — about
 700× a `37 ns` fast `ln`.
@@ -240,28 +246,40 @@ platforms, `no_std`-compatible, 0.5 ULP at storage.
 D9 / D18 strict delegate up to D38's 256-bit guard-digit kernel;
 their cost is dominated by D38 plus the narrow-tier round-trip.
 
-| fn | D9 s=9 | D18 s=18 | D38 s=0 | D38 s=19 | D38 s=38 |
-|---|---|---|---|---|---|
-| ln | 40.2 µs | 52.2 µs | **1.08 µs** | 58.9 µs | 63.2 µs |
-| exp | 35.5 µs | 45.3 µs | **1.03×10⁻³ µs** | 47.5 µs | 28.6 µs |
-| sin | 31.4 µs | 40.2 µs | 19.1 µs | 42.7 µs | **17.9 µs** |
-| sqrt | 33.2 ns | 35.4 ns | **13.5 ns** | 37.7 ns | 3,125 ns |
+Each cell shows the **s = 0 < s = mid < s = max** triple in the
+row's natural unit; the `<` is the scale ordering, not numerical
+(values aren't monotone — the storage-max column sometimes beats
+the midpoint via a Cody-Waite / range-reduction shortcut).
+**Bold** marks the row's winning s = mid value across the three
+widths.
+
+| fn | D9 (s=0 < s=5 < s=9) | D18 (s=0 < s=9 < s=18) | D38 (s=0 < s=19 < s=38) |
+|---|---|---|---|
+| ln | 1.18 µs < **32.0 µs** < 40.2 µs | 1.13 µs < 38.9 µs < 52.2 µs | 1.08 µs < 58.9 µs < 63.2 µs |
+| exp | 1.46×10⁻³ µs < **29.5 µs** < 35.5 µs | 1.10×10⁻³ µs < 34.8 µs < 45.3 µs | 1.03×10⁻³ µs < 47.5 µs < 28.6 µs |
+| sin | 19.1 µs < **27.2 µs** < 31.4 µs | 18.5 µs < 30.6 µs < 40.2 µs | 19.1 µs < 42.7 µs < 17.9 µs |
+| sqrt | 14.9 ns < **18.6 ns** < 33.2 ns | 14.4 ns < 31.9 ns < 35.4 ns | 13.5 ns < 37.7 ns < 3,125 ns |
 
 ### Wide-tier strict — D76 / D153 / D307
 
 Cost grows with both the work integer's bit width and the
 guard-digit budget at each scale.
 
-| fn | D76 s=0 | D76 s=35 | D76 s=76 | D153 s=0 | D153 s=75 | D153 s=153 | D307 s=0 | D307 s=150 | D307 s=307 |
-|---|---|---|---|---|---|---|---|---|---|
-| ln | **0.152 ms** | 1.37 ms | 3.38 ms | 0.291 ms | 6.40 ms | 18.1 ms | 0.540 ms | 34.1 ms | 115 ms |
-| exp | **1.25×10⁻⁵ ms** | 1.27 ms | 3.10 ms | 1.72×10⁻⁵ ms | 5.87 ms | 15.7 ms | 2.80×10⁻⁵ ms | 31.2 ms | 94.6 ms |
-| sin | **0.226 ms** | 1.08 ms | 2.53 ms | 0.428 ms | 4.82 ms | 13.0 ms | 0.808 ms | 25.5 ms | 77.4 ms |
-| sqrt | **0.118 µs** | 20.5 µs | 47.4 µs | 0.196 µs | 83.6 µs | 173 µs | 0.369 µs | 313 µs | 688 µs |
+Same convention as the narrow-tier strict table above: each cell
+is **s = 0 < s = mid < s = max** in the row's natural unit;
+**bold** marks the winning s = mid value across the three
+widths.
 
-**Reading the strict tables.** A few cells reflect *fast paths*
-rather than the full series evaluation — the bold winner per row
-sometimes picks one of these:
+| fn | D76 (s=0 < s=35 < s=76) | D153 (s=0 < s=75 < s=153) | D307 (s=0 < s=150 < s=307) |
+|---|---|---|---|
+| ln | 0.152 ms < **1.37 ms** < 3.38 ms | 0.291 ms < 6.40 ms < 18.1 ms | 0.540 ms < 34.1 ms < 115 ms |
+| exp | 1.25×10⁻⁵ ms < **1.27 ms** < 3.10 ms | 1.72×10⁻⁵ ms < 5.87 ms < 15.7 ms | 2.80×10⁻⁵ ms < 31.2 ms < 94.6 ms |
+| sin | 0.226 ms < **1.08 ms** < 2.53 ms | 0.428 ms < 4.82 ms < 13.0 ms | 0.808 ms < 25.5 ms < 77.4 ms |
+| sqrt | 0.118 µs < **20.5 µs** < 47.4 µs | 0.196 µs < 83.6 µs < 173 µs | 0.369 µs < 313 µs < 688 µs |
+
+**Reading the strict tables.** The s = 0 component of each
+triple reflects a *fast path* rather than the full series
+evaluation:
 
 - `ln_strict` at `SCALE = 0`: the arg becomes `1` (the `½`
   division floors), and `ln(1)` returns 0 in `O(1)`.
@@ -270,8 +288,8 @@ sometimes picks one of these:
 - `sin_strict` at `SCALE = 0`: arg is `1`; small enough that the
   Taylor series terminates quickly.
 
-The honest *series-cost* comparison lives in the midpoint and
-maximum-scale columns. There:
+That's why the bold-winner rule keys off the s = mid value:
+midpoint scale is the honest *series-cost* comparison. There:
 
 - `sqrt_strict` is algebraic (integer `isqrt` + one round-to-
   nearest), so its growth is dominated by `isqrt`'s `O(b²)` limb

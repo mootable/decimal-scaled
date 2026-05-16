@@ -41,6 +41,17 @@ on-wire format are byte-identical to 0.2.4.
   sample-size text updated to match the bench harness's actual
   configuration (3 s warm-up, auto-tuned measurement window,
   50 or 20 samples depending on tier).
+- **`docs/benchmarks.md` §3 strict transcendental tables** —
+  collapsed from one column per (width, scale) to one column per
+  width, with each cell showing the
+  **`s = 0 < s = mid < s = max`** triple in the row's natural
+  unit. Bold-winner rule now keys off the midpoint scale, which
+  is the honest series-cost measurement (s = 0 hits fast paths;
+  s = max sometimes shortens via Cody-Waite range reduction).
+- **`docs/benchmarks.md` Time units table** — added picosecond
+  row and reframed the third column as "Relative to a second"
+  instead of "Relative to `ns`" for consistency across the
+  table.
 
 ## [0.2.4]
 
