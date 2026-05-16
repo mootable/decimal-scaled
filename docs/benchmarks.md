@@ -97,7 +97,7 @@ Alternate divide paths:
 | `*_strict` transcendentals — D38 | within **0.5 ULP** at storage; correctly rounded under HalfToEven, deterministic across platforms, `no_std`-compatible |
 | `*_strict` transcendentals — D76 / D153 / D307 | within **0.5 ULP** at storage at typical scales; at deepest scales the rounded-intermediate budget tightens — see `ALGORITHMS.md` |
 | `*` (lossy) transcendentals — D9 / D18 / D38 | f64-bridge: ~16 decimal digits, platform-libm-dependent, **not** correctly rounded |
-| `*` plain transcendental name — wide tiers (D76 / D153 / D307) | with `strict` feature, dispatches to `*_strict`; no f64-bridge wide-tier surface exists |
+| `*` plain transcendental name — wide tiers (D76 / D153 / D307) | with `strict` feature, dispatches to `*_strict`; with `fast` or `not(strict)`, the f64-bridge `*_fast` is used. Both `*_strict` and `*_fast` named methods are always available regardless of the active mode |
 
 ---
 

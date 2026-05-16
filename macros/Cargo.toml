@@ -2,13 +2,15 @@
 name = "decimal_scaled_macros"
 version = "0.1.1"
 edition = "2024"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-description = "Generic scaled fixed-point decimal macros for deterministic arithmetic. Multiply / divide use a 256-bit widening intermediate with the Moller-Granlund 2011 magic-number divide algorithm (adapted from ConstScaleFpdec, MIT-licensed; see LICENSE-THIRD-PARTY)."
+description = "Compile-time decimal literal proc-macros (`d9!`, `d18!`, `d38!`, `d76!`, `d153!`, `d307!`) for the decimal-scaled crate."
 repository = "https://github.com/mootable/decimal-scaled"
-documentation = "https://docs.rs/decimal-scaled/"
+homepage = "https://github.com/mootable/decimal-scaled"
+documentation = "https://docs.rs/decimal_scaled_macros/"
 readme = "README.md"
-keywords = ["decimal", "deterministic", "no_std", "fixed", "precision"]
-categories = ["mathematics", "no-std", "science", "finance"]
+keywords = ["decimal", "fixed-point", "macros", "proc-macro", "no-std"]
+categories = ["mathematics", "no-std", "rust-patterns"]
 
 [lib]
 proc-macro = true

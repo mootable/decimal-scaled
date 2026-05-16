@@ -2,13 +2,23 @@
 name = "decimal-scaled"
 version = "0.1.1"
 edition = "2024"
+rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-description = "Generic scaled fixed-point decimal types for deterministic arithmetic. Multiply / divide use a 256-bit widening intermediate with the Moller-Granlund 2011 magic-number divide algorithm (adapted from ConstScaleFpdec, MIT-licensed; see LICENSE-THIRD-PARTY)."
+description = "Const-generic base-10 fixed-point decimals (D9/D18/D38/D76/D153/D307) with integer-only transcendentals correctly rounded to within 0.5 ULP — exact at the type's last representable place. Deterministic across every platform; no_std-friendly."
 repository = "https://github.com/mootable/decimal-scaled"
+homepage = "https://github.com/mootable/decimal-scaled"
 documentation = "https://docs.rs/decimal-scaled/"
 readme = "README.md"
-keywords = ["decimal", "deterministic", "no_std", "fixed", "precision"]
+keywords = ["decimal", "fixed-point", "deterministic", "no-std", "precision"]
 categories = ["mathematics", "no-std", "science", "finance"]
+exclude = [
+    ".github/",
+    "bash.exe.stackdump",
+    "research/",
+    "tarpaulin.toml",
+    "scripts/",
+    "docs/benchmarks*.draft",
+]
 
 [features]
 # `strict` is on by default — the crate's headline feature is the
@@ -59,30 +69,20 @@ rounding-ceiling = []
 # f128 are experimental in Rust; this feature requires the nightly
 # toolchain. On stable, leave the feature off.
 experimental-floats = []
-# Wide decimal tiers. Each width is independently opt-in; `wide` is the
-# umbrella up to D307, `x-wide` is the umbrella for the very wide
-# (`d462` and above) tiers. They are backed by the in-tree hand-rolled
-# wide-integer types — no external big-integer dependency. D9 / D18 /
-# D38 use primitive storage and need none of this.
-#
-# Powers of two: D76, D153, D307 (wide); D616, D1232 (x-wide).
-# Halfway widths `(2^n + 2^(n+1))/2`: D115, D230 (wide); D462, D924
-# (x-wide). Halfway widths under 384 are skipped — they would require
-# u64-aligned storage, breaking the u128-limb model.
-wide = ["d76", "d115", "d153", "d230"]
+# Wide decimal tiers (D76 / D153 / D307). Each width is independently
+# opt-in; `wide` is the umbrella for the 256-bit / 512-bit tiers and
+# `x-wide` adds the 1024-bit tier. They are backed by the in-tree
+# hand-rolled wide-integer types in `crate::wide_int` — no external
+# big-integer dependency. D9 / D18 / D38 use primitive storage and
+# need none of this.
+wide = ["d76", "d153"]
 d76 = []
-d115 = []
 d153 = []
-d230 = []
-# Very wide tiers (D307 and above). Gated separately because their
-# strict-transcendental work integers run into many thousands of bits
-# and pull in large wide-integer types.
-x-wide = ["d307", "d462", "d616", "d924", "d1232"]
+# Very-wide tier (D307). Gated separately because its strict-
+# transcendental work integers run into thousands of bits and inflate
+# build time vs the narrower wide tiers.
+x-wide = ["d307"]
 d307 = []
-d462 = []
-d616 = []
-d924 = []
-d1232 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
