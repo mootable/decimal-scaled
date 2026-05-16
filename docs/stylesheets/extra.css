@@ -222,27 +222,14 @@
 .md-typeset .hero-mark .cpath-16 { animation: hero-flicker 51.5s linear  -7.9s infinite, hero-reveal 0.4s ease-out 17.6s forwards; } /* peak 17.9s */
 .md-typeset .hero-mark .cpath-17 { animation: hero-flicker 53.5s linear  -8.6s infinite, hero-reveal 0.4s ease-out 17.9s forwards; } /* peak 18.2s */
 
-/* Matching white-stroke halos — same reveal delay as cpath-N
-   so each halo fades in at the moment its panel lights up.
-   Halos don't flicker (they're outlines, not bodies). */
-.md-typeset .hero-mark .hpath-0  { animation: hero-reveal 0.4s ease-out -0.3s forwards; }
-.md-typeset .hero-mark .hpath-1  { animation: hero-reveal 0.4s ease-out  2.6s forwards; }
-.md-typeset .hero-mark .hpath-2  { animation: hero-reveal 0.4s ease-out  2.9s forwards; }
-.md-typeset .hero-mark .hpath-3  { animation: hero-reveal 0.4s ease-out  1.5s forwards; }
-.md-typeset .hero-mark .hpath-4  { animation: hero-reveal 0.4s ease-out  1.8s forwards; }
-.md-typeset .hero-mark .hpath-5  { animation: hero-reveal 0.4s ease-out  4.7s forwards; }
-.md-typeset .hero-mark .hpath-6  { animation: hero-reveal 0.4s ease-out  7.6s forwards; }
-.md-typeset .hero-mark .hpath-7  { animation: hero-reveal 0.4s ease-out  7.9s forwards; }
-.md-typeset .hero-mark .hpath-8  { animation: hero-reveal 0.4s ease-out  6.5s forwards; }
-.md-typeset .hero-mark .hpath-9  { animation: hero-reveal 0.4s ease-out  6.8s forwards; }
-.md-typeset .hero-mark .hpath-10 { animation: hero-reveal 0.4s ease-out  9.7s forwards; }
-.md-typeset .hero-mark .hpath-11 { animation: hero-reveal 0.4s ease-out 12.6s forwards; }
-.md-typeset .hero-mark .hpath-12 { animation: hero-reveal 0.4s ease-out 12.9s forwards; }
-.md-typeset .hero-mark .hpath-13 { animation: hero-reveal 0.4s ease-out 11.5s forwards; }
-.md-typeset .hero-mark .hpath-14 { animation: hero-reveal 0.4s ease-out 11.8s forwards; }
-.md-typeset .hero-mark .hpath-15 { animation: hero-reveal 0.4s ease-out 14.7s forwards; }
-.md-typeset .hero-mark .hpath-16 { animation: hero-reveal 0.4s ease-out 17.6s forwards; }
-.md-typeset .hero-mark .hpath-17 { animation: hero-reveal 0.4s ease-out 17.9s forwards; }
+/* All halos reveal together AFTER the last coloured panel has
+   lit up (last cpath peak is 18.2s). Until then, revealed
+   panels butt up against each other with no white-grout
+   separator — the cow assembles as a single coloured silhouette
+   and the white-mosaic grout pops in as a final beat. */
+.md-typeset .hero-mark [class^="hpath-"] {
+  animation: hero-reveal 0.6s ease-out 18.6s forwards;
+}
 
 /* Respect users who've opted out of motion: hold the cow steady,
    fully visible from the start (skip the reveal AND the
