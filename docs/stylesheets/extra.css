@@ -151,35 +151,36 @@
 }
 
 /* Fluorescent flicker: each coloured panel runs an independent
-   long-cycle brightness blip so the cow appears to gently
-   "warm up" like a strip light. Prime-second cycles keep panels
-   from drifting back into sync. Adapted from the moocad splash
-   `post-flicker` animation. Lifted slightly from the original
-   (1.5× peak vs 1.4×) since this is the steady state, no big
-   reveal animation behind it. */
+   short-cycle brightness blip + glow so the cow gently shimmers
+   like a strip light. Prime-second cycles keep panels from
+   drifting back into sync. Adapted from the moocad splash
+   `post-flicker` animation, lifted further (brightness(2) +
+   drop-shadow glow) so the effect is visible without staring.
+   First delays kept under 2s so the user sees a flicker within
+   a couple of seconds of landing on the page. */
 @keyframes hero-flicker {
-  0%, 49%   { filter: brightness(1); }
-  50%       { filter: brightness(1.6); }
-  51%, 100% { filter: brightness(1); }
+  0%, 47%   { filter: brightness(1); }
+  50%       { filter: brightness(2) drop-shadow(0 0 8px rgba(255,255,255,0.7)); }
+  53%, 100% { filter: brightness(1); }
 }
-.md-typeset .hero-mark .cpath-0  { animation: hero-flicker  41s linear  0.8s infinite; }
-.md-typeset .hero-mark .cpath-1  { animation: hero-flicker  47s linear  3.5s infinite; }
-.md-typeset .hero-mark .cpath-2  { animation: hero-flicker  53s linear  6.2s infinite; }
-.md-typeset .hero-mark .cpath-3  { animation: hero-flicker  59s linear  9.1s infinite; }
-.md-typeset .hero-mark .cpath-4  { animation: hero-flicker  61s linear 12.7s infinite; }
-.md-typeset .hero-mark .cpath-5  { animation: hero-flicker  67s linear 15.4s infinite; }
-.md-typeset .hero-mark .cpath-6  { animation: hero-flicker  71s linear 18.3s infinite; }
-.md-typeset .hero-mark .cpath-7  { animation: hero-flicker  73s linear 21.1s infinite; }
-.md-typeset .hero-mark .cpath-8  { animation: hero-flicker  79s linear 24.8s infinite; }
-.md-typeset .hero-mark .cpath-9  { animation: hero-flicker  83s linear 27.6s infinite; }
-.md-typeset .hero-mark .cpath-10 { animation: hero-flicker  89s linear 30.4s infinite; }
-.md-typeset .hero-mark .cpath-11 { animation: hero-flicker  97s linear 33.9s infinite; }
-.md-typeset .hero-mark .cpath-12 { animation: hero-flicker 101s linear 36.2s infinite; }
-.md-typeset .hero-mark .cpath-13 { animation: hero-flicker 103s linear 39.7s infinite; }
-.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 107s linear 42.5s infinite; }
-.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 109s linear 45.1s infinite; }
-.md-typeset .hero-mark .cpath-16 { animation: hero-flicker 113s linear 48.8s infinite; }
-.md-typeset .hero-mark .cpath-17 { animation: hero-flicker 119s linear 51.6s infinite; }
+.md-typeset .hero-mark .cpath-0  { animation: hero-flicker  4s linear 0.0s infinite; }
+.md-typeset .hero-mark .cpath-1  { animation: hero-flicker  5s linear 0.3s infinite; }
+.md-typeset .hero-mark .cpath-2  { animation: hero-flicker  7s linear 0.6s infinite; }
+.md-typeset .hero-mark .cpath-3  { animation: hero-flicker 11s linear 0.9s infinite; }
+.md-typeset .hero-mark .cpath-4  { animation: hero-flicker 13s linear 1.2s infinite; }
+.md-typeset .hero-mark .cpath-5  { animation: hero-flicker 17s linear 1.5s infinite; }
+.md-typeset .hero-mark .cpath-6  { animation: hero-flicker 19s linear 1.8s infinite; }
+.md-typeset .hero-mark .cpath-7  { animation: hero-flicker 23s linear 0.1s infinite; }
+.md-typeset .hero-mark .cpath-8  { animation: hero-flicker 29s linear 0.4s infinite; }
+.md-typeset .hero-mark .cpath-9  { animation: hero-flicker 31s linear 0.7s infinite; }
+.md-typeset .hero-mark .cpath-10 { animation: hero-flicker 37s linear 1.0s infinite; }
+.md-typeset .hero-mark .cpath-11 { animation: hero-flicker  3s linear 1.3s infinite; }
+.md-typeset .hero-mark .cpath-12 { animation: hero-flicker  6s linear 1.6s infinite; }
+.md-typeset .hero-mark .cpath-13 { animation: hero-flicker  9s linear 1.9s infinite; }
+.md-typeset .hero-mark .cpath-14 { animation: hero-flicker 14s linear 0.2s infinite; }
+.md-typeset .hero-mark .cpath-15 { animation: hero-flicker 21s linear 0.5s infinite; }
+.md-typeset .hero-mark .cpath-16 { animation: hero-flicker 25s linear 0.8s infinite; }
+.md-typeset .hero-mark .cpath-17 { animation: hero-flicker 33s linear 1.1s infinite; }
 
 /* Respect users who've opted out of motion: hold the cow steady. */
 @media (prefers-reduced-motion: reduce) {
