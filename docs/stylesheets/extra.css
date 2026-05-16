@@ -40,7 +40,7 @@
   --grid-line-color: rgba(63, 74, 110, 0.04);   /* dusk-blue at 4% on paper */
 }
 [data-md-color-scheme="slate"] {
-  --grid-line-color: rgba(183, 192, 229, 0.06); /* dusk-tint at 6% on slate */
+  --grid-line-color: rgba(183, 192, 229, 0.03); /* dusk-tint at 3% on slate */
 }
 
 /* ── Light scheme: paper background, dusk primary ──────────── */
