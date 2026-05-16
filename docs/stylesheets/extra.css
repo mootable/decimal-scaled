@@ -223,15 +223,15 @@
   padding: 1rem 1.2rem;
   background: var(--md-default-bg-color);
   box-shadow:
-    0 2px 6px var(--card-shadow-rest, rgba(26, 26, 26, 0.08)),
-    0 1px 2px var(--card-shadow-rest-tight, rgba(26, 26, 26, 0.04));
+    4px 6px 14px var(--card-shadow-rest, rgba(26, 26, 26, 0.12)),
+    2px 3px 6px var(--card-shadow-rest-tight, rgba(26, 26, 26, 0.06));
   transition: border-color 200ms, box-shadow 200ms, transform 200ms;
 }
 .md-typeset .grid.cards > :is(ul, ol) > li:hover {
   border-color: var(--md-primary-fg-color);
   box-shadow:
-    0 4px 14px var(--card-shadow-hover, rgba(26, 26, 26, 0.12)),
-    0 2px 4px var(--card-shadow-hover-tight, rgba(26, 26, 26, 0.06));
+    8px 10px 22px var(--card-shadow-hover, rgba(26, 26, 26, 0.18)),
+    3px 5px 8px var(--card-shadow-hover-tight, rgba(26, 26, 26, 0.08));
 }
 
 /* Dark mode: shadows lift via light-coloured glow instead of darkening. */
