@@ -531,7 +531,7 @@ impl<const SCALE: u32> D38<SCALE> {
 // Composition strategy:
 //
 // - Hyperbolic functions are composed from the strict `exp` / `ln` /
-// `sqrt` already implemented in `log_exp.rs` / `powers.rs`.
+// `sqrt` already implemented in `log_exp_strict.rs` / `powers_strict.rs`.
 // - `cos` is `sin` phase-shifted by π/2; `tan` is `sin / cos`.
 // - `sin` uses range reduction modulo τ into one π/2 octant followed by
 // a Taylor series.

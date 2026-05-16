@@ -1,15 +1,17 @@
 //! Rounding-mode selector for scale-narrowing operations.
 //!
-//! Used by [`D38::rescale_with`] to control how fractional digits are
-//! discarded when the target scale is less than the source scale. The
-//! six modes cover IEEE-754's five rounding rules (`HalfToEven`,
-//! `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`) plus the commercial
-//! `HalfAwayFromZero` rule expected by users coming from
-//! `bigdecimal` / `rust_decimal`.
+//! Passed to every `*_with(mode)` sibling on every decimal width —
+//! [`crate::D38::rescale_with`], `mul_with`, `div_with`, `to_int_with`,
+//! `from_f64_with`, every `*_strict_with` on the wide tier, etc. — to
+//! control how fractional digits are discarded when the result has
+//! lower precision than the working intermediate. The six modes cover
+//! IEEE-754's five rounding rules (`HalfToEven`, `HalfTowardZero`,
+//! `Trunc`, `Floor`, `Ceiling`) plus the commercial `HalfAwayFromZero`
+//! rule expected by users coming from `bigdecimal` / `rust_decimal`.
 //!
-//! [`D38::rescale`] always uses [`RoundingMode::HalfToEven`] — the
-//! IEEE-754 default and the rule with no systematic bias. Choose a
-//! non-default mode only when your accounting rules require it.
+//! The default mode is `HalfToEven` (IEEE-754 default; no systematic
+//! bias). The `rounding-*` Cargo features let a downstream crate flip
+//! the crate-wide default at compile time.
 
 /// Selector for the rounding rule applied when a scale-narrowing
 /// operation discards fractional digits.
@@ -158,7 +160,7 @@ pub(crate) fn should_bump(
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
-/// Used by [`D38::rescale_with`] and by the multiplier-and-divide
+/// Used by `D38::rescale_with` and by the multiplier-and-divide
 /// fast paths in `mg_divide`. The whole mode-specific logic is
 /// delegated to [`should_bump`]; this function is just the i128
 /// arithmetic wrapper that builds its inputs and applies the bump.

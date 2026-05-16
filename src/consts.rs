@@ -1,14 +1,19 @@
-//! Mathematical constants and float-compatibility constants for [`D38`].
+//! Mathematical constants and float-compatibility constants for every
+//! decimal width.
 //!
 //! # Constants provided
 //!
 //! The [`DecimalConsts`] trait exposes `pi`, `tau`, `half_pi`,
-//! `quarter_pi`, `golden`, and `e` as methods on `D38<SCALE>`.
+//! `quarter_pi`, `golden`, and `e` as methods on every width. The
+//! native-tier (`D38` and narrower) impls live here against a 37-digit
+//! `i128` reference; the wide tier (`D76` / `D153` / `D307`) impls
+//! live in `consts_wide.rs` against per-tier raw constants stored at
+//! each storage type's maximum precision.
 //!
 //! Two inherent associated constants, `EPSILON` and `MIN_POSITIVE`, are
 //! provided as analogues to `f64::EPSILON` and `f64::MIN_POSITIVE` so
-//! that generic code parameterised over numeric types continues to compile
-//! when `T = D38<SCALE>`.
+//! that generic code parameterised over numeric types continues to
+//! compile when `T` is any of the decimal widths.
 //!
 //! # Precision strategy
 //!

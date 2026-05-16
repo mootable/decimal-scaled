@@ -45,12 +45,11 @@
 //! # `num-traits` compatibility
 //!
 //! Every width implements the standard `num-traits` 0.2 surface:
-//! [`num_traits::Zero`], [`num_traits::One`], [`num_traits::Num`],
-//! [`num_traits::Bounded`], [`num_traits::Signed`],
-//! [`num_traits::FromPrimitive`], [`num_traits::ToPrimitive`], and the
-//! `Checked{Add,Sub,Mul,Div,Rem,Neg}` family. These impls are unconditional
-//! (not behind a feature flag) because generic numeric code in the wider
-//! ecosystem consumes this surface by default.
+//! `Zero`, `One`, `Num`, `Bounded`, `Signed`, `FromPrimitive`,
+//! `ToPrimitive`, and the `Checked{Add,Sub,Mul,Div,Rem,Neg}` family
+//! (see [`::num_traits`]). These impls are unconditional (not behind a
+//! feature flag) because generic numeric code in the wider ecosystem
+//! consumes this surface by default.
 //!
 //! # `no_std` support
 //!

@@ -11,7 +11,7 @@
 //!   overflow / division-by-zero.
 //! - `wrapping_*` returns the result modulo the storage's
 //!   `MAX − MIN` range.
-//! - `saturating_*` clamps to [`Self::MIN`] / [`Self::MAX`] on
+//! - `saturating_*` clamps to `Self::MIN` / `Self::MAX` on
 //!   overflow.
 //! - `overflowing_*` returns `(wrapping_result, overflowed_flag)`.
 //!

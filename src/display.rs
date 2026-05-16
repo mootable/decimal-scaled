@@ -1,12 +1,17 @@
 //! [`core::fmt`] formatters and [`core::str::FromStr`] for [`D38`].
+//! The same surface is emitted for every width via
+//! [`crate::macros::display::decl_decimal_display!`] and
+//! [`crate::macros::from_str::decl_decimal_from_str!`]; this file
+//! contains the hand-written D38 implementation and serves as the
+//! shape reference for the macro emissions.
 //!
 //! # Display format
 //!
 //! [`fmt::Display`] formats as a base-10 decimal literal: integer digits,
 //! a `.`, then exactly `SCALE` fractional digits (trailing zeros are always
 //! emitted). At `SCALE = 12`, `1.5` displays as `1.500000000000`. The output
-//! is bit-faithful: parsing it back through [`FromStr`] returns the identical
-//! storage value.
+//! is bit-faithful: parsing it back through [`core::str::FromStr`] returns
+//! the identical storage value.
 //!
 //! # Debug format
 //!

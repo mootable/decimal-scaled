@@ -54,7 +54,7 @@
 //!   methods aren't stable.
 //! - **`from_int`** takes a different source integer per width
 //!   (`i32` for `D9`, `i64` for `D18` / `D38`, `i128` for the wide
-//!   tiers). Use [`Self::from_i32`] when you need a width-generic
+//!   tiers). Use [`Decimal::from_i32`] when you need a width-generic
 //!   integer constructor, and accept the narrower input range.
 //! - **Transcendentals** (`ln` / `exp` / `sin` / …) are gated by the
 //!   `strict` / `fast` features and live as inherent methods on the
