@@ -131,7 +131,7 @@
 /* ── Hero / landing page motifs ────────────────────────────── */
 .md-typeset .hero-row {
   display: grid;
-  grid-template-columns: 75% 25%;
+  grid-template-columns: 67.5% 32.5%;     /* cow lifted from 25% → 32.5% (+30%) */
   gap: 2rem;
   align-items: center;
   margin: 1.5rem 0 2rem;
