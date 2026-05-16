@@ -5,6 +5,46 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.2]
+
+`DecimalConsts` 0.5-ULP contract is now uniform across every supported
+scale — the 0.2.0 / 0.2.1 ≈ 5 ULP "exception at `D38<38>`" is gone.
+
+### Changed
+
+- **`DecimalConsts` reference precision** — every constant on D9 /
+  D18 / D38 is now derived from the **75-digit `Int256` reference**
+  (the same one the wide tier already used), rescaled **down**
+  half-to-even to the caller's `SCALE`. The previous code used a
+  37-digit `i128` reference and *rescaled upward* by 10 at
+  `D38<38>`, which appended a placeholder zero and left the result
+  ≈ 5 ULP off the canonical value. Every result on every supported
+  scale on every width is now within **0.5 ULP** of the canonical
+  decimal expansion — the precision contract holds with no
+  documented exceptions.
+- **`D38<38>` storage-range overflow** — at `SCALE = 38` the D38
+  storage range is approximately ±1.7, so the four
+  larger-magnitude constants (`pi ≈ 3.14`, `tau ≈ 6.28`,
+  `e ≈ 2.72`, `golden ≈ 1.62`) genuinely cannot be represented.
+  The corresponding methods previously panicked with the generic
+  rescale message `D38::rescale: scale-up overflow`; they now panic
+  with the explicit `D38 constant out of storage range: <name>
+  cannot fit i128 at SCALE = 38`. `D38<38>::half_pi()` and
+  `D38<38>::quarter_pi()` (which fit storage) are correctly rounded
+  to 0.5 ULP — verified by a new test asserting `|result − truth|
+  ≤ 1 LSB` at the 38-digit storage scale.
+
+### Fixed
+
+- The "`D38<38>` ≈ 5 ULP exception" mentioned in 0.2.1's
+  `DecimalConsts` module / trait docs is removed from both the
+  preamble and the trait blurb; the rewritten docs state the now-
+  uniform 0.5 ULP contract.
+- `docs/strict-mode.md` "Choosing the configuration" table reflowed:
+  the default is `strict` (not the f64 bridge), and the `fast`
+  feature row no longer claims it drops the `*_strict` surface
+  (corrected in 0.2.0 elsewhere; the table row was missed).
+
 ## [0.2.1]
 
 Documentation patch — no API changes.

@@ -32,7 +32,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-decimal-scaled = "0.2.0"
+decimal-scaled = "0.2.2"
 ```
 
 The default build pulls in the correctly-rounded transcendentals
@@ -44,14 +44,14 @@ pick what you actually want:
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.0", default-features = false, features = ["std", "serde"] }
+decimal-scaled = { version = "0.2.2", default-features = false, features = ["std", "serde"] }
 ```
 
 For `no_std` targets (`alloc` is still required):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.0", default-features = false, features = ["serde", "alloc", "strict"] }
+decimal-scaled = { version = "0.2.2", default-features = false, features = ["serde", "alloc", "strict"] }
 ```
 
 ---
@@ -60,7 +60,7 @@ decimal-scaled = { version = "0.2.0", default-features = false, features = ["ser
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.0", features = ["macros"] }
+decimal-scaled = { version = "0.2.2", features = ["macros"] }
 ```
 
 There are three idiomatic ways to construct a value. Use whichever

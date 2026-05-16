@@ -17,14 +17,16 @@
 //!
 //! Constants are derived from raw integer references — no `f64`
 //! anywhere. Each tier has its own reference at the tier's maximum
-//! storage precision:
+//! storage precision; the rescale to the caller's `SCALE` is always
+//! **downward**, never upward, so half-to-even rounding always lands
+//! on the **correctly-rounded** value at the target scale:
 //!
-//! | Tier           | Storage of reference | `SCALE_REF` (= reference digits) | Source file       |
-//! |----------------|---------------------|----------------------------------|-------------------|
-//! | D9 / D18 / D38 | `i128`              | 37                               | this file         |
-//! | D76            | `Int256`            | 75                               | `consts_wide.rs`  |
-//! | D153           | `Int512`            | 153                              | `consts_wide.rs`  |
-//! | D307           | `Int1024`           | 307                              | `consts_wide.rs`  |
+//! | Tier           | Reference storage | `SCALE_REF` (= reference digits) | Source file       |
+//! |----------------|-------------------|----------------------------------|-------------------|
+//! | D9 / D18 / D38 | `Int256`          | 75                               | this file         |
+//! | D76            | `Int256`          | 75                               | `consts_wide.rs`  |
+//! | D153           | `Int512`          | 153                              | `consts_wide.rs`  |
+//! | D307           | `Int1024`         | 307                              | `consts_wide.rs`  |
 //!
 //! The rescale from `SCALE_REF` to the caller's `SCALE` uses integer
 //! division with the crate-default [`RoundingMode`] (half-to-even by
@@ -32,16 +34,16 @@
 //! through `f64` would cap precision at ~15–17 decimal digits; the
 //! raw-integer path preserves the full per-tier reference width.
 //!
-//! At `SCALE ≤ SCALE_REF` (every supported scale on D9 / D18 / D76 /
-//! D153 / D307, and every D38 scale up to 37) the result is within
-//! **0.5 ULP** of the canonical decimal expansion. The single
-//! exception is `D38<38>`: the largest D38 reference fits 37 fractional
-//! digits in `i128` (`tau ≈ 6.28×10³⁷` is below `i128::MAX ≈
-//! 1.7×10³⁸`), so `SCALE = 38` (the D38 maximum) is rescaled
-//! upward — multiplying the 37-digit reference by 10 — which appends
-//! a placeholder zero rather than adding precision. The error there
-//! is bounded at ≈ 5 ULP for `pi` / `tau` / `e` / `golden`; `half_pi`
-//! and `quarter_pi` (smaller in magnitude) remain inside 0.5 ULP.
+//! **0.5 ULP at every supported scale**, on every width, with no
+//! exceptions in the precision contract. The only constraint is the
+//! width's *storage range*: a value that mathematically exceeds the
+//! type's `Storage::MAX / 10^SCALE` cannot be represented at all. At
+//! `D38<38>` the storage range is approximately ±1.7, so the four
+//! larger-magnitude constants — `pi ≈ 3.14`, `tau ≈ 6.28`, `e ≈ 2.72`,
+//! `golden ≈ 1.62` — overflow `i128` and the corresponding methods
+//! panic with a clear "constant out of storage range" message;
+//! `half_pi ≈ 1.57` and `quarter_pi ≈ 0.79` fit and remain
+//! correctly-rounded to 0.5 ULP.
 //!
 //! [`RoundingMode`]: crate::rounding::RoundingMode
 //!
@@ -53,63 +55,80 @@
 //! (golden ratio).
 
 use crate::core_type::D38;
+use crate::d_w128_kernels::Fixed;
+use crate::wide_int::Int256;
 
-/// Reference scale for the high-precision raw constants below.
-///
-/// Every constant fits in `i128` at this scale; the largest
-/// (tau ≈ 6.28×10³⁷) is below `i128::MAX ≈ 1.7×10³⁸`. Caller scales
-/// above this value rescale up by `10^(SCALE - SCALE_REF)`, which
-/// appends placeholder zeros without adding precision — `SCALE = 38`
-/// loses up to ≈ 5 ULP this way. Caller scales at or below
-/// `SCALE_REF` rescale down via the crate-default [`RoundingMode`],
-/// preserving the 0.5 ULP contract.
+/// Reference scale for every constant in this file: the 75-digit
+/// representation that fits an `Int256` (`2 · 128` bits). Every D38
+/// scale (0..=38) is at most 38 digits, so we always rescale **down**
+/// from 75 → SCALE, never up. The half-to-even rescale-down step is
+/// performed by [`Fixed::round_to_i128`] (`Fixed` is the same 256-bit
+/// guard-digit type the strict transcendentals use), giving 0.5 ULP at
+/// the caller's `SCALE` for every value that fits `i128` at that
+/// scale.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
-///
-/// [`RoundingMode`]: crate::rounding::RoundingMode
-const SCALE_REF: u32 = 37;
+const SCALE_REF: u32 = 75;
 
-// Raw i128 constants at SCALE_REF = 37, materialised at build time
-// by `build.rs` (the same hand-rolled multi-precision generator that
-// emits the wide-tier constants). Sources: ISO 80000-2 (pi, tau,
+// Raw decimal strings at 75 fractional digits, materialised at build
+// time by `build.rs` (the same hand-rolled multi-precision generator
+// that emits the wide-tier constants). Sources: ISO 80000-2 (pi, tau,
 // pi/2, pi/4), OEIS A001113 (e), OEIS A001622 (golden ratio).
 //
-// The build-time string -> i128 parse is `const fn` (Rust 1.83+).
+// The build-time string -> Int256 parse is `const fn` (via
+// `Int256::from_str_radix`, base 10 only). The 75-digit reference is
+// the largest decimal expansion that always fits Int256 for the
+// biggest of these constants (tau ≈ 6.28×10⁷⁵ < Int256::MAX ≈
+// 5.78×10⁷⁶); a single shared SCALE_REF keeps the rescale helpers
+// uniform across all six methods on the trait.
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
-const PI_RAW_S37: i128 = match i128::from_str_radix(PI_D38_S37, 10) {
+const PI_RAW: Int256 = match Int256::from_str_radix(PI_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: PI_D38_S37 not parseable"),
+    Err(_) => panic!("consts: PI_D76_S75 not parseable"),
 };
-const TAU_RAW_S37: i128 = match i128::from_str_radix(TAU_D38_S37, 10) {
+const TAU_RAW: Int256 = match Int256::from_str_radix(TAU_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: TAU_D38_S37 not parseable"),
+    Err(_) => panic!("consts: TAU_D76_S75 not parseable"),
 };
-const HALF_PI_RAW_S37: i128 = match i128::from_str_radix(HALF_PI_D38_S37, 10) {
+const HALF_PI_RAW: Int256 = match Int256::from_str_radix(HALF_PI_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: HALF_PI_D38_S37 not parseable"),
+    Err(_) => panic!("consts: HALF_PI_D76_S75 not parseable"),
 };
-const QUARTER_PI_RAW_S37: i128 = match i128::from_str_radix(QUARTER_PI_D38_S37, 10) {
+const QUARTER_PI_RAW: Int256 = match Int256::from_str_radix(QUARTER_PI_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: QUARTER_PI_D38_S37 not parseable"),
+    Err(_) => panic!("consts: QUARTER_PI_D76_S75 not parseable"),
 };
-const E_RAW_S37: i128 = match i128::from_str_radix(E_D38_S37, 10) {
+const E_RAW: Int256 = match Int256::from_str_radix(E_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: E_D38_S37 not parseable"),
+    Err(_) => panic!("consts: E_D76_S75 not parseable"),
 };
-const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D38_S37, 10) {
+const GOLDEN_RAW: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
     Ok(v) => v,
-    Err(_) => panic!("consts: GOLDEN_D38_S37 not parseable"),
+    Err(_) => panic!("consts: GOLDEN_D76_S75 not parseable"),
 };
 
-// Rescaling from SCALE_REF to the caller's SCALE is delegated to
-// `D38::rescale` (which uses round-half-to-even by default; see
-// `src/rescale.rs`). The constants below construct a `D38<SCALE_REF>`
-// from the raw integer literal and then rescale to the caller's
-// `D38<SCALE>`.
+/// Rescale a 75-digit `Int256` reference down to the caller's `TARGET`
+/// scale as an `i128`, half-to-even. Panics if the value at `TARGET`
+/// does not fit `i128` (the type's storage range at that scale just
+/// doesn't include this constant — e.g. `pi ≈ 3.14` at `D38<38>` would
+/// need `3.14 × 10^38 ≈ 3.14e38`, which exceeds `i128::MAX ≈ 1.7e38`).
+fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i128 {
+    let limbs = raw.0;  // [u128; 2], little-endian
+    let f = Fixed { negative: false, mag: limbs };
+    match f.round_to_i128(SCALE_REF, TARGET) {
+        Some(v) => v,
+        None => panic!(
+            "D38 constant out of storage range: {name} cannot fit i128 at SCALE = {TARGET} \
+             (storage range is ±i128::MAX / 10^SCALE)",
+            name = name,
+            TARGET = TARGET,
+        ),
+    }
+}
 
 /// Well-known mathematical constants available on every decimal width
 /// (`D9` / `D18` / `D38` / `D76` / `D153` / `D307`).
@@ -117,14 +136,17 @@ const GOLDEN_RAW_S37: i128 = match i128::from_str_radix(GOLDEN_D38_S37, 10) {
 /// Import this trait to call `D38s12::pi()`, `D76::<35>::e()`, etc.
 ///
 /// All returned values are computed from a raw integer reference at
-/// each tier's maximum storage precision (37 digits for D9/D18/D38, 75
-/// for D76, 153 for D153, 307 for D307) without passing through `f64`.
-/// The result is within 0.5 ULP of the canonical decimal expansion at
-/// the target `SCALE` for every supported scale, with one exception:
-/// `D38<38>` (the D38 maximum) rescales the 37-digit reference upward
-/// by 10, appending a placeholder zero rather than adding precision;
-/// the error there is bounded at ≈ 5 ULP for the larger-magnitude
-/// constants. See the module-level docs for the per-tier table.
+/// the tier's maximum storage precision (75 digits for D9/D18/D38 and
+/// D76; 153 for D153; 307 for D307) without passing through `f64`,
+/// then rescaled down to the caller's `SCALE` with half-to-even
+/// rounding. The result is **within 0.5 ULP** of the canonical
+/// decimal expansion at every supported scale on every width.
+///
+/// The one situation where a method does not return a value is when
+/// the constant's magnitude exceeds the type's storage range at the
+/// caller's `SCALE` — e.g. `D38<38>::pi()` would need `3.14 × 10³⁸`,
+/// which exceeds `i128::MAX ≈ 1.7×10³⁸`. The method panics with a
+/// clear "constant out of storage range" message in that case.
 pub trait DecimalConsts: Sized {
     /// Pi (~3.14159265...). One half-turn in radians.
     ///
@@ -191,30 +213,31 @@ pub trait DecimalConsts: Sized {
 // duplicating the rescale logic.
 
 pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
-    D38::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<TARGET>().to_bits()
+    rescale_75_to_target::<TARGET>(PI_RAW, "pi")
 }
 pub(crate) fn tau_at_target<const TARGET: u32>() -> i128 {
-    D38::<SCALE_REF>::from_bits(TAU_RAW_S37).rescale::<TARGET>().to_bits()
+    rescale_75_to_target::<TARGET>(TAU_RAW, "tau")
 }
 pub(crate) fn half_pi_at_target<const TARGET: u32>() -> i128 {
-    D38::<SCALE_REF>::from_bits(HALF_PI_RAW_S37).rescale::<TARGET>().to_bits()
+    rescale_75_to_target::<TARGET>(HALF_PI_RAW, "half_pi")
 }
 pub(crate) fn quarter_pi_at_target<const TARGET: u32>() -> i128 {
-    D38::<SCALE_REF>::from_bits(QUARTER_PI_RAW_S37).rescale::<TARGET>().to_bits()
+    rescale_75_to_target::<TARGET>(QUARTER_PI_RAW, "quarter_pi")
 }
 pub(crate) fn golden_at_target<const TARGET: u32>() -> i128 {
-    D38::<SCALE_REF>::from_bits(GOLDEN_RAW_S37).rescale::<TARGET>().to_bits()
+    rescale_75_to_target::<TARGET>(GOLDEN_RAW, "golden")
 }
 pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
-    D38::<SCALE_REF>::from_bits(E_RAW_S37).rescale::<TARGET>().to_bits()
+    rescale_75_to_target::<TARGET>(E_RAW, "e")
 }
 
 // The `DecimalConsts` impl for `D38<SCALE>` is emitted by the
 // `decl_decimal_consts!` macro — the same macro D9 / D18 / D76+ use.
-// It expands to `Self(pi_at_target::<SCALE>())` etc., which is
-// identical to the previous hand-coded
-// `D38::<SCALE_REF>::from_bits(PI_RAW_S37).rescale::<SCALE>()` because
-// `pi_at_target` is defined as exactly that, then `.to_bits()`.
+// It expands to `Self(pi_at_target::<SCALE>())` etc.; each
+// `*_at_target` helper above rescales the 75-digit Int256 reference
+// down to the caller's `SCALE` via half-to-even and narrows to i128
+// (or panics with a clear message if the constant's magnitude
+// exceeds the storage range at that scale).
 crate::macros::consts::decl_decimal_consts!(D38, i128);
 
 // Inherent associated constants: EPSILON / MIN_POSITIVE.
@@ -408,22 +431,47 @@ mod tests {
         assert_eq!(D0::pi().to_bits(), 3_i128);
     }
 
-    /// At SCALE = SCALE_REF (37), pi() returns exactly the raw constant.
+    /// `D38<37>::pi()` is the canonical pi rounded half-to-even to 37
+    /// fractional digits. The 75-digit Int256 reference is rescaled
+    /// down to 37 digits; the result is bit-identical to the
+    /// hand-tabulated constant.
     #[test]
-    fn pi_at_scale_ref_is_raw_constant() {
+    fn pi_at_scale_37_matches_canonical_37_digit_rounding() {
         type D37 = D38<37>;
-        assert_eq!(D37::pi().to_bits(), PI_RAW_S37);
+        // pi to 38 digits: 3.14159265358979323846264338327950288420
+        //                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        //                   keep 37 frac digits; the 38th digit is 0
+        //                   so half-to-even rounds down — no bump.
+        let expected: i128 = 31_415_926_535_897_932_384_626_433_832_795_028_842;
+        assert_eq!(D37::pi().to_bits(), expected);
     }
 
-    /// At SCALE = SCALE_REF + 1 (38), pi() multiplies by 10, appending
-    /// one trailing zero digit. PI_RAW_S37 * 10 ≈ 3.14×10³⁸ which is
-    /// larger than i128::MAX ≈ 1.7×10³⁸, so this case overflows
-    /// `D38<38>` storage at compile time — exercising the upper end
-    /// of the rescale-up path is left to the SCALE = 37 case above.
+    /// `D38<38>` cannot represent pi (storage range is ~±1.7 at
+    /// SCALE=38, pi is 3.14). The method panics with a clear
+    /// "constant out of storage range" message rather than silently
+    /// returning a fudged value.
     #[test]
-    fn pi_at_scale_37_is_raw_constant() {
-        type D37 = D38<37>;
-        assert_eq!(D37::pi().to_bits(), PI_RAW_S37);
+    #[should_panic(expected = "out of storage range")]
+    fn pi_at_scale_38_panics_storage_range() {
+        let _ = D38::<38>::pi();
+    }
+
+    /// `D38<38>` storage range covers ±1.7, which DOES include
+    /// `half_pi ≈ 1.57` and `quarter_pi ≈ 0.79`. They must be
+    /// correctly rounded to 0.5 ULP (= 1 LSB).
+    #[test]
+    fn half_pi_and_quarter_pi_at_scale_38_are_correctly_rounded() {
+        // half_pi to 38 digits: 1.57079632679489661923132169163975144210
+        let expected_half_pi: i128 = 157_079_632_679_489_661_923_132_169_163_975_144_210;
+        let got = D38::<38>::half_pi().to_bits();
+        let diff = (got - expected_half_pi).abs();
+        assert!(diff <= 1, "half_pi: got {got}, expected {expected_half_pi}, diff {diff} > 1 LSB");
+
+        // quarter_pi to 38 digits: 0.78539816339744830961566084581987572105
+        let expected_quarter_pi: i128 = 78_539_816_339_744_830_961_566_084_581_987_572_105;
+        let got = D38::<38>::quarter_pi().to_bits();
+        let diff = (got - expected_quarter_pi).abs();
+        assert!(diff <= 1, "quarter_pi: got {got}, expected {expected_quarter_pi}, diff {diff} > 1 LSB");
     }
 
     /// Negative-side rounding: negating pi gives the expected raw bits.

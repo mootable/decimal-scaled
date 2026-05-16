@@ -68,7 +68,7 @@ widen-compute-narrow delegation):
 ## The `strict` feature
 
 ```toml
-decimal-scaled = { version = "0.2.0", features = ["strict"] }
+decimal-scaled = { version = "0.2.2", features = ["strict"] }
 ```
 
 With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
@@ -81,7 +81,7 @@ transcendental operations.
 ## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.2.0", features = ["fast"] }
+decimal-scaled = { version = "0.2.2", features = ["fast"] }
 ```
 
 `fast` forces the plain methods (`sqrt`, `ln`, `sin`, …) to dispatch
@@ -141,7 +141,7 @@ same 0.5-ULP-at-storage as D38.
 
 | You want… | Use |
 |---|---|
-| Max speed, `std`, mainstream platform | default (f64 bridge) |
-| Bit-identical results everywhere, or `no_std` | `strict` |
-| The strict path *and* the bridge in one build | default or `strict` — call `*_strict` explicitly for the former |
-| The smallest possible build, no strict surface | `fast` |
+| Bit-identical results everywhere; correct rounding | default (`strict` is on by default) |
+| Max speed at the cost of platform-libm precision | `fast` |
+| Per-call explicit choice in the same build | always available via `*_strict` / `*_fast` regardless of features |
+| `no_std + alloc` | default works (`strict` is `no_std`-compatible) |
