@@ -861,14 +861,41 @@ macro_rules! decl_wide_int {
             type Output = $S;
             #[inline]
             fn div(self, rhs: $S) -> $S {
-                self.wrapping_div(rhs)
+                if rhs.is_zero() {
+                    panic!(concat!(stringify!($S), ": division by zero"));
+                }
+                let negative = self.is_negative() ^ rhs.is_negative();
+                let mut q = [0u128; $L];
+                let mut r = [0u128; $L];
+                // Runtime dispatcher: Knuth / BZ for multi-limb (or
+                // single-limb-too-wide-for-u64) divisors. The
+                // `wrapping_div` sibling stays const for compile-time
+                // evaluation; it uses the slower const path.
+                $crate::wide_int::limbs_divmod_dispatch(
+                    &self.unsigned_abs().0,
+                    &rhs.unsigned_abs().0,
+                    &mut q,
+                    &mut r,
+                );
+                $S::from_mag_limbs(&q, negative)
             }
         }
         impl ::core::ops::Rem for $S {
             type Output = $S;
             #[inline]
             fn rem(self, rhs: $S) -> $S {
-                self.wrapping_rem(rhs)
+                if rhs.is_zero() {
+                    panic!(concat!(stringify!($S), ": remainder by zero"));
+                }
+                let mut q = [0u128; $L];
+                let mut r = [0u128; $L];
+                $crate::wide_int::limbs_divmod_dispatch(
+                    &self.unsigned_abs().0,
+                    &rhs.unsigned_abs().0,
+                    &mut q,
+                    &mut r,
+                );
+                $S::from_mag_limbs(&r, self.is_negative())
             }
         }
         impl ::core::ops::Neg for $S {
