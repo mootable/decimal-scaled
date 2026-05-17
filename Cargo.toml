@@ -85,24 +85,24 @@ experimental-floats = []
 # hand-rolled wide-integer types in `crate::wide_int` — no external
 # big-integer dependency. D9 / D18 / D38 use primitive storage and
 # need none of this.
-wide = ["d57", "d76", "d115", "d153", "d230"]
-d57 = []
+wide = ["d56", "d76", "d114", "d153", "d230"]
+d56 = []
 d76 = []
-d115 = []
+d114 = []
 d153 = []
 d230 = []
 # Very-wide tier (D307+). Gated separately because its strict-
 # transcendental work integers run into thousands of bits and inflate
 # build time vs the narrower wide tiers.
-x-wide = ["d307", "d462", "d616"]
+x-wide = ["d307", "d461", "d615"]
 d307 = []
-d462 = []
-d616 = []
-# Extra-wide tier (D924+). Pulls in the Int12288 / Int16384 work
+d461 = []
+d615 = []
+# Extra-wide tier (D923+). Pulls in the Int12288 / Int16384 work
 # integers — multi-second compile-time cost for the macro emission.
-xx-wide = ["d924", "d1232"]
-d924 = []
-d1232 = []
+xx-wide = ["d923", "d1231"]
+d923 = []
+d1231 = []
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }

@@ -1397,7 +1397,10 @@ pub(crate) const fn limbs_divmod_u64(
 
 /// Scratch capacity for the runtime u64-limb kernels — 144 u64 limbs
 /// (9216 bits), matching the u128 path's 72-limb scratch.
-const SCRATCH_LIMBS_U64: usize = 144;
+// 288 u64 limbs = 18432 bits — covers the widest work integer in
+// the crate (Int16384 used by D1231 cbrt, 256 u64 limbs) with isqrt
+// scratch slack.
+const SCRATCH_LIMBS_U64: usize = 288;
 
 /// Equal-length u64 multiplier dispatcher.
 ///
@@ -2004,7 +2007,7 @@ pub(crate) trait WideInt: Copy {
     /// Magnitude limbs (little-endian u64, zero-padded to 128) and sign.
     /// 128 u64 limbs = 8192 bits, comfortably above the widest type
     /// the crate ships (Int4096, which is 64 u64 limbs).
-    fn to_mag_sign(self) -> ([u64; 128], bool);
+    fn to_mag_sign(self) -> ([u64; 288], bool);
     /// Rebuilds from a magnitude limb slice and a sign, truncating
     /// the magnitude to this type's width.
     fn from_mag_sign(mag: &[u64], negative: bool) -> Self;
@@ -2018,8 +2021,8 @@ macro_rules! impl_wideint_signed_prim {
     ($($t:ty),*) => {$(
         impl WideInt for $t {
             #[inline]
-            fn to_mag_sign(self) -> ([u64; 128], bool) {
-                let mut out = [0u64; 128];
+            fn to_mag_sign(self) -> ([u64; 288], bool) {
+                let mut out = [0u64; 288];
                 let mag = self.unsigned_abs() as u128;
                 out[0] = mag as u64;
                 out[1] = (mag >> 64) as u64;
@@ -2040,8 +2043,8 @@ impl_wideint_signed_prim!(i8, i16, i32, i64, i128);
 
 impl WideInt for u128 {
     #[inline]
-    fn to_mag_sign(self) -> ([u64; 128], bool) {
-        let mut out = [0u64; 128];
+    fn to_mag_sign(self) -> ([u64; 288], bool) {
+        let mut out = [0u64; 288];
         out[0] = self as u64;
         out[1] = (self >> 64) as u64;
         (out, false)
@@ -2091,48 +2094,48 @@ decl_wide_int!(Uint16384, Int16384, 256, 512);
 // backs storage or serves as a mul/div widening step for some tier,
 // and a matching `U*` (unsigned) when `Display`'s magnitude path
 // needs it.
-#[cfg(any(feature = "d57", feature = "wide"))]
+#[cfg(any(feature = "d56", feature = "wide"))]
 pub(crate) use self::{Int192 as I192, Uint192 as U192};
-#[cfg(any(feature = "d57", feature = "d76", feature = "wide"))]
+#[cfg(any(feature = "d56", feature = "d76", feature = "wide"))]
 pub(crate) use self::Int384 as I384;
-#[cfg(any(feature = "d115", feature = "wide"))]
+#[cfg(any(feature = "d114", feature = "wide"))]
 pub(crate) use self::Uint384 as U384;
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub(crate) use self::{Int256 as I256, Uint256 as U256};
-#[cfg(any(feature = "d76", feature = "d115", feature = "d153", feature = "wide"))]
+#[cfg(any(feature = "d76", feature = "d114", feature = "d153", feature = "wide"))]
 pub(crate) use self::Int512 as I512;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub(crate) use self::Uint512 as U512;
-#[cfg(any(feature = "d115", feature = "d153", feature = "d230", feature = "wide"))]
+#[cfg(any(feature = "d114", feature = "d153", feature = "d230", feature = "wide"))]
 pub(crate) use self::Int768 as I768;
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub(crate) use self::Uint768 as U768;
 #[cfg(any(feature = "d153", feature = "d230", feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) use self::Int1024 as I1024;
-#[cfg(any(feature = "d230", feature = "d307", feature = "d462", feature = "wide", feature = "x-wide"))]
+#[cfg(any(feature = "d230", feature = "d307", feature = "d461", feature = "wide", feature = "x-wide"))]
 pub(crate) use self::Int1536 as I1536;
-#[cfg(any(feature = "d462", feature = "x-wide"))]
+#[cfg(any(feature = "d461", feature = "x-wide"))]
 pub(crate) use self::Uint1536 as U1536;
-#[cfg(any(feature = "d307", feature = "d462", feature = "d616", feature = "wide", feature = "x-wide"))]
+#[cfg(any(feature = "d307", feature = "d461", feature = "d615", feature = "wide", feature = "x-wide"))]
 pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
-#[cfg(any(feature = "d616", feature = "x-wide"))]
+#[cfg(any(feature = "d615", feature = "x-wide"))]
 pub(crate) use self::Uint2048 as U2048;
-#[cfg(any(feature = "d462", feature = "d616", feature = "d924", feature = "x-wide", feature = "xx-wide"))]
+#[cfg(any(feature = "d461", feature = "d615", feature = "d923", feature = "x-wide", feature = "xx-wide"))]
 pub(crate) use self::Int3072 as I3072;
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
+#[cfg(any(feature = "d923", feature = "xx-wide"))]
 pub(crate) use self::Uint3072 as U3072;
-#[cfg(any(feature = "d616", feature = "d924", feature = "d1232", feature = "x-wide", feature = "xx-wide"))]
+#[cfg(any(feature = "d615", feature = "d923", feature = "d1231", feature = "x-wide", feature = "xx-wide"))]
 pub(crate) use self::Int4096 as I4096;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub(crate) use self::Uint4096 as U4096;
-#[cfg(any(feature = "d924", feature = "d1232", feature = "xx-wide"))]
+#[cfg(any(feature = "d923", feature = "d1231", feature = "xx-wide"))]
 pub(crate) use self::Int6144 as I6144;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub(crate) use self::Int8192 as I8192;
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
+#[cfg(any(feature = "d923", feature = "xx-wide"))]
 #[allow(unused_imports)]
 pub(crate) use self::Int12288 as I12288;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
 #[allow(unused_imports)]
 pub(crate) use self::Int16384 as I16384;
 

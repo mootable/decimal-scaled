@@ -798,8 +798,8 @@ macro_rules! decl_wide_int {
 
         impl $crate::wide_int::WideInt for $S {
             #[inline]
-            fn to_mag_sign(self) -> ([u64; 128], bool) {
-                let mut out = [0u64; 128];
+            fn to_mag_sign(self) -> ([u64; 288], bool) {
+                let mut out = [0u64; 288];
                 let mag = self.unsigned_abs().0;
                 out[..($L)].copy_from_slice(&mag);
                 (out, self.is_negative())

@@ -294,7 +294,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     }
 
     // Unpack u128 magnitude back to u64 limbs for `from_mag_sign`.
-    let mut mag_out = [0u64; 128];
+    let mut mag_out = [0u64; 288];
     let mut i = 0;
     while i < 64 {
         mag_out[2 * i] = mag[i] as u64;

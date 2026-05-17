@@ -601,25 +601,36 @@ fn main() -> std::io::Result<()> {
 
     // ─── New half-width and wider tiers ────────────────────────────
     //
-    // For each, emit (PI, TAU, HALF_PI, QUARTER_PI, E, GOLDEN) at
-    // the tier's max SCALE. Scales chosen as the storage's safe
-    // decimal-digit capacity (storage_bits · log10(2), rounded down).
-    for &scale in &[57u32, 115, 230, 462, 616, 924, 1232] {
-        let p = pi(scale);
+    // Each tier picks SCALE_REF = highest k where τ × 10^k still
+    // fits the storage's signed range. Computed analytically per
+    // tier (the docs in consts_wide.rs explain). τ rather than π is
+    // the binding constraint because TAU_RAW = 2·PI_RAW.
+    //
+    // Format: (tier_name_for_emit, SCALE_REF).
+    for &(name, scale_ref) in &[
+        ("D56",   56u32),
+        ("D114",  114),
+        ("D230",  230),
+        ("D461",  461),
+        ("D615",  615),
+        ("D923",  923),
+        ("D1231", 1231),
+    ] {
+        let p = pi(scale_ref);
         let mut t = p.clone();
         t.mul_u64(2);
         let mut hp = p.clone();
         hp.div_u64(2);
         let mut qp = p.clone();
         qp.div_u64(4);
-        let e = e_const(scale);
-        let phi = golden(scale);
-        emit_constant(&mut f, &format!("PI_D{}_S{}", scale, scale), &p, scale, 1)?;
-        emit_constant(&mut f, &format!("TAU_D{}_S{}", scale, scale), &t, scale, 1)?;
-        emit_constant(&mut f, &format!("HALF_PI_D{}_S{}", scale, scale), &hp, scale, 1)?;
-        emit_constant(&mut f, &format!("QUARTER_PI_D{}_S{}", scale, scale), &qp, scale, 1)?;
-        emit_constant(&mut f, &format!("E_D{}_S{}", scale, scale), &e, scale, 1)?;
-        emit_constant(&mut f, &format!("GOLDEN_D{}_S{}", scale, scale), &phi, scale, 1)?;
+        let e = e_const(scale_ref);
+        let phi = golden(scale_ref);
+        emit_constant(&mut f, &format!("PI_{}_S{}", name, scale_ref), &p, scale_ref, 1)?;
+        emit_constant(&mut f, &format!("TAU_{}_S{}", name, scale_ref), &t, scale_ref, 1)?;
+        emit_constant(&mut f, &format!("HALF_PI_{}_S{}", name, scale_ref), &hp, scale_ref, 1)?;
+        emit_constant(&mut f, &format!("QUARTER_PI_{}_S{}", name, scale_ref), &qp, scale_ref, 1)?;
+        emit_constant(&mut f, &format!("E_{}_S{}", name, scale_ref), &e, scale_ref, 1)?;
+        emit_constant(&mut f, &format!("GOLDEN_{}_S{}", name, scale_ref), &phi, scale_ref, 1)?;
     }
 
     println!("cargo:rerun-if-changed=build.rs");

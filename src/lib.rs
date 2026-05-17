@@ -269,46 +269,75 @@ pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 
 // ─── New half-width and wider tiers ───────────────────────────────────
 
-// D57 — 192-bit storage; half-width between D38 and D76.
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub use core_type::{D57, D57s0, D57s19, D57s28, D57s57};
-#[cfg(any(feature = "d57", feature = "wide"))]
+// D56 — 192-bit storage; half-width between D38 and D76.
+#[cfg(any(feature = "d56", feature = "wide"))]
+pub use core_type::{
+    D56,
+    D56s0, D56s2, D56s4, D56s6, D56s9, D56s12, D56s18, D56s24,
+    D56s28, D56s32, D56s38, D56s42, D56s48, D56s52, D56s56, D56s57,
+};
+#[cfg(any(feature = "d56", feature = "wide"))]
 pub use wide_int::{Int192, Uint192};
 
-// D115 — 384-bit; half-width between D76 and D153.
-#[cfg(any(feature = "d115", feature = "wide"))]
-pub use core_type::{D115, D115s0, D115s57, D115s115};
-#[cfg(any(feature = "d115", feature = "wide"))]
+// D114 — 384-bit; half-width between D76 and D153.
+#[cfg(any(feature = "d114", feature = "wide"))]
+pub use core_type::{
+    D114,
+    D114s0, D114s4, D114s8, D114s16, D114s24, D114s32, D114s38, D114s50,
+    D114s57, D114s64, D114s76, D114s90, D114s100, D114s110, D114s114, D114s115,
+};
+#[cfg(any(feature = "d114", feature = "wide"))]
 pub use wide_int::{Int384, Uint384};
 
 // D230 — 768-bit; half-width between D153 and D307.
 #[cfg(any(feature = "d230", feature = "wide"))]
-pub use core_type::{D230, D230s0, D230s115, D230s230};
+pub use core_type::{
+    D230,
+    D230s0, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115,
+    D230s140, D230s153, D230s175, D230s200, D230s215, D230s225, D230s229, D230s230,
+};
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub use wide_int::{Int768, Uint768};
 
-// D462 — 1536-bit; half-width between D307 and D616.
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-pub use core_type::{D462, D462s0, D462s230, D462s462};
-#[cfg(any(feature = "d462", feature = "x-wide"))]
+// D461 — 1536-bit; half-width between D307 and D615.
+#[cfg(any(feature = "d461", feature = "x-wide"))]
+pub use core_type::{
+    D461,
+    D461s0, D461s18, D461s38, D461s75, D461s115, D461s153, D461s200, D461s230,
+    D461s275, D461s307, D461s350, D461s400, D461s440, D461s460, D461s461, D461s462,
+};
+#[cfg(any(feature = "d461", feature = "x-wide"))]
 pub use wide_int::{Int1536, Uint1536};
 
-// D616 — 2048-bit; new top wide tier. Int2048 / Uint2048 are
+// D615 — 2048-bit; new top wide tier. Int2048 / Uint2048 are
 // already exported above for x-wide / d307 widening; no re-export
 // here.
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-pub use core_type::{D616, D616s0, D616s308, D616s616};
+#[cfg(any(feature = "d615", feature = "x-wide"))]
+pub use core_type::{
+    D615,
+    D615s0, D615s38, D615s75, D615s115, D615s153, D615s200, D615s230, D615s275,
+    D615s308, D615s380, D615s462, D615s500, D615s555, D615s600, D615s615, D615s616,
+};
 
-// D924 — 3072-bit; half-width between D616 and D1232.
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-pub use core_type::{D924, D924s0, D924s462, D924s924};
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
+// D923 — 3072-bit; half-width between D615 and D1231.
+#[cfg(any(feature = "d923", feature = "xx-wide"))]
+pub use core_type::{
+    D923,
+    D923s0, D923s75, D923s153, D923s230, D923s307, D923s400, D923s461, D923s462,
+    D923s500, D923s616, D923s700, D923s800, D923s860, D923s900, D923s920, D923s923, D923s924,
+};
+#[cfg(any(feature = "d923", feature = "xx-wide"))]
 pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
 
-// D1232 — 4096-bit; widest tier shipped.
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub use core_type::{D1232, D1232s0, D1232s616, D1232s1232};
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+// D1231 — 4096-bit; widest tier shipped.
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+pub use core_type::{
+    D1231,
+    D1231s0, D1231s75, D1231s153, D1231s230, D1231s307, D1231s461, D1231s616,
+    D1231s700, D1231s800, D1231s900, D1231s924, D1231s1000, D1231s1100,
+    D1231s1180, D1231s1220, D1231s1230, D1231s1231, D1231s1232,
+};
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub use wide_int::{Int8192, Int16384, Uint8192, Uint16384};
 
 // ─── Construction macros (re-exports + per-scale wrappers) ────────────
