@@ -311,11 +311,47 @@ Further reading:
 - Wikipedia - [Taylor series § Exponential function](https://en.wikipedia.org/wiki/Taylor_series#Exponential_function)
 - Wolfram MathWorld - [Exponential Function](https://mathworld.wolfram.com/ExponentialFunction.html), [Maclaurin Series](https://mathworld.wolfram.com/MaclaurinSeries.html)
 
-### `sin` / `cos` via range-reduced Taylor
+### `sin` via [0, π/4] reduction with sin / cos branching
 
-Reduce to `[0, π/4]` (or `[0, π/2]` in the wide path, slightly
-slower convergence), Taylor-expand `sin`, recover `cos` from
-`sin(x + π/2)`. Same Cody–Waite shape.
+Reduce `v` mod `τ` to `r ∈ [−π, π]`; fold to `|r| ∈ [0, π/2]` via
+`sin(π − x) = sin(x)`; then route to **two sub-kernels** based on
+whether the reduced argument lies in the lower or upper half of
+`[0, π/2]`:
+
+- `r ≤ π/4`: `sin_taylor(r)` — standard
+  `r − r³/3! + r⁵/5! − …` series.
+- `r > π/4`: `cos_taylor(π/2 − r)` — `1 − r²/2! + r⁴/4! − …` series
+  on an argument in `[0, π/4]`. Cos's leading constant-`1` term
+  means it converges marginally faster than sin at the same
+  argument, and the [0, π/4] cap halves the Taylor argument range
+  vs the historic [0, π/2].
+
+Per research/2026_05_17_trig.md R1 (Muller 2016 §11.4 attributes
+the "switch to cos at π/4" trick to standard mid-precision
+practice).
+
+Implementation: `src/macros/wide_transcendental.rs::sin_fixed`
+(routes to `sin_taylor` / `cos_taylor`).
+
+### `sin_cos` joint kernel
+
+`sin_cos_strict(self) -> (sin, cos)`: shares the Taylor evaluation
+between sin and cos, recovers cos via the Pythagorean identity
+`|cos| = √(1 − sin²)`. Net cost ≈ one `sin_strict` + one wide
+sqrt + one wide mul vs the historic two independent sin
+evaluations (`cos = sin(x + π/2)`). 2–3× faster when both values
+are needed.
+
+> Pattern adapted from `fastnum::decimal::dec::math::sin_cos`.
+
+Implementation: `src/macros/wide_transcendental.rs::sin_cos_fixed`
+and `sin_cos_strict`.
+
+### `sin` / `cos` via plain range-reduced Taylor (legacy reference)
+
+Earlier implementation reduced to `[0, π/2]` and ran sin Taylor
+directly without the cos branch; `cos(x) = sin(x + π/2)` was a
+full second sin evaluation. Replaced by the variants above.
 Implementation: `src/trig_strict.rs::sin_fixed`,
 `src/macros/wide_transcendental.rs::sin_fixed` / `sin_taylor`.
 
@@ -324,14 +360,70 @@ Further reading:
 - Wikipedia - [Taylor series § Trigonometric functions](https://en.wikipedia.org/wiki/Taylor_series#Trigonometric_functions) (the `sin x = x − x³/3! + …` and `cos x = 1 − x²/2! + …` series)
 - Wolfram MathWorld - [Sine](https://mathworld.wolfram.com/Sine.html), [Cosine](https://mathworld.wolfram.com/Cosine.html), [Maclaurin Series](https://mathworld.wolfram.com/MaclaurinSeries.html)
 
-### `atan` via three argument halvings + Taylor
+### `atan` via per-width argument halvings + Taylor
 
 The identity `atan(x) = 2·atan(x / (1 + √(1 + x²)))` halves the
-argument; applying it three times reduces |x| by ≈ 8×, then the
-Taylor series for `atan` converges in ≈ `w · log₂(10) / 3` terms
-at working scale `w`. Re-multiply by `2^3 = 8` at the end.
+argument; applying it `l` times reduces `|x|` by `~2^l`, then the
+Taylor series for `atan` converges in `~p_bits / (2l)` terms.
+
+The halving count is chosen per working scale `w`:
+
+- `w < 60` → 5 halvings (D38 / D9 / D18 strict path)
+- `60 ≤ w < 110` → 6 halvings (D76 / light D153)
+- `w ≥ 110` → 7 halvings (D153 / D307)
+
+Per research/2026_05_17_inverse_trig.md R1: each halving costs
+~one wide mul + one wide sqrt + one wide div; each saved Taylor
+term saves ~one wide mul; the break-even depends on `p_bits` and
+sits in the 5–7 range for our tiers.
+
 Implementation: `src/trig_strict.rs::atan_fixed`,
 `src/macros/wide_transcendental.rs::atan_fixed`.
+
+### `atan2` with max-branch quotient selection
+
+`atan2(y, x)` evaluates `atan(y/x)` plus a quadrant offset. The
+historical implementation always fed `y/x` to `atan_fixed`, losing
+`~log₂(|y/x|)` bits when `|y| ≫ |x|` because `atan_fixed`'s
+argument-halving cascade had to consume them. The current
+implementation max-branches: it feeds `atan_fixed` whichever of
+`y/x` or `x/y` has `|·| ≤ 1` and applies the identity
+`atan(t) = sign(t)·π/2 − atan(1/t)` for `|t| > 1` to recover the
+quotient. Eliminates the asymptotic-edge precision loss; modest
+speed win at any `|y/x|` significantly different from 1.
+
+Per research/2026_05_17_inverse_trig.md R2.
+
+Implementation: `src/trig_strict.rs::atan2_strict` (D38),
+`src/macros/wide_transcendental.rs::atan2_strict` (wide tier).
+
+### `asin` / `acos` two-range kernel
+
+Earlier path: `asin(x) = atan(x / √(1 − x²))`. At `|x| → 1` the
+`1 − x²` subtraction cancelled all leading bits, losing ≈
+`log(1/(1−|x|²))` digits of precision and risking 1-ULP error at
+the asymptotic edge.
+
+Two-range kernel preserves the 0-ULP contract at every
+representable input:
+
+- `|x| ≤ 0.5`: existing `atan(x / √(1 − x²))` path. At this range
+  `1 − x² ∈ [0.75, 1]` — no cancellation, full precision.
+- `|x| > 0.5`: half-angle identity
+  `asin(|x|) = π/2 − 2·asin(√((1 − |x|)/2))`. Recurses once on
+  `√((1 − |x|)/2) ∈ (0, 0.5]`, which hits the stable branch. The
+  inner `(1 − |x|)/2` is exact (no cancellation: `|x| ≤ 1`
+  guarantees `1 − |x| ≥ 0`), so the precision floor scales with
+  the working scale instead of with the input's distance from 1.
+
+`acos` shares the same kernel via `acos(x) = π/2 − asin(x)`.
+
+Per research/2026_05_17_inverse_trig.md R3.
+
+Implementation: `src/trig_strict.rs::asin_strict` /
+`acos_strict` (D38) and the four wide-tier variants in
+`src/macros/wide_transcendental.rs` (`asin_strict`,
+`asin_strict_with`, `acos_strict`, `acos_strict_with`).
 
 Further reading:
 
