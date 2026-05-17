@@ -599,6 +599,29 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "E_D307_S307", &e307, 307, 1)?;
     emit_constant(&mut f, "GOLDEN_D307_S307", &phi307, 307, 1)?;
 
+    // ─── New half-width and wider tiers ────────────────────────────
+    //
+    // For each, emit (PI, TAU, HALF_PI, QUARTER_PI, E, GOLDEN) at
+    // the tier's max SCALE. Scales chosen as the storage's safe
+    // decimal-digit capacity (storage_bits · log10(2), rounded down).
+    for &scale in &[57u32, 115, 230, 462, 616, 924, 1232] {
+        let p = pi(scale);
+        let mut t = p.clone();
+        t.mul_u64(2);
+        let mut hp = p.clone();
+        hp.div_u64(2);
+        let mut qp = p.clone();
+        qp.div_u64(4);
+        let e = e_const(scale);
+        let phi = golden(scale);
+        emit_constant(&mut f, &format!("PI_D{}_S{}", scale, scale), &p, scale, 1)?;
+        emit_constant(&mut f, &format!("TAU_D{}_S{}", scale, scale), &t, scale, 1)?;
+        emit_constant(&mut f, &format!("HALF_PI_D{}_S{}", scale, scale), &hp, scale, 1)?;
+        emit_constant(&mut f, &format!("QUARTER_PI_D{}_S{}", scale, scale), &qp, scale, 1)?;
+        emit_constant(&mut f, &format!("E_D{}_S{}", scale, scale), &e, scale, 1)?;
+        emit_constant(&mut f, &format!("GOLDEN_D{}_S{}", scale, scale), &phi, scale, 1)?;
+    }
+
     println!("cargo:rerun-if-changed=build.rs");
     Ok(())
 }

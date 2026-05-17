@@ -286,7 +286,7 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D153<SCALE> {
     #[inline] fn e() -> Self { Self(e_at_target_d153::<SCALE>()) }
 }
 
-#[cfg(any(feature = "d307", feature = "wide"))]
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 impl<const SCALE: u32> DecimalConsts for crate::core_type::D307<SCALE> {
     #[inline] fn pi() -> Self { Self(pi_at_target_d307::<SCALE>()) }
     #[inline] fn tau() -> Self { Self(tau_at_target_d307::<SCALE>()) }
@@ -295,3 +295,180 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D307<SCALE> {
     #[inline] fn golden() -> Self { Self(golden_at_target_d307::<SCALE>()) }
     #[inline] fn e() -> Self { Self(e_at_target_d307::<SCALE>()) }
 }
+
+// ─── New half-width and wider tiers ──────────────────────────────────
+//
+// Generated per the build.rs `for &scale in &[57, 115, 230, 462, 616,
+// 924, 1232]` loop. Each tier mirrors the D76 / D153 / D307 pattern:
+// (1) a raw `Int*` const parsed from the build-time decimal string,
+// (2) a `<const_name>_at_target_d<scale>::<TARGET>()` accessor that
+// rescales down to the caller's SCALE, and (3) a `DecimalConsts` impl
+// on the decimal type.
+//
+// Macro to compress the repetition: each invocation produces one
+// tier's full set of consts + accessor + impl.
+macro_rules! decl_wide_consts_tier {
+    (
+        $D:ident, $Storage:ty, $scale:literal, $scale_ref:ident,
+        $PI:ident, $TAU:ident, $HALF_PI:ident, $QUARTER_PI:ident,
+        $E:ident, $GOLDEN:ident,
+        $PI_RAW:ident, $TAU_RAW:ident, $HALF_PI_RAW:ident,
+        $QUARTER_PI_RAW:ident, $E_RAW:ident, $GOLDEN_RAW:ident,
+        $pi_fn:ident, $tau_fn:ident, $half_pi_fn:ident,
+        $quarter_pi_fn:ident, $e_fn:ident, $golden_fn:ident,
+        $feature:literal, $umbrella:literal $(,)?
+    ) => {
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $scale_ref: u32 = $scale;
+
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $PI_RAW: $Storage = match <$Storage>::from_str_radix($PI, 10) {
+            Ok(v) => v,
+            Err(()) => panic!(concat!("consts_wide: ", stringify!($PI), " not parseable")),
+        };
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $TAU_RAW: $Storage = match <$Storage>::from_str_radix($TAU, 10) {
+            Ok(v) => v,
+            Err(()) => panic!(concat!("consts_wide: ", stringify!($TAU), " not parseable")),
+        };
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $HALF_PI_RAW: $Storage = match <$Storage>::from_str_radix($HALF_PI, 10) {
+            Ok(v) => v,
+            Err(()) => panic!(concat!("consts_wide: ", stringify!($HALF_PI), " not parseable")),
+        };
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $QUARTER_PI_RAW: $Storage = match <$Storage>::from_str_radix($QUARTER_PI, 10) {
+            Ok(v) => v,
+            Err(()) => panic!(concat!("consts_wide: ", stringify!($QUARTER_PI), " not parseable")),
+        };
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $E_RAW: $Storage = match <$Storage>::from_str_radix($E, 10) {
+            Ok(v) => v,
+            Err(()) => panic!(concat!("consts_wide: ", stringify!($E), " not parseable")),
+        };
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        const $GOLDEN_RAW: $Storage = match <$Storage>::from_str_radix($GOLDEN, 10) {
+            Ok(v) => v,
+            Err(()) => panic!(concat!("consts_wide: ", stringify!($GOLDEN), " not parseable")),
+        };
+
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        pub(crate) fn $pi_fn<const TARGET: u32>() -> $Storage {
+            use crate::core_type::$D;
+            $D::<{ $scale }>::from_bits($PI_RAW).rescale::<TARGET>().to_bits()
+        }
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        pub(crate) fn $tau_fn<const TARGET: u32>() -> $Storage {
+            use crate::core_type::$D;
+            $D::<{ $scale }>::from_bits($TAU_RAW).rescale::<TARGET>().to_bits()
+        }
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        pub(crate) fn $half_pi_fn<const TARGET: u32>() -> $Storage {
+            use crate::core_type::$D;
+            $D::<{ $scale }>::from_bits($HALF_PI_RAW).rescale::<TARGET>().to_bits()
+        }
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        pub(crate) fn $quarter_pi_fn<const TARGET: u32>() -> $Storage {
+            use crate::core_type::$D;
+            $D::<{ $scale }>::from_bits($QUARTER_PI_RAW).rescale::<TARGET>().to_bits()
+        }
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        pub(crate) fn $e_fn<const TARGET: u32>() -> $Storage {
+            use crate::core_type::$D;
+            $D::<{ $scale }>::from_bits($E_RAW).rescale::<TARGET>().to_bits()
+        }
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        pub(crate) fn $golden_fn<const TARGET: u32>() -> $Storage {
+            use crate::core_type::$D;
+            $D::<{ $scale }>::from_bits($GOLDEN_RAW).rescale::<TARGET>().to_bits()
+        }
+
+        #[cfg(any(feature = $feature, feature = $umbrella))]
+        impl<const SCALE: u32> DecimalConsts for crate::core_type::$D<SCALE> {
+            #[inline] fn pi() -> Self { Self($pi_fn::<SCALE>()) }
+            #[inline] fn tau() -> Self { Self($tau_fn::<SCALE>()) }
+            #[inline] fn half_pi() -> Self { Self($half_pi_fn::<SCALE>()) }
+            #[inline] fn quarter_pi() -> Self { Self($quarter_pi_fn::<SCALE>()) }
+            #[inline] fn golden() -> Self { Self($golden_fn::<SCALE>()) }
+            #[inline] fn e() -> Self { Self($e_fn::<SCALE>()) }
+        }
+    };
+}
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+use crate::wide_int::Int192;
+#[cfg(any(feature = "d115", feature = "wide"))]
+use crate::wide_int::Int384;
+#[cfg(any(feature = "d230", feature = "wide"))]
+use crate::wide_int::Int768;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+use crate::wide_int::Int1536;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+use crate::wide_int::Int2048;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+use crate::wide_int::Int3072;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+use crate::wide_int::Int4096;
+
+decl_wide_consts_tier!(
+    D57, Int192, 57, D57_SCALE_REF,
+    PI_D57_S57, TAU_D57_S57, HALF_PI_D57_S57, QUARTER_PI_D57_S57, E_D57_S57, GOLDEN_D57_S57,
+    PI_RAW_D192, TAU_RAW_D192, HALF_PI_RAW_D192, QUARTER_PI_RAW_D192, E_RAW_D192, GOLDEN_RAW_D192,
+    pi_at_target_d57, tau_at_target_d57, half_pi_at_target_d57,
+    quarter_pi_at_target_d57, e_at_target_d57, golden_at_target_d57,
+    "d57", "wide",
+);
+
+decl_wide_consts_tier!(
+    D115, Int384, 115, D115_SCALE_REF,
+    PI_D115_S115, TAU_D115_S115, HALF_PI_D115_S115, QUARTER_PI_D115_S115, E_D115_S115, GOLDEN_D115_S115,
+    PI_RAW_D384, TAU_RAW_D384, HALF_PI_RAW_D384, QUARTER_PI_RAW_D384, E_RAW_D384, GOLDEN_RAW_D384,
+    pi_at_target_d115, tau_at_target_d115, half_pi_at_target_d115,
+    quarter_pi_at_target_d115, e_at_target_d115, golden_at_target_d115,
+    "d115", "wide",
+);
+
+decl_wide_consts_tier!(
+    D230, Int768, 230, D230_SCALE_REF,
+    PI_D230_S230, TAU_D230_S230, HALF_PI_D230_S230, QUARTER_PI_D230_S230, E_D230_S230, GOLDEN_D230_S230,
+    PI_RAW_D768, TAU_RAW_D768, HALF_PI_RAW_D768, QUARTER_PI_RAW_D768, E_RAW_D768, GOLDEN_RAW_D768,
+    pi_at_target_d230, tau_at_target_d230, half_pi_at_target_d230,
+    quarter_pi_at_target_d230, e_at_target_d230, golden_at_target_d230,
+    "d230", "wide",
+);
+
+decl_wide_consts_tier!(
+    D462, Int1536, 462, D462_SCALE_REF,
+    PI_D462_S462, TAU_D462_S462, HALF_PI_D462_S462, QUARTER_PI_D462_S462, E_D462_S462, GOLDEN_D462_S462,
+    PI_RAW_D1536, TAU_RAW_D1536, HALF_PI_RAW_D1536, QUARTER_PI_RAW_D1536, E_RAW_D1536, GOLDEN_RAW_D1536,
+    pi_at_target_d462, tau_at_target_d462, half_pi_at_target_d462,
+    quarter_pi_at_target_d462, e_at_target_d462, golden_at_target_d462,
+    "d462", "x-wide",
+);
+
+decl_wide_consts_tier!(
+    D616, Int2048, 616, D616_SCALE_REF,
+    PI_D616_S616, TAU_D616_S616, HALF_PI_D616_S616, QUARTER_PI_D616_S616, E_D616_S616, GOLDEN_D616_S616,
+    PI_RAW_D2048, TAU_RAW_D2048, HALF_PI_RAW_D2048, QUARTER_PI_RAW_D2048, E_RAW_D2048, GOLDEN_RAW_D2048,
+    pi_at_target_d616, tau_at_target_d616, half_pi_at_target_d616,
+    quarter_pi_at_target_d616, e_at_target_d616, golden_at_target_d616,
+    "d616", "x-wide",
+);
+
+decl_wide_consts_tier!(
+    D924, Int3072, 924, D924_SCALE_REF,
+    PI_D924_S924, TAU_D924_S924, HALF_PI_D924_S924, QUARTER_PI_D924_S924, E_D924_S924, GOLDEN_D924_S924,
+    PI_RAW_D3072, TAU_RAW_D3072, HALF_PI_RAW_D3072, QUARTER_PI_RAW_D3072, E_RAW_D3072, GOLDEN_RAW_D3072,
+    pi_at_target_d924, tau_at_target_d924, half_pi_at_target_d924,
+    quarter_pi_at_target_d924, e_at_target_d924, golden_at_target_d924,
+    "d924", "xx-wide",
+);
+
+decl_wide_consts_tier!(
+    D1232, Int4096, 1232, D1232_SCALE_REF,
+    PI_D1232_S1232, TAU_D1232_S1232, HALF_PI_D1232_S1232, QUARTER_PI_D1232_S1232, E_D1232_S1232, GOLDEN_D1232_S1232,
+    PI_RAW_D4096, TAU_RAW_D4096, HALF_PI_RAW_D4096, QUARTER_PI_RAW_D4096, E_RAW_D4096, GOLDEN_RAW_D4096,
+    pi_at_target_d1232, tau_at_target_d1232, half_pi_at_target_d1232,
+    quarter_pi_at_target_d1232, e_at_target_d1232, golden_at_target_d1232,
+    "d1232", "xx-wide",
+);

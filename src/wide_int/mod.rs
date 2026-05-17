@@ -2079,22 +2079,62 @@ decl_wide_int!(Uint3072, Int3072, 48, 96);
 decl_wide_int!(Uint4096, Int4096, 64, 128);
 decl_wide_int!(Uint6144, Int6144, 96, 192);
 decl_wide_int!(Uint8192, Int8192, 128, 256);
+decl_wide_int!(Uint12288, Int12288, 192, 384);
+decl_wide_int!(Uint16384, Int16384, 256, 512);
 
 // Short aliases used by the decimal-tier macros (replacing the former
 // `crate::wide` re-export shim). The signed alias is exposed at each
 // width where it backs storage *or* serves as the next-width mul/div
 // widening step; the unsigned alias only where `Display`'s magnitude
 // path needs it. The feature gates mirror the call-site features.
+// Tier aliases — each width gets an `I*` (signed) alias when it
+// backs storage or serves as a mul/div widening step for some tier,
+// and a matching `U*` (unsigned) when `Display`'s magnitude path
+// needs it.
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) use self::{Int192 as I192, Uint192 as U192};
+#[cfg(any(feature = "d57", feature = "d76", feature = "wide"))]
+pub(crate) use self::Int384 as I384;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub(crate) use self::Uint384 as U384;
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub(crate) use self::{Int256 as I256, Uint256 as U256};
-#[cfg(any(feature = "d76", feature = "d153", feature = "wide"))]
+#[cfg(any(feature = "d76", feature = "d115", feature = "d153", feature = "wide"))]
 pub(crate) use self::Int512 as I512;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub(crate) use self::Uint512 as U512;
-#[cfg(any(feature = "d153", feature = "d307", feature = "wide"))]
+#[cfg(any(feature = "d115", feature = "d153", feature = "d230", feature = "wide"))]
+pub(crate) use self::Int768 as I768;
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub(crate) use self::Uint768 as U768;
+#[cfg(any(feature = "d153", feature = "d230", feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) use self::Int1024 as I1024;
-#[cfg(any(feature = "d307", feature = "wide"))]
+#[cfg(any(feature = "d230", feature = "d307", feature = "d462", feature = "wide", feature = "x-wide"))]
+pub(crate) use self::Int1536 as I1536;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub(crate) use self::Uint1536 as U1536;
+#[cfg(any(feature = "d307", feature = "d462", feature = "d616", feature = "wide", feature = "x-wide"))]
 pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub(crate) use self::Uint2048 as U2048;
+#[cfg(any(feature = "d462", feature = "d616", feature = "d924", feature = "x-wide", feature = "xx-wide"))]
+pub(crate) use self::Int3072 as I3072;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub(crate) use self::Uint3072 as U3072;
+#[cfg(any(feature = "d616", feature = "d924", feature = "d1232", feature = "x-wide", feature = "xx-wide"))]
+pub(crate) use self::Int4096 as I4096;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub(crate) use self::Uint4096 as U4096;
+#[cfg(any(feature = "d924", feature = "d1232", feature = "xx-wide"))]
+pub(crate) use self::Int6144 as I6144;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub(crate) use self::Int8192 as I8192;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+#[allow(unused_imports)]
+pub(crate) use self::Int12288 as I12288;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+#[allow(unused_imports)]
+pub(crate) use self::Int16384 as I16384;
 
 #[cfg(test)]
 mod karatsuba_tests {

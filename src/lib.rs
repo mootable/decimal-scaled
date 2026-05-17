@@ -267,6 +267,50 @@ pub use core_type::{D153, D153s0, D153s35, D153s75, D153s150, D153s153};
 #[cfg(any(feature = "d307", feature = "wide"))]
 pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 
+// ─── New half-width and wider tiers ───────────────────────────────────
+
+// D57 — 192-bit storage; half-width between D38 and D76.
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub use core_type::{D57, D57s0, D57s19, D57s28, D57s57};
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub use wide_int::{Int192, Uint192};
+
+// D115 — 384-bit; half-width between D76 and D153.
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub use core_type::{D115, D115s0, D115s57, D115s115};
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub use wide_int::{Int384, Uint384};
+
+// D230 — 768-bit; half-width between D153 and D307.
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub use core_type::{D230, D230s0, D230s115, D230s230};
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub use wide_int::{Int768, Uint768};
+
+// D462 — 1536-bit; half-width between D307 and D616.
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub use core_type::{D462, D462s0, D462s230, D462s462};
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub use wide_int::{Int1536, Uint1536};
+
+// D616 — 2048-bit; new top wide tier. Int2048 / Uint2048 are
+// already exported above for x-wide / d307 widening; no re-export
+// here.
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub use core_type::{D616, D616s0, D616s308, D616s616};
+
+// D924 — 3072-bit; half-width between D616 and D1232.
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub use core_type::{D924, D924s0, D924s462, D924s924};
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
+
+// D1232 — 4096-bit; widest tier shipped.
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub use core_type::{D1232, D1232s0, D1232s616, D1232s1232};
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub use wide_int::{Int8192, Int16384, Uint8192, Uint16384};
+
 // ─── Construction macros (re-exports + per-scale wrappers) ────────────
 
 /// The narrow-tier proc-macros are always available with the

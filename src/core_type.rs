@@ -1008,6 +1008,275 @@ pub type D307s300 = D307<300>;
 #[cfg(any(feature = "d307", feature = "wide"))]
 pub type D307s307 = D307<307>;
 
+// ─── Half-width and wider tiers (D57 / D115 / D230 / D462 / D616 / D924 / D1232) ───
+//
+// These fill the (2^n + 2^(n+1))/2 gaps between the existing
+// power-of-two storage tiers, plus extend the top end past D307.
+// Each tier has the same surface as D76 / D153 / D307: full
+// `decl_decimal_full!` emission (every arithmetic / transcendental
+// method), plus scale aliases at 0 / mid / max.
+//
+// Cross-width widening / narrowing methods are emitted to the
+// immediate-neighbour tiers only — `D57 ↔ D38`, `D57 ↔ D76`, etc.
+// Multi-tier hops go via the chain (e.g. D57 → D76 → D153) at the
+// cost of one intermediate.
+
+// ── D57 (192-bit / 3 u64 limbs) ────────────────────────────────────────
+
+/// Scaled fixed-point decimal with 192-bit storage. Half-width tier
+/// between D38 and D76 — useful when the D38 i128 ceiling is in
+/// reach but D76's 256-bit storage is wasteful.
+///
+/// Gated behind the `d57` (or umbrella `wide`) Cargo feature.
+#[cfg(any(feature = "d57", feature = "wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D57<const SCALE: u32>(pub crate::wide_int::I192);
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+impl<const SCALE: u32> Default for D57<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D57,
+    crate::wide_int::I192,
+    crate::wide_int::U192,
+    crate::wide_int::I384,
+    crate::wide_int::Int384,
+    crate::wide_int::Int512,
+    crate::wide_int::Int512,
+    wide_trig_d57,
+    57
+);
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s0 = D57<0>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s19 = D57<19>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s28 = D57<28>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s57 = D57<57>;
+
+// ── D115 (384-bit / 6 u64 limbs) ───────────────────────────────────────
+
+/// Scaled fixed-point decimal with 384-bit storage. Half-width tier
+/// between D76 and D153.
+///
+/// Gated behind the `d115` (or umbrella `wide`) Cargo feature.
+#[cfg(any(feature = "d115", feature = "wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D115<const SCALE: u32>(pub crate::wide_int::I384);
+
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl<const SCALE: u32> Default for D115<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d115", feature = "wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D115,
+    crate::wide_int::I384,
+    crate::wide_int::U384,
+    crate::wide_int::I768,
+    crate::wide_int::Int768,
+    crate::wide_int::Int1024,
+    crate::wide_int::Int1024,
+    wide_trig_d115,
+    115
+);
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s0 = D115<0>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s57 = D115<57>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s115 = D115<115>;
+
+// ── D230 (768-bit / 12 u64 limbs) ──────────────────────────────────────
+
+/// Scaled fixed-point decimal with 768-bit storage. Half-width tier
+/// between D153 and D307.
+///
+/// Gated behind the `d230` (or umbrella `wide`) Cargo feature.
+#[cfg(any(feature = "d230", feature = "wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D230<const SCALE: u32>(pub crate::wide_int::I768);
+
+#[cfg(any(feature = "d230", feature = "wide"))]
+impl<const SCALE: u32> Default for D230<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d230", feature = "wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D230,
+    crate::wide_int::I768,
+    crate::wide_int::U768,
+    crate::wide_int::I1536,
+    crate::wide_int::Int1536,
+    crate::wide_int::Int3072,
+    crate::wide_int::Int3072,
+    wide_trig_d230,
+    230
+);
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub type D230s0 = D230<0>;
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub type D230s115 = D230<115>;
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub type D230s230 = D230<230>;
+
+// ── D462 (1536-bit / 24 u64 limbs) ─────────────────────────────────────
+
+/// Scaled fixed-point decimal with 1536-bit storage. Half-width tier
+/// between D307 and D616.
+///
+/// Gated behind the `d462` (or umbrella `x-wide`) Cargo feature.
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D462<const SCALE: u32>(pub crate::wide_int::I1536);
+
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+impl<const SCALE: u32> Default for D462<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D462,
+    crate::wide_int::I1536,
+    crate::wide_int::U1536,
+    crate::wide_int::I3072,
+    crate::wide_int::Int3072,
+    crate::wide_int::Int4096,
+    crate::wide_int::Int4096,
+    wide_trig_d462,
+    462
+);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s0 = D462<0>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s230 = D462<230>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s462 = D462<462>;
+
+// ── D616 (2048-bit / 32 u64 limbs) ─────────────────────────────────────
+
+/// Scaled fixed-point decimal with 2048-bit storage. New top tier
+/// beyond D307; supports correctly-rounded transcendentals at scale
+/// up to 616 decimal digits.
+///
+/// Gated behind the `d616` (or umbrella `x-wide`) Cargo feature.
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D616<const SCALE: u32>(pub crate::wide_int::I2048);
+
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl<const SCALE: u32> Default for D616<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D616,
+    crate::wide_int::I2048,
+    crate::wide_int::U2048,
+    crate::wide_int::I4096,
+    crate::wide_int::Int4096,
+    crate::wide_int::Int8192,
+    crate::wide_int::Int8192,
+    wide_trig_d616,
+    616
+);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s0 = D616<0>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s308 = D616<308>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s616 = D616<616>;
+
+// ── D924 (3072-bit / 48 u64 limbs) ─────────────────────────────────────
+
+/// Scaled fixed-point decimal with 3072-bit storage. Half-width tier
+/// between D616 and D1232; supports SCALE up to 924 digits.
+///
+/// Gated behind the `d924` (or umbrella `xx-wide`) Cargo feature.
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D924<const SCALE: u32>(pub crate::wide_int::I3072);
+
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl<const SCALE: u32> Default for D924<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D924,
+    crate::wide_int::I3072,
+    crate::wide_int::U3072,
+    crate::wide_int::I6144,
+    crate::wide_int::Int6144,
+    crate::wide_int::Int12288,
+    crate::wide_int::Int12288,
+    wide_trig_d924,
+    924
+);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s0 = D924<0>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s462 = D924<462>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s924 = D924<924>;
+
+// ── D1232 (4096-bit / 64 u64 limbs) ────────────────────────────────────
+
+/// Scaled fixed-point decimal with 4096-bit storage. Widest tier
+/// shipped; supports SCALE up to 1232 digits.
+///
+/// Gated behind the `d1232` (or umbrella `xx-wide`) Cargo feature.
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+#[repr(transparent)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
+pub struct D1232<const SCALE: u32>(pub crate::wide_int::I4096);
+
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl<const SCALE: u32> Default for D1232<SCALE> {
+    #[inline]
+    fn default() -> Self { Self::ZERO }
+}
+
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+crate::macros::full::decl_decimal_full!(
+    wide D1232,
+    crate::wide_int::I4096,
+    crate::wide_int::U4096,
+    crate::wide_int::I8192,
+    crate::wide_int::Int8192,
+    crate::wide_int::Int16384,
+    crate::wide_int::Int16384,
+    wide_trig_d1232,
+    1232
+);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s0 = D1232<0>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s616 = D1232<616>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1232 = D1232<1232>;
+
 #[cfg(test)]
 mod tests {
     use super::*;
