@@ -139,3 +139,27 @@ roadmap item here unless the accuracy contract changes.
 | Re-bench every release on a single dedicated machine, not whatever runner happened to be available | TODO | reduces inter-release noise that currently looks like regressions |
 | Track ULP deltas continuously, not one-shot at 0.2.5 | TODO | catches accuracy regressions early; cheap to run |
 | Cross-platform bit-determinism CI (Linux/macOS/Windows × x86_64/aarch64) | TODO | proves the `*_strict` invariant the docs claim |
+
+---
+
+## Out-of-tree adapter crates
+
+The core crate is deliberately compile-time-fixed-precision: a
+runtime-variable scale would break const-fn arithmetic,
+deterministic limb work, and the per-tier specialised
+transcendentals. Database / serialisation ergonomics that need a
+runtime scale are a better fit as thin adapter crates layered on
+top.
+
+| crate (proposed)              | what it bridges                                                                                                       | status |
+|-------------------------------|-----------------------------------------------------------------------------------------------------------------------|--------|
+| `decimal-scaled-sqlx`         | Map SQL `NUMERIC(p, s)` columns to a caller-chosen `D{N}<SCALE>`; handle string-form fallback for non-matching scale  | TODO   |
+| `decimal-scaled-diesel`       | Same shape for Diesel's `Numeric` SQL type                                                                            | TODO   |
+| `decimal-scaled-arrow`        | Arrow `Decimal128` / `Decimal256` column round-trip                                                                   | TODO   |
+| `decimal-scaled-protobuf`     | A protobuf `Decimal` message round-trip helper                                                                        | TODO   |
+
+These intentionally live outside the core crate so the core
+stays `no_std`, has no DB / serialisation drivers as deps, and
+keeps a small public surface. Each adapter owns its own
+runtime-scale negotiation and converts at the boundary into the
+caller's compile-time-fixed tier.
