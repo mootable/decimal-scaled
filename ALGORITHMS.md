@@ -93,11 +93,12 @@ estimations the per-limb work drops by ~30×.
 Implementation: `src/wide_int/mod.rs::MG2by1U64`.
 
 A 3-by-2 sibling (`MG3by2U64`, also implemented per MG Algorithm 5
-with GMP's `invert_pi1` reciprocal refinement) is kept available for
-arbitrary-divisor use cases. It was *not* faster than 2-by-1 +
-refinement loop on decimal divisors because the refinement loop
-almost never fires for our (well-conditioned) divisors, so the
-3-by-2's per-call extra multiply costs more than it saves.
+with the paper's Algorithm 6 reciprocal refinement that accounts
+for `d0`) is kept available for arbitrary-divisor use cases. It was
+*not* faster than 2-by-1 + refinement loop on decimal divisors
+because the refinement loop almost never fires for our
+(well-conditioned) divisors, so the 3-by-2's per-call extra
+multiply costs more than it saves.
 
 ### Knuth Algorithm D — multi-limb divide
 

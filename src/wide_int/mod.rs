@@ -1477,9 +1477,9 @@ impl MG2by1U64 {
 ///
 /// Net win at every Knuth call with `n ≥ 2` divisor limbs.
 ///
-/// Reference: Möller & Granlund 2011, Algorithm 5. The macro shape
-/// mirrors GMP's `udiv_qr_3by2` in `longlong.h`. `MG2by1U64` is the
-/// 2-by-1 cousin used by `limbs_divmod_knuth_u64`'s q̂ estimator.
+/// Reference: Möller & Granlund 2011, Algorithm 5 (the divide) and
+/// Algorithm 6 (the reciprocal precompute). `MG2by1U64` is the 2-by-1
+/// cousin used by `limbs_divmod_knuth_u64`'s q̂ estimator.
 #[derive(Clone, Copy)]
 pub(crate) struct MG3by2U64 {
     d1: u64,
@@ -1499,7 +1499,8 @@ impl MG3by2U64 {
     /// recover (test case: `n=(B-2, B-1, B-1)`, `d=(B-1, B-1)`, where
     /// the naive 2-by-1 reciprocal hands back q=0 instead of B-1).
     ///
-    /// Reference: GMP's `invert_pi1` macro in `gmp-impl.h`.
+    /// Reference: Möller & Granlund 2011, Algorithm 6 (the
+    /// reciprocal refinement that accounts for `d0`).
     #[inline]
     pub(crate) const fn new(d1: u64, d0: u64) -> Self {
         debug_assert!(d1 >> 63 == 1, "MG3by2U64::new: top divisor limb must be normalised");
@@ -1540,7 +1541,7 @@ impl MG3by2U64 {
     /// `(n2, n1) < (d1, d0)` so the quotient fits a single u64.
     /// Returns `(q, r1, r0)` where the remainder is `r1·B + r0`.
     ///
-    /// Algorithm: GMP's `udiv_qr_3by2_preinv`. Decomposed:
+    /// Algorithm decomposition (Möller & Granlund 2011, Algorithm 5):
     /// 1. Initial `q` from a 2-by-1 divide of `(n2, n1)` by `d1` via
     ///    the precomputed reciprocal `dinv`.
     /// 2. Subtract `(q·d1, q·d0)` from `(n1, n0)`; this stages the
@@ -1558,7 +1559,8 @@ impl MG3by2U64 {
 
         // Step 1: q estimate from (n2, n1) / d1 via dinv.
         // (q_hi, q_lo) = n2 * dinv + (n2, n1) — overflow into a 257th
-        // bit is fine, GMP's mask-based correction recovers from it.
+        // bit is fine, the mask-based correction (step 4a) recovers
+        // from it without needing to materialise the lost bit.
         let prod = (n2 as u128).wrapping_mul(self.dinv as u128)
             .wrapping_add(((n2 as u128) << 64) | (n1 as u128));
         let mut q = (prod >> 64) as u64;
@@ -2468,7 +2470,7 @@ mod slice_tests {
     /// representative corpus. Tests the corner cases that historically
     /// broke MG 3-by-2 implementations: numerator near divisor (so the
     /// initial q estimate may overshoot by 2), minimal normalised d1
-    /// (= B/2), maximal d1, and the GMP-confirmed corner where r1
+    /// (= B/2), maximal d1, and the paper's worst-case corner where r1
     /// must compare against q_lo without underflow.
     #[test]
     fn mg3by2_u64_matches_reference() {
