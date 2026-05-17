@@ -104,7 +104,7 @@ macro_rules! decl_wide_transcendental {
             const SERIES_CAP: u128 = 20_000;
 
             #[inline]
-            fn lit(n: u128) -> W {
+            pub(super) fn lit(n: u128) -> W {
                 $crate::wide_int::wide_cast(n)
             }
             #[inline]
@@ -988,8 +988,28 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
-            /// Arcsine of `self`, in radians, in `[−π/2, π/2]`, as
-            /// `atan(x / √(1 − x²))`. Strict. Panics if `|self| > 1`.
+            /// Arcsine of `self`, in radians, in `[−π/2, π/2]`.
+            /// Strict. Panics if `|self| > 1`.
+            ///
+            /// Two-range kernel to preserve the 0-ULP contract at
+            /// every representable input including the asymptotic
+            /// edge `|x| → 1`:
+            ///
+            /// - `|x| ≤ 0.5`: the direct identity
+            ///   `asin(x) = atan(x / √(1 − x²))`. At this range
+            ///   `1 − x² ∈ [0.75, 1]` — no cancellation in the
+            ///   subtraction, so the sqrt keeps full precision.
+            /// - `0.5 < |x| < 1`: the half-angle identity
+            ///   `asin(x) = π/2 − 2·asin(√((1−|x|)/2))`. The inner
+            ///   `√((1−|x|)/2)` lies in `(0, 0.5]` so the recursive
+            ///   asin call hits the stable range. The
+            ///   `(1−|x|)/2` subtraction is exact at integer level
+            ///   (no cancellation — `|x|` ≤ 1 means `1−|x| ≥ 0`),
+            ///   so the asymptotic-edge precision is bounded by
+            ///   the working scale, not by the input's distance
+            ///   from 1.
+            ///
+            /// Per research/2026_05_17_inverse_trig.md R3.
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
@@ -1000,18 +1020,37 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
+                let half_w = one_w / $core::lit(2);
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
-                } else {
+                } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
+                } else {
+                    // Half-angle: asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
+                    // The inner argument is in (0, 0.5], so the
+                    // recursive asin call takes the stable branch.
+                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner_sqrt = $core::sqrt_fixed(inner, w);
+                    let inner_denom = $core::sqrt_fixed(
+                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
+                        w,
+                    );
+                    let inner_asin = $core::atan_fixed(
+                        $core::div(inner_sqrt, inner_denom, w),
+                        w,
+                    );
+                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    if v < $core::zero() { -result_abs } else { result_abs }
                 };
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
             /// Arccosine of `self`, in radians, in `[0, π]`, as
             /// `π/2 − asin(self)`. Strict. Panics if `|self| > 1`.
+            /// Uses the same two-range asin kernel as
+            /// [`Self::asin_strict`] for the underlying asin.
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
@@ -1022,12 +1061,26 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
+                let half_w = one_w / $core::lit(2);
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
-                } else {
+                } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
+                } else {
+                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner_sqrt = $core::sqrt_fixed(inner, w);
+                    let inner_denom = $core::sqrt_fixed(
+                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
+                        w,
+                    );
+                    let inner_asin = $core::atan_fixed(
+                        $core::div(inner_sqrt, inner_denom, w),
+                        w,
+                    );
+                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    if v < $core::zero() { -result_abs } else { result_abs }
                 };
                 let r = $core::half_pi(w) - asin_w;
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
@@ -1417,7 +1470,9 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
-            /// Mode-aware sibling of [`Self::asin_strict`].
+            /// Mode-aware sibling of [`Self::asin_strict`]. Same
+            /// two-range kernel; see the unmodified docs there for
+            /// the algorithm.
             #[inline]
             #[must_use]
             pub fn asin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
@@ -1428,12 +1483,26 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
+                let half_w = one_w / $core::lit(2);
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
-                } else {
+                } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
+                } else {
+                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner_sqrt = $core::sqrt_fixed(inner, w);
+                    let inner_denom = $core::sqrt_fixed(
+                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
+                        w,
+                    );
+                    let inner_asin = $core::atan_fixed(
+                        $core::div(inner_sqrt, inner_denom, w),
+                        w,
+                    );
+                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    if v < $core::zero() { -result_abs } else { result_abs }
                 };
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -1449,12 +1518,26 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
+                let half_w = one_w / $core::lit(2);
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
-                } else {
+                } else if abs_v <= half_w {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
+                } else {
+                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner_sqrt = $core::sqrt_fixed(inner, w);
+                    let inner_denom = $core::sqrt_fixed(
+                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
+                        w,
+                    );
+                    let inner_asin = $core::atan_fixed(
+                        $core::div(inner_sqrt, inner_denom, w),
+                        w,
+                    );
+                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    if v < $core::zero() { -result_abs } else { result_abs }
                 };
                 let r = $core::half_pi(w) - asin_w;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))

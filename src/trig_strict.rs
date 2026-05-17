@@ -260,7 +260,6 @@ impl<const SCALE: u32> D38<SCALE> {
         let abs_v = Fixed { negative: false, mag: v.mag };
         assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::asin: argument out of domain [-1, 1]");
         if abs_v == one_w {
-            // asin(±1) = ±π/2.
             let hp = wide_half_pi(w);
             let hp = if v.negative { hp.neg() } else { hp };
             let raw = hp
@@ -268,9 +267,23 @@ impl<const SCALE: u32> D38<SCALE> {
                 .expect("D38::asin: result out of range");
             return Self::from_bits(raw);
         }
-        // √(1 − x²); x² ≤ 1 so 1 − x² ∈ [0, 1].
-        let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-        let raw = atan_fixed(v.div(denom, w), w)
+        // Two-range kernel to keep the 0-ULP contract at |x| → 1.
+        // The half-angle branch uses asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
+        let half_w = one_w.halve();
+        let asin_w = if !abs_v.ge_mag(half_w) {
+            // Stable range: |x| ≤ 0.5 → 1 − x² ∈ [0.75, 1], no cancellation.
+            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
+            atan_fixed(v.div(denom, w), w)
+        } else {
+            // |x| > 0.5: recurse on √((1−|x|)/2) ∈ (0, 0.5].
+            let inner = one_w.sub(abs_v).halve();
+            let inner_sqrt = inner.sqrt(w);
+            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
+            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
+            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
+            if v.negative { result_abs.neg() } else { result_abs }
+        };
+        let raw = asin_w
             .round_to_i128(w, SCALE)
             .expect("D38::asin: result out of range");
         Self::from_bits(raw)
@@ -291,17 +304,21 @@ impl<const SCALE: u32> D38<SCALE> {
         let v = to_fixed(self.0);
         let abs_v = Fixed { negative: false, mag: v.mag };
         assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::acos: argument out of domain [-1, 1]");
-        // asin(v) in the wide intermediate, then π/2 − asin(v).
+        // Same two-range asin kernel as asin_strict; then π/2 − asin.
+        let half_w = one_w.halve();
         let asin_w = if abs_v == one_w {
             let hp = wide_half_pi(w);
-            if v.negative {
-                hp.neg()
-            } else {
-                hp
-            }
-        } else {
+            if v.negative { hp.neg() } else { hp }
+        } else if !abs_v.ge_mag(half_w) {
             let denom = one_w.sub(v.mul(v, w)).sqrt(w);
             atan_fixed(v.div(denom, w), w)
+        } else {
+            let inner = one_w.sub(abs_v).halve();
+            let inner_sqrt = inner.sqrt(w);
+            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
+            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
+            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
+            if v.negative { result_abs.neg() } else { result_abs }
         };
         let raw = wide_half_pi(w)
             .sub(asin_w)
