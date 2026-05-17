@@ -174,16 +174,6 @@ macro_rules! decl_wide_transcendental {
             pub(super) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
                 round_div(a * b, pow10_w)
             }
-            /// Squaring variant of [`mul_cached`] — `(a · a) / 10^w`,
-            /// rounded half-to-even. Uses the dedicated squaring fast
-            /// path (`limbs_sqr_u64`) for ~50% fewer widening
-            /// multiplies than `mul_cached(a, a, …)`. Hot in the exp
-            /// postfix squaring chain, the AGM/Newton inner loops,
-            /// and every Taylor-`x²` precomputation.
-            #[inline]
-            pub(super) fn sqr_cached(a: W, pow10_w: W) -> W {
-                round_div(a.square(), pow10_w)
-            }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(super) fn div(a: W, b: W, w: u32) -> W {

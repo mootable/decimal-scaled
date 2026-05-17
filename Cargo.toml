@@ -223,6 +223,12 @@ name = "quick_div"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
+# Gate bench for the per-L fixed-array mul specialisation.
+[[bench]]
+name = "m2_mul_fixed"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # Per-width library_comparison benches. Each runs ONE tier's full
 # peer comparison so `cargo bench --bench lib_cmp_d307` iterates
 # in minutes. Run them all sequentially for a full matrix sweep.

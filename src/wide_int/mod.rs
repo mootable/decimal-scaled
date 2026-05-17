@@ -1312,47 +1312,50 @@ pub(crate) const fn limbs_mul_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     }
 }
 
-/// Alternate inner-loop variant of [`limbs_mul_u64`] modelled after
-/// `dashu-int-0.4.1/src/mul/mod.rs:97-110`. Replaces the manual
-/// `prod_hi + c1 + c2` carry merge with a single fused
-/// `(out + ai·bj + carry) as u128` expression and drops the
-/// per-cell `b[j] != 0` zero-skip.
+/// Fixed-width specialisation of [`limbs_mul_u64`]: the operand
+/// limb-count `L` and output limb-count `D = 2·L` are both
+/// compile-time constants, so the slice indirection and loop-bound
+/// checks vanish and LLVM can unroll the inner loop (and, for small
+/// `L`, the outer one too).
 ///
-/// **Status (2026-05-18 M2 bench):** within noise vs v1 at 16/32/48
-/// limbs, ~ 4 % slower at 64 limbs. LLVM emits substantially better
-/// code for the manual carry pattern on the current toolchain than
-/// the assembly analysis predicted. Kept in tree as the documented
-/// alternative + correctness oracle (`limbs_mul_u64_v2_matches_v1`
-/// in slice_tests) for any future SIMD / ADX revisit.
-///
-/// Not `const` because the carry-chain pattern below isn't
-/// const-evaluable.
-#[allow(dead_code)]
-pub(crate) fn limbs_mul_u64_v2(a: &[u64], b: &[u64], out: &mut [u64]) {
-    for (i, &ai) in a.iter().enumerate() {
-        if ai == 0 {
-            continue;
+/// Same algorithm and same output as [`limbs_mul_u64`]; faster only
+/// when both operands have known-equal length (the common case for
+/// wide-tier `widen_mul` where both operands are an `Int{N}` of the
+/// tier's storage width).
+#[inline]
+pub(crate) const fn limbs_mul_u64_fixed<const L: usize, const D: usize>(
+    a: &[u64; L],
+    b: &[u64; L],
+    out: &mut [u64; D],
+) {
+    debug_assert!(D >= 2 * L, "limbs_mul_u64_fixed: D must be ≥ 2·L");
+    let mut i = 0;
+    while i < L {
+        let ai = a[i];
+        if ai != 0 {
+            let mut carry: u64 = 0;
+            let mut j = 0;
+            while j < L {
+                let v = (ai as u128) * (b[j] as u128)
+                    + (out[i + j] as u128)
+                    + (carry as u128);
+                out[i + j] = v as u64;
+                carry = (v >> 64) as u64;
+                j += 1;
+            }
+            // Final row carry, propagated until exhausted or end of
+            // `out`. Worst-case unbounded chain when out[i + L ..]
+            // is all-ones; ordinarily exits after 1 iteration.
+            let mut idx = i + L;
+            let mut c = carry;
+            while c != 0 && idx < D {
+                let v = (out[idx] as u128) + (c as u128);
+                out[idx] = v as u64;
+                c = (v >> 64) as u64;
+                idx += 1;
+            }
         }
-        // Inner row: out[i..i+n] += ai · b, single fused expression
-        // per cell. dashu's `mul_add_2carry` shape.
-        let mut carry: u64 = 0;
-        for (j, &bj) in b.iter().enumerate() {
-            // (existing_word) + (ai · bj) + (carry) -> (lo, hi) in
-            // one u128 expression. LLVM hoists this into MUL + ADC.
-            let v = (ai as u128) * (bj as u128)
-                + (out[i + j] as u128)
-                + (carry as u128);
-            out[i + j] = v as u64;
-            carry = (v >> 64) as u64;
-        }
-        // Propagate final row carry.
-        let mut idx = i + b.len();
-        while carry != 0 && idx < out.len() {
-            let v = (out[idx] as u128) + (carry as u128);
-            out[idx] = v as u64;
-            carry = (v >> 64) as u64;
-            idx += 1;
-        }
+        i += 1;
     }
 }
 
@@ -1436,84 +1439,6 @@ pub(crate) const fn limbs_divmod_u64(
             limbs_sub_assign_u64(rem, den);
             quot[0] |= 1;
         }
-    }
-}
-
-/// `out = a · a` using the squaring fast path: ~`n(n+1)/2` widening
-/// multiplies vs schoolbook's `n²`, by computing each off-diagonal
-/// cross-product once, doubling the sum, then adding the diagonal
-/// `aᵢ²` terms. `out.len() >= 2·a.len()` and `out` must be zeroed.
-///
-/// Reference: Knuth TAOCP Vol 2 §4.3.1 exercise 26; Crandall & Pomerance,
-/// *Prime Numbers: A Computational Perspective*, 2nd ed., 2005, §9.2.1.
-pub(crate) const fn limbs_sqr_u64(a: &[u64], out: &mut [u64]) {
-    let n = a.len();
-    // Step 1 — off-diagonal cross-products into `out`. For each i,
-    // accumulate `a[i] * a[j]` for `j > i` at position `i+j`.
-    let mut i = 0;
-    while i < n {
-        if a[i] != 0 {
-            let mut carry: u64 = 0;
-            let mut j = i + 1;
-            while j < n {
-                let prod = (a[i] as u128) * (a[j] as u128);
-                let prod_lo = prod as u64;
-                let prod_hi = (prod >> 64) as u64;
-                let idx = i + j;
-                let (s1, c1) = out[idx].overflowing_add(prod_lo);
-                let (s2, c2) = s1.overflowing_add(carry);
-                out[idx] = s2;
-                carry = prod_hi + (c1 as u64) + (c2 as u64);
-                j += 1;
-            }
-            let mut idx = i + n;
-            while carry != 0 && idx < out.len() {
-                let (s, c) = out[idx].overflowing_add(carry);
-                out[idx] = s;
-                carry = c as u64;
-                idx += 1;
-            }
-        }
-        i += 1;
-    }
-    // Step 2 — double the cross-product sum (left shift by 1).
-    let mut carry: u64 = 0;
-    let mut k = 0;
-    while k < out.len() {
-        let new_carry = out[k] >> 63;
-        out[k] = (out[k] << 1) | carry;
-        carry = new_carry;
-        k += 1;
-    }
-    // Step 3 — add the diagonal `a[i]²` at position `2i`.
-    let mut i = 0;
-    while i < n {
-        let sq = (a[i] as u128) * (a[i] as u128);
-        let sq_lo = sq as u64;
-        let sq_hi = (sq >> 64) as u64;
-        let idx_lo = 2 * i;
-        if idx_lo >= out.len() {
-            i += 1;
-            continue;
-        }
-        let (s, c_lo) = out[idx_lo].overflowing_add(sq_lo);
-        out[idx_lo] = s;
-        let mut carry: u64 = c_lo as u64;
-        let idx_hi = idx_lo + 1;
-        if idx_hi < out.len() {
-            let (s1, c1) = out[idx_hi].overflowing_add(sq_hi);
-            let (s2, c2) = s1.overflowing_add(carry);
-            out[idx_hi] = s2;
-            carry = (c1 as u64) + (c2 as u64);
-            let mut kk = idx_hi + 1;
-            while carry != 0 && kk < out.len() {
-                let (s, c) = out[kk].overflowing_add(carry);
-                out[kk] = s;
-                carry = c as u64;
-                kk += 1;
-            }
-        }
-        i += 1;
     }
 }
 
@@ -1847,16 +1772,12 @@ pub(crate) fn limbs_divmod_knuth_u64(
     }
 
     // MG 2-by-1 q̂ estimator (Möller-Granlund 2011 Algorithm 4) +
-    // inner refinement against v[n-2]. We re-benched MG 3-by-2
-    // against this 2-by-1 path post u64 migration (peer-library
-    // read 2026-05-18 §3): the 3-by-2's per-q̂ setup cost
+    // inner refinement against v[n-2]. The 3-by-2 estimator was
+    // re-benched post u64 migration: its per-q̂ setup cost
     // (extra multiplies vs the 2-by-1's one) outweighs the
     // refinement loop's near-zero iteration count on decimal
-    // divisors. 2-by-1 + while-loop wins by 5-10% at D615+. The
-    // n=1 short-circuit and escape-early `u_top > v_top` check
-    // (introduced during the 3-by-2 attempt) are kept — they
-    // strip per-iteration Option dispatch and the redundant
-    // recompute of `j + n`.
+    // divisors, so 2-by-1 + while-loop still wins at the widest
+    // tiers.
     let v_top = v[n - 1];
     let v_below = v[n - 2];
     let mg_top = MG2by1U64::new(v_top);
@@ -2603,41 +2524,49 @@ mod slice_tests {
         }
     }
 
-    /// `limbs_sqr_u64(a)` matches `limbs_mul_u64(a, a)` for every input
-    /// in the corpus. The squaring fast path uses ~n(n+1)/2 multiplies
-    /// instead of n² — this proves the algebra holds for the worst-case
-    /// carry patterns the corpus exercises (all-ones limbs, alternating
-    /// hi-bit-set, sparse zeros).
+    /// `limbs_mul_u64_fixed::<L, D>` matches `limbs_mul_u64` at
+    /// a representative set of compile-time `L` values covering
+    /// every wide tier (D38..D1231). Each L gets its own
+    /// monomorphisation; the test confirms the unrolled-by-LLVM
+    /// fixed-array path produces the same output as the slice
+    /// path for every shape in the carry-stressing corpus.
     #[test]
-    fn limbs_sqr_u64_matches_mul_self() {
-        for a in corpus() {
-            let a64 = pack(&a);
-            let mut out_mul = alloc::vec![0u64; 2 * a64.len()];
-            limbs_mul_u64(&a64, &a64, &mut out_mul);
-            let mut out_sqr = alloc::vec![0u64; 2 * a64.len()];
-            limbs_sqr_u64(&a64, &mut out_sqr);
-            assert_eq!(out_sqr, out_mul, "limbs_sqr_u64 mismatch for {:?}", a64);
+    fn limbs_mul_u64_fixed_matches_slice() {
+        macro_rules! check {
+            ($L:expr, $D:expr) => {{
+                for a in corpus() {
+                    for b in corpus() {
+                        let a64 = pack(&a);
+                        let b64 = pack(&b);
+                        if a64.len() < $L || b64.len() < $L {
+                            continue;
+                        }
+                        let mut a_arr = [0u64; $L];
+                        let mut b_arr = [0u64; $L];
+                        a_arr.copy_from_slice(&a64[..$L]);
+                        b_arr.copy_from_slice(&b64[..$L]);
+                        let mut out_slice = alloc::vec![0u64; $D];
+                        let mut out_fixed = [0u64; $D];
+                        limbs_mul_u64(&a_arr, &b_arr, &mut out_slice);
+                        limbs_mul_u64_fixed::<$L, $D>(&a_arr, &b_arr, &mut out_fixed);
+                        assert_eq!(
+                            &out_slice[..],
+                            &out_fixed[..],
+                            "limbs_mul_u64_fixed::<{}, {}> mismatch",
+                            $L, $D
+                        );
+                    }
+                }
+            }};
         }
-    }
-
-    /// `limbs_mul_u64_v2` matches `limbs_mul_u64` (the gold
-    /// reference) across the full corpus. v2 drops the per-cell
-    /// zero-skip and uses dashu's `mul_add_2carry` fused expression
-    /// for tighter codegen; this test proves the algebra is
-    /// identical for worst-case carry patterns.
-    #[test]
-    fn limbs_mul_u64_v2_matches_v1() {
-        for a in corpus() {
-            for b in corpus() {
-                let a64 = pack(&a);
-                let b64 = pack(&b);
-                let mut out_v1 = alloc::vec![0u64; a64.len() + b64.len()];
-                let mut out_v2 = alloc::vec![0u64; a64.len() + b64.len()];
-                limbs_mul_u64(&a64, &b64, &mut out_v1);
-                limbs_mul_u64_v2(&a64, &b64, &mut out_v2);
-                assert_eq!(out_v2, out_v1, "limbs_mul_u64_v2 mismatch");
-            }
-        }
+        check!(2, 4);
+        check!(4, 8);
+        check!(8, 16);
+        check!(16, 32);
+        check!(24, 48);
+        check!(32, 64);
+        check!(48, 96);
+        check!(64, 128);
     }
 
     /// `limbs_divmod_u64` matches `limbs_divmod`.

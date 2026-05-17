@@ -198,6 +198,18 @@ pub mod __bench_internals {
     pub fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
         crate::wide_int::limbs_mul_fast(a, b, out)
     }
+    #[inline(never)]
+    pub fn mul_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
+        crate::wide_int::limbs_mul_u64(a, b, out)
+    }
+    #[inline(never)]
+    pub fn mul_fixed<const L: usize, const D: usize>(
+        a: &[u64; L],
+        b: &[u64; L],
+        out: &mut [u64; D],
+    ) {
+        crate::wide_int::limbs_mul_u64_fixed::<L, D>(a, b, out)
+    }
 }
 mod consts;
 mod consts_wide;
