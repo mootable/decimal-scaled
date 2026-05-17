@@ -33,10 +33,13 @@ fn narrow_overflow_is_err() {
 #[cfg(feature = "wide")]
 #[test]
 fn widen_narrow_into_wide_tier() {
-    use decimal_scaled::{D38s12, D76s12};
+    use decimal_scaled::{D38s12, D56};
+    // After the 0.3 widen-chain rework, D38.widen() steps to D56
+    // (the immediate next tier in the ladder) instead of jumping
+    // straight to D76. The .narrow() symmetric is D56 -> D38.
     let a = D38s12::from_int(1_000_000);
-    let b: D76s12 = a.widen();                 // D38 → D76
-    let back = b.narrow().unwrap();            // D76 → D38
+    let b: D56<12> = a.widen();
+    let back = b.narrow().unwrap();
     assert_eq!(back, a);
 }
 

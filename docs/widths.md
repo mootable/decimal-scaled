@@ -125,12 +125,20 @@ let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 Every adjacent pair in the comprehensive ladder
 (D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
 D461 → D615 → D923 → D1231) has a `From` / `TryFrom` pair plus
-`.widen()` / `.narrow()` helper methods on the new tiers.
-`D38.widen()` and `D76.widen()` continue to return the legacy
-power-of-two-next-up type (`D76`, `D153`) for source
-compatibility — use the half-width tier's own `.widen()` /
-`.narrow()` (or the `From` / `TryFrom` impls directly) to
-traverse through the half-widths step by step.
+`.widen()` / `.narrow()` helper methods that step **one rung**
+in either direction. Chain them to skip multiple rungs, or use
+the `From` / `TryFrom` matrix directly to jump straight to any
+narrower or wider tier.
+
+```rust
+# #[cfg(feature = "wide")] {
+use decimal_scaled::{D38, D56, D114};
+let a: D38<6> = D38::<6>::from_int(7);
+let b: D56<6> = a.widen();          // one rung up
+let c: D114<6> = b.widen().widen(); // two more rungs: D56 → D76 → D114
+let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom
+# }
+```
 
 ## Wide-tier notes (`D56` … `D1231`)
 

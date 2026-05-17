@@ -778,31 +778,31 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D9, i32, D76, crate
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> D38<SCALE> {
-    /// Promote to the next storage tier ([`D76`]) at the same `SCALE`.
-    /// Lossless. Available with the `d76` (or umbrella `wide`) Cargo
+    /// Promote to the next storage tier ([`D56`]) at the same `SCALE`.
+    /// Lossless. Available with the `d56` (or umbrella `wide`) Cargo
     /// feature enabled.
     ///
     /// ```
     /// # #[cfg(feature = "wide")] {
     /// use decimal_scaled::D38s12;
     /// let a = D38s12::from_int(1_000_000);
-    /// let _wider = a.widen();  // D76<12>
+    /// let _wider = a.widen();  // D56<12>
     /// # }
     /// ```
     #[inline]
     #[must_use]
-    pub fn widen(self) -> D76<SCALE> {
+    pub fn widen(self) -> D56<SCALE> {
         self.into()
     }
 }
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> D76<SCALE> {
-    /// Demote to the previous storage tier ([`D38`]) at the same
-    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
-    /// doesn't fit `i128`'s range at the given scale.
+    /// Demote to the previous storage tier ([`D56`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
+    /// doesn't fit `D56`'s range at the given scale.
     #[inline]
-    pub fn narrow(self) -> Result<D38<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D56<SCALE>, crate::error::ConvertError> {
         self.try_into()
     }
 }
@@ -881,25 +881,25 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D153, cr
 
 // ─── D76::widen / D153 hop methods ────────────────────────────────────
 
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d153", feature = "wide")))]
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d114", feature = "wide")))]
 impl<const SCALE: u32> D76<SCALE> {
-    /// Promote to the next storage tier ([`D153`]) at the same
+    /// Promote to the next storage tier ([`D114`]) at the same
     /// `SCALE`. Lossless.
     #[inline]
     #[must_use]
-    pub fn widen(self) -> D153<SCALE> {
+    pub fn widen(self) -> D114<SCALE> {
         self.into()
     }
 }
 
 #[cfg(any(feature = "d153", feature = "wide"))]
 impl<const SCALE: u32> D153<SCALE> {
-    /// Demote to the previous storage tier ([`D76`]) at the same
-    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// Demote to the previous storage tier ([`D114`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
     /// doesn't fit the narrower storage's range at the given scale.
-    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[cfg(any(feature = "d114", feature = "wide"))]
     #[inline]
-    pub fn narrow(self) -> Result<D76<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D114<SCALE>, crate::error::ConvertError> {
         self.try_into()
     }
 }
@@ -969,26 +969,35 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_in
 
 // ─── D153::widen / D307 hop methods ───────────────────────────────────
 
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d307", feature = "wide")))]
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
 impl<const SCALE: u32> D153<SCALE> {
-    /// Promote to the next storage tier ([`D307`]) at the same
+    /// Promote to the next storage tier ([`D230`]) at the same
     /// `SCALE`. Lossless.
     #[inline]
     #[must_use]
-    pub fn widen(self) -> D307<SCALE> {
+    pub fn widen(self) -> D230<SCALE> {
         self.into()
     }
 }
 
 #[cfg(any(feature = "d307", feature = "wide"))]
 impl<const SCALE: u32> D307<SCALE> {
-    /// Demote to the previous storage tier ([`D153`]) at the same
-    /// `SCALE`. Returns `Err(ConvertError::OutOfRange)` if the value
+    /// Demote to the previous storage tier ([`D230`]) at the same
+    /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
     /// doesn't fit the narrower storage's range at the given scale.
-    #[cfg(any(feature = "d153", feature = "wide"))]
+    #[cfg(any(feature = "d230", feature = "wide"))]
     #[inline]
-    pub fn narrow(self) -> Result<D153<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D230<SCALE>, crate::error::ConvertError> {
         self.try_into()
+    }
+
+    /// Promote to the next storage tier ([`D461`]) at the same
+    /// `SCALE`. Lossless. Requires `d461` / `x-wide`.
+    #[cfg(any(feature = "d461", feature = "x-wide"))]
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D461<SCALE> {
+        self.into()
     }
 }
 
