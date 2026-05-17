@@ -1,6 +1,6 @@
 [package]
 name = "decimal-scaled"
-version = "0.2.5"
+version = "0.3.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -45,7 +45,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 # To opt out and use the f64 bridge instead you have to take all
 # three steps: (a) `default-features = false`, (b) explicitly add
 # `fast` + `std`, and (c) NOT re-add `strict`:
-#   decimal-scaled = { version = "0.2.5", default-features = false,
+#   decimal-scaled = { version = "0.3.0", default-features = false,
 #                      features = ["std", "serde", "fast"] }
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
@@ -116,7 +116,7 @@ d1231 = []
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
-decimal_scaled_macros = { path = "macros", version = "0.2.5", default-features = false, optional = true }
+decimal_scaled_macros = { path = "macros", version = "0.3.0", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
@@ -202,18 +202,10 @@ name = "g_math_comparison"
 harness = false
 required-features = ["wide"]
 
-# Full library-comparison matrix — speed + ULP accuracy of
-# `decimal-scaled` against every top-10 crates.io numeric peer
-# at every shared width tier. Drives the §5 Library comparison
-# chapter in docs/benchmarks.md.
-[[bench]]
-name = "library_comparison"
-harness = false
-required-features = ["wide", "x-wide"]
 
 # Focused microbench for wide-tier div/mul during tuning passes.
-# Runs in ~30s, used to validate per-change wins before kicking the
-# full library_comparison sweep.
+# Runs in ~30s, used to validate per-change wins before kicking
+# the full lib_cmp_d{N} sweep.
 [[bench]]
 name = "quick_div"
 harness = false
@@ -221,9 +213,7 @@ required-features = ["wide", "x-wide", "xx-wide"]
 
 # Per-width library_comparison benches. Each runs ONE tier's full
 # peer comparison so `cargo bench --bench lib_cmp_d307` iterates
-# in minutes instead of hours. The monolithic `library_comparison`
-# bench above stays for full sweeps where you want every tier
-# under one criterion baseline.
+# in minutes. Run them all sequentially for a full matrix sweep.
 [[bench]]
 name = "lib_cmp_d9"
 harness = false

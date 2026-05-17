@@ -33,10 +33,11 @@ let l1 = x.ln_strict();
 let r2 = x.sqrt_fast();
 let l2 = x.ln_fast();
 
-// The plain method dispatches by feature:
-//   * with `strict` (default)             -> calls `*_strict`
-//   * with `fast` (overrides `strict`)    -> calls `*_fast`
-//   * with neither + `std`                -> calls `*_fast`
+// The plain method dispatches by feature (0.3.0 rule):
+//   * with `strict` (default)         -> calls `*_strict`
+//   * with neither feature set        -> calls `*_strict`
+//   * with `fast` AND NOT `strict`    -> calls `*_fast`  (needs std)
+//   * with both `strict` AND `fast`   -> calls `*_strict` (strict wins)
 let r3 = x.sqrt();
 ```
 
@@ -68,7 +69,7 @@ widen-compute-narrow delegation):
 ## The `strict` feature
 
 ```toml
-decimal-scaled = { version = "0.2.5", features = ["strict"] }
+decimal-scaled = { version = "0.3.0", features = ["strict"] }
 ```
 
 With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
@@ -81,7 +82,7 @@ transcendental operations.
 ## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.2.5", default-features = false, features = ["std", "fast"] }
+decimal-scaled = { version = "0.3.0", default-features = false, features = ["std", "fast"] }
 ```
 
 `fast` makes the plain methods (`sqrt`, `ln`, `sin`, …) dispatch

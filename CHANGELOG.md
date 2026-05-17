@@ -5,6 +5,155 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.0]
+
+The half-width-tier release. The decimal ladder now goes
+**D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
+D461 → D615 → D923 → D1231** — every adjacent pair has a
+lossless `From` / `widen()` plus a fallible `TryFrom` /
+`narrow()`. New `x-wide` and `xx-wide` Cargo umbrellas gate the
+wider ranges so default builds stay lean.
+
+The strict / fast dispatcher rule changes too: **strict is now
+the default plain dispatch in every build, and wins on tiebreak
+when both `strict` and `fast` are enabled.** The only way to
+land plain `sin` / `ln` / `sqrt` etc. on the f64 bridge is a
+deliberate three-step opt-out (`default-features = false` + add
+`fast` + add `std` + don't re-add `strict`). The named
+`*_strict` and `*_fast` methods stay available regardless of
+feature choice.
+
+### Added — new decimal tiers
+
+- **`D56` (192-bit), `D114` (384-bit), `D230` (768-bit)** —
+  half-width tiers between every existing power-of-two width.
+  Gated behind `d56` / `d114` / `d230` individually or by the
+  expanded `wide` umbrella (now `D56`–`D307` together).
+- **`D461` (1536-bit), `D615` (2048-bit)** — new x-wide tier,
+  gated behind `x-wide` (or `d461` / `d615` individually).
+- **`D923` (3072-bit), `D1231` (4096-bit)** — new xx-wide tier,
+  gated behind `xx-wide` (or `d923` / `d1231` individually).
+- The naming rule: the number on every `D{N}` type is the
+  highest safe `SCALE` (`MAX_SCALE`) the storage can hold, i.e.
+  the number of decimal digits you can represent without
+  overflow. So `D1231` means `MAX_SCALE = 1232` (∼ 1232 decimal
+  digits of headroom), not "1231 bits".
+- Comprehensive scale aliases per the new tiers: ≥ 16 per
+  tier above the narrow range, covering 0 / common midpoints /
+  the previous tier's MAX_SCALE as a cross-tier sentinel /
+  the new tier's MAX_SCALE.
+
+### Changed — breaking
+
+- **`D38.widen()`** now returns `D56<SCALE>` instead of
+  `D76<SCALE>`. Symmetrically, `D76.narrow()` → `D56`,
+  `D76.widen()` → `D114`, `D153.narrow()` → `D114`,
+  `D153.widen()` → `D230`, `D307.narrow()` → `D230`, and
+  `D307.widen()` is new (→ `D461`, gated behind `x-wide`). The
+  legacy power-of-two-next-up semantics are gone; the
+  comprehensive ladder is the new default. Callers that need
+  the old jump can use `.into()` / `.try_into()` to skip rungs.
+- **`strict` + `fast`** now resolves to strict. Previously
+  `fast` won the tiebreak. The strict path is now fast enough
+  (`ln_strict` at D38<19> is ~1.5 µs) that staying on the
+  deterministic correctly-rounded path by default is the right
+  call across more codepaths.
+- **`(no feature)` builds** now dispatch plain transcendentals
+  to `*_strict` too (previously they fell through to `*_fast`).
+  Same reasoning: strict-by-default unless deliberately opted
+  out.
+
+### Added — performance
+
+- **Chain-of-÷10^38 rescale** for wide-tier `mul` at `SCALE > 38`:
+  factors `n / 10^SCALE` as a sequence of `n / 10^38` chunks,
+  each riding the existing base-2^128 MG 2-by-1 magic kernel.
+  Combined-remainder bookkeeping preserves HalfToEven
+  correctness across chunks. Measured wins:
+  - D307<150> mul: 786 ns → 434 ns (1.8× faster)
+  - D461<230> mul: 1.62 µs → 866 ns (1.9×)
+  - D615<308> mul: 2.20 µs → 1.36 µs (1.6×)
+  - D923<461> mul: 3.30 µs → 2.68 µs (1.2×)
+  - D1231<616>: marginal (chain length eats the per-pass win;
+    needs Barrett or wider magic tables — tracked for 0.3.x).
+- **`d56`/`d114`/.../`d1231` per-tier features** can be enabled
+  individually if you don't want a full umbrella.
+
+### Added — benches + tooling
+
+- **Per-width `lib_cmp_d{N}` benches** — 13 new bench binaries
+  (`cargo bench --bench lib_cmp_d307`) replace the monolithic
+  `library_comparison.rs`. Each tier runs in minutes instead
+  of hours; iterating on one tier's perf doesn't need a full
+  matrix sweep. Shared macros + helpers live in
+  `benches/lib_cmp_common.rs`.
+- **`benches/quick_div.rs`** — focused microbench for
+  D307/D615/D923/D1231 div + mul. Used during the wide-tier
+  perf tuning passes.
+- **Per-width summary chart family** — one PNG per power-of-two
+  storage width (`docs/figures/library_comparison/summary_{N}bit.png`)
+  showing every op (add / sub / neg / mul / div / rem / sqrt /
+  ln / exp / sin / cos / tan / atan / sinh / cosh / tanh) on a
+  log-y axis with one bar per library. Re-rendered automatically
+  via the `scripts/refresh_bench_artifacts.sh` workflow.
+- **`scripts/bench_log_to_medians.py`** — extracts the criterion
+  medians from any number of bench-log files into
+  `target/medians.tsv` so chart_gen.rs picks up the latest run.
+- **chart_gen filter** tightened: only renders multi-library
+  line charts where ≥ 2 libraries have ≥ 2 data points, so
+  scatter-of-dots charts get dropped automatically.
+- **Trig family in the bench matrix** — `cos` / `tan` / `atan` /
+  `sinh` / `cosh` / `tanh` benched for every peer that ships
+  them (decimal-scaled, fastnum, g_math, rust_decimal cos/tan).
+- **`examples/rounding_mode_probe.rs`** — diagnostic that prints
+  the candidate renderings under each rounding mode for `exp(1)`,
+  `sin(1)`, `ln(2)`, `sqrt(2)`. Used to verify that the §5
+  "1 ULP" entries on `fastnum` / `rust_decimal` were
+  render-mode artifacts (they carry the correct value
+  internally), not computation errors.
+- **`examples/fast_vs_strict_ulp.rs`** — per-tier accuracy-loss
+  table for `*_fast` vs `*_strict`. Drives the new §2.1 in
+  `docs/benchmarks.md`.
+
+### Fixed
+
+- **D56 work-integer overflow** — D56's transcendental work
+  integer was Int512, which couldn't carry the squared
+  intermediate at `SCALE + GUARD = 86` working scale. Bumped
+  to Int1024. Caught by the in-flight bench sweep.
+- **`feature = "xx-wide"`-only builds** — several macro arms
+  in `src/macros/full.rs` and `src/mg_divide.rs` gated only on
+  `wide` / `x-wide` and missed `xx-wide` / `d923` / `d1231`,
+  so an `xx-wide`-only build failed to compile. Gates extended.
+
+### Docs
+
+- **§5 in `docs/benchmarks.md`** rewritten as "Where each crate
+  fits" — feature-matrix-first framing, per-storage-width
+  summary charts, an explicit note distinguishing render-mode
+  artifacts (fastnum / rust_decimal / decimal-rs) from real
+  precision losses (dashu-float 4 ULP exp(1), g_math 6–46 ULP).
+  Bench-doc tone shifted from "competition" to "here's where
+  each crate fits, here's where ours fits".
+- **`docs/widths.md`**, **`docs/getting-started.md`**,
+  **`docs/strict-mode.md`**, **`docs/features.md`** all updated
+  to enumerate the thirteen-tier ladder and describe the new
+  strict-by-default dispatcher.
+- **README** — "Two headline guarantees" lede now promotes both
+  ≤ 0.5 ULP correctness AND caller-chosen rounding mode at every
+  lossy operation; tier table extended to all 13 widths.
+- **`ALGORITHMS.md`** — wide-int section enumerates every
+  shipped storage type; atan halvings table extended to cover
+  the new wide tiers; tier-listing references updated from
+  the old four-tier list.
+- **`ROADMAP.md`** — explicit versioning intent table (0.3.0
+  done / 0.4.0 signed SCALE + RNG / 1.0.0 gated on competitive
+  wide-tier mul/div or per-row documented gap); MG magic-multiply
+  extension + Barrett path queued for 0.3.x; out-of-tree
+  ecosystem crates (decimal-scaled-expr / -math / -finance)
+  with the expression-engine dual-track + whole-tree
+  serialisation design captured.
+
 ## [0.2.5]
 
 Docs + benchmark accuracy patch. Library code, public API, and
