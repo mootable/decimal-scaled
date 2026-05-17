@@ -176,3 +176,27 @@ stays `no_std`, has no DB / serialisation drivers as deps, and
 keeps a small public surface. Each adapter owns its own
 runtime-scale negotiation and converts at the boundary into the
 caller's compile-time-fixed tier.
+
+---
+
+## Out-of-tree ecosystem crates — applications of the 0-ULP core
+
+The core ships *the deterministic primitive*; the interesting
+applications layer above it. Three planned downstream crates that
+together turn `decimal-scaled` into a complete numerical toolkit
+without bloating the core:
+
+| crate (proposed)             | what it adds | why it wants this backend |
+|------------------------------|--------------|---------------------------|
+| `decimal-scaled-expr`        | Runtime-parsed expression DSL (formulas-as-strings, spreadsheet-style); AST → eval against `D{N}<SCALE>` values; UDF hook | Bit-exact reproducible spreadsheet / rule-engine evaluation; the *only* such engine that doesn't drift on `0.1 + 0.2` |
+| `decimal-scaled-math`        | Extended types: complex, rationals, vectors, matrices (small + sparse), statistical distributions, interval arithmetic, error propagation | 0-ULP determinism propagates through every algebra; lets you compose linear-algebra pipelines that are bit-identical across machines |
+| `decimal-scaled-finance`     | Time-value-of-money (NPV, IRR, PV, FV), amortisation schedules, day-count conventions (ACT/360, 30/360, ACT/ACT, ACT/365), bond pricing, Black-Scholes, FX with caller-chosen rounding | Finance is the original deterministic-decimal use case; every regulator-facing calc must reproduce exactly across re-runs and across counterparties |
+
+Same out-of-tree principle as the adapters: each lives in its own
+crate, depends on `decimal-scaled` only, opts into the tier (`d76`,
+`d307`, etc.) it actually needs, and exposes its surface generically
+over `Decimal`-trait-implementing types so the caller picks the
+storage tier. The finance crate in particular benefits from
+`*_with(mode)` propagation: every regulator has its own
+last-digit-rounding rule (HALFUP, HALFDOWN, HALFEVEN), and we can
+honour each per-call without forking the engine.
