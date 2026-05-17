@@ -563,9 +563,15 @@ impl<const SCALE: u32> D38<SCALE> {
 /// wrong π via the wrapping `from_w − to_w` subtraction.
 fn wide_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     debug_assert!(w <= 75, "wide_pi: working scale {w} exceeds embedded 75-digit π");
+    // PI_RAW is an Int256, internally [u64; 4]. The D38 Fixed kernel
+    // expects [u128; 2]; repack pairs of u64 limbs into u128.
+    let words = crate::consts::PI_RAW.0;
     let pi_at_75 = crate::d_w128_kernels::Fixed {
         negative: false,
-        mag: crate::consts::PI_RAW.0,
+        mag: [
+            (words[0] as u128) | ((words[1] as u128) << 64),
+            (words[2] as u128) | ((words[3] as u128) << 64),
+        ],
     };
     if w == 75 {
         pi_at_75

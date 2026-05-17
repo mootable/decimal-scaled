@@ -5,27 +5,33 @@
 // ─────────────────────────────────────────────────────────────────────
 // decl_wide_int! — concrete fixed-width signed/unsigned integer newtypes.
 //
-// Each invocation emits an unsigned `$U` ([u128; L]) and a
-// two's-complement signed `$S` ([u128; L]), both delegating their
-// arithmetic to the slice primitives above. The arithmetic surface is
-// `const fn` so the decimal types built on it can be `const`.
+// Each invocation emits an unsigned `$U` and a two's-complement signed
+// `$S`, both stored as `[u64; 2 * $L]` little-endian limb arrays so the
+// inner arithmetic can use native `u64 × u64 → u128` and `u128 / u64`
+// hardware instructions. The public `from_limbs_le` / `limbs_le`
+// surface keeps its `[u128; $L]` signature (semver-stable boundary
+// conversion). The arithmetic surface is `const fn` so the decimal
+// types built on it can be `const`.
 // ─────────────────────────────────────────────────────────────────────
 
 /// Emits the `$U` / `$S` integer pair for a fixed limb count.
 ///
 /// - `$U` / `$S` — the unsigned and signed type names.
-/// - `$L` — limb count (`[u128; $L]`); the bit width is `$L * 128`.
-/// - `$D` — `2 * $L`, the buffer width for widening multiply/divide
-/// intermediates.
+/// - `$L` — *u128-equivalent* limb count; the bit width is `$L * 128`.
+///   The actual storage is `[u64; 2 * $L]` (twice as many u64 limbs).
+/// - `$D` — `2 * $L`, the doubled u128-equivalent width for widening
+///   multiply/divide intermediates (so the doubled u64 buffer is
+///   `[u64; 2 * $D]` = `[u64; 4 * $L]`).
 macro_rules! decl_wide_int {
     ($U:ident, $S:ident, $L:tt, $D:tt) => {
         // ── Unsigned ──────────────────────────────────────────────────
-        /// Hand-rolled fixed-width unsigned integer, little-endian limbs.
+        /// Hand-rolled fixed-width unsigned integer, little-endian u64
+        /// limbs (`2 * $L` of them).
         // `Default` is derived manually rather than via `#[derive]` so it
         // works for any limb count — the standard library only emits
         // `Default` for arrays up to `N = 32`.
         #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-        pub struct $U(pub(crate) [u128; $L]);
+        pub struct $U(pub(crate) [u64; 2 * $L]);
 
         impl ::core::default::Default for $U {
             #[inline]
@@ -33,23 +39,23 @@ macro_rules! decl_wide_int {
         }
 
         impl $U {
-            pub(crate) const ZERO: $U = $U([0; $L]);
-            pub(crate) const MAX: $U = $U([u128::MAX; $L]);
+            pub(crate) const ZERO: $U = $U([0u64; 2 * $L]);
+            pub(crate) const MAX: $U = $U([u64::MAX; 2 * $L]);
             pub(crate) const BITS: u32 = $L * 128;
 
             #[inline]
             pub(crate) const fn is_zero(self) -> bool {
-                $crate::wide_int::limbs_is_zero(&self.0)
+                $crate::wide_int::limbs_is_zero_u64(&self.0)
             }
             #[inline]
             pub(crate) const fn leading_zeros(self) -> u32 {
-                Self::BITS - $crate::wide_int::limbs_bit_len(&self.0)
+                Self::BITS - $crate::wide_int::limbs_bit_len_u64(&self.0)
             }
             #[inline]
             pub(crate) const fn count_ones(self) -> u32 {
                 let mut total = 0;
                 let mut i = 0;
-                while i < $L {
+                while i < 2 * $L {
                     total += self.0[i].count_ones();
                     i += 1;
                 }
@@ -61,17 +67,17 @@ macro_rules! decl_wide_int {
             }
             pub(crate) const fn next_power_of_two(self) -> $U {
                 if self.is_zero() {
-                    let mut o = [0u128; $L];
+                    let mut o = [0u64; 2 * $L];
                     o[0] = 1;
                     return $U(o);
                 }
                 if self.is_power_of_two() {
                     return self;
                 }
-                let bits = $crate::wide_int::limbs_bit_len(&self.0);
-                let mut out = [0u128; $L];
+                let bits = $crate::wide_int::limbs_bit_len_u64(&self.0);
+                let mut out = [0u64; 2 * $L];
                 if (bits as usize) < $L * 128 {
-                    out[(bits / 128) as usize] = 1u128 << (bits % 128);
+                    out[(bits / 64) as usize] = 1u64 << (bits % 64);
                 }
                 $U(out)
             }
@@ -90,24 +96,24 @@ macro_rules! decl_wide_int {
                     return ::core::result::Result::Err(());
                 }
                 let bytes = s.as_bytes();
-                let mut acc = [0u128; $L];
-                let ten = [10u128];
+                let mut acc = [0u64; 2 * $L];
+                let ten = [10u64];
                 let mut k = 0;
                 while k < bytes.len() {
                     let ch = bytes[k];
                     if ch < b'0' || ch > b'9' {
                         return ::core::result::Result::Err(());
                     }
-                    let d = (ch - b'0') as u128;
-                    let mut scaled = [0u128; $D];
-                    $crate::wide_int::limbs_mul(&acc, &ten, &mut scaled);
-                    let mut next = [0u128; $L];
+                    let d = (ch - b'0') as u64;
+                    let mut scaled = [0u64; 2 * $D];
+                    $crate::wide_int::limbs_mul_u64(&acc, &ten, &mut scaled);
+                    let mut next = [0u64; 2 * $L];
                     let mut c = 0;
-                    while c < $L {
+                    while c < 2 * $L {
                         next[c] = scaled[c];
                         c += 1;
                     }
-                    $crate::wide_int::limbs_add_assign(&mut next, &[d]);
+                    $crate::wide_int::limbs_add_assign_u64(&mut next, &[d]);
                     acc = next;
                     k += 1;
                 }
@@ -115,7 +121,7 @@ macro_rules! decl_wide_int {
             }
             pub(crate) const fn pow(self, mut exp: u32) -> $U {
                 let mut acc = {
-                    let mut o = [0u128; $L];
+                    let mut o = [0u64; 2 * $L];
                     o[0] = 1;
                     $U(o)
                 };
@@ -133,11 +139,11 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) const fn wrapping_mul(self, rhs: $U) -> $U {
-                let mut prod = [0u128; $D];
-                $crate::wide_int::limbs_mul(&self.0, &rhs.0, &mut prod);
-                let mut out = [0u128; $L];
+                let mut prod = [0u64; 2 * $D];
+                $crate::wide_int::limbs_mul_u64(&self.0, &rhs.0, &mut prod);
+                let mut out = [0u64; 2 * $L];
                 let mut i = 0;
-                while i < $L {
+                while i < 2 * $L {
                     out[i] = prod[i];
                     i += 1;
                 }
@@ -145,8 +151,8 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) fn isqrt(self) -> $U {
-                let mut out = [0u128; $L];
-                $crate::wide_int::limbs_isqrt(&self.0, &mut out);
+                let mut out = [0u64; 2 * $L];
+                $crate::wide_int::limbs_isqrt_u64(&self.0, &mut out);
                 $U(out)
             }
         }
@@ -154,7 +160,7 @@ macro_rules! decl_wide_int {
         impl ::core::cmp::Ord for $U {
             #[inline]
             fn cmp(&self, other: &$U) -> ::core::cmp::Ordering {
-                $crate::wide_int::limbs_cmp(&self.0, &other.0).cmp(&0)
+                $crate::wide_int::limbs_cmp_u64(&self.0, &other.0).cmp(&0)
             }
         }
         impl ::core::cmp::PartialOrd for $U {
@@ -167,8 +173,8 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn shr(self, n: u32) -> $U {
-                let mut out = [0u128; $L];
-                $crate::wide_int::limbs_shr(&self.0, n, &mut out);
+                let mut out = [0u64; 2 * $L];
+                $crate::wide_int::limbs_shr_u64(&self.0, n, &mut out);
                 $U(out)
             }
         }
@@ -176,8 +182,8 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn shl(self, n: u32) -> $U {
-                let mut out = [0u128; $L];
-                $crate::wide_int::limbs_shl(&self.0, n, &mut out);
+                let mut out = [0u64; 2 * $L];
+                $crate::wide_int::limbs_shl_u64(&self.0, n, &mut out);
                 $U(out)
             }
         }
@@ -185,7 +191,7 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn sub(mut self, rhs: $U) -> $U {
-                $crate::wide_int::limbs_sub_assign(&mut self.0, &rhs.0);
+                $crate::wide_int::limbs_sub_assign_u64(&mut self.0, &rhs.0);
                 self
             }
         }
@@ -193,12 +199,9 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn div(self, rhs: $U) -> $U {
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                // Runtime dispatcher: Knuth for multi-limb divisors
-                // and BZ for very-wide ones. The const-fn
-                // `limbs_divmod` is kept for compile-time callers.
-                $crate::wide_int::limbs_divmod_dispatch(&self.0, &rhs.0, &mut q, &mut r);
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_dispatch_u64(&self.0, &rhs.0, &mut q, &mut r);
                 $U(q)
             }
         }
@@ -206,9 +209,9 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn rem(self, rhs: $U) -> $U {
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod_dispatch(&self.0, &rhs.0, &mut q, &mut r);
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_dispatch_u64(&self.0, &rhs.0, &mut q, &mut r);
                 $U(r)
             }
         }
@@ -216,8 +219,8 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn bitand(self, rhs: $U) -> $U {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = self.0[i] & rhs.0[i];
                 }
                 $U(o)
@@ -227,8 +230,8 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn bitor(self, rhs: $U) -> $U {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = self.0[i] | rhs.0[i];
                 }
                 $U(o)
@@ -238,8 +241,8 @@ macro_rules! decl_wide_int {
             type Output = $U;
             #[inline]
             fn bitxor(self, rhs: $U) -> $U {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = self.0[i] ^ rhs.0[i];
                 }
                 $U(o)
@@ -249,34 +252,34 @@ macro_rules! decl_wide_int {
         // ── Signed ────────────────────────────────────────────────────
         /// Hand-rolled fixed-width two's-complement signed integer.
         #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-        pub struct $S(pub(crate) [u128; $L]);
+        pub struct $S(pub(crate) [u64; 2 * $L]);
 
         impl $S {
-            pub(crate) const ZERO: $S = $S([0; $L]);
+            pub(crate) const ZERO: $S = $S([0u64; 2 * $L]);
             pub(crate) const ONE: $S = {
-                let mut a = [0u128; $L];
+                let mut a = [0u64; 2 * $L];
                 a[0] = 1;
                 $S(a)
             };
             pub(crate) const BITS: u32 = $L * 128;
             pub(crate) const MAX: $S = {
-                let mut a = [u128::MAX; $L];
-                a[$L - 1] = i128::MAX as u128;
+                let mut a = [u64::MAX; 2 * $L];
+                a[2 * $L - 1] = i64::MAX as u64;
                 $S(a)
             };
             pub(crate) const MIN: $S = {
-                let mut a = [0u128; $L];
-                a[$L - 1] = 1u128 << 127;
+                let mut a = [0u64; 2 * $L];
+                a[2 * $L - 1] = 1u64 << 63;
                 $S(a)
             };
 
             #[inline]
             pub(crate) const fn is_negative(self) -> bool {
-                self.0[$L - 1] >> 127 == 1
+                self.0[2 * $L - 1] >> 63 == 1
             }
             #[inline]
             pub(crate) const fn is_zero(self) -> bool {
-                $crate::wide_int::limbs_is_zero(&self.0)
+                $crate::wide_int::limbs_is_zero_u64(&self.0)
             }
             #[inline]
             pub(crate) const fn is_positive(self) -> bool {
@@ -285,13 +288,13 @@ macro_rules! decl_wide_int {
             /// Two's-complement negation (wrapping; `MIN.negate() == MIN`).
             #[inline]
             pub(crate) const fn negate(self) -> $S {
-                let mut out = [0u128; $L];
+                let mut out = [0u64; 2 * $L];
                 let mut i = 0;
-                while i < $L {
+                while i < 2 * $L {
                     out[i] = !self.0[i];
                     i += 1;
                 }
-                $crate::wide_int::limbs_add_assign(&mut out, &[1]);
+                $crate::wide_int::limbs_add_assign_u64(&mut out, &[1]);
                 $S(out)
             }
             /// `|self|` as the unsigned sibling. `MIN` maps to `2^(BITS-1)`.
@@ -308,12 +311,12 @@ macro_rules! decl_wide_int {
             pub(crate) const fn cast_unsigned(self) -> $U {
                 $U(self.0)
             }
-            /// Builds a signed value from a non-negative magnitude limb
-            /// slice and a sign, truncating the magnitude into `$L`
-            /// limbs.
-            pub(crate) const fn from_mag_limbs(mag: &[u128], negative: bool) -> $S {
-                let mut out = [0u128; $L];
-                let n = if mag.len() < $L { mag.len() } else { $L };
+            /// Builds a signed value from a non-negative magnitude
+            /// u64-limb slice and a sign, truncating the magnitude into
+            /// `2 * $L` limbs.
+            pub(crate) const fn from_mag_limbs(mag: &[u64], negative: bool) -> $S {
+                let mut out = [0u64; 2 * $L];
+                let n = if mag.len() < 2 * $L { mag.len() } else { 2 * $L };
                 let mut i = 0;
                 while i < n {
                     out[i] = mag[i];
@@ -328,13 +331,13 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) const fn leading_zeros(self) -> u32 {
-                Self::BITS - $crate::wide_int::limbs_bit_len(&self.unsigned_abs().0)
+                Self::BITS - $crate::wide_int::limbs_bit_len_u64(&self.unsigned_abs().0)
             }
             #[inline]
             pub(crate) const fn count_ones(self) -> u32 {
                 let mut total = 0;
                 let mut i = 0;
-                while i < $L {
+                while i < 2 * $L {
                     total += self.0[i].count_ones();
                     i += 1;
                 }
@@ -348,18 +351,18 @@ macro_rules! decl_wide_int {
             /// is set.
             #[inline]
             pub(crate) const fn bit(self, idx: u32) -> bool {
-                let limb = (idx / 128) as usize;
-                if limb >= $L {
+                let limb = (idx / 64) as usize;
+                if limb >= 2 * $L {
                     return self.is_negative();
                 }
-                (self.0[limb] >> (idx % 128)) & 1 == 1
+                (self.0[limb] >> (idx % 64)) & 1 == 1
             }
             #[inline]
             pub(crate) const fn trailing_zeros(self) -> u32 {
                 let mut i = 0;
-                while i < $L {
+                while i < 2 * $L {
                     if self.0[i] != 0 {
-                        return i as u32 * 128 + self.0[i].trailing_zeros();
+                        return i as u32 * 64 + self.0[i].trailing_zeros();
                     }
                     i += 1;
                 }
@@ -382,28 +385,27 @@ macro_rules! decl_wide_int {
                     } else {
                         (false, bytes)
                     };
-                // Reparse the digit bytes as a decimal magnitude.
                 if radix != 10 {
                     return ::core::result::Result::Err(());
                 }
-                let mut acc = [0u128; $L];
-                let ten = [10u128];
+                let mut acc = [0u64; 2 * $L];
+                let ten = [10u64];
                 let mut k = 0;
                 while k < digits.len() {
                     let ch = digits[k];
                     if ch < b'0' || ch > b'9' {
                         return ::core::result::Result::Err(());
                     }
-                    let d = (ch - b'0') as u128;
-                    let mut scaled = [0u128; $D];
-                    $crate::wide_int::limbs_mul(&acc, &ten, &mut scaled);
-                    let mut next = [0u128; $L];
+                    let d = (ch - b'0') as u64;
+                    let mut scaled = [0u64; 2 * $D];
+                    $crate::wide_int::limbs_mul_u64(&acc, &ten, &mut scaled);
+                    let mut next = [0u64; 2 * $L];
                     let mut c = 0;
-                    while c < $L {
+                    while c < 2 * $L {
                         next[c] = scaled[c];
                         c += 1;
                     }
-                    $crate::wide_int::limbs_add_assign(&mut next, &[d]);
+                    $crate::wide_int::limbs_add_assign_u64(&mut next, &[d]);
                     acc = next;
                     k += 1;
                 }
@@ -430,7 +432,7 @@ macro_rules! decl_wide_int {
             #[inline]
             pub(crate) const fn wrapping_add(self, rhs: $S) -> $S {
                 let mut out = self.0;
-                $crate::wide_int::limbs_add_assign(&mut out, &rhs.0);
+                $crate::wide_int::limbs_add_assign_u64(&mut out, &rhs.0);
                 $S(out)
             }
             #[inline]
@@ -448,24 +450,16 @@ macro_rules! decl_wide_int {
             }
             /// Full `self · rhs` product widened into a `W: WideInt`,
             /// without going through the `WideInt::to_mag_sign` /
-            /// `from_mag_sign` 64-limb buffer twice (once for `self`,
-            /// once for `rhs`). Used by the wide-tier `Mul` operator
-            /// to compute a `$Storage * $Storage → $Wider` step using
-            /// the dedicated `$L × $L → 2$L` schoolbook in
-            /// [`crate::wide_int::limbs_mul`] (which has a 2×2 fast
-            /// path) instead of widening both operands then wrapping a
-            /// `2$L × 2$L` multiply.
+            /// `from_mag_sign` magnitude buffer twice. Used by the
+            /// wide-tier `Mul` operator to compute
+            /// `$Storage * $Storage → $Wider` in one step.
             #[inline]
             pub(crate) fn widen_mul<W: $crate::wide_int::WideInt>(self, rhs: $S) -> W {
                 let negative = self.is_negative() ^ rhs.is_negative();
                 let a = self.unsigned_abs();
                 let b = rhs.unsigned_abs();
-                let mut prod = [0u128; $D];
-                // limbs_mul_fast dispatches to Karatsuba above n=16
-                // (Int2048 and wider); schoolbook below. Karatsuba's
-                // half-sum scratch needs alloc; under !alloc the fast
-                // function falls back to limbs_mul anyway.
-                $crate::wide_int::limbs_mul_fast(&a.0, &b.0, &mut prod);
+                let mut prod = [0u64; 2 * $D];
+                $crate::wide_int::limbs_mul_fast_u64(&a.0, &b.0, &mut prod);
                 W::from_mag_sign(&prod, negative)
             }
             /// `self / rhs` truncating toward zero. `rhs` must be nonzero.
@@ -474,9 +468,9 @@ macro_rules! decl_wide_int {
                     panic!("wide integer: division by zero");
                 }
                 let negative = self.is_negative() ^ rhs.is_negative();
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod(
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_u64(
                     &self.unsigned_abs().0,
                     &rhs.unsigned_abs().0,
                     &mut q,
@@ -489,9 +483,9 @@ macro_rules! decl_wide_int {
                 if rhs.is_zero() {
                     panic!("wide integer: remainder by zero");
                 }
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod(
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_u64(
                     &self.unsigned_abs().0,
                     &rhs.unsigned_abs().0,
                     &mut q,
@@ -526,7 +520,7 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) const fn checked_neg(self) -> ::core::option::Option<$S> {
-                if $crate::wide_int::limbs_eq(&self.0, &$S::MIN.0) {
+                if $crate::wide_int::limbs_eq_u64(&self.0, &$S::MIN.0) {
                     ::core::option::Option::None
                 } else {
                     ::core::option::Option::Some(self.negate())
@@ -534,17 +528,17 @@ macro_rules! decl_wide_int {
             }
             pub(crate) const fn checked_mul(self, rhs: $S) -> ::core::option::Option<$S> {
                 let negative = self.is_negative() ^ rhs.is_negative();
-                let mut prod = [0u128; $D];
-                $crate::wide_int::limbs_mul(
+                let mut prod = [0u64; 2 * $D];
+                $crate::wide_int::limbs_mul_u64(
                     &self.unsigned_abs().0,
                     &rhs.unsigned_abs().0,
                     &mut prod,
                 );
-                let (_lo, hi) = prod.split_at($L);
-                if !$crate::wide_int::limbs_is_zero(hi) {
+                let (_lo, hi) = prod.split_at(2 * $L);
+                if !$crate::wide_int::limbs_is_zero_u64(hi) {
                     return ::core::option::Option::None;
                 }
-                let r = $S::from_mag_limbs(prod.split_at($L).0, negative);
+                let r = $S::from_mag_limbs(prod.split_at(2 * $L).0, negative);
                 if r.is_zero() || r.is_negative() == negative {
                     ::core::option::Option::Some(r)
                 } else {
@@ -603,7 +597,7 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) const fn overflowing_neg(self) -> ($S, bool) {
-                (self.negate(), $crate::wide_int::limbs_eq(&self.0, &$S::MIN.0))
+                (self.negate(), $crate::wide_int::limbs_eq_u64(&self.0, &$S::MIN.0))
             }
             #[inline]
             pub(crate) const fn overflowing_rem(self, rhs: $S) -> ($S, bool) {
@@ -648,7 +642,7 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) const fn max(self, rhs: $S) -> $S {
-                if $crate::wide_int::scmp(self.is_negative(), &self.0, rhs.is_negative(), &rhs.0) >= 0 {
+                if $crate::wide_int::scmp_u64(self.is_negative(), &self.0, rhs.is_negative(), &rhs.0) >= 0 {
                     self
                 } else {
                     rhs
@@ -656,7 +650,7 @@ macro_rules! decl_wide_int {
             }
             #[inline]
             pub(crate) const fn min(self, rhs: $S) -> $S {
-                if $crate::wide_int::scmp(self.is_negative(), &self.0, rhs.is_negative(), &rhs.0) <= 0 {
+                if $crate::wide_int::scmp_u64(self.is_negative(), &self.0, rhs.is_negative(), &rhs.0) <= 0 {
                     self
                 } else {
                     rhs
@@ -690,65 +684,86 @@ macro_rules! decl_wide_int {
             pub const fn to_i128_checked(self) -> ::core::option::Option<i128> {
                 let negative = self.is_negative();
                 let mag = self.unsigned_abs().0;
-                let (lo, hi) = mag.split_at(1);
-                if !$crate::wide_int::limbs_is_zero(hi) {
+                // First two u64 limbs make up the low u128; everything
+                // else must be zero.
+                let (lo, hi) = mag.split_at(2);
+                if !$crate::wide_int::limbs_is_zero_u64(hi) {
                     return ::core::option::Option::None;
                 }
+                let lo_u128 = (lo[0] as u128) | ((lo[1] as u128) << 64);
                 if negative {
-                    if lo[0] <= (i128::MAX as u128) + 1 {
-                        ::core::option::Option::Some((lo[0] as i128).wrapping_neg())
+                    if lo_u128 <= (i128::MAX as u128) + 1 {
+                        ::core::option::Option::Some((lo_u128 as i128).wrapping_neg())
                     } else {
                         ::core::option::Option::None
                     }
-                } else if lo[0] <= i128::MAX as u128 {
-                    ::core::option::Option::Some(lo[0] as i128)
+                } else if lo_u128 <= i128::MAX as u128 {
+                    ::core::option::Option::Some(lo_u128 as i128)
                 } else {
                     ::core::option::Option::None
                 }
             }
             /// Exact `u128` value, or `None` if negative / too large.
             pub const fn to_u128_checked(self) -> ::core::option::Option<u128> {
-                let (lo, hi) = self.0.split_at(1);
-                if self.is_negative() || !$crate::wide_int::limbs_is_zero(hi) {
+                let (lo, hi) = self.0.split_at(2);
+                if self.is_negative() || !$crate::wide_int::limbs_is_zero_u64(hi) {
                     ::core::option::Option::None
                 } else {
-                    ::core::option::Option::Some(lo[0])
+                    ::core::option::Option::Some((lo[0] as u128) | ((lo[1] as u128) << 64))
                 }
             }
             /// Builds from a signed 128-bit value.
             #[inline]
             pub const fn from_i128(v: i128) -> $S {
-                $S::from_mag_limbs(&[v.unsigned_abs()], v < 0)
+                let mag = v.unsigned_abs();
+                $S::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
             }
             /// Builds directly from the limb array. The limbs are
             /// interpreted as a little-endian two's-complement
-            /// signed integer (i.e. the same in-memory shape
-            /// `decl_wide_int!` uses). Useful for the serde binary
+            /// signed integer in the *public* `[u128; $L]` shape;
+            /// this constructor unpacks them into the internal
+            /// `[u64; 2 * $L]` storage. Useful for the serde binary
             /// path, which transports the raw limbs unchanged.
             #[inline]
             pub const fn from_limbs_le(limbs: [u128; $L]) -> $S {
-                $S(limbs)
+                let mut out = [0u64; 2 * $L];
+                let mut i = 0;
+                while i < $L {
+                    out[2 * i] = limbs[i] as u64;
+                    out[2 * i + 1] = (limbs[i] >> 64) as u64;
+                    i += 1;
+                }
+                $S(out)
             }
-            /// Read-only access to the underlying limbs. The
-            /// little-endian two's-complement signed shape;
-            /// symmetric with [`Self::from_limbs_le`].
+            /// Read-only access to the underlying limbs in the public
+            /// `[u128; $L]` shape. Symmetric with [`Self::from_limbs_le`].
+            /// The internal storage is `[u64; 2 * $L]`; this method
+            /// packs pairs of u64 limbs back into u128 form so the
+            /// public API stays bit-stable across the storage flip.
             #[inline]
             pub const fn limbs_le(self) -> [u128; $L] {
-                self.0
+                let mut out = [0u128; $L];
+                let mut i = 0;
+                while i < $L {
+                    out[i] = (self.0[2 * i] as u128) | ((self.0[2 * i + 1] as u128) << 64);
+                    i += 1;
+                }
+                out
             }
             /// Builds from an unsigned 128-bit value.
             #[inline]
             pub const fn from_u128(v: u128) -> $S {
-                $S::from_mag_limbs(&[v], false)
+                $S::from_mag_limbs(&[v as u64, (v >> 64) as u64], false)
             }
             /// Truncating cast to `i128` (low 128 bits, sign-applied).
             #[inline]
             pub(crate) const fn as_i128(self) -> i128 {
-                let mag = self.unsigned_abs().0[0];
+                let mag = self.unsigned_abs().0;
+                let lo = (mag[0] as u128) | ((mag[1] as u128) << 64);
                 if self.is_negative() {
-                    (mag as i128).wrapping_neg()
+                    (lo as i128).wrapping_neg()
                 } else {
-                    mag as i128
+                    lo as i128
                 }
             }
             /// Widening / narrowing cast to any other `WideInt`.
@@ -760,9 +775,10 @@ macro_rules! decl_wide_int {
             pub(crate) fn as_f64(self) -> f64 {
                 let mag = self.unsigned_abs().0;
                 let mut acc = 0.0f64;
-                for i in (0..$L).rev() {
-                    acc = acc * 340_282_366_920_938_463_463_374_607_431_768_211_456.0
-                        + mag[i] as f64;
+                // 18_446_744_073_709_551_616.0 = 2^64
+                let radix: f64 = 18_446_744_073_709_551_616.0;
+                for i in (0..(2 * $L)).rev() {
+                    acc = acc * radix + mag[i] as f64;
                 }
                 if self.is_negative() {
                     -acc
@@ -774,7 +790,7 @@ macro_rules! decl_wide_int {
             /// to `MIN` / `MAX` on out-of-range / non-finite input.
             ///
             /// `core`-only: the limb extraction relies on the `f64 →
-            /// u128` cast for truncation, so it needs neither
+            /// u64` cast for truncation, so it needs neither
             /// `f64::trunc` nor `f64::abs`.
             pub(crate) fn from_f64(v: f64) -> $S {
                 if !v.is_finite() {
@@ -782,15 +798,12 @@ macro_rules! decl_wide_int {
                 }
                 let negative = v < 0.0;
                 let mut m = if negative { -v } else { v };
-                let radix = 340_282_366_920_938_463_463_374_607_431_768_211_456.0;
-                let mut limbs = [0u128; $L];
+                let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+                let mut limbs = [0u64; 2 * $L];
                 let mut i = 0;
-                while m >= 1.0 && i < $L {
-                    // `rem` is the value modulo 2^128; the `as u128` cast
-                    // truncates its fractional part. Subtracting `rem`
-                    // leaves a clean multiple of the radix to shift down.
+                while m >= 1.0 && i < 2 * $L {
                     let rem = m % radix;
-                    limbs[i] = rem as u128;
+                    limbs[i] = rem as u64;
                     m = (m - rem) / radix;
                     i += 1;
                 }
@@ -803,14 +816,14 @@ macro_rules! decl_wide_int {
 
         impl $crate::wide_int::WideInt for $S {
             #[inline]
-            fn to_mag_sign(self) -> ([u128; 64], bool) {
-                let mut out = [0u128; 64];
+            fn to_mag_sign(self) -> ([u64; 128], bool) {
+                let mut out = [0u64; 128];
                 let mag = self.unsigned_abs().0;
-                out[..$L].copy_from_slice(&mag);
+                out[..(2 * $L)].copy_from_slice(&mag);
                 (out, self.is_negative())
             }
             #[inline]
-            fn from_mag_sign(mag: &[u128], negative: bool) -> $S {
+            fn from_mag_sign(mag: &[u64], negative: bool) -> $S {
                 $S::from_mag_limbs(mag, negative)
             }
         }
@@ -818,7 +831,7 @@ macro_rules! decl_wide_int {
         impl ::core::cmp::Ord for $S {
             #[inline]
             fn cmp(&self, other: &$S) -> ::core::cmp::Ordering {
-                $crate::wide_int::scmp(
+                $crate::wide_int::scmp_u64(
                     self.is_negative(),
                     &self.0,
                     other.is_negative(),
@@ -858,11 +871,7 @@ macro_rules! decl_wide_int {
             }
         }
         impl $S {
-            /// Quotient + remainder in a single divmod call. Saves
-            /// every caller that needs both (notably the decimal
-            /// `round_with_mode_wide!` rounding pass) from calling
-            /// `n / m` and `n % m` separately, which would do the
-            /// full divmod twice.
+            /// Quotient + remainder in a single divmod call.
             #[inline]
             pub(crate) fn div_rem(self, rhs: $S) -> ($S, $S) {
                 if rhs.is_zero() {
@@ -870,9 +879,9 @@ macro_rules! decl_wide_int {
                 }
                 let neg_q = self.is_negative() ^ rhs.is_negative();
                 let neg_r = self.is_negative();
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod_dispatch(
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_dispatch_u64(
                     &self.unsigned_abs().0,
                     &rhs.unsigned_abs().0,
                     &mut q,
@@ -892,13 +901,9 @@ macro_rules! decl_wide_int {
                     panic!(concat!(stringify!($S), ": division by zero"));
                 }
                 let negative = self.is_negative() ^ rhs.is_negative();
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                // Runtime dispatcher: Knuth / BZ for multi-limb (or
-                // single-limb-too-wide-for-u64) divisors. The
-                // `wrapping_div` sibling stays const for compile-time
-                // evaluation; it uses the slower const path.
-                $crate::wide_int::limbs_divmod_dispatch(
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_dispatch_u64(
                     &self.unsigned_abs().0,
                     &rhs.unsigned_abs().0,
                     &mut q,
@@ -914,9 +919,9 @@ macro_rules! decl_wide_int {
                 if rhs.is_zero() {
                     panic!(concat!(stringify!($S), ": remainder by zero"));
                 }
-                let mut q = [0u128; $L];
-                let mut r = [0u128; $L];
-                $crate::wide_int::limbs_divmod_dispatch(
+                let mut q = [0u64; 2 * $L];
+                let mut r = [0u64; 2 * $L];
+                $crate::wide_int::limbs_divmod_dispatch_u64(
                     &self.unsigned_abs().0,
                     &rhs.unsigned_abs().0,
                     &mut q,
@@ -937,8 +942,8 @@ macro_rules! decl_wide_int {
             type Output = $S;
             #[inline]
             fn shl(self, n: u32) -> $S {
-                let mut out = [0u128; $L];
-                $crate::wide_int::limbs_shl(&self.0, n, &mut out);
+                let mut out = [0u64; 2 * $L];
+                $crate::wide_int::limbs_shl_u64(&self.0, n, &mut out);
                 $S(out)
             }
         }
@@ -952,8 +957,8 @@ macro_rules! decl_wide_int {
                     let shifted = mag >> n;
                     $S::from_mag_limbs(&shifted.0, true)
                 } else {
-                    let mut out = [0u128; $L];
-                    $crate::wide_int::limbs_shr(&self.0, n, &mut out);
+                    let mut out = [0u64; 2 * $L];
+                    $crate::wide_int::limbs_shr_u64(&self.0, n, &mut out);
                     $S(out)
                 }
             }
@@ -962,8 +967,8 @@ macro_rules! decl_wide_int {
             type Output = $S;
             #[inline]
             fn bitand(self, rhs: $S) -> $S {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = self.0[i] & rhs.0[i];
                 }
                 $S(o)
@@ -973,8 +978,8 @@ macro_rules! decl_wide_int {
             type Output = $S;
             #[inline]
             fn bitor(self, rhs: $S) -> $S {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = self.0[i] | rhs.0[i];
                 }
                 $S(o)
@@ -984,8 +989,8 @@ macro_rules! decl_wide_int {
             type Output = $S;
             #[inline]
             fn bitxor(self, rhs: $S) -> $S {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = self.0[i] ^ rhs.0[i];
                 }
                 $S(o)
@@ -995,8 +1000,8 @@ macro_rules! decl_wide_int {
             type Output = $S;
             #[inline]
             fn not(self) -> $S {
-                let mut o = [0u128; $L];
-                for i in 0..$L {
+                let mut o = [0u64; 2 * $L];
+                for i in 0..(2 * $L) {
                     o[i] = !self.0[i];
                 }
                 $S(o)
@@ -1007,7 +1012,7 @@ macro_rules! decl_wide_int {
         impl ::core::fmt::Display for $U {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let mut buf = [0u8; $L * 128];
-                let s = $crate::wide_int::limbs_fmt_into(&self.0, 10, true, &mut buf);
+                let s = $crate::wide_int::limbs_fmt_into_u64(&self.0, 10, true, &mut buf);
                 f.pad_integral(true, "", s)
             }
         }
@@ -1020,7 +1025,7 @@ macro_rules! decl_wide_int {
                 let mag = self.unsigned_abs();
                 if self.is_negative() && !mag.is_zero() {
                     let mut buf = [0u8; $L * 128];
-                    let s = $crate::wide_int::limbs_fmt_into(&mag.0, 10, true, &mut buf);
+                    let s = $crate::wide_int::limbs_fmt_into_u64(&mag.0, 10, true, &mut buf);
                     f.pad_integral(false, "", s)
                 } else {
                     ::core::fmt::Display::fmt(&mag, f)
@@ -1030,28 +1035,28 @@ macro_rules! decl_wide_int {
         impl ::core::fmt::LowerHex for $S {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let mut buf = [0u8; $L * 128];
-                let s = $crate::wide_int::limbs_fmt_into(&self.0, 16, true, &mut buf);
+                let s = $crate::wide_int::limbs_fmt_into_u64(&self.0, 16, true, &mut buf);
                 f.pad_integral(true, "0x", s)
             }
         }
         impl ::core::fmt::UpperHex for $S {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let mut buf = [0u8; $L * 128];
-                let s = $crate::wide_int::limbs_fmt_into(&self.0, 16, false, &mut buf);
+                let s = $crate::wide_int::limbs_fmt_into_u64(&self.0, 16, false, &mut buf);
                 f.pad_integral(true, "0x", s)
             }
         }
         impl ::core::fmt::Octal for $S {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let mut buf = [0u8; $L * 128];
-                let s = $crate::wide_int::limbs_fmt_into(&self.0, 8, true, &mut buf);
+                let s = $crate::wide_int::limbs_fmt_into_u64(&self.0, 8, true, &mut buf);
                 f.pad_integral(true, "0o", s)
             }
         }
         impl ::core::fmt::Binary for $S {
             fn fmt(&self, f: &mut ::core::fmt::Formatter<'_>) -> ::core::fmt::Result {
                 let mut buf = [0u8; $L * 128];
-                let s = $crate::wide_int::limbs_fmt_into(&self.0, 2, true, &mut buf);
+                let s = $crate::wide_int::limbs_fmt_into_u64(&self.0, 2, true, &mut buf);
                 f.pad_integral(true, "0b", s)
             }
         }

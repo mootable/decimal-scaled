@@ -1909,28 +1909,40 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
 /// A signed integer that can be decomposed into a magnitude + sign and
 /// rebuilt from one — the basis of `wide_cast` (widen / narrow between
 /// any two widths, or between a wide integer and a primitive
-/// `i128` / `i64` / `u128`).
+/// `i128` / `i64` / `u128`). u64-limb representation throughout, so
+/// every wide-int's magnitude buffer is directly compatible without
+/// boundary conversion.
 pub(crate) trait WideInt: Copy {
-    /// Magnitude limbs (little-endian, zero-padded to 32) and sign.
-    fn to_mag_sign(self) -> ([u128; 64], bool);
-    /// Rebuilds from a magnitude limb slice and a sign, truncating the
-    /// magnitude to this type's width.
-    fn from_mag_sign(mag: &[u128], negative: bool) -> Self;
+    /// Magnitude limbs (little-endian u64, zero-padded to 128) and sign.
+    /// 128 u64 limbs = 8192 bits, comfortably above the widest type
+    /// the crate ships (Int4096, which is 64 u64 limbs).
+    fn to_mag_sign(self) -> ([u64; 128], bool);
+    /// Rebuilds from a magnitude limb slice and a sign, truncating
+    /// the magnitude to this type's width.
+    fn from_mag_sign(mag: &[u64], negative: bool) -> Self;
 }
 
-/// Implements `WideInt` for a signed primitive integer.
+/// Implements `WideInt` for a signed primitive integer. The
+/// magnitude is split into two u64 limbs (low, high) regardless of
+/// the source primitive's width — for `i64` the high limb is always
+/// zero; for `i128` the split carries the upper 64 bits.
 macro_rules! impl_wideint_signed_prim {
     ($($t:ty),*) => {$(
         impl WideInt for $t {
             #[inline]
-            fn to_mag_sign(self) -> ([u128; 64], bool) {
-                let mut out = [0u128; 64];
-                out[0] = self.unsigned_abs() as u128;
+            fn to_mag_sign(self) -> ([u64; 128], bool) {
+                let mut out = [0u64; 128];
+                let mag = self.unsigned_abs() as u128;
+                out[0] = mag as u64;
+                out[1] = (mag >> 64) as u64;
                 (out, self < 0)
             }
             #[inline]
-            fn from_mag_sign(mag: &[u128], negative: bool) -> $t {
-                let m = mag.first().copied().unwrap_or(0) as $t;
+            fn from_mag_sign(mag: &[u64], negative: bool) -> $t {
+                let lo = mag.first().copied().unwrap_or(0) as u128;
+                let hi = mag.get(1).copied().unwrap_or(0) as u128;
+                let combined = lo | (hi << 64);
+                let m = combined as $t;
                 if negative { m.wrapping_neg() } else { m }
             }
         }
@@ -1940,14 +1952,17 @@ impl_wideint_signed_prim!(i8, i16, i32, i64, i128);
 
 impl WideInt for u128 {
     #[inline]
-    fn to_mag_sign(self) -> ([u128; 64], bool) {
-        let mut out = [0u128; 64];
-        out[0] = self;
+    fn to_mag_sign(self) -> ([u64; 128], bool) {
+        let mut out = [0u64; 128];
+        out[0] = self as u64;
+        out[1] = (self >> 64) as u64;
         (out, false)
     }
     #[inline]
-    fn from_mag_sign(mag: &[u128], _negative: bool) -> u128 {
-        mag.first().copied().unwrap_or(0)
+    fn from_mag_sign(mag: &[u64], _negative: bool) -> u128 {
+        let lo = mag.first().copied().unwrap_or(0) as u128;
+        let hi = mag.get(1).copied().unwrap_or(0) as u128;
+        lo | (hi << 64)
     }
 }
 

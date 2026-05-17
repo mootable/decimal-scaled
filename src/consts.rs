@@ -117,8 +117,14 @@ const GOLDEN_RAW: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
 /// doesn't include this constant — e.g. `pi ≈ 3.14` at `D38<38>` would
 /// need `3.14 × 10^38 ≈ 3.14e38`, which exceeds `i128::MAX ≈ 1.7e38`).
 fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i128 {
-    let limbs = raw.0;  // [u128; 2], little-endian
-    let f = Fixed { negative: false, mag: limbs };
+    // Int256 storage is [u64; 4]; the D38 Fixed kernel uses [u128; 2].
+    // Pack pairs of u64 limbs into u128 little-endian halves.
+    let words = raw.0;
+    let mag: [u128; 2] = [
+        (words[0] as u128) | ((words[1] as u128) << 64),
+        (words[2] as u128) | ((words[3] as u128) << 64),
+    ];
+    let f = Fixed { negative: false, mag };
     match f.round_to_i128(SCALE_REF, TARGET) {
         Some(v) => v,
         None => panic!(
