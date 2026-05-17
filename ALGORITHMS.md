@@ -230,7 +230,53 @@ Further reading:
 - Wikipedia - [Inverse hyperbolic functions § Series expansions](https://en.wikipedia.org/wiki/Inverse_hyperbolic_functions#Series_expansions) (the `artanh` series the crate evaluates)
 - Wolfram MathWorld - [Mercator Series](https://mathworld.wolfram.com/MercatorSeries.html), [Inverse Hyperbolic Tangent](https://mathworld.wolfram.com/InverseHyperbolicTangent.html)
 
-### `exp` via range-reduced Taylor series
+### `exp` via two-stage argument reduction + Taylor
+
+Wide-tier exp uses Brent's two-stage argument reduction (dashu's
+`exp_internal` pattern, traced to Brent 1976 §3):
+
+1. **Stage 1 — modular:** `k = round(v/ln 2)`; `s = v − k·ln 2`,
+   giving `|s| ≤ ln 2 / 2 ≈ 0.347`.
+2. **Stage 2 — multiplicative:** `s ← s / 2^n` with
+   `n ≈ √(precision_bits)`. After both reductions the Taylor
+   argument satisfies `|r| < 2⁻ⁿ ≈ 2⁻√ᵖ`, so the series converges
+   in `O(√p)` terms instead of `O(p)`. n is chosen via integer
+   `sqrt(3w + 1)` (using `w·log₂(10) ≈ 3.32w` as the bit estimate).
+3. **Taylor** on the reduced argument.
+4. **Reassembly:** square `n` times to undo stage 2, then bit-shift
+   by `k` to undo stage 1.
+
+The squaring step replaces `≈ 60` Taylor mul+div pairs with
+`n` plain wide multiplies, which is the dominant saving (a divide
+is more expensive than a multiply at our widths even after the
+u64 storage migration).
+
+> Brent, R. P. (1976). **"Fast multiple-precision evaluation of
+> elementary functions."** *Journal of the ACM* **23(2)**, 242–251.
+> DOI: [10.1145/321941.321944](https://doi.org/10.1145/321941.321944).
+
+Implementation: `src/macros/wide_transcendental.rs::exp_fixed`;
+narrow tier in `src/log_exp_strict.rs`.
+
+Further: `dashu-float::exp::Context::exp_internal` is the modern
+reference implementation we cross-checked against.
+
+### Cached `10^w` divisor in Taylor / AGM / Newton inner loops
+
+Every `mul(a, b, w)` / `div(a, b, w)` in `wide_transcendental` does
+a `round_div` against `10^w`. Computing `lit(10).pow(w)` from
+scratch on each call costs ~10–50 µs at D307<150> (`w=180`, ~8 wide
+squarings followed by ~180 cumulative multiplies). The cached
+variants `mul_cached(a, b, pow10_w)` / `div_cached(...)` accept
+a precomputed `10^w` and skip the recomputation; the inner Taylor
+/ AGM / Newton loops hoist `let pow10_w = pow10(w);` once and pass
+it down, saving ~20 % on every wide transcendental.
+
+Implementation: `src/macros/wide_transcendental.rs::mul_cached`,
+`div_cached`; consumed by `exp_fixed`, `ln_fixed`, `sin_taylor`,
+`atan_taylor`.
+
+### `exp` via plain Taylor (legacy reference)
 
 Range-reduce `x = k · ln 2 + s` with `|s| ≤ ln 2 / 2`, then
 `exp(x) = 2^k · exp(s)`. The Taylor series for `exp(s)` converges

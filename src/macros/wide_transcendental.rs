@@ -128,10 +128,13 @@ macro_rules! decl_wide_transcendental {
             /// `mul` / `div` core helpers share one rounding rule
             /// instead of truncating per op (which leaks ~1 LSB
             /// each into the strict-transcendental series).
+            ///
+            /// Uses `div_rem` for the q + r pair (single dispatcher
+            /// call) instead of the previous `n/d` + `n%d` pattern
+            /// (two dispatcher calls = two full Knuth runs).
             #[inline]
             fn round_div(n: W, d: W) -> W {
-                let q = n / d;
-                let r = n % d;
+                let (q, r) = n.div_rem(d);
                 if r == lit(0) {
                     return q;
                 }
@@ -161,10 +164,26 @@ macro_rules! decl_wide_transcendental {
             pub(super) fn mul(a: W, b: W, w: u32) -> W {
                 round_div(a * b, pow10(w))
             }
+            /// Loop-friendly variant of [`mul`] that takes a
+            /// precomputed `10^w` divisor. Use inside Taylor /
+            /// AGM / Newton loops where `w` is constant across
+            /// every iteration — saves one `lit(10).pow(w)`
+            /// recomputation per call (which for D307<150> at w=180
+            /// is itself a full Int4096 power of ~50 µs).
+            #[inline]
+            pub(super) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
+                round_div(a * b, pow10_w)
+            }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(super) fn div(a: W, b: W, w: u32) -> W {
                 round_div(a * pow10(w), b)
+            }
+            /// Loop-friendly variant of [`div`] taking a precomputed
+            /// `10^w` numerator factor.
+            #[inline]
+            pub(super) fn div_cached(a: W, b: W, pow10_w: W) -> W {
+                round_div(a * pow10_w, b)
             }
             /// `a · n` for a small unsigned multiplier.
             #[inline]
@@ -308,6 +327,7 @@ macro_rules! decl_wide_transcendental {
             pub(super) fn ln_fixed(v_w: W, w: u32) -> W {
                 let one_w = one(w);
                 let two_w = one_w + one_w;
+                let pow10_w = one_w;
                 let mut k: i32 = bit_length(v_w) as i32 - bit_length(one_w) as i32;
                 let m_w = loop {
                     let m = if k >= 0 {
@@ -323,13 +343,13 @@ macro_rules! decl_wide_transcendental {
                         break m;
                     }
                 };
-                let t = div(m_w - one_w, m_w + one_w, w);
-                let t2 = mul(t, t, w);
+                let t = div_cached(m_w - one_w, m_w + one_w, pow10_w);
+                let t2 = mul_cached(t, t, pow10_w);
                 let mut sum = t;
                 let mut term = t;
                 let mut j: u128 = 1;
                 loop {
-                    term = mul(term, t2, w);
+                    term = mul_cached(term, t2, pow10_w);
                     let contrib = term / lit(2 * j + 1);
                     if contrib == zero() {
                         break;
@@ -488,26 +508,64 @@ macro_rules! decl_wide_transcendental {
             /// `e^v` for a working-scale value `v`.
             ///
             /// Range-reduces `v = k·ln 2 + s` with `|s| ≤ ln 2 / 2`,
-            /// Taylor-expands `exp(s)`, reassembles `2^k · exp(s)`.
+            /// then applies the "r/2^n" further reduction (n ≈ √p):
+            /// shift `s` right by `n` bits, run the Taylor series on
+            /// the tiny shifted argument, then square `n` times to
+            /// undo the reduction. Net effect: Taylor needs `O(√p)`
+            /// terms instead of `O(p)`, traded against `n` extra
+            /// squarings — a clear win because each squaring is one
+            /// wide mul whereas each Taylor term is mul + div.
+            ///
+            /// Reassembles `2^k · exp(s)` at the end.
+            ///
+            /// Reference: dashu-float's `exp_internal`
+            /// (`float/src/exp.rs`); the trick traces back to Brent
+            /// 1976 §3 ("binary-splitting for exp via repeated
+            /// squaring of a reduced argument").
             pub(super) fn exp_fixed(v_w: W, w: u32) -> W {
+                // Cache 10^w once — used as divisor in every Taylor
+                // iteration and squaring step below. At D307<150>
+                // w=180 and `pow10(180)` costs ~50 µs by itself
+                // (`lit(10).pow(180)` is ~log₂(180)=8 wide squarings
+                // followed by ~180 cumulative multiplies); without
+                // caching this would dominate the call.
                 let one_w = one(w);
                 let l2 = ln2(w);
-                let k = round_to_nearest_int(div(v_w, l2, w), w);
+                let pow10_w = one_w;
+                let k = round_to_nearest_int(div_cached(v_w, l2, pow10_w), w);
                 let s = v_w - scale_by_k(l2, k);
-                let mut sum = one_w;
-                let mut term = one_w;
-                let mut n: u128 = 1;
+
+                let p_bits = w.saturating_mul(3).saturating_add(1);
+                let mut n: u32 = 1;
+                while (n + 1) * (n + 1) <= p_bits {
+                    n += 1;
+                }
+
+                let s_red = s >> n;
+
+                let mut sum = one_w + s_red;
+                let mut term = s_red;
+                let mut iter: u128 = 2;
                 loop {
-                    term = mul(term, s, w) / lit(n);
+                    term = mul_cached(term, s_red, pow10_w) / lit(iter);
                     if term == zero() {
                         break;
                     }
                     sum = sum + term;
-                    n += 1;
-                    if n > SERIES_CAP {
+                    iter += 1;
+                    if iter > SERIES_CAP {
                         break;
                     }
                 }
+
+                let mut squared = sum;
+                let mut i = 0;
+                while i < n {
+                    squared = mul_cached(squared, squared, pow10_w);
+                    i += 1;
+                }
+                let sum = squared;
+
                 if k >= 0 {
                     let shift = k as u32;
                     if bit_length(sum) + shift >= W::BITS {
@@ -518,12 +576,6 @@ macro_rules! decl_wide_transcendental {
                     }
                     sum << shift
                 } else {
-                    // Underflow: |k| · ln(2) ≥ |v|. Once `-k` exceeds
-                    // the bit-length of `sum`, `sum >> -k` truncates to
-                    // zero — but the cap at `W::BITS - 1` previously
-                    // left a stray `1` for very large `-k`. Catch the
-                    // underflow explicitly so `exp(very_negative)` is
-                    // a true zero.
                     let neg_k = -k as u128;
                     if neg_k >= bit_length(sum) as u128 {
                         return zero();
@@ -534,12 +586,13 @@ macro_rules! decl_wide_transcendental {
 
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
             pub(super) fn atan_taylor(x: W, w: u32) -> W {
-                let x2 = mul(x, x, w);
+                let pow10_w = pow10(w);
+                let x2 = mul_cached(x, x, pow10_w);
                 let mut sum = x;
                 let mut term = x;
                 let mut k: u128 = 1;
                 loop {
-                    term = mul(term, x2, w);
+                    term = mul_cached(term, x2, pow10_w);
                     let contrib = term / lit(2 * k + 1);
                     if contrib == zero() {
                         break;
@@ -570,12 +623,13 @@ macro_rules! decl_wide_transcendental {
 
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/2]`.
             fn sin_taylor(r: W, w: u32) -> W {
-                let r2 = mul(r, r, w);
+                let pow10_w = pow10(w);
+                let r2 = mul_cached(r, r, pow10_w);
                 let mut sum = r;
                 let mut term = r;
                 let mut k: u128 = 1;
                 loop {
-                    term = mul(term, r2, w) / lit((2 * k) * (2 * k + 1));
+                    term = mul_cached(term, r2, pow10_w) / lit((2 * k) * (2 * k + 1));
                     if term == zero() {
                         break;
                     }
