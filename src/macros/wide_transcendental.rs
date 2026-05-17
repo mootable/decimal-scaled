@@ -298,8 +298,13 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
-            /// `ln 2` at working scale `w`, via `2·artanh(1/3)`.
+            /// `ln 2` at working scale `w`. Thread-local memoised
+            /// per `w` (std feature) so the artanh series runs once
+            /// per `(thread, working-scale)` pair, not per call.
             pub(super) fn ln2(w: u32) -> W {
+                cached(&LN2_CACHE_GET, w, ln2_compute)
+            }
+            fn ln2_compute(w: u32) -> W {
                 let t = one(w) / lit(3);
                 let t2 = mul(t, t, w);
                 let mut sum = t;
@@ -392,8 +397,11 @@ macro_rules! decl_wide_transcendental {
                 scale_by_k(ln2(w), k as i128) + ln_m
             }
 
-            /// `ln 10` at working scale `w`.
+            /// `ln 10` at working scale `w`. Memoised, see [`ln2`].
             pub(super) fn ln10(w: u32) -> W {
+                cached(&LN10_CACHE_GET, w, ln10_compute)
+            }
+            fn ln10_compute(w: u32) -> W {
                 ln_fixed(one(w) * lit(10), w)
             }
 
@@ -639,11 +647,107 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// `π` at working scale `w`, via Machin's formula.
+            /// Memoised per `w` (std feature); see [`ln2`].
             pub(super) fn pi(w: u32) -> W {
+                cached(&PI_CACHE_GET, w, pi_compute)
+            }
+            fn pi_compute(w: u32) -> W {
                 let a = atan_taylor(one(w) / lit(5), w);
                 let b = atan_taylor(one(w) / lit(239), w);
                 mul_u(a, 16) - mul_u(b, 4)
             }
+
+            // ── Thread-local memoisation for pi / ln2 / ln10 ───────────
+            //
+            // Each helper computes its constant once per thread per
+            // working scale `w` (typically only one or two distinct `w`
+            // values per process, matching the user's SCALE choices).
+            // Subsequent calls hit the cache and return in ~few ns
+            // vs the 50-150 µs the series evaluation would cost.
+            //
+            // The cache is a tiny `Vec<(u32, W)>` per thread —
+            // typical occupancy is 1-3 entries (one per SCALE the
+            // user computes at). Linear scan is faster than any
+            // hash structure at that scale.
+            //
+            // Gated on the `std` feature for `thread_local!`. Under
+            // `no_std` the wrappers degrade to direct computation —
+            // no cache, no contention concerns.
+
+            #[cfg(feature = "std")]
+            fn cached<F>(slot_get: &dyn Fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>>, w: u32, compute: F) -> W
+            where
+                F: FnOnce(u32) -> W,
+            {
+                let slot = slot_get();
+                let hit = slot.with(|c| {
+                    let cache = c.borrow();
+                    for &(cw, cv) in cache.iter() {
+                        if cw == w {
+                            return ::core::option::Option::Some(cv);
+                        }
+                    }
+                    ::core::option::Option::None
+                });
+                if let ::core::option::Option::Some(v) = hit {
+                    return v;
+                }
+                let v = compute(w);
+                slot.with(|c| {
+                    c.borrow_mut().push((w, v));
+                });
+                v
+            }
+
+            #[cfg(not(feature = "std"))]
+            fn cached<F>(_slot_get: &(), w: u32, compute: F) -> W
+            where
+                F: FnOnce(u32) -> W,
+            {
+                compute(w)
+            }
+
+            #[cfg(feature = "std")]
+            fn pi_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
+                ::std::thread_local! {
+                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
+                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
+                    };
+                }
+                &SLOT
+            }
+            #[cfg(feature = "std")]
+            fn ln2_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
+                ::std::thread_local! {
+                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
+                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
+                    };
+                }
+                &SLOT
+            }
+            #[cfg(feature = "std")]
+            fn ln10_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
+                ::std::thread_local! {
+                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
+                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
+                    };
+                }
+                &SLOT
+            }
+
+            #[cfg(feature = "std")]
+            const PI_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = pi_cache_get;
+            #[cfg(feature = "std")]
+            const LN2_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = ln2_cache_get;
+            #[cfg(feature = "std")]
+            const LN10_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = ln10_cache_get;
+
+            #[cfg(not(feature = "std"))]
+            const PI_CACHE_GET: () = ();
+            #[cfg(not(feature = "std"))]
+            const LN2_CACHE_GET: () = ();
+            #[cfg(not(feature = "std"))]
+            const LN10_CACHE_GET: () = ();
             /// `π/2` at working scale `w`.
             pub(super) fn half_pi(w: u32) -> W {
                 pi(w) / lit(2)
