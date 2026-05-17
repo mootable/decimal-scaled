@@ -43,9 +43,11 @@ Further reading:
 
 ### Limb storage shape — `[u64; 2·N]`
 
-The wide-integer types (`Int256` through `Int4096`) are stored as
-little-endian `[u64; 2·N]` arrays — twice the `u128`-equivalent limb
-count quoted in their names. The choice exposes native `u64 × u64 →
+The wide-integer types (the eight power-of-two widths `Int256`,
+`Int512`, `Int1024`, `Int2048`, `Int4096`, `Int8192`, `Int12288`,
+`Int16384` plus the half-width siblings `Int192`, `Int384`, `Int768`,
+`Int1536`, `Int3072`, `Int6144`) are stored as little-endian
+`[u64; L]` arrays where `L` is the bit-width divided by 64. The choice exposes native `u64 × u64 →
 u128` and `u128 / u64` hardware instructions directly (Zen 4 / Intel
 Golden Cove issue one widening 64×64 mul per cycle in steady state)
 where the historical `[u128; N]` layout had to soft-emulate every
@@ -244,7 +246,7 @@ after the influential 1980 implementation:
 > Elementary Functions."** Prentice-Hall.
 
 Implementation: `src/log_exp_strict.rs::ln_fixed` (D38),
-`src/macros/wide_transcendental.rs::ln_fixed` (D76/D153/D307).
+`src/macros/wide_transcendental.rs::ln_fixed` (every wide tier — D56 / D76 / D114 / D153 / D230 / D307 / D461 / D615 / D923 / D1231).
 
 Further reading:
 
@@ -369,8 +371,9 @@ Taylor series for `atan` converges in `~p_bits / (2l)` terms.
 The halving count is chosen per working scale `w`:
 
 - `w < 60` → 5 halvings (D38 / D9 / D18 strict path)
-- `60 ≤ w < 110` → 6 halvings (D76 / light D153)
-- `w ≥ 110` → 7 halvings (D153 / D307)
+- `60 ≤ w < 110` → 6 halvings (D56 / D76 / light D114)
+- `w ≥ 110` → 7 halvings (D114 / D153 / D230 / D307 / D461 / D615 /
+  D923 / D1231)
 
 Break-even rationale: each halving costs ~one wide mul + one wide
 sqrt + one wide div; each saved Taylor term saves ~one wide mul.
@@ -417,7 +420,7 @@ representable input:
 `acos` shares the same kernel via `acos(x) = π/2 − asin(x)`.
 
 Implementation: `src/trig_strict.rs::asin_strict` /
-`acos_strict` (D38) and the four wide-tier variants in
+`acos_strict` (D38) and the wide-tier variants in
 `src/macros/wide_transcendental.rs` (`asin_strict`,
 `asin_strict_with`, `acos_strict`, `acos_strict_with`).
 
@@ -512,7 +515,7 @@ largest of the six). Sources:
   [Yuri Ofman bio](https://en.wikipedia.org/wiki/Yuri_Ofman),
   [MathWorld - Karatsuba Algorithm](https://mathworld.wolfram.com/KaratsubaAlgorithm.html).
 - **AGM-based ln / exp (Brent–Salamin 1976).** `ln_strict_agm`
-  (D76 / D153 / D307) uses Brent's identity
+  (every wide tier) uses Brent's identity
   `ln(s) ≈ π / (2 · AGM(1, 4/s))` with range reduction
   `ln(x) = ln(x · 2^m) − m·ln 2`. `exp_strict_agm` uses Newton's
   iteration on `ln_strict_agm`. Both converge quadratically - `O(log
