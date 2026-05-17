@@ -1399,91 +1399,15 @@ pub(crate) const fn limbs_divmod_u64(
 /// (9216 bits), matching the u128 path's 72-limb scratch.
 const SCRATCH_LIMBS_U64: usize = 144;
 
-/// Karatsuba u64 threshold. The u128 path's threshold of 32 limbs
-/// translates to 64 u64 limbs at the same bit width. The same
-/// alloc-tax argument applies: Karatsuba's heap-vec scratch only pays
-/// back once the limb count is large enough that the 3·(n/2)² vs n²
-/// mul savings dominate the six per-level `Vec` allocations.
-#[cfg(feature = "alloc")]
-const KARATSUBA_MIN_U64: usize = 64;
-
-/// Karatsuba multiplication, equal-length u64 inputs. Same algorithm
-/// as [`limbs_mul_karatsuba`] but written against u64 limbs.
-#[cfg(feature = "alloc")]
-fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
-    debug_assert_eq!(a.len(), b.len());
-    debug_assert!(out.len() >= 2 * a.len());
-    let n = a.len();
-    if n < KARATSUBA_MIN_U64 {
-        for o in out.iter_mut().take(2 * n) {
-            *o = 0;
-        }
-        limbs_mul_u64(a, b, out);
-        return;
-    }
-    let h = n / 2;
-    let (a_lo, a_hi) = a.split_at(h);
-    let (b_lo, b_hi) = b.split_at(h);
-
-    let mut z0 = alloc::vec![0u64; 2 * h];
-    limbs_mul_karatsuba_u64_padded(a_lo, b_lo, &mut z0);
-
-    let hi_len = n - h;
-    let mut z2 = alloc::vec![0u64; 2 * hi_len];
-    limbs_mul_karatsuba_u64_padded(a_hi, b_hi, &mut z2);
-
-    let sum_len = core::cmp::max(h, hi_len) + 1;
-    let mut sum_a = alloc::vec![0u64; sum_len];
-    let mut sum_b = alloc::vec![0u64; sum_len];
-    sum_a[..h].copy_from_slice(a_lo);
-    sum_b[..h].copy_from_slice(b_lo);
-    limbs_add_assign_u64(&mut sum_a[..], a_hi);
-    limbs_add_assign_u64(&mut sum_b[..], b_hi);
-
-    let mut z1 = alloc::vec![0u64; 2 * sum_len];
-    limbs_mul_karatsuba_u64_padded(&sum_a, &sum_b, &mut z1);
-
-    limbs_sub_assign_u64(&mut z1[..], &z0);
-    limbs_sub_assign_u64(&mut z1[..], &z2);
-
-    for o in out.iter_mut().take(2 * n) {
-        *o = 0;
-    }
-    let z0_take = core::cmp::min(z0.len(), out.len());
-    out[..z0_take].copy_from_slice(&z0[..z0_take]);
-    let z2_take = core::cmp::min(z2.len(), out.len().saturating_sub(2 * h));
-    if z2_take > 0 {
-        out[2 * h..2 * h + z2_take].copy_from_slice(&z2[..z2_take]);
-    }
-    let z1_take = core::cmp::min(z1.len(), out.len().saturating_sub(h));
-    if z1_take > 0 {
-        limbs_add_assign_u64(&mut out[h..h + z1_take], &z1[..z1_take]);
-    }
-}
-
-#[cfg(feature = "alloc")]
-fn limbs_mul_karatsuba_u64_padded(a: &[u64], b: &[u64], out: &mut [u64]) {
-    if a.len() == b.len() && a.len() >= KARATSUBA_MIN_U64 {
-        limbs_mul_karatsuba_u64(a, b, out);
-    } else {
-        for o in out.iter_mut() {
-            *o = 0;
-        }
-        limbs_mul_u64(a, b, out);
-    }
-}
-
 /// Equal-length u64 multiplier dispatcher.
-#[cfg(feature = "alloc")]
-pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
-    if a.len() == b.len() && a.len() >= KARATSUBA_MIN_U64 {
-        limbs_mul_karatsuba_u64(a, b, out);
-    } else {
-        limbs_mul_u64(a, b, out);
-    }
-}
-
-#[cfg(not(feature = "alloc"))]
+///
+/// In testing against `examples/karabench.rs` u64 Karatsuba never won
+/// over schoolbook at the tiers this crate actually emits — the
+/// hardware `u64 × u64 → u128` widening multiply is single-cycle on
+/// x86-64 Zen 4 / Intel Golden Cove, so schoolbook's n² muls finish
+/// in fewer cycles than Karatsuba's 3 × (n/2)² + add/sub overhead at
+/// n ≤ 64. We keep `limbs_mul_u64` as the only multiplier and reserve
+/// the Karatsuba/Toom path for a future SIMD or wider-tier expansion.
 pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     limbs_mul_u64(a, b, out);
 }
