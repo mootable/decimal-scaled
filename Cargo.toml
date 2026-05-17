@@ -1,6 +1,6 @@
 [package]
 name = "decimal-scaled"
-version = "0.3.0"
+version = "0.3.1"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -45,7 +45,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 # To opt out and use the f64 bridge instead you have to take all
 # three steps: (a) `default-features = false`, (b) explicitly add
 # `fast` + `std`, and (c) NOT re-add `strict`:
-#   decimal-scaled = { version = "0.3.0", default-features = false,
+#   decimal-scaled = { version = "0.3.1", default-features = false,
 #                      features = ["std", "serde", "fast"] }
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
@@ -116,7 +116,7 @@ d1231 = []
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
-decimal_scaled_macros = { path = "macros", version = "0.3.0", default-features = false, optional = true }
+decimal_scaled_macros = { path = "macros", version = "0.3.1", default-features = false, optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }

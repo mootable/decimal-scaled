@@ -5,6 +5,27 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.1]
+
+Release-process patch. Library code, public API, on-wire format,
+and bench numbers are byte-identical to 0.3.0.
+
+### Fixed
+
+- **GitHub Pages docs site (`mootable.github.io/decimal-scaled`)
+  failed to refresh on the v0.3.0 tag push.** The Pages environment
+  protection rule only allows deploys from `main`; the concurrent
+  main-push run that *was* allowed to deploy got cancelled by the
+  tag-push run that arrived right after. Tag-triggered deploys
+  blocked. 0.3.1 ships as a `main`-branch push so the docs
+  workflow runs to completion.
+
+### Notes
+
+- Future releases should land the version-bump commit, let
+  `main` build + deploy the docs, *then* tag — not the other
+  way round. Will codify in `scripts/deploy.ps1`.
+
 ## [0.3.0]
 
 The half-width-tier release. The decimal ladder now goes

@@ -51,7 +51,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-decimal-scaled = "0.3.0"
+decimal-scaled = "0.3.1"
 ```
 
 The default build dispatches plain `sqrt` / `ln` / `sin` /
@@ -65,7 +65,7 @@ explicitly opt out of strict:
 [dependencies]
 # f64-bridge fast path — ~16 decimal digits of platform-libm
 # precision, NOT platform-deterministic. Opt-in only.
-decimal-scaled = { version = "0.3.0",
+decimal-scaled = { version = "0.3.1",
                    default-features = false,
                    features = ["std", "serde", "fast"] }
 ```
@@ -74,7 +74,7 @@ For `no_std` targets (`alloc` is still required):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.0",
+decimal-scaled = { version = "0.3.1",
                    default-features = false,
                    features = ["alloc", "serde"] }
 # `strict` is on by default; no need to re-add it.
@@ -86,7 +86,7 @@ decimal-scaled = { version = "0.3.0",
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.0", features = ["macros"] }
+decimal-scaled = { version = "0.3.1", features = ["macros"] }
 ```
 
 There are three idiomatic ways to construct a value. Use whichever

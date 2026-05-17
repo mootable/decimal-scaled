@@ -18,7 +18,7 @@ Enable the macros with the `macros` feature (off by default):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.0", features = ["macros"] }
+decimal-scaled = { version = "0.3.1", features = ["macros"] }
 ```
 
 ```rust
