@@ -371,35 +371,51 @@ is the **s = mid** measurement, **bold** marks the row winner.
 
 | fn | D56 (s=28) | D76 (s=35) | D114 (s=57) | D153 (s=75) | D230 (s=115) | D307 (s=150) |
 |---|---|---|---|---|---|---|
-| ln   | **9.1 µs**  | 19.3 µs | (pending) | 42.6 µs | (pending) | (pending) |
-| exp  | **5.9 µs**  | 15.6 µs | (pending) | (pending) | (pending) | (pending) |
-| sin  | **4.8 µs**  | 11.8 µs | (pending) | (pending) | (pending) | (pending) |
-| sqrt | (pending)   | (pending) | (pending) | (pending) | (pending) | (pending) |
+| ln   | **18.4 µs** | 19.6 µs | 25.5 µs | 42.0 µs |  68.0 µs | 109.5 µs |
+| exp  | **16.7 µs** | 16.6 µs | 18.1 µs | 33.6 µs |  53.5 µs |  86.8 µs |
+| sin  | **11.5 µs** | 12.3 µs | 14.7 µs | 27.5 µs |  47.7 µs |  78.5 µs |
+| sqrt | **1.13 µs** | 1.30 µs | 1.56 µs | 2.10 µs |  3.27 µs |   4.38 µs |
 
-#### Extra-wide (`x-wide` umbrella adds D461 / D615)
+#### Extra-wide (`x-wide` adds D461 / D615)
 
-D461 / D615 strict cells will be filled when the in-flight bench
-sweep finishes. Order-of-magnitude expectation extrapolating from
-D307: ln/exp/sin land in the low-hundreds-of-µs at the midpoint
-scale, sqrt in the tens-of-µs.
+| fn | D461 (s=230) | D615 (s=308) |
+|---|---|---|
+| ln   | **139.7 µs** | 328.5 µs |
+| exp  | **102.3 µs** | 223.0 µs |
+| sin  | **95.2 µs**  | 187.1 µs |
+| sqrt | **6.99 µs**  |  11.5 µs |
 
-#### XX-wide (`xx-wide` umbrella adds D923 / D1231)
+#### XX-wide (`xx-wide` adds D923 / D1231)
 
-Same status — D923 and D1231 strict numbers pending the bench
-sweep. At D1231<616> a single strict-ln call is expected to land
-in the low-ms range; sqrt around 100 µs.
+| fn | D923 (s=461) | D1231 (s=616) |
+|---|---|---|
+| ln   | **592.8 µs** | 993.6 µs |
+| exp  | **441.3 µs** | 755.4 µs |
+| sin  | **441.1 µs** | 776.2 µs |
+| sqrt | **19.6 µs**  |  29.7 µs |
 
 **Historical comparison — 0.2.5 baseline.** On the same hardware,
 0.2.5 measured D76<35> ln at 1.37 ms, D153<75> ln at 6.40 ms,
-D307<150> ln at 34.1 ms. The 0.2.6 cycle's u64-native limbs, MG
+D307<150> ln at 34.1 ms. After this cycle's u64-native limbs, MG
 2-by-1 reciprocal Knuth divide, Brent's two-stage exp argument
 reduction, multi-level sqrt halving in ln, [0, π/4] sin range
 reduction, sin_cos / sinh_cosh joint kernels, thread-local pi /
-ln2 / ln10 cache, and pow10-cached mul/div per inner loop
-collectively bring D76 ln down to ~19 µs (**72× faster**),
-D153 ln to ~43 µs (**150× faster**), and D307 sqrt from 313 µs
-to ~3.8 µs (**80× faster** — partial data; the in-flight bench
-will refresh these once the strict-wide section completes).
+ln2 / ln10 cache, and pow10-cached mul/div per inner loop:
+
+| op | 0.2.5 | 0.2.6 | speedup |
+|---|---|---|---|
+| D76<35>  ln   |  1.37 ms |  19.6 µs |  **70×** |
+| D76<35>  exp  |  1.27 ms |  16.6 µs |  **76×** |
+| D76<35>  sin  |  1.08 ms |  12.3 µs |  **88×** |
+| D76<35>  sqrt | 20.5 µs  |  1.30 µs |  **16×** |
+| D153<75> ln   |  6.40 ms |  42.0 µs | **152×** |
+| D153<75> exp  |  5.87 ms |  33.6 µs | **175×** |
+| D153<75> sin  |  4.82 ms |  27.5 µs | **175×** |
+| D153<75> sqrt | 83.6 µs  |  2.10 µs |  **40×** |
+| D307<150> ln  | 34.1 ms  | 109.5 µs | **311×** |
+| D307<150> exp | 31.2 ms  |  86.8 µs | **360×** |
+| D307<150> sin | 25.5 ms  |  78.5 µs | **325×** |
+| D307<150> sqrt|  313 µs  |  4.38 µs |  **71×** |
 
 **Reading the strict tables.** Both tables sample at the
 midpoint scale because the storage extremes hit shortcut paths
