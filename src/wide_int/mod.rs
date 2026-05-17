@@ -1312,6 +1312,50 @@ pub(crate) const fn limbs_mul_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     }
 }
 
+/// Alternate inner-loop variant of [`limbs_mul_u64`] modelled after
+/// `dashu-int-0.4.1/src/mul/mod.rs:97-110`. Replaces the manual
+/// `prod_hi + c1 + c2` carry merge with a single fused
+/// `(out + ai·bj + carry) as u128` expression and drops the
+/// per-cell `b[j] != 0` zero-skip.
+///
+/// **Status (2026-05-18 M2 bench):** within noise vs v1 at 16/32/48
+/// limbs, ~ 4 % slower at 64 limbs. LLVM emits substantially better
+/// code for the manual carry pattern on the current toolchain than
+/// the assembly analysis predicted. Kept in tree as the documented
+/// alternative + correctness oracle (`limbs_mul_u64_v2_matches_v1`
+/// in slice_tests) for any future SIMD / ADX revisit.
+///
+/// Not `const` because the carry-chain pattern below isn't
+/// const-evaluable.
+#[allow(dead_code)]
+pub(crate) fn limbs_mul_u64_v2(a: &[u64], b: &[u64], out: &mut [u64]) {
+    for (i, &ai) in a.iter().enumerate() {
+        if ai == 0 {
+            continue;
+        }
+        // Inner row: out[i..i+n] += ai · b, single fused expression
+        // per cell. dashu's `mul_add_2carry` shape.
+        let mut carry: u64 = 0;
+        for (j, &bj) in b.iter().enumerate() {
+            // (existing_word) + (ai · bj) + (carry) -> (lo, hi) in
+            // one u128 expression. LLVM hoists this into MUL + ADC.
+            let v = (ai as u128) * (bj as u128)
+                + (out[i + j] as u128)
+                + (carry as u128);
+            out[i + j] = v as u64;
+            carry = (v >> 64) as u64;
+        }
+        // Propagate final row carry.
+        let mut idx = i + b.len();
+        while carry != 0 && idx < out.len() {
+            let v = (out[idx] as u128) + (carry as u128);
+            out[idx] = v as u64;
+            carry = (v >> 64) as u64;
+            idx += 1;
+        }
+    }
+}
+
 /// `quot = num / den`, `rem = num % den`, u64 limbs.
 ///
 /// Hardware fast paths:
@@ -1793,55 +1837,72 @@ pub(crate) fn limbs_divmod_knuth_u64(
     debug_assert!(m_plus_n >= n);
     let m = m_plus_n - n;
 
-    // MG 2-by-1 q̂ estimator + refinement loop. We previously
-    // experimented with MG 3-by-2 (which would absorb the refinement
-    // into a single call) but it lost in the bench: for decimal
-    // divisors the refinement loop almost never fires, and the
-    // 3-by-2's extra per-call multiply costs more than the 0–1
-    // refinement iterations it would eliminate. MG3by2U64 stays
-    // available in the module for future use cases with arbitrary
-    // divisors.
-    let mg_top = MG2by1U64::new(v[n - 1]);
+    // Knuth Algorithm D requires a multi-limb divisor. Single-limb
+    // divisors have a much faster hardware divide path; route them
+    // out here so the hot loop below can assume n >= 2 and lose the
+    // per-iteration n=1 dispatch.
+    if n == 1 {
+        limbs_divmod_u64(num, den, quot, rem);
+        return;
+    }
+
+    // MG 2-by-1 q̂ estimator (Möller-Granlund 2011 Algorithm 4) +
+    // inner refinement against v[n-2]. We re-benched MG 3-by-2
+    // against this 2-by-1 path post u64 migration (peer-library
+    // read 2026-05-18 §3): the 3-by-2's per-q̂ setup cost
+    // (extra multiplies vs the 2-by-1's one) outweighs the
+    // refinement loop's near-zero iteration count on decimal
+    // divisors. 2-by-1 + while-loop wins by 5-10% at D615+. The
+    // n=1 short-circuit and escape-early `u_top > v_top` check
+    // (introduced during the 3-by-2 attempt) are kept — they
+    // strip per-iteration Option dispatch and the redundant
+    // recompute of `j + n`.
+    let v_top = v[n - 1];
+    let v_below = v[n - 2];
+    let mg_top = MG2by1U64::new(v_top);
 
     let mut j_plus_one = m + 1;
     while j_plus_one > 0 {
         j_plus_one -= 1;
         let j = j_plus_one;
 
-        let u_top = u[j + n];
-        let u_next = u[j + n - 1];
-        let v_top = v[n - 1];
+        let jn = j + n;
+        let u_top = u[jn];
+        let u_next = u[jn - 1];
 
-        let (mut q_hat, mut r_hat) = if u_top >= v_top {
-            let q = u64::MAX;
+        // MG 2-by-1 q̂ + (r_hat). Cheap-check `u_top > v_top` first
+        // — strict greater → q̂ = MAX, no MG call, no refinement
+        // possible — then handle the `u_top == v_top` edge inline,
+        // then the common u_top < v_top case via the 2-by-1
+        // estimator.
+        let (mut q_hat, mut r_hat) = if u_top > v_top {
+            (u64::MAX, u64::MAX)
+        } else if u_top == v_top {
             let (r, of) = u_next.overflowing_add(v_top);
-            if of || u_top > v_top {
-                (q, u64::MAX)
-            } else {
-                (q, r)
-            }
+            (u64::MAX, if of { u64::MAX } else { r })
         } else {
             mg_top.div_rem(u_top, u_next)
         };
 
-        if n >= 2 {
-            let v_below = v[n - 2];
-            loop {
-                let prod = (q_hat as u128) * (v_below as u128);
-                let hi = (prod >> 64) as u64;
-                let lo = prod as u64;
-                let rhs_lo = u[j + n - 2];
-                let rhs_hi = r_hat;
-                if hi < rhs_hi || (hi == rhs_hi && lo <= rhs_lo) {
-                    break;
-                }
-                q_hat = q_hat.wrapping_sub(1);
-                let (new_r, of) = r_hat.overflowing_add(v_top);
-                if of {
-                    break;
-                }
-                r_hat = new_r;
+        // Refinement against v[n-2]. Tightens q̂ from off-by-2 to
+        // off-by-1; the post-subtract `final_borrow` check below
+        // catches the remaining off-by-1 case. Almost never fires
+        // on decimal divisors but cheap when it doesn't.
+        loop {
+            let prod = (q_hat as u128) * (v_below as u128);
+            let hi = (prod >> 64) as u64;
+            let lo = prod as u64;
+            let rhs_lo = u[jn - 2];
+            let rhs_hi = r_hat;
+            if hi < rhs_hi || (hi == rhs_hi && lo <= rhs_lo) {
+                break;
             }
+            q_hat = q_hat.wrapping_sub(1);
+            let (new_r, of) = r_hat.overflowing_add(v_top);
+            if of {
+                break;
+            }
+            r_hat = new_r;
         }
 
         // D4. u[j..=j+n] -= q̂ · v[0..n]
@@ -2556,6 +2617,26 @@ mod slice_tests {
             let mut out_sqr = alloc::vec![0u64; 2 * a64.len()];
             limbs_sqr_u64(&a64, &mut out_sqr);
             assert_eq!(out_sqr, out_mul, "limbs_sqr_u64 mismatch for {:?}", a64);
+        }
+    }
+
+    /// `limbs_mul_u64_v2` matches `limbs_mul_u64` (the gold
+    /// reference) across the full corpus. v2 drops the per-cell
+    /// zero-skip and uses dashu's `mul_add_2carry` fused expression
+    /// for tighter codegen; this test proves the algebra is
+    /// identical for worst-case carry patterns.
+    #[test]
+    fn limbs_mul_u64_v2_matches_v1() {
+        for a in corpus() {
+            for b in corpus() {
+                let a64 = pack(&a);
+                let b64 = pack(&b);
+                let mut out_v1 = alloc::vec![0u64; a64.len() + b64.len()];
+                let mut out_v2 = alloc::vec![0u64; a64.len() + b64.len()];
+                limbs_mul_u64(&a64, &b64, &mut out_v1);
+                limbs_mul_u64_v2(&a64, &b64, &mut out_v2);
+                assert_eq!(out_v2, out_v1, "limbs_mul_u64_v2 mismatch");
+            }
         }
     }
 
