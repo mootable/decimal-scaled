@@ -10,16 +10,29 @@
 //! # Primary types
 //!
 //! Each width has a `D<digits><const SCALE: u32>` const-generic shape with the
-//! same method surface; pick the narrowest that fits your range.
+//! same method surface; pick the narrowest that fits your range. The number on
+//! every `D{N}` type is `MAX_SCALE` — the highest `SCALE` the storage can hold.
 //!
-//! | Type | Storage | Max safe decimal digits | Feature gate |
-//! |------|---------|-------------------------|--------------|
-//! | [`D9<SCALE>`]  | `i32`    | 9   | always on |
-//! | [`D18<SCALE>`] | `i64`    | 18  | always on |
-//! | [`D38<SCALE>`] | `i128`   | 38  | always on |
-//! | [`D76<SCALE>`] | 256-bit  | 76  | `d76` or `wide` |
-//! | [`D153<SCALE>`] | 512-bit | 153 | `d153` or `wide` |
-//! | [`D307<SCALE>`] | 1024-bit | 307 | `d307` or `wide` |
+//! | Type | Storage | `MAX_SCALE` | Feature gate |
+//! |------|---------|-------------|--------------|
+//! | [`D9<SCALE>`]    | `i32`     |    9 | always on |
+//! | [`D18<SCALE>`]   | `i64`     |   18 | always on |
+//! | [`D38<SCALE>`]   | `i128`    |   38 | always on |
+//! | [`D56<SCALE>`]   | 192-bit   |   57 | `d56` or `wide` |
+//! | [`D76<SCALE>`]   | 256-bit   |   76 | `d76` or `wide` |
+//! | [`D114<SCALE>`]  | 384-bit   |  115 | `d114` or `wide` |
+//! | [`D153<SCALE>`]  | 512-bit   |  153 | `d153` or `wide` |
+//! | [`D230<SCALE>`]  | 768-bit   |  230 | `d230` or `wide` |
+//! | [`D307<SCALE>`]  | 1024-bit  |  307 | `d307` or `wide` |
+//! | [`D461<SCALE>`]  | 1536-bit  |  462 | `d461` or `x-wide` |
+//! | [`D615<SCALE>`]  | 2048-bit  |  616 | `d615` or `x-wide` |
+//! | [`D923<SCALE>`]  | 3072-bit  |  924 | `d923` or `xx-wide` |
+//! | [`D1231<SCALE>`] | 4096-bit  | 1232 | `d1231` or `xx-wide` |
+//!
+//! Umbrellas: `wide` enables D56 / D76 / D114 / D153 / D230 / D307;
+//! `x-wide` adds D461 + D615; `xx-wide` adds D923 + D1231. Every
+//! adjacent pair has lossless `.widen()` / fallible `.narrow()`
+//! helpers plus `From` / `TryFrom` impls.
 //!
 //! Concrete scale aliases such as `D38s12 = D38<12>` are emitted for every
 //! supported `SCALE`. `SCALE = MAX_SCALE + 1` is rejected at compile time —
