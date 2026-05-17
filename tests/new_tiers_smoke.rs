@@ -162,6 +162,26 @@ macro_rules! tier_smoke {
                 let d: $Tsmid = Default::default();
                 assert_eq!(d, <$Tsmid>::ZERO);
             }
+
+            #[test]
+            fn transcendentals_at_half_max_scale_do_not_overflow() {
+                // Regression: the bench panicked at D56<56>/ln_strict
+                // because the work integer was too narrow to hold
+                // the squared intermediate at working scale
+                // SCALE+GUARD. The fix was to bump D56's work
+                // integer from Int512 to Int1024.
+                //
+                // Exercise the four headline strict transcendentals
+                // at `Tsmid` (an interior, non-trivial scale where
+                // the series actually runs); `1 + 1/2` is in range
+                // at every interior scale.
+                let half = <$Tsmid>::from_int(1) / <$Tsmid>::from_int(2);
+                let one_and_a_half = <$Tsmid>::from_int(1) + half;
+                let _ = one_and_a_half.ln_strict();
+                let _ = half.exp_strict();
+                let _ = one_and_a_half.sin_strict();
+                let _ = one_and_a_half.sqrt_strict();
+            }
         }
     };
 }
