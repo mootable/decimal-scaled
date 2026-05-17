@@ -113,6 +113,27 @@ fn main() {
     }
 
     println!();
+    println!("== sin_cos_strict vs (sin + cos) ==");
+    {
+        let a = D76::<35>::ONE;
+        time("D76<35>::(sin, cos)", || {
+            black_box((black_box(a).sin_strict(), black_box(a).cos_strict()));
+        });
+        time("D76<35>::sin_cos_strict", || {
+            black_box(black_box(a).sin_cos_strict());
+        });
+    }
+    {
+        let a = D307::<150>::ONE;
+        time("D307<150>::(sin, cos)", || {
+            black_box((black_box(a).sin_strict(), black_box(a).cos_strict()));
+        });
+        time("D307<150>::sin_cos_strict", || {
+            black_box(black_box(a).sin_cos_strict());
+        });
+    }
+
+    println!();
     println!("== atan_strict (input = 1) ==");
     {
         let a = D76::<35>::ONE;

@@ -739,6 +739,49 @@ macro_rules! decl_wide_transcendental {
                 if neg { -s } else { s }
             }
 
+            /// Joint sine + cosine of a working-scale value.
+            ///
+            /// Replaces two independent `sin_fixed(...)` calls (one
+            /// for sin, one for `sin(x + π/2)` = cos) with a single
+            /// sin evaluation plus a sqrt:
+            ///
+            /// - Reduce mod τ and fold to `|r| ∈ [0, π/2]`, tracking
+            ///   both signs (sin from the mod-τ residue, cos from
+            ///   whether the unfolded `|r|` exceeded `π/2`).
+            /// - Evaluate `|sin(reduced)|` via the same `sin_taylor`
+            ///   or `cos_taylor` branch as `sin_fixed`.
+            /// - Recover `|cos(reduced)|` from the Pythagorean
+            ///   identity: `√(1 − sin²)`.
+            /// - Apply the cached signs.
+            ///
+            /// One Taylor series + one wide sqrt + one wide mul,
+            /// vs the historic two independent Taylor evaluations.
+            /// Halves the wall-clock when both are needed.
+            pub(super) fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
+                let pi_w = pi(w);
+                let tau = pi_w + pi_w;
+                let hp = pi_w / lit(2);
+                let qp = hp / lit(2);
+                let q = round_to_nearest_int(div(v_w, tau, w), w);
+                let r = v_w - scale_by_k(tau, q);
+                let sin_neg = r < zero();
+                let abs_r = if sin_neg { -r } else { r };
+                let cos_neg = abs_r > hp; // |r| > π/2 → cos negative.
+                let reduced = if cos_neg { pi_w - abs_r } else { abs_r };
+                let s_abs = if reduced > qp {
+                    cos_taylor(hp - reduced, w)
+                } else {
+                    sin_taylor(reduced, w)
+                };
+                // cos² + sin² = 1 ⇒ |cos| = √(1 − sin²).
+                let one_w = one(w);
+                let s2 = mul(s_abs, s_abs, w);
+                let cos_abs = sqrt_fixed(one_w - s2, w);
+                let sin_result = if sin_neg { -s_abs } else { s_abs };
+                let cos_result = if cos_neg { -cos_abs } else { cos_abs };
+                (sin_result, cos_result)
+            }
+
             /// Arctangent of a working-scale value, result in
             /// `(−π/2, π/2)`.
             pub(super) fn atan_fixed(v_w: W, w: u32) -> W {
@@ -950,6 +993,11 @@ macro_rules! decl_wide_transcendental {
 
             /// Cosine of `self` (radians), as `sin(self + π/2)`. Strict
             /// and correctly rounded.
+            ///
+            /// If you need both sin and cos of the same argument,
+            /// prefer [`Self::sin_cos_strict`] — it shares the Taylor
+            /// evaluation between the two and recovers cos via
+            /// `√(1 − sin²)`, halving the wall-clock.
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
@@ -957,6 +1005,30 @@ macro_rules! decl_wide_transcendental {
                 let arg = $core::to_work(self.to_bits()) + $core::half_pi(w);
                 let r = $core::sin_fixed(arg, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
+            }
+
+            /// Joint sine and cosine of `self` (radians), returned
+            /// as `(sin, cos)`. Strict and correctly rounded.
+            ///
+            /// Internally shares one Taylor-series evaluation between
+            /// the two results (computing only `|sin|` and recovering
+            /// `|cos| = √(1 − sin²)` from the Pythagorean identity),
+            /// so the wall-clock is `~one sin_strict + one wide sqrt`
+            /// — roughly half the cost of `(self.sin_strict(),
+            /// self.cos_strict())`.
+            ///
+            /// Useful for rotation matrices, polar→cartesian, complex
+            /// `e^{iθ}` evaluation, and anywhere both trig values of
+            /// the same argument are needed.
+            #[inline]
+            #[must_use]
+            pub fn sin_cos_strict(self) -> (Self, Self) {
+                let w = SCALE + $core::GUARD;
+                let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
+                (
+                    Self::from_bits($core::round_to_storage(s, w, SCALE)),
+                    Self::from_bits($core::round_to_storage(c, w, SCALE)),
+                )
             }
 
             /// Tangent of `self` (radians), as `sin / cos`. Strict and
