@@ -17,7 +17,7 @@ exactness when they need it and an opt-out when they don't.
 | target | gating work |
 |--------|-------------|
 | **0.3.0** | The current development cycle. Ships: the half-width tier ladder (D56 / D114 / D230 / D461 / D615 / D923 / D1231); the comprehensive cross-tier `widen()` / `narrow()` chain (breaking — D38.widen() now returns D56, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); MG magic-multiply table extension across every wide-tier SCALE; trig functions in the per-width summary chart family. |
-| **0.4.0** | Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension landed in 0.3, so the table generator just emits a wider `k` range. |
+| **0.4.0** | (1) Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension landed in 0.3. (2) Cryptographically-secure RNG surface: uniform-decimal sampling over `[0, 1)`, `[a, b]`, and full-storage; rejection-sampling at any SCALE; bring-your-own `CryptoRng` so callers can plug `OsRng` / `ChaCha20Rng` / hardware RNGs. |
 | **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
 
 ---
@@ -163,6 +163,38 @@ analysis and `research/2026_05_17_mg_magic_extension_eval.md` for
 the design eval combining both items.
 
 ---
+
+## Random number generation (0.4.0 target)
+
+A cryptographically-secure RNG surface for sampling decimals.
+Same out-of-tree-via-trait pattern as the rest of the
+ecosystem: bring your own `RngCore` + `CryptoRng` from `rand`,
+the crate provides the decimal-shaped sampling primitives.
+
+| primitive | shape |
+|-----------|-------|
+| `gen_unit::<T, R>(rng)` | uniform `T` in `[0, 1)` — generate SCALE random decimal digits |
+| `gen_range::<T, R>(rng, lo..hi)` | uniform `T` in a closed-or-half-open range; rejection-sampling at any SCALE so the distribution stays unbiased |
+| `gen_storage::<T, R>(rng)` | fill the storage bits directly — useful for token-like opaque IDs |
+| `gen_signed_unit::<T, R>(rng)` | uniform `T` in `(-1, 1)` with the sign bit also sampled |
+
+Design choices:
+
+- **No global state.** The crate doesn't ship its own `thread_rng()`
+  or default RNG. Callers pass an `R: RngCore + CryptoRng`. This
+  matches the `*_with(mode)` story for rounding — explicit > magic.
+- **`no_std`-friendly.** Trait-bound RNG so `getrandom` /
+  `OsRng` aren't required dependencies. Embedded callers can
+  plug their own HRNG-backed `RngCore`.
+- **Cryptographic correctness.** The rejection sampler for
+  `gen_range` follows the well-trodden "draw N bytes, modulo
+  by range only when below the rejection threshold" pattern;
+  no modulo bias even at the widest tiers.
+- **Distribution helpers in `decimal-scaled-math`.** Normal /
+  log-normal / exponential / gamma / Box-Muller etc. live in
+  the ecosystem math crate, not in the core. The core only
+  provides the uniform primitives that everything else
+  composes on top of.
 
 ## Adapter crates (in-workspace) — DB / serialisation bridges
 
