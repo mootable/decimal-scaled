@@ -145,6 +145,19 @@ fn main() {
     }
 
     println!();
+    println!("== cos_strict / tan_strict (post-Pythagorean) ==");
+    {
+        let a = D76::<35>::ONE;
+        time("D76<35>::cos_strict(1)", || { black_box(black_box(a).cos_strict()); });
+        time("D76<35>::tan_strict(1)", || { black_box(black_box(a).tan_strict()); });
+    }
+    {
+        let a = D307::<150>::ONE;
+        time("D307<150>::cos_strict(1)", || { black_box(black_box(a).cos_strict()); });
+        time("D307<150>::tan_strict(1)", || { black_box(black_box(a).tan_strict()); });
+    }
+
+    println!();
     println!("== atan_strict (input = 1) ==");
     {
         let a = D76::<35>::ONE;

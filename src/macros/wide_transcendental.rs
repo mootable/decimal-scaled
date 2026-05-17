@@ -1095,20 +1095,19 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
-            /// Cosine of `self` (radians), as `sin(self + π/2)`. Strict
-            /// and correctly rounded.
-            ///
-            /// If you need both sin and cos of the same argument,
-            /// prefer [`Self::sin_cos_strict`] — it shares the Taylor
-            /// evaluation between the two and recovers cos via
-            /// `√(1 − sin²)`, halving the wall-clock.
+            /// Cosine of `self` (radians). Strict and correctly
+            /// rounded. Internally evaluates the same kernel that
+            /// produces sin, then recovers cos via the Pythagorean
+            /// identity `|cos| = √(1 − sin²)`. The historical path
+            /// `sin(self + π/2)` was a full second sin evaluation;
+            /// the Pythagorean form needs only one sin + one wide
+            /// sqrt, ~half the wall-clock.
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let arg = $core::to_work(self.to_bits()) + $core::half_pi(w);
-                let r = $core::sin_fixed(arg, w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                let (_, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
+                Self::from_bits($core::round_to_storage(c, w, SCALE))
             }
 
             /// Joint sine and cosine of `self` (radians), returned
@@ -1141,9 +1140,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn tan_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let sin_w = $core::sin_fixed(v, w);
-                let cos_w = $core::sin_fixed(v + $core::half_pi(w), w);
+                let (sin_w, cos_w) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
                 if cos_w == $core::zero() {
                     panic!(concat!(
                         stringify!($Type),
@@ -1622,9 +1619,7 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn tan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let sin_w = $core::sin_fixed(v, w);
-                let cos_w = $core::sin_fixed(v + $core::half_pi(w), w);
+                let (sin_w, cos_w) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
                 if cos_w == $core::zero() {
                     panic!(concat!(
                         stringify!($Type),
