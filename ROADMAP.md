@@ -155,7 +155,7 @@ the design eval combining both items.
 
 ---
 
-## Out-of-tree adapter crates
+## Adapter crates (in-workspace) — DB / serialisation bridges
 
 The core crate is deliberately compile-time-fixed-precision: a
 runtime-variable scale would break const-fn arithmetic,
@@ -163,6 +163,11 @@ deterministic limb work, and the per-tier specialised
 transcendentals. Database / serialisation ergonomics that need a
 runtime scale are a better fit as thin adapter crates layered on
 top.
+
+**Layout decision: adapters live in this repo as sibling
+workspace crates.** They're thin shims, they version-couple
+tightly to the core, and atomic cross-crate refactors (D38.widen()
+moving, SCALE going signed, etc.) land in one PR with one CI run.
 
 | crate (proposed)              | what it bridges                                                                                                       | status |
 |-------------------------------|-----------------------------------------------------------------------------------------------------------------------|--------|
@@ -179,7 +184,17 @@ caller's compile-time-fixed tier.
 
 ---
 
-## Out-of-tree ecosystem crates — applications of the 0-ULP core
+## Ecosystem crates (separate repos under the `mootable` org) — applications of the 0-ULP core
+
+**Layout decision: ecosystem crates live in their own repos
+under a shared GitHub org**, not in this workspace. They're
+substantial standalone codebases with distinct contributor
+audiences (finance, symbolic-math, formula-DSL), independent
+release cadence, and per-domain CI policy (finance wants
+regulator-driven golden-vector tests; expr might want fuzz CI;
+math wants property-based tests over algebraic laws). Splitting
+them out keeps each repo focused and lets specialists own
+their domain without learning the wide-int internals.
 
 The core ships *the deterministic primitive*; the interesting
 applications layer above it. Three planned downstream crates that
