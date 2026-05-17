@@ -517,71 +517,50 @@ exists.
 
 ---
 
-## 5. Library comparison
+## 5. Where each crate fits
 
-> **A note on intent.** This chapter is not an attempt to poke
-> holes in other people's libraries. The goal is a true,
-> reproducible side-by-side at matched storage width and
-> midpoint scale so that (a) `decimal-scaled` knows where it
-> needs to improve, and (b) readers picking a crate for their
-> own job have honest data to work from.
->
-> Where a library's published claim doesn't match what the
-> bench measures - `g_math`'s "0 ULP transcendentals" being
-> the example surfaced at 0.2.5 - we'll say so, plainly, with
-> the numbers attached. We're not trying to be unkind; we just
-> think load-bearing accuracy claims deserve to be checked.
->
-> **If you maintain one of the libraries below and disagree
-> with the analysis**, please review
+This isn't a competition — the crates in this chapter solve
+different problems, and the right choice depends on your shape of
+problem rather than on who wins which row. The numbers below
+exist to help you decide *whether* you can use a given crate,
+not to crown a winner.
+
+A starter map of where each crate sits naturally:
+
+| Crate                | Storage shape                    | Strength                                                                | Cost                                                                  |
+|----------------------|----------------------------------|-------------------------------------------------------------------------|-----------------------------------------------------------------------|
+| **decimal-scaled**   | Stack `[u64; L]`, compile-time SCALE | 0-ULP HalfToEven by default, `no_std`, const-fn arithmetic, deterministic | Wide-tier mul / div cost (catch-up work tracked in Roadmap)           |
+| **fastnum**          | Stack fixed-width decimal (D128 / D256 / D512) | Very fast transcendentals at fixed internal precision (38 / 75 / 155 digits) | No SCALE generic; renders with truncation so the user picks the mode  |
+| **rust_decimal**     | 96-bit mantissa, runtime scale   | The database `NUMERIC` shape; serde-friendly; widely deployed             | ~10× slower arithmetic than a stack decimal at the same precision     |
+| **decimal-rs**       | 128-bit, runtime scale           | Compact, fast at D128                                                   | Capped at i128 width; no wide tiers                                   |
+| **bigdecimal**       | Heap `BigInt` + scale            | Arbitrary precision at runtime                                          | Heap traversal on every op; no transcendentals                        |
+| **dashu-float**      | Heap arbitrary-precision         | True arbitrary precision; ships transcendentals                          | Heap allocation; precision context limits result digits, not working  |
+| **fixed::IxxFyy**    | Stack binary fixed-point         | Single-instruction add / sub at narrow widths                            | Binary, not decimal — different rounding semantics                    |
+| **g_math**           | FP-expression DSL                | Fast for embedded expression eval                                       | 6–46 ULP off on transcendentals at the matched width                  |
+
+Pick the row whose strengths match your constraints first; only
+then look at the per-width charts below to see what cost you'd pay.
+
+> **A note on intent.** This chapter isn't trying to poke holes
+> in other people's libraries. The goal is a reproducible
+> side-by-side at matched storage width and midpoint scale, so
+> you can see what trade-off each crate is offering. Where a
+> library's published claim doesn't match what the bench
+> measures (`g_math`'s "0 ULP transcendentals" being the
+> standing example), we say so with the numbers attached. If
+> you maintain one of the libraries below and disagree with the
+> analysis, please review
 > [`benches/library_comparison.rs`](../benches/library_comparison.rs)
-> and [`examples/ulp_report.rs`](../examples/ulp_report.rs). If
-> we've called the wrong constructor, used the wrong scale,
-> mis-configured the precision context, or otherwise failed to
-> exercise the crate the way its docs intend - open a PR with
-> the correction. We'll happily re-run the bench, refresh the
-> tables, and credit the fix in the changelog.
+> and open a PR — we'll re-run the bench, refresh the tables,
+> and credit the fix.
 
-Speed + correctly-rounded-to-storage-place (ULP) accuracy of
-`decimal-scaled` against the top numeric peers on crates.io,
-matched on **storage width** at each tier's **midpoint scale**.
-
-Bench source: `benches/library_comparison.rs`. Charts in
-`docs/figures/library_comparison/` (one PNG per op × width —
-scale on the x-axis, one line per library, `decimal-scaled`
-always on top in red). 78 charts ship; the per-section embeds
-below cover the ones that illustrate the headline numbers, and
-the full set lives in the figures directory for anyone wanting
-to verify the scale-invariant ops (add / sub / neg are flat
-across scale).
-
-### Where decimal-scaled wins decisively: add at every wide tier
-
-decimal-scaled's stack-allocated `[u64; L]` storage keeps
-addition at single-instruction-per-limb cost even at the widest
-tiers. `bigdecimal` and `dashu-float` pay heap-traversal cost
-on every operation; `fastnum`'s fixed-precision decimal mantissa
-sits in between. The picture is the same shape at every wide
-width:
-
-![add @ 256bit (D76)](figures/library_comparison/add_256bit.png)
-![add @ 512bit (D153)](figures/library_comparison/add_512bit.png)
-![add @ 1024bit (D307)](figures/library_comparison/add_1024bit.png)
-![add @ 2048bit (D615)](figures/library_comparison/add_2048bit.png)
-![add @ 4096bit (D1231)](figures/library_comparison/add_4096bit.png)
-
-At D307<150> the spread is 12 ns (us) vs 67 ns (dashu-float) vs
-83 ns (bigdecimal) — a 6× win that holds across every scale on
-that tier. The same shape repeats at every wider tier: add cost
-on us scales linearly with limb count from the ns range, while
-the heap libraries' add cost is dominated by allocation /
-bookkeeping and stays nearly flat at 60–90 ns regardless of
-width. sub / neg / rem look the same.
-
-(The featured per-tier charts later in this section show mul /
-div, where the picture is reversed — the heap representations
-amortise their per-op overhead better on multi-limb mul / div
-than our schoolbook + MG-magic-multiply does today, see Roadmap.)
+Bench source: `benches/library_comparison.rs`. The per-width
+summary chart in each subsection plots x = operation (add / sub /
+neg / mul / div / rem / sqrt / ln / exp / sin) against y = time
+(log ns), one bar per library per op, at that width's centre
+scale. Reading across charts shows how each library scales with
+precision; reading down a single chart shows the within-library
+trade between arithmetic and transcendentals at that width.
 
 
 ### Accuracy at 128-bit (1 ULP = 10⁻¹⁹)
@@ -631,35 +610,13 @@ those margins). Dashes mark "not implemented in this crate at
 this version" — `bigdecimal` ships no `ln` / `exp` / `sin`;
 `dashu-float` and `decimal-rs` ship no `sin`.
 
-### 32-bit storage (s = 5 midpoint)
+### I128 — 128-bit storage at scale 19
 
-| op  | decimal-scaled | rust_decimal (s=5) | fixed::I16F16 |
-|-----|----------------|--------------------|----------------|
-| add | 440 ps         | 5,242 ps           | **429 ps**     |
-| sub | **365 ps**     | 5,292 ps           | 357 ps         |
-| mul | 718 ps         | 6.54 ns            | **385 ps**     |
-| div | 2.35 ns        | 7.34 ns            | **2.23 ns**    |
-| rem | 1.41 ns        | 9.37 ns            | **1.35 ns**    |
-| neg | 242 ps         | 4.27 ns            | **233 ps**     |
+This is the width with the most company: every crate in the
+starter map above is a candidate here. The chart shows where
+each one lands across the operation surface.
 
-`fixed::I16F16` (binary fractional) edges `decimal-scaled` by
-a few percent on every cell - the cost-comparable competitor
-at this width is *binary* fixed-point. `rust_decimal` pays
-heap-ish overhead (~10×) for the dynamic-scale machinery even
-at this small width.
-
-### 64-bit storage (s = 9 midpoint)
-
-| op  | decimal-scaled | rust_decimal (s=9) | fastnum (D64) | fixed::I32F32 |
-|-----|----------------|--------------------|----------------|----------------|
-| add | **356 ps**     | 4.99 ns            | 5.33 ns        | 353 ps         |
-| sub | 350 ps         | 5.08 ns            | 5.95 ns        | **364 ps**     |
-| mul | 8.69 ns        | 6.39 ns            | 7.00 ns        | **480 ps**     |
-| div | 9.19 ns        | 7.12 ns            | **4.58 ns**    | 7.29 ns        |
-| rem | **1.35 ns**    | 9.39 ns            | 10.8 ns        | 2.43 ns        |
-| neg | 228 ps         | 4.33 ns            | 4.44 ns        | **242 ps**     |
-
-### 128-bit storage (s = 19 midpoint)
+![operations @ 128-bit at scale 19](figures/library_comparison/summary_128bit.png)
 
 The richest comparator set. Cells: speed, plus `(ULP n)` for
 transcendentals.
@@ -708,241 +665,132 @@ working scale. The crates with real accuracy losses
 the crates with heap arithmetic (`bigdecimal`, `dashu-float`)
 trade 10×–100× on add / sub / neg.
 
-Featured charts (mul / div at 128-bit):
+Where each crate fits at I128:
 
-![mul @ 128bit](figures/library_comparison/mul_128bit.png)
-![div @ 128bit](figures/library_comparison/div_128bit.png)
+- **decimal-scaled / fastnum / rust_decimal / decimal-rs /
+  fixed::I64F64** all live in the ns range for arithmetic.
+  Pick on shape: SCALE generic + `no_std` (us); fixed precision
+  with very fast transcendentals (fastnum); NUMERIC-shape
+  (rust_decimal); plain i128 + scale (decimal-rs); binary
+  fixed-point (fixed::I64F64).
+- **bigdecimal / dashu-float** live an order of magnitude up
+  because every op touches the heap. Use them when you need
+  arbitrary precision at *runtime*; otherwise the stack peers
+  fit the same shape with less overhead.
+- **g_math** sits sub-µs on transcendentals but at 6–46 ULP off
+  the correctly-rounded value at this precision (see "Accuracy
+  at 128-bit" below). Fits the FP-expression-DSL workflow it's
+  designed for; not a fit when last-digit correctness matters.
 
-### 256-bit storage (s = 35 midpoint)
+Inside the stack-decimal cluster, the transcendental costs
+diverge: `decimal-scaled`'s strict path pays `SCALE + GUARD`
+working precision (so its `ln` is µs-scale here, vs `fastnum`'s
+tens of ns at fixed internal precision). Whether that cost is
+worth paying depends on whether you need HalfToEven-at-storage
+by default or are happy to manage the render mode yourself.
 
-| op   | decimal-scaled | fastnum (D256) | bigdecimal (s=35) | dashu-float (p=35) |
-|------|----------------|----------------|--------------------|---------------------|
-| add  | **1.68 ns**    | 10.4 ns        | 83.3 ns            | 68.3 ns             |
-| sub  | **2.07 ns**    | 11.8 ns        | 92.6 ns            | 68.1 ns             |
-| mul  | 113 ns         | **23.6 ns**    | 84.9 ns            | 59.2 ns             |
-| div  | 231 ns         | **6.07 ns**    | 74.9 ns            | 53.8 ns             |
-| rem  | 67.8 ns        | 82.7 ns        | 261 ns             | **39.1 ns**         |
-| neg  | 1.52 ns        | **1.15 ns**    | 42.2 ns            | 6.35 ns             |
-| ln   | 7.57 µs (0 ULP) | **69.9 ns (0†)** |     -              | 150 µs (0 ULP)      |
-| exp  | **15.1 µs (0 ULP)** | 40.5 µs (0†) |     -              | 403 µs (0 ULP)      |
-| sin  | **16.0 µs (0 ULP)** | 28.8 µs (0†) |     -              | -                   |
-| sqrt | 1.36 µs (0 ULP) | **55.7 ns (0 ULP)** | 3.53 µs (0 ULP) | -                   |
+### I256 — 256-bit storage at scale 35
 
-(`†` = rendering-mode artifact, not a computation error — fastnum
-carries the correct value to its full 75-digit D256 internal
-precision; only its render at SCALE=35 with truncation puts it
-1 ULP from our HalfToEven baseline. See §5 accuracy note.)
+The candidate set narrows. `rust_decimal` / `decimal-rs` /
+`fixed::I64F64` / `g_math` aren't available at this width.
 
-`decimal-scaled` keeps the lead on add / sub / neg. On
-transcendentals, `fastnum` wins ln and sqrt outright by routing
-its series at fixed internal precision rather than at our
-`SCALE + GUARD` working scale, and ties in correctness modulo the
-render mode. `decimal-scaled`'s strict path now costs only 2–100×
-more on the transcendentals where it once cost 1000× more (post
-u64-native + MG 2-by-1 + Brent / multi-level-sqrt rewrites) — the
-choice between the two at D76 is now about whether you want
-HalfToEven-at-storage-scale by default or are happy with a render
-config.
+![operations @ 256-bit at scale 35](figures/library_comparison/summary_256bit.png)
 
-![mul @ 256bit](figures/library_comparison/mul_256bit.png)
-![div @ 256bit](figures/library_comparison/div_256bit.png)
+Three crates fit at I256:
 
-### 512-bit storage (s = 75 midpoint)
+- **decimal-scaled** — when you need a stack-allocated decimal
+  with a compile-time SCALE generic and HalfToEven-by-default
+  transcendentals.
+- **fastnum** (D256) — when you need stack-allocated decimal
+  arithmetic at fixed 75-digit internal precision and are
+  happy to render transcendentals at whichever scale your
+  application chooses. fastnum's `ln` and `sqrt` run an order
+  of magnitude faster than ours here because its series cost
+  doesn't grow with the user's SCALE.
+- **dashu-float / bigdecimal** — when you need arbitrary
+  runtime precision and the heap-allocation cost is acceptable.
 
-| op   | decimal-scaled | fastnum (D512) | bigdecimal (s=75) | dashu-float (p=75) |
-|------|----------------|----------------|--------------------|---------------------|
-| add  | **3.98 ns**    | 13.3 ns        | 82.4 ns            | 66.4 ns             |
-| sub  | 9.61 ns        | 16.9 ns        | 87.7 ns            | 65.4 ns             |
-| mul  | 497 ns         | **68.1 ns**    | 126 ns             | 59.7 ns             |
-| div  | 543 ns         | **7.73 ns**    | 253 ns             | 53.4 ns             |
-| rem  | 88.8 ns        | 108 ns         | 262 ns             | **38.5 ns**         |
-| neg  | 2.77 ns        | **1.73 ns**    | 44.3 ns            | 6.42 ns             |
-| ln   | 16.3 µs (0 ULP) | **72.9 ns (0†)** | -                 | 428 µs (0 ULP)      |
-| exp  | **29.8 µs (0 ULP)** | 172 µs (0†)  | -                 | 632 µs (0 ULP)      |
-| sin  | **31.7 µs (0 ULP)** | 110 µs (0†)  | -                 | -                   |
-| sqrt | 2.00 µs (0 ULP) | **54.2 ns (0 ULP)** | -            | -                   |
+### I512 — 512-bit storage at scale 75
 
-(`†` = rendering-mode artifact — fastnum's D512 ships 155
-internally-accurate digits of every result; the 1 ULP at the
-user's render scale comes from a Trunc/HalfTowardZero choice, not
-from precision loss.)
+![operations @ 512-bit at scale 75](figures/library_comparison/summary_512bit.png)
 
-`fastnum` wins ln / sqrt at sub-µs because its series runs at
-fixed 155-digit D512 internal precision rather than at our
-`SCALE + GUARD = 75 + 30 = 105` working scale; `decimal-scaled`
-matches fastnum on accuracy in the underlying representation and
-wins on exp / sin where the [0, π/4] reduction + sin_cos joint
-kernel pay off. Against `dashu-float`, decimal-scaled is 14×–21×
-faster on ln / exp at 0 ULP. The 0.2.6 cycle's strict-
-transcendental rewrites turned what used to be a ms-scale penalty
-into the same µs-scale envelope as fastnum's path.
+Same three-way fit as I256, scaled up. The within-crate trade
+shifts a little: decimal-scaled's strict `exp` and `sin` start
+to beat fastnum because the [0, π/4] reduction and the sin_cos
+joint kernel benefit more from the wider working scale than
+fastnum's fixed 155-digit series benefits from its fixed
+precision.
 
-![mul @ 512bit](figures/library_comparison/mul_512bit.png)
-![div @ 512bit](figures/library_comparison/div_512bit.png)
+### I1024 — 1024-bit storage at scale 150
 
-### 1024-bit storage (s = 150 midpoint)
+![operations @ 1024-bit at scale 150](figures/library_comparison/summary_1024bit.png)
 
-Only `bigdecimal` and `dashu-float` scale this wide.
+Beyond 1024-bit no fixed-precision stack peer remains. The
+choice reduces to:
 
-| op   | decimal-scaled | bigdecimal (s=150) | dashu-float (p=150) |
-|------|----------------|---------------------|----------------------|
-| add  | **8.19 ns**    | 81.4 ns             | 65.8 ns              |
-| sub  | **14.8 ns**    | 91.4 ns             | 66.8 ns              |
-| mul  | 786 ns         | **141 ns**          | 56.5 ns              |
-| div  | 794 ns         | **263 ns**          | 53.7 ns              |
-| rem  | 115 ns         | 271 ns              | **38.3 ns**          |
-| neg  | 9.69 ns        | 40.7 ns             | **5.96 ns**          |
-| ln   | **34.8 µs**    | -                   | 980 µs               |
-| exp  | **77.8 µs**    | -                   | 1.33 ms              |
-| sin  | **86.8 µs**    | -                   | -                    |
-| sqrt | 4.46 µs        | -                   | -                    |
+- **decimal-scaled** for stack + compile-time SCALE + 0-ULP
+  transcendentals;
+- **bigdecimal / dashu-float** for heap arbitrary precision.
 
-At 1024 bits `dashu-float` wins on raw arithmetic cost because it
-amortises heap arithmetic better than a 32-limb `[u64; 16]`;
-`decimal-scaled` keeps add / sub / neg in the ns range (the limb
-array is still stack-allocated) and now wins decisively on ln / exp
-(28× and 17× faster than dashu-float at 1024-bit) — the 0.2.6
-strict-transcendental rewrites turned the 1024-bit ln from a 22-ms
-ordeal into a 35-µs sub-millisecond op.
+`dashu-float` is cheapest on raw arithmetic (single heap
+arbitrary-precision call per op, scale-flat); decimal-scaled
+keeps arithmetic stack-allocated in the ns range and is the
+only one of the three that ships transcendentals competitive
+with what you'd want at 1024-bit precision.
 
-![mul @ 1024bit](figures/library_comparison/mul_1024bit.png)
-![div @ 1024bit](figures/library_comparison/div_1024bit.png)
+### I2048 — 2048-bit storage at scale 308
 
-### New tier comparison vs heap big-decimal baselines
+x-wide territory. Same two-way choice as I1024.
 
-The half-width and wider tiers introduced in 0.2.6 (D56 / D114 /
-D230 / D461 / D615 / D923 / D1231) compare against the only two
-crates that scale this wide — `bigdecimal` and `dashu-float`,
-both heap-allocated arbitrary-precision. Each row reports the
-midpoint scale for that tier. ln / exp are shown only where
-`dashu-float` ships them; `bigdecimal` does not ship
-transcendentals.
+![operations @ 2048-bit at scale 308](figures/library_comparison/summary_2048bit.png)
 
-#### Arithmetic (s = mid)
+decimal-scaled is the only stack option at this width; the
+chart's three bars per op are us + the two heap libraries.
+`bigdecimal` ships no transcendentals; `dashu-float` ships them
+but with multi-ULP rounding error.
 
-| op | D56 s28 | D114 s57 | D230 s115 | D461 s230 | D615 s308 | D923 s461 | D1231 s616 |
-|---|---|---|---|---|---|---|---|
-| decimal-scaled mul | **104 ns** | **340 ns** | **636 ns** | **1.62 µs** | **2.20 µs** | **3.30 µs** | **5.15 µs** |
-| bigdecimal mul     |  75.8 ns   |  121 ns    |  143 ns    |  191 ns     |  223 ns     |  278 ns     |  407 ns      |
-| dashu-float mul    |  56.2 ns   |  61.3 ns   |  61.7 ns   |  60.0 ns    |  57.4 ns    |  52.8 ns    |  51.7 ns     |
-| decimal-scaled div | **201 ns** | **342 ns** | **631 ns** | **1.54 µs** | **2.24 µs** | **3.19 µs** | **4.69 µs** |
-| bigdecimal div     |  70.3 ns   |  245 ns    |  282 ns    |  284 ns     |  183 ns     |  279 ns     |  306 ns      |
-| dashu-float div    |  53.0 ns   |  57.1 ns   |  60.3 ns   |  57.9 ns    |  53.9 ns    |  49.0 ns    |  49.2 ns     |
+### I4096 — 4096-bit storage at scale 616
 
-At these widths `dashu-float`'s heap mantissa stays roughly
-flat because every op is one base-2 multiprecision call;
-`decimal-scaled`'s stack `[u64; L]` pays linearly with `L` but
-keeps add / sub / neg in the ns range (see §1) and never
-allocates.
+xx-wide territory. Same shape as I2048 with everything an
+order of magnitude slower in absolute terms.
 
-#### Strict transcendentals (s = mid) — 0 ULP
+![operations @ 4096-bit at scale 616](figures/library_comparison/summary_4096bit.png)
 
-| fn | D56 s28 | D114 s57 | D230 s115 | D461 s230 | D615 s308 | D923 s461 | D1231 s616 |
-|---|---|---|---|---|---|---|---|
-| decimal-scaled ln  | **5.21 µs** | **10.9 µs** | **28.3 µs** |  **55.2 µs** | **122 µs** | **228 µs** | **399 µs** |
-| dashu-float ln     |  92.6 µs    |  321 µs     |  741 µs     |   1.91 ms    |  2.80 ms   |  5.24 ms   |  —         |
-| decimal-scaled exp | **5.91 µs** | **16.8 µs** | **57.0 µs** | **110 µs**   | **212 µs** | **401 µs** | **689 µs** |
-| dashu-float exp    |  261 µs     |  487 µs     |  956 µs     |   2.10 ms    |  3.32 ms   |  5.17 ms   |  —         |
-| decimal-scaled sin |   5.54 µs   |  18.1 µs    |  59.8 µs    |   131 µs     |  250 µs    |  511 µs    |  874 µs    |
-| decimal-scaled sqrt|   1.05 µs   |   1.55 µs   |   3.27 µs   |   7.44 µs    |  11.0 µs   |  18.2 µs   |  28.7 µs   |
+Use decimal-scaled at this width when you want fixed-at-compile-
+time 1231-digit precision on the stack. Use dashu-float when
+you want dynamic precision and heap allocation is fine.
+`dashu-float`'s ln / exp weren't benched at 4096-bit (projection
+from 3072-bit puts them at ~8–10 ms vs decimal-scaled's
+0.4–0.7 ms).
 
-(`dashu-float ln`/`exp` were not measured at 4096-bit — the
-bench would have spent over an hour just on those two cells; the
-trend at 3072-bit predicts dashu-float somewhere in the 8-10 ms
-range, vs `decimal-scaled`'s 399-689 µs.)
+### A note on what "0 ULP" means here
 
-`decimal-scaled` wins ln by **18×–23×** and exp by **5×–44×**
-across every new tier where `dashu-float` ships the function.
-Where ULP comparison matters, `dashu-float`'s default rounding
-yields a few-ULP gap from a HalfToEven reference at every tier
-(its precision context limits *result* digits without inflating
-the *working* digits the series needs); `decimal-scaled` is
-HalfToEven 0 ULP at storage scale by default. `bigdecimal` ships
-no transcendentals at any width.
+The strict transcendentals in this crate are 0-ULP **at storage
+scale**, by default, under **HalfToEven** — call `.ln_strict()`,
+get the IEEE 754 default rounding of the true result, no
+render-time configuration required.
 
-Per-tier mul / div charts (scale on the x-axis, one line per
-library, `decimal-scaled` always drawn last in red):
+Several peers (`fastnum`, `rust_decimal`, `decimal-rs`) carry
+the same true value internally — fastnum to 38 / 75 / 155
+digits at D128 / D256 / D512, rust_decimal to its full 96-bit
+mantissa — but render at the user's scale using a different
+rounding mode (Trunc / Floor-equivalent). The "1 ULP" cells
+attributed to these crates in the older measurements were
+render-mode mismatches, not computation errors. If your
+application controls the render mode (or re-rounds explicitly),
+those crates are 0-ULP-equivalent.
 
-#### 192-bit (D56)
-![mul @ 192bit](figures/library_comparison/mul_192bit.png)
-![div @ 192bit](figures/library_comparison/div_192bit.png)
+`dashu-float`'s `exp(1)` at p=19 is 4 ULP from a correctly-
+rounded HalfToEven answer. That's a genuine algorithmic gap:
+its precision context controls the *result* width, not the
+*working* width, so its series can fall short of the guard
+digits a correctly-rounded final answer needs.
 
-#### 384-bit (D114)
-![mul @ 384bit](figures/library_comparison/mul_384bit.png)
-![div @ 384bit](figures/library_comparison/div_384bit.png)
-
-#### 768-bit (D230)
-![mul @ 768bit](figures/library_comparison/mul_768bit.png)
-![div @ 768bit](figures/library_comparison/div_768bit.png)
-
-#### 1536-bit (D461)
-![mul @ 1536bit](figures/library_comparison/mul_1536bit.png)
-![div @ 1536bit](figures/library_comparison/div_1536bit.png)
-
-#### 2048-bit (D615)
-![mul @ 2048bit](figures/library_comparison/mul_2048bit.png)
-![div @ 2048bit](figures/library_comparison/div_2048bit.png)
-
-#### 3072-bit (D923)
-![mul @ 3072bit](figures/library_comparison/mul_3072bit.png)
-![div @ 3072bit](figures/library_comparison/div_3072bit.png)
-
-#### 4096-bit (D1231)
-![mul @ 4096bit](figures/library_comparison/mul_4096bit.png)
-![div @ 4096bit](figures/library_comparison/div_4096bit.png)
-
-The transcendentals (`ln` / `exp` / `sin` / `sqrt`) on the new
-tiers ship single-point data per library (`s = mid` only), so
-they're presented in the table above rather than as charts.
-`examples/chart_gen.rs` skips any (op × width) where no library
-has ≥2 data points — single-dot charts are misleading without
-the slope, and the new tier sweep would need scale-sampling at
-3 points per library to plot meaningfully.
-
-### Reading the library comparison
-
-A note on what "0 ULP" means here. `decimal-scaled`'s strict
-transcendentals are 0-ULP **at storage scale**, by default,
-under **HalfToEven** — i.e. you ask for `.ln_strict()`, you get
-the IEEE 754 default rounding of the true result, no render-time
-choice required. Several peers (`fastnum`, `rust_decimal`,
-`decimal-rs`) match this internally but render at a different
-rounding mode (Trunc / Floor-equivalent), which surfaces as
-1 ULP off when you compare digit strings. Whether that
-constitutes a "loss" depends on whether you control the render
-mode at your call sites.
-
-- **Use `decimal-scaled` when** you need IEEE-754-default 0-ULP
-  rounding at your chosen storage scale by default, AND cheap
-  stack-allocated arithmetic, AND deterministic cross-platform
-  behaviour. The crate-wide default is HalfToEven; use
-  `*_strict_with(mode)` to switch.
-- **Use `fastnum`** when you want decimal arithmetic at a matched
-  width with fast transcendentals; `fastnum` computes correctly
-  to its full internal precision (38 digits at D128, 75 at D256,
-  155 at D512) but renders with truncation at the user's chosen
-  scale. If you can either set its render mode or re-round
-  yourself, `fastnum` is 0-ULP-equivalent at much higher
-  throughput on `ln` and `sqrt`.
-- **Use `bigdecimal` / `dashu-float`** when you need arbitrary
-  precision at runtime (decimal-scaled is compile-time-fixed
-  precision); they pay heap allocation in exchange.
-  `dashu-float` has measurable precision loss (4 ULP on `exp(1)`
-  at p=19) — its precision context controls the *result* width,
-  not the *working* width, so its series can fall short of the
-  guard digits a correctly-rounded final answer needs.
-- **`g_math`** is fast but its "0 ULP transcendentals" marketing
-  claim is decisively wrong at the matched width: 6 ULP on
-  `ln(2)`, 12 on `sqrt(2)`, 33 on `sin(1)`, 46 on `exp(1)` at
-  D128<19>. These are *not* render-mode artifacts — its
-  computation itself is precision-limited. Use only when you're
-  already in its FP-expression-language workflow and the
-  approximate result is fine.
-- **`rust_decimal`** is the right pick when you need the
-  database-`NUMERIC` shape (96-bit mantissa, dynamic scale,
-  serde-friendly) more than raw speed; arithmetic is ~10×
-  slower than `decimal-scaled`'s stack representation, and
-  transcendentals match in correctness modulo render mode.
+`g_math`'s transcendentals are 6–46 ULP off the correctly-
+rounded value at D128<19>. Its "0 ULP transcendentals"
+marketing claim doesn't hold up at this precision. It's still
+a useful tool inside its expression-DSL workflow when an
+approximate result is acceptable.
 
 ---
 

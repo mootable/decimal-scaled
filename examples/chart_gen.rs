@@ -91,6 +91,199 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         "wrote {count} charts to {out_dir}/ (skipped {skipped} charts \
          that would be single-line or no-line)"
     );
+
+    // ---- New format: one summary chart per (width × centre scale).
+    // x-axis = operation (add / sub / mul / div / rem / neg / ln / exp /
+    // sin / sqrt), y-axis = time (log ns), one bar per library per op.
+    render_per_width_summaries(&data, out_dir)?;
+
+    Ok(())
+}
+
+/// Centre scale to feature per power-of-two storage width. Matches
+/// the docs/benchmarks.md §5 subsections.
+const CENTRE_SCALES: &[(&str, u32)] = &[
+    ("128bit",  19),
+    ("256bit",  35),
+    ("512bit",  75),
+    ("1024bit", 150),
+    ("2048bit", 308),
+    ("4096bit", 616),
+];
+
+const OP_ORDER: &[&str] = &[
+    "add", "sub", "neg", "mul", "div", "rem", "sqrt", "ln", "exp", "sin",
+];
+
+/// Render one chart per CENTRE_SCALES entry — a grouped bar chart with
+/// one bar per (operation × library) cell at that width's centre scale.
+fn render_per_width_summaries(
+    data: &BTreeMap<ChartKey, BTreeMap<String, LibPoints>>,
+    out_dir: &str,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Pivot: (width, op, lib) -> ns at the centre scale.
+    let mut summary: BTreeMap<&str, BTreeMap<&str, BTreeMap<String, f64>>> = BTreeMap::new();
+
+    for ((op, width), by_lib) in data {
+        let Some(&(_, centre)) = CENTRE_SCALES.iter().find(|(w, _)| *w == width) else {
+            continue;
+        };
+        if !OP_ORDER.iter().any(|o| *o == op.as_str()) {
+            continue;
+        }
+        for (lib, points) in by_lib {
+            // Find the centre-scale point; if none, try the median of
+            // whatever this library has at this (op × width). Most
+            // libraries are only benched at s = mid, so they have
+            // exactly one point — use it as-is.
+            let chosen = points
+                .iter()
+                .find(|(s, _)| *s == centre)
+                .or_else(|| points.iter().min_by_key(|(s, _)| (*s as i64 - centre as i64).abs()))
+                .copied();
+            if let Some((_, ns)) = chosen {
+                summary
+                    .entry(width.as_str())
+                    .or_default()
+                    .entry(op.as_str())
+                    .or_default()
+                    .insert(lib.clone(), ns);
+            }
+        }
+    }
+
+    for (width, _centre) in CENTRE_SCALES {
+        let Some(per_op) = summary.get(width) else { continue; };
+        let path = format!("{out_dir}/summary_{width}.png");
+        render_per_width_summary(&path, width, per_op)?;
+    }
+    Ok(())
+}
+
+fn render_per_width_summary(
+    path: &str,
+    width: &str,
+    per_op: &BTreeMap<&str, BTreeMap<String, f64>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    // Drop ops that have no data at this width.
+    let ops: Vec<&&str> = OP_ORDER.iter().filter(|o| per_op.contains_key(**o)).collect();
+    if ops.is_empty() {
+        return Ok(());
+    }
+    // Union of libraries appearing anywhere in this width.
+    let mut libs: Vec<String> = per_op
+        .values()
+        .flat_map(|m| m.keys().cloned())
+        .collect();
+    libs.sort();
+    libs.dedup();
+    // Put decimal-scaled last so it draws on top.
+    libs.sort_by_key(|l| l == "decimal-scaled");
+    if libs.is_empty() {
+        return Ok(());
+    }
+
+    let backend = BitMapBackend::new(path, (1100, 600)).into_drawing_area();
+    backend.fill(&WHITE)?;
+
+    let y_min = per_op
+        .values()
+        .flat_map(|m| m.values().copied())
+        .fold(f64::INFINITY, f64::min)
+        .max(0.01);
+    let y_max = per_op
+        .values()
+        .flat_map(|m| m.values().copied())
+        .fold(0.0_f64, f64::max);
+    let y_floor = (y_min * 0.5).max(0.01);
+    let y_ceil = y_max * 2.0;
+
+    let title = format!("operations @ {width} (centre scale)");
+    let n_ops = ops.len();
+    let n_libs = libs.len();
+    // x layout: each op gets a slot, libraries placed as adjacent thin
+    // bars inside the slot. Slot width 1.0, bar width 0.8/n_libs.
+    let x_min: f64 = 0.0;
+    let x_max: f64 = n_ops as f64;
+
+    let mut chart = ChartBuilder::on(&backend)
+        .caption(&title, ("sans-serif", 28))
+        .margin(20)
+        .x_label_area_size(55)
+        .y_label_area_size(75)
+        .right_y_label_area_size(20)
+        .build_cartesian_2d(x_min..x_max, (y_floor..y_ceil).log_scale())?;
+
+    let op_labels: Vec<String> = ops.iter().map(|o| (*o).to_string()).collect();
+    chart
+        .configure_mesh()
+        .x_desc("operation")
+        .y_desc("time (ns, log)")
+        .x_labels(n_ops)
+        .x_label_formatter(&|x| {
+            let i = x.floor() as usize;
+            if i < op_labels.len() {
+                op_labels[i].clone()
+            } else {
+                String::new()
+            }
+        })
+        .draw()?;
+
+    let palette: &[(RGBColor, &str)] = &[
+        (RGBColor(31, 119, 180),  "rust_decimal"),
+        (RGBColor(255, 127, 14),  "fastnum"),
+        (RGBColor(44, 160, 44),   "bigdecimal"),
+        (RGBColor(148, 103, 189), "dashu-float"),
+        (RGBColor(140, 86, 75),   "decimal-rs"),
+        (RGBColor(227, 119, 194), "g_math"),
+        (RGBColor(127, 127, 127), "fixed_i64f64"),
+        (RGBColor(127, 127, 127), "fixed_i16f16"),
+        (RGBColor(127, 127, 127), "fixed_i32f32"),
+        (RGBColor(127, 127, 127), "fixed_i128f128"),
+        (RED,                     "decimal-scaled"),
+    ];
+    let color_for = |lib: &str| -> RGBColor {
+        palette
+            .iter()
+            .find(|(_, name)| *name == lib)
+            .map(|(c, _)| *c)
+            .unwrap_or(RGBColor(100, 100, 100))
+    };
+
+    let bar_width = 0.8 / n_libs as f64;
+    for (li, lib) in libs.iter().enumerate() {
+        let color = color_for(lib);
+        let bars: Vec<_> = ops
+            .iter()
+            .enumerate()
+            .filter_map(|(oi, op)| {
+                per_op.get(**op).and_then(|m| m.get(lib)).map(|&ns| {
+                    let slot_left = oi as f64 + 0.1; // 0.1 padding
+                    let left = slot_left + li as f64 * bar_width;
+                    let right = (left + bar_width).min(slot_left + n_libs as f64 * bar_width);
+                    Rectangle::new(
+                        [(left, y_floor), (right, ns)],
+                        color.filled(),
+                    )
+                })
+            })
+            .collect();
+        let label = lib.clone();
+        chart
+            .draw_series(bars)?
+            .label(label)
+            .legend(move |(x, y)| Rectangle::new([(x, y - 5), (x + 12, y + 5)], color.filled()));
+    }
+
+    chart
+        .configure_series_labels()
+        .position(SeriesLabelPosition::UpperLeft)
+        .border_style(BLACK)
+        .background_style(WHITE.mix(0.9))
+        .draw()?;
+
+    backend.present()?;
     Ok(())
 }
 
