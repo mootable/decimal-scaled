@@ -9,6 +9,18 @@ consistent across the whole API:
 > `RoundingMode`. The plain form just delegates to `_with` with the
 > default.
 
+The default is **HalfToEven** (banker's rounding, the IEEE 754 default).
+You can change the default crate-wide at compile time via a single
+`rounding-*` Cargo feature (see below), or override per-call with the
+`_with` sibling. The `_with` family is comprehensive — `mul_with` /
+`div_with` / `rem_with` for arithmetic, `rescale_with` for scale
+changes, `ln_strict_with` / `exp_strict_with` / `sin_strict_with` /
+every strict transcendental for the correctly-rounded path. So if you
+need ASTM E29 banker's rounding for one codepath and bank-statement
+away-from-zero for another, both are first-class — no global state,
+no thread-locals, no library fork required to bit-match an external
+system.
+
 ## `RoundingMode`
 
 ```rust

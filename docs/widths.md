@@ -122,6 +122,16 @@ let wide:  D38s2 = small.into();              // lossless widen
 let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 ```
 
+Every adjacent pair in the comprehensive ladder
+(D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
+D461 → D615 → D923 → D1231) has a `From` / `TryFrom` pair plus
+`.widen()` / `.narrow()` helper methods on the new tiers.
+`D38.widen()` and `D76.widen()` continue to return the legacy
+power-of-two-next-up type (`D76`, `D153`) for source
+compatibility — use the half-width tier's own `.widen()` /
+`.narrow()` (or the `From` / `TryFrom` impls directly) to
+traverse through the half-widths step by step.
+
 ## Wide-tier notes (`D56` … `D1231`)
 
 - Enable per width (`d56`, `d76`, `d114`, `d153`, `d230`, `d307`,

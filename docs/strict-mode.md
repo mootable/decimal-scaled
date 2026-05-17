@@ -127,15 +127,17 @@ strict transcendental is cross-checked against the platform `f64`
 implementation at `D38<9>` (where `f64` is comfortably more precise
 than the type's ULP) - see the in-crate tests.
 
-The wide tiers (`D76` / `D153` / `D307`) ship the full strict
-transcendental surface - every method has a `*_strict` form plus a
-mode-aware `*_strict_with(mode)` sibling. Two alternate
-implementations are also exposed: `ln_strict_agm` and `exp_strict_agm`
-use the quadratically-convergent Brent–Salamin / Newton path that
-scales better than the artanh / Taylor canonical at very high working
-scales; the canonical paths remain the default until a bench at the
-relevant working scale shows AGM winning. The accuracy contract is the
-same 0.5-ULP-at-storage as D38.
+All wide tiers (`D56` / `D76` / `D114` / `D153` / `D230` / `D307`
+under the `wide` umbrella; `D461` / `D615` under `x-wide`; `D923` /
+`D1231` under `xx-wide`) ship the full strict transcendental
+surface — every method has a `*_strict` form plus a mode-aware
+`*_strict_with(mode)` sibling. Two alternate implementations are
+also exposed: `ln_strict_agm` and `exp_strict_agm` use the
+quadratically-convergent Brent–Salamin / Newton path that scales
+better than the artanh / Taylor canonical at very high working
+scales; the canonical paths remain the default until a bench at
+the relevant working scale shows AGM winning. The accuracy
+contract is the same ≤ 0.5 ULP at storage as D38.
 
 ## Choosing the configuration
 

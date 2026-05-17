@@ -140,14 +140,29 @@ digits it can safely represent**, *not* the bit-width of the
 underlying integer. The crate's home is decimal arithmetic, so it
 names its types in the unit users actually reason about. Mapping:
 
-| type | constructor macro | underlying signed integer | safe decimal digits (= `MAX_SCALE`) | max value at SCALE 0 | required feature | curated per-scale macros |
-|---|---|---|---|---|---|---|
-| `D9<S>`   | `d9!`   | `i32` (32 bits) | 9 | ±2.1 × 10⁹ | always available | `d9s0!`, `d9s2!`, `d9s4!`, `d9s6!`, `d9s9!` |
-| `D18<S>`  | `d18!`  | `i64` (64 bits) | 18 | ±9.2 × 10¹⁸ | always available | `d18s0!`, `d18s2!`, `d18s4!`, `d18s6!`, `d18s9!`, `d18s12!`, `d18s18!` |
-| `D38<S>`  | `d38!`  | `i128` (128 bits) | 38 | ±1.7 × 10³⁸ | always available | `d38s0!`, `d38s2!`, `d38s4!`, `d38s6!`, `d38s8!`, `d38s9!`, `d38s12!`, `d38s15!`, `d38s18!`, `d38s24!`, `d38s35!`, `d38s38!` |
-| `D76<S>`  | `d76!`  | `Int256` (256 bits, in-tree wide-int) | 76 | ±5.8 × 10⁷⁶ | `d76` / `wide` | `d76s0!`, `d76s2!`, `d76s6!`, `d76s12!`, `d76s18!`, `d76s35!`, `d76s50!`, `d76s76!` |
-| `D153<S>` | `d153!` | `Int512` (512 bits) | 153 | ±6.7 × 10¹⁵³ | `d153` / `wide` | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s153!` |
-| `D307<S>` | `d307!` | `Int1024` (1024 bits) | 307 | ±9.0 × 10³⁰⁷ | `d307` / `x-wide` | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s307!` |
+| type | constructor macro | underlying signed integer | safe decimal digits (= `MAX_SCALE`) | max value at SCALE 0 | required feature |
+|---|---|---|---|---|---|
+| `D9<S>`    | `d9!`   | `i32` (32 bits)                  |  9   | ±2.1 × 10⁹    | always available |
+| `D18<S>`   | `d18!`  | `i64` (64 bits)                  | 18   | ±9.2 × 10¹⁸   | always available |
+| `D38<S>`   | `d38!`  | `i128` (128 bits)                | 38   | ±1.7 × 10³⁸   | always available |
+| `D56<S>`   | —       | `Int192` (192 bits)              | 57   | ±3.1 × 10⁵⁷   | `d56` / `wide`   |
+| `D76<S>`   | `d76!`  | `Int256` (256 bits)              | 76   | ±5.8 × 10⁷⁶   | `d76` / `wide`   |
+| `D114<S>`  | —       | `Int384` (384 bits)              | 115  | ±2.0 × 10¹¹⁵  | `d114` / `wide`  |
+| `D153<S>`  | `d153!` | `Int512` (512 bits)              | 153  | ±6.7 × 10¹⁵³  | `d153` / `wide`  |
+| `D230<S>`  | —       | `Int768` (768 bits)              | 230  | ±7.7 × 10²³⁰  | `d230` / `wide`  |
+| `D307<S>`  | `d307!` | `Int1024` (1024 bits)            | 307  | ±9.0 × 10³⁰⁷  | `d307` / `wide`  |
+| `D461<S>`  | —       | `Int1536` (1536 bits)            | 462  | ±1.0 × 10⁴⁶²  | `d461` / `x-wide`|
+| `D615<S>`  | —       | `Int2048` (2048 bits)            | 616  | ±1.6 × 10⁶¹⁶  | `d615` / `x-wide`|
+| `D923<S>`  | —       | `Int3072` (3072 bits)            | 924  | ±2.3 × 10⁹²⁴  | `d923` / `xx-wide`|
+| `D1231<S>` | —       | `Int4096` (4096 bits)            | 1232 | ±2.7 × 10¹²³² | `d1231` / `xx-wide`|
+
+The half-width tiers (`D56`, `D114`, `D230`, `D461`, `D923`) fill
+in the storage-cost gap between each pair of power-of-two widths,
+so you only pay for the precision you actually need. The umbrellas:
+`wide` enables D56–D307, `x-wide` adds D461 / D615, `xx-wide` adds
+D923 / D1231. The `d{N}!` constructor macros currently exist for
+the power-of-two tiers only; half-width tiers and the wider tiers
+use `from_int` / `from_str` / `from_bits` directly.
 
 The number in each type name (`9`, `18`, `38`, …) is the type's
 `MAX_SCALE` - equivalently, the safe-decimal-digits count
@@ -167,7 +182,8 @@ qualifier on the main constructor.
 
 Pick the narrowest tier whose range covers your values at the
 scale you need. Widening is free (`From` / `widen()`); narrowing
-is fallible (`TryFrom` / `narrow()`).
+is fallible (`TryFrom` / `narrow()`). Every adjacent pair in the
+ladder above has both, including through the half-width tiers.
 
 ---
 

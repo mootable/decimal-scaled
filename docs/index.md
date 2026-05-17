@@ -9,7 +9,7 @@ hide:
 <div class="hero-tagline">Bit-exact decimal arithmetic for Rust</div>
 <h1 class="hero-wordmark"><span class="a">decimal</span><span class="b">-scaled</span></h1>
 
-Const-generic base-10 fixed-point decimals - D9 through D307 - with **0.5 ULP correctly-rounded** integer-only transcendentals. Deterministic across every platform. `no_std`-friendly.
+Const-generic base-10 fixed-point decimals — thirteen widths from **D9 to D1231** — with **≤ 0.5 ULP correctly-rounded** integer-only transcendentals. Deterministic across every platform. `no_std`-friendly. Caller-chosen rounding mode at every lossy operation.
 { .hero-lede }
 
 <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>
@@ -82,7 +82,7 @@ Const-generic base-10 fixed-point decimals - D9 through D307 - with **0.5 ULP co
 | Bit-identical results across Linux / macOS / Windows / ARM / x86 | `*_strict` transcendentals - integer-only, no platform libm. |
 | Compile-time-fixed precision with zero per-value scale byte | Const-generic `D38<19>`, `D76<35>` etc. - scale is in the type. |
 | `no_std` (or `no_std + alloc`) | Default features build under `no_std`; the strict tier needs no libm. |
-| 0.5 ULP correctly-rounded `ln` / `exp` / `sin` / `sqrt` at the type's storage place | The only crate on crates.io tested that holds this everywhere. See [Benchmarks §5](benchmarks.md#5-library-comparison). |
+| ≤ 0.5 ULP correctly-rounded `ln` / `exp` / `sin` / `cos` / `tan` / `sqrt` / `atan` / `sinh` / `cosh` / `tanh` and friends — by default | At every shipped width, HalfToEven by default, bit-identical across every platform. Switch rounding mode per call via `*_with(mode)` or crate-wide via the `rounding-*` features. See [Benchmarks §5](benchmarks.md#5-where-each-crate-fits). |
 
 ## What it isn't
 

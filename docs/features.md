@@ -10,11 +10,11 @@ decimal-scaled = { version = "0.2.5", default-features = false, features = ["all
 | Feature | Default | Enables |
 |---|---|---|
 | `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64` constructors. Pulls in `alloc`. |
-| `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required - targets without `alloc` are not supported. |
+| `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` (canonical-string form). |
-| `macros` | no | The `d38!` compile-time literal macro. See [the macro guide](macros.md). |
-| `strict` | no | The plain transcendental methods dispatch to the integer-only `*_strict` path instead of the `f64` bridge. Platform-independent; works under `no_std`. See [strict mode](strict-mode.md). |
-| `fast` | no | Drops the `*_strict` transcendental surface entirely for a smaller build. **Overrides `strict`** - with both set, the crate behaves as if neither were. |
+| `strict` | **yes** | Plain transcendental methods (`sqrt`, `ln`, …) dispatch to the integer-only `*_strict` path — ≤ 0.5 ULP, platform-independent, `no_std`-friendly. The headline accuracy guarantee. See [strict mode](strict-mode.md). |
+| `macros` | no | The `d38!` / `d76!` / etc. compile-time literal macros. See [the macro guide](macros.md). |
+| `fast` | no | When enabled (without `strict`), plain methods dispatch to the f64 bridge for speed at the cost of platform-dependent ≈ 16-digit precision. Both `*_strict` and `*_fast` named methods stay available regardless of which feature is on. |
 
 Notes:
 
@@ -47,17 +47,32 @@ Exactly one of these may be enabled to change the crate-wide default
 
 ## Wide-tier features
 
-The wide decimal types use an in-tree, hand-rolled wide-integer module
-(`crate::wide_int`); there is no external big-integer dependency. They
-are opt-in per width, with `wide` as an umbrella over all three.
+The wide decimal types use an in-tree, hand-rolled wide-integer
+module (`crate::wide_int`); there is no external big-integer
+dependency. They are opt-in per width, with three umbrella features
+covering increasing precision ranges.
 
 | Feature | Enables |
 |---|---|
+| `d56` | `D56` (192-bit storage, `MAX_SCALE = 57`) — half-width between D38 and D76 |
 | `d76` | `D76` (256-bit storage, `MAX_SCALE = 76`) |
+| `d114` | `D114` (384-bit storage, `MAX_SCALE = 115`) — half-width between D76 and D153 |
 | `d153` | `D153` (512-bit storage, `MAX_SCALE = 153`) |
+| `d230` | `D230` (768-bit storage, `MAX_SCALE = 230`) — half-width between D153 and D307 |
 | `d307` | `D307` (1024-bit storage, `MAX_SCALE = 307`) |
-| `wide` | all three of the above |
-| `x-wide` | umbrella alias historically used in wide-feature builds; kept for compatibility |
+| `d461` | `D461` (1536-bit storage, `MAX_SCALE = 462`) — half-width between D307 and D615 |
+| `d615` | `D615` (2048-bit storage, `MAX_SCALE = 616`) |
+| `d923` | `D923` (3072-bit storage, `MAX_SCALE = 924`) — half-width between D615 and D1231 |
+| `d1231` | `D1231` (4096-bit storage, `MAX_SCALE = 1232`) |
+| `wide` | umbrella: enables D56 / D76 / D114 / D153 / D230 / D307 |
+| `x-wide` | umbrella: adds D461 / D615 on top of `wide` |
+| `xx-wide` | umbrella: adds D923 / D1231 on top of `x-wide` |
+
+The half-width tiers exist so you only pay storage cost for the
+precision you actually need — if your accumulator needs ~60 digits,
+`D56` saves a third of the bytes per value vs `D76`, and the same
+across every wider tier pair. Every adjacent pair in the ladder has
+`From` / `TryFrom` impls plus `.widen()` / `.narrow()` helpers.
 
 ## Nightly-only
 
@@ -68,18 +83,31 @@ are opt-in per width, with `wide` as an umbrella over all three.
 ## Common configurations
 
 ```toml
-# Default - std, serde, f64-bridge transcendentals.
+# Default — std, serde, and the integer-only ≤ 0.5 ULP `*_strict`
+# transcendentals dispatched by plain `sin` / `ln` / `sqrt`.
 decimal-scaled = "0.2.5"
 
-# no_std, still with serde.
-decimal-scaled = { version = "0.2.5", default-features = false, features = ["serde", "alloc"] }
+# `no_std`, still with serde and the deterministic strict path.
+decimal-scaled = { version = "0.2.5", default-features = false,
+                   features = ["serde", "alloc", "strict"] }
 
-# Deterministic, platform-independent transcendentals, no_std.
-decimal-scaled = { version = "0.2.5", default-features = false, features = ["alloc", "strict"] }
-
-# All six widths, with the literal macro.
+# Add the half-width and wider tiers (D56–D307).
 decimal-scaled = { version = "0.2.5", features = ["wide", "macros"] }
 
-# Smallest build - no strict surface at all.
-decimal-scaled = { version = "0.2.5", features = ["fast"] }
+# Add the extra-wide tiers (D461 / D615) on top of wide.
+decimal-scaled = { version = "0.2.5", features = ["x-wide", "macros"] }
+
+# Add the xx-wide tiers (D923 / D1231) — research-grade precision.
+decimal-scaled = { version = "0.2.5", features = ["xx-wide", "macros"] }
+
+# Bank-statement rounding: HalfAwayFromZero as the crate-wide default.
+decimal-scaled = { version = "0.2.5",
+                   features = ["wide", "rounding-half-away-from-zero"] }
+
+# Speed over determinism — plain transcendentals dispatch to the f64
+# bridge (~16 decimal digits of platform-libm precision). The
+# `*_strict` named methods remain available for the parts of your
+# code that need them.
+decimal-scaled = { version = "0.2.5", default-features = false,
+                   features = ["std", "fast"] }
 ```
