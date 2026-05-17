@@ -552,14 +552,26 @@ impl<const SCALE: u32> D38<SCALE> {
 // end — so each result is within 0.5 ULP of the exact value.
 // ─────────────────────────────────────────────────────────────────────
 
-/// π at working scale `w` (`w <= 63`), from a 63-digit embedded value.
+/// π at working scale `w`, sourced from the crate-wide 75-digit
+/// `consts::PI_RAW` (Int256 holding `π × 10^75`).
+///
+/// Caller-side precondition: `w <= 75`. The D38 strict trig kernel
+/// runs at `w = SCALE + STRICT_GUARD`, capped at `38 + 30 = 68`, so
+/// the bound is satisfied by every call site in this module. The
+/// debug-assert documents the invariant for any future caller; in
+/// release, `rescale_down(75, w > 75)` would silently produce a
+/// wrong π via the wrapping `from_w − to_w` subtraction.
 fn wide_pi(w: u32) -> crate::d_w128_kernels::Fixed {
-    // π = 3.141592653589793238462643383279502884197169399375105820974944 592
-    crate::d_w128_kernels::Fixed::from_decimal_split(
-        31_415_926_535_897_932_384_626_433_832_795_u128,
-        2_884_197_169_399_375_105_820_974_944_592_u128,
-    )
-    .rescale_down(63, w)
+    debug_assert!(w <= 75, "wide_pi: working scale {w} exceeds embedded 75-digit π");
+    let pi_at_75 = crate::d_w128_kernels::Fixed {
+        negative: false,
+        mag: crate::consts::PI_RAW.0,
+    };
+    if w == 75 {
+        pi_at_75
+    } else {
+        pi_at_75.rescale_down(75, w)
+    }
 }
 
 /// τ = 2π at working scale `w`.
@@ -810,6 +822,41 @@ mod tests {
     #[test]
     fn sin_zero_is_zero() {
         assert_eq!(D38s12::ZERO.sin(), D38s12::ZERO);
+    }
+
+    /// Regression: D38 strict trig at high SCALE drives the working
+    /// scale `w = SCALE + STRICT_GUARD` past the old hard-coded
+    /// 63-digit π constant. With the previous wide_pi the
+    /// `rescale_down(63, w > 63)` call wrapped `from_w - to_w` as u32
+    /// and produced a silently-wrong π. Verify two representative
+    /// SCALEs above the old window (working scale 65 and 67) land
+    /// within 1 LSB of the high-precision canonical sin(1) value.
+    ///
+    /// Reference: sin(1) = 0.8414709848078965066525023216302989996226...
+    /// (OEIS A049469, 40 digits).
+    #[cfg(all(feature = "strict", not(feature = "fast")))]
+    #[test]
+    fn sin_one_correct_past_63_digit_pi_window() {
+        use crate::core_type::D38;
+        // sin(1) × 10^35, rounded half-to-even:
+        // 0.84147098480789650665250232163029899|96226... → ...029900
+        let expected_35: i128 = 84_147_098_480_789_650_665_250_232_163_029_900;
+        // sin(1) × 10^37, rounded:
+        // 0.8414709848078965066525023216302989996|226... → ...02989996
+        let expected_37: i128 =
+            8_414_709_848_078_965_066_525_023_216_302_989_996;
+
+        let got_35 = D38::<35>::ONE.sin_strict().to_bits();
+        assert!(
+            (got_35 - expected_35).abs() <= 1,
+            "sin(1) @ D38<35>: got {got_35}, expected {expected_35}"
+        );
+
+        let got_37 = D38::<37>::ONE.sin_strict().to_bits();
+        assert!(
+            (got_37 - expected_37).abs() <= 1,
+            "sin(1) @ D38<37>: got {got_37}, expected {expected_37}"
+        );
     }
 
     /// `cos(0) == 1` -- bit-exact via `f64::cos(0.0) == 1.0`.

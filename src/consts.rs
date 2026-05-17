@@ -86,7 +86,7 @@ const SCALE_REF: u32 = 75;
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
-const PI_RAW: Int256 = match Int256::from_str_radix(PI_D76_S75, 10) {
+pub(crate) const PI_RAW: Int256 = match Int256::from_str_radix(PI_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: PI_D76_S75 not parseable"),
 };
