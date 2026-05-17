@@ -649,7 +649,9 @@ macro_rules! decl_wide_transcendental {
                 pi(w) / lit(2)
             }
 
-            /// Taylor series for `sin` on a reduced `r ∈ [0, π/2]`.
+            /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
+            ///
+            /// `sin(r) = r − r³/3! + r⁵/5! − …`
             fn sin_taylor(r: W, w: u32) -> W {
                 let pow10_w = pow10(w);
                 let r2 = mul_cached(r, r, pow10_w);
@@ -674,17 +676,66 @@ macro_rules! decl_wide_transcendental {
                 sum
             }
 
+            /// Taylor series for `cos` on a reduced `r ∈ [0, π/4]`.
+            ///
+            /// `cos(r) = 1 − r²/2! + r⁴/4! − r⁶/6! + …`
+            ///
+            /// Converges faster than [`sin_taylor`] at the same `r`
+            /// because the leading `1` dominates the small even-power
+            /// corrections — used as the "upper-half" branch of
+            /// [`sin_fixed`] when the reduced argument exceeds π/4.
+            fn cos_taylor(r: W, w: u32) -> W {
+                let pow10_w = pow10(w);
+                let r2 = mul_cached(r, r, pow10_w);
+                let one_w = one(w);
+                let mut sum = one_w;
+                let mut term = one_w;
+                let mut k: u128 = 1;
+                loop {
+                    term = mul_cached(term, r2, pow10_w)
+                        / lit((2 * k - 1) * (2 * k));
+                    if term == zero() {
+                        break;
+                    }
+                    if k % 2 == 1 {
+                        sum = sum - term;
+                    } else {
+                        sum = sum + term;
+                    }
+                    k += 1;
+                    if k > SERIES_CAP {
+                        break;
+                    }
+                }
+                sum
+            }
+
             /// Sine of a working-scale value.
+            ///
+            /// Reduces to `|r| ≤ π/2` via mod-τ; then folds to
+            /// `r ∈ [0, π/2]` via `sin(π − x) = sin(x)`; then routes
+            /// to `sin_taylor` if `r ≤ π/4` or `cos_taylor(π/2 − r)`
+            /// otherwise. The `[0, π/4]` window halves the convergence
+            /// argument and roughly halves the Taylor term count, and
+            /// cos converges faster than sin at the same argument
+            /// because of the constant-1 leading term.
             pub(super) fn sin_fixed(v_w: W, w: u32) -> W {
                 let pi_w = pi(w);
                 let tau = pi_w + pi_w;
                 let hp = pi_w / lit(2);
+                let qp = hp / lit(2); // π/4
                 let q = round_to_nearest_int(div(v_w, tau, w), w);
                 let r = v_w - scale_by_k(tau, q);
                 let neg = r < zero();
                 let abs_r = if neg { -r } else { r };
                 let reduced = if abs_r >= hp { pi_w - abs_r } else { abs_r };
-                let s = sin_taylor(reduced, w);
+                let s = if reduced > qp {
+                    // sin(reduced) = cos(π/2 − reduced); the cos
+                    // argument lies in [0, π/4].
+                    cos_taylor(hp - reduced, w)
+                } else {
+                    sin_taylor(reduced, w)
+                };
                 if neg { -s } else { s }
             }
 
