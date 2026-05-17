@@ -547,13 +547,42 @@ Speed + correctly-rounded-to-storage-place (ULP) accuracy of
 matched on **storage width** at each tier's **midpoint scale**.
 
 Bench source: `benches/library_comparison.rs`. Charts in
-`docs/figures/library_comparison/` (one PNG per
-op × width - scale on the x-axis, one line per library,
-`decimal-scaled` always on top in red). 60 charts are
-generated, only the meaningful-variation ones are embedded
-below; the full set lives in the figures directory for anyone
-wanting to verify the scale-invariant cells (add / sub / neg
-are flat across scale).
+`docs/figures/library_comparison/` (one PNG per op × width —
+scale on the x-axis, one line per library, `decimal-scaled`
+always on top in red). 78 charts ship; the per-section embeds
+below cover the ones that illustrate the headline numbers, and
+the full set lives in the figures directory for anyone wanting
+to verify the scale-invariant ops (add / sub / neg are flat
+across scale).
+
+### Where decimal-scaled wins decisively: add at every wide tier
+
+decimal-scaled's stack-allocated `[u64; L]` storage keeps
+addition at single-instruction-per-limb cost even at the widest
+tiers. `bigdecimal` and `dashu-float` pay heap-traversal cost
+on every operation; `fastnum`'s fixed-precision decimal mantissa
+sits in between. The picture is the same shape at every wide
+width:
+
+![add @ 256bit (D76)](figures/library_comparison/add_256bit.png)
+![add @ 512bit (D153)](figures/library_comparison/add_512bit.png)
+![add @ 1024bit (D307)](figures/library_comparison/add_1024bit.png)
+![add @ 2048bit (D615)](figures/library_comparison/add_2048bit.png)
+![add @ 4096bit (D1231)](figures/library_comparison/add_4096bit.png)
+
+At D307<150> the spread is 12 ns (us) vs 67 ns (dashu-float) vs
+83 ns (bigdecimal) — a 6× win that holds across every scale on
+that tier. The same shape repeats at every wider tier: add cost
+on us scales linearly with limb count from the ns range, while
+the heap libraries' add cost is dominated by allocation /
+bookkeeping and stays nearly flat at 60–90 ns regardless of
+width. sub / neg / rem look the same.
+
+(The featured per-tier charts later in this section show mul /
+div, where the picture is reversed — the heap representations
+amortise their per-op overhead better on multi-limb mul / div
+than our schoolbook + MG-magic-multiply does today, see Roadmap.)
+
 
 ### Accuracy at 128-bit (1 ULP = 10⁻¹⁹)
 
