@@ -661,10 +661,6 @@ Featured charts (mul / div / ln / exp / sin / sqrt at 128-bit):
 
 ![mul @ 128bit](figures/library_comparison/mul_128bit.png)
 ![div @ 128bit](figures/library_comparison/div_128bit.png)
-![ln @ 128bit](figures/library_comparison/ln_128bit.png)
-![exp @ 128bit](figures/library_comparison/exp_128bit.png)
-![sin @ 128bit](figures/library_comparison/sin_128bit.png)
-![sqrt @ 128bit](figures/library_comparison/sqrt_128bit.png)
 
 ### 256-bit storage (s = 35 midpoint)
 
