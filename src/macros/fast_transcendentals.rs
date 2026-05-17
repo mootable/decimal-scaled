@@ -13,7 +13,7 @@
 //! per-call opt-in to the f64 bridge regardless of the build's
 //! default strict/fast mode.
 //! - `<method>` — a dispatcher present only under
-//! `#[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]`,
+//! `#[cfg(all(feature = "std", feature = "fast", not(feature = "strict")))]`,
 //! forwarding to `<method>_fast`. Plain `<method>` for D9 / D18 / wide
 //! widths therefore tracks the same dispatch rule as the strict file's
 //! plain `<method>` and the two are mutually exclusive.
@@ -194,7 +194,7 @@ macro_rules! decl_fast_transcendentals_via_f64 {
             }
         }
 
-        #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
+        #[cfg(all(feature = "std", feature = "fast", not(feature = "strict")))]
         impl<const SCALE: u32> $Type<SCALE> {
             // Dispatcher forms: plain `<method>` resolves to `*_fast` in
             // this feature mode. Mutually exclusive with the strict-mode

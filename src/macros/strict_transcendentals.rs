@@ -14,7 +14,7 @@
 //! - `<method>_strict` — always present unless the `fast` feature
 //! is set. Integer-only; `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
-//! `#[cfg(all(feature = "strict", not(feature = "fast")))]`,
+//! `#[cfg(not(all(feature = "fast", not(feature = "strict"))))]`,
 //! forwarding to `<method>_strict`. (D9 / D18 have no f64-bridge
 //! transcendentals of their own, so there is no non-strict `<method>`
 //! for these widths.)
@@ -220,168 +220,168 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     .expect(concat!(stringify!($Type), "::powf_strict: result out of range"))
             }
             /// `ln` — feature-gated dispatcher; forwards to [`Self::ln_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn ln(self) -> Self {
                 self.ln_strict()
             }
             /// `log2` — feature-gated dispatcher; forwards to [`Self::log2_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn log2(self) -> Self {
                 self.log2_strict()
             }
             /// `log10` — feature-gated dispatcher; forwards to [`Self::log10_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn log10(self) -> Self {
                 self.log10_strict()
             }
             /// `exp` — feature-gated dispatcher; forwards to [`Self::exp_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn exp(self) -> Self {
                 self.exp_strict()
             }
             /// `exp2` — feature-gated dispatcher; forwards to [`Self::exp2_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn exp2(self) -> Self {
                 self.exp2_strict()
             }
             /// `sqrt` — feature-gated dispatcher; forwards to [`Self::sqrt_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn sqrt(self) -> Self {
                 self.sqrt_strict()
             }
             /// `cbrt` — feature-gated dispatcher; forwards to [`Self::cbrt_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn cbrt(self) -> Self {
                 self.cbrt_strict()
             }
             /// `sin` — feature-gated dispatcher; forwards to [`Self::sin_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn sin(self) -> Self {
                 self.sin_strict()
             }
             /// `cos` — feature-gated dispatcher; forwards to [`Self::cos_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn cos(self) -> Self {
                 self.cos_strict()
             }
             /// `tan` — feature-gated dispatcher; forwards to [`Self::tan_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn tan(self) -> Self {
                 self.tan_strict()
             }
             /// `asin` — feature-gated dispatcher; forwards to [`Self::asin_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn asin(self) -> Self {
                 self.asin_strict()
             }
             /// `acos` — feature-gated dispatcher; forwards to [`Self::acos_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn acos(self) -> Self {
                 self.acos_strict()
             }
             /// `atan` — feature-gated dispatcher; forwards to [`Self::atan_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn atan(self) -> Self {
                 self.atan_strict()
             }
             /// `sinh` — feature-gated dispatcher; forwards to [`Self::sinh_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn sinh(self) -> Self {
                 self.sinh_strict()
             }
             /// `cosh` — feature-gated dispatcher; forwards to [`Self::cosh_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn cosh(self) -> Self {
                 self.cosh_strict()
             }
             /// `tanh` — feature-gated dispatcher; forwards to [`Self::tanh_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn tanh(self) -> Self {
                 self.tanh_strict()
             }
             /// `asinh` — feature-gated dispatcher; forwards to [`Self::asinh_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn asinh(self) -> Self {
                 self.asinh_strict()
             }
             /// `acosh` — feature-gated dispatcher; forwards to [`Self::acosh_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn acosh(self) -> Self {
                 self.acosh_strict()
             }
             /// `atanh` — feature-gated dispatcher; forwards to [`Self::atanh_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn atanh(self) -> Self {
                 self.atanh_strict()
             }
             /// `to_degrees` — feature-gated dispatcher; forwards to [`Self::to_degrees_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn to_degrees(self) -> Self {
                 self.to_degrees_strict()
             }
             /// `to_radians` — feature-gated dispatcher; forwards to [`Self::to_radians_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn to_radians(self) -> Self {
                 self.to_radians_strict()
             }
             /// `log` — feature-gated dispatcher; forwards to [`Self::log_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn log(self, base: Self) -> Self {
                 self.log_strict(base)
             }
             /// `atan2` — feature-gated dispatcher; forwards to [`Self::atan2_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn atan2(self, other: Self) -> Self {
                 self.atan2_strict(other)
             }
             /// `powf` — feature-gated dispatcher; forwards to [`Self::powf_strict`] when the `strict` feature is on.
-            #[cfg(all(feature = "strict", not(feature = "fast")))]
+            #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
             #[must_use]
             pub fn powf(self, exp: Self) -> Self {

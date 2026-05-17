@@ -81,20 +81,45 @@ transcendental operations.
 ## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.2.5", features = ["fast"] }
+decimal-scaled = { version = "0.2.5", default-features = false, features = ["std", "fast"] }
 ```
 
-`fast` forces the plain methods (`sqrt`, `ln`, `sin`, …) to dispatch
-to the f64 bridge, even if `strict` is also on. **Both the `*_strict`
-integer-only methods and the `*_fast` f64-bridge methods are always
-emitted** - the feature only affects what plain `*` resolves to.
+`fast` makes the plain methods (`sqrt`, `ln`, `sin`, …) dispatch
+through the f64 bridge for speed at the cost of ~16-digit
+platform-libm precision. It only affects what plain `*` resolves
+to: **both the `*_strict` integer-only methods and the `*_fast`
+f64-bridge methods are always emitted** so per-call selection
+stays available.
+
+**Strict-by-default — and `strict` wins when both are enabled.**
+0.3.0 changes the dispatcher rule: strict is the default plain
+dispatch *regardless* of whether the `strict` feature is
+explicitly enabled, and `fast` only takes over plain dispatch
+when `strict` is explicitly absent. Reasoning: the strict path
+is now fast enough (`ln_strict` at D38<19> is ~1.5 µs, sin at
+39 µs) that staying on the deterministic correctly-rounded path
+by default is the right call across more codepaths. The only
+way to land on `*_fast` for plain `sqrt` / `ln` / etc. is to
+build with `default-features = false` AND explicitly enable
+`fast` AND NOT re-enable `strict` — a deliberate three-step
+opt-out. Mixing `strict` with `fast` (e.g. a downstream crate
+flips `fast` on a transitive build that also has `strict`)
+keeps you on the strict path.
 
 | Features | `*_strict` named methods | `*_fast` named methods (needs `std`) | plain `sqrt` / `ln` / … |
 |---|---|---|---|
-| *(none)* | present | present | dispatches to `*_fast` (needs `std`) |
-| `strict` | present | present | dispatches to `*_strict` |
-| `fast` | present | present | dispatches to `*_fast` (needs `std`) |
-| `strict`, `fast` | present | present | `fast` wins - dispatches to `*_fast` |
+| *(none)*                                    | present | present | **dispatches to `*_strict`** |
+| `strict` (default)                          | present | present | dispatches to `*_strict` |
+| `fast` (and not `strict`)                   | present | present | dispatches to `*_fast` (needs `std`) |
+| `strict` + `fast`                           | present | present | **dispatches to `*_strict`** |
+
+**Strict is the default dispatcher** — explicit, intentional. To
+get the f64 bridge as the plain dispatch you have to (a) build
+with `default-features = false` (which drops the `strict` feature
+along with `std`+`serde`) and (b) add the `fast` feature plus
+`std`. Mixing `strict` with `fast` keeps you on the strict path —
+the only way to land on `*_fast` for `sqrt` / `ln` / etc. is to
+explicitly opt out of strict.
 
 ## The 0.5 ULP accuracy guarantee
 

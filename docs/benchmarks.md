@@ -166,10 +166,20 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 |---|---|---|---|
 | add | 1.26 ns | 1.27 ns | **1.24 ns** |
 | sub | 1.49 ns | 1.57 ns | **1.44 ns** |
-| mul | **29.0 ns** | 101 ns | 222 ns |
-| div | **93.2 ns** | 200 ns | 230 ns |
+| mul | **29.0 ns** | 126 ns | 222 ns |
+| div | **93.2 ns** | 250 ns | 230 ns |
 | rem | **20.2 ns** | 63.4 ns | 62.3 ns |
 | neg | 1.25 ns | 1.24 ns | **1.20 ns** |
+
+(Note: the s=28 mul/div numbers come from the `lib_cmp_d56`
+isolated bench rather than the full_matrix monolith. The monolith
+run showed inflated D56 mul/div (~187 ns / ~390 ns) due to
+cache-and-inlining contention with the other 30+ tier bench
+functions in the same binary — measured in isolation the numbers
+land back in the expected envelope. The 0.3.0 cycle's per-tier
+`lib_cmp_d{N}` bench split makes that cleaner-isolation
+measurement easy to repeat — see
+[`ROADMAP.md`](../ROADMAP.md) §Methodology.)
 
 ### D76 - 256 bits
 

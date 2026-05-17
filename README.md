@@ -54,23 +54,30 @@ Add to your `Cargo.toml`:
 decimal-scaled = "0.2.5"
 ```
 
-The default build pulls in the correctly-rounded transcendentals
-(the `strict` feature is on by default). To opt in to the faster
-`f64`-bridge ("fast") path instead - ~700× quicker on series
-functions, but only ≈ 16 decimal digits of platform-libm precision
-and **not** platform-deterministic - disable default features and
-pick what you actually want:
+The default build dispatches plain `sqrt` / `ln` / `sin` /
+etc. to the integer-only, deterministic, ≤ 0.5 ULP `*_strict`
+path. **Strict is the default** — and if you mix `strict` and
+`fast` features (e.g. via a transitive dep), strict still wins.
+The only way to plain-dispatch to the f64 bridge is to
+explicitly opt out of strict:
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.5", default-features = false, features = ["std", "serde"] }
+# f64-bridge fast path — ~16 decimal digits of platform-libm
+# precision, NOT platform-deterministic. Opt-in only.
+decimal-scaled = { version = "0.2.5",
+                   default-features = false,
+                   features = ["std", "serde", "fast"] }
 ```
 
 For `no_std` targets (`alloc` is still required):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.5", default-features = false, features = ["serde", "alloc", "strict"] }
+decimal-scaled = { version = "0.2.5",
+                   default-features = false,
+                   features = ["alloc", "serde"] }
+# `strict` is on by default; no need to re-add it.
 ```
 
 ---
@@ -441,15 +448,15 @@ See [`docs/macros.md`](docs/macros.md).
 
 | Feature | Default | Description |
 |---|---|---|
-| `std` | yes | Platform `f64`-bridge transcendentals (used when `strict` is off). Pulls in `alloc`. |
+| `std` | yes | Platform `f64`-bridge transcendentals (the `*_fast` named methods + plain dispatch when the only-`fast` opt-out is set). Pulls in `alloc`. |
 | `alloc` | yes | String formatting and parsing on `no_std`. Required. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers`. |
-| `strict` | **yes** | Plain transcendentals (`ln` / `sin` / …) dispatch to the integer-only, 0.5 ULP, platform-deterministic path. `no_std`-compatible. The `*_strict` and `*_fast` named entry points are both always available; this feature only chooses what plain `*` resolves to. |
+| `strict` | **yes** | Marks the build as intentionally on the strict path. Plain `sqrt` / `ln` / etc. dispatch to the integer-only ≤ 0.5 ULP `*_strict` methods. `no_std`-compatible. **Strict is also the dispatch default when no feature is set at all** — the explicit `strict` feature mainly signals intent (and survives a transitive `fast` flip from a downstream crate, which still resolves to strict). |
 | `macros` | no | The `d38!` compile-time decimal-literal macro. |
-| `fast` | no | Forces plain transcendentals to dispatch to the f64 bridge instead of `*_strict`, even when `strict` is also on. The integer-only `*_strict` and f64 `*_fast` named methods stay available either way. |
-| `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time. |
-| `d76` / `d153` / `d307` | no | The wide decimal tiers (256 / 512 / 1024-bit storage), backed by an in-tree hand-rolled wide-integer type. |
-| `wide` | no | Umbrella over `d76` + `d153` + `d307`. |
+| `fast` | no | Opt out of strict dispatch: plain `sqrt` / `ln` / etc. forward to the f64 bridge. **Only takes effect when `strict` is NOT enabled** — if both are present, strict wins. To get fast dispatch you have to (a) `default-features = false`, (b) NOT re-enable `strict`, and (c) enable `fast` + `std`. The `*_strict` and `*_fast` named methods stay available regardless. |
+| `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time (HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling). |
+| `d{N}` per tier | no | `d56` / `d76` / `d114` / `d153` / `d230` / `d307` / `d461` / `d615` / `d923` / `d1231` enable individual wide tiers. Each is also bundled into the next umbrella. |
+| `wide` / `x-wide` / `xx-wide` | no | Umbrellas: `wide` = D56–D307; `x-wide` adds D461 + D615; `xx-wide` adds D923 + D1231. |
 | `experimental-floats` | no | Nightly-only `f16` / `f128` entry points on the float bridge. |
 
 See [`docs/features.md`](docs/features.md) for the full reference and

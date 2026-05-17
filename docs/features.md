@@ -12,9 +12,9 @@ decimal-scaled = { version = "0.2.5", default-features = false, features = ["all
 | `std` | yes | The `f64`-bridge transcendentals (trig, log/exp, sqrt, …) and `from_f64` constructors. Pulls in `alloc`. |
 | `alloc` | yes | `Display::to_string` and `FromStr` on `no_std`. Required — targets without `alloc` are not supported. |
 | `serde` | yes | `Serialize` / `Deserialize` via `serde_helpers` (canonical-string form). |
-| `strict` | **yes** | Plain transcendental methods (`sqrt`, `ln`, …) dispatch to the integer-only `*_strict` path — ≤ 0.5 ULP, platform-independent, `no_std`-friendly. The headline accuracy guarantee. See [strict mode](strict-mode.md). |
+| `strict` | **yes** | Marks the build as on the strict path: plain `sqrt` / `ln` / etc. dispatch to the integer-only ≤ 0.5 ULP `*_strict` methods. `no_std`-friendly. Strict is *also* the dispatch when no feature is set at all — this feature mainly signals intent and survives a transitive `fast` flip from a downstream crate (which still resolves to strict). See [strict mode](strict-mode.md). |
 | `macros` | no | The `d38!` / `d76!` / etc. compile-time literal macros. See [the macro guide](macros.md). |
-| `fast` | no | When enabled (without `strict`), plain methods dispatch to the f64 bridge for speed at the cost of platform-dependent ≈ 16-digit precision. Both `*_strict` and `*_fast` named methods stay available regardless of which feature is on. |
+| `fast` | no | Opt out of strict dispatch: plain methods forward to the f64 bridge for speed at the cost of platform-libm-dependent ≈ 16-digit precision. **Only takes effect when `strict` is NOT enabled.** Three-step opt-out: `default-features = false` + add `fast` + `std` + DON'T re-add `strict`. Both `*_strict` and `*_fast` named methods stay available regardless. |
 
 Notes:
 

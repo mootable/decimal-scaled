@@ -33,28 +33,37 @@ features = ["std", "serde", "strict", "macros", "wide", "x-wide"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
-# `strict` is on by default — the crate's headline feature is the
-# correctly-rounded (0.5 ULP) integer-only transcendentals. To opt
-# in to the faster f64-bridge ("fast") path instead, build with
-# `default-features = false, features = ["std", "serde"]` and the
-# plain `ln` / `exp` / `sin` / … methods will dispatch through f64
-# (giving ≈ 16 decimal digits of platform-libm precision rather
-# than 0.5 ULP).
+# `strict` is on by default. The crate's headline feature is the
+# correctly-rounded (<=0.5 ULP) integer-only transcendentals;
+# plain `ln` / `sin` / `sqrt` / etc. dispatch to that path.
+#
+# Strict is ALSO the dispatch when no feature is set at all; the
+# explicit `strict` feature mostly signals intent and survives a
+# transitive `fast` flip from a downstream crate (which still
+# resolves to strict — strict wins when both are present).
+#
+# To opt out and use the f64 bridge instead you have to take all
+# three steps: (a) `default-features = false`, (b) explicitly add
+# `fast` + `std`, and (c) NOT re-add `strict`:
+#   decimal-scaled = { version = "0.2.5", default-features = false,
+#                      features = ["std", "serde", "fast"] }
+# That gives ~16 decimal digits of platform-libm precision rather
+# than the deterministic 0.5 ULP strict path.
 default = ["std", "serde", "strict"]
 std = ["alloc"]
 alloc = []
 serde = ["dep:serde"]
 macros = ["dep:decimal_scaled_macros"]
-# Plain transcendentals (`sin`, `ln`, …) dispatch to the integer-only,
-# 0.5-ULP, platform-deterministic `*_strict` path. On by default
-# (see `default` above). The `*_strict` and `*_fast` named methods
-# are both always available regardless of this feature; `strict` only
-# controls what the plain `*` form resolves to. Does not require
-# `std`; the integer-only transcendentals compile under `no_std`.
+# Marks the build as on the strict path: plain `sin` / `ln` / etc.
+# dispatch to the integer-only, <=0.5 ULP, platform-deterministic
+# `*_strict` methods. On by default. Does NOT require `std` — the
+# integer-only transcendentals compile under `no_std`.
 strict = []
-# Forces plain transcendentals to dispatch to the f64 bridge instead
-# of `*_strict`, even when `strict` is also on. Same caveat as above:
-# `*_strict` and `*_fast` named methods stay available either way.
+# Opt out of strict dispatch: plain transcendentals forward to the
+# f64 bridge. Only takes effect when `strict` is NOT enabled — if
+# both are present, strict wins. Both `*_strict` and `*_fast`
+# named methods are emitted regardless of which feature is on; this
+# feature only chooses what plain `*` resolves to.
 fast = []
 # Compiles BOTH the macro-default and the per-type override
 # implementations for every method that has them. Default builds compile
@@ -209,6 +218,73 @@ required-features = ["wide", "x-wide"]
 name = "quick_div"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
+
+# Per-width library_comparison benches. Each runs ONE tier's full
+# peer comparison so `cargo bench --bench lib_cmp_d307` iterates
+# in minutes instead of hours. The monolithic `library_comparison`
+# bench above stays for full sweeps where you want every tier
+# under one criterion baseline.
+[[bench]]
+name = "lib_cmp_d9"
+harness = false
+
+[[bench]]
+name = "lib_cmp_d18"
+harness = false
+
+[[bench]]
+name = "lib_cmp_d38"
+harness = false
+
+[[bench]]
+name = "lib_cmp_d56"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "lib_cmp_d76"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "lib_cmp_d114"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "lib_cmp_d153"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "lib_cmp_d230"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "lib_cmp_d307"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "lib_cmp_d461"
+harness = false
+required-features = ["x-wide"]
+
+[[bench]]
+name = "lib_cmp_d615"
+harness = false
+required-features = ["x-wide"]
+
+[[bench]]
+name = "lib_cmp_d923"
+harness = false
+required-features = ["xx-wide"]
+
+[[bench]]
+name = "lib_cmp_d1231"
+harness = false
+required-features = ["xx-wide"]
 
 [lints.rust]
 unused_variables = "allow"
