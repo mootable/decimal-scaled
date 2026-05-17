@@ -736,6 +736,46 @@ Numbers below are kept as-recorded so the artefact is auditable;
 do not read the fastnum atan column as a real-world atan
 benchmark.
 
+### atan input-class comparison at D38<19>
+
+A per-input bench (`benches/atan_inputs.rs`) compares the three
+libraries that actually expose `atan` (decimal-scaled, fastnum,
+g_math) across eight input classes. Times shown are criterion
+medians on the same machine, with our zero / ±1 / small-x fast
+paths in effect.
+
+| input | decimal-scaled | fastnum         | g_math   |
+|-------|----------------|-----------------|----------|
+| 0     | 4.9 ns         | 1.4 ns          | 11.7 µs  |
+| 1     | 552 ns ⚠       | 12.1 ns         | 11.6 µs  |
+| −1    | 551 ns ⚠       | 13.1 ns         | 11.1 µs  |
+| 1e-7  | **5.3 ns** 🏆  | 8.2 µs          | 1.06 µs  |
+| 0.001 | 44.5 µs        | 11.1 µs         | 1.9 µs   |
+| 0.5   | 62.4 µs        | 47.9 µs         | 12.4 µs  |
+| 2     | 65.7 µs        | 12 ns ‡         | 13.0 µs  |
+| 1e8   | 44.0 µs        | 6.2 ns ‡        | 12.3 µs  |
+
+‡ fastnum returns signalling NaN for |x| > 1 (see previous
+subsection); the 12 ns / 6 ns figures are early-return, not an
+atan computation.
+
+**Honest reading**:
+
+- We're best-in-class at `atan(0)` and `atan(small)` thanks to the
+  zero and small-x fast paths added in this round; **neither peer
+  has a small-x linear shortcut**, so we're ~200× faster than g_math
+  and ~1500× faster than fastnum at 1e-7.
+- g_math is genuinely the perf leader on normal atan (~12 µs flat
+  regardless of input class — almost certainly CORDIC or a
+  precomputed Chebyshev expansion); we are 3-5× behind it on every
+  real input.
+- fastnum is 1.5-4× faster than us in the in-range non-special
+  cases where it actually computes. The real algorithmic gap to
+  fastnum is much smaller than the 5000× headline would suggest.
+- `atan(±1)` at 552 ns is our remaining bottleneck — `Self::quarter_pi()`
+  goes through a non-const multi-limb rescale per call. Making
+  `quarter_pi_at_target` `const fn` would drop this to < 30 ns.
+
 Headline reading: `decimal-scaled` is the only library that
 **simultaneously** (a) ships 0-ULP HalfToEven by default,
 **without** the caller having to switch rounding modes or

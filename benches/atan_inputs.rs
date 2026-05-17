@@ -13,8 +13,8 @@
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use decimal_scaled::D38;
-use fastnum::{dec128, decimal::Context, D128};
-use dashu_float::DBig;
+use fastnum::{decimal::Context, D128};
+use g_math::canonical::{evaluate, gmath};
 use std::str::FromStr;
 
 type Ours = D38<19>;
@@ -29,14 +29,9 @@ fn fastn(s: &str) -> D128 {
     D128::from_str(s, Context::default()).expect("fastnum parse")
 }
 
-/// dashu-float doesn't expose `.atan()` directly on `DBig`; the
-/// way to compute atan in dashu is via the `dashu_float::round`-aware
-/// methods which require building a Context. Skipping dashu here is
-/// pragmatic — the real ask is decimal-scaled vs fastnum input
-/// classes; dashu can be a follow-up if needed.
-fn dashu(s: &str) -> DBig {
-    DBig::from_str(s).expect("dashu parse").with_precision(19).value()
-}
+// dashu-float exposes no trig API at all (no atan / sin / cos), so
+// it cannot be benched here. rust_decimal / bigdecimal / decimal-rs
+// likewise have no atan. Only fastnum and g_math are peer-comparable.
 
 fn bench(c: &mut Criterion) {
     let mut g = c.benchmark_group("atan_inputs_D38s19");
@@ -58,13 +53,15 @@ fn bench(c: &mut Criterion) {
     for (label, s) in cases {
         let our = ours(s);
         let f = fastn(s);
-        let _d = dashu(s); // parsed but not benched — see note above.
 
         g.bench_function(format!("{}/decimal-scaled", label), |bn| {
             bn.iter(|| black_box(our).atan_strict());
         });
         g.bench_function(format!("{}/fastnum", label), |bn| {
             bn.iter(|| black_box(f).atan());
+        });
+        g.bench_function(format!("{}/g_math", label), |bn| {
+            bn.iter(|| evaluate(&black_box(gmath(s)).atan()));
         });
     }
 
