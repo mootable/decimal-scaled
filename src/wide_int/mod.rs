@@ -578,16 +578,98 @@ pub(crate) fn limbs_divmod_dispatch(
     }
 }
 
+/// Möller–Granlund 2-by-1 invariant divisor.
+///
+/// Precomputes the reciprocal `v = ⌊(B² − 1) / d⌋ − B` (where
+/// `B = 2¹²⁸`) so each subsequent `(u₁·B + u₀) / d` reduces to two
+/// `mul_128`s plus a constant fix-up — vs the 128-iteration
+/// shift-subtract of [`div_2_by_1`].
+///
+/// Reference: Möller, N. and Granlund, T. (2011). *Improved Division
+/// by Invariant Integers*, IEEE Trans. Computers 60(2), 165–175,
+/// Algorithm 4 (div) and Algorithm 6 (reciprocal). PDF:
+/// <https://gmplib.org/~tege/division-paper.pdf>.
+///
+/// Setup amortises one bit-recovery `div_2_by_1` across every
+/// quotient limb of a [`limbs_divmod_knuth`] call, which is the
+/// difference between the wide-tier divide being ~50× a 2-by-1 step
+/// per limb (today) and ~2 multiplies per limb (with this struct).
+#[derive(Clone, Copy)]
+pub(crate) struct MG2by1 {
+    /// Normalised divisor (top bit set).
+    d: u128,
+    /// Reciprocal `v = ⌊(B² − 1) / d⌋ − B`.
+    v: u128,
+}
+
+impl MG2by1 {
+    /// Setup. `d` must be normalised (`d >> 127 == 1`).
+    ///
+    /// Computes `v` as `⌊(B² − 1 − d·B) / d⌋`, using the algebraic
+    /// rewrite `(B² − 1)/d − B = (B² − 1 − d·B)/d`. The numerator
+    /// `B² − 1 − d·B = (B − d − 1)·B + (B − 1)`, a u256 with
+    /// `high = !d` (since `!d = (B − 1) − d`) and `low = u128::MAX`.
+    /// `high < d` for any normalised `d`, so the existing
+    /// bit-recovery [`div_2_by_1`] handles it without precondition
+    /// violation.
+    #[inline]
+    pub(crate) const fn new(d: u128) -> Self {
+        debug_assert!(d >> 127 == 1, "MG2by1::new: divisor must be normalised");
+        let (v, _r) = div_2_by_1(!d, u128::MAX, d);
+        Self { d, v }
+    }
+
+    /// Divide `(u1·B + u0)` by the stored divisor. `u1 < d` is
+    /// required (else the quotient wouldn't fit `u128`).
+    ///
+    /// Per MG Algorithm 4:
+    /// 1. `(q1, q0) = v·u1 + ⟨u1, u0⟩` (u257; high word may wrap u128)
+    /// 2. `q1 += 1`
+    /// 3. `r = u0 − q1·d  (mod B)`
+    /// 4. if `r > q0`: `q1 -= 1`; `r += d` (wraps mod B)
+    /// 5. if `r >= d`: `q1 += 1`; `r -= d`
+    ///
+    /// Wrap-around in step 1/2/4 is fine: step 3 only depends on
+    /// `q1 mod B` (since `q1·d mod B == (q1 mod B)·d mod B`), and the
+    /// `r > q0` / `r >= d` corrections recover the true quotient
+    /// modulo `B`. The final `q1` always fits `u128` because the true
+    /// quotient is `< B` (per the `u1 < d` precondition).
+    #[inline]
+    pub(crate) const fn div_rem(&self, u1: u128, u0: u128) -> (u128, u128) {
+        debug_assert!(u1 < self.d, "MG2by1::div_rem: high word must be < divisor");
+        // Step 1.
+        let (vu1_hi, vu1_lo) = mul_128(self.v, u1);
+        let (q0, c_lo) = vu1_lo.overflowing_add(u0);
+        let (q1, _c_hi_a) = vu1_hi.overflowing_add(u1);
+        let (q1, _c_hi_b) = q1.overflowing_add(c_lo as u128);
+        // Step 2.
+        let q1 = q1.wrapping_add(1);
+        // Step 3.
+        let r = u0.wrapping_sub(q1.wrapping_mul(self.d));
+        // Step 4.
+        let (q1, r) = if r > q0 {
+            (q1.wrapping_sub(1), r.wrapping_add(self.d))
+        } else {
+            (q1, r)
+        };
+        // Step 5.
+        if r >= self.d {
+            (q1.wrapping_add(1), r.wrapping_sub(self.d))
+        } else {
+            (q1, r)
+        }
+    }
+}
+
 /// 2-by-1 unsigned divide: `(high · 2^128 + low) / d` and the matching
 /// remainder. Requires `high < d` so the quotient fits a single
 /// `u128`.
 ///
 /// Implementation: bit-by-bit recovery (128 iterations, constant work
-/// per iter). Slower than a hardware 256-by-128 instruction but Rust's
-/// stable surface doesn't expose one, and the tighter shift-multiply
-/// estimators (Möller–Granlund) require precomputed reciprocals that
-/// only pay back across many divides with the same divisor — Knuth's
-/// inner loop sees each divisor at most once per call.
+/// per iter). Kept as the const-context fallback and as the setup
+/// path for [`MG2by1::new`]. Runtime callers that need many divides
+/// against the same divisor should use [`MG2by1`] instead — it cuts
+/// each subsequent divide from 128 iterations down to ~2 multiplies.
 #[inline]
 const fn div_2_by_1(high: u128, low: u128, d: u128) -> (u128, u128) {
     // The classical recovery loop: at each step shift `r` left by 1,
@@ -706,6 +788,13 @@ pub(crate) fn limbs_divmod_knuth(
     debug_assert!(m_plus_n >= n);
     let m = m_plus_n - n;
 
+    // Precompute the Möller–Granlund 2-by-1 reciprocal of the top
+    // divisor limb. After D1 the top limb has its high bit set
+    // (`v[n-1] >> 127 == 1` by construction), so the MG normalisation
+    // precondition is satisfied. One amortised setup cost spread
+    // across `m + 1` quotient-limb estimations.
+    let mg_top = MG2by1::new(v[n - 1]);
+
     // D2. For j from m down to 0.
     let mut j_plus_one = m + 1;
     while j_plus_one > 0 {
@@ -736,7 +825,7 @@ pub(crate) fn limbs_divmod_knuth(
                 (q, r)
             }
         } else {
-            div_2_by_1(u_top, u_next, v_top)
+            mg_top.div_rem(u_top, u_next)
         };
 
         // Refinement: while q̂·v[n−2] > r̂·2^128 + u[j+n−2], decrement.
@@ -1360,6 +1449,50 @@ mod slice_tests {
         assert_eq!(sum_hi, d - 1);
         assert_eq!(sum_lo, u128::MAX);
         assert!(r < d);
+    }
+
+    /// `MG2by1::div_rem` bit-exact matches `div_2_by_1` on a
+    /// battery of corner cases that historically broke 2-by-1 MG
+    /// implementations: maximal numerator with minimal-normalised
+    /// divisor (forces the +1 step's u128 overflow), boundary
+    /// q̂ = u128::MAX, exact divides, and the smallest divisor that
+    /// satisfies the normalisation requirement (`d` with top bit
+    /// set and otherwise zero, i.e. `B/2`).
+    #[test]
+    fn mg2by1_matches_div_2_by_1() {
+        // For each (u1, u0, d), the precondition is `u1 < d` and
+        // `d >> 127 == 1` (normalised).
+        let cases: &[(u128, u128, u128)] = &[
+            // Minimal normalised divisor (d = B/2).
+            (0, 1, 1u128 << 127),
+            (0, u128::MAX, 1u128 << 127),
+            ((1u128 << 127) - 1, u128::MAX, 1u128 << 127),
+            // Maximal divisor (d = u128::MAX = B-1).
+            (0, 1, u128::MAX),
+            (u128::MAX - 1, u128::MAX, u128::MAX),
+            // The exact corner case worked through in the docs:
+            // u1 = B-2, u0 = B-1, d = B-1 → (q, r) = (B-1, B-2).
+            (u128::MAX - 1, u128::MAX, u128::MAX),
+            // Mid-range with mid-range divisor.
+            (12345, 67890, (1u128 << 127) | 0xdead_beefu128),
+            // Numerator equals divisor minus one in the high limb —
+            // exercises the "q̂ = u128::MAX" path.
+            (u128::MAX - 1, 0, u128::MAX),
+            // Random spread.
+            (0x1234_5678_9abc_def0_u128 ^ 0xa5a5, 0xfedc_ba98_7654_3210_u128, (1u128 << 127) | 0xc0ffee_u128),
+        ];
+        for &(u1, u0, d) in cases {
+            assert!(d >> 127 == 1, "test divisor not normalised: {d:#x}");
+            assert!(u1 < d, "test precondition u1 < d violated: {u1:#x} >= {d:#x}");
+            let (q_ref, r_ref) = div_2_by_1(u1, u0, d);
+            let mg = MG2by1::new(d);
+            let (q_mg, r_mg) = mg.div_rem(u1, u0);
+            assert_eq!(
+                (q_mg, r_mg),
+                (q_ref, r_ref),
+                "MG2by1 disagrees with div_2_by_1 for (u1={u1:#x}, u0={u0:#x}, d={d:#x})"
+            );
+        }
     }
 
     /// `limbs_divmod_knuth` agrees with the canonical `limbs_divmod`
