@@ -328,7 +328,20 @@ impl<const SCALE: u32> D38<SCALE> {
                 crate::d_w128_kernels::Fixed::ZERO
             }
         } else {
-            let base = atan_fixed(y.div(x, w), w);
+            // Max-branch (same as the wide-tier path): feed atan_fixed
+            // the |smaller|/|larger| ratio so the argument-halving
+            // cascade in atan_fixed doesn't blow up when |y| ≫ |x|.
+            // Identity: atan(t) = sign(t)·π/2 − atan(1/t) for |t| > 1.
+            let abs_y_ge_abs_x = y.ge_mag(x);
+            let base = if !abs_y_ge_abs_x {
+                atan_fixed(y.div(x, w), w)
+            } else {
+                let inv = atan_fixed(x.div(y, w), w);
+                let hp = wide_half_pi(w);
+                // sign(y/x): positive iff y and x have matching sign.
+                let same_sign = y.negative == x.negative;
+                if same_sign { hp.sub(inv) } else { hp.neg().sub(inv) }
+            };
             if !x.negative {
                 base
             } else if !y.negative {

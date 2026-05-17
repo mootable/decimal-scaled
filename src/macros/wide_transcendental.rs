@@ -750,18 +750,28 @@ macro_rules! decl_wide_transcendental {
                     x = div(one_w, x, w);
                     add_half_pi = true;
                 }
-                // Three argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))).
+                // Argument halvings: atan(x) = 2·atan(x/(1+√(1+x²))).
                 //
-                // Empirically chosen as the trade-off point on this
-                // truncating fixed-point core: each halving reduces
-                // |x| by a factor ≈ 2, so after 3 halvings |x| ≤ 1/8
-                // and the Taylor series converges in ≈ w·log₂(10)/3
-                // terms (e.g. ~70 terms at w=63). Adding more
-                // halvings shortens the series but introduces more
-                // sqrt/div truncation error; fewer halvings explodes
-                // the term count. Tighten via the
-                // `atan_iter_count_bound` test if you change it.
-                let halvings: u32 = 3;
+                // Each halving reduces |x| by a factor ≈ 2, so the
+                // Taylor series convergence rate gains ~log₂(4) = 2
+                // bits per term. Cost per halving: 1 wide mul + 1 wide
+                // sqrt + 1 wide div ≈ 7 µs at D307. Savings per
+                // halving: ~p_bits/halvings² Taylor terms × ~1.5 µs.
+                //
+                // The break-even (where one more halving costs more
+                // than the term savings) sits around halvings ≈
+                // log₂(p_bits/halving_cost), which lands at 6–7 for
+                // D153/D307 and 5–6 for D76. We pick the per-tier
+                // sweet spot from w (the working scale = SCALE + GUARD
+                // decimal digits): wider working scale → more halvings
+                // worth taking.
+                let halvings: u32 = if w < 60 {
+                    5  // D38-equivalent guard (~50 digits)
+                } else if w < 110 {
+                    6  // D76 / D153 light-end
+                } else {
+                    7  // D153 heavy / D307
+                };
                 for _ in 0..halvings {
                     let x2 = mul(x, x, w);
                     let denom = one_w + sqrt_fixed(one_w + x2, w);
@@ -1044,7 +1054,25 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let y = $core::to_work(yraw);
                     let x = $core::to_work(xraw);
-                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    let zero_w = $core::zero();
+                    // Max-branch: feed atan_fixed whichever of y/x or
+                    // x/y has |·| ≤ 1, so the argument-halving cascade
+                    // doesn't blow up. The historic `atan(y/x)`-only
+                    // path lost ~log₂(|y/x|) bits of precision when
+                    // |y| ≫ |x|; the swap recovers them via the
+                    // identity `atan(t) = sign(t)·π/2 − atan(1/t)`
+                    // for `|t| > 1`.
+                    let abs_y = if y < zero_w { -y } else { y };
+                    let abs_x = if x < zero_w { -x } else { x };
+                    let base = if abs_x >= abs_y {
+                        $core::atan_fixed($core::div(y, x, w), w)
+                    } else {
+                        let inv = $core::atan_fixed($core::div(x, y, w), w);
+                        let hp = $core::half_pi(w);
+                        // sign(y/x): same iff y and x agree in sign.
+                        let same_sign = (y < zero_w) == (x < zero_w);
+                        if same_sign { hp - inv } else { -hp - inv }
+                    };
                     if xraw > z {
                         base
                     } else if yraw >= z {
