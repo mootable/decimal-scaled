@@ -56,11 +56,23 @@ fn main() {
 
     println!("\n# External library outputs at SCALE=19");
 
-    println!("\n## fastnum");
+    println!("\n## fastnum @ D128 (38 internal digits)");
     println!("  exp(1)   = {}", dec128!(1).exp());
     println!("  sin(1)   = {}", dec128!(1).sin());
     println!("  ln(2)    = {}", dec128!(2).ln());
     println!("  sqrt(2)  = {}", dec128!(2).sqrt());
+
+    println!("\n## fastnum @ D256 (~75 internal digits)");
+    println!("  exp(1)   = {}", fastnum::dec256!(1).exp());
+    println!("  sin(1)   = {}", fastnum::dec256!(1).sin());
+    println!("  ln(2)    = {}", fastnum::dec256!(2).ln());
+    println!("  sqrt(2)  = {}", fastnum::dec256!(2).sqrt());
+
+    println!("\n## fastnum @ D512 (~155 internal digits)");
+    println!("  exp(1)   = {}", fastnum::dec512!(1).exp());
+    println!("  sin(1)   = {}", fastnum::dec512!(1).sin());
+    println!("  ln(2)    = {}", fastnum::dec512!(2).ln());
+    println!("  sqrt(2)  = {}", fastnum::dec512!(2).sqrt());
 
     println!("\n## rust_decimal (s=19)");
     let two = RustDecimal::from_i128_with_scale(20_000_000_000_000_000_000_i128, 19);
