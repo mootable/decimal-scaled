@@ -13,16 +13,33 @@ macro, every Cargo feature, benchmarks - live in
 [**`docs/guides.md`**](docs/guides.md). API reference on
 [docs.rs](https://docs.rs/decimal-scaled/).
 
-> **0.5 ULP** - the strongest accuracy guarantee a finite numeric
-> type can give - is the headline feature. Every `ln` / `exp` /
-> `sin` / `cos` / `sqrt` / `cbrt` / `powf` / `atan` / `atan2` /
-> `sinh` / `cosh` / `tanh` / `asinh` / `acosh` / `atanh` /
-> `to_degrees` / `to_radians` lands within half an [ULP][ULP] of
-> the exact result and the bit pattern is identical on every
-> machine. No baseline numeric crate offers this for
-> transcendentals. The algorithms, citations and per-function
-> implementation notes are catalogued in
+## Two headline guarantees
+
+> **1. ≤ 0.5 ULP correctness on every transcendental.** The
+> strongest accuracy guarantee a finite numeric type can give.
+> Every `ln` / `exp` / `sin` / `cos` / `tan` / `sqrt` / `cbrt` /
+> `powf` / `asin` / `acos` / `atan` / `atan2` / `sinh` / `cosh` /
+> `tanh` / `asinh` / `acosh` / `atanh` / `to_degrees` /
+> `to_radians` lands within half an [ULP][ULP] of the exact
+> result, and the bit pattern is identical on every machine.
+> No other published Rust crate offers this for transcendentals
+> at arbitrary `SCALE` and width. The algorithms, citations and
+> per-function implementation notes are catalogued in
 > [`ALGORITHMS.md`](ALGORITHMS.md).
+>
+> **2. Caller-chosen rounding mode at every lossy operation.**
+> The default is HalfToEven (the IEEE 754 default) but every
+> lossy entry point — `*` / `/` / `%`, the `rescale` family, and
+> every strict transcendental — ships a `*_with(mode)` sibling
+> that takes a `RoundingMode`:
+> `HalfToEven` · `HalfAwayFromZero` · `HalfTowardZero` ·
+> `Ceiling` · `Floor` · `Trunc`. The crate-wide default is also
+> selectable at compile time via the `rounding-*` Cargo features
+> (`rounding-half-away-from-zero`, `rounding-floor`, etc.). So
+> if you need ASTM E29 banker's rounding for one codepath and
+> bank-statement away-from-zero for another, both are
+> first-class — no global state, no thread-locals, no library
+> fork required to bit-match an external system.
 >
 > [ULP]: https://en.wikipedia.org/wiki/Unit_in_the_last_place
 

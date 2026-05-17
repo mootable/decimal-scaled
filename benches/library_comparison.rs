@@ -176,6 +176,12 @@ fn bench_d38(c: &mut Criterion) {
                 g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
                 g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
                 g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
+                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
+                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
             }
             19 => {
                 let a = D38::<19>::from_int(2); let b = D38::<19>::from_int(1);
@@ -184,6 +190,12 @@ fn bench_d38(c: &mut Criterion) {
                 g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
                 g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
                 g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
+                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
+                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
             }
             38 => {
                 // D38<38> can't hold 2, only ±1.7. Use 1 / 1 for arith
@@ -221,6 +233,12 @@ fn bench_d38(c: &mut Criterion) {
                 g.bench_function("fastnum/exp",  |bn| bn.iter(|| black_box(a).exp()));
                 g.bench_function("fastnum/sin",  |bn| bn.iter(|| black_box(a).sin()));
                 g.bench_function("fastnum/sqrt", |bn| bn.iter(|| black_box(a).sqrt()));
+                g.bench_function("fastnum/cos",  |bn| bn.iter(|| black_box(a).cos()));
+                g.bench_function("fastnum/tan",  |bn| bn.iter(|| black_box(a).tan()));
+                g.bench_function("fastnum/atan", |bn| bn.iter(|| black_box(a).atan()));
+                g.bench_function("fastnum/sinh", |bn| bn.iter(|| black_box(a).sinh()));
+                g.bench_function("fastnum/cosh", |bn| bn.iter(|| black_box(a).cosh()));
+                g.bench_function("fastnum/tanh", |bn| bn.iter(|| black_box(a).tanh()));
             }
         }
 
@@ -242,6 +260,12 @@ fn bench_d38(c: &mut Criterion) {
             g.bench_function("g_math/exp",  |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).exp())));
             g.bench_function("g_math/sin",  |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).sin())));
             g.bench_function("g_math/sqrt", |bn| bn.iter(|| evaluate(&black_box(gmath("2.0")).sqrt())));
+            g.bench_function("g_math/cos",  |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).cos())));
+            g.bench_function("g_math/tan",  |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).tan())));
+            g.bench_function("g_math/atan", |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).atan())));
+            g.bench_function("g_math/sinh", |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).sinh())));
+            g.bench_function("g_math/cosh", |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).cosh())));
+            g.bench_function("g_math/tanh", |bn| bn.iter(|| evaluate(&black_box(gmath("1.0")).tanh())));
         }
 
         // bigdecimal at this scale — construct mantissa via BigInt so
@@ -308,6 +332,12 @@ fn bench_d76(c: &mut Criterion) {
                 g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
                 g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
                 g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
+                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
+                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
             }
             76 => {
                 // D76<76> storage is ±~9, fits 2 and 1.
@@ -326,6 +356,12 @@ fn bench_d76(c: &mut Criterion) {
                 g.bench_function("fastnum/exp",  |bn| bn.iter(|| black_box(a).exp()));
                 g.bench_function("fastnum/sin",  |bn| bn.iter(|| black_box(a).sin()));
                 g.bench_function("fastnum/sqrt", |bn| bn.iter(|| black_box(a).sqrt()));
+                g.bench_function("fastnum/cos",  |bn| bn.iter(|| black_box(a).cos()));
+                g.bench_function("fastnum/tan",  |bn| bn.iter(|| black_box(a).tan()));
+                g.bench_function("fastnum/atan", |bn| bn.iter(|| black_box(a).atan()));
+                g.bench_function("fastnum/sinh", |bn| bn.iter(|| black_box(a).sinh()));
+                g.bench_function("fastnum/cosh", |bn| bn.iter(|| black_box(a).cosh()));
+                g.bench_function("fastnum/tanh", |bn| bn.iter(|| black_box(a).tanh()));
             }
         }
 
@@ -377,6 +413,12 @@ fn bench_d153(c: &mut Criterion) {
                 g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
                 g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
                 g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
+                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
+                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
             }
             153 => {
                 let a = D153::<153>::from_int(2); let b = D153::<153>::from_int(1);
@@ -394,6 +436,12 @@ fn bench_d153(c: &mut Criterion) {
                 g.bench_function("fastnum/exp",  |bn| bn.iter(|| black_box(a).exp()));
                 g.bench_function("fastnum/sin",  |bn| bn.iter(|| black_box(a).sin()));
                 g.bench_function("fastnum/sqrt", |bn| bn.iter(|| black_box(a).sqrt()));
+                g.bench_function("fastnum/cos",  |bn| bn.iter(|| black_box(a).cos()));
+                g.bench_function("fastnum/tan",  |bn| bn.iter(|| black_box(a).tan()));
+                g.bench_function("fastnum/atan", |bn| bn.iter(|| black_box(a).atan()));
+                g.bench_function("fastnum/sinh", |bn| bn.iter(|| black_box(a).sinh()));
+                g.bench_function("fastnum/cosh", |bn| bn.iter(|| black_box(a).cosh()));
+                g.bench_function("fastnum/tanh", |bn| bn.iter(|| black_box(a).tanh()));
             }
         }
 
@@ -441,6 +489,12 @@ fn bench_d307(c: &mut Criterion) {
                 g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
                 g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
                 g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
+                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
+                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
             }
             307 => {
                 let a = D307::<307>::from_int(2); let b = D307::<307>::from_int(1);
@@ -508,6 +562,12 @@ macro_rules! decl_new_tier_bench {
                         g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
                         g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
                         g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
+                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
+                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
                     }
                     s if s == $max => {
                         let a = $T::<$max>::from_int(2); let b = $T::<$max>::from_int(1);

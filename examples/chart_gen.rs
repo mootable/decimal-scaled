@@ -112,7 +112,8 @@ const CENTRE_SCALES: &[(&str, u32)] = &[
 ];
 
 const OP_ORDER: &[&str] = &[
-    "add", "sub", "neg", "mul", "div", "rem", "sqrt", "ln", "exp", "sin",
+    "add", "sub", "neg", "mul", "div", "rem", "sqrt",
+    "ln", "exp", "sin", "cos", "tan", "atan", "sinh", "cosh", "tanh",
 ];
 
 /// Render one chart per CENTRE_SCALES entry — a grouped bar chart with

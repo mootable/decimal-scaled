@@ -519,17 +519,43 @@ exists.
 
 ## 5. Where each crate fits
 
-This isn't a competition — the crates in this chapter solve
-different problems, and the right choice depends on your shape of
-problem rather than on who wins which row. The numbers below
-exist to help you decide *whether* you can use a given crate,
-not to crown a winner.
+### Two things this crate uniquely offers
+
+Before the cell-by-cell numbers, here's what `decimal-scaled`
+brings that no other crate in this comparison brings together:
+
+1. **≤ 0.5 ULP correctness on every transcendental, at every
+   shipped width, by default.** `ln` / `exp` / `sin` / `cos` /
+   `tan` / `sqrt` / `cbrt` / `powf` / `asin` / `acos` / `atan` /
+   `atan2` / `sinh` / `cosh` / `tanh` / `asinh` / `acosh` /
+   `atanh` / `to_degrees` / `to_radians` land within half an ULP
+   of the exact mathematical result, with bit-identical output
+   on every platform. Peers that ship transcendentals are
+   either fast-but-libm-precision (`g_math`), require manual
+   render-mode management to match (`fastnum`, `rust_decimal`),
+   or have an algorithmic precision gap (`dashu-float`).
+2. **First-class caller-chosen rounding mode at every lossy
+   operation.** The default is HalfToEven (the IEEE 754
+   default), but every `*` / `/` / `%`, every `rescale`, and
+   every strict transcendental has a `*_with(mode)` sibling
+   accepting `RoundingMode::{HalfToEven, HalfAwayFromZero,
+   HalfTowardZero, Ceiling, Floor, Trunc}`. The crate-wide
+   default is also selectable at compile time via the
+   `rounding-*` Cargo features. Useful when you need to
+   bit-match an external system (ASTM E29, NUMERIC, MS-Excel,
+   bank statement) without forking the library.
+
+This isn't a competition — the crates below solve different
+problems, and the right choice depends on the shape of your
+problem rather than on who wins which row. The numbers exist
+to help you decide *whether* you can use a given crate, not to
+crown a winner.
 
 A starter map of where each crate sits naturally:
 
 | Crate                | Storage shape                    | Strength                                                                | Cost                                                                  |
 |----------------------|----------------------------------|-------------------------------------------------------------------------|-----------------------------------------------------------------------|
-| **decimal-scaled**   | Stack `[u64; L]`, compile-time SCALE | 0-ULP HalfToEven by default, `no_std`, const-fn arithmetic, deterministic | Wide-tier mul / div cost (catch-up work tracked in Roadmap)           |
+| **decimal-scaled**   | Stack `[u64; L]`, compile-time SCALE | ≤ 0.5 ULP correctness on every transcendental, `*_with(mode)` siblings for every lossy op, `no_std`, const-fn arithmetic, deterministic | Wide-tier mul / div cost (catch-up work tracked in Roadmap)           |
 | **fastnum**          | Stack fixed-width decimal (D128 / D256 / D512) | Very fast transcendentals at fixed internal precision (38 / 75 / 155 digits) | No SCALE generic; renders with truncation so the user picks the mode  |
 | **rust_decimal**     | 96-bit mantissa, runtime scale   | The database `NUMERIC` shape; serde-friendly; widely deployed             | ~10× slower arithmetic than a stack decimal at the same precision     |
 | **decimal-rs**       | 128-bit, runtime scale           | Compact, fast at D128                                                   | Capped at i128 width; no wide tiers                                   |
