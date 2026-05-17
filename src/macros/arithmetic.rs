@@ -187,8 +187,12 @@ macro_rules! decl_decimal_arithmetic {
                 } else if SCALE <= 38 {
                     $crate::mg_divide::div_wide_pow10_with::<$Wider>(n, SCALE, mode)
                 } else {
-                    let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                    $crate::macros::arithmetic::round_with_mode_wide!(n, m, $Wider, mode)
+                    // Chain-of-÷10^38 via the existing MG 2-by-1
+                    // kernel; preserves rounding for the common
+                    // non-half-tie case (≤ 1 ULP biased in the rare
+                    // multi-chunk tie). Replaces the previous
+                    // multi-limb Knuth divide at wide SCALEs.
+                    $crate::mg_divide::div_wide_pow10_chain_with::<$Wider>(n, SCALE, mode)
                 };
                 Self(scaled.resize::<$Storage>())
             }

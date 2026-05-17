@@ -17,6 +17,7 @@ fn bench(c: &mut Criterion) {
         let b = D307::<150>::from_int(1);
         g.bench_function("D307<150>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
         g.bench_function("D307<150>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+
     }
     {
         let a = D615::<308>::from_int(2);

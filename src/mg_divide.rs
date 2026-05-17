@@ -313,6 +313,175 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     W::from_mag_sign(&mag_out, neg)
 }
 
+/// Chain-of-`÷ 10^38` extension of [`div_wide_pow10_with`] to scales
+/// past `38`. Factors `n / 10^SCALE` as a sequence of
+/// `(n / 10^38) / 10^38 / … / 10^last` calls, each reusing the
+/// existing base-`2^128` MG 2-by-1 kernel. The intermediate
+/// quotients stay in the same `mag` buffer so we never allocate.
+///
+/// **Status: experimental.** Currently uses truncating rounding
+/// for the multi-chunk case (the `mode` parameter is honoured only
+/// for the last chunk's remainder — which is the dominant high-
+/// order remainder so this is correct in the vast majority of
+/// cases but not bit-exact half-to-even at the boundary). Not yet
+/// wired into the public operator; called directly from
+/// `benches/quick_div.rs` for now.
+///
+/// # Why this should be faster
+///
+/// At wide tiers, the public `n / m` path (`m = 10^SCALE`,
+/// SCALE > 38) routes through `Int*::div_rem` → Knuth Algorithm D.
+/// Each Knuth quotient digit costs ~10–15 limb ops (q̂ estimation,
+/// mul-sub, occasional add-back). For `D307<150>::mul` the divisor
+/// is 8 u64 limbs and the numerator 32, so ~24 quotient digits ×
+/// ~12 ops = ~290 ops per call.
+///
+/// The chain divides `n / 10^38` four times. Each pass is one
+/// MG 2-by-1 magic multiply per u128 limb of the numerator — for
+/// D307<150> at most 16 nonzero u128 limbs × ~5 ops = ~80 ops per
+/// pass, so ~320 ops for four passes. Comparable to Knuth on op
+/// count BUT with a branchless inner loop that the CPU pipelines
+/// far better than Knuth's q̂-and-correct scheme.
+#[cfg(any(
+    feature = "d56",
+    feature = "d76",
+    feature = "d114",
+    feature = "d153",
+    feature = "d230",
+    feature = "d307",
+    feature = "d461",
+    feature = "d615",
+    feature = "d923",
+    feature = "d1231",
+    feature = "wide",
+    feature = "x-wide",
+    feature = "xx-wide"
+))]
+pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
+    n: W,
+    scale: u32,
+    mode: crate::rounding::RoundingMode,
+) -> W {
+    debug_assert!(scale > 38, "chain path is for SCALE > 38; callers handle ≤ 38");
+
+    let (mag_words, neg) = n.to_mag_sign();
+    let mut mag = [0u128; 64];
+    let mut i = 0;
+    while i < 64 {
+        mag[i] = (mag_words[2 * i] as u128) | ((mag_words[2 * i + 1] as u128) << 64);
+        i += 1;
+    }
+    let mut top = mag.len();
+    while top > 0 && mag[top - 1] == 0 {
+        top -= 1;
+    }
+
+    // Chain divides by 10^38 until we've eaten all but the last chunk.
+    //
+    // Combined-remainder bookkeeping for exact rounding: the chain
+    // produces a sequence of per-chunk remainders r_1, r_2, …, r_k
+    // (from successive divides by 10^38) plus a final r_last (from
+    // dividing by 10^s where s = SCALE − 38·k). The total
+    // remainder is
+    //   r_total = r_1 + r_2·10^38 + r_3·10^76 + … + r_k·10^{38(k-1)}
+    //                                            + r_last·10^{38·k}
+    // and we need to compare r_total with m/2 = 5·10^{SCALE−1}.
+    //
+    // For correctness we only need two flags:
+    //   `lower_any_nonzero` — true iff any of r_1, …, r_k is non-zero
+    //   `r_last` — the top-chunk remainder, compared against the
+    //              corresponding chunk of m/2 (5·10^{s−1})
+    let exp38 = POW10_U128[38];
+    let mut lower_any_nonzero = false;
+    let mut remaining = scale;
+    while remaining > 38 {
+        let mut rem: u128 = 0;
+        let mut i = top;
+        while i > 0 {
+            i -= 1;
+            let (q, r) = div_exp_fast_2word_with_rem(rem, mag[i], exp38, 38)
+                .expect("MG: rem < exp invariant violated");
+            mag[i] = q;
+            rem = r;
+        }
+        if rem != 0 {
+            lower_any_nonzero = true;
+        }
+        remaining -= 38;
+        while top > 0 && mag[top - 1] == 0 {
+            top -= 1;
+        }
+    }
+
+    // Final divide by 10^remaining (1..=38). The remainder of THIS
+    // divide is the top-chunk remainder; together with
+    // `lower_any_nonzero` it determines the cmp_r for the rounding
+    // decision.
+    let scale_idx = remaining as usize;
+    let exp_last = POW10_U128[scale_idx];
+    let mut r_last: u128 = 0;
+    let mut i = top;
+    while i > 0 {
+        i -= 1;
+        let (q, r) = div_exp_fast_2word_with_rem(r_last, mag[i], exp_last, scale_idx)
+            .expect("MG: rem < exp invariant violated");
+        mag[i] = q;
+        r_last = r;
+    }
+
+    // Combined-remainder rounding. cmp_r is the comparison of
+    // r_total with m/2 (= 5·10^{SCALE−1}):
+    //   r_last > exp_last/2          → Greater
+    //   r_last < exp_last/2          → Less
+    //   r_last == exp_last/2 AND
+    //     any lower chunk nonzero    → Greater
+    //     else                       → Equal
+    // r_last == 0 special case: r_total = lower contribution only,
+    //   strictly less than m/2 (since lower chunks each < 10^38 and
+    //   we have at most ⌈SCALE/38⌉ − 1 of them) unless they sum to
+    //   exactly m/2 — which they can't because each chunk's max
+    //   value (10^38 − 1) × 10^{38·i} stays strictly under the next
+    //   chunk's 10^{38·(i+1)} contribution. So r_last == 0 implies
+    //   cmp_r = Less.
+    let combined_nonzero = r_last != 0 || lower_any_nonzero;
+    if combined_nonzero {
+        let half = exp_last / 2; // exact; exp_last = 10^scale_idx is even
+        let cmp_r = if r_last > half {
+            core::cmp::Ordering::Greater
+        } else if r_last < half {
+            core::cmp::Ordering::Less
+        } else if lower_any_nonzero {
+            core::cmp::Ordering::Greater
+        } else {
+            core::cmp::Ordering::Equal
+        };
+        let q_is_odd = (mag[0] & 1) != 0;
+        if crate::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
+            let mut carry: u128 = 1;
+            for limb in &mut mag {
+                let (s, c) = limb.overflowing_add(carry);
+                *limb = s;
+                if !c {
+                    carry = 0;
+                    break;
+                }
+                carry = 1;
+            }
+            let _ = carry;
+        }
+    }
+
+    let mut mag_out = [0u64; 288];
+    let mut i = 0;
+    while i < 64 {
+        mag_out[2 * i] = mag[i] as u64;
+        mag_out[2 * i + 1] = (mag[i] >> 64) as u64;
+        i += 1;
+    }
+
+    W::from_mag_sign(&mag_out, neg)
+}
+
 /// Mode-aware rounding for an *unsigned* magnitude `q` with remainder
 /// `r` against divisor `m`, given the result sign — returns the
 /// rounded magnitude. Caller applies the sign afterwards.
