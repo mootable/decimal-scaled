@@ -202,6 +202,14 @@ name = "library_comparison"
 harness = false
 required-features = ["wide", "x-wide"]
 
+# Focused microbench for wide-tier div/mul during tuning passes.
+# Runs in ~30s, used to validate per-change wins before kicking the
+# full library_comparison sweep.
+[[bench]]
+name = "quick_div"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide"]
+
 [lints.rust]
 unused_variables = "allow"
 dead_code = "allow"

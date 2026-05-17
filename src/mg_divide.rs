@@ -224,11 +224,19 @@ fn div_exp_fast_2word_with_rem(
 /// `crate::wide_int` — it's only invoked from the wide-tier
 /// decimal `Mul` macro arm.
 #[cfg(any(
+    feature = "d56",
     feature = "d76",
+    feature = "d114",
     feature = "d153",
+    feature = "d230",
     feature = "d307",
+    feature = "d461",
+    feature = "d615",
+    feature = "d923",
+    feature = "d1231",
     feature = "wide",
-    feature = "x-wide"
+    feature = "x-wide",
+    feature = "xx-wide"
 ))]
 #[inline]
 pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
