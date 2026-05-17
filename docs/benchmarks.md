@@ -335,6 +335,17 @@ and substantially slower than the f64 path.
 
 ### 2.1 Per-tier accuracy loss
 
+Unlike the ≤ 0.5 ULP guarantee of the default `*_strict`
+transcendentals, `*_fast` is meant to be exactly that: fast.
+It deliberately makes no accuracy guarantees. It exists as an
+escape hatch for situations where some precision can be
+dropped — typically when the strict path is what you compute
+with, but the result is then handed to something that only
+makes sense at f64 precision anyway (graphics hardware, libm
+shape-matching, an interop boundary that's f64 to begin with).
+For anything where last-digit accuracy or cross-platform
+determinism matters, stay on the default `*_strict` path.
+
 Each `*_fast` result inherits f64's ~16 decimal-digit mantissa.
 After scaling back into the type's `[u64; L]` storage, the
 result's low-order digits are pure noise / zero-fill — the f64
