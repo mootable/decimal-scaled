@@ -1116,6 +1116,20 @@ pub(crate) const fn limbs_is_zero_u64(a: &[u64]) -> bool {
     true
 }
 
+/// Fixed-width specialisation of [`limbs_is_zero_u64`]. `L` const at
+/// callsite, lets LLVM unroll for small `L`.
+#[inline]
+pub(crate) const fn limbs_is_zero_u64_fixed<const L: usize>(a: &[u64; L]) -> bool {
+    let mut i = 0;
+    while i < L {
+        if a[i] != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
 /// `a == b` for two limb slices of possibly different lengths.
 #[inline]
 pub(crate) const fn limbs_eq_u64(a: &[u64], b: &[u64]) -> bool {
@@ -1151,10 +1165,40 @@ pub(crate) const fn limbs_cmp_u64(a: &[u64], b: &[u64]) -> i32 {
     0
 }
 
+/// Fixed-width specialisation of [`limbs_cmp_u64`] — both operands
+/// the same `L`; no length-difference handling needed.
+#[inline]
+pub(crate) const fn limbs_cmp_u64_fixed<const L: usize>(a: &[u64; L], b: &[u64; L]) -> i32 {
+    let mut i = L;
+    while i > 0 {
+        i -= 1;
+        if a[i] < b[i] {
+            return -1;
+        }
+        if a[i] > b[i] {
+            return 1;
+        }
+    }
+    0
+}
+
 /// Bit length (`0` for zero, else `floor(log2)+1`).
 #[inline]
 pub(crate) const fn limbs_bit_len_u64(a: &[u64]) -> u32 {
     let mut i = a.len();
+    while i > 0 {
+        i -= 1;
+        if a[i] != 0 {
+            return (i as u32) * 64 + (64 - a[i].leading_zeros());
+        }
+    }
+    0
+}
+
+/// Fixed-width specialisation of [`limbs_bit_len_u64`].
+#[inline]
+pub(crate) const fn limbs_bit_len_u64_fixed<const L: usize>(a: &[u64; L]) -> u32 {
+    let mut i = L;
     while i > 0 {
         i -= 1;
         if a[i] != 0 {
@@ -1180,6 +1224,25 @@ pub(crate) const fn limbs_add_assign_u64(a: &mut [u64], b: &[u64]) -> bool {
     carry != 0
 }
 
+/// Fixed-width specialisation of [`limbs_add_assign_u64`] — both
+/// operands the same `L`.
+#[inline]
+pub(crate) const fn limbs_add_assign_u64_fixed<const L: usize>(
+    a: &mut [u64; L],
+    b: &[u64; L],
+) -> bool {
+    let mut carry: u64 = 0;
+    let mut i = 0;
+    while i < L {
+        let (s1, c1) = a[i].overflowing_add(b[i]);
+        let (s2, c2) = s1.overflowing_add(carry);
+        a[i] = s2;
+        carry = (c1 as u64) + (c2 as u64);
+        i += 1;
+    }
+    carry != 0
+}
+
 /// `a -= b`, returns borrow out. `a.len() >= b.len()`.
 #[inline]
 pub(crate) const fn limbs_sub_assign_u64(a: &mut [u64], b: &[u64]) -> bool {
@@ -1194,6 +1257,88 @@ pub(crate) const fn limbs_sub_assign_u64(a: &mut [u64], b: &[u64]) -> bool {
         i += 1;
     }
     borrow != 0
+}
+
+/// Fixed-width specialisation of [`limbs_sub_assign_u64`].
+#[inline]
+pub(crate) const fn limbs_sub_assign_u64_fixed<const L: usize>(
+    a: &mut [u64; L],
+    b: &[u64; L],
+) -> bool {
+    let mut borrow: u64 = 0;
+    let mut i = 0;
+    while i < L {
+        let (d1, b1) = a[i].overflowing_sub(b[i]);
+        let (d2, b2) = d1.overflowing_sub(borrow);
+        a[i] = d2;
+        borrow = (b1 as u64) + (b2 as u64);
+        i += 1;
+    }
+    borrow != 0
+}
+
+/// Fixed-width specialisation of [`limbs_shl_u64`]. `L` const, but
+/// `shift` is still runtime — bounds checks vanish, the inner loop
+/// trip count is known.
+#[inline]
+pub(crate) const fn limbs_shl_u64_fixed<const L: usize>(
+    a: &[u64; L],
+    shift: u32,
+    out: &mut [u64; L],
+) {
+    let mut z = 0;
+    while z < L {
+        out[z] = 0;
+        z += 1;
+    }
+    let limb_shift = (shift / 64) as usize;
+    let bit = shift % 64;
+    let mut i = 0;
+    while i < L {
+        let dst = i + limb_shift;
+        if dst < L {
+            if bit == 0 {
+                out[dst] |= a[i];
+            } else {
+                out[dst] |= a[i] << bit;
+                if dst + 1 < L {
+                    out[dst + 1] |= a[i] >> (64 - bit);
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Fixed-width specialisation of [`limbs_shr_u64`].
+#[inline]
+pub(crate) const fn limbs_shr_u64_fixed<const L: usize>(
+    a: &[u64; L],
+    shift: u32,
+    out: &mut [u64; L],
+) {
+    let mut z = 0;
+    while z < L {
+        out[z] = 0;
+        z += 1;
+    }
+    let limb_shift = (shift / 64) as usize;
+    let bit = shift % 64;
+    let mut i = limb_shift;
+    while i < L {
+        let dst = i - limb_shift;
+        if dst < L {
+            if bit == 0 {
+                out[dst] |= a[i];
+            } else {
+                out[dst] |= a[i] >> bit;
+                if dst >= 1 {
+                    out[dst - 1] |= a[i] << (64 - bit);
+                }
+            }
+        }
+        i += 1;
+    }
 }
 
 /// `out = a << shift`. `out` is zeroed then filled.
