@@ -12,6 +12,14 @@ transcendental tested at every tier, and stays that way. The
 roadmap is throughput-only - give people a way to keep the
 exactness when they need it and an opt-out when they don't.
 
+## Versioning intent
+
+| target | gating work |
+|--------|-------------|
+| **0.3.0** | The current development cycle. Ships: the half-width tier ladder (D56 / D114 / D230 / D461 / D615 / D923 / D1231); the comprehensive cross-tier `widen()` / `narrow()` chain (breaking — D38.widen() now returns D56, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); MG magic-multiply table extension across every wide-tier SCALE; trig functions in the per-width summary chart family. |
+| **0.4.0** | Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension landed in 0.3, so the table generator just emits a wider `k` range. |
+| **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
+
 ---
 
 ## Wide-tier `÷ 10^SCALE` - primary bottleneck
