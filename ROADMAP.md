@@ -142,6 +142,19 @@ roadmap item here unless the accuracy contract changes.
 
 ---
 
+## Wide-tier MG magic-multiply extension + negative SCALE
+
+| approach | status | expected win |
+|---|---|---|
+| Extend the Möller–Granlund magic-multiply tables past `10^38` to cover every wide-tier SCALE (target: `10^SCALE` for `SCALE` up to the tier MAX_SCALE) so the `÷10^SCALE` step on D76 and above swaps multi-limb Knuth divide for one magic multiply + a fix-up | TODO | est. 3–10× on wide-tier mul/div per the 2026-05-17 gap research |
+| Make `SCALE` signed (i32) so callers can express implicit-trailing-zero magnitudes (D38<-3> = "stored value × 10³"); orthogonal to the magic-multiply work but shares the per-tier `10^k` constant tables — a single tables-rewrite covers both | TODO | enables values up to `±i128::MAX × 10^(-SCALE)` without burning storage on zero-padding; common in actuarial / national-accounts work |
+
+See `research/2026_05_17_wide_mul_div_gap.md` for the gap
+analysis and `research/2026_05_17_mg_magic_extension_eval.md` for
+the design eval combining both items.
+
+---
+
 ## Out-of-tree adapter crates
 
 The core crate is deliberately compile-time-fixed-precision: a
