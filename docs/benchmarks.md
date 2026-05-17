@@ -61,9 +61,16 @@ exercising.
 | D9 | `i32` | `i64` | hardware `i64 / i64` |
 | D18 | `i64` | `i128` | hardware `i128 / i128` |
 | D38 | `i128` | hand-rolled 256-bit `Fixed` | **Möller–Granlund 2011** magic-multiply for `÷ 10^SCALE`; `mg_divide` |
-| D76 | `Int256` (2×u128) | `Int512` | MG magic-multiply lifted to limb arithmetic (`div_wide_pow10`) |
-| D153 | `Int512` | `Int1024` | MG, same path |
-| D307 | `Int1024` | `Int2048` | MG, same path |
+| D56 | `Int192` (3×u64) | `Int384` | MG magic-multiply lifted to limb arithmetic |
+| D76 | `Int256` (4×u64) | `Int512` | MG, same path |
+| D114 | `Int384` (6×u64) | `Int768` | MG, same path |
+| D153 | `Int512` (8×u64) | `Int1024` | MG, same path |
+| D230 | `Int768` (12×u64) | `Int1536` | MG, same path |
+| D307 | `Int1024` (16×u64) | `Int2048` | MG, same path |
+| D461 | `Int1536` (24×u64) | `Int3072` | MG, same path |
+| D615 | `Int2048` (32×u64) | `Int4096` | MG, same path |
+| D923 | `Int3072` (48×u64) | `Int6144` | MG, same path |
+| D1231 | `Int4096` (64×u64) | `Int8192` | MG, same path |
 
 For the strict transcendentals:
 
@@ -71,9 +78,16 @@ For the strict transcendentals:
 |---|---|---|---|
 | D9 / D18 | delegates to D38 | - | (see D38 row) |
 | D38 | `d_w128_kernels::Fixed` (256-bit sign-magnitude) | 60 | artanh series for `ln`, range-reduced Taylor for `exp`, Cody–Waite for `sin`/`cos`, Machin for π, integer `isqrt` for `sqrt` |
+| D56 | `Int512` | 30 | same kernel family as D76, lifted to the half-width work integer |
 | D76 | `Int1024` | 30 | rounded `mul` / `div` (half-to-even per op); same series as D38 lifted to the limb-array core |
+| D114 | `Int1024` | 30 | same |
 | D153 | `Int2048` | 30 | same |
+| D230 | `Int3072` | 30 | same |
 | D307 | `Int4096` | 30 | same |
+| D461 | `Int4096` | 30 | same |
+| D615 | `Int8192` | 30 | same |
+| D923 | `Int12288` | 30 | same |
+| D1231 | `Int16384` | 30 | same |
 
 Alternate transcendental paths (alongside the canonical above,
 exposed under `bench-alt`):
