@@ -1395,6 +1395,84 @@ pub(crate) const fn limbs_divmod_u64(
     }
 }
 
+/// `out = a · a` using the squaring fast path: ~`n(n+1)/2` widening
+/// multiplies vs schoolbook's `n²`, by computing each off-diagonal
+/// cross-product once, doubling the sum, then adding the diagonal
+/// `aᵢ²` terms. `out.len() >= 2·a.len()` and `out` must be zeroed.
+///
+/// Reference: Knuth TAOCP Vol 2 §4.3.1 exercise 26; Crandall & Pomerance,
+/// *Prime Numbers: A Computational Perspective*, 2nd ed., 2005, §9.2.1.
+pub(crate) const fn limbs_sqr_u64(a: &[u64], out: &mut [u64]) {
+    let n = a.len();
+    // Step 1 — off-diagonal cross-products into `out`. For each i,
+    // accumulate `a[i] * a[j]` for `j > i` at position `i+j`.
+    let mut i = 0;
+    while i < n {
+        if a[i] != 0 {
+            let mut carry: u64 = 0;
+            let mut j = i + 1;
+            while j < n {
+                let prod = (a[i] as u128) * (a[j] as u128);
+                let prod_lo = prod as u64;
+                let prod_hi = (prod >> 64) as u64;
+                let idx = i + j;
+                let (s1, c1) = out[idx].overflowing_add(prod_lo);
+                let (s2, c2) = s1.overflowing_add(carry);
+                out[idx] = s2;
+                carry = prod_hi + (c1 as u64) + (c2 as u64);
+                j += 1;
+            }
+            let mut idx = i + n;
+            while carry != 0 && idx < out.len() {
+                let (s, c) = out[idx].overflowing_add(carry);
+                out[idx] = s;
+                carry = c as u64;
+                idx += 1;
+            }
+        }
+        i += 1;
+    }
+    // Step 2 — double the cross-product sum (left shift by 1).
+    let mut carry: u64 = 0;
+    let mut k = 0;
+    while k < out.len() {
+        let new_carry = out[k] >> 63;
+        out[k] = (out[k] << 1) | carry;
+        carry = new_carry;
+        k += 1;
+    }
+    // Step 3 — add the diagonal `a[i]²` at position `2i`.
+    let mut i = 0;
+    while i < n {
+        let sq = (a[i] as u128) * (a[i] as u128);
+        let sq_lo = sq as u64;
+        let sq_hi = (sq >> 64) as u64;
+        let idx_lo = 2 * i;
+        if idx_lo >= out.len() {
+            i += 1;
+            continue;
+        }
+        let (s, c_lo) = out[idx_lo].overflowing_add(sq_lo);
+        out[idx_lo] = s;
+        let mut carry: u64 = c_lo as u64;
+        let idx_hi = idx_lo + 1;
+        if idx_hi < out.len() {
+            let (s1, c1) = out[idx_hi].overflowing_add(sq_hi);
+            let (s2, c2) = s1.overflowing_add(carry);
+            out[idx_hi] = s2;
+            carry = (c1 as u64) + (c2 as u64);
+            let mut kk = idx_hi + 1;
+            while carry != 0 && kk < out.len() {
+                let (s, c) = out[kk].overflowing_add(carry);
+                out[kk] = s;
+                carry = c as u64;
+                kk += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
 /// Scratch capacity for the runtime u64-limb kernels — 144 u64 limbs
 /// (9216 bits), matching the u128 path's 72-limb scratch.
 // 288 u64 limbs = 18432 bits — covers the widest work integer in
@@ -2461,6 +2539,23 @@ mod slice_tests {
 
                 assert_eq!(unpack(&out64), out128, "limbs_mul mismatch");
             }
+        }
+    }
+
+    /// `limbs_sqr_u64(a)` matches `limbs_mul_u64(a, a)` for every input
+    /// in the corpus. The squaring fast path uses ~n(n+1)/2 multiplies
+    /// instead of n² — this proves the algebra holds for the worst-case
+    /// carry patterns the corpus exercises (all-ones limbs, alternating
+    /// hi-bit-set, sparse zeros).
+    #[test]
+    fn limbs_sqr_u64_matches_mul_self() {
+        for a in corpus() {
+            let a64 = pack(&a);
+            let mut out_mul = alloc::vec![0u64; 2 * a64.len()];
+            limbs_mul_u64(&a64, &a64, &mut out_mul);
+            let mut out_sqr = alloc::vec![0u64; 2 * a64.len()];
+            limbs_sqr_u64(&a64, &mut out_sqr);
+            assert_eq!(out_sqr, out_mul, "limbs_sqr_u64 mismatch for {:?}", a64);
         }
     }
 

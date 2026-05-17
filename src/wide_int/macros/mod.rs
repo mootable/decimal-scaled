@@ -525,6 +525,41 @@ macro_rules! decl_wide_int {
                     ::core::option::Option::Some(self.negate())
                 }
             }
+            /// `self · self`, returning `None` on overflow. ~50% fewer
+            /// widening multiplies than `checked_mul(self, self)` via the
+            /// squaring fast path in [`limbs_sqr_u64`].
+            #[inline]
+            pub(crate) const fn checked_sqr(self) -> ::core::option::Option<$S> {
+                let mut prod = [0u64; $D];
+                $crate::wide_int::limbs_sqr_u64(&self.unsigned_abs().0, &mut prod);
+                let (_lo, hi) = prod.split_at($L);
+                if !$crate::wide_int::limbs_is_zero_u64(hi) {
+                    return ::core::option::Option::None;
+                }
+                // self · self is always non-negative.
+                let r = $S::from_mag_limbs(prod.split_at($L).0, false);
+                if r.is_negative() {
+                    return ::core::option::Option::None;
+                }
+                ::core::option::Option::Some(r)
+            }
+            /// `self · self` panicking on overflow. See [`checked_sqr`].
+            #[inline]
+            pub(crate) fn square(self) -> $S {
+                self.checked_sqr()
+                    .expect(concat!(stringify!($S), ": square overflow"))
+            }
+            /// `self · self` widened into a `W: WideInt`. Squaring
+            /// variant of [`widen_mul`]; same call shape but uses
+            /// [`limbs_sqr_u64`] for ~50% fewer widening multiplies.
+            #[inline]
+            pub(crate) fn widen_sqr<W: $crate::wide_int::WideInt>(self) -> W {
+                let a = self.unsigned_abs();
+                let mut prod = [0u64; $D];
+                $crate::wide_int::limbs_sqr_u64(&a.0, &mut prod);
+                // self · self is always non-negative.
+                W::from_mag_sign(&prod, false)
+            }
             pub(crate) const fn checked_mul(self, rhs: $S) -> ::core::option::Option<$S> {
                 let negative = self.is_negative() ^ rhs.is_negative();
                 let mut prod = [0u64; $D];

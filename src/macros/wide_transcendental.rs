@@ -174,6 +174,16 @@ macro_rules! decl_wide_transcendental {
             pub(super) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
                 round_div(a * b, pow10_w)
             }
+            /// Squaring variant of [`mul_cached`] — `(a · a) / 10^w`,
+            /// rounded half-to-even. Uses the dedicated squaring fast
+            /// path (`limbs_sqr_u64`) for ~50% fewer widening
+            /// multiplies than `mul_cached(a, a, …)`. Hot in the exp
+            /// postfix squaring chain, the AGM/Newton inner loops,
+            /// and every Taylor-`x²` precomputation.
+            #[inline]
+            pub(super) fn sqr_cached(a: W, pow10_w: W) -> W {
+                round_div(a.square(), pow10_w)
+            }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(super) fn div(a: W, b: W, w: u32) -> W {
@@ -373,7 +383,7 @@ macro_rules! decl_wide_transcendental {
                 }
 
                 let t = div_cached(m_w - one_w, m_w + one_w, pow10_w);
-                let t2 = mul_cached(t, t, pow10_w);
+                let t2 = sqr_cached(t, pow10_w);
                 let mut sum = t;
                 let mut term = t;
                 let mut j: u128 = 1;
@@ -597,7 +607,7 @@ macro_rules! decl_wide_transcendental {
                 let mut squared = sum;
                 let mut i = 0;
                 while i < n {
-                    squared = mul_cached(squared, squared, pow10_w);
+                    squared = sqr_cached(squared, pow10_w);
                     i += 1;
                 }
                 let sum = squared;
@@ -623,7 +633,7 @@ macro_rules! decl_wide_transcendental {
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
             pub(super) fn atan_taylor(x: W, w: u32) -> W {
                 let pow10_w = pow10(w);
-                let x2 = mul_cached(x, x, pow10_w);
+                let x2 = sqr_cached(x, pow10_w);
                 let mut sum = x;
                 let mut term = x;
                 let mut k: u128 = 1;
@@ -758,7 +768,7 @@ macro_rules! decl_wide_transcendental {
             /// `sin(r) = r − r³/3! + r⁵/5! − …`
             fn sin_taylor(r: W, w: u32) -> W {
                 let pow10_w = pow10(w);
-                let r2 = mul_cached(r, r, pow10_w);
+                let r2 = sqr_cached(r, pow10_w);
                 let mut sum = r;
                 let mut term = r;
                 let mut k: u128 = 1;
@@ -790,7 +800,7 @@ macro_rules! decl_wide_transcendental {
             /// [`sin_fixed`] when the reduced argument exceeds π/4.
             fn cos_taylor(r: W, w: u32) -> W {
                 let pow10_w = pow10(w);
-                let r2 = mul_cached(r, r, pow10_w);
+                let r2 = sqr_cached(r, pow10_w);
                 let one_w = one(w);
                 let mut sum = one_w;
                 let mut term = one_w;
