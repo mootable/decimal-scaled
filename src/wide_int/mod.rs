@@ -1880,7 +1880,16 @@ pub(crate) fn limbs_divmod_bz_u64(
     rem[..rem_n].copy_from_slice(&carry[..rem_n]);
 }
 
-/// `out = floor(sqrt(n))`. Same Newton iteration as [`limbs_isqrt`].
+/// `out = floor(sqrt(n))`. Newton iteration on top of the runtime
+/// divide dispatcher.
+///
+/// History: this routine previously called the *const* [`limbs_divmod_u64`]
+/// per iteration, which routes multi-limb divisors through the
+/// O(bits²) shift-subtract path. At Int4096 (n=64 u64 limbs) that
+/// dominates wall time — Newton converges in ~log₂(b) ≈ 12 iterations,
+/// each one a `~65k`-limb-op divmod. Switching to
+/// [`limbs_divmod_dispatch_u64`] gets Knuth-base-2⁶⁴ per iteration
+/// (~`~32²` = 1024 limb-ops), worth ~40× on D307 sqrt.
 pub(crate) fn limbs_isqrt_u64(n: &[u64], out: &mut [u64]) {
     for o in out.iter_mut() {
         *o = 0;
@@ -1901,7 +1910,7 @@ pub(crate) fn limbs_isqrt_u64(n: &[u64], out: &mut [u64]) {
     loop {
         let mut q = [0u64; SCRATCH_LIMBS_U64];
         let mut r = [0u64; SCRATCH_LIMBS_U64];
-        limbs_divmod_u64(n, &x[..work], &mut q[..work], &mut r[..work]);
+        limbs_divmod_dispatch_u64(n, &x[..work], &mut q[..work], &mut r[..work]);
         limbs_add_assign_u64(&mut q[..work], &x[..work]);
         let mut y = [0u64; SCRATCH_LIMBS_U64];
         limbs_shr_u64(&q[..work], 1, &mut y[..work]);

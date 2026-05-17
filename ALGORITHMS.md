@@ -41,39 +41,103 @@ Further reading:
 - Niels Möller's homepage: <https://www.lysator.liu.se/~nisse/>
 - Torbjörn Granlund's homepage (GMP project): <https://gmplib.org/~tege/>
 
-### Base-2¹²⁸ schoolbook multiplication
+### Limb storage shape — `[u64; 2·N]`
 
-Standard `O(n²)` algorithm; for `n ≤ 4` limbs the constant factor is
-small enough that more sophisticated algorithms (Karatsuba,
-Toom-Cook) lose to it on this crate's operand sizes.
-Implementation: `src/wide_int/mod.rs::limbs_mul`, with a hand-unrolled
-2×2 fast path.
+The wide-integer types (`Int256` through `Int4096`) are stored as
+little-endian `[u64; 2·N]` arrays — twice the `u128`-equivalent limb
+count quoted in their names. The choice exposes native `u64 × u64 →
+u128` and `u128 / u64` hardware instructions directly (Zen 4 / Intel
+Golden Cove issue one widening 64×64 mul per cycle in steady state)
+where the historical `[u128; N]` layout had to soft-emulate every
+mul as four `u64 × u64` sub-products plus a nested carry chain. The
+public `from_limbs_le([u128; N])` / `limbs_le() -> [u128; N]` API
+preserves its u128-shaped signatures via a 4-line const-fn boundary
+conversion, so the wire format and downstream pattern-matching stay
+bit-stable.
+
+Implementation: every `limbs_*_u64` routine in
+`src/wide_int/mod.rs`; the `$U` / `$S` storage in
+`src/wide_int/macros/mod.rs`.
+
+### Base-2⁶⁴ schoolbook multiplication
+
+Standard `O(n²)` schoolbook on u64 limbs, using the native
+`u64 × u64 → u128` widening multiply for each sub-product.
+Karatsuba was implemented (and tested) but lost to schoolbook at
+every tier this crate emits because the per-cycle widening mul
+throughput beats Karatsuba's `3·(n/2)² + add/sub` overhead until
+`n > ~64` limbs (beyond our widest tier). The Karatsuba code is
+retained in `src/wide_int/mod.rs` (u128-base) as a reference / future
+SIMD baseline.
+Implementation: `src/wide_int/mod.rs::limbs_mul_u64`.
 
 Further reading:
 
 - Wikipedia - [Multiplication algorithm](https://en.wikipedia.org/wiki/Multiplication_algorithm)
 - Wolfram MathWorld - [Multiplication](https://mathworld.wolfram.com/Multiplication.html)
 
+### Möller–Granlund 2-by-1 invariant reciprocal in Knuth's q̂ loop
+
+Inside [`Knuth Algorithm D`](#knuth-algorithm-d-multi-limb-divide),
+each quotient limb's q̂ estimate would otherwise cost a 64-iteration
+bit-recovery loop. Precomputing the divisor's 2-by-1 reciprocal
+(Möller-Granlund Algorithm 4) once per call collapses the q̂ step
+to ~2 multiplies plus a constant fix-up. Setup cost is one hardware
+`u128 / u64` divide; amortised across the `m + 1` quotient-limb
+estimations the per-limb work drops by ~30×.
+
+> Möller, N. and Granlund, T. (2011). **"Improved Division by
+> Invariant Integers."** *IEEE Transactions on Computers* **60(2)**,
+> 165–175.
+
+Implementation: `src/wide_int/mod.rs::MG2by1U64`.
+
+A 3-by-2 sibling (`MG3by2U64`, also implemented per MG Algorithm 5
+with GMP's `invert_pi1` reciprocal refinement) is kept available for
+arbitrary-divisor use cases. It was *not* faster than 2-by-1 +
+refinement loop on decimal divisors because the refinement loop
+almost never fires for our (well-conditioned) divisors, so the
+3-by-2's per-call extra multiply costs more than it saves.
+
+### Knuth Algorithm D — multi-limb divide
+
+Textbook Algorithm D (Knuth, TAOCP Vol. 2, §4.3.1) adapted to base
+2⁶⁴. Normalise the divisor so its top limb has the high bit set,
+then for each quotient limb estimate q̂ from the top two limbs of
+the running dividend (via the MG 2-by-1 reciprocal above), refine
+once against the second-from-top divisor limb, multiply-subtract,
+and add-back on the rare miss. Complexity `O(m·n)` limb-ops vs the
+shift-subtract fallback's `O((m+n)·n·64)`.
+
+Implementation: `src/wide_int/mod.rs::limbs_divmod_knuth_u64`,
+fronted by `limbs_divmod_dispatch_u64`.
+
 ### Base-2⁶⁴ schoolbook long division (u64-divisor fast path)
 
-For divisors that fit a 64-bit word, the crate uses one hardware
-divide per 64-bit half-limb of the dividend. This is the standard
-schoolbook long division, transcribed for `[u128]` limb storage.
-Implementation: `src/wide_int/mod.rs::limbs_divmod` (fast path B);
-`src/mg_divide.rs::div_long_256_by_128` (256-bit specialisation).
+For divisors that fit a single u64 word, the crate uses one hardware
+`u128 / u64` divide per dividend limb — every `10^scale` with
+`scale ≤ 19` lands here. This is the standard schoolbook long
+division, now riding the native hardware instruction directly
+(previously this path had to split each u128 limb into 64-bit halves
+and do two divides per limb).
+Implementation: `src/wide_int/mod.rs::limbs_divmod_u64` (fast path B);
+`src/mg_divide.rs::div_long_256_by_128` (256-bit specialisation for
+D38 transcendentals, still u128-typed by design).
 
 Further reading:
 
 - Wikipedia - [Long division](https://en.wikipedia.org/wiki/Long_division)
 - Wolfram MathWorld - [Long division](https://mathworld.wolfram.com/LongDivision.html)
 
-### Binary shift-subtract long division (fallback)
+### Binary shift-subtract long division (const fallback)
 
-Last-resort divide for arbitrary 128+ bit divisors. One bit per
-iteration, total iterations equal to the dividend's actual bit
-length (precomputed via `leading_zeros`).
-Implementation: `src/wide_int/mod.rs::limbs_divmod` general path;
-`src/mg_divide.rs::div_long_256_by_128` general path.
+Last-resort divide for arbitrary multi-limb divisors *in const
+context*. Runtime callers route through the
+[`limbs_divmod_dispatch_u64`](#knuth-algorithm-d-multi-limb-divide)
+dispatcher to Knuth instead; this path stays as the `const fn`
+backstop for `wrapping_div` / `wrapping_rem` and as the setup path
+for the MG reciprocal computation.
+Implementation: `src/wide_int/mod.rs::limbs_divmod_u64` general path.
 
 Further reading:
 
@@ -86,8 +150,19 @@ Further reading:
 
 `x_{k+1} = (x_k + N / x_k) / 2`, started from a power-of-2
 overestimate so the sequence decreases monotonically. Converges
-quadratically. Implementation: `src/mg_divide.rs::isqrt_256`,
-`src/wide_int/mod.rs::limbs_isqrt`.
+quadratically.
+
+At wide tiers the per-iteration divide routes through
+[`limbs_divmod_dispatch_u64`](#knuth-algorithm-d-multi-limb-divide),
+i.e. Knuth Algorithm D with the MG 2-by-1 q̂ reciprocal. Earlier
+versions used the const-context `limbs_divmod_u64` shift-subtract
+path here, which made wide-tier sqrt 24–92× slower than necessary;
+swapping to the runtime dispatcher closes that gap completely. D38
+keeps its hand-tuned `isqrt_256` because the 256-bit specialisation
+out-paces the generic path at single-limb scales.
+
+Implementation: `src/mg_divide.rs::isqrt_256`,
+`src/wide_int/mod.rs::limbs_isqrt_u64`.
 
 Further reading:
 
