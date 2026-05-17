@@ -5,7 +5,7 @@
 //! D38 currently uses its hand-written `mg_divide::mul_div_pow10` /
 //! `div_pow10_div` path — a 256-bit schoolbook product followed by a
 //! Möller–Granlund magic-number divide for `10^SCALE`. The wide tiers
-//! (D76 / D115 / …) take a different path through
+//! (D76 / D114 / …) take a different path through
 //! `decl_decimal_arithmetic!(wide …)`: widen to the next-up `Int*`,
 //! multiply, divide by `10^SCALE` using the generic `limbs_divmod`
 //! (which has hardware fast paths for divisors fitting `u64`).
