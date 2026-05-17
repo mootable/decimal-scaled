@@ -1085,6 +1085,812 @@ pub(crate) fn limbs_fmt_into<'a>(
     core::str::from_utf8(&buf[pos..]).unwrap()
 }
 
+// ─────────────────────────────────────────────────────────────────────
+// u64 limb primitives.
+//
+// Drop-in shape replacements for the `[u128]`-based primitives above,
+// but operating on `&[u64]` slices instead. The point: hardware has a
+// native `u64 × u64 → u128` widening multiply and a native `u128 / u64`
+// hardware divide, neither of which exists for `u128 × u128 → u256` or
+// `u256 / u128`. The u128 primitives above are forced to soft-emulate
+// both via the `mul_128` four-mul decomposition and the 128-iteration
+// `div_2_by_1` bit-recovery loop. The u64 versions get the hardware
+// instructions directly.
+//
+// During the in-progress storage migration these live alongside the
+// u128 versions; the wrapper types (`$U` / `$S` in `decl_wide_int!`)
+// continue to call the u128 entry points. A follow-up commit flips
+// the storage to `[u64; 2 * $L]` and rewires every call site.
+// ─────────────────────────────────────────────────────────────────────
+
+/// `a == 0`. u64-limb counterpart of [`limbs_is_zero`].
+#[inline]
+pub(crate) const fn limbs_is_zero_u64(a: &[u64]) -> bool {
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// `a == b` for two limb slices of possibly different lengths.
+#[inline]
+pub(crate) const fn limbs_eq_u64(a: &[u64], b: &[u64]) -> bool {
+    let n = if a.len() > b.len() { a.len() } else { b.len() };
+    let mut i = 0;
+    while i < n {
+        let av = if i < a.len() { a[i] } else { 0 };
+        let bv = if i < b.len() { b[i] } else { 0 };
+        if av != bv {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// Three-way comparison `-1`/`0`/`1`.
+#[inline]
+pub(crate) const fn limbs_cmp_u64(a: &[u64], b: &[u64]) -> i32 {
+    let n = if a.len() > b.len() { a.len() } else { b.len() };
+    let mut i = n;
+    while i > 0 {
+        i -= 1;
+        let av = if i < a.len() { a[i] } else { 0 };
+        let bv = if i < b.len() { b[i] } else { 0 };
+        if av < bv {
+            return -1;
+        }
+        if av > bv {
+            return 1;
+        }
+    }
+    0
+}
+
+/// Bit length (`0` for zero, else `floor(log2)+1`).
+#[inline]
+pub(crate) const fn limbs_bit_len_u64(a: &[u64]) -> u32 {
+    let mut i = a.len();
+    while i > 0 {
+        i -= 1;
+        if a[i] != 0 {
+            return (i as u32) * 64 + (64 - a[i].leading_zeros());
+        }
+    }
+    0
+}
+
+/// `a += b`, returns carry out. `a.len() >= b.len()`.
+#[inline]
+pub(crate) const fn limbs_add_assign_u64(a: &mut [u64], b: &[u64]) -> bool {
+    let mut carry: u64 = 0;
+    let mut i = 0;
+    while i < a.len() {
+        let bv = if i < b.len() { b[i] } else { 0 };
+        let (s1, c1) = a[i].overflowing_add(bv);
+        let (s2, c2) = s1.overflowing_add(carry);
+        a[i] = s2;
+        carry = (c1 as u64) + (c2 as u64);
+        i += 1;
+    }
+    carry != 0
+}
+
+/// `a -= b`, returns borrow out. `a.len() >= b.len()`.
+#[inline]
+pub(crate) const fn limbs_sub_assign_u64(a: &mut [u64], b: &[u64]) -> bool {
+    let mut borrow: u64 = 0;
+    let mut i = 0;
+    while i < a.len() {
+        let bv = if i < b.len() { b[i] } else { 0 };
+        let (d1, b1) = a[i].overflowing_sub(bv);
+        let (d2, b2) = d1.overflowing_sub(borrow);
+        a[i] = d2;
+        borrow = (b1 as u64) + (b2 as u64);
+        i += 1;
+    }
+    borrow != 0
+}
+
+/// `out = a << shift`. `out` is zeroed then filled.
+pub(crate) const fn limbs_shl_u64(a: &[u64], shift: u32, out: &mut [u64]) {
+    let mut z = 0;
+    while z < out.len() {
+        out[z] = 0;
+        z += 1;
+    }
+    let limb_shift = (shift / 64) as usize;
+    let bit = shift % 64;
+    let mut i = 0;
+    while i < a.len() {
+        let dst = i + limb_shift;
+        if dst < out.len() {
+            if bit == 0 {
+                out[dst] |= a[i];
+            } else {
+                out[dst] |= a[i] << bit;
+                if dst + 1 < out.len() {
+                    out[dst + 1] |= a[i] >> (64 - bit);
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+/// `out = a >> shift`. `out` is zeroed then filled.
+pub(crate) const fn limbs_shr_u64(a: &[u64], shift: u32, out: &mut [u64]) {
+    let mut z = 0;
+    while z < out.len() {
+        out[z] = 0;
+        z += 1;
+    }
+    let limb_shift = (shift / 64) as usize;
+    let bit = shift % 64;
+    let mut i = limb_shift;
+    while i < a.len() {
+        let dst = i - limb_shift;
+        if dst < out.len() {
+            if bit == 0 {
+                out[dst] |= a[i];
+            } else {
+                out[dst] |= a[i] >> bit;
+                if dst >= 1 {
+                    out[dst - 1] |= a[i] << (64 - bit);
+                }
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Single-bit left shift in place; returns the bit shifted out.
+#[inline]
+const fn limbs_shl1_u64(a: &mut [u64]) -> u64 {
+    let mut carry: u64 = 0;
+    let mut i = 0;
+    while i < a.len() {
+        let new_carry = a[i] >> 63;
+        a[i] = (a[i] << 1) | carry;
+        carry = new_carry;
+        i += 1;
+    }
+    carry
+}
+
+/// `true` if every limb above index 0 is zero — fits a single u64.
+#[inline]
+const fn limbs_fit_one_u64(a: &[u64]) -> bool {
+    let mut i = 1;
+    while i < a.len() {
+        if a[i] != 0 {
+            return false;
+        }
+        i += 1;
+    }
+    true
+}
+
+/// `out = a · b` schoolbook. `out.len() >= a.len() + b.len()` and
+/// `out` must be zeroed by the caller.
+///
+/// Inner step uses the native `u64 × u64 → u128` widening mul
+/// (`MUL` + `UMULH` on x86-64 / aarch64), avoiding the 4-way
+/// `mul_128` decomposition every u128 schoolbook step pays.
+pub(crate) const fn limbs_mul_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != 0 {
+            let mut carry: u64 = 0;
+            let mut j = 0;
+            while j < b.len() {
+                if b[j] != 0 || carry != 0 {
+                    let prod = (a[i] as u128) * (b[j] as u128);
+                    let prod_lo = prod as u64;
+                    let prod_hi = (prod >> 64) as u64;
+                    let idx = i + j;
+                    let (s1, c1) = out[idx].overflowing_add(prod_lo);
+                    let (s2, c2) = s1.overflowing_add(carry);
+                    out[idx] = s2;
+                    carry = prod_hi + (c1 as u64) + (c2 as u64);
+                }
+                j += 1;
+            }
+            let mut idx = i + b.len();
+            while carry != 0 && idx < out.len() {
+                let (s, c) = out[idx].overflowing_add(carry);
+                out[idx] = s;
+                carry = c as u64;
+                idx += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
+/// `quot = num / den`, `rem = num % den`, u64 limbs.
+///
+/// Hardware fast paths:
+/// - both fit a single u64 → one native `u64 / u64`
+/// - divisor fits a single u64 → native `u128 / u64` per dividend limb
+/// - otherwise → bit shift-subtract (only reached when divisor is
+///   multi-limb; the dispatcher routes those to Knuth instead)
+pub(crate) const fn limbs_divmod_u64(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+) {
+    let mut z = 0;
+    while z < quot.len() {
+        quot[z] = 0;
+        z += 1;
+    }
+    z = 0;
+    while z < rem.len() {
+        rem[z] = 0;
+        z += 1;
+    }
+
+    let den_one_limb = limbs_fit_one_u64(den);
+
+    // Fast path A: both fit a single u64 → hardware divide.
+    if den_one_limb && limbs_fit_one_u64(num) {
+        if !quot.is_empty() {
+            quot[0] = num[0] / den[0];
+        }
+        if !rem.is_empty() {
+            rem[0] = num[0] % den[0];
+        }
+        return;
+    }
+
+    // Fast path B: divisor fits a single u64 — schoolbook base-2^64
+    // long divide using the native u128/u64 hardware divide. Note this
+    // is the SAME shape as the u128 path's Fast B (which manually
+    // splits u128 into 64-bit halves), but here it's one hardware
+    // divide per limb instead of two.
+    if den_one_limb {
+        let d = den[0];
+        let mut r: u64 = 0;
+        let mut top = num.len();
+        while top > 0 && num[top - 1] == 0 {
+            top -= 1;
+        }
+        let mut i = top;
+        while i > 0 {
+            i -= 1;
+            let acc = ((r as u128) << 64) | (num[i] as u128);
+            let q = (acc / (d as u128)) as u64;
+            r = (acc % (d as u128)) as u64;
+            if i < quot.len() {
+                quot[i] = q;
+            }
+        }
+        if !rem.is_empty() {
+            rem[0] = r;
+        }
+        return;
+    }
+
+    // General path: binary shift-subtract. Only reached for multi-limb
+    // divisors when the dispatcher isn't routing to Knuth (i.e. in
+    // const contexts where Knuth isn't available).
+    let bits = limbs_bit_len_u64(num);
+    let mut i = bits;
+    while i > 0 {
+        i -= 1;
+        limbs_shl1_u64(rem);
+        let bit = (num[(i / 64) as usize] >> (i % 64)) & 1;
+        rem[0] |= bit;
+        limbs_shl1_u64(quot);
+        if limbs_cmp_u64(rem, den) >= 0 {
+            limbs_sub_assign_u64(rem, den);
+            quot[0] |= 1;
+        }
+    }
+}
+
+/// Scratch capacity for the runtime u64-limb kernels — 144 u64 limbs
+/// (9216 bits), matching the u128 path's 72-limb scratch.
+const SCRATCH_LIMBS_U64: usize = 144;
+
+/// Karatsuba u64 threshold. The u128 path's threshold of 32 limbs
+/// translates to 64 u64 limbs at the same bit width. The same
+/// alloc-tax argument applies: Karatsuba's heap-vec scratch only pays
+/// back once the limb count is large enough that the 3·(n/2)² vs n²
+/// mul savings dominate the six per-level `Vec` allocations.
+#[cfg(feature = "alloc")]
+const KARATSUBA_MIN_U64: usize = 64;
+
+/// Karatsuba multiplication, equal-length u64 inputs. Same algorithm
+/// as [`limbs_mul_karatsuba`] but written against u64 limbs.
+#[cfg(feature = "alloc")]
+fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert!(out.len() >= 2 * a.len());
+    let n = a.len();
+    if n < KARATSUBA_MIN_U64 {
+        for o in out.iter_mut().take(2 * n) {
+            *o = 0;
+        }
+        limbs_mul_u64(a, b, out);
+        return;
+    }
+    let h = n / 2;
+    let (a_lo, a_hi) = a.split_at(h);
+    let (b_lo, b_hi) = b.split_at(h);
+
+    let mut z0 = alloc::vec![0u64; 2 * h];
+    limbs_mul_karatsuba_u64_padded(a_lo, b_lo, &mut z0);
+
+    let hi_len = n - h;
+    let mut z2 = alloc::vec![0u64; 2 * hi_len];
+    limbs_mul_karatsuba_u64_padded(a_hi, b_hi, &mut z2);
+
+    let sum_len = core::cmp::max(h, hi_len) + 1;
+    let mut sum_a = alloc::vec![0u64; sum_len];
+    let mut sum_b = alloc::vec![0u64; sum_len];
+    sum_a[..h].copy_from_slice(a_lo);
+    sum_b[..h].copy_from_slice(b_lo);
+    limbs_add_assign_u64(&mut sum_a[..], a_hi);
+    limbs_add_assign_u64(&mut sum_b[..], b_hi);
+
+    let mut z1 = alloc::vec![0u64; 2 * sum_len];
+    limbs_mul_karatsuba_u64_padded(&sum_a, &sum_b, &mut z1);
+
+    limbs_sub_assign_u64(&mut z1[..], &z0);
+    limbs_sub_assign_u64(&mut z1[..], &z2);
+
+    for o in out.iter_mut().take(2 * n) {
+        *o = 0;
+    }
+    let z0_take = core::cmp::min(z0.len(), out.len());
+    out[..z0_take].copy_from_slice(&z0[..z0_take]);
+    let z2_take = core::cmp::min(z2.len(), out.len().saturating_sub(2 * h));
+    if z2_take > 0 {
+        out[2 * h..2 * h + z2_take].copy_from_slice(&z2[..z2_take]);
+    }
+    let z1_take = core::cmp::min(z1.len(), out.len().saturating_sub(h));
+    if z1_take > 0 {
+        limbs_add_assign_u64(&mut out[h..h + z1_take], &z1[..z1_take]);
+    }
+}
+
+#[cfg(feature = "alloc")]
+fn limbs_mul_karatsuba_u64_padded(a: &[u64], b: &[u64], out: &mut [u64]) {
+    if a.len() == b.len() && a.len() >= KARATSUBA_MIN_U64 {
+        limbs_mul_karatsuba_u64(a, b, out);
+    } else {
+        for o in out.iter_mut() {
+            *o = 0;
+        }
+        limbs_mul_u64(a, b, out);
+    }
+}
+
+/// Equal-length u64 multiplier dispatcher.
+#[cfg(feature = "alloc")]
+pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    if a.len() == b.len() && a.len() >= KARATSUBA_MIN_U64 {
+        limbs_mul_karatsuba_u64(a, b, out);
+    } else {
+        limbs_mul_u64(a, b, out);
+    }
+}
+
+#[cfg(not(feature = "alloc"))]
+pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    limbs_mul_u64(a, b, out);
+}
+
+/// Möller–Granlund 2-by-1 invariant divisor at u64 base.
+///
+/// Reference: same as [`MG2by1`] (Möller & Granlund 2011, Algorithm 4).
+///
+/// The u64 base implementation is materially simpler than its u128
+/// sibling because the doubled type (u128) is *native* — every step
+/// that the u128 path does via `mul_128` + carry-merge is just one
+/// `u128` op here.
+#[derive(Clone, Copy)]
+pub(crate) struct MG2by1U64 {
+    d: u64,
+    v: u64,
+}
+
+impl MG2by1U64 {
+    /// `d` must be normalised: `d >> 63 == 1`.
+    #[inline]
+    pub(crate) const fn new(d: u64) -> Self {
+        debug_assert!(d >> 63 == 1, "MG2by1U64::new: divisor must be normalised");
+        // v = floor((B² - 1 - d·B) / d) where B = 2^64.
+        // Numerator high = !d (= B-1-d), low = u64::MAX (= B-1).
+        // High < d for normalised d, so native u128/u128 with the
+        // divisor cast to u128 returns a quotient fitting u64.
+        let num = ((!d as u128) << 64) | (u64::MAX as u128);
+        let v = (num / (d as u128)) as u64;
+        Self { d, v }
+    }
+
+    /// Divide `(u1·B + u0)` by `d`. Requires `u1 < d`.
+    #[inline]
+    pub(crate) const fn div_rem(&self, u1: u64, u0: u64) -> (u64, u64) {
+        debug_assert!(u1 < self.d, "MG2by1U64::div_rem: high word must be < divisor");
+        // (q1, q0) = v·u1 + ⟨u1, u0⟩ as u128
+        let q128 = (self.v as u128).wrapping_mul(u1 as u128)
+            .wrapping_add(((u1 as u128) << 64) | (u0 as u128));
+        let mut q1 = (q128 >> 64) as u64;
+        let q0 = q128 as u64;
+        q1 = q1.wrapping_add(1);
+        let mut r = u0.wrapping_sub(q1.wrapping_mul(self.d));
+        if r > q0 {
+            q1 = q1.wrapping_sub(1);
+            r = r.wrapping_add(self.d);
+        }
+        if r >= self.d {
+            q1 = q1.wrapping_add(1);
+            r = r.wrapping_sub(self.d);
+        }
+        (q1, r)
+    }
+}
+
+/// Runtime divide dispatcher at u64 base.
+pub(crate) fn limbs_divmod_dispatch_u64(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+) {
+    const BZ_THRESHOLD_U64: usize = 16; // doubled from u128 path's 8.
+
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "limbs_divmod_dispatch_u64: divide by zero");
+
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+
+    // Single-limb divisor: defer to const limbs_divmod_u64 (its Fast B
+    // is one hardware u128/u64 per dividend limb — already optimal).
+    if n == 1 {
+        limbs_divmod_u64(num, den, quot, rem);
+        return;
+    }
+
+    if n >= BZ_THRESHOLD_U64 && top >= 2 * n {
+        limbs_divmod_bz_u64(num, den, quot, rem);
+    } else {
+        limbs_divmod_knuth_u64(num, den, quot, rem);
+    }
+}
+
+/// Knuth Algorithm D at base 2^64.
+///
+/// Same structure as [`limbs_divmod_knuth`] but every limb is a u64
+/// and the q̂ estimator uses [`MG2by1U64`]. The multiply-subtract pass
+/// uses native `u64 × u64 → u128`, which collapses one carry-merge
+/// layer compared to the u128 version's `mul_128`.
+pub(crate) fn limbs_divmod_knuth_u64(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+) {
+    for q in quot.iter_mut() {
+        *q = 0;
+    }
+    for r in rem.iter_mut() {
+        *r = 0;
+    }
+
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "limbs_divmod_knuth_u64: divide by zero");
+
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+    if top < n {
+        let copy_n = num.len().min(rem.len());
+        let mut i = 0;
+        while i < copy_n {
+            rem[i] = num[i];
+            i += 1;
+        }
+        return;
+    }
+
+    let shift = den[n - 1].leading_zeros();
+    let mut u = [0u64; SCRATCH_LIMBS_U64];
+    let mut v = [0u64; SCRATCH_LIMBS_U64];
+    debug_assert!(top < SCRATCH_LIMBS_U64 && n <= SCRATCH_LIMBS_U64);
+
+    if shift == 0 {
+        u[..top].copy_from_slice(&num[..top]);
+        u[top] = 0;
+        v[..n].copy_from_slice(&den[..n]);
+    } else {
+        let mut carry: u64 = 0;
+        for i in 0..top {
+            let val = num[i];
+            u[i] = (val << shift) | carry;
+            carry = val >> (64 - shift);
+        }
+        u[top] = carry;
+        carry = 0;
+        for i in 0..n {
+            let val = den[i];
+            v[i] = (val << shift) | carry;
+            carry = val >> (64 - shift);
+        }
+    }
+
+    let m_plus_n = if u[top] != 0 { top + 1 } else { top };
+    debug_assert!(m_plus_n >= n);
+    let m = m_plus_n - n;
+
+    let mg_top = MG2by1U64::new(v[n - 1]);
+
+    let mut j_plus_one = m + 1;
+    while j_plus_one > 0 {
+        j_plus_one -= 1;
+        let j = j_plus_one;
+
+        let u_top = u[j + n];
+        let u_next = u[j + n - 1];
+        let v_top = v[n - 1];
+
+        let (mut q_hat, mut r_hat) = if u_top >= v_top {
+            let q = u64::MAX;
+            let (r, of) = u_next.overflowing_add(v_top);
+            if of || u_top > v_top {
+                (q, u64::MAX)
+            } else {
+                (q, r)
+            }
+        } else {
+            mg_top.div_rem(u_top, u_next)
+        };
+
+        if n >= 2 {
+            let v_below = v[n - 2];
+            loop {
+                let prod = (q_hat as u128) * (v_below as u128);
+                let hi = (prod >> 64) as u64;
+                let lo = prod as u64;
+                let rhs_lo = u[j + n - 2];
+                let rhs_hi = r_hat;
+                if hi < rhs_hi || (hi == rhs_hi && lo <= rhs_lo) {
+                    break;
+                }
+                q_hat = q_hat.wrapping_sub(1);
+                let (new_r, of) = r_hat.overflowing_add(v_top);
+                if of {
+                    break;
+                }
+                r_hat = new_r;
+            }
+        }
+
+        // D4. u[j..=j+n] -= q̂ · v[0..n]
+        let mut mul_carry: u64 = 0;
+        let mut borrow: u64 = 0;
+        for i in 0..n {
+            let prod = (q_hat as u128) * (v[i] as u128);
+            let prod_lo = prod as u64;
+            let prod_hi = (prod >> 64) as u64;
+            let (s_prod, c1) = prod_lo.overflowing_add(mul_carry);
+            let new_mul_carry = prod_hi + (c1 as u64);
+            let (s1, b1) = u[j + i].overflowing_sub(s_prod);
+            let (s2, b2) = s1.overflowing_sub(borrow);
+            u[j + i] = s2;
+            borrow = (b1 as u64) + (b2 as u64);
+            mul_carry = new_mul_carry;
+        }
+        let (s1, b1) = u[j + n].overflowing_sub(mul_carry);
+        let (s2, b2) = s1.overflowing_sub(borrow);
+        u[j + n] = s2;
+        let final_borrow = (b1 as u64) + (b2 as u64);
+
+        if final_borrow != 0 {
+            q_hat = q_hat.wrapping_sub(1);
+            let mut carry: u64 = 0;
+            for i in 0..n {
+                let (s1, c1) = u[j + i].overflowing_add(v[i]);
+                let (s2, c2) = s1.overflowing_add(carry);
+                u[j + i] = s2;
+                carry = (c1 as u64) + (c2 as u64);
+            }
+            u[j + n] = u[j + n].wrapping_add(carry);
+        }
+
+        if j < quot.len() {
+            quot[j] = q_hat;
+        }
+    }
+
+    if shift == 0 {
+        let copy_n = n.min(rem.len());
+        rem[..copy_n].copy_from_slice(&u[..copy_n]);
+    } else {
+        for i in 0..n {
+            if i < rem.len() {
+                let lo = u[i] >> shift;
+                let hi_into_lo = if i + 1 < n {
+                    u[i + 1] << (64 - shift)
+                } else {
+                    0
+                };
+                rem[i] = lo | hi_into_lo;
+            }
+        }
+    }
+}
+
+/// Burnikel–Ziegler outer chunking, u64 base.
+pub(crate) fn limbs_divmod_bz_u64(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+) {
+    const BZ_THRESHOLD_U64: usize = 16;
+
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "limbs_divmod_bz_u64: divide by zero");
+
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+
+    if n < BZ_THRESHOLD_U64 || top < 2 * n {
+        limbs_divmod_knuth_u64(num, den, quot, rem);
+        return;
+    }
+
+    for q in quot.iter_mut() {
+        *q = 0;
+    }
+    for r in rem.iter_mut() {
+        *r = 0;
+    }
+
+    let chunks = top.div_ceil(n);
+    let mut carry = [0u64; SCRATCH_LIMBS_U64];
+    let mut buf = [0u64; SCRATCH_LIMBS_U64];
+    let mut q_chunk = [0u64; SCRATCH_LIMBS_U64];
+    let mut r_chunk = [0u64; SCRATCH_LIMBS_U64];
+
+    let mut idx = chunks;
+    while idx > 0 {
+        idx -= 1;
+        let lo = idx * n;
+        let hi = ((idx + 1) * n).min(top);
+        buf.fill(0);
+        let chunk_len = hi - lo;
+        buf[..chunk_len].copy_from_slice(&num[lo..lo + chunk_len]);
+        buf[chunk_len..chunk_len + n].copy_from_slice(&carry[..n]);
+        let buf_len = chunk_len + n;
+        limbs_divmod_knuth_u64(
+            &buf[..buf_len],
+            &den[..n],
+            &mut q_chunk[..buf_len],
+            &mut r_chunk[..n],
+        );
+        let store_end = (lo + n).min(quot.len());
+        let store_len = store_end.saturating_sub(lo);
+        quot[lo..lo + store_len].copy_from_slice(&q_chunk[..store_len]);
+        carry[..n].copy_from_slice(&r_chunk[..n]);
+    }
+    let rem_n = n.min(rem.len());
+    rem[..rem_n].copy_from_slice(&carry[..rem_n]);
+}
+
+/// `out = floor(sqrt(n))`. Same Newton iteration as [`limbs_isqrt`].
+pub(crate) fn limbs_isqrt_u64(n: &[u64], out: &mut [u64]) {
+    for o in out.iter_mut() {
+        *o = 0;
+    }
+    let bits = limbs_bit_len_u64(n);
+    if bits == 0 {
+        return;
+    }
+    if bits <= 1 {
+        out[0] = 1;
+        return;
+    }
+    let work = n.len() + 1;
+    debug_assert!(work <= SCRATCH_LIMBS_U64, "isqrt scratch overflow");
+    let mut x = [0u64; SCRATCH_LIMBS_U64];
+    let e = bits.div_ceil(2);
+    x[(e / 64) as usize] |= 1u64 << (e % 64);
+    loop {
+        let mut q = [0u64; SCRATCH_LIMBS_U64];
+        let mut r = [0u64; SCRATCH_LIMBS_U64];
+        limbs_divmod_u64(n, &x[..work], &mut q[..work], &mut r[..work]);
+        limbs_add_assign_u64(&mut q[..work], &x[..work]);
+        let mut y = [0u64; SCRATCH_LIMBS_U64];
+        limbs_shr_u64(&q[..work], 1, &mut y[..work]);
+        if limbs_cmp_u64(&y[..work], &x[..work]) >= 0 {
+            break;
+        }
+        x = y;
+    }
+    let copy_len = if out.len() < work { out.len() } else { work };
+    out[..copy_len].copy_from_slice(&x[..copy_len]);
+}
+
+/// `limbs /= radix` in place, returning the remainder. `radix` must
+/// be a u64 (so the per-limb divide stays inside `u128 / u64`).
+fn limbs_div_small_u64(limbs: &mut [u64], radix: u64) -> u64 {
+    let mut rem: u64 = 0;
+    for limb in limbs.iter_mut().rev() {
+        let acc = ((rem as u128) << 64) | (*limb as u128);
+        *limb = (acc / (radix as u128)) as u64;
+        rem = (acc % (radix as u128)) as u64;
+    }
+    rem
+}
+
+/// Format a u64 limb slice into `buf` in the given radix (`2..=16`).
+pub(crate) fn limbs_fmt_into_u64<'a>(
+    limbs: &[u64],
+    radix: u64,
+    lower: bool,
+    buf: &'a mut [u8],
+) -> &'a str {
+    let digits: &[u8] = if lower {
+        b"0123456789abcdef"
+    } else {
+        b"0123456789ABCDEF"
+    };
+    if limbs_is_zero_u64(limbs) {
+        let last = buf.len() - 1;
+        buf[last] = b'0';
+        return core::str::from_utf8(&buf[last..]).unwrap();
+    }
+    let mut work = [0u64; SCRATCH_LIMBS_U64];
+    work[..limbs.len()].copy_from_slice(limbs);
+    let wl = limbs.len();
+    let mut pos = buf.len();
+    while !limbs_is_zero_u64(&work[..wl]) {
+        let r = limbs_div_small_u64(&mut work[..wl], radix);
+        pos -= 1;
+        buf[pos] = digits[r as usize];
+    }
+    core::str::from_utf8(&buf[pos..]).unwrap()
+}
+
+/// Signed three-way compare for u64-limb magnitudes with signs.
+#[inline]
+pub(crate) const fn scmp_u64(a_neg: bool, a: &[u64], b_neg: bool, b: &[u64]) -> i32 {
+    match (a_neg, b_neg) {
+        (true, false) => -1,
+        (false, true) => 1,
+        _ => limbs_cmp_u64(a, b),
+    }
+}
+
+// ─────────────────────────────────────────────────────────────────────
+// End of u64 primitives.
+// ─────────────────────────────────────────────────────────────────────
+
 mod macros;
 use macros::decl_wide_int;
 
@@ -1449,6 +2255,137 @@ mod slice_tests {
         assert_eq!(sum_hi, d - 1);
         assert_eq!(sum_lo, u128::MAX);
         assert!(r < d);
+    }
+
+    // ── u64-primitive equivalence: u64 versions vs u128 oracle ──────
+
+    /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
+    fn pack(limbs: &[u128]) -> alloc::vec::Vec<u64> {
+        let mut out = alloc::vec![0u64; 2 * limbs.len()];
+        for (i, &l) in limbs.iter().enumerate() {
+            out[2 * i] = l as u64;
+            out[2 * i + 1] = (l >> 64) as u64;
+        }
+        out
+    }
+
+    /// Unpack a `[u64; 2*N]` slice into a `[u128; N]` vec.
+    fn unpack(words: &[u64]) -> alloc::vec::Vec<u128> {
+        assert!(words.len() % 2 == 0);
+        let mut out = alloc::vec![0u128; words.len() / 2];
+        for i in 0..out.len() {
+            out[i] = (words[2 * i] as u128) | ((words[2 * i + 1] as u128) << 64);
+        }
+        out
+    }
+
+    fn corpus() -> alloc::vec::Vec<alloc::vec::Vec<u128>> {
+        alloc::vec![
+            alloc::vec![0u128, 0, 0, 0],
+            alloc::vec![1u128, 0, 0, 0],
+            alloc::vec![u128::MAX, 0, 0, 0],
+            alloc::vec![u128::MAX, u128::MAX, 0, 0],
+            alloc::vec![u128::MAX, u128::MAX, u128::MAX, u128::MAX],
+            alloc::vec![123u128, 456, 0, 0],
+            alloc::vec![
+                0x1234_5678_9abc_def0_fedc_ba98_7654_3210_u128,
+                0xa5a5_a5a5_5a5a_5a5a_3c3c_3c3c_c3c3_c3c3,
+                0,
+                0,
+            ],
+        ]
+    }
+
+    /// `limbs_mul_u64` matches `limbs_mul` after pack/unpack on the
+    /// shared corpus.
+    #[test]
+    fn limbs_mul_u64_matches_u128() {
+        for a in corpus() {
+            for b in corpus() {
+                let mut out128 = alloc::vec![0u128; a.len() + b.len()];
+                limbs_mul(&a, &b, &mut out128);
+
+                let a64 = pack(&a);
+                let b64 = pack(&b);
+                let mut out64 = alloc::vec![0u64; a64.len() + b64.len()];
+                limbs_mul_u64(&a64, &b64, &mut out64);
+
+                assert_eq!(unpack(&out64), out128, "limbs_mul mismatch");
+            }
+        }
+    }
+
+    /// `limbs_divmod_u64` matches `limbs_divmod`.
+    #[test]
+    fn limbs_divmod_u64_matches_u128() {
+        for num in corpus() {
+            for den in corpus() {
+                if den.iter().all(|&x| x == 0) {
+                    continue;
+                }
+                let mut q128 = alloc::vec![0u128; num.len()];
+                let mut r128 = alloc::vec![0u128; num.len()];
+                limbs_divmod(&num, &den, &mut q128, &mut r128);
+
+                let n64 = pack(&num);
+                let d64 = pack(&den);
+                let mut q64 = alloc::vec![0u64; n64.len()];
+                let mut r64 = alloc::vec![0u64; n64.len()];
+                limbs_divmod_u64(&n64, &d64, &mut q64, &mut r64);
+
+                assert_eq!(unpack(&q64), q128, "divmod q mismatch");
+                assert_eq!(unpack(&r64), r128, "divmod r mismatch");
+            }
+        }
+    }
+
+    /// `limbs_divmod_knuth_u64` matches `limbs_divmod_knuth`.
+    #[test]
+    fn limbs_divmod_knuth_u64_matches_u128() {
+        for num in corpus() {
+            for den in corpus() {
+                if den.iter().all(|&x| x == 0) {
+                    continue;
+                }
+                let mut q128 = alloc::vec![0u128; num.len()];
+                let mut r128 = alloc::vec![0u128; num.len()];
+                limbs_divmod_knuth(&num, &den, &mut q128, &mut r128);
+
+                let n64 = pack(&num);
+                let d64 = pack(&den);
+                let mut q64 = alloc::vec![0u64; n64.len()];
+                let mut r64 = alloc::vec![0u64; n64.len()];
+                limbs_divmod_knuth_u64(&n64, &d64, &mut q64, &mut r64);
+
+                assert_eq!(unpack(&q64), q128, "knuth q mismatch");
+                assert_eq!(unpack(&r64), r128, "knuth r mismatch");
+            }
+        }
+    }
+
+    /// `MG2by1U64` matches a reference 2-by-1 divide.
+    #[test]
+    fn mg2by1_u64_matches_reference() {
+        let cases: &[(u64, u64, u64)] = &[
+            (0, 1, 1u64 << 63),
+            (0, u64::MAX, 1u64 << 63),
+            ((1u64 << 63) - 1, u64::MAX, 1u64 << 63),
+            (0, 1, u64::MAX),
+            (u64::MAX - 1, u64::MAX, u64::MAX),
+            (12345, 67890, (1u64 << 63) | 0xdead_beef_u64),
+            (u64::MAX - 1, 0, u64::MAX),
+        ];
+        for &(u1, u0, d) in cases {
+            assert!(d >> 63 == 1);
+            assert!(u1 < d);
+            let mg = MG2by1U64::new(d);
+            let (q, r) = mg.div_rem(u1, u0);
+            // Reference: ((u1 as u128) << 64 | u0 as u128) / (d as u128)
+            let num = ((u1 as u128) << 64) | (u0 as u128);
+            let exp_q = (num / (d as u128)) as u64;
+            let exp_r = (num % (d as u128)) as u64;
+            assert_eq!((q, r), (exp_q, exp_r), "MG u64 mismatch for {u1:#x}, {u0:#x}, d={d:#x}");
+        }
     }
 
     /// `MG2by1::div_rem` bit-exact matches `div_2_by_1` on a
