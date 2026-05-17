@@ -329,7 +329,7 @@ macro_rules! decl_wide_transcendental {
                 let two_w = one_w + one_w;
                 let pow10_w = one_w;
                 let mut k: i32 = bit_length(v_w) as i32 - bit_length(one_w) as i32;
-                let m_w = loop {
+                let mut m_w = loop {
                     let m = if k >= 0 {
                         v_w >> (k as u32)
                     } else {
@@ -343,6 +343,30 @@ macro_rules! decl_wide_transcendental {
                         break m;
                     }
                 };
+
+                // Multi-level sqrt argument reduction (Brent 1976,
+                // fastnum's approach). After `l` sqrt operations,
+                // `m ← m^(1/2^l)`, so `|t| = |(m-1)/(m+1)|` shrinks
+                // geometrically and the artanh series converges in
+                // `~p / (2 + 2l)` pair-terms instead of `~p / 2`.
+                // Each sqrt costs ~one wide isqrt; the term saving
+                // dominates around `l ≈ log₂(term_savings_per_sqrt)`
+                // — empirically `l ≈ √p_bits / 4` is the sweet spot.
+                let p_bits = w.saturating_mul(3).saturating_add(1);
+                let mut sqrt_l: u32 = 0;
+                {
+                    let mut n: u32 = 0;
+                    while (n + 1) * (n + 1) <= p_bits {
+                        n += 1;
+                    }
+                    sqrt_l = n / 4;
+                }
+                let mut i = 0;
+                while i < sqrt_l {
+                    m_w = sqrt_fixed(m_w, w);
+                    i += 1;
+                }
+
                 let t = div_cached(m_w - one_w, m_w + one_w, pow10_w);
                 let t2 = mul_cached(t, t, pow10_w);
                 let mut sum = t;
@@ -360,7 +384,11 @@ macro_rules! decl_wide_transcendental {
                         break;
                     }
                 }
-                let ln_m = sum + sum;
+                // ln(m) = 2^(l+1) · artanh(t) = sum << (sqrt_l + 1).
+                // With sqrt_l=0 this collapses to the historic
+                // `2·sum` formula; with sqrt_l>0 it folds in the
+                // `2^l` factor from the unhalved-argument identity.
+                let ln_m = sum << (sqrt_l + 1);
                 scale_by_k(ln2(w), k as i128) + ln_m
             }
 

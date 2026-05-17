@@ -201,7 +201,28 @@ Further reading:
 
 ## Transcendentals
 
-### `ln` via Mercator's series of `artanh`
+### `ln` via multi-level sqrt argument reduction + Mercator's artanh
+
+Range-reduce `x = 2^k · m` with `m ∈ [1, 2)`. Then apply `l` square
+roots to shrink `m → m^(1/2^l)`, so the artanh-series argument
+`t = (m' − 1)/(m' + 1)` is bounded by `0.35 · 2^-l`. The series then
+converges in `~p / (2 + 2l)` pair-terms instead of `~p / 2`, traded
+against `l` extra wide-isqrt calls. We pick `l ≈ √p_bits / 4`
+empirically.
+
+Reassembly: `ln(m) = 2^(l+1) · artanh(t)` (the extra `2^l` factor
+folds into the bit-shift since `ln(m^(1/2^l)) = ln(m) / 2^l`). The
+storage-scale identity `ln(x) = k·ln 2 + ln(m)` stays unchanged.
+
+> Brent, R. P. (1976). **"Multiple-precision zero-finding methods
+> and the complexity of elementary function evaluation."** In
+> *Analytic Computational Complexity*, Academic Press.
+
+Implementation: `src/macros/wide_transcendental.rs::ln_fixed`. The
+fastnum crate uses the same sqrt-halving recursion as its `ln_`
+inner — we cross-validated against it.
+
+### `ln` via plain `artanh` series (legacy reference)
 
 Range-reduce `x = 2^k · m` with `m ∈ [1, 2)`, then compute
 `ln(m) = 2·artanh((m − 1) / (m + 1))`. The argument `t = (m − 1) /
