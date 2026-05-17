@@ -1477,10 +1477,9 @@ impl MG2by1U64 {
 ///
 /// Net win at every Knuth call with `n ≥ 2` divisor limbs.
 ///
-/// Reference: Möller & Granlund 2011, Algorithm 5 (the *real* div
-/// recommendation from `research/2026_05_17_div.md` — `MG2by1U64` was
-/// the intermediate stepping stone that landed first).
-/// The macro shape mirrors GMP's `udiv_qr_3by2` in `longlong.h`.
+/// Reference: Möller & Granlund 2011, Algorithm 5. The macro shape
+/// mirrors GMP's `udiv_qr_3by2` in `longlong.h`. `MG2by1U64` is the
+/// 2-by-1 cousin used by `limbs_divmod_knuth_u64`'s q̂ estimator.
 #[derive(Clone, Copy)]
 pub(crate) struct MG3by2U64 {
     d1: u64,

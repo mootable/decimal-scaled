@@ -326,9 +326,8 @@ whether the reduced argument lies in the lower or upper half of
   argument, and the [0, π/4] cap halves the Taylor argument range
   vs the historic [0, π/2].
 
-Per research/2026_05_17_trig.md R1 (Muller 2016 §11.4 attributes
-the "switch to cos at π/4" trick to standard mid-precision
-practice).
+Reference: Muller 2016 §11.4 attributes the "switch to cos at π/4"
+trick to standard mid-precision practice.
 
 Implementation: `src/macros/wide_transcendental.rs::sin_fixed`
 (routes to `sin_taylor` / `cos_taylor`).
@@ -372,10 +371,10 @@ The halving count is chosen per working scale `w`:
 - `60 ≤ w < 110` → 6 halvings (D76 / light D153)
 - `w ≥ 110` → 7 halvings (D153 / D307)
 
-Per research/2026_05_17_inverse_trig.md R1: each halving costs
-~one wide mul + one wide sqrt + one wide div; each saved Taylor
-term saves ~one wide mul; the break-even depends on `p_bits` and
-sits in the 5–7 range for our tiers.
+Break-even rationale: each halving costs ~one wide mul + one wide
+sqrt + one wide div; each saved Taylor term saves ~one wide mul.
+The trade-off depends on `p_bits` and sits in the 5–7 range for
+our tiers.
 
 Implementation: `src/trig_strict.rs::atan_fixed`,
 `src/macros/wide_transcendental.rs::atan_fixed`.
@@ -391,8 +390,6 @@ implementation max-branches: it feeds `atan_fixed` whichever of
 `atan(t) = sign(t)·π/2 − atan(1/t)` for `|t| > 1` to recover the
 quotient. Eliminates the asymptotic-edge precision loss; modest
 speed win at any `|y/x|` significantly different from 1.
-
-Per research/2026_05_17_inverse_trig.md R2.
 
 Implementation: `src/trig_strict.rs::atan2_strict` (D38),
 `src/macros/wide_transcendental.rs::atan2_strict` (wide tier).
@@ -417,8 +414,6 @@ representable input:
   the working scale instead of with the input's distance from 1.
 
 `acos` shares the same kernel via `acos(x) = π/2 − asin(x)`.
-
-Per research/2026_05_17_inverse_trig.md R3.
 
 Implementation: `src/trig_strict.rs::asin_strict` /
 `acos_strict` (D38) and the four wide-tier variants in

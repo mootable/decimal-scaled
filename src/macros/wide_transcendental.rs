@@ -1080,8 +1080,6 @@ macro_rules! decl_wide_transcendental {
             ///   so the asymptotic-edge precision is bounded by
             ///   the working scale, not by the input's distance
             ///   from 1.
-            ///
-            /// Per research/2026_05_17_inverse_trig.md R3.
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {

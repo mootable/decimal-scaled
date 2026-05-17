@@ -18,8 +18,7 @@
 //!      type. Comparison point only; we are not committing to this
 //!      dep.
 //!   D. **Moller-Granlund magic-number divide on schoolbook product**
-//!      -- the algorithm shape ConstScaleFpdec uses (MIT, see
-//!      `docs/research/2026-05-10-base-10-fixed-point-mul-div-benchmarks.md`).
+//!      -- the algorithm shape ConstScaleFpdec uses (MIT).
 //!      Translates the 1994 Granlund-Montgomery + 2011 Moller-Granlund
 //!      papers; precomputed magic constant for divisor 10^12 baked in
 //!      const. We hand-code one entry of their 38-entry table here for

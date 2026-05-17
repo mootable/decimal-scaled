@@ -733,8 +733,7 @@ pub type D18s18 = D18<18>;
 /// signed integer and `MAX_SCALE = 76`.
 ///
 /// Gated behind the `d76` (or umbrella `wide`) Cargo feature. The
-/// storage backend is `Int256`; this is the interim backend per
-/// `research/multi_width_decimals.md` §3.
+/// storage backend is `Int256`.
 #[cfg(any(feature = "d76", feature = "wide"))]
 #[repr(transparent)]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
