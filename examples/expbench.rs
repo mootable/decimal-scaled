@@ -7,7 +7,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use decimal_scaled::{D153, D307, D38, D76};
+use decimal_scaled::{D153, D18, D307, D38, D76, D9};
 
 const ITERS: u32 = 5_000;
 
@@ -25,6 +25,17 @@ fn time<F: FnMut()>(label: &str, mut f: F) {
 }
 
 fn main() {
+    println!("== exp_strict (narrow-tier sanity) ==");
+    {
+        let a = D9::<5>::ONE / D9::<5>::from_int(2);
+        time("D9<5>::exp_strict(0.5)", || { black_box(black_box(a).exp_strict()); });
+    }
+    {
+        let a = D18::<9>::ONE / D18::<9>::from_int(2);
+        time("D18<9>::exp_strict(0.5)", || { black_box(black_box(a).exp_strict()); });
+    }
+
+    println!();
     println!("== exp_strict ==");
     {
         let a = D38::<19>::ONE / D38::<19>::from_int(2); // 0.5
