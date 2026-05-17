@@ -167,6 +167,18 @@ extern crate alloc;
 mod arithmetic;
 #[cfg(feature = "bench-alt")]
 mod bench_alt;
+#[cfg(feature = "bench-alt")]
+#[doc(hidden)]
+pub mod __bench_internals {
+    #[inline(never)]
+    pub fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
+        crate::wide_int::limbs_mul(a, b, out)
+    }
+    #[inline(never)]
+    pub fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
+        crate::wide_int::limbs_mul_fast(a, b, out)
+    }
+}
 mod consts;
 mod consts_wide;
 mod core_type;

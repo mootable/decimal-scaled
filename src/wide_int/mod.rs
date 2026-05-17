@@ -254,13 +254,18 @@ pub(crate) const fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
     }
 }
 
-/// Karatsuba multiplication threshold. For `a.len() <= KARATSUBA_MIN`
-/// schoolbook wins on constant factors; above that recursive splitting
-/// pays off. Tuned empirically for the `[u128]` limb layout — at 8
-/// limbs (Int1024) schoolbook is 64 limb-mul + carry chains vs
-/// Karatsuba's 3 sub-products of 4 limbs each (48 limb-mul) plus three
-/// shift-and-add merges; the cross-over is here.
-const KARATSUBA_MIN: usize = 16;
+/// Karatsuba multiplication threshold. For `a.len() < KARATSUBA_MIN`
+/// the schoolbook kernel wins because Karatsuba's recursive split
+/// allocates six `Vec`s of scratch per level (`z0`, `z1`, `z2`,
+/// `sum_a`, `sum_b`, plus the merge buffer). On `[u128]` limbs the
+/// `mul_128` savings (3·(n/2)² vs n² calls per level) only outpay
+/// that heap-alloc tax at n ≥ 32 limbs. Below that, the alloc + carry
+/// merges cost more than the limb-mul work they save — verified by
+/// `examples/karabench.rs`: at n=16 the schoolbook beats single-level
+/// Karatsuba ~800 ns vs ~880 ns; at n=32 Karatsuba wins back ~15%
+/// (~2.6 µs vs ~3.0 µs). Below 32 limbs the dispatcher therefore
+/// short-circuits straight to schoolbook.
+const KARATSUBA_MIN: usize = 32;
 
 /// `out = a · b` for equal-length inputs, dispatching to Karatsuba
 /// when the operand size warrants it.
