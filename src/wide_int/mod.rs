@@ -541,17 +541,31 @@ pub(crate) fn limbs_divmod_dispatch(
     }
     assert!(n > 0, "limbs_divmod_dispatch: divide by zero");
 
-    if n == 1 {
-        // Single-limb divisor — hit the const fast paths (A or B).
-        limbs_divmod(num, den, quot, rem);
-        return;
-    }
-
     let mut top = num.len();
     while top > 0 && num[top - 1] == 0 {
         top -= 1;
     }
 
+    // Fast path A: both operands fit one 128-bit word.
+    if n == 1 && top <= 1 {
+        limbs_divmod(num, den, quot, rem);
+        return;
+    }
+
+    // Fast path B (covered by const limbs_divmod): single-limb
+    // divisor that also fits a u64. Every `10^scale` with
+    // `scale ≤ 19` lands here. Larger single-limb divisors
+    // (10^20 ≤ den ≤ 10^38) fall through to Knuth — the const
+    // path's only remaining option for those is the O(bits)
+    // shift-subtract, which is the bottleneck we're closing.
+    if n == 1 && den[0] <= u64::MAX as u128 {
+        limbs_divmod(num, den, quot, rem);
+        return;
+    }
+
+    // Multi-limb arithmetic OR oversized single-limb divisor —
+    // Knuth handles both efficiently; BZ wraps Knuth for very
+    // wide divisors.
     if n >= BZ_THRESHOLD && top >= 2 * n {
         limbs_divmod_bz(num, den, quot, rem);
     } else {
