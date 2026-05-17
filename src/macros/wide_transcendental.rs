@@ -1335,7 +1335,12 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Hyperbolic tangent, as `sinh / cosh`. Strict and
-            /// correctly rounded.
+            /// correctly rounded. Shares one `exp(v)` and one
+            /// `exp(−v)` between the implicit sinh and cosh, then
+            /// `tanh = (eˣ − e⁻ˣ) / (eˣ + e⁻ˣ)` — same arithmetic as
+            /// the historic path, but the divide and the two
+            /// subtraction/addition operands are inlined here to
+            /// avoid going through the intermediate sinh/cosh.
             #[inline]
             #[must_use]
             pub fn tanh_strict(self) -> Self {
@@ -1345,6 +1350,30 @@ macro_rules! decl_wide_transcendental {
                 let enx = $core::exp_fixed(-v, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
+            }
+
+            /// Joint hyperbolic sine and cosine of `self`, returned
+            /// as `(sinh, cosh)`. Strict and correctly rounded.
+            ///
+            /// Shares one `exp(v)` and one `exp(−v)` evaluation
+            /// between sinh and cosh — same cost as a single
+            /// `sinh_strict` or `cosh_strict` call, vs the historic
+            /// `(self.sinh_strict(), self.cosh_strict())` pair which
+            /// computed both `exp` pairs twice.
+            #[inline]
+            #[must_use]
+            pub fn sinh_cosh_strict(self) -> (Self, Self) {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let sinh = (ex - enx) / two;
+                let cosh = (ex + enx) / two;
+                (
+                    Self::from_bits($core::round_to_storage(sinh, w, SCALE)),
+                    Self::from_bits($core::round_to_storage(cosh, w, SCALE)),
+                )
             }
 
             /// Inverse hyperbolic sine, as
