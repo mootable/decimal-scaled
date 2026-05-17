@@ -713,6 +713,29 @@ runs the series with fewer guard digits than needed at p=19);
 transcendentals" marketing claim does not hold up at this
 precision).
 
+### Caveat — fastnum `atan` / `atan2` input-range rejection
+
+`fastnum`'s `Decimal::atan` returns a signalling NaN immediately
+for any `|x| > 1` ([`fastnum-0.4.5/src/decimal/dec/math/atan.rs`](https://docs.rs/fastnum/0.4.5/src/fastnum/decimal/dec/math/atan.rs.html),
+lines 24–40). This is mathematically incorrect — `atan` is
+defined on the whole real line with range `(−π/2, π/2)` — but it
+means any benchmark that calls `fastnum::Decimal::atan(2)` or
+similar is timing a NaN early-return, not an `atan` computation.
+
+The per-tier sweep in `target/medians_per_tier.tsv` records
+`128bit_s19/fastnum/atan = 13 ns` vs
+`128bit_s19/decimal-scaled/atan = 68 µs`; the 5000× ratio is
+fastnum opting out of the computation rather than a faster
+algorithm. fastnum's actual atan for in-range `|x| ≤ 1` reduces
+`atan(x) = asin(x / sqrt(x² + 1))` then runs an asin half-angle
+reduction + Taylor — comparable complexity to our own
+`atan_taylor` + three-halvings path. atan2 inherits the same
+rejection because it forwards to `atan(y / x)` unconditionally.
+
+Numbers below are kept as-recorded so the artefact is auditable;
+do not read the fastnum atan column as a real-world atan
+benchmark.
+
 Headline reading: `decimal-scaled` is the only library that
 **simultaneously** (a) ships 0-ULP HalfToEven by default,
 **without** the caller having to switch rounding modes or
