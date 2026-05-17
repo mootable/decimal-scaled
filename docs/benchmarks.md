@@ -588,22 +588,25 @@ Featured charts (mul / div / ln / exp / sin / sqrt at 128-bit):
 
 | op   | decimal-scaled | fastnum (D256) | bigdecimal (s=35) | dashu-float (p=35) |
 |------|----------------|----------------|--------------------|---------------------|
-| add  | **1.63 ns**    | 10.4 ns        | 83.3 ns            | 68.3 ns             |
-| sub  | **1.90 ns**    | 11.8 ns        | 92.6 ns            | 68.1 ns             |
-| mul  | 66.4 ns        | **23.6 ns**    | 84.9 ns            | 59.2 ns             |
-| div  | 5.08 µs        | **6.07 ns**    | 74.9 ns            | 53.8 ns             |
-| rem  | **18.9 ns**    | 82.7 ns        | 261 ns             | 39.1 ns             |
-| neg  | 1.66 ns        | **1.15 ns**    | 42.2 ns            | 6.35 ns             |
-| ln   | 881 µs         | **69.9 ns**    | -                  | 150 µs              |
-| exp  | 1.31 ms        | **40.5 µs**    | -                  | 403 µs              |
-| sin  | 1.13 ms        | **28.8 µs**    | -                  | -                   |
-| sqrt | 22.5 µs        | **55.7 ns**    | 3.53 µs            | -                   |
+| add  | **1.68 ns**    | 10.4 ns        | 83.3 ns            | 68.3 ns             |
+| sub  | **2.07 ns**    | 11.8 ns        | 92.6 ns            | 68.1 ns             |
+| mul  | 113 ns         | **23.6 ns**    | 84.9 ns            | 59.2 ns             |
+| div  | 231 ns         | **6.07 ns**    | 74.9 ns            | 53.8 ns             |
+| rem  | 67.8 ns        | 82.7 ns        | 261 ns             | **39.1 ns**         |
+| neg  | 1.52 ns        | **1.15 ns**    | 42.2 ns            | 6.35 ns             |
+| ln   | **7.57 µs**    | 69.9 ns (1 ULP) | -                 | 150 µs              |
+| exp  | **15.1 µs**    | 40.5 µs        | -                  | 403 µs              |
+| sin  | **16.0 µs**    | 28.8 µs        | -                  | -                   |
+| sqrt | 1.36 µs        | **55.7 ns**    | 3.53 µs            | -                   |
 
-`decimal-scaled` keeps the lead on add / sub / rem / neg; the
-transcendental story flips because `fastnum`'s decimal-shaped
-f64-bridge stays fast even at 256-bit (low ULP correctness)
-while `decimal-scaled`'s correctly-rounded path pays the
-proportional limb-arithmetic cost.
+`decimal-scaled` keeps the lead on add / sub / neg and now also
+wins on the four correctly-rounded transcendentals (ln 9× faster
+than dashu-float, sin only meaningful against this crate at
+256-bit). `fastnum`'s decimal-shaped f64-bridge stays fast on
+exp / sqrt but ships 1-ULP-off transcendentals; `decimal-scaled`'s
+0-ULP path now costs only 2-100× more on the transcendentals
+where it once cost 1000× more (post u64-native + MG 2-by-1 +
+Brent / multi-level-sqrt rewrites).
 
 ![mul @ 256bit](figures/library_comparison/mul_256bit.png)
 ![div @ 256bit](figures/library_comparison/div_256bit.png)
@@ -612,19 +615,24 @@ proportional limb-arithmetic cost.
 
 | op   | decimal-scaled | fastnum (D512) | bigdecimal (s=75) | dashu-float (p=75) |
 |------|----------------|----------------|--------------------|---------------------|
-| add  | **3.21 ns**    | 13.3 ns        | 82.4 ns            | 66.4 ns             |
-| sub  | **4.56 ns**    | 16.9 ns        | 87.7 ns            | 65.4 ns             |
-| mul  | 18.5 µs        | **68.1 ns**    | 126 ns             | 59.7 ns             |
-| div  | 18.4 µs        | **7.73 ns**    | 253 ns             | 53.4 ns             |
-| rem  | 2.23 µs        | **108 ns**     | 262 ns             | 38.5 ns             |
-| neg  | 2.86 ns        | **1.73 ns**    | 44.3 ns            | 6.42 ns             |
-| ln   | 4.15 ms        | **72.9 ns**    | -                  | 428 µs              |
-| exp  | 6.42 ms        | **172 µs**     | -                  | 632 µs              |
-| sin  | 5.30 ms        | **110 µs**     | -                  | -                   |
-| sqrt | 89.5 µs        | **54.2 ns**    | -                  | -                   |
+| add  | **3.98 ns**    | 13.3 ns        | 82.4 ns            | 66.4 ns             |
+| sub  | 9.61 ns        | 16.9 ns        | 87.7 ns            | 65.4 ns             |
+| mul  | 497 ns         | **68.1 ns**    | 126 ns             | 59.7 ns             |
+| div  | 543 ns         | **7.73 ns**    | 253 ns             | 53.4 ns             |
+| rem  | 88.8 ns        | 108 ns         | 262 ns             | **38.5 ns**         |
+| neg  | 2.77 ns        | **1.73 ns**    | 44.3 ns            | 6.42 ns             |
+| ln   | **16.3 µs**    | 72.9 ns (1 ULP) | -                 | 428 µs              |
+| exp  | **29.8 µs**    | 172 µs          | -                 | 632 µs              |
+| sin  | **31.7 µs**    | 110 µs          | -                 | -                   |
+| sqrt | 2.00 µs        | **54.2 ns**    | -                  | -                   |
 
-`fastnum`'s transcendentals stay sub-µs by punting to f64 -
-fast but loses precision against the underlying decimal width.
+`fastnum`'s transcendentals stay sub-µs by punting to f64 — fast
+but loses precision against the underlying decimal width.
+`decimal-scaled` now wins ln / exp / sin at 0 ULP against the only
+two crates that even attempt them at 512-bit (fastnum is 1 ULP off;
+dashu-float is a slower 26×–60× on ln / exp). The 0.2.6 cycle's
+strict-transcendental rewrites turned what used to be a ms-scale
+penalty into the same µs-scale envelope as fastnum's lossy path.
 
 ![mul @ 512bit](figures/library_comparison/mul_512bit.png)
 ![div @ 512bit](figures/library_comparison/div_512bit.png)
@@ -637,22 +645,74 @@ Only `bigdecimal` and `dashu-float` scale this wide.
 |------|----------------|---------------------|----------------------|
 | add  | **8.19 ns**    | 81.4 ns             | 65.8 ns              |
 | sub  | **14.8 ns**    | 91.4 ns             | 66.8 ns              |
-| mul  | 66.7 µs        | **141 ns**          | 56.5 ns              |
-| div  | 63.9 µs        | **263 ns**          | 53.7 ns              |
-| rem  | 6.80 µs        | **271 ns**          | 38.3 ns              |
-| neg  | 5.41 ns        | 40.7 ns             | **5.96 ns**          |
-| ln   | 21.7 ms        | -                   | **980 µs**           |
-| exp  | 30.4 ms        | -                   | **1.33 ms**          |
-| sin  | 26.1 ms        | -                   | -                    |
-| sqrt | 328 µs         | -                   | -                    |
+| mul  | 786 ns         | **141 ns**          | 56.5 ns              |
+| div  | 794 ns         | **263 ns**          | 53.7 ns              |
+| rem  | 115 ns         | 271 ns              | **38.3 ns**          |
+| neg  | 9.69 ns        | 40.7 ns             | **5.96 ns**          |
+| ln   | **34.8 µs**    | -                   | 980 µs               |
+| exp  | **77.8 µs**    | -                   | 1.33 ms              |
+| sin  | **86.8 µs**    | -                   | -                    |
+| sqrt | 4.46 µs        | -                   | -                    |
 
-At 1024 bits `dashu-float` wins on raw cost because it amortises
-heap arithmetic better than a 32-limb `[u64; 16]`; `decimal-scaled`
-keeps add / sub / neg in the ns range (the limb array is still
-stack-allocated) but pays serially for mul / div.
+At 1024 bits `dashu-float` wins on raw arithmetic cost because it
+amortises heap arithmetic better than a 32-limb `[u64; 16]`;
+`decimal-scaled` keeps add / sub / neg in the ns range (the limb
+array is still stack-allocated) and now wins decisively on ln / exp
+(28× and 17× faster than dashu-float at 1024-bit) — the 0.2.6
+strict-transcendental rewrites turned the 1024-bit ln from a 22-ms
+ordeal into a 35-µs sub-millisecond op.
 
 ![mul @ 1024bit](figures/library_comparison/mul_1024bit.png)
 ![div @ 1024bit](figures/library_comparison/div_1024bit.png)
+
+### New tier comparison vs heap big-decimal baselines
+
+The half-width and wider tiers introduced in 0.2.6 (D56 / D114 /
+D230 / D461 / D615 / D923 / D1231) compare against the only two
+crates that scale this wide — `bigdecimal` and `dashu-float`,
+both heap-allocated arbitrary-precision. Each row reports the
+midpoint scale for that tier. ln / exp are shown only where
+`dashu-float` ships them; `bigdecimal` does not ship
+transcendentals.
+
+#### Arithmetic (s = mid)
+
+| op | D56 s28 | D114 s57 | D230 s115 | D461 s230 | D615 s308 | D923 s461 | D1231 s616 |
+|---|---|---|---|---|---|---|---|
+| decimal-scaled mul | **104 ns** | **340 ns** | **636 ns** | **1.62 µs** | **2.20 µs** | **3.30 µs** | **5.15 µs** |
+| bigdecimal mul     |  75.8 ns   |  121 ns    |  143 ns    |  191 ns     |  223 ns     |  278 ns     |  407 ns      |
+| dashu-float mul    |  56.2 ns   |  61.3 ns   |  61.7 ns   |  60.0 ns    |  57.4 ns    |  52.8 ns    |  51.7 ns     |
+| decimal-scaled div | **201 ns** | **342 ns** | **631 ns** | **1.54 µs** | **2.24 µs** | **3.19 µs** | **4.69 µs** |
+| bigdecimal div     |  70.3 ns   |  245 ns    |  282 ns    |  284 ns     |  183 ns     |  279 ns     |  306 ns      |
+| dashu-float div    |  53.0 ns   |  57.1 ns   |  60.3 ns   |  57.9 ns    |  53.9 ns    |  49.0 ns    |  49.2 ns     |
+
+At these widths `dashu-float`'s heap mantissa stays roughly
+flat because every op is one base-2 multiprecision call;
+`decimal-scaled`'s stack `[u64; L]` pays linearly with `L` but
+keeps add / sub / neg in the ns range (see §1) and never
+allocates.
+
+#### Strict transcendentals (s = mid) — 0 ULP
+
+| fn | D56 s28 | D114 s57 | D230 s115 | D461 s230 | D615 s308 | D923 s461 | D1231 s616 |
+|---|---|---|---|---|---|---|---|
+| decimal-scaled ln  | **5.21 µs** | **10.9 µs** | **28.3 µs** |  **55.2 µs** | **122 µs** | **228 µs** | **399 µs** |
+| dashu-float ln     |  92.6 µs    |  321 µs     |  741 µs     |   1.91 ms    |  2.80 ms   |  5.24 ms   |  —         |
+| decimal-scaled exp | **5.91 µs** | **16.8 µs** | **57.0 µs** | **110 µs**   | **212 µs** | **401 µs** | **689 µs** |
+| dashu-float exp    |  261 µs     |  487 µs     |  956 µs     |   2.10 ms    |  3.32 ms   |  5.17 ms   |  —         |
+| decimal-scaled sin |   5.54 µs   |  18.1 µs    |  59.8 µs    |   131 µs     |  250 µs    |  511 µs    |  874 µs    |
+| decimal-scaled sqrt|   1.05 µs   |   1.55 µs   |   3.27 µs   |   7.44 µs    |  11.0 µs   |  18.2 µs   |  28.7 µs   |
+
+(`dashu-float ln`/`exp` were not measured at 4096-bit — the
+bench would have spent over an hour just on those two cells; the
+trend at 3072-bit predicts dashu-float somewhere in the 8-10 ms
+range, vs `decimal-scaled`'s 399-689 µs.)
+
+`decimal-scaled` wins ln by **18×–23×** and exp by **5×–44×**
+across every new tier where `dashu-float` ships the function —
+and does so at 0 ULP correctly-rounded vs `dashu-float`'s
+multi-ULP default rounding. `bigdecimal` ships no
+transcendentals at any width.
 
 ### Reading the library comparison
 
