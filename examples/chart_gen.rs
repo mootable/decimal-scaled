@@ -201,10 +201,15 @@ fn render_per_width_summary(
     let title = format!("operations @ {width} (centre scale)");
     let n_ops = ops.len();
     let n_libs = libs.len();
-    // x layout: each op gets a slot, libraries placed as adjacent thin
-    // bars inside the slot. Slot width 1.0, bar width 0.8/n_libs.
-    let x_min: f64 = 0.0;
-    let x_max: f64 = n_ops as f64;
+    // x layout: each op group is centred on its integer x (0, 1, 2,
+    // ...). Bars within a group span [-group_half, +group_half] from
+    // that centre so the x-axis label at integer x sits directly
+    // under the bar group.
+    let group_total: f64 = 0.8; // width of all bars stacked, leaving 0.2 between groups
+    let bar_width: f64 = group_total / n_libs as f64;
+    let group_half: f64 = group_total / 2.0;
+    let x_min: f64 = -0.5;
+    let x_max: f64 = n_ops as f64 - 0.5;
 
     let mut chart = ChartBuilder::on(&backend)
         .caption(&title, ("sans-serif", 28))
@@ -219,11 +224,16 @@ fn render_per_width_summary(
         .configure_mesh()
         .x_desc("operation")
         .y_desc("time (ns, log)")
-        .x_labels(n_ops)
+        // n_ops + 1 label positions to ensure plotters lands a tick at
+        // each integer 0..n_ops-1 rather than skipping alternates for
+        // spacing reasons.
+        .x_labels(n_ops + 1)
         .x_label_formatter(&|x| {
-            let i = x.floor() as usize;
-            if i < op_labels.len() {
-                op_labels[i].clone()
+            // Plotters hands us float positions near the integer ticks
+            // it chose; round to the nearest integer and look up.
+            let i = (x.round()) as i64;
+            if (0..n_ops as i64).contains(&i) {
+                op_labels[i as usize].clone()
             } else {
                 String::new()
             }
@@ -251,7 +261,6 @@ fn render_per_width_summary(
             .unwrap_or(RGBColor(100, 100, 100))
     };
 
-    let bar_width = 0.8 / n_libs as f64;
     for (li, lib) in libs.iter().enumerate() {
         let color = color_for(lib);
         let bars: Vec<_> = ops
@@ -259,9 +268,11 @@ fn render_per_width_summary(
             .enumerate()
             .filter_map(|(oi, op)| {
                 per_op.get(**op).and_then(|m| m.get(lib)).map(|&ns| {
-                    let slot_left = oi as f64 + 0.1; // 0.1 padding
-                    let left = slot_left + li as f64 * bar_width;
-                    let right = (left + bar_width).min(slot_left + n_libs as f64 * bar_width);
+                    let centre = oi as f64;
+                    // Each lib's bar is the li-th slot of n_libs,
+                    // packed [-group_half, +group_half] around centre.
+                    let left = centre - group_half + li as f64 * bar_width;
+                    let right = left + bar_width;
                     Rectangle::new(
                         [(left, y_floor), (right, ns)],
                         color.filled(),
