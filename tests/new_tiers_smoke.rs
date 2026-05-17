@@ -164,6 +164,19 @@ macro_rules! tier_smoke {
             }
 
             #[test]
+            fn widen_narrow_round_trip() {
+                // .widen() (where it exists) lifts to the next tier
+                // in the comprehensive ladder; .narrow() drops to
+                // the previous tier. Round-trip should preserve the
+                // value because the next-up tier is strictly larger
+                // and at_scale=Tsmid stays in range on either side.
+                let v: $Tsmid = <$Tsmid>::from_int(42);
+                let n = v.narrow().expect("narrow into previous tier");
+                assert_eq!(n.to_bits().to_string(), v.to_bits().to_string(),
+                    "narrow should bit-preserve when value fits the smaller storage");
+            }
+
+            #[test]
             fn transcendentals_at_half_max_scale_do_not_overflow() {
                 // Regression: the bench panicked at D56<56>/ln_strict
                 // because the work integer was too narrow to hold

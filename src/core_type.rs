@@ -1463,6 +1463,164 @@ pub type D1231s1231 = D1231<1231>;
 #[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub type D1231s1232 = D1231<1232>;
 
+// ─── Cross-tier next-neighbour widen/narrow chain ─────────────────────
+//
+// The historical .widen() / .narrow() methods on D38/D76/D153/D307
+// follow the power-of-two storage sequence (D38→D76→D153→D307). The
+// 0.2.6 tier ladder fills in half-widths between each pair plus
+// extends to D1231; the complete ladder is:
+//
+//   D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
+//   D461 → D615 → D923 → D1231
+//
+// The next-neighbour .widen() / .narrow() methods on the new tiers go
+// to the immediate adjacent rung (D56.widen() → D76, D76.widen()
+// already returns D153 which is the existing power-of-two next-up,
+// etc.). The cross-tier From / TryFrom impls below cover the
+// neighbour pairs that weren't already declared by the legacy
+// D38/D76/D153/D307 blocks.
+//
+// Coverage strategy: declare every NEW adjacent pair both ways. The
+// existing legacy declarations (D9↔D18, D9/D18/D38↔D76, D38/D76↔D153,
+// D76/D153↔D307) stay where they are; this block adds the conversions
+// that hop through the new tiers (D38↔D56, D56↔D76, D76↔D114, etc.).
+
+// D38 ↔ D56
+#[cfg(any(feature = "d56", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_widening!(wide D56, crate::wide_int::I192, D38, i128);
+#[cfg(any(feature = "d56", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D56, crate::wide_int::I192);
+
+// D56 ↔ D76
+#[cfg(all(any(feature = "d56", feature = "wide"), any(feature = "d76", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D56, crate::wide_int::I192);
+#[cfg(all(any(feature = "d56", feature = "wide"), any(feature = "d76", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D56, crate::wide_int::I192, D76, crate::wide_int::I256);
+
+// D76 ↔ D114
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d114", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D114, crate::wide_int::I384, D76, crate::wide_int::I256);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d114", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D114, crate::wide_int::I384);
+
+// D114 ↔ D153
+#[cfg(all(any(feature = "d114", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D153, crate::wide_int::I512, D114, crate::wide_int::I384);
+#[cfg(all(any(feature = "d114", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D114, crate::wide_int::I384, D153, crate::wide_int::I512);
+
+// D153 ↔ D230
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D230, crate::wide_int::I768, D153, crate::wide_int::I512);
+#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D153, crate::wide_int::I512, D230, crate::wide_int::I768);
+
+// D230 ↔ D307
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D307, crate::wide_int::I1024, D230, crate::wide_int::I768);
+#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D230, crate::wide_int::I768, D307, crate::wide_int::I1024);
+
+// D307 ↔ D461
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d461", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D461, crate::wide_int::I1536, D307, crate::wide_int::I1024);
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d461", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D307, crate::wide_int::I1024, D461, crate::wide_int::I1536);
+
+// D461 ↔ D615
+#[cfg(all(any(feature = "d461", feature = "x-wide"), any(feature = "d615", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D615, crate::wide_int::I2048, D461, crate::wide_int::I1536);
+#[cfg(all(any(feature = "d461", feature = "x-wide"), any(feature = "d615", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D461, crate::wide_int::I1536, D615, crate::wide_int::I2048);
+
+// D615 ↔ D923
+#[cfg(all(any(feature = "d615", feature = "x-wide"), any(feature = "d923", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D923, crate::wide_int::I3072, D615, crate::wide_int::I2048);
+#[cfg(all(any(feature = "d615", feature = "x-wide"), any(feature = "d923", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D615, crate::wide_int::I2048, D923, crate::wide_int::I3072);
+
+// D923 ↔ D1231
+#[cfg(all(any(feature = "d923", feature = "xx-wide"), any(feature = "d1231", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D1231, crate::wide_int::I4096, D923, crate::wide_int::I3072);
+#[cfg(all(any(feature = "d923", feature = "xx-wide"), any(feature = "d1231", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D923, crate::wide_int::I3072, D1231, crate::wide_int::I4096);
+
+// .widen() / .narrow() methods on the new tiers — each points at the
+// IMMEDIATE neighbour in the comprehensive ladder above. The legacy
+// .widen() / .narrow() on D38/D76/D153/D307 are unchanged (still go
+// to the power-of-two next-up) for source compatibility; users who
+// want to traverse through the half-widths should use the methods
+// declared here, or the From / TryFrom impls directly.
+
+#[cfg(any(feature = "d56", feature = "wide"))]
+impl<const SCALE: u32> D56<SCALE> {
+    /// Demote to the immediate previous tier ([`D38`]) at the same `SCALE`.
+    /// Returns `Err(ConvertError::Overflow)` if the value exceeds `i128` range.
+    #[inline]
+    pub fn narrow(self) -> Result<D38<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D76`]) at the same `SCALE`. Lossless.
+    #[inline] #[must_use]
+    pub fn widen(self) -> D76<SCALE> { self.into() }
+}
+
+#[cfg(any(feature = "d114", feature = "wide"))]
+impl<const SCALE: u32> D114<SCALE> {
+    /// Demote to the immediate previous tier ([`D76`]) at the same `SCALE`.
+    #[inline]
+    pub fn narrow(self) -> Result<D76<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D153`]) at the same `SCALE`. Lossless.
+    #[inline] #[must_use]
+    pub fn widen(self) -> D153<SCALE> { self.into() }
+}
+
+#[cfg(any(feature = "d230", feature = "wide"))]
+impl<const SCALE: u32> D230<SCALE> {
+    /// Demote to the immediate previous tier ([`D153`]) at the same `SCALE`.
+    #[inline]
+    pub fn narrow(self) -> Result<D153<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D307`]) at the same `SCALE`. Lossless.
+    #[inline] #[must_use]
+    pub fn widen(self) -> D307<SCALE> { self.into() }
+}
+
+#[cfg(any(feature = "d461", feature = "x-wide"))]
+impl<const SCALE: u32> D461<SCALE> {
+    /// Demote to the immediate previous tier ([`D307`]) at the same `SCALE`.
+    #[inline]
+    pub fn narrow(self) -> Result<D307<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D615`]) at the same `SCALE`. Lossless.
+    #[inline] #[must_use]
+    pub fn widen(self) -> D615<SCALE> { self.into() }
+}
+
+#[cfg(any(feature = "d615", feature = "x-wide"))]
+impl<const SCALE: u32> D615<SCALE> {
+    /// Demote to the immediate previous tier ([`D461`]) at the same `SCALE`.
+    #[inline]
+    pub fn narrow(self) -> Result<D461<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D923`]) at the same `SCALE`. Lossless.
+    #[inline] #[must_use]
+    pub fn widen(self) -> D923<SCALE> { self.into() }
+}
+
+#[cfg(any(feature = "d923", feature = "xx-wide"))]
+impl<const SCALE: u32> D923<SCALE> {
+    /// Demote to the immediate previous tier ([`D615`]) at the same `SCALE`.
+    #[inline]
+    pub fn narrow(self) -> Result<D615<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D1231`]) at the same `SCALE`. Lossless.
+    #[inline] #[must_use]
+    pub fn widen(self) -> D1231<SCALE> { self.into() }
+}
+
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+impl<const SCALE: u32> D1231<SCALE> {
+    /// Demote to the immediate previous tier ([`D923`]) at the same `SCALE`.
+    /// D1231 is the widest shipped tier, so there is no `.widen()` method.
+    #[inline]
+    pub fn narrow(self) -> Result<D923<SCALE>, crate::error::ConvertError> { self.try_into() }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
