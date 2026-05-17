@@ -2065,17 +2065,20 @@ pub(crate) fn wide_cast<S: WideInt, T: WideInt>(src: S) -> T {
 // The concrete wide integer type pairs. The 256/512/1024-bit widths
 // back the wide decimal tiers; 2048/4096-bit widths are the
 // strict-transcendental work integers.
-decl_wide_int!(Uint256, Int256, 2, 4);
-decl_wide_int!(Uint384, Int384, 3, 6);
-decl_wide_int!(Uint512, Int512, 4, 8);
-decl_wide_int!(Uint768, Int768, 6, 12);
-decl_wide_int!(Uint1024, Int1024, 8, 16);
-decl_wide_int!(Uint1536, Int1536, 12, 24);
-decl_wide_int!(Uint2048, Int2048, 16, 32);
-decl_wide_int!(Uint3072, Int3072, 24, 48);
-decl_wide_int!(Uint4096, Int4096, 32, 64);
-decl_wide_int!(Uint6144, Int6144, 48, 96);
-decl_wide_int!(Uint8192, Int8192, 64, 128);
+// $L = u64 limb count; $D = doubled (= 2 · $L) for widening
+// products. Each Int*'s name encodes the bit width = $L · 64.
+decl_wide_int!(Uint192, Int192, 3, 6);
+decl_wide_int!(Uint256, Int256, 4, 8);
+decl_wide_int!(Uint384, Int384, 6, 12);
+decl_wide_int!(Uint512, Int512, 8, 16);
+decl_wide_int!(Uint768, Int768, 12, 24);
+decl_wide_int!(Uint1024, Int1024, 16, 32);
+decl_wide_int!(Uint1536, Int1536, 24, 48);
+decl_wide_int!(Uint2048, Int2048, 32, 64);
+decl_wide_int!(Uint3072, Int3072, 48, 96);
+decl_wide_int!(Uint4096, Int4096, 64, 128);
+decl_wide_int!(Uint6144, Int6144, 96, 192);
+decl_wide_int!(Uint8192, Int8192, 128, 256);
 
 // Short aliases used by the decimal-tier macros (replacing the former
 // `crate::wide` re-export shim). The signed alias is exposed at each

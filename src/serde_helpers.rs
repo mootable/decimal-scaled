@@ -657,8 +657,12 @@ macro_rules! decl_wide_serde {
                 } else {
                     let mut bytes = [0u8; $bytes_len];
                     let limbs = self.0.limbs_le();
+                    // limbs is [u64; $bytes_len / 8]; write 8 bytes
+                    // little-endian per limb. On LE targets this
+                    // produces the same byte sequence as the historic
+                    // [u128; $bytes_len / 16] path.
                     for (i, limb) in limbs.iter().enumerate() {
-                        bytes[i * 16..(i + 1) * 16].copy_from_slice(&limb.to_le_bytes());
+                        bytes[i * 8..(i + 1) * 8].copy_from_slice(&limb.to_le_bytes());
                     }
                     s.serialize_bytes(&bytes)
                 }
@@ -699,11 +703,12 @@ macro_rules! decl_wide_serde {
                         if v.len() != $bytes_len {
                             return Err(serde::de::Error::invalid_length($bytes_len, &self));
                         }
-                        let mut limbs = [0u128; $bytes_len / 16];
+                        // 8 bytes per u64 limb; bytes_len/8 limbs total.
+                        let mut limbs = [0u64; $bytes_len / 8];
                         for (i, limb) in limbs.iter_mut().enumerate() {
-                            let mut buf = [0u8; 16];
-                            buf.copy_from_slice(&v[i * 16..(i + 1) * 16]);
-                            *limb = u128::from_le_bytes(buf);
+                            let mut buf = [0u8; 8];
+                            buf.copy_from_slice(&v[i * 8..(i + 1) * 8]);
+                            *limb = u64::from_le_bytes(buf);
                         }
                         Ok(<$crate::core_type::$Type<S>>::from_bits(<$Storage>::from_limbs_le(limbs)))
                     }
