@@ -127,7 +127,7 @@ Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
 at every public type×scale combo. Six ops: add / sub / mul / div
 / rem / neg.
 
-### D9
+### D9 - 32 bits
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
@@ -138,7 +138,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | 1.61 ns | **1.61 ns** | 1.62 ns |
 | neg | **257 ps** | 257 ps | 257 ps |
 
-### D18
+### D18 - 64 bits
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
@@ -149,7 +149,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **1.61 ns** | 1.72 ns | 2.44 ns |
 | neg | **269 ps** | 270 ps | 268 ps |
 
-### D38
+### D38 - 128 bits
 
 | op | s = 0 | s = 19 | s = 38 |
 |---|---|---|---|
@@ -160,7 +160,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | 8.50 ns | **8.27 ns** | 11.7 ns |
 | neg | **513 ps** | 515 ps | 514 ps |
 
-### D56 (new — 192-bit half-width tier)
+### D56 - 192 bits
 
 | op | s = 0 | s = 28 | s = 56 |
 |---|---|---|---|
@@ -171,7 +171,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **20.2 ns** | 63.4 ns | 62.3 ns |
 | neg | 1.25 ns | 1.24 ns | **1.20 ns** |
 
-### D76
+### D76 - 256 bits
 
 | op | s = 0 | s = 35 | s = 76 |
 |---|---|---|---|
@@ -182,7 +182,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **17.0 ns** | 26.7 ns | 161 ns |
 | neg | 1.65 ns | **1.62 ns** | 1.65 ns |
 
-### D114 (new — 384-bit half-width tier)
+### D114 - 384 bits
 
 | op | s = 0 | s = 57 | s = 114 |
 |---|---|---|---|
@@ -193,7 +193,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **26.7 ns** | 66.7 ns | 77.3 ns |
 | neg | 1.95 ns | 1.97 ns | **1.90 ns** |
 
-### D153
+### D153 - 512 bits
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
@@ -204,7 +204,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **23.5 ns** | 43.6 ns | 60.8 ns |
 | neg | 2.69 ns | 2.62 ns | **2.62 ns** |
 
-### D230 (new — 768-bit half-width tier)
+### D230 - 768 bits
 
 | op | s = 0 | s = 115 | s = 230 |
 |---|---|---|---|
@@ -215,7 +215,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **41.9 ns** | 102 ns | 144 ns |
 | neg | 9.52 ns | 9.37 ns | **9.31 ns** |
 
-### D307
+### D307 - 1024 bits
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
@@ -226,7 +226,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **49.9 ns** | 113 ns | 131 ns |
 | neg | **8.91 ns** | 9.82 ns | 9.51 ns |
 
-### D461 (new — 1536-bit half-width tier, `x-wide`)
+### D461 - 1536 bits
 
 | op | s = 0 | s = 230 | s = 461 |
 |---|---|---|---|
@@ -237,7 +237,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **63.8 ns** | 144 ns | 182 ns |
 | neg | **20.9 ns** | 21.4 ns | 21.4 ns |
 
-### D615 (new — 2048-bit, `x-wide`)
+### D615 - 2048 bits
 
 | op | s = 0 | s = 308 | s = 615 |
 |---|---|---|---|
@@ -248,7 +248,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **87.8 ns** | 133 ns | 212 ns |
 | neg | **29.1 ns** | 30.8 ns | 33.6 ns |
 
-### D923 (new — 3072-bit half-width tier, `xx-wide`)
+### D923 - 3072 bits
 
 | op | s = 0 | s = 461 | s = 923 |
 |---|---|---|---|
@@ -259,7 +259,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 | rem | **127 ns** | 230 ns | 289 ns |
 | neg | **53.2 ns** | 53.2 ns | 53.2 ns |
 
-### D1231 (new — 4096-bit, `xx-wide`)
+### D1231 - 4096 bits
 
 | op | s = 0 | s = 616 | s = 1231 |
 |---|---|---|---|
