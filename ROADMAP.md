@@ -188,7 +188,7 @@ without bloating the core:
 
 | crate (proposed)             | what it adds | why it wants this backend |
 |------------------------------|--------------|---------------------------|
-| `decimal-scaled-expr`        | Runtime-parsed expression DSL (formulas-as-strings, spreadsheet-style); AST → eval against `D{N}<SCALE>` values; UDF hook | Bit-exact reproducible spreadsheet / rule-engine evaluation; the *only* such engine that doesn't drift on `0.1 + 0.2` |
+| `decimal-scaled-expr`        | Dual-track expression engine: type-level builders for compile-time-known shapes that monomorphise to direct decimal ops, plus a runtime AST for spreadsheet-style string formulas | Bit-exact reproducible formula / rule engine; the *only* such engine that doesn't drift on `0.1 + 0.2`. Shared substrate for the math + finance crates below |
 | `decimal-scaled-math`        | Extended types: complex, rationals, vectors, matrices (small + sparse), statistical distributions, interval arithmetic, error propagation | 0-ULP determinism propagates through every algebra; lets you compose linear-algebra pipelines that are bit-identical across machines |
 | `decimal-scaled-finance`     | Time-value-of-money (NPV, IRR, PV, FV), amortisation schedules, day-count conventions (ACT/360, 30/360, ACT/ACT, ACT/365), bond pricing, Black-Scholes, FX with caller-chosen rounding | Finance is the original deterministic-decimal use case; every regulator-facing calc must reproduce exactly across re-runs and across counterparties |
 
@@ -200,3 +200,36 @@ storage tier. The finance crate in particular benefits from
 `*_with(mode)` propagation: every regulator has its own
 last-digit-rounding rule (HALFUP, HALFDOWN, HALFEVEN), and we can
 honour each per-call without forking the engine.
+
+### Expression engine design notes (`decimal-scaled-expr`)
+
+Two complementary tracks under a single `Compute` trait:
+
+1. **Type-level expression templates.** Operator overloads on a
+   small `Expr<...>` newtype build a zero-sized AST in the type
+   system (`Add<X, Mul<Y, Lit>>`). `#[inline(always)]` traversal at
+   `.eval()` time lets the compiler see straight through to direct
+   decimal ops — when the operands are bound at the call site this
+   should compile to the same machine code as hand-written
+   arithmetic. Math + finance APIs use this track because their
+   formulas are mostly fixed-shape at the call site (NPV is always
+   `Σ cf_i / (1+r)^i`; cross-product is always `a × b - c × d`).
+
+2. **Runtime AST.** `Box<Node>` shape for spreadsheet-style
+   string-parsed formulas, evaluated by tree traversal. Required
+   for the dynamic-expression use case; same `Compute` trait so
+   downstream code is path-agnostic.
+
+The "lazy decimal" idea is the bridge: the expr types behave like
+decimals (impl `Add` / `Mul` / etc.) and can be passed wherever a
+`Decimal` is expected. Code that materialises immediately
+(`let result: D38<12> = (x + y * 2).compute();`) compiles away the
+AST entirely under the type-level track. Code that defers the
+materialisation gets symbolic manipulation, caching, partial
+evaluation, etc., for free.
+
+Math and finance crates compose on top by importing the trait
+and writing their algorithms once — `npv(cashflows, rate)` works
+identically whether `cashflows` is a `Vec<D38<12>>` (immediate
+arithmetic), a `Vec<Expr<D38<12>>>` (lazy with re-evaluation), or
+a `Vec<DynExpr>` (parsed from a spreadsheet cell).
