@@ -248,3 +248,27 @@ and writing their algorithms once — `npv(cashflows, rate)` works
 identically whether `cashflows` is a `Vec<D38<12>>` (immediate
 arithmetic), a `Vec<Expr<D38<12>>>` (lazy with re-evaluation), or
 a `Vec<DynExpr>` (parsed from a spreadsheet cell).
+
+**Serialisation is a first-class requirement.** Expressions
+need to round-trip through `Serialize` / `Deserialize` so they
+can be:
+
+- persisted to disk (spreadsheet save / load, business-rule
+  storage, version-controlled formula libraries);
+- transmitted over the network (API submission of a custom
+  formula; remote evaluation);
+- written to audit logs for regulator-facing finance work
+  (every applied formula recorded in its exact deserialisable
+  form, so a re-run reproduces bit-identically);
+- diff-able as text (RON / JSON / S-expression for
+  human-readable change review of business rules).
+
+Implementation shape: the runtime AST is the natural
+serialisation target (a `Box<Node>` tree maps to a tagged-union
+JSON / RON / postcard payload). The type-level templates can
+*serialise* (visit the type-level AST, emit nodes) but
+*deserialisation* produces a `DynExpr` because the inbound shape
+isn't known at compile time. The `Compute` trait abstracts both
+so callers don't care. Multiple wire formats should be supported
+behind feature flags (`serde-json`, `serde-postcard`,
+`serde-ron`) without forcing a default dependency.
