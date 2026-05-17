@@ -796,6 +796,45 @@ and does so at 0 ULP correctly-rounded vs `dashu-float`'s
 multi-ULP default rounding. `bigdecimal` ships no
 transcendentals at any width.
 
+Per-tier mul / div charts (scale on the x-axis, one line per
+library, `decimal-scaled` always drawn last in red):
+
+#### 192-bit (D56)
+![mul @ 192bit](figures/library_comparison/mul_192bit.png)
+![div @ 192bit](figures/library_comparison/div_192bit.png)
+
+#### 384-bit (D114)
+![mul @ 384bit](figures/library_comparison/mul_384bit.png)
+![div @ 384bit](figures/library_comparison/div_384bit.png)
+
+#### 768-bit (D230)
+![mul @ 768bit](figures/library_comparison/mul_768bit.png)
+![div @ 768bit](figures/library_comparison/div_768bit.png)
+
+#### 1536-bit (D461)
+![mul @ 1536bit](figures/library_comparison/mul_1536bit.png)
+![div @ 1536bit](figures/library_comparison/div_1536bit.png)
+
+#### 2048-bit (D615)
+![mul @ 2048bit](figures/library_comparison/mul_2048bit.png)
+![div @ 2048bit](figures/library_comparison/div_2048bit.png)
+
+#### 3072-bit (D923)
+![mul @ 3072bit](figures/library_comparison/mul_3072bit.png)
+![div @ 3072bit](figures/library_comparison/div_3072bit.png)
+
+#### 4096-bit (D1231)
+![mul @ 4096bit](figures/library_comparison/mul_4096bit.png)
+![div @ 4096bit](figures/library_comparison/div_4096bit.png)
+
+The transcendentals (`ln` / `exp` / `sin` / `sqrt`) on the new
+tiers ship single-point data per library (`s = mid` only), so
+they're presented in the table above rather than as charts.
+`examples/chart_gen.rs` skips any (op × width) where no library
+has ≥2 data points — single-dot charts are misleading without
+the slope, and the new tier sweep would need scale-sampling at
+3 points per library to plot meaningfully.
+
 ### Reading the library comparison
 
 - **Use `decimal-scaled` when** you need correctly-rounded

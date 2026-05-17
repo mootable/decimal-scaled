@@ -69,12 +69,17 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     let mut count = 0;
     let mut skipped = 0;
     for ((op, width), by_lib) in &data {
-        // Skip charts where no library has ≥2 data points — a chart
-        // with only single dots and no lines is meaningless. This
-        // typically catches transcendentals that are benched only at
-        // s=mid per library.
-        let has_a_line = by_lib.values().any(|points| points.len() >= 2);
-        if !has_a_line {
+        // Render only when there's a real multi-library comparison
+        // worth plotting: at least 2 libraries must have ≥2 scale
+        // points each. This filters two degenerate cases:
+        //
+        //   * No library has ≥2 points (single-dot scatter chart).
+        //   * Only one library (typically `decimal-scaled`) has a
+        //     line while every peer has a single dot — a chart that
+        //     looks like our line floating above isolated dots
+        //     overstates the comparison.
+        let lines = by_lib.values().filter(|points| points.len() >= 2).count();
+        if lines < 2 {
             skipped += 1;
             continue;
         }
@@ -82,7 +87,10 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
         render_chart(&path, op, width, by_lib)?;
         count += 1;
     }
-    println!("wrote {count} charts to {out_dir}/ (skipped {skipped} single-point cases)");
+    println!(
+        "wrote {count} charts to {out_dir}/ (skipped {skipped} charts \
+         that would be single-line or no-line)"
+    );
     Ok(())
 }
 
