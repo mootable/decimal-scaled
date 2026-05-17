@@ -278,15 +278,30 @@ grows roughly linearly with limb count thanks to the MG magic-
 multiply for `÷ 10^SCALE`, which keeps every width's `div` near
 the same nanoseconds-per-limb ratio.
 
-**Wide-tier mul / div improvements vs the 0.2.5 baseline.** The
-0.2.6 cycle replaced the `[u128; N]` limb storage with the
-`[u64; 2N]` u64-native layout and routed every multi-limb divide
-through Knuth Algorithm D with the Möller-Granlund 2-by-1
-invariant reciprocal. The combined effect: D307<150> mul/div
-collapsed from ~60 µs to ~0.78 µs (**76× faster**), D153<75>
-mul/div from ~17 µs to ~0.43 µs (**40× faster**), D76<35> div
-from 4.8 µs to 218 ns (**22× faster**). The numbers above reflect
-the post-rewrite cost on the same hardware.
+**Wide-tier mul / div improvements vs the 0.2.5 baseline.** Two
+successive rewrites this development cycle:
+
+1. **0.2.6 limb-storage rewrite.** Replaced the `[u128; N]` limb
+   storage with the `[u64; 2N]` u64-native layout and routed
+   every multi-limb divide through Knuth Algorithm D with the
+   Möller–Granlund 2-by-1 invariant reciprocal. D307<150> mul/div
+   collapsed from ~60 µs to ~0.78 µs (**76× faster**), D153<75>
+   mul/div from ~17 µs to ~0.43 µs (**40× faster**), D76<35> div
+   from 4.8 µs to 218 ns (**22× faster**).
+2. **0.3.0 chain-of-÷10^38 rescale.** For SCALE > 38 the `mul`
+   rescale step now factors `n / 10^SCALE` as a sequence of
+   `n / 10^38` chunks, each riding the existing base-2^128 MG
+   2-by-1 kernel — a branchless inner loop the CPU pipelines
+   better than Knuth's q̂ + correct scheme. On top of (1):
+   D307<150> mul **786 ns → 434 ns** (**1.8× faster again**),
+   D461<230> mul **1.62 µs → 866 ns** (**1.9×**), D615<308> mul
+   **2.20 µs → 1.36 µs** (**1.6×**). The win decays at the
+   widest tiers (D1231: ~6%) where chain length (16+ chunks)
+   eats the per-pass savings — those tiers want Barrett or
+   wider magic tables, which is the next round of work tracked
+   in [`ROADMAP.md`](../ROADMAP.md). Combined-remainder
+   bookkeeping preserves the HalfToEven correctness contract
+   across chunks.
 
 **Mul / div at the storage maximum scale.** At each type's largest
 scale, `10^SCALE` is approaching the storage type's representable
