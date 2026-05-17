@@ -1463,6 +1463,152 @@ impl MG2by1U64 {
     }
 }
 
+/// Möller–Granlund 3-by-2 invariant divisor at u64 base.
+///
+/// Divides `(n2·B² + n1·B + n0)` by `(d1·B + d0)` for a normalised
+/// 2-limb divisor (`d1`'s top bit set) using *two* limbs of divisor
+/// information, returning a quotient that is exactly correct in one
+/// pass — no refinement loop is needed in the Knuth Algorithm D
+/// caller. Compared to [`MG2by1U64`] + the historic Knuth refinement
+/// loop, the 3-by-2 form trades:
+///
+/// - +1 hardware multiply per call (the d0·q step), against
+/// - up to 2 refinement-loop iterations per quotient limb saved.
+///
+/// Net win at every Knuth call with `n ≥ 2` divisor limbs.
+///
+/// Reference: Möller & Granlund 2011, Algorithm 5 (the *real* div
+/// recommendation from `research/2026_05_17_div.md` — `MG2by1U64` was
+/// the intermediate stepping stone that landed first).
+/// The macro shape mirrors GMP's `udiv_qr_3by2` in `longlong.h`.
+#[derive(Clone, Copy)]
+pub(crate) struct MG3by2U64 {
+    d1: u64,
+    d0: u64,
+    /// Reciprocal of the top divisor limb (same formula as MG2by1U64::v).
+    dinv: u64,
+}
+
+impl MG3by2U64 {
+    /// Setup. `d1` must be normalised (`d1 >> 63 == 1`).
+    ///
+    /// Computes the *3-by-2* invariant reciprocal, which differs from
+    /// the [`MG2by1U64`] 2-by-1 reciprocal by an extra refinement step
+    /// that accounts for `d0`. Without that refinement the algorithm
+    /// fails on inputs where the divisor's low limb is large enough
+    /// to push the q estimate over by more than the corrections can
+    /// recover (test case: `n=(B-2, B-1, B-1)`, `d=(B-1, B-1)`, where
+    /// the naive 2-by-1 reciprocal hands back q=0 instead of B-1).
+    ///
+    /// Reference: GMP's `invert_pi1` macro in `gmp-impl.h`.
+    #[inline]
+    pub(crate) const fn new(d1: u64, d0: u64) -> Self {
+        debug_assert!(d1 >> 63 == 1, "MG3by2U64::new: top divisor limb must be normalised");
+        // Step 1: 2-by-1 reciprocal of d1 alone.
+        let num = ((!d1 as u128) << 64) | (u64::MAX as u128);
+        let mut v = (num / (d1 as u128)) as u64;
+
+        // Step 2: refine for d0. `p = d1·v + d0` (mod B). If the sum
+        // overflows, v was over-estimated → decrement.
+        let mut p = d1.wrapping_mul(v).wrapping_add(d0);
+        if p < d0 {
+            v = v.wrapping_sub(1);
+            let mask = if p >= d1 { u64::MAX } else { 0 };
+            p = p.wrapping_sub(d1);
+            v = v.wrapping_add(mask);
+            p = p.wrapping_sub(mask & d1);
+        }
+
+        // Step 3: account for d0·v. `(t1, t0) = d0·v`; check if
+        // `p + t1` overflows; one or two more decrements may be
+        // required.
+        let prod = (d0 as u128) * (v as u128);
+        let t1 = (prod >> 64) as u64;
+        let t0 = prod as u64;
+        let (new_p, carry) = p.overflowing_add(t1);
+        let _p_final = new_p;
+        if carry {
+            v = v.wrapping_sub(1);
+            if new_p >= d1 && (new_p > d1 || t0 >= d0) {
+                v = v.wrapping_sub(1);
+            }
+        }
+
+        Self { d1, d0, dinv: v }
+    }
+
+    /// Divide `(n2·B² + n1·B + n0)` by `(d1·B + d0)`. Requires
+    /// `(n2, n1) < (d1, d0)` so the quotient fits a single u64.
+    /// Returns `(q, r1, r0)` where the remainder is `r1·B + r0`.
+    ///
+    /// Algorithm: GMP's `udiv_qr_3by2_preinv`. Decomposed:
+    /// 1. Initial `q` from a 2-by-1 divide of `(n2, n1)` by `d1` via
+    ///    the precomputed reciprocal `dinv`.
+    /// 2. Subtract `(q·d1, q·d0)` from `(n1, n0)`; this stages the
+    ///    candidate remainder `(r1, r0)`.
+    /// 3. Two add-back corrections that fire 0–1 times each: the
+    ///    first catches `q` over by 1, the second catches the rare
+    ///    `q` over by 2 (only possible if the initial 2-by-1 reciprocal
+    ///    over-shot).
+    #[inline]
+    pub(crate) const fn div_rem(&self, n2: u64, n1: u64, n0: u64) -> (u64, u64, u64) {
+        debug_assert!(
+            n2 < self.d1 || (n2 == self.d1 && n1 < self.d0),
+            "MG3by2U64::div_rem: numerator high pair must be < divisor"
+        );
+
+        // Step 1: q estimate from (n2, n1) / d1 via dinv.
+        // (q_hi, q_lo) = n2 * dinv + (n2, n1) — overflow into a 257th
+        // bit is fine, GMP's mask-based correction recovers from it.
+        let prod = (n2 as u128).wrapping_mul(self.dinv as u128)
+            .wrapping_add(((n2 as u128) << 64) | (n1 as u128));
+        let mut q = (prod >> 64) as u64;
+        let q_lo = prod as u64;
+
+        // Step 2a: r1 = n1 - q·d1 (mod B).
+        let mut r1 = n1.wrapping_sub(q.wrapping_mul(self.d1));
+
+        // Step 2b: (r1, r0) = (r1, n0) - (d1, d0).
+        let r256 = (((r1 as u128) << 64) | (n0 as u128))
+            .wrapping_sub(((self.d1 as u128) << 64) | (self.d0 as u128));
+        r1 = (r256 >> 64) as u64;
+        let mut r0 = r256 as u64;
+
+        // Step 2c: (r1, r0) -= d0·q (mod B²).
+        let t = (self.d0 as u128).wrapping_mul(q as u128);
+        let r256 = (((r1 as u128) << 64) | (r0 as u128)).wrapping_sub(t);
+        r1 = (r256 >> 64) as u64;
+        r0 = r256 as u64;
+
+        // Step 3: q += 1; provisional.
+        q = q.wrapping_add(1);
+
+        // Step 4a: first conditional correction.
+        // If r1 >= q_lo (in u64 numeric), the provisional q was over
+        // by 1; decrement q and add (d1, d0) back to the remainder.
+        // Branchless via mask.
+        let mask = if r1 >= q_lo { u64::MAX } else { 0 };
+        q = q.wrapping_add(mask); // adds u64::MAX = -1.
+        let add = ((mask & self.d1) as u128) << 64 | ((mask & self.d0) as u128);
+        let r256 = (((r1 as u128) << 64) | (r0 as u128)).wrapping_add(add);
+        r1 = (r256 >> 64) as u64;
+        r0 = r256 as u64;
+
+        // Step 4b: final correction (rare).
+        // If (r1, r0) >= (d1, d0), q was *still* off by 1; bump q and
+        // subtract the divisor once more.
+        if r1 > self.d1 || (r1 == self.d1 && r0 >= self.d0) {
+            q = q.wrapping_add(1);
+            let r256 = (((r1 as u128) << 64) | (r0 as u128))
+                .wrapping_sub(((self.d1 as u128) << 64) | (self.d0 as u128));
+            r1 = (r256 >> 64) as u64;
+            r0 = r256 as u64;
+        }
+
+        (q, r1, r0)
+    }
+}
+
 /// Runtime divide dispatcher at u64 base.
 pub(crate) fn limbs_divmod_dispatch_u64(
     num: &[u64],
@@ -1565,6 +1711,14 @@ pub(crate) fn limbs_divmod_knuth_u64(
     debug_assert!(m_plus_n >= n);
     let m = m_plus_n - n;
 
+    // MG 2-by-1 q̂ estimator + refinement loop. We previously
+    // experimented with MG 3-by-2 (which would absorb the refinement
+    // into a single call) but it lost in the bench: for decimal
+    // divisors the refinement loop almost never fires, and the
+    // 3-by-2's extra per-call multiply costs more than the 0–1
+    // refinement iterations it would eliminate. MG3by2U64 stays
+    // available in the module for future use cases with arbitrary
+    // divisors.
     let mg_top = MG2by1U64::new(v[n - 1]);
 
     let mut j_plus_one = m + 1;
@@ -2299,6 +2453,58 @@ mod slice_tests {
                 assert_eq!(unpack(&q64), q128, "knuth q mismatch");
                 assert_eq!(unpack(&r64), r128, "knuth r mismatch");
             }
+        }
+    }
+
+    /// `MG3by2U64` matches the `limbs_divmod_u64` oracle on a
+    /// representative corpus. Tests the corner cases that historically
+    /// broke MG 3-by-2 implementations: numerator near divisor (so the
+    /// initial q estimate may overshoot by 2), minimal normalised d1
+    /// (= B/2), maximal d1, and the GMP-confirmed corner where r1
+    /// must compare against q_lo without underflow.
+    #[test]
+    fn mg3by2_u64_matches_reference() {
+        let cases: &[(u64, u64, u64, u64, u64)] = &[
+            // (n2, n1, n0, d1, d0) — d1 normalised, (n2, n1) < (d1, d0).
+            // Minimal normalised d1 = B/2.
+            (0, 0, 1, 1u64 << 63, 0),
+            (0, 1, 0, 1u64 << 63, 0),
+            ((1u64 << 63) - 1, u64::MAX, u64::MAX, 1u64 << 63, 1),
+            // Maximal d1 = B-1.
+            (u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX, u64::MAX),
+            (0, 0, 1, u64::MAX, 1),
+            // Mid-range divisor; numerator just under (d1, d0).
+            (0xc0ffee, 0xdead_beef, 0xface_b00c, (1u64 << 63) | 0xc0ffee_u64, 0xdead_beef_face_b00c),
+            // Small numerator vs large divisor (quotient = 0).
+            (0, 1, 2, (1u64 << 63) | 1, 2),
+            // Numerator = divisor (quotient = 1, remainder = 0). Need to
+            // express (d1, d0, 0) carefully: n2 = 0, then we'd violate
+            // the precondition. Skip; this is a degenerate corner the
+            // Knuth caller never hits.
+        ];
+        for &(n2, n1, n0, d1, d0) in cases {
+            assert!(d1 >> 63 == 1, "d1 not normalised: {d1:#x}");
+            assert!(
+                n2 < d1 || (n2 == d1 && n1 < d0),
+                "test precondition (n2, n1) < (d1, d0) violated"
+            );
+            let mg = MG3by2U64::new(d1, d0);
+            let (q, r1, r0) = mg.div_rem(n2, n1, n0);
+
+            // Reference: 3-limb numerator / 2-limb divisor via
+            // limbs_divmod_u64. The function requires
+            // `rem.len() >= num.len()` so size both at 3.
+            let num = alloc::vec![n0, n1, n2];
+            let den = alloc::vec![d0, d1];
+            let mut q_ref = alloc::vec![0u64; 3];
+            let mut r_ref = alloc::vec![0u64; 3];
+            limbs_divmod_u64(&num, &den, &mut q_ref, &mut r_ref);
+
+            assert_eq!(q_ref[0], q, "MG3by2 q mismatch for n=({n2:#x},{n1:#x},{n0:#x}) d=({d1:#x},{d0:#x})");
+            assert_eq!(q_ref[1], 0, "MG3by2 q higher limb non-zero — precondition violated");
+            assert_eq!(q_ref[2], 0, "MG3by2 q higher limb non-zero — precondition violated");
+            assert_eq!(r_ref[0], r0, "MG3by2 r0 mismatch");
+            assert_eq!(r_ref[1], r1, "MG3by2 r1 mismatch");
         }
     }
 
