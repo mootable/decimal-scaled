@@ -249,26 +249,37 @@ identically whether `cashflows` is a `Vec<D38<12>>` (immediate
 arithmetic), a `Vec<Expr<D38<12>>>` (lazy with re-evaluation), or
 a `Vec<DynExpr>` (parsed from a spreadsheet cell).
 
-**Serialisation is a first-class requirement.** Expressions
+**Whole-tree serialisation is a first-class requirement.**
+Expressions (the entire AST, not just the materialised result)
 need to round-trip through `Serialize` / `Deserialize` so they
 can be:
 
 - persisted to disk (spreadsheet save / load, business-rule
   storage, version-controlled formula libraries);
 - transmitted over the network (API submission of a custom
-  formula; remote evaluation);
+  formula; remote evaluation; send-formula-to-server with the
+  values resolved on the receiving side);
 - written to audit logs for regulator-facing finance work
   (every applied formula recorded in its exact deserialisable
-  form, so a re-run reproduces bit-identically);
+  form, so a re-run reproduces bit-identically — input values,
+  intermediate operator tree, applied rounding mode, all stored
+  as one tagged payload);
 - diff-able as text (RON / JSON / S-expression for
-  human-readable change review of business rules).
+  human-readable change review of business rules);
+- equality-comparable in serialised form (two formulas that
+  serialise to the same payload are structurally identical;
+  useful for memoisation keys and conflict detection).
 
-Implementation shape: the runtime AST is the natural
-serialisation target (a `Box<Node>` tree maps to a tagged-union
-JSON / RON / postcard payload). The type-level templates can
-*serialise* (visit the type-level AST, emit nodes) but
-*deserialisation* produces a `DynExpr` because the inbound shape
-isn't known at compile time. The `Compute` trait abstracts both
-so callers don't care. Multiple wire formats should be supported
+Implementation shape: the runtime AST `Box<Node>` is the
+natural serialisation target — every operator node, every
+literal, every variable reference, and every nested sub-tree
+emits as a tagged-union element in the payload. The type-level
+templates can *serialise* (visit the type-level AST, emit the
+same tagged-union sequence) but *deserialisation* always
+materialises a `DynExpr` because the inbound shape isn't known
+at compile time. The `Compute` trait abstracts both so callers
+don't care which side they got. Multiple wire formats supported
 behind feature flags (`serde-json`, `serde-postcard`,
-`serde-ron`) without forcing a default dependency.
+`serde-ron`) without forcing a default dependency. A schema
+versioning scheme on the root node keeps long-lived persisted
+formulas decodable as the AST grows new node types.
