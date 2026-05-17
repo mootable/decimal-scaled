@@ -188,6 +188,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sin_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = sin_fixed(to_fixed(self.0), w)
             .round_to_i128(w, SCALE)
@@ -200,6 +203,10 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cos_strict(self) -> Self {
+        // cos(0) = 1; storage of 1 at this SCALE is 10^SCALE bits.
+        if self.0 == 0 {
+            return Self::from_bits(10_i128.pow(SCALE));
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let arg = to_fixed(self.0).add(wide_half_pi(w));
         let raw = sin_fixed(arg, w)
@@ -218,6 +225,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tan_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
         let sin_w = sin_fixed(v, w);
@@ -235,6 +245,33 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan_strict(self) -> Self {
+        use crate::consts::DecimalConsts;
+        // Fast path 1 — atan(0) = 0.
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        // Fast path 2 — atan(±1) = ±π/4. ONE is the storage of 1.0 at
+        // this SCALE, namely 10^SCALE. Comparing the raw bits avoids
+        // building a transient D38 for the literal 1.
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::quarter_pi();
+        }
+        if self.0 == -one_bits {
+            return -Self::quarter_pi();
+        }
+        // Fast path 3 — atan(x) ≈ x for very small |x|. The cubic
+        // correction |x³/3| rounds to 0 at the storage scale when
+        // |x| < (1.5·10⁻ˢᶜᴬᴸᴱ)^(1/3) ≈ 10^(−⌈SCALE/3⌉). Conservative
+        // threshold: |raw| < 10^(SCALE − ((SCALE+2)/3)). Works for
+        // every SCALE including 0 (threshold = 1, so the path doesn't
+        // fire on any nonzero value at SCALE 0 — harmless).
+        let thresh_exp = SCALE.saturating_sub((SCALE + 2) / 3);
+        let threshold: i128 = 10_i128.pow(thresh_exp);
+        if self.0.abs() <= threshold {
+            return self;
+        }
+
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = atan_fixed(to_fixed(self.0), w)
             .round_to_i128(w, SCALE)
@@ -253,6 +290,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asin_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -298,6 +338,18 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict(self) -> Self {
+        use crate::consts::DecimalConsts;
+        // acos(0) = π/2; acos(1) = 0; acos(-1) = π.
+        if self.0 == 0 {
+            return Self::half_pi();
+        }
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::ZERO;
+        }
+        if self.0 == -one_bits {
+            return Self::pi();
+        }
         use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -379,6 +431,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sinh_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
         let ex = crate::log_exp_strict::exp_fixed(v, w);
@@ -396,6 +451,10 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cosh_strict(self) -> Self {
+        // cosh(0) = 1.
+        if self.0 == 0 {
+            return Self::from_bits(10_i128.pow(SCALE));
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
         let ex = crate::log_exp_strict::exp_fixed(v, w);
@@ -414,6 +473,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tanh_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
         let ex = crate::log_exp_strict::exp_fixed(v, w);
@@ -470,6 +532,11 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh_strict(self) -> Self {
+        // acosh(1) = 0.
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::ZERO;
+        }
         use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -502,6 +569,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -523,6 +593,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_degrees_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = to_fixed(self.0)
             .mul_u128(180)
@@ -537,6 +610,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_radians_strict(self) -> Self {
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = to_fixed(self.0)
             .mul(wide_pi(w), w)
@@ -729,6 +805,12 @@ fn atan_taylor(x: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels
 /// halving `atan(x) = 2·atan(x / (1 + √(1+x²)))`; then the series.
 fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
+
+    #[cfg(feature = "perf-trace")]
+    let _atan_span = ::tracing::info_span!("atan_fixed").entered();
+
+    #[cfg(feature = "perf-trace")]
+    let _setup_span = ::tracing::info_span!("setup").entered();
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let sign = v_w.negative;
     let mut x = Fixed { negative: false, mag: v_w.mag };
@@ -737,14 +819,29 @@ fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernel
         x = one_w.div(x, w); // atan(x) = π/2 − atan(1/x)
         add_half_pi = true;
     }
+    #[cfg(feature = "perf-trace")]
+    drop(_setup_span);
+
     // Three argument halvings: atan(x) = 2·atan(x / (1 + √(1+x²))).
+    #[cfg(feature = "perf-trace")]
+    let _halvings_span = ::tracing::info_span!("halvings").entered();
     let halvings: u32 = 3;
     for _ in 0..halvings {
         let x2 = x.mul(x, w);
         let denom = one_w.add(one_w.add(x2).sqrt(w));
         x = x.div(denom, w);
     }
+    #[cfg(feature = "perf-trace")]
+    drop(_halvings_span);
+
+    #[cfg(feature = "perf-trace")]
+    let _taylor_span = ::tracing::info_span!("taylor").entered();
     let mut result = atan_taylor(x, w);
+    #[cfg(feature = "perf-trace")]
+    drop(_taylor_span);
+
+    #[cfg(feature = "perf-trace")]
+    let _reasm_span = ::tracing::info_span!("reassemble").entered();
     result = result.shl(halvings);
     if add_half_pi {
         result = wide_half_pi(w).sub(result);
