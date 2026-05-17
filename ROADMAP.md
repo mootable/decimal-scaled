@@ -144,6 +144,7 @@ roadmap item here unless the accuracy contract changes.
 
 | approach | status | expected win |
 |---|---|---|
+| Split `benches/library_comparison.rs` into one bench-binary per width (`lib_cmp_d38.rs`, `lib_cmp_d76.rs`, `lib_cmp_d307.rs`, …) so `cargo bench --bench lib_cmp_d307` can iterate on a single tier without re-running the whole matrix | TODO (post-0.3.0) | minutes vs hours per iteration when tuning one tier; each file stays focused on its peer set |
 | Re-bench every release on a single dedicated machine, not whatever runner happened to be available | TODO | reduces inter-release noise that currently looks like regressions |
 | Track ULP deltas continuously, not one-shot at 0.2.5 | TODO | catches accuracy regressions early; cheap to run |
 | Cross-platform bit-determinism CI (Linux/macOS/Windows × x86_64/aarch64) | TODO | proves the `*_strict` invariant the docs claim |
