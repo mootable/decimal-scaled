@@ -177,6 +177,13 @@
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
+// Re-export `tracing` under the crate so the perf-trace cfg-gated
+// `info_span!` calls in macro-emitted modules can reach it via
+// `$crate::tracing::…`. Internal-only — gated by the same feature.
+#[cfg(feature = "perf-trace")]
+#[doc(hidden)]
+pub use ::tracing;
+
 mod arithmetic;
 #[cfg(feature = "bench-alt")]
 mod bench_alt;

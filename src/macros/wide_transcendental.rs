@@ -569,12 +569,19 @@ macro_rules! decl_wide_transcendental {
             /// 1976 §3 ("binary-splitting for exp via repeated
             /// squaring of a reduced argument").
             pub(super) fn exp_fixed(v_w: W, w: u32) -> W {
+                #[cfg(feature = "perf-trace")]
+                let _exp_span = $crate::tracing::info_span!(concat!(
+                    stringify!($Type), "::exp_fixed"
+                )).entered();
+
                 // Cache 10^w once — used as divisor in every Taylor
                 // iteration and squaring step below. At D307<150>
                 // w=180 and `pow10(180)` costs ~50 µs by itself
                 // (`lit(10).pow(180)` is ~log₂(180)=8 wide squarings
                 // followed by ~180 cumulative multiplies); without
                 // caching this would dominate the call.
+                #[cfg(feature = "perf-trace")]
+                let _reduce_span = $crate::tracing::info_span!("range_reduce").entered();
                 let one_w = one(w);
                 let l2 = ln2(w);
                 let pow10_w = one_w;
@@ -588,7 +595,11 @@ macro_rules! decl_wide_transcendental {
                 }
 
                 let s_red = s >> n;
+                #[cfg(feature = "perf-trace")]
+                drop(_reduce_span);
 
+                #[cfg(feature = "perf-trace")]
+                let _taylor_span = $crate::tracing::info_span!("taylor_series").entered();
                 let mut sum = one_w + s_red;
                 let mut term = s_red;
                 let mut iter: u128 = 2;
@@ -603,7 +614,11 @@ macro_rules! decl_wide_transcendental {
                         break;
                     }
                 }
+                #[cfg(feature = "perf-trace")]
+                drop(_taylor_span);
 
+                #[cfg(feature = "perf-trace")]
+                let _sqr_span = $crate::tracing::info_span!("postfix_squarings").entered();
                 let mut squared = sum;
                 let mut i = 0;
                 while i < n {
@@ -611,7 +626,11 @@ macro_rules! decl_wide_transcendental {
                     i += 1;
                 }
                 let sum = squared;
+                #[cfg(feature = "perf-trace")]
+                drop(_sqr_span);
 
+                #[cfg(feature = "perf-trace")]
+                let _reasm_span = $crate::tracing::info_span!("reassemble").entered();
                 if k >= 0 {
                     let shift = k as u32;
                     if bit_length(sum) + shift >= W::BITS {

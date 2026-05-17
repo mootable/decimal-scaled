@@ -112,11 +112,20 @@ d615 = []
 xx-wide = ["d923", "d1231"]
 d923 = []
 d1231 = []
+# Internal perf-investigation feature: emits `tracing::info_span!`
+# blocks at the section boundaries of the wide-tier strict
+# transcendental cores (`exp_fixed`, `ln_fixed`, …). With
+# `tracing-chrome` set up in an example, the resulting JSON loads in
+# https://ui.perfetto.dev for a per-section flame view. Default-off;
+# the spans compile to nothing without the feature, so production
+# users see zero overhead.
+perf-trace = ["dep:tracing"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
 decimal_scaled_macros = { path = "macros", version = "0.3.1", default-features = false, optional = true }
+tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false, features = ["cargo_bench_support", "html_reports"] }
@@ -124,6 +133,9 @@ i256 = { version = "0.2", default-features = false }
 serde_json = "1"
 postcard = { version = "1", default-features = false, features = ["alloc"] }
 decimal_scaled_macros = { path = "macros" }
+# Perf-trace examples wire tracing-chrome to write Perfetto/Chrome JSON.
+tracing-chrome = "0.7"
+tracing-subscriber = { version = "0.3", default-features = false, features = ["std"] }
 # Benchmark-only baselines for the backend comparisons (see benches/).
 # None of these are normal dependencies.
 bnum = { version = "0.14", default-features = false }
@@ -327,3 +339,14 @@ members = [
     "./macros",
 ]
 resolver = "3"
+
+# `debug = true` emits a full PDB (function names + line info) on
+# Windows MSVC and full DWARF on Linux/Mac. Required for sample-based
+# profilers (samply, cargo-flamegraph) to resolve frames to symbol
+# names — `line-tables-only` only carries file:line and leaves the
+# function-name table empty, which makes flame graphs unsymbolicated.
+# Doesn't affect optimisation level; ~30% binary growth from debug
+# info, but the PDB is a sibling file on Windows (not in the .exe)
+# so runtime perf and shipped binary size are unchanged.
+[profile.release]
+debug = true
