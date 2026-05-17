@@ -238,7 +238,14 @@ fn render_per_width_summary(
                 String::new()
             }
         })
+        // Suppress the auto x-axis gridlines that would otherwise draw
+        // a vertical through the centre of each bar group. We'll draw
+        // our own separators at the half-integer slot boundaries
+        // below.
+        .x_max_light_lines(0)
+        .disable_x_mesh()
         .draw()?;
+
 
     let palette: &[(RGBColor, &str)] = &[
         (RGBColor(31, 119, 180),  "rust_decimal"),
@@ -285,6 +292,23 @@ fn render_per_width_summary(
             .draw_series(bars)?
             .label(label)
             .legend(move |(x, y)| Rectangle::new([(x, y - 5), (x + 12, y + 5)], color.filled()));
+    }
+
+    // Major x separators at the boundaries between operation groups
+    // (x = 0.5, 1.5, ..., n_ops - 1.5). Drawn AFTER the bars so they
+    // sit on top instead of being overlaid. Read as "this region
+    // belongs to op N" — the prior auto-gridline bisected each group.
+    let separator_style = ShapeStyle {
+        color: RGBColor(120, 120, 120).to_rgba(),
+        filled: false,
+        stroke_width: 2,
+    };
+    for i in 1..n_ops {
+        let x = i as f64 - 0.5;
+        chart.draw_series(LineSeries::new(
+            [(x, y_floor), (x, y_ceil)].into_iter(),
+            separator_style,
+        ))?;
     }
 
     chart
