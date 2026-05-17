@@ -26,6 +26,12 @@ use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 
 use decimal_scaled::{D153, D18, D307, D38, D76, D9};
+#[cfg(feature = "wide")]
+use decimal_scaled::{D56, D114, D230};
+#[cfg(feature = "x-wide")]
+use decimal_scaled::{D461, D615};
+#[cfg(feature = "xx-wide")]
+use decimal_scaled::{D923, D1231};
 
 use bigdecimal::BigDecimal;
 use dashu_float::DBig;
@@ -477,5 +483,106 @@ fn num_bigint_from_one_at_scale(scale: usize) -> bigdecimal::num_bigint::BigInt 
     BigInt::from(10).pow(scale as u32)
 }
 
-criterion_group!(benches, bench_d9, bench_d18, bench_d38, bench_d76, bench_d153, bench_d307);
+// ─── New half-width and wider tiers ──────────────────────────────
+//
+// These slot between the power-of-two tiers above. Each compares
+// decimal-scaled arithmetic at scale 0 / mid / max plus a
+// transcendental sample at the midpoint, alongside the same
+// bigdecimal + dashu-float external baselines.
+macro_rules! decl_new_tier_bench {
+    ($fn_name:ident, $T:ident, $bit:literal, $mid:literal, $max:literal) => {
+        fn $fn_name(c: &mut Criterion) {
+            for &scale in &[0_usize, $mid, $max] {
+                let group_name = format!(concat!("lib_cmp/", $bit, "bit_s{}"), scale);
+                let mut g = c.benchmark_group(&group_name);
+
+                match scale {
+                    0 => {
+                        let a = $T::<0>::from_int(2); let b = $T::<0>::from_int(1);
+                        arith_copy!(g, "decimal-scaled", a, b);
+                    }
+                    s if s == $mid => {
+                        let a = $T::<$mid>::from_int(2); let b = $T::<$mid>::from_int(1);
+                        arith_copy!(g, "decimal-scaled", a, b);
+                        g.bench_function("decimal-scaled/ln",   |bn| bn.iter(|| black_box(a).ln_strict()));
+                        g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
+                        g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
+                        g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                    }
+                    s if s == $max => {
+                        let a = $T::<$max>::from_int(2); let b = $T::<$max>::from_int(1);
+                        arith_copy!(g, "decimal-scaled", a, b);
+                    }
+                    _ => unreachable!(),
+                }
+
+                // bigdecimal + dashu-float — pure-Rust BigInt-backed
+                // baselines, the only external libs that can carry
+                // these wide scales.
+                {
+                    let mant_a = num_bigint_from_two_at_scale(scale);
+                    let mant_b = num_bigint_from_one_at_scale(scale);
+                    let a = BigDecimal::new(mant_a, scale as i64);
+                    let b = BigDecimal::new(mant_b, scale as i64);
+                    arith_clone!(g, "bigdecimal", a, b);
+                }
+                {
+                    let prec = scale.max(1) as usize;
+                    let a = DBig::from_parts(2.into(), 0).with_precision(prec).value();
+                    let b = DBig::from_parts(1.into(), 0).with_precision(prec).value();
+                    arith_clone!(g, "dashu-float", a, b);
+                    if scale == $mid {
+                        let a2 = a.clone();
+                        g.bench_function("dashu-float/ln",  |bn| bn.iter(|| black_box(a2.clone()).ln()));
+                        g.bench_function("dashu-float/exp", |bn| bn.iter(|| black_box(a2.clone()).exp()));
+                    }
+                }
+
+                g.finish();
+            }
+        }
+    };
+}
+
+#[cfg(feature = "wide")]
+decl_new_tier_bench!(bench_d56,  D56,  "192",  28,  56);
+#[cfg(feature = "wide")]
+decl_new_tier_bench!(bench_d114, D114, "384",  57,  114);
+#[cfg(feature = "wide")]
+decl_new_tier_bench!(bench_d230, D230, "768",  115, 230);
+#[cfg(feature = "x-wide")]
+decl_new_tier_bench!(bench_d461, D461, "1536", 230, 461);
+#[cfg(feature = "x-wide")]
+decl_new_tier_bench!(bench_d615, D615, "2048", 308, 615);
+#[cfg(feature = "xx-wide")]
+decl_new_tier_bench!(bench_d923, D923, "3072", 461, 923);
+#[cfg(feature = "xx-wide")]
+decl_new_tier_bench!(bench_d1231, D1231, "4096", 616, 1231);
+
+#[cfg(all(feature = "wide", not(feature = "x-wide"), not(feature = "xx-wide")))]
+criterion_group!(
+    benches,
+    bench_d9, bench_d18, bench_d38, bench_d76, bench_d153, bench_d307,
+    bench_d56, bench_d114, bench_d230,
+);
+#[cfg(all(feature = "x-wide", not(feature = "xx-wide")))]
+criterion_group!(
+    benches,
+    bench_d9, bench_d18, bench_d38, bench_d76, bench_d153, bench_d307,
+    bench_d56, bench_d114, bench_d230,
+    bench_d461, bench_d615,
+);
+#[cfg(feature = "xx-wide")]
+criterion_group!(
+    benches,
+    bench_d9, bench_d18, bench_d38, bench_d76, bench_d153, bench_d307,
+    bench_d56, bench_d114, bench_d230,
+    bench_d461, bench_d615,
+    bench_d923, bench_d1231,
+);
+#[cfg(not(feature = "wide"))]
+criterion_group!(
+    benches,
+    bench_d9, bench_d18, bench_d38, bench_d76, bench_d153, bench_d307,
+);
 criterion_main!(benches);

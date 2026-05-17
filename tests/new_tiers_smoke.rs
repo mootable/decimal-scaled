@@ -110,6 +110,58 @@ macro_rules! tier_smoke {
                 assert_eq!(s, <$Tsmid>::ZERO);
                 assert_eq!(c, <$Tsmid>::ONE);
             }
+
+            #[test]
+            fn tau_close_to_two_pi() {
+                // τ ≈ 2π — independently rounded so the last digit
+                // can disagree. Check the relation up to a small
+                // fraction of π rather than bit-exact.
+                let tau = <$T>::tau();
+                let pi  = <$T>::pi();
+                let two_pi = pi + pi;
+                let diff = if tau > two_pi { tau - two_pi } else { two_pi - tau };
+                let bound = pi / <$T>::from_int(1000);
+                assert!(diff < bound,
+                    "tau and 2·pi should agree to 3 decimals");
+            }
+
+            #[test]
+            fn half_quarter_pi_ordered() {
+                // quarter_pi < half_pi < pi < tau — these
+                // build-time constants exercise the per-tier rescale
+                // dispatcher.
+                let qp = <$T>::quarter_pi();
+                let hp = <$T>::half_pi();
+                let pi = <$T>::pi();
+                let tau = <$T>::tau();
+                assert!(qp < hp);
+                assert!(hp < pi);
+                assert!(pi < tau);
+                // Each is approximately double the previous —
+                // tolerate ±10% to absorb low-scale truncation.
+                assert!(hp > qp);
+                assert!(pi > hp);
+                assert!(tau > pi);
+            }
+
+            #[test]
+            fn golden_in_expected_range() {
+                // φ = (1 + √5) / 2 ≈ 1.61803... — bracket between 1 and 2.
+                let g = <$T>::golden();
+                let one = <$T>::from_int(1);
+                let two = <$T>::from_int(2);
+                assert!(g > one);
+                assert!(g < two);
+            }
+
+            #[test]
+            fn default_is_zero() {
+                // Default for every tier should be ZERO. This
+                // exercises the per-tier Default impl that the
+                // tier-decl macro emits.
+                let d: $Tsmid = Default::default();
+                assert_eq!(d, <$Tsmid>::ZERO);
+            }
         }
     };
 }

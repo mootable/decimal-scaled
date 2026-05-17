@@ -50,6 +50,12 @@ use bnum::BnumD76;
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
 use decimal_scaled::{D307, D38, D76, D9, D153, D18};
+#[cfg(feature = "wide")]
+use decimal_scaled::{D56, D114, D230};
+#[cfg(feature = "x-wide")]
+use decimal_scaled::{D461, D615};
+#[cfg(feature = "xx-wide")]
+use decimal_scaled::{D923, D1231};
 use fixed::types::I64F64;
 use rust_decimal::Decimal;
 #[cfg(not(feature = "strict"))]
@@ -111,6 +117,41 @@ fn bench_arith(c: &mut Criterion) {
     arith_block!(g, "D307_s0", D307<0>);
     arith_block!(g, "D307_s150", D307<150>);
     arith_block!(g, "D307_s307", D307<307>);
+
+    #[cfg(feature = "wide")]
+    {
+        arith_block!(g, "D56_s0",   D56<0>);
+        arith_block!(g, "D56_s28",  D56<28>);
+        arith_block!(g, "D56_s56",  D56<56>);
+
+        arith_block!(g, "D114_s0",   D114<0>);
+        arith_block!(g, "D114_s57",  D114<57>);
+        arith_block!(g, "D114_s114", D114<114>);
+
+        arith_block!(g, "D230_s0",   D230<0>);
+        arith_block!(g, "D230_s115", D230<115>);
+        arith_block!(g, "D230_s230", D230<230>);
+    }
+    #[cfg(feature = "x-wide")]
+    {
+        arith_block!(g, "D461_s0",   D461<0>);
+        arith_block!(g, "D461_s230", D461<230>);
+        arith_block!(g, "D461_s461", D461<461>);
+
+        arith_block!(g, "D615_s0",   D615<0>);
+        arith_block!(g, "D615_s308", D615<308>);
+        arith_block!(g, "D615_s615", D615<615>);
+    }
+    #[cfg(feature = "xx-wide")]
+    {
+        arith_block!(g, "D923_s0",   D923<0>);
+        arith_block!(g, "D923_s461", D923<461>);
+        arith_block!(g, "D923_s923", D923<923>);
+
+        arith_block!(g, "D1231_s0",    D1231<0>);
+        arith_block!(g, "D1231_s616",  D1231<616>);
+        arith_block!(g, "D1231_s1231", D1231<1231>);
+    }
 
     // Cross-crate baselines.
     {
@@ -282,6 +323,41 @@ fn bench_strict(c: &mut Criterion) {
     strict_block!(g, "D307_s0", D307<0>);
     strict_block!(g, "D307_s150", D307<150>);
     strict_block!(g, "D307_s307", D307<307>);
+
+    #[cfg(feature = "wide")]
+    {
+        strict_block!(g, "D56_s0",   D56<0>);
+        strict_block!(g, "D56_s28",  D56<28>);
+        strict_block!(g, "D56_s56",  D56<56>);
+
+        strict_block!(g, "D114_s0",   D114<0>);
+        strict_block!(g, "D114_s57",  D114<57>);
+        strict_block!(g, "D114_s114", D114<114>);
+
+        strict_block!(g, "D230_s0",   D230<0>);
+        strict_block!(g, "D230_s115", D230<115>);
+        strict_block!(g, "D230_s230", D230<230>);
+    }
+    #[cfg(feature = "x-wide")]
+    {
+        strict_block!(g, "D461_s0",   D461<0>);
+        strict_block!(g, "D461_s230", D461<230>);
+        strict_block!(g, "D461_s461", D461<461>);
+
+        strict_block!(g, "D615_s0",   D615<0>);
+        strict_block!(g, "D615_s308", D615<308>);
+        strict_block!(g, "D615_s615", D615<615>);
+    }
+    #[cfg(feature = "xx-wide")]
+    {
+        strict_block!(g, "D923_s0",   D923<0>);
+        strict_block!(g, "D923_s461", D923<461>);
+        strict_block!(g, "D923_s923", D923<923>);
+
+        strict_block!(g, "D1231_s0",    D1231<0>);
+        strict_block!(g, "D1231_s616",  D1231<616>);
+        strict_block!(g, "D1231_s1231", D1231<1231>);
+    }
 
     g.finish();
 }
