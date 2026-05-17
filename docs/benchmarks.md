@@ -333,6 +333,62 @@ sub-ns round-trip on top of the D38 numbers above.
 bridge) - accurate but not correctly rounded to the last place,
 and substantially slower than the f64 path.
 
+### 2.1 Per-tier accuracy loss
+
+Each `*_fast` result inherits f64's ~16 decimal-digit mantissa.
+After scaling back into the type's `[u64; L]` storage, the
+result's low-order digits are pure noise / zero-fill — the f64
+output simply doesn't carry that precision.
+
+The table below reports the number of trailing decimal digits of
+the storage-scale result that diverge from the `*_strict`
+reference, measured by
+`examples/fast_vs_strict_ulp.rs`. Each row uses argument `1.5`
+for `ln` / `sin` / `sqrt` and `0.5` for `exp`.
+
+| type / s | ln noise | exp noise | sin noise | sqrt noise |
+|----------|---------:|----------:|----------:|-----------:|
+| D9<5>      |   0 |   0 |   0 |   0 |
+| D9<9>      |   0 |   0 |   0 |   0 |
+| D18<9>     |   0 |   0 |   0 |   0 |
+| D18<18>    |   2 |   3 |   2 |   3 |
+| D38<19>    |   3 |   4 |   3 |   3 |
+| D38<38>    |  39 |  38 |  22 |  22 |
+| D56<28>    |  12 |  12 |  12 |  13 |
+| D76<35>    |  18 |  19 |  19 |  20 |
+| D114<57>   |  41 |  42 |  41 |  41 |
+| D153<75>   |  59 |  59 |  59 |  60 |
+| D230<115>  |  99 |  99 |  98 |  98 |
+| D307<150>  | 134 | 135 | 134 | 134 |
+| D461<230>  | 214 | 215 | 214 | 213 |
+| D615<308>  | 292 | 292 | 292 | 292 |
+| D923<461>  | 461 | 462 | 461 | 462 |
+| D1231<616> | 616 | 617 | 616 | 617 |
+
+A noise count of **N** means the last N decimal digits at storage
+scale are zero-fill / random; the leading `max(0, MAX_SCALE − N)`
+digits agree with the strict reference. The empirical pattern
+matches the analytical bound `noise ≈ max(0, SCALE + log₁₀|result| − 15)`
+that f64's 53-bit mantissa imposes.
+
+**Reading the table.**
+
+- **D9 and D18 at low scale (≤ 9)** suffer no precision loss —
+  the result has at most 9 fractional digits and f64 has ~16
+  digits of headroom.
+- **D38 and below, scale ≤ 19**, lose only 2–4 trailing digits.
+  Acceptable for finance-grade work where last-digit precision
+  is not load-bearing.
+- **D38 at MAX_SCALE = 38** loses 22+ trailing digits; the f64
+  bridge is *not* a substitute for `*_strict` if you need that
+  precision.
+- **Wide tiers** (D56 and above) lose roughly `SCALE − 15`
+  trailing digits — at D1231<616> only the leading 15-16
+  significant figures survive. Treat `*_fast` as a "speed-first,
+  16-digit result rendered into the storage type" path on the
+  wide tiers; reach for `*_strict` when the wider digits actually
+  matter.
+
 ---
 
 ## 3. Strict transcendentals (integer-only, correctly rounded)
