@@ -558,23 +558,49 @@ are flat across scale).
 ### Accuracy at 128-bit (1 ULP = 10⁻¹⁹)
 
 Baseline: `D76<19>` integer-only `*_strict` (≥ 49 effective
-working digits, rounded back to 19). Bold = correctly rounded
-to the last place.
+working digits, rounded back to 19 under **HalfToEven**, which
+is the crate-wide default and the IEEE 754 default mode). Bold
+= correctly rounded to the last place under that baseline.
 
-| op      | decimal-scaled | fastnum | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |
-|---------|----------------|---------|--------------|-------------|------------|------------|--------|
-| ln(2)   | **0**          | **0**   | **0**        | **0**       | **0**      | -          | 6      |
-| exp(1)  | **0**          | 1       | 1            | 4           | 1          | -          | 46     |
-| sin(1)  | **0**          | 1       | 1            | -           | -          | -          | 33     |
-| sqrt(2) | **0**          | **0**   | **0**        | -           | **0**      | **0**      | 12     |
+| op      | decimal-scaled | fastnum   | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |
+|---------|----------------|-----------|--------------|-------------|------------|------------|--------|
+| ln(2)   | **0**          | **0**     | **0**        | **0**       | **0**      | -          | 6      |
+| exp(1)  | **0**          | 1†        | 1†           | 4           | 1†         | -          | 46     |
+| sin(1)  | **0**          | 1†        | 1†           | -           | -          | -          | 33     |
+| sqrt(2) | **0**          | **0**     | **0**        | -           | **0**      | **0**      | 12     |
 
-`decimal-scaled` is the only crate that is 0 ULP on every
-transcendental tested. `g_math`'s "0 ULP transcendentals"
-marketing claim is decisively false at the same matched
-precision: 6 ULP off on `ln(2)`, 46 ULP off on `exp(1)`,
-33 ULP off on `sin(1)`. Dashes mark "not implemented in this
-crate at this version" - `bigdecimal` ships no `ln` / `exp` /
-`sin`; `dashu-float` and `decimal-rs` ship no `sin`.
+**† Rounding-mode artifact, not a computation error.** The
+1-ULP cells for `fastnum` and `rust_decimal` are produced by a
+different last-digit rounding choice, not by precision loss.
+`examples/rounding_mode_probe.rs` confirms this: for `exp(1) = e`,
+
+```
+e = 2.71828182845904523536028747...
+  HalfToEven       ->  2.7182818284590452354  <- decimal-scaled
+  HalfAwayFromZero ->  2.7182818284590452354
+  Trunc / Floor    ->  2.7182818284590452353  <- rust_decimal,
+                                                 fastnum-rendered-at-s19
+```
+
+`fastnum` actually carries the full 38-digit `e` internally
+(`2.71828182845904523536028747135266249776`); rendering it at
+SCALE=19 with truncation gives `…2353`. `rust_decimal` does the
+same. If both were rendered HalfToEven they would also score
+0 ULP. The same explanation covers the `sin(1)` row.
+
+`decimal-scaled`'s `*_strict_with(mode)` siblings let you reproduce
+any of the other rounding modes if you need bit-compatibility with
+a peer's choice; the default `*_strict` uses HalfToEven to match
+IEEE 754 and to give round-trip stability across repeated
+operations.
+
+By contrast, `dashu-float`'s 4-ULP `exp(1)` and `g_math`'s
+6 / 46 / 33 / 12 ULP errors are *not* rounding-mode artifacts —
+they're genuine precision losses in the underlying computation
+(`g_math`'s "0 ULP transcendentals" marketing claim is wrong by
+those margins). Dashes mark "not implemented in this crate at
+this version" — `bigdecimal` ships no `ln` / `exp` / `sin`;
+`dashu-float` and `decimal-rs` ship no `sin`.
 
 ### 32-bit storage (s = 5 midpoint)
 
