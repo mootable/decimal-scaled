@@ -119,7 +119,7 @@ macro_rules! decl_wide_roots {
                 let sig_bits = <$CbrtWide>::BITS - n.leading_zeros();
                 let mut x = one << sig_bits.div_ceil(3);
                 loop {
-                    let y = (x + x + n / (x * x)) / three;
+                    let y = (x + x + n / x.square()) / three;
                     if y >= x {
                         break;
                     }
@@ -131,7 +131,7 @@ macro_rules! decl_wide_roots {
                 // Multiplying by 8: 8·N ≥ (2q + 1)³.
                 let eight_n = n << 3u32;
                 let t = q + q + one;
-                let q = if eight_n >= t * t * t { q + one } else { q };
+                let q = if eight_n >= t.square() * t { q + one } else { q };
                 let signed = if negative { -q } else { q };
                 Self::from_bits(signed.resize::<$Storage>())
             }
