@@ -166,6 +166,12 @@ plotters = { version = "0.3", default-features = false, features = ["bitmap_back
 name = "mul_div_candidates"
 harness = false
 
+# Per-PR perf-regression gate, driven by CodSpeed under simulation
+# instrumentation. See .github/workflows/codspeed.yml.
+[[bench]]
+name = "pr_gate"
+harness = false
+
 [[bench]]
 name = "all_functions"
 harness = false
