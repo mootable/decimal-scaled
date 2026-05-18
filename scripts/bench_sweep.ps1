@@ -86,22 +86,26 @@ $pinned = Resolve-Path $pinned
 $sweepDir = Resolve-Path $sweepDir
 
 # Each lane runs its bench queue sequentially, pinned to the lane's
-# affinity mask. A bench is skipped if its log already contains a
-# criterion success marker (so re-runs after a crash pick up where
-# they left off — criterion's own per-bench data lives in
-# target/criterion/ and is preserved across runs).
+# affinity mask. A bench is skipped if the lane log already records
+# its completion (the per-bench log doesn't have a single canonical
+# criterion "done" line, but the lane log emits one
+# `bench_pinned: <name> finished (exit 0)` per successful bench from
+# `bench_pinned.ps1` itself — that's the reliable signal). criterion's
+# own per-bench data lives in target/criterion/ and is preserved
+# across runs.
 $runLane = {
     param($benches, $mask, $sweepDir, $features, $pinned, $repoRoot)
     Set-Location $repoRoot
+    $laneLog = Join-Path $sweepDir "lane-$mask.log"
     foreach ($bench in $benches) {
-        $logFile = Join-Path $sweepDir "$bench.log"
-        if (Test-Path $logFile) {
-            $existing = Get-Content $logFile -Raw -ErrorAction SilentlyContinue
-            if ($existing -and $existing -match 'test result: ok\. 0 passed.*measured') {
+        if (Test-Path $laneLog) {
+            $lane = Get-Content $laneLog -Raw -ErrorAction SilentlyContinue
+            if ($lane -and $lane -match [regex]::Escape("bench_pinned: $bench finished (exit 0)")) {
                 Write-Output "skip $bench (already finished)"
                 continue
             }
         }
+        $logFile = Join-Path $sweepDir "$bench.log"
         Write-Output "starting $bench @ $mask"
         & pwsh -NoProfile -File $pinned `
             -BenchName $bench `
