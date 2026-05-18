@@ -7,6 +7,12 @@
 //! with an explicit-rounding-mode sibling) as a single kernel
 //! parameterised by `working_digits`.
 //!
+//! Hosts the shared `Fixed` ln primitives used by every D38 strict-
+//! ln callsite plus the `LnPolicy` defaults — `STRICT_GUARD`,
+//! `ln_fixed`, `wide_ln2`, `wide_ln10` — so the typed-shell file
+//! has no `crate::algos::*` or `crate::d_w128_kernels::*` references
+//! left.
+//!
 //! Fast paths preserved verbatim from the typed surface:
 //! - `self == 10^SCALE` (i.e. logical 1.0) returns `Self::ZERO`.
 //! - `|self - 1| <= 10^(SCALE - ceil(SCALE/2))` returns `(self - 1)`
@@ -16,8 +22,143 @@
 //! Panics on `raw <= 0` (the typed method's contract).
 
 use crate::d_w128_kernels::Fixed;
-use crate::log_exp_strict::{STRICT_GUARD, ln_fixed};
 use crate::rounding::RoundingMode;
+
+/// Guard digits added below the storage scale for the D38 strict log
+/// family. The 256-bit `Fixed` intermediate runs at
+/// `w = SCALE + STRICT_GUARD`; with `SCALE <= 38` that caps `w` at 68
+/// digits, comfortably inside the 75-digit window the embedded
+/// `ln 2` / `ln 10` constants cover.
+pub(crate) const STRICT_GUARD: u32 = 30;
+
+// `ln(2)` and `ln(10)` are embedded at 75 fractional digits — the same
+// reference scale `wide_pi` uses — so callers running at the maximum
+// strict working scale `W = SCALE + STRICT_GUARD = 38 + 30 = 68` always
+// rescale **down** (never up, which would wrap `from_w − to_w` as `u32`
+// and silently produce a wrong constant). The 75-digit window covers
+// every supported strict scale; widening it further is wasted work
+// because the working scale is capped by `D38<SCALE>`'s storage range
+// (no input that fits `i128` at `SCALE > 38` exists).
+//
+// Half-to-even rounded ln(2) × 10^75 and ln(10) × 10^75; both fit an
+// `Int256` (max ≈ 5.78 × 10⁷⁶). The next-digit rounding is documented
+// in-line so the truncation step is auditable from this file alone.
+
+/// `ln(2) × 10^75`, half-to-even rounded (76th frac digit is 4 — round
+/// down). Source: high-precision evaluation of the natural logarithm.
+const LN2_S75: &str =
+    "693147180559945309417232121458176568075500134360255254120680009493393621969";
+
+/// `ln(10) × 10^75`, half-to-even rounded (76th frac digit is 3 — round
+/// down). Source: high-precision evaluation of the natural logarithm.
+const LN10_S75: &str =
+    "2302585092994045684017991454684364207601101488628772976033327900967572609677";
+
+const LN2_RAW: crate::wide_int::Int256 =
+    match crate::wide_int::Int256::from_str_radix(LN2_S75, 10) {
+        Ok(v) => v,
+        Err(_) => panic!("algos::ln::fixed_d38: LN2_S75 not parseable"),
+    };
+
+const LN10_RAW: crate::wide_int::Int256 =
+    match crate::wide_int::Int256::from_str_radix(LN10_S75, 10) {
+        Ok(v) => v,
+        Err(_) => panic!("algos::ln::fixed_d38: LN10_S75 not parseable"),
+    };
+
+/// Repacks an `Int256` reference (internally `[u64; 4]`) into a
+/// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
+#[inline]
+fn fixed_from_int256(raw: crate::wide_int::Int256) -> Fixed {
+    let words = raw.0;
+    Fixed {
+        negative: false,
+        mag: [
+            (words[0] as u128) | ((words[1] as u128) << 64),
+            (words[2] as u128) | ((words[3] as u128) << 64),
+        ],
+    }
+}
+
+/// `ln(2)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
+/// the 75-digit reference and rescaled **down** to `w`.
+///
+/// Caller-side precondition: `w <= 75`. The D38 strict log family runs
+/// at `w = SCALE + STRICT_GUARD`, capped at `38 + 30 = 68`, so every
+/// strict call site is comfortably inside the bound. A debug-assert
+/// documents the invariant for any future caller.
+pub(crate) fn wide_ln2(w: u32) -> Fixed {
+    debug_assert!(w <= 75, "wide_ln2: working scale {w} exceeds embedded 75-digit ln 2");
+    let ln2_at_75 = fixed_from_int256(LN2_RAW);
+    if w == 75 { ln2_at_75 } else { ln2_at_75.rescale_down(75, w) }
+}
+
+/// `ln(10)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
+/// the 75-digit reference and rescaled **down** to `w`.
+///
+/// Caller-side precondition: `w <= 75`. See [`wide_ln2`].
+pub(crate) fn wide_ln10(w: u32) -> Fixed {
+    debug_assert!(w <= 75, "wide_ln10: working scale {w} exceeds embedded 75-digit ln 10");
+    let ln10_at_75 = fixed_from_int256(LN10_RAW);
+    if w == 75 { ln10_at_75 } else { ln10_at_75.rescale_down(75, w) }
+}
+
+/// Natural logarithm of a positive working-scale value `v_w`, returned
+/// at the same working scale `w`.
+///
+/// Range-reduces `v = 2^k · m` with `m ∈ [1,2)` — the mantissa is
+/// recomputed exactly from `v_w` once `k` is known — then evaluates
+/// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
+/// and returns `k·ln(2) + ln(m)`.
+pub(crate) fn ln_fixed(v_w: Fixed, w: u32) -> Fixed {
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let two_w = one_w.double();
+
+    // Range reduction: find k with v ∈ [2^k, 2^(k+1)); m_w = v_w / 2^k.
+    let mut k: i32 = v_w.bit_length() as i32 - one_w.bit_length() as i32;
+    let m_w = loop {
+        let m = if k >= 0 {
+            v_w.shr(k as u32)
+        } else {
+            v_w.shl((-k) as u32)
+        };
+        if m.ge_mag(two_w) {
+            k += 1;
+        } else if !m.ge_mag(one_w) {
+            k -= 1;
+        } else {
+            break m;
+        }
+    };
+
+    // t = (m - 1) / (m + 1) ∈ [0, 1/3]; artanh(t) = t + t³/3 + t⁵/5 + …
+    let t = m_w.sub(one_w).div(m_w.add(one_w), w);
+    let t2 = t.mul(t, w);
+    let mut sum = t;
+    let mut term = t;
+    let mut j: u128 = 1;
+    loop {
+        term = term.mul(t2, w);
+        let contrib = term.div_small(2 * j + 1);
+        if contrib.is_zero() {
+            break;
+        }
+        sum = sum.add(contrib);
+        j += 1;
+        if j > 400 {
+            break;
+        }
+    }
+    let ln_m = sum.double();
+
+    let ln2 = wide_ln2(w);
+    let k_ln2 = if k >= 0 {
+        ln2.mul_u128(k as u128)
+    } else {
+        ln2.mul_u128((-k) as u128).neg()
+    };
+    k_ln2.add(ln_m)
+}
 
 /// D38 natural log with explicit `working_digits` and rounding mode.
 /// Called by both `ln_strict_with` (with `working_digits = STRICT_GUARD`)
@@ -66,4 +207,93 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     ln_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
         .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("ln kernel", SCALE))
+}
+
+// ── log / log2 / log10 kernels (D38, Fixed fallback) ──────────────
+
+/// `log_base(v) = ln(v) / ln(base)`, both carried in the `Fixed` wide.
+/// Used by `LnPolicy::log_impl` when the D57 borrow path is not
+/// available (no `d57` / `wide` feature).
+#[inline]
+#[must_use]
+pub(crate) fn log_with(
+    raw: i128,
+    base_raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> i128 {
+    assert!(raw > 0, "D38::log: argument must be positive");
+    assert!(base_raw > 0, "D38::log: base must be positive");
+    let w = scale + working_digits;
+    let pow = 10u128.pow(working_digits);
+    let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(pow);
+    let b_w = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(pow);
+    let ln_b = ln_fixed(b_w, w);
+    assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
+    ln_fixed(v_w, w)
+        .div(ln_b, w)
+        .round_to_i128_with(w, scale, mode)
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log", scale))
+}
+
+/// Const-folded strict variant of [`log_with`].
+#[inline]
+#[must_use]
+pub(crate) fn log_strict<const SCALE: u32>(
+    raw: i128,
+    base_raw: i128,
+    mode: RoundingMode,
+) -> i128 {
+    log_with(raw, base_raw, SCALE, STRICT_GUARD, mode)
+}
+
+/// `log2(v) = ln(v) / ln(2)`, `Fixed`-wide fallback for D38.
+#[inline]
+#[must_use]
+pub(crate) fn log2_with(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> i128 {
+    assert!(raw > 0, "D38::log2: argument must be positive");
+    let w = scale + working_digits;
+    let v_w =
+        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
+    ln_fixed(v_w, w)
+        .div(wide_ln2(w), w)
+        .round_to_i128_with(w, scale, mode)
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log2", scale))
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn log2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+    log2_with(raw, SCALE, STRICT_GUARD, mode)
+}
+
+/// `log10(v) = ln(v) / ln(10)`, `Fixed`-wide fallback for D38.
+#[inline]
+#[must_use]
+pub(crate) fn log10_with(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> i128 {
+    assert!(raw > 0, "D38::log10: argument must be positive");
+    let w = scale + working_digits;
+    let v_w =
+        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
+    ln_fixed(v_w, w)
+        .div(wide_ln10(w), w)
+        .round_to_i128_with(w, scale, mode)
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log10", scale))
+}
+
+#[inline]
+#[must_use]
+pub(crate) fn log10_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+    log10_with(raw, SCALE, STRICT_GUARD, mode)
 }

@@ -13,8 +13,9 @@
 //!
 //! Returns the raw `i128` storage at the input's scale.
 
+use crate::algos::exp::fixed_d38::exp_fixed;
+use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::d_w128_kernels::Fixed;
-use crate::log_exp_strict::{STRICT_GUARD, exp_fixed, ln_fixed};
 use crate::rounding::RoundingMode;
 
 /// `base^exp` with caller-chosen `working_digits` above the storage scale.

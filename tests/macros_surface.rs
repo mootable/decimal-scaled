@@ -7,7 +7,7 @@
 //! back to the source file directly.
 
 use decimal_scaled::{D9, D18, D38};
-use decimal_scaled::{DecimalArithmetic, DecimalConvert};
+use decimal_scaled::DecimalArithmetic;
 
 type D9_2 = D9<2>;
 type D18_2 = D18<2>;
@@ -495,7 +495,7 @@ fn d38_add_sub_overflow() {
 
 #[test]
 fn decimal_trait_methods() {
-    use decimal_scaled::Decimal;
+    
     let v = D38_2::from_int(7);
     // scale() takes self
     assert_eq!(v.scale(), 2);

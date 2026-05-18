@@ -29,7 +29,6 @@ use decimal_scaled::D57;
 /// `cbrt(MAX)`, which is the small cube-root of the saturated input).
 #[test]
 fn d57_max_scale_cbrt_does_not_panic() {
-    use decimal_scaled::DecimalConvert as _;
     let v = D57::<57>::from_f64(8.0);
     let _ = v.cbrt_strict();
 }

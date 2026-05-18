@@ -2105,7 +2105,7 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn d76_basics() {
-        use crate::decimal_trait::Decimal;
+        
         use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I256;
         assert_eq!(super::D76s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
@@ -2360,7 +2360,7 @@ mod tests {
     #[cfg(any(feature = "d153", feature = "wide"))]
     #[test]
     fn d153_smoke() {
-        use crate::decimal_trait::Decimal;
+        
         use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I512;
         type D = super::D153<35>;
@@ -2383,7 +2383,7 @@ mod tests {
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
     fn d307_smoke() {
-        use crate::decimal_trait::Decimal;
+        
         use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I1024;
         type D = super::D307<35>;

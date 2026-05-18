@@ -3,8 +3,8 @@
 //! through trait dispatch (the type's inherent `is_zero` etc. shadow
 //! them), so tests must call them with explicit fully-qualified syntax.
 
-use decimal_scaled::{D38s12, Decimal};
-use decimal_scaled::{DecimalArithmetic, DecimalConvert};
+use decimal_scaled::D38s12;
+use decimal_scaled::DecimalArithmetic;
 
 #[test]
 fn decimal_trait_is_zero_default_impl() {

@@ -4,8 +4,10 @@
 //! `Fixed` 256-bit intermediate, wide tier on per-tier `exp_strict`
 //! kernels in [`crate::algos::exp::wide_kernel`]. The wide-tier macro
 //! does not ship a runtime-`working_digits` variant of `exp_fixed`, so
-//! [`ExpPolicy::exp_with_impl`] for wide tiers ignores the
-//! caller-supplied digits and delegates to the strict path.
+//! the wide-tier `*_with_impl` methods ignore the caller-supplied
+//! digits and delegate to the strict path.
+//!
+//! Functions covered: `exp` (natural) and `exp2` (base-2).
 
 use crate::algos::exp;
 use crate::core_type::{D9, D18, D38};
@@ -17,31 +19,51 @@ pub(crate) trait ExpPolicy: Sized {
 
     /// `e^self` with caller-chosen working digits.
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self;
+
+    /// `2^self` (strict, const-folded `SCALE + STRICT_GUARD`).
+    fn exp2_impl(self, mode: RoundingMode) -> Self;
+
+    /// `2^self` with caller-chosen working digits.
+    fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self;
 }
 
-impl<const SCALE: u32> ExpPolicy for D9<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        exp::widen_to_d38::exp_strict_d9(self, mode)
-    }
-    #[inline]
-    fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        exp::widen_to_d38::exp_with_d9(self, working_digits, mode)
-    }
+// ── Narrow tier — widen-to-D38 cascade ─────────────────────────────
+
+macro_rules! impl_exp_widen {
+    ($T:ident, $exp_strict:path, $exp_with:path) => {
+        impl<const SCALE: u32> ExpPolicy for $T<SCALE> {
+            #[inline]
+            fn exp_impl(self, mode: RoundingMode) -> Self {
+                $exp_strict(self, mode)
+            }
+            #[inline]
+            fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
+                $exp_with(self, working_digits, mode)
+            }
+            #[inline]
+            fn exp2_impl(self, mode: RoundingMode) -> Self {
+                let wide: D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode))
+                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                        concat!(stringify!($T), "::exp2"), SCALE,
+                    ))
+            }
+            #[inline]
+            fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
+                let wide: D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp2_approx_with(working_digits, mode))
+                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                        concat!(stringify!($T), "::exp2"), SCALE,
+                    ))
+            }
+        }
+    };
 }
 
-impl<const SCALE: u32> ExpPolicy for D18<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        exp::widen_to_d38::exp_strict_d18(self, mode)
-    }
-    #[inline]
-    fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        exp::widen_to_d38::exp_with_d18(self, working_digits, mode)
-    }
-}
+impl_exp_widen!(D9, exp::widen_to_d38::exp_strict_d9, exp::widen_to_d38::exp_with_d9);
+impl_exp_widen!(D18, exp::widen_to_d38::exp_strict_d18, exp::widen_to_d38::exp_with_d18);
 
-// D38 — see `crate::policy::ln` for the borrow-D57 rationale.
+// ── D38 — see `crate::policy::ln` for the borrow-D57 rationale. ────
 
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
@@ -52,6 +74,14 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
         Self(exp::borrow_d57::exp_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn exp2_impl(self, mode: RoundingMode) -> Self {
+        Self(exp::borrow_d57::exp2_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        Self(exp::borrow_d57::exp2_strict::<SCALE>(self.0, mode))
     }
 }
 
@@ -65,12 +95,51 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
         Self(exp::fixed_d38::exp_with(self.0, SCALE, working_digits, mode))
     }
+    #[inline]
+    fn exp2_impl(self, mode: RoundingMode) -> Self {
+        Self(exp::fixed_d38::exp2_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
+        Self(exp::fixed_d38::exp2_with(self.0, SCALE, working_digits, mode))
+    }
 }
 
 // ── Wide tiers — width default: per-tier wide_kernel ────────────────
 //
-// `exp_with_impl` for wide tiers ignores `working_digits` and falls
-// through to the strict path; see module-level docs for the rationale.
+// `exp_with_impl` / `exp2_with_impl` for wide tiers ignore
+// `working_digits` and fall through to the strict path; see module
+// docs for the rationale. `exp2_impl` delegates to the inherent
+// `*_strict_with` shell emitted by `decl_wide_transcendental!` since
+// the wide-tier core's `exp_fixed` plus per-tier `ln2(w)` compose
+// `exp2` in a way that doesn't have a free-function equivalent in
+// `algos::exp::wide_kernel` today.
+
+macro_rules! impl_wide_exp {
+    ($T:ident, $exp:path) => {
+        impl<const SCALE: u32> ExpPolicy for crate::core_type::$T<SCALE> {
+            #[inline]
+            fn exp_impl(self, mode: RoundingMode) -> Self {
+                Self($exp(self.0, mode, SCALE))
+            }
+            #[inline]
+            fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+                Self($exp(self.0, mode, SCALE))
+            }
+            #[inline]
+            fn exp2_impl(self, mode: RoundingMode) -> Self {
+                self.exp2_strict_with(mode)
+            }
+            #[inline]
+            fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+                self.exp2_strict_with(mode)
+            }
+        }
+    };
+}
+
+// D57 — bespoke arm so `exp_impl` can divert SCALE ∈ 45..=56 through
+// the lookup table before falling back to the generic `wide_kernel`.
 
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> ExpPolicy for crate::core_type::D57<SCALE> {
@@ -88,112 +157,39 @@ impl<const SCALE: u32> ExpPolicy for crate::core_type::D57<SCALE> {
         }
         Self(exp::wide_kernel::exp_strict_d57(self.0, mode, SCALE))
     }
+    #[inline]
+    fn exp2_impl(self, mode: RoundingMode) -> Self {
+        self.exp2_strict_with(mode)
+    }
+    #[inline]
+    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        self.exp2_strict_with(mode)
+    }
 }
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D76<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d76(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d76(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D76, exp::wide_kernel::exp_strict_d76);
 
 #[cfg(any(feature = "d115", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D115<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D115, exp::wide_kernel::exp_strict_d115);
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D153<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d153(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D153, exp::wide_kernel::exp_strict_d153);
 
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D230<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d230(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d230(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D230, exp::wide_kernel::exp_strict_d230);
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D307<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d307(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D307, exp::wide_kernel::exp_strict_d307);
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D462<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d462(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D462, exp::wide_kernel::exp_strict_d462);
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D616<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d616(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d616(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D616, exp::wide_kernel::exp_strict_d616);
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D924<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d924(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d924(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D924, exp::wide_kernel::exp_strict_d924);
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D1232<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d1232(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d1232(self.0, mode, SCALE))
-    }
-}
+impl_wide_exp!(D1232, exp::wide_kernel::exp_strict_d1232);
