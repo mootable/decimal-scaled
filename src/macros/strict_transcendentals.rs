@@ -100,29 +100,35 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     $crate::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
-            /// `sin_strict` — delegates to [`crate::core_type::D38::sin_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `sin_strict` — delegates to the policy-registered sin
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn sin_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sin_strict())
-                    .expect(concat!(stringify!($Type), "::sin_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::sin_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
-            /// `cos_strict` — delegates to [`crate::core_type::D38::cos_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `cos_strict` — delegates to the policy-registered cos
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cos_strict())
-                    .expect(concat!(stringify!($Type), "::cos_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::cos_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
-            /// `tan_strict` — delegates to [`crate::core_type::D38::tan_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `tan_strict` — delegates to the policy-registered tan
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn tan_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tan_strict())
-                    .expect(concat!(stringify!($Type), "::tan_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::tan_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `asin_strict` — delegates to [`crate::core_type::D38::asin_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]

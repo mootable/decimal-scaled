@@ -207,20 +207,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Sine under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::sin_impl`].
     #[inline]
     #[must_use]
     pub fn sin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let raw = sin_fixed(to_fixed(self.0), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::sin: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::sin_impl(self, mode)
     }
 
     /// Sine with caller-chosen guard digits.
@@ -231,23 +223,15 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Sine with caller-chosen guard digits AND rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::sin_with_impl`].
     #[inline]
     #[must_use]
     pub fn sin_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.sin_strict_with(mode);
         }
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        let w = SCALE + working_digits;
-        let raw = sin_fixed(to_fixed(self.0), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::sin: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::sin_with_impl(self, working_digits, mode)
     }
 
     /// Cosine of `self` (radians). Strict: `cos(x) = sin(x + π/2)`,
@@ -259,18 +243,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Cosine under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::cos_impl`].
     #[inline]
     #[must_use]
     pub fn cos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        if self.0 == 0 {
-            return Self::from_bits(10_i128.pow(SCALE));
-        }
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let arg = to_fixed(self.0).add(wide_half_pi(w));
-        let raw = sin_fixed(arg, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::cos: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::cos_impl(self, mode)
     }
 
     /// Cosine with caller-chosen guard digits.
@@ -287,15 +265,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.cos_strict_with(mode);
         }
-        if self.0 == 0 {
-            return Self::from_bits(10_i128.pow(SCALE));
-        }
-        let w = SCALE + working_digits;
-        let arg = to_fixed(self.0).add(wide_half_pi(w));
-        let raw = sin_fixed(arg, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::cos: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::cos_with_impl(self, working_digits, mode)
     }
 
     /// Tangent of `self` (radians). Strict: `tan(x) = sin(x) / cos(x)`,
@@ -312,25 +282,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Tangent under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::tan_impl`].
     #[inline]
     #[must_use]
     pub fn tan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let v = to_fixed(self.0);
-        let sin_w = sin_fixed(v, w);
-        let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
-        assert!(!cos_w.is_zero(), "D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
-        let raw = sin_w
-            .div(cos_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::tan: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::tan_impl(self, mode)
     }
 
     /// Tangent with caller-chosen guard digits.
@@ -347,22 +304,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.tan_strict_with(mode);
         }
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        let w = SCALE + working_digits;
-        let v = to_fixed(self.0);
-        let sin_w = sin_fixed(v, w);
-        let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
-        assert!(!cos_w.is_zero(), "D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
-        let raw = sin_w
-            .div(cos_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::tan: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::tan_with_impl(self, working_digits, mode)
     }
 
     /// Arctangent of `self`, in radians, in `(−π/2, π/2)`. Strict:
@@ -1271,7 +1213,7 @@ impl<const SCALE: u32> D38<SCALE> {
 /// are slightly less restrictive but using the atan threshold for
 /// uniformity is safe for all and avoids per-function tuning.
 #[inline]
-const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
+pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
     let thresh_exp = SCALE.saturating_sub((SCALE + 2) / 3);
     10_i128.pow(thresh_exp)
 }
@@ -1301,20 +1243,20 @@ fn wide_tau(w: u32) -> crate::d_w128_kernels::Fixed {
 }
 
 /// π/2 at working scale `w`.
-fn wide_half_pi(w: u32) -> crate::d_w128_kernels::Fixed {
+pub(crate) fn wide_half_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     wide_pi(w).halve()
 }
 
 /// Builds a working-scale `Fixed` from a signed `D38` raw value `r`:
 /// `r · 10^STRICT_GUARD`, carrying the sign.
-fn to_fixed(raw: i128) -> crate::d_w128_kernels::Fixed {
+pub(crate) fn to_fixed(raw: i128) -> crate::d_w128_kernels::Fixed {
     to_fixed_w(raw, crate::log_exp_strict::STRICT_GUARD)
 }
 
 /// Builds a working-scale `Fixed` from a signed `D38` raw value `r`:
 /// `r · 10^working_digits`, carrying the sign. Used by the `_approx`
 /// variants where the guard width is chosen at runtime.
-fn to_fixed_w(raw: i128, working_digits: u32) -> crate::d_w128_kernels::Fixed {
+pub(crate) fn to_fixed_w(raw: i128, working_digits: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let m = Fixed::from_u128_mag(raw.unsigned_abs(), false)
         .mul_u128(10u128.pow(working_digits));
@@ -1396,7 +1338,7 @@ fn sin_taylor(r: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels:
 /// Reduces `v` modulo τ via `q = round(v/τ)`, folds the remainder into
 /// `[0, π/2]` tracking sign and the `π − x` reflection, then evaluates
 /// the Taylor series.
-fn sin_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
+pub(crate) fn sin_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let tau = wide_tau(w);
     let pi = wide_pi(w);
