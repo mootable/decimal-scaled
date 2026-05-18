@@ -39,3 +39,10 @@ pub(crate) mod ln;
 pub(crate) mod pow;
 pub(crate) mod sqrt;
 pub(crate) mod trig;
+
+// Shared kernels consumed by multiple families. `mg_divide` is the
+// Moller-Granlund magic-number divide used by every multiplicative
+// path; `fixed_d38` is the 256-bit sign-magnitude `Fixed` type used
+// by the strict-transcendental fallback paths.
+pub(crate) mod mg_divide;
+pub(crate) mod fixed_d38;

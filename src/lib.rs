@@ -236,6 +236,8 @@ pub(crate) use crate::support::rounding;
 pub(crate) use crate::support::error;
 pub(crate) use crate::support::diagnostics;
 pub(crate) use crate::support::display;
+pub(crate) use crate::algos::mg_divide;
+pub(crate) use crate::algos::fixed_d38 as d_w128_kernels;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
@@ -243,8 +245,6 @@ pub(crate) use crate::support::display;
 // `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
 // `core_type.rs`, alongside every other surface.
 mod rescale;
-mod mg_divide;
-mod d_w128_kernels;
 // `wide_int` is now unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
 // `d_w128_kernels::Fixed` 256-bit sign-magnitude type), so the wide-
