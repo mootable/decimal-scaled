@@ -192,14 +192,80 @@ macro_rules! impl_wide_trig {
     };
 }
 
+// D56 — hand-rolled (not via `impl_wide_trig!`) so the `atan_impl`
+// arm can route `SCALE ∈ 44..=57` through the bespoke
+// `algos::trig::lookup_d56_s44_57_atan` kernel before falling back to
+// the generic `wide_kernel::atan_strict_d56`. Lower scales (and every
+// other forward op at every scale) still hit the wide kernel. Inverse
+// family (asin / acos / atan2) continues to delegate to the macro-
+// emitted inherent `*_strict_with` methods, matching the wide-tier
+// shape `impl_wide_trig!` produces for the sibling tiers.
+
 #[cfg(any(feature = "d56", feature = "wide"))]
-impl_wide_trig!(
-    D56,
-    trig::wide_kernel::sin_strict_d56,
-    trig::wide_kernel::cos_strict_d56,
-    trig::wide_kernel::tan_strict_d56,
-    trig::wide_kernel::atan_strict_d56
-);
+impl<const SCALE: u32> TrigPolicy for crate::core_type::D56<SCALE> {
+    #[inline]
+    fn sin_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::wide_kernel::sin_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::wide_kernel::sin_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn cos_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::wide_kernel::cos_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::wide_kernel::cos_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn tan_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::wide_kernel::tan_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::wide_kernel::tan_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn atan_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 44..=57) {
+            return Self(trig::lookup_d56_s44_57_atan::atan_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::atan_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 44..=57) {
+            return Self(trig::lookup_d56_s44_57_atan::atan_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::atan_strict_d56(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn asin_impl(self, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
+    #[inline]
+    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
+    #[inline]
+    fn acos_impl(self, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
+    #[inline]
+    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
+    #[inline]
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
+    #[inline]
+    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
+}
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl_wide_trig!(

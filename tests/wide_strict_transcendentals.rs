@@ -576,3 +576,70 @@ fn d56_s50_exp_matches_d76_baseline() {
         "D56<50>::exp(2) bespoke kernel does not match D76<50> narrowed reference",
     );
 }
+
+// ─── Bespoke D56<44..=57> atan kernel cross-witness ────────────────────
+//
+// `algos::trig::lookup_d56_s44_57_atan` routes D56<44..=57>::atan_strict
+// through a single-stage table-reduced kernel (atan addition formula
+// against a 512-entry table). The strict 0.5-ULP contract requires its
+// output to match the canonical wide-tier path. Cross-witness: lift the
+// D56<50> input to D76<50> (whose atan_strict goes through the generic
+// wide kernel, unaffected by this change), run both, and require the
+// D56 storage matches the D76 result narrowed to D56's scale within
+// 1 LSB.
+//
+// SCALE 50 is the midpoint of the bespoke range; this guards every
+// path the kernel takes (reciprocal fold for |x|>1, table lookup,
+// Taylor on y, reassembly).
+
+#[test]
+fn d56_s50_atan_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_50 = D56<50>;
+    type D76_50 = D76<50>;
+
+    // atan(2) ≈ 1.107 rad. The reciprocal-fold branch runs because
+    // |2| > 1, then a non-trivial table entry is picked (j ≈ M/2)
+    // and the Taylor residual is small.
+    let n_56 = D56_50::from_int(2);
+    let n_76: D76_50 = n_56.into();
+
+    let r_56 = n_56.atan_strict();
+    let r_76 = n_76.atan_strict();
+
+    // D76's atan_strict goes through the generic wide kernel
+    // (unaffected by this change). Narrow the D76 reference back to
+    // D56 via `try_into`; the strict 0.5-ULP contract for D56 means
+    // the two results must agree exactly at D56's storage scale.
+    let r_76_as_56: D56_50 = r_76.try_into().expect("atan(2) fits D56<50>");
+    assert_eq!(
+        r_56, r_76_as_56,
+        "D56<50>::atan(2) bespoke kernel does not match D76<50> narrowed reference",
+    );
+}
+
+// Exercise the bespoke kernel's small-argument branch (no reciprocal
+// fold) at a scale where the generic kernel is otherwise inactive.
+// `atan(1/3) ≈ 0.3217` is in [0, 1] so the table lookup runs directly,
+// picking j ≈ M/3 with a non-trivial Taylor residual.
+#[test]
+fn d56_s44_atan_small_arg_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_44 = D56<44>;
+    type D76_44 = D76<44>;
+
+    // 1/3 at SCALE=44 — round to nearest.
+    let one_third_56 = D56_44::from_int(1) / D56_44::from_int(3);
+    let one_third_76: D76_44 = one_third_56.into();
+
+    let r_56 = one_third_56.atan_strict();
+    let r_76 = one_third_76.atan_strict();
+
+    let r_76_as_56: D56_44 = r_76.try_into().expect("atan(1/3) fits D56<44>");
+    assert_eq!(
+        r_56, r_76_as_56,
+        "D56<44>::atan(1/3) bespoke kernel does not match D76<44> narrowed reference",
+    );
+}
