@@ -295,7 +295,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Natural log under the supplied rounding mode. See [`Self::ln_strict`].
     ///
-    /// Body delegates to [`crate::policy::ln::LnPolicy::ln_impl`].
+    /// Body delegates to `policy::ln::LnPolicy::ln_impl`.
     #[inline]
     #[must_use]
     pub fn ln_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -339,7 +339,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Natural log with caller-chosen guard digits AND rounding mode.
     /// See [`Self::ln_approx`] for accuracy/speed contract.
     ///
-    /// Body delegates to [`crate::policy::ln::LnPolicy::ln_with_impl`].
+    /// Body delegates to `policy::ln::LnPolicy::ln_with_impl`.
     /// When `working_digits == STRICT_GUARD` the kernel collapses to
     /// the const-folded strict path.
     #[inline]
@@ -608,7 +608,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// `e^self` under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::exp::ExpPolicy::exp_impl`].
+    /// Body delegates to `policy::exp::ExpPolicy::exp_impl`.
     #[inline]
     #[must_use]
     pub fn exp_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -624,7 +624,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Exponential with caller-chosen guard digits AND rounding mode.
     ///
-    /// Body delegates to [`crate::policy::exp::ExpPolicy::exp_with_impl`].
+    /// Body delegates to `policy::exp::ExpPolicy::exp_with_impl`.
     /// When `working_digits == STRICT_GUARD` the call collapses to the
     /// const-folded strict path.
     #[inline]

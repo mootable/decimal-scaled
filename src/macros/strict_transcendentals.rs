@@ -78,8 +78,8 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             /// result doesn't fit `Self`'s range.
             ///
             /// For the narrow tier this resolves to
-            /// [`crate::algos::sqrt::widen_to_d38`] (widen → D38 sqrt
-            /// → narrow); see [`crate::policy::sqrt`] for the cascade.
+            /// `algos::sqrt::widen_to_d38` (widen → D38 sqrt
+            /// → narrow); see `policy::sqrt` for the cascade.
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {

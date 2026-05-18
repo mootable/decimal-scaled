@@ -284,7 +284,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Negative inputs saturate to [`Self::ZERO`] regardless of mode,
     /// matching the f64-bridge policy.
     ///
-    /// Body delegates to [`crate::policy::sqrt::SqrtPolicy::sqrt_impl`],
+    /// Body delegates to `policy::sqrt::SqrtPolicy::sqrt_impl`,
     /// which for D38 selects the `mg_divide_d38` width-override kernel.
     #[inline]
     #[must_use]
@@ -344,7 +344,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// input is preserved; `Floor` / `Ceiling` resolve direction
     /// relative to the signed result.
     ///
-    /// Body delegates to [`crate::policy::cbrt::CbrtPolicy::cbrt_impl`].
+    /// Body delegates to `policy::cbrt::CbrtPolicy::cbrt_impl`.
     #[inline]
     #[must_use]
     pub fn cbrt_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {

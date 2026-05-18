@@ -985,7 +985,7 @@ macro_rules! decl_wide_transcendental {
             /// correctly rounded. Panics if `self <= 0`.
             ///
             /// Delegates to the policy-registered ln kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::ln`].
+            /// `(width, SCALE)` cell — see `policy::ln`.
             #[inline]
             #[must_use]
             pub fn ln_strict(self) -> Self {
@@ -1091,7 +1091,7 @@ macro_rules! decl_wide_transcendental {
             /// result overflows the representable range.
             ///
             /// Delegates to the policy-registered exp kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::exp`].
+            /// `(width, SCALE)` cell — see `policy::exp`.
             #[inline]
             #[must_use]
             pub fn exp_strict(self) -> Self {
@@ -1137,7 +1137,7 @@ macro_rules! decl_wide_transcendental {
             /// Sine of `self` (radians). Strict and correctly rounded.
             ///
             /// Delegates to the policy-registered sin kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn sin_strict(self) -> Self {
@@ -1155,7 +1155,7 @@ macro_rules! decl_wide_transcendental {
             /// wall-clock of the historic `sin(self + π/2)` path.
             ///
             /// Delegates to the policy-registered cos kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
@@ -1193,7 +1193,7 @@ macro_rules! decl_wide_transcendental {
             /// correctly rounded. Panics at odd multiples of π/2.
             ///
             /// Delegates to the policy-registered tan kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn tan_strict(self) -> Self {
@@ -1207,7 +1207,7 @@ macro_rules! decl_wide_transcendental {
             /// Strict and correctly rounded.
             ///
             /// Delegates to the policy-registered atan kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn atan_strict(self) -> Self {
@@ -1553,7 +1553,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::ln_strict`]. Delegates to
             /// the policy-registered ln kernel for this `(width, SCALE)`
-            /// cell — see [`crate::policy::ln`].
+            /// cell — see `policy::ln`.
             #[inline]
             #[must_use]
             pub fn ln_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
@@ -1636,7 +1636,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::exp_strict`]. Delegates
             /// to the policy-registered exp kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::exp`].
+            /// `(width, SCALE)` cell — see `policy::exp`.
             #[inline]
             #[must_use]
             pub fn exp_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
@@ -1674,7 +1674,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::sin_strict`]. Delegates
             /// to the policy-registered sin kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn sin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
@@ -1683,7 +1683,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::cos_strict`]. Delegates
             /// to the policy-registered cos kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             ///
             /// Note: pre-policy this method ran `sin_fixed(self + π/2)`
             /// while the no-mode `cos_strict` ran the shared
@@ -1699,7 +1699,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::tan_strict`]. Delegates
             /// to the policy-registered tan kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn tan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
@@ -1708,7 +1708,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::atan_strict`]. Delegates
             /// to the policy-registered atan kernel for this
-            /// `(width, SCALE)` cell — see [`crate::policy::trig`].
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn atan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {

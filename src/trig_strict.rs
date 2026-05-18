@@ -208,7 +208,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Sine under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::sin_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::sin_impl`.
     #[inline]
     #[must_use]
     pub fn sin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -224,7 +224,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Sine with caller-chosen guard digits AND rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::sin_with_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::sin_with_impl`.
     #[inline]
     #[must_use]
     pub fn sin_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
@@ -244,7 +244,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Cosine under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::cos_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::cos_impl`.
     #[inline]
     #[must_use]
     pub fn cos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -283,7 +283,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Tangent under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::tan_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::tan_impl`.
     #[inline]
     #[must_use]
     pub fn tan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -317,7 +317,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Arctangent under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::atan_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::atan_impl`.
     #[inline]
     #[must_use]
     pub fn atan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -357,7 +357,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Arcsine under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::asin_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::asin_impl`.
     #[inline]
     #[must_use]
     pub fn asin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -395,7 +395,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Arccosine under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::acos_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::acos_impl`.
     #[inline]
     #[must_use]
     pub fn acos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
@@ -430,7 +430,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Four-quadrant arctangent under the supplied rounding mode.
     ///
-    /// Body delegates to [`crate::policy::trig::TrigPolicy::atan2_impl`].
+    /// Body delegates to `policy::trig::TrigPolicy::atan2_impl`.
     #[inline]
     #[must_use]
     pub fn atan2_strict_with(self, other: Self, mode: crate::rounding::RoundingMode) -> Self {

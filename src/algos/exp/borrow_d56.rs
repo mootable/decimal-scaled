@@ -1,12 +1,18 @@
 //! D38 exponential via widen → D56 wide_kernel → narrow back.
 //!
-//! See [`crate::algos::ln::borrow_d56`] for the broader rationale.
+//! See `algos::ln::borrow_d56` for the broader rationale.
 //!
-//! Correctness note for `exp`: unlike ln/sin/cos/atan, `exp(D38<S>::MAX)`
-//! may overflow D38<S> even when D56 holds it comfortably. The current
+//! Correctness note for `exp`: unlike ln/sin/cos/atan, `exp(D38::<S>::MAX)`
+//! may overflow `D38::<S>` even when D56 holds it comfortably. The current
 //! `fixed_d38::exp_strict` panics on overflow via `round_to_i128_with`
 //! returning `None`; this wrapper preserves that panic semantic via the
 //! narrowing `TryFrom` failing and the wrapping `expect(...)`.
+
+// `crate::algos::ln::borrow_d56` is referenced in the module docs as a
+// plain code span rather than an intra-doc link because both modules
+// are pub(crate); intra-doc links to private items break the
+// `RUSTDOCFLAGS=-D warnings` doc build (the docs.yml workflow uses
+// this flag to catch broken intra-doc links).
 
 use crate::core_type::{D38, D56};
 use crate::rounding::RoundingMode;

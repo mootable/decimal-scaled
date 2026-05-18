@@ -76,7 +76,7 @@ macro_rules! decl_wide_roots {
             /// ties are impossible for an integer radicand, so the
             /// three half-modes coincide.
             ///
-            /// Body delegates to [`$crate::policy::sqrt::SqrtPolicy::sqrt_impl`],
+            /// Body delegates to `policy::sqrt::SqrtPolicy::sqrt_impl`,
             /// which dispatches to the kernel registered for this
             /// `(width, SCALE)` cell in `crate::policy::sqrt`.
             #[inline]
@@ -104,7 +104,7 @@ macro_rules! decl_wide_roots {
             /// preserved; `Floor` / `Ceiling` bump magnitude only when
             /// the bump moves the signed result in their direction.
             ///
-            /// Body delegates to [`$crate::policy::cbrt::CbrtPolicy::cbrt_impl`].
+            /// Body delegates to `policy::cbrt::CbrtPolicy::cbrt_impl`.
             #[inline]
             #[must_use]
             pub fn cbrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
