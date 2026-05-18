@@ -188,7 +188,7 @@ fn rescale_75_to_target_with<const TARGET: u32>(
 /// directly at the boundary rather than going through
 /// `Decimal::pi().to_f64()`. Otherwise pick a `SCALE` of 15 or more
 /// so the decimal value can round-trip to the canonical `f64`.
-pub trait DecimalConsts: Sized {
+pub trait DecimalConstants: Sized {
     /// Pi (~3.14159265...). One half-turn in radians.
     ///
     /// Source: ISO 80000-2 / OEIS A000796. Rescaled per-tier (see the
@@ -270,6 +270,19 @@ pub trait DecimalConsts: Sized {
     /// `e()` under the supplied rounding mode.
     fn e_with(mode: crate::rounding::RoundingMode) -> Self;
 }
+
+// Backwards-compat alias for the trait's original name. The 0.3.2
+// shipped name was `DecimalConsts`; renamed to `DecimalConstants`
+// for consistency with the spelled-out `Decimal*` style elsewhere
+// in the crate. The alias keeps existing imports compiling without
+// a SemVer-breaking bump.
+//
+// TODO(0.4): remove this alias.
+#[deprecated(
+    since = "0.3.3",
+    note = "renamed to `DecimalConstants`; the `DecimalConsts` alias will be removed in 0.4"
+)]
+pub use self::DecimalConstants as DecimalConsts;
 
 // Public-to-crate helpers that return each constant's rescaled bits at
 // the caller's target SCALE. Used by the `decl_decimal_consts!` macro

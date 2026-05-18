@@ -126,7 +126,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// ```ignore
     /// # #[cfg(feature = "std")]
     /// # {
-    /// use decimal_scaled::{D38s12, DecimalConsts};
+    /// use decimal_scaled::{D38s12, DecimalConstants};
     /// // acos(1) == 0.
     /// assert_eq!(D38s12::ONE.acos(), D38s12::ZERO);
     /// # }
@@ -178,7 +178,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// ```ignore
     /// # #[cfg(feature = "std")]
     /// # {
-    /// use decimal_scaled::{D38s12, DecimalConsts};
+    /// use decimal_scaled::{D38s12, DecimalConstants};
     /// // atan2(1, 1) ~= pi/4 (45 degrees, first quadrant).
     /// let one = D38s12::ONE;
     /// let result = one.atan2(one); // approximately D38s12::quarter_pi()

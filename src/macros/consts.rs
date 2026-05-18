@@ -1,4 +1,4 @@
-//! Macro-generated `DecimalConsts` impls for every decimal width.
+//! Macro-generated `DecimalConstants` impls for every decimal width.
 //!
 //! The constants are stored once as `i128` literals at `SCALE_REF = 37`
 //! in `src/consts.rs` (D38's path). For other widths the macro
@@ -30,7 +30,7 @@
 //! follow-up — verifying ~308 digits of each constant for D307 is
 //! the bulk of the work.
 
-/// Emits `DecimalConsts` for a decimal type. Requires the
+/// Emits `DecimalConstants` for a decimal type. Requires the
 /// `D38::<SCALE_REF>::from_bits(_).rescale::<SCALE>()` path to be
 /// available (i.e. the rescale macro is already invoked for D38).
 ///
@@ -45,7 +45,7 @@
 macro_rules! decl_decimal_consts {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> $crate::consts::DecimalConsts for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::consts::DecimalConstants for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
                 Self(<$Storage>::from_i128($crate::consts::pi_at_target::<SCALE>()))
@@ -99,7 +99,7 @@ macro_rules! decl_decimal_consts {
 
     // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> $crate::consts::DecimalConsts for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::consts::DecimalConstants for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
                 Self($crate::consts::pi_at_target::<SCALE>() as $Storage)

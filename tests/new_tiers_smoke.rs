@@ -2,7 +2,7 @@
 //! D615 / D923 / D1231). Each tier gets coverage on:
 //!
 //! - Arithmetic round-trip (from_int / add / sub / mul / div).
-//! - `DecimalConsts::pi()` correctness (compared against
+//! - `DecimalConstants::pi()` correctness (compared against
 //!   the 100-digit canonical reference 3.14159...749 to its tier's
 //!   safe precision).
 //! - `sqrt_strict(4) == 2` exact.
@@ -18,7 +18,7 @@
 
 #![cfg(feature = "wide")]
 
-use decimal_scaled::DecimalConsts;
+use decimal_scaled::DecimalConstants;
 
 // Each tier's smoke battery is the same shape; this macro emits
 // per-tier modules so test failures point at the offending tier.

@@ -48,7 +48,7 @@
     )),
 ))]
 
-use decimal_scaled::{D38, D38s12, DecimalConsts};
+use decimal_scaled::{D38, D38s12, DecimalConstants};
 
 /// Check that `actual` is within 1 LSB of `expected_truth` (both as
 /// raw storage bits) — the 0.5-ULP contract.
@@ -61,7 +61,7 @@ fn assert_05_ulp(label: &str, actual: i128, expected_truth: i128) {
     );
 }
 
-// ─── Constants (DecimalConsts trait) ──────────────────────────────────
+// ─── Constants (DecimalConstants trait) ──────────────────────────────────
 
 /// Truth values at SCALE=12, half-to-even rounded from the canonical
 /// 35-digit references:

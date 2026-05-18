@@ -884,7 +884,7 @@ mod strict_tests {
         );
     }
 
-    /// ln(e) is approximately 1. Uses the existing pi/e constants via DecimalConsts.
+    /// ln(e) is approximately 1. Uses the existing pi/e constants via DecimalConstants.
     #[test]
     fn ln_of_e_close_to_one() {
         // e at scale 12 = 2_718_281_828_459 (canonical 35-digit reference rescaled).

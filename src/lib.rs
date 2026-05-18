@@ -252,12 +252,16 @@ pub mod serde_helpers;
 #[cfg(any(not(feature = "fast"), feature = "std"))]
 mod trig_strict;
 mod trig_fast;
+mod transcendental_trait;
 
 
+pub use consts::DecimalConstants;
+#[allow(deprecated)]
 pub use consts::DecimalConsts;
 pub use decimal_trait::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;
+pub use transcendental_trait::DecimalTranscendental;
 
 // D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s38.
 pub use core_type::{

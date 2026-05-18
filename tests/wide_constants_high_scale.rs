@@ -15,7 +15,7 @@
     )),
 ))]
 
-use decimal_scaled::{D76, D153, D307, DecimalConsts};
+use decimal_scaled::{D76, D153, D307, DecimalConstants};
 
 /// D76<76>::pi() used to panic at the i128 rescale-up. After wiring
 /// the build-time-generated 75-digit Int256 constants, it returns a

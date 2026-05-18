@@ -60,7 +60,7 @@
 //!   `strict` / `fast` features and live as inherent methods on the
 //!   concrete types. Reach for those directly when needed.
 //! - **Mathematical constants** (`pi`, `tau`, `e`, …) live on
-//!   [`crate::DecimalConsts`], a separate trait that every width also
+//!   [`crate::DecimalConstants`], a separate trait that every width also
 //!   implements.
 //!
 //! For most users the concrete type (e.g. `D38<12>` or its alias

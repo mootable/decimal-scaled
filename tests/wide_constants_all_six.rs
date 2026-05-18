@@ -10,7 +10,7 @@
 
 #![cfg(feature = "wide")]
 
-use decimal_scaled::DecimalConsts;
+use decimal_scaled::DecimalConstants;
 
 #[test]
 fn d76_all_six_constants_at_scale_12() {

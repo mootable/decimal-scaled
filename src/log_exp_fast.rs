@@ -165,7 +165,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
 #[cfg(all(test, any(not(feature = "strict"), feature = "fast")))]
 mod tests {
-    use crate::consts::DecimalConsts;
+    use crate::consts::DecimalConstants;
     use crate::core_type::D38s12;
 
     /// Tolerance for f64-bridge log/exp tests against integer-valued

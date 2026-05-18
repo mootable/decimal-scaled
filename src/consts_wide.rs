@@ -9,7 +9,7 @@
 //! `Int*::from_str_radix` (a `const fn`).
 //!
 //! This closes the SCALE > 37 panic in `D76<76>::pi()` etc. and
-//! tightens the 0.5 ULP contract on `DecimalConsts` for every
+//! tightens the 0.5 ULP contract on `DecimalConstants` for every
 //! wide-tier scale.
 
 // These imports are only reachable when at least one wide-tier
@@ -19,7 +19,7 @@
 #[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 use crate::wide_int::{Int256, Int512, Int1024};
 #[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
-use crate::consts::DecimalConsts;
+use crate::consts::DecimalConstants;
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
@@ -260,14 +260,14 @@ pub(crate) fn golden_at_target_d307<const TARGET: u32>() -> Int1024 {
         .to_bits()
 }
 
-// ─── DecimalConsts impls ──────────────────────────────────────────────
+// ─── DecimalConstants impls ──────────────────────────────────────────────
 //
 // These shadow the impls that `decl_decimal_consts!(wide …)` would
 // emit. To avoid duplicate trait impls, the wide-arm macro invocations
 // in `core_type.rs` were removed (search for `decl_decimal_consts!(wide`).
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl<const SCALE: u32> DecimalConsts for crate::core_type::D76<SCALE> {
+impl<const SCALE: u32> DecimalConstants for crate::core_type::D76<SCALE> {
     #[inline] fn pi() -> Self { Self(pi_at_target_d76::<SCALE>()) }
     #[inline] fn tau() -> Self { Self(tau_at_target_d76::<SCALE>()) }
     #[inline] fn half_pi() -> Self { Self(half_pi_at_target_d76::<SCALE>()) }
@@ -295,7 +295,7 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D76<SCALE> {
 }
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> DecimalConsts for crate::core_type::D153<SCALE> {
+impl<const SCALE: u32> DecimalConstants for crate::core_type::D153<SCALE> {
     #[inline] fn pi() -> Self { Self(pi_at_target_d153::<SCALE>()) }
     #[inline] fn tau() -> Self { Self(tau_at_target_d153::<SCALE>()) }
     #[inline] fn half_pi() -> Self { Self(half_pi_at_target_d153::<SCALE>()) }
@@ -323,7 +323,7 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D153<SCALE> {
 }
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl<const SCALE: u32> DecimalConsts for crate::core_type::D307<SCALE> {
+impl<const SCALE: u32> DecimalConstants for crate::core_type::D307<SCALE> {
     #[inline] fn pi() -> Self { Self(pi_at_target_d307::<SCALE>()) }
     #[inline] fn tau() -> Self { Self(tau_at_target_d307::<SCALE>()) }
     #[inline] fn half_pi() -> Self { Self(half_pi_at_target_d307::<SCALE>()) }
@@ -356,7 +356,7 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D307<SCALE> {
 // 924, 1232]` loop. Each tier mirrors the D76 / D153 / D307 pattern:
 // (1) a raw `Int*` const parsed from the build-time decimal string,
 // (2) a `<const_name>_at_target_d<scale>::<TARGET>()` accessor that
-// rescales down to the caller's SCALE, and (3) a `DecimalConsts` impl
+// rescales down to the caller's SCALE, and (3) a `DecimalConstants` impl
 // on the decimal type.
 //
 // Macro to compress the repetition: each invocation produces one
@@ -438,7 +438,7 @@ macro_rules! decl_wide_consts_tier {
         }
 
         #[cfg(any(feature = $feature, feature = $umbrella))]
-        impl<const SCALE: u32> DecimalConsts for crate::core_type::$D<SCALE> {
+        impl<const SCALE: u32> DecimalConstants for crate::core_type::$D<SCALE> {
             #[inline] fn pi() -> Self { Self($pi_fn::<SCALE>()) }
             #[inline] fn tau() -> Self { Self($tau_fn::<SCALE>()) }
             #[inline] fn half_pi() -> Self { Self($half_pi_fn::<SCALE>()) }

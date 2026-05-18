@@ -377,7 +377,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -412,7 +412,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.atan_strict_with(mode);
         }
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -557,7 +557,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         if self.0 == 0 {
             return Self::half_pi();
         }
@@ -610,7 +610,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.acos_strict_with(mode);
         }
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         if self.0 == 0 {
             return Self::half_pi();
         }
@@ -1520,7 +1520,7 @@ fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernel
 
 #[cfg(test)]
 mod tests {
-    use crate::consts::DecimalConsts;
+    use crate::consts::DecimalConstants;
     use crate::core_type::D38s12;
 
     // Tolerance for single-operation results. The f64-bridge build is

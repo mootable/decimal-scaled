@@ -448,6 +448,7 @@ crate::macros::arithmetic::decl_decimal_arithmetic!(@common D38, i128);
 // equivalent. FromPrimitive / ToPrimitive / NumCast stay hand-coded in
 // `src/num_traits_impls.rs` (not part of the macro surface).
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D38);
+crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 
 // D38 strict transcendentals: hand-tuned per-type kernels.
 //
@@ -535,6 +536,7 @@ crate::macros::from_str::decl_decimal_from_str!(D9, i32);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D9, i32);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D9);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D9);
+crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D9);
 crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D9);
 crate::macros::pow::decl_decimal_pow!(D9);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D9);
@@ -600,6 +602,7 @@ crate::macros::from_str::decl_decimal_from_str!(D18, i64);
 crate::macros::float_bridge::decl_decimal_float_bridge!(D18, i64);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D18);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D18);
+crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D18);
 crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D18);
 crate::macros::pow::decl_decimal_pow!(D18);
 crate::macros::rounding_methods::decl_decimal_rounding_methods!(D18);
@@ -1939,7 +1942,7 @@ mod tests {
     #[test]
     fn d9_consts() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         type D9s4 = super::D9<4>;
         // pi at scale 4 = 3.1416 -> bits = 31416.
         assert_eq!(D9s4::pi().to_bits(), 31416);
@@ -1970,7 +1973,7 @@ mod tests {
     #[test]
     fn d18_consts() {
         if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         type D18s12 = super::D18<12>;
         // pi at scale 12 = 3.141592653590 (matches D38s12).
         assert_eq!(D18s12::pi().to_bits(), 3_141_592_653_590);
@@ -2119,7 +2122,7 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn d76_consts_and_from_str() {
-        use crate::consts::DecimalConsts;
+        use crate::consts::DecimalConstants;
         use core::str::FromStr;
         // pi at scale 12 matches the D38 reference.
         assert_eq!(
