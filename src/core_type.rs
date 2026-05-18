@@ -1607,6 +1607,17 @@ impl<const SCALE: u32> D615<SCALE> {
     /// Demote to the immediate previous tier ([`D461`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D461<SCALE>, crate::error::ConvertError> { self.try_into() }
+}
+
+// `widen` lives in a second impl gated on D923's feature — D615 can
+// be enabled without xx-wide (docs.rs builds this case), in which
+// case D923 doesn't exist as a type and the unconditional `widen`
+// method above breaks the doc build.
+#[cfg(all(
+    any(feature = "d615", feature = "x-wide"),
+    any(feature = "d923", feature = "xx-wide"),
+))]
+impl<const SCALE: u32> D615<SCALE> {
     /// Promote to the next storage tier ([`D923`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
     pub fn widen(self) -> D923<SCALE> { self.into() }

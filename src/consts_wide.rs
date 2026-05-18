@@ -274,6 +274,24 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D76<SCALE> {
     #[inline] fn quarter_pi() -> Self { Self(quarter_pi_at_target_d76::<SCALE>()) }
     #[inline] fn golden() -> Self { Self(golden_at_target_d76::<SCALE>()) }
     #[inline] fn e() -> Self { Self(e_at_target_d76::<SCALE>()) }
+    #[inline] fn pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D76::<D76_SCALE_REF>::from_bits(PI_RAW_D256).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn tau_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D76::<D76_SCALE_REF>::from_bits(TAU_RAW_D256).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn half_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D76::<D76_SCALE_REF>::from_bits(HALF_PI_RAW_D256).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn quarter_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D76::<D76_SCALE_REF>::from_bits(QUARTER_PI_RAW_D256).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn golden_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D76::<D76_SCALE_REF>::from_bits(GOLDEN_RAW_D256).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn e_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D76::<D76_SCALE_REF>::from_bits(E_RAW_D256).rescale_with::<SCALE>(mode).to_bits())
+    }
 }
 
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -284,6 +302,24 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D153<SCALE> {
     #[inline] fn quarter_pi() -> Self { Self(quarter_pi_at_target_d153::<SCALE>()) }
     #[inline] fn golden() -> Self { Self(golden_at_target_d153::<SCALE>()) }
     #[inline] fn e() -> Self { Self(e_at_target_d153::<SCALE>()) }
+    #[inline] fn pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D153::<D153_SCALE_REF>::from_bits(PI_RAW_D512).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn tau_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D153::<D153_SCALE_REF>::from_bits(TAU_RAW_D512).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn half_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D153::<D153_SCALE_REF>::from_bits(HALF_PI_RAW_D512).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn quarter_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D153::<D153_SCALE_REF>::from_bits(QUARTER_PI_RAW_D512).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn golden_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D153::<D153_SCALE_REF>::from_bits(GOLDEN_RAW_D512).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn e_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D153::<D153_SCALE_REF>::from_bits(E_RAW_D512).rescale_with::<SCALE>(mode).to_bits())
+    }
 }
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
@@ -294,6 +330,24 @@ impl<const SCALE: u32> DecimalConsts for crate::core_type::D307<SCALE> {
     #[inline] fn quarter_pi() -> Self { Self(quarter_pi_at_target_d307::<SCALE>()) }
     #[inline] fn golden() -> Self { Self(golden_at_target_d307::<SCALE>()) }
     #[inline] fn e() -> Self { Self(e_at_target_d307::<SCALE>()) }
+    #[inline] fn pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D307::<D307_SCALE_REF>::from_bits(PI_RAW_D1024).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn tau_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D307::<D307_SCALE_REF>::from_bits(TAU_RAW_D1024).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn half_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D307::<D307_SCALE_REF>::from_bits(HALF_PI_RAW_D1024).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn quarter_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D307::<D307_SCALE_REF>::from_bits(QUARTER_PI_RAW_D1024).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn golden_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D307::<D307_SCALE_REF>::from_bits(GOLDEN_RAW_D1024).rescale_with::<SCALE>(mode).to_bits())
+    }
+    #[inline] fn e_with(mode: crate::rounding::RoundingMode) -> Self {
+        Self(crate::core_type::D307::<D307_SCALE_REF>::from_bits(E_RAW_D1024).rescale_with::<SCALE>(mode).to_bits())
+    }
 }
 
 // ─── New half-width and wider tiers ──────────────────────────────────
@@ -391,6 +445,24 @@ macro_rules! decl_wide_consts_tier {
             #[inline] fn quarter_pi() -> Self { Self($quarter_pi_fn::<SCALE>()) }
             #[inline] fn golden() -> Self { Self($golden_fn::<SCALE>()) }
             #[inline] fn e() -> Self { Self($e_fn::<SCALE>()) }
+            #[inline] fn pi_with(mode: crate::rounding::RoundingMode) -> Self {
+                Self(crate::core_type::$D::<{ $scale }>::from_bits($PI_RAW).rescale_with::<SCALE>(mode).to_bits())
+            }
+            #[inline] fn tau_with(mode: crate::rounding::RoundingMode) -> Self {
+                Self(crate::core_type::$D::<{ $scale }>::from_bits($TAU_RAW).rescale_with::<SCALE>(mode).to_bits())
+            }
+            #[inline] fn half_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+                Self(crate::core_type::$D::<{ $scale }>::from_bits($HALF_PI_RAW).rescale_with::<SCALE>(mode).to_bits())
+            }
+            #[inline] fn quarter_pi_with(mode: crate::rounding::RoundingMode) -> Self {
+                Self(crate::core_type::$D::<{ $scale }>::from_bits($QUARTER_PI_RAW).rescale_with::<SCALE>(mode).to_bits())
+            }
+            #[inline] fn golden_with(mode: crate::rounding::RoundingMode) -> Self {
+                Self(crate::core_type::$D::<{ $scale }>::from_bits($GOLDEN_RAW).rescale_with::<SCALE>(mode).to_bits())
+            }
+            #[inline] fn e_with(mode: crate::rounding::RoundingMode) -> Self {
+                Self(crate::core_type::$D::<{ $scale }>::from_bits($E_RAW).rescale_with::<SCALE>(mode).to_bits())
+            }
         }
     };
 }

@@ -29,7 +29,7 @@ exclude = [
 # the docs build doesn't require nightly or pick a non-default
 # rounding mode.
 [package.metadata.docs.rs]
-features = ["std", "serde", "strict", "macros", "wide", "x-wide"]
+features = ["std", "serde", "strict", "macros", "wide", "x-wide", "xx-wide"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]

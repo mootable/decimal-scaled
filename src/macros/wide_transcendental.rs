@@ -24,14 +24,31 @@
 //! than embedded: `ln 2 = 2·artanh(1/3)`, `ln 10 = ln_fixed(10)`, and
 //! `π` from Machin's `16·atan(1/5) − 4·atan(1/239)`.
 //!
-//! # The `*_strict` dual API
+//! # The four-variant matrix
 //!
-//! - `<method>_strict` — always present unless the `fast` feature
-//! is set; integer-only and `no_std`-compatible.
-//! - `<method>` — a dispatcher present only under
-//! `#[cfg(all(feature = "strict", not(feature = "fast")))]`,
-//! forwarding to `<method>_strict`. The wide tiers have no f64-bridge
-//! transcendentals of their own.
+//! Each transcendental ships four entry points so a single name
+//! covers every (precision × rounding) combination:
+//!
+//! | Method            | Guard width    | Rounding mode               |
+//! |-------------------|----------------|------------------------------|
+//! | `<fn>_strict`     | crate default  | crate default               |
+//! | `<fn>_strict_with`| crate default  | caller-supplied              |
+//! | `<fn>_approx`     | caller-chosen  | crate default               |
+//! | `<fn>_approx_with`| caller-chosen  | caller-supplied              |
+//!
+//! `_strict` runs at `SCALE + GUARD` (const-folded so each per-tier
+//! kernel specialises for one `w`). `_approx` runs at
+//! `SCALE + working_digits` — pick less than `GUARD` to trade
+//! precision for latency (the AGM / Taylor series shortens), or
+//! more for chained-composition headroom. When `working_digits ==
+//! GUARD` the `_approx_with` body redirects to `_strict_with` so the
+//! const-folded fast path is never displaced.
+//!
+//! All four variants are integer-only, `no_std`-compatible, and
+//! correctly rounded under the selected mode. Without `strict` the
+//! plain `<fn>` is unimplemented — the wide tiers have no f64-bridge
+//! transcendentals of their own. With `strict` the plain `<fn>`
+//! dispatches to `<fn>_strict`.
 //!
 //! # Precision
 //!

@@ -117,15 +117,30 @@ const GOLDEN_RAW: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
 /// doesn't include this constant — e.g. `pi ≈ 3.14` at `D38<38>` would
 /// need `3.14 × 10^38 ≈ 3.14e38`, which exceeds `i128::MAX ≈ 1.7e38`).
 fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i128 {
-    // Int256 storage is [u64; 4]; the D38 Fixed kernel uses [u128; 2].
-    // Pack pairs of u64 limbs into u128 little-endian halves.
+    rescale_75_to_target_with::<TARGET>(raw, name, crate::rounding::DEFAULT_ROUNDING_MODE)
+}
+
+/// Mode-aware variant of [`rescale_75_to_target`].
+///
+/// `Floor` gives the largest representable value ≤ true constant —
+/// useful when downstream code uses the value as an upper bound that
+/// must not be exceeded. `Ceiling` gives the smallest value ≥ true
+/// constant — useful for conservative bucket counts /
+/// over-approximation. The three half-modes coincide for irrational
+/// constants (no integer mantissa hits the exact half-way point at
+/// the 75-digit reference scale).
+fn rescale_75_to_target_with<const TARGET: u32>(
+    raw: Int256,
+    name: &'static str,
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
     let words = raw.0;
     let mag: [u128; 2] = [
         (words[0] as u128) | ((words[1] as u128) << 64),
         (words[2] as u128) | ((words[3] as u128) << 64),
     ];
     let f = Fixed { negative: false, mag };
-    match f.round_to_i128(SCALE_REF, TARGET) {
+    match f.round_to_i128_with(SCALE_REF, TARGET, mode) {
         Some(v) => v,
         None => panic!(
             "D38 constant out of storage range: {name} cannot fit i128 at SCALE = {TARGET} \
@@ -153,6 +168,26 @@ fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i
 /// caller's `SCALE` — e.g. `D38<38>::pi()` would need `3.14 × 10³⁸`,
 /// which exceeds `i128::MAX ≈ 1.7×10³⁸`. The method panics with a
 /// clear "constant out of storage range" message in that case.
+///
+/// # Crossing into f64
+///
+/// `to_f64()` is itself correctly rounded, but it can only round to
+/// the *decimal value the type holds* — not to the underlying ideal
+/// constant. `f64` carries ~15.95 decimal digits of mantissa, so any
+/// constant produced at `SCALE < 15` is intrinsically coarser than
+/// the `f64` grid: `D38<12>::pi().to_f64()` lands ~466 ULPs from
+/// [`std::f64::consts::PI`], because the 12-digit decimal rounds
+/// differently than the closest-`f64` to true π. At `SCALE ≥ 15` the
+/// round-trip is bit-exact for these constants (the decimal value
+/// has enough digits to disambiguate the `f64` grid).
+///
+/// **Practical rule for downstream code that crosses into `f64`** —
+/// CAD bulge-arc tessellation, OpenGL/GLSL, hardware drivers — and
+/// uses the `f64` value to count, bucket, or seed a fixed-iteration
+/// loop: source mathematical constants from [`std::f64::consts`]
+/// directly at the boundary rather than going through
+/// `Decimal::pi().to_f64()`. Otherwise pick a `SCALE` of 15 or more
+/// so the decimal value can round-trip to the canonical `f64`.
 pub trait DecimalConsts: Sized {
     /// Pi (~3.14159265...). One half-turn in radians.
     ///
@@ -211,6 +246,29 @@ pub trait DecimalConsts: Sized {
     ///
     /// N/A: constant value, no arithmetic performed.
     fn e() -> Self;
+
+    // ─── *_with(mode) siblings ───────────────────────────────────
+    //
+    // Each `<const>_with(mode)` rescales the 75-digit reference under
+    // the caller-supplied `RoundingMode`. Useful when the default
+    // mode (half-to-even, or whatever a `rounding-*` Cargo feature
+    // selects) is the wrong direction for the use case — e.g. a CAD
+    // tessellation that needs `pi_with(Floor)` so the down-stream
+    // f64 conversion stays ≤ true π and segment counts can't
+    // over-flow their fixed-size buffers.
+
+    /// `pi()` under the supplied rounding mode.
+    fn pi_with(mode: crate::rounding::RoundingMode) -> Self;
+    /// `tau()` under the supplied rounding mode.
+    fn tau_with(mode: crate::rounding::RoundingMode) -> Self;
+    /// `half_pi()` under the supplied rounding mode.
+    fn half_pi_with(mode: crate::rounding::RoundingMode) -> Self;
+    /// `quarter_pi()` under the supplied rounding mode.
+    fn quarter_pi_with(mode: crate::rounding::RoundingMode) -> Self;
+    /// `golden()` under the supplied rounding mode.
+    fn golden_with(mode: crate::rounding::RoundingMode) -> Self;
+    /// `e()` under the supplied rounding mode.
+    fn e_with(mode: crate::rounding::RoundingMode) -> Self;
 }
 
 // Public-to-crate helpers that return each constant's rescaled bits at
@@ -235,6 +293,39 @@ pub(crate) fn golden_at_target<const TARGET: u32>() -> i128 {
 }
 pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
     rescale_75_to_target::<TARGET>(E_RAW, "e")
+}
+
+// Mode-aware variants — used by the `*_with(mode)` constant methods.
+
+pub(crate) fn pi_at_target_with<const TARGET: u32>(
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
+    rescale_75_to_target_with::<TARGET>(PI_RAW, "pi", mode)
+}
+pub(crate) fn tau_at_target_with<const TARGET: u32>(
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
+    rescale_75_to_target_with::<TARGET>(TAU_RAW, "tau", mode)
+}
+pub(crate) fn half_pi_at_target_with<const TARGET: u32>(
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
+    rescale_75_to_target_with::<TARGET>(HALF_PI_RAW, "half_pi", mode)
+}
+pub(crate) fn quarter_pi_at_target_with<const TARGET: u32>(
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
+    rescale_75_to_target_with::<TARGET>(QUARTER_PI_RAW, "quarter_pi", mode)
+}
+pub(crate) fn golden_at_target_with<const TARGET: u32>(
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
+    rescale_75_to_target_with::<TARGET>(GOLDEN_RAW, "golden", mode)
+}
+pub(crate) fn e_at_target_with<const TARGET: u32>(
+    mode: crate::rounding::RoundingMode,
+) -> i128 {
+    rescale_75_to_target_with::<TARGET>(E_RAW, "e", mode)
 }
 
 // The `DecimalConsts` impl for `D38<SCALE>` is emitted by the

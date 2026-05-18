@@ -27,19 +27,33 @@
 //! `sqrt` / `cbrt` / `powf` / `hypot` each have an integer-only
 //! `*_strict` form and an f64-bridge form (see `docs/strict-mode.md`).
 //! The `*_strict` forms are **correctly rounded** — within 0.5 ULP of
-//! the exact result:
+//! the exact result under the active [`RoundingMode`]:
 //!
 //! - `sqrt_strict` / `cbrt_strict` form the exact 256-/384-bit
-//! radicand and take its exact integer root, rounding to nearest;
+//! radicand and take its exact integer root, then apply the rounding
+//! mode (no ties exist for integer-sqrt so the three half-modes
+//! coincide; `Floor`/`Ceiling` divert for the directed cases);
 //! - `powf_strict` runs `exp(y·ln(x))` entirely in the `d_w128_kernels`
 //! guard-digit intermediate;
 //! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
+//!
+//! Each strict method has a `*_strict_with(mode)` sibling that takes
+//! the rounding mode explicitly; the no-arg `*_strict` form
+//! delegates to it with the crate-default mode (see
+//! [`crate::RoundingMode`] for the `rounding-*` Cargo features).
+//! `powf` additionally ships `powf_approx(working_digits)` and
+//! `powf_approx_with(working_digits, mode)` — the four-variant matrix
+//! the transcendentals expose; `sqrt` / `cbrt` / `hypot` have no
+//! guard-width parameter (the exact-integer-root path is precision-
+//! independent), so only the `_strict` / `_strict_with` pair exists.
 //!
 //! `pow` / `powi` (integer exponents) are exact at any feature
 //! configuration. The plain `sqrt` / `cbrt` / `powf` / `hypot`
 //! dispatch to the `*_strict` form under the `strict` feature, and to
 //! the f64 bridge otherwise; the `*_strict` forms are always compiled
 //! unless `fast` is set, and are `no_std`-compatible.
+//!
+//! [`RoundingMode`]: crate::RoundingMode
 //!
 //! # Variant family for `pow`
 //!

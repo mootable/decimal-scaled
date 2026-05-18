@@ -5,6 +5,94 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.2] — unreleased
+
+API-additive surface expansion across every decimal width. No
+breaking changes; existing callers compile unchanged. The big themes
+are the four-variant `_strict_with` / `_approx` / `_approx_with`
+matrix on every transcendental, mode-aware constants, full serde
+parity, and a docs.rs build fix.
+
+### Added
+
+- **Four-variant matrix on every transcendental.** Each function
+  ships `<fn>_strict`, `<fn>_strict_with(mode)`,
+  `<fn>_approx(working_digits)`, and
+  `<fn>_approx_with(working_digits, mode)`. The `_strict` body
+  keeps a const-folded `STRICT_GUARD` so LLVM specialises one
+  optimal kernel per `SCALE`; `_approx` takes the guard width at
+  runtime for callers who want to trade ULP precision for latency.
+  When `working_digits == STRICT_GUARD` the `_approx_with` body
+  redirects to `_strict_with` so the fast path is never displaced.
+  Covers ln / log / log2 / log10 / exp / exp2 / powf on D38 and
+  the wide tiers, and sin / cos / tan / atan / asin / acos /
+  atan2 / sinh / cosh / tanh / asinh / acosh / atanh / to_degrees
+  / to_radians for the trig family.
+- **`sqrt_strict_with(mode)` / `cbrt_strict_with(mode)` /
+  `hypot_strict_with(mode)`** on D38 and the wide tiers. Roots
+  have no working-digits parameter (the exact-integer-root path is
+  precision-independent), so only the `_strict` / `_strict_with`
+  pair exists. `Floor` and `Ceiling` dispatch by sign for `cbrt`.
+- **`DecimalConsts::*_with(mode)` siblings.** `pi_with` /
+  `tau_with` / `half_pi_with` / `quarter_pi_with` / `golden_with`
+  / `e_with` rescale the embedded reference under a
+  caller-supplied `RoundingMode`. `pi_with(Floor)` gives the
+  largest representable value ≤ true π — useful for CAD
+  tessellation that must not over-count.
+- **`from_num` / `to_num` parity** across every width. The
+  saturating `NumCast`-style bridge previously existed only on
+  D38; extracted into `decl_decimal_num_traits_basics!` so D9 /
+  D18 / D38 / D56 / D76 / D114 / D153 / D230 / D307 / D461 / D615
+  / D923 / D1231 all get the same surface.
+- **Serde for every wide tier.** Added `decl_wide_serde!`
+  invocations for D56 / D114 / D230 / D461 / D615 / D923 / D1231
+  — previously only D76 / D153 / D307 had Serialize / Deserialize.
+- **`proc-macro-crate` resolution** in the construction macros
+  (`d9!`, `d18!`, `d38!`, `d76!`, `d153!`, `d307!`). Lets consumer
+  crates alias `decimal-scaled` freely instead of being forced to
+  use the literal `decimal_scaled` import name. Falls back to
+  `::decimal_scaled` when the lookup fails — same behaviour as
+  the original hard-coded path.
+
+### Fixed
+
+- **docs.rs build for 0.3.1 failed** with
+  `E0425: cannot find type D923`. `src/core_type.rs`'s
+  `D615::widen` returned `D923<SCALE>` unconditionally, but `D923`
+  is gated behind `xx-wide` — which the docs.rs feature set didn't
+  enable. Split `D615`'s impl block in two so `widen` only exists
+  when D923 does, and added `xx-wide` to the docs.rs
+  `[package.metadata.docs.rs]` feature list for a complete
+  rendered surface.
+
+### Documentation
+
+- f64-boundary warning on `DecimalConsts`: `to_f64()` is itself
+  correctly rounded, but `pi() → to_f64()` at `SCALE < 15` lands
+  ~466 ULPs from `std::f64::consts::PI` because the decimal value
+  is intrinsically coarser than the f64 grid. Downstream code
+  that uses the f64 to count, bucket, or seed an iteration loop
+  should source mathematical constants from `std::f64::consts`
+  directly at the boundary, or pick `SCALE ≥ 15`.
+- Module-header rewrite on `log_exp_strict`, `trig_strict`,
+  `powers_strict`, and the wide-tier `wide_transcendental` macro
+  describing the four-variant matrix and when each form is
+  appropriate.
+
+### Benches
+
+- Split the monolithic `full_matrix` bench into per-width binaries
+  (`full_matrix_d{9,18,38,56,76,114,153,230,307,461,615,923,1231}`)
+  sharing a `full_matrix_common.rs` macros module. A multi-hour
+  sweep used to lose all completed widths on a power-loss / lid
+  close; per-width binaries let criterion flush each width before
+  starting the next.
+- `scripts/bench_pinned.ps1` and `scripts/bench_sweep.ps1`: 2-lane
+  parallel runner that pins each lane to a physical core (both SMT
+  siblings) at High priority. Skips any bench whose log already
+  shows completion, so a partial sweep resumes from where it left
+  off in one command.
+
 ## [0.3.1]
 
 Release-process patch. Library code, public API, on-wire format,

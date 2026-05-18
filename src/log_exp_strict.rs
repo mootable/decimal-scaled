@@ -5,30 +5,48 @@
 //! - **Logarithms:** [`D38::ln`] / [`D38::log`] / [`D38::log2`] / [`D38::log10`].
 //! - **Exponentials:** [`D38::exp`] / [`D38::exp2`].
 //!
-//! # The `*_strict` dual API
+//! # The four-variant matrix
 //!
-//! Each method has an integer-only `<method>_strict` form and an
-//! f64-bridge form:
+//! Each function ships four entry points so a single name covers
+//! every (precision × rounding) combination:
 //!
-//! - `<method>_strict` — always compiled (unless the `fast`
-//! feature is set), `no_std`-compatible, platform-deterministic.
+//! | Method            | Guard width    | Rounding mode               |
+//! |-------------------|----------------|------------------------------|
+//! | `<fn>_strict`     | crate default  | crate default               |
+//! | `<fn>_strict_with`| crate default  | caller-supplied              |
+//! | `<fn>_approx`     | caller-chosen  | crate default               |
+//! | `<fn>_approx_with`| caller-chosen  | caller-supplied              |
+//!
+//! `_strict` runs at `SCALE + STRICT_GUARD` (const-folded so LLVM
+//! specialises one optimal kernel per `SCALE`). `_approx` runs at
+//! `SCALE + working_digits` chosen at call time — drop below
+//! `STRICT_GUARD` to trade precision for latency (the Mercator /
+//! Taylor series shortens proportionally), raise above for more
+//! headroom on chained compositions. When `working_digits ==
+//! STRICT_GUARD` the `_approx_with` body redirects to `_strict_with`
+//! so the const-folded path is never displaced.
+//!
 //! `ln_strict` uses range reduction plus a Mercator series;
 //! `exp_strict` uses range reduction plus a Taylor series; the
-//! remaining methods compose those two.
-//! - The f64-bridge form is gated on `std` and calls the inherent
-//! `f64` intrinsic.
+//! remaining methods compose those two. All four variants are
+//! integer-only, `no_std`-compatible, and correctly rounded under
+//! the selected mode.
 //!
-//! The plain `<method>` is a dispatcher: with the `strict` feature it
-//! calls `<method>_strict`, otherwise the f64 bridge. See
-//! `docs/strict-mode.md` for the full dual-API and feature rules.
+//! Without the `strict` feature, the plain `<fn>` is an f64-bridge
+//! (calls the inherent `f64` intrinsic, gated on `std`). With
+//! `strict` it dispatches to `<fn>_strict`. See `docs/strict-mode.md`
+//! for the full dual-API and feature rules.
 //!
 //! # Precision
 //!
 //! The f64-bridge forms are **Lossy** — `self` round-trips through
-//! `f64`. The `*_strict` forms are **correctly rounded**: the result
-//! is within 0.5 ULP of the exact value (IEEE-754 round-to-nearest).
-//! They evaluate the series in the `d_w128_kernels::Fixed` guard-digit
-//! intermediate and round once at the end.
+//! `f64`. Every `_strict` / `_strict_with` / `_approx` /
+//! `_approx_with` form is **correctly rounded** under the selected
+//! [`RoundingMode`]: the result is within 0.5 ULP of the exact
+//! value. They evaluate the series in the `d_w128_kernels::Fixed`
+//! guard-digit intermediate and round once at the end.
+//!
+//! [`RoundingMode`]: crate::RoundingMode
 //!
 //! # Domain handling
 //!

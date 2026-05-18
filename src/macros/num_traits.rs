@@ -126,6 +126,68 @@ macro_rules! decl_decimal_num_traits_basics {
                 <$Type<SCALE>>::is_negative(*self)
             }
         }
+
+        // Saturating, never-panicking `from_num` / `to_num` bridge
+        // pair — single `NumCast`-style entry point that any width's
+        // `T: ToPrimitive` / `T: NumCast + Bounded` caller can use
+        // without dispatching on storage width.
+        //
+        // Float NaN maps to ZERO; +/-Infinity and finite-out-of-range
+        // saturate to MAX / MIN by sign of the source.
+        //
+        // Requires the type's `::num_traits::NumCast` impl to be
+        // available, which `decl_decimal_num_traits_conversions!`
+        // emits for every width.
+        impl<const SCALE: u32> $Type<SCALE> {
+            /// Saturating `T → Self` via [`num_traits::NumCast`].
+            /// Out-of-range / `±Infinity` saturate to `MAX` / `MIN`;
+            /// `NaN` maps to [`Self::ZERO`]. See the module-level docs.
+            #[must_use]
+            pub fn from_num<T: ::num_traits::ToPrimitive>(value: T) -> Self {
+                let int_signal = value.to_i128();
+                let uint_signal = value.to_u128();
+                let float_signal = if int_signal.is_none() && uint_signal.is_none() {
+                    value.to_f64()
+                } else {
+                    None
+                };
+                if let Some(f) = float_signal
+                    && f.is_nan() {
+                        return Self::ZERO;
+                    }
+                if let Some(d) = <Self as ::num_traits::NumCast>::from(value) {
+                    return d;
+                }
+                if let Some(i) = int_signal {
+                    return if i < 0 { Self::MIN } else { Self::MAX };
+                }
+                if uint_signal.is_some() {
+                    return Self::MAX;
+                }
+                match float_signal {
+                    Some(f) if f.is_sign_negative() => Self::MIN,
+                    Some(_) => Self::MAX,
+                    None => Self::ZERO,
+                }
+            }
+
+            /// Saturating `Self → T` via [`num_traits::NumCast`].
+            /// Out-of-range targets saturate to `T::max_value()` /
+            /// `T::min_value()`. Never panics.
+            #[must_use]
+            pub fn to_num<T: ::num_traits::NumCast + ::num_traits::Bounded>(self) -> T {
+                match T::from(self) {
+                    ::core::option::Option::Some(t) => t,
+                    ::core::option::Option::None => {
+                        if self >= Self::ZERO {
+                            T::max_value()
+                        } else {
+                            T::min_value()
+                        }
+                    }
+                }
+            }
+        }
     };
 }
 

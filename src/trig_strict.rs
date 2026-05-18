@@ -1,8 +1,8 @@
 //! Trigonometric, hyperbolic, and angle-conversion methods for [`D38`].
 //!
-//! # Methods
+//! # Surface
 //!
-//! Fifteen methods:
+//! Fifteen mathematical functions:
 //!
 //! - **Forward trig (radians input):** [`D38::sin`] / [`D38::cos`] /
 //! [`D38::tan`].
@@ -12,32 +12,46 @@
 //! [`D38::asinh`] / [`D38::acosh`] / [`D38::atanh`].
 //! - **Angle conversions:** [`D38::to_degrees`] / [`D38::to_radians`].
 //!
-//! # The `*_strict` dual API
+//! # The four-variant matrix
 //!
-//! Each method has two implementations:
+//! Each function ships with four entry points so a single name covers
+//! every (precision × rounding) combination the surface needs:
 //!
-//! - An integer-only `<method>_strict` form — always compiled (unless
-//! the `fast` feature is set), `no_std`-compatible, and
-//! platform-deterministic. `sin`/`cos`/`tan` range-reduce and
-//! evaluate a Taylor series; `atan`/`asin`/`acos`/`atan2` derive from
-//! a reciprocal-reduced Taylor `atan`; the hyperbolic family composes
-//! the strict `exp` / `ln` / `sqrt`.
-//! - An f64-bridge form — converts to `f64`, calls the platform
-//! intrinsic, converts back. Gated on `std`.
+//! | Method            | Guard width    | Rounding mode               |
+//! |-------------------|----------------|------------------------------|
+//! | `<fn>_strict`     | crate default  | crate default ([`RoundingMode::HalfToEven`] unless a `rounding-*` feature is set) |
+//! | `<fn>_strict_with`| crate default  | caller-supplied              |
+//! | `<fn>_approx`     | caller-chosen  | crate default               |
+//! | `<fn>_approx_with`| caller-chosen  | caller-supplied              |
 //!
-//! The plain `<method>` is a dispatcher: with the `strict` feature it
-//! calls `<method>_strict`; otherwise it is the f64 bridge. See
-//! `docs/strict-mode.md` for the full dual-API and feature-gating
+//! The `_strict` body keeps a const-folded guard width
+//! (`SCALE + STRICT_GUARD`) so LLVM specialises one optimal kernel
+//! per `SCALE`. The `_approx` body takes the guard width at runtime
+//! and is intended for callers who want to trade ULP precision for
+//! latency — pick a smaller `working_digits` than `STRICT_GUARD` to
+//! cut series length, or a larger one to recover headroom. When the
+//! caller passes exactly `STRICT_GUARD` the `_approx_with` body
+//! redirects to `_strict_with` so the const-folded path is never
+//! displaced.
+//!
+//! All four variants are integer-only, `no_std`-compatible, and
+//! correctly rounded under the selected mode. Without the `strict`
+//! feature, the plain `<fn>` is an f64-bridge instead.
+//!
+//! See `docs/strict-mode.md` for the full dual-API + feature-gating
 //! rules and the 0.5 ULP accuracy contract.
 //!
 //! # Precision
 //!
 //! The f64-bridge forms are **Lossy** — the `D38` value round-trips
 //! through `f64`, which introduces up to one LSB of quantisation per
-//! conversion. The `*_strict` forms are **correctly rounded**: within
-//! 0.5 ULP of the exact result (IEEE-754 round-to-nearest). They
-//! evaluate every reduction and series step in the `d_w128_kernels::Fixed`
+//! conversion. Every `_strict` / `_strict_with` / `_approx` /
+//! `_approx_with` form is **correctly rounded**: within 0.5 ULP of
+//! the exact result under the selected `RoundingMode`. They evaluate
+//! every reduction and series step in the `d_w128_kernels::Fixed`
 //! guard-digit intermediate and round once at the end.
+//!
+//! [`RoundingMode::HalfToEven`]: crate::RoundingMode::HalfToEven
 //!
 //! # `atan2` signature
 //!

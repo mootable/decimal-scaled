@@ -70,6 +70,30 @@ macro_rules! decl_decimal_consts {
             fn e() -> Self {
                 Self(<$Storage>::from_i128($crate::consts::e_at_target::<SCALE>()))
             }
+            #[inline]
+            fn pi_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::consts::pi_at_target_with::<SCALE>(mode)))
+            }
+            #[inline]
+            fn tau_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::consts::tau_at_target_with::<SCALE>(mode)))
+            }
+            #[inline]
+            fn half_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::consts::half_pi_at_target_with::<SCALE>(mode)))
+            }
+            #[inline]
+            fn quarter_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::consts::quarter_pi_at_target_with::<SCALE>(mode)))
+            }
+            #[inline]
+            fn golden_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::consts::golden_at_target_with::<SCALE>(mode)))
+            }
+            #[inline]
+            fn e_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::consts::e_at_target_with::<SCALE>(mode)))
+            }
         }
     };
 
@@ -78,33 +102,51 @@ macro_rules! decl_decimal_consts {
         impl<const SCALE: u32> $crate::consts::DecimalConsts for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
-                let bits = $crate::consts::pi_at_target::<SCALE>();
-                Self(bits as $Storage)
+                Self($crate::consts::pi_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn tau() -> Self {
-                let bits = $crate::consts::tau_at_target::<SCALE>();
-                Self(bits as $Storage)
+                Self($crate::consts::tau_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn half_pi() -> Self {
-                let bits = $crate::consts::half_pi_at_target::<SCALE>();
-                Self(bits as $Storage)
+                Self($crate::consts::half_pi_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn quarter_pi() -> Self {
-                let bits = $crate::consts::quarter_pi_at_target::<SCALE>();
-                Self(bits as $Storage)
+                Self($crate::consts::quarter_pi_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn golden() -> Self {
-                let bits = $crate::consts::golden_at_target::<SCALE>();
-                Self(bits as $Storage)
+                Self($crate::consts::golden_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn e() -> Self {
-                let bits = $crate::consts::e_at_target::<SCALE>();
-                Self(bits as $Storage)
+                Self($crate::consts::e_at_target::<SCALE>() as $Storage)
+            }
+            #[inline]
+            fn pi_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self($crate::consts::pi_at_target_with::<SCALE>(mode) as $Storage)
+            }
+            #[inline]
+            fn tau_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self($crate::consts::tau_at_target_with::<SCALE>(mode) as $Storage)
+            }
+            #[inline]
+            fn half_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self($crate::consts::half_pi_at_target_with::<SCALE>(mode) as $Storage)
+            }
+            #[inline]
+            fn quarter_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self($crate::consts::quarter_pi_at_target_with::<SCALE>(mode) as $Storage)
+            }
+            #[inline]
+            fn golden_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self($crate::consts::golden_at_target_with::<SCALE>(mode) as $Storage)
+            }
+            #[inline]
+            fn e_with(mode: $crate::rounding::RoundingMode) -> Self {
+                Self($crate::consts::e_at_target_with::<SCALE>(mode) as $Storage)
             }
         }
     };

@@ -46,57 +46,107 @@ struct Width {
     /// `MAX_SCALE` for this width — the largest `SCALE` that fits
     /// without overflowing storage.
     max_scale: u32,
-    /// Crate-relative path to the type. Filled into the emitted
-    /// `::decimal_scaled::DXX::<SCALE>::from_bits(…)` expression.
-    type_path: &'static str,
-    /// Crate-relative path to the underlying signed integer (used
-    /// for the inline-expression form's `let _v: …` type anchor).
+    /// Leaf identifier of the decimal type (`D38`, `D76`, …). At
+    /// emit time we prepend the resolved root path
+    /// (`::<consumer-import-name>`) via [`crate_root`].
+    type_leaf: &'static str,
+    /// Storage type for the inline-expression form's `let _v: …`
+    /// anchor. For narrow widths this is a primitive (`"i32"` /
+    /// `"i64"` / `"i128"`) and used as-is. For wide widths it's a
+    /// leaf inside the decimal-scaled crate (`"Int256"` /
+    /// `"Int512"` / `"Int1024"`) and prefixed with the resolved
+    /// root path at emit time.
     storage_path: &'static str,
     /// `true` for D76 / D153 / D307 (hand-rolled wide integer
     /// storage). Drives the emit-via-`from_str_radix` path.
     wide: bool,
 }
 
+/// Resolves the consuming crate's import name for `decimal-scaled`
+/// and returns it as a leading absolute path (`::<name>`), so
+/// `type_path()` / `storage_path()` can prepend it to a leaf
+/// identifier. Falls back to `::decimal_scaled` if the lookup
+/// fails — same behaviour as the original hard-coded path.
+///
+/// Note: `proc-macro-crate` can only see the *direct* dependencies
+/// of the consumer crate. A consumer that wants to use `d38!`
+/// without listing `decimal-scaled` itself (relying on a transitive
+/// dep through some wrapper crate) will still fail — there is no
+/// proc-macro mechanism to resolve transitive deps. The
+/// fixed-macro-style wrapper pattern hits the same limit.
+fn crate_root() -> proc_macro2::TokenStream {
+    use proc_macro_crate::{crate_name, FoundCrate};
+    use quote::quote;
+    match crate_name("decimal-scaled") {
+        Ok(FoundCrate::Itself) => quote! { ::decimal_scaled },
+        Ok(FoundCrate::Name(name)) => {
+            let ident = proc_macro2::Ident::new(&name, proc_macro2::Span::call_site());
+            quote! { ::#ident }
+        }
+        Err(_) => quote! { ::decimal_scaled },
+    }
+}
+
+/// Build the absolute path to a decimal type (`<root>::D38`).
+fn type_path(width: Width) -> proc_macro2::TokenStream {
+    let root = crate_root();
+    let leaf = proc_macro2::Ident::new(width.type_leaf, proc_macro2::Span::call_site());
+    quote::quote! { #root :: #leaf }
+}
+
+/// Build the storage-path token stream. Narrow widths just emit
+/// the primitive (`i32` / `i64` / `i128`); wide widths emit
+/// `<root>::Int<NNN>`.
+fn storage_path_tokens(width: Width) -> proc_macro2::TokenStream {
+    if width.wide {
+        let root = crate_root();
+        let leaf = proc_macro2::Ident::new(width.storage_path, proc_macro2::Span::call_site());
+        quote::quote! { #root :: #leaf }
+    } else {
+        width.storage_path.parse().unwrap()
+    }
+}
+
 const D9: Width = Width {
     name: "d9",
     max_scale: 9,
-    type_path: "::decimal_scaled::D9",
+    type_leaf: "D9",
     storage_path: "i32",
     wide: false,
 };
 const D18: Width = Width {
     name: "d18",
     max_scale: 18,
-    type_path: "::decimal_scaled::D18",
+    type_leaf: "D18",
     storage_path: "i64",
     wide: false,
 };
 const D38: Width = Width {
     name: "d38",
     max_scale: 38,
-    type_path: "::decimal_scaled::D38",
+    type_leaf: "D38",
     storage_path: "i128",
     wide: false,
 };
 const D76: Width = Width {
     name: "d76",
     max_scale: 76,
-    type_path: "::decimal_scaled::D76",
-    storage_path: "::decimal_scaled::Int256",
+    type_leaf: "D76",
+    storage_path: "Int256",
     wide: true,
 };
 const D153: Width = Width {
     name: "d153",
     max_scale: 153,
-    type_path: "::decimal_scaled::D153",
-    storage_path: "::decimal_scaled::Int512",
+    type_leaf: "D153",
+    storage_path: "Int512",
     wide: true,
 };
 const D307: Width = Width {
     name: "d307",
     max_scale: 307,
-    type_path: "::decimal_scaled::D307",
-    storage_path: "::decimal_scaled::Int1024",
+    type_leaf: "D307",
+    storage_path: "Int1024",
     wide: true,
 };
 
@@ -765,9 +815,9 @@ fn emit_narrow(
         "i128" => quote! { #signed },
         _ => unreachable!(),
     };
-    let type_path: proc_macro2::TokenStream = width.type_path.parse().unwrap();
+    let tp = type_path(width);
     let out = quote! {
-        #type_path :: <#target_scale> :: from_bits(#bits_tokens)
+        #tp :: <#target_scale> :: from_bits(#bits_tokens)
     };
     out.into()
 }
@@ -778,19 +828,17 @@ fn emit_wide(
     sign: i128,
     digits: &str,
 ) -> TokenStream {
-    // Wide integers have `from_str_radix` as `const fn`. Emit a
-    // const block that materialises the bits at compile time.
     let signed_str = if sign < 0 {
         format!("-{digits}")
     } else {
         digits.to_string()
     };
-    let type_path: proc_macro2::TokenStream = width.type_path.parse().unwrap();
-    let storage_path: proc_macro2::TokenStream = width.storage_path.parse().unwrap();
+    let tp = type_path(width);
+    let sp = storage_path_tokens(width);
     let err_msg = format!("{}! bits parse failed", width.name);
     let out = quote! {
-        #type_path :: <#target_scale> :: from_bits({
-            const BITS: #storage_path = match <#storage_path>::from_str_radix(#signed_str, 10) {
+        #tp :: <#target_scale> :: from_bits({
+            const BITS: #sp = match <#sp>::from_str_radix(#signed_str, 10) {
                 ::core::result::Result::Ok(v) => v,
                 ::core::result::Result::Err(_) => panic!(#err_msg),
             };
@@ -818,16 +866,14 @@ fn expand_expression(
             ),
         );
     }
-    let type_path: proc_macro2::TokenStream = width.type_path.parse().unwrap();
-    let storage_path: proc_macro2::TokenStream = width.storage_path.parse().unwrap();
+    let tp = type_path(width);
+    let sp = storage_path_tokens(width);
     let err_msg = format!("{}! overflow: expression * 10^SCALE exceeds storage range", width.name);
     let out = if width.wide {
-        // Wide path: build the multiplier in the wide-int type via
-        // its `pow(scale)` const fn, then runtime-multiply.
         quote! {
-            #type_path :: <#scale> :: from_bits({
-                let _v: #storage_path = (#expr);
-                let mult: #storage_path = <#storage_path>::from_str_radix("10", 10)
+            #tp :: <#scale> :: from_bits({
+                let _v: #sp = (#expr);
+                let mult: #sp = <#sp>::from_str_radix("10", 10)
                     .expect("d{}! mult literal")
                     .pow(#scale);
                 _v.checked_mul(mult).expect(#err_msg)
@@ -835,13 +881,12 @@ fn expand_expression(
         }
     } else if scale == 0 {
         quote! {
-            #type_path :: <0> :: from_bits({
-                let _v: #storage_path = (#expr);
+            #tp :: <0> :: from_bits({
+                let _v: #sp = (#expr);
                 _v
             })
         }
     } else {
-        // Narrow path: literal i32/i64/i128 multiplier via `pow`.
         let mult_lit: proc_macro2::TokenStream = match width.storage_path {
             "i32" => {
                 let v = 10i32.pow(scale);
@@ -858,8 +903,8 @@ fn expand_expression(
             _ => unreachable!(),
         };
         quote! {
-            #type_path :: <#scale> :: from_bits({
-                let _v: #storage_path = (#expr);
+            #tp :: <#scale> :: from_bits({
+                let _v: #sp = (#expr);
                 _v.checked_mul(#mult_lit).expect(#err_msg)
             })
         }

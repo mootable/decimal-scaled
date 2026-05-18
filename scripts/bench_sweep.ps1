@@ -126,11 +126,30 @@ Write-Host "Lane A job id: $($jobA.Id) (bench-laneA)"
 Write-Host "Lane B job id: $($jobB.Id) (bench-laneB)"
 Write-Host "Sweep dir    : $sweepDir"
 Write-Host ""
-Write-Host "Detach this script; check progress with:"
-Write-Host "    Get-Job; Receive-Job -Id $($jobA.Id) -Keep"
-Write-Host "    Get-Job; Receive-Job -Id $($jobB.Id) -Keep"
-Write-Host "Or tail an individual bench log:"
+Write-Host "Waiting on both lanes — this dispatcher pwsh process will"
+Write-Host "stay alive until both lanes finish (Start-Job children die"
+Write-Host "with the parent). You can attach from another shell to peek"
+Write-Host "at progress without affecting the run:"
 Write-Host "    Get-Content -Wait '$sweepDir\<bench-name>.log'"
 Write-Host ""
-Write-Host "If interrupted, rerun this script and it'll resume from"
-Write-Host "where it left off (skips benches whose log shows completion)."
+Write-Host "If you have to kill this process (Ctrl-C, lid close, power"
+Write-Host "loss), the running cargo bench processes die too. Just rerun"
+Write-Host "this script — it skips benches whose log shows completion."
+Write-Host ""
+
+# Stream output from both jobs as it's produced so the dispatcher's
+# log file reflects live progress instead of buffering until end.
+while (($jobA.State -eq 'Running') -or ($jobB.State -eq 'Running')) {
+    Receive-Job -Id $jobA.Id
+    Receive-Job -Id $jobB.Id
+    Start-Sleep -Seconds 30
+}
+
+# Drain anything left after both jobs finished.
+Receive-Job -Id $jobA.Id
+Receive-Job -Id $jobB.Id
+
+Write-Host ""
+Write-Host "Both lanes finished."
+Write-Host "Lane A state: $($jobA.State), Lane B state: $($jobB.State)"
+Write-Host "Index file  : $indexFile"
