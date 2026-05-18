@@ -192,14 +192,31 @@ impl<const SCALE: u32> D38<SCALE> {
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // sin(x) = x − x³/6 + … — for sufficiently small |x| the
-        // cubic correction rounds to 0 at the storage scale and
-        // sin(x) == x. Using atan's stricter threshold here is
-        // safe (atan = x − x³/3, larger correction).
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let raw = sin_fixed(to_fixed(self.0), w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::sin: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Sine with caller-chosen guard digits. See `ln_approx` for the
+    /// accuracy / speed contract.
+    #[inline]
+    #[must_use]
+    pub fn sin_approx(self, working_digits: u32) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.sin_strict();
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        let w = SCALE + working_digits;
         let raw = sin_fixed(to_fixed(self.0), w)
             .round_to_i128(w, SCALE)
             .expect("D38::sin: result out of range");
@@ -216,6 +233,24 @@ impl<const SCALE: u32> D38<SCALE> {
             return Self::from_bits(10_i128.pow(SCALE));
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let arg = to_fixed(self.0).add(wide_half_pi(w));
+        let raw = sin_fixed(arg, w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::cos: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Cosine with caller-chosen guard digits. See `ln_approx`.
+    #[inline]
+    #[must_use]
+    pub fn cos_approx(self, working_digits: u32) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.cos_strict();
+        }
+        if self.0 == 0 {
+            return Self::from_bits(10_i128.pow(SCALE));
+        }
+        let w = SCALE + working_digits;
         let arg = to_fixed(self.0).add(wide_half_pi(w));
         let raw = sin_fixed(arg, w)
             .round_to_i128(w, SCALE)
@@ -258,13 +293,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn atan_strict(self) -> Self {
         use crate::consts::DecimalConsts;
-        // Fast path 1 — atan(0) = 0.
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // Fast path 2 — atan(±1) = ±π/4. ONE is the storage of 1.0 at
-        // this SCALE, namely 10^SCALE. Comparing the raw bits avoids
-        // building a transient D38 for the literal 1.
         let one_bits: i128 = 10_i128.pow(SCALE);
         if self.0 == one_bits {
             return Self::quarter_pi();
@@ -272,17 +303,38 @@ impl<const SCALE: u32> D38<SCALE> {
         if self.0 == -one_bits {
             return -Self::quarter_pi();
         }
-        // Fast path 3 — atan(x) ≈ x for very small |x|. The cubic
-        // correction |x³/3| rounds to 0 at the storage scale when
-        // |x| < (1.5·10⁻ˢᶜᴬᴸᴱ)^(1/3) ≈ 10^(−⌈SCALE/3⌉). Conservative
-        // threshold: |raw| < 10^(SCALE − ((SCALE+2)/3)). Works for
-        // every SCALE including 0 (threshold = 1, so the path doesn't
-        // fire on any nonzero value at SCALE 0 — harmless).
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
-
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
+        let raw = atan_fixed(to_fixed(self.0), w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::atan: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Arctangent with caller-chosen guard digits. See `ln_approx`.
+    #[inline]
+    #[must_use]
+    pub fn atan_approx(self, working_digits: u32) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.atan_strict();
+        }
+        use crate::consts::DecimalConsts;
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::quarter_pi();
+        }
+        if self.0 == -one_bits {
+            return -Self::quarter_pi();
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        let w = SCALE + working_digits;
         let raw = atan_fixed(to_fixed(self.0), w)
             .round_to_i128(w, SCALE)
             .expect("D38::atan: result out of range");

@@ -285,6 +285,15 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_approx(self, working_digits: u32) -> Self {
+        // When the caller-supplied guard matches `STRICT_GUARD`, route
+        // through `ln_strict` so the call gets the compile-time const
+        // propagation (faster) AND the 0.5 ULP correctness contract.
+        // Callers who want strict precision wrote the wrong call —
+        // this redirect spares them the perf cost of using the runtime
+        // path with an effectively-constant argument.
+        if working_digits == STRICT_GUARD {
+            return self.ln_strict();
+        }
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::ln: argument must be positive");
         let one_bits: i128 = 10_i128.pow(SCALE);
@@ -346,6 +355,29 @@ impl<const SCALE: u32> D38<SCALE> {
         Self::from_bits(raw)
     }
 
+    /// Logarithm with caller-chosen guard digits. See `ln_approx`.
+    #[inline]
+    #[must_use]
+    pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.log_strict(base);
+        }
+        use crate::d_w128_kernels::Fixed;
+        assert!(self.0 > 0, "D38::log: argument must be positive");
+        assert!(base.0 > 0, "D38::log: base must be positive");
+        let w = SCALE + working_digits;
+        let pow = 10u128.pow(working_digits);
+        let v_w = Fixed::from_u128_mag(self.0 as u128, false).mul_u128(pow);
+        let b_w = Fixed::from_u128_mag(base.0 as u128, false).mul_u128(pow);
+        let ln_b = ln_fixed(b_w, w);
+        assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
+        let raw = ln_fixed(v_w, w)
+            .div(ln_b, w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::log: result out of range");
+        Self::from_bits(raw)
+    }
+
     /// Returns the logarithm of `self` in the given `base`.
     ///
     /// With the `strict` feature enabled this is the integer-only
@@ -381,6 +413,25 @@ impl<const SCALE: u32> D38<SCALE> {
         Self::from_bits(raw)
     }
 
+    /// Base-2 log with caller-chosen guard digits. See `ln_approx`.
+    #[inline]
+    #[must_use]
+    pub fn log2_approx(self, working_digits: u32) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.log2_strict();
+        }
+        use crate::d_w128_kernels::Fixed;
+        assert!(self.0 > 0, "D38::log2: argument must be positive");
+        let w = SCALE + working_digits;
+        let v_w =
+            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
+        let raw = ln_fixed(v_w, w)
+            .div(wide_ln2(w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::log2: result out of range");
+        Self::from_bits(raw)
+    }
+
     /// Returns the base-2 logarithm of `self`.
     ///
     /// With the `strict` feature enabled this is the integer-only
@@ -409,6 +460,25 @@ impl<const SCALE: u32> D38<SCALE> {
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        let raw = ln_fixed(v_w, w)
+            .div(wide_ln10(w), w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::log10: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Base-10 log with caller-chosen guard digits. See `ln_approx`.
+    #[inline]
+    #[must_use]
+    pub fn log10_approx(self, working_digits: u32) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.log10_strict();
+        }
+        use crate::d_w128_kernels::Fixed;
+        assert!(self.0 > 0, "D38::log10: argument must be positive");
+        let w = SCALE + working_digits;
+        let v_w =
+            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
         let raw = ln_fixed(v_w, w)
             .div(wide_ln10(w), w)
             .round_to_i128(w, SCALE)
@@ -462,6 +532,30 @@ impl<const SCALE: u32> D38<SCALE> {
         let negative_input = self.0 < 0;
         let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
             .mul_u128(10u128.pow(STRICT_GUARD));
+        let v_w = if negative_input { v_w.neg() } else { v_w };
+        let raw = exp_fixed(v_w, w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::exp: result overflows the representable range");
+        Self::from_bits(raw)
+    }
+
+    /// Exponential with caller-chosen guard digits — same accuracy /
+    /// speed tradeoff as `ln_approx`. See `ln_approx` for the
+    /// detailed contract.
+    #[inline]
+    #[must_use]
+    pub fn exp_approx(self, working_digits: u32) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.exp_strict();
+        }
+        use crate::d_w128_kernels::Fixed;
+        if self.0 == 0 {
+            return Self::ONE;
+        }
+        let w = SCALE + working_digits;
+        let negative_input = self.0 < 0;
+        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
+            .mul_u128(10u128.pow(working_digits));
         let v_w = if negative_input { v_w.neg() } else { v_w };
         let raw = exp_fixed(v_w, w)
             .round_to_i128(w, SCALE)
