@@ -305,7 +305,7 @@ pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub use core_type::{
     D56,
-    D56s0, D56s2, D56s4, D56s6, D56s9, D56s12, D56s18, D56s24,
+    D56s0, D56s2, D56s4, D56s6, D56s9, D56s12, D56s18, D56s20, D56s24,
     D56s28, D56s32, D56s38, D56s42, D56s48, D56s52, D56s56, D56s57,
 };
 #[cfg(any(feature = "d56", feature = "wide"))]

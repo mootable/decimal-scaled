@@ -1075,6 +1075,8 @@ pub type D56s12 = D56<12>;
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub type D56s18 = D56<18>;
 #[cfg(any(feature = "d56", feature = "wide"))]
+pub type D56s20 = D56<20>;
+#[cfg(any(feature = "d56", feature = "wide"))]
 pub type D56s24 = D56<24>;
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub type D56s28 = D56<28>;
