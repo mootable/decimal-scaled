@@ -130,29 +130,35 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     $crate::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
-            /// `asin_strict` — delegates to [`crate::core_type::D38::asin_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `asin_strict` — delegates to the policy-registered asin
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asin_strict())
-                    .expect(concat!(stringify!($Type), "::asin_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::asin_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
-            /// `acos_strict` — delegates to [`crate::core_type::D38::acos_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `acos_strict` — delegates to the policy-registered acos
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acos_strict())
-                    .expect(concat!(stringify!($Type), "::acos_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::acos_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
-            /// `atan_strict` — delegates to [`crate::core_type::D38::atan_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `atan_strict` — delegates to the policy-registered atan
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn atan_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atan_strict())
-                    .expect(concat!(stringify!($Type), "::atan_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::atan_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `sinh_strict` — delegates to [`crate::core_type::D38::sinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -227,14 +233,16 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 ::core::convert::TryInto::try_into(wide_self.log_strict(wide_base))
                     .expect(concat!(stringify!($Type), "::log_strict: result out of range"))
             }
-            /// `atan2_strict` — delegates to [`crate::core_type::D38::atan2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `atan2_strict` — delegates to the policy-registered atan2
+            /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
-                let wide_self: $crate::core_type::D38<SCALE> = self.into();
-                let wide_other: $crate::core_type::D38<SCALE> = other.into();
-                ::core::convert::TryInto::try_into(wide_self.atan2_strict(wide_other))
-                    .expect(concat!(stringify!($Type), "::atan2_strict: result out of range"))
+                <Self as $crate::policy::trig::TrigPolicy>::atan2_impl(
+                    self,
+                    other,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `powf_strict` — delegates to the policy-registered powf
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP

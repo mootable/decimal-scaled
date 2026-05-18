@@ -316,28 +316,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Arctangent under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::atan_impl`].
     #[inline]
     #[must_use]
     pub fn atan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::consts::DecimalConstants;
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        let one_bits: i128 = 10_i128.pow(SCALE);
-        if self.0 == one_bits {
-            return Self::quarter_pi();
-        }
-        if self.0 == -one_bits {
-            return -Self::quarter_pi();
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let raw = atan_fixed(to_fixed(self.0), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::atan: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::atan_impl(self, mode)
     }
 
     /// Arctangent with caller-chosen guard digits.
@@ -354,25 +338,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.atan_strict_with(mode);
         }
-        use crate::consts::DecimalConstants;
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        let one_bits: i128 = 10_i128.pow(SCALE);
-        if self.0 == one_bits {
-            return Self::quarter_pi();
-        }
-        if self.0 == -one_bits {
-            return -Self::quarter_pi();
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        let w = SCALE + working_digits;
-        let raw = atan_fixed(to_fixed(self.0), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::atan: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::atan_with_impl(self, working_digits, mode)
     }
 
     /// Arcsine of `self`, in radians, in `[−π/2, π/2]`. Strict.
@@ -390,45 +356,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Arcsine under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::asin_impl`].
     #[inline]
     #[must_use]
     pub fn asin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        use crate::d_w128_kernels::Fixed;
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        let abs_v = Fixed { negative: false, mag: v.mag };
-        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::asin: argument out of domain [-1, 1]");
-        if abs_v == one_w {
-            let hp = wide_half_pi(w);
-            let hp = if v.negative { hp.neg() } else { hp };
-            let raw = hp
-                .round_to_i128_with(w, SCALE, mode)
-                .expect("D38::asin: result out of range");
-            return Self::from_bits(raw);
-        }
-        let half_w = one_w.halve();
-        let asin_w = if !abs_v.ge_mag(half_w) {
-            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-            atan_fixed(v.div(denom, w), w)
-        } else {
-            let inner = one_w.sub(abs_v).halve();
-            let inner_sqrt = inner.sqrt(w);
-            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
-            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
-            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
-            if v.negative { result_abs.neg() } else { result_abs }
-        };
-        let raw = asin_w
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::asin: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::asin_impl(self, mode)
     }
 
     /// Arcsine with caller-chosen guard digits.
@@ -445,42 +378,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.asin_strict_with(mode);
         }
-        if self.0 == 0 {
-            return Self::ZERO;
-        }
-        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
-            return self;
-        }
-        use crate::d_w128_kernels::Fixed;
-        let w = SCALE + working_digits;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed_w(self.0, working_digits);
-        let abs_v = Fixed { negative: false, mag: v.mag };
-        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::asin: argument out of domain [-1, 1]");
-        if abs_v == one_w {
-            let hp = wide_half_pi(w);
-            let hp = if v.negative { hp.neg() } else { hp };
-            let raw = hp
-                .round_to_i128_with(w, SCALE, mode)
-                .expect("D38::asin: result out of range");
-            return Self::from_bits(raw);
-        }
-        let half_w = one_w.halve();
-        let asin_w = if !abs_v.ge_mag(half_w) {
-            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-            atan_fixed(v.div(denom, w), w)
-        } else {
-            let inner = one_w.sub(abs_v).halve();
-            let inner_sqrt = inner.sqrt(w);
-            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
-            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
-            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
-            if v.negative { result_abs.neg() } else { result_abs }
-        };
-        let raw = asin_w
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::asin: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::asin_with_impl(self, working_digits, mode)
     }
 
     /// Arccosine of `self`, in radians, in `[0, π]`. Strict:
@@ -496,46 +394,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Arccosine under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::acos_impl`].
     #[inline]
     #[must_use]
     pub fn acos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::consts::DecimalConstants;
-        if self.0 == 0 {
-            return Self::half_pi();
-        }
-        let one_bits: i128 = 10_i128.pow(SCALE);
-        if self.0 == one_bits {
-            return Self::ZERO;
-        }
-        if self.0 == -one_bits {
-            return Self::pi();
-        }
-        use crate::d_w128_kernels::Fixed;
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed(self.0);
-        let abs_v = Fixed { negative: false, mag: v.mag };
-        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::acos: argument out of domain [-1, 1]");
-        let half_w = one_w.halve();
-        let asin_w = if abs_v == one_w {
-            let hp = wide_half_pi(w);
-            if v.negative { hp.neg() } else { hp }
-        } else if !abs_v.ge_mag(half_w) {
-            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-            atan_fixed(v.div(denom, w), w)
-        } else {
-            let inner = one_w.sub(abs_v).halve();
-            let inner_sqrt = inner.sqrt(w);
-            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
-            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
-            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
-            if v.negative { result_abs.neg() } else { result_abs }
-        };
-        let raw = wide_half_pi(w)
-            .sub(asin_w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::acos: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::acos_impl(self, mode)
     }
 
     /// Arccosine with caller-chosen guard digits.
@@ -552,43 +416,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.acos_strict_with(mode);
         }
-        use crate::consts::DecimalConstants;
-        if self.0 == 0 {
-            return Self::half_pi();
-        }
-        let one_bits: i128 = 10_i128.pow(SCALE);
-        if self.0 == one_bits {
-            return Self::ZERO;
-        }
-        if self.0 == -one_bits {
-            return Self::pi();
-        }
-        use crate::d_w128_kernels::Fixed;
-        let w = SCALE + working_digits;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-        let v = to_fixed_w(self.0, working_digits);
-        let abs_v = Fixed { negative: false, mag: v.mag };
-        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::acos: argument out of domain [-1, 1]");
-        let half_w = one_w.halve();
-        let asin_w = if abs_v == one_w {
-            let hp = wide_half_pi(w);
-            if v.negative { hp.neg() } else { hp }
-        } else if !abs_v.ge_mag(half_w) {
-            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
-            atan_fixed(v.div(denom, w), w)
-        } else {
-            let inner = one_w.sub(abs_v).halve();
-            let inner_sqrt = inner.sqrt(w);
-            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
-            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
-            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
-            if v.negative { result_abs.neg() } else { result_abs }
-        };
-        let raw = wide_half_pi(w)
-            .sub(asin_w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::acos: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::acos_with_impl(self, working_digits, mode)
     }
 
     /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`), in
@@ -601,14 +429,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Four-quadrant arctangent under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::trig::TrigPolicy::atan2_impl`].
     #[inline]
     #[must_use]
     pub fn atan2_strict_with(self, other: Self, mode: crate::rounding::RoundingMode) -> Self {
-        let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let raw = atan2_kernel(to_fixed(self.0), to_fixed(other.0), self.0, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::atan2: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::atan2_impl(self, other, mode)
     }
 
     /// Four-quadrant arctangent with caller-chosen guard digits.
@@ -625,16 +451,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.atan2_strict_with(other, mode);
         }
-        let w = SCALE + working_digits;
-        let raw = atan2_kernel(
-            to_fixed_w(self.0, working_digits),
-            to_fixed_w(other.0, working_digits),
-            self.0,
-            w,
-        )
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::atan2: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::trig::TrigPolicy>::atan2_with_impl(self, other, working_digits, mode)
     }
 
     /// Hyperbolic sine of `self`. Strict: `sinh(x) = (eˣ − e⁻ˣ)/2`,
@@ -1271,7 +1088,7 @@ pub(crate) fn to_fixed_w(raw: i128, working_digits: u32) -> crate::d_w128_kernel
 /// dispatchers can compose it at their chosen working scale `w`.
 /// `y_raw` keeps the original sign of the y-argument for the x-zero
 /// branch where the wide y value would have been signed-zero.
-fn atan2_kernel(
+pub(crate) fn atan2_kernel(
     y: crate::d_w128_kernels::Fixed,
     x: crate::d_w128_kernels::Fixed,
     y_raw: i128,
@@ -1401,7 +1218,7 @@ fn atan_taylor(x: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels
 /// Odd-function fold to `x ≥ 0`; reciprocal reduction
 /// `atan(x) = π/2 − atan(1/x)` for `x > 1`; three rounds of argument
 /// halving `atan(x) = 2·atan(x / (1 + √(1+x²)))`; then the series.
-fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
+pub(crate) fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
 
     #[cfg(feature = "perf-trace")]
