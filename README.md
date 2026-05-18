@@ -64,7 +64,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-decimal-scaled = "0.3.1"
+decimal-scaled = "0.3.2"
 ```
 
 The default build dispatches plain `sqrt` / `ln` / `sin` /
@@ -78,7 +78,7 @@ explicitly opt out of strict:
 [dependencies]
 # f64-bridge fast path — ~16 decimal digits of platform-libm
 # precision, NOT platform-deterministic. Opt-in only.
-decimal-scaled = { version = "0.3.1",
+decimal-scaled = { version = "0.3.2",
                    default-features = false,
                    features = ["std", "serde", "fast"] }
 ```
@@ -87,7 +87,7 @@ For `no_std` targets (`alloc` is still required):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.1",
+decimal-scaled = { version = "0.3.2",
                    default-features = false,
                    features = ["alloc", "serde"] }
 # `strict` is on by default; no need to re-add it.
@@ -99,7 +99,7 @@ decimal-scaled = { version = "0.3.1",
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.1", features = ["macros"] }
+decimal-scaled = { version = "0.3.2", features = ["macros"] }
 ```
 
 There are three idiomatic ways to construct a value. Use whichever
@@ -165,16 +165,16 @@ names its types in the unit users actually reason about. Mapping:
 | `D9<S>`    | `d9!`   | `i32` (32 bits)                  |  9   | ±2.1 × 10⁹    | always available |
 | `D18<S>`   | `d18!`  | `i64` (64 bits)                  | 18   | ±9.2 × 10¹⁸   | always available |
 | `D38<S>`   | `d38!`  | `i128` (128 bits)                | 38   | ±1.7 × 10³⁸   | always available |
-| `D56<S>`   | —       | `Int192` (192 bits)              | 57   | ±3.1 × 10⁵⁷   | `d56` / `wide`   |
-| `D76<S>`   | `d76!`  | `Int256` (256 bits)              | 76   | ±5.8 × 10⁷⁶   | `d76` / `wide`   |
-| `D114<S>`  | —       | `Int384` (384 bits)              | 115  | ±2.0 × 10¹¹⁵  | `d114` / `wide`  |
-| `D153<S>`  | `d153!` | `Int512` (512 bits)              | 153  | ±6.7 × 10¹⁵³  | `d153` / `wide`  |
-| `D230<S>`  | —       | `Int768` (768 bits)              | 230  | ±7.7 × 10²³⁰  | `d230` / `wide`  |
-| `D307<S>`  | `d307!` | `Int1024` (1024 bits)            | 307  | ±9.0 × 10³⁰⁷  | `d307` / `wide`  |
-| `D461<S>`  | —       | `Int1536` (1536 bits)            | 462  | ±1.0 × 10⁴⁶²  | `d461` / `x-wide`|
-| `D615<S>`  | —       | `Int2048` (2048 bits)            | 616  | ±1.6 × 10⁶¹⁶  | `d615` / `x-wide`|
-| `D923<S>`  | —       | `Int3072` (3072 bits)            | 924  | ±2.3 × 10⁹²⁴  | `d923` / `xx-wide`|
-| `D1231<S>` | —       | `Int4096` (4096 bits)            | 1232 | ±2.7 × 10¹²³² | `d1231` / `xx-wide`|
+| `D56<S>`   | `d56!`   | `Int192` (192 bits)              | 57   | ±3.1 × 10⁵⁷   | `d56` / `wide`   |
+| `D76<S>`   | `d76!`   | `Int256` (256 bits)              | 76   | ±5.8 × 10⁷⁶   | `d76` / `wide`   |
+| `D114<S>`  | `d114!`  | `Int384` (384 bits)              | 115  | ±2.0 × 10¹¹⁵  | `d114` / `wide`  |
+| `D153<S>`  | `d153!`  | `Int512` (512 bits)              | 153  | ±6.7 × 10¹⁵³  | `d153` / `wide`  |
+| `D230<S>`  | `d230!`  | `Int768` (768 bits)              | 230  | ±7.7 × 10²³⁰  | `d230` / `wide`  |
+| `D307<S>`  | `d307!`  | `Int1024` (1024 bits)            | 307  | ±9.0 × 10³⁰⁷  | `d307` / `wide`  |
+| `D461<S>`  | `d461!`  | `Int1536` (1536 bits)            | 462  | ±1.0 × 10⁴⁶²  | `d461` / `x-wide`|
+| `D615<S>`  | `d615!`  | `Int2048` (2048 bits)            | 616  | ±1.6 × 10⁶¹⁶  | `d615` / `x-wide`|
+| `D923<S>`  | `d923!`  | `Int3072` (3072 bits)            | 924  | ±2.3 × 10⁹²⁴  | `d923` / `xx-wide`|
+| `D1231<S>` | `d1231!` | `Int4096` (4096 bits)            | 1232 | ±2.7 × 10¹²³² | `d1231` / `xx-wide`|
 
 The half-width tiers (`D56`, `D114`, `D230`, `D461`, `D923`) fill
 in the storage-cost gap between each pair of power-of-two widths,
