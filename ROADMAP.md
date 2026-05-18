@@ -38,7 +38,7 @@ Tactical perf and fast-path wins, with bench evidence in
 | `benches/atan_inputs.rs` — input-class atan timing (decimal-scaled vs fastnum vs g_math) | exposed two bench-validity issues (fastnum `atan(|x|>1)` = NaN, fastnum `ln(2)` = const lookup) — recorded in `docs/benchmarks.md` |
 
 Items investigated and intentionally *not* shipped (kept as
-dead code / docs for posterity, audit trail in commits + `research/`):
+dead code / docs for posterity; audit trail in commit messages):
 
 - `limbs_sqr_u64` squaring fast path — 50% fewer widening MULs in theory; on this toolchain the ADC overhead equalises it, exp regressed 7%. Kernel retained in tree; not wired.
 - `5^w` magic-multiply split for `÷10^w` — Granlund-Montgomery reciprocal for the `5^w` factor. Failed M2 gate 4-5× at every tier; algorithm wrong-shaped for multi-limb divisors at our ratio.
