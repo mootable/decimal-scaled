@@ -14,7 +14,7 @@ only.
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.2.5", features = ["macros"] }
+decimal-scaled = { version = "0.4", features = ["macros"] }
 ```
 
 ```rust
@@ -28,12 +28,19 @@ let cost = d38!(19.99, scale 2);   // D38<2>::from_bits(1999)
 
 | macro | target | storage | `MAX_SCALE` | feature gate |
 |---|---|---|---|---|
-| `d9!` | `D9<SCALE>` | `i32` | 9 | always |
-| `d18!` | `D18<SCALE>` | `i64` | 18 | always |
-| `d38!` | `D38<SCALE>` | `i128` | 38 | always |
-| `d76!` | `D76<SCALE>` | `Int256` | 76 | `d76` / `wide` |
-| `d153!` | `D153<SCALE>` | `Int512` | 153 | `d153` / `wide` |
-| `d307!` | `D307<SCALE>` | `Int1024` | 307 | `d307` / `x-wide` |
+| `d9!`    | `D9<SCALE>`    | `i32`     |   8  | always              |
+| `d18!`   | `D18<SCALE>`   | `i64`     |  17  | always              |
+| `d38!`   | `D38<SCALE>`   | `i128`    |  37  | always              |
+| `d57!`   | `D57<SCALE>`   | `Int192`  |  56  | `d57` / `wide`      |
+| `d76!`   | `D76<SCALE>`   | `Int256`  |  75  | `d76` / `wide`      |
+| `d115!`  | `D115<SCALE>`  | `Int384`  | 114  | `d115` / `wide`     |
+| `d153!`  | `D153<SCALE>`  | `Int512`  | 152  | `d153` / `wide`     |
+| `d230!`  | `D230<SCALE>`  | `Int768`  | 229  | `d230` / `wide`     |
+| `d307!`  | `D307<SCALE>`  | `Int1024` | 306  | `d307` / `wide`     |
+| `d462!`  | `D462<SCALE>`  | `Int1536` | 461  | `d462` / `x-wide`   |
+| `d616!`  | `D616<SCALE>`  | `Int2048` | 615  | `d616` / `x-wide`   |
+| `d924!`  | `D924<SCALE>`  | `Int3072` | 923  | `d924` / `xx-wide`  |
+| `d1232!` | `D1232<SCALE>` | `Int4096` | 1231 | `d1232` / `xx-wide` |
 
 Each entry point accepts the same argument grammar.
 
@@ -175,7 +182,8 @@ use decimal_scaled::{d9, d18, d38, D9s2, D18s12, D38s2, D38s12, D38};
 // Auto-scale inference.
 let a = d38!(1.23);                  // D38<2>
 let b = d38!(1.23000);               // D38<5>
-let c = d18!(1.5e-9);                // D18<10>... wait, 10 > D18::MAX_SCALE
+let c = d18!(1.5e-9);                // D18<10>
+let d = d18!(1.5e-20);               // implied scale 21 > D18::MAX_SCALE = 17
 //                                  → compile error: use d38! or scale up.
 
 // Explicit scale + rounding.
@@ -219,12 +227,16 @@ width - the long tail remains reachable via the explicit
 
 | width | wrappers |
 |---|---|
-| D9 | `d9s0!`, `d9s2!`, `d9s4!`, `d9s6!`, `d9s9!` |
-| D18 | `d18s0!`, `d18s2!`, `d18s4!`, `d18s6!`, `d18s9!`, `d18s12!`, `d18s18!` |
-| D38 | `d38s0!`, `d38s2!`, `d38s4!`, `d38s6!`, `d38s8!`, `d38s9!`, `d38s12!`, `d38s15!`, `d38s18!`, `d38s24!`, `d38s35!`, `d38s38!` |
-| D76 | `d76s0!`, `d76s2!`, `d76s6!`, `d76s12!`, `d76s18!`, `d76s35!`, `d76s50!`, `d76s76!` |
-| D153 | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s153!` |
-| D307 | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s307!` |
+| D9 | `d9s0!`, `d9s2!`, `d9s4!`, `d9s6!` |
+| D18 | `d18s0!`, `d18s2!`, `d18s4!`, `d18s6!`, `d18s9!`, `d18s12!` |
+| D38 | `d38s0!`, `d38s2!`, `d38s4!`, `d38s6!`, `d38s8!`, `d38s9!`, `d38s12!`, `d38s15!`, `d38s18!`, `d38s24!`, `d38s35!`, `d38s37!` |
+| D76 | `d76s0!`, `d76s2!`, `d76s6!`, `d76s12!`, `d76s18!`, `d76s35!`, `d76s50!`, `d76s75!` |
+| D153 | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s152!` |
+| D307 | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s306!` |
+
+Per-scale wrappers at the old `MAX_SCALE == name` cap (`d9s9!`,
+`d18s18!`, `d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`) were
+removed in 0.4.0 along with the matching scale aliases.
 
 Each wrapper forwards every other qualifier unchanged:
 
@@ -239,12 +251,12 @@ d38s2!(1.234_567, rounded)
 
 | cause | sketched message |
 |---|---|
-| Scale exceeds width max | `scale 40 exceeds max for D38 (max = 38)` |
+| Scale exceeds width max | `scale 38 exceeds max for D38 (max = 37)` |
 | Scale required for expression | `scale must be specified for an expression value: d38!(expr, scale N)` |
 | Lossy literal without `rounded` | `literal 1.234567 has 6 fractional digits, target scale 2 would lose precision; pass rounded to opt into half-to-even rounding` |
 | Bits overflow storage | `scaled value 1234567890000000000000000 overflows D9's storage (i32)` |
 | Bare leading/trailing dot | `decimal literals require a digit on each side of the dot (write 0.5 not .5)` |
-| Inferred scale exceeds max | `1e-50 implies scale 50, which exceeds D38::MAX_SCALE (38); use an explicit scale or a wider entry point` |
+| Inferred scale exceeds max | `1e-50 implies scale 50, which exceeds D38::MAX_SCALE (37); use an explicit scale or a wider entry point` |
 | Type suffix on literal | `type suffixes (e.g. _i64, _f32) are not accepted in decimal-scaled literals` |
 | Unknown qualifier | `unknown qualifier 'precision'; expected one of: scale, radix, rounded` |
 | Radix disagreement | `radix qualifier (10) disagrees with literal prefix (radix 16)` |

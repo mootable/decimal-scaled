@@ -92,6 +92,17 @@ For most users the upgrade is a mechanical search-and-replace:
   the value at SCALE 37 instead, or use `D38<37>::from_bits(...)`
   directly.
 
+### Fixed
+
+- **Wide-tier `FromStr` ceiling lifted.** Decimal strings can now be
+  parsed at every legal `SCALE` on every wide-tier width — previously
+  a u128 intermediate inside the parser silently capped the
+  parseable scale at 38, so e.g. `"0.5".parse::<D307<150>>()` would
+  fail with a precision error despite the type being well within
+  storage range. The parser now widens through the storage integer
+  directly, matching the round-trip contract `s.parse::<T>() ==
+  Ok(T::from_str(&s).unwrap())` at every `SCALE ≤ MAX_SCALE`.
+
 ### Internal
 
 - Build-time math-constant scales lowered: `SCALE_REF` for D153 / D230

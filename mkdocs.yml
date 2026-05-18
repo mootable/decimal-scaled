@@ -88,6 +88,7 @@ nav:
       - Macros: macros.md
       - Conversions: conversions.md
       - Cargo features: features.md
+      - Comparisons: comparisons.md
   - Benchmarks: benchmarks.md
   - Algorithms: ALGORITHMS.md
   - Roadmap: ROADMAP.md
