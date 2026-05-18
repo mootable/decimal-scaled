@@ -70,6 +70,32 @@ impl<const SCALE: u32> TrigPolicy for D18<SCALE> {
     #[inline] fn atan2_with_impl(self, other: Self, wd: u32, mode: RoundingMode) -> Self { trig::widen_to_d38::atan2_with_d18(self, other, wd, mode) }
 }
 
+// D38 — see `crate::policy::ln` for the borrow-D56 rationale.
+//
+// When D56 is available, sin / cos / tan / atan / asin / acos / atan2
+// all route through `borrow_d56`. The `_with` variants collapse to
+// strict because the D56 wide_kernel has no runtime-`working_digits`
+// path. `fixed_d38::*` is retained as an alternate kernel.
+
+#[cfg(any(feature = "d56", feature = "wide"))]
+impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
+    #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::sin_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::sin_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::cos_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::cos_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::tan_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::tan_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn atan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::atan_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::atan_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn asin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::asin_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::asin_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn acos_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::acos_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::acos_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { Self(trig::borrow_d56::atan2_strict::<SCALE>(self.0, other.0, mode)) }
+    #[inline] fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d56::atan2_strict::<SCALE>(self.0, other.0, mode)) }
+}
+
+#[cfg(not(any(feature = "d56", feature = "wide")))]
 impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
     #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode)) }
     #[inline] fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode)) }

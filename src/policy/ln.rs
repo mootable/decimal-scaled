@@ -57,8 +57,34 @@ impl<const SCALE: u32> LnPolicy for D18<SCALE> {
     }
 }
 
-// ── D38 — width override: hand-tuned `Fixed`-intermediate ln ───────
+// ── D38 — width override ───────────────────────────────────────────
+//
+// When D56 is available, D38's ln routes through `borrow_d56` —
+// widen to D56, call D56's wide_kernel ln, narrow back. The D56
+// kernel is 2-4× faster than D38's bespoke `Fixed` 256-bit path at
+// matched precision (per per-scale survey v2). The hand-tuned
+// `fixed_d38` kernel is retained as an alternate code path. Falls
+// back to `fixed_d38` when D56 is gated out.
+//
+// `ln_with_impl`: D56's wide_kernel has no runtime-`working_digits`
+// variant, so the borrow path collapses to the strict kernel
+// (mirroring the wide-tier behaviour documented above).
 
+#[cfg(any(feature = "d56", feature = "wide"))]
+impl<const SCALE: u32> LnPolicy for D38<SCALE> {
+    #[inline]
+    fn ln_impl(self, mode: RoundingMode) -> Self {
+        Self(ln::borrow_d56::ln_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        // D56 wide_kernel has no runtime-guard variant; delegate to
+        // the strict path. See module docs.
+        Self(ln::borrow_d56::ln_strict::<SCALE>(self.0, mode))
+    }
+}
+
+#[cfg(not(any(feature = "d56", feature = "wide")))]
 impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {

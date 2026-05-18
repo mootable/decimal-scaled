@@ -41,6 +41,21 @@ impl<const SCALE: u32> ExpPolicy for D18<SCALE> {
     }
 }
 
+// D38 — see `crate::policy::ln` for the borrow-D56 rationale.
+
+#[cfg(any(feature = "d56", feature = "wide"))]
+impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
+    #[inline]
+    fn exp_impl(self, mode: RoundingMode) -> Self {
+        Self(exp::borrow_d56::exp_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        Self(exp::borrow_d56::exp_strict::<SCALE>(self.0, mode))
+    }
+}
+
+#[cfg(not(any(feature = "d56", feature = "wide")))]
 impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {

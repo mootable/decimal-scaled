@@ -17,6 +17,8 @@
 //!   the wide tiers (D56 / D76 / D114 / D153 / D230 / D307 / D461 /
 //!   D615 / D923 / D1231).
 
+#[cfg(any(feature = "d56", feature = "wide"))]
+pub(crate) mod borrow_d56;
 pub(crate) mod fixed_d38;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;
