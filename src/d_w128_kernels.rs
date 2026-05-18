@@ -468,6 +468,7 @@ impl Fixed {
     /// Returns `None` if the rounded magnitude does not fit `i128`.
     ///
     /// [`RoundingMode`]: crate::rounding::RoundingMode
+    #[inline]
     pub(crate) fn round_to_i128(self, w: u32, target: u32) -> Option<i128> {
         self.round_to_i128_with(w, target, crate::rounding::DEFAULT_ROUNDING_MODE)
     }
@@ -475,6 +476,11 @@ impl Fixed {
     /// Mode-aware variant of [`Self::round_to_i128`]. Mode dispatch
     /// runs through [`crate::rounding::should_bump`], matching the
     /// rest of the crate's rounding sites.
+    ///
+    /// `#[inline]` so callers that thread a const mode (the strict
+    /// path's `DEFAULT_ROUNDING_MODE`) get the should_bump match
+    /// folded at the call site rather than dispatching at runtime.
+    #[inline]
     pub(crate) fn round_to_i128_with(
         self,
         w: u32,
