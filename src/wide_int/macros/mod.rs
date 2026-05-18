@@ -85,6 +85,54 @@ macro_rules! decl_wide_int {
             pub(crate) const fn cast_signed(self) -> $S {
                 $S(self.0)
             }
+            /// Builds from an unsigned 128-bit value (zero-extends
+            /// the upper limbs).
+            #[inline]
+            pub const fn from_u128(v: u128) -> $U {
+                let mut out = [0u64; $L];
+                out[0] = v as u64;
+                if $L > 1 {
+                    out[1] = (v >> 64) as u64;
+                }
+                $U(out)
+            }
+            /// Approximate `f64` value (positive; truncated toward
+            /// zero on overflow).
+            pub(crate) fn as_f64(self) -> f64 {
+                let mut acc = 0.0f64;
+                let radix: f64 = 18_446_744_073_709_551_616.0;
+                let mut i = $L;
+                while i > 0 {
+                    i -= 1;
+                    acc = acc * radix + self.0[i] as f64;
+                }
+                acc
+            }
+            /// Builds from a non-negative `f64`. Negative inputs
+            /// saturate to `ZERO`; non-finite saturates to `MAX`.
+            /// Matches the `$S::from_f64` shape but unsigned.
+            pub(crate) fn from_f64(v: f64) -> $U {
+                if !v.is_finite() {
+                    return if v.is_sign_negative() { $U::ZERO } else { $U::MAX };
+                }
+                if v <= 0.0 {
+                    return $U::ZERO;
+                }
+                let mut m = v;
+                let mut limbs = [0u64; $L];
+                let mut i = 0;
+                let radix: f64 = 18_446_744_073_709_551_616.0;
+                while i < $L && m >= 1.0 {
+                    let limb = m.rem_euclid(radix) as u64;
+                    limbs[i] = limb;
+                    m = (m / radix).floor();
+                    i += 1;
+                }
+                if m >= 1.0 {
+                    return $U::MAX;
+                }
+                $U(limbs)
+            }
             /// Parses an unsigned decimal string. Only base 10 is
             /// supported.
             pub(crate) const fn from_str_radix(
@@ -1042,6 +1090,59 @@ macro_rules! decl_wide_int {
                 f.pad_integral(true, "0b", s)
             }
         }
+
+        // ── From<primitive> conversions ────────────────────────────
+        //
+        // Lossless widening from every Rust primitive integer to the
+        // wide signed and unsigned tiers. Closes the gap that forced
+        // downstream callers to write `Int192::from_u128(v as u128)`
+        // when `v` was a `u64` (and similar contortions for the
+        // smaller primitives). With these impls, `Int192::from(1_u64)`
+        // and `From`-based `.into()` work like they do for the
+        // built-in integer types.
+
+        impl ::core::convert::From<u8>   for $U { #[inline] fn from(v: u8)   -> $U { <$U>::from_u128(v as u128) } }
+        impl ::core::convert::From<u16>  for $U { #[inline] fn from(v: u16)  -> $U { <$U>::from_u128(v as u128) } }
+        impl ::core::convert::From<u32>  for $U { #[inline] fn from(v: u32)  -> $U { <$U>::from_u128(v as u128) } }
+        impl ::core::convert::From<u64>  for $U { #[inline] fn from(v: u64)  -> $U { <$U>::from_u128(v as u128) } }
+        impl ::core::convert::From<u128> for $U { #[inline] fn from(v: u128) -> $U { <$U>::from_u128(v)         } }
+
+        impl ::core::convert::From<u8>   for $S { #[inline] fn from(v: u8)   -> $S { <$S>::from_u128(v as u128) } }
+        impl ::core::convert::From<u16>  for $S { #[inline] fn from(v: u16)  -> $S { <$S>::from_u128(v as u128) } }
+        impl ::core::convert::From<u32>  for $S { #[inline] fn from(v: u32)  -> $S { <$S>::from_u128(v as u128) } }
+        impl ::core::convert::From<u64>  for $S { #[inline] fn from(v: u64)  -> $S { <$S>::from_u128(v as u128) } }
+        impl ::core::convert::From<u128> for $S { #[inline] fn from(v: u128) -> $S { <$S>::from_u128(v)         } }
+        impl ::core::convert::From<i8>   for $S { #[inline] fn from(v: i8)   -> $S { <$S>::from_i128(v as i128) } }
+        impl ::core::convert::From<i16>  for $S { #[inline] fn from(v: i16)  -> $S { <$S>::from_i128(v as i128) } }
+        impl ::core::convert::From<i32>  for $S { #[inline] fn from(v: i32)  -> $S { <$S>::from_i128(v as i128) } }
+        impl ::core::convert::From<i64>  for $S { #[inline] fn from(v: i64)  -> $S { <$S>::from_i128(v as i128) } }
+        impl ::core::convert::From<i128> for $S { #[inline] fn from(v: i128) -> $S { <$S>::from_i128(v)         } }
+
+        // ── Float conversions ──────────────────────────────────────
+        //
+        // `From<f32>` / `From<f64>` saturate on out-of-range / NaN
+        // the same way the underlying `from_f64` does (covers both
+        // tiers; the f32 path widens to f64 first). Negative floats
+        // saturate to `ZERO` for the unsigned tier and produce the
+        // signed magnitude for the signed tier.
+
+        impl ::core::convert::From<f32> for $U { #[inline] fn from(v: f32) -> $U { <$U>::from_f64(v as f64) } }
+        impl ::core::convert::From<f64> for $U { #[inline] fn from(v: f64) -> $U { <$U>::from_f64(v)        } }
+        impl ::core::convert::From<f32> for $S { #[inline] fn from(v: f32) -> $S { <$S>::from_f64(v as f64) } }
+        impl ::core::convert::From<f64> for $S { #[inline] fn from(v: f64) -> $S { <$S>::from_f64(v)        } }
+
+        // Experimental floats (nightly + `experimental-floats`):
+        // f16 widens to f64 losslessly; f128 narrows to f64 with
+        // up-to-1-ulp-at-f64 quantisation. Both route through the
+        // same saturating `from_f64`.
+        #[cfg(all(feature = "experimental-floats"))]
+        impl ::core::convert::From<f16> for $U { #[inline] fn from(v: f16) -> $U { <$U>::from_f64(v as f64) } }
+        #[cfg(all(feature = "experimental-floats"))]
+        impl ::core::convert::From<f128> for $U { #[inline] fn from(v: f128) -> $U { <$U>::from_f64(v as f64) } }
+        #[cfg(all(feature = "experimental-floats"))]
+        impl ::core::convert::From<f16> for $S { #[inline] fn from(v: f16) -> $S { <$S>::from_f64(v as f64) } }
+        #[cfg(all(feature = "experimental-floats"))]
+        impl ::core::convert::From<f128> for $S { #[inline] fn from(v: f128) -> $S { <$S>::from_f64(v as f64) } }
     };
 }
 

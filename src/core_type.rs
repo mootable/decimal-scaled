@@ -808,29 +808,38 @@ impl<const SCALE: u32> D76<SCALE> {
 }
 
 /// Scale alias: `D76<0>`. 1 LSB = 1 (256-bit integer ledger).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s0 = D76<0>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s0  = D76<0>;
+/// Scale alias: `D76<1>`. 1 LSB = 10^-1 (tenths).
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s1  = D76<1>;
 /// Scale alias: `D76<2>`. 1 LSB = 10^-2 (cents).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s2 = D76<2>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s2  = D76<2>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s3  = D76<3>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s4  = D76<4>;
 /// Scale alias: `D76<6>`. 1 LSB = 10^-6 (ppm).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s6 = D76<6>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s6  = D76<6>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s9  = D76<9>;
 /// Scale alias: `D76<12>`. 1 LSB = 10^-12 (pico; financial standard).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s12 = D76<12>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s12 = D76<12>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s15 = D76<15>;
 /// Scale alias: `D76<18>`. 1 LSB = 10^-18 (atto).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s18 = D76<18>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s18 = D76<18>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s20 = D76<20>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s24 = D76<24>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s28 = D76<28>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s32 = D76<32>;
 /// Scale alias: `D76<35>`. 1 LSB = 10^-35 (matches `SCALE_REF`).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s35 = D76<35>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s35 = D76<35>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s38 = D76<38>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s42 = D76<42>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s48 = D76<48>;
 /// Scale alias: `D76<50>`. 1 LSB = 10^-50 (deep scientific precision).
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s50 = D76<50>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s50 = D76<50>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s56 = D76<56>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s64 = D76<64>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s70 = D76<70>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s75 = D76<75>;
 /// Scale alias: `D76<76>`. 1 LSB = 10^-76. Maximum supported scale.
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub type D76s76 = D76<76>;
+#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s76 = D76<76>;
 
 // ---------------------------------------------------------------------
 // D153 — 512-bit storage (`Int512`), scale 0..=153. Wide-scientific
@@ -905,17 +914,33 @@ impl<const SCALE: u32> D153<SCALE> {
 }
 
 /// Scale alias: `D153<0>`. 1 LSB = 1 (512-bit integer ledger).
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub type D153s0 = D153<0>;
-/// Scale alias: `D153<35>`. 1 LSB = 10^-35 (matches `SCALE_REF`).
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub type D153s35 = D153<35>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s0   = D153<0>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s1   = D153<1>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s2   = D153<2>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s4   = D153<4>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s6   = D153<6>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s9   = D153<9>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s12  = D153<12>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s15  = D153<15>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s18  = D153<18>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s20  = D153<20>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s24  = D153<24>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s28  = D153<28>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s32  = D153<32>;
+/// Scale alias: `D153<35>`. 1 LSB = 10^-35 (matches D38 `SCALE_REF`).
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s35  = D153<35>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s38  = D153<38>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s50  = D153<50>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s57  = D153<57>;
 /// Scale alias: `D153<75>`. 1 LSB = 10^-75 (wide-scientific midpoint).
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub type D153s75 = D153<75>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s75  = D153<75>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s76  = D153<76>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s100 = D153<100>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s115 = D153<115>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s140 = D153<140>;
 /// Scale alias: `D153<150>`. 1 LSB = 10^-150.
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub type D153s150 = D153<150>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s150 = D153<150>;
+#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s152 = D153<152>;
 /// Scale alias: `D153<153>`. 1 LSB = 10^-153. Maximum supported scale.
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub type D153s153 = D153<153>;
@@ -1002,20 +1027,37 @@ impl<const SCALE: u32> D307<SCALE> {
 }
 
 /// Scale alias: `D307<0>`. 1 LSB = 1 (1024-bit integer ledger).
-#[cfg(any(feature = "d307", feature = "wide"))]
-pub type D307s0 = D307<0>;
-/// Scale alias: `D307<35>`. 1 LSB = 10^-35 (matches `SCALE_REF`).
-#[cfg(any(feature = "d307", feature = "wide"))]
-pub type D307s35 = D307<35>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s0   = D307<0>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s1   = D307<1>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s2   = D307<2>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s4   = D307<4>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s6   = D307<6>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s9   = D307<9>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s12  = D307<12>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s15  = D307<15>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s18  = D307<18>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s20  = D307<20>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s24  = D307<24>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s28  = D307<28>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s32  = D307<32>;
+/// Scale alias: `D307<35>`. 1 LSB = 10^-35 (matches D38 `SCALE_REF`).
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s35  = D307<35>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s38  = D307<38>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s50  = D307<50>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s75  = D307<75>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s100 = D307<100>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s115 = D307<115>;
 /// Scale alias: `D307<150>`. 1 LSB = 10^-150.
-#[cfg(any(feature = "d307", feature = "wide"))]
-pub type D307s150 = D307<150>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s150 = D307<150>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s153 = D307<153>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s200 = D307<200>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s230 = D307<230>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s275 = D307<275>;
 /// Scale alias: `D307<300>`. 1 LSB = 10^-300.
-#[cfg(any(feature = "d307", feature = "wide"))]
-pub type D307s300 = D307<300>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s300 = D307<300>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s306 = D307<306>;
 /// Scale alias: `D307<307>`. 1 LSB = 10^-307. Maximum supported scale.
-#[cfg(any(feature = "d307", feature = "wide"))]
-pub type D307s307 = D307<307>;
+#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s307 = D307<307>;
 
 // ─── Half-width and wider tiers (D56 / D114 / D230 / D461 / D615 / D923 / D1231) ───
 //
@@ -1062,6 +1104,8 @@ crate::macros::full::decl_decimal_full!(
 );
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub type D56s0 = D56<0>;
+#[cfg(any(feature = "d56", feature = "wide"))]
+pub type D56s1 = D56<1>;
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub type D56s2 = D56<2>;
 #[cfg(any(feature = "d56", feature = "wide"))]
@@ -1127,6 +1171,8 @@ crate::macros::full::decl_decimal_full!(
 #[cfg(any(feature = "d114", feature = "wide"))]
 pub type D114s0 = D114<0>;
 #[cfg(any(feature = "d114", feature = "wide"))]
+pub type D114s1 = D114<1>;
+#[cfg(any(feature = "d114", feature = "wide"))]
 pub type D114s4 = D114<4>;
 #[cfg(any(feature = "d114", feature = "wide"))]
 pub type D114s8 = D114<8>;
@@ -1189,6 +1235,8 @@ crate::macros::full::decl_decimal_full!(
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s0 = D230<0>;
 #[cfg(any(feature = "d230", feature = "wide"))]
+pub type D230s1 = D230<1>;
+#[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s6 = D230<6>;
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s18 = D230<18>;
@@ -1250,6 +1298,8 @@ crate::macros::full::decl_decimal_full!(
 );
 #[cfg(any(feature = "d461", feature = "x-wide"))]
 pub type D461s0 = D461<0>;
+#[cfg(any(feature = "d461", feature = "x-wide"))]
+pub type D461s1 = D461<1>;
 #[cfg(any(feature = "d461", feature = "x-wide"))]
 pub type D461s18 = D461<18>;
 #[cfg(any(feature = "d461", feature = "x-wide"))]
@@ -1314,6 +1364,8 @@ crate::macros::full::decl_decimal_full!(
 #[cfg(any(feature = "d615", feature = "x-wide"))]
 pub type D615s0 = D615<0>;
 #[cfg(any(feature = "d615", feature = "x-wide"))]
+pub type D615s1 = D615<1>;
+#[cfg(any(feature = "d615", feature = "x-wide"))]
 pub type D615s38 = D615<38>;
 #[cfg(any(feature = "d615", feature = "x-wide"))]
 pub type D615s75 = D615<75>;
@@ -1375,6 +1427,8 @@ crate::macros::full::decl_decimal_full!(
 );
 #[cfg(any(feature = "d923", feature = "xx-wide"))]
 pub type D923s0 = D923<0>;
+#[cfg(any(feature = "d923", feature = "xx-wide"))]
+pub type D923s1 = D923<1>;
 #[cfg(any(feature = "d923", feature = "xx-wide"))]
 pub type D923s75 = D923<75>;
 #[cfg(any(feature = "d923", feature = "xx-wide"))]
@@ -1439,6 +1493,8 @@ crate::macros::full::decl_decimal_full!(
 );
 #[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub type D1231s0 = D1231<0>;
+#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+pub type D1231s1 = D1231<1>;
 #[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub type D1231s75 = D1231<75>;
 #[cfg(any(feature = "d1231", feature = "xx-wide"))]

@@ -281,7 +281,10 @@ pub use core_type::{
 // D76 — 256-bit storage, behind the `d76` / `wide` features.
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub use core_type::{
-    D76, D76s0, D76s2, D76s6, D76s12, D76s18, D76s35, D76s50, D76s76,
+    D76,
+    D76s0, D76s1, D76s2, D76s3, D76s4, D76s6, D76s9, D76s12, D76s15,
+    D76s18, D76s20, D76s24, D76s28, D76s32, D76s35, D76s38, D76s42,
+    D76s48, D76s50, D76s56, D76s64, D76s70, D76s75, D76s76,
 };
 
 // The hand-rolled wide-integer types — the storage backend for the
@@ -293,11 +296,23 @@ pub use wide_int::{
 
 // D153 — 512-bit storage, behind the `d153` / `wide` features.
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub use core_type::{D153, D153s0, D153s35, D153s75, D153s150, D153s153};
+pub use core_type::{
+    D153,
+    D153s0, D153s1, D153s2, D153s4, D153s6, D153s9, D153s12, D153s15,
+    D153s18, D153s20, D153s24, D153s28, D153s32, D153s35, D153s38,
+    D153s50, D153s57, D153s75, D153s76, D153s100, D153s115, D153s140,
+    D153s150, D153s152, D153s153,
+};
 
 // D307 — 1024-bit storage, behind the `d307` / `wide` features.
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
+pub use core_type::{
+    D307,
+    D307s0, D307s1, D307s2, D307s4, D307s6, D307s9, D307s12, D307s15,
+    D307s18, D307s20, D307s24, D307s28, D307s32, D307s35, D307s38,
+    D307s50, D307s75, D307s100, D307s115, D307s150, D307s153,
+    D307s200, D307s230, D307s275, D307s300, D307s306, D307s307,
+};
 
 // ─── New half-width and wider tiers ───────────────────────────────────
 
@@ -305,7 +320,7 @@ pub use core_type::{D307, D307s0, D307s35, D307s150, D307s300, D307s307};
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub use core_type::{
     D56,
-    D56s0, D56s2, D56s4, D56s6, D56s9, D56s12, D56s18, D56s20, D56s24,
+    D56s0, D56s1, D56s2, D56s4, D56s6, D56s9, D56s12, D56s18, D56s20, D56s24,
     D56s28, D56s32, D56s38, D56s42, D56s48, D56s52, D56s56, D56s57,
 };
 #[cfg(any(feature = "d56", feature = "wide"))]
@@ -315,7 +330,7 @@ pub use wide_int::{Int192, Uint192};
 #[cfg(any(feature = "d114", feature = "wide"))]
 pub use core_type::{
     D114,
-    D114s0, D114s4, D114s8, D114s16, D114s24, D114s32, D114s38, D114s50,
+    D114s0, D114s1, D114s4, D114s8, D114s16, D114s24, D114s32, D114s38, D114s50,
     D114s57, D114s64, D114s76, D114s90, D114s100, D114s110, D114s114, D114s115,
 };
 #[cfg(any(feature = "d114", feature = "wide"))]
@@ -325,7 +340,7 @@ pub use wide_int::{Int384, Uint384};
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub use core_type::{
     D230,
-    D230s0, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115,
+    D230s0, D230s1, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115,
     D230s140, D230s153, D230s175, D230s200, D230s215, D230s225, D230s229, D230s230,
 };
 #[cfg(any(feature = "d230", feature = "wide"))]
@@ -335,7 +350,7 @@ pub use wide_int::{Int768, Uint768};
 #[cfg(any(feature = "d461", feature = "x-wide"))]
 pub use core_type::{
     D461,
-    D461s0, D461s18, D461s38, D461s75, D461s115, D461s153, D461s200, D461s230,
+    D461s0, D461s1, D461s18, D461s38, D461s75, D461s115, D461s153, D461s200, D461s230,
     D461s275, D461s307, D461s350, D461s400, D461s440, D461s460, D461s461, D461s462,
 };
 #[cfg(any(feature = "d461", feature = "x-wide"))]
@@ -347,7 +362,7 @@ pub use wide_int::{Int1536, Uint1536};
 #[cfg(any(feature = "d615", feature = "x-wide"))]
 pub use core_type::{
     D615,
-    D615s0, D615s38, D615s75, D615s115, D615s153, D615s200, D615s230, D615s275,
+    D615s0, D615s1, D615s38, D615s75, D615s115, D615s153, D615s200, D615s230, D615s275,
     D615s308, D615s380, D615s462, D615s500, D615s555, D615s600, D615s615, D615s616,
 };
 
@@ -355,7 +370,7 @@ pub use core_type::{
 #[cfg(any(feature = "d923", feature = "xx-wide"))]
 pub use core_type::{
     D923,
-    D923s0, D923s75, D923s153, D923s230, D923s307, D923s400, D923s461, D923s462,
+    D923s0, D923s1, D923s75, D923s153, D923s230, D923s307, D923s400, D923s461, D923s462,
     D923s500, D923s616, D923s700, D923s800, D923s860, D923s900, D923s920, D923s923, D923s924,
 };
 #[cfg(any(feature = "d923", feature = "xx-wide"))]
@@ -365,7 +380,7 @@ pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
 #[cfg(any(feature = "d1231", feature = "xx-wide"))]
 pub use core_type::{
     D1231,
-    D1231s0, D1231s75, D1231s153, D1231s230, D1231s307, D1231s461, D1231s616,
+    D1231s0, D1231s1, D1231s75, D1231s153, D1231s230, D1231s307, D1231s461, D1231s616,
     D1231s700, D1231s800, D1231s900, D1231s924, D1231s1000, D1231s1100,
     D1231s1180, D1231s1220, D1231s1230, D1231s1231, D1231s1232,
 };
