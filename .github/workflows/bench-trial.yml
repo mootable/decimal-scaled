@@ -48,6 +48,13 @@ jobs:
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
+      - name: Install system libs (fontconfig for plotters dev-dep)
+        # `plotters` (a dev-dep, used by examples/chart_gen.rs) pulls
+        # `yeslogic-fontconfig-sys` via its `ttf` feature, which links
+        # to libfontconfig at build time. Standard ubuntu-latest
+        # doesn't have it pre-installed.
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Cache cargo registry + git
         uses: actions/cache@v4
         with:
