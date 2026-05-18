@@ -1,0 +1,27 @@
+[package]
+name = "decimal-scaled-bench-history"
+version = "0.0.0"
+edition = "2024"
+publish = false
+
+# Standalone Cargo project (NOT a workspace member of the parent crate).
+# Each CI matrix cell rewrites the `decimal-scaled` dependency line below
+# to point at a specific published tag (v0.2.5 .. v0.3.3) or to a `path`
+# dep against HEAD. The harness in `benches/comparison.rs` is identical
+# across cells — that is what makes the comparison "like-for-like".
+
+[dependencies]
+# REPLACED PER CELL by .github/workflows/bench-history.yml
+decimal-scaled = { version = "0.3.3", default-features = false, features = ["std", "strict", "wide", "x-wide"] }
+
+[dev-dependencies]
+criterion = { version = "0.5", default-features = false }
+
+[[bench]]
+name = "comparison"
+harness = false
+
+# Empty [workspace] table — keeps this project OUT of the parent crate's
+# workspace so the version-pinned dep doesn't fight the parent's `path`
+# resolution. Required because Cargo otherwise auto-discovers and errors.
+[workspace]

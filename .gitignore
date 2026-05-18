@@ -1,2 +1,4 @@
 /target
 Cargo.lock
+/bench-history/target
+/bench-history/Cargo.lock
