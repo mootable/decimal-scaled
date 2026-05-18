@@ -257,6 +257,553 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     $crate::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
+
+            // ── Mode-aware (`_strict_with`) and guard-aware
+            // (`_approx`, `_approx_with`) siblings ─────────────────
+            //
+            // Each method widens to `D38<SCALE>`, calls the matching
+            // D38 inherent, and narrows the result back. This is the
+            // same widen-strict-narrow shape used by the `_strict`
+            // methods above; the extra `mode` / `working_digits`
+            // arguments are forwarded verbatim to the D38 call.
+            //
+            // Without these the
+            // `decl_decimal_transcendental_impl!` macro would emit
+            // trait method bodies that resolve back to themselves,
+            // causing infinite recursion at runtime on D9 / D18.
+
+            // ─ Logarithms ────────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn ln_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.ln_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::ln_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn ln_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.ln_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::ln_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn ln_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.ln_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::ln_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn log_strict_with(self, base: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_base: $crate::core_type::D38<SCALE> = base.into();
+                ::core::convert::TryInto::try_into(wide_self.log_strict_with(wide_base, mode))
+                    .expect(concat!(stringify!($Type), "::log_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_base: $crate::core_type::D38<SCALE> = base.into();
+                ::core::convert::TryInto::try_into(wide_self.log_approx(wide_base, working_digits))
+                    .expect(concat!(stringify!($Type), "::log_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log_approx_with(self, base: Self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_base: $crate::core_type::D38<SCALE> = base.into();
+                ::core::convert::TryInto::try_into(wide_self.log_approx_with(wide_base, working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::log_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn log2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.log2_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::log2_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log2_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.log2_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::log2_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log2_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.log2_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::log2_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn log10_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.log10_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::log10_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log10_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.log10_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::log10_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn log10_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.log10_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::log10_approx_with: result out of range"))
+            }
+
+            // ─ Exponentials ──────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn exp_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::exp_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn exp_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::exp_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn exp_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::exp_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn exp2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::exp2_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn exp2_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp2_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::exp2_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn exp2_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.exp2_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::exp2_approx_with: result out of range"))
+            }
+
+            // ─ Power ─────────────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn powf_strict_with(self, exp: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
+                ::core::convert::TryInto::try_into(wide_self.powf_strict_with(wide_exp, mode))
+                    .expect(concat!(stringify!($Type), "::powf_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn powf_approx(self, exp: Self, working_digits: u32) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
+                ::core::convert::TryInto::try_into(wide_self.powf_approx(wide_exp, working_digits))
+                    .expect(concat!(stringify!($Type), "::powf_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn powf_approx_with(self, exp: Self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
+                ::core::convert::TryInto::try_into(wide_self.powf_approx_with(wide_exp, working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::powf_approx_with: result out of range"))
+            }
+
+            // ─ Roots ─────────────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn sqrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sqrt_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::sqrt_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn cbrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cbrt_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::cbrt_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn hypot_strict(self, other: Self) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_other: $crate::core_type::D38<SCALE> = other.into();
+                ::core::convert::TryInto::try_into(wide_self.hypot_strict(wide_other))
+                    .expect(concat!(stringify!($Type), "::hypot_strict: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn hypot_strict_with(self, other: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_other: $crate::core_type::D38<SCALE> = other.into();
+                ::core::convert::TryInto::try_into(wide_self.hypot_strict_with(wide_other, mode))
+                    .expect(concat!(stringify!($Type), "::hypot_strict_with: result out of range"))
+            }
+
+            // ─ Trig (forward) ────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn sin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sin_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::sin_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn sin_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sin_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::sin_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn sin_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sin_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::sin_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn cos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cos_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::cos_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn cos_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cos_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::cos_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn cos_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cos_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::cos_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn tan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.tan_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::tan_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn tan_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.tan_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::tan_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn tan_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.tan_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::tan_approx_with: result out of range"))
+            }
+
+            // ─ Trig (inverse) ────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn atan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.atan_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::atan_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn atan_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.atan_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::atan_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn atan_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.atan_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::atan_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn asin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.asin_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::asin_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn asin_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.asin_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::asin_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn asin_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.asin_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::asin_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn acos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.acos_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::acos_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn acos_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.acos_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::acos_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn acos_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.acos_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::acos_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn atan2_strict_with(self, other: Self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_other: $crate::core_type::D38<SCALE> = other.into();
+                ::core::convert::TryInto::try_into(wide_self.atan2_strict_with(wide_other, mode))
+                    .expect(concat!(stringify!($Type), "::atan2_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_other: $crate::core_type::D38<SCALE> = other.into();
+                ::core::convert::TryInto::try_into(wide_self.atan2_approx(wide_other, working_digits))
+                    .expect(concat!(stringify!($Type), "::atan2_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn atan2_approx_with(self, other: Self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide_self: $crate::core_type::D38<SCALE> = self.into();
+                let wide_other: $crate::core_type::D38<SCALE> = other.into();
+                ::core::convert::TryInto::try_into(wide_self.atan2_approx_with(wide_other, working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::atan2_approx_with: result out of range"))
+            }
+
+            // ─ Hyperbolic ────────────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn sinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::sinh_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn sinh_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sinh_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::sinh_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn sinh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.sinh_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::sinh_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn cosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::cosh_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn cosh_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cosh_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::cosh_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn cosh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.cosh_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::cosh_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn tanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::tanh_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn tanh_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.tanh_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::tanh_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn tanh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.tanh_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::tanh_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn asinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::asinh_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn asinh_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.asinh_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::asinh_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn asinh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.asinh_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::asinh_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn acosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::acosh_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn acosh_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.acosh_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::acosh_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn acosh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.acosh_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::acosh_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn atanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::atanh_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn atanh_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.atanh_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::atanh_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn atanh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.atanh_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::atanh_approx_with: result out of range"))
+            }
+
+            // ─ Angle conversion ──────────────────────────────────
+            #[inline]
+            #[must_use]
+            pub fn to_degrees_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::to_degrees_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn to_degrees_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.to_degrees_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::to_degrees_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn to_degrees_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.to_degrees_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::to_degrees_approx_with: result out of range"))
+            }
+
+            #[inline]
+            #[must_use]
+            pub fn to_radians_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.to_radians_strict_with(mode))
+                    .expect(concat!(stringify!($Type), "::to_radians_strict_with: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn to_radians_approx(self, working_digits: u32) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.to_radians_approx(working_digits))
+                    .expect(concat!(stringify!($Type), "::to_radians_approx: result out of range"))
+            }
+            #[inline]
+            #[must_use]
+            pub fn to_radians_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
+                let wide: $crate::core_type::D38<SCALE> = self.into();
+                ::core::convert::TryInto::try_into(wide.to_radians_approx_with(working_digits, mode))
+                    .expect(concat!(stringify!($Type), "::to_radians_approx_with: result out of range"))
+            }
+
             /// `ln` — feature-gated dispatcher; forwards to [`Self::ln_strict`] when the `strict` feature is on.
             #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
             #[inline]
