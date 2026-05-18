@@ -52,13 +52,17 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 ::core::convert::TryInto::try_into(wide.log10_strict())
                     .expect(concat!(stringify!($Type), "::log10_strict: result out of range"))
             }
-            /// `exp_strict` — delegates to [`crate::core_type::D38::exp_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `exp_strict` — delegates to the policy-registered exp
+            /// kernel for this `(width, SCALE)` cell. **0.5 ULP
+            /// correctly-rounded** at storage scale. Panics if the
+            /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
             pub fn exp_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.exp_strict())
-                    .expect(concat!(stringify!($Type), "::exp_strict: result out of range"))
+                <Self as $crate::policy::exp::ExpPolicy>::exp_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `exp2_strict` — delegates to [`crate::core_type::D38::exp2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]

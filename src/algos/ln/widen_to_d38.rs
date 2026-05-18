@@ -15,7 +15,7 @@ pub(crate) fn ln_strict_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -
     let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
     D38::<SCALE>(raw)
         .try_into()
-        .expect("widen_to_d38::ln_strict_d9: result out of range")
+        .expect("ln_strict: result out of range")
 }
 
 /// `D9` natural log with caller-chosen working digits.
@@ -30,7 +30,7 @@ pub(crate) fn ln_with_d9<const SCALE: u32>(
     let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
     D38::<SCALE>(raw)
         .try_into()
-        .expect("widen_to_d38::ln_with_d9: result out of range")
+        .expect("ln_with: result out of range")
 }
 
 /// `D18` natural log via widen → D38 → narrow. Strict working-scale.
@@ -41,7 +41,7 @@ pub(crate) fn ln_strict_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode)
     let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
     D38::<SCALE>(raw)
         .try_into()
-        .expect("widen_to_d38::ln_strict_d18: result out of range")
+        .expect("ln_strict: result out of range")
 }
 
 /// `D18` natural log with caller-chosen working digits.
@@ -56,5 +56,5 @@ pub(crate) fn ln_with_d18<const SCALE: u32>(
     let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
     D38::<SCALE>(raw)
         .try_into()
-        .expect("widen_to_d38::ln_with_d18: result out of range")
+        .expect("ln_with: result out of range")
 }

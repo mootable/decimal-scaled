@@ -558,22 +558,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// `e^self` under the supplied rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::exp::ExpPolicy::exp_impl`].
     #[inline]
     #[must_use]
     pub fn exp_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
-        if self.0 == 0 {
-            return Self::ONE;
-        }
-        let w = SCALE + STRICT_GUARD;
-        let negative_input = self.0 < 0;
-        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
-            .mul_u128(10u128.pow(STRICT_GUARD));
-        let v_w = if negative_input { v_w.neg() } else { v_w };
-        let raw = exp_fixed(v_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::exp: result overflows the representable range");
-        Self::from_bits(raw)
+        <Self as crate::policy::exp::ExpPolicy>::exp_impl(self, mode)
     }
 
     /// Exponential with caller-chosen guard digits.
@@ -584,25 +574,17 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Exponential with caller-chosen guard digits AND rounding mode.
+    ///
+    /// Body delegates to [`crate::policy::exp::ExpPolicy::exp_with_impl`].
+    /// When `working_digits == STRICT_GUARD` the call collapses to the
+    /// const-folded strict path.
     #[inline]
     #[must_use]
     pub fn exp_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.exp_strict_with(mode);
         }
-        use crate::d_w128_kernels::Fixed;
-        if self.0 == 0 {
-            return Self::ONE;
-        }
-        let w = SCALE + working_digits;
-        let negative_input = self.0 < 0;
-        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
-            .mul_u128(10u128.pow(working_digits));
-        let v_w = if negative_input { v_w.neg() } else { v_w };
-        let raw = exp_fixed(v_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::exp: result overflows the representable range");
-        Self::from_bits(raw)
+        <Self as crate::policy::exp::ExpPolicy>::exp_with_impl(self, working_digits, mode)
     }
 
     /// Returns `e^self` (natural exponential).
