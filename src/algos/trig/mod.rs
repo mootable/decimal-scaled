@@ -23,6 +23,8 @@
 pub(crate) mod borrow_d56;
 pub(crate) mod fixed_d38;
 #[cfg(any(feature = "d56", feature = "wide"))]
+pub(crate) mod lookup_d56_s18_22_sincos;
+#[cfg(any(feature = "d56", feature = "wide"))]
 pub(crate) mod lookup_d56_s44_57_atan;
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub(crate) mod lookup_d56_s44_57_sincos;

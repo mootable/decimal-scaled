@@ -727,3 +727,111 @@ fn d56_s44_sin_cos_small_arg_matches_d76_baseline() {
         "D56<44>::cos(1/3) bespoke kernel does not match D76<44> narrowed reference",
     );
 }
+
+// ─── D56<SCALE>::{sin,cos}_strict — SCALE 18..=22 narrow-GUARD kernel ──
+//
+// For SCALE ∈ 18..=22 the policy routes through the bespoke narrow-
+// GUARD slot `algos::trig::lookup_d56_s18_22_sincos` rather than the
+// generic `wide_kernel::sin_strict_d56` / `cos_strict_d56`. The kernel
+// keeps the canonical `sin_fixed` / `cos_fixed` body but evaluates it
+// at a narrower working width. Cross-witness against the D76 wide
+// kernel (which is unaffected) at the boundaries and midpoint of the
+// range.
+
+#[test]
+fn d56_s18_sin_cos_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_18 = D56<18>;
+    type D76_18 = D76<18>;
+
+    // arg = 1 — small enough that k = 0 (the canonical Taylor path).
+    let n_56 = D56_18::from_int(1);
+    let n_76: D76_18 = n_56.into();
+
+    let sin_56 = n_56.sin_strict();
+    let sin_76 = n_76.sin_strict();
+    let sin_76_as_56: D56_18 = sin_76.try_into().expect("sin(1) fits D56<18>");
+    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
+        .expect("sin diff fits i128").abs();
+    assert!(
+        sin_diff <= 1,
+        "D56<18>::sin(1) narrow-GUARD kernel deviates from D76<18> by {sin_diff} LSB",
+    );
+
+    let cos_56 = n_56.cos_strict();
+    let cos_76 = n_76.cos_strict();
+    let cos_76_as_56: D56_18 = cos_76.try_into().expect("cos(1) fits D56<18>");
+    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
+        .expect("cos diff fits i128").abs();
+    assert!(
+        cos_diff <= 1,
+        "D56<18>::cos(1) narrow-GUARD kernel deviates from D76<18> by {cos_diff} LSB",
+    );
+}
+
+#[test]
+fn d56_s20_sin_cos_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_20 = D56<20>;
+    type D76_20 = D76<20>;
+
+    // arg = 2 — exercises the quadrant-shift branch (k = 1) of the
+    // shared sin_fixed reduction.
+    let n_56 = D56_20::from_int(2);
+    let n_76: D76_20 = n_56.into();
+
+    let sin_56 = n_56.sin_strict();
+    let sin_76 = n_76.sin_strict();
+    let sin_76_as_56: D56_20 = sin_76.try_into().expect("sin(2) fits D56<20>");
+    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
+        .expect("sin diff fits i128").abs();
+    assert!(
+        sin_diff <= 1,
+        "D56<20>::sin(2) narrow-GUARD kernel deviates from D76<20> by {sin_diff} LSB",
+    );
+
+    let cos_56 = n_56.cos_strict();
+    let cos_76 = n_76.cos_strict();
+    let cos_76_as_56: D56_20 = cos_76.try_into().expect("cos(2) fits D56<20>");
+    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
+        .expect("cos diff fits i128").abs();
+    assert!(
+        cos_diff <= 1,
+        "D56<20>::cos(2) narrow-GUARD kernel deviates from D76<20> by {cos_diff} LSB",
+    );
+}
+
+#[test]
+fn d56_s22_sin_cos_small_arg_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_22 = D56<22>;
+    type D76_22 = D76<22>;
+
+    // Small non-integer argument — stresses the Taylor residual at the
+    // top end of the slot.
+    let third_56 = D56_22::from_int(1) / D56_22::from_int(3);
+    let third_76: D76_22 = third_56.into();
+
+    let sin_56 = third_56.sin_strict();
+    let sin_76 = third_76.sin_strict();
+    let sin_76_as_56: D56_22 = sin_76.try_into().expect("sin(1/3) fits D56<22>");
+    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
+        .expect("sin diff fits i128").abs();
+    assert!(
+        sin_diff <= 1,
+        "D56<22>::sin(1/3) narrow-GUARD kernel deviates from D76<22> by {sin_diff} LSB",
+    );
+
+    let cos_56 = third_56.cos_strict();
+    let cos_76 = third_76.cos_strict();
+    let cos_76_as_56: D56_22 = cos_76.try_into().expect("cos(1/3) fits D56<22>");
+    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
+        .expect("cos diff fits i128").abs();
+    assert!(
+        cos_diff <= 1,
+        "D56<22>::cos(1/3) narrow-GUARD kernel deviates from D76<22> by {cos_diff} LSB",
+    );
+}
