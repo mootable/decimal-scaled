@@ -183,13 +183,21 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn to_radians(self) -> Self {
         self.to_radians_strict()
     }
-    /// Sine of `self` (radians). Strict: integer-only and correctly
-    /// rounded — the result is within 0.5 ULP of the exact sine.
+
+    // Sine of `self` (radians). Strict: integer-only and correctly
+    // rounded — the result is within 0.5 ULP of the exact sine.
     #[inline]
     #[must_use]
     pub fn sin_strict(self) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
+        }
+        // sin(x) = x − x³/6 + … — for sufficiently small |x| the
+        // cubic correction rounds to 0 at the storage scale and
+        // sin(x) == x. Using atan's stricter threshold here is
+        // safe (atan = x − x³/3, larger correction).
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = sin_fixed(to_fixed(self.0), w)
@@ -227,6 +235,10 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn tan_strict(self) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
+        }
+        // tan(x) = x + x³/3 + … — same threshold as atan.
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
@@ -266,9 +278,7 @@ impl<const SCALE: u32> D38<SCALE> {
         // threshold: |raw| < 10^(SCALE − ((SCALE+2)/3)). Works for
         // every SCALE including 0 (threshold = 1, so the path doesn't
         // fire on any nonzero value at SCALE 0 — harmless).
-        let thresh_exp = SCALE.saturating_sub((SCALE + 2) / 3);
-        let threshold: i128 = 10_i128.pow(thresh_exp);
-        if self.0.abs() <= threshold {
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
 
@@ -292,6 +302,10 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn asin_strict(self) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
+        }
+        // asin(x) = x + x³/6 + … — atan's threshold is safe.
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
         }
         use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
@@ -434,6 +448,10 @@ impl<const SCALE: u32> D38<SCALE> {
         if self.0 == 0 {
             return Self::ZERO;
         }
+        // sinh(x) = x + x³/6 + … — atan's threshold is safe.
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
         let ex = crate::log_exp_strict::exp_fixed(v, w);
@@ -476,6 +494,10 @@ impl<const SCALE: u32> D38<SCALE> {
         if self.0 == 0 {
             return Self::ZERO;
         }
+        // tanh(x) = x − x³/3 + … — same threshold as atan.
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let v = to_fixed(self.0);
         let ex = crate::log_exp_strict::exp_fixed(v, w);
@@ -499,6 +521,10 @@ impl<const SCALE: u32> D38<SCALE> {
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ZERO;
+        }
+        // asinh(x) = x − x³/6 + … — atan's threshold is safe.
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
@@ -571,6 +597,10 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn atanh_strict(self) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
+        }
+        // atanh(x) = x + x³/3 + … — same threshold as atan.
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
         }
         use crate::d_w128_kernels::Fixed;
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
@@ -667,6 +697,27 @@ impl<const SCALE: u32> D38<SCALE> {
 /// debug-assert documents the invariant for any future caller; in
 /// release, `rescale_down(75, w > 75)` would silently produce a
 /// wrong π via the wrapping `from_w − to_w` subtraction.
+/// Threshold below which the linear small-x fast paths fire for the
+/// odd trig functions (`atan`, `sin`, `tan`, `sinh`, `tanh`, `asin`,
+/// `asinh`, `atanh`).
+///
+/// All these functions have a Taylor series `f(x) = x + c·x³ + …`
+/// where `|c| ≤ 1/3`. For `|x| < (1.5·10⁻ˢᶜᴬᴸᴱ)^(1/3) ≈ 10^(−⌈SCALE/3⌉)`
+/// the cubic correction is bounded by `0.5·ULP` and `f(x) == x`
+/// exactly at the storage scale. The threshold returned here is the
+/// conservative integer `10^(SCALE − ⌈(SCALE+2)/3⌉)` in storage
+/// units (one decimal digit safety margin from the exact bound).
+///
+/// The atan-shaped functions (`c = 1/3`) get the tightest correction;
+/// the sin-shaped functions (`c = 1/6`) and asin-shaped (`c = 1/6`)
+/// are slightly less restrictive but using the atan threshold for
+/// uniformity is safe for all and avoids per-function tuning.
+#[inline]
+const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
+    let thresh_exp = SCALE.saturating_sub((SCALE + 2) / 3);
+    10_i128.pow(thresh_exp)
+}
+
 fn wide_pi(w: u32) -> crate::d_w128_kernels::Fixed {
     debug_assert!(w <= 75, "wide_pi: working scale {w} exceeds embedded 75-digit π");
     // PI_RAW is an Int256, internally [u64; 4]. The D38 Fixed kernel
