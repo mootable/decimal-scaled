@@ -33,4 +33,5 @@
 // Unconditional — D9/D18/D38 impls live here too. Wide-tier impls
 // inside each family are individually feature-gated.
 pub(crate) mod cbrt;
+pub(crate) mod ln;
 pub(crate) mod sqrt;

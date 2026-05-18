@@ -34,4 +34,5 @@
 // are always built; each wide-tier kernel inside
 // `<family>::generic_wide` is independently feature-gated.
 pub(crate) mod cbrt;
+pub(crate) mod ln;
 pub(crate) mod sqrt;

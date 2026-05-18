@@ -245,29 +245,12 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Natural log under the supplied rounding mode. See [`Self::ln_strict`].
+    ///
+    /// Body delegates to [`crate::policy::ln::LnPolicy::ln_impl`].
     #[inline]
     #[must_use]
     pub fn ln_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
-        assert!(self.0 > 0, "D38::ln: argument must be positive");
-        let one_bits: i128 = 10_i128.pow(SCALE);
-        if self.0 == one_bits {
-            return Self::ZERO;
-        }
-        let delta = self.0 - one_bits;
-        let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
-        if delta.abs() <= ln1p_band {
-            return Self::from_bits(delta);
-        }
-        // Const-folded guard so SCALE+STRICT_GUARD and 10^STRICT_GUARD
-        // resolve at compile time per tier.
-        let w = SCALE + STRICT_GUARD;
-        let v_w =
-            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
-        let raw = ln_fixed(v_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::ln: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::ln::LnPolicy>::ln_impl(self, mode)
     }
 
     /// Natural logarithm with a caller-chosen number of guard digits
@@ -306,31 +289,17 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Natural log with caller-chosen guard digits AND rounding mode.
     /// See [`Self::ln_approx`] for accuracy/speed contract.
+    ///
+    /// Body delegates to [`crate::policy::ln::LnPolicy::ln_with_impl`].
+    /// When `working_digits == STRICT_GUARD` the kernel collapses to
+    /// the const-folded strict path.
     #[inline]
     #[must_use]
     pub fn ln_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
-        // Redirect to const-folded strict path when guard matches.
         if working_digits == STRICT_GUARD {
             return self.ln_strict_with(mode);
         }
-        use crate::d_w128_kernels::Fixed;
-        assert!(self.0 > 0, "D38::ln: argument must be positive");
-        let one_bits: i128 = 10_i128.pow(SCALE);
-        if self.0 == one_bits {
-            return Self::ZERO;
-        }
-        let delta = self.0 - one_bits;
-        let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
-        if delta.abs() <= ln1p_band {
-            return Self::from_bits(delta);
-        }
-        let w = SCALE + working_digits;
-        let v_w =
-            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
-        let raw = ln_fixed(v_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::ln: result out of range");
-        Self::from_bits(raw)
+        <Self as crate::policy::ln::LnPolicy>::ln_with_impl(self, working_digits, mode)
     }
 
     /// Returns the natural logarithm (base e) of `self`.

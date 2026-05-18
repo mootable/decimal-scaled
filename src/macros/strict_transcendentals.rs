@@ -24,13 +24,17 @@
 macro_rules! decl_strict_transcendentals_via_d38 {
     ($Type:ident) => {
         impl<const SCALE: u32> $Type<SCALE> {
-            /// `ln_strict` — delegates to [`crate::core_type::D38::ln_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `ln_strict` — delegates to the policy-registered ln
+            /// kernel for this `(width, SCALE)` cell. **0.5 ULP
+            /// correctly-rounded** at storage scale. Panics if the
+            /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
             pub fn ln_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.ln_strict())
-                    .expect(concat!(stringify!($Type), "::ln_strict: result out of range"))
+                <Self as $crate::policy::ln::LnPolicy>::ln_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `log2_strict` — delegates to [`crate::core_type::D38::log2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
