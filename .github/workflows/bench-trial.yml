@@ -1,0 +1,98 @@
+name: bench-trial
+
+# Trial benchmark workflow — runs a focused subset of the crate's
+# Criterion benches on GitHub-hosted Linux runners and uploads the
+# `target/criterion/` artefact for download.
+#
+# Goals:
+#   * Prove GitHub Actions is a viable home for our bench workflow
+#     without leaving the local laptop free for development.
+#   * Stay under the 6-hour per-job timeout — picks the fast
+#     `quick_div` bench (~30 s wall) so the trial round-trip is
+#     dominated by checkout + toolchain install + build, not the
+#     benchmark itself.
+#   * Manual trigger only. We do NOT auto-run on push because every
+#     run would burn the unlimited-but-shared CI capacity and we
+#     don't have CodSpeed regression detection wired up yet.
+#
+# Once this trial passes, the next steps are:
+#   1. Wire CodSpeed (instruction-count simulation; <1 % noise on
+#      shared GHA CPUs) per
+#      `research/free_bench_platforms_2026-05-18.md`.
+#   2. Add a second job that runs the longer `full_matrix_d*` or
+#      `lib_cmp_d*` sweeps split per width so each fits the 6 h cap.
+#
+# Standard runner spec (2 vCPU, 7 GB RAM, 14 GB SSD shared CPU) means
+# wall-clock numbers WILL have 20–50 % run-to-run variance per the
+# Criterion author. Treat these numbers as relative (regression
+# detection), not absolute. Headline benchmarks in
+# `docs/benchmarks.md` continue to be sourced from a known dedicated
+# machine.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  quick:
+    name: quick_div bench (focused)
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-${{ runner.os }}-
+
+      - name: Cache cargo build outputs
+        uses: actions/cache@v4
+        with:
+          path: target
+          key: cargo-target-${{ runner.os }}-bench-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml', 'src/**', 'macros/src/**', 'benches/**') }}
+          restore-keys: |
+            cargo-target-${{ runner.os }}-bench-
+
+      - name: Show runner specs
+        # Anchor the wall-clock numbers in the artefact to the actual
+        # CPU class GitHub allocated for the run. The standard runner
+        # pool has multiple CPU generations and Criterion timings can
+        # disagree by tens of percent across them.
+        run: |
+          echo "--- /proc/cpuinfo (model name + flags) ---"
+          grep -E '^(model name|flags)' /proc/cpuinfo | head -8
+          echo
+          echo "--- nproc ---"
+          nproc
+          echo
+          echo "--- memory ---"
+          free -h
+
+      - name: Run quick_div bench
+        # `quick_div` is the focused mul/div microbench — ~30 s wall.
+        # `wide,x-wide,xx-wide` per its `required-features` declaration
+        # in Cargo.toml. `--no-fail-fast` keeps every cell's output in
+        # the artefact even if one comparison panics.
+        run: cargo bench --bench quick_div --features wide,x-wide,xx-wide
+
+      - name: Upload Criterion results
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: criterion-quick_div
+          path: target/criterion/
+          if-no-files-found: warn
+          retention-days: 7
