@@ -4,14 +4,14 @@
 
 ```toml
 [dependencies]
-decimal-scaled = "0.3.3"
+decimal-scaled = "0.4"
 ```
 
 `no_std` (drops `std` and `serde`, keeps `alloc`):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.3", default-features = false }
+decimal-scaled = { version = "0.4", default-features = false }
 ```
 
 See [Cargo features](features.md) for the full list.
@@ -30,7 +30,7 @@ is exactly one representation per value - no normalisation, no per-value
 scale byte, no heap allocation.
 
 The primary type is `D38<const SCALE: u32>` (128-bit storage). The
-scale aliases `D38s0` … `D38s38` name specific scales:
+scale aliases `D38s0` … `D38s37` name specific scales:
 
 ```rust
 use decimal_scaled::{D38, D38s2, D38s12};
@@ -121,7 +121,10 @@ assert_eq!(format!("{v:?}"), "D38<2>(-20.50)");
 
 `FromStr` parses the same canonical form. `1.10` and `1.1` parsed at the
 same scale produce the *same* bit pattern, so equality and hashing are a
-single integer comparison.
+single integer comparison. Parsing works at every legal `SCALE` on
+every width — including the deep wide-tier scales (`D307<300>`,
+`D1232<1231>`) — without the u128-intermediate ceiling that older
+releases imposed.
 
 ## Rounding helpers
 

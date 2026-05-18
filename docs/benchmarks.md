@@ -35,6 +35,16 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > sometimes shortens via Cody-Waite range reduction, so neither is
 > a fair comparator). The bold mark goes on the row winner.**
 
+> **0.4.0 note on SCALE labels.** The raw-data dumps and `s = max`
+> columns below were recorded under 0.3.x, where `MAX_SCALE == name`
+> (e.g. `D38<38>`, `D76<76>`). 0.4.0 caps `MAX_SCALE` at `name − 1`,
+> so cells labelled `s = 38` / `s = 76` / `s = 153` / `s = 307` /
+> `s = 1231` etc. are no longer legal — re-read them as
+> `s = MAX_SCALE` measurements at the old cap. The arithmetic
+> shapes don't change with the rename (only the highest SCALE drops
+> by one), so these numbers remain a useful pre-0.4.0 baseline. The
+> next sweep will be relabelled to the new cap.
+
 ## Time units
 
 | Symbol | Unit | Relative to a second |
@@ -921,8 +931,9 @@ At 1024 bits the native back-end takes div / rem on its own
   - universally in range at every width and scale. Transcendentals:
   `1.5` (= `from_int(1) + from_int(1)/from_int(2)`) for ln / sin /
   sqrt, `0.5` for exp - sized to stay in range at every type×scale
-  combo, with `D38<38>`'s ≈ 1.7 ceiling being the binding
-  constraint.
+  combo (at the old pre-0.4.0 `D38<38>` cap, the ≈ 1.7 ceiling was
+  the binding constraint; under 0.4.0 the max is `D38<37>` so the
+  ceiling sits at ≈ 17).
 - **`black_box`.** Every input is wrapped in `std::hint::black_box`;
   the closure returns the result so the optimiser cannot drop the
   call.
