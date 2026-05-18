@@ -238,6 +238,12 @@ name = "atan_inputs"
 harness = false
 required-features = ["wide"]
 
+# Gate for ln_approx(working_digits) — caller-controlled precision.
+[[bench]]
+name = "m2_ln_approx"
+harness = false
+required-features = ["wide"]
+
 
 
 

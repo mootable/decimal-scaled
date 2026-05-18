@@ -226,24 +226,79 @@ impl<const SCALE: u32> D38<SCALE> {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::ln: argument must be positive");
         let one_bits: i128 = 10_i128.pow(SCALE);
-        // Fast path 1 — ln(1) = 0.
+        // Fast path 1 — ln(1) = 0. Exact regardless of guard.
         if self.0 == one_bits {
             return Self::ZERO;
         }
         // Fast path 2 — ln(x) ≈ x − 1 for x in the linear band
         // around 1. Truncation error |(x−1)²/2| < 0.5·ULP when
-        // |x − 1| < 10^(−⌈SCALE/2⌉). In storage units:
-        // |delta| ≤ 10^(SCALE − ⌈(SCALE+1)/2⌉). For SCALE=19 that
-        // bounds |delta| at ~10^9 storage = 10^(−10) decimal, with
-        // a comfortable safety margin from the exact bound.
+        // |x − 1| < 10^(−⌈SCALE/2⌉). Exact regardless of guard.
         let delta = self.0 - one_bits;
         let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
         if delta.abs() <= ln1p_band {
             return Self::from_bits(delta);
         }
+        // The strict path uses the compile-time const `STRICT_GUARD`
+        // so the compiler can const-fold `SCALE + STRICT_GUARD`,
+        // `10u128.pow(STRICT_GUARD)`, and any downstream uses of `w`
+        // inside `ln_fixed` to per-tier constants. Duplicated against
+        // `ln_approx` (runtime guard) deliberately — sharing one
+        // helper would force the runtime path on the strict callsite
+        // and erase the const propagation.
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+        let raw = ln_fixed(v_w, w)
+            .round_to_i128(w, SCALE)
+            .expect("D38::ln: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Natural logarithm with a caller-chosen number of guard digits
+    /// above the storage scale, trading away the strict 0.5-ULP
+    /// guarantee for proportionally faster evaluation.
+    ///
+    /// `working_digits` controls the working scale `w = SCALE +
+    /// working_digits` of the internal series evaluation. The default
+    /// `ln_strict` uses `working_digits = 30` (the same `STRICT_GUARD`
+    /// the rest of the strict family uses, sized for `<= 0.5 ULP` at
+    /// every supported `SCALE`). Callers can request fewer guard digits
+    /// to converge the Taylor series in fewer iterations:
+    ///
+    /// - `working_digits ≈ 6-10`: roughly `working_digits` digits of
+    ///   accuracy at the storage scale; typically 1.5-3× faster than
+    ///   strict; suitable for plotting, intermediate convergence
+    ///   checks, or any computation where bit-exact rounding is not
+    ///   required.
+    /// - `working_digits ≥ 30`: same accuracy as `ln_strict`, but
+    ///   slower than calling `ln_strict` directly because `w` is a
+    ///   runtime value here. Prefer `ln_strict` when you want full
+    ///   precision.
+    ///
+    /// The zero / one / linear-band fast paths fire regardless of the
+    /// requested guard — those answers are exact and don't depend on
+    /// the working precision.
+    ///
+    /// # Panics
+    ///
+    /// Same as `ln_strict`: argument must be positive.
+    #[inline]
+    #[must_use]
+    pub fn ln_approx(self, working_digits: u32) -> Self {
+        use crate::d_w128_kernels::Fixed;
+        assert!(self.0 > 0, "D38::ln: argument must be positive");
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::ZERO;
+        }
+        let delta = self.0 - one_bits;
+        let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
+        if delta.abs() <= ln1p_band {
+            return Self::from_bits(delta);
+        }
+        let w = SCALE + working_digits;
+        let v_w =
+            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
         let raw = ln_fixed(v_w, w)
             .round_to_i128(w, SCALE)
             .expect("D38::ln: result out of range");
