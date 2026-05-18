@@ -74,8 +74,11 @@ macro_rules! decl_cbrt_kernel {
     };
 }
 
+// D56: `MAX_SCALE = 57`, kernel needs `mag * 10^(2*SCALE)` ≈ `10^171`
+// at the high end which does not fit `Int384`'s ~`10^115` capacity.
+// Use `Int768` so the work integer covers the full SCALE range.
 #[cfg(any(feature = "d56", feature = "wide"))]
-decl_cbrt_kernel!(cbrt_d56, crate::wide_int::Int192, crate::wide_int::Int384);
+decl_cbrt_kernel!(cbrt_d56, crate::wide_int::Int192, crate::wide_int::Int768);
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 decl_cbrt_kernel!(cbrt_d76, crate::wide_int::Int256, crate::wide_int::Int512);
