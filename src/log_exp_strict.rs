@@ -225,6 +225,22 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn ln_strict(self) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::ln: argument must be positive");
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        // Fast path 1 — ln(1) = 0.
+        if self.0 == one_bits {
+            return Self::ZERO;
+        }
+        // Fast path 2 — ln(x) ≈ x − 1 for x in the linear band
+        // around 1. Truncation error |(x−1)²/2| < 0.5·ULP when
+        // |x − 1| < 10^(−⌈SCALE/2⌉). In storage units:
+        // |delta| ≤ 10^(SCALE − ⌈(SCALE+1)/2⌉). For SCALE=19 that
+        // bounds |delta| at ~10^9 storage = 10^(−10) decimal, with
+        // a comfortable safety margin from the exact bound.
+        let delta = self.0 - one_bits;
+        let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
+        if delta.abs() <= ln1p_band {
+            return Self::from_bits(delta);
+        }
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
