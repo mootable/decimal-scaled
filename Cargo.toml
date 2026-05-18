@@ -196,13 +196,70 @@ name = "agm_vs_taylor"
 harness = false
 required-features = ["x-wide"]
 
-# Comprehensive matrix: every decimal width × three scales (smallest /
-# midpoint / largest) × arithmetic + strict + fast transcendentals,
-# plus cross-crate baselines. Drives the `docs/benchmarks.md` rewrite.
+# Per-width full_matrix slice — one bench binary per decimal width.
+# Each runs the arith + strict (+ lossy, narrow only) families for
+# just its width, plus any cross-crate baseline that matches the
+# width (rust_decimal under D38, bnum under D76, fixed::I64F64 under
+# D18). Splitting per-width keeps a power-loss / lid-close near the
+# end of a sweep from wiping out completed widths' criterion data.
 [[bench]]
-name = "full_matrix"
+name = "full_matrix_d9"
 harness = false
-required-features = ["wide", "x-wide"]
+
+[[bench]]
+name = "full_matrix_d18"
+harness = false
+
+[[bench]]
+name = "full_matrix_d38"
+harness = false
+
+[[bench]]
+name = "full_matrix_d56"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "full_matrix_d76"
+harness = false
+
+[[bench]]
+name = "full_matrix_d114"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "full_matrix_d153"
+harness = false
+
+[[bench]]
+name = "full_matrix_d230"
+harness = false
+required-features = ["wide"]
+
+[[bench]]
+name = "full_matrix_d307"
+harness = false
+
+[[bench]]
+name = "full_matrix_d461"
+harness = false
+required-features = ["x-wide"]
+
+[[bench]]
+name = "full_matrix_d615"
+harness = false
+required-features = ["x-wide"]
+
+[[bench]]
+name = "full_matrix_d923"
+harness = false
+required-features = ["xx-wide"]
+
+[[bench]]
+name = "full_matrix_d1231"
+harness = false
+required-features = ["xx-wide"]
 
 # Like-for-like comparison vs `g_math` (another fixed-point crate that
 # claims "0 ULP transcendentals"). Runs at decimal precision matched
