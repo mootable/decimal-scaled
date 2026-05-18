@@ -1,4 +1,4 @@
-name: bench-trial
+name: "\U0001FA91 bench-trial"
 
 # Trial benchmark workflow — runs a focused subset of the crate's
 # Criterion benches on GitHub-hosted Linux runners and uploads the
@@ -37,7 +37,7 @@ permissions:
 
 jobs:
   quick:
-    name: quick_div bench (focused)
+    name: "\U0001FA91 quick_div bench (focused)"
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
