@@ -1,4 +1,4 @@
-name: docs
+name: "\U0001F4D6 docs"
 
 # Builds the API documentation (rustdoc) plus the prose guides in
 # `docs/` and publishes them to GitHub Pages.
