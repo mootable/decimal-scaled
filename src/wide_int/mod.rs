@@ -2363,6 +2363,45 @@ pub(crate) fn wide_cast<S: WideInt, T: WideInt>(src: S) -> T {
     T::from_mag_sign(&mag, negative)
 }
 
+/// Common interface across the wide signed integer family
+/// (`Int192` … `Int16384`) — the operations the wide-tier algorithm
+/// kernels (sqrt / cbrt / ln / exp / trig …) need to operate
+/// generically over their storage / work types.
+///
+/// Implemented only for the wide signed integers; the primitive
+/// integer kernels live in `wide_int` separately.
+pub(crate) trait WideStorage:
+    Copy
+    + PartialEq
+    + PartialOrd
+    + WideInt
+    + ::core::ops::Add<Output = Self>
+    + ::core::ops::Sub<Output = Self>
+    + ::core::ops::Mul<Output = Self>
+    + ::core::ops::Div<Output = Self>
+    + ::core::ops::Shl<u32, Output = Self>
+    + ::core::ops::Shr<u32, Output = Self>
+{
+    /// Width of this storage type in bits (`L * 64`).
+    const BITS: u32;
+    /// Additive identity.
+    const ZERO: Self;
+    /// Multiplicative identity.
+    const ONE: Self;
+    /// Integer constant `10`, used by the decimal-scale `10^scale`
+    /// rescaling that every kernel performs.
+    const TEN: Self;
+
+    /// Integer power: `self^exp` via right-to-left binary exponentiation.
+    fn pow(self, exp: u32) -> Self;
+    /// Exact integer square root.
+    fn isqrt(self) -> Self;
+    /// Widening / narrowing cast to a sibling wide-storage type.
+    fn resize_to<T: WideStorage>(self) -> T;
+    /// Leading-zero count of the two's-complement representation.
+    fn leading_zeros(self) -> u32;
+}
+
 // The concrete wide integer type pairs. The 256/512/1024-bit widths
 // back the wide decimal tiers; 2048/4096-bit widths are the
 // strict-transcendental work integers.
@@ -2382,6 +2421,44 @@ decl_wide_int!(Uint6144, Int6144, 96, 192);
 decl_wide_int!(Uint8192, Int8192, 128, 256);
 decl_wide_int!(Uint12288, Int12288, 192, 384);
 decl_wide_int!(Uint16384, Int16384, 256, 512);
+
+/// Implements `WideStorage` for one signed wide integer type, by
+/// delegating each method to the inherent items the
+/// `decl_wide_int!` macro already emits.
+macro_rules! impl_wide_storage {
+    ($($S:ty),* $(,)?) => {$(
+        impl WideStorage for $S {
+            const BITS: u32 = <$S>::BITS;
+            const ZERO: Self = <$S>::ZERO;
+            const ONE: Self = <$S>::ONE;
+            const TEN: Self = <$S>::from_i128(10);
+
+            #[inline]
+            fn pow(self, exp: u32) -> Self {
+                <$S>::pow(self, exp)
+            }
+            #[inline]
+            fn isqrt(self) -> Self {
+                <$S>::isqrt(self)
+            }
+            #[inline]
+            fn resize_to<T: WideStorage>(self) -> T {
+                // The inherent `resize` is bounded by `WideInt`, and
+                // `WideStorage: WideInt` so `T: WideInt` holds.
+                <$S>::resize::<T>(self)
+            }
+            #[inline]
+            fn leading_zeros(self) -> u32 {
+                <$S>::leading_zeros(self)
+            }
+        }
+    )*};
+}
+
+impl_wide_storage!(
+    Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
+    Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
+);
 
 // Short aliases used by the decimal-tier macros (replacing the former
 // `crate::wide` re-export shim). The signed alias is exposed at each
