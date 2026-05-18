@@ -1,5 +1,5 @@
-//! Smoke tests for the new decimal tiers (D56 / D114 / D230 / D461 /
-//! D615 / D923 / D1231). Each tier gets coverage on:
+//! Smoke tests for the new decimal tiers (D57 / D115 / D230 / D462 /
+//! D616 / D924 / D1232). Each tier gets coverage on:
 //!
 //! - Arithmetic round-trip (from_int / add / sub / mul / div).
 //! - `DecimalConstants::pi()` correctness (compared against
@@ -178,10 +178,10 @@ macro_rules! tier_smoke {
 
             #[test]
             fn transcendentals_at_half_max_scale_do_not_overflow() {
-                // Regression: the bench panicked at D56<56>/ln_strict
+                // Regression: the bench panicked at D57<56>/ln_strict
                 // because the work integer was too narrow to hold
                 // the squared intermediate at working scale
-                // SCALE+GUARD. The fix was to bump D56's work
+                // SCALE+GUARD. The fix was to bump D57's work
                 // integer from Int512 to Int1024.
                 //
                 // Exercise the four headline strict transcendentals
@@ -199,23 +199,23 @@ macro_rules! tier_smoke {
     };
 }
 
-#[cfg(feature = "d56")]
-tier_smoke!(d56, decimal_scaled::D56<5>, decimal_scaled::D56s0, decimal_scaled::D56<5>, decimal_scaled::D56s57);
+#[cfg(feature = "d57")]
+tier_smoke!(d57, decimal_scaled::D57<5>, decimal_scaled::D57s0, decimal_scaled::D57<5>, decimal_scaled::D57s56);
 
-#[cfg(feature = "d114")]
-tier_smoke!(d114, decimal_scaled::D114<10>, decimal_scaled::D114s0, decimal_scaled::D114<10>, decimal_scaled::D114s115);
+#[cfg(feature = "d115")]
+tier_smoke!(d115, decimal_scaled::D115<10>, decimal_scaled::D115s0, decimal_scaled::D115<10>, decimal_scaled::D115s114);
 
 #[cfg(feature = "d230")]
-tier_smoke!(d230, decimal_scaled::D230<10>, decimal_scaled::D230s0, decimal_scaled::D230<10>, decimal_scaled::D230s230);
+tier_smoke!(d230, decimal_scaled::D230<10>, decimal_scaled::D230s0, decimal_scaled::D230<10>, decimal_scaled::D230s229);
 
-#[cfg(feature = "d461")]
-tier_smoke!(d461, decimal_scaled::D461<10>, decimal_scaled::D461s0, decimal_scaled::D461<10>, decimal_scaled::D461s462);
+#[cfg(feature = "d462")]
+tier_smoke!(d462, decimal_scaled::D462<10>, decimal_scaled::D462s0, decimal_scaled::D462<10>, decimal_scaled::D462s461);
 
-#[cfg(feature = "d615")]
-tier_smoke!(d615, decimal_scaled::D615<10>, decimal_scaled::D615s0, decimal_scaled::D615<10>, decimal_scaled::D615s616);
+#[cfg(feature = "d616")]
+tier_smoke!(d616, decimal_scaled::D616<10>, decimal_scaled::D616s0, decimal_scaled::D616<10>, decimal_scaled::D616s615);
 
-#[cfg(feature = "d923")]
-tier_smoke!(d923, decimal_scaled::D923<10>, decimal_scaled::D923s0, decimal_scaled::D923<10>, decimal_scaled::D923s924);
+#[cfg(feature = "d924")]
+tier_smoke!(d924, decimal_scaled::D924<10>, decimal_scaled::D924s0, decimal_scaled::D924<10>, decimal_scaled::D924s923);
 
-#[cfg(feature = "d1231")]
-tier_smoke!(d1231, decimal_scaled::D1231<10>, decimal_scaled::D1231s0, decimal_scaled::D1231<10>, decimal_scaled::D1231s1232);
+#[cfg(feature = "d1232")]
+tier_smoke!(d1232, decimal_scaled::D1232<10>, decimal_scaled::D1232s0, decimal_scaled::D1232<10>, decimal_scaled::D1232s1231);

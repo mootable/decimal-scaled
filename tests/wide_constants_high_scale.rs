@@ -39,8 +39,9 @@ fn d76_pi_at_scale_75_is_exact() {
 }
 
 #[test]
-fn d153_pi_at_scale_153_works() {
-    let pi = D153::<153>::pi();
+fn d153_pi_at_scale_152_works() {
+    // v0.4.0 cap: MAX_SCALE for D153 is 152.
+    let pi = D153::<152>::pi();
     let s = pi.to_bits().to_string();
     assert!(s.starts_with("3141592653589793238462643383279502884"), "got {s}");
 }

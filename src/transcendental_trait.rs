@@ -1,8 +1,8 @@
 //! The [`DecimalTranscendental`] trait — the width-generic
 //! transcendental + root surface shared by every decimal type.
 //!
-//! Implemented by every width (`D9`, `D18`, `D38`, `D56`, `D76`,
-//! `D114`, `D153`, `D230`, `D307`, `D461`, `D615`, `D923`, `D1231`).
+//! Implemented by every width (`D9`, `D18`, `D38`, `D57`, `D76`,
+//! `D115`, `D153`, `D230`, `D307`, `D462`, `D616`, `D924`, `D1232`).
 //! Each impl is a one-line delegator to the inherent method of the
 //! same name, so the trait costs nothing at runtime — `#[inline]` on
 //! every method lets LLVM erase the trait dispatch.

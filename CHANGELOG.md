@@ -5,6 +5,102 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.0] — 2026-05-19
+
+Mechanical breaking rename: every width name now equals the maximum
+all-nines decimal-digit count its storage can hold, and `MAX_SCALE` is
+capped at `name - 1` on every width so at least one integer digit is
+always representable.
+
+### Breaking
+
+- **Six widths renamed** to match the true digit ceiling of their
+  underlying storage:
+
+  | Old   | New   | Storage    |
+  | ----- | ----- | ---------- |
+  | `D56`   | `D57`   | `Int192`   |
+  | `D114`  | `D115`  | `Int384`   |
+  | `D461`  | `D462`  | `Int1536`  |
+  | `D615`  | `D616`  | `Int2048`  |
+  | `D923`  | `D924`  | `Int3072`  |
+  | `D1231` | `D1232` | `Int4096`  |
+
+  The seven widths whose name already matched (`D9`, `D18`, `D38`,
+  `D76`, `D153`, `D230`, `D307`) keep their names.
+
+- **`MAX_SCALE` capped at `name - 1` on every width.** A `Dxxx<SCALE>`
+  with `SCALE == name` represents only `|x| < magic_constant` (no
+  integer digit guaranteed). The cap restores the invariant that every
+  representable value has at least one integer digit:
+
+  | Type   | Old `MAX_SCALE` | New `MAX_SCALE` |
+  | ------ | --------------- | --------------- |
+  | `D9`   | 9    | 8    |
+  | `D18`  | 18   | 17   |
+  | `D38`  | 38   | 37   |
+  | `D57`  (was `D56`)  | 57   | 56   |
+  | `D76`  | 76   | 75   |
+  | `D115` (was `D114`) | 115  | 114  |
+  | `D153` | 153  | 152  |
+  | `D230` | 230  | 229  |
+  | `D307` | 307  | 306  |
+  | `D462` (was `D461`) | 462  | 461  |
+  | `D616` (was `D615`) | 616  | 615  |
+  | `D924` (was `D923`) | 924  | 923  |
+  | `D1232` (was `D1231`) | 1232 | 1231 |
+
+- **Maximum-SCALE alias types removed.** Each width used to expose a
+  scale alias at the old `MAX_SCALE`; those aliases are now gone:
+  `D9s9`, `D18s18`, `D38s38`, `D57s57` (was `D56s57`), `D76s76`,
+  `D115s115` (was `D114s115`), `D153s153`, `D230s230`, `D307s307`,
+  `D462s462` (was `D461s462`), `D616s616` (was `D615s616`),
+  `D924s924` (was `D923s924`), `D1232s1232` (was `D1231s1232`).
+  The new ceiling is the one-less alias (`D38s37`, `D76s75`, ...).
+
+- **Per-scale construction macros for the old MAX_SCALE removed.**
+  `d9s9!`, `d18s18!`, `d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`
+  no longer exist. The proc-macro entry points (`d38!`, `d76!`, ...)
+  now reject `scale == name` with a clearer "scale N exceeds max for
+  Dxxx (max = N-1)" error.
+
+- **Cargo feature flags renamed** for the six renamed widths:
+
+  | Old      | New      |
+  | -------- | -------- |
+  | `d56`    | `d57`    |
+  | `d114`   | `d115`   |
+  | `d461`   | `d462`   |
+  | `d615`   | `d616`   |
+  | `d923`   | `d924`   |
+  | `d1231`  | `d1232`  |
+
+  The umbrella features (`wide`, `x-wide`, `xx-wide`) keep their names
+  and have been updated to reference the new per-width names.
+
+### Migration
+
+For most users the upgrade is a mechanical search-and-replace:
+
+- Rename type imports: `D56` → `D57`, `D114` → `D115`, `D461` → `D462`,
+  `D615` → `D616`, `D923` → `D924`, `D1231` → `D1232`.
+- Rename feature-flag mentions in your `Cargo.toml`: `d56` → `d57` etc.
+- If you used a maximum-SCALE alias or wrote `Dxxx<MAX_SCALE>` literally,
+  drop the SCALE by one: `D38<38>` → `D38<37>`, `D76<76>` → `D76<75>`,
+  `D56<57>` → `D57<56>`, etc.
+- The renamed per-scale macros are gone: `d38!(_, scale 38)` → write
+  the value at SCALE 37 instead, or use `D38<37>::from_bits(...)`
+  directly.
+
+### Internal
+
+- Build-time math-constant scales lowered: `SCALE_REF` for D153 / D230
+  / D307 dropped to 152 / 229 / 306 respectively (the others already
+  matched the new `name - 1` ceiling).
+- Bench file names tracking width (`benches/full_matrix_d56.rs`,
+  `benches/lib_cmp_d1231.rs`, ...) renamed to match the new width
+  identifiers.
+
 ## [0.3.3] — 2026-05-18
 
 Trait surface split + benchmarks refresh, all in one cycle.
@@ -21,7 +117,7 @@ Trait surface split + benchmarks refresh, all in one cycle.
   four-variant transcendental + root matrix), and
   `DecimalConstants` (`pi` / `tau` / `e` / …). Decimal carries a
   blanket impl so every type that implements all four halves is
-  Decimal for free; every shipped width (D9..D1231) keeps the full
+  Decimal for free; every shipped width (D9..D1232) keeps the full
   surface.
 
   Callers using `T: Decimal` and `T::method()` syntax keep
@@ -59,7 +155,7 @@ Trait surface split + benchmarks refresh, all in one cycle.
   transcendental values in this sweep also reflect contention
   drift (cold-machine micro-bench for D38<19> ln_strict measures
   ~54.8 µs vs the >800 µs in the full_matrix table — ~15× gap).
-  Wide-tier numbers (D56+ arithmetic, D56+ transcendentals) are
+  Wide-tier numbers (D57+ arithmetic, D57+ transcendentals) are
   reliable and reflect real cumulative perf work from the 0.3.x
   cycle.
 - The 326-measurement raw data dump from 0.3.2 stays appended at
@@ -112,10 +208,10 @@ bench noise). Full per-tier numbers in 0.3.3.
 - **`from_num` / `to_num` parity** across every width. The
   saturating `NumCast`-style bridge previously existed only on
   D38; extracted into `decl_decimal_num_traits_basics!` so D9 /
-  D18 / D38 / D56 / D76 / D114 / D153 / D230 / D307 / D461 / D615
-  / D923 / D1231 all get the same surface.
+  D18 / D38 / D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616
+  / D924 / D1232 all get the same surface.
 - **Serde for every wide tier.** Added `decl_wide_serde!`
-  invocations for D56 / D114 / D230 / D461 / D615 / D923 / D1231
+  invocations for D57 / D115 / D230 / D462 / D616 / D924 / D1232
   — previously only D76 / D153 / D307 had Serialize / Deserialize.
 - **`proc-macro-crate` resolution** in the construction macros
   (`d9!`, `d18!`, `d38!`, `d76!`, `d153!`, `d307!`). Lets consumer
@@ -123,14 +219,14 @@ bench noise). Full per-tier numbers in 0.3.3.
   use the literal `decimal_scaled` import name. Falls back to
   `::decimal_scaled` when the lookup fails — same behaviour as
   the original hard-coded path.
-- **Construction macros for every wide tier.** Added `d56!`,
-  `d114!`, `d230!`, `d461!`, `d615!`, `d923!`, `d1231!` — every
+- **Construction macros for every wide tier.** Added `d57!`,
+  `d115!`, `d230!`, `d462!`, `d616!`, `d924!`, `d1232!` — every
   shipped Decimal width now has a compile-time literal
   constructor over the existing `expand_for(Width, …)`
   machinery, gated behind the matching feature.
 - **`EPSILON` / `MIN_POSITIVE` for every decimal width.** Macro-
-  emitted out of `decl_decimal_basics!` so D9 / D18 / D38 / D56 /
-  D76 / D114 / D153 / D230 / D307 / D461 / D615 / D923 / D1231 all
+  emitted out of `decl_decimal_basics!` so D9 / D18 / D38 / D57 /
+  D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 / D1232 all
   share the same surface. Closes the "literal `1` doesn't coerce
   to a wide-int storage type" trap that forced downstream callers
   to write `from_bits(<Int192>::from_u128(1))` longhand.
@@ -149,17 +245,17 @@ bench noise). Full per-tier numbers in 0.3.3.
   15, 18, 20, 24, 28, 32, 35, 38, 50, plus tier-specific midpoints
   and the storage-max scale). Added `Dnns1` (one fractional digit)
   to every wide tier so all 13 widths have a consistent scale-1
-  alias. Added `D56s20` for the 20-digit CAD-numeric precision
+  alias. Added `D57s20` for the 20-digit CAD-numeric precision
   moocad's Stage 5 needed.
 
 ### Fixed
 
 - **docs.rs build for 0.3.1 failed** with
-  `E0425: cannot find type D923`. `src/core_type.rs`'s
-  `D615::widen` returned `D923<SCALE>` unconditionally, but `D923`
+  `E0425: cannot find type D924`. `src/core_type.rs`'s
+  `D616::widen` returned `D924<SCALE>` unconditionally, but `D924`
   is gated behind `xx-wide` — which the docs.rs feature set didn't
-  enable. Split `D615`'s impl block in two so `widen` only exists
-  when D923 does, and added `xx-wide` to the docs.rs
+  enable. Split `D616`'s impl block in two so `widen` only exists
+  when D924 does, and added `xx-wide` to the docs.rs
   `[package.metadata.docs.rs]` feature list for a complete
   rendered surface.
 
@@ -215,8 +311,8 @@ and bench numbers are byte-identical to 0.3.0.
 ## [0.3.0]
 
 The half-width-tier release. The decimal ladder now goes
-**D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
-D461 → D615 → D923 → D1231** — every adjacent pair has a
+**D9 → D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
+D462 → D616 → D924 → D1232** — every adjacent pair has a
 lossless `From` / `widen()` plus a fallible `TryFrom` /
 `narrow()`. New `x-wide` and `xx-wide` Cargo umbrellas gate the
 wider ranges so default builds stay lean.
@@ -232,18 +328,18 @@ feature choice.
 
 ### Added — new decimal tiers
 
-- **`D56` (192-bit), `D114` (384-bit), `D230` (768-bit)** —
+- **`D57` (192-bit), `D115` (384-bit), `D230` (768-bit)** —
   half-width tiers between every existing power-of-two width.
-  Gated behind `d56` / `d114` / `d230` individually or by the
-  expanded `wide` umbrella (now `D56`–`D307` together).
-- **`D461` (1536-bit), `D615` (2048-bit)** — new x-wide tier,
-  gated behind `x-wide` (or `d461` / `d615` individually).
-- **`D923` (3072-bit), `D1231` (4096-bit)** — new xx-wide tier,
-  gated behind `xx-wide` (or `d923` / `d1231` individually).
+  Gated behind `d57` / `d115` / `d230` individually or by the
+  expanded `wide` umbrella (now `D57`–`D307` together).
+- **`D462` (1536-bit), `D616` (2048-bit)** — new x-wide tier,
+  gated behind `x-wide` (or `d462` / `d616` individually).
+- **`D924` (3072-bit), `D1232` (4096-bit)** — new xx-wide tier,
+  gated behind `xx-wide` (or `d924` / `d1232` individually).
 - The naming rule: the number on every `D{N}` type is the
   highest safe `SCALE` (`MAX_SCALE`) the storage can hold, i.e.
   the number of decimal digits you can represent without
-  overflow. So `D1231` means `MAX_SCALE = 1232` (∼ 1232 decimal
+  overflow. So `D1232` means `MAX_SCALE = 1232` (∼ 1232 decimal
   digits of headroom), not "1231 bits".
 - Comprehensive scale aliases per the new tiers: ≥ 16 per
   tier above the narrow range, covering 0 / common midpoints /
@@ -252,11 +348,11 @@ feature choice.
 
 ### Changed — breaking
 
-- **`D38.widen()`** now returns `D56<SCALE>` instead of
-  `D76<SCALE>`. Symmetrically, `D76.narrow()` → `D56`,
-  `D76.widen()` → `D114`, `D153.narrow()` → `D114`,
+- **`D38.widen()`** now returns `D57<SCALE>` instead of
+  `D76<SCALE>`. Symmetrically, `D76.narrow()` → `D57`,
+  `D76.widen()` → `D115`, `D153.narrow()` → `D115`,
   `D153.widen()` → `D230`, `D307.narrow()` → `D230`, and
-  `D307.widen()` is new (→ `D461`, gated behind `x-wide`). The
+  `D307.widen()` is new (→ `D462`, gated behind `x-wide`). The
   legacy power-of-two-next-up semantics are gone; the
   comprehensive ladder is the new default. Callers that need
   the old jump can use `.into()` / `.try_into()` to skip rungs.
@@ -278,12 +374,12 @@ feature choice.
   Combined-remainder bookkeeping preserves HalfToEven
   correctness across chunks. Measured wins:
   - D307<150> mul: 786 ns → 434 ns (1.8× faster)
-  - D461<230> mul: 1.62 µs → 866 ns (1.9×)
-  - D615<308> mul: 2.20 µs → 1.36 µs (1.6×)
-  - D923<461> mul: 3.30 µs → 2.68 µs (1.2×)
-  - D1231<616>: marginal (chain length eats the per-pass win;
+  - D462<230> mul: 1.62 µs → 866 ns (1.9×)
+  - D616<308> mul: 2.20 µs → 1.36 µs (1.6×)
+  - D924<461> mul: 3.30 µs → 2.68 µs (1.2×)
+  - D1232<616>: marginal (chain length eats the per-pass win;
     needs Barrett or wider magic tables — tracked for 0.3.x).
-- **`d56`/`d114`/.../`d1231` per-tier features** can be enabled
+- **`d57`/`d115`/.../`d1232` per-tier features** can be enabled
   individually if you don't want a full umbrella.
 
 ### Added — benches + tooling
@@ -295,7 +391,7 @@ feature choice.
   matrix sweep. Shared macros + helpers live in
   `benches/lib_cmp_common.rs`.
 - **`benches/quick_div.rs`** — focused microbench for
-  D307/D615/D923/D1231 div + mul. Used during the wide-tier
+  D307/D616/D924/D1232 div + mul. Used during the wide-tier
   perf tuning passes.
 - **Per-width summary chart family** — one PNG per power-of-two
   storage width (`docs/figures/library_comparison/summary_{N}bit.png`)
@@ -324,13 +420,13 @@ feature choice.
 
 ### Fixed
 
-- **D56 work-integer overflow** — D56's transcendental work
+- **D57 work-integer overflow** — D57's transcendental work
   integer was Int512, which couldn't carry the squared
   intermediate at `SCALE + GUARD = 86` working scale. Bumped
   to Int1024. Caught by the in-flight bench sweep.
 - **`feature = "xx-wide"`-only builds** — several macro arms
   in `src/macros/full.rs` and `src/mg_divide.rs` gated only on
-  `wide` / `x-wide` and missed `xx-wide` / `d923` / `d1231`,
+  `wide` / `x-wide` and missed `xx-wide` / `d924` / `d1232`,
   so an `xx-wide`-only build failed to compile. Gates extended.
 
 ### Docs

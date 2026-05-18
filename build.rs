@@ -565,39 +565,39 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "E_D76_S75", &e75, 75, 1)?;
     emit_constant(&mut f, "GOLDEN_D76_S75", &phi75, 75, 1)?;
 
-    // D153: SCALE_REF=153.
-    let pi153 = pi(153);
-    let mut tau153 = pi153.clone();
-    tau153.mul_u64(2);
-    let mut half_pi153 = pi153.clone();
-    half_pi153.div_u64(2);
-    let mut quarter_pi153 = pi153.clone();
-    quarter_pi153.div_u64(4);
-    let e153 = e_const(153);
-    let phi153 = golden(153);
-    emit_constant(&mut f, "PI_D153_S153", &pi153, 153, 1)?;
-    emit_constant(&mut f, "TAU_D153_S153", &tau153, 153, 1)?;
-    emit_constant(&mut f, "HALF_PI_D153_S153", &half_pi153, 153, 1)?;
-    emit_constant(&mut f, "QUARTER_PI_D153_S153", &quarter_pi153, 153, 1)?;
-    emit_constant(&mut f, "E_D153_S153", &e153, 153, 1)?;
-    emit_constant(&mut f, "GOLDEN_D153_S153", &phi153, 153, 1)?;
+    // D153: SCALE_REF=152 (v0.4.0 cap: MAX_SCALE = name - 1).
+    let pi152 = pi(152);
+    let mut tau152 = pi152.clone();
+    tau152.mul_u64(2);
+    let mut half_pi152 = pi152.clone();
+    half_pi152.div_u64(2);
+    let mut quarter_pi152 = pi152.clone();
+    quarter_pi152.div_u64(4);
+    let e152 = e_const(152);
+    let phi152 = golden(152);
+    emit_constant(&mut f, "PI_D153_S152", &pi152, 152, 1)?;
+    emit_constant(&mut f, "TAU_D153_S152", &tau152, 152, 1)?;
+    emit_constant(&mut f, "HALF_PI_D153_S152", &half_pi152, 152, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D153_S152", &quarter_pi152, 152, 1)?;
+    emit_constant(&mut f, "E_D153_S152", &e152, 152, 1)?;
+    emit_constant(&mut f, "GOLDEN_D153_S152", &phi152, 152, 1)?;
 
-    // D307: SCALE_REF=307.
-    let pi307 = pi(307);
-    let mut tau307 = pi307.clone();
-    tau307.mul_u64(2);
-    let mut half_pi307 = pi307.clone();
-    half_pi307.div_u64(2);
-    let mut quarter_pi307 = pi307.clone();
-    quarter_pi307.div_u64(4);
-    let e307 = e_const(307);
-    let phi307 = golden(307);
-    emit_constant(&mut f, "PI_D307_S307", &pi307, 307, 1)?;
-    emit_constant(&mut f, "TAU_D307_S307", &tau307, 307, 1)?;
-    emit_constant(&mut f, "HALF_PI_D307_S307", &half_pi307, 307, 1)?;
-    emit_constant(&mut f, "QUARTER_PI_D307_S307", &quarter_pi307, 307, 1)?;
-    emit_constant(&mut f, "E_D307_S307", &e307, 307, 1)?;
-    emit_constant(&mut f, "GOLDEN_D307_S307", &phi307, 307, 1)?;
+    // D307: SCALE_REF=306 (v0.4.0 cap).
+    let pi306 = pi(306);
+    let mut tau306 = pi306.clone();
+    tau306.mul_u64(2);
+    let mut half_pi306 = pi306.clone();
+    half_pi306.div_u64(2);
+    let mut quarter_pi306 = pi306.clone();
+    quarter_pi306.div_u64(4);
+    let e306 = e_const(306);
+    let phi306 = golden(306);
+    emit_constant(&mut f, "PI_D307_S306", &pi306, 306, 1)?;
+    emit_constant(&mut f, "TAU_D307_S306", &tau306, 306, 1)?;
+    emit_constant(&mut f, "HALF_PI_D307_S306", &half_pi306, 306, 1)?;
+    emit_constant(&mut f, "QUARTER_PI_D307_S306", &quarter_pi306, 306, 1)?;
+    emit_constant(&mut f, "E_D307_S306", &e306, 306, 1)?;
+    emit_constant(&mut f, "GOLDEN_D307_S306", &phi306, 306, 1)?;
 
     // ─── New half-width and wider tiers ────────────────────────────
     //
@@ -608,13 +608,13 @@ fn main() -> std::io::Result<()> {
     //
     // Format: (tier_name_for_emit, SCALE_REF).
     for &(name, scale_ref) in &[
-        ("D56",   56u32),
-        ("D114",  114),
-        ("D230",  230),
-        ("D461",  461),
-        ("D615",  615),
-        ("D923",  923),
-        ("D1231", 1231),
+        ("D57",   56u32),
+        ("D115",  114),
+        ("D230",  229),
+        ("D462",  461),
+        ("D616",  615),
+        ("D924",  923),
+        ("D1232", 1231),
     ] {
         let p = pi(scale_ref);
         let mut t = p.clone();

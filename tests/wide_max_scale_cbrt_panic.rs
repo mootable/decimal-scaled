@@ -9,8 +9,8 @@
 //! one step further per tier so the kernel is correct at any SCALE up
 //! to that tier's `MAX_SCALE`.
 //!
-//! Companion to `tests/d56_max_scale_cbrt_panic.rs`, which covers the
-//! D56 reproducer in detail.
+//! Companion to `tests/d57_max_scale_cbrt_panic.rs`, which covers the
+//! D57 reproducer in detail.
 //!
 //! Note: at MAX_SCALE the representable range is bounded by
 //! `Storage::MAX / 10^MAX_SCALE`, so test inputs must be small. Each
@@ -57,7 +57,7 @@ macro_rules! cbrt_of_one_test {
 cbrt_of_one_test!(d76_max_scale_cbrt_of_one, D76, 76, Int256);
 
 #[cfg(feature = "wide")]
-cbrt_of_one_test!(d114_max_scale_cbrt_of_one, D114, 115, Int384);
+cbrt_of_one_test!(d115_max_scale_cbrt_of_one, D115, 115, Int384);
 
 #[cfg(feature = "wide")]
 cbrt_of_one_test!(d153_max_scale_cbrt_of_one, D153, 153, Int512);
@@ -69,13 +69,13 @@ cbrt_of_one_test!(d230_max_scale_cbrt_of_one, D230, 230, Int768);
 cbrt_of_one_test!(d307_max_scale_cbrt_of_one, D307, 307, Int1024);
 
 #[cfg(feature = "x-wide")]
-cbrt_of_one_test!(d461_max_scale_cbrt_of_one, D461, 461, Int1536);
+cbrt_of_one_test!(d462_max_scale_cbrt_of_one, D462, 461, Int1536);
 
 #[cfg(feature = "x-wide")]
-cbrt_of_one_test!(d615_max_scale_cbrt_of_one, D615, 615, Int2048);
+cbrt_of_one_test!(d616_max_scale_cbrt_of_one, D616, 615, Int2048);
 
 #[cfg(feature = "xx-wide")]
-cbrt_of_one_test!(d923_max_scale_cbrt_of_one, D923, 923, Int3072);
+cbrt_of_one_test!(d924_max_scale_cbrt_of_one, D924, 923, Int3072);
 
 #[cfg(feature = "xx-wide")]
-cbrt_of_one_test!(d1231_max_scale_cbrt_of_one, D1231, 1231, Int4096);
+cbrt_of_one_test!(d1232_max_scale_cbrt_of_one, D1232, 1231, Int4096);

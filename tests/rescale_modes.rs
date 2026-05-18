@@ -76,8 +76,8 @@ fn d9_with_scale_delegates() {
 fn d9_rescale_up_overflow_panics() {
     type D9_0 = D9<0>;
     let v = D9_0::MAX; // ~2.14e9
-    // Scale up to S=9 → multiply by 10^9; overflows i32.
-    let _: D9<9> = v.rescale::<9>();
+    // Scale up to S=8 (new MAX_SCALE) → multiply by 10^8; overflows i32.
+    let _: D9<8> = v.rescale::<8>();
 }
 
 // ─── D18 / D38: every mode on a half-LSB input ─────────────────────────
@@ -145,5 +145,5 @@ fn d76_rescale_with_all_modes() {
 fn d76_rescale_up_overflow_panics() {
     use decimal_scaled::D76;
     let v = D76::<0>::MAX;
-    let _: D76<76> = v.rescale::<76>();
+    let _: D76<75> = v.rescale::<75>();
 }

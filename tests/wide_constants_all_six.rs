@@ -58,8 +58,8 @@ fn d153_all_six_constants() {
     let _ = D::e();
     let _ = D::golden();
 
-    // Also at the canonical reference scale (S=153).
-    type D2 = D153<153>;
+    // Also at the canonical reference scale (S=152, v0.4.0 new MAX_SCALE).
+    type D2 = D153<152>;
     let _ = D2::pi();
     let _ = D2::tau();
     let _ = D2::half_pi();
@@ -80,7 +80,7 @@ fn d307_all_six_constants() {
     let _ = D::e();
     let _ = D::golden();
 
-    type D2 = D307<307>;
+    type D2 = D307<306>;
     let _ = D2::pi();
     let _ = D2::tau();
     let _ = D2::half_pi();

@@ -144,7 +144,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// Every wide-tier `mul` / `div` / `sqrt_fixed` /
             /// `to_work_w` / `round_to_*` call recomputes `pow10(w)`;
-            /// at D56<57>.atan the body invokes that ~198 times per
+            /// at D57<57>.atan the body invokes that ~198 times per
             /// call, each `lit(10).pow(w)` running ~log₂(w) wide
             /// squarings followed by ~w cumulative wide multiplies.
             /// Caching collapses that into one compute per

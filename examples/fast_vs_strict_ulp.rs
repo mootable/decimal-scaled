@@ -9,11 +9,11 @@
 
 use decimal_scaled::{D9, D18, D38};
 #[cfg(feature = "wide")]
-use decimal_scaled::{D56, D76, D114, D153, D230, D307};
+use decimal_scaled::{D57, D76, D115, D153, D230, D307};
 #[cfg(feature = "x-wide")]
-use decimal_scaled::{D461, D615};
+use decimal_scaled::{D462, D616};
 #[cfg(feature = "xx-wide")]
-use decimal_scaled::{D923, D1231};
+use decimal_scaled::{D924, D1232};
 
 /// Number of trailing decimal digits in the strict result that the
 /// fast f64-bridge result fails to reproduce. Computed as
@@ -106,21 +106,21 @@ fn main() {
     row!(D38<38>, "D38<38>", D38::<38>::from_bits(15_000_000_000_000_000_000_000_000_000_000_000_000_i128));
     #[cfg(feature = "wide")]
     {
-        row!(D56<28>,  "D56<28>",  D56::<28>::from_int(1) + D56::<28>::from_int(1) / D56::<28>::from_int(2));
+        row!(D57<28>,  "D57<28>",  D57::<28>::from_int(1) + D57::<28>::from_int(1) / D57::<28>::from_int(2));
         row!(D76<35>,  "D76<35>",  D76::<35>::from_int(1) + D76::<35>::from_int(1) / D76::<35>::from_int(2));
-        row!(D114<57>, "D114<57>", D114::<57>::from_int(1) + D114::<57>::from_int(1) / D114::<57>::from_int(2));
+        row!(D115<57>, "D115<57>", D115::<57>::from_int(1) + D115::<57>::from_int(1) / D115::<57>::from_int(2));
         row!(D153<75>, "D153<75>", D153::<75>::from_int(1) + D153::<75>::from_int(1) / D153::<75>::from_int(2));
         row!(D230<115>,"D230<115>",D230::<115>::from_int(1) + D230::<115>::from_int(1) / D230::<115>::from_int(2));
         row!(D307<150>,"D307<150>",D307::<150>::from_int(1) + D307::<150>::from_int(1) / D307::<150>::from_int(2));
     }
     #[cfg(feature = "x-wide")]
     {
-        row!(D461<230>,"D461<230>",D461::<230>::from_int(1) + D461::<230>::from_int(1) / D461::<230>::from_int(2));
-        row!(D615<308>,"D615<308>",D615::<308>::from_int(1) + D615::<308>::from_int(1) / D615::<308>::from_int(2));
+        row!(D462<230>,"D462<230>",D462::<230>::from_int(1) + D462::<230>::from_int(1) / D462::<230>::from_int(2));
+        row!(D616<308>,"D616<308>",D616::<308>::from_int(1) + D616::<308>::from_int(1) / D616::<308>::from_int(2));
     }
     #[cfg(feature = "xx-wide")]
     {
-        row!(D923<461>,"D923<461>",D923::<461>::from_int(1) + D923::<461>::from_int(1) / D923::<461>::from_int(2));
-        row!(D1231<616>,"D1231<616>",D1231::<616>::from_int(1) + D1231::<616>::from_int(1) / D1231::<616>::from_int(2));
+        row!(D924<461>,"D924<461>",D924::<461>::from_int(1) + D924::<461>::from_int(1) / D924::<461>::from_int(2));
+        row!(D1232<616>,"D1232<616>",D1232::<616>::from_int(1) + D1232::<616>::from_int(1) / D1232::<616>::from_int(2));
     }
 }

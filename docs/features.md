@@ -54,23 +54,23 @@ covering increasing precision ranges.
 
 | Feature | Enables |
 |---|---|
-| `d56` | `D56` (192-bit storage, `MAX_SCALE = 57`) — half-width between D38 and D76 |
+| `d57` | `D57` (192-bit storage, `MAX_SCALE = 57`) — half-width between D38 and D76 |
 | `d76` | `D76` (256-bit storage, `MAX_SCALE = 76`) |
-| `d114` | `D114` (384-bit storage, `MAX_SCALE = 115`) — half-width between D76 and D153 |
+| `d115` | `D115` (384-bit storage, `MAX_SCALE = 115`) — half-width between D76 and D153 |
 | `d153` | `D153` (512-bit storage, `MAX_SCALE = 153`) |
 | `d230` | `D230` (768-bit storage, `MAX_SCALE = 230`) — half-width between D153 and D307 |
 | `d307` | `D307` (1024-bit storage, `MAX_SCALE = 307`) |
-| `d461` | `D461` (1536-bit storage, `MAX_SCALE = 462`) — half-width between D307 and D615 |
-| `d615` | `D615` (2048-bit storage, `MAX_SCALE = 616`) |
-| `d923` | `D923` (3072-bit storage, `MAX_SCALE = 924`) — half-width between D615 and D1231 |
-| `d1231` | `D1231` (4096-bit storage, `MAX_SCALE = 1232`) |
-| `wide` | umbrella: enables D56 / D76 / D114 / D153 / D230 / D307 |
-| `x-wide` | umbrella: adds D461 / D615 on top of `wide` |
-| `xx-wide` | umbrella: adds D923 / D1231 on top of `x-wide` |
+| `d462` | `D462` (1536-bit storage, `MAX_SCALE = 462`) — half-width between D307 and D616 |
+| `d616` | `D616` (2048-bit storage, `MAX_SCALE = 616`) |
+| `d924` | `D924` (3072-bit storage, `MAX_SCALE = 924`) — half-width between D616 and D1232 |
+| `d1232` | `D1232` (4096-bit storage, `MAX_SCALE = 1232`) |
+| `wide` | umbrella: enables D57 / D76 / D115 / D153 / D230 / D307 |
+| `x-wide` | umbrella: adds D462 / D616 on top of `wide` |
+| `xx-wide` | umbrella: adds D924 / D1232 on top of `x-wide` |
 
 The half-width tiers exist so you only pay storage cost for the
 precision you actually need — if your accumulator needs ~60 digits,
-`D56` saves a third of the bytes per value vs `D76`, and the same
+`D57` saves a third of the bytes per value vs `D76`, and the same
 across every wider tier pair. Every adjacent pair in the ladder has
 `From` / `TryFrom` impls plus `.widen()` / `.narrow()` helpers.
 
@@ -91,13 +91,13 @@ decimal-scaled = "0.3.3"
 decimal-scaled = { version = "0.3.3", default-features = false,
                    features = ["serde", "alloc", "strict"] }
 
-# Add the half-width and wider tiers (D56–D307).
+# Add the half-width and wider tiers (D57–D307).
 decimal-scaled = { version = "0.3.3", features = ["wide", "macros"] }
 
-# Add the extra-wide tiers (D461 / D615) on top of wide.
+# Add the extra-wide tiers (D462 / D616) on top of wide.
 decimal-scaled = { version = "0.3.3", features = ["x-wide", "macros"] }
 
-# Add the xx-wide tiers (D923 / D1231) — research-grade precision.
+# Add the xx-wide tiers (D924 / D1232) — research-grade precision.
 decimal-scaled = { version = "0.3.3", features = ["xx-wide", "macros"] }
 
 # Bank-statement rounding: HalfAwayFromZero as the crate-wide default.

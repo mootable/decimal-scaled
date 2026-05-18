@@ -1,6 +1,6 @@
 [package]
 name = "decimal-scaled"
-version = "0.3.3"
+version = "0.4.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
@@ -99,24 +99,24 @@ experimental-floats = []
 # hand-rolled wide-integer types in `crate::wide_int` — no external
 # big-integer dependency. D9 / D18 / D38 use primitive storage and
 # need none of this.
-wide = ["d56", "d76", "d114", "d153", "d230"]
-d56 = []
+wide = ["d57", "d76", "d115", "d153", "d230"]
+d57 = []
 d76 = []
-d114 = []
+d115 = []
 d153 = []
 d230 = []
 # Very-wide tier (D307+). Gated separately because its strict-
 # transcendental work integers run into thousands of bits and inflate
 # build time vs the narrower wide tiers.
-x-wide = ["d307", "d461", "d615"]
+x-wide = ["d307", "d462", "d616"]
 d307 = []
-d461 = []
-d615 = []
-# Extra-wide tier (D923+). Pulls in the Int12288 / Int16384 work
+d462 = []
+d616 = []
+# Extra-wide tier (D924+). Pulls in the Int12288 / Int16384 work
 # integers — multi-second compile-time cost for the macro emission.
-xx-wide = ["d923", "d1231"]
-d923 = []
-d1231 = []
+xx-wide = ["d924", "d1232"]
+d924 = []
+d1232 = []
 # Internal perf-investigation feature: emits `tracing::info_span!`
 # blocks at the section boundaries of the wide-tier strict
 # transcendental cores (`exp_fixed`, `ln_fixed`, …). With
@@ -129,7 +129,7 @@ perf-trace = ["dep:tracing"]
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
 num-traits = { version = "0.2", default-features = false }
-decimal_scaled_macros = { path = "macros", version = "0.3.3", default-features = false, optional = true }
+decimal_scaled_macros = { path = "macros", version = "0.4.0", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 
 [dev-dependencies]
@@ -177,7 +177,7 @@ name = "all_functions"
 harness = false
 
 # Focused micro-bench for D38<33>::log10_strict / log2_strict / etc.
-# Used to validate the borrow-D56 migration of the secondary log/exp
+# Used to validate the borrow-D57 migration of the secondary log/exp
 # entry points (ln/exp were borrowed by commit 09e7ea9).
 [[bench]]
 name = "d38_s33_log10_micro"
@@ -234,7 +234,7 @@ name = "full_matrix_d38"
 harness = false
 
 [[bench]]
-name = "full_matrix_d56"
+name = "full_matrix_d57"
 harness = false
 required-features = ["wide"]
 
@@ -243,7 +243,7 @@ name = "full_matrix_d76"
 harness = false
 
 [[bench]]
-name = "full_matrix_d114"
+name = "full_matrix_d115"
 harness = false
 required-features = ["wide"]
 
@@ -261,22 +261,22 @@ name = "full_matrix_d307"
 harness = false
 
 [[bench]]
-name = "full_matrix_d461"
+name = "full_matrix_d462"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
-name = "full_matrix_d615"
+name = "full_matrix_d616"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
-name = "full_matrix_d923"
+name = "full_matrix_d924"
 harness = false
 required-features = ["xx-wide"]
 
 [[bench]]
-name = "full_matrix_d1231"
+name = "full_matrix_d1232"
 harness = false
 required-features = ["xx-wide"]
 
@@ -339,7 +339,7 @@ name = "lib_cmp_d38"
 harness = false
 
 [[bench]]
-name = "lib_cmp_d56"
+name = "lib_cmp_d57"
 harness = false
 required-features = ["wide"]
 
@@ -349,7 +349,7 @@ harness = false
 required-features = ["wide"]
 
 [[bench]]
-name = "lib_cmp_d114"
+name = "lib_cmp_d115"
 harness = false
 required-features = ["wide"]
 
@@ -369,22 +369,22 @@ harness = false
 required-features = ["wide"]
 
 [[bench]]
-name = "lib_cmp_d461"
+name = "lib_cmp_d462"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
-name = "lib_cmp_d615"
+name = "lib_cmp_d616"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
-name = "lib_cmp_d923"
+name = "lib_cmp_d924"
 harness = false
 required-features = ["xx-wide"]
 
 [[bench]]
-name = "lib_cmp_d1231"
+name = "lib_cmp_d1232"
 harness = false
 required-features = ["xx-wide"]
 

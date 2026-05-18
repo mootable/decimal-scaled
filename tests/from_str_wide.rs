@@ -12,7 +12,7 @@
 #![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 
 use core::str::FromStr;
-use decimal_scaled::{D1231, D307, D38, D76};
+use decimal_scaled::{D1232, D307, D38, D76};
 
 #[test]
 fn d76_deep_scale_parses_one_point_five() {
@@ -45,7 +45,7 @@ fn d307_deep_scale_round_trip_back_to_value() {
 #[test]
 fn d1231_deepest_scale_parses_one_point_five() {
     // Deepest supported tier × scale combination.
-    let v = D1231::<1230>::from_str("1.5").expect("D1231<1230>::from_str(\"1.5\")");
+    let v = D1232::<1230>::from_str("1.5").expect("D1232<1230>::from_str(\"1.5\")");
     let round_trip = v.to_string();
     let expected = format!("1.5{}", "0".repeat(1229));
     assert_eq!(round_trip, expected);
@@ -57,7 +57,7 @@ fn d1231_deepest_scale_handles_negative() {
     // rather than negating after the fact, so the asymmetric two's-
     // complement `MIN` boundary is reachable without overflowing on
     // the positive side. Spot-check a non-boundary negative value.
-    let v = D1231::<1230>::from_str("-1.5").expect("negative parse");
+    let v = D1232::<1230>::from_str("-1.5").expect("negative parse");
     let round_trip = v.to_string();
     let expected = format!("-1.5{}", "0".repeat(1229));
     assert_eq!(round_trip, expected);

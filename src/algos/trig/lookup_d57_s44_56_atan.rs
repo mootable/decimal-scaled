@@ -1,12 +1,12 @@
-//! Bespoke `atan_strict` kernel slot for `D56<SCALE>` with
-//! `SCALE ∈ 44..=57`.
+//! Bespoke `atan_strict` kernel slot for `D57<SCALE>` with
+//! `SCALE ∈ 44..=56`.
 //!
 //! At deep storage scales the wide-tier `atan_fixed` runs an
 //! `O(log w)` halving chain (each `atan(x) = 2·atan(x/(1+√(1+x²)))`
 //! costs one wide sqrt + one wide div + one wide mul) followed by a
 //! Taylor evaluation on the post-halving residual. With `w = SCALE +
 //! GUARD = 74..=87` and the per-tier halving cap at 7, the halving
-//! chain itself burns ~7 wide sqrts (each ~1.2 µs at D56<57>) before
+//! chain itself burns ~7 wide sqrts (each ~1.2 µs at D57<57>) before
 //! the Taylor loop runs ~30 terms — and every iteration of every
 //! kernel goes through the same `Int1024 / Int1024` Knuth divide that
 //! dominates wide arithmetic at this width. This kernel collapses the
@@ -25,8 +25,8 @@
 //! the generic path runs.
 //!
 //! The slot is exposed through [`crate::policy::trig::TrigPolicy`]
-//! only for `SCALE ∈ 44..=57`; lower scales keep using the generic
-//! [`super::wide_kernel::atan_strict_d56`] which is already cheaper
+//! only for `SCALE ∈ 44..=56`; lower scales keep using the generic
+//! [`super::wide_kernel::atan_strict_d57`] which is already cheaper
 //! there (fewer halvings, faster Knuth dispatch).
 //!
 //! ## Correctness
@@ -47,9 +47,9 @@
 //! contract requires ≤ 0.5 LSB-of-storage = 0.5·10⁻ᴿᴱ — a margin of
 //! 28+ orders of magnitude even at `SCALE = 57`.
 
-#![cfg(any(feature = "d56", feature = "wide"))]
+#![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::core_type::wide_trig_d56 as core;
+use crate::core_type::wide_trig_d57 as core;
 use crate::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
@@ -58,8 +58,8 @@ use crate::wide_int::Int192;
 /// integer-division path. Larger M shrinks the post-table residual
 /// `|y| ≤ 1/(2M)` and so shaves Taylor iterations.
 ///
-/// Mirrors the tuning from the D56 exp lookup (see
-/// [`crate::algos::exp::lookup_d56_s45_57::M`]): same `Int1024`-wide
+/// Mirrors the tuning from the D57 exp lookup (see
+/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int1024`-wide
 /// work integer, same Knuth-dispatch arithmetic cost per slot, same
 /// per-thread memoisation pattern. `M = 512` strikes the same balance
 /// here — the post-table Taylor remainder is small enough that the
@@ -120,7 +120,7 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     out
 }
 
-/// `atan(x)` strict kernel for `D56<SCALE>` with `SCALE ∈ 44..=57`.
+/// `atan(x)` strict kernel for `D57<SCALE>` with `SCALE ∈ 44..=56`.
 ///
 /// Stages:
 /// 1. Fold sign and `|x| > 1` to `|x| ≤ 1` via `atan(1/|x|)` + π/2.

@@ -32,7 +32,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Build the benchmark targets
-        # `pr_gate` covers D56<20> and D307<150> hot paths — requires
+        # `pr_gate` covers D57<20> and D307<150> hot paths — requires
         # the wide / x-wide feature gates so those types are visible.
         # Features are additive at build time; harmless for the
         # narrow-only `all_functions` bench that doesn't reach for

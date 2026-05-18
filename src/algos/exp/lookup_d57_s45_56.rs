@@ -1,4 +1,4 @@
-//! Bespoke `exp_strict` kernel slot for `D56<SCALE>` with `SCALE ∈ 45..=57`.
+//! Bespoke `exp_strict` kernel slot for `D57<SCALE>` with `SCALE ∈ 45..=56`.
 //!
 //! At deep storage scales the wide-tier `exp_fixed` runs the Taylor
 //! series and `~√p` post-squarings against an `Int192` × `Int192 →
@@ -18,8 +18,8 @@
 //! squarings the generic `exp_fixed` path runs.
 //!
 //! The slot is exposed through [`crate::policy::exp::ExpPolicy`] only
-//! for `SCALE ∈ 45..=57`; lower scales keep using the generic
-//! [`super::wide_kernel::exp_strict_d56`] which is already cheap there.
+//! for `SCALE ∈ 45..=56`; lower scales keep using the generic
+//! [`super::wide_kernel::exp_strict_d57`] which is already cheap there.
 //!
 //! ## Correctness
 //!
@@ -33,9 +33,9 @@
 //! contract requires ≤ 0.5 LSB-of-storage = 0.5·10⁻ᴿᴱ — a margin of
 //! 28+ orders of magnitude even at `SCALE = 57`.
 
-#![cfg(any(feature = "d56", feature = "wide"))]
+#![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::core_type::wide_trig_d56 as core;
+use crate::core_type::wide_trig_d57 as core;
 use crate::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
@@ -45,7 +45,7 @@ use crate::wide_int::Int192;
 /// post-table Taylor remainder `|δ| ≤ ln(2) / (2M)` and so shaves
 /// Taylor iterations.
 ///
-/// Tuned empirically against `examples/d56_exp_scale_range_bench`:
+/// Tuned empirically against `examples/d57_exp_scale_range_bench`:
 /// the curve is monotonic (bigger table → faster hot-path) but with
 /// diminishing returns past ~M = 512, and the one-off per-thread
 /// table seed costs `M · exp_fixed(w)` calls — roughly `M · 17 µs`
@@ -54,7 +54,7 @@ use crate::wide_int::Int192;
 /// vs. M = 4096's ~8 µs / call wins at ~70 ms cold-start.
 ///
 /// Per-thread memory cost: `M · sizeof(W) = M · 128 B` (Int1024 for
-/// the D56 wide-tier transcendental core), so 64 KB at M = 512.
+/// the D57 wide-tier transcendental core), so 64 KB at M = 512.
 const M: u32 = 512;
 
 #[cfg(feature = "std")]
@@ -108,7 +108,7 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     out
 }
 
-/// `e^x` strict kernel for `D56<SCALE>` with `SCALE ∈ 45..=57`.
+/// `e^x` strict kernel for `D57<SCALE>` with `SCALE ∈ 45..=56`.
 ///
 /// Two-stage range reduction:
 /// 1. `k = round(x / ln 2)`, `s = x − k·ln 2`, `|s| ≤ ln 2 / 2`.
@@ -123,7 +123,7 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     // exp(0) = 1 short-circuit (matches generic wide_kernel).
     if raw == Int192::ZERO {
-        // D56::<SCALE>::ONE raw is 10^SCALE in storage units.
+        // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
         let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
         return ten.pow(SCALE);
     }
@@ -167,7 +167,7 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
     } else {
         ((j_signed + M as i128) as u32, -1i128)
     };
-    debug_assert!(j_idx < M, "exp_strict d56 s45..=57: table index out of range");
+    debug_assert!(j_idx < M, "exp_strict d57 s45..=56: table index out of range");
 
     // Taylor: exp(δ) = 1 + δ + δ²/2! + … on |δ| ≤ ln(2)/(2M) ≈ 6.8·10⁻⁴
     // for M = 512. Term n shrinks as δⁿ / n!: at n ≈ 15 the contribution
@@ -199,7 +199,7 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
         // Bit-length guard; matches wide_kernel::exp_fixed.
         debug_assert!(
             core::bit_length(exp_s) + shift < core::W::BITS,
-            "exp_strict d56 s45..=57: result overflows the representable range",
+            "exp_strict d57 s45..=56: result overflows the representable range",
         );
         exp_s << shift
     } else {

@@ -39,9 +39,9 @@ type Cents = D38s2;          // == D38<2>
 type Pico  = D38<12>;        // same as D38s12
 ```
 
-For the narrower (`D9`, `D18`) and wider tiers (`D56` / `D76` /
-`D114` / `D153` / `D230` / `D307` for the `wide` umbrella; `D461` /
-`D615` under `x-wide`; `D923` / `D1231` under `xx-wide`), see [the
+For the narrower (`D9`, `D18`) and wider tiers (`D57` / `D76` /
+`D115` / `D153` / `D230` / `D307` for the `wide` umbrella; `D462` /
+`D616` under `x-wide`; `D924` / `D1232` under `xx-wide`), see [the
 width family](widths.md).
 
 ## Constructing values
@@ -144,7 +144,7 @@ To round to a *different* scale, use `rescale` - see the
 ## Next steps
 
 - [Conversions](conversions.md) — integers, floats, and cross-width.
-- [The width family](widths.md) — choosing one of the thirteen widths from D9 to D1231.
+- [The width family](widths.md) — choosing one of the thirteen widths from D9 to D1232.
 - [The `d38!` macro](macros.md) — ergonomic compile-time literals.
 - [Rounding modes](rounding.md) — switching from HalfToEven to Floor, Ceiling, Trunc, etc., per call or crate-wide.
 - [Strict vs fast transcendentals](strict-mode.md) — when to reach for `*_fast` and what you give up.

@@ -153,9 +153,9 @@ strict transcendental is cross-checked against the platform `f64`
 implementation at `D38<9>` (where `f64` is comfortably more precise
 than the type's ULP) - see the in-crate tests.
 
-All wide tiers (`D56` / `D76` / `D114` / `D153` / `D230` / `D307`
-under the `wide` umbrella; `D461` / `D615` under `x-wide`; `D923` /
-`D1231` under `xx-wide`) ship the full strict transcendental
+All wide tiers (`D57` / `D76` / `D115` / `D153` / `D230` / `D307`
+under the `wide` umbrella; `D462` / `D616` under `x-wide`; `D924` /
+`D1232` under `xx-wide`) ship the full strict transcendental
 surface — every method has a `*_strict` form plus a mode-aware
 `*_strict_with(mode)` sibling. Two alternate implementations are
 also exposed: `ln_strict_agm` and `exp_strict_agm` use the

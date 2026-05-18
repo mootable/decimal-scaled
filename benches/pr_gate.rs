@@ -9,7 +9,7 @@
 //!
 //! Coverage:
 //!
-//! - D56<20> — the project's primary D56 optimisation target band.
+//! - D57<20> — the project's primary D57 optimisation target band.
 //!   Touches every bespoke kernel that lands at SCALE 20.
 //! - D38<19> — narrow-tier regression sentinel.
 //! - D307<150> — deep-storage wide-tier sentinel for wide-int
@@ -26,16 +26,11 @@
 // so this import resolves to the CodSpeed-instrumented surface when
 // run under `cargo codspeed`, and plain Criterion otherwise.
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
-use decimal_scaled::{D38, D56, D307};
+use decimal_scaled::{D38, D57, D307};
 
-// D307<30> rather than D307<150>: FromStr's u128 intermediate
-// caps at SCALE <= 38 (10^39 overflows u128). The bench is a
-// regression sentinel — SCALE in the deep range exercises the
-// wide-int machinery either way; we just need a SCALE the
-// FromStr path can handle.
 type T38 = D38<19>;
-type T56 = D56<20>;
-type T307 = D307<30>;
+type T57 = D57<20>;
+type T307 = D307<150>;
 
 fn inputs_d38() -> (T38, T38) {
     let a: T38 = "1.5".parse().unwrap();
@@ -43,9 +38,9 @@ fn inputs_d38() -> (T38, T38) {
     (a, b)
 }
 
-fn inputs_d56() -> (T56, T56) {
-    let a: T56 = "1.5".parse().unwrap();
-    let b: T56 = "2.5".parse().unwrap();
+fn inputs_d57() -> (T57, T57) {
+    let a: T57 = "1.5".parse().unwrap();
+    let b: T57 = "2.5".parse().unwrap();
     (a, b)
 }
 
@@ -57,7 +52,7 @@ fn inputs_d307() -> (T307, T307) {
 
 fn bench_arith(c: &mut Criterion) {
     let (a38, b38) = inputs_d38();
-    let (a56, b56) = inputs_d56();
+    let (a56, b56) = inputs_d57();
     let (a307, b307) = inputs_d307();
 
     let mut g = c.benchmark_group("arith");
@@ -65,9 +60,9 @@ fn bench_arith(c: &mut Criterion) {
     g.bench_function("D38_mul", |bn| bn.iter(|| black_box(a38) * black_box(b38)));
     g.bench_function("D38_div", |bn| bn.iter(|| black_box(a38) / black_box(b38)));
 
-    g.bench_function("D56_add", |bn| bn.iter(|| black_box(a56) + black_box(b56)));
-    g.bench_function("D56_mul", |bn| bn.iter(|| black_box(a56) * black_box(b56)));
-    g.bench_function("D56_div", |bn| bn.iter(|| black_box(a56) / black_box(b56)));
+    g.bench_function("D57_add", |bn| bn.iter(|| black_box(a56) + black_box(b56)));
+    g.bench_function("D57_mul", |bn| bn.iter(|| black_box(a56) * black_box(b56)));
+    g.bench_function("D57_div", |bn| bn.iter(|| black_box(a56) / black_box(b56)));
 
     g.bench_function("D307_add", |bn| bn.iter(|| black_box(a307) + black_box(b307)));
     g.bench_function("D307_mul", |bn| bn.iter(|| black_box(a307) * black_box(b307)));
@@ -77,42 +72,42 @@ fn bench_arith(c: &mut Criterion) {
 
 fn bench_transcendentals(c: &mut Criterion) {
     let (a38, _) = inputs_d38();
-    let (a56, _) = inputs_d56();
+    let (a56, _) = inputs_d57();
     let (a307, _) = inputs_d307();
 
     let mut g = c.benchmark_group("sqrt_strict");
     g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sqrt_strict()));
-    g.bench_function("D56", |bn| bn.iter(|| black_box(a56).sqrt_strict()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).sqrt_strict()));
     g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sqrt_strict()));
     g.finish();
 
     let mut g = c.benchmark_group("ln_strict");
     g.bench_function("D38", |bn| bn.iter(|| black_box(a38).ln_strict()));
-    g.bench_function("D56", |bn| bn.iter(|| black_box(a56).ln_strict()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).ln_strict()));
     g.bench_function("D307", |bn| bn.iter(|| black_box(a307).ln_strict()));
     g.finish();
 
     let mut g = c.benchmark_group("exp_strict");
     g.bench_function("D38", |bn| bn.iter(|| black_box(a38).exp_strict()));
-    g.bench_function("D56", |bn| bn.iter(|| black_box(a56).exp_strict()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).exp_strict()));
     g.bench_function("D307", |bn| bn.iter(|| black_box(a307).exp_strict()));
     g.finish();
 
     let mut g = c.benchmark_group("sin_strict");
     g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sin_strict()));
-    g.bench_function("D56", |bn| bn.iter(|| black_box(a56).sin_strict()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).sin_strict()));
     g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sin_strict()));
     g.finish();
 
     let mut g = c.benchmark_group("cos_strict");
     g.bench_function("D38", |bn| bn.iter(|| black_box(a38).cos_strict()));
-    g.bench_function("D56", |bn| bn.iter(|| black_box(a56).cos_strict()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).cos_strict()));
     g.bench_function("D307", |bn| bn.iter(|| black_box(a307).cos_strict()));
     g.finish();
 
     let mut g = c.benchmark_group("atan_strict");
     g.bench_function("D38", |bn| bn.iter(|| black_box(a38).atan_strict()));
-    g.bench_function("D56", |bn| bn.iter(|| black_box(a56).atan_strict()));
+    g.bench_function("D57", |bn| bn.iter(|| black_box(a56).atan_strict()));
     g.bench_function("D307", |bn| bn.iter(|| black_box(a307).atan_strict()));
     g.finish();
 }

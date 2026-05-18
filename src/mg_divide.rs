@@ -224,16 +224,16 @@ fn div_exp_fast_2word_with_rem(
 /// `crate::wide_int` — it's only invoked from the wide-tier
 /// decimal `Mul` macro arm.
 #[cfg(any(
-    feature = "d56",
+    feature = "d57",
     feature = "d76",
-    feature = "d114",
+    feature = "d115",
     feature = "d153",
     feature = "d230",
     feature = "d307",
-    feature = "d461",
-    feature = "d615",
-    feature = "d923",
-    feature = "d1231",
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
     feature = "wide",
     feature = "x-wide",
     feature = "xx-wide"
@@ -343,16 +343,16 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
 /// count BUT with a branchless inner loop that the CPU pipelines
 /// far better than Knuth's q̂-and-correct scheme.
 #[cfg(any(
-    feature = "d56",
+    feature = "d57",
     feature = "d76",
-    feature = "d114",
+    feature = "d115",
     feature = "d153",
     feature = "d230",
     feature = "d307",
-    feature = "d461",
-    feature = "d615",
-    feature = "d923",
-    feature = "d1231",
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
     feature = "wide",
     feature = "x-wide",
     feature = "xx-wide"

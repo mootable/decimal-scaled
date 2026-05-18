@@ -23,7 +23,7 @@
 //!   `W: WideStorage` is the next-up width used to form the radicand
 //!   without overflow.
 //!
-//! Per-tier free functions ([`sqrt_d56`], [`sqrt_d76`], …) remain as
+//! Per-tier free functions ([`sqrt_d57`], [`sqrt_d76`], …) remain as
 //! thin shims so the policy callers don't need to know about the
 //! `(Storage, SqrtWide)` pairing — each shim picks the right `W` for
 //! its tier and forwards to [`sqrt`].
@@ -78,14 +78,14 @@ macro_rules! decl_sqrt_kernel_shim {
     };
 }
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d56, crate::wide_int::Int192, crate::wide_int::Int384);
+#[cfg(any(feature = "d57", feature = "wide"))]
+decl_sqrt_kernel_shim!(sqrt_d57, crate::wide_int::Int192, crate::wide_int::Int384);
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 decl_sqrt_kernel_shim!(sqrt_d76, crate::wide_int::Int256, crate::wide_int::Int512);
 
-#[cfg(any(feature = "d114", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d114, crate::wide_int::Int384, crate::wide_int::Int768);
+#[cfg(any(feature = "d115", feature = "wide"))]
+decl_sqrt_kernel_shim!(sqrt_d115, crate::wide_int::Int384, crate::wide_int::Int768);
 
 #[cfg(any(feature = "d153", feature = "wide"))]
 decl_sqrt_kernel_shim!(sqrt_d153, crate::wide_int::Int512, crate::wide_int::Int1024);
@@ -96,14 +96,14 @@ decl_sqrt_kernel_shim!(sqrt_d230, crate::wide_int::Int768, crate::wide_int::Int1
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 decl_sqrt_kernel_shim!(sqrt_d307, crate::wide_int::Int1024, crate::wide_int::Int2048);
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-decl_sqrt_kernel_shim!(sqrt_d461, crate::wide_int::Int1536, crate::wide_int::Int3072);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+decl_sqrt_kernel_shim!(sqrt_d462, crate::wide_int::Int1536, crate::wide_int::Int3072);
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-decl_sqrt_kernel_shim!(sqrt_d615, crate::wide_int::Int2048, crate::wide_int::Int4096);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+decl_sqrt_kernel_shim!(sqrt_d616, crate::wide_int::Int2048, crate::wide_int::Int4096);
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-decl_sqrt_kernel_shim!(sqrt_d923, crate::wide_int::Int3072, crate::wide_int::Int6144);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+decl_sqrt_kernel_shim!(sqrt_d924, crate::wide_int::Int3072, crate::wide_int::Int6144);
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-decl_sqrt_kernel_shim!(sqrt_d1231, crate::wide_int::Int4096, crate::wide_int::Int8192);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+decl_sqrt_kernel_shim!(sqrt_d1232, crate::wide_int::Int4096, crate::wide_int::Int8192);

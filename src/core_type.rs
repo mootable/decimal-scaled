@@ -370,24 +370,17 @@ pub type D38s36 = D38<36>;
 
 /// Scale alias: `D38<37>`. 1 LSB = 10^-37. Range ~+/-17.
 ///
+/// This is the maximum supported scale: `MAX_SCALE = 37` guarantees at
+/// least one integer digit (`|x| >= 1`) for every representable value.
+/// `10^38 < i128::MAX < 10^39`, so the storage could in principle hold a
+/// scale-38 representation, but doing so would leave `|x| < 1.7` with no
+/// integer-digit headroom -- the v0.4.0 cap rules this out by design.
 /// Math constants lose precision above `SCALE = 35`; see `D38s36`.
 ///
 /// # Precision
 ///
 /// N/A: constant value, no arithmetic performed.
 pub type D38s37 = D38<37>;
-
-/// Scale alias: `D38<38>`. 1 LSB = 10^-38. Range ~+/-1.7
-/// (sub-unit dimensionless ratios).
-///
-/// This is the maximum supported scale. `10^38 < i128::MAX < 10^39`, so
-/// `SCALE = 39` is not supported (`multiplier()` would overflow). Math
-/// constants lose precision above `SCALE = 35`; see `D38s36`.
-///
-/// # Precision
-///
-/// N/A: constant value, no arithmetic performed.
-pub type D38s38 = D38<38>;
 
 // The `ParseError` enum lives in `src/error.rs` and is re-exported
 // from the crate root. It is not width-specific.
@@ -396,7 +389,7 @@ pub use crate::error::ParseError;
 // Inherent basics + Decimal trait impl: emitted by the macro generator
 // (one invocation per width). See src/decimal_macro.rs for the macro
 // definition and the surface it produces.
-crate::macros::basics::decl_decimal_basics!(D38, i128, 38);
+crate::macros::basics::decl_decimal_basics!(D38, i128, 37);
 crate::macros::display::decl_decimal_display!(D38);
 // FromStr and the raw-storage hex / octal / binary formatters: the
 // shared macros. D38's hand-coded versions were equivalent (`FromStr`
@@ -539,7 +532,7 @@ impl<const SCALE: u32> Default for crate::D<i32, SCALE> {
     }
 }
 
-crate::macros::basics::decl_decimal_basics!(D9, i32, 9);
+crate::macros::basics::decl_decimal_basics!(D9, i32, 8);
 crate::macros::arithmetic::decl_decimal_arithmetic!(D9, i32, i64);
 crate::macros::conversions::decl_from_primitive!(D9, i32, i8);
 crate::macros::conversions::decl_from_primitive!(D9, i32, i16);
@@ -580,9 +573,10 @@ pub type D9s6 = D9<6>;
 /// Scale alias: `D9<7>`. 1 LSB = 10^-7. Range ±214.
 pub type D9s7 = D9<7>;
 /// Scale alias: `D9<8>`. 1 LSB = 10^-8 (satoshi). Range ±21.4.
+///
+/// Maximum supported scale (v0.4.0 cap: `MAX_SCALE = name - 1` guarantees
+/// at least one integer digit at every legal SCALE).
 pub type D9s8 = D9<8>;
-/// Scale alias: `D9<9>`. 1 LSB = 10^-9 (nano). Range ±2.1.
-pub type D9s9 = D9<9>;
 
 // ---------------------------------------------------------------------
 // D18 — 64-bit storage, scale 0..=18. Interchange size; fits a GPR on
@@ -612,7 +606,7 @@ impl<const SCALE: u32> Default for crate::D<i64, SCALE> {
     }
 }
 
-crate::macros::basics::decl_decimal_basics!(D18, i64, 18);
+crate::macros::basics::decl_decimal_basics!(D18, i64, 17);
 crate::macros::arithmetic::decl_decimal_arithmetic!(D18, i64, i128);
 crate::macros::conversions::decl_from_primitive!(D18, i64, i8);
 crate::macros::conversions::decl_from_primitive!(D18, i64, i16);
@@ -747,9 +741,10 @@ pub type D18s15 = D18<15>;
 /// Scale alias: `D18<16>`. 1 LSB = 10^-16. Range ±920.
 pub type D18s16 = D18<16>;
 /// Scale alias: `D18<17>`. 1 LSB = 10^-17. Range ±92.
+///
+/// Maximum supported scale (v0.4.0 cap: `MAX_SCALE = name - 1`
+/// guarantees at least one integer digit at every legal SCALE).
 pub type D18s17 = D18<17>;
-/// Scale alias: `D18<18>`. 1 LSB = 10^-18 (atto). Range ±9.2.
-pub type D18s18 = D18<18>;
 
 // ---------------------------------------------------------------------
 // D76 — 256-bit storage (`Int256`), scale 0..=76. First of the
@@ -797,7 +792,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int1024,
     crate::wide_int::Int1024,
     wide_trig_d76,
-    76
+    75
 );
 // Cross-width widening into D76 (lossless): D9 / D18 / D38 -> D76.
 #[cfg(any(feature = "d76", feature = "wide"))]
@@ -818,31 +813,31 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D9, i32, D76, crate
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> D38<SCALE> {
-    /// Promote to the next storage tier ([`D56`]) at the same `SCALE`.
-    /// Lossless. Available with the `d56` (or umbrella `wide`) Cargo
+    /// Promote to the next storage tier ([`D57`]) at the same `SCALE`.
+    /// Lossless. Available with the `d57` (or umbrella `wide`) Cargo
     /// feature enabled.
     ///
     /// ```
     /// # #[cfg(feature = "wide")] {
     /// use decimal_scaled::D38s12;
     /// let a = D38s12::from_int(1_000_000);
-    /// let _wider = a.widen();  // D56<12>
+    /// let _wider = a.widen();  // D57<12>
     /// # }
     /// ```
     #[inline]
     #[must_use]
-    pub fn widen(self) -> D56<SCALE> {
+    pub fn widen(self) -> D57<SCALE> {
         self.into()
     }
 }
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> D76<SCALE> {
-    /// Demote to the previous storage tier ([`D56`]) at the same
+    /// Demote to the previous storage tier ([`D57`]) at the same
     /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
-    /// doesn't fit `D56`'s range at the given scale.
+    /// doesn't fit `D57`'s range at the given scale.
     #[inline]
-    pub fn narrow(self) -> Result<D56<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D57<SCALE>, crate::error::ConvertError> {
         self.try_into()
     }
 }
@@ -877,9 +872,9 @@ impl<const SCALE: u32> D76<SCALE> {
 #[cfg(any(feature = "d76", feature = "wide"))] pub type D76s56 = D76<56>;
 #[cfg(any(feature = "d76", feature = "wide"))] pub type D76s64 = D76<64>;
 #[cfg(any(feature = "d76", feature = "wide"))] pub type D76s70 = D76<70>;
+/// Scale alias: `D76<75>`. 1 LSB = 10^-75. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d76", feature = "wide"))] pub type D76s75 = D76<75>;
-/// Scale alias: `D76<76>`. 1 LSB = 10^-76. Maximum supported scale.
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s76 = D76<76>;
 
 // ---------------------------------------------------------------------
 // D153 — 512-bit storage (`Int512`), scale 0..=153. Wide-scientific
@@ -925,7 +920,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int2048,
     crate::wide_int::Int2048,
     wide_trig_d153,
-    153
+    152
 );
 // Cross-width widening into D153 (lossless): D38 / D76 -> D153.
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -940,25 +935,25 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D153, cr
 
 // ─── D76::widen / D153 hop methods ────────────────────────────────────
 
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d114", feature = "wide")))]
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
 impl<const SCALE: u32> D76<SCALE> {
-    /// Promote to the next storage tier ([`D114`]) at the same
+    /// Promote to the next storage tier ([`D115`]) at the same
     /// `SCALE`. Lossless.
     #[inline]
     #[must_use]
-    pub fn widen(self) -> D114<SCALE> {
+    pub fn widen(self) -> D115<SCALE> {
         self.into()
     }
 }
 
 #[cfg(any(feature = "d153", feature = "wide"))]
 impl<const SCALE: u32> D153<SCALE> {
-    /// Demote to the previous storage tier ([`D114`]) at the same
+    /// Demote to the previous storage tier ([`D115`]) at the same
     /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
     /// doesn't fit the narrower storage's range at the given scale.
-    #[cfg(any(feature = "d114", feature = "wide"))]
+    #[cfg(any(feature = "d115", feature = "wide"))]
     #[inline]
-    pub fn narrow(self) -> Result<D114<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D115<SCALE>, crate::error::ConvertError> {
         self.try_into()
     }
 }
@@ -990,10 +985,9 @@ impl<const SCALE: u32> D153<SCALE> {
 #[cfg(any(feature = "d153", feature = "wide"))] pub type D153s140 = D153<140>;
 /// Scale alias: `D153<150>`. 1 LSB = 10^-150.
 #[cfg(any(feature = "d153", feature = "wide"))] pub type D153s150 = D153<150>;
+/// Scale alias: `D153<152>`. 1 LSB = 10^-152. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d153", feature = "wide"))] pub type D153s152 = D153<152>;
-/// Scale alias: `D153<153>`. 1 LSB = 10^-153. Maximum supported scale.
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub type D153s153 = D153<153>;
 
 // ---------------------------------------------------------------------
 // D307 — 1024-bit storage (`Int1024`), scale 0..=307. Deep
@@ -1039,7 +1033,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int4096,
     crate::wide_int::Int4096,
     wide_trig_d307,
-    307
+    306
 );
 // Cross-width widening into D307 (lossless): D76 / D153 -> D307.
 #[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d76", feature = "wide")))]
@@ -1076,12 +1070,12 @@ impl<const SCALE: u32> D307<SCALE> {
         self.try_into()
     }
 
-    /// Promote to the next storage tier ([`D461`]) at the same
-    /// `SCALE`. Lossless. Requires `d461` / `x-wide`.
-    #[cfg(any(feature = "d461", feature = "x-wide"))]
+    /// Promote to the next storage tier ([`D462`]) at the same
+    /// `SCALE`. Lossless. Requires `d462` / `x-wide`.
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
     #[inline]
     #[must_use]
-    pub fn widen(self) -> D461<SCALE> {
+    pub fn widen(self) -> D462<SCALE> {
         self.into()
     }
 }
@@ -1115,11 +1109,11 @@ impl<const SCALE: u32> D307<SCALE> {
 #[cfg(any(feature = "d307", feature = "wide"))] pub type D307s275 = D307<275>;
 /// Scale alias: `D307<300>`. 1 LSB = 10^-300.
 #[cfg(any(feature = "d307", feature = "wide"))] pub type D307s300 = D307<300>;
+/// Scale alias: `D307<306>`. 1 LSB = 10^-306. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d307", feature = "wide"))] pub type D307s306 = D307<306>;
-/// Scale alias: `D307<307>`. 1 LSB = 10^-307. Maximum supported scale.
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s307 = D307<307>;
 
-// ─── Half-width and wider tiers (D56 / D114 / D230 / D461 / D615 / D923 / D1231) ───
+// ─── Half-width and wider tiers (D57 / D115 / D230 / D462 / D616 / D924 / D1232) ───
 //
 // These fill the (2^n + 2^(n+1))/2 gaps between the existing
 // power-of-two storage tiers, plus extend the top end past D307.
@@ -1128,160 +1122,160 @@ impl<const SCALE: u32> D307<SCALE> {
 // method), plus scale aliases at 0 / mid / max.
 //
 // Cross-width widening / narrowing methods are emitted to the
-// immediate-neighbour tiers only — `D56 ↔ D38`, `D56 ↔ D76`, etc.
-// Multi-tier hops go via the chain (e.g. D56 → D76 → D153) at the
+// immediate-neighbour tiers only — `D57 ↔ D38`, `D57 ↔ D76`, etc.
+// Multi-tier hops go via the chain (e.g. D57 → D76 → D153) at the
 // cost of one intermediate.
 
-// ── D56 (192-bit / 3 u64 limbs) ────────────────────────────────────────
+// ── D57 (192-bit / 3 u64 limbs) ────────────────────────────────────────
 
 /// Scaled fixed-point decimal with 192-bit storage. Half-width tier
 /// between D38 and D76 — useful when the D38 i128 ceiling is in
 /// reach but D76's 256-bit storage is wasteful. Now a type alias of
-/// the unified [`crate::D`] generic decimal type: `D56<S>` is
+/// the unified [`crate::D`] generic decimal type: `D57<S>` is
 /// `D<crate::wide_int::Int192, S>`. Both spellings are interchangeable.
 ///
 /// The `#[repr(transparent)]` layout over `Int192` is preserved
 /// through the alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
 ///
-/// Gated behind the `d56` (or umbrella `wide`) Cargo feature.
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56<const SCALE: u32> = crate::D<crate::wide_int::Int192, SCALE>;
+/// Gated behind the `d57` (or umbrella `wide`) Cargo feature.
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57<const SCALE: u32> = crate::D<crate::wide_int::Int192, SCALE>;
 
 /// `Default` returns `ZERO`, matching the all-zero limb pattern of
 /// `Int192`.
 ///
 /// Implemented on the underlying `crate::D<crate::wide_int::Int192, SCALE>`
-/// because `D56<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D57<SCALE>` is now an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
-#[cfg(any(feature = "d56", feature = "wide"))]
+#[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int192, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
 
-#[cfg(any(feature = "d56", feature = "wide"))]
+#[cfg(any(feature = "d57", feature = "wide"))]
 crate::macros::full::decl_decimal_full!(
-    wide D56,
+    wide D57,
     crate::wide_int::I192,
     crate::wide_int::U192,
     crate::wide_int::I384,
     crate::wide_int::Int384,
     crate::wide_int::Int512,
     crate::wide_int::Int1024,
-    wide_trig_d56,
-    57
+    wide_trig_d57,
+    56
 );
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s0 = D56<0>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s1 = D56<1>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s2 = D56<2>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s4 = D56<4>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s6 = D56<6>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s9 = D56<9>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s12 = D56<12>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s18 = D56<18>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s20 = D56<20>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s24 = D56<24>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s28 = D56<28>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s32 = D56<32>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s38 = D56<38>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s42 = D56<42>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s48 = D56<48>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s52 = D56<52>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s56 = D56<56>;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub type D56s57 = D56<57>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s0 = D57<0>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s1 = D57<1>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s2 = D57<2>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s4 = D57<4>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s6 = D57<6>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s9 = D57<9>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s12 = D57<12>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s18 = D57<18>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s20 = D57<20>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s24 = D57<24>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s28 = D57<28>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s32 = D57<32>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s38 = D57<38>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s42 = D57<42>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s48 = D57<48>;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s52 = D57<52>;
+/// Scale alias: `D57<56>`. 1 LSB = 10^-56. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub type D57s56 = D57<56>;
 
-// ── D114 (384-bit / 6 u64 limbs) ───────────────────────────────────────
+// ── D115 (384-bit / 6 u64 limbs) ───────────────────────────────────────
 
 /// Scaled fixed-point decimal with 384-bit storage. Half-width tier
 /// between D76 and D153. Now a type alias of the unified [`crate::D`]
-/// generic decimal type: `D114<S>` is `D<crate::wide_int::Int384, S>`.
+/// generic decimal type: `D115<S>` is `D<crate::wide_int::Int384, S>`.
 /// Both spellings are interchangeable.
 ///
 /// The `#[repr(transparent)]` layout over `Int384` is preserved through
 /// the alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
 ///
-/// Gated behind the `d114` (or umbrella `wide`) Cargo feature.
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114<const SCALE: u32> = crate::D<crate::wide_int::Int384, SCALE>;
+/// Gated behind the `d115` (or umbrella `wide`) Cargo feature.
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115<const SCALE: u32> = crate::D<crate::wide_int::Int384, SCALE>;
 
 /// `Default` returns `ZERO`, matching the all-zero limb pattern of
 /// `Int384`.
 ///
 /// Implemented on the underlying `crate::D<crate::wide_int::Int384, SCALE>`
-/// because `D114<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D115<SCALE>` is now an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
-#[cfg(any(feature = "d114", feature = "wide"))]
+#[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int384, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
 
-#[cfg(any(feature = "d114", feature = "wide"))]
+#[cfg(any(feature = "d115", feature = "wide"))]
 crate::macros::full::decl_decimal_full!(
-    wide D114,
+    wide D115,
     crate::wide_int::I384,
     crate::wide_int::U384,
     crate::wide_int::I768,
     crate::wide_int::Int768,
     crate::wide_int::Int1024,
     crate::wide_int::Int1024,
-    wide_trig_d114,
-    115
+    wide_trig_d115,
+    114
 );
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s0 = D114<0>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s1 = D114<1>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s4 = D114<4>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s8 = D114<8>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s16 = D114<16>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s24 = D114<24>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s32 = D114<32>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s38 = D114<38>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s50 = D114<50>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s57 = D114<57>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s64 = D114<64>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s76 = D114<76>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s90 = D114<90>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s100 = D114<100>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s110 = D114<110>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s114 = D114<114>;
-#[cfg(any(feature = "d114", feature = "wide"))]
-pub type D114s115 = D114<115>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s0 = D115<0>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s1 = D115<1>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s4 = D115<4>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s8 = D115<8>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s16 = D115<16>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s24 = D115<24>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s32 = D115<32>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s38 = D115<38>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s50 = D115<50>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s57 = D115<57>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s64 = D115<64>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s76 = D115<76>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s90 = D115<90>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s100 = D115<100>;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s110 = D115<110>;
+/// Scale alias: `D115<114>`. 1 LSB = 10^-114. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub type D115s114 = D115<114>;
 
 // ── D230 (768-bit / 12 u64 limbs) ──────────────────────────────────────
 
@@ -1320,7 +1314,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int3072,
     crate::wide_int::Int3072,
     wide_trig_d230,
-    230
+    229
 );
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s0 = D230<0>;
@@ -1352,326 +1346,326 @@ pub type D230s200 = D230<200>;
 pub type D230s215 = D230<215>;
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s225 = D230<225>;
+/// Scale alias: `D230<229>`. 1 LSB = 10^-229. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s229 = D230<229>;
-#[cfg(any(feature = "d230", feature = "wide"))]
-pub type D230s230 = D230<230>;
 
-// ── D461 (1536-bit / 24 u64 limbs) ─────────────────────────────────────
+// ── D462 (1536-bit / 24 u64 limbs) ─────────────────────────────────────
 
 /// Scaled fixed-point decimal with 1536-bit storage. Half-width tier
-/// between D307 and D615. Now a type alias of the unified [`crate::D`]
-/// generic decimal type: `D461<S>` is `D<crate::wide_int::Int1536, S>`.
+/// between D307 and D616. Now a type alias of the unified [`crate::D`]
+/// generic decimal type: `D462<S>` is `D<crate::wide_int::Int1536, S>`.
 /// Both spellings are interchangeable.
 ///
 /// The `#[repr(transparent)]` layout over `Int1536` is preserved through
 /// the alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
 ///
-/// Gated behind the `d461` (or umbrella `x-wide`) Cargo feature.
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461<const SCALE: u32> = crate::D<crate::wide_int::Int1536, SCALE>;
+/// Gated behind the `d462` (or umbrella `x-wide`) Cargo feature.
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462<const SCALE: u32> = crate::D<crate::wide_int::Int1536, SCALE>;
 
 /// `Default` returns `ZERO`, matching the all-zero limb pattern of
 /// `Int1536`.
 ///
 /// Implemented on the underlying `crate::D<crate::wide_int::Int1536, SCALE>`
-/// because `D461<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D462<SCALE>` is now an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
-#[cfg(any(feature = "d461", feature = "x-wide"))]
+#[cfg(any(feature = "d462", feature = "x-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int1536, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
+#[cfg(any(feature = "d462", feature = "x-wide"))]
 crate::macros::full::decl_decimal_full!(
-    wide D461,
+    wide D462,
     crate::wide_int::I1536,
     crate::wide_int::U1536,
     crate::wide_int::I3072,
     crate::wide_int::Int3072,
     crate::wide_int::Int4096,
     crate::wide_int::Int4096,
-    wide_trig_d461,
-    462
+    wide_trig_d462,
+    461
 );
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s0 = D461<0>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s1 = D461<1>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s18 = D461<18>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s38 = D461<38>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s75 = D461<75>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s115 = D461<115>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s153 = D461<153>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s200 = D461<200>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s230 = D461<230>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s275 = D461<275>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s307 = D461<307>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s350 = D461<350>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s400 = D461<400>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s440 = D461<440>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s460 = D461<460>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s461 = D461<461>;
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-pub type D461s462 = D461<462>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s0 = D462<0>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s1 = D462<1>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s18 = D462<18>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s38 = D462<38>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s75 = D462<75>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s115 = D462<115>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s153 = D462<153>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s200 = D462<200>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s230 = D462<230>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s275 = D462<275>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s307 = D462<307>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s350 = D462<350>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s400 = D462<400>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s440 = D462<440>;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s460 = D462<460>;
+/// Scale alias: `D462<461>`. 1 LSB = 10^-461. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub type D462s461 = D462<461>;
 
-// ── D615 (2048-bit / 32 u64 limbs) ─────────────────────────────────────
+// ── D616 (2048-bit / 32 u64 limbs) ─────────────────────────────────────
 
 /// Scaled fixed-point decimal with 2048-bit storage. New top tier
 /// beyond D307; supports correctly-rounded transcendentals at scale
 /// up to 616 decimal digits. Now a type alias of the unified
-/// [`crate::D`] generic decimal type: `D615<S>` is
+/// [`crate::D`] generic decimal type: `D616<S>` is
 /// `D<crate::wide_int::Int2048, S>`. Both spellings are interchangeable.
 ///
 /// The `#[repr(transparent)]` layout over `Int2048` is preserved through
 /// the alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
 ///
-/// Gated behind the `d615` (or umbrella `x-wide`) Cargo feature.
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615<const SCALE: u32> = crate::D<crate::wide_int::Int2048, SCALE>;
+/// Gated behind the `d616` (or umbrella `x-wide`) Cargo feature.
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616<const SCALE: u32> = crate::D<crate::wide_int::Int2048, SCALE>;
 
 /// `Default` returns `ZERO`, matching the all-zero limb pattern of
 /// `Int2048`.
 ///
 /// Implemented on the underlying `crate::D<crate::wide_int::Int2048, SCALE>`
-/// because `D615<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D616<SCALE>` is now an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
-#[cfg(any(feature = "d615", feature = "x-wide"))]
+#[cfg(any(feature = "d616", feature = "x-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int2048, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
+#[cfg(any(feature = "d616", feature = "x-wide"))]
 crate::macros::full::decl_decimal_full!(
-    wide D615,
+    wide D616,
     crate::wide_int::I2048,
     crate::wide_int::U2048,
     crate::wide_int::I4096,
     crate::wide_int::Int4096,
     crate::wide_int::Int8192,
     crate::wide_int::Int8192,
-    wide_trig_d615,
-    616
+    wide_trig_d616,
+    615
 );
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s0 = D615<0>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s1 = D615<1>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s38 = D615<38>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s75 = D615<75>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s115 = D615<115>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s153 = D615<153>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s200 = D615<200>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s230 = D615<230>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s275 = D615<275>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s308 = D615<308>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s380 = D615<380>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s462 = D615<462>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s500 = D615<500>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s555 = D615<555>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s600 = D615<600>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s615 = D615<615>;
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-pub type D615s616 = D615<616>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s0 = D616<0>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s1 = D616<1>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s38 = D616<38>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s75 = D616<75>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s115 = D616<115>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s153 = D616<153>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s200 = D616<200>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s230 = D616<230>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s275 = D616<275>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s308 = D616<308>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s380 = D616<380>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s462 = D616<462>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s500 = D616<500>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s555 = D616<555>;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s600 = D616<600>;
+/// Scale alias: `D616<615>`. 1 LSB = 10^-615. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub type D616s615 = D616<615>;
 
-// ── D923 (3072-bit / 48 u64 limbs) ─────────────────────────────────────
+// ── D924 (3072-bit / 48 u64 limbs) ─────────────────────────────────────
 
 /// Scaled fixed-point decimal with 3072-bit storage. Half-width tier
-/// between D615 and D1231; supports SCALE up to 924 digits. Now a type
-/// alias of the unified [`crate::D`] generic decimal type: `D923<S>`
+/// between D616 and D1232; supports SCALE up to 924 digits. Now a type
+/// alias of the unified [`crate::D`] generic decimal type: `D924<S>`
 /// is `D<crate::wide_int::Int3072, S>`. Both spellings are interchangeable.
 ///
 /// The `#[repr(transparent)]` layout over `Int3072` is preserved through
 /// the alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
 ///
-/// Gated behind the `d923` (or umbrella `xx-wide`) Cargo feature.
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923<const SCALE: u32> = crate::D<crate::wide_int::Int3072, SCALE>;
+/// Gated behind the `d924` (or umbrella `xx-wide`) Cargo feature.
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924<const SCALE: u32> = crate::D<crate::wide_int::Int3072, SCALE>;
 
 /// `Default` returns `ZERO`, matching the all-zero limb pattern of
 /// `Int3072`.
 ///
 /// Implemented on the underlying `crate::D<crate::wide_int::Int3072, SCALE>`
-/// because `D923<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D924<SCALE>` is now an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int3072, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
 crate::macros::full::decl_decimal_full!(
-    wide D923,
+    wide D924,
     crate::wide_int::I3072,
     crate::wide_int::U3072,
     crate::wide_int::I6144,
     crate::wide_int::Int6144,
     crate::wide_int::Int12288,
     crate::wide_int::Int12288,
-    wide_trig_d923,
-    924
+    wide_trig_d924,
+    923
 );
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s0 = D923<0>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s1 = D923<1>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s75 = D923<75>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s153 = D923<153>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s230 = D923<230>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s307 = D923<307>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s400 = D923<400>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s461 = D923<461>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s462 = D923<462>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s500 = D923<500>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s616 = D923<616>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s700 = D923<700>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s800 = D923<800>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s860 = D923<860>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s900 = D923<900>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s920 = D923<920>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s923 = D923<923>;
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-pub type D923s924 = D923<924>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s0 = D924<0>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s1 = D924<1>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s75 = D924<75>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s153 = D924<153>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s230 = D924<230>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s307 = D924<307>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s400 = D924<400>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s461 = D924<461>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s462 = D924<462>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s500 = D924<500>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s616 = D924<616>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s700 = D924<700>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s800 = D924<800>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s860 = D924<860>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s900 = D924<900>;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s920 = D924<920>;
+/// Scale alias: `D924<923>`. 1 LSB = 10^-923. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub type D924s923 = D924<923>;
 
-// ── D1231 (4096-bit / 64 u64 limbs) ────────────────────────────────────
+// ── D1232 (4096-bit / 64 u64 limbs) ────────────────────────────────────
 
 /// Scaled fixed-point decimal with 4096-bit storage. Widest tier
 /// shipped; supports SCALE up to 1232 digits. Now a type alias of the
-/// unified [`crate::D`] generic decimal type: `D1231<S>` is
+/// unified [`crate::D`] generic decimal type: `D1232<S>` is
 /// `D<crate::wide_int::Int4096, S>`. Both spellings are interchangeable.
 ///
 /// The `#[repr(transparent)]` layout over `Int4096` is preserved through
 /// the alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
 ///
-/// Gated behind the `d1231` (or umbrella `xx-wide`) Cargo feature.
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231<const SCALE: u32> = crate::D<crate::wide_int::Int4096, SCALE>;
+/// Gated behind the `d1232` (or umbrella `xx-wide`) Cargo feature.
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232<const SCALE: u32> = crate::D<crate::wide_int::Int4096, SCALE>;
 
 /// `Default` returns `ZERO`, matching the all-zero limb pattern of
 /// `Int4096`.
 ///
 /// Implemented on the underlying `crate::D<crate::wide_int::Int4096, SCALE>`
-/// because `D1231<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// because `D1232<SCALE>` is now an alias of that type. `ZERO` is emitted
 /// by the basics macro further down in this file.
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int4096, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
 crate::macros::full::decl_decimal_full!(
-    wide D1231,
+    wide D1232,
     crate::wide_int::I4096,
     crate::wide_int::U4096,
     crate::wide_int::I8192,
     crate::wide_int::Int8192,
     crate::wide_int::Int16384,
     crate::wide_int::Int16384,
-    wide_trig_d1231,
-    1232
+    wide_trig_d1232,
+    1231
 );
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s0 = D1231<0>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1 = D1231<1>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s75 = D1231<75>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s153 = D1231<153>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s230 = D1231<230>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s307 = D1231<307>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s461 = D1231<461>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s616 = D1231<616>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s700 = D1231<700>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s800 = D1231<800>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s900 = D1231<900>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s924 = D1231<924>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1000 = D1231<1000>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1100 = D1231<1100>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1180 = D1231<1180>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1220 = D1231<1220>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1230 = D1231<1230>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1231 = D1231<1231>;
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-pub type D1231s1232 = D1231<1232>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s0 = D1232<0>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1 = D1232<1>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s75 = D1232<75>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s153 = D1232<153>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s230 = D1232<230>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s307 = D1232<307>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s461 = D1232<461>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s616 = D1232<616>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s700 = D1232<700>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s800 = D1232<800>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s900 = D1232<900>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s924 = D1232<924>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1000 = D1232<1000>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1100 = D1232<1100>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1180 = D1232<1180>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1220 = D1232<1220>;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1230 = D1232<1230>;
+/// Scale alias: `D1232<1231>`. 1 LSB = 10^-1231. Maximum supported scale
+/// (v0.4.0 cap: `MAX_SCALE = name - 1`).
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub type D1232s1231 = D1232<1231>;
 
 // ─── Cross-tier next-neighbour widen/narrow chain ─────────────────────
 //
 // The historical .widen() / .narrow() methods on D38/D76/D153/D307
 // follow the power-of-two storage sequence (D38→D76→D153→D307). The
 // 0.2.6 tier ladder fills in half-widths between each pair plus
-// extends to D1231; the complete ladder is:
+// extends to D1232; the complete ladder is:
 //
-//   D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
-//   D461 → D615 → D923 → D1231
+//   D9 → D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
+//   D462 → D616 → D924 → D1232
 //
 // The next-neighbour .widen() / .narrow() methods on the new tiers go
-// to the immediate adjacent rung (D56.widen() → D76, D76.widen()
+// to the immediate adjacent rung (D57.widen() → D76, D76.widen()
 // already returns D153 which is the existing power-of-two next-up,
 // etc.). The cross-tier From / TryFrom impls below cover the
 // neighbour pairs that weren't already declared by the legacy
@@ -1680,31 +1674,31 @@ pub type D1231s1232 = D1231<1232>;
 // Coverage strategy: declare every NEW adjacent pair both ways. The
 // existing legacy declarations (D9↔D18, D9/D18/D38↔D76, D38/D76↔D153,
 // D76/D153↔D307) stay where they are; this block adds the conversions
-// that hop through the new tiers (D38↔D56, D56↔D76, D76↔D114, etc.).
+// that hop through the new tiers (D38↔D57, D57↔D76, D76↔D115, etc.).
 
-// D38 ↔ D56
-#[cfg(any(feature = "d56", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D56, crate::wide_int::I192, D38, i128);
-#[cfg(any(feature = "d56", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D56, crate::wide_int::I192);
+// D38 ↔ D57
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_widening!(wide D57, crate::wide_int::I192, D38, i128);
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D57, crate::wide_int::I192);
 
-// D56 ↔ D76
-#[cfg(all(any(feature = "d56", feature = "wide"), any(feature = "d76", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D56, crate::wide_int::I192);
-#[cfg(all(any(feature = "d56", feature = "wide"), any(feature = "d76", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D56, crate::wide_int::I192, D76, crate::wide_int::I256);
+// D57 ↔ D76
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d76", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D57, crate::wide_int::I192);
+#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d76", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D57, crate::wide_int::I192, D76, crate::wide_int::I256);
 
-// D76 ↔ D114
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d114", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D114, crate::wide_int::I384, D76, crate::wide_int::I256);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d114", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D114, crate::wide_int::I384);
+// D76 ↔ D115
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D115, crate::wide_int::I384, D76, crate::wide_int::I256);
+#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D115, crate::wide_int::I384);
 
-// D114 ↔ D153
-#[cfg(all(any(feature = "d114", feature = "wide"), any(feature = "d153", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D153, crate::wide_int::I512, D114, crate::wide_int::I384);
-#[cfg(all(any(feature = "d114", feature = "wide"), any(feature = "d153", feature = "wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D114, crate::wide_int::I384, D153, crate::wide_int::I512);
+// D115 ↔ D153
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D153, crate::wide_int::I512, D115, crate::wide_int::I384);
+#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d153", feature = "wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D115, crate::wide_int::I384, D153, crate::wide_int::I512);
 
 // D153 ↔ D230
 #[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
@@ -1718,29 +1712,29 @@ crate::macros::conversions::decl_cross_width_widening!(wide D307, crate::wide_in
 #[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D230, crate::wide_int::I768, D307, crate::wide_int::I1024);
 
-// D307 ↔ D461
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d461", feature = "x-wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D461, crate::wide_int::I1536, D307, crate::wide_int::I1024);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d461", feature = "x-wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D307, crate::wide_int::I1024, D461, crate::wide_int::I1536);
+// D307 ↔ D462
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D462, crate::wide_int::I1536, D307, crate::wide_int::I1024);
+#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D307, crate::wide_int::I1024, D462, crate::wide_int::I1536);
 
-// D461 ↔ D615
-#[cfg(all(any(feature = "d461", feature = "x-wide"), any(feature = "d615", feature = "x-wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D615, crate::wide_int::I2048, D461, crate::wide_int::I1536);
-#[cfg(all(any(feature = "d461", feature = "x-wide"), any(feature = "d615", feature = "x-wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D461, crate::wide_int::I1536, D615, crate::wide_int::I2048);
+// D462 ↔ D616
+#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D616, crate::wide_int::I2048, D462, crate::wide_int::I1536);
+#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d616", feature = "x-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D462, crate::wide_int::I1536, D616, crate::wide_int::I2048);
 
-// D615 ↔ D923
-#[cfg(all(any(feature = "d615", feature = "x-wide"), any(feature = "d923", feature = "xx-wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D923, crate::wide_int::I3072, D615, crate::wide_int::I2048);
-#[cfg(all(any(feature = "d615", feature = "x-wide"), any(feature = "d923", feature = "xx-wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D615, crate::wide_int::I2048, D923, crate::wide_int::I3072);
+// D616 ↔ D924
+#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D924, crate::wide_int::I3072, D616, crate::wide_int::I2048);
+#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D616, crate::wide_int::I2048, D924, crate::wide_int::I3072);
 
-// D923 ↔ D1231
-#[cfg(all(any(feature = "d923", feature = "xx-wide"), any(feature = "d1231", feature = "xx-wide")))]
-crate::macros::conversions::decl_cross_width_widening!(wide D1231, crate::wide_int::I4096, D923, crate::wide_int::I3072);
-#[cfg(all(any(feature = "d923", feature = "xx-wide"), any(feature = "d1231", feature = "xx-wide")))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D923, crate::wide_int::I3072, D1231, crate::wide_int::I4096);
+// D924 ↔ D1232
+#[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_widening!(wide D1232, crate::wide_int::I4096, D924, crate::wide_int::I3072);
+#[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
+crate::macros::conversions::decl_cross_width_narrowing!(wide D924, crate::wide_int::I3072, D1232, crate::wide_int::I4096);
 
 // .widen() / .narrow() methods on the new tiers — each points at the
 // IMMEDIATE neighbour in the comprehensive ladder above. The legacy
@@ -1749,8 +1743,8 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D923, crate::wide_i
 // want to traverse through the half-widths should use the methods
 // declared here, or the From / TryFrom impls directly.
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-impl<const SCALE: u32> D56<SCALE> {
+#[cfg(any(feature = "d57", feature = "wide"))]
+impl<const SCALE: u32> D57<SCALE> {
     /// Demote to the immediate previous tier ([`D38`]) at the same `SCALE`.
     /// Returns `Err(ConvertError::Overflow)` if the value exceeds `i128` range.
     #[inline]
@@ -1760,8 +1754,8 @@ impl<const SCALE: u32> D56<SCALE> {
     pub fn widen(self) -> D76<SCALE> { self.into() }
 }
 
-#[cfg(any(feature = "d114", feature = "wide"))]
-impl<const SCALE: u32> D114<SCALE> {
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl<const SCALE: u32> D115<SCALE> {
     /// Demote to the immediate previous tier ([`D76`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D76<SCALE>, crate::error::ConvertError> { self.try_into() }
@@ -1780,53 +1774,53 @@ impl<const SCALE: u32> D230<SCALE> {
     pub fn widen(self) -> D307<SCALE> { self.into() }
 }
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-impl<const SCALE: u32> D461<SCALE> {
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+impl<const SCALE: u32> D462<SCALE> {
     /// Demote to the immediate previous tier ([`D307`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D307<SCALE>, crate::error::ConvertError> { self.try_into() }
-    /// Promote to the next storage tier ([`D615`]) at the same `SCALE`. Lossless.
+    /// Promote to the next storage tier ([`D616`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
-    pub fn widen(self) -> D615<SCALE> { self.into() }
+    pub fn widen(self) -> D616<SCALE> { self.into() }
 }
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-impl<const SCALE: u32> D615<SCALE> {
-    /// Demote to the immediate previous tier ([`D461`]) at the same `SCALE`.
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl<const SCALE: u32> D616<SCALE> {
+    /// Demote to the immediate previous tier ([`D462`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D461<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D462<SCALE>, crate::error::ConvertError> { self.try_into() }
 }
 
-// `widen` lives in a second impl gated on D923's feature — D615 can
+// `widen` lives in a second impl gated on D924's feature — D616 can
 // be enabled without xx-wide (docs.rs builds this case), in which
-// case D923 doesn't exist as a type and the unconditional `widen`
+// case D924 doesn't exist as a type and the unconditional `widen`
 // method above breaks the doc build.
 #[cfg(all(
-    any(feature = "d615", feature = "x-wide"),
-    any(feature = "d923", feature = "xx-wide"),
+    any(feature = "d616", feature = "x-wide"),
+    any(feature = "d924", feature = "xx-wide"),
 ))]
-impl<const SCALE: u32> D615<SCALE> {
-    /// Promote to the next storage tier ([`D923`]) at the same `SCALE`. Lossless.
+impl<const SCALE: u32> D616<SCALE> {
+    /// Promote to the next storage tier ([`D924`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
-    pub fn widen(self) -> D923<SCALE> { self.into() }
+    pub fn widen(self) -> D924<SCALE> { self.into() }
 }
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-impl<const SCALE: u32> D923<SCALE> {
-    /// Demote to the immediate previous tier ([`D615`]) at the same `SCALE`.
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl<const SCALE: u32> D924<SCALE> {
+    /// Demote to the immediate previous tier ([`D616`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D615<SCALE>, crate::error::ConvertError> { self.try_into() }
-    /// Promote to the next storage tier ([`D1231`]) at the same `SCALE`. Lossless.
+    pub fn narrow(self) -> Result<D616<SCALE>, crate::error::ConvertError> { self.try_into() }
+    /// Promote to the next storage tier ([`D1232`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
-    pub fn widen(self) -> D1231<SCALE> { self.into() }
+    pub fn widen(self) -> D1232<SCALE> { self.into() }
 }
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-impl<const SCALE: u32> D1231<SCALE> {
-    /// Demote to the immediate previous tier ([`D923`]) at the same `SCALE`.
-    /// D1231 is the widest shipped tier, so there is no `.widen()` method.
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl<const SCALE: u32> D1232<SCALE> {
+    /// Demote to the immediate previous tier ([`D924`]) at the same `SCALE`.
+    /// D1232 is the widest shipped tier, so there is no `.widen()` method.
     #[inline]
-    pub fn narrow(self) -> Result<D923<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D924<SCALE>, crate::error::ConvertError> { self.try_into() }
 }
 
 #[cfg(test)]
@@ -2121,13 +2115,13 @@ mod tests {
         assert_eq!(super::D76s2::multiplier(), I256::from_str_radix("100", 10).unwrap());
         assert_eq!(super::D76s2::SCALE, 2);
         assert_eq!(super::D76s2::ZERO.scale(), 2);
-        // SCALE = 76 multiplier is 10^76, well within 256-bit range.
-        let m76 = super::D76s76::multiplier();
+        // SCALE = 75 (new MAX_SCALE) multiplier is 10^75, well within 256-bit range.
+        let m75 = super::D76s75::multiplier();
         assert_eq!(
-            m76,
-            I256::from_str_radix("10000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap()
+            m75,
+            I256::from_str_radix("1000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap()
         );
-        assert_eq!(<super::D76s12 as DecimalArithmetic>::MAX_SCALE, 76);
+        assert_eq!(<super::D76s12 as DecimalArithmetic>::MAX_SCALE, 75);
         // round-trip
         let raw = I256::from_str_radix("123456789012345678901234567890", 10).unwrap();
         assert_eq!(super::D76s12::from_bits(raw).to_bits(), raw);
@@ -2188,11 +2182,11 @@ mod tests {
         // scale 0 prints no fractional part
         let int_only: super::D76<0> = super::D76::<0>::ONE;
         assert_eq!(alloc::format!("{}", int_only), "1");
-        // very large magnitude near the 76-digit ceiling
-        let big = super::D76s76::MAX;
+        // very large magnitude near the 75-digit ceiling (new MAX_SCALE)
+        let big = super::D76s75::MAX;
         let s = alloc::format!("{}", big);
-        assert!(s.starts_with("5.78960446"));
-        assert_eq!(s.len(), "5.".len() + 76);
+        assert!(s.starts_with("57.8960446"));
+        assert_eq!(s.len(), "57.".len() + 75);
     }
 
     #[cfg(any(feature = "d76", feature = "wide"))]
@@ -2319,8 +2313,8 @@ mod tests {
         let narrowed: super::D38s6 = in_range.try_into().unwrap();
         assert_eq!(narrowed.to_bits(), 999i128);
         // cross-width narrowing D76 -> D38 out of range
-        let out_of_range = super::D76s76::MAX;
-        let narrow_fail: Result<super::D38<76>, _> = out_of_range.try_into();
+        let out_of_range = super::D76s75::MAX;
+        let narrow_fail: Result<super::D38<75>, _> = out_of_range.try_into();
         assert!(narrow_fail.is_err());
     }
 
@@ -2370,7 +2364,7 @@ mod tests {
         use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I512;
         type D = super::D153<35>;
-        assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 153);
+        assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 152);
         assert_eq!(D::ZERO.to_bits(), I512::from_str_radix("0", 10).unwrap());
         let one = D::ONE;
         let two = one + one;
@@ -2382,8 +2376,8 @@ mod tests {
         // rescale across the wide range
         let up: super::D153<150> = one.rescale::<150>();
         assert_eq!(up, super::D153::<150>::ONE);
-        // 153-digit ceiling multiplier fits in I512
-        let _ = super::D153s153::multiplier();
+        // 152-digit ceiling multiplier fits in I512 (new MAX_SCALE)
+        let _ = super::D153s152::multiplier();
     }
 
     #[cfg(any(feature = "d307", feature = "wide"))]
@@ -2393,7 +2387,7 @@ mod tests {
         use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I1024;
         type D = super::D307<35>;
-        assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 307);
+        assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 306);
         let one = D::ONE;
         let two = one + one;
         let three = two + one;
@@ -2410,8 +2404,8 @@ mod tests {
             let narrowed: super::D76<35> = widened.try_into().unwrap();
             assert_eq!(narrowed, super::D76::<35>::ONE);
         }
-        // 307-digit ceiling multiplier fits in I1024
-        let _ = super::D307s307::multiplier();
+        // 306-digit ceiling multiplier fits in I1024 (new MAX_SCALE)
+        let _ = super::D307s306::multiplier();
     }
 
     #[test]

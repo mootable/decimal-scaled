@@ -42,7 +42,7 @@ use crate::rounding::RoundingMode;
 /// Emits a `ln_strict_<tier>(raw, mode)` free function for one wide
 /// tier. `$Storage` is the type's raw storage integer; `$core_path` is
 /// the per-tier transcendental core module path (e.g.
-/// `crate::core_type::wide_trig_d56`).
+/// `crate::core_type::wide_trig_d57`).
 macro_rules! decl_ln_kernel {
     ($name:ident, $Storage:ty, $core_path:path, $tier_label:literal) => {
         /// Wide-tier `ln_strict` kernel. See module docs.
@@ -62,12 +62,12 @@ macro_rules! decl_ln_kernel {
     };
 }
 
-#[cfg(any(feature = "d56", feature = "wide"))]
+#[cfg(any(feature = "d57", feature = "wide"))]
 decl_ln_kernel!(
-    ln_strict_d56,
+    ln_strict_d57,
     crate::wide_int::I192,
-    crate::core_type::wide_trig_d56,
-    "D56"
+    crate::core_type::wide_trig_d57,
+    "D57"
 );
 
 #[cfg(any(feature = "d76", feature = "wide"))]
@@ -78,12 +78,12 @@ decl_ln_kernel!(
     "D76"
 );
 
-#[cfg(any(feature = "d114", feature = "wide"))]
+#[cfg(any(feature = "d115", feature = "wide"))]
 decl_ln_kernel!(
-    ln_strict_d114,
+    ln_strict_d115,
     crate::wide_int::I384,
-    crate::core_type::wide_trig_d114,
-    "D114"
+    crate::core_type::wide_trig_d115,
+    "D115"
 );
 
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -110,34 +110,34 @@ decl_ln_kernel!(
     "D307"
 );
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
+#[cfg(any(feature = "d462", feature = "x-wide"))]
 decl_ln_kernel!(
-    ln_strict_d461,
+    ln_strict_d462,
     crate::wide_int::I1536,
-    crate::core_type::wide_trig_d461,
-    "D461"
+    crate::core_type::wide_trig_d462,
+    "D462"
 );
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
+#[cfg(any(feature = "d616", feature = "x-wide"))]
 decl_ln_kernel!(
-    ln_strict_d615,
+    ln_strict_d616,
     crate::wide_int::I2048,
-    crate::core_type::wide_trig_d615,
-    "D615"
+    crate::core_type::wide_trig_d616,
+    "D616"
 );
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
 decl_ln_kernel!(
-    ln_strict_d923,
+    ln_strict_d924,
     crate::wide_int::I3072,
-    crate::core_type::wide_trig_d923,
-    "D923"
+    crate::core_type::wide_trig_d924,
+    "D924"
 );
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
 decl_ln_kernel!(
-    ln_strict_d1231,
+    ln_strict_d1232,
     crate::wide_int::I4096,
-    crate::core_type::wide_trig_d1231,
-    "D1231"
+    crate::core_type::wide_trig_d1232,
+    "D1232"
 );

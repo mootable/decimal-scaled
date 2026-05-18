@@ -69,6 +69,7 @@ fn mul_assign_div_assign() {
 // `*` / `/` operators: panic in debug, wrap in release. The mode argument
 // influences only the rounding step, not the overflow policy.
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to multiply with overflow")]
 fn mul_with_overflow_panics_in_debug() {
@@ -76,6 +77,7 @@ fn mul_with_overflow_panics_in_debug() {
     let _ = a.mul_with(a, RoundingMode::HalfToEven);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to divide with overflow")]
 fn div_with_overflow_panics_in_debug() {
@@ -84,6 +86,7 @@ fn div_with_overflow_panics_in_debug() {
     let _ = a.div_with(D38::<0>::from_int(-1), RoundingMode::HalfToEven);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to multiply with overflow")]
 fn mul_overflow_panics_in_debug() {
@@ -94,6 +97,7 @@ fn mul_overflow_panics_in_debug() {
     let _ = a * a;
 }
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic(expected = "attempt to divide with overflow")]
 fn div_overflow_panics_in_debug() {

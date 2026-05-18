@@ -169,22 +169,22 @@ names its types in the unit users actually reason about. Mapping:
 | `D9<S>`    | `d9!`   | `i32` (32 bits)                  |  9   | ±2.1 × 10⁹    | always available |
 | `D18<S>`   | `d18!`  | `i64` (64 bits)                  | 18   | ±9.2 × 10¹⁸   | always available |
 | `D38<S>`   | `d38!`  | `i128` (128 bits)                | 38   | ±1.7 × 10³⁸   | always available |
-| `D56<S>`   | `d56!`   | `Int192` (192 bits)              | 57   | ±3.1 × 10⁵⁷   | `d56` / `wide`   |
+| `D57<S>`   | `d57!`   | `Int192` (192 bits)              | 57   | ±3.1 × 10⁵⁷   | `d57` / `wide`   |
 | `D76<S>`   | `d76!`   | `Int256` (256 bits)              | 76   | ±5.8 × 10⁷⁶   | `d76` / `wide`   |
-| `D114<S>`  | `d114!`  | `Int384` (384 bits)              | 115  | ±2.0 × 10¹¹⁵  | `d114` / `wide`  |
+| `D115<S>`  | `d115!`  | `Int384` (384 bits)              | 115  | ±2.0 × 10¹¹⁵  | `d115` / `wide`  |
 | `D153<S>`  | `d153!`  | `Int512` (512 bits)              | 153  | ±6.7 × 10¹⁵³  | `d153` / `wide`  |
 | `D230<S>`  | `d230!`  | `Int768` (768 bits)              | 230  | ±7.7 × 10²³⁰  | `d230` / `wide`  |
 | `D307<S>`  | `d307!`  | `Int1024` (1024 bits)            | 307  | ±9.0 × 10³⁰⁷  | `d307` / `wide`  |
-| `D461<S>`  | `d461!`  | `Int1536` (1536 bits)            | 462  | ±1.0 × 10⁴⁶²  | `d461` / `x-wide`|
-| `D615<S>`  | `d615!`  | `Int2048` (2048 bits)            | 616  | ±1.6 × 10⁶¹⁶  | `d615` / `x-wide`|
-| `D923<S>`  | `d923!`  | `Int3072` (3072 bits)            | 924  | ±2.3 × 10⁹²⁴  | `d923` / `xx-wide`|
-| `D1231<S>` | `d1231!` | `Int4096` (4096 bits)            | 1232 | ±2.7 × 10¹²³² | `d1231` / `xx-wide`|
+| `D462<S>`  | `d462!`  | `Int1536` (1536 bits)            | 462  | ±1.0 × 10⁴⁶²  | `d462` / `x-wide`|
+| `D616<S>`  | `d616!`  | `Int2048` (2048 bits)            | 616  | ±1.6 × 10⁶¹⁶  | `d616` / `x-wide`|
+| `D924<S>`  | `d924!`  | `Int3072` (3072 bits)            | 924  | ±2.3 × 10⁹²⁴  | `d924` / `xx-wide`|
+| `D1232<S>` | `d1232!` | `Int4096` (4096 bits)            | 1232 | ±2.7 × 10¹²³² | `d1232` / `xx-wide`|
 
-The half-width tiers (`D56`, `D114`, `D230`, `D461`, `D923`) fill
+The half-width tiers (`D57`, `D115`, `D230`, `D462`, `D924`) fill
 in the storage-cost gap between each pair of power-of-two widths,
 so you only pay for the precision you actually need. The umbrellas:
-`wide` enables D56–D307, `x-wide` adds D461 / D615, `xx-wide` adds
-D923 / D1231. The `d{N}!` constructor macros currently exist for
+`wide` enables D57–D307, `x-wide` adds D462 / D616, `xx-wide` adds
+D924 / D1232. The `d{N}!` constructor macros currently exist for
 the power-of-two tiers only; half-width tiers and the wider tiers
 use `from_int` / `from_str` / `from_bits` directly.
 
@@ -472,8 +472,8 @@ See [`docs/macros.md`](docs/macros.md).
 | `macros` | no | The `d38!` compile-time decimal-literal macro. |
 | `fast` | no | Opt out of strict dispatch: plain `sqrt` / `ln` / etc. forward to the f64 bridge. **Only takes effect when `strict` is NOT enabled** — if both are present, strict wins. To get fast dispatch you have to (a) `default-features = false`, (b) NOT re-enable `strict`, and (c) enable `fast` + `std`. The `*_strict` and `*_fast` named methods stay available regardless. |
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time (HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling). |
-| `d{N}` per tier | no | `d56` / `d76` / `d114` / `d153` / `d230` / `d307` / `d461` / `d615` / `d923` / `d1231` enable individual wide tiers. Each is also bundled into the next umbrella. |
-| `wide` / `x-wide` / `xx-wide` | no | Umbrellas: `wide` = D56–D307; `x-wide` adds D461 + D615; `xx-wide` adds D923 + D1231. |
+| `d{N}` per tier | no | `d57` / `d76` / `d115` / `d153` / `d230` / `d307` / `d462` / `d616` / `d924` / `d1232` enable individual wide tiers. Each is also bundled into the next umbrella. |
+| `wide` / `x-wide` / `xx-wide` | no | Umbrellas: `wide` = D57–D307; `x-wide` adds D462 + D616; `xx-wide` adds D924 + D1232. |
 | `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Ships impls for D9 / D18 / D38. See "Runtime polymorphism" below. |
 | `experimental-floats` | no | Nightly-only `f16` / `f128` entry points on the float bridge. |
 

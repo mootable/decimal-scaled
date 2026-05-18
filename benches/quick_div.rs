@@ -5,7 +5,7 @@
 
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D307, D615, D923, D1231};
+use decimal_scaled::{D307, D616, D924, D1232};
 
 fn bench(c: &mut Criterion) {
     let mut g = c.benchmark_group("quick_div");
@@ -20,22 +20,22 @@ fn bench(c: &mut Criterion) {
 
     }
     {
-        let a = D615::<308>::from_int(2);
-        let b = D615::<308>::from_int(1);
-        g.bench_function("D615<308>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
-        g.bench_function("D615<308>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+        let a = D616::<308>::from_int(2);
+        let b = D616::<308>::from_int(1);
+        g.bench_function("D616<308>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+        g.bench_function("D616<308>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
     }
     {
-        let a = D923::<461>::from_int(2);
-        let b = D923::<461>::from_int(1);
-        g.bench_function("D923<461>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
-        g.bench_function("D923<461>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+        let a = D924::<461>::from_int(2);
+        let b = D924::<461>::from_int(1);
+        g.bench_function("D924<461>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+        g.bench_function("D924<461>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
     }
     {
-        let a = D1231::<616>::from_int(2);
-        let b = D1231::<616>::from_int(1);
-        g.bench_function("D1231<616>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
-        g.bench_function("D1231<616>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
+        let a = D1232::<616>::from_int(2);
+        let b = D1232::<616>::from_int(1);
+        g.bench_function("D1232<616>/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
+        g.bench_function("D1232<616>/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
     }
 
     g.finish();

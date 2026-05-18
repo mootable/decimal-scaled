@@ -2,8 +2,8 @@
 //! every comparable operation.
 //!
 //! The crate ships twelve decimal widths (D9, D18, D38 plus the
-//! wide tier D76/D114/D153/D230/D307 and the x-wide tier
-//! D461/D615/D923/D1231). This bench fans the add / sub / mul /
+//! wide tier D76/D115/D153/D230/D307 and the x-wide tier
+//! D462/D616/D924/D1232). This bench fans the add / sub / mul /
 //! div / rem / neg primitives across every available width and pits
 //! them against the established baselines:
 //!
@@ -78,7 +78,7 @@ fn bench_arithmetic(c: &mut Criterion) {
 
     // Wide tier (256-bit and up, hand-rolled wide integers). Only
     // the powers-of-two D types are exposed publicly so far; the
-    // intermediate widths (D114, D230, D461, D923) are queued.
+    // intermediate widths (D115, D230, D462, D924) are queued.
     six_ops!(g, "D76", D76::<12>::from_int(A as i128), D76::<12>::from_int(B as i128));
     #[cfg(feature = "d153")]
     six_ops!(g, "D153", D153::<12>::from_int(A as i128), D153::<12>::from_int(B as i128));

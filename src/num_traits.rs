@@ -39,8 +39,8 @@
 
 // `from_num` / `to_num` are emitted by
 // `decl_decimal_num_traits_basics!` in `src/macros/num_traits.rs`,
-// so every width (D9 / D18 / D38 / D56 / D76 / D114 / D153 / D230 /
-// D307 / D461 / D615 / D923 / D1231) gets the same surface. Tests
+// so every width (D9 / D18 / D38 / D57 / D76 / D115 / D153 / D230 /
+// D307 / D462 / D616 / D924 / D1232) gets the same surface. Tests
 // below cover the D38 path; the macro emits the same code for the
 // wide widths and `tests/macros_num_traits.rs` covers them.
 

@@ -56,10 +56,10 @@
 //!
 //! The `dyn` feature ships impls for the narrow-tier widths only —
 //! [`D9`], [`D18`], [`D38`]. The wide and extra-wide tiers
-//! (D56/D76/D114/D153/D230/D307/D461/D615/D923/D1231) are deliberately
+//! (D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232) are deliberately
 //! excluded: their per-scale monomorphisation footprint
 //! (`MAX_SCALE + 1` instantiations per op per width, up to 1233 for
-//! `D1231`) would dominate compile time, and the dyn façade is the
+//! `D1232`) would dominate compile time, and the dyn façade is the
 //! wrong tool for the compute-bound code those tiers serve. Reach for
 //! the typed [`crate::Decimal`] surface there. The [`DecimalWidth`] and
 //! [`RawStorage`] enums still carry variants for the wider tiers so
@@ -100,15 +100,15 @@ pub enum DecimalWidth {
     D18,
     /// 128-bit storage; corresponds to [`crate::D38`].
     D38,
-    /// 192-bit storage; corresponds to [`crate::D56`]. Gated by `d56` / `wide`.
-    #[cfg(any(feature = "d56", feature = "wide"))]
-    D56,
+    /// 192-bit storage; corresponds to [`crate::D57`]. Gated by `d57` / `wide`.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    D57,
     /// 256-bit storage; corresponds to [`crate::D76`]. Gated by `d76` / `wide`.
     #[cfg(any(feature = "d76", feature = "wide"))]
     D76,
-    /// 384-bit storage; corresponds to [`crate::D114`]. Gated by `d114` / `wide`.
-    #[cfg(any(feature = "d114", feature = "wide"))]
-    D114,
+    /// 384-bit storage; corresponds to [`crate::D115`]. Gated by `d115` / `wide`.
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    D115,
     /// 512-bit storage; corresponds to [`crate::D153`]. Gated by `d153` / `wide`.
     #[cfg(any(feature = "d153", feature = "wide"))]
     D153,
@@ -118,18 +118,18 @@ pub enum DecimalWidth {
     /// 1024-bit storage; corresponds to [`crate::D307`]. Gated by `d307` / `wide` / `x-wide`.
     #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
     D307,
-    /// 1536-bit storage; corresponds to [`crate::D461`]. Gated by `d461` / `x-wide`.
-    #[cfg(any(feature = "d461", feature = "x-wide"))]
-    D461,
-    /// 2048-bit storage; corresponds to [`crate::D615`]. Gated by `d615` / `x-wide`.
-    #[cfg(any(feature = "d615", feature = "x-wide"))]
-    D615,
-    /// 3072-bit storage; corresponds to [`crate::D923`]. Gated by `d923` / `xx-wide`.
-    #[cfg(any(feature = "d923", feature = "xx-wide"))]
-    D923,
-    /// 4096-bit storage; corresponds to [`crate::D1231`]. Gated by `d1231` / `xx-wide`.
-    #[cfg(any(feature = "d1231", feature = "xx-wide"))]
-    D1231,
+    /// 1536-bit storage; corresponds to [`crate::D462`]. Gated by `d462` / `x-wide`.
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    D462,
+    /// 2048-bit storage; corresponds to [`crate::D616`]. Gated by `d616` / `x-wide`.
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    D616,
+    /// 3072-bit storage; corresponds to [`crate::D924`]. Gated by `d924` / `xx-wide`.
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    D924,
+    /// 4096-bit storage; corresponds to [`crate::D1232`]. Gated by `d1232` / `xx-wide`.
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    D1232,
 }
 
 /// Tagged-union view of the raw storage integer behind a [`DynDecimal`]
@@ -147,14 +147,14 @@ pub enum RawStorage {
     I64(i64),
     /// 128-bit signed integer — D38.
     I128(i128),
-    /// 192-bit signed integer — D56. Gated by `d56` / `wide`.
-    #[cfg(any(feature = "d56", feature = "wide"))]
+    /// 192-bit signed integer — D57. Gated by `d57` / `wide`.
+    #[cfg(any(feature = "d57", feature = "wide"))]
     Int192(crate::wide_int::Int192),
     /// 256-bit signed integer — D76. Gated by `d76` / `wide`.
     #[cfg(any(feature = "d76", feature = "wide"))]
     Int256(crate::wide_int::Int256),
-    /// 384-bit signed integer — D114. Gated by `d114` / `wide`.
-    #[cfg(any(feature = "d114", feature = "wide"))]
+    /// 384-bit signed integer — D115. Gated by `d115` / `wide`.
+    #[cfg(any(feature = "d115", feature = "wide"))]
     Int384(crate::wide_int::Int384),
     /// 512-bit signed integer — D153. Gated by `d153` / `wide`.
     #[cfg(any(feature = "d153", feature = "wide"))]
@@ -165,17 +165,17 @@ pub enum RawStorage {
     /// 1024-bit signed integer — D307. Gated by `d307` / `wide` / `x-wide`.
     #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
     Int1024(crate::wide_int::Int1024),
-    /// 1536-bit signed integer — D461. Gated by `d461` / `x-wide`.
-    #[cfg(any(feature = "d461", feature = "x-wide"))]
+    /// 1536-bit signed integer — D462. Gated by `d462` / `x-wide`.
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
     Int1536(crate::wide_int::Int1536),
-    /// 2048-bit signed integer — D615. Gated by `d615` / `x-wide`.
-    #[cfg(any(feature = "d615", feature = "x-wide"))]
+    /// 2048-bit signed integer — D616. Gated by `d616` / `x-wide`.
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
     Int2048(crate::wide_int::Int2048),
-    /// 3072-bit signed integer — D923. Gated by `d923` / `xx-wide`.
-    #[cfg(any(feature = "d923", feature = "xx-wide"))]
+    /// 3072-bit signed integer — D924. Gated by `d924` / `xx-wide`.
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
     Int3072(crate::wide_int::Int3072),
-    /// 4096-bit signed integer — D1231. Gated by `d1231` / `xx-wide`.
-    #[cfg(any(feature = "d1231", feature = "xx-wide"))]
+    /// 4096-bit signed integer — D1232. Gated by `d1232` / `xx-wide`.
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
     Int4096(crate::wide_int::Int4096),
 }
 
