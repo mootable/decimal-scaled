@@ -519,11 +519,20 @@ impl<const SCALE: u32> D38<SCALE> {
 /// Scaled fixed-point decimal with 32-bit storage. See [`D38`] for the
 /// shape documentation; D9 has the same surface scaled to `i32` and
 /// `MAX_SCALE = 9`.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D9<const SCALE: u32>(pub i32);
+///
+/// Now a type alias of the unified [`crate::D`] generic decimal type:
+/// `D9<S>` is `D<i32, S>`. Both spellings are interchangeable. The
+/// `#[repr(transparent)]` layout over `i32` is preserved through the
+/// alias because the underlying [`crate::D`] is itself
+/// `#[repr(transparent)]` over its storage parameter.
+pub type D9<const SCALE: u32> = crate::D<i32, SCALE>;
 
-impl<const SCALE: u32> Default for D9<SCALE> {
+/// `Default` returns `ZERO`, matching `i32::default() == 0`.
+///
+/// Implemented on the underlying `crate::D<i32, SCALE>` because
+/// `D9<SCALE>` is now an alias of that type. `ZERO` is emitted by
+/// the basics macro further down in this file.
+impl<const SCALE: u32> Default for crate::D<i32, SCALE> {
     #[inline]
     fn default() -> Self {
         Self::ZERO
@@ -583,11 +592,20 @@ pub type D9s9 = D9<9>;
 /// Scaled fixed-point decimal with 64-bit storage. See [`D38`] for the
 /// shape documentation; D18 has the same surface scaled to `i64` and
 /// `MAX_SCALE = 18`.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D18<const SCALE: u32>(pub i64);
+///
+/// Now a type alias of the unified [`crate::D`] generic decimal type:
+/// `D18<S>` is `D<i64, S>`. Both spellings are interchangeable. The
+/// `#[repr(transparent)]` layout over `i64` is preserved through the
+/// alias because the underlying [`crate::D`] is itself
+/// `#[repr(transparent)]` over its storage parameter.
+pub type D18<const SCALE: u32> = crate::D<i64, SCALE>;
 
-impl<const SCALE: u32> Default for D18<SCALE> {
+/// `Default` returns `ZERO`, matching `i64::default() == 0`.
+///
+/// Implemented on the underlying `crate::D<i64, SCALE>` because
+/// `D18<SCALE>` is now an alias of that type. `ZERO` is emitted by
+/// the basics macro further down in this file.
+impl<const SCALE: u32> Default for crate::D<i64, SCALE> {
     #[inline]
     fn default() -> Self {
         Self::ZERO

@@ -284,21 +284,21 @@ fn to_int_truncates() {
 
 #[test]
 fn d9_cross_scale_add() {
-    let a: Box<dyn DynDecimal> = Box::new(D9::<2>(150));     // 1.50
-    let b: Box<dyn DynDecimal> = Box::new(D9::<4>(7));       // 0.0007
+    let a: Box<dyn DynDecimal> = Box::new(D9::<2>::from_bits(150));     // 1.50
+    let b: Box<dyn DynDecimal> = Box::new(D9::<4>::from_bits(7));       // 0.0007
     let sum = a.add(&*b).unwrap();
     assert_eq!(sum.scale_dyn(), 4);
-    assert_eq!(*sum.as_any().downcast_ref::<D9<4>>().unwrap(), D9::<4>(15_007));
+    assert_eq!(*sum.as_any().downcast_ref::<D9<4>>().unwrap(), D9::<4>::from_bits(15_007));
 }
 
 #[test]
 fn d18_cross_scale_mul() {
     // 1.5 (D18<1>) * 2.00 (D18<2>) -> 3.00 at scale 2.
-    let a: Box<dyn DynDecimal> = Box::new(D18::<1>(15));
-    let b: Box<dyn DynDecimal> = Box::new(D18::<2>(200));
+    let a: Box<dyn DynDecimal> = Box::new(D18::<1>::from_bits(15));
+    let b: Box<dyn DynDecimal> = Box::new(D18::<2>::from_bits(200));
     let prod = a.mul(&*b).unwrap();
     assert_eq!(prod.scale_dyn(), 2);
-    assert_eq!(*prod.as_any().downcast_ref::<D18<2>>().unwrap(), D18::<2>(300));
+    assert_eq!(*prod.as_any().downcast_ref::<D18<2>>().unwrap(), D18::<2>::from_bits(300));
 }
 
 // ── Storing mixed values in a single container ────────────────────────
