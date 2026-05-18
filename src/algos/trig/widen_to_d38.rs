@@ -10,14 +10,14 @@ macro_rules! delegate_via_d38 {
         pub(crate) fn $d9_name<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<SCALE> {
             let widened: D38<SCALE> = v.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(widened.0, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
         #[inline]
         #[must_use]
         pub(crate) fn $d18_name<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
             let widened: D38<SCALE> = v.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(widened.0, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -33,7 +33,7 @@ macro_rules! delegate_via_d38_with {
         ) -> D9<SCALE> {
             let widened: D38<SCALE> = v.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(widened.0, working_digits, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
         #[inline]
         #[must_use]
@@ -44,7 +44,7 @@ macro_rules! delegate_via_d38_with {
         ) -> D18<SCALE> {
             let widened: D38<SCALE> = v.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(widened.0, working_digits, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -66,7 +66,7 @@ macro_rules! delegate_via_d38_binary {
             let y_wide: D38<SCALE> = y.into();
             let x_wide: D38<SCALE> = x.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
         #[inline]
         #[must_use]
@@ -78,7 +78,7 @@ macro_rules! delegate_via_d38_binary {
             let y_wide: D38<SCALE> = y.into();
             let x_wide: D38<SCALE> = x.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -96,7 +96,7 @@ macro_rules! delegate_via_d38_binary_with {
             let y_wide: D38<SCALE> = y.into();
             let x_wide: D38<SCALE> = x.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, working_digits, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
         #[inline]
         #[must_use]
@@ -109,7 +109,7 @@ macro_rules! delegate_via_d38_binary_with {
             let y_wide: D38<SCALE> = y.into();
             let x_wide: D38<SCALE> = x.into();
             let raw = super::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, working_digits, mode);
-            D38::<SCALE>(raw).try_into().expect($err)
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }

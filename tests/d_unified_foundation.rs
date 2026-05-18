@@ -1,13 +1,17 @@
 //! Sanity tests for the unified `D<S, SCALE>` foundation.
 //!
-//! At this stage `D<S, SCALE>` only carries the struct definition +
-//! hand-rolled `Clone` / `Copy` / `Debug` / `PartialEq` / `Eq` /
+//! At this stage `D<S, SCALE>` carries the struct definition +
+//! hand-rolled `Clone` / `Copy` / `PartialEq` / `Eq` /
 //! `PartialOrd` / `Ord` / `Hash` impls (no arithmetic, no constants,
 //! no method surface yet — those land as per-storage impls in
 //! follow-up commits during width migration). These tests exist so
 //! the foundation has real coverage before migration starts loading
 //! it down with per-storage `impl<const SCALE: u32> D<…, SCALE>`
 //! blocks.
+//!
+//! `Debug` is provided per-storage by the width-specific display
+//! macro (`decl_decimal_display!`), not as a blanket on `D<S, SCALE>`
+//! — so it is exercised by the per-width Debug tests, not here.
 
 use core::cmp::Ordering;
 use std::collections::hash_map::DefaultHasher;
@@ -60,13 +64,11 @@ fn hashable_consistent_with_eq() {
     assert_eq!(ha.finish(), hb.finish());
 }
 
-#[test]
-fn debug_includes_scale_and_raw() {
-    let d: D<i32, 7> = D(42);
-    let s = format!("{:?}", d);
-    assert!(s.contains("7"), "Debug output should reference SCALE: got {s}");
-    assert!(s.contains("42"), "Debug output should reference raw value: got {s}");
-}
+// `debug_includes_scale_and_raw` removed: `Debug` is no longer a
+// blanket impl on `D<S, SCALE>` (it's emitted per-storage by
+// `decl_decimal_display!` so the formatted form is the canonical
+// decimal string, not the raw integer). Per-width Debug coverage
+// lives in the width-specific display tests.
 
 #[test]
 fn repr_transparent_size_matches_storage() {

@@ -18,11 +18,17 @@
 //! round-trips are exact and the types are safe to embed in C-ABI
 //! plugin payloads when the underlying integer matches a primitive.
 
-/// Scaled fixed-point decimal with 128-bit storage.
+/// Scaled fixed-point decimal with 128-bit storage. Now a type alias
+/// of the unified [`crate::D`] generic decimal type: `D38<S>` is
+/// `D<i128, S>`. Both spellings are interchangeable.
 ///
 /// `SCALE` is the base-10 exponent. A logical value `v` is stored as
 /// `v * 10^SCALE` in the underlying `i128`. For example, with `SCALE = 12`
 /// the number `1.5` is stored as `i128(1_500_000_000_000)`.
+///
+/// The `#[repr(transparent)]` layout over `i128` is preserved through
+/// the alias because the underlying [`crate::D`] is itself
+/// `#[repr(transparent)]` over its storage parameter.
 ///
 /// # Precision
 ///
@@ -46,18 +52,21 @@
 /// as trivial type aliases without duplicating any method implementations.
 /// Mixed-scale arithmetic is deliberately not provided; callers convert
 /// explicitly.
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D38<const SCALE: u32>(pub i128);
+pub type D38<const SCALE: u32> = crate::D<i128, SCALE>;
 
-// Manual `Debug` is implemented in `display.rs` and renders via `Display`
-// so the canonical decimal string is shown rather than the raw i128.
+// Manual `Debug` is implemented in `display.rs` (via the
+// `decl_decimal_display!` macro) and renders via `Display` so the
+// canonical decimal string is shown rather than the raw i128.
 
 /// `Default` returns `ZERO`, matching `i128::default() == 0`.
 ///
 /// This lets `#[derive(Default)]` work correctly on structs that contain
 /// `D38<S>` fields.
-impl<const SCALE: u32> Default for D38<SCALE> {
+///
+/// Implemented on the underlying `crate::D<i128, SCALE>` because
+/// `D38<SCALE>` is now an alias of that type. `ZERO` is emitted by
+/// the basics macro further down in this file.
+impl<const SCALE: u32> Default for crate::D<i128, SCALE> {
     #[inline]
     fn default() -> Self {
         Self::ZERO

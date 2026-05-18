@@ -56,7 +56,7 @@ macro_rules! decl_decimal_rescale {
                 mode: $crate::rounding::RoundingMode,
             ) -> $Type<TARGET_SCALE> {
                 if TARGET_SCALE == SCALE {
-                    return $Type::<TARGET_SCALE>(self.0);
+                    return $Type::<TARGET_SCALE>::from_bits(self.0);
                 }
                 let ten = <$Storage>::from_str_radix("10", 10)
                     .expect("wide decimal: invalid base-10 literal");
@@ -71,7 +71,7 @@ macro_rules! decl_decimal_rescale {
                         Some(v) => v,
                         None => panic!(concat!(stringify!($Type), "::rescale: scale-up overflow")),
                     };
-                    return $Type::<TARGET_SCALE>(result);
+                    return $Type::<TARGET_SCALE>::from_bits(result);
                 }
                 let shift = SCALE - TARGET_SCALE;
                 let divisor = ten.pow(shift);
@@ -79,7 +79,7 @@ macro_rules! decl_decimal_rescale {
                 let quotient = raw / divisor;
                 let remainder = raw % divisor;
                 if remainder == zero {
-                    return $Type::<TARGET_SCALE>(quotient);
+                    return $Type::<TARGET_SCALE>::from_bits(quotient);
                 }
                 let abs_rem = remainder.unsigned_abs();
                 let half = divisor.unsigned_abs() >> 1;
@@ -122,7 +122,7 @@ macro_rules! decl_decimal_rescale {
                         if non_negative { quotient + one } else { quotient }
                     }
                 };
-                $Type::<TARGET_SCALE>(bits)
+                $Type::<TARGET_SCALE>::from_bits(bits)
             }
         }
     };
@@ -170,7 +170,7 @@ macro_rules! decl_decimal_rescale {
                 mode: $crate::rounding::RoundingMode,
             ) -> $Type<TARGET_SCALE> {
                 if TARGET_SCALE == SCALE {
-                    return $Type::<TARGET_SCALE>(self.0);
+                    return $Type::<TARGET_SCALE>::from_bits(self.0);
                 }
                 if TARGET_SCALE > SCALE {
                     let shift = TARGET_SCALE - SCALE;
@@ -179,7 +179,7 @@ macro_rules! decl_decimal_rescale {
                         Some(v) => v,
                         None => panic!(concat!(stringify!($Type), "::rescale: scale-up overflow")),
                     };
-                    return $Type::<TARGET_SCALE>(result);
+                    return $Type::<TARGET_SCALE>::from_bits(result);
                 }
                 let shift = SCALE - TARGET_SCALE;
                 let divisor = (10 as $Storage).pow(shift);
@@ -187,7 +187,7 @@ macro_rules! decl_decimal_rescale {
                 let quotient = raw / divisor;
                 let remainder = raw % divisor;
                 if remainder == 0 {
-                    return $Type::<TARGET_SCALE>(quotient);
+                    return $Type::<TARGET_SCALE>::from_bits(quotient);
                 }
                 let abs_rem = remainder.unsigned_abs();
                 let half = (divisor / 2) as _;
@@ -229,7 +229,7 @@ macro_rules! decl_decimal_rescale {
                         if raw >= 0 { quotient + 1 } else { quotient }
                     }
                 };
-                $Type::<TARGET_SCALE>(bits)
+                $Type::<TARGET_SCALE>::from_bits(bits)
             }
         }
     };

@@ -13,7 +13,7 @@ use crate::rounding::RoundingMode;
 pub(crate) fn ln_strict_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("ln_strict: result out of range")
 }
@@ -28,7 +28,7 @@ pub(crate) fn ln_with_d9<const SCALE: u32>(
 ) -> D9<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("ln_with: result out of range")
 }
@@ -39,7 +39,7 @@ pub(crate) fn ln_with_d9<const SCALE: u32>(
 pub(crate) fn ln_strict_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("ln_strict: result out of range")
 }
@@ -54,7 +54,7 @@ pub(crate) fn ln_with_d18<const SCALE: u32>(
 ) -> D18<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("ln_with: result out of range")
 }

@@ -13,7 +13,7 @@ use crate::rounding::RoundingMode;
 pub(crate) fn cbrt_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<SCALE> {
     let widened: D38<SCALE> = v.into();
     let cbrt_d38 = super::mg_divide_d38::cbrt(widened.0, SCALE, mode);
-    D38::<SCALE>(cbrt_d38)
+    D38::<SCALE>::from_bits(cbrt_d38)
         .try_into()
         .expect("widen_to_d38::cbrt_d9: result out of range")
 }
@@ -24,7 +24,7 @@ pub(crate) fn cbrt_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<
 pub(crate) fn cbrt_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
     let widened: D38<SCALE> = v.into();
     let cbrt_d38 = super::mg_divide_d38::cbrt(widened.0, SCALE, mode);
-    D38::<SCALE>(cbrt_d38)
+    D38::<SCALE>::from_bits(cbrt_d38)
         .try_into()
         .expect("widen_to_d38::cbrt_d18: result out of range")
 }

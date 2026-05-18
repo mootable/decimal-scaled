@@ -20,7 +20,7 @@ pub(crate) fn powf_strict_d9<const SCALE: u32>(
     let base_w: D38<SCALE> = base.into();
     let exp_w: D38<SCALE> = exp.into();
     let raw = super::fixed_d38::powf_strict::<SCALE>(base_w.0, exp_w.0, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("powf_strict: result out of range")
 }
@@ -37,7 +37,7 @@ pub(crate) fn powf_with_d9<const SCALE: u32>(
     let base_w: D38<SCALE> = base.into();
     let exp_w: D38<SCALE> = exp.into();
     let raw = super::fixed_d38::powf_with::<SCALE>(base_w.0, exp_w.0, working_digits, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("powf_with: result out of range")
 }
@@ -53,7 +53,7 @@ pub(crate) fn powf_strict_d18<const SCALE: u32>(
     let base_w: D38<SCALE> = base.into();
     let exp_w: D38<SCALE> = exp.into();
     let raw = super::fixed_d38::powf_strict::<SCALE>(base_w.0, exp_w.0, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("powf_strict: result out of range")
 }
@@ -70,7 +70,7 @@ pub(crate) fn powf_with_d18<const SCALE: u32>(
     let base_w: D38<SCALE> = base.into();
     let exp_w: D38<SCALE> = exp.into();
     let raw = super::fixed_d38::powf_with::<SCALE>(base_w.0, exp_w.0, working_digits, mode);
-    D38::<SCALE>(raw)
+    D38::<SCALE>::from_bits(raw)
         .try_into()
         .expect("powf_with: result out of range")
 }

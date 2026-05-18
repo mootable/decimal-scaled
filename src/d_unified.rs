@@ -26,6 +26,12 @@
 //! (`Clone` / `Copy` / `Default` derivation patterns that need
 //! tighter bounds than the derive macro provides).
 //!
+//! `Debug` is deliberately NOT a blanket impl on `D<S, SCALE>`: it is
+//! emitted per-width by `decl_decimal_display!` so the output is the
+//! canonical decimal string rather than the raw integer. A blanket
+//! `Debug` would collide with the macro-emitted impls once per-width
+//! types alias `D<…, SCALE>`.
+//!
 //! # `SCALE` parameterisation
 //!
 //! `SCALE` is the base-10 exponent: the logical value of
@@ -59,11 +65,12 @@ impl<S: Clone, const SCALE: u32> Clone for D<S, SCALE> {
 
 impl<S: Copy, const SCALE: u32> Copy for D<S, SCALE> {}
 
-impl<S: core::fmt::Debug, const SCALE: u32> core::fmt::Debug for D<S, SCALE> {
-    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
-        write!(f, "D<_,{}>({:?})", SCALE, self.0)
-    }
-}
+// `Debug` is intentionally NOT provided here as a blanket impl. Each
+// concrete storage's `Debug` impl is emitted by the per-width display
+// macro (`decl_decimal_display!`) so the output is the canonical
+// decimal string rather than the raw integer. A blanket impl on
+// `D<S, SCALE>` would collide with those macro-emitted impls once
+// the per-width types are aliases of `D<…, SCALE>`.
 
 impl<S: PartialEq, const SCALE: u32> PartialEq for D<S, SCALE> {
     #[inline]
