@@ -24,5 +24,7 @@ pub(crate) mod borrow_d56;
 pub(crate) mod fixed_d38;
 #[cfg(any(feature = "d56", feature = "wide"))]
 pub(crate) mod lookup_d56_s44_57_atan;
+#[cfg(any(feature = "d56", feature = "wide"))]
+pub(crate) mod lookup_d56_s44_57_sincos;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;

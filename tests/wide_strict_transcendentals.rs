@@ -643,3 +643,87 @@ fn d56_s44_atan_small_arg_matches_d76_baseline() {
         "D56<44>::atan(1/3) bespoke kernel does not match D76<44> narrowed reference",
     );
 }
+
+// ─── Bespoke D56<44..=57> sin/cos kernel cross-witness ─────────────────
+//
+// `sin_strict` / `cos_strict` at `SCALE ∈ 44..=57` now route through
+// `algos::trig::lookup_d56_s44_57_sincos` instead of `wide_kernel::
+// sin_strict_d56` / `cos_strict_d56`. The bespoke kernel uses a
+// shared π/2-then-π/(4M) range reduction with M = 512, so sin and
+// cos share one table and exercise the same code path. Cross-witness
+// against the D76 wide kernel (which is unaffected by this change)
+// at two representative scales.
+
+#[test]
+fn d56_s50_sin_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_50 = D56<50>;
+    type D76_50 = D76<50>;
+
+    // sin(2) ≈ 0.909. k = round(2 / (π/2)) = 1, so the quadrant
+    // permutation picks the cos(r) branch — exercises the k ≠ 0 path.
+    let n_56 = D56_50::from_int(2);
+    let n_76: D76_50 = n_56.into();
+
+    let r_56 = n_56.sin_strict();
+    let r_76 = n_76.sin_strict();
+
+    let r_76_as_56: D56_50 = r_76.try_into().expect("sin(2) fits D56<50>");
+    assert_eq!(
+        r_56, r_76_as_56,
+        "D56<50>::sin(2) bespoke kernel does not match D76<50> narrowed reference",
+    );
+}
+
+#[test]
+fn d56_s50_cos_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_50 = D56<50>;
+    type D76_50 = D76<50>;
+
+    // cos(2) ≈ −0.416. Same quadrant as sin(2) — sin and cos share
+    // the reduction table, so this exercises the cos selector arm.
+    let n_56 = D56_50::from_int(2);
+    let n_76: D76_50 = n_56.into();
+
+    let r_56 = n_56.cos_strict();
+    let r_76 = n_76.cos_strict();
+
+    let r_76_as_56: D56_50 = r_76.try_into().expect("cos(2) fits D56<50>");
+    assert_eq!(
+        r_56, r_76_as_56,
+        "D56<50>::cos(2) bespoke kernel does not match D76<50> narrowed reference",
+    );
+}
+
+// SCALE = 44 — at the low end of the kernel range. Small argument
+// (1/3 rad) keeps k = 0 so the quadrant path stays trivial; this
+// stresses the j-quantisation and the Taylor residual instead.
+#[test]
+fn d56_s44_sin_cos_small_arg_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_44 = D56<44>;
+    type D76_44 = D76<44>;
+
+    let one_third_56 = D56_44::from_int(1) / D56_44::from_int(3);
+    let one_third_76: D76_44 = one_third_56.into();
+
+    let sin_56 = one_third_56.sin_strict();
+    let sin_76 = one_third_76.sin_strict();
+    let sin_76_as_56: D56_44 = sin_76.try_into().expect("sin(1/3) fits D56<44>");
+    assert_eq!(
+        sin_56, sin_76_as_56,
+        "D56<44>::sin(1/3) bespoke kernel does not match D76<44> narrowed reference",
+    );
+
+    let cos_56 = one_third_56.cos_strict();
+    let cos_76 = one_third_76.cos_strict();
+    let cos_76_as_56: D56_44 = cos_76.try_into().expect("cos(1/3) fits D56<44>");
+    assert_eq!(
+        cos_56, cos_76_as_56,
+        "D56<44>::cos(1/3) bespoke kernel does not match D76<44> narrowed reference",
+    );
+}

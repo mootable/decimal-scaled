@@ -205,18 +205,30 @@ macro_rules! impl_wide_trig {
 impl<const SCALE: u32> TrigPolicy for crate::core_type::D56<SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 44..=57) {
+            return Self(trig::lookup_d56_s44_57_sincos::sin_strict::<SCALE>(self.0, mode));
+        }
         Self(trig::wide_kernel::sin_strict_d56(self.0, mode, SCALE))
     }
     #[inline]
     fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 44..=57) {
+            return Self(trig::lookup_d56_s44_57_sincos::sin_strict::<SCALE>(self.0, mode));
+        }
         Self(trig::wide_kernel::sin_strict_d56(self.0, mode, SCALE))
     }
     #[inline]
     fn cos_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 44..=57) {
+            return Self(trig::lookup_d56_s44_57_sincos::cos_strict::<SCALE>(self.0, mode));
+        }
         Self(trig::wide_kernel::cos_strict_d56(self.0, mode, SCALE))
     }
     #[inline]
     fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 44..=57) {
+            return Self(trig::lookup_d56_s44_57_sincos::cos_strict::<SCALE>(self.0, mode));
+        }
         Self(trig::wide_kernel::cos_strict_d56(self.0, mode, SCALE))
     }
     #[inline]
