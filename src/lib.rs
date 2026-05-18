@@ -184,6 +184,7 @@ extern crate alloc;
 #[doc(hidden)]
 pub use ::tracing;
 
+mod algos;
 mod arithmetic;
 #[cfg(feature = "bench-alt")]
 mod bench_alt;
@@ -241,6 +242,7 @@ mod d_w128_kernels;
 // `decl_wide_int!` instantiations.
 mod wide_int;
 mod overflow_variants;
+mod policy;
 mod powers_strict;
 mod powers_fast;
 

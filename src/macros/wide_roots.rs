@@ -75,32 +75,14 @@ macro_rules! decl_wide_roots {
             /// `D38::sqrt_strict_with` doc for the per-mode contract:
             /// ties are impossible for an integer radicand, so the
             /// three half-modes coincide.
+            ///
+            /// Body delegates to [`$crate::policy::sqrt::SqrtPolicy::sqrt_impl`],
+            /// which dispatches to the kernel registered for this
+            /// `(width, SCALE)` cell in `crate::policy::sqrt`.
             #[inline]
             #[must_use]
             pub fn sqrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
-                use $crate::rounding::RoundingMode;
-                let raw = self.to_bits();
-                let zero_s = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= zero_s {
-                    return Self::ZERO;
-                }
-                let zero = $crate::macros::wide_roots::wide_lit!($SqrtWide, "0");
-                let one = $crate::macros::wide_roots::wide_lit!($SqrtWide, "1");
-                let ten = $crate::macros::wide_roots::wide_lit!($SqrtWide, "10");
-                let n: $SqrtWide = raw.resize::<$SqrtWide>() * ten.pow(SCALE);
-                let q = n.isqrt();
-                let diff = n - q * q;
-                let halfway_round_up = diff > q;
-                let diff_nonzero = diff != zero;
-                let bump = match mode {
-                    RoundingMode::HalfToEven
-                    | RoundingMode::HalfAwayFromZero
-                    | RoundingMode::HalfTowardZero => halfway_round_up,
-                    RoundingMode::Trunc | RoundingMode::Floor => false,
-                    RoundingMode::Ceiling => diff_nonzero,
-                };
-                let q = if bump { q + one } else { q };
-                Self::from_bits(q.resize::<$Storage>())
+                <Self as $crate::policy::sqrt::SqrtPolicy>::sqrt_impl(self, mode)
             }
 
             /// Correctly-rounded cube root.
