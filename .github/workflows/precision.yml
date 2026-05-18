@@ -1,4 +1,4 @@
-name: "\U0001F6E1 precision (0.5 ULP gate)"
+name: "\U0001F4CF precision (0.5 ULP gate)"
 
 # 0.5 ULP correctness gate. NON-OVERRIDABLE — a failed precision
 # check blocks merge unconditionally. The crate's headline contract
