@@ -11,7 +11,7 @@
 //! lossy, in which case the relevant rounding contract is asserted.
 
 use decimal_scaled::{
-    D38, D38s0, D38s12, D38s2, D38s38, D38s9, D9s0, D9s2, D9s4, D9s9, D18s0, D18s18,
+    D38, D38s0, D38s12, D38s2, D38s37, D38s9, D9s0, D9s2, D9s4, D9s8, D18s0, D18s17,
     D18s6, D18s9, Decimal, RoundingMode,
 };
 use decimal_scaled::DecimalArithmetic;
@@ -27,32 +27,34 @@ fn zero_one_max_min_storage_patterns() {
     assert_eq!(D38s0::ZERO.to_bits(), 0);
     assert_eq!(D38s0::ONE.to_bits(), 1);
     assert_eq!(D38s12::ONE.to_bits(), 1_000_000_000_000);
-    assert_eq!(D38s38::ONE.to_bits(), 10_i128.pow(38));
+    assert_eq!(D38s37::ONE.to_bits(), 10_i128.pow(37));
     assert_eq!(D38s12::MAX.to_bits(), i128::MAX);
     assert_eq!(D38s12::MIN.to_bits(), i128::MIN);
 
     assert_eq!(D9s0::ONE.to_bits(), 1);
-    assert_eq!(D9s9::ONE.to_bits(), 10_i32.pow(9));
+    assert_eq!(D9s8::ONE.to_bits(), 10_i32.pow(8));
     assert_eq!(D9s0::MAX.to_bits(), i32::MAX);
     assert_eq!(D9s0::MIN.to_bits(), i32::MIN);
 
-    assert_eq!(D18s18::ONE.to_bits(), 10_i64.pow(18));
+    assert_eq!(D18s17::ONE.to_bits(), 10_i64.pow(17));
     assert_eq!(D18s0::MAX.to_bits(), i64::MAX);
 }
 
 #[test]
 fn multiplier_at_scale_extremes() {
     assert_eq!(D38s0::multiplier(), 1);
-    assert_eq!(D38s38::multiplier(), 10_i128.pow(38));
-    assert_eq!(D9s9::multiplier(), 10_i32.pow(9));
-    assert_eq!(D18s18::multiplier(), 10_i64.pow(18));
+    assert_eq!(D38s37::multiplier(), 10_i128.pow(37));
+    assert_eq!(D9s8::multiplier(), 10_i32.pow(8));
+    assert_eq!(D18s17::multiplier(), 10_i64.pow(17));
 }
 
 #[test]
 fn max_scale_per_width() {
-    assert_eq!(<D9s0 as DecimalArithmetic>::MAX_SCALE, 9);
-    assert_eq!(<D18s0 as DecimalArithmetic>::MAX_SCALE, 18);
-    assert_eq!(<D38s0 as DecimalArithmetic>::MAX_SCALE, 38);
+    // v0.4.0 cap: MAX_SCALE = name - 1 (guarantees at least one integer
+    // digit at every legal SCALE).
+    assert_eq!(<D9s0 as DecimalArithmetic>::MAX_SCALE, 8);
+    assert_eq!(<D18s0 as DecimalArithmetic>::MAX_SCALE, 17);
+    assert_eq!(<D38s0 as DecimalArithmetic>::MAX_SCALE, 37);
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -106,6 +108,7 @@ fn checked_mul_overflow_at_max() {
     assert_eq!(D38s12::MIN.saturating_mul(two), D38s12::MIN);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic]
 fn add_overflow_panics_in_debug() {
@@ -125,11 +128,12 @@ fn div_by_zero_operator_panics() {
 
 #[test]
 fn rescale_up_is_lossless_to_max_scale() {
-    // 1 at scale 0 -> scale 38 is exactly 10^38 (which fits i128).
-    // A larger integer would overflow when scaled up by 10^38.
+    // 1 at scale 0 -> scale 37 (new MAX_SCALE) is exactly 10^37
+    // (which fits i128). A larger integer would overflow when scaled
+    // up by 10^37.
     let v = D38s0::from_bits(1);
-    let up: D38<38> = v.rescale::<38>();
-    assert_eq!(up.to_bits(), 10_i128.pow(38));
+    let up: D38<37> = v.rescale::<37>();
+    assert_eq!(up.to_bits(), 10_i128.pow(37));
 }
 
 #[test]
@@ -215,6 +219,7 @@ fn signum_abs_at_extremes() {
     assert_eq!(D38s12::MAX.abs(), D38s12::MAX);
 }
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic]
 fn abs_of_min_panics_in_debug() {
@@ -304,10 +309,10 @@ fn additive_and_multiplicative_identities() {
             assert_eq!(v - v, zero);
         }};
     }
-    check!(D9s9);
-    check!(D18s18);
+    check!(D9s8);
+    check!(D18s17);
     check!(D38s12);
-    check!(D38s38);
+    check!(D38s37);
 }
 
 #[test]
@@ -425,9 +430,10 @@ fn midpoint_is_overflow_free_at_extremes() {
 #[test]
 fn from_str_round_trips_display_at_scale_extremes() {
     use core::str::FromStr;
-    // A value with the maximum fractional digits round-trips exactly.
-    let s = "1.23456789012345678901234567890123456789"; // 38 frac digits
-    let v = D38s38::from_str(s).unwrap();
+    // A value with the maximum fractional digits round-trips exactly
+    // (v0.4.0 cap: MAX_SCALE for D38 is 37, so 37 frac digits).
+    let s = "1.2345678901234567890123456789012345678"; // 37 frac digits
+    let v = D38s37::from_str(s).unwrap();
     assert_eq!(format!("{v}"), s);
     // Scale 0 has no fractional part.
     let v0 = D38s0::from_str("-42").unwrap();

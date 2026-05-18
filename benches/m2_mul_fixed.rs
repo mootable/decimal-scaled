@@ -52,10 +52,10 @@ fn bench(c: &mut Criterion) {
     pair!(g, "L4",   4,  8);   // D76 storage
     pair!(g, "L8",   8,  16);  // D153 storage
     pair!(g, "L16",  16, 32);  // D307 storage
-    pair!(g, "L24",  24, 48);  // D461 storage
-    pair!(g, "L32",  32, 64);  // D615 storage
-    pair!(g, "L48",  48, 96);  // D923 storage
-    pair!(g, "L64",  64, 128); // D1231 storage
+    pair!(g, "L24",  24, 48);  // D462 storage
+    pair!(g, "L32",  32, 64);  // D616 storage
+    pair!(g, "L48",  48, 96);  // D924 storage
+    pair!(g, "L64",  64, 128); // D1232 storage
 
     g.finish();
 }

@@ -61,7 +61,7 @@ jobs:
         # `--all-features` is avoided: `experimental-floats` needs
         # the nightly toolchain. `wide` + `x-wide` + `xx-wide` +
         # `macros` is the widest stable-buildable set and documents
-        # every shipped tier (D9 through D1231).
+        # every shipped tier (D9 through D1232).
         run: cargo doc --no-deps --features wide,x-wide,xx-wide,macros --workspace
         env:
           # Fail the build on any rustdoc warning so broken intra-doc

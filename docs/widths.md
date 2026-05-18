@@ -10,16 +10,16 @@ integer, which sets the range and the maximum usable scale.
 | `D9`    | `i32`     | 9    | always on        | embedded / register-sized ledgers |
 | `D18`   | `i64`     | 18   | always on        | interchange size; maps to SQL `DECIMAL(18, s)` |
 | `D38`   | `i128`    | 38   | always on        | the financial standard; satoshi-grade at `SCALE = 12` |
-| `D56`   | 192-bit   | 57   | `d56` / `wide`   | half-width between D38 and D76 |
+| `D57`   | 192-bit   | 57   | `d57` / `wide`   | half-width between D38 and D76 |
 | `D76`   | 256-bit   | 76   | `d76` / `wide`   | crypto ratios, statistical accumulation |
-| `D114`  | 384-bit   | 115  | `d114` / `wide`  | half-width between D76 and D153 |
+| `D115`  | 384-bit   | 115  | `d115` / `wide`  | half-width between D76 and D153 |
 | `D153`  | 512-bit   | 153  | `d153` / `wide`  | wide-scientific / actuarial work |
 | `D230`  | 768-bit   | 230  | `d230` / `wide`  | half-width between D153 and D307 |
 | `D307`  | 1024-bit  | 307  | `d307` / `wide`  | deep arbitrary-precision determinism |
-| `D461`  | 1536-bit  | 462  | `d461` / `x-wide`  | half-width between D307 and D615 |
-| `D615`  | 2048-bit  | 616  | `d615` / `x-wide`  | extended-precision scientific / cryptography |
-| `D923`  | 3072-bit  | 924  | `d923` / `xx-wide` | half-width between D615 and D1231 |
-| `D1231` | 4096-bit  | 1232 | `d1231` / `xx-wide`| widest shipped tier; arbitrary-precision research |
+| `D462`  | 1536-bit  | 462  | `d462` / `x-wide`  | half-width between D307 and D616 |
+| `D616`  | 2048-bit  | 616  | `d616` / `x-wide`  | extended-precision scientific / cryptography |
+| `D924`  | 3072-bit  | 924  | `d924` / `xx-wide` | half-width between D616 and D1232 |
+| `D1232` | 4096-bit  | 1232 | `d1232` / `xx-wide`| widest shipped tier; arbitrary-precision research |
 
 `MAX_SCALE` is the largest `SCALE` for which `10^SCALE` fits the storage
 integer. Using a larger `SCALE` is a compile-time error (the
@@ -36,20 +36,20 @@ narrower storage is faster and smaller.
   nanosecond-grade fractional precision.
 - **`D38`** - the default choice. At `SCALE = 12` the range is roughly
   ±1.7 × 10²⁶ - far beyond global-GDP-scale money.
-- **`D56` / `D76` / `D114` / `D153` / `D230` / `D307`** - the *wide tier*.
+- **`D57` / `D76` / `D115` / `D153` / `D230` / `D307`** - the *wide tier*.
   Backed by an in-tree hand-rolled wide-integer module; no external
   big-integer dependency. Opt-in via the matching feature
-  (`d56`, `d76`, `d114`, `d153`, `d230`, `d307`, or umbrella `wide`).
-  Half-width siblings (D56 / D114 / D230) let you size storage to your
+  (`d57`, `d76`, `d115`, `d153`, `d230`, `d307`, or umbrella `wide`).
+  Half-width siblings (D57 / D115 / D230) let you size storage to your
   precision budget without paying for an unnecessary power-of-two jump.
   `D76` at `SCALE ≈ 70` still leaves ~10⁵ integer headroom.
-- **`D461` / `D615`** - the *extra-wide tier*. Gated behind `x-wide`
-  (or `d461` / `d615`). Use for scientific or cryptographic work that
+- **`D462` / `D616`** - the *extra-wide tier*. Gated behind `x-wide`
+  (or `d462` / `d616`). Use for scientific or cryptographic work that
   needs more than the ~307-digit budget of D307 but doesn't want the
   full xx-wide compile cost.
-- **`D923` / `D1231`** - the *xx-wide tier*. Gated behind `xx-wide`
-  (or `d923` / `d1231`). The widest shipped tier; transcendentals at
-  D1231<1231> approach a second per call, so it's research-grade
+- **`D924` / `D1232`** - the *xx-wide tier*. Gated behind `xx-wide`
+  (or `d924` / `d1232`). The widest shipped tier; transcendentals at
+  D1232<1231> approach a second per call, so it's research-grade
   precision rather than a hot-path target.
 
 ## Scale aliases
@@ -123,8 +123,8 @@ let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 ```
 
 Every adjacent pair in the comprehensive ladder
-(D9 → D18 → D38 → D56 → D76 → D114 → D153 → D230 → D307 →
-D461 → D615 → D923 → D1231) has a `From` / `TryFrom` pair plus
+(D9 → D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
+D462 → D616 → D924 → D1232) has a `From` / `TryFrom` pair plus
 `.widen()` / `.narrow()` helper methods that step **one rung**
 in either direction. Chain them to skip multiple rungs, or use
 the `From` / `TryFrom` matrix directly to jump straight to any
@@ -132,19 +132,19 @@ narrower or wider tier.
 
 ```rust
 # #[cfg(feature = "wide")] {
-use decimal_scaled::{D38, D56, D114};
+use decimal_scaled::{D38, D57, D115};
 let a: D38<6> = D38::<6>::from_int(7);
-let b: D56<6> = a.widen();          // one rung up
-let c: D114<6> = b.widen().widen(); // two more rungs: D56 → D76 → D114
+let b: D57<6> = a.widen();          // one rung up
+let c: D115<6> = b.widen().widen(); // two more rungs: D57 → D76 → D115
 let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom
 # }
 ```
 
-## Wide-tier notes (`D56` … `D1231`)
+## Wide-tier notes (`D57` … `D1232`)
 
-- Enable per width (`d56`, `d76`, `d114`, `d153`, `d230`, `d307`,
-  `d461`, `d615`, `d923`, `d1231`) or by umbrella (`wide` for
-  D56–D230, `x-wide` adds D461–D615, `xx-wide` adds D923–D1231).
+- Enable per width (`d57`, `d76`, `d115`, `d153`, `d230`, `d307`,
+  `d462`, `d616`, `d924`, `d1232`) or by umbrella (`wide` for
+  D57–D230, `x-wide` adds D462–D616, `xx-wide` adds D924–D1232).
 - Storage is the in-tree hand-rolled wide-integer module
   (`crate::wide_int`); there is no external big-integer dependency. The
   wide-int type never appears in your code - you work through

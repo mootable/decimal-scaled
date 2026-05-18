@@ -8,14 +8,14 @@
 //! scale-range overrides, then the width's chosen default kernel:
 //!
 //! ```ignore
-//! impl<const SCALE: u32> SqrtPolicy for D56<SCALE> {
+//! impl<const SCALE: u32> SqrtPolicy for D57<SCALE> {
 //!     fn sqrt_impl(self, mode: RoundingMode) -> Self {
 //!         // Scale-range overrides — listed top-down, first match wins.
 //!         if matches!(SCALE, 20..=20) {
-//!             return Self(algos::sqrt::lookup_d56_s20::sqrt(self.0, mode));
+//!             return Self(algos::sqrt::lookup_d57_s20::sqrt(self.0, mode));
 //!         }
 //!         // Width default — what every non-overridden scale gets.
-//!         Self(algos::sqrt::generic_wide::sqrt_d56(self.0, SCALE, mode))
+//!         Self(algos::sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
 //!     }
 //! }
 //! ```
@@ -93,22 +93,22 @@ impl<const SCALE: u32> SqrtPolicy for D38<SCALE> {
     }
 }
 
-// ── Wide tiers — width default: generic_wide; D56 has a scale slot ─
+// ── Wide tiers — width default: generic_wide; D57 has a scale slot ─
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::core_type::D56<SCALE> {
+#[cfg(any(feature = "d57", feature = "wide"))]
+impl<const SCALE: u32> SqrtPolicy for crate::core_type::D57<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
         // Scale-range overrides — first match wins.
         if matches!(SCALE, 20..=20) {
-            // SCALE_OVERRIDE(D56, 20): bespoke kernel slot, currently
+            // SCALE_OVERRIDE(D57, 20): bespoke kernel slot, currently
             // a pass-through to `generic_wide` (no behavioural change).
-            // Replace `lookup_d56_s20::sqrt` body with a tuned
+            // Replace `lookup_d57_s20::sqrt` body with a tuned
             // implementation when ready.
-            return Self(sqrt::lookup_d56_s20::sqrt(self.0, mode));
+            return Self(sqrt::lookup_d57_s20::sqrt(self.0, mode));
         }
         // Width default (global default for the wide-tier family).
-        Self(sqrt::generic_wide::sqrt_d56(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
     }
 }
 
@@ -120,11 +120,11 @@ impl<const SCALE: u32> SqrtPolicy for crate::core_type::D76<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d114", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::core_type::D114<SCALE> {
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl<const SCALE: u32> SqrtPolicy for crate::core_type::D115<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d114(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d115(self.0, SCALE, mode))
     }
 }
 
@@ -152,34 +152,34 @@ impl<const SCALE: u32> SqrtPolicy for crate::core_type::D307<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::core_type::D461<SCALE> {
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+impl<const SCALE: u32> SqrtPolicy for crate::core_type::D462<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d461(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d462(self.0, SCALE, mode))
     }
 }
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::core_type::D615<SCALE> {
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl<const SCALE: u32> SqrtPolicy for crate::core_type::D616<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d615(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d616(self.0, SCALE, mode))
     }
 }
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::core_type::D923<SCALE> {
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl<const SCALE: u32> SqrtPolicy for crate::core_type::D924<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d923(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d924(self.0, SCALE, mode))
     }
 }
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::core_type::D1231<SCALE> {
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl<const SCALE: u32> SqrtPolicy for crate::core_type::D1232<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d1231(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d1232(self.0, SCALE, mode))
     }
 }

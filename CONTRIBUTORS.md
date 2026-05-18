@@ -41,7 +41,7 @@ Common variant names:
 | `generic_wide`                | One function, generic over `(Storage, Wide)` via `WideStorage`    |
 | `fixed_d38`                   | Hand-tuned `i128` kernel using the in-tree `Fixed` intermediate   |
 | `widen_to_d38`                | D9/D18 widen into D38, run `fixed_d38`, narrow back               |
-| `borrow_d56`                  | D38 widens into D56, runs the wide kernel, narrows back           |
+| `borrow_d57`                  | D38 widens into D57, runs the wide kernel, narrows back           |
 | `wide_kernel`                 | Per-tier wide-int core emitted by `decl_wide_transcendental!`     |
 | `lookup_<width>_s<lo>_<hi>[_<func>]` | Bespoke per-(width, scale-range) override slot             |
 
@@ -57,34 +57,34 @@ once per width, generic over `const SCALE: u32`. The body picks a
 kernel:
 
 ```rust
-impl<const SCALE: u32> SqrtPolicy for D56<SCALE> {
+impl<const SCALE: u32> SqrtPolicy for D57<SCALE> {
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
         // Scale-range overrides — first match wins.
         if matches!(SCALE, 20..=20) {
-            return Self(sqrt::lookup_d56_s20::sqrt(self.0, mode));
+            return Self(sqrt::lookup_d57_s20::sqrt(self.0, mode));
         }
         // Width default.
-        Self(sqrt::generic_wide::sqrt_d56(self.0, SCALE, mode))
+        Self(sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
     }
 }
 ```
 
 Because `SCALE` is `const`, the `if` is dead-code-eliminated per
-monomorphisation. Every concrete `D56<S>` compiles to a direct call
+monomorphisation. Every concrete `D57<S>` compiles to a direct call
 to one kernel — zero runtime dispatch cost.
 
 Stable Rust does not allow trait-impl specialisation on const-generic
 types, so per-(width, scale) overrides live as `if matches!(SCALE, …)`
-arms inside the per-width impl rather than separate `impl … for D56<20>`
+arms inside the per-width impl rather than separate `impl … for D57<20>`
 blocks. The override list is grep-able in one place per family.
 
 ### The cascade
 
-When you call `D56<20>::sqrt_strict()`, dispatch flows:
+When you call `D57<20>::sqrt_strict()`, dispatch flows:
 
 ```
 typed method shell  ──►  policy trait impl  ──►  algos kernel
-D56<20>::sqrt_strict     SqrtPolicy::sqrt_impl    sqrt::lookup_d56_s20::sqrt
+D57<20>::sqrt_strict     SqrtPolicy::sqrt_impl    sqrt::lookup_d57_s20::sqrt
 ```
 
 Three intercept points exist, in priority order:
@@ -99,18 +99,18 @@ Add an override where it gives you the most leverage for the least scope.
 
 ## 2. Adding a per-(width, scale) override
 
-Worked example: writing a bespoke `sin/cos` kernel for `D56<SCALE>`
+Worked example: writing a bespoke `sin/cos` kernel for `D57<SCALE>`
 at `SCALE ∈ 18..=22`. The shipped
-[`src/algos/trig/lookup_d56_s44_57_sincos.rs`](src/algos/trig/lookup_d56_s44_57_sincos.rs)
-is the template for the SCALE 44..=57 band; a narrower band uses the
+[`src/algos/trig/lookup_d57_s44_56_sincos.rs`](src/algos/trig/lookup_d57_s44_56_sincos.rs)
+is the template for the SCALE 44..=56 band; a narrower band uses the
 same shape with different reduction parameters.
 
 ### Step 1 — Create the kernel file
 
-`src/algos/trig/lookup_d56_s18_22_sincos.rs`:
+`src/algos/trig/lookup_d57_s18_22_sincos.rs`:
 
 ```rust
-//! Bespoke sin/cos slot for D56<SCALE> with SCALE in 18..=22.
+//! Bespoke sin/cos slot for D57<SCALE> with SCALE in 18..=22.
 //!
 //! At narrower scales the wide-tier `sin_cos_fixed` runs at
 //! `w = SCALE + GUARD` digits. The shared `GUARD` is sized for the
@@ -138,24 +138,24 @@ pub(crate) fn cos_strict(raw: Int192, mode: RoundingMode) -> Int192 {
 `src/algos/trig/mod.rs`:
 
 ```rust
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub(crate) mod lookup_d56_s18_22_sincos;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s18_22_sincos;
 ```
 
 ### Step 3 — Wire it in the policy
 
-`src/policy/trig.rs`, in the `impl<const SCALE: u32> TrigPolicy for D56<SCALE>`
+`src/policy/trig.rs`, in the `impl<const SCALE: u32> TrigPolicy for D57<SCALE>`
 block, add a scale-range arm above the default:
 
 ```rust
 fn sin_impl(self, mode: RoundingMode) -> Self {
     if matches!(SCALE, 18..=22) {
-        return Self(trig::lookup_d56_s18_22_sincos::sin_strict(self.0, mode));
+        return Self(trig::lookup_d57_s18_22_sincos::sin_strict(self.0, mode));
     }
-    if matches!(SCALE, 44..=57) {
-        return Self(trig::lookup_d56_s44_57_sincos::sin_strict(self.0, mode));
+    if matches!(SCALE, 44..=56) {
+        return Self(trig::lookup_d57_s44_56_sincos::sin_strict(self.0, mode));
     }
-    Self(trig::wide_kernel::sin_strict_d56(self.0, SCALE, mode))
+    Self(trig::wide_kernel::sin_strict_d57(self.0, SCALE, mode))
 }
 ```
 
@@ -185,11 +185,11 @@ If your change adds a bespoke kernel for a new `(width, scale)` cell,
 [`wide_strict_transcendentals.rs`](tests/wide_strict_transcendentals.rs)
 (or the matching narrow-tier file) in the same commit.** Use a
 wider-storage type at the same `SCALE` as the truth source — for
-example, a new D56<20> kernel's witness is D76<20> at the same scale.
-The pattern in the file for D56<18/20/22> sincos is the template.
+example, a new D57<20> kernel's witness is D76<20> at the same scale.
+The pattern in the file for D57<18/20/22> sincos is the template.
 
 The 0.5 ULP suite for D38 is comprehensive; the wide-tier suite is
-less so. If you are touching D56 or a wider tier and there is no
+less so. If you are touching D57 or a wider tier and there is no
 existing dedicated 0.5 ULP test at the scale you care about, add one
 — the PR gate is "we have a test that would catch this" not "the
 existing tests happen to pass". A smaller perf win at strict
@@ -203,9 +203,9 @@ Bespoke slot files: `lookup_<width_alias>_s<lo>_<hi>[_<func>].rs`
 
 Examples:
 
-- `lookup_d56_s20.rs` — single scale, single function (file scope is unambiguous)
-- `lookup_d56_s44_57_atan.rs` — scale range, named function (multi-function family)
-- `lookup_d56_s44_57_sincos.rs` — scale range, shared kernel emitting both sin and cos
+- `lookup_d57_s20.rs` — single scale, single function (file scope is unambiguous)
+- `lookup_d57_s44_56_atan.rs` — scale range, named function (multi-function family)
+- `lookup_d57_s44_56_sincos.rs` — scale range, shared kernel emitting both sin and cos
 
 Inside the file:
 
@@ -254,7 +254,7 @@ Place it under `examples/` (not in the bench harness) — it's a
 single-purpose, throwaway tool.
 
 ```rust
-// examples/d56_sincos_s18_22_probe.rs
+// examples/d57_sincos_s18_22_probe.rs
 fn main() {
     for scale in 18..=22 {
         let a = /* deterministic input */;
@@ -267,7 +267,7 @@ fn main() {
             samples.push(t0.elapsed());
         }
         samples.sort();
-        println!("D56<{}> sin_strict median = {:?}", scale, samples[1]);
+        println!("D57<{}> sin_strict median = {:?}", scale, samples[1]);
     }
 }
 ```
@@ -275,7 +275,7 @@ fn main() {
 Run it synchronously and capture to a file:
 
 ```sh
-cargo run --release --example d56_sincos_s18_22_probe --features wide > probe.txt
+cargo run --release --example d57_sincos_s18_22_probe --features wide > probe.txt
 ```
 
 Run **before** the change, then **after**, and diff. A < 60s probe
@@ -309,7 +309,7 @@ For a tuning change at a single (width, scale-range), run only the
 matching per-width bench:
 
 ```sh
-cargo bench --bench full_matrix_d56 --features wide,x-wide,xx-wide,macros
+cargo bench --bench full_matrix_d57 --features wide,x-wide,xx-wide,macros
 ```
 
 Criterion writes timing data to `target/criterion/`. Look at the
@@ -395,7 +395,7 @@ The three bench targets:
 
 - [`benches/all_functions.rs`](benches/all_functions.rs) — 130-bench D38<12> full public-API sweep.
 - [`benches/mul_div_candidates.rs`](benches/mul_div_candidates.rs) — focused mul/div algorithm comparison.
-- [`benches/pr_gate.rs`](benches/pr_gate.rs) — wide-tier coverage at D38<19> / D56<20> / D307<150> across nine ops. Add cells here when you ship a kernel that the other two suites don't reach.
+- [`benches/pr_gate.rs`](benches/pr_gate.rs) — wide-tier coverage at D38<19> / D57<20> / D307<150> across nine ops. Add cells here when you ship a kernel that the other two suites don't reach.
 
 CodSpeed leaves a comment on the PR with per-bench `%Δ` against the
 baseline and marks the check failed if any cell regressed past the

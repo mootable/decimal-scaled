@@ -41,21 +41,21 @@ impl<const SCALE: u32> ExpPolicy for D18<SCALE> {
     }
 }
 
-// D38 — see `crate::policy::ln` for the borrow-D56 rationale.
+// D38 — see `crate::policy::ln` for the borrow-D57 rationale.
 
-#[cfg(any(feature = "d56", feature = "wide"))]
+#[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::borrow_d56::exp_strict::<SCALE>(self.0, mode))
+        Self(exp::borrow_d57::exp_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::borrow_d56::exp_strict::<SCALE>(self.0, mode))
+        Self(exp::borrow_d57::exp_strict::<SCALE>(self.0, mode))
     }
 }
 
-#[cfg(not(any(feature = "d56", feature = "wide")))]
+#[cfg(not(any(feature = "d57", feature = "wide")))]
 impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
@@ -72,21 +72,21 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
 // `exp_with_impl` for wide tiers ignores `working_digits` and falls
 // through to the strict path; see module-level docs for the rationale.
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D56<SCALE> {
+#[cfg(any(feature = "d57", feature = "wide"))]
+impl<const SCALE: u32> ExpPolicy for crate::core_type::D57<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 45..=57) {
-            return Self(exp::lookup_d56_s45_57::exp_strict::<SCALE>(self.0, mode));
+        if matches!(SCALE, 45..=56) {
+            return Self(exp::lookup_d57_s45_56::exp_strict::<SCALE>(self.0, mode));
         }
-        Self(exp::wide_kernel::exp_strict_d56(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d57(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 45..=57) {
-            return Self(exp::lookup_d56_s45_57::exp_strict::<SCALE>(self.0, mode));
+        if matches!(SCALE, 45..=56) {
+            return Self(exp::lookup_d57_s45_56::exp_strict::<SCALE>(self.0, mode));
         }
-        Self(exp::wide_kernel::exp_strict_d56(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d57(self.0, mode, SCALE))
     }
 }
 
@@ -102,15 +102,15 @@ impl<const SCALE: u32> ExpPolicy for crate::core_type::D76<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d114", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D114<SCALE> {
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl<const SCALE: u32> ExpPolicy for crate::core_type::D115<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d114(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d114(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
     }
 }
 
@@ -150,50 +150,50 @@ impl<const SCALE: u32> ExpPolicy for crate::core_type::D307<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D461<SCALE> {
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+impl<const SCALE: u32> ExpPolicy for crate::core_type::D462<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d461(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d462(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d461(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d462(self.0, mode, SCALE))
     }
 }
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D615<SCALE> {
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl<const SCALE: u32> ExpPolicy for crate::core_type::D616<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d615(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d616(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d615(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d616(self.0, mode, SCALE))
     }
 }
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D923<SCALE> {
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl<const SCALE: u32> ExpPolicy for crate::core_type::D924<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d923(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d924(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d923(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d924(self.0, mode, SCALE))
     }
 }
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D1231<SCALE> {
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl<const SCALE: u32> ExpPolicy for crate::core_type::D1232<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d1231(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d1232(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::wide_kernel::exp_strict_d1231(self.0, mode, SCALE))
+        Self(exp::wide_kernel::exp_strict_d1232(self.0, mode, SCALE))
     }
 }

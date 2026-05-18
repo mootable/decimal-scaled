@@ -3,7 +3,7 @@
 //!
 //! # Why
 //!
-//! Each concrete decimal width in the crate (`D38`, `D56`, `D76`, …)
+//! Each concrete decimal width in the crate (`D38`, `D57`, `D76`, …)
 //! was originally its own `#[repr(transparent)]` newtype. That worked
 //! but meant every per-width macro invocation, every method shell,
 //! every cross-width helper had to be duplicated by name. The
@@ -40,7 +40,7 @@
 //!
 //! # Compatibility
 //!
-//! Existing names (`D9`, `D18`, `D38`, `D56`, …, `D1231`) become
+//! Existing names (`D9`, `D18`, `D38`, `D57`, …, `D1232`) become
 //! type aliases of `D<…, SCALE>`. Source-compatible. The
 //! `#[repr(transparent)]` layout is preserved per storage, so the
 //! raw-bytes representation of `D38<5>` is unchanged.

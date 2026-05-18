@@ -39,12 +39,12 @@ impl<const SCALE: u32> CbrtPolicy for D38<SCALE> {
 
 // ── Wide tiers — width default: generic_wide ───────────────────────
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-impl<const SCALE: u32> CbrtPolicy for crate::core_type::D56<SCALE> {
+#[cfg(any(feature = "d57", feature = "wide"))]
+impl<const SCALE: u32> CbrtPolicy for crate::core_type::D57<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        // Scale-range slot reserved for D56<20> tuning (none yet).
-        Self(cbrt::generic_wide::cbrt_d56(self.0, SCALE, mode))
+        // Scale-range slot reserved for D57<20> tuning (none yet).
+        Self(cbrt::generic_wide::cbrt_d57(self.0, SCALE, mode))
     }
 }
 
@@ -56,11 +56,11 @@ impl<const SCALE: u32> CbrtPolicy for crate::core_type::D76<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d114", feature = "wide"))]
-impl<const SCALE: u32> CbrtPolicy for crate::core_type::D114<SCALE> {
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl<const SCALE: u32> CbrtPolicy for crate::core_type::D115<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        Self(cbrt::generic_wide::cbrt_d114(self.0, SCALE, mode))
+        Self(cbrt::generic_wide::cbrt_d115(self.0, SCALE, mode))
     }
 }
 
@@ -88,34 +88,34 @@ impl<const SCALE: u32> CbrtPolicy for crate::core_type::D307<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-impl<const SCALE: u32> CbrtPolicy for crate::core_type::D461<SCALE> {
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+impl<const SCALE: u32> CbrtPolicy for crate::core_type::D462<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        Self(cbrt::generic_wide::cbrt_d461(self.0, SCALE, mode))
+        Self(cbrt::generic_wide::cbrt_d462(self.0, SCALE, mode))
     }
 }
 
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-impl<const SCALE: u32> CbrtPolicy for crate::core_type::D615<SCALE> {
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl<const SCALE: u32> CbrtPolicy for crate::core_type::D616<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        Self(cbrt::generic_wide::cbrt_d615(self.0, SCALE, mode))
+        Self(cbrt::generic_wide::cbrt_d616(self.0, SCALE, mode))
     }
 }
 
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-impl<const SCALE: u32> CbrtPolicy for crate::core_type::D923<SCALE> {
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl<const SCALE: u32> CbrtPolicy for crate::core_type::D924<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        Self(cbrt::generic_wide::cbrt_d923(self.0, SCALE, mode))
+        Self(cbrt::generic_wide::cbrt_d924(self.0, SCALE, mode))
     }
 }
 
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-impl<const SCALE: u32> CbrtPolicy for crate::core_type::D1231<SCALE> {
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl<const SCALE: u32> CbrtPolicy for crate::core_type::D1232<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        Self(cbrt::generic_wide::cbrt_d1231(self.0, SCALE, mode))
+        Self(cbrt::generic_wide::cbrt_d1232(self.0, SCALE, mode))
     }
 }

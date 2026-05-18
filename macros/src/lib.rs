@@ -109,92 +109,92 @@ fn storage_path_tokens(width: Width) -> proc_macro2::TokenStream {
 
 const D9: Width = Width {
     name: "d9",
-    max_scale: 9,
+    max_scale: 8,
     type_leaf: "D9",
     storage_path: "i32",
     wide: false,
 };
 const D18: Width = Width {
     name: "d18",
-    max_scale: 18,
+    max_scale: 17,
     type_leaf: "D18",
     storage_path: "i64",
     wide: false,
 };
 const D38: Width = Width {
     name: "d38",
-    max_scale: 38,
+    max_scale: 37,
     type_leaf: "D38",
     storage_path: "i128",
     wide: false,
 };
 const D76: Width = Width {
     name: "d76",
-    max_scale: 76,
+    max_scale: 75,
     type_leaf: "D76",
     storage_path: "Int256",
     wide: true,
 };
 const D153: Width = Width {
     name: "d153",
-    max_scale: 153,
+    max_scale: 152,
     type_leaf: "D153",
     storage_path: "Int512",
     wide: true,
 };
 const D307: Width = Width {
     name: "d307",
-    max_scale: 307,
+    max_scale: 306,
     type_leaf: "D307",
     storage_path: "Int1024",
     wide: true,
 };
-const D56: Width = Width {
-    name: "d56",
+const D57: Width = Width {
+    name: "d57",
     max_scale: 56,
-    type_leaf: "D56",
+    type_leaf: "D57",
     storage_path: "Int192",
     wide: true,
 };
-const D114: Width = Width {
-    name: "d114",
+const D115: Width = Width {
+    name: "d115",
     max_scale: 114,
-    type_leaf: "D114",
+    type_leaf: "D115",
     storage_path: "Int384",
     wide: true,
 };
 const D230: Width = Width {
     name: "d230",
-    max_scale: 230,
+    max_scale: 229,
     type_leaf: "D230",
     storage_path: "Int768",
     wide: true,
 };
-const D461: Width = Width {
-    name: "d461",
+const D462: Width = Width {
+    name: "d462",
     max_scale: 461,
-    type_leaf: "D461",
+    type_leaf: "D462",
     storage_path: "Int1536",
     wide: true,
 };
-const D615: Width = Width {
-    name: "d615",
+const D616: Width = Width {
+    name: "d616",
     max_scale: 615,
-    type_leaf: "D615",
+    type_leaf: "D616",
     storage_path: "Int2048",
     wide: true,
 };
-const D923: Width = Width {
-    name: "d923",
+const D924: Width = Width {
+    name: "d924",
     max_scale: 923,
-    type_leaf: "D923",
+    type_leaf: "D924",
     storage_path: "Int3072",
     wide: true,
 };
-const D1231: Width = Width {
-    name: "d1231",
+const D1232: Width = Width {
+    name: "d1232",
     max_scale: 1231,
-    type_leaf: "D1231",
+    type_leaf: "D1232",
     storage_path: "Int4096",
     wide: true,
 };
@@ -244,18 +244,18 @@ pub fn d307(input: TokenStream) -> TokenStream {
     expand_for(D307, input)
 }
 
-/// `d56!` — construct a `decimal_scaled::D56<SCALE>` value at
-/// compile time. Requires the parent crate's `d56` / `wide` feature.
+/// `d57!` — construct a `decimal_scaled::D57<SCALE>` value at
+/// compile time. Requires the parent crate's `d57` / `wide` feature.
 #[proc_macro]
-pub fn d56(input: TokenStream) -> TokenStream {
-    expand_for(D56, input)
+pub fn d57(input: TokenStream) -> TokenStream {
+    expand_for(D57, input)
 }
 
-/// `d114!` — construct a `decimal_scaled::D114<SCALE>` value at
-/// compile time. Requires the parent crate's `d114` / `wide` feature.
+/// `d115!` — construct a `decimal_scaled::D115<SCALE>` value at
+/// compile time. Requires the parent crate's `d115` / `wide` feature.
 #[proc_macro]
-pub fn d114(input: TokenStream) -> TokenStream {
-    expand_for(D114, input)
+pub fn d115(input: TokenStream) -> TokenStream {
+    expand_for(D115, input)
 }
 
 /// `d230!` — construct a `decimal_scaled::D230<SCALE>` value at
@@ -265,36 +265,36 @@ pub fn d230(input: TokenStream) -> TokenStream {
     expand_for(D230, input)
 }
 
-/// `d461!` — construct a `decimal_scaled::D461<SCALE>` value at
-/// compile time. Requires the parent crate's `d461` / `x-wide`
+/// `d462!` — construct a `decimal_scaled::D462<SCALE>` value at
+/// compile time. Requires the parent crate's `d462` / `x-wide`
 /// feature.
 #[proc_macro]
-pub fn d461(input: TokenStream) -> TokenStream {
-    expand_for(D461, input)
+pub fn d462(input: TokenStream) -> TokenStream {
+    expand_for(D462, input)
 }
 
-/// `d615!` — construct a `decimal_scaled::D615<SCALE>` value at
-/// compile time. Requires the parent crate's `d615` / `x-wide`
+/// `d616!` — construct a `decimal_scaled::D616<SCALE>` value at
+/// compile time. Requires the parent crate's `d616` / `x-wide`
 /// feature.
 #[proc_macro]
-pub fn d615(input: TokenStream) -> TokenStream {
-    expand_for(D615, input)
+pub fn d616(input: TokenStream) -> TokenStream {
+    expand_for(D616, input)
 }
 
-/// `d923!` — construct a `decimal_scaled::D923<SCALE>` value at
-/// compile time. Requires the parent crate's `d923` / `xx-wide`
+/// `d924!` — construct a `decimal_scaled::D924<SCALE>` value at
+/// compile time. Requires the parent crate's `d924` / `xx-wide`
 /// feature.
 #[proc_macro]
-pub fn d923(input: TokenStream) -> TokenStream {
-    expand_for(D923, input)
+pub fn d924(input: TokenStream) -> TokenStream {
+    expand_for(D924, input)
 }
 
-/// `d1231!` — construct a `decimal_scaled::D1231<SCALE>` value at
-/// compile time. Requires the parent crate's `d1231` / `xx-wide`
+/// `d1232!` — construct a `decimal_scaled::D1232<SCALE>` value at
+/// compile time. Requires the parent crate's `d1232` / `xx-wide`
 /// feature.
 #[proc_macro]
-pub fn d1231(input: TokenStream) -> TokenStream {
-    expand_for(D1231, input)
+pub fn d1232(input: TokenStream) -> TokenStream {
+    expand_for(D1232, input)
 }
 
 fn expand_for(width: Width, input: TokenStream) -> TokenStream {

@@ -1,4 +1,4 @@
-//! Per-width `full_matrix` slice for D114 (wide-tier).
+//! Per-width `full_matrix` slice for D57 (wide-tier).
 
 #![cfg(feature = "wide")]
 
@@ -6,14 +6,14 @@
 mod full_matrix_common;
 
 use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::D114;
+use decimal_scaled::D57;
 
 fn bench_arith(c: &mut Criterion) {
     let mut g = c.benchmark_group("arith");
     g.sample_size(50);
-    arith_block!(g, "D114_s0",   D114<0>);
-    arith_block!(g, "D114_s57",  D114<57>);
-    arith_block!(g, "D114_s114", D114<114>);
+    arith_block!(g, "D57_s0",  D57<0>);
+    arith_block!(g, "D57_s28", D57<28>);
+    arith_block!(g, "D57_s56", D57<56>);
     g.finish();
 }
 
@@ -21,9 +21,9 @@ fn bench_strict(c: &mut Criterion) {
     let mut g = c.benchmark_group("strict_wide");
     g.sample_size(20);
     g.measurement_time(std::time::Duration::from_secs(5));
-    strict_block!(g, "D114_s0",   D114<0>);
-    strict_block!(g, "D114_s57",  D114<57>);
-    strict_block!(g, "D114_s114", D114<114>);
+    strict_block!(g, "D57_s0",  D57<0>);
+    strict_block!(g, "D57_s28", D57<28>);
+    strict_block!(g, "D57_s56", D57<56>);
     g.finish();
 }
 

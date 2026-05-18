@@ -353,8 +353,8 @@ crate::macros::consts::decl_decimal_consts!(D38, i128);
 // EPSILON / MIN_POSITIVE for every width are now emitted by
 // `decl_decimal_basics!`. The D38-specific inherent impl that used
 // to live here has been removed in favour of the macro-emitted ones
-// so D9 / D18 / D38 / D56 / D76 / D114 / D153 / D230 / D307 / D461 /
-// D615 / D923 / D1231 all share the same EPSILON / MIN_POSITIVE
+// so D9 / D18 / D38 / D57 / D76 / D115 / D153 / D230 / D307 / D462 /
+// D616 / D924 / D1232 all share the same EPSILON / MIN_POSITIVE
 // surface.
 
 #[cfg(test)]

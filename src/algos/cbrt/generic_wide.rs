@@ -15,7 +15,7 @@
 //! `10^(3*MAX_SCALE)` bits, which overflows the obvious next-up width
 //! (`Storage * 2`). Each tier's work integer is therefore bumped one
 //! further step so the kernel is correct across the full SCALE range.
-//! See the D56 shim below for the original investigation; the same
+//! See the D57 shim below for the original investigation; the same
 //! arithmetic applies to every tier listed.
 
 use crate::rounding::RoundingMode;
@@ -95,21 +95,21 @@ macro_rules! decl_cbrt_kernel_shim {
     };
 }
 
-// D56: `MAX_SCALE = 57`, kernel needs `mag * 10^(2*SCALE)` ≈ `10^171`
+// D57: `MAX_SCALE = 57`, kernel needs `mag * 10^(2*SCALE)` ≈ `10^171`
 // at the high end which does not fit `Int384`'s ~`10^115` capacity.
 // Use `Int768` so the work integer covers the full SCALE range.
-#[cfg(any(feature = "d56", feature = "wide"))]
-decl_cbrt_kernel_shim!(cbrt_d56, crate::wide_int::Int192, crate::wide_int::Int768);
+#[cfg(any(feature = "d57", feature = "wide"))]
+decl_cbrt_kernel_shim!(cbrt_d57, crate::wide_int::Int192, crate::wide_int::Int768);
 
 // D76: `MAX_SCALE = 76`, work peaks near `10^228`; Int512 (~10^154)
 // overflows, bump to Int1024 (~10^308).
 #[cfg(any(feature = "d76", feature = "wide"))]
 decl_cbrt_kernel_shim!(cbrt_d76, crate::wide_int::Int256, crate::wide_int::Int1024);
 
-// D114: `MAX_SCALE = 115`, work peaks near `10^345`; Int768 (~10^231)
+// D115: `MAX_SCALE = 115`, work peaks near `10^345`; Int768 (~10^231)
 // overflows, bump to Int1536 (~10^462).
-#[cfg(any(feature = "d114", feature = "wide"))]
-decl_cbrt_kernel_shim!(cbrt_d114, crate::wide_int::Int384, crate::wide_int::Int1536);
+#[cfg(any(feature = "d115", feature = "wide"))]
+decl_cbrt_kernel_shim!(cbrt_d115, crate::wide_int::Int384, crate::wide_int::Int1536);
 
 // D153: `MAX_SCALE = 153`, work peaks near `10^459`; Int1024 (~10^308)
 // overflows, bump to Int2048 (~10^616).
@@ -126,22 +126,22 @@ decl_cbrt_kernel_shim!(cbrt_d230, crate::wide_int::Int768, crate::wide_int::Int3
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 decl_cbrt_kernel_shim!(cbrt_d307, crate::wide_int::Int1024, crate::wide_int::Int4096);
 
-// D461: `MAX_SCALE = 461`, work peaks near `10^1383`; Int3072 (~10^924)
+// D462: `MAX_SCALE = 461`, work peaks near `10^1383`; Int3072 (~10^924)
 // overflows, bump to Int6144 (~10^1849).
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d461, crate::wide_int::Int1536, crate::wide_int::Int6144);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+decl_cbrt_kernel_shim!(cbrt_d462, crate::wide_int::Int1536, crate::wide_int::Int6144);
 
-// D615: `MAX_SCALE = 615`, work peaks near `10^1845`; Int4096 (~10^1233)
+// D616: `MAX_SCALE = 615`, work peaks near `10^1845`; Int4096 (~10^1233)
 // overflows, bump to Int8192 (~10^2466).
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d615, crate::wide_int::Int2048, crate::wide_int::Int8192);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+decl_cbrt_kernel_shim!(cbrt_d616, crate::wide_int::Int2048, crate::wide_int::Int8192);
 
-// D923: `MAX_SCALE = 923`, work peaks near `10^2769`; Int6144 (~10^1849)
+// D924: `MAX_SCALE = 923`, work peaks near `10^2769`; Int6144 (~10^1849)
 // overflows, bump to Int12288 (~10^3699).
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d923, crate::wide_int::Int3072, crate::wide_int::Int12288);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+decl_cbrt_kernel_shim!(cbrt_d924, crate::wide_int::Int3072, crate::wide_int::Int12288);
 
-// D1231: `MAX_SCALE = 1231`, work peaks near `10^3693`; Int8192 (~10^2466)
+// D1232: `MAX_SCALE = 1231`, work peaks near `10^3693`; Int8192 (~10^2466)
 // overflows, bump to Int16384 (~10^4932).
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d1231, crate::wide_int::Int4096, crate::wide_int::Int16384);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+decl_cbrt_kernel_shim!(cbrt_d1232, crate::wide_int::Int4096, crate::wide_int::Int16384);

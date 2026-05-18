@@ -446,6 +446,7 @@ fn d76_acosh_strict_with_v_ge_two_branch() {
 // panics with a result-out-of-range message when the rounded result
 // can't fit `$Storage`.
 
+#[cfg(debug_assertions)]
 #[test]
 #[should_panic]
 fn d76_strict_result_out_of_range_panics() {
@@ -537,30 +538,30 @@ mod x_wide {
     }
 }
 
-// ─── Bespoke D56<45..=57> exp kernel cross-witness ─────────────────────
+// ─── Bespoke D57<45..=56> exp kernel cross-witness ─────────────────────
 //
-// `algos::exp::lookup_d56_s45_57` routes D56<45..=57>::exp_strict
+// `algos::exp::lookup_d57_s45_56` routes D57<45..=56>::exp_strict
 // through a two-stage range-reduced kernel with a per-scale lookup
 // table. The strict 0.5-ULP contract requires its output to match the
-// canonical wide-tier path. Cross-witness: lift the D56<50> input to
+// canonical wide-tier path. Cross-witness: lift the D57<50> input to
 // D76<50> (whose exp_strict goes through the generic wide kernel,
-// unaffected by this change), run both, and require the D56 storage
-// matches the D76 result narrowed to D56's scale within 1 LSB.
+// unaffected by this change), run both, and require the D57 storage
+// matches the D76 result narrowed to D57's scale within 1 LSB.
 //
 // SCALE 50 is the midpoint of the bespoke range; this guards every
 // path the kernel takes (range reduce, table lookup, Taylor on δ,
 // reassemble).
 
 #[test]
-fn d56_s50_exp_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s50_exp_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_50 = D56<50>;
+    type D57_50 = D57<50>;
     type D76_50 = D76<50>;
 
     // exp(2) is representable at SCALE=50 (e² ≈ 7.389; storage ≤ 8·10⁵⁰
     // fits Int192 max ≈ 3.14·10⁵⁷ comfortably).
-    let n_56 = D56_50::from_int(2);
+    let n_56 = D57_50::from_int(2);
     let n_76: D76_50 = n_56.into();
 
     let r_56 = n_56.exp_strict();
@@ -568,24 +569,24 @@ fn d56_s50_exp_matches_d76_baseline() {
 
     // D76's exp_strict goes through the generic wide kernel
     // (unaffected by this change). Narrow the D76 reference back to
-    // D56 via `try_into`; the strict 0.5-ULP contract for D56 means
-    // the two results must agree exactly at D56's storage scale.
-    let r_76_as_56: D56_50 = r_76.try_into().expect("e² fits D56<50>");
+    // D57 via `try_into`; the strict 0.5-ULP contract for D57 means
+    // the two results must agree exactly at D57's storage scale.
+    let r_76_as_56: D57_50 = r_76.try_into().expect("e² fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
-        "D56<50>::exp(2) bespoke kernel does not match D76<50> narrowed reference",
+        "D57<50>::exp(2) bespoke kernel does not match D76<50> narrowed reference",
     );
 }
 
-// ─── Bespoke D56<44..=57> atan kernel cross-witness ────────────────────
+// ─── Bespoke D57<44..=56> atan kernel cross-witness ────────────────────
 //
-// `algos::trig::lookup_d56_s44_57_atan` routes D56<44..=57>::atan_strict
+// `algos::trig::lookup_d57_s44_56_atan` routes D57<44..=56>::atan_strict
 // through a single-stage table-reduced kernel (atan addition formula
 // against a 512-entry table). The strict 0.5-ULP contract requires its
 // output to match the canonical wide-tier path. Cross-witness: lift the
-// D56<50> input to D76<50> (whose atan_strict goes through the generic
+// D57<50> input to D76<50> (whose atan_strict goes through the generic
 // wide kernel, unaffected by this change), run both, and require the
-// D56 storage matches the D76 result narrowed to D56's scale within
+// D57 storage matches the D76 result narrowed to D57's scale within
 // 1 LSB.
 //
 // SCALE 50 is the midpoint of the bespoke range; this guards every
@@ -593,16 +594,16 @@ fn d56_s50_exp_matches_d76_baseline() {
 // Taylor on y, reassembly).
 
 #[test]
-fn d56_s50_atan_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s50_atan_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_50 = D56<50>;
+    type D57_50 = D57<50>;
     type D76_50 = D76<50>;
 
     // atan(2) ≈ 1.107 rad. The reciprocal-fold branch runs because
     // |2| > 1, then a non-trivial table entry is picked (j ≈ M/2)
     // and the Taylor residual is small.
-    let n_56 = D56_50::from_int(2);
+    let n_56 = D57_50::from_int(2);
     let n_76: D76_50 = n_56.into();
 
     let r_56 = n_56.atan_strict();
@@ -610,12 +611,12 @@ fn d56_s50_atan_matches_d76_baseline() {
 
     // D76's atan_strict goes through the generic wide kernel
     // (unaffected by this change). Narrow the D76 reference back to
-    // D56 via `try_into`; the strict 0.5-ULP contract for D56 means
-    // the two results must agree exactly at D56's storage scale.
-    let r_76_as_56: D56_50 = r_76.try_into().expect("atan(2) fits D56<50>");
+    // D57 via `try_into`; the strict 0.5-ULP contract for D57 means
+    // the two results must agree exactly at D57's storage scale.
+    let r_76_as_56: D57_50 = r_76.try_into().expect("atan(2) fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
-        "D56<50>::atan(2) bespoke kernel does not match D76<50> narrowed reference",
+        "D57<50>::atan(2) bespoke kernel does not match D76<50> narrowed reference",
     );
 }
 
@@ -624,77 +625,77 @@ fn d56_s50_atan_matches_d76_baseline() {
 // `atan(1/3) ≈ 0.3217` is in [0, 1] so the table lookup runs directly,
 // picking j ≈ M/3 with a non-trivial Taylor residual.
 #[test]
-fn d56_s44_atan_small_arg_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s44_atan_small_arg_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_44 = D56<44>;
+    type D57_44 = D57<44>;
     type D76_44 = D76<44>;
 
     // 1/3 at SCALE=44 — round to nearest.
-    let one_third_56 = D56_44::from_int(1) / D56_44::from_int(3);
+    let one_third_56 = D57_44::from_int(1) / D57_44::from_int(3);
     let one_third_76: D76_44 = one_third_56.into();
 
     let r_56 = one_third_56.atan_strict();
     let r_76 = one_third_76.atan_strict();
 
-    let r_76_as_56: D56_44 = r_76.try_into().expect("atan(1/3) fits D56<44>");
+    let r_76_as_56: D57_44 = r_76.try_into().expect("atan(1/3) fits D57<44>");
     assert_eq!(
         r_56, r_76_as_56,
-        "D56<44>::atan(1/3) bespoke kernel does not match D76<44> narrowed reference",
+        "D57<44>::atan(1/3) bespoke kernel does not match D76<44> narrowed reference",
     );
 }
 
-// ─── Bespoke D56<44..=57> sin/cos kernel cross-witness ─────────────────
+// ─── Bespoke D57<44..=56> sin/cos kernel cross-witness ─────────────────
 //
-// `sin_strict` / `cos_strict` at `SCALE ∈ 44..=57` now route through
-// `algos::trig::lookup_d56_s44_57_sincos` instead of `wide_kernel::
-// sin_strict_d56` / `cos_strict_d56`. The bespoke kernel uses a
+// `sin_strict` / `cos_strict` at `SCALE ∈ 44..=56` now route through
+// `algos::trig::lookup_d57_s44_56_sincos` instead of `wide_kernel::
+// sin_strict_d57` / `cos_strict_d57`. The bespoke kernel uses a
 // shared π/2-then-π/(4M) range reduction with M = 512, so sin and
 // cos share one table and exercise the same code path. Cross-witness
 // against the D76 wide kernel (which is unaffected by this change)
 // at two representative scales.
 
 #[test]
-fn d56_s50_sin_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s50_sin_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_50 = D56<50>;
+    type D57_50 = D57<50>;
     type D76_50 = D76<50>;
 
     // sin(2) ≈ 0.909. k = round(2 / (π/2)) = 1, so the quadrant
     // permutation picks the cos(r) branch — exercises the k ≠ 0 path.
-    let n_56 = D56_50::from_int(2);
+    let n_56 = D57_50::from_int(2);
     let n_76: D76_50 = n_56.into();
 
     let r_56 = n_56.sin_strict();
     let r_76 = n_76.sin_strict();
 
-    let r_76_as_56: D56_50 = r_76.try_into().expect("sin(2) fits D56<50>");
+    let r_76_as_56: D57_50 = r_76.try_into().expect("sin(2) fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
-        "D56<50>::sin(2) bespoke kernel does not match D76<50> narrowed reference",
+        "D57<50>::sin(2) bespoke kernel does not match D76<50> narrowed reference",
     );
 }
 
 #[test]
-fn d56_s50_cos_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s50_cos_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_50 = D56<50>;
+    type D57_50 = D57<50>;
     type D76_50 = D76<50>;
 
     // cos(2) ≈ −0.416. Same quadrant as sin(2) — sin and cos share
     // the reduction table, so this exercises the cos selector arm.
-    let n_56 = D56_50::from_int(2);
+    let n_56 = D57_50::from_int(2);
     let n_76: D76_50 = n_56.into();
 
     let r_56 = n_56.cos_strict();
     let r_76 = n_76.cos_strict();
 
-    let r_76_as_56: D56_50 = r_76.try_into().expect("cos(2) fits D56<50>");
+    let r_76_as_56: D57_50 = r_76.try_into().expect("cos(2) fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
-        "D56<50>::cos(2) bespoke kernel does not match D76<50> narrowed reference",
+        "D57<50>::cos(2) bespoke kernel does not match D76<50> narrowed reference",
     );
 }
 
@@ -702,136 +703,136 @@ fn d56_s50_cos_matches_d76_baseline() {
 // (1/3 rad) keeps k = 0 so the quadrant path stays trivial; this
 // stresses the j-quantisation and the Taylor residual instead.
 #[test]
-fn d56_s44_sin_cos_small_arg_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s44_sin_cos_small_arg_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_44 = D56<44>;
+    type D57_44 = D57<44>;
     type D76_44 = D76<44>;
 
-    let one_third_56 = D56_44::from_int(1) / D56_44::from_int(3);
+    let one_third_56 = D57_44::from_int(1) / D57_44::from_int(3);
     let one_third_76: D76_44 = one_third_56.into();
 
     let sin_56 = one_third_56.sin_strict();
     let sin_76 = one_third_76.sin_strict();
-    let sin_76_as_56: D56_44 = sin_76.try_into().expect("sin(1/3) fits D56<44>");
+    let sin_76_as_56: D57_44 = sin_76.try_into().expect("sin(1/3) fits D57<44>");
     assert_eq!(
         sin_56, sin_76_as_56,
-        "D56<44>::sin(1/3) bespoke kernel does not match D76<44> narrowed reference",
+        "D57<44>::sin(1/3) bespoke kernel does not match D76<44> narrowed reference",
     );
 
     let cos_56 = one_third_56.cos_strict();
     let cos_76 = one_third_76.cos_strict();
-    let cos_76_as_56: D56_44 = cos_76.try_into().expect("cos(1/3) fits D56<44>");
+    let cos_76_as_56: D57_44 = cos_76.try_into().expect("cos(1/3) fits D57<44>");
     assert_eq!(
         cos_56, cos_76_as_56,
-        "D56<44>::cos(1/3) bespoke kernel does not match D76<44> narrowed reference",
+        "D57<44>::cos(1/3) bespoke kernel does not match D76<44> narrowed reference",
     );
 }
 
-// ─── D56<SCALE>::{sin,cos}_strict — SCALE 18..=22 narrow-GUARD kernel ──
+// ─── D57<SCALE>::{sin,cos}_strict — SCALE 18..=22 narrow-GUARD kernel ──
 //
 // For SCALE ∈ 18..=22 the policy routes through the bespoke narrow-
-// GUARD slot `algos::trig::lookup_d56_s18_22_sincos` rather than the
-// generic `wide_kernel::sin_strict_d56` / `cos_strict_d56`. The kernel
+// GUARD slot `algos::trig::lookup_d57_s18_22_sincos` rather than the
+// generic `wide_kernel::sin_strict_d57` / `cos_strict_d57`. The kernel
 // keeps the canonical `sin_fixed` / `cos_fixed` body but evaluates it
 // at a narrower working width. Cross-witness against the D76 wide
 // kernel (which is unaffected) at the boundaries and midpoint of the
 // range.
 
 #[test]
-fn d56_s18_sin_cos_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s18_sin_cos_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_18 = D56<18>;
+    type D57_18 = D57<18>;
     type D76_18 = D76<18>;
 
     // arg = 1 — small enough that k = 0 (the canonical Taylor path).
-    let n_56 = D56_18::from_int(1);
+    let n_56 = D57_18::from_int(1);
     let n_76: D76_18 = n_56.into();
 
     let sin_56 = n_56.sin_strict();
     let sin_76 = n_76.sin_strict();
-    let sin_76_as_56: D56_18 = sin_76.try_into().expect("sin(1) fits D56<18>");
+    let sin_76_as_56: D57_18 = sin_76.try_into().expect("sin(1) fits D57<18>");
     let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
         .expect("sin diff fits i128").abs();
     assert!(
         sin_diff <= 1,
-        "D56<18>::sin(1) narrow-GUARD kernel deviates from D76<18> by {sin_diff} LSB",
+        "D57<18>::sin(1) narrow-GUARD kernel deviates from D76<18> by {sin_diff} LSB",
     );
 
     let cos_56 = n_56.cos_strict();
     let cos_76 = n_76.cos_strict();
-    let cos_76_as_56: D56_18 = cos_76.try_into().expect("cos(1) fits D56<18>");
+    let cos_76_as_56: D57_18 = cos_76.try_into().expect("cos(1) fits D57<18>");
     let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
         .expect("cos diff fits i128").abs();
     assert!(
         cos_diff <= 1,
-        "D56<18>::cos(1) narrow-GUARD kernel deviates from D76<18> by {cos_diff} LSB",
+        "D57<18>::cos(1) narrow-GUARD kernel deviates from D76<18> by {cos_diff} LSB",
     );
 }
 
 #[test]
-fn d56_s20_sin_cos_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s20_sin_cos_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_20 = D56<20>;
+    type D57_20 = D57<20>;
     type D76_20 = D76<20>;
 
     // arg = 2 — exercises the quadrant-shift branch (k = 1) of the
     // shared sin_fixed reduction.
-    let n_56 = D56_20::from_int(2);
+    let n_56 = D57_20::from_int(2);
     let n_76: D76_20 = n_56.into();
 
     let sin_56 = n_56.sin_strict();
     let sin_76 = n_76.sin_strict();
-    let sin_76_as_56: D56_20 = sin_76.try_into().expect("sin(2) fits D56<20>");
+    let sin_76_as_56: D57_20 = sin_76.try_into().expect("sin(2) fits D57<20>");
     let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
         .expect("sin diff fits i128").abs();
     assert!(
         sin_diff <= 1,
-        "D56<20>::sin(2) narrow-GUARD kernel deviates from D76<20> by {sin_diff} LSB",
+        "D57<20>::sin(2) narrow-GUARD kernel deviates from D76<20> by {sin_diff} LSB",
     );
 
     let cos_56 = n_56.cos_strict();
     let cos_76 = n_76.cos_strict();
-    let cos_76_as_56: D56_20 = cos_76.try_into().expect("cos(2) fits D56<20>");
+    let cos_76_as_56: D57_20 = cos_76.try_into().expect("cos(2) fits D57<20>");
     let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
         .expect("cos diff fits i128").abs();
     assert!(
         cos_diff <= 1,
-        "D56<20>::cos(2) narrow-GUARD kernel deviates from D76<20> by {cos_diff} LSB",
+        "D57<20>::cos(2) narrow-GUARD kernel deviates from D76<20> by {cos_diff} LSB",
     );
 }
 
 #[test]
-fn d56_s22_sin_cos_small_arg_matches_d76_baseline() {
-    use decimal_scaled::D56;
+fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
+    use decimal_scaled::D57;
 
-    type D56_22 = D56<22>;
+    type D57_22 = D57<22>;
     type D76_22 = D76<22>;
 
     // Small non-integer argument — stresses the Taylor residual at the
     // top end of the slot.
-    let third_56 = D56_22::from_int(1) / D56_22::from_int(3);
+    let third_56 = D57_22::from_int(1) / D57_22::from_int(3);
     let third_76: D76_22 = third_56.into();
 
     let sin_56 = third_56.sin_strict();
     let sin_76 = third_76.sin_strict();
-    let sin_76_as_56: D56_22 = sin_76.try_into().expect("sin(1/3) fits D56<22>");
+    let sin_76_as_56: D57_22 = sin_76.try_into().expect("sin(1/3) fits D57<22>");
     let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
         .expect("sin diff fits i128").abs();
     assert!(
         sin_diff <= 1,
-        "D56<22>::sin(1/3) narrow-GUARD kernel deviates from D76<22> by {sin_diff} LSB",
+        "D57<22>::sin(1/3) narrow-GUARD kernel deviates from D76<22> by {sin_diff} LSB",
     );
 
     let cos_56 = third_56.cos_strict();
     let cos_76 = third_76.cos_strict();
-    let cos_76_as_56: D56_22 = cos_76.try_into().expect("cos(1/3) fits D56<22>");
+    let cos_76_as_56: D57_22 = cos_76.try_into().expect("cos(1/3) fits D57<22>");
     let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
         .expect("cos diff fits i128").abs();
     assert!(
         cos_diff <= 1,
-        "D56<22>::cos(1/3) narrow-GUARD kernel deviates from D76<22> by {cos_diff} LSB",
+        "D57<22>::cos(1/3) narrow-GUARD kernel deviates from D76<22> by {cos_diff} LSB",
     );
 }

@@ -1,5 +1,5 @@
-//! Bespoke `sin_strict` + `cos_strict` kernel slot for `D56<SCALE>`
-//! with `SCALE ∈ 44..=57`.
+//! Bespoke `sin_strict` + `cos_strict` kernel slot for `D57<SCALE>`
+//! with `SCALE ∈ 44..=56`.
 //!
 //! At deep storage scales the wide-tier `sin_cos_fixed` evaluates a
 //! Taylor series on a reduced argument `r ∈ [0, π/4]`. The series
@@ -37,8 +37,8 @@
 //! share one reduction, so one table buys both.
 //!
 //! The slot is exposed through [`crate::policy::trig::TrigPolicy`] only
-//! for `SCALE ∈ 44..=57`; lower scales keep using the generic
-//! [`super::wide_kernel::sin_strict_d56`] / `cos_strict_d56` which are
+//! for `SCALE ∈ 44..=56`; lower scales keep using the generic
+//! [`super::wide_kernel::sin_strict_d57`] / `cos_strict_d57` which are
 //! already cheap there (smaller `w`, fewer Taylor terms, faster Knuth
 //! dispatch).
 //!
@@ -60,9 +60,9 @@
 //! contract requires ≤ 0.5 LSB-of-storage = 0.5·10⁻ᴿᴱ — a margin of
 //! 28+ orders of magnitude even at `SCALE = 57`.
 
-#![cfg(any(feature = "d56", feature = "wide"))]
+#![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::core_type::wide_trig_d56 as core;
+use crate::core_type::wide_trig_d57 as core;
 use crate::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
@@ -72,9 +72,9 @@ use crate::wide_int::Int192;
 /// division path. Larger M shrinks the post-table residual `|δ| ≤
 /// π/(8M)` and so shaves Taylor iterations.
 ///
-/// Mirrors the tuning from the D56 atan + exp lookups (see
-/// [`crate::algos::trig::lookup_d56_s44_57_atan::M`] and
-/// [`crate::algos::exp::lookup_d56_s45_57::M`]): same `Int1024`-wide
+/// Mirrors the tuning from the D57 atan + exp lookups (see
+/// [`crate::algos::trig::lookup_d57_s44_56_atan::M`] and
+/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int1024`-wide
 /// work integer, same Knuth-dispatch arithmetic cost per slot, same
 /// per-thread memoisation pattern. `M = 512` strikes the same balance
 /// here — the post-table Taylor remainders are small enough that each
@@ -153,8 +153,8 @@ pub(crate) enum Which {
     Cos,
 }
 
-/// Shared `sin_strict` / `cos_strict` kernel for `D56<SCALE>` with
-/// `SCALE ∈ 44..=57`.
+/// Shared `sin_strict` / `cos_strict` kernel for `D57<SCALE>` with
+/// `SCALE ∈ 44..=56`.
 ///
 /// Stages:
 /// 1. Reduce `x = k·(π/2) + r` with `|r| ≤ π/4` via
@@ -179,7 +179,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     if raw == Int192::ZERO {
         return match which {
             Which::Sin => Int192::ZERO,
-            // D56::<SCALE>::ONE raw is 10^SCALE in storage units.
+            // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
             Which::Cos => {
                 let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
                 ten.pow(SCALE)
@@ -225,7 +225,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     let j_abs = j_signed.unsigned_abs() as u32;
     debug_assert!(
         j_abs <= M,
-        "sin_cos_strict d56 s44..=57: table index {j_abs} > M={M}"
+        "sin_cos_strict d57 s44..=56: table index {j_abs} > M={M}"
     );
     let j_idx = if j_abs > M { M as usize } else { j_abs as usize };
     let (sin_cj_abs, cos_cj) = table_entry(w, j_idx);
@@ -319,16 +319,16 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     core::round_to_storage_with(result, w, SCALE, mode)
 }
 
-/// Thin entry shim — `sin_strict` for `D56<SCALE>` with
-/// `SCALE ∈ 44..=57`. See [`sin_cos_strict`] for the algorithm.
+/// Thin entry shim — `sin_strict` for `D57<SCALE>` with
+/// `SCALE ∈ 44..=56`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
 pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     sin_cos_strict::<SCALE>(raw, mode, Which::Sin)
 }
 
-/// Thin entry shim — `cos_strict` for `D56<SCALE>` with
-/// `SCALE ∈ 44..=57`. See [`sin_cos_strict`] for the algorithm.
+/// Thin entry shim — `cos_strict` for `D57<SCALE>` with
+/// `SCALE ∈ 44..=56`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
 pub(crate) fn cos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {

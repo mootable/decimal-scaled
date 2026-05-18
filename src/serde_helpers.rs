@@ -726,26 +726,26 @@ macro_rules! decl_wide_serde {
     };
 }
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-decl_wide_serde!(D56, crate::wide_int::Int192, 24);
+#[cfg(any(feature = "d57", feature = "wide"))]
+decl_wide_serde!(D57, crate::wide_int::Int192, 24);
 #[cfg(any(feature = "d76", feature = "wide"))]
 decl_wide_serde!(D76, crate::wide_int::Int256, 32);
-#[cfg(any(feature = "d114", feature = "wide"))]
-decl_wide_serde!(D114, crate::wide_int::Int384, 48);
+#[cfg(any(feature = "d115", feature = "wide"))]
+decl_wide_serde!(D115, crate::wide_int::Int384, 48);
 #[cfg(any(feature = "d153", feature = "wide"))]
 decl_wide_serde!(D153, crate::wide_int::Int512, 64);
 #[cfg(any(feature = "d230", feature = "wide"))]
 decl_wide_serde!(D230, crate::wide_int::Int768, 96);
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 decl_wide_serde!(D307, crate::wide_int::Int1024, 128);
-#[cfg(any(feature = "d461", feature = "x-wide"))]
-decl_wide_serde!(D461, crate::wide_int::Int1536, 192);
-#[cfg(any(feature = "d615", feature = "x-wide"))]
-decl_wide_serde!(D615, crate::wide_int::Int2048, 256);
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
-decl_wide_serde!(D923, crate::wide_int::Int3072, 384);
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
-decl_wide_serde!(D1231, crate::wide_int::Int4096, 512);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+decl_wide_serde!(D462, crate::wide_int::Int1536, 192);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+decl_wide_serde!(D616, crate::wide_int::Int2048, 256);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+decl_wide_serde!(D924, crate::wide_int::Int3072, 384);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+decl_wide_serde!(D1232, crate::wide_int::Int4096, 512);
 
 #[cfg(all(test, feature = "wide"))]
 mod wide_serde_tests {

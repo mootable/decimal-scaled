@@ -1,5 +1,5 @@
 //! Bespoke narrow-`GUARD` `sin_strict` + `cos_strict` kernel slot for
-//! `D56<SCALE>` with `SCALE ∈ 18..=22`.
+//! `D57<SCALE>` with `SCALE ∈ 18..=22`.
 //!
 //! The shared wide-tier core sizes `GUARD = 30` for the worst case
 //! `SCALE = 57` (~200 rounded Taylor multiplies at a 87-digit working
@@ -9,8 +9,8 @@
 //! width is over-provisioned. Halving the working width roughly halves
 //! the per-iteration `Int192` `mul` / `div` cost.
 //!
-//! Unlike the SCALE 44..=57 sibling
-//! ([`super::lookup_d56_s44_57_sincos`]), this slot does NOT carry an
+//! Unlike the SCALE 44..=56 sibling
+//! ([`super::lookup_d57_s44_56_sincos`]), this slot does NOT carry an
 //! argument-reduction table. The reduction-table win only pays back
 //! when the unreduced Taylor series exceeds ~30 terms (which happens
 //! above ~SCALE 30 with the default `GUARD`); at SCALE 18..=22 the
@@ -38,9 +38,9 @@
 //! `SCALE + 12 = 30..34` — roughly two-thirds of the bits, which
 //! matches the ~25-30% wall-clock reclaim observed in the probe.
 
-#![cfg(any(feature = "d56", feature = "wide"))]
+#![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::core_type::wide_trig_d56 as core;
+use crate::core_type::wide_trig_d57 as core;
 use crate::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
@@ -57,7 +57,7 @@ pub(crate) enum Which {
 }
 
 /// Shared narrow-`GUARD` `sin_strict` / `cos_strict` kernel for
-/// `D56<SCALE>` with `SCALE ∈ 18..=22`.
+/// `D57<SCALE>` with `SCALE ∈ 18..=22`.
 ///
 /// Reroutes the canonical [`core::sin_fixed`] / [`core::cos_fixed`]
 /// kernels through a narrower working width
@@ -75,7 +75,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     if raw == Int192::ZERO {
         return match which {
             Which::Sin => Int192::ZERO,
-            // D56::<SCALE>::ONE raw is 10^SCALE in storage units.
+            // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
             Which::Cos => {
                 let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
                 ten.pow(SCALE)
@@ -92,7 +92,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     core::round_to_storage_with(result, w, SCALE, mode)
 }
 
-/// Thin entry shim — `sin_strict` for `D56<SCALE>` with
+/// Thin entry shim — `sin_strict` for `D57<SCALE>` with
 /// `SCALE ∈ 18..=22`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
@@ -100,7 +100,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
     sin_cos_strict::<SCALE>(raw, mode, Which::Sin)
 }
 
-/// Thin entry shim — `cos_strict` for `D56<SCALE>` with
+/// Thin entry shim — `cos_strict` for `D57<SCALE>` with
 /// `SCALE ∈ 18..=22`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]

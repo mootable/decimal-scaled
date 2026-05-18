@@ -8,8 +8,8 @@
 //! Variants:
 //!
 //! - [`generic_wide`] — Newton iteration on `mag · 10^(2·SCALE)` over a
-//!   wide work integer. Width default for D56 / D76 / D114 / D153 /
-//!   D230 / D307 / D461 / D615 / D923 / D1231.
+//!   wide work integer. Width default for D57 / D76 / D115 / D153 /
+//!   D230 / D307 / D462 / D616 / D924 / D1232.
 //! - [`mg_divide_d38`] — hand-tuned 384-bit cube-root path tailored to
 //!   D38's `i128` storage. **Width specialisation for D38**, captures
 //!   the kernel that has shipped with D38 since before the algorithm

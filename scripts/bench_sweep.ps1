@@ -38,31 +38,31 @@ $indexFile = Join-Path $sweepDir 'INDEX.md'
 # All 26 per-width bench binaries. Order within each lane is
 # longest-first so big benches start as the lane warms up.
 $laneA = @(
-    'full_matrix_d1231',
-    'full_matrix_d923',
-    'full_matrix_d615',
-    'full_matrix_d461',
+    'full_matrix_d1232',
+    'full_matrix_d924',
+    'full_matrix_d616',
+    'full_matrix_d462',
     'full_matrix_d307',
     'full_matrix_d230',
     'full_matrix_d153',
-    'full_matrix_d114',
+    'full_matrix_d115',
     'full_matrix_d76',
-    'full_matrix_d56',
+    'full_matrix_d57',
     'full_matrix_d38',
     'full_matrix_d18',
     'full_matrix_d9'
 )
 $laneB = @(
-    'lib_cmp_d1231',
-    'lib_cmp_d923',
-    'lib_cmp_d615',
-    'lib_cmp_d461',
+    'lib_cmp_d1232',
+    'lib_cmp_d924',
+    'lib_cmp_d616',
+    'lib_cmp_d462',
     'lib_cmp_d307',
     'lib_cmp_d230',
     'lib_cmp_d153',
-    'lib_cmp_d114',
+    'lib_cmp_d115',
     'lib_cmp_d76',
-    'lib_cmp_d56',
+    'lib_cmp_d57',
     'lib_cmp_d38',
     'lib_cmp_d18',
     'lib_cmp_d9'

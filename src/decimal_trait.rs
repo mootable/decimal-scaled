@@ -21,8 +21,8 @@
 //!
 //! Implemented automatically by a blanket impl, so any type that
 //! impls all four halves is `Decimal` for free. Every shipped width
-//! (`D9`, `D18`, `D38`, `D56`, `D76`, `D114`, `D153`, `D230`, `D307`,
-//! `D461`, `D615`, `D923`, `D1231`) already satisfies the bound via
+//! (`D9`, `D18`, `D38`, `D57`, `D76`, `D115`, `D153`, `D230`, `D307`,
+//! `D462`, `D616`, `D924`, `D1232`) already satisfies the bound via
 //! the per-tier macros (`decl_decimal_basics!` for arithmetic +
 //! convert, `decl_decimal_consts!` for constants,
 //! `decl_decimal_transcendental_impl!` for the transcendental

@@ -16,7 +16,7 @@ exactness when they need it and an opt-out when they don't.
 
 | target | gating work |
 |--------|-------------|
-| **0.3.0** (shipped) | Half-width tier ladder (D56 / D114 / D230 / D461 / D615 / D923 / D1231); the comprehensive cross-tier `widen()` / `narrow()` chain (D38.widen() now returns D56, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); strict-by-default dispatcher; per-width benchmark split; trig functions in the per-width summary chart family. |
+| **0.3.0** (shipped) | Half-width tier ladder (D57 / D115 / D230 / D462 / D616 / D924 / D1232); the comprehensive cross-tier `widen()` / `narrow()` chain (D38.widen() now returns D57, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); strict-by-default dispatcher; per-width benchmark split; trig functions in the per-width summary chart family. |
 | **0.3.1** (shipped) | Docs-site release-process fixes; rustdoc build covers x-wide + xx-wide tiers. |
 | **0.3.2** (in flight) | See "Shipped recently in 0.3.x" below. Per-L fixed-array `mul` (1.25× on D307 exp); 17 trig fast paths; ln fast paths; adaptive halvings in atan; full profiling infrastructure (samply / flamegraph / perfetto); two benchmark add-ons (atan input-class comparison, per-L mul gate). |
 | **0.4.0** | (1) Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension. (2) Cryptographically-secure RNG surface: uniform-decimal sampling over `[0, 1)`, `[a, b]`, and full-storage; rejection-sampling at any SCALE; bring-your-own `CryptoRng` so callers can plug `OsRng` / `ChaCha20Rng` / hardware RNGs. |
@@ -33,7 +33,7 @@ Tactical perf and fast-path wins, with bench evidence in
 | Adaptive halvings in `atan_fixed` (halve while `|y| > ~0.2`, max 8; was fixed 3) | 3-5× on atan with small / reciprocal-reduced inputs (D38<19>: `atan(0.001)` 44 → 14 µs; `atan(1e8)` 44 → 8 µs) |
 | 17 trig fast paths: zero / ±1 / small-x linear band for `atan`, `sin`, `cos`, `tan`, `asin`, `acos`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `to_degrees`, `to_radians` | ~1000-10000× on the fast-path inputs (`atan(0)` 68 µs → 5 ns; `atan(1e-7)` 68 µs → 5 ns); best-in-class small-x atan vs both fastnum and g_math |
 | `ln(1) = 0` + `ln(1+ε) ≈ ε` linear-band fast paths in `ln_strict` | <10 ns on fast-path inputs vs prior 1.4 µs |
-| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D9 through D1231 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
+| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D9 through D1232 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
 | Profiling infrastructure: `perf-trace` feature, section spans in `exp_fixed` / `atan_fixed`, samply + perfetto example drivers + parser scripts | establishes the M2-gate discipline used through the rest of this work |
 | `benches/atan_inputs.rs` — input-class atan timing (decimal-scaled vs fastnum vs g_math) | exposed two bench-validity issues (fastnum `atan(|x|>1)` = NaN, fastnum `ln(2)` = const lookup) — recorded in `docs/benchmarks.md` |
 

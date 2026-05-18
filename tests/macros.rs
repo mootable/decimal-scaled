@@ -160,8 +160,9 @@ fn rounded_negative_value() {
 
 #[test]
 fn explicit_scale_to_max_supported() {
-    let v = d38!(1, scale 38);
-    assert_eq!(v.to_bits(), 10_i128.pow(38));
+    // v0.4.0 cap: MAX_SCALE for D38 is 37.
+    let v = d38!(1, scale 37);
+    assert_eq!(v.to_bits(), 10_i128.pow(37));
 }
 
 #[test]
@@ -256,10 +257,11 @@ fn d9_literal_inferred_scale() {
 }
 
 #[test]
-fn d9_max_scale_9() {
-    use decimal_scaled::{d9, D9s9};
-    let v = d9!(0.000_000_001);  // raw 1 at scale 9
-    assert_eq!(v, D9s9::from_bits(1));
+fn d9_max_scale_8() {
+    // v0.4.0 cap: MAX_SCALE for D9 is 8.
+    use decimal_scaled::{d9, D9s8};
+    let v = d9!(0.000_000_01);  // raw 1 at scale 8
+    assert_eq!(v, D9s8::from_bits(1));
 }
 
 #[test]

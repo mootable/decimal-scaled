@@ -18,19 +18,19 @@
 //! | [`D9<SCALE>`]    | `i32`     |    9 | always on |
 //! | [`D18<SCALE>`]   | `i64`     |   18 | always on |
 //! | [`D38<SCALE>`]   | `i128`    |   38 | always on |
-//! | [`D56<SCALE>`]   | 192-bit   |   57 | `d56` or `wide` |
+//! | [`D57<SCALE>`]   | 192-bit   |   57 | `d57` or `wide` |
 //! | [`D76<SCALE>`]   | 256-bit   |   76 | `d76` or `wide` |
-//! | [`D114<SCALE>`]  | 384-bit   |  115 | `d114` or `wide` |
+//! | [`D115<SCALE>`]  | 384-bit   |  115 | `d115` or `wide` |
 //! | [`D153<SCALE>`]  | 512-bit   |  153 | `d153` or `wide` |
 //! | [`D230<SCALE>`]  | 768-bit   |  230 | `d230` or `wide` |
 //! | [`D307<SCALE>`]  | 1024-bit  |  307 | `d307` or `wide` |
-//! | [`D461<SCALE>`]  | 1536-bit  |  462 | `d461` or `x-wide` |
-//! | [`D615<SCALE>`]  | 2048-bit  |  616 | `d615` or `x-wide` |
-//! | [`D923<SCALE>`]  | 3072-bit  |  924 | `d923` or `xx-wide` |
-//! | [`D1231<SCALE>`] | 4096-bit  | 1232 | `d1231` or `xx-wide` |
+//! | [`D462<SCALE>`]  | 1536-bit  |  462 | `d462` or `x-wide` |
+//! | [`D616<SCALE>`]  | 2048-bit  |  616 | `d616` or `x-wide` |
+//! | [`D924<SCALE>`]  | 3072-bit  |  924 | `d924` or `xx-wide` |
+//! | [`D1232<SCALE>`] | 4096-bit  | 1232 | `d1232` or `xx-wide` |
 //!
-//! Umbrellas: `wide` enables D56 / D76 / D114 / D153 / D230 / D307;
-//! `x-wide` adds D461 + D615; `xx-wide` adds D923 + D1231. Every
+//! Umbrellas: `wide` enables D57 / D76 / D115 / D153 / D230 / D307;
+//! `x-wide` adds D462 + D616; `xx-wide` adds D924 + D1232. Every
 //! adjacent pair has lossless `.widen()` / fallible `.narrow()`
 //! helpers plus `From` / `TryFrom` impls.
 //!
@@ -277,23 +277,24 @@ pub use transcendental_trait::DecimalTranscendental;
 #[cfg(feature = "dyn")]
 pub use dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
 
-// D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s38.
+// D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s37
+// (v0.4.0 cap: MAX_SCALE = name - 1).
 pub use core_type::{
     D38, D38s0, D38s1, D38s2, D38s3, D38s4, D38s5, D38s6, D38s7, D38s8, D38s9, D38s10,
     D38s11, D38s12, D38s13, D38s14, D38s15, D38s16, D38s17, D38s18, D38s19, D38s20,
     D38s21, D38s22, D38s23, D38s24, D38s25, D38s26, D38s27, D38s28, D38s29, D38s30,
-    D38s31, D38s32, D38s33, D38s34, D38s35, D38s36, D38s37, D38s38,
+    D38s31, D38s32, D38s33, D38s34, D38s35, D38s36, D38s37,
 };
 
 // D9 — 32-bit storage, scale 0..=9.
 pub use core_type::{
-    D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8, D9s9,
+    D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8,
 };
 
 // D18 — 64-bit storage, scale 0..=18.
 pub use core_type::{
     D18, D18s0, D18s1, D18s2, D18s3, D18s4, D18s5, D18s6, D18s7, D18s8, D18s9, D18s10, D18s11,
-    D18s12, D18s13, D18s14, D18s15, D18s16, D18s17, D18s18,
+    D18s12, D18s13, D18s14, D18s15, D18s16, D18s17,
 };
 
 // D76 — 256-bit storage, behind the `d76` / `wide` features.
@@ -302,7 +303,7 @@ pub use core_type::{
     D76,
     D76s0, D76s1, D76s2, D76s3, D76s4, D76s6, D76s9, D76s12, D76s15,
     D76s18, D76s20, D76s24, D76s28, D76s32, D76s35, D76s38, D76s42,
-    D76s48, D76s50, D76s56, D76s64, D76s70, D76s75, D76s76,
+    D76s48, D76s50, D76s56, D76s64, D76s70, D76s75,
 };
 
 // The hand-rolled wide-integer types — the storage backend for the
@@ -319,7 +320,7 @@ pub use core_type::{
     D153s0, D153s1, D153s2, D153s4, D153s6, D153s9, D153s12, D153s15,
     D153s18, D153s20, D153s24, D153s28, D153s32, D153s35, D153s38,
     D153s50, D153s57, D153s75, D153s76, D153s100, D153s115, D153s140,
-    D153s150, D153s152, D153s153,
+    D153s150, D153s152,
 };
 
 // D307 — 1024-bit storage, behind the `d307` / `wide` features.
@@ -329,29 +330,29 @@ pub use core_type::{
     D307s0, D307s1, D307s2, D307s4, D307s6, D307s9, D307s12, D307s15,
     D307s18, D307s20, D307s24, D307s28, D307s32, D307s35, D307s38,
     D307s50, D307s75, D307s100, D307s115, D307s150, D307s153,
-    D307s200, D307s230, D307s275, D307s300, D307s306, D307s307,
+    D307s200, D307s230, D307s275, D307s300, D307s306,
 };
 
 // ─── New half-width and wider tiers ───────────────────────────────────
 
-// D56 — 192-bit storage; half-width between D38 and D76.
-#[cfg(any(feature = "d56", feature = "wide"))]
+// D57 — 192-bit storage; half-width between D38 and D76.
+#[cfg(any(feature = "d57", feature = "wide"))]
 pub use core_type::{
-    D56,
-    D56s0, D56s1, D56s2, D56s4, D56s6, D56s9, D56s12, D56s18, D56s20, D56s24,
-    D56s28, D56s32, D56s38, D56s42, D56s48, D56s52, D56s56, D56s57,
+    D57,
+    D57s0, D57s1, D57s2, D57s4, D57s6, D57s9, D57s12, D57s18, D57s20, D57s24,
+    D57s28, D57s32, D57s38, D57s42, D57s48, D57s52, D57s56,
 };
-#[cfg(any(feature = "d56", feature = "wide"))]
+#[cfg(any(feature = "d57", feature = "wide"))]
 pub use wide_int::{Int192, Uint192};
 
-// D114 — 384-bit; half-width between D76 and D153.
-#[cfg(any(feature = "d114", feature = "wide"))]
+// D115 — 384-bit; half-width between D76 and D153.
+#[cfg(any(feature = "d115", feature = "wide"))]
 pub use core_type::{
-    D114,
-    D114s0, D114s1, D114s4, D114s8, D114s16, D114s24, D114s32, D114s38, D114s50,
-    D114s57, D114s64, D114s76, D114s90, D114s100, D114s110, D114s114, D114s115,
+    D115,
+    D115s0, D115s1, D115s4, D115s8, D115s16, D115s24, D115s32, D115s38, D115s50,
+    D115s57, D115s64, D115s76, D115s90, D115s100, D115s110, D115s114,
 };
-#[cfg(any(feature = "d114", feature = "wide"))]
+#[cfg(any(feature = "d115", feature = "wide"))]
 pub use wide_int::{Int384, Uint384};
 
 // D230 — 768-bit; half-width between D153 and D307.
@@ -359,50 +360,50 @@ pub use wide_int::{Int384, Uint384};
 pub use core_type::{
     D230,
     D230s0, D230s1, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115,
-    D230s140, D230s153, D230s175, D230s200, D230s215, D230s225, D230s229, D230s230,
+    D230s140, D230s153, D230s175, D230s200, D230s215, D230s225, D230s229,
 };
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub use wide_int::{Int768, Uint768};
 
-// D461 — 1536-bit; half-width between D307 and D615.
-#[cfg(any(feature = "d461", feature = "x-wide"))]
+// D462 — 1536-bit; half-width between D307 and D616.
+#[cfg(any(feature = "d462", feature = "x-wide"))]
 pub use core_type::{
-    D461,
-    D461s0, D461s1, D461s18, D461s38, D461s75, D461s115, D461s153, D461s200, D461s230,
-    D461s275, D461s307, D461s350, D461s400, D461s440, D461s460, D461s461, D461s462,
+    D462,
+    D462s0, D462s1, D462s18, D462s38, D462s75, D462s115, D462s153, D462s200, D462s230,
+    D462s275, D462s307, D462s350, D462s400, D462s440, D462s460, D462s461,
 };
-#[cfg(any(feature = "d461", feature = "x-wide"))]
+#[cfg(any(feature = "d462", feature = "x-wide"))]
 pub use wide_int::{Int1536, Uint1536};
 
-// D615 — 2048-bit; new top wide tier. Int2048 / Uint2048 are
+// D616 — 2048-bit; new top wide tier. Int2048 / Uint2048 are
 // already exported above for x-wide / d307 widening; no re-export
 // here.
-#[cfg(any(feature = "d615", feature = "x-wide"))]
+#[cfg(any(feature = "d616", feature = "x-wide"))]
 pub use core_type::{
-    D615,
-    D615s0, D615s1, D615s38, D615s75, D615s115, D615s153, D615s200, D615s230, D615s275,
-    D615s308, D615s380, D615s462, D615s500, D615s555, D615s600, D615s615, D615s616,
+    D616,
+    D616s0, D616s1, D616s38, D616s75, D616s115, D616s153, D616s200, D616s230, D616s275,
+    D616s308, D616s380, D616s462, D616s500, D616s555, D616s600, D616s615,
 };
 
-// D923 — 3072-bit; half-width between D615 and D1231.
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
+// D924 — 3072-bit; half-width between D616 and D1232.
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub use core_type::{
-    D923,
-    D923s0, D923s1, D923s75, D923s153, D923s230, D923s307, D923s400, D923s461, D923s462,
-    D923s500, D923s616, D923s700, D923s800, D923s860, D923s900, D923s920, D923s923, D923s924,
+    D924,
+    D924s0, D924s1, D924s75, D924s153, D924s230, D924s307, D924s400, D924s461, D924s462,
+    D924s500, D924s616, D924s700, D924s800, D924s860, D924s900, D924s920, D924s923,
 };
-#[cfg(any(feature = "d923", feature = "xx-wide"))]
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
 
-// D1231 — 4096-bit; widest tier shipped.
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+// D1232 — 4096-bit; widest tier shipped.
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub use core_type::{
-    D1231,
-    D1231s0, D1231s1, D1231s75, D1231s153, D1231s230, D1231s307, D1231s461, D1231s616,
-    D1231s700, D1231s800, D1231s900, D1231s924, D1231s1000, D1231s1100,
-    D1231s1180, D1231s1220, D1231s1230, D1231s1231, D1231s1232,
+    D1232,
+    D1232s0, D1232s1, D1232s75, D1232s153, D1232s230, D1232s307, D1232s461, D1232s616,
+    D1232s700, D1232s800, D1232s900, D1232s924, D1232s1000, D1232s1100,
+    D1232s1180, D1232s1220, D1232s1230, D1232s1231,
 };
-#[cfg(any(feature = "d1231", feature = "xx-wide"))]
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub use wide_int::{Int8192, Int16384, Uint8192, Uint16384};
 
 // ─── Construction macros (re-exports + per-scale wrappers) ────────────
@@ -422,26 +423,26 @@ pub use decimal_scaled_macros::d153;
 #[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))]
 pub use decimal_scaled_macros::d307;
 
-#[cfg(all(feature = "macros", any(feature = "d56", feature = "wide")))]
-pub use decimal_scaled_macros::d56;
+#[cfg(all(feature = "macros", any(feature = "d57", feature = "wide")))]
+pub use decimal_scaled_macros::d57;
 
-#[cfg(all(feature = "macros", any(feature = "d114", feature = "wide")))]
-pub use decimal_scaled_macros::d114;
+#[cfg(all(feature = "macros", any(feature = "d115", feature = "wide")))]
+pub use decimal_scaled_macros::d115;
 
 #[cfg(all(feature = "macros", any(feature = "d230", feature = "wide")))]
 pub use decimal_scaled_macros::d230;
 
-#[cfg(all(feature = "macros", any(feature = "d461", feature = "x-wide")))]
-pub use decimal_scaled_macros::d461;
+#[cfg(all(feature = "macros", any(feature = "d462", feature = "x-wide")))]
+pub use decimal_scaled_macros::d462;
 
-#[cfg(all(feature = "macros", any(feature = "d615", feature = "x-wide")))]
-pub use decimal_scaled_macros::d615;
+#[cfg(all(feature = "macros", any(feature = "d616", feature = "x-wide")))]
+pub use decimal_scaled_macros::d616;
 
-#[cfg(all(feature = "macros", any(feature = "d923", feature = "xx-wide")))]
-pub use decimal_scaled_macros::d923;
+#[cfg(all(feature = "macros", any(feature = "d924", feature = "xx-wide")))]
+pub use decimal_scaled_macros::d924;
 
-#[cfg(all(feature = "macros", any(feature = "d1231", feature = "xx-wide")))]
-pub use decimal_scaled_macros::d1231;
+#[cfg(all(feature = "macros", any(feature = "d1232", feature = "xx-wide")))]
+pub use decimal_scaled_macros::d1232;
 
 // Per-scale wrappers — curated subset of pre-baked
 // `<dN>s<SCALE>!` macros that forward to the corresponding
@@ -467,9 +468,6 @@ macro_rules! d9s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 4  $(
 /// `d9s6!(value)` — equivalent to `d9!(value, scale 6)`.
 #[cfg(feature = "macros")] #[macro_export]
 macro_rules! d9s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 6  $(, $($rest)*)?) }; }
-/// `d9s9!(value)` — equivalent to `d9!(value, scale 9)`.
-#[cfg(feature = "macros")] #[macro_export]
-macro_rules! d9s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 9  $(, $($rest)*)?) }; }
 
 // D18 curated scales.
 /// `d18s0!(value)` — equivalent to `d18!(value, scale 0)`.
@@ -490,9 +488,6 @@ macro_rules! d18s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 9  
 /// `d18s12!(value)` — equivalent to `d18!(value, scale 12)`.
 #[cfg(feature = "macros")] #[macro_export]
 macro_rules! d18s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 12 $(, $($rest)*)?) }; }
-/// `d18s18!(value)` — equivalent to `d18!(value, scale 18)`.
-#[cfg(feature = "macros")] #[macro_export]
-macro_rules! d18s18 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 18 $(, $($rest)*)?) }; }
 
 // D38 curated scales.
 /// `d38s0!(value)` — equivalent to `d38!(value, scale 0)`.
@@ -528,9 +523,6 @@ macro_rules! d38s24 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 24 
 /// `d38s35!(value)` — equivalent to `d38!(value, scale 35)`.
 #[cfg(feature = "macros")] #[macro_export]
 macro_rules! d38s35 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 35 $(, $($rest)*)?) }; }
-/// `d38s38!(value)` — equivalent to `d38!(value, scale 38)`.
-#[cfg(feature = "macros")] #[macro_export]
-macro_rules! d38s38 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 38 $(, $($rest)*)?) }; }
 
 // D76 curated scales.
 /// `d76s0!(value)` — equivalent to `d76!(value, scale 0)`.
@@ -554,9 +546,6 @@ macro_rules! d76s35 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 35 
 /// `d76s50!(value)` — equivalent to `d76!(value, scale 50)`.
 #[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
 macro_rules! d76s50 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 50 $(, $($rest)*)?) }; }
-/// `d76s76!(value)` — equivalent to `d76!(value, scale 76)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
-macro_rules! d76s76 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 76 $(, $($rest)*)?) }; }
 
 // D153 curated scales.
 /// `d153s0!(value)` — equivalent to `d153!(value, scale 0)`.
@@ -571,9 +560,6 @@ macro_rules! d153s75  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 
 /// `d153s150!(value)` — equivalent to `d153!(value, scale 150)`.
 #[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
 macro_rules! d153s150 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 150 $(, $($rest)*)?) }; }
-/// `d153s153!(value)` — equivalent to `d153!(value, scale 153)`.
-#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
-macro_rules! d153s153 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 153 $(, $($rest)*)?) }; }
 
 // D307 curated scales.
 /// `d307s0!(value)` — equivalent to `d307!(value, scale 0)`.
@@ -588,6 +574,3 @@ macro_rules! d307s150 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 
 /// `d307s300!(value)` — equivalent to `d307!(value, scale 300)`.
 #[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
 macro_rules! d307s300 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 300 $(, $($rest)*)?) }; }
-/// `d307s307!(value)` — equivalent to `d307!(value, scale 307)`.
-#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
-macro_rules! d307s307 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 307 $(, $($rest)*)?) }; }

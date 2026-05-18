@@ -381,9 +381,9 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Logarithm in `base` under the supplied rounding mode.
     ///
-    /// Under `d56` / `wide` the body widens to D56, calls D56's
+    /// Under `d57` / `wide` the body widens to D57, calls D57's
     /// `log_strict_with` (which shares the fast
-    /// `wide_trig_d56::ln_fixed` core that `ln_strict` borrows), and
+    /// `wide_trig_d57::ln_fixed` core that `ln_strict` borrows), and
     /// narrows back. Without those features it falls through to the
     /// bespoke `Fixed` 256-bit kernel — same path the family used
     /// before the borrow migration.
@@ -392,13 +392,13 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn log_strict_with(self, base: Self, mode: crate::rounding::RoundingMode) -> Self {
         assert!(self.0 > 0, "D38::log: argument must be positive");
         assert!(base.0 > 0, "D38::log: base must be positive");
-        #[cfg(any(feature = "d56", feature = "wide"))]
+        #[cfg(any(feature = "d57", feature = "wide"))]
         {
-            Self::from_bits(crate::algos::ln::borrow_d56::log_strict::<SCALE>(
+            Self::from_bits(crate::algos::ln::borrow_d57::log_strict::<SCALE>(
                 self.0, base.0, mode,
             ))
         }
-        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        #[cfg(not(any(feature = "d57", feature = "wide")))]
         {
             use crate::d_w128_kernels::Fixed;
             let w = SCALE + STRICT_GUARD;
@@ -473,17 +473,17 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Base-2 log under the supplied rounding mode.
     ///
-    /// Under `d56` / `wide` widens to D56, calls D56's
+    /// Under `d57` / `wide` widens to D57, calls D57's
     /// `log2_strict_with`, narrows back — see [`Self::log_strict_with`].
     #[inline]
     #[must_use]
     pub fn log2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         assert!(self.0 > 0, "D38::log2: argument must be positive");
-        #[cfg(any(feature = "d56", feature = "wide"))]
+        #[cfg(any(feature = "d57", feature = "wide"))]
         {
-            Self::from_bits(crate::algos::ln::borrow_d56::log2_strict::<SCALE>(self.0, mode))
+            Self::from_bits(crate::algos::ln::borrow_d57::log2_strict::<SCALE>(self.0, mode))
         }
-        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        #[cfg(not(any(feature = "d57", feature = "wide")))]
         {
             use crate::d_w128_kernels::Fixed;
             let w = SCALE + STRICT_GUARD;
@@ -551,17 +551,17 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// Base-10 log under the supplied rounding mode.
     ///
-    /// Under `d56` / `wide` widens to D56, calls D56's
+    /// Under `d57` / `wide` widens to D57, calls D57's
     /// `log10_strict_with`, narrows back — see [`Self::log_strict_with`].
     #[inline]
     #[must_use]
     pub fn log10_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         assert!(self.0 > 0, "D38::log10: argument must be positive");
-        #[cfg(any(feature = "d56", feature = "wide"))]
+        #[cfg(any(feature = "d57", feature = "wide"))]
         {
-            Self::from_bits(crate::algos::ln::borrow_d56::log10_strict::<SCALE>(self.0, mode))
+            Self::from_bits(crate::algos::ln::borrow_d57::log10_strict::<SCALE>(self.0, mode))
         }
-        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        #[cfg(not(any(feature = "d57", feature = "wide")))]
         {
             use crate::d_w128_kernels::Fixed;
             let w = SCALE + STRICT_GUARD;
@@ -701,7 +701,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
     /// `2^self` under the supplied rounding mode.
     ///
-    /// Under `d56` / `wide` widens to D56, calls D56's
+    /// Under `d57` / `wide` widens to D57, calls D57's
     /// `exp2_strict_with`, narrows back — see [`Self::log_strict_with`]
     /// for the broader rationale.
     #[inline]
@@ -710,11 +710,11 @@ impl<const SCALE: u32> D38<SCALE> {
         if self.0 == 0 {
             return Self::ONE;
         }
-        #[cfg(any(feature = "d56", feature = "wide"))]
+        #[cfg(any(feature = "d57", feature = "wide"))]
         {
-            Self::from_bits(crate::algos::exp::borrow_d56::exp2_strict::<SCALE>(self.0, mode))
+            Self::from_bits(crate::algos::exp::borrow_d57::exp2_strict::<SCALE>(self.0, mode))
         }
-        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        #[cfg(not(any(feature = "d57", feature = "wide")))]
         {
             use crate::d_w128_kernels::Fixed;
             let w = SCALE + STRICT_GUARD;

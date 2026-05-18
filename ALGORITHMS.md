@@ -246,7 +246,7 @@ after the influential 1980 implementation:
 > Elementary Functions."** Prentice-Hall.
 
 Implementation: `src/log_exp_strict.rs::ln_fixed` (D38),
-`src/macros/wide_transcendental.rs::ln_fixed` (every wide tier — D56 / D76 / D114 / D153 / D230 / D307 / D461 / D615 / D923 / D1231).
+`src/macros/wide_transcendental.rs::ln_fixed` (every wide tier — D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 / D1232).
 
 Further reading:
 
@@ -371,9 +371,9 @@ Taylor series for `atan` converges in `~p_bits / (2l)` terms.
 The halving count is chosen per working scale `w`:
 
 - `w < 60` → 5 halvings (D38 / D9 / D18 strict path)
-- `60 ≤ w < 110` → 6 halvings (D56 / D76 / light D114)
-- `w ≥ 110` → 7 halvings (D114 / D153 / D230 / D307 / D461 / D615 /
-  D923 / D1231)
+- `60 ≤ w < 110` → 6 halvings (D57 / D76 / light D115)
+- `w ≥ 110` → 7 halvings (D115 / D153 / D230 / D307 / D462 / D616 /
+  D924 / D1232)
 
 Break-even rationale: each halving costs ~one wide mul + one wide
 sqrt + one wide div; each saved Taylor term saves ~one wide mul.

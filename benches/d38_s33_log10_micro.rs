@@ -1,5 +1,5 @@
 //! Focused micro-bench for `D38<33>::log10_strict` before/after the
-//! borrow-D56 migration. Kept tiny so a full run completes in well
+//! borrow-D57 migration. Kept tiny so a full run completes in well
 //! under a minute (per the project's "micro-bench first" rule).
 
 use std::hint::black_box;

@@ -21,7 +21,7 @@
 //! `Dxx<S>` it came from when the same code path serves many
 //! monomorphisations).
 //!
-//! For the deeper-diagnostic sites in `algos/*/borrow_d56.rs` we
+//! For the deeper-diagnostic sites in `algos/*/borrow_d57.rs` we
 //! also include the offending wide-tier value inline — those
 //! wrappers have it in scope cheaply. The macro-emitted call sites
 //! in `macros/strict_transcendentals.rs` route through this helper

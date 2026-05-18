@@ -1,7 +1,7 @@
 //! Trigonometric algorithm family.
 //!
 //! Narrow tier (D9 / D18 / D38) carries forward + inverse + atan2 on
-//! the 256-bit `Fixed` intermediate. Wide tier (D56 .. D1231)
+//! the 256-bit `Fixed` intermediate. Wide tier (D57 .. D1232)
 //! currently covers only sin / cos / tan / atan via per-tier kernels
 //! in [`wide_kernel`]; the inverse family (asin / acos / atan2) for
 //! the wide tiers remains macro-emitted on inherent methods. Both
@@ -16,17 +16,17 @@
 //! - [`widen_to_d38`] — D9 / D18 widen → `fixed_d38::*` → narrow.
 //! - [`wide_kernel`] — per-tier `sin_strict_<tier>` / `cos_strict_<tier>`
 //!   / `tan_strict_<tier>` / `atan_strict_<tier>` free functions for
-//!   the wide tiers (D56 / D76 / D114 / D153 / D230 / D307 / D461 /
-//!   D615 / D923 / D1231).
+//!   the wide tiers (D57 / D76 / D115 / D153 / D230 / D307 / D462 /
+//!   D616 / D924 / D1232).
 
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub(crate) mod borrow_d56;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod borrow_d57;
 pub(crate) mod fixed_d38;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub(crate) mod lookup_d56_s18_22_sincos;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub(crate) mod lookup_d56_s44_57_atan;
-#[cfg(any(feature = "d56", feature = "wide"))]
-pub(crate) mod lookup_d56_s44_57_sincos;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s18_22_sincos;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s44_56_atan;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s44_56_sincos;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;
