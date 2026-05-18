@@ -1985,6 +1985,7 @@ mod tests {
     #[test]
     fn d76_basics() {
         use crate::decimal_trait::Decimal;
+        use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I256;
         assert_eq!(super::D76s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
         assert_eq!(super::D76s2::ONE.to_bits(), I256::from_str_radix("100", 10).unwrap());
@@ -1999,7 +2000,7 @@ mod tests {
             m76,
             I256::from_str_radix("10000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap()
         );
-        assert_eq!(<super::D76s12 as Decimal>::MAX_SCALE, 76);
+        assert_eq!(<super::D76s12 as DecimalArithmetic>::MAX_SCALE, 76);
         // round-trip
         let raw = I256::from_str_radix("123456789012345678901234567890", 10).unwrap();
         assert_eq!(super::D76s12::from_bits(raw).to_bits(), raw);
@@ -2239,9 +2240,10 @@ mod tests {
     #[test]
     fn d153_smoke() {
         use crate::decimal_trait::Decimal;
+        use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I512;
         type D = super::D153<35>;
-        assert_eq!(<D as Decimal>::MAX_SCALE, 153);
+        assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 153);
         assert_eq!(D::ZERO.to_bits(), I512::from_str_radix("0", 10).unwrap());
         let one = D::ONE;
         let two = one + one;
@@ -2261,9 +2263,10 @@ mod tests {
     #[test]
     fn d307_smoke() {
         use crate::decimal_trait::Decimal;
+        use crate::arithmetic_trait::DecimalArithmetic;
         use crate::wide_int::I1024;
         type D = super::D307<35>;
-        assert_eq!(<D as Decimal>::MAX_SCALE, 307);
+        assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 307);
         let one = D::ONE;
         let two = one + one;
         let three = two + one;

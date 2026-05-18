@@ -181,7 +181,7 @@ macro_rules! decl_decimal_basics {
             pub const MIN_POSITIVE: Self = Self($one_lsb);
         }
 
-        impl<const SCALE: u32> $crate::decimal_trait::Decimal for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::arithmetic_trait::DecimalArithmetic for $Type<SCALE> {
             type Storage = $Storage;
 
             const SCALE: u32 = SCALE;
@@ -193,12 +193,6 @@ macro_rules! decl_decimal_basics {
 
             #[inline]
             fn multiplier() -> $Storage { $Type::<SCALE>::multiplier() }
-            #[inline]
-            fn from_bits(raw: $Storage) -> Self { $Type::<SCALE>::from_bits(raw) }
-            #[inline]
-            fn to_bits(self) -> $Storage { self.0 }
-            #[inline]
-            fn scale(self) -> u32 { SCALE }
 
             // Sign — delegate to inherent.
             #[inline]
@@ -321,6 +315,16 @@ macro_rules! decl_decimal_basics {
             fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
                 $Type::<SCALE>::overflowing_rem(self, rhs)
             }
+        }
+
+        impl<const SCALE: u32> $crate::convert_trait::DecimalConvert for $Type<SCALE> {
+            // Round-trip.
+            #[inline]
+            fn from_bits(raw: $Storage) -> Self { $Type::<SCALE>::from_bits(raw) }
+            #[inline]
+            fn to_bits(self) -> $Storage { self.0 }
+            #[inline]
+            fn scale(self) -> u32 { SCALE }
 
             // Integer conversion.
             #[inline]

@@ -14,6 +14,7 @@ use decimal_scaled::{
     D38, D38s0, D38s12, D38s2, D38s38, D38s9, D9s0, D9s2, D9s4, D9s9, D18s0, D18s18,
     D18s6, D18s9, Decimal, RoundingMode,
 };
+use decimal_scaled::DecimalArithmetic;
 
 // ─────────────────────────────────────────────────────────────────────
 // Constants and storage boundaries
@@ -49,9 +50,9 @@ fn multiplier_at_scale_extremes() {
 
 #[test]
 fn max_scale_per_width() {
-    assert_eq!(<D9s0 as Decimal>::MAX_SCALE, 9);
-    assert_eq!(<D18s0 as Decimal>::MAX_SCALE, 18);
-    assert_eq!(<D38s0 as Decimal>::MAX_SCALE, 38);
+    assert_eq!(<D9s0 as DecimalArithmetic>::MAX_SCALE, 9);
+    assert_eq!(<D18s0 as DecimalArithmetic>::MAX_SCALE, 18);
+    assert_eq!(<D38s0 as DecimalArithmetic>::MAX_SCALE, 38);
 }
 
 // ─────────────────────────────────────────────────────────────────────

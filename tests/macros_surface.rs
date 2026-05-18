@@ -7,6 +7,7 @@
 //! back to the source file directly.
 
 use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{DecimalArithmetic, DecimalConvert};
 
 type D9_2 = D9<2>;
 type D18_2 = D18<2>;
@@ -499,7 +500,7 @@ fn decimal_trait_methods() {
     // scale() takes self
     assert_eq!(v.scale(), 2);
     // multiplier returns Storage type
-    assert_eq!(<D38_2 as Decimal>::multiplier(), 100_i128);
+    assert_eq!(<D38_2 as DecimalArithmetic>::multiplier(), 100_i128);
     // is_zero
     assert!(!v.is_zero());
     assert!(D38_2::ZERO.is_zero());

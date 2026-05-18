@@ -253,11 +253,15 @@ pub mod serde_helpers;
 mod trig_strict;
 mod trig_fast;
 mod transcendental_trait;
+mod arithmetic_trait;
+mod convert_trait;
 
 
 pub use consts::DecimalConstants;
 #[allow(deprecated)]
 pub use consts::DecimalConsts;
+pub use arithmetic_trait::DecimalArithmetic;
+pub use convert_trait::DecimalConvert;
 pub use decimal_trait::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;

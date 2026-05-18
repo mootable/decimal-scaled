@@ -3,6 +3,7 @@
 //! reaching for inherent methods.
 
 use decimal_scaled::{D9, D18, D38, Decimal, RoundingMode};
+use decimal_scaled::{DecimalArithmetic, DecimalConvert};
 
 /// A width-generic helper that touches each major surface area: ops,
 /// sign, overflow variants, integer methods, pow, and float bridge.
@@ -99,7 +100,7 @@ fn sum_product_d38() {
 #[test]
 fn trait_to_int_with_modes() {
     fn cast<D: Decimal>(d: D, mode: RoundingMode) -> i64 {
-        Decimal::to_int_with(d, mode)
+        DecimalConvert::to_int_with(d, mode)
     }
     let v = D38::<2>::from_bits(151);
     assert_eq!(cast(v, RoundingMode::Floor), 1);
@@ -125,10 +126,10 @@ fn trait_bitwise_supertraits() {
 #[test]
 fn trait_default_predicates_per_width() {
     fn check<D: Decimal>() {
-        assert!(<D as Decimal>::is_zero(D::ZERO));
-        assert!(<D as Decimal>::is_one(D::ONE));
-        assert!(!<D as Decimal>::is_normal(D::ZERO));
-        assert!(<D as Decimal>::is_normal(D::ONE));
+        assert!(<D as DecimalArithmetic>::is_zero(D::ZERO));
+        assert!(<D as DecimalArithmetic>::is_one(D::ONE));
+        assert!(!<D as DecimalArithmetic>::is_normal(D::ZERO));
+        assert!(<D as DecimalArithmetic>::is_normal(D::ONE));
     }
     check::<D9<0>>();
     check::<D18<0>>();
