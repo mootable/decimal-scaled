@@ -536,3 +536,43 @@ mod x_wide {
         let _ = one_b.exp_strict_agm();
     }
 }
+
+// ─── Bespoke D56<45..=57> exp kernel cross-witness ─────────────────────
+//
+// `algos::exp::lookup_d56_s45_57` routes D56<45..=57>::exp_strict
+// through a two-stage range-reduced kernel with a per-scale lookup
+// table. The strict 0.5-ULP contract requires its output to match the
+// canonical wide-tier path. Cross-witness: lift the D56<50> input to
+// D76<50> (whose exp_strict goes through the generic wide kernel,
+// unaffected by this change), run both, and require the D56 storage
+// matches the D76 result narrowed to D56's scale within 1 LSB.
+//
+// SCALE 50 is the midpoint of the bespoke range; this guards every
+// path the kernel takes (range reduce, table lookup, Taylor on δ,
+// reassemble).
+
+#[test]
+fn d56_s50_exp_matches_d76_baseline() {
+    use decimal_scaled::D56;
+
+    type D56_50 = D56<50>;
+    type D76_50 = D76<50>;
+
+    // exp(2) is representable at SCALE=50 (e² ≈ 7.389; storage ≤ 8·10⁵⁰
+    // fits Int192 max ≈ 3.14·10⁵⁷ comfortably).
+    let n_56 = D56_50::from_int(2);
+    let n_76: D76_50 = n_56.into();
+
+    let r_56 = n_56.exp_strict();
+    let r_76 = n_76.exp_strict();
+
+    // D76's exp_strict goes through the generic wide kernel
+    // (unaffected by this change). Narrow the D76 reference back to
+    // D56 via `try_into`; the strict 0.5-ULP contract for D56 means
+    // the two results must agree exactly at D56's storage scale.
+    let r_76_as_56: D56_50 = r_76.try_into().expect("e² fits D56<50>");
+    assert_eq!(
+        r_56, r_76_as_56,
+        "D56<50>::exp(2) bespoke kernel does not match D76<50> narrowed reference",
+    );
+}
