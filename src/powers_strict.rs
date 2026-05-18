@@ -376,22 +376,12 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Cube root under the supplied rounding mode. The sign of the
     /// input is preserved; `Floor` / `Ceiling` resolve direction
     /// relative to the signed result.
+    ///
+    /// Body delegates to [`crate::policy::cbrt::CbrtPolicy::cbrt_impl`].
     #[inline]
     #[must_use]
     pub fn cbrt_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        let raw = self.to_bits();
-        if raw == 0 {
-            return Self::ZERO;
-        }
-        let negative = raw < 0;
-        let q = crate::mg_divide::cbrt_raw_with_signed(
-            raw.unsigned_abs(),
-            SCALE,
-            negative,
-            mode,
-        );
-        let result = q as i128;
-        Self::from_bits(if negative { -result } else { result })
+        <Self as crate::policy::cbrt::CbrtPolicy>::cbrt_impl(self, mode)
     }
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow,

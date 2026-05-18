@@ -80,13 +80,17 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                     $crate::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
-            /// `cbrt_strict` — delegates to [`crate::core_type::D38::cbrt_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `cbrt_strict` — delegates to the policy-registered cbrt
+            /// kernel for this `(width, SCALE)` cell. **0.5 ULP
+            /// correctly-rounded** at storage scale. Panics if the
+            /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
-                let wide: $crate::core_type::D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cbrt_strict())
-                    .expect(concat!(stringify!($Type), "::cbrt_strict: result out of range"))
+                <Self as $crate::policy::cbrt::CbrtPolicy>::cbrt_impl(
+                    self,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `sin_strict` — delegates to [`crate::core_type::D38::sin_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]

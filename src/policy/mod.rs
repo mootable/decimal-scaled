@@ -31,5 +31,6 @@
 //! list is grep-able in one place per family.
 
 // Unconditional — D9/D18/D38 impls live here too. Wide-tier impls
-// inside `sqrt` are individually feature-gated.
+// inside each family are individually feature-gated.
+pub(crate) mod cbrt;
 pub(crate) mod sqrt;
