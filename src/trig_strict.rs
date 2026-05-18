@@ -873,14 +873,23 @@ fn atan_fixed(v_w: crate::d_w128_kernels::Fixed, w: u32) -> crate::d_w128_kernel
     #[cfg(feature = "perf-trace")]
     drop(_setup_span);
 
-    // Three argument halvings: atan(x) = 2·atan(x / (1 + √(1+x²))).
+    // Adaptive argument halvings: atan(x) = 2·atan(x / (1 + √(1+x²))).
+    // Halve only while |x| > ~0.2 (the Taylor convergence target);
+    // matches g_math's adaptive-halvings approach. Skips halvings
+    // entirely when the input is already small (e.g. `atan(0.1)`
+    // would previously waste 3 halvings to reach 0.0125 — now 0).
+    // Hard cap at 8 halvings as a safety net against pathological
+    // edge cases; the post-reciprocal-reduce `x` always falls below
+    // the threshold long before that.
     #[cfg(feature = "perf-trace")]
     let _halvings_span = ::tracing::info_span!("halvings").entered();
-    let halvings: u32 = 3;
-    for _ in 0..halvings {
+    let halving_threshold = one_w.div_small(5); // 0.2 at scale w
+    let mut halvings: u32 = 0;
+    while x.ge_mag(halving_threshold) && halvings < 8 {
         let x2 = x.mul(x, w);
         let denom = one_w.add(one_w.add(x2).sqrt(w));
         x = x.div(denom, w);
+        halvings += 1;
     }
     #[cfg(feature = "perf-trace")]
     drop(_halvings_span);
