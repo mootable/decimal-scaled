@@ -47,7 +47,8 @@ macro_rules! decl_decimal_basics {
                         panic!("wide decimal: invalid zero literal")
                     }
                 }
-            }
+            },
+            one_lsb = { <$Storage>::from_u128(1) }
         }
     };
 
@@ -56,14 +57,18 @@ macro_rules! decl_decimal_basics {
         $crate::macros::basics::decl_decimal_basics! {
             @impl $Type, $Storage, $max_scale,
             multiplier = { (10 as $Storage).pow(SCALE) },
-            zero = { 0 }
+            zero = { 0 },
+            one_lsb = { 1 as $Storage }
         }
     };
 
     // Shared implementation body. `$mult` is the const expression for
-    // `10^SCALE`; `$zero` is the const expression for the storage zero.
+    // `10^SCALE`; `$zero` is the const expression for the storage zero;
+    // `$one_lsb` is the const expression for the smallest positive
+    // storage value (`1` cast / constructed into the storage type).
     (@impl $Type:ident, $Storage:ty, $max_scale:literal,
-     multiplier = { $mult:expr }, zero = { $zero:expr }) => {
+     multiplier = { $mult:expr }, zero = { $zero:expr },
+     one_lsb = { $one_lsb:expr }) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Constructs from a raw storage bit pattern.
             ///
@@ -151,6 +156,29 @@ macro_rules! decl_decimal_basics {
             /// builds because two's-complement `MIN` has no positive
             /// counterpart.
             pub const MIN: Self = Self(<$Storage>::MIN);
+
+            /// Smallest representable positive value: 1 LSB = `10^-SCALE`.
+            ///
+            /// Provided as an analogue to `f64::EPSILON` for generic
+            /// numeric code that wants the smallest non-zero positive
+            /// step. Differs from the f64 definition ("difference
+            /// between 1.0 and the next-larger f64"): on a
+            /// fixed-scale decimal the LSB is uniform across the
+            /// representable range. There are no subnormals.
+            ///
+            /// Useful when you need a "smallest positive step" value
+            /// without writing `Self::from_bits(<storage>::from_u128(1))`
+            /// out longhand — particularly with wide-tier storage
+            /// where the literal `1` isn't directly the wide-int type.
+            pub const EPSILON: Self = Self($one_lsb);
+
+            /// Smallest positive value (equal to [`Self::EPSILON`]).
+            ///
+            /// Provided as an analogue to `f64::MIN_POSITIVE` for
+            /// generic numeric code. Unlike `f64`, fixed-scale decimal
+            /// types have no subnormals, so `MIN_POSITIVE` and
+            /// `EPSILON` are the same value.
+            pub const MIN_POSITIVE: Self = Self($one_lsb);
         }
 
         impl<const SCALE: u32> $crate::decimal_trait::Decimal for $Type<SCALE> {

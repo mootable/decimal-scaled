@@ -337,37 +337,12 @@ pub(crate) fn e_at_target_with<const TARGET: u32>(
 // exceeds the storage range at that scale).
 crate::macros::consts::decl_decimal_consts!(D38, i128);
 
-// Inherent associated constants: EPSILON / MIN_POSITIVE.
-//
-// These mirror `f64::EPSILON` and `f64::MIN_POSITIVE` so that generic
-// numeric code that calls `T::EPSILON` or `T::MIN_POSITIVE` compiles
-// when `T = D38<SCALE>`. For D38 both equal `D38(1)` -- the smallest
-// representable positive value (1 LSB = 10^-SCALE). There are no subnormals.
-
-impl<const SCALE: u32> D38<SCALE> {
-    /// Smallest representable positive value: 1 LSB = `10^-SCALE`.
-    ///
-    /// Provided as an analogue to `f64::EPSILON` for generic numeric code.
-    /// Note that this differs from the f64 definition ("difference between
-    /// 1.0 and the next-larger f64"): for `D38` the LSB is uniform across
-    /// the entire representable range.
-    ///
-    /// # Precision
-    ///
-    /// N/A: constant value, no arithmetic performed.
-    pub const EPSILON: Self = Self(1);
-
-    /// Smallest positive value (equal to [`Self::EPSILON`]).
-    ///
-    /// Provided as an analogue to `f64::MIN_POSITIVE` for generic numeric
-    /// code. Unlike `f64`, `D38` has no subnormals, so `MIN_POSITIVE`
-    /// and `EPSILON` are the same value.
-    ///
-    /// # Precision
-    ///
-    /// N/A: constant value, no arithmetic performed.
-    pub const MIN_POSITIVE: Self = Self(1);
-}
+// EPSILON / MIN_POSITIVE for every width are now emitted by
+// `decl_decimal_basics!`. The D38-specific inherent impl that used
+// to live here has been removed in favour of the macro-emitted ones
+// so D9 / D18 / D38 / D56 / D76 / D114 / D153 / D230 / D307 / D461 /
+// D615 / D923 / D1231 all share the same EPSILON / MIN_POSITIVE
+// surface.
 
 #[cfg(test)]
 mod tests {
