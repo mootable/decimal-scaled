@@ -218,24 +218,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_strict_with(self, exp: D38<SCALE>, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
-        if self.to_bits() <= 0 {
-            return Self::ZERO;
-        }
-        let guard = crate::log_exp_strict::STRICT_GUARD;
-        let w = SCALE + guard;
-        let pow = 10u128.pow(guard);
-        let ln_x = crate::log_exp_strict::ln_fixed(
-            Fixed::from_u128_mag(self.to_bits() as u128, false).mul_u128(pow),
-            w,
-        );
-        let y_neg = exp.to_bits() < 0;
-        let y_w = Fixed::from_u128_mag(exp.to_bits().unsigned_abs(), false).mul_u128(pow);
-        let y_w = if y_neg { y_w.neg() } else { y_w };
-        let raw = crate::log_exp_strict::exp_fixed(y_w.mul(ln_x, w), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::powf: result overflows the representable range");
-        Self::from_bits(raw)
+        <Self as crate::policy::pow::PowPolicy>::powf_impl(self, exp, mode)
     }
 
     /// `self^exp` with caller-chosen guard digits.
@@ -252,23 +235,7 @@ impl<const SCALE: u32> D38<SCALE> {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
             return self.powf_strict_with(exp, mode);
         }
-        use crate::d_w128_kernels::Fixed;
-        if self.to_bits() <= 0 {
-            return Self::ZERO;
-        }
-        let w = SCALE + working_digits;
-        let pow = 10u128.pow(working_digits);
-        let ln_x = crate::log_exp_strict::ln_fixed(
-            Fixed::from_u128_mag(self.to_bits() as u128, false).mul_u128(pow),
-            w,
-        );
-        let y_neg = exp.to_bits() < 0;
-        let y_w = Fixed::from_u128_mag(exp.to_bits().unsigned_abs(), false).mul_u128(pow);
-        let y_w = if y_neg { y_w.neg() } else { y_w };
-        let raw = crate::log_exp_strict::exp_fixed(y_w.mul(ln_x, w), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::powf: result overflows the representable range");
-        Self::from_bits(raw)
+        <Self as crate::policy::pow::PowPolicy>::powf_with_impl(self, exp, working_digits, mode)
     }
 
     /// Raises `self` to the power `exp`.

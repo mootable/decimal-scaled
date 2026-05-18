@@ -236,14 +236,18 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 ::core::convert::TryInto::try_into(wide_self.atan2_strict(wide_other))
                     .expect(concat!(stringify!($Type), "::atan2_strict: result out of range"))
             }
-            /// `powf_strict` — delegates to [`crate::core_type::D38::powf_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
+            /// `powf_strict` — delegates to the policy-registered powf
+            /// kernel for this `(width, SCALE)` cell. **0.5 ULP
+            /// correctly-rounded** at storage scale. Panics if the
+            /// result doesn't fit `Self`'s range.
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
-                let wide_self: $crate::core_type::D38<SCALE> = self.into();
-                let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
-                ::core::convert::TryInto::try_into(wide_self.powf_strict(wide_exp))
-                    .expect(concat!(stringify!($Type), "::powf_strict: result out of range"))
+                <Self as $crate::policy::pow::PowPolicy>::powf_impl(
+                    self,
+                    exp,
+                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
             /// `ln` — feature-gated dispatcher; forwards to [`Self::ln_strict`] when the `strict` feature is on.
             #[cfg(not(all(feature = "fast", not(feature = "strict"))))]
