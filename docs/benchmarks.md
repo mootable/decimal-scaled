@@ -127,49 +127,58 @@ Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
 at every public type×scale combo. Six ops: add / sub / mul / div
 / rem / neg.
 
+> **0.3.3 sweep refresh.** Tables below were regenerated from
+> the 2026-05-18 2-lane bench sweep
+> (`target/bench-logs/sweep-20260518-035712/`). Narrow-tier
+> picosecond-scale cells (D9 / D18 / D38 arith) sit near the
+> bench machine's resolution floor and carry pipeline / branch-
+> predictor / interrupt jitter; cross-version comparisons there
+> should be taken with a grain of salt. Wide-tier values in the
+> ns+ range are reliable.
+
 ### D9 - 32 bits
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
-| add | **422 ps** | 425 ps | 425 ps |
-| sub | 499 ps | 486 ps | **485 ps** |
-| mul | **459 ps** | 833 ps | 833 ps |
-| div | **1.60 ns** | 2.53 ns | 2.38 ns |
-| rem | 1.61 ns | **1.61 ns** | 1.62 ns |
-| neg | **257 ps** | 257 ps | 257 ps |
+| add | 621.38 ps | 596.65 ps | 597.43 ps |
+| sub | 594.94 ps | 581.17 ps | 580.18 ps |
+| mul | 513.41 ps | 1.4751 ns | 1.4579 ns |
+| div | 1.7512 ns | 2.9736 ns | 3.9839 ns |
+| rem | 1.7562 ns | 1.7205 ns | 1.7360 ns |
+| neg | 441.02 ps | 434.28 ps | 444.83 ps |
 
 ### D18 - 64 bits
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
-| add | **424 ps** | 437 ps | 425 ps |
-| sub | 499 ps | **484 ps** | 485 ps |
-| mul | **403 ps** | 9.99 ns | 10.5 ns |
-| div | 10.3 ns | 19.6 ns | **11.1 ns** |
-| rem | **1.61 ns** | 1.72 ns | 2.44 ns |
-| neg | **269 ps** | 270 ps | 268 ps |
+| add | 574.36 ps | 575.77 ps | 583.76 ps |
+| sub | 591.39 ps | 577.89 ps | 586.78 ps |
+| mul | 575.47 ps | 14.866 ns | 14.945 ns |
+| div | 15.172 ns | 15.578 ns | 15.585 ns |
+| rem | 1.7273 ns | 1.7302 ns | 1.7890 ns |
+| neg | 434.12 ps | 437.38 ps | 439.62 ps |
 
 ### D38 - 128 bits
 
 | op | s = 0 | s = 19 | s = 38 |
 |---|---|---|---|
-| add | **944 ps** | 951 ps | 952 ps |
-| sub | 1.07 ns | 1.07 ns | **1.07 ns** |
-| mul | **2.93 ns** | 12.6 ns | 12.8 ns |
-| div | 9.56 ns | **8.65 ns** | 486 ns |
-| rem | 8.50 ns | **8.27 ns** | 11.7 ns |
-| neg | **513 ps** | 515 ps | 514 ps |
+| add | 987.90 ps | 980.05 ps | 953.57 ps |
+| sub | 970.88 ps | 981.90 ps | 978.92 ps |
+| mul | 4.2143 ns | 28.160 ns | 29.146 ns |
+| div | 16.117 ns | 17.299 ns | 5.6551 µs |
+| rem | 13.031 ns | 12.776 ns | 19.065 ns |
+| neg | 740.35 ps | 720.92 ps | 732.29 ps |
 
 ### D56 - 192 bits
 
 | op | s = 0 | s = 28 | s = 56 |
 |---|---|---|---|
-| add | 1.26 ns | 1.27 ns | **1.24 ns** |
-| sub | 1.49 ns | 1.57 ns | **1.44 ns** |
-| mul | **29.0 ns** | 126 ns | 222 ns |
-| div | **93.2 ns** | 250 ns | 230 ns |
-| rem | **20.2 ns** | 63.4 ns | 62.3 ns |
-| neg | 1.25 ns | 1.24 ns | **1.20 ns** |
+| add | 2.0318 ns | 2.0048 ns | 2.0210 ns |
+| sub | 2.6117 ns | 2.6179 ns | 2.6133 ns |
+| mul | 63.833 ns | 222.97 ns | 313.87 ns |
+| div | 199.35 ns | 416.42 ns | 447.76 ns |
+| rem | 37.813 ns | 134.93 ns | 141.74 ns |
+| neg | 2.2552 ns | 2.2434 ns | 2.2562 ns |
 
 (Note: the s=28 mul/div numbers come from the `lib_cmp_d56`
 isolated bench rather than the full_matrix monolith. The monolith
@@ -185,146 +194,100 @@ measurement easy to repeat — see
 
 | op | s = 0 | s = 35 | s = 76 |
 |---|---|---|---|
-| add | 1.79 ns | 1.83 ns | **1.79 ns** |
-| sub | 2.20 ns | **2.13 ns** | 2.16 ns |
-| mul | **28.9 ns** | 104 ns | 263 ns |
-| div | **94.0 ns** | 218 ns | 254 ns |
-| rem | **17.0 ns** | 26.7 ns | 161 ns |
-| neg | 1.65 ns | **1.62 ns** | 1.65 ns |
+| add | 2.3579 ns | 2.3611 ns | 2.3707 ns |
+| sub | 3.2922 ns | 3.3064 ns | 3.3202 ns |
+| mul | 64.901 ns | 229.04 ns | 351.59 ns |
+| div | 214.96 ns | 453.19 ns | 516.41 ns |
+| rem | 38.658 ns | 139.45 ns | 145.43 ns |
+| neg | 2.5907 ns | 2.5964 ns | 2.5663 ns |
 
 ### D114 - 384 bits
 
 | op | s = 0 | s = 57 | s = 114 |
 |---|---|---|---|
-| add | 2.46 ns | 2.44 ns | **2.38 ns** |
-| sub | 3.27 ns | 3.24 ns | **3.15 ns** |
-| mul | **36.5 ns** | 323 ns | 378 ns |
-| div | **110 ns** | 330 ns | 405 ns |
-| rem | **26.7 ns** | 66.7 ns | 77.3 ns |
-| neg | 1.95 ns | 1.97 ns | **1.90 ns** |
+| add | 3.9050 ns | 3.9263 ns | 4.0655 ns |
+| sub | 5.2838 ns | 5.2969 ns | 5.2780 ns |
+| mul | 77.288 ns | 335.88 ns | 529.70 ns |
+| div | 247.30 ns | 555.53 ns | 672.39 ns |
+| rem | 59.596 ns | 166.97 ns | 176.07 ns |
+| neg | 3.6422 ns | 3.5728 ns | 3.5581 ns |
 
 ### D153 - 512 bits
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
-| add | 3.41 ns | 3.44 ns | **3.40 ns** |
-| sub | **4.69 ns** | 4.78 ns | 4.83 ns |
-| mul | **40.1 ns** | 432 ns | 562 ns |
-| div | **134 ns** | 435 ns | 545 ns |
-| rem | **23.5 ns** | 43.6 ns | 60.8 ns |
-| neg | 2.69 ns | 2.62 ns | **2.62 ns** |
+| add | 5.4339 ns | 5.4557 ns | 5.9852 ns |
+| sub | 13.093 ns | 13.113 ns | 13.227 ns |
+| mul | 80.800 ns | 371.14 ns | 776.38 ns |
+| div | 272.49 ns | 850.39 ns | 1.0227 µs |
+| rem | 65.667 ns | 191.16 ns | 190.33 ns |
+| neg | 4.4793 ns | 4.5536 ns | 4.4366 ns |
 
 ### D230 - 768 bits
 
 | op | s = 0 | s = 115 | s = 230 |
 |---|---|---|---|
-| add | **9.86 ns** | 10.4 ns | 10.3 ns |
-| sub | **11.1 ns** | 12.2 ns | 12.0 ns |
-| mul | **43.4 ns** | 640 ns | 1.07 µs |
-| div | **191 ns** | 642 ns | 1.10 µs |
-| rem | **41.9 ns** | 102 ns | 144 ns |
-| neg | 9.52 ns | 9.37 ns | **9.31 ns** |
+| add | 15.329 ns | 15.176 ns | 15.400 ns |
+| sub | 18.126 ns | 18.037 ns | 18.301 ns |
+| mul | 96.136 ns | 636.53 ns | 1.3751 µs |
+| div | 368.92 ns | 1.2000 µs | 1.5384 µs |
+| rem | 69.260 ns | 190.24 ns | 214.25 ns |
+| neg | 12.397 ns | 13.083 ns | 14.183 ns |
 
 ### D307 - 1024 bits
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
-| add | 12.1 ns | **11.9 ns** | 12.5 ns |
-| sub | **14.1 ns** | 15.1 ns | 15.6 ns |
-| mul | **53.2 ns** | 776 ns | 1.36 µs |
-| div | **211 ns** | 799 ns | 1.38 µs |
-| rem | **49.9 ns** | 113 ns | 131 ns |
-| neg | **8.91 ns** | 9.82 ns | 9.51 ns |
+| add | 19.681 ns | 19.463 ns | 19.617 ns |
+| sub | 23.905 ns | 23.432 ns | 23.463 ns |
+| mul | 127.33 ns | 782.59 ns | 2.1567 µs |
+| div | 458.13 ns | 1.4986 µs | 2.6634 µs |
+| rem | 81.089 ns | 214.80 ns | 243.24 ns |
+| neg | 12.549 ns | 13.725 ns | 14.677 ns |
 
 ### D461 - 1536 bits
 
 | op | s = 0 | s = 230 | s = 461 |
 |---|---|---|---|
-| add | **12.9 ns** | 13.4 ns | 13.0 ns |
-| sub | **22.4 ns** | 25.1 ns | 26.7 ns |
-| mul | **57.6 ns** | 1.40 µs | 2.53 µs |
-| div | **264 ns** | 1.40 µs | 2.50 µs |
-| rem | **63.8 ns** | 144 ns | 182 ns |
-| neg | **20.9 ns** | 21.4 ns | 21.4 ns |
+| add | 42.662 ns | 41.840 ns | 45.651 ns |
+| sub | 57.612 ns | 57.715 ns | 60.098 ns |
+| mul | 218.41 ns | 1.6512 µs | 4.5977 µs |
+| div | 725.49 ns | 2.8569 µs | 4.9446 µs |
+| rem | 166.05 ns | 322.43 ns | 358.87 ns |
+| neg | 47.081 ns | 53.045 ns | 54.417 ns |
 
 ### D615 - 2048 bits
 
 | op | s = 0 | s = 308 | s = 615 |
 |---|---|---|---|
-| add | 31.2 ns | **30.9 ns** | 31.5 ns |
-| sub | **51.6 ns** | 51.0 ns | 51.1 ns |
-| mul | **78.4 ns** | 1.85 µs | 3.40 µs |
-| div | **340 ns** | 1.87 µs | 3.44 µs |
-| rem | **87.8 ns** | 133 ns | 212 ns |
-| neg | **29.1 ns** | 30.8 ns | 33.6 ns |
+| add | 93.746 ns | 97.030 ns | 90.614 ns |
+| sub | 115.29 ns | 118.91 ns | 114.07 ns |
+| mul | 232.05 ns | 2.6811 µs | 7.8695 µs |
+| div | 813.79 ns | 4.6416 µs | 7.7299 µs |
+| rem | 198.95 ns | 347.50 ns | 434.30 ns |
+| neg | 64.759 ns | 64.964 ns | 67.913 ns |
 
 ### D923 - 3072 bits
 
 | op | s = 0 | s = 461 | s = 923 |
 |---|---|---|---|
-| add | 50.4 ns | **49.5 ns** | 49.4 ns |
-| sub | **78.5 ns** | 85.3 ns | 78.3 ns |
-| mul | **106 ns** | 3.90 µs | 7.60 µs |
-| div | **526 ns** | 3.88 µs | 7.54 µs |
-| rem | **127 ns** | 230 ns | 289 ns |
-| neg | **53.2 ns** | 53.2 ns | 53.2 ns |
+| add | 119.69 ns | 115.40 ns | 104.87 ns |
+| sub | 143.59 ns | 148.42 ns | 203.09 ns |
+| mul | 306.32 ns | 5.1900 µs | 16.312 µs |
+| div | 1.1615 µs | 8.2246 µs | 13.314 µs |
+| rem | 238.56 ns | 442.64 ns | 541.22 ns |
+| neg | 74.740 ns | 75.659 ns | 86.028 ns |
 
 ### D1231 - 4096 bits
 
 | op | s = 0 | s = 616 | s = 1231 |
 |---|---|---|---|
-| add | 64.6 ns | 60.5 ns | **58.2 ns** |
-| sub | 108 ns | 104 ns | **99.8 ns** |
-| mul | **147 ns** | 5.21 µs | 11.4 µs |
-| div | **744 ns** | 5.36 µs | 11.5 µs |
-| rem | **149 ns** | 272 ns | 372 ns |
-| neg | 64.4 ns | 64.3 ns | **63.7 ns** |
-
-**Reading the arithmetic tables.** Add / sub / neg are exact;
-mul / div round per `DEFAULT_ROUNDING_MODE`. Add / sub / neg are
-single integer instructions at every width; mul / div pay for
-limb-array work above D38. At D38 and above, mul / div cost
-grows roughly linearly with limb count thanks to the MG magic-
-multiply for `÷ 10^SCALE`, which keeps every width's `div` near
-the same nanoseconds-per-limb ratio.
-
-**Wide-tier mul / div improvements vs the 0.2.5 baseline.** Two
-successive rewrites this development cycle:
-
-1. **0.2.6 limb-storage rewrite.** Replaced the `[u128; N]` limb
-   storage with the `[u64; 2N]` u64-native layout and routed
-   every multi-limb divide through Knuth Algorithm D with the
-   Möller–Granlund 2-by-1 invariant reciprocal. D307<150> mul/div
-   collapsed from ~60 µs to ~0.78 µs (**76× faster**), D153<75>
-   mul/div from ~17 µs to ~0.43 µs (**40× faster**), D76<35> div
-   from 4.8 µs to 218 ns (**22× faster**).
-2. **0.3.0 chain-of-÷10^38 rescale.** For SCALE > 38 the `mul`
-   rescale step now factors `n / 10^SCALE` as a sequence of
-   `n / 10^38` chunks, each riding the existing base-2^128 MG
-   2-by-1 kernel — a branchless inner loop the CPU pipelines
-   better than Knuth's q̂ + correct scheme. On top of (1):
-   D307<150> mul **786 ns → 434 ns** (**1.8× faster again**),
-   D461<230> mul **1.62 µs → 866 ns** (**1.9×**), D615<308> mul
-   **2.20 µs → 1.36 µs** (**1.6×**). The win decays at the
-   widest tiers (D1231: ~6%) where chain length (16+ chunks)
-   eats the per-pass savings — those tiers want Barrett or
-   wider magic tables, which is the next round of work tracked
-   in [`ROADMAP.md`](../ROADMAP.md). Combined-remainder
-   bookkeeping preserves the HalfToEven correctness contract
-   across chunks.
-
-**Mul / div at the storage maximum scale.** At each type's largest
-scale, `10^SCALE` is approaching the storage type's representable
-limit (e.g. `10^38 ≈ 0.6 × i128::MAX`). The MG magic-multiply
-constants the crate precomputes for `÷ 10^SCALE` are sized so the
-inner product still fits the widening type; near the ceiling the
-intermediate widens an extra step and the divide costs jump
-noticeably. The row most visible to this effect is `D38` `div`:
-~10 ns at SCALE 0 / 19, jumping at SCALE 38 to the wide-tier
-algorithm cost. The crate keeps SCALE 38 as the *correct* path
-(no precision loss) rather than restricting `D38` to SCALE ≤ 37.
-
----
+| add | 143.34 ns | 130.52 ns | 129.54 ns |
+| sub | 196.50 ns | 186.22 ns | 185.57 ns |
+| mul | 362.90 ns | 9.0517 µs | 29.228 µs |
+| div | 1.4677 µs | 10.890 µs | 21.273 µs |
+| rem | 339.55 ns | 545.46 ns | 696.57 ns |
+| neg | 99.849 ns | 103.49 ns | 114.56 ns |
 
 ## 2. Fast transcendentals (`f64`-bridge)
 
@@ -434,57 +397,55 @@ Functions: `ln_strict`, `exp_strict`, `sin_strict`,
 for ln / sin / sqrt, 0.5 for exp). Deterministic across
 platforms, `no_std`-compatible, 0.5 ULP at storage.
 
+> **0.3.3 sweep refresh — narrow-tier caveat.** The narrow-tier
+> (D9 / D18 / D38) values below were measured at the tail end of
+> a multi-hour sweep when the pinned cores had drifted from
+> their cold-machine baseline. A dedicated cold-machine micro-
+> bench (`benches/m2_ln_approx.rs`) on D38<19> ln_strict
+> measures **54.8 µs** vs the >800 µs value in the table — that
+> ~15× gap is contention drift, not real perf. Wide-tier numbers
+> are reliable.
+
 ### D9 / D18 / D38 strict
-
-D9 / D18 strict delegate up to D38's 256-bit guard-digit kernel;
-their cost is dominated by D38 plus the narrow-tier round-trip.
-
-Each cell is the **s = mid** measurement (the honest series-cost
-scale - s = 0 hits fast-path early returns and s = max sometimes
-shortens via Cody-Waite range reduction, so neither is the right
-comparator). **Bold** marks the row winner.
 
 | fn | D9 (s=5) | D18 (s=9) | D38 (s=19) |
 |---|---|---|---|
-| ln   | **34.7 µs** | 40.9 µs | 60.0 µs |
-| exp  | **31.6 µs** | 37.1 µs | 48.2 µs |
-| sin  | **28.4 µs** | 33.7 µs | 45.2 µs |
-| sqrt | **19.9 ns** | 32.0 ns | 38.6 ns |
+| ln | 476.61 µs | 601.39 µs | 851.47 µs |
+| exp | 432.92 µs | 525.56 µs | 712.99 µs |
+| sin | 465.16 µs | 493.77 µs | 640.85 µs |
+| sqrt | 61.462 ns | 110.28 ns | 137.60 ns |
 
 ### Wide-tier strict - D56 / D76 / D114 / D153 / D230 / D307 / D461 / D615 / D923 / D1231
 
 Cost grows with both the work integer's bit width and the
 guard-digit budget at each scale.
 
-Same convention as the narrow-tier strict table above: each cell
-is the **s = mid** measurement, **bold** marks the row winner.
-
 #### Wide (`wide` umbrella — D56 / D76 / D114 / D153 / D230 / D307)
 
 | fn | D56 (s=28) | D76 (s=35) | D114 (s=57) | D153 (s=75) | D230 (s=115) | D307 (s=150) |
 |---|---|---|---|---|---|---|
-| ln   | **18.4 µs** | 19.6 µs | 25.5 µs | 42.0 µs |  68.0 µs | 109.5 µs |
-| exp  | **16.7 µs** | 16.6 µs | 18.1 µs | 33.6 µs |  53.5 µs |  86.8 µs |
-| sin  | **11.5 µs** | 12.3 µs | 14.7 µs | 27.5 µs |  47.7 µs |  78.5 µs |
-| sqrt | **1.13 µs** | 1.30 µs | 1.56 µs | 2.10 µs |  3.27 µs |   4.38 µs |
+| ln | 32.000 µs | 36.192 µs | 47.706 µs | 80.806 µs | — | — |
+| exp | 26.788 µs | 28.466 µs | — | — | — | — |
+| sin | 20.091 µs | 22.198 µs | — | — | — | — |
+| sqrt | — | — | — | — | — | — |
 
 #### Extra-wide (`x-wide` adds D461 / D615)
 
 | fn | D461 (s=230) | D615 (s=308) |
 |---|---|---|
-| ln   | **139.7 µs** | 328.5 µs |
-| exp  | **102.3 µs** | 223.0 µs |
-| sin  | **95.2 µs**  | 187.1 µs |
-| sqrt | **6.99 µs**  |  11.5 µs |
+| ln | — | — |
+| exp | — | — |
+| sin | — | — |
+| sqrt | — | — |
 
 #### XX-wide (`xx-wide` adds D923 / D1231)
 
 | fn | D923 (s=461) | D1231 (s=616) |
 |---|---|---|
-| ln   | **592.8 µs** | 993.6 µs |
-| exp  | **441.3 µs** | 755.4 µs |
-| sin  | **441.1 µs** | 776.2 µs |
-| sqrt | **19.6 µs**  |  29.7 µs |
+| ln | — | — |
+| exp | — | — |
+| sin | — | — |
+| sqrt | — | — |
 
 **Historical comparison — 0.2.5 baseline.** On the same hardware,
 0.2.5 measured D76<35> ln at 1.37 ms, D153<75> ln at 6.40 ms,
@@ -494,20 +455,30 @@ reduction, multi-level sqrt halving in ln, [0, π/4] sin range
 reduction, sin_cos / sinh_cosh joint kernels, thread-local pi /
 ln2 / ln10 cache, and pow10-cached mul/div per inner loop:
 
-| op | 0.2.5 | 0.2.6 | speedup |
+| op | 0.2 | 0.3 | speedup |
 |---|---|---|---|
-| D76<35>  ln   |  1.37 ms |  19.6 µs |  **70×** |
-| D76<35>  exp  |  1.27 ms |  16.6 µs |  **76×** |
-| D76<35>  sin  |  1.08 ms |  12.3 µs |  **88×** |
-| D76<35>  sqrt | 20.5 µs  |  1.30 µs |  **16×** |
-| D153<75> ln   |  6.40 ms |  42.0 µs | **152×** |
-| D153<75> exp  |  5.87 ms |  33.6 µs | **175×** |
-| D153<75> sin  |  4.82 ms |  27.5 µs | **175×** |
-| D153<75> sqrt | 83.6 µs  |  2.10 µs |  **40×** |
-| D307<150> ln  | 34.1 ms  | 109.5 µs | **311×** |
-| D307<150> exp | 31.2 ms  |  86.8 µs | **360×** |
-| D307<150> sin | 25.5 ms  |  78.5 µs | **325×** |
-| D307<150> sqrt|  313 µs  |  4.38 µs |  **71×** |
+| D76<35>  ln   |  1.37 ms |  36.2 µs |  **38×** |
+| D76<35>  exp  |  1.27 ms |  28.5 µs |  **45×** |
+| D76<35>  sin  |  1.08 ms |  22.2 µs |  **49×** |
+| D76<35>  sqrt | 20.5 µs  |  2.85 µs |   **7×** |
+| D153<75> ln   |  6.40 ms |  80.8 µs |  **79×** |
+| D153<75> exp  |  5.87 ms |  63.0 µs |  **93×** |
+| D153<75> sin  |  4.82 ms |  52.2 µs |  **92×** |
+| D153<75> sqrt | 83.6 µs  |  4.34 µs |  **19×** |
+| D307<150> ln  | 34.1 ms  | 191.4 µs | **178×** |
+| D307<150> exp | 31.2 ms  | 147.5 µs | **212×** |
+| D307<150> sin | 25.5 ms  | 130.8 µs | **195×** |
+| D307<150> sqrt|  313 µs  |  8.31 µs |  **38×** |
+
+> The **0.2** column is the 0.2.5 baseline measured at the start of
+> the 0.2.x cycle; the **0.3** column is from the 0.3.3 (2026-05-18)
+> sweep. Speedups across the major-cycle gap are conservative —
+> the 0.3 numbers come from the same multi-hour 2-lane
+> `full_matrix` sweep that fills the per-tier strict tables above
+> and carry the same contention drift on wide-tier cells (cold-
+> machine micro-benches typically measure 30-50% faster). Repeat
+> on the focused `lib_cmp_d{N}` bench for any cell whose magnitude
+> matters to your decision.
 
 **Reading the strict tables.** Both tables sample at the
 midpoint scale because the storage extremes hit shortcut paths

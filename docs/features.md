@@ -2,7 +2,7 @@
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.2", default-features = false, features = ["alloc"] }
+decimal-scaled = { version = "0.3.3", default-features = false, features = ["alloc"] }
 ```
 
 ## Core features
@@ -85,29 +85,29 @@ across every wider tier pair. Every adjacent pair in the ladder has
 ```toml
 # Default — std, serde, and the integer-only ≤ 0.5 ULP `*_strict`
 # transcendentals dispatched by plain `sin` / `ln` / `sqrt`.
-decimal-scaled = "0.3.2"
+decimal-scaled = "0.3.3"
 
 # `no_std`, still with serde and the deterministic strict path.
-decimal-scaled = { version = "0.3.2", default-features = false,
+decimal-scaled = { version = "0.3.3", default-features = false,
                    features = ["serde", "alloc", "strict"] }
 
 # Add the half-width and wider tiers (D56–D307).
-decimal-scaled = { version = "0.3.2", features = ["wide", "macros"] }
+decimal-scaled = { version = "0.3.3", features = ["wide", "macros"] }
 
 # Add the extra-wide tiers (D461 / D615) on top of wide.
-decimal-scaled = { version = "0.3.2", features = ["x-wide", "macros"] }
+decimal-scaled = { version = "0.3.3", features = ["x-wide", "macros"] }
 
 # Add the xx-wide tiers (D923 / D1231) — research-grade precision.
-decimal-scaled = { version = "0.3.2", features = ["xx-wide", "macros"] }
+decimal-scaled = { version = "0.3.3", features = ["xx-wide", "macros"] }
 
 # Bank-statement rounding: HalfAwayFromZero as the crate-wide default.
-decimal-scaled = { version = "0.3.2",
+decimal-scaled = { version = "0.3.3",
                    features = ["wide", "rounding-half-away-from-zero"] }
 
 # Speed over determinism — plain transcendentals dispatch to the f64
 # bridge (~16 decimal digits of platform-libm precision). The
 # `*_strict` named methods remain available for the parts of your
 # code that need them.
-decimal-scaled = { version = "0.3.2", default-features = false,
+decimal-scaled = { version = "0.3.3", default-features = false,
                    features = ["std", "fast"] }
 ```

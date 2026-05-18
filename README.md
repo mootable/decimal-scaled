@@ -13,18 +13,20 @@ macro, every Cargo feature, benchmarks - live in
 [**`docs/guides.md`**](docs/guides.md). API reference on
 [docs.rs](https://docs.rs/decimal-scaled/).
 
-> **🚧 0.3.2 release note — bench numbers pending.**
-> 0.3.2 ships the `_approx(working_digits)` family (D38 ln sanity:
-> **3.7× faster** than `_strict` at guard 6, 2.6× at guard 10,
-> 1.8× at guard 15), the four-variant `_strict_with` /
-> `_approx_with` mode-aware matrix on every transcendental,
-> mode-aware constants, full serde and `from_num` / `to_num`
-> parity across every wide tier, and the `d56!` / `d114!` /
-> `d230!` / `d461!` / `d615!` / `d923!` / `d1231!` construction
-> macros — plus the docs.rs 0.3.1 build failure fix. The full
-> per-tier `lib_cmp_d*` and `full_matrix_d*` sweeps weren't
-> finished in time for this release; refreshed
-> `docs/benchmarks.md` numbers will land in 0.3.3.
+> **0.3.3 release note.** Trait surface split: the kitchen-sink
+> `Decimal` trait is now a marker supertrait that combines four
+> narrower halves — `DecimalArithmetic`, `DecimalConvert`,
+> `DecimalTranscendental`, `DecimalConstants`. Generic code that
+> needs only part of the surface can target the narrower bound
+> (e.g. `fn dot<T: DecimalArithmetic>(…)`). Existing `T: Decimal`
+> bounds keep working — every shipped width implements all four
+> halves. **Breaking only for callers using `<X as Decimal>::method`
+> UFCS path syntax**; they need to move to the appropriate sub-trait
+> (`DecimalArithmetic` for ZERO/ONE/MAX_SCALE/pow/checked_*/…,
+> `DecimalConvert` for from_bits/from_f64/to_int/…). 0.3.3 also
+> refreshes every per-tier table in [benchmarks.md](docs/benchmarks.md)
+> from the 2026-05-18 sweep, and dumps the 326-measurement raw data
+> alongside.
 
 ## Two headline guarantees
 
@@ -64,7 +66,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-decimal-scaled = "0.3.2"
+decimal-scaled = "0.3.3"
 ```
 
 The default build dispatches plain `sqrt` / `ln` / `sin` /
@@ -78,7 +80,7 @@ explicitly opt out of strict:
 [dependencies]
 # f64-bridge fast path — ~16 decimal digits of platform-libm
 # precision, NOT platform-deterministic. Opt-in only.
-decimal-scaled = { version = "0.3.2",
+decimal-scaled = { version = "0.3.3",
                    default-features = false,
                    features = ["std", "serde", "fast"] }
 ```
@@ -87,7 +89,7 @@ For `no_std` targets (`alloc` is still required):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.2",
+decimal-scaled = { version = "0.3.3",
                    default-features = false,
                    features = ["alloc", "serde"] }
 # `strict` is on by default; no need to re-add it.
@@ -99,7 +101,7 @@ decimal-scaled = { version = "0.3.2",
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.3.2", features = ["macros"] }
+decimal-scaled = { version = "0.3.3", features = ["macros"] }
 ```
 
 There are three idiomatic ways to construct a value. Use whichever

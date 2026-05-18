@@ -5,6 +5,67 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.3.3] — 2026-05-18
+
+Trait surface split + benchmarks refresh, all in one cycle.
+
+### Changed
+
+- **`Decimal` trait is now a marker supertrait** combining four
+  narrower halves: `DecimalArithmetic` (operators, sign,
+  pow / checked / wrapping / saturating / overflowing, reductions,
+  plus the foundational type info `Storage`, `SCALE`, `MAX_SCALE`,
+  `ZERO`, `ONE`, `MAX`, `MIN`, `multiplier()`), `DecimalConvert`
+  (`from_bits` / `to_bits` / `scale`, integer bridges, the
+  `std`-gated f64 / f32 bridge), `DecimalTranscendental` (the
+  four-variant transcendental + root matrix), and
+  `DecimalConstants` (`pi` / `tau` / `e` / …). Decimal carries a
+  blanket impl so every type that implements all four halves is
+  Decimal for free; every shipped width (D9..D1231) keeps the full
+  surface.
+
+  Callers using `T: Decimal` and `T::method()` syntax keep
+  compiling unchanged — method resolution finds methods via the
+  supertrait chain. The narrower bounds let generic code shrink
+  its surface when it doesn't need everything, e.g.
+  `fn dot<T: DecimalArithmetic + Copy>(a: &[T], b: &[T]) -> T`.
+
+### Breaking
+
+- **`<X as Decimal>::method` UFCS path callers** need to move to
+  the right sub-trait: `<X as DecimalArithmetic>::ZERO` /
+  `::MAX_SCALE` / `::multiplier` / `::sum` / `::is_zero` / etc.,
+  and `<X as DecimalConvert>::from_bits` / `::to_int_with` /
+  `::from_f64` / etc. Test files under `tests/` and the internal
+  tests in `src/core_type.rs` have been updated as part of this
+  release.
+
+### Added
+
+- **`DecimalArithmetic`** and **`DecimalConvert`** as new
+  narrower trait surfaces (see Changed). Re-exported from the
+  crate root.
+
+### Benchmarks
+
+- **`docs/benchmarks.md` refreshed from the 2026-05-18 sweep.**
+  Every per-tier arithmetic table (§1) and every strict-
+  transcendental table (§3) regenerated with the new numbers,
+  preserving narrative around them.
+- Caveats called out inline: narrow-tier (D9 / D18 / D38)
+  picosecond-scale arithmetic sits near the bench machine's
+  resolution floor and the cross-version deltas there are
+  contention noise rather than real perf; narrow-tier
+  transcendental values in this sweep also reflect contention
+  drift (cold-machine micro-bench for D38<19> ln_strict measures
+  ~54.8 µs vs the >800 µs in the full_matrix table — ~15× gap).
+  Wide-tier numbers (D56+ arithmetic, D56+ transcendentals) are
+  reliable and reflect real cumulative perf work from the 0.3.x
+  cycle.
+- The 326-measurement raw data dump from 0.3.2 stays appended at
+  the end of the doc for anyone who wants every cell criterion
+  produced.
+
 ## [0.3.2] — 2026-05-18
 
 API-additive surface expansion across every decimal width plus
