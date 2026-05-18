@@ -404,6 +404,27 @@ pub use decimal_scaled_macros::d153;
 #[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))]
 pub use decimal_scaled_macros::d307;
 
+#[cfg(all(feature = "macros", any(feature = "d56", feature = "wide")))]
+pub use decimal_scaled_macros::d56;
+
+#[cfg(all(feature = "macros", any(feature = "d114", feature = "wide")))]
+pub use decimal_scaled_macros::d114;
+
+#[cfg(all(feature = "macros", any(feature = "d230", feature = "wide")))]
+pub use decimal_scaled_macros::d230;
+
+#[cfg(all(feature = "macros", any(feature = "d461", feature = "x-wide")))]
+pub use decimal_scaled_macros::d461;
+
+#[cfg(all(feature = "macros", any(feature = "d615", feature = "x-wide")))]
+pub use decimal_scaled_macros::d615;
+
+#[cfg(all(feature = "macros", any(feature = "d923", feature = "xx-wide")))]
+pub use decimal_scaled_macros::d923;
+
+#[cfg(all(feature = "macros", any(feature = "d1231", feature = "xx-wide")))]
+pub use decimal_scaled_macros::d1231;
+
 // Per-scale wrappers — curated subset of pre-baked
 // `<dN>s<SCALE>!` macros that forward to the corresponding
 // proc-macro with `scale N` added. Long-tail scales remain
