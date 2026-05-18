@@ -191,8 +191,6 @@ mod identity;
 mod support;
 mod types;
 #[cfg(feature = "bench-alt")]
-mod bench_alt;
-#[cfg(feature = "bench-alt")]
 #[doc(hidden)]
 pub mod __bench_internals {
     #[inline(never)]
@@ -219,24 +217,25 @@ pub mod __bench_internals {
 mod consts;
 mod consts_wide;
 mod core_type;
-mod diagnostics;
-mod display;
 mod equalities;
-mod error;
 mod macros;
 mod num_traits;
 mod log_exp_strict;
 mod log_exp_fast;
 
-// Path shims for moved-but-still-referenced trait modules. After the
-// folder shuffle these live under `types::traits::*`; the shims keep
-// the legacy `crate::<trait>` paths resolving for one release cycle
+// Path shims for moved-but-still-referenced modules. After the folder
+// shuffle these live under `types::traits::*` / `support::*`; the shims
+// keep the legacy `crate::<name>` paths resolving for one release cycle
 // while internal call sites get swept (PR 3).
 pub(crate) use crate::types::traits::arithmetic as arithmetic_trait;
 pub(crate) use crate::types::traits::convert as convert_trait;
 pub(crate) use crate::types::traits::transcendental as transcendental_trait;
 #[cfg(feature = "dyn")]
 pub(crate) use crate::types::traits::dyn_decimal;
+pub(crate) use crate::support::rounding;
+pub(crate) use crate::support::error;
+pub(crate) use crate::support::diagnostics;
+pub(crate) use crate::support::display;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
@@ -244,7 +243,6 @@ pub(crate) use crate::types::traits::dyn_decimal;
 // `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
 // `core_type.rs`, alongside every other surface.
 mod rescale;
-mod rounding;
 mod mg_divide;
 mod d_w128_kernels;
 // `wide_int` is now unconditional. D38's strict transcendentals use
@@ -261,7 +259,7 @@ mod powers_strict;
 mod powers_fast;
 
 #[cfg(feature = "serde")]
-pub mod serde_helpers;
+pub use crate::support::serde_helpers;
 // `trig` is compiled when it has any surface to emit: the integer-only
 // `*_strict` methods (present unless `fast`) or the f64-bridge
 // methods (present with `std`).

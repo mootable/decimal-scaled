@@ -312,7 +312,7 @@ pub(crate) fn parse_components<const SCALE: u32>(
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
-    parse_decimal::<SCALE>(s).map(super::core_type::D38::to_bits)
+    parse_decimal::<SCALE>(s).map(crate::core_type::D38::to_bits)
 }
 
 fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {

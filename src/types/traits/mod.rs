@@ -26,6 +26,3 @@ pub use decimal::Decimal;
 pub use arithmetic::DecimalArithmetic;
 pub use convert::DecimalConvert;
 pub use transcendental::DecimalTranscendental;
-
-#[cfg(feature = "dyn")]
-pub use dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
