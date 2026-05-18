@@ -140,9 +140,26 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn pow10(n: u32) -> W {
                 lit(10).pow(n)
             }
+            /// Memoised companion to [`pow10`] keyed on `w`.
+            ///
+            /// Every wide-tier `mul` / `div` / `sqrt_fixed` /
+            /// `to_work_w` / `round_to_*` call recomputes `pow10(w)`;
+            /// at D56<57>.atan the body invokes that ~198 times per
+            /// call, each `lit(10).pow(w)` running ~log₂(w) wide
+            /// squarings followed by ~w cumulative wide multiplies.
+            /// Caching collapses that into one compute per
+            /// `(thread, w)` pair, served from a tiny per-tier
+            /// thread-local `Vec<(u32, W)>` (typically 1-3 entries
+            /// matching the user's SCALE choices) — see the
+            /// `cached` / `pi_cache_get` / `ln2_cache_get` /
+            /// `ln10_cache_get` slots below for the same pattern.
+            #[inline]
+            pub(crate) fn pow10_cached(w: u32) -> W {
+                cached(&POW10_CACHE_GET, w, pow10)
+            }
             #[inline]
             pub(crate) fn one(w: u32) -> W {
-                pow10(w)
+                pow10_cached(w)
             }
             /// Half-to-even round of `(numerator / divisor)` for
             /// the signed wide integer `W`. Pulled out so the
@@ -183,7 +200,7 @@ macro_rules! decl_wide_transcendental {
             /// the series-evaluation core.
             #[inline]
             pub(crate) fn mul(a: W, b: W, w: u32) -> W {
-                round_div(a * b, pow10(w))
+                round_div(a * b, pow10_cached(w))
             }
             /// Loop-friendly variant of [`mul`] that takes a
             /// precomputed `10^w` divisor. Use inside Taylor /
@@ -198,7 +215,7 @@ macro_rules! decl_wide_transcendental {
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
-                round_div(a * pow10(w), b)
+                round_div(a * pow10_cached(w), b)
             }
             /// Loop-friendly variant of [`div`] taking a precomputed
             /// `10^w` numerator factor.
@@ -230,7 +247,7 @@ macro_rules! decl_wide_transcendental {
                     bit_length(av) + (w as u32) * 4 < W::BITS,
                     "sqrt_fixed: |v| * 10^w overflows the working width"
                 );
-                (av * pow10(w)).isqrt()
+                (av * pow10_cached(w)).isqrt()
             }
 
             /// Builds a working-scale value from the type's raw storage:
@@ -251,7 +268,7 @@ macro_rules! decl_wide_transcendental {
             /// the `_approx` family where the guard width is chosen at
             /// call time.
             pub(crate) fn to_work_w(raw: $Storage, working_digits: u32) -> W {
-                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10(working_digits)
+                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10_cached(working_digits)
             }
 
             /// Rounds a working-scale value down to scale `target` using
@@ -274,7 +291,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::rounding::RoundingMode,
             ) -> $Storage {
-                let divisor = pow10(w - target);
+                let divisor = pow10_cached(w - target);
                 let q = v / divisor;
                 let r = v % divisor;
                 let rounded = if r == lit(0) {
@@ -305,7 +322,7 @@ macro_rules! decl_wide_transcendental {
             /// Rounds a working-scale value to the nearest integer (ties
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
-                let divisor = pow10(w);
+                let divisor = pow10_cached(w);
                 let q = v / divisor;
                 let r = v % divisor;
                 let half = divisor / lit(2);
@@ -670,7 +687,7 @@ macro_rules! decl_wide_transcendental {
 
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
             pub(crate) fn atan_taylor(x: W, w: u32) -> W {
-                let pow10_w = pow10(w);
+                let pow10_w = pow10_cached(w);
                 let x2 = mul_cached(x, x, pow10_w);
                 let mut sum = x;
                 let mut term = x;
@@ -782,6 +799,15 @@ macro_rules! decl_wide_transcendental {
                 }
                 &SLOT
             }
+            #[cfg(feature = "std")]
+            fn pow10_cache_get() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> {
+                ::std::thread_local! {
+                    static SLOT: ::core::cell::RefCell<alloc::vec::Vec<(u32, W)>> = const {
+                        ::core::cell::RefCell::new(alloc::vec::Vec::new())
+                    };
+                }
+                &SLOT
+            }
 
             #[cfg(feature = "std")]
             const PI_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = pi_cache_get;
@@ -789,6 +815,8 @@ macro_rules! decl_wide_transcendental {
             const LN2_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = ln2_cache_get;
             #[cfg(feature = "std")]
             const LN10_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = ln10_cache_get;
+            #[cfg(feature = "std")]
+            const POW10_CACHE_GET: fn() -> &'static ::std::thread::LocalKey<::core::cell::RefCell<alloc::vec::Vec<(u32, W)>>> = pow10_cache_get;
 
             #[cfg(not(feature = "std"))]
             const PI_CACHE_GET: () = ();
@@ -796,6 +824,8 @@ macro_rules! decl_wide_transcendental {
             const LN2_CACHE_GET: () = ();
             #[cfg(not(feature = "std"))]
             const LN10_CACHE_GET: () = ();
+            #[cfg(not(feature = "std"))]
+            const POW10_CACHE_GET: () = ();
             /// `π/2` at working scale `w`.
             pub(crate) fn half_pi(w: u32) -> W {
                 pi(w) / lit(2)
@@ -805,7 +835,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// `sin(r) = r − r³/3! + r⁵/5! − …`
             fn sin_taylor(r: W, w: u32) -> W {
-                let pow10_w = pow10(w);
+                let pow10_w = pow10_cached(w);
                 let r2 = mul_cached(r, r, pow10_w);
                 let mut sum = r;
                 let mut term = r;
@@ -837,7 +867,7 @@ macro_rules! decl_wide_transcendental {
             /// corrections — used as the "upper-half" branch of
             /// [`sin_fixed`] when the reduced argument exceeds π/4.
             fn cos_taylor(r: W, w: u32) -> W {
-                let pow10_w = pow10(w);
+                let pow10_w = pow10_cached(w);
                 let r2 = mul_cached(r, r, pow10_w);
                 let one_w = one(w);
                 let mut sum = one_w;
