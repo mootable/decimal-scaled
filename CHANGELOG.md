@@ -5,13 +5,22 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.3.2] — unreleased
+## [0.3.2] — 2026-05-18
 
-API-additive surface expansion across every decimal width. No
-breaking changes; existing callers compile unchanged. The big themes
-are the four-variant `_strict_with` / `_approx` / `_approx_with`
-matrix on every transcendental, mode-aware constants, full serde
-parity, and a docs.rs build fix.
+API-additive surface expansion across every decimal width plus
+several downstream-blocking defect fixes. No breaking changes;
+existing callers compile unchanged. Big themes: the four-variant
+`_strict_with` / `_approx` / `_approx_with` matrix on every
+transcendental, mode-aware constants, full serde parity, the
+construction-macro surface extended to every shipped tier, a docs.rs
+build fix, and primitive ergonomics on the wide-int and
+fixed-decimal types.
+
+Headline perf number for the new `_approx` family on the D38<19> ln
+sanity bench: 1.17× faster at guard 25, 1.45× at 20, 1.80× at 15,
+2.62× at 10, **3.70× at guard 6** — all vs strict's 54.8 µs. Strict
+itself is at parity with 0.3.1 (52.3 µs prior → 54.8 µs now, within
+bench noise). Full per-tier numbers in 0.3.3.
 
 ### Added
 
@@ -53,6 +62,34 @@ parity, and a docs.rs build fix.
   use the literal `decimal_scaled` import name. Falls back to
   `::decimal_scaled` when the lookup fails — same behaviour as
   the original hard-coded path.
+- **Construction macros for every wide tier.** Added `d56!`,
+  `d114!`, `d230!`, `d461!`, `d615!`, `d923!`, `d1231!` — every
+  shipped Decimal width now has a compile-time literal
+  constructor over the existing `expand_for(Width, …)`
+  machinery, gated behind the matching feature.
+- **`EPSILON` / `MIN_POSITIVE` for every decimal width.** Macro-
+  emitted out of `decl_decimal_basics!` so D9 / D18 / D38 / D56 /
+  D76 / D114 / D153 / D230 / D307 / D461 / D615 / D923 / D1231 all
+  share the same surface. Closes the "literal `1` doesn't coerce
+  to a wide-int storage type" trap that forced downstream callers
+  to write `from_bits(<Int192>::from_u128(1))` longhand.
+- **Wide-int `From<primitive>` impls.** Every signed wide int
+  (`$S`) gets `From<u8/u16/u32/u64/u128/i8/i16/i32/i64/i128>`;
+  every unsigned (`$U`) gets `From<u8/u16/u32/u64/u128>` plus a
+  `from_u128` const-fn constructor.
+- **Wide-int `From<float>` impls.** `From<f32>` and `From<f64>`
+  for both `$U` and `$S`; nightly-only `From<f16>` / `From<f128>`
+  gated behind the existing `experimental-floats` feature.
+  Same saturate-on-overflow / NaN-maps-to-zero contract the
+  decimal-tier float bridge uses.
+- **Wider scale-alias coverage.** Backfilled D76 / D153 / D307
+  from the previous 5-8 aliases each to ~25 per tier covering the
+  standard decimal-precision breakpoints (1, 2, 3, 4, 6, 9, 12,
+  15, 18, 20, 24, 28, 32, 35, 38, 50, plus tier-specific midpoints
+  and the storage-max scale). Added `Dnns1` (one fractional digit)
+  to every wide tier so all 13 widths have a consistent scale-1
+  alias. Added `D56s20` for the 20-digit CAD-numeric precision
+  moocad's Stage 5 needed.
 
 ### Fixed
 

@@ -13,6 +13,19 @@ macro, every Cargo feature, benchmarks - live in
 [**`docs/guides.md`**](docs/guides.md). API reference on
 [docs.rs](https://docs.rs/decimal-scaled/).
 
+> **🚧 0.3.2 release note — bench numbers pending.**
+> 0.3.2 ships the `_approx(working_digits)` family (D38 ln sanity:
+> **3.7× faster** than `_strict` at guard 6, 2.6× at guard 10,
+> 1.8× at guard 15), the four-variant `_strict_with` /
+> `_approx_with` mode-aware matrix on every transcendental,
+> mode-aware constants, full serde and `from_num` / `to_num`
+> parity across every wide tier, and the `d56!` / `d114!` /
+> `d230!` / `d461!` / `d615!` / `d923!` / `d1231!` construction
+> macros — plus the docs.rs 0.3.1 build failure fix. The full
+> per-tier `lib_cmp_d*` and `full_matrix_d*` sweeps weren't
+> finished in time for this release; refreshed
+> `docs/benchmarks.md` numbers will land in 0.3.3.
+
 ## Two headline guarantees
 
 > **1. ≤ 0.5 ULP correctness on every transcendental.** The
