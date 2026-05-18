@@ -1106,16 +1106,26 @@ impl<const SCALE: u32> D307<SCALE> {
 
 /// Scaled fixed-point decimal with 192-bit storage. Half-width tier
 /// between D38 and D76 — useful when the D38 i128 ceiling is in
-/// reach but D76's 256-bit storage is wasteful.
+/// reach but D76's 256-bit storage is wasteful. Now a type alias of
+/// the unified [`crate::D`] generic decimal type: `D56<S>` is
+/// `D<crate::wide_int::Int192, S>`. Both spellings are interchangeable.
+///
+/// The `#[repr(transparent)]` layout over `Int192` is preserved
+/// through the alias because the underlying [`crate::D`] is itself
+/// `#[repr(transparent)]` over its storage parameter.
 ///
 /// Gated behind the `d56` (or umbrella `wide`) Cargo feature.
 #[cfg(any(feature = "d56", feature = "wide"))]
-#[repr(transparent)]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub struct D56<const SCALE: u32>(pub crate::wide_int::I192);
+pub type D56<const SCALE: u32> = crate::D<crate::wide_int::Int192, SCALE>;
 
+/// `Default` returns `ZERO`, matching the all-zero limb pattern of
+/// `Int192`.
+///
+/// Implemented on the underlying `crate::D<crate::wide_int::Int192, SCALE>`
+/// because `D56<SCALE>` is now an alias of that type. `ZERO` is emitted
+/// by the basics macro further down in this file.
 #[cfg(any(feature = "d56", feature = "wide"))]
-impl<const SCALE: u32> Default for D56<SCALE> {
+impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int192, SCALE> {
     #[inline]
     fn default() -> Self { Self::ZERO }
 }
