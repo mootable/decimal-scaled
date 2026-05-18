@@ -46,6 +46,8 @@ dead code / docs for posterity; audit trail in commit messages):
 - MG 2-by-1 → 3-by-2 swap in `limbs_divmod_knuth_u64` — mixed signal across tiers; algorithm reverted, structural cleanups (n=1 short-circuit, escape-early `u_top > v_top`, hoist `j+n`) retained.
 - Phase-1 LLVM-unroll batch (`add_assign_fixed`, `sub_assign_fixed`, etc.) — won per-op micro-benches but regressed whole-call D307 exp by 18% (icache / inline-decision interaction). Kernels in tree; macros wire to slice variants.
 - Integer-rhs auto-detect in D38 `Mul`/`Div` — within noise at D38 (base path is already a single i128 multiply); extending to wide tiers would need a multi-limb modulo per call.
+- u64-base Karatsuba mul — implemented, gated off in the dispatcher (`KARATSUBA_THRESHOLD_U64 = 256`, above our widest tier). M2 bench at L=16-96 showed schoolbook 1.07-1.92× faster everywhere; LLVM-unrolled schoolbook + the heap allocs the recursive split needs put the crossover past every shipped width. Implementation + correctness oracle retained for future use (SIMD, extra-wide tiers, or a scratch-passing rewrite that drops the Vec allocs).
+- Real Burnikel-Ziegler recursive divmod — depends on Karatsuba winning for sub-products; foreclosed by the above. The existing `limbs_divmod_bz_u64` is chunked Knuth and stays.
 
 ---
 
