@@ -2379,6 +2379,8 @@ pub(crate) trait WideStorage:
     + ::core::ops::Sub<Output = Self>
     + ::core::ops::Mul<Output = Self>
     + ::core::ops::Div<Output = Self>
+    + ::core::ops::Rem<Output = Self>
+    + ::core::ops::Neg<Output = Self>
     + ::core::ops::Shl<u32, Output = Self>
     + ::core::ops::Shr<u32, Output = Self>
 {
