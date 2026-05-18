@@ -5,7 +5,7 @@
 //! - The inherent constructor / accessor / multiplier methods.
 //! - The `SCALE` associated const + `scale()` method.
 //! - The `ZERO`, `ONE`, `MAX`, `MIN` constants.
-//! - The [`crate::decimal_trait::Decimal`] trait impl, delegating to
+//! - The [`crate::types::traits::Decimal`] trait impl, delegating to
 //! the inherent surface.
 //!
 //! Invoke once per width (see `core_type.rs` for the per-width

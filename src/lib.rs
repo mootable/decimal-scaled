@@ -187,6 +187,9 @@ pub use ::tracing;
 mod algos;
 mod arithmetic;
 mod d_unified;
+mod identity;
+mod support;
+mod types;
 #[cfg(feature = "bench-alt")]
 mod bench_alt;
 #[cfg(feature = "bench-alt")]
@@ -216,7 +219,6 @@ pub mod __bench_internals {
 mod consts;
 mod consts_wide;
 mod core_type;
-mod decimal_trait;
 mod diagnostics;
 mod display;
 mod equalities;
@@ -225,6 +227,16 @@ mod macros;
 mod num_traits;
 mod log_exp_strict;
 mod log_exp_fast;
+
+// Path shims for moved-but-still-referenced trait modules. After the
+// folder shuffle these live under `types::traits::*`; the shims keep
+// the legacy `crate::<trait>` paths resolving for one release cycle
+// while internal call sites get swept (PR 3).
+pub(crate) use crate::types::traits::arithmetic as arithmetic_trait;
+pub(crate) use crate::types::traits::convert as convert_trait;
+pub(crate) use crate::types::traits::transcendental as transcendental_trait;
+#[cfg(feature = "dyn")]
+pub(crate) use crate::types::traits::dyn_decimal;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
@@ -256,26 +268,21 @@ pub mod serde_helpers;
 #[cfg(any(not(feature = "fast"), feature = "std"))]
 mod trig_strict;
 mod trig_fast;
-mod transcendental_trait;
-mod arithmetic_trait;
-mod convert_trait;
-#[cfg(feature = "dyn")]
-pub mod dyn_decimal;
 
 
 pub use consts::DecimalConstants;
 #[allow(deprecated)]
 pub use consts::DecimalConsts;
-pub use arithmetic_trait::DecimalArithmetic;
-pub use convert_trait::DecimalConvert;
+pub use crate::types::traits::DecimalArithmetic;
+pub use crate::types::traits::DecimalConvert;
 pub use d_unified::D;
-pub use decimal_trait::Decimal;
+pub use crate::types::traits::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;
-pub use transcendental_trait::DecimalTranscendental;
+pub use crate::types::traits::DecimalTranscendental;
 
 #[cfg(feature = "dyn")]
-pub use dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
+pub use crate::types::traits::dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
 
 // D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s37
 // (v0.4.0 cap: MAX_SCALE = name - 1).

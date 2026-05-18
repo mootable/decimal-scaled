@@ -10,7 +10,7 @@
 //! `Self::Storage` and `Self::ZERO` / `Self::MAX` / `Self::MIN`
 //! (needed for saturation paths) are in scope.
 //!
-//! See `crate::decimal_trait` for the full scope rationale.
+//! See [`crate::types::traits::decimal`] for the full scope rationale.
 
 use crate::arithmetic_trait::DecimalArithmetic;
 use crate::rounding::RoundingMode;

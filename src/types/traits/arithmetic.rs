@@ -17,7 +17,7 @@
 //! }
 //! ```
 //!
-//! See `crate::decimal_trait` for the full scope rationale.
+//! See [`crate::types::traits::decimal`] for the full scope rationale.
 
 /// Arithmetic surface shared by every decimal width: type info,
 /// constants, operators, sign methods, integer-shape predicates,
