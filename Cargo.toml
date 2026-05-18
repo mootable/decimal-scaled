@@ -239,6 +239,7 @@ harness = false
 required-features = ["wide"]
 
 
+
 # Per-width library_comparison benches. Each runs ONE tier's full
 # peer comparison so `cargo bench --bench lib_cmp_d307` iterates
 # in minutes. Run them all sequentially for a full matrix sweep.
