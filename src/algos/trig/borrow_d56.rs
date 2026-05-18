@@ -19,10 +19,12 @@ use crate::rounding::RoundingMode;
 use crate::wide_int::I192;
 
 #[inline]
-fn narrow<const SCALE: u32>(raw_wide: I192, msg: &'static str) -> i128 {
-    let r: D38<SCALE> = D56::<SCALE>::from_bits(raw_wide)
-        .try_into()
-        .expect(msg);
+fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> i128 {
+    let wide = D56::<SCALE>::from_bits(raw_wide);
+    let r: D38<SCALE> = wide.try_into().unwrap_or_else(|_| panic!(
+        "{op}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     r.0
 }
 
@@ -33,7 +35,7 @@ fn narrow<const SCALE: u32>(raw_wide: I192, msg: &'static str) -> i128 {
 pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = super::wide_kernel::sin_strict_d56(widened.0, mode, SCALE);
-    narrow::<SCALE>(raw_wide, "sin: result out of range")
+    narrow::<SCALE>(raw_wide, "sin_strict")
 }
 
 #[inline]
@@ -41,7 +43,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = super::wide_kernel::cos_strict_d56(widened.0, mode, SCALE);
-    narrow::<SCALE>(raw_wide, "cos: result out of range")
+    narrow::<SCALE>(raw_wide, "cos_strict")
 }
 
 #[inline]
@@ -49,7 +51,7 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = super::wide_kernel::tan_strict_d56(widened.0, mode, SCALE);
-    narrow::<SCALE>(raw_wide, "tan: result out of range")
+    narrow::<SCALE>(raw_wide, "tan_strict")
 }
 
 #[inline]
@@ -57,7 +59,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = super::wide_kernel::atan_strict_d56(widened.0, mode, SCALE);
-    narrow::<SCALE>(raw_wide, "atan: result out of range")
+    narrow::<SCALE>(raw_wide, "atan_strict")
 }
 
 // ── inverse (asin / acos / atan2) — via D56 inherent methods ────────
@@ -67,7 +69,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.asin_strict_with(mode);
-    narrow::<SCALE>(result.0, "asin: result out of range")
+    narrow::<SCALE>(result.0, "asin_strict")
 }
 
 #[inline]
@@ -75,7 +77,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.acos_strict_with(mode);
-    narrow::<SCALE>(result.0, "acos: result out of range")
+    narrow::<SCALE>(result.0, "acos_strict")
 }
 
 #[inline]
@@ -84,5 +86,5 @@ pub(crate) fn atan2_strict<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: Rou
     let y_wide: D56<SCALE> = D38::<SCALE>::from_bits(y_raw).into();
     let x_wide: D56<SCALE> = D38::<SCALE>::from_bits(x_raw).into();
     let result = y_wide.atan2_strict_with(x_wide, mode);
-    narrow::<SCALE>(result.0, "atan2: result out of range")
+    narrow::<SCALE>(result.0, "atan2_strict")
 }

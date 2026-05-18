@@ -26,9 +26,11 @@ use crate::rounding::RoundingMode;
 pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = super::wide_kernel::exp_strict_d56(widened.0, mode, SCALE);
-    let narrowed: D38<SCALE> = D56::<SCALE>::from_bits(raw_wide)
-        .try_into()
-        .expect("exp kernel: result overflows the representable range");
+    let wide = D56::<SCALE>::from_bits(raw_wide);
+    let narrowed: D38<SCALE> = wide.try_into().unwrap_or_else(|_| panic!(
+        "exp_strict: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }
 
@@ -41,8 +43,9 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn exp2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.exp2_strict_with(mode);
-    let narrowed: D38<SCALE> = result
-        .try_into()
-        .expect("exp2 kernel: result overflows the representable range");
+    let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
+        "exp2_strict: result out of range — produced {result}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }

@@ -26,9 +26,11 @@ use crate::rounding::RoundingMode;
 pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = super::wide_kernel::ln_strict_d56(widened.0, mode, SCALE);
-    let narrowed: D38<SCALE> = D56::<SCALE>::from_bits(raw_wide)
-        .try_into()
-        .expect("ln_strict: result out of range");
+    let wide = D56::<SCALE>::from_bits(raw_wide);
+    let narrowed: D38<SCALE> = wide.try_into().unwrap_or_else(|_| panic!(
+        "ln_strict: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }
 
@@ -41,7 +43,10 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
 pub(crate) fn log2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.log2_strict_with(mode);
-    let narrowed: D38<SCALE> = result.try_into().expect("log2_strict: result out of range");
+    let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
+        "log2_strict: result out of range — produced {result}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }
 
@@ -52,7 +57,10 @@ pub(crate) fn log2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 pub(crate) fn log10_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.log10_strict_with(mode);
-    let narrowed: D38<SCALE> = result.try_into().expect("log10_strict: result out of range");
+    let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
+        "log10_strict: result out of range — produced {result}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }
 
@@ -70,6 +78,9 @@ pub(crate) fn log_strict<const SCALE: u32>(
     let widened: D56<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let base_wide: D56<SCALE> = D38::<SCALE>::from_bits(base_raw).into();
     let result = widened.log_strict_with(base_wide, mode);
-    let narrowed: D38<SCALE> = result.try_into().expect("log_strict: result out of range");
+    let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
+        "log_strict: result out of range — produced {result}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }

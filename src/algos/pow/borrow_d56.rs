@@ -34,9 +34,10 @@ pub(crate) fn powf_strict<const SCALE: u32>(
     let base_w: D56<SCALE> = D38::<SCALE>::from_bits(base).into();
     let exp_w: D56<SCALE> = D38::<SCALE>::from_bits(exp).into();
     let result = base_w.powf_strict_with(exp_w, mode);
-    let narrowed: D38<SCALE> = result
-        .try_into()
-        .expect("powf kernel: result overflows the representable range");
+    let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
+        "powf_strict: result out of range — produced {result}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }
 
@@ -53,8 +54,9 @@ pub(crate) fn powf_with<const SCALE: u32>(
     let base_w: D56<SCALE> = D38::<SCALE>::from_bits(base).into();
     let exp_w: D56<SCALE> = D38::<SCALE>::from_bits(exp).into();
     let result = base_w.powf_approx_with(exp_w, working_digits, mode);
-    let narrowed: D38<SCALE> = result
-        .try_into()
-        .expect("powf kernel: result overflows the representable range");
+    let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
+        "powf_with: result out of range — produced {result}, D38<{SCALE}> represents only |x| < 1.7e{}",
+        38_i32 - SCALE as i32,
+    ));
     narrowed.0
 }
