@@ -56,7 +56,8 @@ use crate::rounding::RoundingMode;
 pub trait DecimalTranscendental: Sized {
     // ── Logarithms ─────────────────────────────────────────────
 
-    /// Natural log. See [`crate::log_exp_strict`] for the algorithm.
+    /// Natural log. See the log/exp implementation module for the
+    /// algorithm.
     fn ln_strict(self) -> Self;
     fn ln_strict_with(self, mode: RoundingMode) -> Self;
     fn ln_approx(self, working_digits: u32) -> Self;
