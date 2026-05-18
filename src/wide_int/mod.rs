@@ -1594,16 +1594,109 @@ pub(crate) const fn limbs_divmod_u64(
 // scratch slack.
 const SCRATCH_LIMBS_U64: usize = 288;
 
-/// Equal-length u64 multiplier dispatcher.
+/// Karatsuba threshold for the u64-base multiplier. Set above any
+/// width the crate ships so the dispatcher never routes through
+/// Karatsuba in practice. The implementation is retained for
+/// possible future use (a `simd` feature, an extra-wide tier past
+/// D1231, etc.) but the M2 gate at L=16-96 showed schoolbook wins
+/// 1.07-1.92× at every shipped width — LLVM-unrolled schoolbook
+/// + the heap allocations the recursive split needs put the
+/// crossover well past our widest tier.
+pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 256;
+
+/// Recursive Karatsuba multiplication at u64 base.
 ///
-/// In testing against `examples/karabench.rs` u64 Karatsuba never won
-/// over schoolbook at the tiers this crate actually emits — the
-/// hardware `u64 × u64 → u128` widening multiply is single-cycle on
-/// x86-64 Zen 4 / Intel Golden Cove, so schoolbook's n² muls finish
-/// in fewer cycles than Karatsuba's 3 × (n/2)² + add/sub overhead at
-/// n ≤ 64. We keep `limbs_mul_u64` as the only multiplier and reserve
-/// the Karatsuba/Toom path for a future SIMD or wider-tier expansion.
+/// Reference: Karatsuba & Ofman 1962, "Multiplication of Multidigit
+/// Numbers on Automata" (Doklady Akad. Nauk SSSR 145, 293-294).
+/// Splits both equal-length operands at half: `a = a₁·B + a₀`,
+/// `b = b₁·B + b₀`, computes three half-width sub-products
+/// `z₀ = a₀·b₀`, `z₂ = a₁·b₁`, `z₁ = (a₀+a₁)·(b₀+b₁) − z₀ − z₂`,
+/// then recombines as `z₂·B² + z₁·B + z₀`.
+///
+/// Operands must be equal length. `out.len() >= 2 * a.len()` and
+/// `out` must be zeroed by the caller.
+#[cfg(feature = "alloc")]
+pub(crate) fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert!(out.len() >= 2 * a.len());
+    let n = a.len();
+    if n < KARATSUBA_THRESHOLD_U64 {
+        limbs_mul_u64(a, b, out);
+        return;
+    }
+    let h = n / 2;
+    let hi_len = n - h;
+    let (a_lo, a_hi) = a.split_at(h);
+    let (b_lo, b_hi) = b.split_at(h);
+
+    // z0 = a_lo · b_lo
+    let mut z0 = alloc::vec![0u64; 2 * h];
+    limbs_mul_karatsuba_padded_u64(a_lo, b_lo, &mut z0);
+
+    // z2 = a_hi · b_hi
+    let mut z2 = alloc::vec![0u64; 2 * hi_len];
+    limbs_mul_karatsuba_padded_u64(a_hi, b_hi, &mut z2);
+
+    // sum_a = a_lo + a_hi, sum_b = b_lo + b_hi. The sums fit in
+    // max(h, hi_len) + 1 limbs (1 limb of carry).
+    let sum_len = core::cmp::max(h, hi_len) + 1;
+    let mut sum_a = alloc::vec![0u64; sum_len];
+    let mut sum_b = alloc::vec![0u64; sum_len];
+    sum_a[..h].copy_from_slice(a_lo);
+    sum_b[..h].copy_from_slice(b_lo);
+    let _ = limbs_add_assign_u64(&mut sum_a[..], a_hi);
+    let _ = limbs_add_assign_u64(&mut sum_b[..], b_hi);
+
+    // z1m = sum_a · sum_b, then z1 = z1m - z0 - z2.
+    let mut z1 = alloc::vec![0u64; 2 * sum_len];
+    limbs_mul_karatsuba_padded_u64(&sum_a, &sum_b, &mut z1);
+    let _ = limbs_sub_assign_u64(&mut z1[..], &z0);
+    let _ = limbs_sub_assign_u64(&mut z1[..], &z2);
+
+    // Combine: out = z0 + z2·B² + z1·B  (B = 2^(h·64)).
+    for o in out.iter_mut().take(2 * n) {
+        *o = 0;
+    }
+    let z0_take = core::cmp::min(z0.len(), out.len());
+    out[..z0_take].copy_from_slice(&z0[..z0_take]);
+    let z2_take = core::cmp::min(z2.len(), out.len().saturating_sub(2 * h));
+    if z2_take > 0 {
+        out[2 * h..2 * h + z2_take].copy_from_slice(&z2[..z2_take]);
+    }
+    let z1_take = core::cmp::min(z1.len(), out.len().saturating_sub(h));
+    if z1_take > 0 {
+        let _ = limbs_add_assign_u64(&mut out[h..h + z1_take], &z1[..z1_take]);
+    }
+}
+
+/// Karatsuba helper that handles uneven operand lengths at the
+/// recursion boundary (`n` odd → `n_hi = n − h > h`).
+#[cfg(feature = "alloc")]
+fn limbs_mul_karatsuba_padded_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    if a.len() == b.len() && a.len() >= KARATSUBA_THRESHOLD_U64 {
+        limbs_mul_karatsuba_u64(a, b, out);
+    } else {
+        for o in out.iter_mut() {
+            *o = 0;
+        }
+        limbs_mul_u64(a, b, out);
+    }
+}
+
+/// Equal-length u64 multiplier dispatcher. Picks Karatsuba above
+/// the threshold; otherwise schoolbook. Both operands are assumed
+/// to be the same length (the common `widen_mul` case).
 pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    #[cfg(feature = "alloc")]
+    {
+        if a.len() == b.len() && a.len() >= KARATSUBA_THRESHOLD_U64 {
+            for o in out.iter_mut() {
+                *o = 0;
+            }
+            limbs_mul_karatsuba_u64(a, b, out);
+            return;
+        }
+    }
     limbs_mul_u64(a, b, out);
 }
 
@@ -2665,6 +2758,32 @@ mod slice_tests {
                 limbs_mul_u64(&a64, &b64, &mut out64);
 
                 assert_eq!(unpack(&out64), out128, "limbs_mul mismatch");
+            }
+        }
+    }
+
+    /// `limbs_mul_karatsuba_u64` matches `limbs_mul_u64` on equal-length
+    /// operands across the carry-stressing corpus. Proves the recursive
+    /// split + recombine algebra holds for the worst-case inputs.
+    #[test]
+    fn limbs_mul_karatsuba_u64_matches_schoolbook() {
+        for a in corpus() {
+            for b in corpus() {
+                let a64 = pack(&a);
+                let b64 = pack(&b);
+                let n = a64.len().min(b64.len());
+                if n < super::KARATSUBA_THRESHOLD_U64 {
+                    continue;
+                }
+                let mut a_buf = alloc::vec![0u64; n];
+                let mut b_buf = alloc::vec![0u64; n];
+                a_buf.copy_from_slice(&a64[..n]);
+                b_buf.copy_from_slice(&b64[..n]);
+                let mut out_school = alloc::vec![0u64; 2 * n];
+                let mut out_kara = alloc::vec![0u64; 2 * n];
+                limbs_mul_u64(&a_buf, &b_buf, &mut out_school);
+                limbs_mul_karatsuba_u64(&a_buf, &b_buf, &mut out_kara);
+                assert_eq!(out_kara, out_school, "Karatsuba mismatch at n={n}");
             }
         }
     }
