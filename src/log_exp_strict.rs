@@ -74,27 +74,76 @@ use crate::core_type::D38;
 
 pub(crate) const STRICT_GUARD: u32 = 30;
 
-/// `ln(2)` as a `Fixed` at working scale `w` (`w <= 64`). The constant
-/// is embedded to 64 fractional digits and narrowed to `w`.
-pub(crate) fn wide_ln2(w: u32) -> crate::d_w128_kernels::Fixed {
-    // ln 2 = 0.693147180559945309417232121458176568075500134360255254120680 0094
-    crate::d_w128_kernels::Fixed::from_decimal_split(
-        69_314_718_055_994_530_941_723_212_145_817_u128,
-        65_680_755_001_343_602_552_541_206_800_094_u128,
-    )
-    .rescale_down(64, w)
+// `ln(2)` and `ln(10)` are embedded at 75 fractional digits — the same
+// reference scale `wide_pi` uses — so callers running at the maximum
+// strict working scale `W = SCALE + STRICT_GUARD = 38 + 30 = 68` always
+// rescale **down** (never up, which would wrap `from_w − to_w` as `u32`
+// and silently produce a wrong constant). The 75-digit window covers
+// every supported strict scale; widening it further is wasted work
+// because the working scale is capped by `D38<SCALE>`'s storage range
+// (no input that fits `i128` at `SCALE > 38` exists).
+//
+// Half-to-even rounded ln(2) × 10^75 and ln(10) × 10^75; both fit an
+// `Int256` (max ≈ 5.78 × 10⁷⁶). The next-digit rounding is documented
+// in-line so the truncation step is auditable from this file alone.
+
+/// `ln(2) × 10^75`, half-to-even rounded (76th frac digit is 4 — round
+/// down). Source: high-precision evaluation of the natural logarithm.
+const LN2_S75: &str =
+    "693147180559945309417232121458176568075500134360255254120680009493393621969";
+
+/// `ln(10) × 10^75`, half-to-even rounded (76th frac digit is 3 — round
+/// down). Source: high-precision evaluation of the natural logarithm.
+const LN10_S75: &str =
+    "2302585092994045684017991454684364207601101488628772976033327900967572609677";
+
+const LN2_RAW: crate::wide_int::Int256 =
+    match crate::wide_int::Int256::from_str_radix(LN2_S75, 10) {
+        Ok(v) => v,
+        Err(_) => panic!("log_exp_strict: LN2_S75 not parseable"),
+    };
+
+const LN10_RAW: crate::wide_int::Int256 =
+    match crate::wide_int::Int256::from_str_radix(LN10_S75, 10) {
+        Ok(v) => v,
+        Err(_) => panic!("log_exp_strict: LN10_S75 not parseable"),
+    };
+
+/// Repacks an `Int256` reference (internally `[u64; 4]`) into a
+/// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
+#[inline]
+fn fixed_from_int256(raw: crate::wide_int::Int256) -> crate::d_w128_kernels::Fixed {
+    let words = raw.0;
+    crate::d_w128_kernels::Fixed {
+        negative: false,
+        mag: [
+            (words[0] as u128) | ((words[1] as u128) << 64),
+            (words[2] as u128) | ((words[3] as u128) << 64),
+        ],
+    }
 }
 
-/// `ln(10)` as a `Fixed` at working scale `w` (`w <= 63`). Embedded to
-/// 63 fractional digits (`ln 10 ≈ 2.30…` has an integer digit) and
-/// narrowed to `w`.
+/// `ln(2)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
+/// the 75-digit reference and rescaled **down** to `w`.
+///
+/// Caller-side precondition: `w <= 75`. The D38 strict log family runs
+/// at `w = SCALE + STRICT_GUARD`, capped at `38 + 30 = 68`, so every
+/// strict call site is comfortably inside the bound. A debug-assert
+/// documents the invariant for any future caller.
+pub(crate) fn wide_ln2(w: u32) -> crate::d_w128_kernels::Fixed {
+    debug_assert!(w <= 75, "wide_ln2: working scale {w} exceeds embedded 75-digit ln 2");
+    let ln2_at_75 = fixed_from_int256(LN2_RAW);
+    if w == 75 { ln2_at_75 } else { ln2_at_75.rescale_down(75, w) }
+}
+
+/// `ln(10)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
+/// the 75-digit reference and rescaled **down** to `w`.
+///
+/// Caller-side precondition: `w <= 75`. See [`wide_ln2`].
 fn wide_ln10(w: u32) -> crate::d_w128_kernels::Fixed {
-    // ln 10 = 2.302585092994045684017991454684364207601101488628772976033327 901
-    crate::d_w128_kernels::Fixed::from_decimal_split(
-        23_025_850_929_940_456_840_179_914_546_843_u128,
-        64_207_601_101_488_628_772_976_033_327_901_u128,
-    )
-    .rescale_down(63, w)
+    debug_assert!(w <= 75, "wide_ln10: working scale {w} exceeds embedded 75-digit ln 10");
+    let ln10_at_75 = fixed_from_int256(LN10_RAW);
+    if w == 75 { ln10_at_75 } else { ln10_at_75.rescale_down(75, w) }
 }
 
 /// Natural logarithm of a positive working-scale value `v_w`, returned
