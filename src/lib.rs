@@ -186,6 +186,7 @@ pub use ::tracing;
 
 mod algos;
 mod arithmetic;
+mod d_unified;
 #[cfg(feature = "bench-alt")]
 mod bench_alt;
 #[cfg(feature = "bench-alt")]
@@ -266,6 +267,7 @@ pub use consts::DecimalConstants;
 pub use consts::DecimalConsts;
 pub use arithmetic_trait::DecimalArithmetic;
 pub use convert_trait::DecimalConvert;
+pub use d_unified::D;
 pub use decimal_trait::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;
