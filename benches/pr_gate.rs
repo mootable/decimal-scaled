@@ -28,9 +28,14 @@
 use criterion::{Criterion, black_box, criterion_group, criterion_main};
 use decimal_scaled::{D38, D56, D307};
 
+// D307<30> rather than D307<150>: FromStr's u128 intermediate
+// caps at SCALE <= 38 (10^39 overflows u128). The bench is a
+// regression sentinel — SCALE in the deep range exercises the
+// wide-int machinery either way; we just need a SCALE the
+// FromStr path can handle.
 type T38 = D38<19>;
 type T56 = D56<20>;
-type T307 = D307<150>;
+type T307 = D307<30>;
 
 fn inputs_d38() -> (T38, T38) {
     let a: T38 = "1.5".parse().unwrap();
