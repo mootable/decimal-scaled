@@ -380,23 +380,39 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Logarithm in `base` under the supplied rounding mode.
+    ///
+    /// Under `d56` / `wide` the body widens to D56, calls D56's
+    /// `log_strict_with` (which shares the fast
+    /// `wide_trig_d56::ln_fixed` core that `ln_strict` borrows), and
+    /// narrows back. Without those features it falls through to the
+    /// bespoke `Fixed` 256-bit kernel — same path the family used
+    /// before the borrow migration.
     #[inline]
     #[must_use]
     pub fn log_strict_with(self, base: Self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log: argument must be positive");
         assert!(base.0 > 0, "D38::log: base must be positive");
-        let w = SCALE + STRICT_GUARD;
-        let pow = 10u128.pow(STRICT_GUARD);
-        let v_w = Fixed::from_u128_mag(self.0 as u128, false).mul_u128(pow);
-        let b_w = Fixed::from_u128_mag(base.0 as u128, false).mul_u128(pow);
-        let ln_b = ln_fixed(b_w, w);
-        assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
-        let raw = ln_fixed(v_w, w)
-            .div(ln_b, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::log: result out of range");
-        Self::from_bits(raw)
+        #[cfg(any(feature = "d56", feature = "wide"))]
+        {
+            Self::from_bits(crate::algos::ln::borrow_d56::log_strict::<SCALE>(
+                self.0, base.0, mode,
+            ))
+        }
+        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        {
+            use crate::d_w128_kernels::Fixed;
+            let w = SCALE + STRICT_GUARD;
+            let pow = 10u128.pow(STRICT_GUARD);
+            let v_w = Fixed::from_u128_mag(self.0 as u128, false).mul_u128(pow);
+            let b_w = Fixed::from_u128_mag(base.0 as u128, false).mul_u128(pow);
+            let ln_b = ln_fixed(b_w, w);
+            assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
+            let raw = ln_fixed(v_w, w)
+                .div(ln_b, w)
+                .round_to_i128_with(w, SCALE, mode)
+                .expect("D38::log: result out of range");
+            Self::from_bits(raw)
+        }
     }
 
     /// Logarithm with caller-chosen guard digits. See `ln_approx`.
@@ -456,19 +472,29 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Base-2 log under the supplied rounding mode.
+    ///
+    /// Under `d56` / `wide` widens to D56, calls D56's
+    /// `log2_strict_with`, narrows back — see [`Self::log_strict_with`].
     #[inline]
     #[must_use]
     pub fn log2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log2: argument must be positive");
-        let w = SCALE + STRICT_GUARD;
-        let v_w =
-            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
-        let raw = ln_fixed(v_w, w)
-            .div(wide_ln2(w), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::log2: result out of range");
-        Self::from_bits(raw)
+        #[cfg(any(feature = "d56", feature = "wide"))]
+        {
+            Self::from_bits(crate::algos::ln::borrow_d56::log2_strict::<SCALE>(self.0, mode))
+        }
+        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        {
+            use crate::d_w128_kernels::Fixed;
+            let w = SCALE + STRICT_GUARD;
+            let v_w =
+                Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+            let raw = ln_fixed(v_w, w)
+                .div(wide_ln2(w), w)
+                .round_to_i128_with(w, SCALE, mode)
+                .expect("D38::log2: result out of range");
+            Self::from_bits(raw)
+        }
     }
 
     /// Base-2 log with caller-chosen guard digits.
@@ -524,19 +550,29 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// Base-10 log under the supplied rounding mode.
+    ///
+    /// Under `d56` / `wide` widens to D56, calls D56's
+    /// `log10_strict_with`, narrows back — see [`Self::log_strict_with`].
     #[inline]
     #[must_use]
     pub fn log10_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log10: argument must be positive");
-        let w = SCALE + STRICT_GUARD;
-        let v_w =
-            Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
-        let raw = ln_fixed(v_w, w)
-            .div(wide_ln10(w), w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::log10: result out of range");
-        Self::from_bits(raw)
+        #[cfg(any(feature = "d56", feature = "wide"))]
+        {
+            Self::from_bits(crate::algos::ln::borrow_d56::log10_strict::<SCALE>(self.0, mode))
+        }
+        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        {
+            use crate::d_w128_kernels::Fixed;
+            let w = SCALE + STRICT_GUARD;
+            let v_w =
+                Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
+            let raw = ln_fixed(v_w, w)
+                .div(wide_ln10(w), w)
+                .round_to_i128_with(w, SCALE, mode)
+                .expect("D38::log10: result out of range");
+            Self::from_bits(raw)
+        }
     }
 
     /// Base-10 log with caller-chosen guard digits.
@@ -664,23 +700,34 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 
     /// `2^self` under the supplied rounding mode.
+    ///
+    /// Under `d56` / `wide` widens to D56, calls D56's
+    /// `exp2_strict_with`, narrows back — see [`Self::log_strict_with`]
+    /// for the broader rationale.
     #[inline]
     #[must_use]
     pub fn exp2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
-        use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
         }
-        let w = SCALE + STRICT_GUARD;
-        let negative_input = self.0 < 0;
-        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
-            .mul_u128(10u128.pow(STRICT_GUARD));
-        let v_w = if negative_input { v_w.neg() } else { v_w };
-        let arg_w = v_w.mul(wide_ln2(w), w);
-        let raw = exp_fixed(arg_w, w)
-            .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::exp2: result overflows the representable range");
-        Self::from_bits(raw)
+        #[cfg(any(feature = "d56", feature = "wide"))]
+        {
+            Self::from_bits(crate::algos::exp::borrow_d56::exp2_strict::<SCALE>(self.0, mode))
+        }
+        #[cfg(not(any(feature = "d56", feature = "wide")))]
+        {
+            use crate::d_w128_kernels::Fixed;
+            let w = SCALE + STRICT_GUARD;
+            let negative_input = self.0 < 0;
+            let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
+                .mul_u128(10u128.pow(STRICT_GUARD));
+            let v_w = if negative_input { v_w.neg() } else { v_w };
+            let arg_w = v_w.mul(wide_ln2(w), w);
+            let raw = exp_fixed(arg_w, w)
+                .round_to_i128_with(w, SCALE, mode)
+                .expect("D38::exp2: result overflows the representable range");
+            Self::from_bits(raw)
+        }
     }
 
     /// Base-2 exponential with caller-chosen guard digits.

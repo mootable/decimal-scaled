@@ -170,6 +170,14 @@ harness = false
 name = "all_functions"
 harness = false
 
+# Focused micro-bench for D38<33>::log10_strict / log2_strict / etc.
+# Used to validate the borrow-D56 migration of the secondary log/exp
+# entry points (ln/exp were borrowed by commit 09e7ea9).
+[[bench]]
+name = "d38_s33_log10_micro"
+harness = false
+required-features = ["wide"]
+
 # Wide-integer backend comparison: native hand-rolled `Int256` vs
 # `bnum` / `ruint`. Needs the wide tier.
 [[bench]]
