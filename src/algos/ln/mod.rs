@@ -1,10 +1,10 @@
-//! Natural-logarithm algorithm family — narrow-tier kernels.
+//! Natural-logarithm algorithm family.
 //!
-//! Only D9 / D18 / D38 have policy-routed `ln_strict` today. The wide
-//! tiers (D56+) still call their per-tier `ln_fixed` directly from the
-//! macro-emitted method shell; migrating those through the policy
-//! trait requires opening up the per-tier core modules
-//! (`wide_trig_<tier>`) and is deferred to a separate effort.
+//! Narrow tier (D9 / D18 / D38) calls the `Fixed` 256-bit intermediate
+//! kernels; wide tier (D56 .. D1231) calls per-tier free functions in
+//! [`wide_kernel`] that wrap the `wide_trig_<tier>::ln_fixed` core the
+//! `decl_wide_transcendental!` macro emits next to each `Dxx` struct.
+//! Both tiers route through `crate::policy::ln::LnPolicy`.
 //!
 //! Variants:
 //!
@@ -13,6 +13,10 @@
 //!   the four-variant matrix entry points (strict mode + approximation
 //!   mode, each with an explicit-rounding sibling).
 //! - [`widen_to_d38`] — D9 / D18 widen → `fixed_d38::ln` → narrow.
+//! - [`wide_kernel`] — per-tier `ln_strict_<tier>` free functions for
+//!   the wide tiers (D56 / D76 / D114 / D153 / D230 / D307 / D461 /
+//!   D615 / D923 / D1231).
 
 pub(crate) mod fixed_d38;
+pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;
