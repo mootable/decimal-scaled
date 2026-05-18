@@ -16,9 +16,36 @@ exactness when they need it and an opt-out when they don't.
 
 | target | gating work |
 |--------|-------------|
-| **0.3.0** | The current development cycle. Ships: the half-width tier ladder (D56 / D114 / D230 / D461 / D615 / D923 / D1231); the comprehensive cross-tier `widen()` / `narrow()` chain (breaking — D38.widen() now returns D56, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); MG magic-multiply table extension across every wide-tier SCALE; trig functions in the per-width summary chart family. |
-| **0.4.0** | (1) Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension landed in 0.3. (2) Cryptographically-secure RNG surface: uniform-decimal sampling over `[0, 1)`, `[a, b]`, and full-storage; rejection-sampling at any SCALE; bring-your-own `CryptoRng` so callers can plug `OsRng` / `ChaCha20Rng` / hardware RNGs. |
+| **0.3.0** (shipped) | Half-width tier ladder (D56 / D114 / D230 / D461 / D615 / D923 / D1231); the comprehensive cross-tier `widen()` / `narrow()` chain (D38.widen() now returns D56, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); strict-by-default dispatcher; per-width benchmark split; trig functions in the per-width summary chart family. |
+| **0.3.1** (shipped) | Docs-site release-process fixes; rustdoc build covers x-wide + xx-wide tiers. |
+| **0.3.2** (in flight) | See "Shipped recently in 0.3.x" below. Per-L fixed-array `mul` (1.25× on D307 exp); 17 trig fast paths; ln fast paths; adaptive halvings in atan; full profiling infrastructure (samply / flamegraph / perfetto); two benchmark add-ons (atan input-class comparison, per-L mul gate). |
+| **0.4.0** | (1) Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension. (2) Cryptographically-secure RNG surface: uniform-decimal sampling over `[0, 1)`, `[a, b]`, and full-storage; rejection-sampling at any SCALE; bring-your-own `CryptoRng` so callers can plug `OsRng` / `ChaCha20Rng` / hardware RNGs. |
 | **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
+
+## Shipped recently in 0.3.x
+
+Tactical perf and fast-path wins, with bench evidence in
+`target/` and `docs/benchmarks.md`:
+
+| change | measured effect |
+|--------|-----------------|
+| `limbs_mul_u64_fixed<const L, D>` wired into `widen_mul` / `wrapping_mul` / `checked_mul` | 1.22-2.73× on per-L mul; **1.25× on D307<150> `exp_strict` whole-call** (88.8 → 71.1 µs) |
+| Adaptive halvings in `atan_fixed` (halve while `|y| > ~0.2`, max 8; was fixed 3) | 3-5× on atan with small / reciprocal-reduced inputs (D38<19>: `atan(0.001)` 44 → 14 µs; `atan(1e8)` 44 → 8 µs) |
+| 17 trig fast paths: zero / ±1 / small-x linear band for `atan`, `sin`, `cos`, `tan`, `asin`, `acos`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `to_degrees`, `to_radians` | ~1000-10000× on the fast-path inputs (`atan(0)` 68 µs → 5 ns; `atan(1e-7)` 68 µs → 5 ns); best-in-class small-x atan vs both fastnum and g_math |
+| `ln(1) = 0` + `ln(1+ε) ≈ ε` linear-band fast paths in `ln_strict` | <10 ns on fast-path inputs vs prior 1.4 µs |
+| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D9 through D1231 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
+| Profiling infrastructure: `perf-trace` feature, section spans in `exp_fixed` / `atan_fixed`, samply + perfetto example drivers + parser scripts | establishes the M2-gate discipline used through the rest of this work |
+| `benches/atan_inputs.rs` — input-class atan timing (decimal-scaled vs fastnum vs g_math) | exposed two bench-validity issues (fastnum `atan(|x|>1)` = NaN, fastnum `ln(2)` = const lookup) — recorded in `docs/benchmarks.md` |
+
+Items investigated and intentionally *not* shipped (kept as
+dead code / docs for posterity, audit trail in commits + `research/`):
+
+- `limbs_sqr_u64` squaring fast path — 50% fewer widening MULs in theory; on this toolchain the ADC overhead equalises it, exp regressed 7%. Kernel retained in tree; not wired.
+- `5^w` magic-multiply split for `÷10^w` — Granlund-Montgomery reciprocal for the `5^w` factor. Failed M2 gate 4-5× at every tier; algorithm wrong-shaped for multi-limb divisors at our ratio.
+- `limbs_mul_u64_v2` dashu-style inner row (`mul_add_2carry` form) — within noise on this toolchain.
+- MG 2-by-1 → 3-by-2 swap in `limbs_divmod_knuth_u64` — mixed signal across tiers; algorithm reverted, structural cleanups (n=1 short-circuit, escape-early `u_top > v_top`, hoist `j+n`) retained.
+- Phase-1 LLVM-unroll batch (`add_assign_fixed`, `sub_assign_fixed`, etc.) — won per-op micro-benches but regressed whole-call D307 exp by 18% (icache / inline-decision interaction). Kernels in tree; macros wire to slice variants.
+- Integer-rhs auto-detect in D38 `Mul`/`Div` — within noise at D38 (base path is already a single i128 multiply); extending to wide tiers would need a multi-limb modulo per call.
 
 ---
 
@@ -144,7 +171,7 @@ roadmap item here unless the accuracy contract changes.
 
 | approach | status | expected win |
 |---|---|---|
-| Split `benches/library_comparison.rs` into one bench-binary per width (`lib_cmp_d38.rs`, `lib_cmp_d76.rs`, `lib_cmp_d307.rs`, …) so `cargo bench --bench lib_cmp_d307` can iterate on a single tier without re-running the whole matrix | TODO (post-0.3.0) | minutes vs hours per iteration when tuning one tier; each file stays focused on its peer set |
+| Split `benches/library_comparison.rs` into one bench-binary per width (`lib_cmp_d38.rs`, `lib_cmp_d76.rs`, `lib_cmp_d307.rs`, …) so `cargo bench --bench lib_cmp_d307` can iterate on a single tier without re-running the whole matrix | **DONE in 0.3.x** | minutes vs hours per iteration when tuning one tier; each file stays focused on its peer set |
 | Re-bench every release on a single dedicated machine, not whatever runner happened to be available | TODO | reduces inter-release noise that currently looks like regressions |
 | Track ULP deltas continuously, not one-shot at 0.2.5 | TODO | catches accuracy regressions early; cheap to run |
 | Cross-platform bit-determinism CI (Linux/macOS/Windows × x86_64/aarch64) | TODO | proves the `*_strict` invariant the docs claim |
