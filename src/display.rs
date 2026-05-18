@@ -5,6 +5,23 @@
 //! contains the hand-written D38 implementation and serves as the
 //! shape reference for the macro emissions.
 //!
+//! # Parser factoring
+//!
+//! [`parse_components`] is the shared string-parsing front-end (sign /
+//! dot / digit-character validation, plus the overlong-fractional and
+//! leading-zero checks). The arithmetic accumulator that turns the
+//! integer / fractional digit slices into a storage value is
+//! *per-storage*:
+//!
+//! - Narrow tier (D9 / D18 / D38) accumulates in `u128` inside
+//!   [`parse_decimal_bits`] — fast and the `10^SCALE` multiplier always
+//!   fits since SCALE ≤ 38.
+//! - Wide tier (D76 … D1231) accumulates in the storage type itself
+//!   via the per-width body emitted by
+//!   [`crate::macros::from_str::decl_decimal_from_str!`]'s `wide` arm.
+//!   The integer arithmetic happens at the storage width so the
+//!   `10^SCALE` multiplier never overflows even at SCALE = 1230.
+//!
 //! # Display format
 //!
 //! [`fmt::Display`] formats as a base-10 decimal literal: integer digits,
@@ -174,19 +191,32 @@ fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) ->
 // `ParseError`'s `Display` and `Error` impls live in `src/error.rs`.
 
 
-/// Core decimal string parser.
+/// Outcome of the string-parsing front-end: sign and the integer / fractional
+/// digit slices. Both byte slices contain only ASCII digits.
 ///
-/// Extracted from the trait impl to keep `from_str` small and to centralise
-/// the sign / dot / digit state machine in one place.
+/// Centralises the sign / dot / digit-character state machine so the
+/// per-storage accumulators (`i128` for the narrow tier; the wide signed
+/// integers emitted via the from-str macro for the wide tier) only need
+/// to do the base-10 arithmetic.
+pub(crate) struct ParseComponents<'a> {
+    pub negative: bool,
+    pub int_str: &'a [u8],
+    pub frac_str: &'a [u8],
+}
+
+/// String-parsing front-end shared by every width.
+///
+/// Validates and splits the input into sign / integer-digits / fractional-
+/// digits. The `SCALE` parameter is needed only to reject overlong fractional
+/// parts — no arithmetic happens here, so wide-tier callers can drive their
+/// own storage-typed accumulator without overflow risk.
 ///
 /// # Precision
 ///
-/// Strict: all arithmetic is integer-only; result is bit-exact.
-pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
-    parse_decimal::<SCALE>(s).map(super::core_type::D38::to_bits)
-}
-
-fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
+/// Strict: integer-only string slicing; no arithmetic.
+pub(crate) fn parse_components<const SCALE: u32>(
+    s: &str,
+) -> Result<ParseComponents<'_>, ParseError> {
     if s.is_empty() {
         return Err(ParseError::Empty);
     }
@@ -260,6 +290,37 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
     if frac_str.len() > SCALE as usize {
         return Err(ParseError::OverlongFractional);
     }
+
+    Ok(ParseComponents {
+        negative,
+        int_str,
+        frac_str,
+    })
+}
+
+/// Core decimal string parser for `D38`-class native-`i128` storage.
+///
+/// Drives [`parse_components`] and accumulates the storage value in `u128`
+/// (which avoids the `i128::MIN` asymmetry), then applies the sign.
+///
+/// The wide tier (D76 … D1231) uses [`crate::macros::from_str`] to emit a
+/// per-storage accumulator with the same shape; the front-end is shared but
+/// the arithmetic happens at the storage width so `10^SCALE` cannot
+/// overflow.
+///
+/// # Precision
+///
+/// Strict: all arithmetic is integer-only; result is bit-exact.
+pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
+    parse_decimal::<SCALE>(s).map(super::core_type::D38::to_bits)
+}
+
+fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
+    let ParseComponents {
+        negative,
+        int_str,
+        frac_str,
+    } = parse_components::<SCALE>(s)?;
 
     // Accumulate the storage value as u128 (avoids the i128::MIN asymmetry)
     // and apply the sign at the very end.
