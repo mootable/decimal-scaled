@@ -281,7 +281,20 @@ impl Fixed {
 
     /// Truncating change of working scale from `from_w` down to `to_w`
     /// (`to_w <= from_w`): divides the magnitude by `10^(from_w-to_w)`.
+    ///
+    /// `from_w >= to_w` is a kernel-boundary invariant: this is the
+    /// "down" path. A debug-assert catches callers that accidentally
+    /// invert the arguments — without it, `from_w - to_w` wraps as
+    /// `u32` and the downstream `Fixed::pow10` overflows with a
+    /// confusing message far from the actual site. See `wide_ln2` /
+    /// `wide_ln10` / `wide_pi` for the rescale-down call shape.
     pub(crate) fn rescale_down(self, from_w: u32, to_w: u32) -> Fixed {
+        debug_assert!(
+            from_w >= to_w,
+            "Fixed::rescale_down: from_w ({from_w}) must be >= to_w ({to_w}); \
+             this is the rescale-DOWN path. Inverted arguments wrap u32 and \
+             trip a far-away pow10 overflow."
+        );
         if from_w == to_w {
             return self;
         }
