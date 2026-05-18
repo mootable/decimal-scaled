@@ -43,7 +43,7 @@ pub(crate) fn powf_with<const SCALE: u32>(
     let y_w = if y_neg { y_w.neg() } else { y_w };
     exp_fixed(y_w.mul(ln_x, w), w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("powf kernel: result overflows the representable range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
@@ -68,5 +68,5 @@ pub(crate) fn powf_strict<const SCALE: u32>(
     let y_w = if y_neg { y_w.neg() } else { y_w };
     exp_fixed(y_w.mul(ln_x, w), w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("powf kernel: result overflows the representable range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
 }

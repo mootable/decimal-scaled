@@ -15,7 +15,7 @@ pub(crate) fn cbrt_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<
     let cbrt_d38 = super::mg_divide_d38::cbrt(widened.0, SCALE, mode);
     D38::<SCALE>::from_bits(cbrt_d38)
         .try_into()
-        .expect("widen_to_d38::cbrt_d9: result out of range")
+        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("widen_to_d38::cbrt_d9", SCALE))
 }
 
 /// `D18` cube-root via widen → D38 → narrow.
@@ -26,5 +26,5 @@ pub(crate) fn cbrt_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D
     let cbrt_d38 = super::mg_divide_d38::cbrt(widened.0, SCALE, mode);
     D38::<SCALE>::from_bits(cbrt_d38)
         .try_into()
-        .expect("widen_to_d38::cbrt_d18: result out of range")
+        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("widen_to_d38::cbrt_d18", SCALE))
 }

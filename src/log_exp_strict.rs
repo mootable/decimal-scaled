@@ -410,7 +410,7 @@ impl<const SCALE: u32> D38<SCALE> {
             let raw = ln_fixed(v_w, w)
                 .div(ln_b, w)
                 .round_to_i128_with(w, SCALE, mode)
-                .expect("D38::log: result out of range");
+                .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log", SCALE));
             Self::from_bits(raw)
         }
     }
@@ -441,7 +441,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = ln_fixed(v_w, w)
             .div(ln_b, w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::log: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log", SCALE));
         Self::from_bits(raw)
     }
 
@@ -492,7 +492,7 @@ impl<const SCALE: u32> D38<SCALE> {
             let raw = ln_fixed(v_w, w)
                 .div(wide_ln2(w), w)
                 .round_to_i128_with(w, SCALE, mode)
-                .expect("D38::log2: result out of range");
+                .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log2", SCALE));
             Self::from_bits(raw)
         }
     }
@@ -519,7 +519,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = ln_fixed(v_w, w)
             .div(wide_ln2(w), w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::log2: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log2", SCALE));
         Self::from_bits(raw)
     }
 
@@ -570,7 +570,7 @@ impl<const SCALE: u32> D38<SCALE> {
             let raw = ln_fixed(v_w, w)
                 .div(wide_ln10(w), w)
                 .round_to_i128_with(w, SCALE, mode)
-                .expect("D38::log10: result out of range");
+                .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log10", SCALE));
             Self::from_bits(raw)
         }
     }
@@ -597,7 +597,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = ln_fixed(v_w, w)
             .div(wide_ln10(w), w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::log10: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log10", SCALE));
         Self::from_bits(raw)
     }
 
@@ -725,7 +725,7 @@ impl<const SCALE: u32> D38<SCALE> {
             let arg_w = v_w.mul(wide_ln2(w), w);
             let raw = exp_fixed(arg_w, w)
                 .round_to_i128_with(w, SCALE, mode)
-                .expect("D38::exp2: result overflows the representable range");
+                .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::exp2", SCALE));
             Self::from_bits(raw)
         }
     }
@@ -756,7 +756,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let arg_w = v_w.mul(wide_ln2(w), w);
         let raw = exp_fixed(arg_w, w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::exp2: result overflows the representable range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::exp2", SCALE));
         Self::from_bits(raw)
     }
 

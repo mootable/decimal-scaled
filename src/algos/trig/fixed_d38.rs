@@ -29,7 +29,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     let w = SCALE + STRICT_GUARD;
     sin_fixed(to_fixed(raw), w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("sin: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("sin", SCALE))
 }
 
 #[inline]
@@ -48,7 +48,7 @@ pub(crate) fn sin_with<const SCALE: u32>(
     let w = SCALE + working_digits;
     sin_fixed(to_fixed_w(raw, working_digits), w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("sin: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("sin", SCALE))
 }
 
 // ── cos ────────────────────────────────────────────────────────────
@@ -63,7 +63,7 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     let arg = to_fixed(raw).add(wide_half_pi(w));
     sin_fixed(arg, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("cos: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("cos", SCALE))
 }
 
 #[inline]
@@ -80,7 +80,7 @@ pub(crate) fn cos_with<const SCALE: u32>(
     let arg = to_fixed_w(raw, working_digits).add(wide_half_pi(w));
     sin_fixed(arg, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("cos: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("cos", SCALE))
 }
 
 // ── tan ────────────────────────────────────────────────────────────
@@ -105,7 +105,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     sin_w
         .div(cos_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("tan: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("tan", SCALE))
 }
 
 #[inline]
@@ -132,7 +132,7 @@ pub(crate) fn tan_with<const SCALE: u32>(
     sin_w
         .div(cos_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("tan: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("tan", SCALE))
 }
 
 // ── atan ───────────────────────────────────────────────────────────
@@ -156,7 +156,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     let w = SCALE + STRICT_GUARD;
     atan_fixed(to_fixed(raw), w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("atan: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan", SCALE))
 }
 
 #[inline]
@@ -182,7 +182,7 @@ pub(crate) fn atan_with<const SCALE: u32>(
     let w = SCALE + working_digits;
     atan_fixed(to_fixed_w(raw, working_digits), w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("atan: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan", SCALE))
 }
 
 // ── asin ───────────────────────────────────────────────────────────
@@ -207,7 +207,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
         let hp = if v.negative { hp.neg() } else { hp };
         return hp
             .round_to_i128_with(w, SCALE, mode)
-            .expect("asin: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE));
     }
     let half_w = one_w.halve();
     let asin_w = if !abs_v.ge_mag(half_w) {
@@ -223,7 +223,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     };
     asin_w
         .round_to_i128_with(w, SCALE, mode)
-        .expect("asin: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE))
 }
 
 #[inline]
@@ -250,7 +250,7 @@ pub(crate) fn asin_with<const SCALE: u32>(
         let hp = if v.negative { hp.neg() } else { hp };
         return hp
             .round_to_i128_with(w, SCALE, mode)
-            .expect("asin: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE));
     }
     let half_w = one_w.halve();
     let asin_w = if !abs_v.ge_mag(half_w) {
@@ -266,7 +266,7 @@ pub(crate) fn asin_with<const SCALE: u32>(
     };
     asin_w
         .round_to_i128_with(w, SCALE, mode)
-        .expect("asin: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE))
 }
 
 // ── acos ───────────────────────────────────────────────────────────
@@ -308,7 +308,7 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     wide_half_pi(w)
         .sub(asin_w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("acos: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("acos", SCALE))
 }
 
 #[inline]
@@ -352,7 +352,7 @@ pub(crate) fn acos_with<const SCALE: u32>(
     wide_half_pi(w)
         .sub(asin_w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("acos: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("acos", SCALE))
 }
 
 // ── atan2 ──────────────────────────────────────────────────────────
@@ -367,7 +367,7 @@ pub(crate) fn atan2_strict<const SCALE: u32>(
     let w = SCALE + STRICT_GUARD;
     atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("atan2: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan2", SCALE))
 }
 
 #[inline]
@@ -386,5 +386,5 @@ pub(crate) fn atan2_with<const SCALE: u32>(
         w,
     )
         .round_to_i128_with(w, SCALE, mode)
-        .expect("atan2: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan2", SCALE))
 }

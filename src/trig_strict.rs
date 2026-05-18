@@ -481,7 +481,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .sub(enx)
             .halve()
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::sinh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::sinh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -513,7 +513,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .sub(enx)
             .halve()
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::sinh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::sinh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -540,7 +540,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .add(enx)
             .halve()
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::cosh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::cosh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -569,7 +569,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .add(enx)
             .halve()
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::cosh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::cosh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -600,7 +600,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .sub(enx)
             .div(ex.add(enx), w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::tanh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::tanh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -632,7 +632,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .sub(enx)
             .div(ex.add(enx), w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::tanh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::tanh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -673,7 +673,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let signed = if self.0 < 0 { inner.neg() } else { inner };
         let raw = signed
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::asinh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::asinh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -713,7 +713,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let signed = if self.0 < 0 { inner.neg() } else { inner };
         let raw = signed
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::asinh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::asinh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -755,7 +755,7 @@ impl<const SCALE: u32> D38<SCALE> {
         };
         let raw = inner
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::acosh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::acosh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -793,7 +793,7 @@ impl<const SCALE: u32> D38<SCALE> {
         };
         let raw = inner
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::acosh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::acosh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -830,7 +830,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = crate::log_exp_strict::ln_fixed(ratio, w)
             .halve()
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::atanh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::atanh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -864,7 +864,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = crate::log_exp_strict::ln_fixed(ratio, w)
             .halve()
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::atanh: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::atanh", SCALE));
         Self::from_bits(raw)
     }
 
@@ -889,7 +889,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .mul_u128(180)
             .div(wide_pi(w), w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::to_degrees: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::to_degrees", SCALE));
         Self::from_bits(raw)
     }
 
@@ -915,7 +915,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .mul_u128(180)
             .div(wide_pi(w), w)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::to_degrees: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::to_degrees", SCALE));
         Self::from_bits(raw)
     }
 
@@ -939,7 +939,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .mul(wide_pi(w), w)
             .div_small(180)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::to_radians: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::to_radians", SCALE));
         Self::from_bits(raw)
     }
 
@@ -965,7 +965,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .mul(wide_pi(w), w)
             .div_small(180)
             .round_to_i128_with(w, SCALE, mode)
-            .expect("D38::to_radians: result out of range");
+            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::to_radians", SCALE));
         Self::from_bits(raw)
     }
 }

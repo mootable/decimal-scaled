@@ -24,7 +24,7 @@ pub(crate) fn exp_with(raw: i128, scale: u32, working_digits: u32, mode: Roundin
     let v_w = if negative_input { v_w.neg() } else { v_w };
     exp_fixed(v_w, w)
         .round_to_i128_with(w, scale, mode)
-        .expect("exp kernel: result overflows the representable range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("exp kernel", scale))
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
@@ -41,5 +41,5 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     let v_w = if negative_input { v_w.neg() } else { v_w };
     exp_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("exp kernel: result overflows the representable range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("exp kernel", SCALE))
 }

@@ -41,7 +41,7 @@ pub(crate) fn ln_with(raw: i128, scale: u32, working_digits: u32, mode: Rounding
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
     ln_fixed(v_w, w)
         .round_to_i128_with(w, scale, mode)
-        .expect("ln kernel: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("ln kernel", scale))
 }
 
 /// Strict variant — fixed to `STRICT_GUARD` working digits. Equivalent
@@ -65,5 +65,5 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
     ln_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .expect("ln kernel: result out of range")
+        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("ln kernel", SCALE))
 }

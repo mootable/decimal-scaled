@@ -42,7 +42,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn log2_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log2_strict())
-                    .expect(concat!(stringify!($Type), "::log2_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log2_strict"), SCALE))
             }
             /// `log10_strict` — delegates to [`crate::core_type::D38::log10_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -50,7 +50,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn log10_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log10_strict())
-                    .expect(concat!(stringify!($Type), "::log10_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log10_strict"), SCALE))
             }
             /// `exp_strict` — delegates to the policy-registered exp
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
@@ -70,7 +70,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn exp2_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp2_strict())
-                    .expect(concat!(stringify!($Type), "::exp2_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp2_strict"), SCALE))
             }
             /// `sqrt_strict` — delegates to the policy-registered sqrt
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
@@ -166,7 +166,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn sinh_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_strict())
-                    .expect(concat!(stringify!($Type), "::sinh_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sinh_strict"), SCALE))
             }
             /// `cosh_strict` — delegates to [`crate::core_type::D38::cosh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -174,7 +174,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn cosh_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_strict())
-                    .expect(concat!(stringify!($Type), "::cosh_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cosh_strict"), SCALE))
             }
             /// `tanh_strict` — delegates to [`crate::core_type::D38::tanh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -182,7 +182,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn tanh_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_strict())
-                    .expect(concat!(stringify!($Type), "::tanh_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tanh_strict"), SCALE))
             }
             /// `asinh_strict` — delegates to [`crate::core_type::D38::asinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -190,7 +190,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn asinh_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_strict())
-                    .expect(concat!(stringify!($Type), "::asinh_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asinh_strict"), SCALE))
             }
             /// `acosh_strict` — delegates to [`crate::core_type::D38::acosh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -198,7 +198,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn acosh_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_strict())
-                    .expect(concat!(stringify!($Type), "::acosh_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acosh_strict"), SCALE))
             }
             /// `atanh_strict` — delegates to [`crate::core_type::D38::atanh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -206,7 +206,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn atanh_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_strict())
-                    .expect(concat!(stringify!($Type), "::atanh_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atanh_strict"), SCALE))
             }
             /// `to_degrees_strict` — delegates to [`crate::core_type::D38::to_degrees_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -214,7 +214,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn to_degrees_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_strict())
-                    .expect(concat!(stringify!($Type), "::to_degrees_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_degrees_strict"), SCALE))
             }
             /// `to_radians_strict` — delegates to [`crate::core_type::D38::to_radians_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -222,7 +222,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn to_radians_strict(self) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_strict())
-                    .expect(concat!(stringify!($Type), "::to_radians_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_radians_strict"), SCALE))
             }
             /// `log_strict` — delegates to [`crate::core_type::D38::log_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -231,7 +231,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_base: $crate::core_type::D38<SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide_self.log_strict(wide_base))
-                    .expect(concat!(stringify!($Type), "::log_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log_strict"), SCALE))
             }
             /// `atan2_strict` — delegates to the policy-registered atan2
             /// kernel for this `(width, SCALE)` cell.
@@ -278,21 +278,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn ln_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.ln_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::ln_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::ln_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn ln_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.ln_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::ln_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::ln_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn ln_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.ln_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::ln_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::ln_approx_with"), SCALE))
             }
 
             #[inline]
@@ -301,7 +301,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_base: $crate::core_type::D38<SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide_self.log_strict_with(wide_base, mode))
-                    .expect(concat!(stringify!($Type), "::log_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -309,7 +309,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_base: $crate::core_type::D38<SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide_self.log_approx(wide_base, working_digits))
-                    .expect(concat!(stringify!($Type), "::log_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log_approx"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -317,7 +317,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_base: $crate::core_type::D38<SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide_self.log_approx_with(wide_base, working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::log_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log_approx_with"), SCALE))
             }
 
             #[inline]
@@ -325,21 +325,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn log2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log2_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::log2_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log2_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn log2_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log2_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::log2_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log2_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn log2_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log2_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::log2_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log2_approx_with"), SCALE))
             }
 
             #[inline]
@@ -347,21 +347,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn log10_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log10_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::log10_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log10_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn log10_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log10_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::log10_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log10_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn log10_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log10_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::log10_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::log10_approx_with"), SCALE))
             }
 
             // ─ Exponentials ──────────────────────────────────────
@@ -370,21 +370,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn exp_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::exp_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn exp_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::exp_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn exp_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::exp_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp_approx_with"), SCALE))
             }
 
             #[inline]
@@ -392,21 +392,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn exp2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::exp2_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp2_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn exp2_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp2_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::exp2_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp2_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn exp2_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp2_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::exp2_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::exp2_approx_with"), SCALE))
             }
 
             // ─ Power ─────────────────────────────────────────────
@@ -416,7 +416,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
                 ::core::convert::TryInto::try_into(wide_self.powf_strict_with(wide_exp, mode))
-                    .expect(concat!(stringify!($Type), "::powf_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::powf_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -424,7 +424,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
                 ::core::convert::TryInto::try_into(wide_self.powf_approx(wide_exp, working_digits))
-                    .expect(concat!(stringify!($Type), "::powf_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::powf_approx"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -432,7 +432,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_exp: $crate::core_type::D38<SCALE> = exp.into();
                 ::core::convert::TryInto::try_into(wide_self.powf_approx_with(wide_exp, working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::powf_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::powf_approx_with"), SCALE))
             }
 
             // ─ Roots ─────────────────────────────────────────────
@@ -441,14 +441,14 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn sqrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sqrt_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::sqrt_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sqrt_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn cbrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cbrt_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::cbrt_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cbrt_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -456,7 +456,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_other: $crate::core_type::D38<SCALE> = other.into();
                 ::core::convert::TryInto::try_into(wide_self.hypot_strict(wide_other))
-                    .expect(concat!(stringify!($Type), "::hypot_strict: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::hypot_strict"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -464,7 +464,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_other: $crate::core_type::D38<SCALE> = other.into();
                 ::core::convert::TryInto::try_into(wide_self.hypot_strict_with(wide_other, mode))
-                    .expect(concat!(stringify!($Type), "::hypot_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::hypot_strict_with"), SCALE))
             }
 
             // ─ Trig (forward) ────────────────────────────────────
@@ -473,21 +473,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn sin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sin_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::sin_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sin_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn sin_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sin_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::sin_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sin_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn sin_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sin_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::sin_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sin_approx_with"), SCALE))
             }
 
             #[inline]
@@ -495,21 +495,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn cos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cos_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::cos_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cos_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn cos_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cos_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::cos_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cos_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn cos_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cos_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::cos_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cos_approx_with"), SCALE))
             }
 
             #[inline]
@@ -517,21 +517,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn tan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tan_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::tan_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tan_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn tan_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tan_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::tan_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tan_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn tan_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tan_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::tan_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tan_approx_with"), SCALE))
             }
 
             // ─ Trig (inverse) ────────────────────────────────────
@@ -540,21 +540,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn atan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atan_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::atan_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atan_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn atan_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atan_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::atan_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atan_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn atan_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atan_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::atan_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atan_approx_with"), SCALE))
             }
 
             #[inline]
@@ -562,21 +562,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn asin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asin_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::asin_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asin_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn asin_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asin_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::asin_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asin_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn asin_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asin_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::asin_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asin_approx_with"), SCALE))
             }
 
             #[inline]
@@ -584,21 +584,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn acos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acos_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::acos_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acos_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn acos_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acos_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::acos_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acos_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn acos_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acos_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::acos_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acos_approx_with"), SCALE))
             }
 
             #[inline]
@@ -607,7 +607,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_other: $crate::core_type::D38<SCALE> = other.into();
                 ::core::convert::TryInto::try_into(wide_self.atan2_strict_with(wide_other, mode))
-                    .expect(concat!(stringify!($Type), "::atan2_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atan2_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -615,7 +615,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_other: $crate::core_type::D38<SCALE> = other.into();
                 ::core::convert::TryInto::try_into(wide_self.atan2_approx(wide_other, working_digits))
-                    .expect(concat!(stringify!($Type), "::atan2_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atan2_approx"), SCALE))
             }
             #[inline]
             #[must_use]
@@ -623,7 +623,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
                 let wide_self: $crate::core_type::D38<SCALE> = self.into();
                 let wide_other: $crate::core_type::D38<SCALE> = other.into();
                 ::core::convert::TryInto::try_into(wide_self.atan2_approx_with(wide_other, working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::atan2_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atan2_approx_with"), SCALE))
             }
 
             // ─ Hyperbolic ────────────────────────────────────────
@@ -632,21 +632,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn sinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::sinh_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sinh_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn sinh_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::sinh_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sinh_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn sinh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::sinh_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::sinh_approx_with"), SCALE))
             }
 
             #[inline]
@@ -654,21 +654,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn cosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::cosh_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cosh_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn cosh_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::cosh_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cosh_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn cosh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::cosh_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::cosh_approx_with"), SCALE))
             }
 
             #[inline]
@@ -676,21 +676,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn tanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::tanh_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tanh_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn tanh_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::tanh_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tanh_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn tanh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::tanh_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::tanh_approx_with"), SCALE))
             }
 
             #[inline]
@@ -698,21 +698,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn asinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::asinh_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asinh_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn asinh_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::asinh_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asinh_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn asinh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::asinh_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::asinh_approx_with"), SCALE))
             }
 
             #[inline]
@@ -720,21 +720,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn acosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::acosh_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acosh_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn acosh_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::acosh_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acosh_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn acosh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::acosh_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::acosh_approx_with"), SCALE))
             }
 
             #[inline]
@@ -742,21 +742,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn atanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::atanh_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atanh_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn atanh_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::atanh_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atanh_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn atanh_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::atanh_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::atanh_approx_with"), SCALE))
             }
 
             // ─ Angle conversion ──────────────────────────────────
@@ -765,21 +765,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn to_degrees_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::to_degrees_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_degrees_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn to_degrees_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::to_degrees_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_degrees_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn to_degrees_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::to_degrees_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_degrees_approx_with"), SCALE))
             }
 
             #[inline]
@@ -787,21 +787,21 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             pub fn to_radians_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_strict_with(mode))
-                    .expect(concat!(stringify!($Type), "::to_radians_strict_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_radians_strict_with"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn to_radians_approx(self, working_digits: u32) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_approx(working_digits))
-                    .expect(concat!(stringify!($Type), "::to_radians_approx: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_radians_approx"), SCALE))
             }
             #[inline]
             #[must_use]
             pub fn to_radians_approx_with(self, working_digits: u32, mode: $crate::rounding::RoundingMode) -> Self {
                 let wide: $crate::core_type::D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_approx_with(working_digits, mode))
-                    .expect(concat!(stringify!($Type), "::to_radians_approx_with: result out of range"))
+                    .unwrap_or_else(|_| $crate::diagnostics::overflow_panic_with_scale(concat!(stringify!($Type), "::to_radians_approx_with"), SCALE))
             }
 
             /// `ln` — feature-gated dispatcher; forwards to [`Self::ln_strict`] when the `strict` feature is on.

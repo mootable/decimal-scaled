@@ -13,7 +13,7 @@ pub(crate) fn exp_strict_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) 
     let raw = super::fixed_d38::exp_strict::<SCALE>(widened.0, mode);
     D38::<SCALE>::from_bits(raw)
         .try_into()
-        .expect("exp_strict: result out of range")
+        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("exp_strict", SCALE))
 }
 
 #[inline]
@@ -27,7 +27,7 @@ pub(crate) fn exp_with_d9<const SCALE: u32>(
     let raw = super::fixed_d38::exp_with(widened.0, SCALE, working_digits, mode);
     D38::<SCALE>::from_bits(raw)
         .try_into()
-        .expect("exp_with: result out of range")
+        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("exp_with", SCALE))
 }
 
 #[inline]
@@ -37,7 +37,7 @@ pub(crate) fn exp_strict_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode
     let raw = super::fixed_d38::exp_strict::<SCALE>(widened.0, mode);
     D38::<SCALE>::from_bits(raw)
         .try_into()
-        .expect("exp_strict: result out of range")
+        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("exp_strict", SCALE))
 }
 
 #[inline]
@@ -51,5 +51,5 @@ pub(crate) fn exp_with_d18<const SCALE: u32>(
     let raw = super::fixed_d38::exp_with(widened.0, SCALE, working_digits, mode);
     D38::<SCALE>::from_bits(raw)
         .try_into()
-        .expect("exp_with: result out of range")
+        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("exp_with", SCALE))
 }

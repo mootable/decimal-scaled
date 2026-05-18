@@ -217,6 +217,7 @@ mod consts;
 mod consts_wide;
 mod core_type;
 mod decimal_trait;
+mod diagnostics;
 mod display;
 mod equalities;
 mod error;
