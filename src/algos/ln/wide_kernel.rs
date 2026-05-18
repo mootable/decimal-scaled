@@ -19,6 +19,23 @@
 //! therefore ignores the requested working digits and delegates to the
 //! strict path; this is intentional and documented at the policy call
 //! site.
+//!
+//! # Why this file stays per-tier (no `WideStorage` collapse)
+//!
+//! Unlike [`crate::algos::sqrt::generic_wide`] and
+//! [`crate::algos::cbrt::generic_wide`], the per-tier wrappers here do
+//! *not* collapse to a single generic function over `WideStorage`.
+//! Each wrapper calls `core::ln_fixed`, `core::to_work`,
+//! `core::round_to_storage_with`, and `core::GUARD` from the per-tier
+//! `crate::core_type::wide_trig_<tier>` module — these are emitted by
+//! the `decl_wide_transcendental!` macro and carry tier-specific
+//! constants (pi/ln2 tables, work-integer type alias `W`, scale
+//! bounds) that vary per tier. Generalising would require either
+//! reworking the macro to emit generic-over-`W` functions or
+//! introducing a `WideTrigCore` trait surface — both are larger
+//! refactors than the 3-line shim body justifies. The per-tier core
+//! module is already the natural carrier for those bindings; the
+//! wrappers below stay thin and per-tier on purpose.
 
 use crate::rounding::RoundingMode;
 

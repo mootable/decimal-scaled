@@ -24,6 +24,18 @@
 //! `atan_with_impl` for wide tiers therefore ignore the requested
 //! working digits and delegate to the strict path; this is intentional
 //! and documented at the policy call site.
+//!
+//! # Why this file stays per-tier (no `WideStorage` collapse)
+//!
+//! See the matching note in [`crate::algos::ln::wide_kernel`] — the
+//! same reasoning applies, with the extra wrinkle that the trig
+//! kernels share four cores (`sin_fixed`, `sin_cos_fixed`,
+//! `atan_fixed`, plus `core::div` / `core::zero`) all emitted per-tier
+//! by `decl_wide_transcendental!` against a tier-specific work integer
+//! `W` and tier-specific pi tables. Collapsing the wrappers below
+//! would not save any kernel logic — it would only delete four lines
+//! per tier while forcing either a macro refactor or a new
+//! `WideTrigCore` trait. The wrappers stay per-tier on purpose.
 
 use crate::rounding::RoundingMode;
 

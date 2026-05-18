@@ -13,6 +13,17 @@
 //! therefore ignores the requested working digits and delegates to the
 //! strict path; this is intentional and documented at the policy call
 //! site.
+//!
+//! # Why this file stays per-tier (no `WideStorage` collapse)
+//!
+//! See the matching note in [`crate::algos::ln::wide_kernel`] — the
+//! same reasoning applies. `core::exp_fixed`, `core::to_work`,
+//! `core::round_to_storage_with`, and `core::GUARD` are emitted
+//! per-tier by `decl_wide_transcendental!` against a tier-specific
+//! work integer `W` and tier-specific constant tables. The wrappers
+//! below stay per-tier; collapsing them would force a larger refactor
+//! (either the macro itself or a new `WideTrigCore` trait) for no
+//! shape-saving in the 3-line wrapper body.
 
 use crate::rounding::RoundingMode;
 
