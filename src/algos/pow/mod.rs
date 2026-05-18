@@ -12,8 +12,14 @@
 //!
 //! - [`fixed_d38`] — D38's hand-tuned `powf` on the `Fixed` intermediate,
 //!   carrying the four-variant matrix entry shape (strict + approx, each
-//!   with an explicit-rounding sibling).
+//!   with an explicit-rounding sibling). Retained as the D56-disabled
+//!   fallback for the D38 surface.
+//! - [`borrow_d56`] — D38 widen → D56 inherent `powf_strict_with` /
+//!   `powf_approx_with` → narrow back. Picks up the ln + exp wide-tier
+//!   speedups in composed form. Gated on `d56` / `wide`.
 //! - [`widen_to_d38`] — D9 / D18 widen → `fixed_d38::powf` → narrow.
 
+#[cfg(any(feature = "d56", feature = "wide"))]
+pub(crate) mod borrow_d56;
 pub(crate) mod fixed_d38;
 pub(crate) mod widen_to_d38;
