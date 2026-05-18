@@ -223,33 +223,31 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_strict(self) -> Self {
+        self.ln_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Natural log under the supplied rounding mode. See [`Self::ln_strict`].
+    #[inline]
+    #[must_use]
+    pub fn ln_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::ln: argument must be positive");
         let one_bits: i128 = 10_i128.pow(SCALE);
-        // Fast path 1 — ln(1) = 0. Exact regardless of guard.
         if self.0 == one_bits {
             return Self::ZERO;
         }
-        // Fast path 2 — ln(x) ≈ x − 1 for x in the linear band
-        // around 1. Truncation error |(x−1)²/2| < 0.5·ULP when
-        // |x − 1| < 10^(−⌈SCALE/2⌉). Exact regardless of guard.
         let delta = self.0 - one_bits;
         let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
         if delta.abs() <= ln1p_band {
             return Self::from_bits(delta);
         }
-        // The strict path uses the compile-time const `STRICT_GUARD`
-        // so the compiler can const-fold `SCALE + STRICT_GUARD`,
-        // `10u128.pow(STRICT_GUARD)`, and any downstream uses of `w`
-        // inside `ln_fixed` to per-tier constants. Duplicated against
-        // `ln_approx` (runtime guard) deliberately — sharing one
-        // helper would force the runtime path on the strict callsite
-        // and erase the const propagation.
+        // Const-folded guard so SCALE+STRICT_GUARD and 10^STRICT_GUARD
+        // resolve at compile time per tier.
         let w = SCALE + STRICT_GUARD;
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
         let raw = ln_fixed(v_w, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::ln: result out of range");
         Self::from_bits(raw)
     }
@@ -285,14 +283,17 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_approx(self, working_digits: u32) -> Self {
-        // When the caller-supplied guard matches `STRICT_GUARD`, route
-        // through `ln_strict` so the call gets the compile-time const
-        // propagation (faster) AND the 0.5 ULP correctness contract.
-        // Callers who want strict precision wrote the wrong call —
-        // this redirect spares them the perf cost of using the runtime
-        // path with an effectively-constant argument.
+        self.ln_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Natural log with caller-chosen guard digits AND rounding mode.
+    /// See [`Self::ln_approx`] for accuracy/speed contract.
+    #[inline]
+    #[must_use]
+    pub fn ln_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        // Redirect to const-folded strict path when guard matches.
         if working_digits == STRICT_GUARD {
-            return self.ln_strict();
+            return self.ln_strict_with(mode);
         }
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::ln: argument must be positive");
@@ -309,7 +310,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let v_w =
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
         let raw = ln_fixed(v_w, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::ln: result out of range");
         Self::from_bits(raw)
     }
@@ -339,6 +340,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log_strict(self, base: Self) -> Self {
+        self.log_strict_with(base, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Logarithm in `base` under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log_strict_with(self, base: Self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log: argument must be positive");
         assert!(base.0 > 0, "D38::log: base must be positive");
@@ -350,7 +358,7 @@ impl<const SCALE: u32> D38<SCALE> {
         assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
         let raw = ln_fixed(v_w, w)
             .div(ln_b, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::log: result out of range");
         Self::from_bits(raw)
     }
@@ -359,8 +367,15 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
+        self.log_approx_with(base, working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Logarithm with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log_approx_with(self, base: Self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
-            return self.log_strict(base);
+            return self.log_strict_with(base, mode);
         }
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log: argument must be positive");
@@ -373,7 +388,7 @@ impl<const SCALE: u32> D38<SCALE> {
         assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
         let raw = ln_fixed(v_w, w)
             .div(ln_b, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::log: result out of range");
         Self::from_bits(raw)
     }
@@ -401,6 +416,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log2_strict(self) -> Self {
+        self.log2_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Base-2 log under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log2: argument must be positive");
         let w = SCALE + STRICT_GUARD;
@@ -408,17 +430,24 @@ impl<const SCALE: u32> D38<SCALE> {
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
         let raw = ln_fixed(v_w, w)
             .div(wide_ln2(w), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::log2: result out of range");
         Self::from_bits(raw)
     }
 
-    /// Base-2 log with caller-chosen guard digits. See `ln_approx`.
+    /// Base-2 log with caller-chosen guard digits.
     #[inline]
     #[must_use]
     pub fn log2_approx(self, working_digits: u32) -> Self {
+        self.log2_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Base-2 log with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log2_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
-            return self.log2_strict();
+            return self.log2_strict_with(mode);
         }
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log2: argument must be positive");
@@ -427,7 +456,7 @@ impl<const SCALE: u32> D38<SCALE> {
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
         let raw = ln_fixed(v_w, w)
             .div(wide_ln2(w), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::log2: result out of range");
         Self::from_bits(raw)
     }
@@ -455,6 +484,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log10_strict(self) -> Self {
+        self.log10_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Base-10 log under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log10_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log10: argument must be positive");
         let w = SCALE + STRICT_GUARD;
@@ -462,17 +498,24 @@ impl<const SCALE: u32> D38<SCALE> {
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
         let raw = ln_fixed(v_w, w)
             .div(wide_ln10(w), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::log10: result out of range");
         Self::from_bits(raw)
     }
 
-    /// Base-10 log with caller-chosen guard digits. See `ln_approx`.
+    /// Base-10 log with caller-chosen guard digits.
     #[inline]
     #[must_use]
     pub fn log10_approx(self, working_digits: u32) -> Self {
+        self.log10_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Base-10 log with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn log10_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
-            return self.log10_strict();
+            return self.log10_strict_with(mode);
         }
         use crate::d_w128_kernels::Fixed;
         assert!(self.0 > 0, "D38::log10: argument must be positive");
@@ -481,7 +524,7 @@ impl<const SCALE: u32> D38<SCALE> {
             Fixed::from_u128_mag(self.0 as u128, false).mul_u128(10u128.pow(working_digits));
         let raw = ln_fixed(v_w, w)
             .div(wide_ln10(w), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::log10: result out of range");
         Self::from_bits(raw)
     }
@@ -524,6 +567,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp_strict(self) -> Self {
+        self.exp_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// `e^self` under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn exp_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
@@ -534,19 +584,24 @@ impl<const SCALE: u32> D38<SCALE> {
             .mul_u128(10u128.pow(STRICT_GUARD));
         let v_w = if negative_input { v_w.neg() } else { v_w };
         let raw = exp_fixed(v_w, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::exp: result overflows the representable range");
         Self::from_bits(raw)
     }
 
-    /// Exponential with caller-chosen guard digits — same accuracy /
-    /// speed tradeoff as `ln_approx`. See `ln_approx` for the
-    /// detailed contract.
+    /// Exponential with caller-chosen guard digits.
     #[inline]
     #[must_use]
     pub fn exp_approx(self, working_digits: u32) -> Self {
+        self.exp_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Exponential with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn exp_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
-            return self.exp_strict();
+            return self.exp_strict_with(mode);
         }
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
@@ -558,7 +613,7 @@ impl<const SCALE: u32> D38<SCALE> {
             .mul_u128(10u128.pow(working_digits));
         let v_w = if negative_input { v_w.neg() } else { v_w };
         let raw = exp_fixed(v_w, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::exp: result overflows the representable range");
         Self::from_bits(raw)
     }
@@ -587,6 +642,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp2_strict(self) -> Self {
+        self.exp2_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// `2^self` under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn exp2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ONE;
@@ -596,10 +658,39 @@ impl<const SCALE: u32> D38<SCALE> {
         let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
             .mul_u128(10u128.pow(STRICT_GUARD));
         let v_w = if negative_input { v_w.neg() } else { v_w };
-        // arg = self · ln(2), carried at the wide working scale.
         let arg_w = v_w.mul(wide_ln2(w), w);
         let raw = exp_fixed(arg_w, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::exp2: result overflows the representable range");
+        Self::from_bits(raw)
+    }
+
+    /// Base-2 exponential with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn exp2_approx(self, working_digits: u32) -> Self {
+        self.exp2_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Base-2 exponential with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn exp2_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == STRICT_GUARD {
+            return self.exp2_strict_with(mode);
+        }
+        use crate::d_w128_kernels::Fixed;
+        if self.0 == 0 {
+            return Self::ONE;
+        }
+        let w = SCALE + working_digits;
+        let negative_input = self.0 < 0;
+        let v_w = Fixed::from_u128_mag(self.0.unsigned_abs(), false)
+            .mul_u128(10u128.pow(working_digits));
+        let v_w = if negative_input { v_w.neg() } else { v_w };
+        let arg_w = v_w.mul(wide_ln2(w), w);
+        let raw = exp_fixed(arg_w, w)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::exp2: result overflows the representable range");
         Self::from_bits(raw)
     }
