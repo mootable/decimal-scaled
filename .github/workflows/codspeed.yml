@@ -31,8 +31,8 @@ jobs:
       - name: Install system libs (fontconfig for plotters dev-dep)
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
-      - name: Build the benchmark targets
-        run: cargo codspeed build --bench all_functions --bench mul_div_candidates
+      - name: Build the benchmark target
+        run: cargo codspeed build --bench all_functions
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
