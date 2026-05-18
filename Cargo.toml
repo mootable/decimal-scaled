@@ -29,7 +29,7 @@ exclude = [
 # the docs build doesn't require nightly or pick a non-default
 # rounding mode.
 [package.metadata.docs.rs]
-features = ["std", "serde", "strict", "macros", "wide", "x-wide", "xx-wide"]
+features = ["std", "serde", "strict", "macros", "wide", "x-wide", "xx-wide", "dyn"]
 rustdoc-args = ["--cfg", "docsrs"]
 
 [features]
@@ -59,6 +59,11 @@ macros = ["dep:decimal_scaled_macros"]
 # `*_strict` methods. On by default. Does NOT require `std` — the
 # integer-only transcendentals compile under `no_std`.
 strict = []
+# Runtime-polymorphic façade. Adds the `DynDecimal` object-safe trait
+# and `DecimalWidth` enum, with a blanket impl bridging every concrete
+# `Dxx<S>` type. Off by default — typed `Decimal` users pay nothing.
+# Boxing cost (heap allocation per binary op) is the price of erasure.
+dyn = []
 # Opt out of strict dispatch: plain transcendentals forward to the
 # f64 bridge. Only takes effect when `strict` is NOT enabled — if
 # both are present, strict wins. Both `*_strict` and `*_fast`

@@ -17,6 +17,8 @@ pub(crate) mod bitwise;
 pub(crate) mod consts;
 pub(crate) mod conversions;
 pub(crate) mod display;
+#[cfg(feature = "dyn")]
+pub(crate) mod dyn_bridge;
 pub(crate) mod equalities;
 pub(crate) mod float_bridge;
 pub(crate) mod from_str;

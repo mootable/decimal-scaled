@@ -255,6 +255,8 @@ mod trig_fast;
 mod transcendental_trait;
 mod arithmetic_trait;
 mod convert_trait;
+#[cfg(feature = "dyn")]
+pub mod dyn_decimal;
 
 
 pub use consts::DecimalConstants;
@@ -266,6 +268,9 @@ pub use decimal_trait::Decimal;
 pub use error::{ConvertError, ParseError};
 pub use rounding::RoundingMode;
 pub use transcendental_trait::DecimalTranscendental;
+
+#[cfg(feature = "dyn")]
+pub use dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
 
 // D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s38.
 pub use core_type::{

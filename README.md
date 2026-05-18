@@ -472,10 +472,59 @@ See [`docs/macros.md`](docs/macros.md).
 | `rounding-*` | no | Five mutually-exclusive flags that change the crate-wide default `RoundingMode` at compile time (HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling). |
 | `d{N}` per tier | no | `d56` / `d76` / `d114` / `d153` / `d230` / `d307` / `d461` / `d615` / `d923` / `d1231` enable individual wide tiers. Each is also bundled into the next umbrella. |
 | `wide` / `x-wide` / `xx-wide` | no | Umbrellas: `wide` = D56–D307; `x-wide` adds D461 + D615; `xx-wide` adds D923 + D1231. |
+| `dyn` | no | Object-safe `DynDecimal` trait + `DecimalWidth` / `RawStorage` enums for runtime-polymorphic decimal handles. Ships impls for D9 / D18 / D38. See "Runtime polymorphism" below. |
 | `experimental-floats` | no | Nightly-only `f16` / `f128` entry points on the float bridge. |
 
 See [`docs/features.md`](docs/features.md) for the full reference and
 common configurations.
+
+---
+
+## Runtime polymorphism
+
+The typed [`Decimal`] trait is monomorphised: every `Dxx<S>` is a
+distinct compile-time type and generic code over `T: Decimal` pays no
+runtime cost. That model breaks down when the width or scale is chosen
+at runtime — config-driven types, plugin interfaces, a
+`Vec<Box<…>>` of mixed decimals.
+
+The `dyn` feature adds a deliberately small, object-safe trait
+[`DynDecimal`] for exactly that case:
+
+```rust,ignore
+use decimal_scaled::{D38, DynDecimal, DecimalWidth};
+
+let values: Vec<Box<dyn DynDecimal>> = vec![
+    Box::new(D38::<2>::from_i32(150)),  // 1.50
+    Box::new(D38::<5>::from_i32(2)),    // 2.00000
+];
+let sum = values[0].add(&*values[1]).unwrap();
+assert_eq!(sum.width(), DecimalWidth::D38);
+assert_eq!(sum.scale_dyn(), 5);          // auto-rescale to wider scale
+```
+
+Semantics:
+
+- Binary ops on **different widths** return `None`. No implicit widening
+  across storage tiers.
+- Binary ops on the **same width but different scales** losslessly
+  rescale both sides to the wider scale and return the result at that
+  scale.
+- Overflow at any step returns `None` instead of panicking.
+- Downcast back to the typed surface via
+  [`DynDecimal::as_any`]`.downcast_ref::<Dxx<S>>()` once you know the
+  concrete type.
+
+Scope: the `dyn` feature ships impls for **D9, D18, and D38** only.
+Wider tiers would require enumerating up to 1233 scale instantiations
+per binary op per width and serve compute-bound code where the
+boxing cost of dyn is wrong anyway. The [`DecimalWidth`] /
+[`RawStorage`] enums carry variants for every shipped width so the
+API is forward-compatible if those impls land later.
+
+Cost: each binary op heap-allocates one `Box<dyn DynDecimal>` (plus
+intermediate boxes when auto-rescale is needed). Use the typed
+[`Decimal`] surface in hot paths.
 
 ---
 
