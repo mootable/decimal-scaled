@@ -692,7 +692,45 @@ pub(crate) fn sqrt_raw_with(r: u128, scale: u32, mode: crate::rounding::Rounding
     if r == 0 {
         return 0;
     }
-    let (hi, lo) = mul2(r, POW10_U128[scale as usize]);
+
+    // Fast path: when the full radicand `r · 10^SCALE` fits a single
+    // `u128`, hardware-backed `u128::isqrt` (stable since Rust 1.84)
+    // replaces the 256-bit Newton loop. Threshold is
+    // `r ≤ u128::MAX / 10^SCALE`, which at SCALE ≤ 18 covers every
+    // representable raw value (e.g. at SCALE=18 the cap is
+    // `≈ 3.4e38 / 10^18 ≈ 3.4e20`, well above `i128::MAX = 1.7e38`).
+    // At SCALE ≥ 19 the cap is tight enough that typical operands
+    // miss the fast path and fall through to the widening branch
+    // below; small near-zero values still benefit.
+    //
+    // SCALE is const-generic at every call site, so the threshold
+    // and the table lookup `POW10_U128[scale]` const-fold and the
+    // branch is statically resolved per-monomorphisation.
+    let scale_idx = scale as usize;
+    let pow = POW10_U128[scale_idx];
+    // u128 overflow check: `r ≤ u128::MAX / pow` iff `r * pow ≤ u128::MAX`.
+    if r <= u128::MAX / pow {
+        let n = r * pow;
+        let q = n.isqrt();
+        // Residual `N − q²` and the round-to-nearest tie test `diff > q`
+        // mirror the 256-bit branch exactly: `q² ≤ N` always, so the
+        // subtraction never underflows.
+        let diff = n - q * q;
+        let diff_nonzero = diff != 0;
+        let halfway_round_up = diff > q;
+        let bump = match mode {
+            RoundingMode::HalfToEven
+            | RoundingMode::HalfAwayFromZero
+            | RoundingMode::HalfTowardZero => halfway_round_up,
+            RoundingMode::Trunc | RoundingMode::Floor => false,
+            RoundingMode::Ceiling => diff_nonzero,
+        };
+        return if bump { q + 1 } else { q };
+    }
+
+    // Widening path: `r · 10^SCALE` overflows `u128`, so the full
+    // 256-bit machinery is required.
+    let (hi, lo) = mul2(r, pow);
     let q = isqrt_256(hi, lo);
     let (q_sq_hi, q_sq_lo) = mul2(q, q);
     let (diff_hi, diff_lo) = if lo >= q_sq_lo {
@@ -1121,18 +1159,47 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
 
     let mult = D38::<SCALE>::multiplier();
 
-    // Fast path: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
+    // Fast path 1: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
     // fits with headroom; for larger SCALE the overflow check below
     // handles the fallthrough.
     if let Some(num) = a.checked_mul(mult) {
         return Some(crate::rounding::apply_rounding(num, b, mode));
     }
 
-    // Widening path: a*mult overflows i128. Compute it as a 256-bit
-    // unsigned, divide by |b| keeping the remainder, round per `mode`,
-    // restore sign.
+    // Fast path 2: `|a| * mult` overflows `i128` but still fits `u128`
+    // (so the i128-signed `checked_mul` rejected it only because of the
+    // sign bit, OR `|a|` is just past `i128::MAX / mult`). Skip the
+    // 256-bit `mul2 + div_long_256_by_128` path — a single hardware
+    // `u128 / u128` suffices.
+    //
+    // Predicate: `|a| ≤ u128::MAX / mult`. Const-folded per SCALE.
     let ua = a.unsigned_abs();
     let umult = mult as u128;
+    if ua <= u128::MAX / umult {
+        let num = ua * umult;
+        let ub = b.unsigned_abs();
+        let q_floor = num / ub;
+        let r = num % ub;
+        let neg = (a < 0) ^ (b < 0);
+        let q = round_mag_with_mode(q_floor, r, ub, mode, !neg);
+        return if neg {
+            if q <= i128::MAX as u128 {
+                Some(-(q as i128))
+            } else if q == (i128::MAX as u128) + 1 {
+                Some(i128::MIN)
+            } else {
+                None
+            }
+        } else if q <= i128::MAX as u128 {
+            Some(q as i128)
+        } else {
+            None
+        };
+    }
+
+    // Widening path: |a|*mult overflows u128. Compute it as a 256-bit
+    // unsigned, divide by |b| keeping the remainder, round per `mode`,
+    // restore sign.
     let (mhigh, mlow) = mul2(ua, umult);
 
     let ub = b.unsigned_abs();
@@ -1532,5 +1599,176 @@ mod tests {
                 "cbrt({r}, {scale}): round-up decision mismatched",
             );
         }
+    }
+
+    // ── fast-path equivalence property tests ──
+    //
+    // `sqrt_raw_with` and `div_pow10_div_with` each gained a single-width
+    // fast path that triggers when the operand magnitude lets the work
+    // stay inside `u128`. These tests cross-check the fast path against
+    // an always-widening reference implementation for a deterministic
+    // SplitMix64 sweep, covering every rounding mode and a range of
+    // SCALEs that straddle the fast-path/widening boundary.
+
+    /// Reference sqrt that bypasses the fast path: always uses the
+    /// 256-bit `mul2 + isqrt_256` machinery.
+    fn sqrt_raw_reference(r: u128, scale: u32, mode: crate::rounding::RoundingMode) -> u128 {
+        use crate::rounding::RoundingMode;
+        if r == 0 {
+            return 0;
+        }
+        let (hi, lo) = mul2(r, POW10_U128[scale as usize]);
+        let q = isqrt_256(hi, lo);
+        let (q_sq_hi, q_sq_lo) = mul2(q, q);
+        let (diff_hi, diff_lo) = if lo >= q_sq_lo {
+            (hi - q_sq_hi, lo - q_sq_lo)
+        } else {
+            (hi - q_sq_hi - 1, lo.wrapping_sub(q_sq_lo))
+        };
+        let diff_nonzero = diff_hi != 0 || diff_lo != 0;
+        let halfway_round_up = diff_hi != 0 || diff_lo > q;
+        let bump = match mode {
+            RoundingMode::HalfToEven
+            | RoundingMode::HalfAwayFromZero
+            | RoundingMode::HalfTowardZero => halfway_round_up,
+            RoundingMode::Trunc | RoundingMode::Floor => false,
+            RoundingMode::Ceiling => diff_nonzero,
+        };
+        if bump { q + 1 } else { q }
+    }
+
+    /// SplitMix64 — small deterministic 64-bit PRNG with good
+    /// distribution for property tests. Not cryptographic; just here so
+    /// the test sweep is reproducible.
+    struct SplitMix64(u64);
+    impl SplitMix64 {
+        fn next(&mut self) -> u64 {
+            self.0 = self.0.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = self.0;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        }
+        fn next_u128(&mut self) -> u128 {
+            ((self.next() as u128) << 64) | (self.next() as u128)
+        }
+    }
+
+    fn all_modes() -> [crate::rounding::RoundingMode; 6] {
+        use crate::rounding::RoundingMode::*;
+        [HalfToEven, HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling]
+    }
+
+    /// Cross-check the sqrt fast path against the widening reference on
+    /// 200 000 randomized inputs per SCALE × mode, sampling SCALEs
+    /// that straddle the `r·10^S ≤ u128::MAX` boundary.
+    #[test]
+    fn sqrt_fast_path_matches_reference() {
+        const ITERS: usize = 200_000;
+        let scales: &[u32] = &[0, 5, 10, 14, 18, 19, 23, 28, 33, 38];
+        for &scale in scales {
+            for mode in all_modes() {
+                let mut rng = SplitMix64(0xC0FFEE_u64.wrapping_add(scale as u64));
+                let pow = POW10_U128[scale as usize];
+                let cap = u128::MAX / pow;
+                for _ in 0..ITERS {
+                    // Mix three input regimes: well inside fast path,
+                    // straddling the boundary, well inside widening.
+                    let raw = match rng.next() % 3 {
+                        0 => rng.next_u128() % cap.max(1),
+                        1 => {
+                            // Within ±cap of the boundary.
+                            let bias = rng.next_u128() % (cap.max(1));
+                            cap.saturating_sub(bias).saturating_add(rng.next() as u128)
+                        }
+                        _ => rng.next_u128() & (i128::MAX as u128), // up to i128::MAX
+                    };
+                    let got = sqrt_raw_with(raw, scale, mode);
+                    let expected = sqrt_raw_reference(raw, scale, mode);
+                    assert_eq!(
+                        got, expected,
+                        "sqrt mismatch: raw={raw}, scale={scale}, mode={mode:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// Reference div that always uses the 256-bit widening path,
+    /// bypassing both the i128 and the u128 fast paths. Used to
+    /// cross-check the new u128 fast path in `div_pow10_div_with`.
+    fn div_pow10_div_reference<const SCALE: u32>(
+        a: i128,
+        b: i128,
+        mode: crate::rounding::RoundingMode,
+    ) -> Option<i128> {
+        if b == 0 {
+            return None;
+        }
+        a.checked_div(b)?;
+        if SCALE == 0 {
+            return Some(crate::rounding::apply_rounding(a, b, mode));
+        }
+        let mult = D38::<SCALE>::multiplier();
+        let ua = a.unsigned_abs();
+        let umult = mult as u128;
+        let (mhigh, mlow) = mul2(ua, umult);
+        let ub = b.unsigned_abs();
+        let (q_floor, r) = div_long_256_by_128_with_rem(mhigh, mlow, ub)?;
+        let neg = (a < 0) ^ (b < 0);
+        let q = round_mag_with_mode(q_floor, r, ub, mode, !neg);
+        if neg {
+            if q <= i128::MAX as u128 {
+                Some(-(q as i128))
+            } else if q == (i128::MAX as u128) + 1 {
+                Some(i128::MIN)
+            } else {
+                None
+            }
+        } else if q <= i128::MAX as u128 {
+            Some(q as i128)
+        } else {
+            None
+        }
+    }
+
+    /// Targeted sweep for the SCALEs where the u128 fast path can fire
+    /// (SCALE ≤ ~38; the predicate `|a| ≤ u128::MAX / 10^S` is checked
+    /// dynamically). For each scale × mode, draw `a, b` from the full
+    /// `i128` range and assert fast-dispatch matches the reference.
+    #[test]
+    fn div_pow10_div_fast_path_matches_reference() {
+        const ITERS: usize = 100_000;
+        // Macro: instantiate the const-generic for each scale literal.
+        macro_rules! sweep {
+            ($scale:literal) => {{
+                const SCALE: u32 = $scale;
+                for mode in all_modes() {
+                    let mut rng = SplitMix64(0xDEADBEEF_u64 + SCALE as u64);
+                    for _ in 0..ITERS {
+                        // a: full i128 spread; b: nonzero, also full spread.
+                        let a = rng.next_u128() as i128;
+                        let mut b: i128 = rng.next_u128() as i128;
+                        if b == 0 { b = 1; }
+                        let got = div_pow10_div_with::<SCALE>(a, b, mode);
+                        let expected = div_pow10_div_reference::<SCALE>(a, b, mode);
+                        assert_eq!(
+                            got, expected,
+                            "div mismatch: a={a}, b={b}, scale={SCALE}, mode={mode:?}",
+                        );
+                    }
+                }
+            }};
+        }
+        sweep!(0);
+        sweep!(5);
+        sweep!(10);
+        sweep!(14);
+        sweep!(18);
+        sweep!(19);
+        sweep!(23);
+        sweep!(28);
+        sweep!(33);
+        sweep!(38);
     }
 }
