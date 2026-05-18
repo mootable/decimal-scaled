@@ -964,6 +964,19 @@ macro_rules! decl_wide_transcendental {
                 (sin_result, cos_result)
             }
 
+            /// Cosine of a working-scale value via the cofunction
+            /// identity `cos(x) = sin(π/2 − x)`.
+            ///
+            /// Used by the standalone `cos_strict` kernel path: one
+            /// `sin_fixed` evaluation, no sqrt — strictly cheaper than
+            /// the `sin_cos_fixed` path when only `cos` is needed.
+            /// `sin_cos_fixed` remains the right choice when both
+            /// outputs are wanted (one Taylor + one sqrt vs two
+            /// Taylors).
+            pub(crate) fn cos_fixed(v_w: W, w: u32) -> W {
+                sin_fixed(half_pi(w) - v_w, w)
+            }
+
             /// Arctangent of a working-scale value, result in
             /// `(−π/2, π/2)`.
             pub(crate) fn atan_fixed(v_w: W, w: u32) -> W {
@@ -1178,11 +1191,11 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Cosine of `self` (radians). Strict and correctly
-            /// rounded. The policy-registered kernel internally
-            /// evaluates the shared `sin_cos_fixed` (one Taylor +
-            /// one wide sqrt) and recovers cos via the Pythagorean
-            /// identity `|cos| = √(1 − sin²)` — roughly half the
-            /// wall-clock of the historic `sin(self + π/2)` path.
+            /// rounded. The policy-registered kernel evaluates a
+            /// single `sin_fixed(π/2 − self)` via the cofunction
+            /// identity — no sqrt, no shared Taylor with sin.
+            /// `sin_cos_strict` keeps the shared-Taylor
+            /// `sin_cos_fixed` path for joint evaluation.
             ///
             /// Delegates to the policy-registered cos kernel for this
             /// `(width, SCALE)` cell — see `policy::trig`.

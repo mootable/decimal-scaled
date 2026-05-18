@@ -10,12 +10,13 @@
 //! on inherent methods today.
 //!
 //! `cos_strict` historically had two paths inside the macro shell:
-//! `sin_cos_fixed` for the no-arg `cos_strict` (recovers `cos` via the
-//! Pythagorean identity, shared Taylor evaluation with `sin`), and
-//! `sin_fixed(arg + π/2)` for the mode-aware `cos_strict_with`. The
-//! policy migration consolidates both on the `sin_cos_fixed` path —
-//! the two routes agree to well within the test suite's 2-ULP slack,
-//! and the shared-Taylor variant is the faster of the two.
+//! `sin_cos_fixed` (recovers `cos` via the Pythagorean identity,
+//! shared Taylor evaluation with `sin`) and `sin_fixed(arg + π/2)`.
+//! The standalone `cos_strict` kernel now uses a dedicated
+//! `cos_fixed` (cofunction identity `cos(x) = sin(π/2 − x)` — one
+//! `sin_fixed`, no sqrt). `sin_cos_fixed` is reserved for
+//! `sin_cos_strict` where both outputs are wanted (one Taylor +
+//! one sqrt vs two Taylors).
 //!
 //! The wide-tier core does not ship runtime-`working_digits` variants
 //! of `sin_fixed` / `cos_fixed` / `atan_fixed`; the strict
@@ -61,16 +62,18 @@ macro_rules! decl_trig_kernel {
             core::round_to_storage_with(r, w, scale, mode)
         }
 
-        /// Wide-tier `cos_strict` kernel — `sin_cos_fixed` path (shares
-        /// the Taylor evaluation with sin and recovers cos via the
-        /// Pythagorean identity).
+        /// Wide-tier `cos_strict` kernel — standalone `cos_fixed`
+        /// path via the cofunction identity `cos(x) = sin(π/2 − x)`.
+        /// One `sin_fixed` evaluation, no sqrt. The `sin_cos_fixed`
+        /// path is reserved for `sin_cos_strict` where both outputs
+        /// are wanted.
         #[inline]
         #[must_use]
         pub(crate) fn $cos_name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
             let w = scale + core::GUARD;
-            let (_, c) = core::sin_cos_fixed(core::to_work(raw), w);
-            core::round_to_storage_with(c, w, scale, mode)
+            let r = core::cos_fixed(core::to_work(raw), w);
+            core::round_to_storage_with(r, w, scale, mode)
         }
 
         /// Wide-tier `tan_strict` kernel. Panics at odd multiples of
