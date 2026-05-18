@@ -4,19 +4,27 @@ name: docs
 # `docs/` and publishes them to GitHub Pages.
 #
 # Triggers:
-#   * any pushed `v*` release tag (the deploy script in
-#     `scripts/deploy.ps1` pushes such a tag as its final git step);
 #   * a push to `main` (keeps the published docs current between
-#     releases);
+#     releases — release commits land on main first, then the tag
+#     follows for tracking only);
 #   * manual dispatch from the Actions tab.
+#
+# Tags do NOT trigger this workflow. The GitHub Pages environment is
+# configured to allow deploys only from `main`, so a tag-triggered
+# run would always fail at the `deploy` job with an
+# environment-protection error. Worse, the concurrency group
+# (`pages`) means a fast `git push main && git push --tag` sequence
+# would cancel the in-flight main-push deploy and leave only the
+# blocked tag run, stranding the docs site on the previous release.
+# The 0.3.0 / 0.3.2 / 0.3.3 release lessons all converged on this:
+# `main` is the canonical deploy trigger, tags are tracking labels
+# only.
 #
 # One-time repo setup: Settings -> Pages -> Build and deployment ->
 # Source: "GitHub Actions".
 
 on:
   push:
-    tags:
-      - 'v*'
     branches:
       - main
   workflow_dispatch:
