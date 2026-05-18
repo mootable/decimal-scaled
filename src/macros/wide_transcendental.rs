@@ -225,6 +225,14 @@ macro_rules! decl_wide_transcendental {
                 $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10(GUARD)
             }
 
+            /// Runtime-guard variant of [`to_work`]: scales raw by
+            /// `10^working_digits` instead of the const `GUARD`. Used by
+            /// the `_approx` family where the guard width is chosen at
+            /// call time.
+            pub(super) fn to_work_w(raw: $Storage, working_digits: u32) -> W {
+                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10(working_digits)
+            }
+
             /// Rounds a working-scale value down to scale `target` using
             /// the crate-default rounding mode and narrows to the
             /// type's storage. Panics if the rounded value does not
@@ -1918,6 +1926,808 @@ macro_rules! decl_wide_transcendental {
             pub fn to_radians_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
+                let r = $core::mul(v, $core::pi(w), w)
+                    / $crate::macros::wide_roots::wide_lit!($Work, "180");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Mode-aware sibling of [`Self::sin_cos_strict`].
+            #[inline]
+            #[must_use]
+            pub fn sin_cos_strict_with(self, mode: $crate::rounding::RoundingMode) -> (Self, Self) {
+                let w = SCALE + $core::GUARD;
+                let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
+                (
+                    Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
+                )
+            }
+
+            /// Mode-aware sibling of [`Self::sinh_cosh_strict`].
+            #[inline]
+            #[must_use]
+            pub fn sinh_cosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> (Self, Self) {
+                let w = SCALE + $core::GUARD;
+                let v = $core::to_work(self.to_bits());
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let sinh = (ex - enx) / two;
+                let cosh = (ex + enx) / two;
+                (
+                    Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
+                )
+            }
+
+            // ─── *_approx(working_digits) family ─────────────────────
+            // Each transcendental gets `_approx(g)` and
+            // `_approx_with(g, mode)`. When `g == GUARD` we redirect to
+            // the corresponding strict variant so the const-folded
+            // strict path is never displaced.
+
+            /// Natural log with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn ln_approx(self, working_digits: u32) -> Self {
+                self.ln_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Natural log with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn ln_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.ln_strict_with(mode);
+                }
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::ln: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = $core::ln_fixed($core::to_work_w(raw, working_digits), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Log to chosen base with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
+                self.log_approx_with(base, working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Log to chosen base with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn log_approx_with(
+                self,
+                base: Self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.log_strict_with(base, mode);
+                }
+                let raw = self.to_bits();
+                let braw = base.to_bits();
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= z {
+                    panic!(concat!(stringify!($Type), "::log: argument must be positive"));
+                }
+                if braw <= z {
+                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let ln_b = $core::ln_fixed($core::to_work_w(braw, working_digits), w);
+                if ln_b == $core::zero() {
+                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
+                }
+                let r = $core::div(
+                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
+                    ln_b,
+                    w,
+                );
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Log base 2 with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn log2_approx(self, working_digits: u32) -> Self {
+                self.log2_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Log base 2 with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn log2_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.log2_strict_with(mode);
+                }
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = $core::div(
+                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
+                    $core::ln2(w),
+                    w,
+                );
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Log base 10 with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn log10_approx(self, working_digits: u32) -> Self {
+                self.log10_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Log base 10 with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn log10_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.log10_strict_with(mode);
+                }
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = $core::div(
+                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
+                    $core::ln10(w),
+                    w,
+                );
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// `eˣ` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn exp_approx(self, working_digits: u32) -> Self {
+                self.exp_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// `eˣ` with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn exp_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.exp_strict_with(mode);
+                }
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ONE;
+                }
+                let w = SCALE + working_digits;
+                let r = $core::exp_fixed($core::to_work_w(raw, working_digits), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// `2ˣ` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn exp2_approx(self, working_digits: u32) -> Self {
+                self.exp2_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// `2ˣ` with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn exp2_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.exp2_strict_with(mode);
+                }
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ONE;
+                }
+                let w = SCALE + working_digits;
+                let arg = $core::mul($core::to_work_w(raw, working_digits), $core::ln2(w), w);
+                let r = $core::exp_fixed(arg, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// `xʸ` with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn powf_approx(self, exp: Self, working_digits: u32) -> Self {
+                self.powf_approx_with(exp, working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// `xʸ` with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn powf_approx_with(
+                self,
+                exp: Self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.powf_strict_with(exp, mode);
+                }
+                let raw = self.to_bits();
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ZERO;
+                }
+                let w = SCALE + working_digits;
+                let ln_x = $core::ln_fixed($core::to_work_w(raw, working_digits), w);
+                let y = $core::to_work_w(exp.to_bits(), working_digits);
+                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Sine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn sin_approx(self, working_digits: u32) -> Self {
+                self.sin_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Sine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn sin_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.sin_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let r = $core::sin_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Cosine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn cos_approx(self, working_digits: u32) -> Self {
+                self.cos_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Cosine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn cos_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.cos_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let arg = $core::to_work_w(self.to_bits(), working_digits) + $core::half_pi(w);
+                let r = $core::sin_fixed(arg, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Joint sine/cosine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn sin_cos_approx(self, working_digits: u32) -> (Self, Self) {
+                self.sin_cos_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Joint sine/cosine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn sin_cos_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> (Self, Self) {
+                if working_digits == $core::GUARD {
+                    return self.sin_cos_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let (s, c) = $core::sin_cos_fixed(
+                    $core::to_work_w(self.to_bits(), working_digits),
+                    w,
+                );
+                (
+                    Self::from_bits($core::round_to_storage_with(s, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with(c, w, SCALE, mode)),
+                )
+            }
+
+            /// Tangent with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn tan_approx(self, working_digits: u32) -> Self {
+                self.tan_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Tangent with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn tan_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.tan_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let (sin_w, cos_w) = $core::sin_cos_fixed(
+                    $core::to_work_w(self.to_bits(), working_digits),
+                    w,
+                );
+                if cos_w == $core::zero() {
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::tan: cosine is zero (argument is an odd multiple of pi/2)"
+                    ));
+                }
+                let r = $core::div(sin_w, cos_w, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Arctangent with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn atan_approx(self, working_digits: u32) -> Self {
+                self.atan_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Arctangent with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn atan_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.atan_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let r = $core::atan_fixed($core::to_work_w(self.to_bits(), working_digits), w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Arcsine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn asin_approx(self, working_digits: u32) -> Self {
+                self.asin_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Arcsine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn asin_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.asin_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let one_w = $core::one(w);
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let abs_v = if v < $core::zero() { -v } else { v };
+                if abs_v > one_w {
+                    panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
+                }
+                let half_w = one_w / $core::lit(2);
+                let r = if abs_v == one_w {
+                    let hp = $core::half_pi(w);
+                    if v < $core::zero() { -hp } else { hp }
+                } else if abs_v <= half_w {
+                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
+                    $core::atan_fixed($core::div(v, denom, w), w)
+                } else {
+                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner_sqrt = $core::sqrt_fixed(inner, w);
+                    let inner_denom = $core::sqrt_fixed(
+                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
+                        w,
+                    );
+                    let inner_asin = $core::atan_fixed(
+                        $core::div(inner_sqrt, inner_denom, w),
+                        w,
+                    );
+                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    if v < $core::zero() { -result_abs } else { result_abs }
+                };
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Arccosine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn acos_approx(self, working_digits: u32) -> Self {
+                self.acos_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Arccosine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn acos_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.acos_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let one_w = $core::one(w);
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let abs_v = if v < $core::zero() { -v } else { v };
+                if abs_v > one_w {
+                    panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
+                }
+                let half_w = one_w / $core::lit(2);
+                let asin_w = if abs_v == one_w {
+                    let hp = $core::half_pi(w);
+                    if v < $core::zero() { -hp } else { hp }
+                } else if abs_v <= half_w {
+                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
+                    $core::atan_fixed($core::div(v, denom, w), w)
+                } else {
+                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner_sqrt = $core::sqrt_fixed(inner, w);
+                    let inner_denom = $core::sqrt_fixed(
+                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
+                        w,
+                    );
+                    let inner_asin = $core::atan_fixed(
+                        $core::div(inner_sqrt, inner_denom, w),
+                        w,
+                    );
+                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
+                    if v < $core::zero() { -result_abs } else { result_abs }
+                };
+                let r = $core::half_pi(w) - asin_w;
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Four-quadrant arctangent with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
+                self.atan2_approx_with(other, working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Four-quadrant arctangent with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn atan2_approx_with(
+                self,
+                other: Self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.atan2_strict_with(other, mode);
+                }
+                let w = SCALE + working_digits;
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                let yraw = self.to_bits();
+                let xraw = other.to_bits();
+                let r = if xraw == z {
+                    if yraw > z {
+                        $core::half_pi(w)
+                    } else if yraw < z {
+                        -$core::half_pi(w)
+                    } else {
+                        $core::zero()
+                    }
+                } else {
+                    let y = $core::to_work_w(yraw, working_digits);
+                    let x = $core::to_work_w(xraw, working_digits);
+                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    if xraw > z {
+                        base
+                    } else if yraw >= z {
+                        base + $core::pi(w)
+                    } else {
+                        base - $core::pi(w)
+                    }
+                };
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Hyperbolic sine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn sinh_approx(self, working_digits: u32) -> Self {
+                self.sinh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Hyperbolic sine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn sinh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.sinh_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Hyperbolic cosine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn cosh_approx(self, working_digits: u32) -> Self {
+                self.cosh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Hyperbolic cosine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn cosh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.cosh_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Hyperbolic tangent with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn tanh_approx(self, working_digits: u32) -> Self {
+                self.tanh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Hyperbolic tangent with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn tanh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.tanh_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let r = $core::div(ex - enx, ex + enx, w);
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Joint sinh/cosh with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn sinh_cosh_approx(self, working_digits: u32) -> (Self, Self) {
+                self.sinh_cosh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Joint sinh/cosh with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn sinh_cosh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> (Self, Self) {
+                if working_digits == $core::GUARD {
+                    return self.sinh_cosh_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let ex = $core::exp_fixed(v, w);
+                let enx = $core::exp_fixed(-v, w);
+                let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let sinh = (ex - enx) / two;
+                let cosh = (ex + enx) / two;
+                (
+                    Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
+                    Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
+                )
+            }
+
+            /// Inverse hyperbolic sine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn asinh_approx(self, working_digits: u32) -> Self {
+                self.asinh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Inverse hyperbolic sine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn asinh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.asinh_strict_with(mode);
+                }
+                let raw = self.to_bits();
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return Self::ZERO;
+                }
+                let w = SCALE + working_digits;
+                let one_w = $core::one(w);
+                let v = $core::to_work_w(raw, working_digits);
+                let ax = if v < $core::zero() { -v } else { v };
+                let inner = if ax >= one_w {
+                    let inv = $core::div(one_w, ax, w);
+                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
+                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                } else {
+                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
+                    $core::ln_fixed(ax + root, w)
+                };
+                let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    -inner
+                } else {
+                    inner
+                };
+                Self::from_bits($core::round_to_storage_with(signed, w, SCALE, mode))
+            }
+
+            /// Inverse hyperbolic cosine with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn acosh_approx(self, working_digits: u32) -> Self {
+                self.acosh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Inverse hyperbolic cosine with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn acosh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.acosh_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let one_w = $core::one(w);
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                if v < one_w {
+                    panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
+                }
+                let two_w = one_w + one_w;
+                let inner = if v >= two_w {
+                    let inv = $core::div(one_w, v, w);
+                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
+                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                } else {
+                    let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
+                    $core::ln_fixed(v + root, w)
+                };
+                Self::from_bits($core::round_to_storage_with(inner, w, SCALE, mode))
+            }
+
+            /// Inverse hyperbolic tangent with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn atanh_approx(self, working_digits: u32) -> Self {
+                self.atanh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Inverse hyperbolic tangent with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn atanh_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.atanh_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let one_w = $core::one(w);
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                let ax = if v < $core::zero() { -v } else { v };
+                if ax >= one_w {
+                    panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
+                }
+                let ratio = $core::div(one_w + v, one_w - v, w);
+                let r = $core::ln_fixed(ratio, w) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Radians-to-degrees with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn to_degrees_approx(self, working_digits: u32) -> Self {
+                self.to_degrees_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Radians-to-degrees with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn to_degrees_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.to_degrees_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let v = $core::to_work_w(self.to_bits(), working_digits);
+                debug_assert!(
+                    $core::bit_length(v) + 8 < <$Work>::BITS,
+                    concat!(stringify!($Type),
+                        "::to_degrees: |self| * 180 overflows the working integer")
+                );
+                let r = $core::div(
+                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
+                    $core::pi(w),
+                    w,
+                );
+                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+            }
+
+            /// Degrees-to-radians with caller-chosen guard digits.
+            #[inline]
+            #[must_use]
+            pub fn to_radians_approx(self, working_digits: u32) -> Self {
+                self.to_radians_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Degrees-to-radians with caller-chosen guard digits AND rounding mode.
+            #[inline]
+            #[must_use]
+            pub fn to_radians_approx_with(
+                self,
+                working_digits: u32,
+                mode: $crate::rounding::RoundingMode,
+            ) -> Self {
+                if working_digits == $core::GUARD {
+                    return self.to_radians_strict_with(mode);
+                }
+                let w = SCALE + working_digits;
+                let v = $core::to_work_w(self.to_bits(), working_digits);
                 let r = $core::mul(v, $core::pi(w), w)
                     / $crate::macros::wide_roots::wide_lit!($Work, "180");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))

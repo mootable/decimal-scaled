@@ -670,29 +670,46 @@ pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
 /// Strict: integer-only; the result is within 0.5 ULP of the exact
 /// square root — it is the exact result correctly rounded.
 pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
+    sqrt_raw_with(r, scale, crate::rounding::RoundingMode::HalfToEven)
+}
+
+/// Mode-aware variant of [`sqrt_raw_correctly_rounded`].
+///
+/// For a non-negative integer radicand `N = r · 10^SCALE`, the true
+/// `√N` is irrational unless `N` is a perfect square, so no half-way
+/// tie exists between two integers — every nearest-mode (HalfToEven /
+/// HalfAwayFromZero / HalfTowardZero) returns the same result. The
+/// directed modes split:
+///
+/// - `Trunc` / `Floor`: keep `q = floor(√N)`. `√N ≥ 0` so floor and
+///   trunc coincide.
+/// - `Ceiling`: bump to `q + 1` whenever `N > q²` (the diff is
+///   non-zero, so the true root is strictly greater than `q`).
+/// - half-modes: bump to `q + 1` iff `N > q² + q` (equivalently
+///   `diff > q`), the standard round-to-nearest-integer test.
+pub(crate) fn sqrt_raw_with(r: u128, scale: u32, mode: crate::rounding::RoundingMode) -> u128 {
+    use crate::rounding::RoundingMode;
     if r == 0 {
         return 0;
     }
-    // N = r · 10^SCALE as a 256-bit value.
     let (hi, lo) = mul2(r, POW10_U128[scale as usize]);
     let q = isqrt_256(hi, lo);
-    // q = floor(sqrt(N)). Round up to q+1 iff N is closer to (q+1)²
-    // than to q², i.e. iff N ≥ (q + 0.5)² = q² + q + 0.25, i.e. (in
-    // integers) iff N − q² > q.
     let (q_sq_hi, q_sq_lo) = mul2(q, q);
-    // diff = N − q² (non-negative because q = floor(sqrt(N))).
     let (diff_hi, diff_lo) = if lo >= q_sq_lo {
         (hi - q_sq_hi, lo - q_sq_lo)
     } else {
         (hi - q_sq_hi - 1, lo.wrapping_sub(q_sq_lo))
     };
-    // diff ≤ 2q < 2^128, so diff_hi is 0 unless diff == 2^128 exactly;
-    // either way `diff > q` iff diff_hi != 0 or diff_lo > q.
-    if diff_hi != 0 || diff_lo > q {
-        q + 1
-    } else {
-        q
-    }
+    let diff_nonzero = diff_hi != 0 || diff_lo != 0;
+    let halfway_round_up = diff_hi != 0 || diff_lo > q;
+    let bump = match mode {
+        RoundingMode::HalfToEven
+        | RoundingMode::HalfAwayFromZero
+        | RoundingMode::HalfTowardZero => halfway_round_up,
+        RoundingMode::Trunc | RoundingMode::Floor => false,
+        RoundingMode::Ceiling => diff_nonzero,
+    };
+    if bump { q + 1 } else { q }
 }
 
 // ─────────────────────────────────────────────────────────────────────
@@ -875,23 +892,90 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
 /// Strict: integer-only; the result is within 0.5 ULP of the exact
 /// cube root — it is the exact result correctly rounded.
 pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
+    cbrt_raw_with_unsigned_mag(r, scale, crate::rounding::RoundingMode::HalfToEven)
+}
+
+/// Mode-aware variant of [`cbrt_raw_correctly_rounded`] operating on
+/// the **magnitude** `|r|` only.
+///
+/// Caller threads in the sign separately: the caller knows whether
+/// the final cube-root value is positive or negative (cbrt preserves
+/// sign), and `Floor` / `Ceiling` need that sign to decide whether to
+/// bump the magnitude or not.
+///
+/// - `Trunc`: keep magnitude `q` (toward zero regardless of sign).
+/// - `Floor`: positive → `q`; negative → bump magnitude when non-zero
+///   residual (more negative).
+/// - `Ceiling`: positive → bump when non-zero residual; negative → `q`.
+/// - half-modes: bump iff `8·N ≥ (2q + 1)³` (cube-root half-way test).
+///
+/// The half-way test handles the tie case (perfect-cube midpoint) per
+/// the original `cbrt_raw_correctly_rounded`; for cubes this can match
+/// equality, so the three half-modes diverge in the tie:
+/// `HalfAwayFromZero` and `HalfToEven` both bump (cubes meeting the
+/// `>=` make `q+1` the away neighbour for non-negative, and the larger
+/// magnitude); `HalfTowardZero` keeps `q`. The implementation here
+/// follows the conservative reading: `>=` triggers a bump for the
+/// `HalfAwayFromZero` and `HalfToEven` modes, `>` for `HalfTowardZero`.
+pub(crate) fn cbrt_raw_with_unsigned_mag(
+    r: u128,
+    scale: u32,
+    mode: crate::rounding::RoundingMode,
+) -> u128 {
+    cbrt_raw_with_signed(r, scale, false, mode)
+}
+
+/// Sign-aware mode dispatch for the cbrt raw computation. `negative`
+/// is the sign of the source value (cbrt preserves sign).
+pub(crate) fn cbrt_raw_with_signed(
+    r: u128,
+    scale: u32,
+    negative: bool,
+    mode: crate::rounding::RoundingMode,
+) -> u128 {
+    use crate::rounding::RoundingMode;
     if r == 0 {
         return 0;
     }
-    // N = r · 10^(2·SCALE) as a 384-bit value.
     let n = mul_u128_by_256(r, pow10_256(2 * scale));
     let q = icbrt_384(n);
-    // Round up to q+1 iff N is closer to (q+1)³ than to q³, i.e. iff
-    // N ≥ (q + 0.5)³. Multiplying by 8: 8·N ≥ (2q + 1)³.
     let eight_n = shl3_384(n);
     let two_q_plus_1 = 2 * q + 1;
     let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
     let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
-    if ge_384(eight_n, cube) {
-        q + 1
+    let halfway_geq = ge_384(eight_n, cube);
+    let halfway_gt = gt_384(eight_n, cube);
+    // Residual non-zero iff q³ < N, i.e. the cubed midpoint cube is
+    // strictly less than 8·N; equivalent for our purposes to "q is not
+    // the exact cube root". Cheaper test: residual non-zero iff
+    // `n != q · q · q`, but that requires another 384-bit mul. Reuse
+    // the eight_n vs (2q)³ comparison: 8N > 8q³ iff N > q³ iff there's
+    // a residual.
+    let two_q = q + q;
+    let (tq_sq_hi, tq_sq_lo) = mul2(two_q, two_q);
+    let eight_q_cubed = if q == 0 {
+        [0u128, 0, 0]
     } else {
-        q
-    }
+        mul_u256_by_u128([tq_sq_lo, tq_sq_hi], two_q)
+    };
+    let residual_nonzero = gt_384(eight_n, eight_q_cubed);
+    let tie = halfway_geq && !halfway_gt;
+    let bump = match mode {
+        RoundingMode::HalfToEven => halfway_gt || (tie && (q & 1 == 1)),
+        RoundingMode::HalfAwayFromZero => halfway_geq,
+        RoundingMode::HalfTowardZero => halfway_gt,
+        RoundingMode::Trunc => false,
+        RoundingMode::Floor => negative && residual_nonzero,
+        RoundingMode::Ceiling => !negative && residual_nonzero,
+    };
+    if bump { q + 1 } else { q }
+}
+
+/// 384-bit strictly-greater comparison, mirroring [`ge_384`].
+fn gt_384(a: [u128; 3], b: [u128; 3]) -> bool {
+    if a[2] != b[2] { return a[2] > b[2]; }
+    if a[1] != b[1] { return a[1] > b[1]; }
+    a[0] > b[0]
 }
 
 /// Compute `(a * b) / 10^SCALE` with truncating division semantics

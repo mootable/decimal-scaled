@@ -189,6 +189,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sin_strict(self) -> Self {
+        self.sin_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Sine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn sin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -197,18 +204,24 @@ impl<const SCALE: u32> D38<SCALE> {
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = sin_fixed(to_fixed(self.0), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::sin: result out of range");
         Self::from_bits(raw)
     }
 
-    /// Sine with caller-chosen guard digits. See `ln_approx` for the
-    /// accuracy / speed contract.
+    /// Sine with caller-chosen guard digits.
     #[inline]
     #[must_use]
     pub fn sin_approx(self, working_digits: u32) -> Self {
+        self.sin_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Sine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn sin_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
-            return self.sin_strict();
+            return self.sin_strict_with(mode);
         }
         if self.0 == 0 {
             return Self::ZERO;
@@ -218,7 +231,7 @@ impl<const SCALE: u32> D38<SCALE> {
         }
         let w = SCALE + working_digits;
         let raw = sin_fixed(to_fixed(self.0), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::sin: result out of range");
         Self::from_bits(raw)
     }
@@ -228,24 +241,37 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cos_strict(self) -> Self {
-        // cos(0) = 1; storage of 1 at this SCALE is 10^SCALE bits.
+        self.cos_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Cosine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn cos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::from_bits(10_i128.pow(SCALE));
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let arg = to_fixed(self.0).add(wide_half_pi(w));
         let raw = sin_fixed(arg, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::cos: result out of range");
         Self::from_bits(raw)
     }
 
-    /// Cosine with caller-chosen guard digits. See `ln_approx`.
+    /// Cosine with caller-chosen guard digits.
     #[inline]
     #[must_use]
     pub fn cos_approx(self, working_digits: u32) -> Self {
+        self.cos_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Cosine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn cos_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
-            return self.cos_strict();
+            return self.cos_strict_with(mode);
         }
         if self.0 == 0 {
             return Self::from_bits(10_i128.pow(SCALE));
@@ -253,7 +279,7 @@ impl<const SCALE: u32> D38<SCALE> {
         let w = SCALE + working_digits;
         let arg = to_fixed(self.0).add(wide_half_pi(w));
         let raw = sin_fixed(arg, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::cos: result out of range");
         Self::from_bits(raw)
     }
@@ -268,10 +294,16 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tan_strict(self) -> Self {
+        self.tan_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Tangent under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn tan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // tan(x) = x + x³/3 + … — same threshold as atan.
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
@@ -282,7 +314,39 @@ impl<const SCALE: u32> D38<SCALE> {
         assert!(!cos_w.is_zero(), "D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
         let raw = sin_w
             .div(cos_w, w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::tan: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Tangent with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn tan_approx(self, working_digits: u32) -> Self {
+        self.tan_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Tangent with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn tan_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.tan_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        let w = SCALE + working_digits;
+        let v = to_fixed(self.0);
+        let sin_w = sin_fixed(v, w);
+        let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
+        assert!(!cos_w.is_zero(), "D38::tan: cosine is zero (argument is an odd multiple of pi/2)");
+        let raw = sin_w
+            .div(cos_w, w)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::tan: result out of range");
         Self::from_bits(raw)
     }
@@ -292,6 +356,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan_strict(self) -> Self {
+        self.atan_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Arctangent under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn atan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::consts::DecimalConsts;
         if self.0 == 0 {
             return Self::ZERO;
@@ -308,17 +379,24 @@ impl<const SCALE: u32> D38<SCALE> {
         }
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
         let raw = atan_fixed(to_fixed(self.0), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::atan: result out of range");
         Self::from_bits(raw)
     }
 
-    /// Arctangent with caller-chosen guard digits. See `ln_approx`.
+    /// Arctangent with caller-chosen guard digits.
     #[inline]
     #[must_use]
     pub fn atan_approx(self, working_digits: u32) -> Self {
+        self.atan_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Arctangent with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn atan_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
         if working_digits == crate::log_exp_strict::STRICT_GUARD {
-            return self.atan_strict();
+            return self.atan_strict_with(mode);
         }
         use crate::consts::DecimalConsts;
         if self.0 == 0 {
@@ -336,7 +414,7 @@ impl<const SCALE: u32> D38<SCALE> {
         }
         let w = SCALE + working_digits;
         let raw = atan_fixed(to_fixed(self.0), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::atan: result out of range");
         Self::from_bits(raw)
     }
@@ -352,10 +430,16 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asin_strict(self) -> Self {
+        self.asin_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Arcsine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn asin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // asin(x) = x + x³/6 + … — atan's threshold is safe.
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
@@ -369,19 +453,15 @@ impl<const SCALE: u32> D38<SCALE> {
             let hp = wide_half_pi(w);
             let hp = if v.negative { hp.neg() } else { hp };
             let raw = hp
-                .round_to_i128(w, SCALE)
+                .round_to_i128_with(w, SCALE, mode)
                 .expect("D38::asin: result out of range");
             return Self::from_bits(raw);
         }
-        // Two-range kernel to keep the 0-ULP contract at |x| → 1.
-        // The half-angle branch uses asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
         let half_w = one_w.halve();
         let asin_w = if !abs_v.ge_mag(half_w) {
-            // Stable range: |x| ≤ 0.5 → 1 − x² ∈ [0.75, 1], no cancellation.
             let denom = one_w.sub(v.mul(v, w)).sqrt(w);
             atan_fixed(v.div(denom, w), w)
         } else {
-            // |x| > 0.5: recurse on √((1−|x|)/2) ∈ (0, 0.5].
             let inner = one_w.sub(abs_v).halve();
             let inner_sqrt = inner.sqrt(w);
             let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
@@ -390,7 +470,59 @@ impl<const SCALE: u32> D38<SCALE> {
             if v.negative { result_abs.neg() } else { result_abs }
         };
         let raw = asin_w
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::asin: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Arcsine with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn asin_approx(self, working_digits: u32) -> Self {
+        self.asin_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Arcsine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn asin_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.asin_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        use crate::d_w128_kernels::Fixed;
+        let w = SCALE + working_digits;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed_w(self.0, working_digits);
+        let abs_v = Fixed { negative: false, mag: v.mag };
+        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::asin: argument out of domain [-1, 1]");
+        if abs_v == one_w {
+            let hp = wide_half_pi(w);
+            let hp = if v.negative { hp.neg() } else { hp };
+            let raw = hp
+                .round_to_i128_with(w, SCALE, mode)
+                .expect("D38::asin: result out of range");
+            return Self::from_bits(raw);
+        }
+        let half_w = one_w.halve();
+        let asin_w = if !abs_v.ge_mag(half_w) {
+            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
+            atan_fixed(v.div(denom, w), w)
+        } else {
+            let inner = one_w.sub(abs_v).halve();
+            let inner_sqrt = inner.sqrt(w);
+            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
+            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
+            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
+            if v.negative { result_abs.neg() } else { result_abs }
+        };
+        let raw = asin_w
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::asin: result out of range");
         Self::from_bits(raw)
     }
@@ -404,8 +536,14 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict(self) -> Self {
+        self.acos_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Arccosine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn acos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::consts::DecimalConsts;
-        // acos(0) = π/2; acos(1) = 0; acos(-1) = π.
         if self.0 == 0 {
             return Self::half_pi();
         }
@@ -422,7 +560,6 @@ impl<const SCALE: u32> D38<SCALE> {
         let v = to_fixed(self.0);
         let abs_v = Fixed { negative: false, mag: v.mag };
         assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::acos: argument out of domain [-1, 1]");
-        // Same two-range asin kernel as asin_strict; then π/2 − asin.
         let half_w = one_w.halve();
         let asin_w = if abs_v == one_w {
             let hp = wide_half_pi(w);
@@ -440,7 +577,60 @@ impl<const SCALE: u32> D38<SCALE> {
         };
         let raw = wide_half_pi(w)
             .sub(asin_w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::acos: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Arccosine with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn acos_approx(self, working_digits: u32) -> Self {
+        self.acos_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Arccosine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn acos_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.acos_strict_with(mode);
+        }
+        use crate::consts::DecimalConsts;
+        if self.0 == 0 {
+            return Self::half_pi();
+        }
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::ZERO;
+        }
+        if self.0 == -one_bits {
+            return Self::pi();
+        }
+        use crate::d_w128_kernels::Fixed;
+        let w = SCALE + working_digits;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed_w(self.0, working_digits);
+        let abs_v = Fixed { negative: false, mag: v.mag };
+        assert!(!(abs_v.ge_mag(one_w) && abs_v != one_w), "D38::acos: argument out of domain [-1, 1]");
+        let half_w = one_w.halve();
+        let asin_w = if abs_v == one_w {
+            let hp = wide_half_pi(w);
+            if v.negative { hp.neg() } else { hp }
+        } else if !abs_v.ge_mag(half_w) {
+            let denom = one_w.sub(v.mul(v, w)).sqrt(w);
+            atan_fixed(v.div(denom, w), w)
+        } else {
+            let inner = one_w.sub(abs_v).halve();
+            let inner_sqrt = inner.sqrt(w);
+            let inner_denom = one_w.sub(inner_sqrt.mul(inner_sqrt, w)).sqrt(w);
+            let inner_asin = atan_fixed(inner_sqrt.div(inner_denom, w), w);
+            let result_abs = wide_half_pi(w).sub(inner_asin).sub(inner_asin);
+            if v.negative { result_abs.neg() } else { result_abs }
+        };
+        let raw = wide_half_pi(w)
+            .sub(asin_w)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::acos: result out of range");
         Self::from_bits(raw)
     }
@@ -451,42 +641,42 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan2_strict(self, other: Self) -> Self {
+        self.atan2_strict_with(other, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Four-quadrant arctangent under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn atan2_strict_with(self, other: Self, mode: crate::rounding::RoundingMode) -> Self {
         let w = SCALE + crate::log_exp_strict::STRICT_GUARD;
-        let y = to_fixed(self.0);
-        let x = to_fixed(other.0);
-        let result_w = if x.is_zero() {
-            if self.0 > 0 {
-                wide_half_pi(w)
-            } else if self.0 < 0 {
-                wide_half_pi(w).neg()
-            } else {
-                crate::d_w128_kernels::Fixed::ZERO
-            }
-        } else {
-            // Max-branch (same as the wide-tier path): feed atan_fixed
-            // the |smaller|/|larger| ratio so the argument-halving
-            // cascade in atan_fixed doesn't blow up when |y| ≫ |x|.
-            // Identity: atan(t) = sign(t)·π/2 − atan(1/t) for |t| > 1.
-            let abs_y_ge_abs_x = y.ge_mag(x);
-            let base = if !abs_y_ge_abs_x {
-                atan_fixed(y.div(x, w), w)
-            } else {
-                let inv = atan_fixed(x.div(y, w), w);
-                let hp = wide_half_pi(w);
-                // sign(y/x): positive iff y and x have matching sign.
-                let same_sign = y.negative == x.negative;
-                if same_sign { hp.sub(inv) } else { hp.neg().sub(inv) }
-            };
-            if !x.negative {
-                base
-            } else if !y.negative {
-                base.add(wide_pi(w))
-            } else {
-                base.sub(wide_pi(w))
-            }
-        };
-        let raw = result_w
-            .round_to_i128(w, SCALE)
+        let raw = atan2_kernel(to_fixed(self.0), to_fixed(other.0), self.0, w)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::atan2: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Four-quadrant arctangent with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
+        self.atan2_approx_with(other, working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Four-quadrant arctangent with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn atan2_approx_with(self, other: Self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.atan2_strict_with(other, mode);
+        }
+        let w = SCALE + working_digits;
+        let raw = atan2_kernel(
+            to_fixed_w(self.0, working_digits),
+            to_fixed_w(other.0, working_digits),
+            self.0,
+            w,
+        )
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::atan2: result out of range");
         Self::from_bits(raw)
     }
@@ -497,10 +687,16 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sinh_strict(self) -> Self {
+        self.sinh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hyperbolic sine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn sinh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // sinh(x) = x + x³/6 + … — atan's threshold is safe.
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
@@ -511,7 +707,39 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = ex
             .sub(enx)
             .halve()
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::sinh: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Hyperbolic sine with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn sinh_approx(self, working_digits: u32) -> Self {
+        self.sinh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hyperbolic sine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn sinh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.sinh_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        let w = SCALE + working_digits;
+        let v = to_fixed_w(self.0, working_digits);
+        let ex = crate::log_exp_strict::exp_fixed(v, w);
+        let enx = crate::log_exp_strict::exp_fixed(v.neg(), w);
+        let raw = ex
+            .sub(enx)
+            .halve()
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::sinh: result out of range");
         Self::from_bits(raw)
     }
@@ -521,7 +749,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cosh_strict(self) -> Self {
-        // cosh(0) = 1.
+        self.cosh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hyperbolic cosine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn cosh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::from_bits(10_i128.pow(SCALE));
         }
@@ -532,7 +766,36 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = ex
             .add(enx)
             .halve()
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::cosh: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Hyperbolic cosine with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn cosh_approx(self, working_digits: u32) -> Self {
+        self.cosh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hyperbolic cosine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn cosh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.cosh_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::from_bits(10_i128.pow(SCALE));
+        }
+        let w = SCALE + working_digits;
+        let v = to_fixed_w(self.0, working_digits);
+        let ex = crate::log_exp_strict::exp_fixed(v, w);
+        let enx = crate::log_exp_strict::exp_fixed(v.neg(), w);
+        let raw = ex
+            .add(enx)
+            .halve()
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::cosh: result out of range");
         Self::from_bits(raw)
     }
@@ -543,10 +806,16 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tanh_strict(self) -> Self {
+        self.tanh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hyperbolic tangent under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn tanh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // tanh(x) = x − x³/3 + … — same threshold as atan.
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
@@ -557,7 +826,39 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = ex
             .sub(enx)
             .div(ex.add(enx), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::tanh: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Hyperbolic tangent with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn tanh_approx(self, working_digits: u32) -> Self {
+        self.tanh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hyperbolic tangent with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn tanh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.tanh_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        let w = SCALE + working_digits;
+        let v = to_fixed_w(self.0, working_digits);
+        let ex = crate::log_exp_strict::exp_fixed(v, w);
+        let enx = crate::log_exp_strict::exp_fixed(v.neg(), w);
+        let raw = ex
+            .sub(enx)
+            .div(ex.add(enx), w)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::tanh: result out of range");
         Self::from_bits(raw)
     }
@@ -570,11 +871,17 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asinh_strict(self) -> Self {
+        self.asinh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Inverse hyperbolic sine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn asinh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // asinh(x) = x − x³/6 + … — atan's threshold is safe.
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
@@ -583,18 +890,56 @@ impl<const SCALE: u32> D38<SCALE> {
         let v = to_fixed(self.0);
         let ax = Fixed { negative: false, mag: v.mag };
         let inner = if ax.ge_mag(one_w) {
-            // ln(|x|) + ln(1 + √(1 + 1/x²)).
             let inv = one_w.div(ax, w);
             let root = one_w.add(inv.mul(inv, w)).sqrt(w);
             crate::log_exp_strict::ln_fixed(ax, w).add(crate::log_exp_strict::ln_fixed(one_w.add(root), w))
         } else {
-            // ln(|x| + √(x² + 1)).
             let root = ax.mul(ax, w).add(one_w).sqrt(w);
             crate::log_exp_strict::ln_fixed(ax.add(root), w)
         };
         let signed = if self.0 < 0 { inner.neg() } else { inner };
         let raw = signed
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::asinh: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Inverse hyperbolic sine with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn asinh_approx(self, working_digits: u32) -> Self {
+        self.asinh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Inverse hyperbolic sine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn asinh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.asinh_strict_with(mode);
+        }
+        use crate::d_w128_kernels::Fixed;
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        let w = SCALE + working_digits;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed_w(self.0, working_digits);
+        let ax = Fixed { negative: false, mag: v.mag };
+        let inner = if ax.ge_mag(one_w) {
+            let inv = one_w.div(ax, w);
+            let root = one_w.add(inv.mul(inv, w)).sqrt(w);
+            crate::log_exp_strict::ln_fixed(ax, w).add(crate::log_exp_strict::ln_fixed(one_w.add(root), w))
+        } else {
+            let root = ax.mul(ax, w).add(one_w).sqrt(w);
+            crate::log_exp_strict::ln_fixed(ax.add(root), w)
+        };
+        let signed = if self.0 < 0 { inner.neg() } else { inner };
+        let raw = signed
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::asinh: result out of range");
         Self::from_bits(raw)
     }
@@ -610,7 +955,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh_strict(self) -> Self {
-        // acosh(1) = 0.
+        self.acosh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Inverse hyperbolic cosine under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn acosh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         let one_bits: i128 = 10_i128.pow(SCALE);
         if self.0 == one_bits {
             return Self::ZERO;
@@ -622,17 +973,53 @@ impl<const SCALE: u32> D38<SCALE> {
         assert!(!v.negative && v.ge_mag(one_w), "D38::acosh: argument must be >= 1");
         let two_w = one_w.double();
         let inner = if v.ge_mag(two_w) {
-            // ln(x) + ln(1 + √(1 − 1/x²)).
             let inv = one_w.div(v, w);
             let root = one_w.sub(inv.mul(inv, w)).sqrt(w);
             crate::log_exp_strict::ln_fixed(v, w).add(crate::log_exp_strict::ln_fixed(one_w.add(root), w))
         } else {
-            // ln(x + √(x² − 1)).
             let root = v.mul(v, w).sub(one_w).sqrt(w);
             crate::log_exp_strict::ln_fixed(v.add(root), w)
         };
         let raw = inner
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::acosh: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Inverse hyperbolic cosine with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn acosh_approx(self, working_digits: u32) -> Self {
+        self.acosh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Inverse hyperbolic cosine with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn acosh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.acosh_strict_with(mode);
+        }
+        let one_bits: i128 = 10_i128.pow(SCALE);
+        if self.0 == one_bits {
+            return Self::ZERO;
+        }
+        use crate::d_w128_kernels::Fixed;
+        let w = SCALE + working_digits;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed_w(self.0, working_digits);
+        assert!(!v.negative && v.ge_mag(one_w), "D38::acosh: argument must be >= 1");
+        let two_w = one_w.double();
+        let inner = if v.ge_mag(two_w) {
+            let inv = one_w.div(v, w);
+            let root = one_w.sub(inv.mul(inv, w)).sqrt(w);
+            crate::log_exp_strict::ln_fixed(v, w).add(crate::log_exp_strict::ln_fixed(one_w.add(root), w))
+        } else {
+            let root = v.mul(v, w).sub(one_w).sqrt(w);
+            crate::log_exp_strict::ln_fixed(v.add(root), w)
+        };
+        let raw = inner
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::acosh: result out of range");
         Self::from_bits(raw)
     }
@@ -647,10 +1034,16 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh_strict(self) -> Self {
+        self.atanh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Inverse hyperbolic tangent under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn atanh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
-        // atanh(x) = x + x³/3 + … — same threshold as atan.
         if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
             return self;
         }
@@ -660,11 +1053,44 @@ impl<const SCALE: u32> D38<SCALE> {
         let v = to_fixed(self.0);
         let ax = Fixed { negative: false, mag: v.mag };
         assert!(!ax.ge_mag(one_w), "D38::atanh: argument out of domain (-1, 1)");
-        // ln((1 + x) / (1 − x)) / 2.
         let ratio = one_w.add(v).div(one_w.sub(v), w);
         let raw = crate::log_exp_strict::ln_fixed(ratio, w)
             .halve()
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::atanh: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Inverse hyperbolic tangent with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn atanh_approx(self, working_digits: u32) -> Self {
+        self.atanh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Inverse hyperbolic tangent with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn atanh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.atanh_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        if self.0.abs() <= small_x_linear_threshold::<SCALE>() {
+            return self;
+        }
+        use crate::d_w128_kernels::Fixed;
+        let w = SCALE + working_digits;
+        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let v = to_fixed_w(self.0, working_digits);
+        let ax = Fixed { negative: false, mag: v.mag };
+        assert!(!ax.ge_mag(one_w), "D38::atanh: argument out of domain (-1, 1)");
+        let ratio = one_w.add(v).div(one_w.sub(v), w);
+        let raw = crate::log_exp_strict::ln_fixed(ratio, w)
+            .halve()
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::atanh: result out of range");
         Self::from_bits(raw)
     }
@@ -675,6 +1101,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_degrees_strict(self) -> Self {
+        self.to_degrees_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Radians-to-degrees conversion under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn to_degrees_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -682,7 +1115,33 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = to_fixed(self.0)
             .mul_u128(180)
             .div(wide_pi(w), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::to_degrees: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Radians-to-degrees conversion with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn to_degrees_approx(self, working_digits: u32) -> Self {
+        self.to_degrees_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Radians-to-degrees with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn to_degrees_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.to_degrees_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        let w = SCALE + working_digits;
+        let raw = to_fixed_w(self.0, working_digits)
+            .mul_u128(180)
+            .div(wide_pi(w), w)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::to_degrees: result out of range");
         Self::from_bits(raw)
     }
@@ -692,6 +1151,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_radians_strict(self) -> Self {
+        self.to_radians_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Degrees-to-radians conversion under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn to_radians_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.0 == 0 {
             return Self::ZERO;
         }
@@ -699,7 +1165,33 @@ impl<const SCALE: u32> D38<SCALE> {
         let raw = to_fixed(self.0)
             .mul(wide_pi(w), w)
             .div_small(180)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::to_radians: result out of range");
+        Self::from_bits(raw)
+    }
+
+    /// Degrees-to-radians conversion with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn to_radians_approx(self, working_digits: u32) -> Self {
+        self.to_radians_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Degrees-to-radians with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn to_radians_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.to_radians_strict_with(mode);
+        }
+        if self.0 == 0 {
+            return Self::ZERO;
+        }
+        let w = SCALE + working_digits;
+        let raw = to_fixed_w(self.0, working_digits)
+            .mul(wide_pi(w), w)
+            .div_small(180)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::to_radians: result out of range");
         Self::from_bits(raw)
     }
@@ -802,13 +1294,60 @@ fn wide_half_pi(w: u32) -> crate::d_w128_kernels::Fixed {
 /// Builds a working-scale `Fixed` from a signed `D38` raw value `r`:
 /// `r · 10^STRICT_GUARD`, carrying the sign.
 fn to_fixed(raw: i128) -> crate::d_w128_kernels::Fixed {
+    to_fixed_w(raw, crate::log_exp_strict::STRICT_GUARD)
+}
+
+/// Builds a working-scale `Fixed` from a signed `D38` raw value `r`:
+/// `r · 10^working_digits`, carrying the sign. Used by the `_approx`
+/// variants where the guard width is chosen at runtime.
+fn to_fixed_w(raw: i128, working_digits: u32) -> crate::d_w128_kernels::Fixed {
     use crate::d_w128_kernels::Fixed;
     let m = Fixed::from_u128_mag(raw.unsigned_abs(), false)
-        .mul_u128(10u128.pow(crate::log_exp_strict::STRICT_GUARD));
+        .mul_u128(10u128.pow(working_digits));
     if raw < 0 {
         m.neg()
     } else {
         m
+    }
+}
+
+/// Shared `atan2` body factored out so the `_strict` and `_approx`
+/// dispatchers can compose it at their chosen working scale `w`.
+/// `y_raw` keeps the original sign of the y-argument for the x-zero
+/// branch where the wide y value would have been signed-zero.
+fn atan2_kernel(
+    y: crate::d_w128_kernels::Fixed,
+    x: crate::d_w128_kernels::Fixed,
+    y_raw: i128,
+    w: u32,
+) -> crate::d_w128_kernels::Fixed {
+    use crate::d_w128_kernels::Fixed;
+    if x.is_zero() {
+        return if y_raw > 0 {
+            wide_half_pi(w)
+        } else if y_raw < 0 {
+            wide_half_pi(w).neg()
+        } else {
+            Fixed::ZERO
+        };
+    }
+    // Max-branch: feed atan_fixed the |smaller|/|larger| ratio so the
+    // argument-halving cascade doesn't blow up when |y| ≫ |x|.
+    let abs_y_ge_abs_x = y.ge_mag(x);
+    let base = if !abs_y_ge_abs_x {
+        atan_fixed(y.div(x, w), w)
+    } else {
+        let inv = atan_fixed(x.div(y, w), w);
+        let hp = wide_half_pi(w);
+        let same_sign = y.negative == x.negative;
+        if same_sign { hp.sub(inv) } else { hp.neg().sub(inv) }
+    };
+    if !x.negative {
+        base
+    } else if !y.negative {
+        base.add(wide_pi(w))
+    } else {
+        base.sub(wide_pi(w))
     }
 }
 

@@ -68,19 +68,38 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
+                self.sqrt_strict_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Square root under the supplied rounding mode. See the
+            /// `D38::sqrt_strict_with` doc for the per-mode contract:
+            /// ties are impossible for an integer radicand, so the
+            /// three half-modes coincide.
+            #[inline]
+            #[must_use]
+            pub fn sqrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                use $crate::rounding::RoundingMode;
                 let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                let zero_s = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= zero_s {
                     return Self::ZERO;
                 }
+                let zero = $crate::macros::wide_roots::wide_lit!($SqrtWide, "0");
                 let one = $crate::macros::wide_roots::wide_lit!($SqrtWide, "1");
                 let ten = $crate::macros::wide_roots::wide_lit!($SqrtWide, "10");
-                // N = r · 10^SCALE, formed exactly one width up.
                 let n: $SqrtWide = raw.resize::<$SqrtWide>() * ten.pow(SCALE);
-                // q = floor(sqrt(N)). Round up to q+1 iff N is closer to
-                // (q+1)² than to q², i.e. iff N − q² > q.
                 let q = n.isqrt();
                 let diff = n - q * q;
-                let q = if diff > q { q + one } else { q };
+                let halfway_round_up = diff > q;
+                let diff_nonzero = diff != zero;
+                let bump = match mode {
+                    RoundingMode::HalfToEven
+                    | RoundingMode::HalfAwayFromZero
+                    | RoundingMode::HalfTowardZero => halfway_round_up,
+                    RoundingMode::Trunc | RoundingMode::Floor => false,
+                    RoundingMode::Ceiling => diff_nonzero,
+                };
+                let q = if bump { q + one } else { q };
                 Self::from_bits(q.resize::<$Storage>())
             }
 
@@ -96,6 +115,16 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
+                self.cbrt_strict_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Cube root under the supplied rounding mode. Sign is
+            /// preserved; `Floor` / `Ceiling` bump magnitude only when
+            /// the bump moves the signed result in their direction.
+            #[inline]
+            #[must_use]
+            pub fn cbrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+                use $crate::rounding::RoundingMode;
                 let raw = self.to_bits();
                 let storage_zero = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 if raw == storage_zero {
@@ -106,16 +135,11 @@ macro_rules! decl_wide_roots {
                 let three = $crate::macros::wide_roots::wide_lit!($CbrtWide, "3");
                 let ten = $crate::macros::wide_roots::wide_lit!($CbrtWide, "10");
 
-                // Work on the magnitude two widths up; the radicand
-                // `r · 10^(2·SCALE)` needs the extra room.
                 let widened = raw.resize::<$CbrtWide>();
                 let negative = widened < zero;
                 let mag = if negative { -widened } else { widened };
                 let n: $CbrtWide = mag * ten.pow(2 * SCALE);
 
-                // q = floor(cbrt(N)) by integer Newton iteration:
-                // x_{k+1} = (2·x_k + N / x_k²) / 3, started from an
-                // overestimate so the sequence decreases monotonically.
                 let sig_bits = <$CbrtWide>::BITS - n.leading_zeros();
                 let mut x = one << sig_bits.div_ceil(3);
                 loop {
@@ -127,11 +151,25 @@ macro_rules! decl_wide_roots {
                 }
                 let q = x;
 
-                // Round up to q+1 iff N is closer to (q+1)³ than to q³.
-                // Multiplying by 8: 8·N ≥ (2q + 1)³.
                 let eight_n = n << 3u32;
                 let t = q + q + one;
-                let q = if eight_n >= t * t * t { q + one } else { q };
+                let cube = t * t * t;
+                let halfway_geq = eight_n >= cube;
+                let halfway_gt = eight_n > cube;
+                let tie = halfway_geq && !halfway_gt;
+                let two_q = q + q;
+                let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
+                let residual_nonzero = eight_n > eight_q_cubed;
+                let q_is_odd = (q.clone() % (one + one)) != zero;
+                let bump = match mode {
+                    RoundingMode::HalfToEven => halfway_gt || (tie && q_is_odd),
+                    RoundingMode::HalfAwayFromZero => halfway_geq,
+                    RoundingMode::HalfTowardZero => halfway_gt,
+                    RoundingMode::Trunc => false,
+                    RoundingMode::Floor => negative && residual_nonzero,
+                    RoundingMode::Ceiling => !negative && residual_nonzero,
+                };
+                let q = if bump { q + one } else { q };
                 let signed = if negative { -q } else { q };
                 Self::from_bits(signed.resize::<$Storage>())
             }
@@ -171,6 +209,14 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn hypot_strict(self, other: Self) -> Self {
+                self.hypot_strict_with(other, $crate::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Hypot under the supplied rounding mode. The mode applies
+            /// to the inner sqrt step.
+            #[inline]
+            #[must_use]
+            pub fn hypot_strict_with(self, other: Self, mode: $crate::rounding::RoundingMode) -> Self {
                 let a = self.abs();
                 let b = other.abs();
                 let (large, small) = if a >= b { (a, b) } else { (b, a) };
@@ -179,7 +225,7 @@ macro_rules! decl_wide_roots {
                 } else {
                     let ratio = small / large;
                     let one_plus_sq = Self::ONE + ratio * ratio;
-                    large * one_plus_sq.sqrt_strict()
+                    large * one_plus_sq.sqrt_strict_with(mode)
                 }
             }
         }

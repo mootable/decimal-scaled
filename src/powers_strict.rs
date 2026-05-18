@@ -197,6 +197,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_strict(self, exp: D38<SCALE>) -> Self {
+        self.powf_strict_with(exp, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// `self^exp` under the supplied rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn powf_strict_with(self, exp: D38<SCALE>, mode: crate::rounding::RoundingMode) -> Self {
         use crate::d_w128_kernels::Fixed;
         if self.to_bits() <= 0 {
             return Self::ZERO;
@@ -204,18 +211,48 @@ impl<const SCALE: u32> D38<SCALE> {
         let guard = crate::log_exp_strict::STRICT_GUARD;
         let w = SCALE + guard;
         let pow = 10u128.pow(guard);
-        // ln(self) in the wide intermediate.
         let ln_x = crate::log_exp_strict::ln_fixed(
             Fixed::from_u128_mag(self.to_bits() as u128, false).mul_u128(pow),
             w,
         );
-        // y = exp, carried at the wide working scale (with its sign).
         let y_neg = exp.to_bits() < 0;
         let y_w = Fixed::from_u128_mag(exp.to_bits().unsigned_abs(), false).mul_u128(pow);
         let y_w = if y_neg { y_w.neg() } else { y_w };
-        // exp(y · ln(x)), rounded once at the end.
         let raw = crate::log_exp_strict::exp_fixed(y_w.mul(ln_x, w), w)
-            .round_to_i128(w, SCALE)
+            .round_to_i128_with(w, SCALE, mode)
+            .expect("D38::powf: result overflows the representable range");
+        Self::from_bits(raw)
+    }
+
+    /// `self^exp` with caller-chosen guard digits.
+    #[inline]
+    #[must_use]
+    pub fn powf_approx(self, exp: D38<SCALE>, working_digits: u32) -> Self {
+        self.powf_approx_with(exp, working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// `self^exp` with caller-chosen guard digits AND rounding mode.
+    #[inline]
+    #[must_use]
+    pub fn powf_approx_with(self, exp: D38<SCALE>, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+            return self.powf_strict_with(exp, mode);
+        }
+        use crate::d_w128_kernels::Fixed;
+        if self.to_bits() <= 0 {
+            return Self::ZERO;
+        }
+        let w = SCALE + working_digits;
+        let pow = 10u128.pow(working_digits);
+        let ln_x = crate::log_exp_strict::ln_fixed(
+            Fixed::from_u128_mag(self.to_bits() as u128, false).mul_u128(pow),
+            w,
+        );
+        let y_neg = exp.to_bits() < 0;
+        let y_w = Fixed::from_u128_mag(exp.to_bits().unsigned_abs(), false).mul_u128(pow);
+        let y_w = if y_neg { y_w.neg() } else { y_w };
+        let raw = crate::log_exp_strict::exp_fixed(y_w.mul(ln_x, w), w)
+            .round_to_i128_with(w, SCALE, mode)
             .expect("D38::powf: result overflows the representable range");
         Self::from_bits(raw)
     }
@@ -258,26 +295,21 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sqrt_strict(self) -> Self {
-        // Correctly-rounded square root.
-        //
-        // For a `D38<SCALE>` with raw storage `r`, the logical value is
-        // `r / 10^SCALE`, and the raw storage of its square root is
-        //
-        // round( sqrt(r / 10^SCALE) · 10^SCALE )
-        // = round( sqrt(r · 10^SCALE) ).
-        //
-        // `r · 10^SCALE` is formed exactly as a 256-bit product and its
-        // integer square root is computed exactly, so the result is the
-        // exact square root correctly rounded to the type's last place
-        // (within 0.5 ULP — the IEEE-754 round-to-nearest result).
-        //
-        // Negative inputs saturate to ZERO, matching the f64-bridge
-        // policy (saturation, not panic).
+        self.sqrt_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Square root under the supplied rounding mode.
+    ///
+    /// Negative inputs saturate to [`Self::ZERO`] regardless of mode,
+    /// matching the f64-bridge policy.
+    #[inline]
+    #[must_use]
+    pub fn sqrt_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         if self.to_bits() <= 0 {
             return Self::ZERO;
         }
         let raw = self.to_bits() as u128;
-        let q = crate::mg_divide::sqrt_raw_correctly_rounded(raw, SCALE);
+        let q = crate::mg_divide::sqrt_raw_with(raw, SCALE, mode);
         Self::from_bits(q as i128)
     }
 
@@ -326,15 +358,26 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cbrt_strict(self) -> Self {
+        self.cbrt_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Cube root under the supplied rounding mode. The sign of the
+    /// input is preserved; `Floor` / `Ceiling` resolve direction
+    /// relative to the signed result.
+    #[inline]
+    #[must_use]
+    pub fn cbrt_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
         let raw = self.to_bits();
         if raw == 0 {
             return Self::ZERO;
         }
         let negative = raw < 0;
-        // `unsigned_abs` handles `i128::MIN` without the signed-negation
-        // overflow; the magnitude is at most 2^127.
-        let q = crate::mg_divide::cbrt_raw_correctly_rounded(raw.unsigned_abs(), SCALE);
-        // q < 2^127, so it fits i128 and its negation cannot overflow.
+        let q = crate::mg_divide::cbrt_raw_with_signed(
+            raw.unsigned_abs(),
+            SCALE,
+            negative,
+            mode,
+        );
         let result = q as i128;
         Self::from_bits(if negative { -result } else { result })
     }
@@ -348,6 +391,15 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn hypot_strict(self, other: Self) -> Self {
+        self.hypot_strict_with(other, crate::rounding::DEFAULT_ROUNDING_MODE)
+    }
+
+    /// Hypot under the supplied rounding mode. The mode applies to the
+    /// inner square root; the surrounding adds and multiplies are
+    /// exact-or-truncating per the operator path's own contract.
+    #[inline]
+    #[must_use]
+    pub fn hypot_strict_with(self, other: Self, mode: crate::rounding::RoundingMode) -> Self {
         let a = self.abs();
         let b = other.abs();
         let (large, small) = if a >= b { (a, b) } else { (b, a) };
@@ -356,7 +408,7 @@ impl<const SCALE: u32> D38<SCALE> {
         } else {
             let ratio = small / large;
             let one_plus_sq = Self::ONE + ratio * ratio;
-            large * one_plus_sq.sqrt_strict()
+            large * one_plus_sq.sqrt_strict_with(mode)
         }
     }
 
