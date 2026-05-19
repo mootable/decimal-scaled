@@ -197,6 +197,30 @@ fn rem_of_with_modes_rescales_inputs() {
     assert_eq!(c, D38::<0>::from_int(1));
 }
 
+// ── Operator overload cross-width PartialEq / PartialOrd (same SCALE). ─
+
+#[test]
+fn cross_width_eq_operator_works() {
+    let a: D38<12> = D38::<12>::from_int(5);
+    let b: D18<12> = D18::<12>::from_int(5);
+    assert!(a == b);
+    assert!(b == a);
+    let c: D9<2> = D9::<2>::from_int(3);
+    let d: D38<2> = D38::<2>::from_int(3);
+    assert!(c == d);
+    assert!(d == c);
+}
+
+#[test]
+fn cross_width_ord_operator_works() {
+    let a: D38<12> = D38::<12>::from_int(5);
+    let b: D18<12> = D18::<12>::from_int(10);
+    assert!(a < b);
+    assert!(b > a);
+    assert!(a <= b);
+    assert!(b >= a);
+}
+
 // ── Wide tier smoke test ─────────────────────────────────────────────
 
 #[cfg(feature = "wide")]
