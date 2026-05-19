@@ -253,10 +253,16 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     // `Int*` types copies only `(L + 1) / 2` u128 limbs (8 for
     // Int512, 4 for Int256) instead of zero-initialising and
     // copying the full 288-u64 default buffer (~2.3 kB stack).
-    let mut mag = [0u128; 64];
+    //
+    // Sized for `Int16384` (128 u128 limbs = 16384 bits) — the
+    // widest working integer in the crate, used by `D1232`'s
+    // wide-transcendental kernels. Narrower callers (D38–D924
+    // working ints) only populate their `L/2` leading limbs and
+    // skip the trailing zeros via the `top` cursor below.
+    let mut mag = [0u128; 128];
     let neg = n.mag_into_u128(&mut mag);
 
-    // The magnitude buffer is fixed at 64 u128 limbs (Int8192-equivalent),
+    // The magnitude buffer is fixed at 128 u128 limbs (Int16384-equivalent),
     // but most calls operate on far narrower widths (`Int512` ≤ 4 limbs,
     // `Int1024` ≤ 8 limbs, …). Skip the leading zeros.
     let mut top = mag.len();
@@ -367,8 +373,11 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
     debug_assert!(scale > 38, "chain path is for SCALE > 38; callers handle ≤ 38");
 
     // Pack magnitude directly into u128 limbs (same fast path as
-    // the single-chunk `div_wide_pow10_with`).
-    let mut mag = [0u128; 64];
+    // the single-chunk `div_wide_pow10_with`). Sized for the
+    // widest working integer in the crate (`Int16384` = 128 u128
+    // limbs); narrower callers populate only their leading
+    // `L / 2` limbs and the `top` cursor skips the trailing zeros.
+    let mut mag = [0u128; 128];
     let neg = n.mag_into_u128(&mut mag);
     let mut top = mag.len();
     while top > 0 && mag[top - 1] == 0 {
