@@ -162,8 +162,33 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D57<SCALE> {
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl_wide_exp!(D76, exp::wide_kernel::exp_strict_d76);
 
+// D115 — bespoke arm so `exp_impl` can divert SCALE = 57 through the
+// Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
 #[cfg(any(feature = "d115", feature = "wide"))]
-impl_wide_exp!(D115, exp::wide_kernel::exp_strict_d115);
+impl<const SCALE: u32> ExpPolicy for crate::types::widths::D115<SCALE> {
+    #[inline]
+    fn exp_impl(self, mode: RoundingMode) -> Self {
+        if SCALE == 57 {
+            return Self(exp::lookup_d115_s57_tang::exp_strict::<SCALE>(self.0, mode));
+        }
+        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        if SCALE == 57 {
+            return Self(exp::lookup_d115_s57_tang::exp_strict::<SCALE>(self.0, mode));
+        }
+        Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn exp2_impl(self, mode: RoundingMode) -> Self {
+        self.exp2_strict_with(mode)
+    }
+    #[inline]
+    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        self.exp2_strict_with(mode)
+    }
+}
 
 #[cfg(any(feature = "d153", feature = "wide"))]
 impl_wide_exp!(D153, exp::wide_kernel::exp_strict_d153);
