@@ -305,6 +305,14 @@ name = "m2_mul_fixed"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# Gate bench for the single-u64-multiplier specialisation
+# `limbs_mul_u64_into` vs `limbs_mul_u64_fixed` with a single-limb
+# operand. Validates the n×1 schoolbook win across every wide tier.
+[[bench]]
+name = "m2_mul_u64_into"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # Multi-input atan comparison across decimal-scaled / fastnum /
 # dashu-float at D38<19>. Times 8 input classes to expose
 # per-library fast-path coverage (fastnum's NaN-out for |x|>1,

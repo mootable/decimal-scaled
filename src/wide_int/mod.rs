@@ -1504,6 +1504,46 @@ pub(crate) const fn limbs_mul_u64_fixed<const L: usize, const D: usize>(
     }
 }
 
+/// `out = a · n` where `n` is a single u64 multiplier, `a` is a
+/// fixed-width `L`-limb input, and `out` is a fixed-width
+/// `LP1 = L + 1` limb output. `out` must be zeroed by the caller.
+///
+/// Specialisation of the n-by-1-word multi-precision multiply
+/// (Knuth, TAOCP Vol 2 §4.3.1, Algorithm M with `n = 1`):
+/// every inner-loop step is a single `u64 × u64 → u128` widening
+/// mul plus an accumulator-and-carry fold, so the whole operation
+/// is `L` widening muls and `L` adds with no cross-row carry
+/// chains. By contrast, [`limbs_mul_u64_fixed`] called with
+/// `b = [n, 0, ..., 0]` still runs the `L²` outer-product loop
+/// (most iterations are short-circuited on `b[j] == 0`, but the
+/// monomorphisation still emits the dead branches and the row
+/// carry-propagation tail).
+///
+/// `LP1` must equal `L + 1`; the caller passes both because Rust
+/// stable cannot express `L + 1` in a const generic position.
+#[inline(always)]
+pub(crate) const fn limbs_mul_u64_into<const L: usize, const LP1: usize>(
+    a: &[u64; L],
+    n: u64,
+    out: &mut [u64; LP1],
+) {
+    debug_assert!(LP1 == L + 1, "limbs_mul_u64_into: LP1 must equal L + 1");
+    let mut carry: u64 = 0;
+    let mut i = 0;
+    while i < L {
+        // p fits u128 with no overflow:
+        //   (2^64 - 1)·(2^64 - 1) + (2^64 - 1) + (2^64 - 1)
+        //   = 2^128 - 1
+        let p = (a[i] as u128) * (n as u128)
+            + (out[i] as u128)
+            + (carry as u128);
+        out[i] = p as u64;
+        carry = (p >> 64) as u64;
+        i += 1;
+    }
+    out[L] = carry;
+}
+
 /// `quot = num / den`, `rem = num % den`, u64 limbs.
 ///
 /// Hardware fast paths:
@@ -2910,6 +2950,68 @@ mod slice_tests {
         check!(32, 64);
         check!(48, 96);
         check!(64, 128);
+    }
+
+    /// `limbs_mul_u64_into::<L, L+1>` matches `limbs_mul_u64_fixed::<L, 2·L>`
+    /// when the wider operand is `[n, 0, ..., 0]`, across L covering every
+    /// wide tier from D38 (L=2) to D307 (L=16). 1000 random (a, n) pairs
+    /// per L from a deterministic SplitMix64 stream — no run-to-run drift,
+    /// regression-friendly. Tail-zero limbs from the wide product are
+    /// asserted alongside the leading `L + 1` so any spurious write past
+    /// the truncated output is caught.
+    #[test]
+    fn limbs_mul_u64_into_matches_fixed() {
+        // SplitMix64 — Vigna 2014, public-domain reference algorithm.
+        let mut state: u64 = 0xDEAD_BEEF_CAFE_F00D;
+        let mut next = || -> u64 {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+
+        macro_rules! check_into {
+            ($L:expr, $LP1:expr, $D:expr) => {{
+                for _ in 0..1000 {
+                    let mut a = [0u64; $L];
+                    for slot in a.iter_mut() {
+                        *slot = next();
+                    }
+                    let n = next();
+
+                    let mut out_into = [0u64; $LP1];
+                    limbs_mul_u64_into::<$L, $LP1>(&a, n, &mut out_into);
+
+                    let mut b = [0u64; $L];
+                    b[0] = n;
+                    let mut out_fixed = [0u64; $D];
+                    limbs_mul_u64_fixed::<$L, $D>(&a, &b, &mut out_fixed);
+
+                    assert_eq!(
+                        &out_into[..],
+                        &out_fixed[..$LP1],
+                        "limbs_mul_u64_into::<{}, {}> low limbs mismatch \
+                         (a={:?}, n={:#x})",
+                        $L, $LP1, a, n
+                    );
+                    for (k, &limb) in out_fixed[$LP1..].iter().enumerate() {
+                        assert_eq!(
+                            limb, 0,
+                            "limbs_mul_u64_fixed high limb {} not zero \
+                             — single-multiplier product must fit L+1 limbs",
+                            $LP1 + k
+                        );
+                    }
+                }
+            }};
+        }
+        check_into!(2, 3, 4);
+        check_into!(3, 4, 6);
+        check_into!(4, 5, 8);
+        check_into!(6, 7, 12);
+        check_into!(8, 9, 16);
+        check_into!(16, 17, 32);
     }
 
     /// `limbs_divmod_u64` matches `limbs_divmod`.
