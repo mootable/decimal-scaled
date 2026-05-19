@@ -31,13 +31,23 @@ pub(crate) mod lookup_d57_s18_22_tang;
 pub(crate) mod lookup_d115_s57_tang;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub(crate) mod lookup_d153_s70_82_tang;
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub(crate) mod lookup_d230_s110_120_tang;
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) mod lookup_d307_s140_160_tang;
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+pub(crate) mod lookup_d307_s285_295_tang;
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub(crate) mod lookup_d462_s225_235_tang;
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 pub(crate) mod lookup_d616_s300_315_tang;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub(crate) mod lookup_d616_s585_595_tang;
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub(crate) mod lookup_d924_s455_465_tang;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub(crate) mod lookup_d924_s895_905_tang;
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub(crate) mod lookup_d1232_s610_620_tang;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub(crate) mod lookup_d1232_s1195_1205_tang;
