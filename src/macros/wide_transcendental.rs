@@ -179,7 +179,7 @@ macro_rules! decl_wide_transcendental {
                 let ar = abs(r);
                 let comp = abs(d) - ar;
                 let cmp_r = ar.cmp(&comp);
-                let q_is_odd = (q % lit(2)) != lit(0);
+                let q_is_odd = q.bit(0);
                 let result_positive = (n < lit(0)) == (d < lit(0));
                 if $crate::support::rounding::should_bump(
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -300,7 +300,7 @@ macro_rules! decl_wide_transcendental {
                     let ar = abs(r);
                     let comp = divisor - ar;
                     let cmp_r = ar.cmp(&comp);
-                    let q_is_odd = (q % lit(2)) != lit(0);
+                    let q_is_odd = q.bit(0);
                     let result_positive = v >= lit(0);
                     if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                         if result_positive { q + lit(1) } else { q - lit(1) }
