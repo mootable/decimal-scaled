@@ -631,7 +631,7 @@ impl Fixed {
             };
         }
         let divisor = Fixed::pow10(shift);
-        let (q, r) = divmod_u256(self.mag, divisor);
+        let (q, r) = divmod_u256_by_pow10(self.mag, divisor, shift);
         let rounded = if is_zero_u256(r) {
             q
         } else {
@@ -667,7 +667,7 @@ impl Fixed {
     /// the result always fits.
     pub(crate) fn round_to_nearest_int(self, w: u32) -> i128 {
         let scale = Fixed::pow10(w);
-        let (q, r) = divmod_u256(self.mag, scale);
+        let (q, r) = divmod_u256_by_pow10(self.mag, scale, w);
         let int_mag = if ge_u256(r, halve_u256(scale)) {
             add_u256(q, [1, 0]).0
         } else {
@@ -743,6 +743,33 @@ fn shl_u256(n: U256, shift: u32) -> U256 {
     } else {
         [n[0] << shift, (n[1] << shift) | (n[0] >> (128 - shift))]
     }
+}
+
+/// `a / 10^w` and `a % 10^w` for a 256-bit dividend and a working scale
+/// `w in 1..=76`.
+///
+/// Uses the Möller-Granlund 2-by-1 magic kernel from
+/// [`crate::algos::mg_divide`] when `w <= 38` (the divisor fits a
+/// single u128 magic-table entry), collapsing the generic
+/// `divmod_u256` ~256-iteration shift / subtract bit loop into two
+/// MG calls. Falls back to the generic path for `w > 38` (divisor
+/// exceeds u128, outside the MG magic table).
+///
+/// The fast path matches the divisor `[divisor]` the caller passes
+/// in; `w` and `divisor` must agree (`divisor == Fixed::pow10(w)`).
+#[inline]
+fn divmod_u256_by_pow10(a: U256, divisor: U256, w: u32) -> (U256, U256) {
+    if w >= 1 && w <= 38 {
+        let exp = crate::algos::mg_divide::POW10_U128[w as usize];
+        // Walk dividend top-down (limb 1, then limb 0).
+        let (q_hi, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(0, a[1], exp, w as usize)
+            .expect("divmod_u256_by_pow10: invariant violated");
+        let (q_lo, r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(r1, a[0], exp, w as usize)
+            .expect("divmod_u256_by_pow10: invariant violated");
+        // The remainder is `r0` (< exp ≤ u128); the high remainder limb is 0.
+        return ([q_lo, q_hi], [r0, 0]);
+    }
+    divmod_u256(a, divisor)
 }
 
 /// `a / b` and `a % b` for 256-bit values.
