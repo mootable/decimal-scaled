@@ -941,3 +941,185 @@ fn d57_s20_cbrt_matches_d76_baseline() {
         );
     }
 }
+
+// ─── D307<140..=160>::{ln,exp,sin,cos,tan,atan,sinh,cosh,tanh}_strict ──
+//
+// For SCALE ∈ 140..=160 the D307 policy routes ln/exp/sin/cos/tan/atan/
+// sinh/cosh/tanh through the bespoke narrow-GUARD slots (Tang lookup
+// for ln/exp/hyper, narrowed `GUARD_NARROW` for sincos/atan) rather
+// than the generic `wide_kernel`. Cross-witness against the D462 wide
+// kernel (which is unaffected by these slots) at SCALE = 150 — the
+// midpoint of the bespoke range and the headline target.
+
+#[cfg(feature = "x-wide")]
+#[test]
+fn d307_s150_ln_matches_d462_baseline() {
+    use decimal_scaled::{D307, D462};
+
+    type D307_150 = D307<150>;
+    type D462_150 = D462<150>;
+
+    // ln(1.5) — exercises the non-trivial table-index branch (Tang's
+    // i = 64 for f_i = 1.5 at M = 128). ln(2) hits a short-circuit so
+    // is a weak stress.
+    let arg_307 = D307_150::from_int(3) / D307_150::from_int(2);
+    let arg_462: D462_150 = arg_307.into();
+
+    let r_307 = arg_307.ln_strict();
+    let r_462 = arg_462.ln_strict();
+    let r_462_as_307: D307_150 = r_462.try_into().expect("ln(1.5) fits D307<150>");
+    let diff = (r_307.to_bits() - r_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("ln diff fits i128")
+        .abs();
+    assert!(
+        diff <= 1,
+        "D307<150>::ln(1.5) Tang narrow-GUARD kernel deviates from D462<150> by {diff} LSB",
+    );
+}
+
+#[cfg(feature = "x-wide")]
+#[test]
+fn d307_s150_exp_matches_d462_baseline() {
+    use decimal_scaled::{D307, D462};
+
+    type D307_150 = D307<150>;
+    type D462_150 = D462<150>;
+
+    // exp(2) — well-conditioned and lands inside D307<150> storage.
+    let arg_307 = D307_150::from_int(2);
+    let arg_462: D462_150 = arg_307.into();
+
+    let r_307 = arg_307.exp_strict();
+    let r_462 = arg_462.exp_strict();
+    let r_462_as_307: D307_150 = r_462.try_into().expect("exp(2) fits D307<150>");
+    let diff = (r_307.to_bits() - r_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("exp diff fits i128")
+        .abs();
+    assert!(
+        diff <= 1,
+        "D307<150>::exp(2) Tang narrow-GUARD kernel deviates from D462<150> by {diff} LSB",
+    );
+}
+
+#[cfg(feature = "x-wide")]
+#[test]
+fn d307_s150_sin_cos_matches_d462_baseline() {
+    use decimal_scaled::{D307, D462};
+
+    type D307_150 = D307<150>;
+    type D462_150 = D462<150>;
+
+    // arg = 1 — small enough that k = 0 (canonical Taylor path).
+    let n_307 = D307_150::from_int(1);
+    let n_462: D462_150 = n_307.into();
+
+    let sin_307 = n_307.sin_strict();
+    let sin_462 = n_462.sin_strict();
+    let sin_462_as_307: D307_150 = sin_462.try_into().expect("sin(1) fits D307<150>");
+    let sin_diff = (sin_307.to_bits() - sin_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("sin diff fits i128")
+        .abs();
+    assert!(
+        sin_diff <= 1,
+        "D307<150>::sin(1) narrow-GUARD kernel deviates from D462<150> by {sin_diff} LSB",
+    );
+
+    let cos_307 = n_307.cos_strict();
+    let cos_462 = n_462.cos_strict();
+    let cos_462_as_307: D307_150 = cos_462.try_into().expect("cos(1) fits D307<150>");
+    let cos_diff = (cos_307.to_bits() - cos_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("cos diff fits i128")
+        .abs();
+    assert!(
+        cos_diff <= 1,
+        "D307<150>::cos(1) narrow-GUARD kernel deviates from D462<150> by {cos_diff} LSB",
+    );
+}
+
+#[cfg(feature = "x-wide")]
+#[test]
+fn d307_s150_tan_atan_matches_d462_baseline() {
+    use decimal_scaled::{D307, D462};
+
+    type D307_150 = D307<150>;
+    type D462_150 = D462<150>;
+
+    let n_307 = D307_150::from_int(1) / D307_150::from_int(3);
+    let n_462: D462_150 = n_307.into();
+
+    let tan_307 = n_307.tan_strict();
+    let tan_462 = n_462.tan_strict();
+    let tan_462_as_307: D307_150 = tan_462.try_into().expect("tan(1/3) fits D307<150>");
+    let tan_diff = (tan_307.to_bits() - tan_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("tan diff fits i128")
+        .abs();
+    assert!(
+        tan_diff <= 1,
+        "D307<150>::tan(1/3) narrow-GUARD kernel deviates from D462<150> by {tan_diff} LSB",
+    );
+
+    let atan_307 = n_307.atan_strict();
+    let atan_462 = n_462.atan_strict();
+    let atan_462_as_307: D307_150 = atan_462.try_into().expect("atan(1/3) fits D307<150>");
+    let atan_diff = (atan_307.to_bits() - atan_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("atan diff fits i128")
+        .abs();
+    assert!(
+        atan_diff <= 1,
+        "D307<150>::atan(1/3) narrow-GUARD kernel deviates from D462<150> by {atan_diff} LSB",
+    );
+}
+
+#[cfg(feature = "x-wide")]
+#[test]
+fn d307_s150_hyperbolics_match_d462_baseline() {
+    use decimal_scaled::{D307, D462};
+
+    type D307_150 = D307<150>;
+    type D462_150 = D462<150>;
+
+    let n_307 = D307_150::from_int(1);
+    let n_462: D462_150 = n_307.into();
+
+    let sinh_307 = n_307.sinh_strict();
+    let sinh_462 = n_462.sinh_strict();
+    let sinh_462_as_307: D307_150 = sinh_462.try_into().expect("sinh(1) fits D307<150>");
+    let sinh_diff = (sinh_307.to_bits() - sinh_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("sinh diff fits i128")
+        .abs();
+    assert!(
+        sinh_diff <= 1,
+        "D307<150>::sinh(1) hyper Tang kernel deviates from D462<150> by {sinh_diff} LSB",
+    );
+
+    let cosh_307 = n_307.cosh_strict();
+    let cosh_462 = n_462.cosh_strict();
+    let cosh_462_as_307: D307_150 = cosh_462.try_into().expect("cosh(1) fits D307<150>");
+    let cosh_diff = (cosh_307.to_bits() - cosh_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("cosh diff fits i128")
+        .abs();
+    assert!(
+        cosh_diff <= 1,
+        "D307<150>::cosh(1) hyper Tang kernel deviates from D462<150> by {cosh_diff} LSB",
+    );
+
+    let tanh_307 = n_307.tanh_strict();
+    let tanh_462 = n_462.tanh_strict();
+    let tanh_462_as_307: D307_150 = tanh_462.try_into().expect("tanh(1) fits D307<150>");
+    let tanh_diff = (tanh_307.to_bits() - tanh_462_as_307.to_bits())
+        .to_i128_checked()
+        .expect("tanh diff fits i128")
+        .abs();
+    assert!(
+        tanh_diff <= 1,
+        "D307<150>::tanh(1) hyper Tang kernel deviates from D462<150> by {tanh_diff} LSB",
+    );
+}

@@ -222,6 +222,16 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D153<SCALE> {
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl_wide_exp!(D230, exp::wide_kernel::exp_strict_d230);
 
+// D307 — Tang exp surface dispatch was bench-trialed at SCALE 150 and
+// showed a ~5% regression on `exp(2)` against the canonical
+// `wide_kernel::exp_strict_d307`. D307's Int1024 working integer is
+// approaching the Tang-exp crossover identified at D462/D616
+// (Int3072+ where adaptive Smith r/2^n in `exp_fixed` matches the
+// Tang table-multiply cost). Surface `exp_impl` therefore keeps the
+// generic `wide_kernel`. The `tang_exp_fixed` machinery is still
+// retained for the hyperbolic kernels at SCALE 140..=160, where the
+// shared lift + narrow-GUARD pattern wins despite the wash on exp
+// itself.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 impl_wide_exp!(D307, exp::wide_kernel::exp_strict_d307);
 
