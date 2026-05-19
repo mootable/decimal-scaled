@@ -35,15 +35,16 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > sometimes shortens via Cody-Waite range reduction, so neither is
 > a fair comparator). The bold mark goes on the row winner.**
 
-> **0.4.0 note on SCALE labels.** The raw-data dumps and `s = max`
-> columns below were recorded under 0.3.x, where `MAX_SCALE == name`
-> (e.g. `D38<38>`, `D76<76>`). 0.4.0 caps `MAX_SCALE` at `name − 1`,
-> so cells labelled `s = 38` / `s = 76` / `s = 153` / `s = 307` /
-> `s = 1231` etc. are no longer legal — re-read them as
-> `s = MAX_SCALE` measurements at the old cap. The arithmetic
-> shapes don't change with the rename (only the highest SCALE drops
-> by one), so these numbers remain a useful pre-0.4.0 baseline. The
-> next sweep will be relabelled to the new cap.
+> **Bench machine.** All numbers in this doc are from the v0.4.0
+> full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
+> runners (2 vCPU shared, 7 GiB RAM, no core pinning). Per the
+> Criterion author's standing caveat, shared CI runners carry
+> 20–50 % wall-clock variance per cell. Cells are valid relative
+> to each other within this run (matched compiler, matched
+> features, one runner per width shard) but multi-hour sweep
+> cells run roughly 1.5–2× slower than a cold-machine
+> micro-bench of the same code; reach for a focused
+> `lib_cmp_d{N}` bench when a single cell's magnitude matters.
 
 ## Time units
 
@@ -137,167 +138,157 @@ Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
 at every public type×scale combo. Six ops: add / sub / mul / div
 / rem / neg.
 
-> **0.3.3 sweep refresh.** Tables below were regenerated from
-> the 2026-05-18 2-lane bench sweep
-> (`target/bench-logs/sweep-20260518-035712/`). Narrow-tier
-> picosecond-scale cells (D9 / D18 / D38 arith) sit near the
-> bench machine's resolution floor and carry pipeline / branch-
-> predictor / interrupt jitter; cross-version comparisons there
-> should be taken with a grain of salt. Wide-tier values in the
-> ns+ range are reliable.
+> **v0.4.0 sweep refresh.** Tables below come from the v0.4.0
+> full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
+> runners (GHA run [`26069911678`](https://github.com/mootable/decimal-scaled/actions/runs/26069911678)).
+> Narrow-tier ps-scale cells (D9 / D18 / D38 add / sub / neg)
+> sit near the runner's resolution floor and carry ±20 %
+> pipeline / steal-budget jitter; wide-tier ns+ values are
+> reliable. See the [run-conditions preamble](#040-sweep--full-raw-data)
+> at the bottom of this page for the full caveat.
 
 ### D9 - 32 bits
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
-| add | 621.38 ps | 596.65 ps | 597.43 ps |
-| sub | 594.94 ps | 581.17 ps | 580.18 ps |
-| mul | 513.41 ps | 1.4751 ns | 1.4579 ns |
-| div | 1.7512 ns | 2.9736 ns | 3.9839 ns |
-| rem | 1.7562 ns | 1.7205 ns | 1.7360 ns |
-| neg | 441.02 ps | 434.28 ps | 444.83 ps |
+| add | 934.42 ps | 933.09 ps | 933.46 ps |
+| sub | 933.84 ps | 933.37 ps | 933.80 ps |
+| mul | 933.75 ps | 1.5556 ns | 1.5563 ns |
+| div | 1.8658 ns | 2.1845 ns | 2.1782 ns |
+| rem | 1.8655 ns | 1.8662 ns | 1.8657 ns |
+| neg | 622.20 ps | 622.49 ps | 621.99 ps |
 
 ### D18 - 64 bits
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
-| add | 574.36 ps | 575.77 ps | 583.76 ps |
-| sub | 591.39 ps | 577.89 ps | 586.78 ps |
-| mul | 575.47 ps | 14.866 ns | 14.945 ns |
-| div | 15.172 ns | 15.578 ns | 15.585 ns |
-| rem | 1.7273 ns | 1.7302 ns | 1.7890 ns |
-| neg | 434.12 ps | 437.38 ps | 439.62 ps |
+| add | 935.49 ps | 933.97 ps | 936.63 ps |
+| sub | 934.42 ps | 934.31 ps | 937.32 ps |
+| mul | 936.63 ps | 5.6151 ns | 6.0023 ns |
+| div | 5.9201 ns | 6.2239 ns | 6.2545 ns |
+| rem | 1.8669 ns | 1.8667 ns | 2.1813 ns |
+| neg | 622.51 ps | 622.35 ps | 624.40 ps |
 
 ### D38 - 128 bits
 
 | op | s = 0 | s = 19 | s = 38 |
 |---|---|---|---|
-| add | 987.90 ps | 980.05 ps | 953.57 ps |
-| sub | 970.88 ps | 981.90 ps | 978.92 ps |
-| mul | 4.2143 ns | 28.160 ns | 29.146 ns |
-| div | 16.117 ns | 17.299 ns | 5.6551 µs |
-| rem | 13.031 ns | 12.776 ns | 19.065 ns |
-| neg | 740.35 ps | 720.92 ps | 732.29 ps |
+| add | 1.1859 ns | 1.1841 ns | 1.1842 ns |
+| sub | 1.1973 ns | 1.1827 ns | 1.1808 ns |
+| mul | 3.4690 ns | 20.922 ns | 21.163 ns |
+| div | 6.7787 ns | 9.2041 ns | 654.60 ns |
+| rem | 5.8664 ns | 5.8757 ns | 9.9953 ns |
+| neg | 867.78 ps | 867.88 ps | 867.73 ps |
 
 ### D57 - 192 bits
 
 | op | s = 0 | s = 28 | s = 56 |
 |---|---|---|---|
-| add | 2.0318 ns | 2.0048 ns | 2.0210 ns |
-| sub | 2.6117 ns | 2.6179 ns | 2.6133 ns |
-| mul | 63.833 ns | 222.97 ns | 313.87 ns |
-| div | 199.35 ns | 416.42 ns | 447.76 ns |
-| rem | 37.813 ns | 134.93 ns | 141.74 ns |
-| neg | 2.2552 ns | 2.2434 ns | 2.2562 ns |
-
-(Note: the s=28 mul/div numbers come from the `lib_cmp_d57`
-isolated bench rather than the full_matrix monolith. The monolith
-run showed inflated D57 mul/div (~187 ns / ~390 ns) due to
-cache-and-inlining contention with the other 30+ tier bench
-functions in the same binary — measured in isolation the numbers
-land back in the expected envelope. The 0.3.0 cycle's per-tier
-`lib_cmp_d{N}` bench split makes that cleaner-isolation
-measurement easy to repeat — see
-[`ROADMAP.md`](../ROADMAP.md) §Methodology.)
+| add | 2.6813 ns | 2.6801 ns | 2.6802 ns |
+| sub | 2.8485 ns | 2.8475 ns | 2.8478 ns |
+| mul | 80.446 ns | 290.95 ns | 318.52 ns |
+| div | 190.20 ns | 449.22 ns | 495.24 ns |
+| rem | 24.021 ns | 168.10 ns | 174.59 ns |
+| neg | 2.1822 ns | 2.1812 ns | 2.1817 ns |
 
 ### D76 - 256 bits
 
 | op | s = 0 | s = 35 | s = 76 |
 |---|---|---|---|
-| add | 2.3579 ns | 2.3611 ns | 2.3707 ns |
-| sub | 3.2922 ns | 3.3064 ns | 3.3202 ns |
-| mul | 64.901 ns | 229.04 ns | 351.59 ns |
-| div | 214.96 ns | 453.19 ns | 516.41 ns |
-| rem | 38.658 ns | 139.45 ns | 145.43 ns |
-| neg | 2.5907 ns | 2.5964 ns | 2.5663 ns |
+| add | 3.7185 ns | 3.7207 ns | 3.7177 ns |
+| sub | 3.7274 ns | 3.7283 ns | 3.7286 ns |
+| mul | 79.068 ns | 288.20 ns | 352.83 ns |
+| div | 176.64 ns | 464.47 ns | 564.51 ns |
+| rem | 25.622 ns | 170.89 ns | 179.56 ns |
+| neg | 2.5578 ns | 2.5567 ns | 2.5607 ns |
 
 ### D115 - 384 bits
 
 | op | s = 0 | s = 57 | s = 114 |
 |---|---|---|---|
-| add | 3.9050 ns | 3.9263 ns | 4.0655 ns |
-| sub | 5.2838 ns | 5.2969 ns | 5.2780 ns |
-| mul | 77.288 ns | 335.88 ns | 529.70 ns |
-| div | 247.30 ns | 555.53 ns | 672.39 ns |
-| rem | 59.596 ns | 166.97 ns | 176.07 ns |
-| neg | 3.6422 ns | 3.5728 ns | 3.5581 ns |
+| add | 4.8551 ns | 4.8561 ns | 4.8515 ns |
+| sub | 5.6624 ns | 5.6541 ns | 5.6554 ns |
+| mul | 55.254 ns | 229.39 ns | 324.85 ns |
+| div | 162.08 ns | 420.85 ns | 483.67 ns |
+| rem | 27.116 ns | 104.97 ns | 114.23 ns |
+| neg | 3.1529 ns | 3.1497 ns | 3.1523 ns |
 
 ### D153 - 512 bits
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
-| add | 5.4339 ns | 5.4557 ns | 5.9852 ns |
-| sub | 13.093 ns | 13.113 ns | 13.227 ns |
-| mul | 80.800 ns | 371.14 ns | 776.38 ns |
-| div | 272.49 ns | 850.39 ns | 1.0227 µs |
-| rem | 65.667 ns | 191.16 ns | 190.33 ns |
-| neg | 4.4793 ns | 4.5536 ns | 4.4366 ns |
+| add | 7.3587 ns | 7.3488 ns | 7.3480 ns |
+| sub | 13.865 ns | 13.864 ns | 13.864 ns |
+| mul | 98.866 ns | 382.80 ns | 642.64 ns |
+| div | 292.26 ns | 871.16 ns | 1.0327 µs |
+| rem | 39.690 ns | 190.44 ns | 204.99 ns |
+| neg | 5.0735 ns | 5.0724 ns | 5.0731 ns |
 
 ### D230 - 768 bits
 
 | op | s = 0 | s = 115 | s = 230 |
 |---|---|---|---|
-| add | 15.329 ns | 15.176 ns | 15.400 ns |
-| sub | 18.126 ns | 18.037 ns | 18.301 ns |
-| mul | 96.136 ns | 636.53 ns | 1.3751 µs |
-| div | 368.92 ns | 1.2000 µs | 1.5384 µs |
-| rem | 69.260 ns | 190.24 ns | 214.25 ns |
-| neg | 12.397 ns | 13.083 ns | 14.183 ns |
+| add | 16.739 ns | 16.736 ns | 16.744 ns |
+| sub | 19.019 ns | 19.016 ns | 19.014 ns |
+| mul | 65.709 ns | 431.16 ns | 944.22 ns |
+| div | 267.70 ns | 870.79 ns | 1.1877 µs |
+| rem | 52.693 ns | 138.62 ns | 153.42 ns |
+| neg | 10.280 ns | 10.362 ns | 10.651 ns |
 
 ### D307 - 1024 bits
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
-| add | 19.681 ns | 19.463 ns | 19.617 ns |
-| sub | 23.905 ns | 23.432 ns | 23.463 ns |
-| mul | 127.33 ns | 782.59 ns | 2.1567 µs |
-| div | 458.13 ns | 1.4986 µs | 2.6634 µs |
-| rem | 81.089 ns | 214.80 ns | 243.24 ns |
-| neg | 12.549 ns | 13.725 ns | 14.677 ns |
+| add | 23.037 ns | 22.928 ns | 22.918 ns |
+| sub | 26.622 ns | 26.608 ns | 26.621 ns |
+| mul | 92.466 ns | 568.68 ns | 1.5216 µs |
+| div | 375.04 ns | 1.3321 µs | 2.4394 µs |
+| rem | 66.987 ns | 229.35 ns | 257.63 ns |
+| neg | 13.953 ns | 14.377 ns | 14.772 ns |
 
 ### D462 - 1536 bits
 
 | op | s = 0 | s = 230 | s = 461 |
 |---|---|---|---|
-| add | 42.662 ns | 41.840 ns | 45.651 ns |
-| sub | 57.612 ns | 57.715 ns | 60.098 ns |
-| mul | 218.41 ns | 1.6512 µs | 4.5977 µs |
-| div | 725.49 ns | 2.8569 µs | 4.9446 µs |
-| rem | 166.05 ns | 322.43 ns | 358.87 ns |
-| neg | 47.081 ns | 53.045 ns | 54.417 ns |
+| add | 26.347 ns | 26.372 ns | 26.389 ns |
+| sub | 44.482 ns | 44.476 ns | 44.503 ns |
+| mul | 148.97 ns | 1.2045 µs | 3.1619 µs |
+| div | 529.19 ns | 2.2243 µs | 4.0998 µs |
+| rem | 99.969 ns | 281.44 ns | 320.65 ns |
+| neg | 35.756 ns | 36.281 ns | 38.117 ns |
 
 ### D616 - 2048 bits
 
 | op | s = 0 | s = 308 | s = 615 |
 |---|---|---|---|
-| add | 93.746 ns | 97.030 ns | 90.614 ns |
-| sub | 115.29 ns | 118.91 ns | 114.07 ns |
-| mul | 232.05 ns | 2.6811 µs | 7.8695 µs |
-| div | 813.79 ns | 4.6416 µs | 7.7299 µs |
-| rem | 198.95 ns | 347.50 ns | 434.30 ns |
-| neg | 64.759 ns | 64.964 ns | 67.913 ns |
+| add | 44.720 ns | 44.609 ns | 44.735 ns |
+| sub | 66.411 ns | 66.405 ns | 66.390 ns |
+| mul | 117.66 ns | 1.7899 µs | 5.2515 µs |
+| div | 465.22 ns | 2.5389 µs | 4.8258 µs |
+| rem | 101.62 ns | 185.84 ns | 280.11 ns |
+| neg | 38.610 ns | 39.818 ns | 41.372 ns |
 
 ### D924 - 3072 bits
 
 | op | s = 0 | s = 461 | s = 923 |
 |---|---|---|---|
-| add | 119.69 ns | 115.40 ns | 104.87 ns |
-| sub | 143.59 ns | 148.42 ns | 203.09 ns |
-| mul | 306.32 ns | 5.1900 µs | 16.312 µs |
-| div | 1.1615 µs | 8.2246 µs | 13.314 µs |
-| rem | 238.56 ns | 442.64 ns | 541.22 ns |
-| neg | 74.740 ns | 75.659 ns | 86.028 ns |
+| add | 94.060 ns | 94.035 ns | 94.078 ns |
+| sub | 120.69 ns | 120.64 ns | 120.60 ns |
+| mul | 205.57 ns | 3.6839 µs | 11.280 µs |
+| div | 895.13 ns | 6.1591 µs | 11.506 µs |
+| rem | 175.60 ns | 392.37 ns | 479.32 ns |
+| neg | 65.160 ns | 67.274 ns | 70.182 ns |
 
 ### D1232 - 4096 bits
 
 | op | s = 0 | s = 616 | s = 1231 |
 |---|---|---|---|
-| add | 143.34 ns | 130.52 ns | 129.54 ns |
-| sub | 196.50 ns | 186.22 ns | 185.57 ns |
-| mul | 362.90 ns | 9.0517 µs | 29.228 µs |
-| div | 1.4677 µs | 10.890 µs | 21.273 µs |
-| rem | 339.55 ns | 545.46 ns | 696.57 ns |
-| neg | 99.849 ns | 103.49 ns | 114.56 ns |
+| add | 120.02 ns | 119.90 ns | 119.95 ns |
+| sub | 188.44 ns | 188.67 ns | 188.50 ns |
+| mul | 259.39 ns | 6.2126 µs | 19.642 µs |
+| div | 1.0629 µs | 8.9470 µs | 18.140 µs |
+| rem | 217.59 ns | 475.36 ns | 593.95 ns |
+| neg | 92.268 ns | 93.567 ns | 96.780 ns |
 
 ## 2. Fast transcendentals (`f64`-bridge)
 
@@ -407,55 +398,55 @@ Functions: `ln_strict`, `exp_strict`, `sin_strict`,
 for ln / sin / sqrt, 0.5 for exp). Deterministic across
 platforms, `no_std`-compatible, 0.5 ULP at storage.
 
-> **0.3.3 sweep refresh — narrow-tier caveat.** The narrow-tier
-> (D9 / D18 / D38) values below were measured at the tail end of
-> a multi-hour sweep when the pinned cores had drifted from
-> their cold-machine baseline. A dedicated cold-machine micro-
-> bench (`benches/m2_ln_approx.rs`) on D38<19> ln_strict
-> measures **54.8 µs** vs the >800 µs value in the table — that
-> ~15× gap is contention drift, not real perf. Wide-tier numbers
-> are reliable.
+> **v0.4.0 sweep — narrow-tier caveat.** The narrow-tier
+> (D9 / D18 / D38) values below were recorded on shared GHA
+> standard runners over a multi-hour sweep window. Cold-machine
+> micro-benches of the same code typically measure several ×
+> faster; treat the absolute µs values here as an upper-bound
+> ceiling, not a steady-state cost. Wide-tier numbers carry the
+> same caveat at a smaller multiple (1.5–2×).
 
 ### D9 / D18 / D38 strict
 
 | fn | D9 (s=5) | D18 (s=9) | D38 (s=19) |
 |---|---|---|---|
-| ln | 476.61 µs | 601.39 µs | 851.47 µs |
-| exp | 432.92 µs | 525.56 µs | 712.99 µs |
-| sin | 465.16 µs | 493.77 µs | 640.85 µs |
-| sqrt | 61.462 ns | 110.28 ns | 137.60 ns |
+| ln | 86.619 µs | 104.72 µs | 19.605 µs |
+| exp | 80.799 µs | 95.852 µs | 16.333 µs |
+| sin | 74.438 µs | 84.749 µs | 11.678 µs |
+| sqrt | 20.697 ns | 20.297 ns | 34.859 ns |
 
 ### Wide-tier strict - D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 / D1232
 
 Cost grows with both the work integer's bit width and the
-guard-digit budget at each scale.
+guard-digit budget at each scale. The full v0.4.0 sweep now
+populates every cell.
 
 #### Wide (`wide` umbrella — D57 / D76 / D115 / D153 / D230 / D307)
 
 | fn | D57 (s=28) | D76 (s=35) | D115 (s=57) | D153 (s=75) | D230 (s=115) | D307 (s=150) |
 |---|---|---|---|---|---|---|
-| ln | 32.000 µs | 36.192 µs | 47.706 µs | 80.806 µs | — | — |
-| exp | 26.788 µs | 28.466 µs | — | — | — | — |
-| sin | 20.091 µs | 22.198 µs | — | — | — | — |
-| sqrt | — | — | — | — | — | — |
+| ln | 36.425 µs | 40.569 µs | 31.353 µs | 67.527 µs | 83.541 µs | 161.25 µs |
+| exp | 29.294 µs | 32.121 µs | 23.744 µs | 53.779 µs | 69.725 µs | 131.52 µs |
+| sin | 20.661 µs | 22.591 µs | 18.288 µs | 40.827 µs | 54.728 µs | 104.43 µs |
+| sqrt | 3.2400 µs | 3.5341 µs | 2.3271 µs | 4.9825 µs | 4.3601 µs | 7.8380 µs |
 
 #### Extra-wide (`x-wide` adds D462 / D616)
 
 | fn | D462 (s=230) | D616 (s=308) |
 |---|---|---|
-| ln | — | — |
-| exp | — | — |
-| sin | — | — |
-| sqrt | — | — |
+| ln | 229.97 µs | 368.73 µs |
+| exp | 174.68 µs | 300.48 µs |
+| sin | 159.36 µs | 252.42 µs |
+| sqrt | 12.295 µs | 15.212 µs |
 
 #### XX-wide (`xx-wide` adds D924 / D1232)
 
 | fn | D924 (s=461) | D1232 (s=616) |
 |---|---|---|
-| ln | — | — |
-| exp | — | — |
-| sin | — | — |
-| sqrt | — | — |
+| ln | 873.53 µs | 1.5721 ms |
+| exp | 715.05 µs | 1.2906 ms |
+| sin | 690.32 µs | 1.2871 ms |
+| sqrt | 34.839 µs | 53.822 µs |
 
 **Historical comparison — 0.2.5 baseline.** On the same hardware,
 0.2.5 measured D76<35> ln at 1.37 ms, D153<75> ln at 6.40 ms,
@@ -465,30 +456,34 @@ reduction, multi-level sqrt halving in ln, [0, π/4] sin range
 reduction, sin_cos / sinh_cosh joint kernels, thread-local pi /
 ln2 / ln10 cache, and pow10-cached mul/div per inner loop:
 
-| op | 0.2 | 0.3 | speedup |
+| op | 0.2 | 0.4 | speedup |
 |---|---|---|---|
-| D76<35>  ln   |  1.37 ms |  36.2 µs |  **38×** |
-| D76<35>  exp  |  1.27 ms |  28.5 µs |  **45×** |
-| D76<35>  sin  |  1.08 ms |  22.2 µs |  **49×** |
-| D76<35>  sqrt | 20.5 µs  |  2.85 µs |   **7×** |
-| D153<75> ln   |  6.40 ms |  80.8 µs |  **79×** |
-| D153<75> exp  |  5.87 ms |  63.0 µs |  **93×** |
-| D153<75> sin  |  4.82 ms |  52.2 µs |  **92×** |
-| D153<75> sqrt | 83.6 µs  |  4.34 µs |  **19×** |
-| D307<150> ln  | 34.1 ms  | 191.4 µs | **178×** |
-| D307<150> exp | 31.2 ms  | 147.5 µs | **212×** |
-| D307<150> sin | 25.5 ms  | 130.8 µs | **195×** |
-| D307<150> sqrt|  313 µs  |  8.31 µs |  **38×** |
+| D76<35>  ln   |  1.37 ms |  40.6 µs |  **34×** |
+| D76<35>  exp  |  1.27 ms |  32.1 µs |  **40×** |
+| D76<35>  sin  |  1.08 ms |  22.6 µs |  **48×** |
+| D76<35>  sqrt | 20.5 µs  |  3.53 µs |   **6×** |
+| D153<75> ln   |  6.40 ms |  67.5 µs |  **95×** |
+| D153<75> exp  |  5.87 ms |  53.8 µs | **109×** |
+| D153<75> sin  |  4.82 ms |  40.8 µs | **118×** |
+| D153<75> sqrt | 83.6 µs  |  4.98 µs |  **17×** |
+| D307<150> ln  | 34.1 ms  | 161.3 µs | **211×** |
+| D307<150> exp | 31.2 ms  | 131.5 µs | **237×** |
+| D307<150> sin | 25.5 ms  | 104.4 µs | **244×** |
+| D307<150> sqrt|  313 µs  |  7.84 µs |  **40×** |
 
 > The **0.2** column is the 0.2.5 baseline measured at the start of
-> the 0.2.x cycle; the **0.3** column is from the 0.3.3 (2026-05-18)
-> sweep. Speedups across the major-cycle gap are conservative —
-> the 0.3 numbers come from the same multi-hour 2-lane
-> `full_matrix` sweep that fills the per-tier strict tables above
-> and carry the same contention drift on wide-tier cells (cold-
-> machine micro-benches typically measure 30-50% faster). Repeat
-> on the focused `lib_cmp_d{N}` bench for any cell whose magnitude
-> matters to your decision.
+> the 0.2.x cycle on the original dev box; the **0.4** column is
+> from the v0.4.0 (GHA run [`26069911678`](https://github.com/mootable/decimal-scaled/actions/runs/26069911678))
+> full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
+> runners. The two halves of each speedup are measured on
+> **different machines** — the 0.2 column reflects cold-machine
+> dev-box runs while the 0.4 column reflects shared CI runners
+> that typically measure 1.5–2× slower per the run-conditions
+> preamble below. The ratios are therefore conservative: a like-
+> for-like cold-machine re-run of v0.4.0 would widen every
+> speedup. Use these numbers as a directional "the algorithm
+> family changed, here's the shape of the change" — not as a
+> drop-in benchmark you can re-run yourself.
 
 **Reading the strict tables.** Both tables sample at the
 midpoint scale because the storage extremes hit shortcut paths
