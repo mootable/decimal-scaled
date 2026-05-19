@@ -73,6 +73,7 @@ In-depth guides live under [`docs/`](docs/):
 - [Getting started](docs/getting-started.md) — constructing values, arithmetic, formatting, parsing.
 - [The width family](docs/widths.md) — `D9` through `D1232`, scale aliases, the `Decimal` trait, picking a tier.
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing, the float bridge.
+- [Cross-scale operations](docs/cross-scale.md) — `mul_of` / `add_of` / `cmp_of` / `clamp_of` / etc. on every width for mixed-width mixed-SCALE expressions, plus the nightly-gated `cross::mul(a, b)` auto-inferred form.
 - [Rounding](docs/rounding.md) — `RoundingMode`, the `_with` pairs, `rescale`, the compile-time `rounding-*` features.
 - [Strict mode](docs/strict-mode.md) — integer-only `*_strict` transcendentals, the ≤ 0.5 ULP guarantee.
 - [The `d*!` macros](docs/macros.md) — compile-time decimal literals, scale inference, scientific / radix notation.

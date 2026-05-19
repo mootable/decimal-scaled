@@ -147,6 +147,7 @@ To round to a *different* scale, use `rescale` - see the
 ## Next steps
 
 - [Conversions](conversions.md) — integers, floats, and cross-width.
+- [Cross-scale operations](cross-scale.md) — mixing widths and SCALEs in one expression via `mul_of` / `add_of` / `cmp_of` / `clamp_of` / etc., plus the nightly-gated `cross::mul(a, b)` auto-inferred form.
 - [The width family](widths.md) — choosing one of the thirteen widths from D9 to D1232.
 - [The `d38!` macro](macros.md) — ergonomic compile-time literals.
 - [Rounding modes](rounding.md) — switching from HalfToEven to Floor, Ceiling, Trunc, etc., per call or crate-wide.
