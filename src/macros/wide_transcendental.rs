@@ -205,9 +205,17 @@ macro_rules! decl_wide_transcendental {
             /// 380 000 + 190 000 random inputs.
             ///
             /// For `w == 0` the divisor is 1 so the result is `n`
-            /// unchanged. For `w > 38` we fall back to the generic
-            /// [`round_div`] path; the MG chain extension is not
-            /// yet bit-exact for that range.
+            /// unchanged. For `1 ≤ w ≤ 38` the single-chunk MG
+            /// kernel handles the divide in one pass; for `w > 38`
+            /// the chain-MG kernel breaks the divide into a sequence
+            /// of `÷ 10^38` stages plus a final `÷ 10^(w − 38·k)`,
+            /// each one a base-`2^128` MG long-divide, with
+            /// combined-remainder bookkeeping that yields bit-exact
+            /// half-to-even. The chain audit
+            /// (`round_div_chain_audit_*` in `algos::mg_divide::tests`)
+            /// confirms agreement with the schoolbook `div_rem`
+            /// reference on 380K + 190K random inputs across every
+            /// `RoundingMode` and `w ∈ 39..=100`.
             #[inline]
             fn round_div_pow10(n: W, w: u32) -> W {
                 if w == 0 {
@@ -220,7 +228,11 @@ macro_rules! decl_wide_transcendental {
                         $crate::support::rounding::RoundingMode::HalfToEven,
                     );
                 }
-                round_div(n, pow10_cached(w))
+                $crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(
+                    n,
+                    w,
+                    $crate::support::rounding::RoundingMode::HalfToEven,
+                )
             }
             /// `(a · b) / 10^w`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
@@ -362,11 +374,12 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware variant of [`round_to_storage`].
             ///
             /// When the narrowing distance `w - target` is in `1..=38`
-            /// the MG kernel `div_wide_pow10_with` serves every mode
-            /// directly (it accepts the same `RoundingMode` enum), so
-            /// the rounding decision happens inside the magic-multiply
-            /// long-divide instead of after a separate generic
-            /// `div_rem`. Above 38 we fall back to the generic path.
+            /// the single-chunk MG kernel `div_wide_pow10_with` serves
+            /// every mode directly. For `shift > 38` the chain-MG
+            /// kernel `div_wide_pow10_chain_with` does the same via
+            /// repeated `÷ 10^38` with combined-remainder bookkeeping
+            /// (bit-exact for every `RoundingMode`; see
+            /// `round_div_chain_audit_*` in `algos::mg_divide::tests`).
             pub(crate) fn round_to_storage_with(
                 v: W,
                 w: u32,
@@ -379,22 +392,7 @@ macro_rules! decl_wide_transcendental {
                 } else if shift <= 38 {
                     $crate::algos::mg_divide::div_wide_pow10_with::<W>(v, shift, mode)
                 } else {
-                    let divisor = pow10_cached(shift);
-                    let (q, r) = v.div_rem(divisor);
-                    if r == lit(0) {
-                        q
-                    } else {
-                        let ar = abs(r);
-                        let comp = divisor - ar;
-                        let cmp_r = ar.cmp(&comp);
-                        let q_is_odd = q.bit(0);
-                        let result_positive = v >= lit(0);
-                        if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                            if result_positive { q + lit(1) } else { q - lit(1) }
-                        } else {
-                            q
-                        }
-                    }
+                    $crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(v, shift, mode)
                 };
                 let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
                 let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);

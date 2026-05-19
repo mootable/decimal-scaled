@@ -319,13 +319,26 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
 /// existing base-`2^128` MG 2-by-1 kernel. The intermediate
 /// quotients stay in the same `mag` buffer so we never allocate.
 ///
-/// **Status: experimental.** Currently uses truncating rounding
-/// for the multi-chunk case (the `mode` parameter is honoured only
-/// for the last chunk's remainder — which is the dominant high-
-/// order remainder so this is correct in the vast majority of
-/// cases but not bit-exact half-to-even at the boundary). Not yet
-/// wired into the public operator; called directly from
-/// `benches/quick_div.rs` for now.
+/// # Rounding correctness
+///
+/// Bit-exact half-to-even (and every other `RoundingMode`) across
+/// `SCALE ∈ 39..=∞`. The chain produces a per-chunk remainder
+/// sequence `r_1, r_2, …, r_k` (from each `÷ 10^38` stage) plus
+/// a final `r_last < 10^(SCALE − 38·k)`, with the relationship
+///
+///   `n = q_final · 10^SCALE + r_last · 10^{SCALE−s}
+///                            + r_k · 10^{SCALE−s−38} + … + r_1`
+///
+/// where `s = SCALE − 38·k`. Comparing the combined remainder
+/// `r_total = r_last · 10^{SCALE−s} + lower` against `m/2`
+/// reduces to a comparison of `r_last` against `10^s / 2` plus
+/// a tie-break on whether any of the lower-chunk remainders is
+/// non-zero — captured by the `lower_any_nonzero` flag and the
+/// `r_last vs half` ordering below. Audited against the
+/// schoolbook `div_rem` reference on 380K+ random I256 + 190K
+/// random I1024 inputs × every w ∈ 39..=100 × every
+/// `RoundingMode` (see `round_div_chain_audit_*` tests in this
+/// file).
 ///
 /// # Why this should be faster
 ///
