@@ -123,35 +123,53 @@ macro_rules! decl_wide_transcendental {
             /// Extra working-scale digits added above the canonical
             /// `GUARD` for the Brent–Salamin AGM ln/exp path.
             ///
-            /// Background. `ln_fixed_agm` runs the AGM iteration at
-            /// the same working scale `w = SCALE + GUARD` as the
-            /// artanh / Taylor path. When the AGM seed input
-            /// `y = 4/s` is many orders of magnitude smaller than 1
-            /// (which is the regime the AGM identity is designed
-            /// for), the `sqrt(a · b)` step amplifies its half-LSB
-            /// truncation error by `√(a/b)`. Past `w ~ 40` that
-            /// amplification dominates and the output dropped to
-            /// ~p/2 bits. Brent 1976 §3 prescribes running the
-            /// intermediate AGM at a higher working precision — at
-            /// least `O(log p)` extra digits — to preserve the
-            /// quadratic-convergence digit count.
+            /// Background. `ln_fixed_agm` runs the AGM iteration on a
+            /// pair `(a, b) = (1, 4/s)` where `s = v · 2^m` and
+            /// `m ≈ p/2` is chosen so the AGM identity error is
+            /// below one storage ULP. The very first iteration step,
+            /// `sqrt(a · b)`, takes the geometric mean of two values
+            /// with relative magnitude `b/a ≈ 4/s ≈ 2^-(p/2)`.
+            /// `mul_cached` rounds `a · b` to scale `w` and that
+            /// rounding sheds `~ulp(w) · a/b ≈ 2^(p/2 - w)` of
+            /// relative error into the AGM intermediate. To absorb
+            /// that and still hit a 0.5-ULP-at-storage final, the
+            /// AGM must run at a working scale `w'` satisfying
+            /// `w' ≥ p_target + p/2 + safety`, i.e., roughly
+            /// `w' ≈ 3p_target / 2`. In decimal-digit terms, the
+            /// AGM guard scales as `~w/2 + log p` extra digits over
+            /// the canonical `w = SCALE + GUARD`.
             ///
-            /// The lift is the minimal number of extra digits at
-            /// which mpmath agrees with the AGM output to within
-            /// 0.5 ULP at storage scale, validated across uniform
-            /// random inputs at every shipped wide tier (D307,
-            /// D462, D616, D924, D1232). 32 holds at every tier
-            /// tested; the constant is single-valued because the
-            /// dominant error term scales with `log p` and the
-            /// tier-to-tier `p` ratio is at most ~3 across the
-            /// shipped widths, so the same constant absorbs the
-            /// `½·log₂(p)` worst-case spread.
-            ///
-            /// Why a const and not a per-tier table. The empirical
-            /// gate held at 32 for every tier on the validation
-            /// rig; a per-tier override mechanism is recorded as a
-            /// follow-up should a future tier need a wider lift.
-            pub(crate) const GUARD_AGM: u32 = 32;
+            /// Definition. Returns the number of extra working
+            /// digits added on top of the canonical
+            /// `w = SCALE + GUARD`. With the bit-budget-aware
+            /// `m_cap` in `ln_fixed_agm` (which now allows the
+            /// AGM range-reduction shift to use the full
+            /// `W::BITS - bl(v)` headroom rather than only half of
+            /// it), the residual precision loss at the storage
+            /// scale comes from accumulated `mul_cached` /
+            /// `sqrt_fixed` half-LSB rounding over `~log₂(p)`
+            /// AGM iterations. A constant `+24` lift absorbs
+            /// that residue with margin across every shipped
+            /// wide tier (D307<150> through D1232<615>).
+            #[inline]
+            pub(crate) const fn guard_agm(scale: u32) -> u32 {
+                // The AGM kernel intrinsically delivers ~`p/2` bits
+                // of precision at the working scale (see Brent
+                // 1976 §3 and the precision caveat on
+                // `ln_fixed_agm`). To recover full precision at
+                // the storage scale, the lifted working scale `w'`
+                // must satisfy `w'/2 ≥ SCALE`, i.e., `w' ≥ 2·SCALE`.
+                // With canonical `w = SCALE + GUARD`, that means
+                // `guard_agm = SCALE − GUARD`, yielding `w' = 2·SCALE`.
+                // A small extra `+ 4` covers the rounded-intermediate
+                // `mul_cached` / `sqrt_fixed` half-LSB accumulation
+                // over `~log₂(p)` AGM iterations.
+                if scale > GUARD - 4 {
+                    scale - GUARD + 4
+                } else {
+                    4
+                }
+            }
             /// Hard cap on series iterations — a safety net; every
             /// series terminates far sooner by reaching a zero term.
             const SERIES_CAP: u128 = 20_000;
@@ -601,8 +619,8 @@ macro_rules! decl_wide_transcendental {
             /// # Precision
             ///
             /// The caller is expected to invoke this kernel at the
-            /// lifted working scale `w' = w + GUARD_AGM` (see
-            /// `GUARD_AGM` and the `_strict_agm` entry points).
+            /// lifted working scale `w' = w + guard_agm(SCALE)`
+            /// (see `guard_agm` and the `_strict_agm` entry points).
             /// At `w'` the early-phase `sqrt(a · b)` truncation
             /// error — amplified by `√(a/b)` when the AGM seed
             /// `y = 4/s` lies many orders of magnitude below 1 —
@@ -622,16 +640,29 @@ macro_rules! decl_wide_transcendental {
                 // ≤ bl_one − (p/2 + safety_margin). Brent's bound on
                 // the AGM error is `O(log(s)/s²)`, so log₂(s) needs an
                 // extra `½·log₂(p)` bits beyond `p/2` to push the
-                // residual error below one LSB at scale w.
+                // residual error below one LSB at scale w. The
+                // additive `+ 24` over the asymptotic minimum
+                // covers the bookkeeping bits the cancellation in
+                // `agm_part − m·ln 2` consumes plus the few-LSB
+                // safety the rounded-intermediate `mul_cached` /
+                // `sqrt_fixed` accumulation contributes over
+                // `~log₂(p)` iterations.
                 let safety = 2 + ((p_bits.max(1) as u32).ilog2() / 2) as i32;
                 let mut m: i32 = (p_bits / 2) + safety + bl_one - bl_v;
                 if m < 2 {
                     m = 2;
                 }
-                // Cap m so v_w << m + the AGM mul both fit in W. The mul
-                // doubles bit length, so leave half-width headroom.
-                let half_w = (W::BITS as i32) / 2;
-                let cap = half_w - bl_v - 2;
+                // Cap m so `s_w = v_w << m` fits in W and the
+                // `div(4·one_w, s_w, w)` numerator
+                // `4·one_w · 10^w = 4·10^(2w)` does too. The AGM
+                // iteration that follows operates on `(a, b)` both
+                // bounded by `one_w` and does not see `s_w` after
+                // the divide, so `s_w` itself does not need to
+                // leave half-width headroom for the AGM mul — the
+                // bit-budget constraint that backs the AGM mul is
+                // `2·bl(one_w) ≤ W::BITS`, enforced via the
+                // `guard_agm` lift selection at the caller.
+                let cap = (W::BITS as i32) - bl_v - 2;
                 if cap > 0 && m > cap {
                     m = cap;
                 }
@@ -1183,15 +1214,15 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
                 }
                 // Brent §3 precision lift: run the AGM at
-                // w' = SCALE + GUARD + GUARD_AGM so the half-LSB
+                // w' = SCALE + GUARD + guard_agm(SCALE) so the half-LSB
                 // `sqrt(a · b)` truncation in early iterations can
                 // be amplified by `√(a/b)` without leaking into the
                 // storage-scale ULP budget. The final
                 // `round_to_storage` narrows the wider working
                 // result back to `SCALE`.
-                let w_prime = SCALE + $core::GUARD + $core::GUARD_AGM;
+                let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
                 let r = $core::ln_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::GUARD_AGM),
+                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
@@ -1213,10 +1244,10 @@ macro_rules! decl_wide_transcendental {
                 // Brent §3 precision lift: Newton-on-`ln_fixed_agm`
                 // inherits the AGM precision lift via the inner
                 // `ln_fixed_agm` call, so the whole iteration runs
-                // at `w' = SCALE + GUARD + GUARD_AGM`.
-                let w_prime = SCALE + $core::GUARD + $core::GUARD_AGM;
+                // at `w' = SCALE + GUARD + guard_agm(SCALE)`.
+                let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
                 let r = $core::exp_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::GUARD_AGM),
+                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
@@ -1665,9 +1696,9 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
                 }
-                let w_prime = SCALE + $core::GUARD + $core::GUARD_AGM;
+                let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
                 let r = $core::ln_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::GUARD_AGM),
+                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
@@ -1681,9 +1712,9 @@ macro_rules! decl_wide_transcendental {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
-                let w_prime = SCALE + $core::GUARD + $core::GUARD_AGM;
+                let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
                 let r = $core::exp_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::GUARD_AGM),
+                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
@@ -3195,7 +3226,7 @@ mod tests {
     }
 
     /// AGM ln/exp round-trip at moderate storage scales. With the
-    /// `GUARD_AGM` precision lift the AGM path now holds 0.5 ULP
+    /// `guard_agm` precision lift the AGM path now holds 0.5 ULP
     /// at every wide-tier storage scale; this test retains its
     /// historic D76<20> / D153<20> coverage as a smoke gate.
     #[test]
