@@ -68,6 +68,23 @@ fn is_zero_u256(a: U256) -> bool {
     a[0] == 0 && a[1] == 0
 }
 
+/// Full 256x128 -> 384 unsigned product, returned in U512 form
+/// (top limb is always 0).
+///
+/// Specialisation of [`mul_u256`] for the common case where one
+/// operand is a 128-bit constant — the four-sub-product schoolbook
+/// collapses to two because two of the partial products with the
+/// zero high limb are themselves zero.
+#[inline]
+fn mul_u256_by_u128(a: U256, b: u128) -> U512 {
+    let (p0_hi, p0_lo) = mul_128(a[0], b);
+    let (p1_hi, p1_lo) = mul_128(a[1], b);
+    let r0 = p0_lo;
+    let (r1, c1) = p0_hi.overflowing_add(p1_lo);
+    let r2 = p1_hi + u128::from(c1);
+    [r0, r1, r2, 0]
+}
+
 /// Full 256x256 -> 512 unsigned product.
 pub(crate) fn mul_u256(a: U256, b: U256) -> U512 {
     // a = a0 + a1·B, b = b0 + b1·B, B = 2^128.
@@ -161,6 +178,110 @@ fn div_u512_by_word(num: U512, d: u64) -> U512 {
         out[i] = u128::from(limbs[i << 1]) | (u128::from(limbs[(i << 1) | 1]) << 64);
     }
     out
+}
+
+/// Quotient `num / 10^w` for a 512-bit dividend, returned as a 256-bit
+/// value (the caller must ensure the true quotient fits — every site
+/// in this file does).
+///
+/// Reuses the Möller-Granlund magic constants and the 2-by-1 kernel
+/// from [`crate::algos::mg_divide`]: instead of the
+/// 256-shift-subtract bit loop the generic `div_u512_by_u256` falls
+/// back to once the divisor exceeds `u64::MAX`, we walk the dividend
+/// in u128 limbs and apply the MG kernel once per limb. For
+/// `w <= 38` this collapses a ~256-iteration bit loop into 4 MG
+/// 2-by-1 calls.
+///
+/// For `w > 38` the divisor itself exceeds a single u128 limb and
+/// the simple per-limb MG sweep no longer applies; we fall back to
+/// the generic `div_u512_by_u256` bit loop. The fast path covers
+/// the `D38<SCALE>` native `Fixed` working scales `SCALE + 30` for
+/// `SCALE in 0..=8` — exactly the scales not borrowed to D57. The
+/// embedded-constant rescales (`wide_pi`, `wide_ln2`, …) divide by
+/// `10^(75 - w)` which is also < 38 for any caller-relevant `w`.
+#[inline]
+fn div_u512_by_pow10(num: U512, w: u32) -> U256 {
+    if w == 0 {
+        return [num[0], num[1]];
+    }
+    if w <= 38 {
+        return div_u512_by_pow10_small(num, w as usize);
+    }
+    if w <= 76 {
+        // Chained truncating divide: floor(num / 10^w) ==
+        // floor(floor(num / 10^38) / 10^(w-38)) for integer w > 38.
+        // The first pass shrinks the dividend by ~126 bits, leaving
+        // at most ~386 bits — we keep the full 4 u128 limbs across
+        // the chain to be safe.
+        let pass1 = div_u512_by_pow10_small_full(num, 38);
+        return div_u512_by_pow10_small(pass1, (w - 38) as usize);
+    }
+    // Fallback for w > 76 — not used by any caller in this module.
+    let scale = Fixed::pow10(w);
+    let q = div_u512_by_u256(num, scale);
+    [q[0], q[1]]
+}
+
+/// Same as [`div_u512_by_pow10_small`] but returns all four u128
+/// quotient limbs (no narrowing to U256). Used as the first pass of
+/// the `w > 38` chain where the intermediate dividend may span more
+/// than 256 bits.
+#[inline]
+fn div_u512_by_pow10_small_full(num: U512, scale_idx: usize) -> U512 {
+    debug_assert!((1..=38).contains(&scale_idx));
+    let exp = crate::algos::mg_divide::POW10_U128[scale_idx];
+    let mut rem: u128 = 0;
+    let (q3, r3) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[3], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    rem = r3;
+    let (q2, r2) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[2], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    rem = r2;
+    let (q1, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[1], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    rem = r1;
+    let (q0, _r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[0], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    [q0, q1, q2, q3]
+}
+
+/// `num / 10^scale_idx` where `1 <= scale_idx <= 38`, returning the
+/// 256-bit quotient. The divisor fits a single u128 limb, so one MG
+/// 2-by-1 step per dividend u128 limb suffices.
+#[inline]
+fn div_u512_by_pow10_small(num: U512, scale_idx: usize) -> U256 {
+    debug_assert!((1..=38).contains(&scale_idx));
+    let exp = crate::algos::mg_divide::POW10_U128[scale_idx];
+    // Walk dividend top-down (most-significant limb first), tracking a
+    // running remainder. Quotient limbs go bottom-up; the high two
+    // quotient limbs are discarded (they're always 0 for the working-
+    // scale invariants in this module — the radicand fits 256 bits
+    // after the divide).
+    let mut rem: u128 = 0;
+    // limb 3 (highest)
+    let (q3, r3) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[3], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    debug_assert!(
+        q3 == 0,
+        "div_u512_by_pow10: quotient overflows 256 bits — caller invariant violated"
+    );
+    rem = r3;
+    // limb 2
+    let (q2, r2) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[2], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    debug_assert!(
+        q2 == 0,
+        "div_u512_by_pow10: quotient overflows 256 bits — caller invariant violated"
+    );
+    rem = r2;
+    // limb 1
+    let (out_hi, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[1], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    rem = r1;
+    // limb 0
+    let (out_lo, _r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[0], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    [out_lo, out_hi]
 }
 
 /// Quotient `num / d` where `num` is 512-bit and `d` is 256-bit.
@@ -298,7 +419,8 @@ impl Fixed {
         if from_w == to_w {
             return self;
         }
-        let (q, _r) = divmod_u256(self.mag, Fixed::pow10(from_w - to_w));
+        let shift = from_w - to_w;
+        let (q, _r) = divmod_u256_by_pow10(self.mag, Fixed::pow10(shift), shift);
         Fixed { negative: self.negative && !is_zero_u256(q), mag: q }
     }
 
@@ -409,11 +531,18 @@ impl Fixed {
     /// 2^128` so the 512-bit product divides back into 256 bits.
     pub(crate) fn mul(self, rhs: Fixed, w: u32) -> Fixed {
         let prod = mul_u256(self.mag, rhs.mag);
-        let scale = Fixed::pow10(w);
-        let q = div_u512_by_u256(prod, scale);
+        // Specialised `pow10(w)` divisor path. The general
+        // `div_u512_by_u256` falls back to a 256-iteration shift /
+        // subtract bit loop once the divisor exceeds `u64::MAX`
+        // (i.e. `w >= 20`); for power-of-10 divisors we have the
+        // Möller-Granlund magic table in `crate::algos::mg_divide`,
+        // which collapses one 2-limb step into a handful of u128
+        // multiplies. Chain it across the 512-bit dividend in u128
+        // limbs to avoid the bit loop entirely.
+        let q_mag = div_u512_by_pow10(prod, w);
         Fixed {
-            negative: (self.negative ^ rhs.negative) && !(q[0] == 0 && q[1] == 0),
-            mag: [q[0], q[1]],
+            negative: (self.negative ^ rhs.negative) && !(q_mag[0] == 0 && q_mag[1] == 0),
+            mag: q_mag,
         }
     }
 
@@ -421,7 +550,46 @@ impl Fixed {
     /// zero. `n` must be non-zero.
     pub(crate) fn div_small(self, n: u128) -> Fixed {
         debug_assert!(n != 0, "division by zero");
-        // 256-bit / 128-bit long division.
+        // Fast path: divisor fits a single u64 — schoolbook base-2^64
+        // long division costs four hardware u128/u64 divides (one per
+        // 64-bit limb) instead of the 256-iteration bit loop below.
+        // Every Taylor / artanh series in this crate calls
+        // `div_small(2*k+1)` or `div_small((2*k)*(2*k+1))` with
+        // k < 400, so the divisor is < ~1.3 million ≪ u64::MAX and
+        // this fast path always fires from those sites.
+        if n <= u64::MAX as u128 {
+            let d = n as u64;
+            let dd = n; // already u128, avoids reconvert in the loop
+            let limbs: [u64; 4] = [
+                self.mag[0] as u64,
+                (self.mag[0] >> 64) as u64,
+                self.mag[1] as u64,
+                (self.mag[1] >> 64) as u64,
+            ];
+            let mut out = [0u64; 4];
+            let mut rem: u128 = 0;
+            // Top-down schoolbook divide in base 2^64. Each step:
+            //   (rem << 64 | limb) / d  →  64-bit quotient + 64-bit rem
+            let cur3 = (rem << 64) | u128::from(limbs[3]);
+            out[3] = (cur3 / dd) as u64;
+            rem = cur3 - u128::from(out[3]) * dd;
+            let cur2 = (rem << 64) | u128::from(limbs[2]);
+            out[2] = (cur2 / dd) as u64;
+            rem = cur2 - u128::from(out[2]) * dd;
+            let cur1 = (rem << 64) | u128::from(limbs[1]);
+            out[1] = (cur1 / dd) as u64;
+            rem = cur1 - u128::from(out[1]) * dd;
+            let cur0 = (rem << 64) | u128::from(limbs[0]);
+            out[0] = (cur0 / dd) as u64;
+            let _ = d;
+            let q_lo = u128::from(out[0]) | (u128::from(out[1]) << 64);
+            let q_hi = u128::from(out[2]) | (u128::from(out[3]) << 64);
+            return Fixed {
+                negative: self.negative && !(q_lo == 0 && q_hi == 0),
+                mag: [q_lo, q_hi],
+            };
+        }
+        // Fallback: 256-bit / 128-bit long division for divisor > u64::MAX.
         let mut rem: u128 = 0;
         let mut hi = self.mag[1];
         let mut lo = self.mag[0];
@@ -455,7 +623,14 @@ impl Fixed {
     /// a 512-bit value and its integer square root taken exactly. The
     /// caller's working values keep `mag · 10^w < 2^512`.
     pub(crate) fn sqrt(self, w: u32) -> Fixed {
-        let radicand = mul_u256(self.mag, Fixed::pow10(w));
+        // For w <= 38 the multiplier fits a single u128; the
+        // collapsed 256x128 multiply skips the two zero sub-products
+        // of the general 256x256 schoolbook.
+        let radicand = if w <= 38 {
+            mul_u256_by_u128(self.mag, crate::algos::mg_divide::POW10_U128[w as usize])
+        } else {
+            mul_u256(self.mag, Fixed::pow10(w))
+        };
         Fixed { negative: false, mag: isqrt_u512(radicand) }
     }
 
@@ -463,8 +638,15 @@ impl Fixed {
     /// truncating toward zero. `rhs` must be non-zero. `self * 10^w`
     /// must fit 512 bits (it always does for the evaluators' inputs).
     pub(crate) fn div(self, rhs: Fixed, w: u32) -> Fixed {
-        let scale = Fixed::pow10(w);
-        let scaled = mul_u256(self.mag, scale);
+        // Build the numerator `self.mag * 10^w` as a 512-bit value.
+        // The single-u128-limb multiplier specialisation collapses
+        // half the sub-products when `w <= 38`; outside that band
+        // we go through the general 256x256 schoolbook.
+        let scaled = if w <= 38 {
+            mul_u256_by_u128(self.mag, crate::algos::mg_divide::POW10_U128[w as usize])
+        } else {
+            mul_u256(self.mag, Fixed::pow10(w))
+        };
         let q = div_u512_by_u256(scaled, rhs.mag);
         Fixed {
             negative: (self.negative ^ rhs.negative) && !(q[0] == 0 && q[1] == 0),
@@ -516,7 +698,7 @@ impl Fixed {
             };
         }
         let divisor = Fixed::pow10(shift);
-        let (q, r) = divmod_u256(self.mag, divisor);
+        let (q, r) = divmod_u256_by_pow10(self.mag, divisor, shift);
         let rounded = if is_zero_u256(r) {
             q
         } else {
@@ -552,7 +734,7 @@ impl Fixed {
     /// the result always fits.
     pub(crate) fn round_to_nearest_int(self, w: u32) -> i128 {
         let scale = Fixed::pow10(w);
-        let (q, r) = divmod_u256(self.mag, scale);
+        let (q, r) = divmod_u256_by_pow10(self.mag, scale, w);
         let int_mag = if ge_u256(r, halve_u256(scale)) {
             add_u256(q, [1, 0]).0
         } else {
@@ -628,6 +810,33 @@ fn shl_u256(n: U256, shift: u32) -> U256 {
     } else {
         [n[0] << shift, (n[1] << shift) | (n[0] >> (128 - shift))]
     }
+}
+
+/// `a / 10^w` and `a % 10^w` for a 256-bit dividend and a working scale
+/// `w in 1..=76`.
+///
+/// Uses the Möller-Granlund 2-by-1 magic kernel from
+/// [`crate::algos::mg_divide`] when `w <= 38` (the divisor fits a
+/// single u128 magic-table entry), collapsing the generic
+/// `divmod_u256` ~256-iteration shift / subtract bit loop into two
+/// MG calls. Falls back to the generic path for `w > 38` (divisor
+/// exceeds u128, outside the MG magic table).
+///
+/// The fast path matches the divisor `[divisor]` the caller passes
+/// in; `w` and `divisor` must agree (`divisor == Fixed::pow10(w)`).
+#[inline]
+fn divmod_u256_by_pow10(a: U256, divisor: U256, w: u32) -> (U256, U256) {
+    if w >= 1 && w <= 38 {
+        let exp = crate::algos::mg_divide::POW10_U128[w as usize];
+        // Walk dividend top-down (limb 1, then limb 0).
+        let (q_hi, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(0, a[1], exp, w as usize)
+            .expect("divmod_u256_by_pow10: invariant violated");
+        let (q_lo, r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(r1, a[0], exp, w as usize)
+            .expect("divmod_u256_by_pow10: invariant violated");
+        // The remainder is `r0` (< exp ≤ u128); the high remainder limb is 0.
+        return ([q_lo, q_hi], [r0, 0]);
+    }
+    divmod_u256(a, divisor)
 }
 
 /// `a / b` and `a % b` for 256-bit values.

@@ -129,7 +129,7 @@ pub(crate) fn atan2_kernel(
 }
 
 /// Taylor series for `sin` on a reduced non-negative argument
-/// `r ∈ [0, π/2]`, evaluated at working scale `w`.
+/// `r ∈ [0, π/4]`, evaluated at working scale `w`.
 fn sin_taylor(r: Fixed, w: u32) -> Fixed {
     let r2 = r.mul(r, w);
     let mut sum = r;
@@ -154,15 +154,54 @@ fn sin_taylor(r: Fixed, w: u32) -> Fixed {
     sum
 }
 
+/// Taylor series for `cos` on a reduced non-negative argument
+/// `r ∈ [0, π/4]`, evaluated at working scale `w`.
+///
+/// `cos(r) = 1 − r²/2! + r⁴/4! − r⁶/6! + …`
+///
+/// Mirrors the wide-tier `cos_taylor`: at the same `r` cos converges
+/// faster than sin because the leading `1` dominates the small
+/// even-power corrections. Used as the upper-half branch of
+/// `sin_fixed` and `sin_cos_fixed` when the reduced argument exceeds
+/// π/4 — splitting `[0, π/2]` at π/4 roughly halves the worst-case
+/// Taylor term count.
+fn cos_taylor(r: Fixed, w: u32) -> Fixed {
+    let r2 = r.mul(r, w);
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let mut sum = one_w;
+    let mut term = one_w;
+    let mut k: u128 = 1;
+    loop {
+        // term_k = term_{k-1} · r² / ((2k-1)(2k)); sign alternates.
+        term = term.mul(r2, w).div_small((2 * k - 1) * (2 * k));
+        if term.is_zero() {
+            break;
+        }
+        if k % 2 == 1 {
+            sum = sum.sub(term);
+        } else {
+            sum = sum.add(term);
+        }
+        k += 1;
+        if k > 200 {
+            break;
+        }
+    }
+    sum
+}
+
 /// Sine of a working-scale value `v_w`, at working scale `w`.
 ///
 /// Reduces `v` modulo τ via `q = round(v/τ)`, folds the remainder into
-/// `[0, π/2]` tracking sign and the `π − x` reflection, then evaluates
-/// the Taylor series.
+/// `[0, π/2]` tracking sign and the `π − x` reflection, then routes
+/// to `sin_taylor` for `r ≤ π/4` or `cos_taylor(π/2 − r)` for the
+/// upper half — the π/4 split roughly halves the Taylor term count
+/// versus a single `[0, π/2]` series.
 pub(crate) fn sin_fixed(v_w: Fixed, w: u32) -> Fixed {
     let tau = wide_tau(w);
     let pi = wide_pi(w);
     let half_pi = wide_half_pi(w);
+    let quarter_pi = half_pi.halve();
 
     // r = v - round(v/τ)·τ ∈ [-π, π].
     let q = v_w.div(tau, w).round_to_nearest_int(w);
@@ -181,12 +220,71 @@ pub(crate) fn sin_fixed(v_w: Fixed, w: u32) -> Fixed {
     } else {
         abs_r
     };
-    let s = sin_taylor(reduced, w);
+    // Pick the faster-converging branch at π/4.
+    let s = if reduced.ge_mag(quarter_pi) {
+        // sin(reduced) = cos(π/2 − reduced); the cos arg ∈ [0, π/4].
+        cos_taylor(half_pi.sub(reduced), w)
+    } else {
+        sin_taylor(reduced, w)
+    };
     if sign {
         s.neg()
     } else {
         s
     }
+}
+
+/// Joint sine + cosine of a working-scale value `v_w`, at working
+/// scale `w`.
+///
+/// Shares the mod-τ argument reduction between sin and cos — one
+/// reduction (1 wide divide + 1 round-to-int + 1 multiply-back +
+/// 1 sub), then two Taylor evaluations on the reduced argument.
+///
+/// The naive `sin_fixed(v) + sin_fixed(v + π/2)` pays the reduction
+/// twice. Recovering `cos` via the Pythagorean identity
+/// `|cos| = √(1 − sin²)` was tried — a 256-bit Fixed sqrt is far
+/// more expensive than a second Taylor at this width, so the joint
+/// kernel sticks with two Taylors after the shared reduction.
+pub(crate) fn sin_cos_fixed(v_w: Fixed, w: u32) -> (Fixed, Fixed) {
+    let tau = wide_tau(w);
+    let pi = wide_pi(w);
+    let half_pi = wide_half_pi(w);
+    let quarter_pi = half_pi.halve();
+
+    let q = v_w.div(tau, w).round_to_nearest_int(w);
+    let q_tau = if q >= 0 {
+        tau.mul_u128(q as u128)
+    } else {
+        tau.mul_u128((-q) as u128).neg()
+    };
+    let r = v_w.sub(q_tau);
+
+    // Sin: fold |r| ∈ [0, π] to [0, π/2] via sin(π − x) = sin(x);
+    // sign comes from the residue sign.
+    let sin_neg = r.negative;
+    let abs_r = Fixed { negative: false, mag: r.mag };
+    let cos_neg = abs_r.ge_mag(half_pi); // |r| > π/2 ⇒ cos negative.
+    let sin_reduced = if cos_neg { pi.sub(abs_r) } else { abs_r };
+    let s_abs = if sin_reduced.ge_mag(quarter_pi) {
+        cos_taylor(half_pi.sub(sin_reduced), w)
+    } else {
+        sin_taylor(sin_reduced, w)
+    };
+
+    // Cos: |cos(r)| = sin(π/2 − sin_reduced) — same π/4 split.
+    // sin_reduced is in [0, π/2], so π/2 − sin_reduced is also in
+    // [0, π/2] and the π/4 branch logic is just inverted.
+    let cos_reduced = half_pi.sub(sin_reduced);
+    let c_abs = if cos_reduced.ge_mag(quarter_pi) {
+        cos_taylor(half_pi.sub(cos_reduced), w)
+    } else {
+        sin_taylor(cos_reduced, w)
+    };
+
+    let sin_result = if sin_neg { s_abs.neg() } else { s_abs };
+    let cos_result = if cos_neg { c_abs.neg() } else { c_abs };
+    (sin_result, cos_result)
 }
 
 /// Taylor series for `atan` on a reduced non-negative argument
@@ -356,9 +454,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
         return raw;
     }
     let w = SCALE + STRICT_GUARD;
-    let v = to_fixed(raw);
-    let sin_w = sin_fixed(v, w);
-    let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
+    let (sin_w, cos_w) = sin_cos_fixed(to_fixed(raw), w);
     assert!(
         !cos_w.is_zero(),
         "tan: cosine is zero (argument is an odd multiple of pi/2)"
@@ -383,9 +479,7 @@ pub(crate) fn tan_with<const SCALE: u32>(
         return raw;
     }
     let w = SCALE + working_digits;
-    let v = to_fixed_w(raw, working_digits);
-    let sin_w = sin_fixed(v, w);
-    let cos_w = sin_fixed(v.add(wide_half_pi(w)), w);
+    let (sin_w, cos_w) = sin_cos_fixed(to_fixed_w(raw, working_digits), w);
     assert!(
         !cos_w.is_zero(),
         "tan: cosine is zero (argument is an odd multiple of pi/2)"
@@ -676,7 +770,12 @@ pub(crate) fn sinh_with(
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
     let ex = exp_fixed(v, w);
-    let enx = exp_fixed(v.neg(), w);
+    // exp(-v) = 1 / exp(v). One exp_fixed plus one wide divide
+    // replaces a second exp_fixed evaluation — the divide is an
+    // order of magnitude cheaper than another exp on a 256-bit
+    // Fixed at SCALE+GUARD.
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let enx = one_w.div(ex, w);
     ex.sub(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
@@ -703,7 +802,10 @@ pub(crate) fn cosh_with(
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
     let ex = exp_fixed(v, w);
-    let enx = exp_fixed(v.neg(), w);
+    // exp(-v) = 1 / exp(v) — one exp_fixed + wide divide vs two
+    // exp_fixed calls.
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let enx = one_w.div(ex, w);
     ex.add(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
@@ -733,7 +835,10 @@ pub(crate) fn tanh_with(
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
     let ex = exp_fixed(v, w);
-    let enx = exp_fixed(v.neg(), w);
+    // exp(-v) = 1 / exp(v) — one exp_fixed + wide divide vs two
+    // exp_fixed calls.
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let enx = one_w.div(ex, w);
     ex.sub(enx)
         .div(ex.add(enx), w)
         .round_to_i128_with(w, scale, mode)

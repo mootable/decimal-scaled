@@ -65,37 +65,13 @@ impl<const SCALE: u32> PowPolicy for D18<SCALE> {
 // The hand-tuned `fixed_d38` kernel is retained both as the
 // low-scale path AND as the D57-disabled fallback.
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> PowPolicy for D38<SCALE> {
-    #[inline]
-    fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
-        if SCALE >= 23 {
-            Self(pow::borrow_d57::powf_strict::<SCALE>(self.0, exp.0, mode))
-        } else {
-            Self(pow::fixed_d38::powf_strict::<SCALE>(self.0, exp.0, mode))
-        }
-    }
-    #[inline]
-    fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        if SCALE >= 23 {
-            Self(pow::borrow_d57::powf_with::<SCALE>(
-                self.0,
-                exp.0,
-                working_digits,
-                mode,
-            ))
-        } else {
-            Self(pow::fixed_d38::powf_with::<SCALE>(
-                self.0,
-                exp.0,
-                working_digits,
-                mode,
-            ))
-        }
-    }
-}
-
-#[cfg(not(any(feature = "d57", feature = "wide")))]
+// D38 — uniformly route through `fixed_d38::powf_*` after the 0.4.2
+// MG-routing of `Fixed::mul` / `div_small` / `divmod_u256_by_pow10` /
+// `rescale_down`. The previous SCALE-23 split favoured `borrow_d57`
+// at high scales because `Fixed::mul` was paying a 256-iteration bit
+// loop for the divide-by-pow10(w). With the chained MG kernel the
+// bespoke path now wins across the whole SCALE range; the empirical
+// crossover that motivated the split is no longer present.
 impl<const SCALE: u32> PowPolicy for D38<SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {

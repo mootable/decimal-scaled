@@ -257,14 +257,23 @@ macro_rules! d38_hyperbolic_and_angle {
     };
 }
 
+// D38 — route forward trig (sin / cos / tan) and the hyperbolic
+// family through `fixed_d38`; keep the inverse trig family
+// (atan / asin / acos / atan2) on the borrow_d57 path. With the
+// 0.4.2 MG-routed `Fixed` primitives the bespoke kernel wins ~2x
+// on sin / cos / tan, but the wide_kernel's atan algorithm is
+// qualitatively faster than fixed_d38's adaptive-halvings path
+// (bench-trial at SCALE 19: borrow_d57 atan ~28 µs, fixed_d38 atan
+// ~66 µs). asin / acos / atan2 compose `atan` internally, so they
+// inherit that gap.
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
-    #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::sin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::sin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::cos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::cos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::tan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::tan_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode)) }
+    #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cos_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cos_with::<SCALE>(self.0, wd, mode)) }
+    #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tan_strict::<SCALE>(self.0, mode)) }
+    #[inline] fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tan_with::<SCALE>(self.0, wd, mode)) }
     #[inline] fn atan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode)) }
     #[inline] fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode)) }
     #[inline] fn asin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode)) }

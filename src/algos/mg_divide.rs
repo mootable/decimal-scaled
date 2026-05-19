@@ -61,7 +61,7 @@ use crate::types::widths::D38;
 /// loop for the typical scale range) in hot paths like
 /// `div_wide_pow10_with`. Last entry `10^38` is the largest power of
 /// ten that fits in `u128`.
-const POW10_U128: [u128; 39] = {
+pub(crate) const POW10_U128: [u128; 39] = {
     let mut t = [1u128; 39];
     let mut i = 1;
     while i < 39 {
@@ -164,7 +164,7 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-fn div_exp_fast_2word_with_rem(
+pub(crate) fn div_exp_fast_2word_with_rem(
     n_high: u128,
     n_low: u128,
     exp: u128,
@@ -1076,13 +1076,69 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
         ));
     }
 
-    // Widening path: |a*b| > i128::MAX. Compute the unsigned 256-bit
-    // product, magic-divide by 10^SCALE, round per `mode`, restore sign.
+    // Widening path: |a*b| > i128::MAX. Compute the unsigned product;
+    // when it still fits a single u128 use a hardware u128 divide
+    // (one DIV instruction), only falling through to the full 256-bit
+    // magic-divide when the unsigned product overflows u128 too. The
+    // u128 fast path covers the operand band sqrt(i128::MAX) < |op| <
+    // sqrt(u128::MAX), i.e. ~1.3e19 < |op| < ~1.8e19 — the SCALE 19
+    // typical-input window that previously paid the full mul2 +
+    // div_exp_fast_2word machinery for no reason.
     let ua = a.unsigned_abs();
     let ub = b.unsigned_abs();
-    let (mhigh, mlow) = mul2(ua, ub);
-
     let exp = D38::<SCALE>::multiplier() as u128;
+
+    let (uprod, hi_overflow) = ua.overflowing_mul(ub);
+    if !hi_overflow {
+        // u128 product fits. For SCALE <= 19 the divisor `exp = 10^SCALE`
+        // also fits a single u64, in which case the LLVM `__udivti3`
+        // soft-call (u128/u128) can be replaced by a two-step schoolbook
+        // divide in base 2^64 — two hardware `divq` instructions on
+        // x86_64 instead of the soft routine. The branch is const-folded
+        // per-SCALE so the runtime cost is just the branch the compiler
+        // proves away.
+        let (q_floor, r) = if SCALE <= 19 {
+            let d = exp as u64;
+            let hi = (uprod >> 64) as u64;
+            let lo = uprod as u64;
+            if hi == 0 {
+                // Single-limb dividend: one hardware divide suffices.
+                let q = lo / d;
+                let r = lo % d;
+                (q as u128, r as u128)
+            } else {
+                // Two-limb schoolbook divide in base 2^64.
+                let q_hi = hi / d;
+                let r_hi = hi % d;
+                let cur = ((r_hi as u128) << 64) | (lo as u128);
+                let q_lo_u128 = cur / (d as u128);
+                let r = cur - q_lo_u128 * (d as u128);
+                let q = ((q_hi as u128) << 64) | (q_lo_u128 & u128::from(u64::MAX));
+                (q, r)
+            }
+        } else {
+            let q = uprod / exp;
+            (q, uprod - q * exp)
+        };
+        let neg = (a < 0) ^ (b < 0);
+        let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
+        return if neg {
+            if q <= i128::MAX as u128 {
+                Some(-(q as i128))
+            } else if q == (i128::MAX as u128) + 1 {
+                Some(i128::MIN)
+            } else {
+                None
+            }
+        } else if q <= i128::MAX as u128 {
+            Some(q as i128)
+        } else {
+            None
+        };
+    }
+
+    // Truly wide path: unsigned 256-bit product, magic-divide by 10^SCALE.
+    let (mhigh, mlow) = mul2(ua, ub);
     let (q_floor, r) = div_exp_fast_2word_with_rem(mhigh, mlow, exp, SCALE as usize)?;
     // Sign: result is negative iff exactly one operand is negative.
     let neg = (a < 0) ^ (b < 0);
