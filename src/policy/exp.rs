@@ -225,6 +225,15 @@ impl_wide_exp!(D230, exp::wide_kernel::exp_strict_d230);
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 impl_wide_exp!(D307, exp::wide_kernel::exp_strict_d307);
 
+// D462 — Tang exp probed at SCALE 225..=235 and LOST (~75% regression
+// against the canonical `wide_kernel::exp_strict_d462`). At Int3072
+// working width the Tang post-reduction Taylor needs ~95 wide mults
+// (one per term) vs. the canonical Smith r/2^n path's ~28 wide
+// squarings — the table-elimination of the `k·ln 2` reduction does
+// not pay for the longer Taylor at this depth. See
+// `src/algos/exp/lookup_d462_s225_235_tang.rs` for the kernel left in
+// place behind `cfg(test)` so the algorithm-lab probe can re-run.
+// Dispatch keeps the canonical macro emission via `impl_wide_exp!`.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl_wide_exp!(D462, exp::wide_kernel::exp_strict_d462);
 
