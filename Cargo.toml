@@ -307,6 +307,15 @@ name = "d57_s20"
 harness = false
 required-features = ["wide"]
 
+# Focused D76<6> per-op microbench — narrow-SCALE wide-tier cell
+# where the wide_transcendental working scale (w = 36) is inside
+# the MG (magic-multiply) base-2^128 long-divide kernel's
+# `1..=38` window. Used to probe MG-routing wins on hot loops.
+[[bench]]
+name = "d76_s6"
+harness = false
+required-features = ["wide"]
+
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
 name = "m2_mul_fixed"

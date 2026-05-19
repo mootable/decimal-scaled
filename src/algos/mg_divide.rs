@@ -1771,4 +1771,213 @@ mod tests {
         sweep!(33);
         sweep!(38);
     }
+
+    /// Reference half-to-even quotient via the generic `div_rem` path:
+    /// the same routine `round_div` uses in the wide_transcendental
+    /// macro. Comparing the MG-based `div_wide_pow10_with` against this
+    /// is the audit gate for routing `round_div` through the MG kernel
+    /// whenever the divisor is `10^w` with `w ≤ 38`.
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn round_div_reference_int256(n: crate::wide_int::I256, w: u32) -> crate::wide_int::I256 {
+        use crate::wide_int::I256;
+        let d_u128 = POW10_U128[w as usize];
+        let d: I256 = crate::wide_int::wide_cast(d_u128);
+        let zero: I256 = crate::wide_int::wide_cast(0u128);
+        let one: I256 = crate::wide_int::wide_cast(1u128);
+        let (q, r) = n.div_rem(d);
+        if r == zero {
+            return q;
+        }
+        let ar = if r < zero { -r } else { r };
+        let comp = d - ar;
+        let cmp_r = ar.cmp(&comp);
+        let q_is_odd = q.bit(0);
+        let result_positive = n >= zero;
+        let bump = crate::support::rounding::should_bump(
+            crate::support::rounding::RoundingMode::HalfToEven,
+            cmp_r,
+            q_is_odd,
+            result_positive,
+        );
+        if bump {
+            if result_positive { q + one } else { q - one }
+        } else {
+            q
+        }
+    }
+
+    /// Bit-exact audit: `div_wide_pow10_with(..HalfToEven)` must produce
+    /// the same quotient as the generic-`div_rem` half-to-even reference
+    /// for every divisor `10^w` with `1 ≤ w ≤ 38`, across random `I256`
+    /// numerators in both signs.
+    ///
+    /// If this passes the MG kernel is a drop-in replacement for the
+    /// existing `round_div(n, pow10_cached(w))` whenever the divisor is
+    /// a known power of ten with `w ≤ 38` — which is the entire `mul` /
+    /// `mul_cached` / `round_to_storage_with` call-set in the
+    /// wide_transcendental macro.
+    /// Mode-aware reference: same shape as `round_div_reference_int256`
+    /// but parameterised on a `RoundingMode`. Used by the full-mode
+    /// audit to confirm the MG kernel obeys every mode the production
+    /// path passes.
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    fn round_div_reference_int256_with(
+        n: crate::wide_int::I256,
+        w: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> crate::wide_int::I256 {
+        use crate::wide_int::I256;
+        let d_u128 = POW10_U128[w as usize];
+        let d: I256 = crate::wide_int::wide_cast(d_u128);
+        let zero: I256 = crate::wide_int::wide_cast(0u128);
+        let one: I256 = crate::wide_int::wide_cast(1u128);
+        let (q, r) = n.div_rem(d);
+        if r == zero {
+            return q;
+        }
+        let ar = if r < zero { -r } else { r };
+        let comp = d - ar;
+        let cmp_r = ar.cmp(&comp);
+        let q_is_odd = q.bit(0);
+        let result_positive = n >= zero;
+        let bump = crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive);
+        if bump {
+            if result_positive { q + one } else { q - one }
+        } else {
+            q
+        }
+    }
+
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[test]
+    fn round_div_audit_mg_matches_div_rem_int256() {
+        use crate::wide_int::I256;
+        const ITERS: usize = 10_000;
+        for w in 1u32..=38 {
+            let mut rng = SplitMix64(0xA17D17_u64.wrapping_add(w as u64));
+            for _ in 0..ITERS {
+                // Build a numerator drawn from a mix of regimes:
+                //   - small (fits one u128 limb)
+                //   - mid (two u128 limbs)
+                //   - sign-flipped versions of each
+                let regime = rng.next() % 4;
+                let mag_high = if regime >= 2 { rng.next_u128() & (i128::MAX as u128) } else { 0 };
+                let mag_low = rng.next_u128();
+                let pos: I256 = {
+                    let lo: I256 = crate::wide_int::wide_cast(mag_low);
+                    let hi: I256 = crate::wide_int::wide_cast(mag_high);
+                    (hi << 128_u32) + lo
+                };
+                let n: I256 = if regime % 2 == 1 { -pos } else { pos };
+
+                let got = crate::algos::mg_divide::div_wide_pow10_with::<I256>(
+                    n,
+                    w,
+                    crate::support::rounding::RoundingMode::HalfToEven,
+                );
+                let expected = round_div_reference_int256(n, w);
+                assert_eq!(
+                    got, expected,
+                    "round_div MG audit mismatch: w={w}, n={n:?}",
+                );
+            }
+        }
+    }
+
+    /// All-modes variant: MG kernel matches the reference under every
+    /// `RoundingMode` the production path can hand it. The
+    /// `round_to_storage_with` routing in `wide_transcendental.rs`
+    /// passes the caller's mode straight through, so HalfToEven alone
+    /// isn't sufficient evidence.
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[test]
+    fn round_div_audit_mg_all_modes_int256() {
+        use crate::wide_int::I256;
+        const ITERS: usize = 2_000;
+        let scales: &[u32] = &[1, 5, 10, 19, 28, 38];
+        for &w in scales {
+            for mode in all_modes() {
+                let mut rng = SplitMix64(0xCAFE_u64.wrapping_add(w as u64 ^ mode as u64));
+                for _ in 0..ITERS {
+                    let regime = rng.next() % 4;
+                    let mag_high = if regime >= 2 { rng.next_u128() & (i128::MAX as u128) } else { 0 };
+                    let mag_low = rng.next_u128();
+                    let pos: I256 = {
+                        let lo: I256 = crate::wide_int::wide_cast(mag_low);
+                        let hi: I256 = crate::wide_int::wide_cast(mag_high);
+                        (hi << 128_u32) + lo
+                    };
+                    let n: I256 = if regime % 2 == 1 { -pos } else { pos };
+                    let got = crate::algos::mg_divide::div_wide_pow10_with::<I256>(n, w, mode);
+                    let expected = round_div_reference_int256_with(n, w, mode);
+                    assert_eq!(
+                        got, expected,
+                        "round_div MG all-modes mismatch: w={w}, mode={mode:?}",
+                    );
+                }
+            }
+        }
+    }
+
+    /// Same audit as [`round_div_audit_mg_matches_div_rem_int256`] but
+    /// for the next wider tier's work integer. The MG kernel iterates
+    /// over magnitude limbs so we need to confirm it stays bit-exact
+    /// on the multi-limb pathway too.
+    #[cfg(any(feature = "d307", feature = "wide"))]
+    #[test]
+    fn round_div_audit_mg_matches_div_rem_int1024() {
+        use crate::wide_int::I1024;
+        let zero: I1024 = crate::wide_int::wide_cast(0u128);
+        let one: I1024 = crate::wide_int::wide_cast(1u128);
+        const ITERS: usize = 5_000;
+        for w in 1u32..=38 {
+            let mut rng = SplitMix64(0xB02ED2_u64.wrapping_add(w as u64));
+            let d: I1024 = crate::wide_int::wide_cast(POW10_U128[w as usize]);
+            for _ in 0..ITERS {
+                // Fill up to 6 u128 limbs (768 bits) of magnitude — well
+                // past one MG kernel pass.
+                let limbs = (rng.next() % 7) as usize;
+                let mut n: I1024 = zero;
+                for k in 0..limbs {
+                    let chunk: I1024 = crate::wide_int::wide_cast(rng.next_u128());
+                    n = n + (chunk << ((k * 128) as u32));
+                }
+                if rng.next() & 1 == 1 {
+                    n = -n;
+                }
+
+                let got = crate::algos::mg_divide::div_wide_pow10_with::<I1024>(
+                    n,
+                    w,
+                    crate::support::rounding::RoundingMode::HalfToEven,
+                );
+                // Reference half-to-even via div_rem.
+                let (q, r) = n.div_rem(d);
+                let expected = if r == zero {
+                    q
+                } else {
+                    let ar = if r < zero { -r } else { r };
+                    let comp = d - ar;
+                    let cmp_r = ar.cmp(&comp);
+                    let q_is_odd = q.bit(0);
+                    let result_positive = n >= zero;
+                    let bump = crate::support::rounding::should_bump(
+                        crate::support::rounding::RoundingMode::HalfToEven,
+                        cmp_r,
+                        q_is_odd,
+                        result_positive,
+                    );
+                    if bump {
+                        if result_positive { q + one } else { q - one }
+                    } else {
+                        q
+                    }
+                };
+                assert_eq!(
+                    got, expected,
+                    "round_div MG audit (I1024) mismatch: w={w}",
+                );
+            }
+        }
+    }
 }
