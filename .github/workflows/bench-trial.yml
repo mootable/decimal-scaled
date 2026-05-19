@@ -31,13 +31,29 @@ name: "\U0001FA91 bench-trial"
 
 on:
   workflow_dispatch:
+    inputs:
+      bench:
+        description: "Bench target (Cargo `--bench <name>`, e.g. quick_div, all_functions, mul_div_candidates)"
+        required: true
+        default: "quick_div"
+        type: string
+      filter:
+        description: "Optional Criterion filter (passed as the trailing argument; empty runs all groups in the bench)"
+        required: false
+        default: ""
+        type: string
+      features:
+        description: "Cargo feature set"
+        required: false
+        default: "wide,x-wide,xx-wide,macros"
+        type: string
 
 permissions:
   contents: read
 
 jobs:
   quick:
-    name: "\U0001FA91 quick_div bench (focused)"
+    name: "\U0001FA91 ${{ inputs.bench }}${{ inputs.filter && format(' [{0}]', inputs.filter) || '' }}"
     runs-on: ubuntu-latest
     timeout-minutes: 60
 
@@ -88,18 +104,17 @@ jobs:
           echo "--- memory ---"
           free -h
 
-      - name: Run quick_div bench
-        # `quick_div` is the focused mul/div microbench — ~30 s wall.
-        # `wide,x-wide,xx-wide` per its `required-features` declaration
-        # in Cargo.toml. `--no-fail-fast` keeps every cell's output in
-        # the artefact even if one comparison panics.
-        run: cargo bench --bench quick_div --features wide,x-wide,xx-wide
+      - name: Run ${{ inputs.bench }} bench
+        # Dispatched bench target. Features default to the full wide
+        # surface; filter is empty by default and passes through as
+        # Criterion's positional name-filter argument when supplied.
+        run: cargo bench --bench ${{ inputs.bench }} --features ${{ inputs.features }} -- ${{ inputs.filter }}
 
       - name: Upload Criterion results
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: criterion-quick_div
+          name: criterion-${{ inputs.bench }}-${{ github.run_id }}-${{ github.run_attempt }}
           path: target/criterion/
           if-no-files-found: warn
           retention-days: 7
