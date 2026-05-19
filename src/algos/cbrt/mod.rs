@@ -20,3 +20,6 @@
 pub(crate) mod generic_wide;
 pub(crate) mod mg_divide_d38;
 pub(crate) mod widen_to_d38;
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s20;

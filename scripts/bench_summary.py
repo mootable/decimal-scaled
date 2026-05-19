@@ -50,7 +50,7 @@ def main():
         if b is None or n is None:
             continue
         ratio = n / b if b else float("nan")
-        arrow = "  " if 0.95 <= ratio <= 1.05 else ("↓ " if ratio < 1.0 else "↑ ")
+        arrow = "  " if 0.95 <= ratio <= 1.05 else ("v " if ratio < 1.0 else "^ ")
         print(f"{k:40s}  {fmt(b)}  {fmt(n)}  {arrow}{ratio:5.2f}")
 
 
