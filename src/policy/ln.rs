@@ -277,14 +277,14 @@ impl<const SCALE: u32> LnPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(ln::lookup_d57_s18_22::ln_strict::<SCALE>(self.0, mode));
+            return Self(ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(self.0, mode));
         }
         Self(ln::wide_kernel::ln_strict_d57(self.0, mode, SCALE))
     }
     #[inline]
     fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(ln::lookup_d57_s18_22::ln_strict::<SCALE>(self.0, mode));
+            return Self(ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(self.0, mode));
         }
         Self(ln::wide_kernel::ln_strict_d57(self.0, mode, SCALE))
     }

@@ -30,7 +30,7 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22::ln_strict::<SCALE>(widened.0, mode)
+        super::lookup_d57_s18_22_tang::ln_strict::<SCALE>(widened.0, mode)
     } else {
         super::wide_kernel::ln_strict_d57(widened.0, mode, SCALE)
     };
