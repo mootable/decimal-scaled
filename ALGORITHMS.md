@@ -2,10 +2,10 @@
 
 Catalogue of the published algorithms the crate evaluates, with
 academic citations and the source files where each is implemented.
-This is engineering credit - it complements `LICENSE-THIRD-PARTY`
+This is engineering credit - it complements `LICENSES/THIRD-PARTY.md`
 (which covers verbatim/adapted code from upstream repositories) by
 giving the *idea* attributions. For the lines-of-code attributions
-see `LICENSE-THIRD-PARTY`.
+see `LICENSES/THIRD-PARTY.md`.
 
 ## Integer arithmetic
 
@@ -32,7 +32,7 @@ Implementation: `src/mg_divide.rs` (`mul2`, `div_exp_fast_2word`,
 `div_exp_fast_2word_with_rem`, `MG_EXP_MAGICS`). The algorithm shape
 was adapted from the
 [`primitive_fixed_point_decimal`](https://github.com/WuBingzheng/primitive_fixed_point_decimal)
-crate - see `LICENSE-THIRD-PARTY` for the verbatim attribution.
+crate - see `LICENSES/THIRD-PARTY.md` for the verbatim attribution.
 
 Further reading:
 

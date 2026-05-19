@@ -231,7 +231,7 @@ Two reasons this matters and they reinforce each other: a legal duty — copylef
 
 - Re-implementation from the mathematical description is still the preferred path. A fresh implementation gives the maintainers full latitude to refactor, restructure, and adapt the code as the algorithm library evolves — which is harder with code you've inherited under an upstream's coding style and naming.
 - If you do reuse code under a permissive licence, you must follow the attribution rules of that licence — and citation is *not* a substitute for compliance:
-    - MIT and BSD: preserve the upstream copyright notice and licence text in the source file or in `LICENSE-THIRD-PARTY`.
+    - MIT and BSD: preserve the upstream copyright notice and licence text in the source file or in `LICENSES/THIRD-PARTY.md`.
     - Apache-2.0: preserve copyright notices, the licence text, and any `NOTICE` file; mark modifications you have made.
 - Regardless of the licence, cite the source. The module docstring should name the paper or upstream and link to it, so reviewers can verify the kernel against its source.
 

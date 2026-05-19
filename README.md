@@ -91,8 +91,8 @@ API reference: <https://docs.rs/decimal-scaled/>.
 
 Licensed under either of:
 
-- MIT license ([LICENSE-MIT](LICENSE-MIT))
-- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE))
+- MIT license ([LICENSES/MIT.md](LICENSES/MIT.md))
+- Apache License, Version 2.0 ([LICENSES/Apache-2.0.md](LICENSES/Apache-2.0.md))
 
 at your option.
 

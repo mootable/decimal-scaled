@@ -26,7 +26,7 @@
 //!
 //! The 128x128->256 multiply ([`mul2`]) and the magic-number table
 //! ([`MG_EXP_MAGICS`]) are adapted from the `primitive_fixed_point_decimal`
-//! crate (MIT-licensed; see `LICENSE-THIRD-PARTY`).
+//! crate (MIT-licensed; see `LICENSES/THIRD-PARTY.md`).
 //!
 //! # `SCALE = 0` special case
 //!
