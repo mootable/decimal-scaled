@@ -1009,10 +1009,11 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     7  // D153 heavy / D307
                 };
+                let pow10_w = pow10_cached(w);
                 for _ in 0..halvings {
-                    let x2 = mul(x, x, w);
+                    let x2 = mul_cached(x, x, pow10_w);
                     let denom = one_w + sqrt_fixed(one_w + x2, w);
-                    x = div(x, denom, w);
+                    x = div_cached(x, denom, pow10_w);
                 }
                 let mut result = atan_taylor(x, w) << halvings;
                 if add_half_pi {
