@@ -661,16 +661,16 @@ transcendentals.
 
 | op       | decimal-scaled         | fastnum (D128)        | rust_decimal (s=19)    | fixed::I64F64 | bigdecimal (s=19) | dashu-float (p=19)  | decimal-rs (s=19)      | g_math Q64.64       |
 |----------|------------------------|-----------------------|------------------------|----------------|-------------------|---------------------|------------------------|---------------------|
-| add      | **842 ps**             | 8.33 ns               | 6.34 ns                | 868 ps         | 81.2 ns           | 67.6 ns             | 6.09 ns                | -                   |
-| sub      | **891 ps**             | 5.12 ns               | 6.35 ns                | 881 ps         | 298 ns            | 65.2 ns             | 6.06 ns                | -                   |
-| mul      | 12.3 ns                | 9.99 ns               | 27.6 ns                | **1.48 ns**    | 70.0 ns           | 56.6 ns             | 34.4 ns                | 232 ns              |
-| div      | 8.00 ns                | **5.17 ns**           | 8.54 ns                | 23.9 ns        | 67.2 ns           | 53.9 ns             | 79.0 ns                | -                   |
-| rem      | 7.74 ns                | 18.0 ns               | 11.9 ns                | 14.4 ns        | 116 ns            | 37.6 ns             | **3.36 ns**            | -                   |
-| neg      | **489 ps**             | 757 ps                | 4.31 ns                | 506 ps         | 41.3 ns           | 6.15 ns             | 4.59 ns                | -                   |
-| ln       | 1.47 µs (0 ULP)        | **16.1 ns (0 ULP)**   | 3.71 µs (0 ULP)        | -              | -                 | 67.9 µs (0 ULP)     | 2.66 µs (0 ULP)        | 543 ns (6 ULP)      |
-| exp      | 40.5 µs (0 ULP)        | 8.92 µs (0†)          | **170 ns (0†)**        | -              | -                 | 232 µs (4 ULP)      | **51.4 ns (0†)**       | 1.28 µs (46 ULP)    |
-| sin      | 39.2 µs (0 ULP)        | **6.58 µs (0†)**      | 2.46 µs (0†)           | -              | -                 | -                   | -                      | 11.9 µs (33 ULP)    |
-| sqrt     | 35.4 ns (0 ULP)        | **9.20 ns (0 ULP)**   | 555 ns (0 ULP)         | -              | 3.09 µs (0 ULP)   | -                   | 1.51 µs (0 ULP)        | 2.60 µs (12 ULP)    |
+| add      | **2.11 ns**            | 14.8 ns               | 12.0 ns                | 2.11 ns        | 56.0 ns           | 96.5 ns             | 12.0 ns                | -                   |
+| sub      | **2.11 ns**            | 10.3 ns               | 13.2 ns                | 2.11 ns        | 50.3 ns           | 100 ns              | 12.1 ns                | -                   |
+| mul      | 21.6 ns                | 10.6 ns               | 36.8 ns                | **2.46 ns**    | 52.1 ns           | 86.3 ns             | 61.4 ns                | 281 ns              |
+| div      | 8.13 ns                | **7.44 ns**           | 9.58 ns                | 29.6 ns        | 42.6 ns           | 94.6 ns             | 129 ns                 | -                   |
+| rem      | 7.03 ns                | 30.4 ns               | 21.1 ns                | 14.4 ns        | 73.2 ns           | 63.3 ns             | **5.13 ns**            | -                   |
+| neg      | **1.41 ns**            | 7.14 ns               | 2.79 ns                | 1.41 ns        | 16.9 ns           | 6.33 ns             | 3.07 ns                | -                   |
+| ln       | 10.5 µs (0 ULP)        | **65.3 ns (0 ULP)**   | 5.28 µs (0 ULP)        | -              | -                 | 79.5 µs (0 ULP)     | 3.89 µs (0 ULP)        | 1.11 µs (6 ULP)     |
+| exp      | 22.1 µs (0 ULP)        | 12.6 µs (0†)          | 266 ns (0†)            | -              | -                 | 258 µs (4 ULP)      | **71.9 ns (0†)**       | 2.85 µs (46 ULP)    |
+| sin      | 20.5 µs (0 ULP)        | **8.86 µs (0†)**      | 3.43 µs (0†)           | -              | -                 | -                   | -                      | 26.8 µs (33 ULP)    |
+| sqrt     | 30.8 ns (0 ULP)        | **20.0 ns (0 ULP)**   | 875 ns (0 ULP)         | -              | 3.22 µs (0 ULP)   | -                   | 2.12 µs (0 ULP)        | 6.10 µs (12 ULP)    |
 
 **† rendering-mode artifact, not a precision loss.** See the
 "Accuracy at 128-bit" section above for the full worked example;
@@ -699,8 +699,8 @@ means any benchmark that calls `fastnum::Decimal::atan(2)` or
 similar is timing a NaN early-return, not an `atan` computation.
 
 The per-tier sweep in `target/medians_per_tier.tsv` records
-`128bit_s19/fastnum/atan = 13 ns` vs
-`128bit_s19/decimal-scaled/atan = 68 µs`; the 5000× ratio is
+`128bit_s19/fastnum/atan = 23 ns` vs
+`128bit_s19/decimal-scaled/atan = 36 µs`; the ~1500× ratio is
 fastnum opting out of the computation rather than a faster
 algorithm. fastnum's actual atan for in-range `|x| ≤ 1` reduces
 `atan(x) = asin(x / sqrt(x² + 1))` then runs an asin half-angle
