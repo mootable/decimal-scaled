@@ -83,7 +83,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -93,7 +93,7 @@ jobs:
             cargo-${{ runner.os }}-
 
       - name: Cache cargo build outputs (per matrix cell)
-        uses: actions/cache@v4
+        uses: actions/cache@v5
         with:
           path: target
           # Cache key includes the width because each per-width bench
