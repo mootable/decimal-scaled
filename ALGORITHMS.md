@@ -204,6 +204,44 @@ Further reading:
 
 ## Transcendentals
 
+### Table-driven `ln` / `exp` / `sin_cos` / `atan` / hyperbolic (Tang) — narrow-GUARD bands
+
+For working-scale bands clustered around each tier's "design SCALE"
+(roughly half the storage's decimal capacity), the strict-mode wide
+kernels first consult a precomputed lookup at the working width and
+fall back to the artanh / Taylor path only on a table miss. The
+table shape follows P. T. P. Tang's table-driven decomposition: split
+the argument as `x = T_i + r` where `T_i` is drawn from a small
+(256- or 512-entry) lookup of decimal-aligned breakpoints, then
+evaluate the short residual series on `r`. Convergence on `r` is one
+or two pair-terms instead of the artanh / Taylor path's `~p / 2`, so
+end-to-end time at the narrow-GUARD bands drops by 3× to 34× over
+the canonical fallback (peak measured 33.8× at D1232<615>).
+
+Tables ship as plain `const` arrays sized for each tier's
+`(width, working-scale band)` pair —
+D57<18-22>, D115<57>, D153<70-82>, D307<140-160>, D462<225-235>,
+D616<300-315>, D924<455-465>, D1232<610-620> — and are bit-stable
+across builds.
+
+> Tang, P. T. P. (1989). **"Table-driven implementation of the
+> exponential function in IEEE floating-point arithmetic."**
+> *ACM Transactions on Mathematical Software* **15(2)**, 144–157.
+> DOI: [10.1145/63522.214389](https://doi.org/10.1145/63522.214389).
+
+> Tang, P. T. P. (1990). **"Table-driven implementation of the
+> logarithm function in IEEE floating-point arithmetic."**
+> *ACM Transactions on Mathematical Software* **16(4)**, 378–400.
+> DOI: [10.1145/98267.98294](https://doi.org/10.1145/98267.98294).
+
+Implementation: `src/algos/exp/lookup_d*_tang.rs`,
+`src/algos/ln/lookup_d*_tang.rs`,
+`src/algos/trig/lookup_d*_sincos*.rs`,
+`src/algos/trig/lookup_d*_hyper.rs`,
+`src/algos/trig/lookup_d*_atan.rs`. Dispatched per `(width, scale)`
+by each tier's `mod.rs`. Outside the listed bands the artanh /
+Taylor path below handles the call.
+
 ### `ln` via multi-level sqrt argument reduction + Mercator's artanh
 
 Range-reduce `x = 2^k · m` with `m ∈ [1, 2)`. Then apply `l` square
@@ -498,18 +536,25 @@ largest of the six). Sources:
 ## Cross-over algorithms
 
 - **Karatsuba multiplication.** Implemented in
-  `wide_int::limbs_mul_karatsuba` and dispatched to by
-  `wide_int::limbs_mul_fast` when both operands are equal-length and at
-  least `KARATSUBA_MIN = 16` limbs. Below that threshold, schoolbook
-  wins outright; at or above it, the recursive
-  `(a₁b₁, (a₁+a₀)(b₁+b₀) − a₁b₁ − a₀b₀, a₀b₀)` decomposition reduces
-  the asymptotic cost. In practice the threshold means storage tiers
-  through Int1024 (8 limbs) use schoolbook; the 2048-/4096-bit work
-  integers behind the wide-tier strict transcendentals (Int2048 = 16
-  limbs, Int4096 = 32 limbs) hit the Karatsuba path. (Karatsuba, A. and
-  Ofman, Yu. (1962). *Doklady Akad. Nauk SSSR* 145, 293–294.) Anatoly
-  Karatsuba (1937–2008) and Yuri Ofman are both deceased; see the
-  Wikipedia biography links below. Further reading:
+  `wide_int::limbs_mul_karatsuba_u64` and dispatched to by
+  `wide_int::limbs_mul_fast_u64` when both operands are equal-length
+  and at least `KARATSUBA_THRESHOLD_U64 = 256` u64 limbs. Every
+  shipped tier (widest work-int Int12288 = 192 u64 limbs, normal
+  arithmetic at ≤ 96 limbs) sits below the threshold, so the
+  canonical path is u64 schoolbook in practice. An M2 micro-bench
+  at L = 16 – 96 limbs measured schoolbook 1.07× – 1.92× *faster*
+  than Karatsuba everywhere: the LLVM-unrolled limb-by-limb
+  `u64 × u64 → u128` schoolbook keeps both multiplier ports saturated,
+  while the recursive `3·(n/2)² + add/sub` decomposition pays an
+  allocation (`Vec` scratch for `z0`, `z1`, `z2`, `sum_a`, `sum_b`)
+  per recursive call that swamps the asymptotic win at any length
+  this crate emits. The implementation and a property-test oracle
+  against schoolbook are retained for future use — SIMD widening,
+  extra-wide tiers past D1232, or a scratch-passing rewrite that
+  removes the heap allocations. (Karatsuba, A. and Ofman, Yu. (1962).
+  *Doklady Akad. Nauk SSSR* 145, 293–294.) Anatoly Karatsuba
+  (1937–2008) and Yuri Ofman are both deceased; see the Wikipedia
+  biography links below. Further reading:
   [Karatsuba algorithm](https://en.wikipedia.org/wiki/Karatsuba_algorithm),
   [Anatoly Karatsuba bio](https://en.wikipedia.org/wiki/Anatoly_Karatsuba),
   [Yuri Ofman bio](https://en.wikipedia.org/wiki/Yuri_Ofman),
@@ -562,11 +607,92 @@ largest of the six). Sources:
   [MathWorld - Long Division](https://mathworld.wolfram.com/LongDivision.html).
   The Burnikel–Ziegler tech report is the canonical algorithm
   reference: [MPI-I-98-1-022](https://pure.mpg.de/rest/items/item_1819444_4/component/file_2599480/content).
-- **CORDIC.** Common in hardware floating-point; not competitive
-  with Taylor + reduction in a software fixed-point context.
-  Further reading: [CORDIC](https://en.wikipedia.org/wiki/CORDIC)
-  (the rotation-mode and vectoring-mode iterations are the central
-  equations there), [MathWorld - CORDIC](https://mathworld.wolfram.com/CORDIC.html).
+## Evaluated and not used
+
+Algorithms whose implementation was researched, prototyped, or
+analytically vetted, and rejected for this crate's mix of fixed-point
+storage, medium working widths, and software-only target. Each entry
+records the reason so a future contributor does not relitigate the
+same trade-off.
+
+### Comba multiplication
+
+Single-pass accumulator-per-output-column schoolbook variant: each
+output limb collects its sub-products into a wide accumulator stream,
+folding the carry chain into the loop body instead of a separate
+sweep. Evaluated as a candidate replacement for the canonical
+limb-by-limb schoolbook inside `limbs_mul_u64`. **Not adopted:** at
+every length this crate emits (≤ 96 u64 limbs in the widest work
+integer) the LLVM-unrolled schoolbook already saturates both
+`mulhi` / `mullo` ports on Zen 4 / Golden Cove, so the Comba
+reordering wins nothing in steady-state. The crossover where
+Comba's column accumulator pays off lies past every shipped tier.
+
+> Comba, P. G. (1990). **"Exponentiation cryptosystems on the IBM PC."**
+> *IBM Systems Journal* **29(4)**, 526–538.
+> DOI: [10.1147/sj.294.0526](https://doi.org/10.1147/sj.294.0526).
+
+### Johansson denominator-collection for `atan`
+
+Fredrik Johansson's medium-precision elementary-function paper
+proposes collecting per-term denominators in the inverse-trig Taylor
+series so that the loop performs one deferred long-division instead
+of `O(p)` per-term divides. Evaluated as a candidate speed-up for
+`atan_fixed` at the wide tiers. **Not adopted:** the accumulated
+denominator product overflows a single wide-limb well before the
+Taylor loop terminates at this crate's widths, so the supposed single
+deferred divide degenerates back into per-term divides plus extra
+book-keeping. The crate's per-width argument-halving cascade ahead
+of the Taylor step is the larger lever and is already taken (see
+the `atan` Taylor section above).
+
+> Johansson, F. (2015). **"Efficient implementation of elementary
+> functions in the medium-precision range."** 22nd IEEE Symposium on
+> Computer Arithmetic (ARITH-22).
+
+Further reading: [arXiv:1410.7176](https://arxiv.org/abs/1410.7176)
+(preprint).
+
+### CORDIC
+
+Coordinate Rotation Digital Computer — bit-by-bit shift-add-rotation
+iteration popular in hardware floating-point. **Not adopted:** each
+iteration delivers ~one bit of accuracy, so the wide tiers
+(D1232<615> ≈ 2046 working bits) would need thousands of iterations
+versus the artanh / Taylor path's tens of pair-terms. CORDIC's
+hardware win comes from its shift-add primitives being one cycle
+each; in software the wide bit-shifts plus fixed-point sign-table
+lookups cost more per bit than a wide multiply delivers in tens of
+bits, so the asymptotic loss is decisive.
+
+Further reading:
+- Wikipedia — [CORDIC](https://en.wikipedia.org/wiki/CORDIC) (the
+  rotation-mode and vectoring-mode iterations).
+- Wolfram MathWorld —
+  [CORDIC](https://mathworld.wolfram.com/CORDIC.html).
+
+### Direct mpfr-style arbitrary-precision libmpfr port
+
+Considered as a "just wrap MPFR" alternative for the wide-tier
+transcendentals. **Not adopted:** MPFR is LGPL-licensed (with the
+GMP backend either LGPL or GPL depending on build), incompatible
+with this crate's MIT-OR-Apache-2.0 licence. The wide-tier kernels
+are therefore implemented from the original published papers (Brent,
+Tang, Möller-Granlund, Mercator) rather than transliterated from
+MPFR or any other viral-licensed reference implementation.
+
+### Newton–Raphson reciprocal divide for `÷ 10^SCALE`
+
+Considered as an alternative to the Möller-Granlund magic-multiplier
+at the wide tiers, where MG's setup (one hardware `u128 / u64` divide
+to compute the magic) is unavoidable per `(SCALE, width)` and a
+Newton iteration on `1/10^SCALE` could amortise it. **Not adopted:**
+MG's per-call cost is already a single 128-bit multiply plus a
+constant fix-up (no iteration), so the Newton path needs to break
+even against ~3 wide multiplies and ends up slower until storage
+width exceeds the largest current tier. The MG path also yields
+chain-MG (`limbs_divmod_dispatch_u64` plus `MG2by1U64`) which already
+covers the multi-limb divisor case at hardware speed.
 
 ## Related external crates (benchmark baselines only)
 
