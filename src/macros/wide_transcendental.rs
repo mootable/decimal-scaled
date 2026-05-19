@@ -179,7 +179,7 @@ macro_rules! decl_wide_transcendental {
                 let ar = abs(r);
                 let comp = abs(d) - ar;
                 let cmp_r = ar.cmp(&comp);
-                let q_is_odd = (q % lit(2)) != lit(0);
+                let q_is_odd = q.bit(0);
                 let result_positive = (n < lit(0)) == (d < lit(0));
                 if $crate::support::rounding::should_bump(
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -331,15 +331,14 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
                 let divisor = pow10_cached(w - target);
-                let q = v / divisor;
-                let r = v % divisor;
+                let (q, r) = v.div_rem(divisor);
                 let rounded = if r == lit(0) {
                     q
                 } else {
                     let ar = abs(r);
                     let comp = divisor - ar;
                     let cmp_r = ar.cmp(&comp);
-                    let q_is_odd = (q % lit(2)) != lit(0);
+                    let q_is_odd = q.bit(0);
                     let result_positive = v >= lit(0);
                     if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                         if result_positive { q + lit(1) } else { q - lit(1) }
@@ -362,9 +361,8 @@ macro_rules! decl_wide_transcendental {
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
                 let divisor = pow10_cached(w);
-                let q = v / divisor;
-                let r = v % divisor;
-                let half = divisor / lit(2);
+                let (q, r) = v.div_rem(divisor);
+                let half = divisor >> 1;
                 let qi = if abs(r) >= half {
                     if v < lit(0) { q - lit(1) } else { q + lit(1) }
                 } else {
@@ -559,7 +557,7 @@ macro_rules! decl_wide_transcendental {
                 let mut b = y_w;
                 let iter_cap = 80u32;
                 for _ in 0..iter_cap {
-                    let next_a = (a + b) / lit(2);
+                    let next_a = (a + b) >> 1;
                     let next_b = sqrt_fixed(mul(a, b, w), w);
                     let d = if next_a >= next_b { next_a - next_b } else { next_b - next_a };
                     a = next_a;
@@ -594,7 +592,7 @@ macro_rules! decl_wide_transcendental {
                 // Newton seed: low-order Taylor (1 + s + s²/2). Within
                 // ~10⁻² of truth for |s| ≤ ln(2)/2 ≈ 0.347.
                 let s2 = mul(s, s, w);
-                let mut x = one_w + s + s2 / lit(2);
+                let mut x = one_w + s + (s2 >> 1);
                 if x <= lit(0) {
                     x = one_w;
                 }
@@ -867,7 +865,7 @@ macro_rules! decl_wide_transcendental {
             const POW10_CACHE_GET: () = ();
             /// `π/2` at working scale `w`.
             pub(crate) fn half_pi(w: u32) -> W {
-                pi(w) / lit(2)
+                pi(w) >> 1
             }
 
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
@@ -943,8 +941,8 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn sin_fixed(v_w: W, w: u32) -> W {
                 let pi_w = pi(w);
                 let tau = pi_w + pi_w;
-                let hp = pi_w / lit(2);
-                let qp = hp / lit(2); // π/4
+                let hp = pi_w >> 1;
+                let qp = hp >> 1; // π/4
                 let q = round_to_nearest_int(div(v_w, tau, w), w);
                 let r = v_w - scale_by_k(tau, q);
                 let neg = r < zero();
@@ -981,8 +979,8 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
                 let pi_w = pi(w);
                 let tau = pi_w + pi_w;
-                let hp = pi_w / lit(2);
-                let qp = hp / lit(2);
+                let hp = pi_w >> 1;
+                let qp = hp >> 1;
                 let q = round_to_nearest_int(div(v_w, tau, w), w);
                 let r = v_w - scale_by_k(tau, q);
                 let sin_neg = r < zero();
