@@ -497,7 +497,46 @@ impl Fixed {
     /// zero. `n` must be non-zero.
     pub(crate) fn div_small(self, n: u128) -> Fixed {
         debug_assert!(n != 0, "division by zero");
-        // 256-bit / 128-bit long division.
+        // Fast path: divisor fits a single u64 — schoolbook base-2^64
+        // long division costs four hardware u128/u64 divides (one per
+        // 64-bit limb) instead of the 256-iteration bit loop below.
+        // Every Taylor / artanh series in this crate calls
+        // `div_small(2*k+1)` or `div_small((2*k)*(2*k+1))` with
+        // k < 400, so the divisor is < ~1.3 million ≪ u64::MAX and
+        // this fast path always fires from those sites.
+        if n <= u64::MAX as u128 {
+            let d = n as u64;
+            let dd = n; // already u128, avoids reconvert in the loop
+            let limbs: [u64; 4] = [
+                self.mag[0] as u64,
+                (self.mag[0] >> 64) as u64,
+                self.mag[1] as u64,
+                (self.mag[1] >> 64) as u64,
+            ];
+            let mut out = [0u64; 4];
+            let mut rem: u128 = 0;
+            // Top-down schoolbook divide in base 2^64. Each step:
+            //   (rem << 64 | limb) / d  →  64-bit quotient + 64-bit rem
+            let cur3 = (rem << 64) | u128::from(limbs[3]);
+            out[3] = (cur3 / dd) as u64;
+            rem = cur3 - u128::from(out[3]) * dd;
+            let cur2 = (rem << 64) | u128::from(limbs[2]);
+            out[2] = (cur2 / dd) as u64;
+            rem = cur2 - u128::from(out[2]) * dd;
+            let cur1 = (rem << 64) | u128::from(limbs[1]);
+            out[1] = (cur1 / dd) as u64;
+            rem = cur1 - u128::from(out[1]) * dd;
+            let cur0 = (rem << 64) | u128::from(limbs[0]);
+            out[0] = (cur0 / dd) as u64;
+            let _ = d;
+            let q_lo = u128::from(out[0]) | (u128::from(out[1]) << 64);
+            let q_hi = u128::from(out[2]) | (u128::from(out[3]) << 64);
+            return Fixed {
+                negative: self.negative && !(q_lo == 0 && q_hi == 0),
+                mag: [q_lo, q_hi],
+            };
+        }
+        // Fallback: 256-bit / 128-bit long division for divisor > u64::MAX.
         let mut rem: u128 = 0;
         let mut hi = self.mag[1];
         let mut lo = self.mag[0];
