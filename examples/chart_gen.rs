@@ -354,7 +354,7 @@ const HISTORY_VERSIONS: &[(&str, &str)] = &[
     ("v0.2.5", "v0.2.5"),
     ("v0.3.2", "v0.3.2"),
     ("v0.3.3", "v0.3.3"),
-    ("HEAD",   "v0.4.0"),
+    ("HEAD",   "v0.4.2"),
 ];
 
 const HISTORY_GROUPS: &[(&str, &str)] = &[

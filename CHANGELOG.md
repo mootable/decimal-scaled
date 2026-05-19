@@ -5,6 +5,100 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.2] — 2026-05-19
+
+A perf release. Every wide tier shipped a bespoke narrow-GUARD Tang
+lookup slot for `ln` at its popular mid-storage SCALE, plus shared
+kernel and infrastructure wins. Headline measured speedups at the
+Tang `ln` slot (relative to v0.4.0 at the same cell): D115<57>
+12.7×, D153<76> 19.4×, D307<150> 27×, D462<230> 27.6×, D616<308>
+26.1×, D924<461> 30.8×, D1232<616> 33.8×.
+
+### Added
+
+- **Tang `ln` narrow-GUARD lookup slots** at every wide tier:
+  D57<20>, D115<57>, D153<76>, D307<150>, D462<230>, D616<308>,
+  D924<460>, D1232<615>. Each is M=128 with GUARD_NARROW=8 (10
+  for atan/inverse). Cite Tang 1989 / 1990 (ACM TOMS 16(4)).
+- **Tang `exp` surface lookup** at D57<18..=22>, D115<57>, and
+  D153<70..=82>. At D307 and wider the surface-Tang `exp` loses
+  to the canonical adaptive Smith r/2^n `wide_kernel::exp_fixed`
+  (the Tang post-reduction Taylor needs more wide mults than the
+  Smith squaring tail at Int3072+); the Tang `exp` lookup
+  modules ship at D307 / D462 / D616 / D1232 but are not wired
+  in `policy::exp`. The `tang_exp_fixed` helper is consumed by
+  the hyperbolic kernels (sinh / cosh / tanh) at every tier
+  where the trig lookup exists, in combination with the
+  reciprocal-divide identity for an additional 1.2–1.31×.
+- **Narrow-GUARD trig family** (sin / cos / tan / atan / sinh /
+  cosh / tanh) per tier; 1.09–1.83× speedups.
+- **MG-chain bit-exact half-to-even for w > 38** in
+  `algos::mg_divide::div_wide_pow10_chain_with`; promoted to
+  production in `macros::wide_transcendental`
+  `round_to_storage_with`. Audited at 642K cross-witness inputs
+  across all 6 `RoundingMode`s. Cite Möller–Granlund 2011 IEEE TC
+  60(2).
+- **`limbs_mul_u64_into<L, LP1>` primitive** in `wide_int/mod.rs`
+  — Knuth Algorithm M specialised to n = 1. Wired into the
+  wide-tier `mul_u` choke-point.
+- **f64-bridge Newton seed** for `sqrt` + `cbrt` at the wide-tier
+  macro core. Cite Brent–Zimmermann 2010 §5.4.
+- **`benches/agm_vs_taylor_d{230,616,924,1232}.rs`** —
+  reproducible AGM-vs-artanh probe at deep SCALE.
+
+### Changed
+
+- **`exp(-v)` → `1/exp(v)` reciprocal-divide identity** in
+  sinh / cosh / tanh cuts the second `exp_fixed` call; ~2–2.4× at
+  wide tier, ~1.5× at D38.
+- **`Fixed::sqrt` Pythagorean joint `sin_cos` refactored to
+  shared-reduction-only** at D38 — `sqrt` at the 256-bit Fixed
+  costs more than a second Taylor at this width; reverted to
+  shared-reduction. (Distinct from the wide-tier `sqrt_fixed`
+  where the Pythagorean still pays.)
+- **`mul_u` central choke-point** routes through the new
+  `limbs_mul_u64_into` primitive when `n ≤ u64::MAX`; D76<35>
+  `ln` −11 % (the choke-point lives in `scale_by_k` which is
+  called multiple times per call).
+- **D18 (i64) `mul` / `div`** for SCALE ≥ 10 now uses a two-limb
+  base-2^64 schoolbook divide (Knuth Algorithm D) instead of the
+  `__divti3` soft-call; D18<18> mul −60 % (9.2 → 3.5 ns), div
+  −47 % (9.8 → 5.1 ns).
+
+### Fixed
+
+- Several `/ lit(2)` divisions in inverse-trig and hyperbolic
+  paths replaced with `>> 1`; `q % lit(2)` replaced with
+  `q.bit(0)`; `v / d + v % d` replaced with `v.div_rem(d)`.
+  ~30 sites across the wide-transcendental macro and the
+  policy / trig dispatch.
+
+### Performance — findings
+
+- **Tang `ln` ladder peaks at D1232<615>: 33.8× over v0.4.0** at
+  the slot's exact SCALE. The ladder is monotone in tier except
+  D924<461> where the larger table OOSes L2 on most x86 (still
+  30.8× over v0.4.0).
+- **Smith r/2^n joint sin/cos Taylor LOSES at narrow / medium
+  tier.** Three-way confirmed across D38, D57, D76. Only
+  theoretical wins start at D307+ (where the un-reduced Taylor
+  balloons to 50+ terms). We retain the adaptive in-kernel Smith
+  path in `exp_fixed`.
+- **Comba diagonal-layout schoolbook DIES at every n.** Production
+  row-major LLVM-unrolled `limbs_mul_u64_fixed` wins 14–92 % at
+  n = 2..16.
+- **Karatsuba / Toom–Cook crossovers don't fire** at any shipped
+  width per `ROADMAP.md` — schoolbook + LLVM unroll plus the
+  recursive split's heap allocs push the crossover past D1232.
+- **Brent's AGM `ln` crossover empirically located at D1232 SCALE
+  1000** — 3× past the textbook ~300-digit prediction. Our
+  chain-MG + narrow-GUARD artanh kernel is well-tuned enough to
+  delay the crossover. AGM not wired (precision lift required
+  first; reserved for 0.5 cycle). Cite Brent 1976 JACM 23(2),
+  Salamin 1976 Math Comp 30.
+- **D9 (i32) genuinely exhausted** — LLVM inlines Granlund–Möller
+  for `/ 10^9` already.
+
 ## [0.4.1] — 2026-05-19
 
 ### Removed
