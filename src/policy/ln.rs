@@ -290,14 +290,14 @@ impl_wide_ln!(D76, ln::wide_kernel::ln_strict_d76);
 impl<const SCALE: u32> LnPolicy for crate::types::widths::D115<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(ln::lookup_d115_s57_tang::ln_strict::<SCALE>(self.0, mode));
         }
         Self(ln::wide_kernel::ln_strict_d115(self.0, mode, SCALE))
     }
     #[inline]
     fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(ln::lookup_d115_s57_tang::ln_strict::<SCALE>(self.0, mode));
         }
         Self(ln::wide_kernel::ln_strict_d115(self.0, mode, SCALE))

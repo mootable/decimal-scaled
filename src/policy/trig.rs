@@ -666,42 +666,42 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(self.0, mode));
         }
         self.sinh_strict_with(mode)
     }
     #[inline]
     fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(self.0, mode));
         }
         self.sinh_strict_with(mode)
     }
     #[inline]
     fn cosh_impl(self, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(self.0, mode));
         }
         self.cosh_strict_with(mode)
     }
     #[inline]
     fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(self.0, mode));
         }
         self.cosh_strict_with(mode)
     }
     #[inline]
     fn tanh_impl(self, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(self.0, mode));
         }
         self.tanh_strict_with(mode)
     }
     #[inline]
     fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(self.0, mode));
         }
         self.tanh_strict_with(mode)

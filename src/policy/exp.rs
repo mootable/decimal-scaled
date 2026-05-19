@@ -168,14 +168,14 @@ impl_wide_exp!(D76, exp::wide_kernel::exp_strict_d76);
 impl<const SCALE: u32> ExpPolicy for crate::types::widths::D115<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(exp::lookup_d115_s57_tang::exp_strict::<SCALE>(self.0, mode));
         }
         Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
     }
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if SCALE == 57 {
+        if matches!(SCALE, 50..=60) {
             return Self(exp::lookup_d115_s57_tang::exp_strict::<SCALE>(self.0, mode));
         }
         Self(exp::wide_kernel::exp_strict_d115(self.0, mode, SCALE))
