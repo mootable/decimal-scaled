@@ -1076,13 +1076,42 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
         ));
     }
 
-    // Widening path: |a*b| > i128::MAX. Compute the unsigned 256-bit
-    // product, magic-divide by 10^SCALE, round per `mode`, restore sign.
+    // Widening path: |a*b| > i128::MAX. Compute the unsigned product;
+    // when it still fits a single u128 use a hardware u128 divide
+    // (one DIV instruction), only falling through to the full 256-bit
+    // magic-divide when the unsigned product overflows u128 too. The
+    // u128 fast path covers the operand band sqrt(i128::MAX) < |op| <
+    // sqrt(u128::MAX), i.e. ~1.3e19 < |op| < ~1.8e19 — the SCALE 19
+    // typical-input window that previously paid the full mul2 +
+    // div_exp_fast_2word machinery for no reason.
     let ua = a.unsigned_abs();
     let ub = b.unsigned_abs();
-    let (mhigh, mlow) = mul2(ua, ub);
-
     let exp = D38::<SCALE>::multiplier() as u128;
+
+    let (uprod, hi_overflow) = ua.overflowing_mul(ub);
+    if !hi_overflow {
+        // u128 product fits. One hardware divide replaces the magic.
+        let q_floor = uprod / exp;
+        let r = uprod - q_floor * exp;
+        let neg = (a < 0) ^ (b < 0);
+        let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
+        return if neg {
+            if q <= i128::MAX as u128 {
+                Some(-(q as i128))
+            } else if q == (i128::MAX as u128) + 1 {
+                Some(i128::MIN)
+            } else {
+                None
+            }
+        } else if q <= i128::MAX as u128 {
+            Some(q as i128)
+        } else {
+            None
+        };
+    }
+
+    // Truly wide path: unsigned 256-bit product, magic-divide by 10^SCALE.
+    let (mhigh, mlow) = mul2(ua, ub);
     let (q_floor, r) = div_exp_fast_2word_with_rem(mhigh, mlow, exp, SCALE as usize)?;
     // Sign: result is negative iff exactly one operand is negative.
     let neg = (a < 0) ^ (b < 0);
