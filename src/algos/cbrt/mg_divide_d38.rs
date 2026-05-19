@@ -8,7 +8,7 @@
 //! Sign handling lives here; the underlying mg_divide function takes
 //! an unsigned magnitude plus a sign flag.
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 
 /// D38 cube-root kernel. Sign of the input is preserved.
 #[inline]
@@ -18,7 +18,7 @@ pub(crate) fn cbrt(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
         return 0;
     }
     let negative = raw < 0;
-    let q = crate::mg_divide::cbrt_raw_with_signed(raw.unsigned_abs(), scale, negative, mode);
+    let q = crate::algos::mg_divide::cbrt_raw_with_signed(raw.unsigned_abs(), scale, negative, mode);
     let result = q as i128;
     if negative { -result } else { result }
 }

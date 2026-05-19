@@ -13,7 +13,7 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
 /// `D57<20>` square-root kernel. Pass-through to the generic wide

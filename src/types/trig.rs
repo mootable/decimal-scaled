@@ -39,7 +39,7 @@
 //! atanh / to_degrees / to_radians) live in
 //! [`crate::algos::trig::fixed_d38`]. This file is a typed-shell
 //! surface; there are zero `crate::algos::*` or
-//! `crate::d_w128_kernels::*` references in it.
+//! `crate::algos::fixed_d38::*` references in it.
 //!
 //! [`RoundingMode::HalfToEven`]: crate::RoundingMode::HalfToEven
 //!
@@ -49,8 +49,8 @@
 //! This module matches that signature exactly so generic numeric code
 //! calling `y.atan2(x)` works with `T = D38`.
 
-use crate::core_type::D38;
-use crate::log_exp_strict::STRICT_GUARD;
+use crate::types::widths::D38;
+use crate::types::log_exp::STRICT_GUARD;
 
 impl<const SCALE: u32> D38<SCALE> {
     // ── Plain dispatchers (strict-feature) ────────────────────────
@@ -166,24 +166,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sin_strict(self) -> Self {
-        self.sin_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.sin_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn sin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn sin_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::sin_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn sin_approx(self, working_digits: u32) -> Self {
-        self.sin_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.sin_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn sin_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn sin_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.sin_strict_with(mode);
         }
@@ -194,24 +194,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cos_strict(self) -> Self {
-        self.cos_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.cos_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn cos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn cos_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::cos_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn cos_approx(self, working_digits: u32) -> Self {
-        self.cos_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.cos_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn cos_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn cos_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.cos_strict_with(mode);
         }
@@ -222,24 +222,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tan_strict(self) -> Self {
-        self.tan_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.tan_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn tan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn tan_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::tan_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn tan_approx(self, working_digits: u32) -> Self {
-        self.tan_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.tan_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn tan_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn tan_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.tan_strict_with(mode);
         }
@@ -250,24 +250,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan_strict(self) -> Self {
-        self.atan_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.atan_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atan_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn atan_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::atan_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn atan_approx(self, working_digits: u32) -> Self {
-        self.atan_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.atan_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atan_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn atan_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.atan_strict_with(mode);
         }
@@ -278,24 +278,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asin_strict(self) -> Self {
-        self.asin_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.asin_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn asin_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn asin_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::asin_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn asin_approx(self, working_digits: u32) -> Self {
-        self.asin_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.asin_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn asin_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn asin_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.asin_strict_with(mode);
         }
@@ -306,24 +306,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict(self) -> Self {
-        self.acos_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.acos_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn acos_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn acos_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::acos_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn acos_approx(self, working_digits: u32) -> Self {
-        self.acos_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.acos_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn acos_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn acos_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.acos_strict_with(mode);
         }
@@ -334,24 +334,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atan2_strict(self, other: Self) -> Self {
-        self.atan2_strict_with(other, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.atan2_strict_with(other, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atan2_strict_with(self, other: Self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn atan2_strict_with(self, other: Self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::atan2_impl(self, other, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
-        self.atan2_approx_with(other, working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.atan2_approx_with(other, working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atan2_approx_with(self, other: Self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn atan2_approx_with(self, other: Self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.atan2_strict_with(other, mode);
         }
@@ -364,24 +364,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sinh_strict(self) -> Self {
-        self.sinh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.sinh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn sinh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn sinh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::sinh_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn sinh_approx(self, working_digits: u32) -> Self {
-        self.sinh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.sinh_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn sinh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn sinh_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.sinh_strict_with(mode);
         }
@@ -392,24 +392,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cosh_strict(self) -> Self {
-        self.cosh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.cosh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn cosh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn cosh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::cosh_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn cosh_approx(self, working_digits: u32) -> Self {
-        self.cosh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.cosh_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn cosh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn cosh_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.cosh_strict_with(mode);
         }
@@ -420,24 +420,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn tanh_strict(self) -> Self {
-        self.tanh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.tanh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn tanh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn tanh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::tanh_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn tanh_approx(self, working_digits: u32) -> Self {
-        self.tanh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.tanh_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn tanh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn tanh_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.tanh_strict_with(mode);
         }
@@ -448,24 +448,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn asinh_strict(self) -> Self {
-        self.asinh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.asinh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn asinh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn asinh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::asinh_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn asinh_approx(self, working_digits: u32) -> Self {
-        self.asinh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.asinh_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn asinh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn asinh_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.asinh_strict_with(mode);
         }
@@ -476,24 +476,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh_strict(self) -> Self {
-        self.acosh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.acosh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn acosh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn acosh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::acosh_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn acosh_approx(self, working_digits: u32) -> Self {
-        self.acosh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.acosh_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn acosh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn acosh_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.acosh_strict_with(mode);
         }
@@ -504,24 +504,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh_strict(self) -> Self {
-        self.atanh_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.atanh_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atanh_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn atanh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::atanh_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn atanh_approx(self, working_digits: u32) -> Self {
-        self.atanh_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.atanh_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn atanh_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn atanh_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.atanh_strict_with(mode);
         }
@@ -534,24 +534,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_degrees_strict(self) -> Self {
-        self.to_degrees_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.to_degrees_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn to_degrees_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn to_degrees_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::to_degrees_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn to_degrees_approx(self, working_digits: u32) -> Self {
-        self.to_degrees_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.to_degrees_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn to_degrees_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn to_degrees_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.to_degrees_strict_with(mode);
         }
@@ -562,24 +562,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn to_radians_strict(self) -> Self {
-        self.to_radians_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.to_radians_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn to_radians_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn to_radians_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::trig::TrigPolicy>::to_radians_impl(self, mode)
     }
 
     #[inline]
     #[must_use]
     pub fn to_radians_approx(self, working_digits: u32) -> Self {
-        self.to_radians_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.to_radians_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     #[inline]
     #[must_use]
-    pub fn to_radians_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn to_radians_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.to_radians_strict_with(mode);
         }
@@ -589,8 +589,8 @@ impl<const SCALE: u32> D38<SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use crate::consts::DecimalConstants;
-    use crate::core_type::D38s12;
+    use crate::types::consts::DecimalConstants;
+    use crate::types::widths::D38s12;
 
     // Tolerance for single-operation results. The f64-bridge build is
     // one f64 round-trip (≤ 2 LSB); the integer-only `strict` build is
@@ -618,7 +618,7 @@ mod tests {
     #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[test]
     fn strict_trig_family_matches_f64() {
-        use crate::core_type::D38;
+        use crate::types::widths::D38;
         macro_rules! check {
             ($name:literal, $raw:expr, $strict:expr, $f64expr:expr) => {{
                 let strict: i128 = $strict;
@@ -681,7 +681,7 @@ mod tests {
     #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[test]
     fn sin_one_correct_past_63_digit_pi_window() {
-        use crate::core_type::D38;
+        use crate::types::widths::D38;
         let expected_35: i128 = 84_147_098_480_789_650_665_250_232_163_029_900;
         let expected_37: i128 =
             8_414_709_848_078_965_066_525_023_216_302_989_996;
@@ -881,7 +881,7 @@ mod tests {
 
     #[test]
     fn cosh_squared_minus_sinh_squared_is_one() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         for raw in [
             500_000_000_000_i128,
             -500_000_000_000_i128,
@@ -906,7 +906,7 @@ mod tests {
 
     #[test]
     fn to_degrees_pi_is_180() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         let pi = D38s12::pi();
         let result = pi.to_degrees();
         let expected = D38s12::from_int(180);
@@ -964,7 +964,7 @@ mod tests {
 
     #[test]
     fn to_degrees_half_pi_is_90() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         let result = D38s12::half_pi().to_degrees();
         let expected = D38s12::from_int(90);
         assert!(

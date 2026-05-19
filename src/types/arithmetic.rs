@@ -35,7 +35,7 @@
 
 use core::ops::{Div, DivAssign, Mul, MulAssign};
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 impl<const SCALE: u32> Mul for D38<SCALE> {
     type Output = Self;
@@ -69,7 +69,7 @@ impl<const SCALE: u32> Mul for D38<SCALE> {
     /// ```
     #[inline]
     fn mul(self, rhs: Self) -> Self {
-        match crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
+        match crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
             None => Self(panic_or_wrap_mul::<SCALE>(self.0, rhs.0)),
         }
@@ -122,7 +122,7 @@ impl<const SCALE: u32> Div for D38<SCALE> {
     fn div(self, rhs: Self) -> Self {
         // Match the panic message from `i128 /`.
         assert!(rhs.0 != 0, "attempt to divide by zero");
-        match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
+        match crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
             None => Self(panic_or_wrap_div::<SCALE>(self.0, rhs.0)),
         }
@@ -162,8 +162,8 @@ impl<const SCALE: u32> D38<SCALE> {
     /// family; directed rounding otherwise.
     #[inline]
     #[must_use]
-    pub fn mul_with(self, rhs: Self, mode: crate::rounding::RoundingMode) -> Self {
-        match crate::mg_divide::mul_div_pow10_with::<SCALE>(self.0, rhs.0, mode) {
+    pub fn mul_with(self, rhs: Self, mode: crate::support::rounding::RoundingMode) -> Self {
+        match crate::algos::mg_divide::mul_div_pow10_with::<SCALE>(self.0, rhs.0, mode) {
             Some(q) => Self(q),
             None => Self(panic_or_wrap_mul::<SCALE>(self.0, rhs.0)),
         }
@@ -186,9 +186,9 @@ impl<const SCALE: u32> D38<SCALE> {
     /// family; directed rounding otherwise.
     #[inline]
     #[must_use]
-    pub fn div_with(self, rhs: Self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn div_with(self, rhs: Self, mode: crate::support::rounding::RoundingMode) -> Self {
         assert!(rhs.0 != 0, "attempt to divide by zero");
-        match crate::mg_divide::div_pow10_div_with::<SCALE>(self.0, rhs.0, mode) {
+        match crate::algos::mg_divide::div_pow10_div_with::<SCALE>(self.0, rhs.0, mode) {
             Some(q) => Self(q),
             None => Self(panic_or_wrap_div::<SCALE>(self.0, rhs.0)),
         }
@@ -244,7 +244,7 @@ fn panic_or_wrap_div<const SCALE: u32>(a: i128, b: i128) -> i128 {
 
 #[cfg(test)]
 mod tests {
-    use crate::core_type::D38s12;
+    use crate::types::widths::D38s12;
 
     /// ZERO + ZERO == ZERO.
     #[test]
@@ -626,10 +626,10 @@ mod tests {
     /// the crate-default mode (HalfToEven by default).
     #[test]
     fn div_scale_zero_matches_i128_div() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN {
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        type D0 = crate::core_type::D38<0>;
+        type D0 = crate::types::widths::D38<0>;
         let a = D0::from_bits(15);
         let b = D0::from_bits(4);
         // 15 / 4 = 3.75 -> 4 under HalfToEven (no tie at .75).
@@ -643,7 +643,7 @@ mod tests {
     /// Mul at SCALE = 0: reduces to plain `i128 *`.
     #[test]
     fn mul_scale_zero_matches_i128_mul() {
-        type D0 = crate::core_type::D38<0>;
+        type D0 = crate::types::widths::D38<0>;
         let a = D0::from_bits(7);
         let b = D0::from_bits(11);
         assert_eq!(a * b, D0::from_bits(77));

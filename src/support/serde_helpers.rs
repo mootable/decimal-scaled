@@ -44,7 +44,7 @@ use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 // ── Serialize ─────────────────────────────────────────────────────────
 
@@ -331,7 +331,7 @@ pub mod decimal_serde {
 #[cfg(all(test, feature = "alloc", feature = "serde"))]
 mod tests {
     use super::*;
-    use crate::core_type::{D38, D38s12};
+    use crate::types::widths::{D38, D38s12};
     use serde::de::value::{Error as DeError, StrDeserializer};
     use serde::de::IntoDeserializer;
     use alloc::format;
@@ -636,7 +636,7 @@ mod tests {
 #[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
 macro_rules! decl_wide_serde {
     ($Type:ident, $Storage:ty, $bytes_len:literal) => {
-        impl<const SCALE: u32> Serialize for $crate::core_type::$Type<SCALE> {
+        impl<const SCALE: u32> Serialize for $crate::types::widths::$Type<SCALE> {
             /// Serialise as a base-10 integer string for human-
             /// readable formats, or as `$bytes_len` little-endian
             /// bytes for binary formats.
@@ -669,12 +669,12 @@ macro_rules! decl_wide_serde {
             }
         }
 
-        impl<'de, const SCALE: u32> Deserialize<'de> for $crate::core_type::$Type<SCALE> {
+        impl<'de, const SCALE: u32> Deserialize<'de> for $crate::types::widths::$Type<SCALE> {
             #[inline]
             fn deserialize<D: Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
                 struct V<const S: u32>;
                 impl<'de, const S: u32> Visitor<'de> for V<S> {
-                    type Value = $crate::core_type::$Type<S>;
+                    type Value = $crate::types::widths::$Type<S>;
                     fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
                         f.write_str(concat!(
                             "a base-10 integer string or ",
@@ -690,7 +690,7 @@ macro_rules! decl_wide_serde {
                                 ": invalid base-10 integer string",
                             ))
                         })?;
-                        Ok(<$crate::core_type::$Type<S>>::from_bits(parsed))
+                        Ok(<$crate::types::widths::$Type<S>>::from_bits(parsed))
                     }
                     fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
                         self.visit_str(v)
@@ -710,7 +710,7 @@ macro_rules! decl_wide_serde {
                             buf.copy_from_slice(&v[i * 8..(i + 1) * 8]);
                             *limb = u64::from_le_bytes(buf);
                         }
-                        Ok(<$crate::core_type::$Type<S>>::from_bits(<$Storage>::from_limbs_le(limbs)))
+                        Ok(<$crate::types::widths::$Type<S>>::from_bits(<$Storage>::from_limbs_le(limbs)))
                     }
                     fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
                         self.visit_bytes(v)

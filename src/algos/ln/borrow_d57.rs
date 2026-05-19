@@ -16,8 +16,8 @@
 //! by the narrowing `TryFrom` returning `Err` and the wrapping
 //! `expect` re-raising it.
 
-use crate::core_type::{D38, D57};
-use crate::rounding::RoundingMode;
+use crate::types::widths::{D38, D57};
+use crate::support::rounding::RoundingMode;
 
 /// D38 natural log via widen → D57 wide_kernel → narrow back.
 /// Strict working scale (`SCALE + GUARD` const-folded inside D57).

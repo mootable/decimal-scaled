@@ -8,7 +8,7 @@
 //! - The [`crate::types::traits::Decimal`] trait impl, delegating to
 //! the inherent surface.
 //!
-//! Invoke once per width (see `core_type.rs` for the per-width
+//! Invoke once per width (see `types/widths.rs` for the per-width
 //! invocations).
 //!
 //! Two front-end arms exist:
@@ -181,7 +181,7 @@ macro_rules! decl_decimal_basics {
             pub const MIN_POSITIVE: Self = Self($one_lsb);
         }
 
-        impl<const SCALE: u32> $crate::arithmetic_trait::DecimalArithmetic for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::types::traits::arithmetic::DecimalArithmetic for $Type<SCALE> {
             type Storage = $Storage;
 
             const SCALE: u32 = SCALE;
@@ -317,7 +317,7 @@ macro_rules! decl_decimal_basics {
             }
         }
 
-        impl<const SCALE: u32> $crate::convert_trait::DecimalConvert for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::types::traits::convert::DecimalConvert for $Type<SCALE> {
             // Round-trip.
             #[inline]
             fn from_bits(raw: $Storage) -> Self { $Type::<SCALE>::from_bits(raw) }
@@ -332,7 +332,7 @@ macro_rules! decl_decimal_basics {
             #[inline]
             fn to_int(self) -> i64 { $Type::<SCALE>::to_int(self) }
             #[inline]
-            fn to_int_with(self, mode: $crate::rounding::RoundingMode) -> i64 {
+            fn to_int_with(self, mode: $crate::support::rounding::RoundingMode) -> i64 {
                 $Type::<SCALE>::to_int_with(self, mode)
             }
 
@@ -342,7 +342,7 @@ macro_rules! decl_decimal_basics {
             fn from_f64(value: f64) -> Self { $Type::<SCALE>::from_f64(value) }
             #[cfg(feature = "std")]
             #[inline]
-            fn from_f64_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
+            fn from_f64_with(value: f64, mode: $crate::support::rounding::RoundingMode) -> Self {
                 $Type::<SCALE>::from_f64_with(value, mode)
             }
             #[cfg(feature = "std")]

@@ -28,17 +28,17 @@
 /// (`i32` / `i64` / `i128`).
 ///
 /// Mode-specific behaviour is delegated to
-/// [`crate::rounding::should_bump`], which receives the three
+/// [`crate::support::rounding::should_bump`], which receives the three
 /// pre-computed inputs every mode needs: the `|r|` vs `|m|−|r|`
 /// ordering (the round-up test without the `2·|r|` overflow risk),
 /// the parity of the truncated quotient, and the result sign. The
 /// caller bumps the quotient by ±1 in the result direction.
 ///
-/// Passing `crate::rounding::DEFAULT_ROUNDING_MODE` yields the
+/// Passing `crate::support::rounding::DEFAULT_ROUNDING_MODE` yields the
 /// crate-wide default (IEEE-754 round-half-to-even unless a
 /// `rounding-*` feature overrides it).
 ///
-/// [`RoundingMode`]: crate::rounding::RoundingMode
+/// [`RoundingMode`]: crate::support::rounding::RoundingMode
 macro_rules! round_with_mode_native {
     ($n:expr, $m:expr, $mode:expr) => {{
         let n = $n;
@@ -55,7 +55,7 @@ macro_rules! round_with_mode_native {
             let cmp_r = abs_r.cmp(&comp);
             let q_is_odd = (q & 1) != 0;
             let result_positive = (n < 0) == (m < 0);
-            if $crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+            if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                 if result_positive {
                     q + 1
                 } else {
@@ -70,7 +70,7 @@ macro_rules! round_with_mode_native {
 pub(crate) use round_with_mode_native;
 
 /// Wide-storage counterpart of [`round_with_mode_native!`] — the same
-/// strategy-pattern dispatch over [`crate::rounding::should_bump`],
+/// strategy-pattern dispatch over [`crate::support::rounding::should_bump`],
 /// adapted to a hand-rolled wide integer `$W`. Uses
 /// `<$W>::from_i128(0/1)` for the small constants and the type's
 /// operators throughout.
@@ -97,7 +97,7 @@ macro_rules! round_with_mode_wide {
                 (q % two) != zero
             };
             let result_positive = (n < zero) == (m < zero);
-            if $crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+            if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                 if result_positive {
                     q + one
                 } else {
@@ -135,10 +135,10 @@ macro_rules! decl_decimal_arithmetic {
             /// within 0.5 ULP), and narrows back to `$Storage`. See
             /// [`Self::mul_with`] to choose a non-default rounding mode.
             ///
-            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             fn mul(self, rhs: Self) -> Self {
-                self.mul_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.mul_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
         }
 
@@ -157,10 +157,10 @@ macro_rules! decl_decimal_arithmetic {
             /// preserving the `value · 10^SCALE` form. See
             /// [`Self::div_with`] for a non-default rounding mode.
             ///
-            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             fn div(self, rhs: Self) -> Self {
-                self.div_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.div_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
         }
 
@@ -176,7 +176,7 @@ macro_rules! decl_decimal_arithmetic {
             /// the common case. Larger scales fall through to the
             /// slower `n / (10^SCALE)` path.
             #[inline]
-            pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 // `widen_mul` does the `$Storage × $Storage → $Wider`
                 // product in one step — no Int{2W} wrapping mul with
                 // half-empty operands, and no double trip through the
@@ -185,14 +185,14 @@ macro_rules! decl_decimal_arithmetic {
                 let scaled = if SCALE == 0 {
                     n
                 } else if SCALE <= 38 {
-                    $crate::mg_divide::div_wide_pow10_with::<$Wider>(n, SCALE, mode)
+                    $crate::algos::mg_divide::div_wide_pow10_with::<$Wider>(n, SCALE, mode)
                 } else {
                     // Chain-of-÷10^38 via the existing MG 2-by-1
                     // kernel; preserves rounding for the common
                     // non-half-tie case (≤ 1 ULP biased in the rare
                     // multi-chunk tie). Replaces the previous
                     // multi-limb Knuth divide at wide SCALEs.
-                    $crate::mg_divide::div_wide_pow10_chain_with::<$Wider>(n, SCALE, mode)
+                    $crate::algos::mg_divide::div_wide_pow10_chain_with::<$Wider>(n, SCALE, mode)
                 };
                 Self(scaled.resize::<$Storage>())
             }
@@ -210,7 +210,7 @@ macro_rules! decl_decimal_arithmetic {
             /// `$Storage` width) widened to `$Wider`, avoiding the
             /// per-call `pow(SCALE)` on the wider type.
             #[inline]
-            pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let b: $Wider = rhs.0.resize::<$Wider>();
                 // `self.0 * multiplier()` both fit `$Storage` for any
                 // representable `SCALE`, so the full product fits
@@ -243,10 +243,10 @@ macro_rules! decl_decimal_arithmetic {
             /// within 0.5 ULP), and narrows back to `$Storage`. See
             /// [`Self::mul_with`] to choose a non-default rounding mode.
             ///
-            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             fn mul(self, rhs: Self) -> Self {
-                self.mul_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.mul_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
         }
 
@@ -265,10 +265,10 @@ macro_rules! decl_decimal_arithmetic {
             /// preserving the `value · 10^SCALE` form. See
             /// [`Self::div_with`] for a non-default rounding mode.
             ///
-            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             fn div(self, rhs: Self) -> Self {
-                self.div_with(rhs, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.div_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
         }
 
@@ -277,7 +277,7 @@ macro_rules! decl_decimal_arithmetic {
             /// scale-narrowing step according to `mode`. Within 0.5 ULP
             /// for the half-* family.
             #[inline]
-            pub fn mul_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let a = self.0 as $Wider;
                 let b = rhs.0 as $Wider;
                 let m = (10 as $Wider).pow(SCALE);
@@ -291,7 +291,7 @@ macro_rules! decl_decimal_arithmetic {
             /// scale-narrowing step according to `mode`. Within 0.5 ULP
             /// for the half-* family.
             #[inline]
-            pub fn div_with(self, rhs: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let a = self.0 as $Wider;
                 let b = rhs.0 as $Wider;
                 let m = (10 as $Wider).pow(SCALE);

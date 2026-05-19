@@ -7,7 +7,7 @@
 //! SCALE + GUARD`, `ln_fixed`, `round_to_storage_with` shape as the
 //! existing macro-emitted methods, just lifted to a policy-callable
 //! free function. The per-tier transcendental core lives at
-//! `crate::core_type::wide_trig_<tier>` (the module the
+//! `crate::types::widths::wide_trig_<tier>` (the module the
 //! `decl_wide_transcendental!` macro emits next to each `Dxx` struct).
 //!
 //! Panics if `raw <= 0` — matches the long-standing `ln_strict`
@@ -27,7 +27,7 @@
 //! *not* collapse to a single generic function over `WideStorage`.
 //! Each wrapper calls `core::ln_fixed`, `core::to_work`,
 //! `core::round_to_storage_with`, and `core::GUARD` from the per-tier
-//! `crate::core_type::wide_trig_<tier>` module — these are emitted by
+//! `crate::types::widths::wide_trig_<tier>` module — these are emitted by
 //! the `decl_wide_transcendental!` macro and carry tier-specific
 //! constants (pi/ln2 tables, work-integer type alias `W`, scale
 //! bounds) that vary per tier. Generalising would require either
@@ -37,12 +37,12 @@
 //! module is already the natural carrier for those bindings; the
 //! wrappers below stay thin and per-tier on purpose.
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 
 /// Emits a `ln_strict_<tier>(raw, mode)` free function for one wide
 /// tier. `$Storage` is the type's raw storage integer; `$core_path` is
 /// the per-tier transcendental core module path (e.g.
-/// `crate::core_type::wide_trig_d57`).
+/// `crate::types::widths::wide_trig_d57`).
 macro_rules! decl_ln_kernel {
     ($name:ident, $Storage:ty, $core_path:path, $tier_label:literal) => {
         /// Wide-tier `ln_strict` kernel. See module docs.
@@ -66,7 +66,7 @@ macro_rules! decl_ln_kernel {
 decl_ln_kernel!(
     ln_strict_d57,
     crate::wide_int::I192,
-    crate::core_type::wide_trig_d57,
+    crate::types::widths::wide_trig_d57,
     "D57"
 );
 
@@ -74,7 +74,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d76,
     crate::wide_int::I256,
-    crate::core_type::wide_trig_d76,
+    crate::types::widths::wide_trig_d76,
     "D76"
 );
 
@@ -82,7 +82,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d115,
     crate::wide_int::I384,
-    crate::core_type::wide_trig_d115,
+    crate::types::widths::wide_trig_d115,
     "D115"
 );
 
@@ -90,7 +90,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d153,
     crate::wide_int::I512,
-    crate::core_type::wide_trig_d153,
+    crate::types::widths::wide_trig_d153,
     "D153"
 );
 
@@ -98,7 +98,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d230,
     crate::wide_int::I768,
-    crate::core_type::wide_trig_d230,
+    crate::types::widths::wide_trig_d230,
     "D230"
 );
 
@@ -106,7 +106,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d307,
     crate::wide_int::I1024,
-    crate::core_type::wide_trig_d307,
+    crate::types::widths::wide_trig_d307,
     "D307"
 );
 
@@ -114,7 +114,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d462,
     crate::wide_int::I1536,
-    crate::core_type::wide_trig_d462,
+    crate::types::widths::wide_trig_d462,
     "D462"
 );
 
@@ -122,7 +122,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d616,
     crate::wide_int::I2048,
-    crate::core_type::wide_trig_d616,
+    crate::types::widths::wide_trig_d616,
     "D616"
 );
 
@@ -130,7 +130,7 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d924,
     crate::wide_int::I3072,
-    crate::core_type::wide_trig_d924,
+    crate::types::widths::wide_trig_d924,
     "D924"
 );
 
@@ -138,6 +138,6 @@ decl_ln_kernel!(
 decl_ln_kernel!(
     ln_strict_d1232,
     crate::wide_int::I4096,
-    crate::core_type::wide_trig_d1232,
+    crate::types::widths::wide_trig_d1232,
     "D1232"
 );

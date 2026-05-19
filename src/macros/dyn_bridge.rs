@@ -1,4 +1,4 @@
-//! Per-width emission of the [`crate::dyn_decimal::DynDecimal`] impl.
+//! Per-width emission of the [`crate::types::traits::dyn_decimal::DynDecimal`] impl.
 //!
 //! Invoked once per supported width with the full enumeration of legal
 //! `SCALE` values for that width. The body is a single
@@ -8,7 +8,7 @@
 //!
 //! The macro is intentionally only invoked for the narrow-tier widths
 //! (`D9`, `D18`, `D38`) — see the module docs for
-//! [`crate::dyn_decimal`] for the scope rationale.
+//! [`crate::types::traits::dyn_decimal`] for the scope rationale.
 
 /// Emits `impl<const SCALE: u32> DynDecimal for $Type<SCALE>` plus
 /// internal dispatch helpers.
@@ -16,8 +16,8 @@
 /// Args:
 /// - `$Type`           — concrete decimal type (`D9` / `D18` / `D38`).
 /// - `$Storage`        — underlying primitive integer (`i32` / `i64` / `i128`).
-/// - `$width_variant`  — matching variant of [`crate::dyn_decimal::DecimalWidth`].
-/// - `$raw_variant`    — matching variant of [`crate::dyn_decimal::RawStorage`].
+/// - `$width_variant`  — matching variant of [`crate::types::traits::dyn_decimal::DecimalWidth`].
+/// - `$raw_variant`    — matching variant of [`crate::types::traits::dyn_decimal::RawStorage`].
 /// - `$max_scale`      — `MAX_SCALE` constant for the width.
 /// - `$($scale)+`      — every legal `SCALE` literal, `0..=$max_scale`.
 ///
@@ -33,22 +33,22 @@ macro_rules! decl_decimal_dyn_impl {
         $max_scale:literal,
         scales = [$($scale:literal)+]
     ) => {
-        impl<const SCALE: u32> $crate::dyn_decimal::DynDecimal for $crate::$Type<SCALE> {
-            fn width(&self) -> $crate::dyn_decimal::DecimalWidth {
-                $crate::dyn_decimal::DecimalWidth::$width_variant
+        impl<const SCALE: u32> $crate::types::traits::dyn_decimal::DynDecimal for $crate::$Type<SCALE> {
+            fn width(&self) -> $crate::types::traits::dyn_decimal::DecimalWidth {
+                $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant
             }
 
             fn scale_dyn(&self) -> u32 { SCALE }
 
             fn max_scale(&self) -> u32 { $max_scale }
 
-            fn raw_storage(&self) -> $crate::dyn_decimal::RawStorage {
-                $crate::dyn_decimal::RawStorage::$raw_variant(self.0)
+            fn raw_storage(&self) -> $crate::types::traits::dyn_decimal::RawStorage {
+                $crate::types::traits::dyn_decimal::RawStorage::$raw_variant(self.0)
             }
 
             fn as_any(&self) -> &dyn ::core::any::Any { self }
 
-            fn clone_box(&self) -> ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal> {
+            fn clone_box(&self) -> ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal> {
                 ::alloc::boxed::Box::new(*self)
             }
 
@@ -68,27 +68,27 @@ macro_rules! decl_decimal_dyn_impl {
                 <Self as $crate::DecimalArithmetic>::is_negative(*self)
             }
 
-            fn signum(&self) -> ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal> {
+            fn signum(&self) -> ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal> {
                 ::alloc::boxed::Box::new(<Self as $crate::DecimalArithmetic>::signum(*self))
             }
 
-            fn abs(&self) -> ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal> {
+            fn abs(&self) -> ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal> {
                 ::alloc::boxed::Box::new(<Self as $crate::DecimalArithmetic>::abs(*self))
             }
 
-            fn neg(&self) -> ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal> {
+            fn neg(&self) -> ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal> {
                 ::alloc::boxed::Box::new(-*self)
             }
 
             fn add(
                 &self,
-                rhs: &dyn $crate::dyn_decimal::DynDecimal,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+                rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal,
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return None;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
+                let lhs_box = $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
                 let rhs_box = rhs.rescale_to(target_scale)?;
                 match target_scale {
                     $(
@@ -99,7 +99,7 @@ macro_rules! decl_decimal_dyn_impl {
                                 .downcast_ref::<$crate::$Type<$scale>>()?;
                             <$crate::$Type<$scale> as $crate::DecimalArithmetic>::checked_add(l, r)
                                 .map(|res| ::alloc::boxed::Box::new(res)
-                                    as ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>)
+                                    as ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>)
                         }
                     )+
                     _ => None,
@@ -108,13 +108,13 @@ macro_rules! decl_decimal_dyn_impl {
 
             fn sub(
                 &self,
-                rhs: &dyn $crate::dyn_decimal::DynDecimal,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+                rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal,
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return None;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
+                let lhs_box = $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
                 let rhs_box = rhs.rescale_to(target_scale)?;
                 match target_scale {
                     $(
@@ -125,7 +125,7 @@ macro_rules! decl_decimal_dyn_impl {
                                 .downcast_ref::<$crate::$Type<$scale>>()?;
                             <$crate::$Type<$scale> as $crate::DecimalArithmetic>::checked_sub(l, r)
                                 .map(|res| ::alloc::boxed::Box::new(res)
-                                    as ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>)
+                                    as ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>)
                         }
                     )+
                     _ => None,
@@ -134,13 +134,13 @@ macro_rules! decl_decimal_dyn_impl {
 
             fn mul(
                 &self,
-                rhs: &dyn $crate::dyn_decimal::DynDecimal,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+                rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal,
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return None;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
+                let lhs_box = $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
                 let rhs_box = rhs.rescale_to(target_scale)?;
                 match target_scale {
                     $(
@@ -151,7 +151,7 @@ macro_rules! decl_decimal_dyn_impl {
                                 .downcast_ref::<$crate::$Type<$scale>>()?;
                             <$crate::$Type<$scale> as $crate::DecimalArithmetic>::checked_mul(l, r)
                                 .map(|res| ::alloc::boxed::Box::new(res)
-                                    as ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>)
+                                    as ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>)
                         }
                     )+
                     _ => None,
@@ -160,13 +160,13 @@ macro_rules! decl_decimal_dyn_impl {
 
             fn div(
                 &self,
-                rhs: &dyn $crate::dyn_decimal::DynDecimal,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+                rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal,
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return None;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
+                let lhs_box = $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
                 let rhs_box = rhs.rescale_to(target_scale)?;
                 match target_scale {
                     $(
@@ -177,7 +177,7 @@ macro_rules! decl_decimal_dyn_impl {
                                 .downcast_ref::<$crate::$Type<$scale>>()?;
                             <$crate::$Type<$scale> as $crate::DecimalArithmetic>::checked_div(l, r)
                                 .map(|res| ::alloc::boxed::Box::new(res)
-                                    as ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>)
+                                    as ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>)
                         }
                     )+
                     _ => None,
@@ -186,13 +186,13 @@ macro_rules! decl_decimal_dyn_impl {
 
             fn rem(
                 &self,
-                rhs: &dyn $crate::dyn_decimal::DynDecimal,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+                rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal,
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return None;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
+                let lhs_box = $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
                 let rhs_box = rhs.rescale_to(target_scale)?;
                 match target_scale {
                     $(
@@ -203,7 +203,7 @@ macro_rules! decl_decimal_dyn_impl {
                                 .downcast_ref::<$crate::$Type<$scale>>()?;
                             <$crate::$Type<$scale> as $crate::DecimalArithmetic>::checked_rem(l, r)
                                 .map(|res| ::alloc::boxed::Box::new(res)
-                                    as ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>)
+                                    as ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>)
                         }
                     )+
                     _ => None,
@@ -213,19 +213,19 @@ macro_rules! decl_decimal_dyn_impl {
             fn rescale_to(
                 &self,
                 target_scale: u32,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
-                $crate::dyn_decimal::DynDecimal::rescale_to_with(
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
+                $crate::types::traits::dyn_decimal::DynDecimal::rescale_to_with(
                     self,
                     target_scale,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
             fn rescale_to_with(
                 &self,
                 target_scale: u32,
-                mode: $crate::rounding::RoundingMode,
-            ) -> Option<::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>> {
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Option<::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>> {
                 // Scale-up overflow check: the typed `rescale_with` panics on
                 // overflow, but the dyn surface contract is to return `None`.
                 // For target_scale > SCALE the storage gets multiplied by
@@ -239,18 +239,18 @@ macro_rules! decl_decimal_dyn_impl {
                 match target_scale {
                     $(
                         $scale => Some(::alloc::boxed::Box::new(self.rescale_with::<$scale>(mode))
-                            as ::alloc::boxed::Box<dyn $crate::dyn_decimal::DynDecimal>),
+                            as ::alloc::boxed::Box<dyn $crate::types::traits::dyn_decimal::DynDecimal>),
                     )+
                     _ => None,
                 }
             }
 
-            fn eq_dyn(&self, rhs: &dyn $crate::dyn_decimal::DynDecimal) -> bool {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+            fn eq_dyn(&self, rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal) -> bool {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return false;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = match $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale) {
+                let lhs_box = match $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale) {
                     Some(b) => b,
                     None => return false,
                 };
@@ -280,13 +280,13 @@ macro_rules! decl_decimal_dyn_impl {
 
             fn cmp_dyn(
                 &self,
-                rhs: &dyn $crate::dyn_decimal::DynDecimal,
+                rhs: &dyn $crate::types::traits::dyn_decimal::DynDecimal,
             ) -> Option<::core::cmp::Ordering> {
-                if rhs.width() != $crate::dyn_decimal::DecimalWidth::$width_variant {
+                if rhs.width() != $crate::types::traits::dyn_decimal::DecimalWidth::$width_variant {
                     return None;
                 }
                 let target_scale = SCALE.max(rhs.scale_dyn());
-                let lhs_box = $crate::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
+                let lhs_box = $crate::types::traits::dyn_decimal::DynDecimal::rescale_to(self, target_scale)?;
                 let rhs_box = rhs.rescale_to(target_scale)?;
                 match target_scale {
                     $(

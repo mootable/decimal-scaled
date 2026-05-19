@@ -27,14 +27,14 @@
 //! - `add`, `sub`, `neg`, `rem` variants delegate directly to the
 //! corresponding `i128` intrinsics on the raw storage field.
 //! - `mul` variants route through the same widening multiply-then-divide
-//! helper (`crate::mg_divide::mul_div_pow10`) as the default `Mul`
+//! helper (`crate::algos::mg_divide::mul_div_pow10`) as the default `Mul`
 //! operator. The intermediate product uses 256-bit arithmetic and
 //! cannot observably overflow; the only failure mode is a final `i128`
 //! quotient that does not fit.
 //! - `div` variants route through the same widening long-divide helper
-//! (`crate::mg_divide::div_pow10_div`) as the default `Div` operator.
+//! (`crate::algos::mg_divide::div_pow10_div`) as the default `Div` operator.
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
     // Mul (rescale-aware via widening multiply-then-divide)
@@ -68,7 +68,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_mul(self, rhs: Self) -> Option<Self> {
-        crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0).map(Self)
+        crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0).map(Self)
     }
 
     /// Returns `self * rhs` with two's-complement wrap when the rescaled
@@ -95,7 +95,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn wrapping_mul(self, rhs: Self) -> Self {
-        match crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
+        match crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
             None => Self(
                 self.0
@@ -127,7 +127,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn saturating_mul(self, rhs: Self) -> Self {
-        if let Some(q) = crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) { Self(q) } else {
+        if let Some(q) = crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) { Self(q) } else {
             // Clamp direction: negative result iff exactly one operand
             // is negative (a zero operand cannot produce overflow).
             let neg = (self.0 < 0) ^ (rhs.0 < 0);
@@ -155,7 +155,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn overflowing_mul(self, rhs: Self) -> (Self, bool) {
-        match crate::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
+        match crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
             Some(q) => (Self(q), false),
             None => (self.wrapping_mul(rhs), true),
         }
@@ -193,7 +193,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_div(self, rhs: Self) -> Option<Self> {
-        crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0).map(Self)
+        crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0).map(Self)
     }
 
     /// Returns `self / rhs` with two's-complement wrap when the rescaled
@@ -223,7 +223,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn wrapping_div(self, rhs: Self) -> Self {
         assert!(rhs.0 != 0, "attempt to divide by zero");
-        match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
+        match crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
             None => Self(
                 self.0
@@ -262,7 +262,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn saturating_div(self, rhs: Self) -> Self {
         assert!(rhs.0 != 0, "attempt to divide by zero");
-        if let Some(q) = crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) { Self(q) } else {
+        if let Some(q) = crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) { Self(q) } else {
             // Clamp direction: negative iff exactly one operand is negative.
             let neg = (self.0 < 0) ^ (rhs.0 < 0);
             if neg { Self::MIN } else { Self::MAX }
@@ -296,7 +296,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn overflowing_div(self, rhs: Self) -> (Self, bool) {
         assert!(rhs.0 != 0, "attempt to divide by zero");
-        match crate::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
+        match crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => (Self(q), false),
             None => (self.wrapping_div(rhs), true),
         }
@@ -307,7 +307,7 @@ impl<const SCALE: u32> D38<SCALE> {
 #[cfg(test)]
 #[allow(clippy::arithmetic_side_effects)]
 mod tests {
-    use crate::core_type::{D38, D38s12};
+    use crate::types::widths::{D38, D38s12};
 
     /// Returns `-ONE` as a convenience value.
     fn neg_one() -> D38s12 {

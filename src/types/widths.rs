@@ -384,7 +384,7 @@ pub type D38s37 = D38<37>;
 
 // The `ParseError` enum lives in `src/error.rs` and is re-exported
 // from the crate root. It is not width-specific.
-pub use crate::error::ParseError;
+pub use crate::support::error::ParseError;
 
 // Inherent basics + Decimal trait impl: emitted by the macro generator
 // (one invocation per width). See src/decimal_macro.rs for the macro
@@ -456,8 +456,8 @@ crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 //
 // The canonical public `*_strict` surface (`ln_strict`, `exp_strict`,
 // `sin_strict`, `powf_strict`, …) is emitted by the per-type files
-// `log_exp_strict.rs` / `trig_strict.rs` / `powers_strict.rs` using
-// the hand-tuned 256-bit `d_w128_kernels::Fixed` work integer. They
+// `types/log_exp.rs` / `types/trig.rs` / `types/powers.rs` using
+// the hand-tuned 256-bit `algos::fixed_d38::Fixed` work integer. They
 // are the **chosen winners** per the per-type-kernel policy:
 //
 // - `decl_wide_transcendental!(D38, i128, Int512, …)` would deliver
@@ -497,7 +497,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// assert_eq!(b.to_bits() as i128, a.to_bits());
     /// ```
     #[inline]
-    pub fn narrow(self) -> Result<D18<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D18<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
 }
@@ -701,7 +701,7 @@ impl<const SCALE: u32> D18<SCALE> {
     /// assert_eq!(b.to_bits() as i64, a.to_bits());
     /// ```
     #[inline]
-    pub fn narrow(self) -> Result<D9<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D9<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
 }
@@ -837,7 +837,7 @@ impl<const SCALE: u32> D76<SCALE> {
     /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
     /// doesn't fit `D57`'s range at the given scale.
     #[inline]
-    pub fn narrow(self) -> Result<D57<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D57<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
 }
@@ -953,7 +953,7 @@ impl<const SCALE: u32> D153<SCALE> {
     /// doesn't fit the narrower storage's range at the given scale.
     #[cfg(any(feature = "d115", feature = "wide"))]
     #[inline]
-    pub fn narrow(self) -> Result<D115<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D115<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
 }
@@ -1066,7 +1066,7 @@ impl<const SCALE: u32> D307<SCALE> {
     /// doesn't fit the narrower storage's range at the given scale.
     #[cfg(any(feature = "d230", feature = "wide"))]
     #[inline]
-    pub fn narrow(self) -> Result<D230<SCALE>, crate::error::ConvertError> {
+    pub fn narrow(self) -> Result<D230<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
 
@@ -1748,7 +1748,7 @@ impl<const SCALE: u32> D57<SCALE> {
     /// Demote to the immediate previous tier ([`D38`]) at the same `SCALE`.
     /// Returns `Err(ConvertError::Overflow)` if the value exceeds `i128` range.
     #[inline]
-    pub fn narrow(self) -> Result<D38<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D38<SCALE>, crate::support::error::ConvertError> { self.try_into() }
     /// Promote to the next storage tier ([`D76`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
     pub fn widen(self) -> D76<SCALE> { self.into() }
@@ -1758,7 +1758,7 @@ impl<const SCALE: u32> D57<SCALE> {
 impl<const SCALE: u32> D115<SCALE> {
     /// Demote to the immediate previous tier ([`D76`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D76<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D76<SCALE>, crate::support::error::ConvertError> { self.try_into() }
     /// Promote to the next storage tier ([`D153`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
     pub fn widen(self) -> D153<SCALE> { self.into() }
@@ -1768,7 +1768,7 @@ impl<const SCALE: u32> D115<SCALE> {
 impl<const SCALE: u32> D230<SCALE> {
     /// Demote to the immediate previous tier ([`D153`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D153<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D153<SCALE>, crate::support::error::ConvertError> { self.try_into() }
     /// Promote to the next storage tier ([`D307`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
     pub fn widen(self) -> D307<SCALE> { self.into() }
@@ -1778,7 +1778,7 @@ impl<const SCALE: u32> D230<SCALE> {
 impl<const SCALE: u32> D462<SCALE> {
     /// Demote to the immediate previous tier ([`D307`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D307<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D307<SCALE>, crate::support::error::ConvertError> { self.try_into() }
     /// Promote to the next storage tier ([`D616`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
     pub fn widen(self) -> D616<SCALE> { self.into() }
@@ -1788,7 +1788,7 @@ impl<const SCALE: u32> D462<SCALE> {
 impl<const SCALE: u32> D616<SCALE> {
     /// Demote to the immediate previous tier ([`D462`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D462<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D462<SCALE>, crate::support::error::ConvertError> { self.try_into() }
 }
 
 // `widen` lives in a second impl gated on D924's feature — D616 can
@@ -1809,7 +1809,7 @@ impl<const SCALE: u32> D616<SCALE> {
 impl<const SCALE: u32> D924<SCALE> {
     /// Demote to the immediate previous tier ([`D616`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D616<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D616<SCALE>, crate::support::error::ConvertError> { self.try_into() }
     /// Promote to the next storage tier ([`D1232`]) at the same `SCALE`. Lossless.
     #[inline] #[must_use]
     pub fn widen(self) -> D1232<SCALE> { self.into() }
@@ -1820,7 +1820,7 @@ impl<const SCALE: u32> D1232<SCALE> {
     /// Demote to the immediate previous tier ([`D924`]) at the same `SCALE`.
     /// D1232 is the widest shipped tier, so there is no `.widen()` method.
     #[inline]
-    pub fn narrow(self) -> Result<D924<SCALE>, crate::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D924<SCALE>, crate::support::error::ConvertError> { self.try_into() }
 }
 
 #[cfg(test)]
@@ -2062,8 +2062,8 @@ mod tests {
 
     #[test]
     fn d9_consts() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        use crate::consts::DecimalConstants;
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        use crate::types::consts::DecimalConstants;
         type D9s4 = super::D9<4>;
         // pi at scale 4 = 3.1416 -> bits = 31416.
         assert_eq!(D9s4::pi().to_bits(), 31416);
@@ -2093,8 +2093,8 @@ mod tests {
 
     #[test]
     fn d18_consts() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
-        use crate::consts::DecimalConstants;
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        use crate::types::consts::DecimalConstants;
         type D18s12 = super::D18<12>;
         // pi at scale 12 = 3.141592653590 (matches D38s12).
         assert_eq!(D18s12::pi().to_bits(), 3_141_592_653_590);
@@ -2106,7 +2106,7 @@ mod tests {
     #[test]
     fn d76_basics() {
         
-        use crate::arithmetic_trait::DecimalArithmetic;
+        use crate::types::traits::arithmetic::DecimalArithmetic;
         use crate::wide_int::I256;
         assert_eq!(super::D76s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
         assert_eq!(super::D76s2::ONE.to_bits(), I256::from_str_radix("100", 10).unwrap());
@@ -2244,7 +2244,7 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn d76_consts_and_from_str() {
-        use crate::consts::DecimalConstants;
+        use crate::types::consts::DecimalConstants;
         use core::str::FromStr;
         // pi at scale 12 matches the D38 reference.
         assert_eq!(
@@ -2295,7 +2295,7 @@ mod tests {
         assert_eq!(D::from_int(9i128), D::from(9i32));
         assert_eq!(D::from_i32(-4), D::from(-4i32));
         // to_int: 2.5 with HalfToEven -> 2
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         let two_and_half = D::from_bits(I256::from_str_radix("2500000", 10).unwrap());
         assert_eq!(two_and_half.to_int_with(RoundingMode::HalfToEven), 2);
         assert_eq!(two_and_half.to_int_with(RoundingMode::HalfAwayFromZero), 3);
@@ -2321,7 +2321,7 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn d76_rescale_rounding_floats() {
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         use crate::wide_int::I256;
         type D6 = super::D76<6>;
         // rescale up (lossless): scale 6 -> scale 9
@@ -2361,7 +2361,7 @@ mod tests {
     #[test]
     fn d153_smoke() {
         
-        use crate::arithmetic_trait::DecimalArithmetic;
+        use crate::types::traits::arithmetic::DecimalArithmetic;
         use crate::wide_int::I512;
         type D = super::D153<35>;
         assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 152);
@@ -2384,7 +2384,7 @@ mod tests {
     #[test]
     fn d307_smoke() {
         
-        use crate::arithmetic_trait::DecimalArithmetic;
+        use crate::types::traits::arithmetic::DecimalArithmetic;
         use crate::wide_int::I1024;
         type D = super::D307<35>;
         assert_eq!(<D as DecimalArithmetic>::MAX_SCALE, 306);

@@ -49,7 +49,7 @@
 //! [`crate::algos::ln::fixed_d38`] and
 //! [`crate::algos::exp::fixed_d38`]. This file is a typed-shell
 //! surface; there are zero `crate::algos::*` or
-//! `crate::d_w128_kernels::*` references in it.
+//! `crate::algos::fixed_d38::*` references in it.
 //!
 //! # Precision
 //!
@@ -57,7 +57,7 @@
 //! `f64`. Every `_strict` / `_strict_with` / `_approx` /
 //! `_approx_with` form is **correctly rounded** under the selected
 //! [`RoundingMode`]: the result is within 0.5 ULP of the exact
-//! value. They evaluate the series in the `d_w128_kernels::Fixed`
+//! value. They evaluate the series in the `algos::fixed_d38::Fixed`
 //! guard-digit intermediate and round once at the end.
 //!
 //! [`RoundingMode`]: crate::RoundingMode
@@ -69,7 +69,7 @@
 //! `D38::ZERO` and saturates infinities to `D38::MAX` or `D38::MIN`.
 //! The `*_strict` forms panic on out-of-domain inputs (`self <= 0`).
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 /// Re-export of the D38 strict-mode guard-digit constant for in-crate
 /// callers that branch on the strict-vs-approx working-scale match.
@@ -107,13 +107,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_strict(self) -> Self {
-        self.ln_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.ln_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Natural log under the supplied rounding mode. See [`Self::ln_strict`].
     #[inline]
     #[must_use]
-    pub fn ln_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn ln_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::ln::LnPolicy>::ln_impl(self, mode)
     }
 
@@ -123,13 +123,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_approx(self, working_digits: u32) -> Self {
-        self.ln_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.ln_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Natural log with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn ln_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn ln_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.ln_strict_with(mode);
         }
@@ -148,13 +148,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log_strict(self, base: Self) -> Self {
-        self.log_strict_with(base, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.log_strict_with(base, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Logarithm in `base` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn log_strict_with(self, base: Self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn log_strict_with(self, base: Self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::ln::LnPolicy>::log_impl(self, base, mode)
     }
 
@@ -162,13 +162,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
-        self.log_approx_with(base, working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.log_approx_with(base, working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Logarithm with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn log_approx_with(self, base: Self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn log_approx_with(self, base: Self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.log_strict_with(base, mode);
         }
@@ -187,13 +187,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log2_strict(self) -> Self {
-        self.log2_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.log2_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Base-2 log under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn log2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn log2_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::ln::LnPolicy>::log2_impl(self, mode)
     }
 
@@ -201,13 +201,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log2_approx(self, working_digits: u32) -> Self {
-        self.log2_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.log2_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Base-2 log with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn log2_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn log2_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.log2_strict_with(mode);
         }
@@ -226,13 +226,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log10_strict(self) -> Self {
-        self.log10_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.log10_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Base-10 log under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn log10_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn log10_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::ln::LnPolicy>::log10_impl(self, mode)
     }
 
@@ -240,13 +240,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log10_approx(self, working_digits: u32) -> Self {
-        self.log10_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.log10_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Base-10 log with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn log10_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn log10_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.log10_strict_with(mode);
         }
@@ -267,13 +267,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp_strict(self) -> Self {
-        self.exp_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.exp_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `e^self` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn exp_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::exp::ExpPolicy>::exp_impl(self, mode)
     }
 
@@ -281,13 +281,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp_approx(self, working_digits: u32) -> Self {
-        self.exp_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.exp_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Exponential with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn exp_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.exp_strict_with(mode);
         }
@@ -306,13 +306,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp2_strict(self) -> Self {
-        self.exp2_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.exp2_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `2^self` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp2_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn exp2_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::exp::ExpPolicy>::exp2_impl(self, mode)
     }
 
@@ -320,13 +320,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp2_approx(self, working_digits: u32) -> Self {
-        self.exp2_approx_with(working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.exp2_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Base-2 exponential with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp2_approx_with(self, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn exp2_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
         if working_digits == STRICT_GUARD {
             return self.exp2_strict_with(mode);
         }
@@ -344,7 +344,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
 #[cfg(all(test, feature = "strict", not(feature = "fast")))]
 mod strict_tests {
-    use crate::core_type::D38s12;
+    use crate::types::widths::D38s12;
 
     /// Tolerance in ULPs for the strict transcendentals. They are
     /// correctly rounded (≤ 0.5 ULP); 2 LSB of slack absorbs the
@@ -367,7 +367,7 @@ mod strict_tests {
     /// correctly-rounded integer result must agree to within 1 ULP.
     #[test]
     fn ln_strict_is_correctly_rounded_vs_f64() {
-        use crate::core_type::D38;
+        use crate::types::widths::D38;
         fn check(raw: i128) {
             let x = D38::<9>::from_bits(raw);
             let strict = x.ln_strict().to_bits();
@@ -400,7 +400,7 @@ mod strict_tests {
     /// bridge to within 1 ULP at D38<9>.
     #[test]
     fn strict_log_exp_family_matches_f64() {
-        use crate::core_type::D38;
+        use crate::types::widths::D38;
         fn check_exp(raw: i128) {
             let x = D38::<9>::from_bits(raw);
             let strict = x.exp_strict().to_bits();
@@ -446,7 +446,7 @@ mod strict_tests {
     /// `exp2_strict` is exact at integer arguments: `2^10` is `1024`.
     #[test]
     fn strict_exp2_at_integers() {
-        use crate::core_type::D38;
+        use crate::types::widths::D38;
         for k in 0_i128..=12 {
             let x = D38::<12>::from_bits(k * 10i128.pow(12));
             let got = x.exp2_strict().to_bits();
@@ -458,7 +458,7 @@ mod strict_tests {
     /// `ln_strict` is exact at the powers of two it can represent.
     #[test]
     fn ln_strict_of_powers_of_two() {
-        use crate::core_type::D38;
+        use crate::types::widths::D38;
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
             let x = D38::<18>::from_bits((1i128 << k) * 10i128.pow(18));

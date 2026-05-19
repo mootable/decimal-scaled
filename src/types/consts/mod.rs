@@ -13,6 +13,6 @@ pub use d38::DecimalConsts;
 
 // Re-export every `pub(crate)` helper from `d38` (the narrow-tier
 // constant tables) so the macros emitted by `macros/consts.rs` can
-// reach them through `$crate::consts::<name>`. Path-shimmed for one
-// release cycle; PR 3 sweeps to the final paths.
+// reach them through `$crate::types::consts::<name>` from the
+// per-width impl invocations.
 pub(crate) use d38::*;

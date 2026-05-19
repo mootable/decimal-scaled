@@ -36,7 +36,7 @@
 //! public entry points short-circuit at `SCALE == 0` before touching the
 //! table.
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 /// Pre-computed magic constants for divide-by-`10^i` via the
 /// Moller-Granlund algorithm. Index `i` covers `i = 0..=38`.
@@ -242,7 +242,7 @@ fn div_exp_fast_2word_with_rem(
 pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     n: W,
     scale: u32,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> W {
     debug_assert!((1..=38).contains(&scale));
     let (mag_words, neg) = n.to_mag_sign();
@@ -286,7 +286,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
         let q_is_odd = (mag[0] & 1) != 0;
         let comp = exp - rem;
         let cmp_r = rem.cmp(&comp);
-        if crate::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
+        if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
             let mut carry: u128 = 1;
             for limb in &mut mag {
                 let (s, c) = limb.overflowing_add(carry);
@@ -360,7 +360,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
 pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
     n: W,
     scale: u32,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> W {
     debug_assert!(scale > 38, "chain path is for SCALE > 38; callers handle ≤ 38");
 
@@ -456,7 +456,7 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
             core::cmp::Ordering::Equal
         };
         let q_is_odd = (mag[0] & 1) != 0;
-        if crate::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
+        if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
             let mut carry: u128 = 1;
             for limb in &mut mag {
                 let (s, c) = limb.overflowing_add(carry);
@@ -487,14 +487,14 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
 /// rounded magnitude. Caller applies the sign afterwards.
 ///
 /// All mode-specific behaviour is delegated to
-/// [`crate::rounding::should_bump`]; this function only assembles
+/// [`crate::support::rounding::should_bump`]; this function only assembles
 /// the inputs from the unsigned-magnitude representation.
 #[inline]
 fn round_mag_with_mode(
     q: u128,
     r: u128,
     m: u128,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
     result_positive: bool,
 ) -> u128 {
     if r == 0 {
@@ -503,7 +503,7 @@ fn round_mag_with_mode(
     let comp = m - r;
     let cmp_r = r.cmp(&comp);
     let q_is_odd = (q & 1) != 0;
-    if crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+    if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
         q + 1
     } else {
         q
@@ -670,7 +670,7 @@ pub(crate) fn isqrt_256(hi: u128, lo: u128) -> u128 {
 /// Strict: integer-only; the result is within 0.5 ULP of the exact
 /// square root — it is the exact result correctly rounded.
 pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
-    sqrt_raw_with(r, scale, crate::rounding::RoundingMode::HalfToEven)
+    sqrt_raw_with(r, scale, crate::support::rounding::RoundingMode::HalfToEven)
 }
 
 /// Mode-aware variant of [`sqrt_raw_correctly_rounded`].
@@ -687,8 +687,8 @@ pub(crate) fn sqrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 ///   non-zero, so the true root is strictly greater than `q`).
 /// - half-modes: bump to `q + 1` iff `N > q² + q` (equivalently
 ///   `diff > q`), the standard round-to-nearest-integer test.
-pub(crate) fn sqrt_raw_with(r: u128, scale: u32, mode: crate::rounding::RoundingMode) -> u128 {
-    use crate::rounding::RoundingMode;
+pub(crate) fn sqrt_raw_with(r: u128, scale: u32, mode: crate::support::rounding::RoundingMode) -> u128 {
+    use crate::support::rounding::RoundingMode;
     if r == 0 {
         return 0;
     }
@@ -930,7 +930,7 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
 /// Strict: integer-only; the result is within 0.5 ULP of the exact
 /// cube root — it is the exact result correctly rounded.
 pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
-    cbrt_raw_with_unsigned_mag(r, scale, crate::rounding::RoundingMode::HalfToEven)
+    cbrt_raw_with_unsigned_mag(r, scale, crate::support::rounding::RoundingMode::HalfToEven)
 }
 
 /// Mode-aware variant of [`cbrt_raw_correctly_rounded`] operating on
@@ -958,7 +958,7 @@ pub(crate) fn cbrt_raw_correctly_rounded(r: u128, scale: u32) -> u128 {
 pub(crate) fn cbrt_raw_with_unsigned_mag(
     r: u128,
     scale: u32,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> u128 {
     cbrt_raw_with_signed(r, scale, false, mode)
 }
@@ -969,9 +969,9 @@ pub(crate) fn cbrt_raw_with_signed(
     r: u128,
     scale: u32,
     negative: bool,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> u128 {
-    use crate::rounding::RoundingMode;
+    use crate::support::rounding::RoundingMode;
     if r == 0 {
         return 0;
     }
@@ -1047,18 +1047,18 @@ fn gt_384(a: [u128; 3], b: [u128; 3]) -> bool {
 /// ```
 #[inline]
 pub(crate) fn mul_div_pow10<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
-    mul_div_pow10_with::<SCALE>(a, b, crate::rounding::DEFAULT_ROUNDING_MODE)
+    mul_div_pow10_with::<SCALE>(a, b, crate::support::rounding::DEFAULT_ROUNDING_MODE)
 }
 
 /// Mode-aware variant of [`mul_div_pow10`]: rounds the
 /// divide-by-`10^SCALE` step according to `mode`. The default
 /// `mul_div_pow10` is a thin wrapper that passes
-/// [`crate::rounding::DEFAULT_ROUNDING_MODE`].
+/// [`crate::support::rounding::DEFAULT_ROUNDING_MODE`].
 #[inline]
 pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     a: i128,
     b: i128,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> Option<i128> {
     // SCALE = 0: multiplier is 1, result is just a * b. No rounding
     // step possible.
@@ -1069,7 +1069,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     // Fast path: i128 * i128 didn't overflow. Apply `mode` at the
     // divide-by-10^SCALE step.
     if let Some(prod) = a.checked_mul(b) {
-        return Some(crate::rounding::apply_rounding(
+        return Some(crate::support::rounding::apply_rounding(
             prod,
             D38::<SCALE>::multiplier(),
             mode,
@@ -1133,17 +1133,17 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
 /// ```
 #[inline]
 pub(crate) fn div_pow10_div<const SCALE: u32>(a: i128, b: i128) -> Option<i128> {
-    div_pow10_div_with::<SCALE>(a, b, crate::rounding::DEFAULT_ROUNDING_MODE)
+    div_pow10_div_with::<SCALE>(a, b, crate::support::rounding::DEFAULT_ROUNDING_MODE)
 }
 
 /// Mode-aware variant of [`div_pow10_div`]: rounds the final divide
 /// step according to `mode`. The default `div_pow10_div` is a thin
-/// wrapper that passes [`crate::rounding::DEFAULT_ROUNDING_MODE`].
+/// wrapper that passes [`crate::support::rounding::DEFAULT_ROUNDING_MODE`].
 #[inline]
 pub(crate) fn div_pow10_div_with<const SCALE: u32>(
     a: i128,
     b: i128,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> Option<i128> {
     if b == 0 {
         return None;
@@ -1154,7 +1154,7 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
 
     // SCALE = 0: scale-narrowing step is `a / b` itself; apply mode.
     if SCALE == 0 {
-        return Some(crate::rounding::apply_rounding(a, b, mode));
+        return Some(crate::support::rounding::apply_rounding(a, b, mode));
     }
 
     let mult = D38::<SCALE>::multiplier();
@@ -1163,7 +1163,7 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
     // fits with headroom; for larger SCALE the overflow check below
     // handles the fallthrough.
     if let Some(num) = a.checked_mul(mult) {
-        return Some(crate::rounding::apply_rounding(num, b, mode));
+        return Some(crate::support::rounding::apply_rounding(num, b, mode));
     }
 
     // Fast path 2: `|a| * mult` overflows `i128` but still fits `u128`
@@ -1337,7 +1337,7 @@ mod tests {
     /// Division: small operands match the naive form.
     #[test]
     fn div_pow10_div_small_matches_naive() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         // `expected` is the truncating result and matches under
         // HalfToEven only when the remainder is below half — true here
         // (a*10^12 / 7 leaves a remainder well under 3.5).
@@ -1359,7 +1359,7 @@ mod tests {
     /// crate-default rounding mode (HalfToEven by default).
     #[test]
     fn div_pow10_div_scale_zero() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         const SCALE: u32 = 0;
         // 15 / 4 = 3.75 -> 4 under half-* family (no tie, .75 > .5).
         assert_eq!(div_pow10_div::<SCALE>(15, 4), Some(4));
@@ -1374,7 +1374,7 @@ mod tests {
     /// `div_pow10_div_with` honours the explicit mode argument.
     #[test]
     fn div_pow10_div_with_modes() {
-        use crate::rounding::RoundingMode::*;
+        use crate::support::rounding::RoundingMode::*;
         const SCALE: u32 = 0;
         // 15 / 4 = 3.75
         assert_eq!(div_pow10_div_with::<SCALE>(15, 4, HalfToEven), Some(4));
@@ -1443,7 +1443,7 @@ mod tests {
     #[test]
     fn div_pow10_div_carry_propagation_under_directed_rounding() {
         const SCALE: u32 = 12;
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         // 1 / 3 = 0.333... — non-zero remainder, three modes pick
         // different last digits.
         let a: i128 = 1_000_000_000_000;  // 1.0 at S=12
@@ -1612,8 +1612,8 @@ mod tests {
 
     /// Reference sqrt that bypasses the fast path: always uses the
     /// 256-bit `mul2 + isqrt_256` machinery.
-    fn sqrt_raw_reference(r: u128, scale: u32, mode: crate::rounding::RoundingMode) -> u128 {
-        use crate::rounding::RoundingMode;
+    fn sqrt_raw_reference(r: u128, scale: u32, mode: crate::support::rounding::RoundingMode) -> u128 {
+        use crate::support::rounding::RoundingMode;
         if r == 0 {
             return 0;
         }
@@ -1654,8 +1654,8 @@ mod tests {
         }
     }
 
-    fn all_modes() -> [crate::rounding::RoundingMode; 6] {
-        use crate::rounding::RoundingMode::*;
+    fn all_modes() -> [crate::support::rounding::RoundingMode; 6] {
+        use crate::support::rounding::RoundingMode::*;
         [HalfToEven, HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling]
     }
 
@@ -1700,14 +1700,14 @@ mod tests {
     fn div_pow10_div_reference<const SCALE: u32>(
         a: i128,
         b: i128,
-        mode: crate::rounding::RoundingMode,
+        mode: crate::support::rounding::RoundingMode,
     ) -> Option<i128> {
         if b == 0 {
             return None;
         }
         a.checked_div(b)?;
         if SCALE == 0 {
-            return Some(crate::rounding::apply_rounding(a, b, mode));
+            return Some(crate::support::rounding::apply_rounding(a, b, mode));
         }
         let mult = D38::<SCALE>::multiplier();
         let ua = a.unsigned_abs();

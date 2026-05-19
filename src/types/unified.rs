@@ -20,7 +20,7 @@
 //! types.
 //!
 //! Methods on `D<S, SCALE>` are added per-`S` in the macros / impl
-//! blocks scattered across the crate — see `core_type.rs`, the
+//! blocks scattered across the crate — see `types/widths.rs`, the
 //! `macros/` directory, and `policy/`. This file only carries the
 //! struct definition and the most foundational `impl`s
 //! (`Clone` / `Copy` / `Default` derivation patterns that need

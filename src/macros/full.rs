@@ -1,6 +1,6 @@
 //! Umbrella `decl_decimal_full!` macro: emits the *common* per-width
 //! surface in one invocation, replacing ~15 individual `decl_*!` calls
-//! per type in `core_type.rs`.
+//! per type in `types/widths.rs`.
 //!
 //! Not all per-width macro invocations are inside the umbrella:
 //!
@@ -14,7 +14,7 @@
 //!
 //! The umbrella is feature-gated implicitly via its callers; D76 /
 //! D153 / D307 invocations live behind `#[cfg(any(feature = "d76",
-//! feature = "wide"))]` etc. in `core_type.rs`.
+//! feature = "wide"))]` etc. in `types/widths.rs`.
 
 /// Wide-tier umbrella. Emits every macro that takes only
 /// `($Type, $Storage[, ...])` args plus the wide-specific

@@ -48,7 +48,7 @@
 //!
 //! [`DecimalConstants`]: crate::DecimalConstants
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 
 /// Width-generic transcendental + root surface shared by every
 /// decimal width. See the module-level docs for the four-variant

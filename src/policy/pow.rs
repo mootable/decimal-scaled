@@ -2,8 +2,8 @@
 //! rationale as [`crate::policy::ln`] / [`crate::policy::exp`]).
 
 use crate::algos::pow;
-use crate::core_type::{D9, D18, D38};
-use crate::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
+use crate::support::rounding::RoundingMode;
 
 pub(crate) trait PowPolicy: Sized {
     /// `self^exp` (strict, const-folded `SCALE + STRICT_GUARD`).

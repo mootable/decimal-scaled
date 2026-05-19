@@ -4,7 +4,7 @@
 //! Two `from_f64` surfaces are emitted:
 //!
 //! - `from_f64(value)` — uses
-//! `crate::rounding::DEFAULT_ROUNDING_MODE` (controlled by the
+//! `crate::support::rounding::DEFAULT_ROUNDING_MODE` (controlled by the
 //! `rounding-*` Cargo features; `HalfToEven` by default).
 //! - `from_f64_with(value, mode)` — explicit `RoundingMode`.
 //!
@@ -33,7 +33,7 @@ macro_rules! decl_decimal_float_bridge {
             #[inline]
             #[must_use]
             pub fn from_f64(value: f64) -> Self {
-                Self::from_f64_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                Self::from_f64_with(value, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Constructs from an `f64` using the supplied rounding
@@ -41,7 +41,7 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn from_f64_with(value: f64, mode: $crate::support::rounding::RoundingMode) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
                 }
@@ -59,18 +59,18 @@ macro_rules! decl_decimal_float_bridge {
                     return Self::MIN;
                 }
                 let rounded = match mode {
-                    $crate::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
-                    $crate::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
-                    $crate::rounding::RoundingMode::HalfTowardZero => {
+                    $crate::support::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
                         if scaled >= 0.0 {
                             (scaled - 0.5).ceil()
                         } else {
                             (scaled + 0.5).floor()
                         }
                     }
-                    $crate::rounding::RoundingMode::Trunc => scaled.trunc(),
-                    $crate::rounding::RoundingMode::Floor => scaled.floor(),
-                    $crate::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                    $crate::support::rounding::RoundingMode::Trunc => scaled.trunc(),
+                    $crate::support::rounding::RoundingMode::Floor => scaled.floor(),
+                    $crate::support::rounding::RoundingMode::Ceiling => scaled.ceil(),
                 };
                 Self(<$Storage>::from_f64(rounded))
             }
@@ -118,7 +118,7 @@ macro_rules! decl_decimal_float_bridge {
             #[inline]
             #[must_use]
             pub fn from_f128(value: f128) -> Self {
-                Self::from_f128_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                Self::from_f128_with(value, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Construct from an `f128` using the supplied rounding mode.
@@ -128,7 +128,7 @@ macro_rules! decl_decimal_float_bridge {
             #[must_use]
             pub fn from_f128_with(
                 value: f128,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 Self::from_f64_with(value as f64, mode)
             }
@@ -155,7 +155,7 @@ macro_rules! decl_decimal_float_bridge {
             #[inline]
             #[must_use]
             pub fn from_f64(value: f64) -> Self {
-                Self::from_f64_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                Self::from_f64_with(value, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Constructs from an `f64` using the supplied rounding
@@ -163,7 +163,7 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_with(value: f64, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn from_f64_with(value: f64, mode: $crate::support::rounding::RoundingMode) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
                 }
@@ -180,9 +180,9 @@ macro_rules! decl_decimal_float_bridge {
                     return Self::MIN;
                 }
                 let rounded = match mode {
-                    $crate::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
-                    $crate::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
-                    $crate::rounding::RoundingMode::HalfTowardZero => {
+                    $crate::support::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
                         // Round to nearest, ties toward zero. Bias the
                         // value by a half-LSB toward zero and then round.
                         if scaled >= 0.0 {
@@ -191,9 +191,9 @@ macro_rules! decl_decimal_float_bridge {
                             (scaled + 0.5).floor()
                         }
                     }
-                    $crate::rounding::RoundingMode::Trunc => scaled.trunc(),
-                    $crate::rounding::RoundingMode::Floor => scaled.floor(),
-                    $crate::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                    $crate::support::rounding::RoundingMode::Trunc => scaled.trunc(),
+                    $crate::support::rounding::RoundingMode::Floor => scaled.floor(),
+                    $crate::support::rounding::RoundingMode::Ceiling => scaled.ceil(),
                 };
                 Self(rounded as $Storage)
             }
@@ -241,7 +241,7 @@ macro_rules! decl_decimal_float_bridge {
             #[inline]
             #[must_use]
             pub fn from_f128(value: f128) -> Self {
-                Self::from_f128_with(value, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                Self::from_f128_with(value, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Construct from an `f128` using the supplied rounding mode.
@@ -250,7 +250,7 @@ macro_rules! decl_decimal_float_bridge {
             #[must_use]
             pub fn from_f128_with(
                 value: f128,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
@@ -268,18 +268,18 @@ macro_rules! decl_decimal_float_bridge {
                     return Self::MIN;
                 }
                 let rounded = match mode {
-                    $crate::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
-                    $crate::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
-                    $crate::rounding::RoundingMode::HalfTowardZero => {
+                    $crate::support::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
                         if scaled >= 0.0 {
                             (scaled - 0.5).ceil()
                         } else {
                             (scaled + 0.5).floor()
                         }
                     }
-                    $crate::rounding::RoundingMode::Trunc => scaled.trunc(),
-                    $crate::rounding::RoundingMode::Floor => scaled.floor(),
-                    $crate::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                    $crate::support::rounding::RoundingMode::Trunc => scaled.trunc(),
+                    $crate::support::rounding::RoundingMode::Floor => scaled.floor(),
+                    $crate::support::rounding::RoundingMode::Ceiling => scaled.ceil(),
                 };
                 Self(rounded as $Storage)
             }

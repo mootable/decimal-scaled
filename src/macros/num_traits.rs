@@ -44,14 +44,14 @@ macro_rules! decl_decimal_num_traits_basics {
         }
 
         impl<const SCALE: u32> ::num_traits::Num for $Type<SCALE> {
-            type FromStrRadixErr = $crate::core_type::ParseError;
+            type FromStrRadixErr = $crate::types::widths::ParseError;
             fn from_str_radix(
                 s: &str,
                 radix: u32,
             ) -> ::core::result::Result<Self, Self::FromStrRadixErr> {
                 if radix != 10 {
                     return ::core::result::Result::Err(
-                        $crate::core_type::ParseError::InvalidChar,
+                        $crate::types::widths::ParseError::InvalidChar,
                     );
                 }
                 <Self as ::core::str::FromStr>::from_str(s)

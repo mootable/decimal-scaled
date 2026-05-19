@@ -10,8 +10,8 @@
 //! Functions covered: `exp` (natural) and `exp2` (base-2).
 
 use crate::algos::exp;
-use crate::core_type::{D9, D18, D38};
-use crate::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
+use crate::support::rounding::RoundingMode;
 
 pub(crate) trait ExpPolicy: Sized {
     /// `e^self` (strict, const-folded `SCALE + STRICT_GUARD`).
@@ -44,7 +44,7 @@ macro_rules! impl_exp_widen {
             fn exp2_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::exp2"), SCALE,
                     ))
             }
@@ -52,7 +52,7 @@ macro_rules! impl_exp_widen {
             fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.exp2_approx_with(working_digits, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::exp2"), SCALE,
                     ))
             }
@@ -117,7 +117,7 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
 
 macro_rules! impl_wide_exp {
     ($T:ident, $exp:path) => {
-        impl<const SCALE: u32> ExpPolicy for crate::core_type::$T<SCALE> {
+        impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn exp_impl(self, mode: RoundingMode) -> Self {
                 Self($exp(self.0, mode, SCALE))
@@ -142,7 +142,7 @@ macro_rules! impl_wide_exp {
 // the lookup table before falling back to the generic `wide_kernel`.
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for crate::core_type::D57<SCALE> {
+impl<const SCALE: u32> ExpPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 45..=56) {

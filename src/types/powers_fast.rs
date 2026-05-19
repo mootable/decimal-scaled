@@ -1,11 +1,11 @@
 //! Lossy (f64-bridge) powers methods for D38.
 //!
-//! Companion to `powers_strict.rs`. The plain methods here are the
+//! Companion to `types/powers.rs`. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
 

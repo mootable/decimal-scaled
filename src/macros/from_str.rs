@@ -1,14 +1,14 @@
 //! Macro-generated `FromStr` for the decimal widths.
 //!
-//! The string-parsing front-end ([`crate::display::parse_components`])
+//! The string-parsing front-end ([`crate::support::display::parse_components`])
 //! is shared across every width — it does sign / dot / digit-character
 //! validation plus the overlong-fractional and leading-zero checks.
 //! The accumulator that turns the validated digit slices into a
 //! storage value is *per-storage*:
 //!
-//! - The **native** arm calls [`crate::display::parse_decimal_bits`],
+//! - The **native** arm calls [`crate::support::display::parse_decimal_bits`],
 //!   which accumulates in `u128` and narrows to the target storage,
-//!   reporting [`crate::core_type::ParseError::OutOfRange`] when the
+//!   reporting [`crate::types::widths::ParseError::OutOfRange`] when the
 //!   narrowing would lose information. SCALE is bounded by 38 here
 //!   so `10^SCALE` always fits in `u128`.
 //! - The **wide** arm emits a per-storage accumulator that does the
@@ -31,9 +31,9 @@ macro_rules! decl_decimal_from_str {
     // width — see the module docs for the rationale.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
-            type Err = $crate::core_type::ParseError;
+            type Err = $crate::types::widths::ParseError;
             fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
-                let comps = $crate::display::parse_components::<SCALE>(s)?;
+                let comps = $crate::support::display::parse_components::<SCALE>(s)?;
                 let negative = comps.negative;
                 let int_str = comps.int_str;
                 let frac_str = comps.frac_str;
@@ -59,7 +59,7 @@ macro_rules! decl_decimal_from_str {
                         ::core::option::Option::Some(v) => v,
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
-                                $crate::core_type::ParseError::OutOfRange,
+                                $crate::types::widths::ParseError::OutOfRange,
                             )
                         }
                     };
@@ -68,7 +68,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::Some(v) => v,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
-                                    $crate::core_type::ParseError::OutOfRange,
+                                    $crate::types::widths::ParseError::OutOfRange,
                                 )
                             }
                         }
@@ -77,7 +77,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::Some(v) => v,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
-                                    $crate::core_type::ParseError::OutOfRange,
+                                    $crate::types::widths::ParseError::OutOfRange,
                                 )
                             }
                         }
@@ -87,7 +87,7 @@ macro_rules! decl_decimal_from_str {
                     ::core::option::Option::Some(v) => v,
                     ::core::option::Option::None => {
                         return ::core::result::Result::Err(
-                            $crate::core_type::ParseError::OutOfRange,
+                            $crate::types::widths::ParseError::OutOfRange,
                         )
                     }
                 };
@@ -101,7 +101,7 @@ macro_rules! decl_decimal_from_str {
                         ::core::option::Option::Some(v) => v,
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
-                                $crate::core_type::ParseError::OutOfRange,
+                                $crate::types::widths::ParseError::OutOfRange,
                             )
                         }
                     };
@@ -110,7 +110,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::Some(v) => v,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
-                                    $crate::core_type::ParseError::OutOfRange,
+                                    $crate::types::widths::ParseError::OutOfRange,
                                 )
                             }
                         }
@@ -119,7 +119,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::Some(v) => v,
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
-                                    $crate::core_type::ParseError::OutOfRange,
+                                    $crate::types::widths::ParseError::OutOfRange,
                                 )
                             }
                         }
@@ -132,7 +132,7 @@ macro_rules! decl_decimal_from_str {
                         ::core::option::Option::Some(v) => v,
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
-                                $crate::core_type::ParseError::OutOfRange,
+                                $crate::types::widths::ParseError::OutOfRange,
                             )
                         }
                     };
@@ -144,7 +144,7 @@ macro_rules! decl_decimal_from_str {
                     ::core::option::Option::Some(v) => v,
                     ::core::option::Option::None => {
                         return ::core::result::Result::Err(
-                            $crate::core_type::ParseError::OutOfRange,
+                            $crate::types::widths::ParseError::OutOfRange,
                         )
                     }
                 };
@@ -156,12 +156,12 @@ macro_rules! decl_decimal_from_str {
     // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
-            type Err = $crate::core_type::ParseError;
+            type Err = $crate::types::widths::ParseError;
             fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
-                let bits_i128 = $crate::display::parse_decimal_bits::<SCALE>(s)?;
+                let bits_i128 = $crate::support::display::parse_decimal_bits::<SCALE>(s)?;
                 if bits_i128 > <$Storage>::MAX as i128 || bits_i128 < <$Storage>::MIN as i128 {
                     return ::core::result::Result::Err(
-                        $crate::core_type::ParseError::OutOfRange,
+                        $crate::types::widths::ParseError::OutOfRange,
                     );
                 }
                 ::core::result::Result::Ok(Self(bits_i128 as $Storage))

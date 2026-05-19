@@ -18,8 +18,8 @@
 //! Plus [`decl_decimal_int_conversion_methods!`] which emits
 //! `from_int` / `from_i32` / `to_int` / `to_int_with` on each width.
 //!
-//! [`ConvertError::Overflow`]: $crate::error::ConvertError::Overflow
-//! [`ConvertError::NotFinite`]: $crate::error::ConvertError::NotFinite
+//! [`ConvertError::Overflow`]: $crate::support::error::ConvertError::Overflow
+//! [`ConvertError::NotFinite`]: $crate::support::error::ConvertError::NotFinite
 
 /// Generates `From<$Src> for $Type<SCALE>` that scales the value by
 /// `10^SCALE` and stores it in `$Storage`. The cast `value as $Storage`
@@ -106,7 +106,7 @@ macro_rules! decl_cross_width_narrowing {
     // widening and the final narrowing cast in both cases.
     (wide $Dest:ident, $DestStorage:ty, $Src:ident, $SrcStorage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<$Src<SCALE>> for $Dest<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             /// Attempts to narrow a wider decimal type to this narrower
             /// one. Fails with `Overflow` when the source value exceeds
             /// the destination's `MIN..=MAX`. The scale is unchanged.
@@ -117,7 +117,7 @@ macro_rules! decl_cross_width_narrowing {
                 let dest_min: $SrcStorage = $crate::wide_int::wide_cast(<$DestStorage>::MIN);
                 if bits > dest_max || bits < dest_min {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::Overflow,
+                        $crate::support::error::ConvertError::Overflow,
                     );
                 }
                 ::core::result::Result::Ok(Self($crate::wide_int::wide_cast(bits)))
@@ -128,7 +128,7 @@ macro_rules! decl_cross_width_narrowing {
     // Native-to-native narrowing.
     ($Dest:ident, $DestStorage:ty, $Src:ident, $SrcStorage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<$Src<SCALE>> for $Dest<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             /// Attempts to narrow a wider decimal type to this narrower
             /// one. Fails with `OutOfRange` when the source value
             /// exceeds the destination's `MIN..=MAX`. The scale is
@@ -140,7 +140,7 @@ macro_rules! decl_cross_width_narrowing {
                     || bits < (<$DestStorage>::MIN as $SrcStorage)
                 {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::Overflow,
+                        $crate::support::error::ConvertError::Overflow,
                     );
                 }
                 ::core::result::Result::Ok(Self(bits as $DestStorage))
@@ -160,13 +160,13 @@ macro_rules! decl_try_from_i128 {
     // multiplier overflowing the (still finite) wide storage.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<i128> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: i128) -> ::core::result::Result<Self, Self::Error> {
                 let widened: $Storage = $crate::wide_int::wide_cast(value);
                 let scaled = widened
                     .checked_mul(Self::multiplier())
-                    .ok_or($crate::error::ConvertError::Overflow)?;
+                    .ok_or($crate::support::error::ConvertError::Overflow)?;
                 ::core::result::Result::Ok(Self(scaled))
             }
         }
@@ -175,16 +175,16 @@ macro_rules! decl_try_from_i128 {
     // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<i128> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: i128) -> ::core::result::Result<Self, Self::Error> {
                 let m: i128 = Self::multiplier() as i128;
                 let scaled = value
                     .checked_mul(m)
-                    .ok_or($crate::error::ConvertError::Overflow)?;
+                    .ok_or($crate::support::error::ConvertError::Overflow)?;
                 if scaled > <$Storage>::MAX as i128 || scaled < <$Storage>::MIN as i128 {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::Overflow,
+                        $crate::support::error::ConvertError::Overflow,
                     );
                 }
                 ::core::result::Result::Ok(Self(scaled as $Storage))
@@ -205,13 +205,13 @@ macro_rules! decl_try_from_u128 {
     // only failure mode is the `checked_mul` overflowing the storage.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<u128> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: u128) -> ::core::result::Result<Self, Self::Error> {
                 let widened: $Storage = <$Storage>::from_u128(value);
                 let scaled = widened
                     .checked_mul(Self::multiplier())
-                    .ok_or($crate::error::ConvertError::Overflow)?;
+                    .ok_or($crate::support::error::ConvertError::Overflow)?;
                 ::core::result::Result::Ok(Self(scaled))
             }
         }
@@ -220,11 +220,11 @@ macro_rules! decl_try_from_u128 {
     // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<u128> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: u128) -> ::core::result::Result<Self, Self::Error> {
                 let as_i128: i128 = i128::try_from(value)
-                    .map_err(|_| $crate::error::ConvertError::Overflow)?;
+                    .map_err(|_| $crate::support::error::ConvertError::Overflow)?;
                 <Self as ::core::convert::TryFrom<i128>>::try_from(as_i128)
             }
         }
@@ -244,12 +244,12 @@ macro_rules! decl_try_from_f64 {
     // `f64` -> wide cast is also the `WideInt` cast.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<f64> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: f64) -> ::core::result::Result<Self, Self::Error> {
                 if !value.is_finite() {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::NotFinite,
+                        $crate::support::error::ConvertError::NotFinite,
                     );
                 }
                 let mult_f64: f64 = Self::multiplier().as_f64();
@@ -258,7 +258,7 @@ macro_rules! decl_try_from_f64 {
                 let storage_min_f64: f64 = <$Storage>::MIN.as_f64();
                 if !(storage_min_f64..storage_max_f64).contains(&scaled) {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::Overflow,
+                        $crate::support::error::ConvertError::Overflow,
                     );
                 }
                 ::core::result::Result::Ok(Self(<$Storage>::from_f64(scaled)))
@@ -269,12 +269,12 @@ macro_rules! decl_try_from_f64 {
     // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<f64> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: f64) -> ::core::result::Result<Self, Self::Error> {
                 if !value.is_finite() {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::NotFinite,
+                        $crate::support::error::ConvertError::NotFinite,
                     );
                 }
                 let scaled = value * (Self::multiplier() as f64);
@@ -282,7 +282,7 @@ macro_rules! decl_try_from_f64 {
                 let storage_min_f64 = <$Storage>::MIN as f64;
                 if !(storage_min_f64..storage_max_f64).contains(&scaled) {
                     return ::core::result::Result::Err(
-                        $crate::error::ConvertError::Overflow,
+                        $crate::support::error::ConvertError::Overflow,
                     );
                 }
                 ::core::result::Result::Ok(Self(scaled as $Storage))
@@ -302,7 +302,7 @@ macro_rules! decl_try_from_f32 {
     };
     ($Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<f32> for $Type<SCALE> {
-            type Error = $crate::error::ConvertError;
+            type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: f32) -> ::core::result::Result<Self, Self::Error> {
                 <Self as ::core::convert::TryFrom<f64>>::try_from(value as f64)
@@ -347,7 +347,7 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// integer part falls outside `i64`'s range.
             #[inline]
             pub fn to_int(self) -> i64 {
-                self.to_int_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.to_int_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Converts to `i64` using the supplied rounding mode for the
@@ -356,7 +356,7 @@ macro_rules! decl_decimal_int_conversion_methods {
             #[inline]
             pub fn to_int_with(
                 self,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> i64 {
                 let zero = <$Storage>::from_str_radix("0", 10)
                     .expect("wide decimal: invalid base-10 literal");
@@ -376,7 +376,7 @@ macro_rules! decl_decimal_int_conversion_methods {
                     let half = divisor.unsigned_abs() >> 1;
                     let non_negative = !raw.is_negative();
                     match mode {
-                        $crate::rounding::RoundingMode::HalfToEven => {
+                        $crate::support::rounding::RoundingMode::HalfToEven => {
                             if abs_rem < half {
                                 quotient
                             } else if abs_rem > half {
@@ -389,7 +389,7 @@ macro_rules! decl_decimal_int_conversion_methods {
                                 quotient - one
                             }
                         }
-                        $crate::rounding::RoundingMode::HalfAwayFromZero => {
+                        $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
                             if abs_rem < half {
                                 quotient
                             } else if non_negative {
@@ -398,18 +398,18 @@ macro_rules! decl_decimal_int_conversion_methods {
                                 quotient - one
                             }
                         }
-                        $crate::rounding::RoundingMode::HalfTowardZero => {
+                        $crate::support::rounding::RoundingMode::HalfTowardZero => {
                             if abs_rem > half {
                                 if non_negative { quotient + one } else { quotient - one }
                             } else {
                                 quotient
                             }
                         }
-                        $crate::rounding::RoundingMode::Trunc => quotient,
-                        $crate::rounding::RoundingMode::Floor => {
+                        $crate::support::rounding::RoundingMode::Trunc => quotient,
+                        $crate::support::rounding::RoundingMode::Floor => {
                             if non_negative { quotient } else { quotient - one }
                         }
-                        $crate::rounding::RoundingMode::Ceiling => {
+                        $crate::support::rounding::RoundingMode::Ceiling => {
                             if non_negative { quotient + one } else { quotient }
                         }
                     }
@@ -449,7 +449,7 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// of the rounded value falls outside `i64`'s range.
             #[inline]
             pub fn to_int(self) -> i64 {
-                self.to_int_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.to_int_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Converts to `i64` using the supplied rounding mode for the
@@ -458,7 +458,7 @@ macro_rules! decl_decimal_int_conversion_methods {
             #[inline]
             pub fn to_int_with(
                 self,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> i64 {
                 let raw = self.0 as i128;
                 let divisor = Self::multiplier() as i128;
@@ -470,7 +470,7 @@ macro_rules! decl_decimal_int_conversion_methods {
                     let abs_rem = remainder.unsigned_abs();
                     let half = (divisor / 2) as u128;
                     match mode {
-                        $crate::rounding::RoundingMode::HalfToEven => {
+                        $crate::support::rounding::RoundingMode::HalfToEven => {
                             if abs_rem < half {
                                 quotient
                             } else if abs_rem > half {
@@ -483,7 +483,7 @@ macro_rules! decl_decimal_int_conversion_methods {
                                 quotient - 1
                             }
                         }
-                        $crate::rounding::RoundingMode::HalfAwayFromZero => {
+                        $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
                             if abs_rem < half {
                                 quotient
                             } else if raw >= 0 {
@@ -492,18 +492,18 @@ macro_rules! decl_decimal_int_conversion_methods {
                                 quotient - 1
                             }
                         }
-                        $crate::rounding::RoundingMode::HalfTowardZero => {
+                        $crate::support::rounding::RoundingMode::HalfTowardZero => {
                             if abs_rem > half {
                                 if raw >= 0 { quotient + 1 } else { quotient - 1 }
                             } else {
                                 quotient
                             }
                         }
-                        $crate::rounding::RoundingMode::Trunc => quotient,
-                        $crate::rounding::RoundingMode::Floor => {
+                        $crate::support::rounding::RoundingMode::Trunc => quotient,
+                        $crate::support::rounding::RoundingMode::Floor => {
                             if raw >= 0 { quotient } else { quotient - 1 }
                         }
-                        $crate::rounding::RoundingMode::Ceiling => {
+                        $crate::support::rounding::RoundingMode::Ceiling => {
                             if raw >= 0 { quotient + 1 } else { quotient }
                         }
                     }

@@ -480,14 +480,14 @@ impl Fixed {
     ///
     /// Returns `None` if the rounded magnitude does not fit `i128`.
     ///
-    /// [`RoundingMode`]: crate::rounding::RoundingMode
+    /// [`RoundingMode`]: crate::support::rounding::RoundingMode
     #[inline]
     pub(crate) fn round_to_i128(self, w: u32, target: u32) -> Option<i128> {
-        self.round_to_i128_with(w, target, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.round_to_i128_with(w, target, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Mode-aware variant of [`Self::round_to_i128`]. Mode dispatch
-    /// runs through [`crate::rounding::should_bump`], matching the
+    /// runs through [`crate::support::rounding::should_bump`], matching the
     /// rest of the crate's rounding sites.
     ///
     /// `#[inline]` so callers that thread a const mode (the strict
@@ -498,7 +498,7 @@ impl Fixed {
         self,
         w: u32,
         target: u32,
-        mode: crate::rounding::RoundingMode,
+        mode: crate::support::rounding::RoundingMode,
     ) -> Option<i128> {
         let shift = w - target;
         if shift == 0 {
@@ -525,7 +525,7 @@ impl Fixed {
             let cmp_r = cmp_u256(r, comp);
             let q_is_odd = (q[0] & 1) == 1;
             let result_positive = !self.negative;
-            if crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+            if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                 add_u256(q, [1, 0]).0
             } else {
                 q
@@ -841,7 +841,7 @@ mod tests {
         // shift=0 path: if the magnitude doesn't fit i128, return None.
         // Magnitude > i128::MAX requires the high limb to be set or the
         // low limb to exceed 1<<127.
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         let hte = RoundingMode::HalfToEven;
         // High limb non-zero — instant overflow.
         let v = Fixed { negative: false, mag: [0, 1] };
@@ -865,7 +865,7 @@ mod tests {
         // exceeds i128::MAX for sufficiently large inputs; here we use
         // the full 256-bit max so the high-limb-nonzero post-rounding
         // overflow branch fires.
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         let hte = RoundingMode::HalfToEven;
         // 2^128 / 10 = ~3.4e37, fits low limb; not an overflow.
         let two_to_128 = Fixed { negative: false, mag: [0, 1] };
@@ -904,7 +904,7 @@ mod tests {
 
     #[test]
     fn fixed_round_to_i128_half_to_even() {
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         // Working scale 6, round to scale 0. Pin the mode so this
         // test asserts HalfToEven specifically regardless of the
         // active `rounding-*` feature.

@@ -63,8 +63,8 @@
 //! - **Joint kernels** (`sin_cos`, `sinh_cosh`) exist only on the
 //!   wide tiers; reach for them on the concrete type.
 
-pub use crate::arithmetic_trait::DecimalArithmetic;
-pub use crate::convert_trait::DecimalConvert;
+pub use crate::types::traits::arithmetic::DecimalArithmetic;
+pub use crate::types::traits::convert::DecimalConvert;
 
 /// Marker supertrait combining the four halves of the decimal API
 /// surface ([`DecimalArithmetic`], [`DecimalConvert`],
@@ -75,15 +75,15 @@ pub use crate::convert_trait::DecimalConvert;
 pub trait Decimal:
     DecimalArithmetic
     + DecimalConvert
-    + crate::transcendental_trait::DecimalTranscendental
-    + crate::consts::DecimalConstants
+    + crate::types::traits::transcendental::DecimalTranscendental
+    + crate::types::consts::DecimalConstants
 {
 }
 
 impl<T> Decimal for T where
     T: DecimalArithmetic
         + DecimalConvert
-        + crate::transcendental_trait::DecimalTranscendental
-        + crate::consts::DecimalConstants
+        + crate::types::traits::transcendental::DecimalTranscendental
+        + crate::types::consts::DecimalConstants
 {
 }

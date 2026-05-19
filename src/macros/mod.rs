@@ -3,7 +3,7 @@
 //!
 //! Every macro takes the target `$Type` (e.g. `D9`, `D18`, `D38`)
 //! and the relevant storage / widening types as parameters, then
-//! emits the corresponding impl block. Each width's `core_type.rs`
+//! emits the corresponding impl block. Each width's `types/widths.rs`
 //! entry then becomes a series of one-line macro invocations.
 //!
 //! Naming convention: the file name reflects the surface

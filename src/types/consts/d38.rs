@@ -6,7 +6,7 @@
 //! The [`DecimalConsts`] trait exposes `pi`, `tau`, `half_pi`,
 //! `quarter_pi`, `golden`, and `e` as methods on every width. The
 //! native-tier (`D38` and narrower) impls live here; the wide tier
-//! (`D76` / `D153` / `D307`) impls live in `consts_wide.rs`.
+//! (`D76` / `D153` / `D307`) impls live in `types/consts/wide.rs`.
 //!
 //! Two inherent associated constants, `EPSILON` and `MIN_POSITIVE`, are
 //! provided as analogues to `f64::EPSILON` and `f64::MIN_POSITIVE` so
@@ -24,9 +24,9 @@
 //! | Tier           | Reference storage | `SCALE_REF` (= reference digits) | Source file       |
 //! |----------------|-------------------|----------------------------------|-------------------|
 //! | D9 / D18 / D38 | `Int256`          | 75                               | this file         |
-//! | D76            | `Int256`          | 75                               | `consts_wide.rs`  |
-//! | D153           | `Int512`          | 153                              | `consts_wide.rs`  |
-//! | D307           | `Int1024`         | 307                              | `consts_wide.rs`  |
+//! | D76            | `Int256`          | 75                               | `types/consts/wide.rs`  |
+//! | D153           | `Int512`          | 153                              | `types/consts/wide.rs`  |
+//! | D307           | `Int1024`         | 307                              | `types/consts/wide.rs`  |
 //!
 //! The rescale from `SCALE_REF` to the caller's `SCALE` uses integer
 //! division with the crate-default [`RoundingMode`] (half-to-even by
@@ -45,7 +45,7 @@
 //! `half_pi ≈ 1.57080`, `quarter_pi ≈ 0.78540`, and `golden ≈ 1.61803`
 //! all fit inside ±1.70141 and remain correctly-rounded to 0.5 ULP.
 //!
-//! [`RoundingMode`]: crate::rounding::RoundingMode
+//! [`RoundingMode`]: crate::support::rounding::RoundingMode
 //!
 //! # Sources
 //!
@@ -54,8 +54,8 @@
 //! 80000-2 (pi, tau, pi/2, pi/4), OEIS A001113 (e), OEIS A001622
 //! (golden ratio).
 
-use crate::core_type::D38;
-use crate::d_w128_kernels::Fixed;
+use crate::types::widths::D38;
+use crate::algos::fixed_d38::Fixed;
 use crate::wide_int::Int256;
 
 /// Reference scale for every constant in this file: the 75-digit
@@ -117,7 +117,7 @@ const GOLDEN_RAW: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
 /// doesn't include this constant — e.g. `pi ≈ 3.14` at `D38<38>` would
 /// need `3.14 × 10^38 ≈ 3.14e38`, which exceeds `i128::MAX ≈ 1.7e38`).
 fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i128 {
-    rescale_75_to_target_with::<TARGET>(raw, name, crate::rounding::DEFAULT_ROUNDING_MODE)
+    rescale_75_to_target_with::<TARGET>(raw, name, crate::support::rounding::DEFAULT_ROUNDING_MODE)
 }
 
 /// Mode-aware variant of [`rescale_75_to_target`].
@@ -132,7 +132,7 @@ fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i
 fn rescale_75_to_target_with<const TARGET: u32>(
     raw: Int256,
     name: &'static str,
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     let words = raw.0;
     let mag: [u128; 2] = [
@@ -258,17 +258,17 @@ pub trait DecimalConstants: Sized {
     // over-flow their fixed-size buffers.
 
     /// `pi()` under the supplied rounding mode.
-    fn pi_with(mode: crate::rounding::RoundingMode) -> Self;
+    fn pi_with(mode: crate::support::rounding::RoundingMode) -> Self;
     /// `tau()` under the supplied rounding mode.
-    fn tau_with(mode: crate::rounding::RoundingMode) -> Self;
+    fn tau_with(mode: crate::support::rounding::RoundingMode) -> Self;
     /// `half_pi()` under the supplied rounding mode.
-    fn half_pi_with(mode: crate::rounding::RoundingMode) -> Self;
+    fn half_pi_with(mode: crate::support::rounding::RoundingMode) -> Self;
     /// `quarter_pi()` under the supplied rounding mode.
-    fn quarter_pi_with(mode: crate::rounding::RoundingMode) -> Self;
+    fn quarter_pi_with(mode: crate::support::rounding::RoundingMode) -> Self;
     /// `golden()` under the supplied rounding mode.
-    fn golden_with(mode: crate::rounding::RoundingMode) -> Self;
+    fn golden_with(mode: crate::support::rounding::RoundingMode) -> Self;
     /// `e()` under the supplied rounding mode.
-    fn e_with(mode: crate::rounding::RoundingMode) -> Self;
+    fn e_with(mode: crate::support::rounding::RoundingMode) -> Self;
 }
 
 // Backwards-compat alias for the trait's original name. The 0.3.2
@@ -311,32 +311,32 @@ pub(crate) fn e_at_target<const TARGET: u32>() -> i128 {
 // Mode-aware variants — used by the `*_with(mode)` constant methods.
 
 pub(crate) fn pi_at_target_with<const TARGET: u32>(
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     rescale_75_to_target_with::<TARGET>(PI_RAW, "pi", mode)
 }
 pub(crate) fn tau_at_target_with<const TARGET: u32>(
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     rescale_75_to_target_with::<TARGET>(TAU_RAW, "tau", mode)
 }
 pub(crate) fn half_pi_at_target_with<const TARGET: u32>(
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     rescale_75_to_target_with::<TARGET>(HALF_PI_RAW, "half_pi", mode)
 }
 pub(crate) fn quarter_pi_at_target_with<const TARGET: u32>(
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     rescale_75_to_target_with::<TARGET>(QUARTER_PI_RAW, "quarter_pi", mode)
 }
 pub(crate) fn golden_at_target_with<const TARGET: u32>(
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     rescale_75_to_target_with::<TARGET>(GOLDEN_RAW, "golden", mode)
 }
 pub(crate) fn e_at_target_with<const TARGET: u32>(
-    mode: crate::rounding::RoundingMode,
+    mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
     rescale_75_to_target_with::<TARGET>(E_RAW, "e", mode)
 }
@@ -360,7 +360,7 @@ crate::macros::consts::decl_decimal_consts!(D38, i128);
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::D38s12;
+    use crate::types::widths::D38s12;
 
     // Bit-exact assertions at SCALE = 12.
     //
@@ -373,7 +373,7 @@ mod tests {
     /// Expected: 3_141_592_653_590.
     #[test]
     fn pi_is_bit_exact_at_scale_12() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D38s12::pi().to_bits(), 3_141_592_653_590_i128);
     }
 
@@ -382,7 +382,7 @@ mod tests {
     /// 14th digit is 5 -> round up. Expected: 6_283_185_307_180.
     #[test]
     fn tau_is_bit_exact_at_scale_12() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D38s12::tau().to_bits(), 6_283_185_307_180_i128);
     }
 
@@ -391,7 +391,7 @@ mod tests {
     /// 14th digit is 8 -> round up. Expected: 1_570_796_326_795.
     #[test]
     fn half_pi_is_bit_exact_at_scale_12() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D38s12::half_pi().to_bits(), 1_570_796_326_795_i128);
     }
 
@@ -400,7 +400,7 @@ mod tests {
     /// 13th digit is 4 -> no round-up. Expected: 785_398_163_397.
     #[test]
     fn quarter_pi_is_bit_exact_at_scale_12() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D38s12::quarter_pi().to_bits(), 785_398_163_397_i128);
     }
 
@@ -409,7 +409,7 @@ mod tests {
     /// 14th digit is 0 -> no round-up. Expected: 2_718_281_828_459.
     #[test]
     fn e_is_bit_exact_at_scale_12() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D38s12::e().to_bits(), 2_718_281_828_459_i128);
     }
 
@@ -418,7 +418,7 @@ mod tests {
     /// 14th digit is 8 -> round up. Expected: 1_618_033_988_750.
     #[test]
     fn golden_is_bit_exact_at_scale_12() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         assert_eq!(D38s12::golden().to_bits(), 1_618_033_988_750_i128);
     }
 
@@ -502,7 +502,7 @@ mod tests {
     /// 3.1415926535...). Expected raw bits: 3_141_593.
     #[test]
     fn pi_at_scale_6_is_bit_exact() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         type D6 = D38<6>;
         assert_eq!(D6::pi().to_bits(), 3_141_593_i128);
     }
@@ -511,7 +511,7 @@ mod tests {
     /// round-up).
     #[test]
     fn pi_at_scale_0_is_three() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         type D0 = D38<0>;
         assert_eq!(D0::pi().to_bits(), 3_i128);
     }
@@ -590,7 +590,7 @@ mod tests {
     /// Negative-side rounding: negating pi gives the expected raw bits.
     #[test]
     fn neg_pi_round_trip() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         let pi = D38s12::pi();
         let neg_pi = -pi;
         assert_eq!(neg_pi.to_bits(), -3_141_592_653_590_i128);

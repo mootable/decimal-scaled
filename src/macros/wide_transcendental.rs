@@ -2,7 +2,7 @@
 //! (D76 / D153 / D307).
 //!
 //! D38 and the narrow tiers run their strict transcendentals on the
-//! 256-bit `d_w128_kernels::Fixed` guard-digit intermediate; D9 / D18
+//! 256-bit `algos::fixed_d38::Fixed` guard-digit intermediate; D9 / D18
 //! delegate into D38. The wide tiers cannot widen into D38 — their
 //! scale range exceeds it — so they need their own guard-digit core.
 //!
@@ -69,7 +69,7 @@
 //!   that didn't cancel even with many guard digits.
 //!
 //! The final round to storage runs through
-//! [`crate::rounding::should_bump`] and honours `DEFAULT_ROUNDING_MODE`.
+//! [`crate::support::rounding::should_bump`] and honours `DEFAULT_ROUNDING_MODE`.
 //!
 //! For inputs whose own storage representation has ≤ 0.5 LSB
 //! rounding (any value parsed from a literal at the storage scale),
@@ -79,7 +79,7 @@
 //! propagates through whatever conditioning the method has — that's
 //! an input-side budget the wide-tier API can't compensate for.
 //!
-//! [`RoundingMode`]: crate::rounding::RoundingMode
+//! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
 /// Emits the strict transcendental surface for a wide decimal tier.
 ///
@@ -181,8 +181,8 @@ macro_rules! decl_wide_transcendental {
                 let cmp_r = ar.cmp(&comp);
                 let q_is_odd = (q % lit(2)) != lit(0);
                 let result_positive = (n < lit(0)) == (d < lit(0));
-                if $crate::rounding::should_bump(
-                    $crate::rounding::RoundingMode::HalfToEven,
+                if $crate::support::rounding::should_bump(
+                    $crate::support::rounding::RoundingMode::HalfToEven,
                     cmp_r,
                     q_is_odd,
                     result_positive,
@@ -276,12 +276,12 @@ macro_rules! decl_wide_transcendental {
             /// type's storage. Panics if the rounded value does not
             /// fit.
             ///
-            /// Mode dispatch goes through [`crate::rounding::should_bump`]
+            /// Mode dispatch goes through [`crate::support::rounding::should_bump`]
             /// (the same strategy the operator path uses), so a
             /// wide-tier `*_strict` honours the active `rounding-*`
             /// feature flag instead of always rounding half-to-even.
             pub(crate) fn round_to_storage(v: W, w: u32, target: u32) -> $Storage {
-                round_to_storage_with(v, w, target, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                round_to_storage_with(v, w, target, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Mode-aware variant of [`round_to_storage`].
@@ -289,7 +289,7 @@ macro_rules! decl_wide_transcendental {
                 v: W,
                 w: u32,
                 target: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
                 let divisor = pow10_cached(w - target);
                 let q = v / divisor;
@@ -302,7 +302,7 @@ macro_rules! decl_wide_transcendental {
                     let cmp_r = ar.cmp(&comp);
                     let q_is_odd = (q % lit(2)) != lit(0);
                     let result_positive = v >= lit(0);
-                    if $crate::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
+                    if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                         if result_positive { q + lit(1) } else { q - lit(1) }
                     } else {
                         q
@@ -1034,7 +1034,7 @@ macro_rules! decl_wide_transcendental {
             pub fn ln_strict(self) -> Self {
                 <Self as $crate::policy::ln::LnPolicy>::ln_impl(
                     self,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
@@ -1140,7 +1140,7 @@ macro_rules! decl_wide_transcendental {
             pub fn exp_strict(self) -> Self {
                 <Self as $crate::policy::exp::ExpPolicy>::exp_impl(
                     self,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
@@ -1186,7 +1186,7 @@ macro_rules! decl_wide_transcendental {
             pub fn sin_strict(self) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::sin_impl(
                     self,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
@@ -1204,7 +1204,7 @@ macro_rules! decl_wide_transcendental {
             pub fn cos_strict(self) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::cos_impl(
                     self,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
@@ -1242,7 +1242,7 @@ macro_rules! decl_wide_transcendental {
             pub fn tan_strict(self) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::tan_impl(
                     self,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
@@ -1256,7 +1256,7 @@ macro_rules! decl_wide_transcendental {
             pub fn atan_strict(self) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::atan_impl(
                     self,
-                    $crate::rounding::DEFAULT_ROUNDING_MODE,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
                 )
             }
 
@@ -1599,14 +1599,14 @@ macro_rules! decl_wide_transcendental {
             /// cell — see `policy::ln`.
             #[inline]
             #[must_use]
-            pub fn ln_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::ln::LnPolicy>::ln_impl(self, mode)
             }
 
             /// Mode-aware sibling of [`Self::ln_strict_agm`].
             #[inline]
             #[must_use]
-            pub fn ln_strict_agm_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn ln_strict_agm_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::ln_agm: argument must be positive"));
@@ -1619,7 +1619,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::exp_strict_agm`].
             #[inline]
             #[must_use]
-            pub fn exp_strict_agm_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn exp_strict_agm_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
@@ -1632,7 +1632,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::log_strict`].
             #[inline]
             #[must_use]
-            pub fn log_strict_with(self, base: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn log_strict_with(self, base: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 let braw = base.to_bits();
                 let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
@@ -1654,7 +1654,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::log2_strict`].
             #[inline]
             #[must_use]
-            pub fn log2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
@@ -1667,7 +1667,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::log10_strict`].
             #[inline]
             #[must_use]
-            pub fn log10_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
@@ -1682,14 +1682,14 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::exp`.
             #[inline]
             #[must_use]
-            pub fn exp_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::exp::ExpPolicy>::exp_impl(self, mode)
             }
 
             /// Mode-aware sibling of [`Self::exp2_strict`].
             #[inline]
             #[must_use]
-            pub fn exp2_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
@@ -1703,7 +1703,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::powf_strict`].
             #[inline]
             #[must_use]
-            pub fn powf_strict_with(self, exp: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn powf_strict_with(self, exp: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
@@ -1720,7 +1720,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn sin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::sin_impl(self, mode)
             }
 
@@ -1736,7 +1736,7 @@ macro_rules! decl_wide_transcendental {
             /// slack.
             #[inline]
             #[must_use]
-            pub fn cos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::cos_impl(self, mode)
             }
 
@@ -1745,7 +1745,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn tan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::tan_impl(self, mode)
             }
 
@@ -1754,7 +1754,7 @@ macro_rules! decl_wide_transcendental {
             /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
-            pub fn atan_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::trig::TrigPolicy>::atan_impl(self, mode)
             }
 
@@ -1763,7 +1763,7 @@ macro_rules! decl_wide_transcendental {
             /// the algorithm.
             #[inline]
             #[must_use]
-            pub fn asin_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn asin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let one_w = $core::one(w);
                 let v = $core::to_work(self.to_bits());
@@ -1798,7 +1798,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::acos_strict`].
             #[inline]
             #[must_use]
-            pub fn acos_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn acos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let one_w = $core::one(w);
                 let v = $core::to_work(self.to_bits());
@@ -1834,7 +1834,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::atan2_strict`].
             #[inline]
             #[must_use]
-            pub fn atan2_strict_with(self, other: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn atan2_strict_with(self, other: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
                 let yraw = self.to_bits();
@@ -1865,7 +1865,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::sinh_strict`].
             #[inline]
             #[must_use]
-            pub fn sinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
@@ -1877,7 +1877,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::cosh_strict`].
             #[inline]
             #[must_use]
-            pub fn cosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
@@ -1889,7 +1889,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::tanh_strict`].
             #[inline]
             #[must_use]
-            pub fn tanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
@@ -1901,7 +1901,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::asinh_strict`].
             #[inline]
             #[must_use]
-            pub fn asinh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn asinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
@@ -1929,7 +1929,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::acosh_strict`].
             #[inline]
             #[must_use]
-            pub fn acosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let one_w = $core::one(w);
                 let v = $core::to_work(self.to_bits());
@@ -1951,7 +1951,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::atanh_strict`].
             #[inline]
             #[must_use]
-            pub fn atanh_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let one_w = $core::one(w);
                 let v = $core::to_work(self.to_bits());
@@ -1967,7 +1967,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::to_degrees_strict`].
             #[inline]
             #[must_use]
-            pub fn to_degrees_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn to_degrees_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 debug_assert!(
@@ -1986,7 +1986,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::to_radians_strict`].
             #[inline]
             #[must_use]
-            pub fn to_radians_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn to_radians_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let r = $core::mul(v, $core::pi(w), w)
@@ -1997,7 +1997,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::sin_cos_strict`].
             #[inline]
             #[must_use]
-            pub fn sin_cos_strict_with(self, mode: $crate::rounding::RoundingMode) -> (Self, Self) {
+            pub fn sin_cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
                 let (s, c) = $core::sin_cos_fixed($core::to_work(self.to_bits()), w);
                 (
@@ -2009,7 +2009,7 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware sibling of [`Self::sinh_cosh_strict`].
             #[inline]
             #[must_use]
-            pub fn sinh_cosh_strict_with(self, mode: $crate::rounding::RoundingMode) -> (Self, Self) {
+            pub fn sinh_cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> (Self, Self) {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
@@ -2033,7 +2033,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn ln_approx(self, working_digits: u32) -> Self {
-                self.ln_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.ln_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Natural log with caller-chosen guard digits AND rounding mode.
@@ -2042,7 +2042,7 @@ macro_rules! decl_wide_transcendental {
             pub fn ln_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.ln_strict_with(mode);
@@ -2060,7 +2060,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
-                self.log_approx_with(base, working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.log_approx_with(base, working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Log to chosen base with caller-chosen guard digits AND rounding mode.
@@ -2070,7 +2070,7 @@ macro_rules! decl_wide_transcendental {
                 self,
                 base: Self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.log_strict_with(base, mode);
@@ -2101,7 +2101,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log2_approx(self, working_digits: u32) -> Self {
-                self.log2_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.log2_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Log base 2 with caller-chosen guard digits AND rounding mode.
@@ -2110,7 +2110,7 @@ macro_rules! decl_wide_transcendental {
             pub fn log2_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.log2_strict_with(mode);
@@ -2132,7 +2132,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn log10_approx(self, working_digits: u32) -> Self {
-                self.log10_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.log10_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Log base 10 with caller-chosen guard digits AND rounding mode.
@@ -2141,7 +2141,7 @@ macro_rules! decl_wide_transcendental {
             pub fn log10_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.log10_strict_with(mode);
@@ -2163,7 +2163,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp_approx(self, working_digits: u32) -> Self {
-                self.exp_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.exp_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// `eˣ` with caller-chosen guard digits AND rounding mode.
@@ -2172,7 +2172,7 @@ macro_rules! decl_wide_transcendental {
             pub fn exp_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.exp_strict_with(mode);
@@ -2190,7 +2190,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp2_approx(self, working_digits: u32) -> Self {
-                self.exp2_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.exp2_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// `2ˣ` with caller-chosen guard digits AND rounding mode.
@@ -2199,7 +2199,7 @@ macro_rules! decl_wide_transcendental {
             pub fn exp2_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.exp2_strict_with(mode);
@@ -2218,7 +2218,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn powf_approx(self, exp: Self, working_digits: u32) -> Self {
-                self.powf_approx_with(exp, working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.powf_approx_with(exp, working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// `xʸ` with caller-chosen guard digits AND rounding mode.
@@ -2228,7 +2228,7 @@ macro_rules! decl_wide_transcendental {
                 self,
                 exp: Self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.powf_strict_with(exp, mode);
@@ -2248,7 +2248,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_approx(self, working_digits: u32) -> Self {
-                self.sin_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.sin_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Sine with caller-chosen guard digits AND rounding mode.
@@ -2257,7 +2257,7 @@ macro_rules! decl_wide_transcendental {
             pub fn sin_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.sin_strict_with(mode);
@@ -2271,7 +2271,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cos_approx(self, working_digits: u32) -> Self {
-                self.cos_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.cos_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Cosine with caller-chosen guard digits AND rounding mode.
@@ -2280,7 +2280,7 @@ macro_rules! decl_wide_transcendental {
             pub fn cos_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.cos_strict_with(mode);
@@ -2295,7 +2295,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_cos_approx(self, working_digits: u32) -> (Self, Self) {
-                self.sin_cos_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.sin_cos_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Joint sine/cosine with caller-chosen guard digits AND rounding mode.
@@ -2304,7 +2304,7 @@ macro_rules! decl_wide_transcendental {
             pub fn sin_cos_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
                 if working_digits == $core::GUARD {
                     return self.sin_cos_strict_with(mode);
@@ -2324,7 +2324,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tan_approx(self, working_digits: u32) -> Self {
-                self.tan_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.tan_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Tangent with caller-chosen guard digits AND rounding mode.
@@ -2333,7 +2333,7 @@ macro_rules! decl_wide_transcendental {
             pub fn tan_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.tan_strict_with(mode);
@@ -2357,7 +2357,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan_approx(self, working_digits: u32) -> Self {
-                self.atan_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.atan_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Arctangent with caller-chosen guard digits AND rounding mode.
@@ -2366,7 +2366,7 @@ macro_rules! decl_wide_transcendental {
             pub fn atan_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.atan_strict_with(mode);
@@ -2380,7 +2380,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asin_approx(self, working_digits: u32) -> Self {
-                self.asin_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.asin_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Arcsine with caller-chosen guard digits AND rounding mode.
@@ -2389,7 +2389,7 @@ macro_rules! decl_wide_transcendental {
             pub fn asin_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.asin_strict_with(mode);
@@ -2429,7 +2429,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn acos_approx(self, working_digits: u32) -> Self {
-                self.acos_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.acos_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Arccosine with caller-chosen guard digits AND rounding mode.
@@ -2438,7 +2438,7 @@ macro_rules! decl_wide_transcendental {
             pub fn acos_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.acos_strict_with(mode);
@@ -2479,7 +2479,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan2_approx(self, other: Self, working_digits: u32) -> Self {
-                self.atan2_approx_with(other, working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.atan2_approx_with(other, working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Four-quadrant arctangent with caller-chosen guard digits AND rounding mode.
@@ -2489,7 +2489,7 @@ macro_rules! decl_wide_transcendental {
                 self,
                 other: Self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.atan2_strict_with(other, mode);
@@ -2525,7 +2525,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_approx(self, working_digits: u32) -> Self {
-                self.sinh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.sinh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Hyperbolic sine with caller-chosen guard digits AND rounding mode.
@@ -2534,7 +2534,7 @@ macro_rules! decl_wide_transcendental {
             pub fn sinh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.sinh_strict_with(mode);
@@ -2551,7 +2551,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cosh_approx(self, working_digits: u32) -> Self {
-                self.cosh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.cosh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Hyperbolic cosine with caller-chosen guard digits AND rounding mode.
@@ -2560,7 +2560,7 @@ macro_rules! decl_wide_transcendental {
             pub fn cosh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.cosh_strict_with(mode);
@@ -2577,7 +2577,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tanh_approx(self, working_digits: u32) -> Self {
-                self.tanh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.tanh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Hyperbolic tangent with caller-chosen guard digits AND rounding mode.
@@ -2586,7 +2586,7 @@ macro_rules! decl_wide_transcendental {
             pub fn tanh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.tanh_strict_with(mode);
@@ -2603,7 +2603,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_cosh_approx(self, working_digits: u32) -> (Self, Self) {
-                self.sinh_cosh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.sinh_cosh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Joint sinh/cosh with caller-chosen guard digits AND rounding mode.
@@ -2612,7 +2612,7 @@ macro_rules! decl_wide_transcendental {
             pub fn sinh_cosh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> (Self, Self) {
                 if working_digits == $core::GUARD {
                     return self.sinh_cosh_strict_with(mode);
@@ -2634,7 +2634,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asinh_approx(self, working_digits: u32) -> Self {
-                self.asinh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.asinh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Inverse hyperbolic sine with caller-chosen guard digits AND rounding mode.
@@ -2643,7 +2643,7 @@ macro_rules! decl_wide_transcendental {
             pub fn asinh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.asinh_strict_with(mode);
@@ -2676,7 +2676,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn acosh_approx(self, working_digits: u32) -> Self {
-                self.acosh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.acosh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Inverse hyperbolic cosine with caller-chosen guard digits AND rounding mode.
@@ -2685,7 +2685,7 @@ macro_rules! decl_wide_transcendental {
             pub fn acosh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.acosh_strict_with(mode);
@@ -2712,7 +2712,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atanh_approx(self, working_digits: u32) -> Self {
-                self.atanh_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.atanh_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Inverse hyperbolic tangent with caller-chosen guard digits AND rounding mode.
@@ -2721,7 +2721,7 @@ macro_rules! decl_wide_transcendental {
             pub fn atanh_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.atanh_strict_with(mode);
@@ -2742,7 +2742,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn to_degrees_approx(self, working_digits: u32) -> Self {
-                self.to_degrees_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.to_degrees_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Radians-to-degrees with caller-chosen guard digits AND rounding mode.
@@ -2751,7 +2751,7 @@ macro_rules! decl_wide_transcendental {
             pub fn to_degrees_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.to_degrees_strict_with(mode);
@@ -2775,7 +2775,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn to_radians_approx(self, working_digits: u32) -> Self {
-                self.to_radians_approx_with(working_digits, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.to_radians_approx_with(working_digits, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Degrees-to-radians with caller-chosen guard digits AND rounding mode.
@@ -2784,7 +2784,7 @@ macro_rules! decl_wide_transcendental {
             pub fn to_radians_approx_with(
                 self,
                 working_digits: u32,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
                 if working_digits == $core::GUARD {
                     return self.to_radians_strict_with(mode);
@@ -3068,7 +3068,7 @@ mod tests {
     /// actually changes the result.
     #[test]
     fn wide_strict_with_honours_mode() {
-        use crate::rounding::RoundingMode;
+        use crate::support::rounding::RoundingMode;
         // π at SCALE=6 truncates to 3.141592 (HalfToEven also picks
         // 3.141592 here since digit 7 is < 5). ln(10) at SCALE=6 is
         // 2.302585...0929... — digit after 6 is 0, so all modes pick

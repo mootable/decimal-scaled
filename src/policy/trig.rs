@@ -16,8 +16,8 @@
 //! in [`crate::policy::ln`]).
 
 use crate::algos::trig;
-use crate::core_type::{D9, D18, D38};
-use crate::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
+use crate::support::rounding::RoundingMode;
 
 pub(crate) trait TrigPolicy: Sized {
     fn sin_impl(self, mode: RoundingMode) -> Self;
@@ -92,112 +92,112 @@ macro_rules! impl_narrow_trig {
             fn sinh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::sinh"), SCALE))
             }
             #[inline]
             fn sinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::sinh"), SCALE))
             }
             #[inline]
             fn cosh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::cosh"), SCALE))
             }
             #[inline]
             fn cosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::cosh"), SCALE))
             }
             #[inline]
             fn tanh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::tanh"), SCALE))
             }
             #[inline]
             fn tanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::tanh"), SCALE))
             }
             #[inline]
             fn asinh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::asinh"), SCALE))
             }
             #[inline]
             fn asinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::asinh"), SCALE))
             }
             #[inline]
             fn acosh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::acosh"), SCALE))
             }
             #[inline]
             fn acosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::acosh"), SCALE))
             }
             #[inline]
             fn atanh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::atanh"), SCALE))
             }
             #[inline]
             fn atanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::atanh"), SCALE))
             }
             #[inline]
             fn to_degrees_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::to_degrees"), SCALE))
             }
             #[inline]
             fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::to_degrees"), SCALE))
             }
             #[inline]
             fn to_radians_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_strict_with(mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::to_radians"), SCALE))
             }
             #[inline]
             fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale(
+                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
                         concat!(stringify!($T), "::to_radians"), SCALE))
             }
         }
@@ -307,12 +307,12 @@ impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
 // ignores `working_digits` (see module docs).
 
 /// Emits the `TrigPolicy` impl for one wide tier. `$T` is the typed
-/// decimal ident (e.g. `D57`) prefixed inside with `crate::core_type::`;
+/// decimal ident (e.g. `D57`) prefixed inside with `crate::types::widths::`;
 /// `$sin` / `$cos` / `$tan` / `$atan` are the corresponding
 /// `trig::wide_kernel::*` paths.
 macro_rules! impl_wide_trig {
     ($T:ident, $sin:path, $cos:path, $tan:path, $atan:path) => {
-        impl<const SCALE: u32> TrigPolicy for crate::core_type::$T<SCALE> {
+        impl<const SCALE: u32> TrigPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn sin_impl(self, mode: RoundingMode) -> Self {
                 Self($sin(self.0, mode, SCALE))
@@ -411,7 +411,7 @@ macro_rules! impl_wide_trig {
 // shape `impl_wide_trig!` produces for the sibling tiers.
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::core_type::D57<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {

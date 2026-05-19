@@ -1,11 +1,11 @@
 //! Lossy (f64-bridge) `log_exp` methods for D38.
 //!
-//! Companion to `log_exp_strict.rs`. The plain methods here are the
+//! Companion to `types/log_exp.rs`. The plain methods here are the
 //! f64-bridge variants, gated on std + (no strict feature or
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
 
@@ -165,8 +165,8 @@ impl<const SCALE: u32> D38<SCALE> {
 
 #[cfg(all(test, any(not(feature = "strict"), feature = "fast")))]
 mod tests {
-    use crate::consts::DecimalConstants;
-    use crate::core_type::D38s12;
+    use crate::types::consts::DecimalConstants;
+    use crate::types::widths::D38s12;
 
     /// Tolerance for f64-bridge log/exp tests against integer-valued
     /// expectations.
@@ -343,7 +343,7 @@ mod tests {
     /// `ln(exp(x)) ~= x` for moderate `x` -- the inverse round-trip.
     #[test]
     fn ln_of_exp_round_trip() {
-        if !crate::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
         // Moderate inputs; large positive inputs approach D38s12 magnitude limit.
         for raw in [
             -2_345_678_901_234_i128, // ~-2.345678

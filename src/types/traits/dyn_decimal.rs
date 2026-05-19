@@ -78,7 +78,7 @@ use alloc::string::String;
 use core::any::Any;
 use core::cmp::Ordering;
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 
 /// Discriminator for the concrete decimal width carried by a
 /// [`DynDecimal`] value.

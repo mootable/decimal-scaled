@@ -46,7 +46,7 @@
 
 #[cfg(test)]
 mod tests {
-    use crate::core_type::{D38, D38s12};
+    use crate::types::widths::{D38, D38s12};
 
     // from_num — thin delegate over NumCast / FromPrimitive.
 

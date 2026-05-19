@@ -18,10 +18,10 @@
 
 #![cfg(feature = "bench-alt")]
 
-use crate::core_type::D38;
+use crate::types::widths::D38;
 
 // D38 — every strict transcendental is an `override` (hand-tuned
-// per `d_w128_kernels.rs`). The `_default` alias would be the
+// per `algos/fixed_d38.rs`). The `_default` alias would be the
 // macro-generated `decl_wide_transcendental!` path; that path is
 // not invoked for D38 because it's more than 1.5× slower than the
 // override. With `bench-alt` a separate invocation could add the
@@ -58,7 +58,7 @@ impl<const SCALE: u32> D38<SCALE> {
 // emitted). The `_default` aliases forward to the canonical.
 macro_rules! decl_default_aliases {
     ($Type:ident) => {
-        impl<const SCALE: u32> crate::core_type::$Type<SCALE> {
+        impl<const SCALE: u32> crate::types::widths::$Type<SCALE> {
             #[inline] pub fn ln_strict_default(self) -> Self { self.ln_strict() }
             #[inline] pub fn log_strict_default(self, base: Self) -> Self { self.log_strict(base) }
             #[inline] pub fn log2_strict_default(self) -> Self { self.log2_strict() }

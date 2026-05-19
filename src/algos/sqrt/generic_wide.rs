@@ -8,7 +8,7 @@
 //! exact integer square root is taken with `isqrt`, and a single
 //! round-to-nearest step lands the result on the type's last
 //! representable place. The result is within 0.5 ULP under any of the
-//! six [`crate::rounding::RoundingMode`] values.
+//! six [`crate::support::rounding::RoundingMode`] values.
 //!
 //! # Generic kernel + per-tier shims
 //!
@@ -31,7 +31,7 @@
 //! Each function returns `Storage::ZERO` for `raw <= 0` (the
 //! saturate-not-panic policy matching the typed `sqrt_strict` surface).
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 use crate::wide_int::WideStorage;
 
 /// Generic square-root kernel for the wide-integer family.

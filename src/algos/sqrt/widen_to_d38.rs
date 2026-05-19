@@ -11,8 +11,8 @@
 //! Two free functions are exposed — one per narrow width — so the
 //! policy file's per-width impls are straight-line.
 
-use crate::core_type::{D9, D18, D38};
-use crate::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
+use crate::support::rounding::RoundingMode;
 
 /// `D9` square-root via widen → D38 → narrow.
 #[inline]
@@ -22,7 +22,7 @@ pub(crate) fn sqrt_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<
     let sqrt_d38 = super::mg_divide_d38::sqrt(widened.0, SCALE, mode);
     let narrowed: D9<SCALE> = D38::<SCALE>::from_bits(sqrt_d38)
         .try_into()
-        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("widen_to_d38::sqrt_d9", SCALE));
+        .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale("widen_to_d38::sqrt_d9", SCALE));
     narrowed
 }
 
@@ -34,6 +34,6 @@ pub(crate) fn sqrt_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D
     let sqrt_d38 = super::mg_divide_d38::sqrt(widened.0, SCALE, mode);
     let narrowed: D18<SCALE> = D38::<SCALE>::from_bits(sqrt_d38)
         .try_into()
-        .unwrap_or_else(|_| crate::diagnostics::overflow_panic_with_scale("widen_to_d38::sqrt_d18", SCALE));
+        .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale("widen_to_d38::sqrt_d18", SCALE));
     narrowed
 }

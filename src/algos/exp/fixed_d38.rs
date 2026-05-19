@@ -8,11 +8,11 @@
 //!
 //! Hosts the shared `Fixed` exp primitive used by the `ExpPolicy`
 //! defaults (`exp_fixed`) so the typed-shell file has no
-//! `crate::algos::*` or `crate::d_w128_kernels::*` references left.
+//! `crate::algos::*` or `crate::algos::fixed_d38::*` references left.
 
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, wide_ln2};
-use crate::d_w128_kernels::Fixed;
-use crate::rounding::RoundingMode;
+use crate::algos::fixed_d38::Fixed;
+use crate::support::rounding::RoundingMode;
 
 /// `e` raised to a working-scale value `v_w`, returned at the same
 /// working scale `w`.
@@ -79,7 +79,7 @@ pub(crate) fn exp_with(raw: i128, scale: u32, working_digits: u32, mode: Roundin
     let v_w = if negative_input { v_w.neg() } else { v_w };
     exp_fixed(v_w, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("exp kernel", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp kernel", scale))
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
@@ -96,7 +96,7 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     let v_w = if negative_input { v_w.neg() } else { v_w };
     exp_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("exp kernel", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp kernel", SCALE))
 }
 
 // ── exp2 kernel (D38, Fixed fallback) ─────────────────────────────
@@ -117,7 +117,7 @@ pub(crate) fn exp2_with(raw: i128, scale: u32, working_digits: u32, mode: Roundi
     let arg_w = v_w.mul(wide_ln2(w), w);
     exp_fixed(arg_w, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::exp2", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale))
 }
 
 #[inline]

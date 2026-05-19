@@ -15,8 +15,8 @@
 
 use crate::algos::exp::fixed_d38::exp_fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
-use crate::d_w128_kernels::Fixed;
-use crate::rounding::RoundingMode;
+use crate::algos::fixed_d38::Fixed;
+use crate::support::rounding::RoundingMode;
 
 /// `base^exp` with caller-chosen `working_digits` above the storage scale.
 ///
@@ -44,7 +44,7 @@ pub(crate) fn powf_with<const SCALE: u32>(
     let y_w = if y_neg { y_w.neg() } else { y_w };
     exp_fixed(y_w.mul(ln_x, w), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
@@ -69,5 +69,5 @@ pub(crate) fn powf_strict<const SCALE: u32>(
     let y_w = if y_neg { y_w.neg() } else { y_w };
     exp_fixed(y_w.mul(ln_x, w), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
 }

@@ -68,7 +68,7 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
-                self.sqrt_strict_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.sqrt_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Square root under the supplied rounding mode. See the
@@ -81,7 +81,7 @@ macro_rules! decl_wide_roots {
             /// `(width, SCALE)` cell in `crate::policy::sqrt`.
             #[inline]
             #[must_use]
-            pub fn sqrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn sqrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::sqrt::SqrtPolicy>::sqrt_impl(self, mode)
             }
 
@@ -97,7 +97,7 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
-                self.cbrt_strict_with($crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.cbrt_strict_with($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Cube root under the supplied rounding mode. Sign is
@@ -107,7 +107,7 @@ macro_rules! decl_wide_roots {
             /// Body delegates to `policy::cbrt::CbrtPolicy::cbrt_impl`.
             #[inline]
             #[must_use]
-            pub fn cbrt_strict_with(self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn cbrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 <Self as $crate::policy::cbrt::CbrtPolicy>::cbrt_impl(self, mode)
             }
 
@@ -146,14 +146,14 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn hypot_strict(self, other: Self) -> Self {
-                self.hypot_strict_with(other, $crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.hypot_strict_with(other, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Hypot under the supplied rounding mode. The mode applies
             /// to the inner sqrt step.
             #[inline]
             #[must_use]
-            pub fn hypot_strict_with(self, other: Self, mode: $crate::rounding::RoundingMode) -> Self {
+            pub fn hypot_strict_with(self, other: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let a = self.abs();
                 let b = other.abs();
                 let (large, small) = if a >= b { (a, b) } else { (b, a) };

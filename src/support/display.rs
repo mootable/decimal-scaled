@@ -69,14 +69,14 @@
 
 use core::fmt;
 
-use crate::core_type::{ParseError, D38};
+use crate::types::widths::{ParseError, D38};
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
 
 // ──────────────────────────────────────────────────────────────────────
 // Display and Debug are emitted by the `decl_decimal_display!` macro
-// invoked from `core_type.rs`; the macro itself lives in
+// invoked from `types/widths.rs`; the macro itself lives in
 // `src/macros/display.rs` and handles all widths uniformly.
 // ──────────────────────────────────────────────────────────────────────
 
@@ -312,7 +312,7 @@ pub(crate) fn parse_components<const SCALE: u32>(
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
-    parse_decimal::<SCALE>(s).map(crate::core_type::D38::to_bits)
+    parse_decimal::<SCALE>(s).map(crate::types::widths::D38::to_bits)
 }
 
 fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
@@ -393,7 +393,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::core_type::{D38s12, D38};
+    use crate::types::widths::{D38s12, D38};
     #[cfg(feature = "alloc")]
     use alloc::format;
     #[cfg(feature = "alloc")]

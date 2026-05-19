@@ -33,7 +33,7 @@
 //! radicand and take its exact integer root, then apply the rounding
 //! mode (no ties exist for integer-sqrt so the three half-modes
 //! coincide; `Floor`/`Ceiling` divert for the directed cases);
-//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `d_w128_kernels`
+//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `algos::fixed_d38`
 //! guard-digit intermediate;
 //! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
 //!
@@ -84,8 +84,8 @@
 //! cause. `D38::ONE.powi(i32::MIN)` therefore evaluates correctly as
 //! `D38::ONE / D38::ONE.pow(2_147_483_648_u32)`.
 
-use crate::core_type::D38;
-use crate::mg_divide::mul_div_pow10;
+use crate::types::widths::D38;
+use crate::algos::mg_divide::mul_div_pow10;
 
 impl<const SCALE: u32> D38<SCALE> {
     /// Raises `self` to the power `exp`.
@@ -211,13 +211,13 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_strict(self, exp: D38<SCALE>) -> Self {
-        self.powf_strict_with(exp, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.powf_strict_with(exp, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `self^exp` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn powf_strict_with(self, exp: D38<SCALE>, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn powf_strict_with(self, exp: D38<SCALE>, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::pow::PowPolicy>::powf_impl(self, exp, mode)
     }
 
@@ -225,14 +225,14 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_approx(self, exp: D38<SCALE>, working_digits: u32) -> Self {
-        self.powf_approx_with(exp, working_digits, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.powf_approx_with(exp, working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// `self^exp` with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn powf_approx_with(self, exp: D38<SCALE>, working_digits: u32, mode: crate::rounding::RoundingMode) -> Self {
-        if working_digits == crate::log_exp_strict::STRICT_GUARD {
+    pub fn powf_approx_with(self, exp: D38<SCALE>, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+        if working_digits == crate::types::log_exp::STRICT_GUARD {
             return self.powf_strict_with(exp, mode);
         }
         <Self as crate::policy::pow::PowPolicy>::powf_with_impl(self, exp, working_digits, mode)
@@ -276,7 +276,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn sqrt_strict(self) -> Self {
-        self.sqrt_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.sqrt_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Square root under the supplied rounding mode.
@@ -288,7 +288,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// which for D38 selects the `mg_divide_d38` width-override kernel.
     #[inline]
     #[must_use]
-    pub fn sqrt_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn sqrt_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::sqrt::SqrtPolicy>::sqrt_impl(self, mode)
     }
 
@@ -337,7 +337,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn cbrt_strict(self) -> Self {
-        self.cbrt_strict_with(crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.cbrt_strict_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Cube root under the supplied rounding mode. The sign of the
@@ -347,7 +347,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Body delegates to `policy::cbrt::CbrtPolicy::cbrt_impl`.
     #[inline]
     #[must_use]
-    pub fn cbrt_strict_with(self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn cbrt_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
         <Self as crate::policy::cbrt::CbrtPolicy>::cbrt_impl(self, mode)
     }
 
@@ -360,7 +360,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn hypot_strict(self, other: Self) -> Self {
-        self.hypot_strict_with(other, crate::rounding::DEFAULT_ROUNDING_MODE)
+        self.hypot_strict_with(other, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
     /// Hypot under the supplied rounding mode. The mode applies to the
@@ -368,7 +368,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// exact-or-truncating per the operator path's own contract.
     #[inline]
     #[must_use]
-    pub fn hypot_strict_with(self, other: Self, mode: crate::rounding::RoundingMode) -> Self {
+    pub fn hypot_strict_with(self, other: Self, mode: crate::support::rounding::RoundingMode) -> Self {
         let a = self.abs();
         let b = other.abs();
         let (large, small) = if a >= b { (a, b) } else { (b, a) };
@@ -594,7 +594,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use crate::core_type::D38s12;
+    use crate::types::widths::D38s12;
 
     // Tolerance for f64-bridge tests. Used only by std-feature-gated
     // tests below; gated to suppress unused-item warnings on no_std builds.
@@ -806,13 +806,13 @@ mod tests {
         // So a correctly-rounded q satisfies q^2 - q < N ≤ q^2 + q  (q>0),
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
-            let x = crate::core_type::D38::<S>::from_bits(raw);
+            let x = crate::types::widths::D38::<S>::from_bits(raw);
             let q = x.sqrt_strict().to_bits();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
             let mult = 10u128.pow(S);
-            let (n_hi, n_lo) = crate::mg_divide::mul2(raw as u128, mult);
-            let (qsq_hi, qsq_lo) = crate::mg_divide::mul2(q as u128, q as u128);
+            let (n_hi, n_lo) = crate::algos::mg_divide::mul2(raw as u128, mult);
+            let (qsq_hi, qsq_lo) = crate::algos::mg_divide::mul2(q as u128, q as u128);
             // lower: N > q^2 - q ⇔   N + q > q^2   (q ≥ 0)
             // upper: N ≤ q^2 + q
             let q_u = q as u128;
@@ -873,7 +873,7 @@ mod tests {
         // hold the 384-bit cubes (i256 is already a dev-dependency).
         use i256::U256;
         fn check<const S: u32>(raw: i128) {
-            let x = crate::core_type::D38::<S>::from_bits(raw);
+            let x = crate::types::widths::D38::<S>::from_bits(raw);
             let q = x.cbrt_strict().to_bits();
             // Sign must match the input.
             assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");

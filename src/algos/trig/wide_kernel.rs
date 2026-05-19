@@ -38,7 +38,7 @@
 //! per tier while forcing either a macro refactor or a new
 //! `WideTrigCore` trait. The wrappers stay per-tier on purpose.
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 
 /// Emits four `<fn>_strict_<tier>(raw, mode, scale)` free functions
 /// (sin / cos / tan / atan) for one wide tier. See module docs.
@@ -113,7 +113,7 @@ decl_trig_kernel!(
     tan_strict_d57,
     atan_strict_d57,
     crate::wide_int::I192,
-    crate::core_type::wide_trig_d57,
+    crate::types::widths::wide_trig_d57,
     "D57"
 );
 
@@ -124,7 +124,7 @@ decl_trig_kernel!(
     tan_strict_d76,
     atan_strict_d76,
     crate::wide_int::I256,
-    crate::core_type::wide_trig_d76,
+    crate::types::widths::wide_trig_d76,
     "D76"
 );
 
@@ -135,7 +135,7 @@ decl_trig_kernel!(
     tan_strict_d115,
     atan_strict_d115,
     crate::wide_int::I384,
-    crate::core_type::wide_trig_d115,
+    crate::types::widths::wide_trig_d115,
     "D115"
 );
 
@@ -146,7 +146,7 @@ decl_trig_kernel!(
     tan_strict_d153,
     atan_strict_d153,
     crate::wide_int::I512,
-    crate::core_type::wide_trig_d153,
+    crate::types::widths::wide_trig_d153,
     "D153"
 );
 
@@ -157,7 +157,7 @@ decl_trig_kernel!(
     tan_strict_d230,
     atan_strict_d230,
     crate::wide_int::I768,
-    crate::core_type::wide_trig_d230,
+    crate::types::widths::wide_trig_d230,
     "D230"
 );
 
@@ -168,7 +168,7 @@ decl_trig_kernel!(
     tan_strict_d307,
     atan_strict_d307,
     crate::wide_int::I1024,
-    crate::core_type::wide_trig_d307,
+    crate::types::widths::wide_trig_d307,
     "D307"
 );
 
@@ -179,7 +179,7 @@ decl_trig_kernel!(
     tan_strict_d462,
     atan_strict_d462,
     crate::wide_int::I1536,
-    crate::core_type::wide_trig_d462,
+    crate::types::widths::wide_trig_d462,
     "D462"
 );
 
@@ -190,7 +190,7 @@ decl_trig_kernel!(
     tan_strict_d616,
     atan_strict_d616,
     crate::wide_int::I2048,
-    crate::core_type::wide_trig_d616,
+    crate::types::widths::wide_trig_d616,
     "D616"
 );
 
@@ -201,7 +201,7 @@ decl_trig_kernel!(
     tan_strict_d924,
     atan_strict_d924,
     crate::wide_int::I3072,
-    crate::core_type::wide_trig_d924,
+    crate::types::widths::wide_trig_d924,
     "D924"
 );
 
@@ -212,6 +212,6 @@ decl_trig_kernel!(
     tan_strict_d1232,
     atan_strict_d1232,
     crate::wide_int::I4096,
-    crate::core_type::wide_trig_d1232,
+    crate::types::widths::wide_trig_d1232,
     "D1232"
 );

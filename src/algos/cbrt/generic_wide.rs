@@ -18,7 +18,7 @@
 //! See the D57 shim below for the original investigation; the same
 //! arithmetic applies to every tier listed.
 
-use crate::rounding::RoundingMode;
+use crate::support::rounding::RoundingMode;
 use crate::wide_int::WideStorage;
 
 /// Generic cube-root kernel for the wide-integer family.

@@ -25,7 +25,7 @@ macro_rules! decl_decimal_rescale {
             #[inline]
             #[must_use]
             pub fn rescale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
-                self.rescale_with::<TARGET_SCALE>($crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.rescale_with::<TARGET_SCALE>($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Builder-style alias for [`Self::rescale`].
@@ -34,7 +34,7 @@ macro_rules! decl_decimal_rescale {
             /// default rounding mode. Use [`Self::rescale_with`] when
             /// you need to pass an explicit [`RoundingMode`].
             ///
-            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             #[must_use]
             pub fn with_scale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
@@ -53,7 +53,7 @@ macro_rules! decl_decimal_rescale {
             #[must_use]
             pub fn rescale_with<const TARGET_SCALE: u32>(
                 self,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> $Type<TARGET_SCALE> {
                 if TARGET_SCALE == SCALE {
                     return $Type::<TARGET_SCALE>::from_bits(self.0);
@@ -85,7 +85,7 @@ macro_rules! decl_decimal_rescale {
                 let half = divisor.unsigned_abs() >> 1;
                 let non_negative = !raw.is_negative();
                 let bits = match mode {
-                    $crate::rounding::RoundingMode::HalfToEven => {
+                    $crate::support::rounding::RoundingMode::HalfToEven => {
                         if abs_rem < half {
                             quotient
                         } else if abs_rem > half {
@@ -98,7 +98,7 @@ macro_rules! decl_decimal_rescale {
                             quotient - one
                         }
                     }
-                    $crate::rounding::RoundingMode::HalfAwayFromZero => {
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
                         if abs_rem < half {
                             quotient
                         } else if non_negative {
@@ -107,18 +107,18 @@ macro_rules! decl_decimal_rescale {
                             quotient - one
                         }
                     }
-                    $crate::rounding::RoundingMode::HalfTowardZero => {
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
                         if abs_rem > half {
                             if non_negative { quotient + one } else { quotient - one }
                         } else {
                             quotient
                         }
                     }
-                    $crate::rounding::RoundingMode::Trunc => quotient,
-                    $crate::rounding::RoundingMode::Floor => {
+                    $crate::support::rounding::RoundingMode::Trunc => quotient,
+                    $crate::support::rounding::RoundingMode::Floor => {
                         if non_negative { quotient } else { quotient - one }
                     }
-                    $crate::rounding::RoundingMode::Ceiling => {
+                    $crate::support::rounding::RoundingMode::Ceiling => {
                         if non_negative { quotient + one } else { quotient }
                     }
                 };
@@ -139,7 +139,7 @@ macro_rules! decl_decimal_rescale {
             #[inline]
             #[must_use]
             pub const fn rescale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
-                self.rescale_with::<TARGET_SCALE>($crate::rounding::DEFAULT_ROUNDING_MODE)
+                self.rescale_with::<TARGET_SCALE>($crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
 
             /// Builder-style alias for [`Self::rescale`].
@@ -148,7 +148,7 @@ macro_rules! decl_decimal_rescale {
             /// default rounding mode. Use [`Self::rescale_with`] when
             /// you need to pass an explicit [`RoundingMode`].
             ///
-            /// [`RoundingMode`]: $crate::rounding::RoundingMode
+            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
             #[inline]
             #[must_use]
             pub const fn with_scale<const TARGET_SCALE: u32>(self) -> $Type<TARGET_SCALE> {
@@ -167,7 +167,7 @@ macro_rules! decl_decimal_rescale {
             #[must_use]
             pub const fn rescale_with<const TARGET_SCALE: u32>(
                 self,
-                mode: $crate::rounding::RoundingMode,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> $Type<TARGET_SCALE> {
                 if TARGET_SCALE == SCALE {
                     return $Type::<TARGET_SCALE>::from_bits(self.0);
@@ -192,7 +192,7 @@ macro_rules! decl_decimal_rescale {
                 let abs_rem = remainder.unsigned_abs();
                 let half = (divisor / 2) as _;
                 let bits = match mode {
-                    $crate::rounding::RoundingMode::HalfToEven => {
+                    $crate::support::rounding::RoundingMode::HalfToEven => {
                         if abs_rem < half {
                             quotient
                         } else if abs_rem > half {
@@ -205,7 +205,7 @@ macro_rules! decl_decimal_rescale {
                             quotient - 1
                         }
                     }
-                    $crate::rounding::RoundingMode::HalfAwayFromZero => {
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
                         if abs_rem < half {
                             quotient
                         } else if raw >= 0 {
@@ -214,18 +214,18 @@ macro_rules! decl_decimal_rescale {
                             quotient - 1
                         }
                     }
-                    $crate::rounding::RoundingMode::HalfTowardZero => {
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
                         if abs_rem > half {
                             if raw >= 0 { quotient + 1 } else { quotient - 1 }
                         } else {
                             quotient
                         }
                     }
-                    $crate::rounding::RoundingMode::Trunc => quotient,
-                    $crate::rounding::RoundingMode::Floor => {
+                    $crate::support::rounding::RoundingMode::Trunc => quotient,
+                    $crate::support::rounding::RoundingMode::Floor => {
                         if raw >= 0 { quotient } else { quotient - 1 }
                     }
-                    $crate::rounding::RoundingMode::Ceiling => {
+                    $crate::support::rounding::RoundingMode::Ceiling => {
                         if raw >= 0 { quotient + 1 } else { quotient }
                     }
                 };

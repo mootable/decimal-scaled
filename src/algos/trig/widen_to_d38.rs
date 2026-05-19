@@ -1,7 +1,7 @@
 //! Narrow-tier sin / cos / tan via widen → D38 → narrow.
 
-use crate::core_type::{D9, D18, D38};
-use crate::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
+use crate::support::rounding::RoundingMode;
 
 macro_rules! delegate_via_d38 {
     ($d9_name:ident, $d18_name:ident, $kernel:ident, $err:literal) => {

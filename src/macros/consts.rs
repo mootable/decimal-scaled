@@ -45,108 +45,108 @@
 macro_rules! decl_decimal_consts {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> $crate::consts::DecimalConstants for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::types::consts::DecimalConstants for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
-                Self(<$Storage>::from_i128($crate::consts::pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::pi_at_target::<SCALE>()))
             }
             #[inline]
             fn tau() -> Self {
-                Self(<$Storage>::from_i128($crate::consts::tau_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::tau_at_target::<SCALE>()))
             }
             #[inline]
             fn half_pi() -> Self {
-                Self(<$Storage>::from_i128($crate::consts::half_pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::half_pi_at_target::<SCALE>()))
             }
             #[inline]
             fn quarter_pi() -> Self {
-                Self(<$Storage>::from_i128($crate::consts::quarter_pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::quarter_pi_at_target::<SCALE>()))
             }
             #[inline]
             fn golden() -> Self {
-                Self(<$Storage>::from_i128($crate::consts::golden_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::golden_at_target::<SCALE>()))
             }
             #[inline]
             fn e() -> Self {
-                Self(<$Storage>::from_i128($crate::consts::e_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::e_at_target::<SCALE>()))
             }
             #[inline]
-            fn pi_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::consts::pi_at_target_with::<SCALE>(mode)))
+            fn pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::types::consts::pi_at_target_with::<SCALE>(mode)))
             }
             #[inline]
-            fn tau_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::consts::tau_at_target_with::<SCALE>(mode)))
+            fn tau_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::types::consts::tau_at_target_with::<SCALE>(mode)))
             }
             #[inline]
-            fn half_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::consts::half_pi_at_target_with::<SCALE>(mode)))
+            fn half_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::types::consts::half_pi_at_target_with::<SCALE>(mode)))
             }
             #[inline]
-            fn quarter_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::consts::quarter_pi_at_target_with::<SCALE>(mode)))
+            fn quarter_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::types::consts::quarter_pi_at_target_with::<SCALE>(mode)))
             }
             #[inline]
-            fn golden_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::consts::golden_at_target_with::<SCALE>(mode)))
+            fn golden_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::types::consts::golden_at_target_with::<SCALE>(mode)))
             }
             #[inline]
-            fn e_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::consts::e_at_target_with::<SCALE>(mode)))
+            fn e_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128($crate::types::consts::e_at_target_with::<SCALE>(mode)))
             }
         }
     };
 
     // Native (primitive integer) storage.
     ($Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> $crate::consts::DecimalConstants for $Type<SCALE> {
+        impl<const SCALE: u32> $crate::types::consts::DecimalConstants for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
-                Self($crate::consts::pi_at_target::<SCALE>() as $Storage)
+                Self($crate::types::consts::pi_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn tau() -> Self {
-                Self($crate::consts::tau_at_target::<SCALE>() as $Storage)
+                Self($crate::types::consts::tau_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn half_pi() -> Self {
-                Self($crate::consts::half_pi_at_target::<SCALE>() as $Storage)
+                Self($crate::types::consts::half_pi_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn quarter_pi() -> Self {
-                Self($crate::consts::quarter_pi_at_target::<SCALE>() as $Storage)
+                Self($crate::types::consts::quarter_pi_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn golden() -> Self {
-                Self($crate::consts::golden_at_target::<SCALE>() as $Storage)
+                Self($crate::types::consts::golden_at_target::<SCALE>() as $Storage)
             }
             #[inline]
             fn e() -> Self {
-                Self($crate::consts::e_at_target::<SCALE>() as $Storage)
+                Self($crate::types::consts::e_at_target::<SCALE>() as $Storage)
             }
             #[inline]
-            fn pi_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self($crate::consts::pi_at_target_with::<SCALE>(mode) as $Storage)
+            fn pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::pi_at_target_with::<SCALE>(mode) as $Storage)
             }
             #[inline]
-            fn tau_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self($crate::consts::tau_at_target_with::<SCALE>(mode) as $Storage)
+            fn tau_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::tau_at_target_with::<SCALE>(mode) as $Storage)
             }
             #[inline]
-            fn half_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self($crate::consts::half_pi_at_target_with::<SCALE>(mode) as $Storage)
+            fn half_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::half_pi_at_target_with::<SCALE>(mode) as $Storage)
             }
             #[inline]
-            fn quarter_pi_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self($crate::consts::quarter_pi_at_target_with::<SCALE>(mode) as $Storage)
+            fn quarter_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::quarter_pi_at_target_with::<SCALE>(mode) as $Storage)
             }
             #[inline]
-            fn golden_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self($crate::consts::golden_at_target_with::<SCALE>(mode) as $Storage)
+            fn golden_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::golden_at_target_with::<SCALE>(mode) as $Storage)
             }
             #[inline]
-            fn e_with(mode: $crate::rounding::RoundingMode) -> Self {
-                Self($crate::consts::e_at_target_with::<SCALE>(mode) as $Storage)
+            fn e_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::e_at_target_with::<SCALE>(mode) as $Storage)
             }
         }
     };

@@ -10,7 +10,7 @@
 //! Hosts the shared `Fixed` ln primitives used by every D38 strict-
 //! ln callsite plus the `LnPolicy` defaults — `STRICT_GUARD`,
 //! `ln_fixed`, `wide_ln2`, `wide_ln10` — so the typed-shell file
-//! has no `crate::algos::*` or `crate::d_w128_kernels::*` references
+//! has no `crate::algos::*` or `crate::algos::fixed_d38::*` references
 //! left.
 //!
 //! Fast paths preserved verbatim from the typed surface:
@@ -21,8 +21,8 @@
 //!
 //! Panics on `raw <= 0` (the typed method's contract).
 
-use crate::d_w128_kernels::Fixed;
-use crate::rounding::RoundingMode;
+use crate::algos::fixed_d38::Fixed;
+use crate::support::rounding::RoundingMode;
 
 /// Guard digits added below the storage scale for the D38 strict log
 /// family. The 256-bit `Fixed` intermediate runs at
@@ -182,7 +182,7 @@ pub(crate) fn ln_with(raw: i128, scale: u32, working_digits: u32, mode: Rounding
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
     ln_fixed(v_w, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("ln kernel", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("ln kernel", scale))
 }
 
 /// Strict variant — fixed to `STRICT_GUARD` working digits. Equivalent
@@ -206,7 +206,7 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
     ln_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("ln kernel", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("ln kernel", SCALE))
 }
 
 // ── log / log2 / log10 kernels (D38, Fixed fallback) ──────────────
@@ -234,7 +234,7 @@ pub(crate) fn log_with(
     ln_fixed(v_w, w)
         .div(ln_b, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log", scale))
 }
 
 /// Const-folded strict variant of [`log_with`].
@@ -264,7 +264,7 @@ pub(crate) fn log2_with(
     ln_fixed(v_w, w)
         .div(wide_ln2(w), w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log2", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log2", scale))
 }
 
 #[inline]
@@ -289,7 +289,7 @@ pub(crate) fn log10_with(
     ln_fixed(v_w, w)
         .div(wide_ln10(w), w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::log10", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log10", scale))
 }
 
 #[inline]

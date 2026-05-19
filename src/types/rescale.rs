@@ -12,7 +12,7 @@
 //!   `rounding-*` Cargo feature). Suitable for the overwhelming
 //!   majority of cases.
 //! - `rescale_with::<TARGET>(mode)` — takes an explicit
-//!   [`crate::rounding::RoundingMode`] for users whose accounting rules
+//!   [`crate::support::rounding::RoundingMode`] for users whose accounting rules
 //!   mandate a non-default rule.
 //! - `with_scale::<TARGET>()` — builder-style alias for `rescale`.
 //!
@@ -24,7 +24,7 @@
 //! Overflow on the scale-up direction is detected via `checked_mul`
 //! and panics with a clear message in both debug and release builds.
 
-use crate::core_type::{D38, D9, D18};
+use crate::types::widths::{D38, D9, D18};
 
 // The rescale / rescale_with methods are emitted by
 // `crate::macros::rescale::decl_decimal_rescale!` — same macro for

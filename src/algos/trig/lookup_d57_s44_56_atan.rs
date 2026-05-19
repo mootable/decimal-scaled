@@ -49,8 +49,8 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::core_type::wide_trig_d57 as core;
-use crate::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d57 as core;
+use crate::support::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
 /// Table size — number of `atan(j / M)` entries per working scale.

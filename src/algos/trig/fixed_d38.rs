@@ -6,8 +6,8 @@
 //! primitives (`sin_fixed`, `atan_fixed`, `atan2_kernel`, `to_fixed`,
 //! `wide_pi`, `wide_half_pi`, `small_x_linear_threshold`) plus every
 //! D38 strict-trig + hyperbolic kernel. The typed-shell file in
-//! `src/trig_strict.rs` has no `crate::algos::*` or
-//! `crate::d_w128_kernels::*` references left — each public method
+//! `src/types/trig.rs` has no `crate::algos::*` or
+//! `crate::algos::fixed_d38::*` references left — each public method
 //! delegates one line through `policy::trig::TrigPolicy::*_impl`,
 //! whose default body lives here.
 //!
@@ -18,10 +18,10 @@
 
 use crate::algos::exp::fixed_d38::exp_fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
-use crate::consts::DecimalConstants;
-use crate::core_type::D38;
-use crate::d_w128_kernels::Fixed;
-use crate::rounding::RoundingMode;
+use crate::types::consts::DecimalConstants;
+use crate::types::widths::D38;
+use crate::algos::fixed_d38::Fixed;
+use crate::support::rounding::RoundingMode;
 
 // ── Shared Fixed primitives ────────────────────────────────────────
 
@@ -45,7 +45,7 @@ pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
 /// `consts::PI_RAW` (Int256 holding `π × 10^75`).
 pub(crate) fn wide_pi(w: u32) -> Fixed {
     debug_assert!(w <= 75, "wide_pi: working scale {w} exceeds embedded 75-digit π");
-    let words = crate::consts::PI_RAW.0;
+    let words = crate::types::consts::PI_RAW.0;
     let pi_at_75 = Fixed {
         negative: false,
         mag: [
@@ -290,7 +290,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     let w = SCALE + STRICT_GUARD;
     sin_fixed(to_fixed(raw), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("sin", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sin", SCALE))
 }
 
 #[inline]
@@ -309,7 +309,7 @@ pub(crate) fn sin_with<const SCALE: u32>(
     let w = SCALE + working_digits;
     sin_fixed(to_fixed_w(raw, working_digits), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("sin", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("sin", SCALE))
 }
 
 // ── cos ────────────────────────────────────────────────────────────
@@ -324,7 +324,7 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     let arg = to_fixed(raw).add(wide_half_pi(w));
     sin_fixed(arg, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("cos", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cos", SCALE))
 }
 
 #[inline]
@@ -341,7 +341,7 @@ pub(crate) fn cos_with<const SCALE: u32>(
     let arg = to_fixed_w(raw, working_digits).add(wide_half_pi(w));
     sin_fixed(arg, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("cos", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("cos", SCALE))
 }
 
 // ── tan ────────────────────────────────────────────────────────────
@@ -366,7 +366,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     sin_w
         .div(cos_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("tan", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tan", SCALE))
 }
 
 #[inline]
@@ -393,7 +393,7 @@ pub(crate) fn tan_with<const SCALE: u32>(
     sin_w
         .div(cos_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("tan", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("tan", SCALE))
 }
 
 // ── atan ───────────────────────────────────────────────────────────
@@ -417,7 +417,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     let w = SCALE + STRICT_GUARD;
     atan_fixed(to_fixed(raw), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE))
 }
 
 #[inline]
@@ -443,7 +443,7 @@ pub(crate) fn atan_with<const SCALE: u32>(
     let w = SCALE + working_digits;
     atan_fixed(to_fixed_w(raw, working_digits), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan", SCALE))
 }
 
 // ── asin ───────────────────────────────────────────────────────────
@@ -467,7 +467,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
         let hp = if v.negative { hp.neg() } else { hp };
         return hp
             .round_to_i128_with(w, SCALE, mode)
-            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE));
+            .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE));
     }
     let half_w = one_w.halve();
     let asin_w = if !abs_v.ge_mag(half_w) {
@@ -483,7 +483,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     };
     asin_w
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE))
 }
 
 #[inline]
@@ -509,7 +509,7 @@ pub(crate) fn asin_with<const SCALE: u32>(
         let hp = if v.negative { hp.neg() } else { hp };
         return hp
             .round_to_i128_with(w, SCALE, mode)
-            .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE));
+            .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE));
     }
     let half_w = one_w.halve();
     let asin_w = if !abs_v.ge_mag(half_w) {
@@ -525,7 +525,7 @@ pub(crate) fn asin_with<const SCALE: u32>(
     };
     asin_w
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("asin", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("asin", SCALE))
 }
 
 // ── acos ───────────────────────────────────────────────────────────
@@ -566,7 +566,7 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     wide_half_pi(w)
         .sub(asin_w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("acos", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE))
 }
 
 #[inline]
@@ -609,7 +609,7 @@ pub(crate) fn acos_with<const SCALE: u32>(
     wide_half_pi(w)
         .sub(asin_w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("acos", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("acos", SCALE))
 }
 
 // ── atan2 ──────────────────────────────────────────────────────────
@@ -624,7 +624,7 @@ pub(crate) fn atan2_strict<const SCALE: u32>(
     let w = SCALE + STRICT_GUARD;
     atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan2", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE))
 }
 
 #[inline]
@@ -643,13 +643,13 @@ pub(crate) fn atan2_with<const SCALE: u32>(
         w,
     )
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("atan2", SCALE))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("atan2", SCALE))
 }
 
 // ── Hyperbolic family ─────────────────────────────────────────────
 //
 // sinh / cosh / tanh / asinh / acosh / atanh kernels on the `Fixed`
-// 256-bit intermediate. The typed-shell file in `src/trig_strict.rs`
+// 256-bit intermediate. The typed-shell file in `src/types/trig.rs`
 // delegates one line to each `TrigPolicy::*_impl`, whose default body
 // resolves to the matching kernel below.
 
@@ -680,7 +680,7 @@ pub(crate) fn sinh_with(
     ex.sub(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::sinh", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale))
 }
 
 #[inline]
@@ -707,7 +707,7 @@ pub(crate) fn cosh_with(
     ex.add(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::cosh", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale))
 }
 
 #[inline]
@@ -737,7 +737,7 @@ pub(crate) fn tanh_with(
     ex.sub(enx)
         .div(ex.add(enx), w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::tanh", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::tanh", scale))
 }
 
 #[inline]
@@ -775,7 +775,7 @@ pub(crate) fn asinh_with(
     let signed = if raw < 0 { inner.neg() } else { inner };
     signed
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::asinh", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::asinh", scale))
 }
 
 #[inline]
@@ -811,7 +811,7 @@ pub(crate) fn acosh_with(
     };
     inner
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::acosh", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::acosh", scale))
 }
 
 #[inline]
@@ -843,7 +843,7 @@ pub(crate) fn atanh_with(
     ln_fixed(ratio, w)
         .halve()
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::atanh", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::atanh", scale))
 }
 
 // ── Angle conversions ─────────────────────────────────────────────
@@ -870,7 +870,7 @@ pub(crate) fn to_degrees_with(
         .mul_u128(180)
         .div(wide_pi(w), w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::to_degrees", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::to_degrees", scale))
 }
 
 #[inline]
@@ -895,7 +895,7 @@ pub(crate) fn to_radians_with(
         .mul(wide_pi(w), w)
         .div_small(180)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::diagnostics::overflow_panic_with_scale("D38::to_radians", scale))
+        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::to_radians", scale))
 }
 
 // ── Runtime-scale small-x threshold ───────────────────────────────

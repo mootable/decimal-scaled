@@ -214,42 +214,15 @@ pub mod __bench_internals {
 }
 mod macros;
 
-// Path shims for moved-but-still-referenced modules. After the folder
-// shuffle these live under `types::traits::*` / `support::*`; the shims
-// keep the legacy `crate::<name>` paths resolving for one release cycle
-// while internal call sites get swept (PR 3).
-pub(crate) use crate::types::traits::arithmetic as arithmetic_trait;
-pub(crate) use crate::types::traits::convert as convert_trait;
-pub(crate) use crate::types::traits::transcendental as transcendental_trait;
-#[cfg(feature = "dyn")]
-pub(crate) use crate::types::traits::dyn_decimal;
-pub(crate) use crate::support::rounding;
-pub(crate) use crate::support::error;
-pub(crate) use crate::support::diagnostics;
-pub(crate) use crate::support::display;
-pub(crate) use crate::algos::mg_divide;
-pub(crate) use crate::algos::fixed_d38 as d_w128_kernels;
-// Typed shell shims — typed transcendental shells moved into
-// `types/`; legacy `crate::*_strict` / `crate::*_fast` paths kept
-// alive for one release cycle.
-pub(crate) use crate::types::log_exp as log_exp_strict;
-// Type-definition shims — the biggest cascade sites. `core_type` is
-// referenced from ~50 in-crate sites (every macro emission, every
-// algos/policy file); `d_unified` / `consts` / `consts_wide` are
-// secondary.
-pub(crate) use crate::types::widths as core_type;
-pub(crate) use crate::types::unified as d_unified;
-pub(crate) use crate::types::consts;
-
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
 // `tests/`. The macro-generated impls themselves are emitted by
 // `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
-// `core_type.rs`, alongside every other surface.
+// `types/widths.rs`, alongside every other surface.
 //
 // `wide_int` is unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
-// `d_w128_kernels::Fixed` 256-bit sign-magnitude type), so the wide-
+// `algos::fixed_d38::Fixed` 256-bit sign-magnitude type), so the wide-
 // integer family must be available in every feature configuration —
 // not just `feature = "wide"` builds. Compile-time impact is modest:
 // ~2k LOC of self-contained limb arithmetic plus the per-width
@@ -261,15 +234,15 @@ mod policy;
 pub use crate::support::serde_helpers;
 
 
-pub use consts::DecimalConstants;
+pub use crate::types::consts::DecimalConstants;
 #[allow(deprecated)]
-pub use consts::DecimalConsts;
+pub use crate::types::consts::DecimalConsts;
 pub use crate::types::traits::DecimalArithmetic;
 pub use crate::types::traits::DecimalConvert;
-pub use d_unified::D;
+pub use crate::types::unified::D;
 pub use crate::types::traits::Decimal;
-pub use error::{ConvertError, ParseError};
-pub use rounding::RoundingMode;
+pub use crate::support::error::{ConvertError, ParseError};
+pub use crate::support::rounding::RoundingMode;
 pub use crate::types::traits::DecimalTranscendental;
 
 #[cfg(feature = "dyn")]
@@ -277,7 +250,7 @@ pub use crate::types::traits::dyn_decimal::{DecimalWidth, DynDecimal, RawStorage
 
 // D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s37
 // (v0.4.0 cap: MAX_SCALE = name - 1).
-pub use core_type::{
+pub use crate::types::widths::{
     D38, D38s0, D38s1, D38s2, D38s3, D38s4, D38s5, D38s6, D38s7, D38s8, D38s9, D38s10,
     D38s11, D38s12, D38s13, D38s14, D38s15, D38s16, D38s17, D38s18, D38s19, D38s20,
     D38s21, D38s22, D38s23, D38s24, D38s25, D38s26, D38s27, D38s28, D38s29, D38s30,
@@ -285,19 +258,19 @@ pub use core_type::{
 };
 
 // D9 — 32-bit storage, scale 0..=9.
-pub use core_type::{
+pub use crate::types::widths::{
     D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8,
 };
 
 // D18 — 64-bit storage, scale 0..=18.
-pub use core_type::{
+pub use crate::types::widths::{
     D18, D18s0, D18s1, D18s2, D18s3, D18s4, D18s5, D18s6, D18s7, D18s8, D18s9, D18s10, D18s11,
     D18s12, D18s13, D18s14, D18s15, D18s16, D18s17,
 };
 
 // D76 — 256-bit storage, behind the `d76` / `wide` features.
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D76,
     D76s0, D76s1, D76s2, D76s3, D76s4, D76s6, D76s9, D76s12, D76s15,
     D76s18, D76s20, D76s24, D76s28, D76s32, D76s35, D76s38, D76s42,
@@ -313,7 +286,7 @@ pub use wide_int::{
 
 // D153 — 512-bit storage, behind the `d153` / `wide` features.
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D153,
     D153s0, D153s1, D153s2, D153s4, D153s6, D153s9, D153s12, D153s15,
     D153s18, D153s20, D153s24, D153s28, D153s32, D153s35, D153s38,
@@ -323,7 +296,7 @@ pub use core_type::{
 
 // D307 — 1024-bit storage, behind the `d307` / `wide` features.
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D307,
     D307s0, D307s1, D307s2, D307s4, D307s6, D307s9, D307s12, D307s15,
     D307s18, D307s20, D307s24, D307s28, D307s32, D307s35, D307s38,
@@ -335,7 +308,7 @@ pub use core_type::{
 
 // D57 — 192-bit storage; half-width between D38 and D76.
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D57,
     D57s0, D57s1, D57s2, D57s4, D57s6, D57s9, D57s12, D57s18, D57s20, D57s24,
     D57s28, D57s32, D57s38, D57s42, D57s48, D57s52, D57s56,
@@ -345,7 +318,7 @@ pub use wide_int::{Int192, Uint192};
 
 // D115 — 384-bit; half-width between D76 and D153.
 #[cfg(any(feature = "d115", feature = "wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D115,
     D115s0, D115s1, D115s4, D115s8, D115s16, D115s24, D115s32, D115s38, D115s50,
     D115s57, D115s64, D115s76, D115s90, D115s100, D115s110, D115s114,
@@ -355,7 +328,7 @@ pub use wide_int::{Int384, Uint384};
 
 // D230 — 768-bit; half-width between D153 and D307.
 #[cfg(any(feature = "d230", feature = "wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D230,
     D230s0, D230s1, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115,
     D230s140, D230s153, D230s175, D230s200, D230s215, D230s225, D230s229,
@@ -365,7 +338,7 @@ pub use wide_int::{Int768, Uint768};
 
 // D462 — 1536-bit; half-width between D307 and D616.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D462,
     D462s0, D462s1, D462s18, D462s38, D462s75, D462s115, D462s153, D462s200, D462s230,
     D462s275, D462s307, D462s350, D462s400, D462s440, D462s460, D462s461,
@@ -377,7 +350,7 @@ pub use wide_int::{Int1536, Uint1536};
 // already exported above for x-wide / d307 widening; no re-export
 // here.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D616,
     D616s0, D616s1, D616s38, D616s75, D616s115, D616s153, D616s200, D616s230, D616s275,
     D616s308, D616s380, D616s462, D616s500, D616s555, D616s600, D616s615,
@@ -385,7 +358,7 @@ pub use core_type::{
 
 // D924 — 3072-bit; half-width between D616 and D1232.
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D924,
     D924s0, D924s1, D924s75, D924s153, D924s230, D924s307, D924s400, D924s461, D924s462,
     D924s500, D924s616, D924s700, D924s800, D924s860, D924s900, D924s920, D924s923,
@@ -395,7 +368,7 @@ pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
 
 // D1232 — 4096-bit; widest tier shipped.
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub use core_type::{
+pub use crate::types::widths::{
     D1232,
     D1232s0, D1232s1, D1232s75, D1232s153, D1232s230, D1232s307, D1232s461, D1232s616,
     D1232s700, D1232s800, D1232s900, D1232s924, D1232s1000, D1232s1100,

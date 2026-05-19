@@ -21,7 +21,7 @@
 //! - [`lookup_d57_s20`] — stub kernel slot for `D57<20>` tuning;
 //!   currently delegates to `generic_wide` byte-for-byte.
 //!
-//! [`RoundingMode`]: crate::rounding::RoundingMode
+//! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
 pub(crate) mod generic_wide;
 pub(crate) mod lookup_d57_s20;
