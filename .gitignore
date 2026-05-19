@@ -5,3 +5,7 @@ Cargo.lock
 /bench-history-results
 /lib-cmp-results
 /bench-results
+/bench-results-final
+/algo-lab-results
+/sweep-results-v0.4.2
+/bench-history-results-v0.4.2
