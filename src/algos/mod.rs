@@ -47,8 +47,21 @@ pub(crate) mod trig;
 pub(crate) mod mg_divide;
 pub(crate) mod fixed_d38;
 
-// Research kernel — Newton-Raphson reciprocal divide for `n / 10^SCALE`.
-// Gated to the deepest wide tiers only; head-to-head benched against
-// [`mg_divide::div_wide_pow10_chain_with`] in `benches/newton_vs_mg.rs`.
-#[cfg(any(feature = "d616", feature = "d924", feature = "d1232", feature = "x-wide", feature = "xx-wide"))]
+// Newton-Raphson reciprocal divide for `n / 10^SCALE` at the wide
+// tiers. Head-to-head benched against
+// [`mg_divide::div_wide_pow10_chain_with`] in `benches/newton_vs_mg.rs`;
+// wired into the `mul` and transcendental-rounding call sites by
+// [`dispatch_wide_pow10_with`] at the cells where the bench matrix
+// shows Newton wins. Other cells fall through to MG inside the
+// dispatcher.
+//
+// Gated on every wide tier — D307's `$Wider = Int2048` is in the
+// matrix's 2048-bit slot, so D307's `mul` slow path also routes
+// through the dispatcher.
+#[cfg(any(
+    feature = "d76", feature = "d115", feature = "d153", feature = "d230",
+    feature = "d307", feature = "d462", feature = "d616",
+    feature = "d924", feature = "d1232",
+    feature = "wide", feature = "x-wide", feature = "xx-wide"
+))]
 pub mod newton_reciprocal;

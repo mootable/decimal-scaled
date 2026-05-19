@@ -228,7 +228,7 @@ fn cmp_limbs(a: &[u128], b: &[u128]) -> core::cmp::Ordering {
 ///
 /// Direct analogue of [`crate::algos::mg_divide::div_wide_pow10_chain_with`]
 /// — same signature, same semantics, different inner algorithm.
-pub fn div_wide_pow10_newton_with<W: crate::wide_int::WideInt>(
+pub(crate) fn div_wide_pow10_newton_with<W: crate::wide_int::WideInt>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
@@ -284,6 +284,152 @@ pub fn div_wide_pow10_newton_with<W: crate::wide_int::WideInt>(
         *dst = *src;
     }
     W::from_mag_sign_u128(&out, neg)
+}
+
+/// Width-keyed dispatch decision for `n / 10^SCALE`.
+///
+/// Returns `true` when the bench-validated Newton-vs-MG matrix says
+/// Newton wins for this `(width_bits, scale)` cell. The matrix:
+///
+/// | Storage  | bits | Newton min SCALE |
+/// |----------|------|------------------|
+/// | I2048    | 2048 |  ≥ 200           |
+/// | I3072    | 3072 |  ≥ 200           |
+/// | I4096    | 4096 |  ≥ 400           |
+///
+/// Bench source: `benches/newton_vs_mg.rs` head-to-head against
+/// [`crate::algos::mg_divide::div_wide_pow10_chain_with`] at the
+/// listed widths × representative SCALE bands. Larger widths (Int8192
+/// / Int12288 / Int16384 — used by the transcendental work integers)
+/// have no bench data and fall through to MG.
+///
+/// Scale `≤ 38` always returns `false`: the single-pass MG kernel
+/// `div_wide_pow10_with` is the chosen winner there and a chain-Newton
+/// would be both slower and indistinguishable rounding-wise.
+#[inline]
+const fn newton_wins(width_bits: u32, scale: u32) -> bool {
+    if scale <= 38 {
+        return false;
+    }
+    match width_bits {
+        2048 if scale >= 200 => true,
+        3072 if scale >= 200 => true,
+        4096 if scale >= 400 => true,
+        _ => false,
+    }
+}
+
+/// Per-`(width_bits, scale)` reciprocal table cache.
+///
+/// Mirrors the existing `pow10_cached` / `pi_cached` / `ln2_cached`
+/// thread-local `Vec<(u32, …)>` pattern in
+/// [`crate::macros::wide_transcendental`]. Linear scan over the live
+/// SCALEs (typically 1–3 entries per build); each miss runs one
+/// `NewtonReciprocal::precompute(scale, width_limbs)` then keeps the
+/// table for the rest of the thread's lifetime.
+///
+/// Three separate slots — one per cached width — because the
+/// `width_limbs` argument differs (16 / 24 / 32 u128 limbs for
+/// Int2048 / Int3072 / Int4096) and the `NewtonReciprocal` allocates
+/// limb-storage sized to that argument.
+#[cfg(feature = "std")]
+mod cache {
+    use super::NewtonReciprocal;
+    use ::std::thread_local;
+
+    thread_local! {
+        static C_2048: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+        static C_3072: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+        static C_4096: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+    }
+
+    /// Run `f` with a borrowed reciprocal table for `(width_bits, scale)`.
+    /// On first call per `(thread, width_bits, scale)` the table is
+    /// computed and stashed; subsequent calls borrow it from the slot.
+    pub(super) fn with_table<R>(
+        width_bits: u32,
+        scale: u32,
+        width_limbs: usize,
+        f: impl FnOnce(&NewtonReciprocal) -> R,
+    ) -> R {
+        let slot = match width_bits {
+            2048 => &C_2048,
+            3072 => &C_3072,
+            4096 => &C_4096,
+            _ => unreachable!("with_table called on un-cached width {width_bits}"),
+        };
+        // Ensure the slot has an entry for `scale`; insert one if not.
+        // The thread_local + RefCell pattern avoids ever holding the
+        // borrow across the precompute itself (precompute does not
+        // re-enter the cache, but keeping the borrow scope tight is
+        // robust against future changes).
+        let needs_insert = slot.with(|c| {
+            let cache = c.borrow();
+            !cache.iter().any(|(s, _)| *s == scale)
+        });
+        if needs_insert {
+            let table = NewtonReciprocal::precompute(scale, width_limbs);
+            slot.with(|c| {
+                let mut cache = c.borrow_mut();
+                if !cache.iter().any(|(s, _)| *s == scale) {
+                    cache.push((scale, table));
+                }
+            });
+        }
+        slot.with(|c| {
+            let cache = c.borrow();
+            let entry = cache
+                .iter()
+                .find(|(s, _)| *s == scale)
+                .expect("cache invariant: entry inserted above");
+            f(&entry.1)
+        })
+    }
+}
+
+/// Width-class dispatch for `n / 10^SCALE`.
+///
+/// When the `(W::BITS, scale)` cell wins under [`newton_wins`] the
+/// call routes through the Newton kernel with a thread-local cached
+/// reciprocal table; otherwise it forwards to the MG chain kernel.
+///
+/// Used at the `mul` / transcendental-rounding call sites where the
+/// numerator width is `W` and `scale` is a runtime value — see the
+/// matching call sites in `macros::arithmetic::decl_decimal_arithmetic`
+/// and `macros::wide_transcendental::decl_wide_transcendental`.
+#[inline]
+pub(crate) fn dispatch_wide_pow10_with<W: crate::wide_int::WideStorage>(
+    n: W,
+    scale: u32,
+    mode: crate::support::rounding::RoundingMode,
+) -> W {
+    let bits = <W as crate::wide_int::WideStorage>::BITS;
+    if !newton_wins(bits, scale) {
+        return crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(n, scale, mode);
+    }
+
+    #[cfg(feature = "std")]
+    {
+        let width_limbs = (bits as usize) / 128;
+        return cache::with_table(bits, scale, width_limbs, |table| {
+            div_wide_pow10_newton_with::<W>(n, scale, mode, table)
+        });
+    }
+
+    #[cfg(not(feature = "std"))]
+    {
+        // no_std fallback: no thread-local cache available; per-call
+        // precompute is too costly for the wide tier (one Knuth divide
+        // at storage width). Forward to MG instead — Newton wins
+        // depend on amortising the table across many calls.
+        crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(n, scale, mode)
+    }
 }
 
 #[cfg(test)]

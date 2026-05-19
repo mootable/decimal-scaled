@@ -228,7 +228,15 @@ macro_rules! decl_wide_transcendental {
                         $crate::support::rounding::RoundingMode::HalfToEven,
                     );
                 }
-                $crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(
+                // Newton vs MG chain dispatch (see the matrix in
+                // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`]).
+                // For most wide-tier `$Work` integers `W::BITS` lands
+                // outside the bench-validated cells (Int8192 /
+                // Int12288 / Int16384) and the dispatcher forwards to
+                // MG; the routing is here so a future bench at the
+                // larger widths can promote without touching this
+                // site.
+                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W>(
                     n,
                     w,
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -402,7 +410,9 @@ macro_rules! decl_wide_transcendental {
                 } else if shift <= 38 {
                     $crate::algos::mg_divide::div_wide_pow10_with::<W>(v, shift, mode)
                 } else {
-                    $crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(v, shift, mode)
+                    // Newton vs MG chain dispatch — see the matrix
+                    // in [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
+                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W>(v, shift, mode)
                 };
                 let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
                 let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
