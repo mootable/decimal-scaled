@@ -1528,6 +1528,9 @@ impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int3072, SCALE> {
 }
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
+// `no_const_table`: 953-entry `Int12288` POW10_TABLE build exceeds
+// the stable-rust const-eval step budget. Stays on the per-thread
+// `Vec<(u32, W)>` cache.
 crate::macros::full::decl_decimal_full!(
     wide D924,
     crate::wide_int::I3072,
@@ -1537,7 +1540,8 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int12288,
     crate::wide_int::Int12288,
     wide_trig_d924,
-    923
+    923,
+    no_const_table
 );
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub type D924s0 = D924<0>;
@@ -1604,6 +1608,9 @@ impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int4096, SCALE> {
 }
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+// `no_const_table`: 1262-entry `Int16384` POW10_TABLE build exceeds
+// the stable-rust const-eval step budget. Stays on the per-thread
+// `Vec<(u32, W)>` cache.
 crate::macros::full::decl_decimal_full!(
     wide D1232,
     crate::wide_int::I4096,
@@ -1613,7 +1620,8 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int16384,
     crate::wide_int::Int16384,
     wide_trig_d1232,
-    1231
+    1231,
+    no_const_table
 );
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub type D1232s0 = D1232<0>;
