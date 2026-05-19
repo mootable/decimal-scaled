@@ -518,9 +518,10 @@ macro_rules! decl_wide_transcendental {
                 let mut a = one_w;
                 let mut b = y_w;
                 let iter_cap = 80u32;
+                let pow10_w_agm = pow10_cached(w);
                 for _ in 0..iter_cap {
                     let next_a = (a + b) >> 1;
-                    let next_b = sqrt_fixed(mul(a, b, w), w);
+                    let next_b = sqrt_fixed(mul_cached(a, b, pow10_w_agm), w);
                     let d = if next_a >= next_b { next_a - next_b } else { next_b - next_a };
                     a = next_a;
                     b = next_b;
