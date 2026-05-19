@@ -967,6 +967,25 @@ known fix waiting to be implemented:
 See [`ROADMAP.md`](ROADMAP.md) at the repo root for the full
 list with expected wins per item and current status.
 
+## History — cross-version improvement
+
+Same harness, same input distributions across every cell — the
+only thing changing per cell is the `decimal-scaled` dependency
+version. The shipped harness lives in
+[`bench-history/`](https://github.com/mootable/decimal-scaled/tree/main/bench-history)
+and is driven by
+[`bench-history.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/bench-history.yml);
+each charted version is `cargo add`ed into a stub crate and
+benched with the same Criterion settings. v0.3.0 / v0.3.1 are
+omitted; widths and functions are deliberately minimal per the
+bench-history scope note.
+
+![history at D38](figures/history/d38.png)
+
+![history at D76](figures/history/d76.png)
+
+![history at D307](figures/history/d307.png)
+
 ## 0.4.0 sweep — full raw data
 
 Complete dump of the v0.4.0 full_matrix sweep (GitHub Actions run

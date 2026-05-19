@@ -21,6 +21,15 @@ type LibPoints = Vec<(u32, f64)>; // (scale, ns)
 type ChartKey = (String, String); // (op, width)
 
 fn main() -> Result<(), Box<dyn std::error::Error>> {
+    // Subcommand routing — the default (no args) runs the
+    // library-comparison + per-width-summary pipeline; `history`
+    // renders the cross-version trend charts from
+    // bench-history-results/.
+    let mode = std::env::args().nth(1).unwrap_or_default();
+    if mode == "history" {
+        return render_history();
+    }
+
     let tsv = fs::read_to_string("target/medians.tsv")?;
 
     // (op, width) -> lib -> [(scale, ns)]
@@ -315,6 +324,201 @@ fn render_per_width_summary(
     chart
         .configure_series_labels()
         .position(SeriesLabelPosition::UpperLeft)
+        .border_style(BLACK)
+        .background_style(WHITE.mix(0.9))
+        .draw()?;
+
+    backend.present()?;
+    Ok(())
+}
+
+// ------------------------------------------------------------------
+// History mode — read bench-history-results/ and render per-width
+// cross-version trend lines.
+//
+// Layout on disk (rooted at bench-history-results/):
+//
+//   bench-history-<tag>/<group>/<width>/new/estimates.json
+//
+// where:
+//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, HEAD }
+//   <group> ∈ { arith_add, arith_mul, arith_div,
+//               sqrt_strict, ln_strict, sin_strict }
+//   <width> ∈ { D38, D76, D307 }
+//
+// We label the HEAD tag as v0.4.0 in the rendered chart per the
+// brief — the bench was run against the v0.4.0 source.
+// ------------------------------------------------------------------
+
+const HISTORY_VERSIONS: &[(&str, &str)] = &[
+    ("v0.2.5", "v0.2.5"),
+    ("v0.3.2", "v0.3.2"),
+    ("v0.3.3", "v0.3.3"),
+    ("HEAD",   "v0.4.0"),
+];
+
+const HISTORY_GROUPS: &[(&str, &str)] = &[
+    ("arith_add",   "add"),
+    ("arith_mul",   "mul"),
+    ("arith_div",   "div"),
+    ("sqrt_strict", "sqrt"),
+    ("ln_strict",   "ln"),
+    ("sin_strict",  "sin"),
+];
+
+const HISTORY_WIDTHS: &[&str] = &["D38", "D76", "D307"];
+
+fn render_history() -> Result<(), Box<dyn std::error::Error>> {
+    use std::path::Path;
+
+    // (width, fn_label) -> Vec<(version_label, ns)>
+    let mut data: BTreeMap<(String, String), Vec<(String, f64)>> = BTreeMap::new();
+
+    for (tag, vlabel) in HISTORY_VERSIONS {
+        for (group, fn_label) in HISTORY_GROUPS {
+            for width in HISTORY_WIDTHS {
+                let p = format!(
+                    "bench-history-results/bench-history-{tag}/{group}/{width}/new/estimates.json",
+                );
+                if !Path::new(&p).exists() {
+                    eprintln!("history: missing {p}");
+                    continue;
+                }
+                let raw = fs::read_to_string(&p)?;
+                let parsed: serde_json::Value = serde_json::from_str(&raw)?;
+                let ns = parsed["mean"]["point_estimate"]
+                    .as_f64()
+                    .ok_or_else(|| format!("no mean in {p}"))?;
+                data.entry(((*width).to_string(), (*fn_label).to_string()))
+                    .or_default()
+                    .push(((*vlabel).to_string(), ns));
+            }
+        }
+    }
+
+    let out_dir = "docs/figures/history";
+    fs::create_dir_all(out_dir)?;
+
+    for width in HISTORY_WIDTHS {
+        let path = format!("{out_dir}/{}.png", width.to_lowercase());
+        render_history_chart(&path, width, &data)?;
+    }
+    println!("wrote {} history charts to {out_dir}/", HISTORY_WIDTHS.len());
+    Ok(())
+}
+
+fn render_history_chart(
+    path: &str,
+    width: &str,
+    data: &BTreeMap<(String, String), Vec<(String, f64)>>,
+) -> Result<(), Box<dyn std::error::Error>> {
+    let backend = BitMapBackend::new(path, (900, 540)).into_drawing_area();
+    backend.fill(&WHITE)?;
+
+    // Collect rows for this width.
+    let fn_order: &[&str] = &["add", "mul", "div", "sqrt", "ln", "sin"];
+    let mut rows: Vec<(&str, &Vec<(String, f64)>)> = Vec::new();
+    for fn_label in fn_order {
+        if let Some(points) = data.get(&(width.to_string(), (*fn_label).to_string())) {
+            rows.push((*fn_label, points));
+        }
+    }
+    if rows.is_empty() {
+        return Ok(());
+    }
+
+    let n_versions = HISTORY_VERSIONS.len();
+    let x_min = 0.0_f64;
+    let x_max = (n_versions - 1) as f64;
+    let y_min = rows
+        .iter()
+        .flat_map(|(_, p)| p.iter().map(|(_, n)| *n))
+        .fold(f64::INFINITY, f64::min)
+        .max(0.01);
+    let y_max = rows
+        .iter()
+        .flat_map(|(_, p)| p.iter().map(|(_, n)| *n))
+        .fold(0.0_f64, f64::max);
+    let y_floor = (y_min * 0.5).max(0.01);
+    let y_ceil = y_max * 2.0;
+
+    let title = format!("history — {width}, cross-version improvement");
+    let mut chart = ChartBuilder::on(&backend)
+        .caption(&title, ("sans-serif", 26))
+        .margin(20)
+        .x_label_area_size(50)
+        .y_label_area_size(75)
+        .right_y_label_area_size(20)
+        .build_cartesian_2d(x_min..x_max, (y_floor..y_ceil).log_scale())?;
+
+    let version_labels: Vec<String> =
+        HISTORY_VERSIONS.iter().map(|(_, v)| (*v).to_string()).collect();
+
+    chart
+        .configure_mesh()
+        .x_desc("version")
+        .y_desc("time (ns, log)")
+        .x_labels(n_versions)
+        .x_label_formatter(&|x| {
+            let i = (x.round()) as i64;
+            if (0..n_versions as i64).contains(&i) {
+                version_labels[i as usize].clone()
+            } else {
+                String::new()
+            }
+        })
+        .x_max_light_lines(0)
+        .disable_x_mesh()
+        .draw()?;
+
+    // One distinct colour per function, kept consistent across the
+    // three width charts so a reader can scan vertically.
+    let color_for = |fn_label: &str| -> RGBColor {
+        match fn_label {
+            "add"  => RGBColor(31, 119, 180),
+            "mul"  => RGBColor(255, 127, 14),
+            "div"  => RGBColor(44, 160, 44),
+            "sqrt" => RGBColor(148, 103, 189),
+            "ln"   => RGBColor(214, 39, 40),
+            "sin"  => RGBColor(140, 86, 75),
+            _      => RGBColor(127, 127, 127),
+        }
+    };
+
+    for (fn_label, points) in &rows {
+        let color = color_for(fn_label);
+        // Map version label -> x index; skip missing versions so the
+        // line just spans the cells we have.
+        let xy: Vec<(f64, f64)> = points
+            .iter()
+            .filter_map(|(vlabel, ns)| {
+                HISTORY_VERSIONS
+                    .iter()
+                    .position(|(_, v)| *v == vlabel.as_str())
+                    .map(|i| (i as f64, *ns))
+            })
+            .collect();
+        if xy.is_empty() {
+            continue;
+        }
+        let label = (*fn_label).to_string();
+        let xy_for_points = xy.clone();
+        chart
+            .draw_series(LineSeries::new(xy.into_iter(), color.stroke_width(3)))?
+            .label(label)
+            .legend(move |(x, y)| {
+                PathElement::new(vec![(x, y), (x + 20, y)], color.stroke_width(3))
+            });
+        chart.draw_series(
+            xy_for_points
+                .into_iter()
+                .map(|(x, y)| Circle::new((x, y), 5, color.filled())),
+        )?;
+    }
+
+    chart
+        .configure_series_labels()
+        .position(SeriesLabelPosition::UpperRight)
         .border_style(BLACK)
         .background_style(WHITE.mix(0.9))
         .draw()?;
