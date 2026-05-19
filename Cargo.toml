@@ -161,6 +161,10 @@ scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
 # Rust, no Python dep. Driven by examples/chart_gen.rs.
 plotters = { version = "0.3", default-features = false, features = ["bitmap_backend", "bitmap_encoder", "line_series", "ttf"] }
+# Property-based fuzz coverage for the strict transcendentals — see
+# tests/ulp_proptest.rs. Pinned 1.x for deterministic, fixed-seed
+# minimisation when a counterexample is found.
+proptest = "1"
 
 [[bench]]
 name = "mul_div_candidates"
