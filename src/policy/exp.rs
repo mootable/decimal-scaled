@@ -247,6 +247,16 @@ impl_wide_exp!(D307, exp::wide_kernel::exp_strict_d307);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl_wide_exp!(D462, exp::wide_kernel::exp_strict_d462);
 
+// D616 — width default via `impl_wide_exp!`. The Tang-lookup exp at
+// SCALE 300..=315 was bench-trialled and rejected: at D616's Int8192
+// working integer the wide_kernel `exp_fixed` (with the adaptive Smith
+// r/2^n already applied) runs in ~230 µs, while the table-multiply
+// Tang lookup runs at ~250 µs — i.e. break-even at best. The Tang
+// table multiply on a 1024-byte working integer is the same cost
+// class as the Smith squaring tail the lookup is meant to elide, so
+// no win materialises at this depth. The lookup module stays in tree
+// (it ships the `tang_exp_fixed` helper the hyperbolic kernels need)
+// but is NOT wired in policy.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl_wide_exp!(D616, exp::wide_kernel::exp_strict_d616);
 
