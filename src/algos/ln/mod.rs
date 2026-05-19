@@ -49,3 +49,5 @@ pub(crate) mod lookup_d924_s455_465_tang;
 pub(crate) mod lookup_d924_s895_905_tang;
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub(crate) mod lookup_d1232_s610_620_tang;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub(crate) mod lookup_d1232_s1195_1205_tang;
