@@ -316,6 +316,14 @@ name = "d76_s6"
 harness = false
 required-features = ["wide"]
 
+# Focused D153<76> per-op microbench — mid-storage popular scale on
+# the 512-bit storage / Int1024 working-integer tier. Used to probe
+# narrow-GUARD and Tang-lookup wins on the D153 hot paths.
+[[bench]]
+name = "d153_s76"
+harness = false
+required-features = ["wide"]
+
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
 name = "m2_mul_fixed"
