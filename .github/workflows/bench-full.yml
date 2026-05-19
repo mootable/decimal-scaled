@@ -59,18 +59,18 @@ jobs:
           - { width: "18",   features: "wide,x-wide,xx-wide,macros" }
           - { width: "38",   features: "wide,x-wide,xx-wide,macros" }
           # Wide tier — gated by `wide`.
-          - { width: "56",   features: "wide,x-wide,xx-wide,macros" }
+          - { width: "57",   features: "wide,x-wide,xx-wide,macros" }
           - { width: "76",   features: "wide,x-wide,xx-wide,macros" }
-          - { width: "114",  features: "wide,x-wide,xx-wide,macros" }
+          - { width: "115",  features: "wide,x-wide,xx-wide,macros" }
           - { width: "153",  features: "wide,x-wide,xx-wide,macros" }
           - { width: "230",  features: "wide,x-wide,xx-wide,macros" }
           - { width: "307",  features: "wide,x-wide,xx-wide,macros" }
           # Extra-wide tier — gated by `x-wide`.
-          - { width: "461",  features: "wide,x-wide,xx-wide,macros" }
-          - { width: "615",  features: "wide,x-wide,xx-wide,macros" }
+          - { width: "462",  features: "wide,x-wide,xx-wide,macros" }
+          - { width: "616",  features: "wide,x-wide,xx-wide,macros" }
           # Extra-extra-wide tier — gated by `xx-wide`.
-          - { width: "923",  features: "wide,x-wide,xx-wide,macros" }
-          - { width: "1231", features: "wide,x-wide,xx-wide,macros" }
+          - { width: "924",  features: "wide,x-wide,xx-wide,macros" }
+          - { width: "1232", features: "wide,x-wide,xx-wide,macros" }
 
     steps:
       - name: Checkout
