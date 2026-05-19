@@ -177,6 +177,42 @@ macro_rules! decl_decimal_arithmetic {
             /// slower `n / (10^SCALE)` path.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                // Fast path: if the product fits `$Storage` exactly,
+                // skip the widen → mg_divide-in-`$Wider` → narrow
+                // chain. The check is one `leading_zeros` per operand
+                // on the storage type's `[u64; L]` limbs (4 ops for
+                // Int256, 6 for Int384, …); negligible vs the
+                // 4 × L² limb mul that follows. When the path is
+                // taken we save (a) one set of `$Storage → $Wider`
+                // resizes, (b) one `$Wider → $Storage` resize at
+                // exit, and (c) the wider half of the MG divide's
+                // entry / exit `mag_into_u128` / `from_mag_sign_u128`
+                // limb copy.
+                //
+                // The condition `lz_a + lz_b > $Storage::BITS` is
+                // sufficient for the unsigned magnitude product to
+                // fit in `$Storage::BITS - 1` bits (i.e. the signed
+                // sign-bit slot stays clear). `leading_zeros` on the
+                // signed `$Storage` is computed over
+                // `unsigned_abs(self).leading_zeros()` so it already
+                // accounts for the sign-bit asymmetry; `.MIN` is the
+                // only value with magnitude `2^(BITS - 1)`, and at
+                // `lz = 0` the test fails so MIN takes the slow
+                // path.
+                let lz_a = self.0.leading_zeros();
+                let lz_b = rhs.0.leading_zeros();
+                if lz_a + lz_b > <$Storage>::BITS {
+                    let n: $Storage = self.0.wrapping_mul(rhs.0);
+                    let scaled = if SCALE == 0 {
+                        n
+                    } else if SCALE <= 38 {
+                        $crate::algos::mg_divide::div_wide_pow10_with::<$Storage>(n, SCALE, mode)
+                    } else {
+                        $crate::algos::mg_divide::div_wide_pow10_chain_with::<$Storage>(n, SCALE, mode)
+                    };
+                    return Self(scaled);
+                }
+
                 // `widen_mul` does the `$Storage × $Storage → $Wider`
                 // product in one step — no Int{2W} wrapping mul with
                 // half-empty operands, and no double trip through the
