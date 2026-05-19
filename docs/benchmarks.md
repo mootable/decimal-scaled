@@ -1024,15 +1024,15 @@ and is driven by
 [`bench-history.yml`](https://github.com/mootable/decimal-scaled/blob/main/.github/workflows/bench-history.yml);
 each charted version is `cargo add`ed into a stub crate and
 benched with the same Criterion settings. v0.3.0 / v0.3.1 /
-v0.4.0 / v0.4.1 are omitted; widths and functions are
-deliberately minimal per the bench-history scope note. The
-charted endpoint labelled v0.4.2 is the current HEAD —
-v0.4.0 / v0.4.1 are not on crates.io as separate
-bench-history rows because each was a transient release in
-the 0.4 cycle; v0.4.2 is the first 0.4 release shape that
-moves the needle vs the v0.3.x baseline (Tang `ln` lookup
+v0.4.1 are omitted; widths and functions are deliberately
+minimal per the bench-history scope note. v0.4.1 is skipped
+because it was a cosmetic-only release with no perf delta vs
+v0.4.0. The charted endpoint labelled v0.4.2 is the current
+HEAD and isolates the v0.4.2-cycle work (Tang `ln` lookup
 ladder, narrow-GUARD trig family, reciprocal-divide
-hyperbolic identity).
+hyperbolic identity, MG-chain bit-exact half-to-even) from
+the v0.4.0 baseline that shipped the wide-tier kernel
+refactor without the lookup ladder.
 
 ![history at D38](figures/history/d38.png)
 
