@@ -215,6 +215,16 @@ name = "agm_vs_taylor"
 harness = false
 required-features = ["x-wide"]
 
+# AGM vs artanh / Taylor at D230<115>. Mid-storage crossover probe:
+# the AGM ln crossover (Brent 1976) is around ~300 decimal digits;
+# D230<115> sits at ~131 working-bit decimal digits and is expected
+# to LOSE to Brent-reduced artanh — the bench captures the data
+# point for completeness.
+[[bench]]
+name = "agm_vs_taylor_d230"
+harness = false
+required-features = ["wide"]
+
 # Per-width full_matrix slice — one bench binary per decimal width.
 # Each runs the arith + strict (+ lossy, narrow only) families for
 # just its width, plus any cross-crate baseline that matches the
