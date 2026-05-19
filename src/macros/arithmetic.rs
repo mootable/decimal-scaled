@@ -396,7 +396,7 @@ macro_rules! decl_decimal_arithmetic {
     // though both the rebalance divisor `10^SCALE` (SCALE <= 18, fits
     // u64) and the runtime divisor `rhs.0.unsigned_abs()` (i64
     // magnitude, fits u64) are u64. Routing through
-    // [`i128_divrem_by_u64_with_mode`] replaces the soft-call with
+    // `i128_divrem_by_u64_with_mode` replaces the soft-call with
     // two hardware `divq` instructions, cutting D18 mul/div ~60%.
     ($Type:ident, $Storage:ty, i128) => {
         $crate::macros::arithmetic::decl_decimal_arithmetic!(@common $Type, $Storage);
@@ -430,7 +430,7 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
             type Output = Self;
             /// Divide two values of the same scale using the crate-default
-            /// [`RoundingMode`] (within 0.5 ULP).
+            /// `RoundingMode` (within 0.5 ULP).
             #[inline]
             fn div(self, rhs: Self) -> Self {
                 self.div_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
@@ -519,7 +519,7 @@ macro_rules! decl_decimal_arithmetic {
             /// For `SCALE = 0` the multiplier is 1; the i128 product is
             /// returned directly. For `SCALE >= 1` the divide-by-
             /// `10^SCALE` step uses
-            /// [`i128_divrem_by_u64_with_mode`], replacing the
+            /// `i128_divrem_by_u64_with_mode`, replacing the
             /// `__divti3` soft-call with two hardware `divq` instructions.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {

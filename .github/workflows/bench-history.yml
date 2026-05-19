@@ -39,6 +39,9 @@ jobs:
           # directional read this bench is for.
           - { tag: "v0.3.2", source: "crates-io", version: "0.3.2" }
           - { tag: "v0.3.3", source: "crates-io", version: "0.3.3" }
+          - { tag: "v0.4.0", source: "crates-io", version: "0.4.0" }
+          # v0.4.1 skipped — cosmetic only (dropped `DecimalConsts` alias);
+          # no perf delta vs v0.4.0.
           - { tag: "HEAD",   source: "path",      version: "" }
 
     steps:
