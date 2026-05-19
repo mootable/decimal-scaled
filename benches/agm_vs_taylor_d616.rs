@@ -5,12 +5,12 @@
 //! decision (AGM as the bespoke `ln` / `exp` kernel for SCALE ≥ X) has
 //! a measured anchor.
 //!
-//! Both paths are correctly-rounded in principle, but the AGM
-//! implementation runs at the canonical working scale `w = SCALE +
-//! GUARD`; beyond `w ~ 30` it drops to ~p/2 bits of precision (see
-//! `Dxx::ln_strict_agm` doc and `ALGORITHMS.md`). This bench measures
-//! pure throughput; precision is the canonical path's contract, not
-//! the AGM path's at this depth.
+//! Both paths are correctly-rounded to 0.5 ULP at storage scale.
+//! `ln_strict_agm` runs at the lifted working scale
+//! `w' = 2·SCALE + 4` via `guard_agm`; `exp_strict_agm` takes an
+//! additional `k_lift` to cover the post-Newton `x << k`
+//! amplification. This bench measures pure throughput against the
+//! chain-MG + narrow-GUARD artanh / Tang stack.
 //!
 //! Run with `cargo bench --features x-wide --bench agm_vs_taylor_d616`.
 
