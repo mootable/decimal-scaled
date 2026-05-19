@@ -146,7 +146,7 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(exp::lookup_d57_s18_22::exp_strict::<SCALE>(self.0, mode));
+            return Self(exp::lookup_d57_s18_22_tang::exp_strict::<SCALE>(self.0, mode));
         }
         if matches!(SCALE, 45..=56) {
             return Self(exp::lookup_d57_s45_56::exp_strict::<SCALE>(self.0, mode));
@@ -156,7 +156,7 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(exp::lookup_d57_s18_22::exp_strict::<SCALE>(self.0, mode));
+            return Self(exp::lookup_d57_s18_22_tang::exp_strict::<SCALE>(self.0, mode));
         }
         if matches!(SCALE, 45..=56) {
             return Self(exp::lookup_d57_s45_56::exp_strict::<SCALE>(self.0, mode));
