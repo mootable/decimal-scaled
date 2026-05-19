@@ -7,10 +7,22 @@ and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.ht
 
 ## [0.4.0] — 2026-05-19
 
-Mechanical breaking rename: every width name now equals the maximum
-all-nines decimal-digit count its storage can hold, and `MAX_SCALE` is
-capped at `name - 1` on every width so at least one integer digit is
-always representable.
+The 0.4 release lands four roughly independent strands in one cycle:
+a mechanical breaking rename + scale-cap so every width name equals
+its storage's maximum decimal-digit count and at least one integer
+digit is always representable; a wide-tier transcendental rewrite
+that lifts a unified algorithm library into `src/algos/` and routes
+every typed shell through per-family policy traits in `src/policy/`;
+a `src/` reorganisation into six narrative buckets (`types/`,
+`identity/`, `algos/`, `policy/`, `wide_int/`, `macros/`,
+`support/`); and a supply-chain / governance pass (OpenSSF Best
+Practices "Passing", OpenSSF Scorecard, `cargo-audit` + Dependabot
+in CI, `SECURITY.md`, REUSE-compliant `LICENSES/`). Performance
+work landed alongside: D38 transcendentals "borrow" the wider D57
+work integer to shrink the strict path 5–43×, bespoke D57 lookup
+kernels carry the SCALE 20 / 44–56 cells, and the wide-tier
+`ln` / `exp` / `sin` numbers improve 34–244× versus the 0.2.5
+baseline (see `docs/benchmarks.md` §3 and the History section).
 
 ### Breaking
 
@@ -103,6 +115,246 @@ For most users the upgrade is a mechanical search-and-replace:
   directly, matching the round-trip contract `s.parse::<T>() ==
   Ok(T::from_str(&s).unwrap())` at every `SCALE ≤ MAX_SCALE`.
 
+### Added
+
+- **`SECURITY.md`** — vulnerability reporting policy, supported
+  versions table, scope, and disclosure timeline. Required for
+  OpenSSF Best Practices conformance.
+- **`CONTRIBUTORS.md`** — contributor acknowledgement file at the
+  repository root.
+- **`LICENSES/` directory** — REUSE-compliant layout. The
+  top-level `LICENSE-MIT` / `LICENSE-APACHE` text files were moved
+  into `LICENSES/MIT.md` and `LICENSES/Apache-2.0.md`, and a new
+  `LICENSES/THIRD-PARTY.md` enumerates third-party origins for the
+  vendored algorithms.
+- **OpenSSF Best Practices badge** — project 12895 reached the
+  "Passing" tier. README badge ribbon extended with the badge.
+- **OpenSSF Scorecard workflow** (`.github/workflows/scorecard.yml`)
+  — weekly Scorecard run, results published as a repository badge.
+- **`cargo-audit` workflow** (`.github/workflows/cargo-audit.yml`)
+  — RustSec advisory check on every push to `main`, badge surfaced
+  in the README. Generates `Cargo.lock` in-CI since the repo
+  gitignores it.
+- **Dependabot configuration** (`.github/dependabot.yml`) — daily
+  updates for Cargo, GitHub Actions, and the `bench-history/`
+  sub-crate.
+- **CodSpeed continuous performance tracking**
+  (`.github/workflows/codspeed.yml`) — wide-tier benches + a ULP
+  precision gate run on every PR.
+- **`bench-full` workflow** (`.github/workflows/bench-full.yml`)
+  — matrix fanout across all 13 widths; each shard runs in its
+  own runner so a multi-hour sweep no longer loses every completed
+  width on a single VM eviction.
+- **`bench-history` workflow** (`.github/workflows/bench-history.yml`)
+  — cross-version harness in `bench-history/` that `cargo add`s
+  each shipped release into a stub crate and benches them under
+  matched Criterion settings, driving the new `docs/benchmarks.md`
+  History section and the per-width `docs/figures/history/*.png`
+  charts.
+- **`bench-trial` workflow** (`.github/workflows/bench-trial.yml`)
+  — focused single-cell trial bench for quick perf experiments
+  without paying the full-matrix runtime.
+- **`precision` workflow** (`.github/workflows/precision.yml`)
+  — ULP precision gate against the in-tree `examples/ulp_report.rs`
+  baseline; surfaced as a separate README badge.
+- **`DynDecimal` object-safe façade** — runtime-polymorphic trait
+  that lets callers hold a `Box<dyn DynDecimal>` across different
+  widths / scales when the concrete type is only known at runtime.
+  Re-exported from the crate root.
+- **Unified `D<S, SCALE>` struct** — every shipped width
+  (D9 / D18 / D38 / D57 / D76 / D115 / D153 / D230 / D307 / D462 /
+  D616 / D924 / D1232) is now a type alias over a single generic
+  `D<S, SCALE>` carrier rather than a hand-rolled struct per width.
+  The alias names and their public API surface are unchanged.
+- **Per-family policy traits** in `src/policy/` —
+  `SqrtPolicy` / `CbrtPolicy` / `LnPolicy` / `ExpPolicy` /
+  `PowPolicy` / `TrigPolicy`. The typed shell for each width
+  picks its kernel by `impl`ing the matching policy trait against
+  routines from `src/algos/`, instead of macro-emitting one
+  open-coded copy of the kernel per width.
+- **Algorithm library** in `src/algos/` — `sqrt/`, `cbrt/`, `ln/`,
+  `exp/`, `pow/`, `trig/` each ship the kernel variants the
+  policies route to: a `widen_to_d38` path for the narrow tier,
+  a `borrow_d57` path that promotes D38 to D57 for tighter strict
+  kernels, a `fixed_d38` path for the 256-bit handrolled `Fixed`,
+  a `wide_kernel` for D76+, and bespoke `lookup_d57_*` tables for
+  the SCALE 20 sqrt and SCALE 18–22 / 44–56 sincos / atan cells.
+- **`borrow_d57` bridge** — D38 transcendentals (`ln`, `exp`,
+  `pow`, `sin`, `cos`, `tan`, `atan`) gain a widen-to-D57 path
+  that runs the strict kernel at the wider work integer and
+  narrows back. Closes the SCALE 23+ accuracy gap and drops cost
+  multiple × on the narrow tier (see Performance).
+- **`docs/comparisons.md`** — moved-out home for the README's
+  binary-vs-decimal-fraction explainer and the long-form
+  comparison with other Rust decimal crates. Wired into the
+  docs site nav alongside `widths.md`, `getting-started.md`,
+  `strict-mode.md`, and `features.md`.
+
+### Changed
+
+- **`src/` reorganised into six narrative buckets.** Files moved:
+  - `types/` — public typed shells (`D9` / `D18` / `D38` /
+    `D57` / …), the unified `D<S, SCALE>` carrier, `traits/`
+    (the `Decimal` / `DecimalArithmetic` / `DecimalConvert` /
+    `DecimalTranscendental` / `DecimalConstants` / `DynDecimal`
+    surface), `arithmetic.rs`, `rescale.rs`, `num_traits.rs`,
+    `overflow_variants.rs`, `powers{,_fast}.rs`, `log_exp{,_fast}.rs`,
+    `trig{,_fast}.rs`, `consts/`, and `widths.rs` (the former
+    `core_type.rs`).
+  - `identity/` — cross-type `PartialEq` / `PartialOrd` between
+    every width and the primitive integer / float surface
+    (the former top-level `equalities.rs`).
+  - `algos/` — kernel library described above, plus `fixed_d38.rs`
+    (256-bit `Fixed`, formerly `d_w128_kernels.rs`) and
+    `mg_divide.rs` (formerly top-level).
+  - `policy/` — per-family routing traits.
+  - `wide_int/` — unchanged in role; the hand-rolled
+    `Int192` / `Int384` / … storage family.
+  - `macros/` — unchanged in role; declarative + procedural
+    macros that emit the typed shells.
+  - `support/` — `error.rs`, `rounding.rs`, `display.rs`,
+    `serde_helpers.rs`, `bench_alt.rs`, `diagnostics.rs`.
+- **Typed shells route through policy traits, not direct
+  `algos::` calls.** Each `Dxxx::ln_strict` (etc.) body is now
+  a single `<Self as LnPolicy>::ln_impl(self, …)` dispatch,
+  emitted via the existing macro surface. The layering shim that
+  let typed methods reach straight into the kernel during the
+  pilot is gone.
+- **README** — binary-vs-decimal-fraction explainer moved out
+  to `docs/comparisons.md`; in-README copy slimmed to a one-
+  paragraph pointer. Badge ribbon now carries OpenSSF Best
+  Practices, OpenSSF Scorecard, and cargo-audit badges
+  alongside the existing crates.io / docs.rs / MSRV / License /
+  site / CodSpeed badges. The `docs.yml` GHA badge is now
+  labelled "site" to disambiguate from docs.rs.
+- **`AGENTS.md`** and **`.claude/skills/decimal-scaled/SKILL.md`**
+  refreshed for the 0.4.0 layout: new width names, new src/
+  bucket map, the six-bucket layering rule (typed shells call
+  policy, policy calls algos, algos may call wide_int but never
+  the reverse).
+- **`docs/benchmarks.md`** — every per-tier arithmetic table
+  (§1) and strict-transcendental table (§3) regenerated from
+  the v0.4.0 sweep. New History section (§7) plotting
+  `decimal-scaled` v0.2.5 → v0.4.0 deltas at D38 / D76 / D307
+  for the same operations. New §0.4.0 raw-data dump appended
+  in place of the prior 0.3.2 dump. Run-conditions preamble
+  spells out the GitHub-hosted runner caveat (1.5–2× wall-
+  clock variance per Criterion's standing guidance).
+
+### Fixed
+
+- **Wide-tier `FromStr` ceiling lifted.** Decimal strings can now be
+  parsed at every legal `SCALE` on every wide-tier width — previously
+  a u128 intermediate inside the parser silently capped the
+  parseable scale at 38, so e.g. `"0.5".parse::<D307<150>>()` would
+  fail with a precision error despite the type being well within
+  storage range. The parser now widens through the storage integer
+  directly, matching the round-trip contract `s.parse::<T>() ==
+  Ok(T::from_str(&s).unwrap())` at every `SCALE ≤ MAX_SCALE`.
+- **`D38<MAX_SCALE>.log10_strict`** no longer panics on inputs
+  inside the storage range but close to the upper boundary. The
+  intermediate `mul_div` step was overflowing the narrow work
+  integer at the boundary; the fixed path uses the wider work
+  integer that `log_strict` already uses.
+- **`D57<MAX_SCALE>.cbrt_strict`** no longer overflows the work
+  integer at the maximum scale. The cube-root reduction needed
+  one extra guard digit at the storage ceiling.
+- **Wide-tier `cbrt_strict`** no longer overflows the work
+  integer at `SCALE = MAX_SCALE`. Generalises the D57 fix above to
+  every wider tier.
+- **Overflow panic messages** across every narrowing kernel now
+  spell out which kernel + which direction + the offending
+  value, instead of the prior generic "rescale: scale-up
+  overflow" formatting. Surfaces the right call site immediately
+  in downstream stack traces.
+- **`mul_div_candidates` divide rounding** in the handrolled
+  sanity-check path realigned with the production divide kernel.
+  Previously the handrolled path rounded half-to-even
+  off-by-one at the LSB on a small input class, masking real
+  regressions in the production kernel.
+- **Test gates promoted to module-level `#[cfg(...)]`.** A handful
+  of test modules added in 0.3.x still carried runtime
+  `if !COND { return; }` early-returns; those are now
+  module-level cfg gates so a test never silently no-ops under a
+  feature combination that disables its precondition.
+- **Infinite recursion in `DecimalTranscendental` trait impl** —
+  one trait-method body called the trait method instead of the
+  underlying inherent method, producing a runtime stack overflow
+  when called via the trait. Fixed.
+- **`Fixed::rescale_down` argument order** is now `debug_assert`-
+  ed at call sites — a defensive guard added after a near-miss
+  during the policy-trait wiring.
+
+### Removed
+
+- **Top-level layering shims** — `src/lib.rs` no longer re-exports
+  symbols that have moved into the bucketed layout for backward
+  source-path compatibility. Public callers using the documented
+  crate-root re-exports (`decimal_scaled::D38`, etc.) are
+  unaffected; only callers that reached into the private path
+  layout need to update.
+- **`research/` references** — none ever shipped in source,
+  docs, or commit messages; the folder remains private and
+  out of the crate tarball.
+
+### Performance
+
+All numbers below come from `docs/benchmarks.md` (per-width
+arithmetic tables in §1, strict transcendentals in §3,
+cross-version History in §7). The 0.4 column reflects the
+v0.4.0 GHA sweep on shared `ubuntu-latest` runners; cold-dev-box
+re-runs typically measure 30–50 % faster on the wide tiers and
+several × faster on the narrow tier's picosecond cells. Treat
+the multiples as directional shape-of-change rather than as
+drop-in benchmarks.
+
+- **D38 strict transcendentals "borrow" the D57 work integer.**
+  D38 `log_strict` / `log10_strict` / `exp2_strict` / `log_strict`
+  / `powf_strict` now widen to D57 for the integer-kernel pass
+  and narrow back. The D57 borrow path is also scale-gated for
+  D38 `powf` (`SCALE >= 23`, tightened from the original
+  `SCALE >= 25` after measurement).
+- **Bespoke narrow-GUARD kernels on D57.** Hand-rolled kernels
+  for the SCALE 20 sqrt (`algos::sqrt::lookup_d57_s20`), the
+  SCALE 18..=22 sincos (`algos::trig::lookup_d57_s18_22_sincos`),
+  the SCALE 44..=56 sincos / atan (`algos::trig::lookup_d57_s44_56_*`)
+  and the SCALE 45..=56 exp (`algos::exp::lookup_d57_s45_56`)
+  carry the cells where the generic wide kernel was the wrong
+  shape for the scale.
+- **D38 cos closes ~25 % of the gap to D38 sin** (joint
+  sin / cos kernel re-tuned).
+- **D38 sqrt + div u128 fast path** skips the 256-bit machinery
+  when the inputs fit u128, recovering several ns per call on
+  the narrow tier.
+- **Wide-tier transcendentals (D76+)** — `pow10(w)` memoised
+  per-tier in the wide transcendental cores. The cross-version
+  delta vs the 0.2.5 baseline on the same operations, from
+  `docs/benchmarks.md` §3:
+
+  | op              | 0.2.5     | 0.4.0     | speedup   |
+  |---              |---        |---        |---        |
+  | D76<35> ln      | 1.37 ms   | 40.6 µs   | **34×**   |
+  | D76<35> exp     | 1.27 ms   | 32.1 µs   | **40×**   |
+  | D76<35> sin     | 1.08 ms   | 22.6 µs   | **48×**   |
+  | D76<35> sqrt    | 20.5 µs   | 3.53 µs   |  **6×**   |
+  | D153<75> ln     | 6.40 ms   | 67.5 µs   | **95×**   |
+  | D153<75> exp    | 5.87 ms   | 53.8 µs   | **109×**  |
+  | D153<75> sin    | 4.82 ms   | 40.8 µs   | **118×**  |
+  | D153<75> sqrt   | 83.6 µs   | 4.98 µs   | **17×**   |
+  | D307<150> ln    | 34.1 ms   | 161.3 µs  | **211×**  |
+  | D307<150> exp   | 31.2 ms   | 131.5 µs  | **237×**  |
+  | D307<150> sin   | 25.5 ms   | 104.4 µs  | **244×**  |
+  | D307<150> sqrt  | 313 µs    | 7.84 µs   | **40×**   |
+
+  These multiples are conservative since the 0.2 column is a
+  cold-dev-box run and the 0.4 column is shared CI; the
+  algorithm-of-record changes (u64-native limbs, MG 2-by-1
+  reciprocal Knuth divide, Brent's two-stage exp argument
+  reduction, multi-level sqrt halving in ln, [0, π/4] sin range
+  reduction, sin_cos / sinh_cosh joint kernels, thread-local
+  pi / ln2 / ln10 cache, pow10-cached mul / div per inner loop)
+  carry the win.
+
 ### Internal
 
 - Build-time math-constant scales lowered: `SCALE_REF` for D153 / D230
@@ -111,6 +363,16 @@ For most users the upgrade is a mechanical search-and-replace:
 - Bench file names tracking width (`benches/full_matrix_d56.rs`,
   `benches/lib_cmp_d1231.rs`, ...) renamed to match the new width
   identifiers.
+- New `src/macros/dyn_bridge.rs` carries the `DynDecimal` blanket-
+  impl bridge so every typed shell picks up the object-safe surface
+  via one macro invocation.
+- Wide transcendental macro module (`src/macros/wide_transcendental.rs`)
+  consolidated to route through `src/policy/` rather than emitting
+  one open-coded kernel per width.
+- Layering rule codified: typed shells call policy, policy calls
+  algos, algos may call `wide_int` but never the reverse.
+- `Cargo.toml` dev-dependency `fastnum` bumped 0.4 → 0.7; benches
+  follow the new API.
 
 ## [0.3.3] — 2026-05-18
 
