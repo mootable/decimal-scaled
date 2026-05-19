@@ -2,3 +2,5 @@
 Cargo.lock
 /bench-history/target
 /bench-history/Cargo.lock
+/bench-history-results
+/lib-cmp-results
