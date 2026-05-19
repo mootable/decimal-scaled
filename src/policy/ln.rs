@@ -146,43 +146,10 @@ impl_log_widen!(D18, ln::widen_to_d38::ln_strict_d18, ln::widen_to_d38::ln_with_
 // `*_with_impl`: D57's wide_kernel has no runtime-`working_digits`
 // variant, so the borrow path collapses to the strict kernel.
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> LnPolicy for D38<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::ln_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::ln_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::log_strict::<SCALE>(self.0, base.0, mode))
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::log_strict::<SCALE>(self.0, base.0, mode))
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::log2_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::log2_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::log10_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::borrow_d57::log10_strict::<SCALE>(self.0, mode))
-    }
-}
-
-#[cfg(not(any(feature = "d57", feature = "wide")))]
+// D38 — use the in-tree `Fixed`-256 `ln_fixed` directly. See the
+// `crate::policy::exp` comment for the same routing change rationale:
+// once the MG-routed Fixed primitives ship the bespoke `Fixed`
+// kernel beats the borrow_d57 round trip.
 impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {

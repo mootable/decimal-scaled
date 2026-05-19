@@ -65,27 +65,13 @@ impl_exp_widen!(D18, exp::widen_to_d38::exp_strict_d18, exp::widen_to_d38::exp_w
 
 // ── D38 — see `crate::policy::ln` for the borrow-D57 rationale. ────
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
-    #[inline]
-    fn exp_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::borrow_d57::exp_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::borrow_d57::exp_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn exp2_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::borrow_d57::exp2_strict::<SCALE>(self.0, mode))
-    }
-    #[inline]
-    fn exp2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::borrow_d57::exp2_strict::<SCALE>(self.0, mode))
-    }
-}
-
-#[cfg(not(any(feature = "d57", feature = "wide")))]
+// D38 — use the in-tree `Fixed`-256 `exp_fixed` directly. The
+// borrow_d57 path was retained earlier when D38's bespoke kernel was
+// ~2× slower than D57's wide_kernel at matched precision. With the
+// 0.4.2 MG-routed `Fixed::mul` / `div_small` / `divmod_u256_by_pow10`
+// fast paths the D38-native kernel beats the borrow-and-back round
+// trip across the whole SCALE range — measured ~2× faster at
+// SCALE 19 (10-12 µs versus 22 µs on the GHA shared-runner pool).
 impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
