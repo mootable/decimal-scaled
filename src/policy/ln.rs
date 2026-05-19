@@ -576,8 +576,11 @@ impl<const SCALE: u32> LnPolicy for crate::types::widths::D616<SCALE> {
 
 // D924 — bespoke arm so `ln_impl` can divert SCALE ∈ 455..=465 (the
 // popular mid-storage band centred on `SCALE = 461 ≈ MAX_SCALE / 2`)
-// through the Tang-style narrow-GUARD lookup before falling back to
-// `wide_kernel`. See [`crate::algos::ln::lookup_d924_s455_465_tang`].
+// OR SCALE ∈ 895..=905 (the deep-storage band approaching MAX_SCALE
+// = 923) through the Tang-style narrow-GUARD lookup before falling
+// back to `wide_kernel`. See
+// [`crate::algos::ln::lookup_d924_s455_465_tang`] and
+// [`crate::algos::ln::lookup_d924_s895_905_tang`].
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> LnPolicy for crate::types::widths::D924<SCALE> {
     #[inline]
@@ -585,12 +588,18 @@ impl<const SCALE: u32> LnPolicy for crate::types::widths::D924<SCALE> {
         if matches!(SCALE, 455..=465) {
             return Self(ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(self.0, mode));
         }
+        if matches!(SCALE, 895..=905) {
+            return Self(ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(self.0, mode));
+        }
         Self(ln::wide_kernel::ln_strict_d924(self.0, mode, SCALE))
     }
     #[inline]
     fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
         if matches!(SCALE, 455..=465) {
             return Self(ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(self.0, mode));
+        }
+        if matches!(SCALE, 895..=905) {
+            return Self(ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(self.0, mode));
         }
         Self(ln::wide_kernel::ln_strict_d924(self.0, mode, SCALE))
     }
