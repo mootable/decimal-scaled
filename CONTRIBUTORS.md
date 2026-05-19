@@ -179,6 +179,9 @@ PR gate — if any of them fail your kernel does not land.
 - [`tests/precision_wide_baseline.rs`](tests/precision_wide_baseline.rs) — D76 wide-tier 0.5 ULP measurement at D76<6>. Same `≤ 1 LSB` contract; constant `WIDE_TOLERANCE_LSB` makes the threshold explicit so a regression that drifts past it is loud. Gated to `HalfToEven`.
 - [`tests/wide_strict_transcendentals.rs`](tests/wide_strict_transcendentals.rs) — cross-witness suite for the wide tier. Computes a value at the target's storage and scale, computes the reference at a wider storage at the same scale, rescales, and asserts bit-exact or ±1 LSB agreement. The pattern to copy when adding a new bespoke kernel.
 - [`tests/narrow_strict_transcendentals.rs`](tests/narrow_strict_transcendentals.rs) — narrow tier (D9/D18/D38) inherited-method coverage.
+- [`tests/d616_s308_lookup_parity.rs`](tests/d616_s308_lookup_parity.rs), [`tests/d924_s460_lookup_parity.rs`](tests/d924_s460_lookup_parity.rs), [`tests/d1232_s615_lookup_parity.rs`](tests/d1232_s615_lookup_parity.rs) — per-tier Tang-lookup-vs-wide-kernel parity at the design SCALE. Tight `≤ 1 LSB` agreement between the two implementation paths, plus `exp(ln(x))` round-trip identities. New Tang lookup bands must add a matching parity file at their target SCALE before the kernel is allowed in.
+- [`tests/perf_d462_s230_correctness.rs`](tests/perf_d462_s230_correctness.rs) — composed-identity witnesses (`cosh² − sinh² = 1`, `sin² + cos² = 1`, …) for the D462 Tang slot. The same shape works for any new bespoke-kernel slot.
+- [`tests/powf_integer_fastpath_parity.rs`](tests/powf_integer_fastpath_parity.rs) — bit-exact assertion of `powf_strict(D::from_i32(n)).to_bits() == powi(n).to_bits()` for the `|n| ≤ 64` fast path. Any future integer-exponent specialisation has to keep this contract.
 
 If your change adds a bespoke kernel for a new `(width, scale)` cell,
 **add cross-witness tests for that cell to
@@ -366,11 +369,12 @@ things and have very different escape hatches.
 ### Precision gate (hard, non-overridable)
 
 [`.github/workflows/precision.yml`](.github/workflows/precision.yml)
-runs the four 0.5 ULP test files listed above. **A failed precision
-check blocks merge full stop.** There is no reviewer override, no
-label dismissal, no waiver process. If your kernel drifts past the
-±1 LSB contract the change does not land, regardless of how good its
-perf numbers look.
+runs the precision suite listed above — the four 0.5 ULP files, the
+per-tier Tang-lookup parity files, and the bespoke-slot correctness
+witnesses — on every pull request. **A failed precision check blocks
+merge full stop.** There is no reviewer override, no label dismissal,
+no waiver process. If your kernel drifts past the ±1 LSB contract the
+change does not land, regardless of how good its perf numbers look.
 
 If you hit a precision failure: the kernel parameters need adjustment
 (usually a wider `GUARD` constant, occasionally a different reduction

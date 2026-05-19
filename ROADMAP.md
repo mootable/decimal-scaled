@@ -18,8 +18,13 @@ exactness when they need it and an opt-out when they don't.
 |--------|-------------|
 | **0.3.0** (shipped) | Half-width tier ladder (D57 / D115 / D230 / D462 / D616 / D924 / D1232); the comprehensive cross-tier `widen()` / `narrow()` chain (D38.widen() now returns D57, etc.); the chain-of-÷10^38 wide-tier `mul` speedup (≥ 2× at D307<150>); strict-by-default dispatcher; per-width benchmark split; trig functions in the per-width summary chart family. |
 | **0.3.1** (shipped) | Docs-site release-process fixes; rustdoc build covers x-wide + xx-wide tiers. |
-| **0.3.2** (in flight) | See "Shipped recently in 0.3.x" below. Per-L fixed-array `mul` (1.25× on D307 exp); 17 trig fast paths; ln fast paths; adaptive halvings in atan; full profiling infrastructure (samply / flamegraph / perfetto); two benchmark add-ons (atan input-class comparison, per-L mul gate). |
-| **0.4.0** | (1) Signed `SCALE` (`SCALE: i32`) so callers can express implicit-trailing-zero magnitudes (`D38<-3>` = "stored value × 10³"). Shares the per-tier `10^k` constant tables with the magic-multiply extension. (2) Cryptographically-secure RNG surface: uniform-decimal sampling over `[0, 1)`, `[a, b]`, and full-storage; rejection-sampling at any SCALE; bring-your-own `CryptoRng` so callers can plug `OsRng` / `ChaCha20Rng` / hardware RNGs. |
+| **0.3.2** (shipped) | Per-L fixed-array `mul` (1.25× on D307 exp); 17 trig fast paths; ln fast paths; adaptive halvings in atan; full profiling infrastructure (samply / flamegraph / perfetto); two benchmark add-ons (atan input-class comparison, per-L mul gate). |
+| **0.3.3** (shipped) | Trait split — `Decimal` → `DecimalArithmetic + DecimalConvert`; benchmarks.md refresh from full sweep; docs workflow no longer triggers on tag pushes. |
+| **0.4.0** (shipped) | Foundation release — `src/` six-bucket layout (`types/`, `algos/`, `macros/`, `wide_int/`, `consts/`, `prelude/`); type renames D56 family → D57; FromStr wide-tier fix; OpenSSF Best Practices + Scorecard + cargo-audit CI; REUSE LICENSES/. |
+| **0.4.1** (shipped) | Cosmetic-only — dropped the `DecimalConsts` alias. No perf delta. |
+| **0.4.2** (shipped) | Tang ln ladder 13×-34× across narrow-GUARD bands (D57<18-22> through D1232<610-620>); AGM crossover empirically located at SCALE 1000 (3× past textbook 300 digits); D18 mul/div -60% / -47%; chain-MG bit-exact half-to-even for w > 38; `limbs_mul_u64_into<L, LP1>` primitive; benchmarks.md refresh. |
+| **0.4.3** (candidate) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (mpmath golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
+| **0.5.0** (planned) | Cryptographically-secure RNG surface (see "Random number generation" section). |
 | **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
 
 ## Shipped recently in 0.3.x
@@ -76,20 +81,15 @@ Concrete symptom: at 256-bit / s=35, `decimal-scaled` `div` is
 
 At D76 / D153 / D307 the multiplication kernel is straight
 schoolbook over `[u64; 4]` / `[u64; 8]` / `[u64; 16]`. The
-crossover for Karatsuba is typically around 8 limbs, Toom-3
-around 32. D153 and D307 sit squarely in Karatsuba and
-Karatsuba-vs-Toom-3 territory, respectively, but neither is
-implemented.
+textbook Karatsuba crossover is ~8 limbs and Toom-3 is ~32. In
+practice the LLVM-unrolled u64 schoolbook beats both at every
+length this crate emits — see the row below.
 
-Concrete symptom: 1024-bit `mul` is 66.7 µs in `decimal-scaled`
-vs 141 ns in `bigdecimal`. The crate carries the cost of
-`16 × 16 = 256` limb multiplies serially.
-
-| approach | status | expected win |
+| approach | status | notes |
 |---|---|---|
-| Karatsuba on `Int512` / `Int1024` mul | TODO | ~2× at D153, ~3-4× at D307 |
-| Toom-3 on `Int1024` mul, gated by limb count | TODO | further ~1.5-2× on top of Karatsuba at the very deepest scale |
-| SIMD limb multiplies (AVX-512, NEON) gated behind a `simd` feature | speculative | hardware-dependent; worth a probe bench before committing |
+| Karatsuba on `Int512` / `Int1024` mul | **implemented, gated off** | `limbs_mul_karatsuba_u64` with `KARATSUBA_THRESHOLD_U64 = 256` (above our widest tier). M2 bench at L = 16-96 measured schoolbook 1.07-1.92× *faster* everywhere; the recursive split's heap allocations dominate the asymptotic win at our widths. Kept in tree for SIMD / extra-wide / scratch-passing future work. See [`ALGORITHMS.md`](ALGORITHMS.md) cross-over section. |
+| Toom-3 on `Int1024` mul, gated by limb count | foreclosed | dependent on Karatsuba winning a tier below it; since Karatsuba loses to schoolbook everywhere we ship, Toom-3 is structurally further out. Reconsider if SIMD widening shifts the schoolbook constant. |
+| SIMD limb multiplies (AVX-512, NEON) gated behind a `simd` feature | speculative | hardware-dependent; worth a probe bench before committing. This is the *only* lever that would change the Karatsuba / Toom-3 outcome above. |
 
 ---
 
@@ -108,45 +108,41 @@ width - a precision cliff that's hard to communicate.
 
 | approach | status | expected win |
 |---|---|---|
-| `*_approx(working_digits: u32)` family - same series as `*_strict` but with caller-controlled working-scale cutoff | TODO | linear cost reduction proportional to the requested digit cut |
+| Tang table-driven `ln` / `exp` / `sin_cos` / `atan` / hyperbolic at narrow-GUARD bands | **shipped 0.4.2 + extended 0.4.3-candidate** | 3-34× over artanh / Taylor at the gated `(width, scale)` bands; full ladder D57<18-22> → D1232<610-620>. See [`ALGORITHMS.md`](ALGORITHMS.md) Tang section. |
+| `*_approx(working_digits: u32)` family — same series as `*_strict` but with caller-controlled working-scale cutoff | TODO | linear cost reduction proportional to the requested digit cut |
 | Document the precision cliff of `*_fast` on wide tiers more loudly | TODO | non-code; reader expectations |
-| Newton-on-AGM `ln` / `exp` paths past D153 - quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | not yet promoted by the dispatcher; crossover point measured in `benches/agm_vs_taylor.rs` |
+| Newton-on-AGM `ln` / `exp` paths past D153 — quadratic convergence, asymptotically wins where the artanh series stalls | partial (`bench-alt`) | Crossover empirically located at SCALE 1000 (3× past textbook 300 digits) thanks to the well-tuned chain-MG artanh path. Currently exposed as the alternate path; promotion gated on AGM precision lift (queued as 0.4.3-candidate B) since the present implementation runs intermediate AGM steps at the working scale and loses precision past ~30. |
 
 ---
 
 ## More decimal widths - fill the tier ladder
 
-Current widths cover the power-of-two storage sequence
-(32 / 64 / 128 / 256 / 512 / 1024 bits). Real-world picks
-often fall between these - e.g. a `D57` covers IEEE 754 binary192
-mantissa precision, a `D462` covers cryptographic-class
-high-precision intermediates without paying the full D616 cost.
-
-Plan:
-
-- **Double the top end up to 4096 bits.** D307 (1024 bit) is the
-  current ceiling; add D616 (2048 bit) and D1232 (4096 bit).
-- **Fill in the half-step widths between each existing pair.**
-
-Resulting tier ladder:
+Tier ladder is now complete from 32-bit storage (D9) up to 4096-bit
+storage (D1232), covering every multiple-of-64 step. The half-step
+tiers between each power-of-two (D57, D115, D230, D462, D924) shipped
+in 0.3.0 and let callers pay only for the precision they need
+without jumping a full storage doubling.
 
 | storage bits | type | safe decimal digits | status |
 |---|---|---|---|
 | 32   | `D9`    | 9    | shipped |
-| 48   | `D14`   | 14   | TODO |
 | 64   | `D18`   | 18   | shipped |
-| 96   | `D28`   | 28   | TODO |
 | 128  | `D38`   | 38   | shipped |
-| 192  | `D57`   | 57   | TODO |
+| 192  | `D57`   | 57   | shipped (0.3.0) |
 | 256  | `D76`   | 76   | shipped |
-| 384  | `D115`  | 115  | TODO |
+| 384  | `D115`  | 115  | shipped (0.3.0) |
 | 512  | `D153`  | 153  | shipped |
-| 768  | `D230`  | 230  | TODO |
+| 768  | `D230`  | 230  | shipped (0.3.0) |
 | 1024 | `D307`  | 307  | shipped |
-| 1536 | `D462`  | 462  | TODO |
-| 2048 | `D616`  | 616  | TODO |
-| 3072 | `D924`  | 924  | TODO |
-| 4096 | `D1232` | 1232 | TODO |
+| 1536 | `D462`  | 462  | shipped (0.3.0) |
+| 2048 | `D616`  | 616  | shipped (0.3.0) |
+| 3072 | `D924`  | 924  | shipped (0.3.0) |
+| 4096 | `D1232` | 1232 | shipped (0.3.0) |
+
+Sub-64-bit-limb tiers (the previous D14 / D28 entries at 48- and
+96-bit storage) are out of scope — the wide-int kernels are
+`[u64; N]`-shaped and the per-step gain over D18 or D38 doesn't
+justify the limb-fragment book-keeping.
 
 Each new tier needs its own `IntN` storage in `crate::wide_int`,
 the corresponding `MAX_SCALE` plumbing, and matching wide-int +
@@ -180,12 +176,18 @@ roadmap item here unless the accuracy contract changes.
 
 ---
 
-## Wide-tier MG magic-multiply extension + negative SCALE
+## Wide-tier MG magic-multiply extension
 
 | approach | status | expected win |
 |---|---|---|
 | Extend the Möller–Granlund magic-multiply tables past `10^38` to cover every wide-tier SCALE (target: `10^SCALE` for `SCALE` up to the tier MAX_SCALE) so the `÷10^SCALE` step on D76 and above swaps multi-limb Knuth divide for one magic multiply + a fix-up | TODO | up to several × on wide-tier mul/div |
-| Make `SCALE` signed (i32) so callers can express implicit-trailing-zero magnitudes (D38<-3> = "stored value × 10³"); orthogonal to the magic-multiply work but shares the per-tier `10^k` constant tables — a single tables-rewrite covers both | TODO | enables values up to `±i128::MAX × 10^(-SCALE)` without burning storage on zero-padding; common in actuarial / national-accounts work |
+
+Signed `SCALE` (`SCALE: i32`, e.g. `D38<-3>` = "stored value × 10³")
+was previously listed as a 0.4.0 / 0.5.0 target. **Deferred
+indefinitely** — the const-generic infrastructure churn (every
+type-bound, every `MAX_SCALE` check, every macro arm) does not pay
+back the implicit-trailing-zero use case, which is already
+expressible by promoting one tier and using a positive scale.
 
 ---
 
