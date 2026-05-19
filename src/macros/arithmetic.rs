@@ -247,6 +247,29 @@ macro_rules! decl_decimal_arithmetic {
             /// per-call `pow(SCALE)` on the wider type.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
+                // Fast path: when `self * 10^SCALE` fits `$Storage`
+                // exactly (`leading_zeros(self) + leading_zeros(10^SCALE) >
+                // $Storage::BITS`), skip the widen-to-$Wider chain
+                // and divide in $Storage. The divisor `rhs` already
+                // fits $Storage by construction. Saves one
+                // $Storage→$Wider resize on `rhs`, one $Wider→$Storage
+                // resize on the result, and shrinks the Knuth divmod
+                // from $Wider-limbs to $Storage-limbs.
+                //
+                // `$Type::<SCALE>::multiplier()` is a `const` -- its
+                // `leading_zeros()` collapses at compile time when
+                // SCALE is a const, so the branch's predicate is one
+                // `leading_zeros` call on `self.0`.
+                let mult: $Storage = $Type::<SCALE>::multiplier();
+                let lz_n = self.0.leading_zeros();
+                let lz_m = mult.leading_zeros();
+                if lz_n + lz_m > <$Storage>::BITS {
+                    let n: $Storage = self.0.wrapping_mul(mult);
+                    let result =
+                        $crate::macros::arithmetic::round_with_mode_wide!(n, rhs.0, $Storage, mode);
+                    return Self(result);
+                }
+
                 let b: $Wider = rhs.0.resize::<$Wider>();
                 // `self.0 * multiplier()` both fit `$Storage` for any
                 // representable `SCALE`, so the full product fits
