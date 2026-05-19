@@ -219,6 +219,83 @@ pub mod __bench_internals {
     ) {
         crate::wide_int::limbs_mul_u64_into::<L, LP1>(a, n, out)
     }
+
+    // Newton-reciprocal divide research kernel — wrapped via concrete
+    // shims so the bench harness gets head-to-head comparisons against
+    // [`crate::algos::mg_divide::div_wide_pow10_chain_with`] without
+    // exposing trait machinery.
+    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+    pub mod newton_vs_mg {
+        use crate::algos::newton_reciprocal::NewtonReciprocal as NR;
+        pub struct NewtonReciprocal(pub(crate) NR);
+        impl NewtonReciprocal {
+            #[inline(never)]
+            pub fn precompute(scale: u32, width_limbs: usize) -> Self {
+                Self(NR::precompute(scale, width_limbs))
+            }
+        }
+
+        macro_rules! shim {
+            ($pub_name:ident, $width:ty, $feat:literal) => {
+                #[cfg(any(feature = $feat))]
+                pub mod $pub_name {
+                    use super::NewtonReciprocal;
+                    use crate::RoundingMode;
+                    use $width as W;
+
+                    /// Storage type for this tier — opaque to the bench.
+                    #[derive(Clone, Copy)]
+                    pub struct Storage(W);
+
+                    /// Build a representative non-zero numerator from a top-limb position.
+                    #[inline(never)]
+                    pub fn build_numerator(top_limb_idx: usize) -> Storage {
+                        use crate::wide_int::WideInt;
+                        let mut mag = [0u128; 64];
+                        mag[top_limb_idx] = 1u128 << 32;
+                        mag[1] = 0xdeadbeef_cafef00d_u128;
+                        Storage(W::from_mag_sign_u128(&mag, false))
+                    }
+
+                    #[inline(never)]
+                    pub fn mg_chain(n: Storage, scale: u32) -> Storage {
+                        Storage(crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(
+                            n.0,
+                            scale,
+                            RoundingMode::HalfToEven,
+                        ))
+                    }
+
+                    #[inline(never)]
+                    pub fn mg_single(n: Storage, scale: u32) -> Storage {
+                        Storage(crate::algos::mg_divide::div_wide_pow10_with::<W>(
+                            n.0,
+                            scale,
+                            RoundingMode::HalfToEven,
+                        ))
+                    }
+
+                    #[inline(never)]
+                    pub fn newton(
+                        n: Storage,
+                        scale: u32,
+                        table: &NewtonReciprocal,
+                    ) -> Storage {
+                        Storage(crate::algos::newton_reciprocal::div_wide_pow10_newton_with::<W>(
+                            n.0,
+                            scale,
+                            RoundingMode::HalfToEven,
+                            &table.0,
+                        ))
+                    }
+                }
+            };
+        }
+        shim!(d307, crate::wide_int::I1024, "x-wide");
+        shim!(d616, crate::wide_int::I2048, "x-wide");
+        shim!(d924, crate::wide_int::I3072, "xx-wide");
+        shim!(d1232, crate::wide_int::I4096, "xx-wide");
+    }
 }
 mod macros;
 

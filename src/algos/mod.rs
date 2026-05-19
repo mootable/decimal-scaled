@@ -46,3 +46,9 @@ pub(crate) mod trig;
 // by the strict-transcendental fallback paths.
 pub(crate) mod mg_divide;
 pub(crate) mod fixed_d38;
+
+// Research kernel — Newton-Raphson reciprocal divide for `n / 10^SCALE`.
+// Gated to the deepest wide tiers only; head-to-head benched against
+// [`mg_divide::div_wide_pow10_chain_with`] in `benches/newton_vs_mg.rs`.
+#[cfg(any(feature = "d616", feature = "d924", feature = "d1232", feature = "x-wide", feature = "xx-wide"))]
+pub mod newton_reciprocal;
