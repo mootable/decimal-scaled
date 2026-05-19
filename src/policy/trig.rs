@@ -1014,14 +1014,120 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
 }
 
+// D462 — bespoke arm so the SCALE 225..=235 narrow-GUARD lookup slots
+// can divert the hot calls before falling back to the generic
+// `wide_kernel` and the macro-emitted inherent shells. Mirrors the
+// D153 mid-tier shape.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl_wide_trig!(
-    D462,
-    trig::wide_kernel::sin_strict_d462,
-    trig::wide_kernel::cos_strict_d462,
-    trig::wide_kernel::tan_strict_d462,
-    trig::wide_kernel::atan_strict_d462
-);
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
+    #[inline]
+    fn sin_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::sin_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::sin_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn cos_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::cos_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::cos_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn tan_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::tan_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::tan_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn atan_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::atan_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 225..=235) {
+            return Self(trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(self.0, mode));
+        }
+        Self(trig::wide_kernel::atan_strict_d462(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    #[inline]
+    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    #[inline]
+    fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    #[inline]
+    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    #[inline]
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    #[inline]
+    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+
+    // sinh / cosh / tanh — the Tang-exp slot (which the hyper lookup
+    // would have piggybacked on for the shared `(eˣ, e⁻ˣ)` pair) lost
+    // at D462 against the canonical `exp_fixed` Smith r/2^n path, so
+    // the hyper Tang slot loses too. Dispatch keeps the macro-emitted
+    // `sinh_strict_with` / `cosh_strict_with` / `tanh_strict_with`
+    // shells which compose the canonical `exp_fixed`.
+    #[inline]
+    fn sinh_impl(self, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+    #[inline]
+    fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+    #[inline]
+    fn cosh_impl(self, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+    #[inline]
+    fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+    #[inline]
+    fn tanh_impl(self, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+    #[inline]
+    fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+    #[inline]
+    fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    #[inline]
+    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    #[inline]
+    fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    #[inline]
+    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    #[inline]
+    fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    #[inline]
+    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    #[inline]
+    fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    #[inline]
+    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    #[inline]
+    fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    #[inline]
+    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+}
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl_wide_trig!(
