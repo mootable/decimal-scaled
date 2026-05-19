@@ -80,12 +80,33 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: Int1024, mode: RoundingMode) -> 
     if raw == Int1024::ZERO {
         return Int1024::ZERO;
     }
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
-    let (sin_w, cos_w) = core::sin_cos_fixed(v_w, w);
-    if cos_w == core::zero() {
+    // Near a pole (input close to an odd multiple of π/2) the range-
+    // reduced residue folds toward ±π/2 where cos(r) → 0, so the
+    // tangent quotient sin(r)/cos(r) grows without bound. Dividing at a
+    // fixed working scale then amplifies the working-scale rounding
+    // error by `1/cos(r) ≈ |tan|`, the same conditioning class as the
+    // exp `2^k` reassembly. Hold 0.5 ULP at storage by lifting the
+    // working scale by ~log10(|tan|) guard digits, derived cheaply from
+    // a base-width probe quotient, then recompute sin/cos at the lifted
+    // scale and divide there.
+    //
+    // Reference: Muller, *Elementary Functions: Algorithms and
+    // Implementation* (3rd ed., 2016), §11.1 — range-reduction error
+    // budget for poles of the reduced function.
+    let w0 = SCALE + GUARD_NARROW;
+    let v0 = core::to_work_w(raw, GUARD_NARROW);
+    let (sin0, cos0) = core::sin_cos_fixed(v0, w0);
+    if cos0 == core::zero() {
         panic!("D307::tan: cosine is zero (argument is an odd multiple of pi/2)");
     }
+    let probe = core::div(sin0, cos0, w0);
+    let extra = super::near_pole_tan::tan_extra_digits(core::bit_length(probe), w0);
+    if extra == 0 {
+        return core::round_to_storage_with(probe, w0, SCALE, mode);
+    }
+    let w = w0 + extra;
+    let v_w = core::to_work_w(raw, GUARD_NARROW + extra);
+    let (sin_w, cos_w) = core::sin_cos_fixed(v_w, w);
     let r = core::div(sin_w, cos_w, w);
     core::round_to_storage_with(r, w, SCALE, mode)
 }

@@ -38,6 +38,7 @@ pub(crate) mod lookup_d57_s44_56_atan;
 pub(crate) mod lookup_d57_s44_56_sincos;
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub(crate) mod lookup_d115_s57_hyper;
+pub(crate) mod near_pole_tan;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub(crate) mod lookup_d153_s70_82_atan;
 #[cfg(any(feature = "d153", feature = "wide"))]
