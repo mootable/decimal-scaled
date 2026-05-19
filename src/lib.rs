@@ -185,7 +185,6 @@ extern crate alloc;
 pub use ::tracing;
 
 mod algos;
-mod arithmetic;
 mod d_unified;
 mod identity;
 mod support;
@@ -218,9 +217,6 @@ mod consts;
 mod consts_wide;
 mod core_type;
 mod macros;
-mod num_traits;
-mod log_exp_strict;
-mod log_exp_fast;
 
 // Path shims for moved-but-still-referenced modules. After the folder
 // shuffle these live under `types::traits::*` / `support::*`; the shims
@@ -237,14 +233,18 @@ pub(crate) use crate::support::diagnostics;
 pub(crate) use crate::support::display;
 pub(crate) use crate::algos::mg_divide;
 pub(crate) use crate::algos::fixed_d38 as d_w128_kernels;
+// Typed shell shims — typed transcendental shells moved into
+// `types/`; legacy `crate::*_strict` / `crate::*_fast` paths kept
+// alive for one release cycle.
+pub(crate) use crate::types::log_exp as log_exp_strict;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under
 // `tests/`. The macro-generated impls themselves are emitted by
 // `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
 // `core_type.rs`, alongside every other surface.
-mod rescale;
-// `wide_int` is now unconditional. D38's strict transcendentals use
+//
+// `wide_int` is unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
 // `d_w128_kernels::Fixed` 256-bit sign-magnitude type), so the wide-
 // integer family must be available in every feature configuration —
@@ -252,19 +252,10 @@ mod rescale;
 // ~2k LOC of self-contained limb arithmetic plus the per-width
 // `decl_wide_int!` instantiations.
 mod wide_int;
-mod overflow_variants;
 mod policy;
-mod powers_strict;
-mod powers_fast;
 
 #[cfg(feature = "serde")]
 pub use crate::support::serde_helpers;
-// `trig` is compiled when it has any surface to emit: the integer-only
-// `*_strict` methods (present unless `fast`) or the f64-bridge
-// methods (present with `std`).
-#[cfg(any(not(feature = "fast"), feature = "std"))]
-mod trig_strict;
-mod trig_fast;
 
 
 pub use consts::DecimalConstants;
