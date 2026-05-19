@@ -323,8 +323,7 @@ macro_rules! decl_wide_transcendental {
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
                 let divisor = pow10_cached(w);
-                let q = v / divisor;
-                let r = v % divisor;
+                let (q, r) = v.div_rem(divisor);
                 let half = divisor / lit(2);
                 let qi = if abs(r) >= half {
                     if v < lit(0) { q - lit(1) } else { q + lit(1) }
