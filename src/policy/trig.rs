@@ -257,27 +257,13 @@ macro_rules! d38_hyperbolic_and_angle {
     };
 }
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
-    #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::sin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::sin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::cos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::cos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::tan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::tan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn atan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn asin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn acos_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)) }
-    #[inline] fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)) }
-
-    d38_hyperbolic_and_angle!();
-}
-
-#[cfg(not(any(feature = "d57", feature = "wide")))]
+// D38 — route through the in-tree `Fixed`-256 kernels. The borrow_d57
+// path was the faster option when D38's bespoke kernel paid a
+// 256-iteration bit loop for every divide-by-pow10(w); with the
+// 0.4.2 MG-routed Fixed primitives the bespoke kernel beats the
+// widen / D57 wide_kernel / narrow round trip for forward AND
+// inverse trig. Hyperbolics already route through fixed_d38 via
+// d38_hyperbolic_and_angle!() below.
 impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
     #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode)) }
     #[inline] fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode)) }
