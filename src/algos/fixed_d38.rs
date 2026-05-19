@@ -419,7 +419,8 @@ impl Fixed {
         if from_w == to_w {
             return self;
         }
-        let (q, _r) = divmod_u256(self.mag, Fixed::pow10(from_w - to_w));
+        let shift = from_w - to_w;
+        let (q, _r) = divmod_u256_by_pow10(self.mag, Fixed::pow10(shift), shift);
         Fixed { negative: self.negative && !is_zero_u256(q), mag: q }
     }
 
