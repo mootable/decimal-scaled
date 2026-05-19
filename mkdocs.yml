@@ -87,6 +87,7 @@ nav:
       - Rounding: rounding.md
       - Macros: macros.md
       - Conversions: conversions.md
+      - Cross-scale operations: cross-scale.md
       - Cargo features: features.md
       - Comparisons: comparisons.md
   - Benchmarks: benchmarks.md

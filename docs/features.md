@@ -80,6 +80,7 @@ across every wider tier pair. Every adjacent pair in the ladder has
 | Feature | Enables |
 |---|---|
 | `experimental-floats` | `f16` / `f128` entry points on the float bridge (`from_f16`, `to_f128`, …). Requires a nightly toolchain. |
+| `cross-scale-ops` | Auto-inferred cross-scale free functions under `decimal_scaled::cross` (`cross::mul(a, b)` etc.) via `generic_const_exprs`. Requires a nightly toolchain. The stable [`D{N}<S>::mul_of(a, b)`](cross-scale.md#layer-1---stable-explicit-target) explicit-target form is available without this feature. |
 
 ## Common configurations
 

@@ -13,6 +13,8 @@
 
 pub(crate) mod arithmetic;
 pub(crate) mod basics;
+pub(crate) mod cross_scale_ops;
+pub(crate) mod cross_width_cmp;
 pub(crate) mod bitwise;
 pub(crate) mod consts;
 pub(crate) mod conversions;
