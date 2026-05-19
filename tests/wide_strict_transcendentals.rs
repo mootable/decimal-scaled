@@ -842,3 +842,54 @@ fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
         "D57<22>::cos(1/3) narrow-GUARD kernel deviates from D76<22> by {cos_diff} LSB",
     );
 }
+
+// ─── Bespoke D57<20> sqrt kernel cross-witness ─────────────────────────
+//
+// `algos::sqrt::lookup_d57_s20` routes D57<20>::sqrt_strict through a
+// dedicated Int256 work integer with an f64-bridge Newton seed (saves
+// 4-5 Newton iterations vs the trait-level 1-bit seed). Cross-witness
+// the kernel against the canonical wide-tier path: lift the input to
+// D76<20> (whose sqrt_strict runs the generic kernel at the wider
+// Int512 work integer with the trait-level isqrt) and require the two
+// agree at D57's storage scale within 1 LSB across a representative
+// span of values (perfect squares, non-square integers, small
+// fractions, multi-digit fractions, and large magnitudes).
+#[test]
+fn d57_s20_sqrt_matches_d76_baseline() {
+    use decimal_scaled::D57;
+
+    type D57_20 = D57<20>;
+    type D76_20 = D76<20>;
+
+    let inputs: &[D57_20] = &[
+        D57_20::from_int(1),
+        D57_20::from_int(2),
+        D57_20::from_int(3),
+        D57_20::from_int(4),
+        D57_20::from_int(9),
+        D57_20::from_int(16),
+        D57_20::from_int(100),
+        D57_20::from_int(1_000_000),
+        D57_20::from_int(1) / D57_20::from_int(4),
+        D57_20::from_int(1) / D57_20::from_int(3),
+        D57_20::from_int(3) / D57_20::from_int(2),
+        D57_20::from_int(7) / D57_20::from_int(11),
+        D57_20::from_int(123_456_789),
+    ];
+
+    for &n in inputs {
+        let wide: D76_20 = n.into();
+        let r_56 = n.sqrt_strict();
+        let r_76 = wide.sqrt_strict();
+        let r_76_as_56: D57_20 = r_76.try_into().expect("sqrt fits D57<20>");
+        let diff = (r_56.to_bits() - r_76_as_56.to_bits())
+            .to_i128_checked()
+            .expect("sqrt diff fits i128")
+            .abs();
+        assert!(
+            diff <= 1,
+            "D57<20>::sqrt({:?}) f64-bridge-seeded kernel deviates from D76<20> by {diff} LSB",
+            n,
+        );
+    }
+}
