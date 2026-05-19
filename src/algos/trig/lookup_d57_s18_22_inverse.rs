@@ -44,7 +44,7 @@ use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 inverse-trig slot. Matches the
 /// `lookup_d57_s18_22_atan` guard.
-const GUARD_NARROW: u32 = 14;
+const GUARD_NARROW: u32 = 10;
 
 fn asin_fixed(v: core::W, w: u32) -> core::W {
     let one_w = core::one(w);

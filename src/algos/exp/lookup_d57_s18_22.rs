@@ -37,7 +37,7 @@ use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 slot. See module docs for the
 /// derivation and headroom.
-const GUARD_NARROW: u32 = 12;
+const GUARD_NARROW: u32 = 8;
 
 /// `exp_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 ///

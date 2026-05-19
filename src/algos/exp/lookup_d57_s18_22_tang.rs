@@ -36,7 +36,7 @@ use crate::support::rounding::RoundingMode;
 use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 Tang-exp slot.
-const GUARD_NARROW: u32 = 12;
+const GUARD_NARROW: u32 = 8;
 
 /// Table size — power of two so the index quantisation step
 /// `ln(2) / M` keeps the cheap integer-division path. Tuning rationale

@@ -35,7 +35,7 @@ use crate::wide_int::Int192;
 /// Narrow guard for the SCALE 18..=22 atan slot. Slightly larger than
 /// the sincos/ln/exp `GUARD_NARROW = 12` because atan's series can
 /// require slightly more iterations after argument reduction.
-const GUARD_NARROW: u32 = 14;
+const GUARD_NARROW: u32 = 10;
 
 /// `atan_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 ///

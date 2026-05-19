@@ -47,7 +47,7 @@ use crate::wide_int::Int192;
 /// Narrow guard for the SCALE 18..=22 hyperbolic slot. Matches the
 /// exp / ln narrow guard so a sinh/cosh call shares the same `pow10_w`
 /// cache slot with neighboring exp / ln invocations.
-const GUARD_NARROW: u32 = 12;
+const GUARD_NARROW: u32 = 8;
 
 /// `sinh_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]

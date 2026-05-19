@@ -46,7 +46,7 @@ use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 slot. See module docs for the
 /// derivation and headroom.
-const GUARD_NARROW: u32 = 12;
+const GUARD_NARROW: u32 = 8;
 
 /// Sin/cos selector. Both share every stage of the reduction; the
 /// selector only picks which output to return.
