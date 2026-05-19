@@ -1823,6 +1823,52 @@ impl<const SCALE: u32> D1232<SCALE> {
     pub fn narrow(self) -> Result<D924<SCALE>, crate::support::error::ConvertError> { self.try_into() }
 }
 
+// ─── Cross-scale-op constructors + comparators ─────────────────────────
+//
+// One invocation per width emits `mul_of`, `add_of`, `sub_of`, `div_of`,
+// `rem_of`, `max_of`, `min_of`, `clamp_of`, `cmp_of`, `eq_of`, `ne_of`,
+// `lt_of`, `le_of`, `gt_of`, `ge_of` (plus the `_with(mode)` siblings
+// for the constructors that involve a possibly-lossy rescale of inputs).
+// Operands of any width ≤ Self's storage are accepted via the
+// `WidthLE` bound; operands of any SCALE are accepted via the
+// const-generic `S1` / `S2` parameters. See
+// `crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops` for
+// the body.
+
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D9, i32);
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D18, i64);
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D38, i128);
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D57, crate::wide_int::Int192);
+
+#[cfg(any(feature = "d76", feature = "wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D76, crate::wide_int::Int256);
+
+#[cfg(any(feature = "d115", feature = "wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D115, crate::wide_int::Int384);
+
+#[cfg(any(feature = "d153", feature = "wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D153, crate::wide_int::Int512);
+
+#[cfg(any(feature = "d230", feature = "wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D230, crate::wide_int::Int768);
+
+#[cfg(any(feature = "d307", feature = "wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D307, crate::wide_int::Int1024);
+
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D462, crate::wide_int::Int1536);
+
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D616, crate::wide_int::Int2048);
+
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D924, crate::wide_int::Int3072);
+
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D1232, crate::wide_int::Int4096);
+
 #[cfg(test)]
 mod tests {
     use super::*;
