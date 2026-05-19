@@ -217,7 +217,6 @@ pub mod __bench_internals {
 mod consts;
 mod consts_wide;
 mod core_type;
-mod equalities;
 mod macros;
 mod num_traits;
 mod log_exp_strict;

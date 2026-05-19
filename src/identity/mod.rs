@@ -9,3 +9,5 @@
 //! `PartialOrd`, `Ord`, and `Hash` impls are emitted by
 //! [`crate::macros::basics`] today; only the cross-primitive
 //! `PartialEq<primitive>` wiring lives here.
+
+pub(crate) mod equalities;
