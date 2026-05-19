@@ -292,8 +292,7 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
                 let divisor = pow10_cached(w - target);
-                let q = v / divisor;
-                let r = v % divisor;
+                let (q, r) = v.div_rem(divisor);
                 let rounded = if r == lit(0) {
                     q
                 } else {
