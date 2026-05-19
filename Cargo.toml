@@ -224,6 +224,14 @@ name = "agm_vs_taylor_d616"
 harness = false
 required-features = ["x-wide"]
 
+# AGM vs artanh / Taylor at D924 — the first half-width tier whose
+# upper SCALE band (700+) might tip past the Brent AGM crossover after
+# D616 measurements (SCALE 250/300/400/500) all showed AGM LOSING.
+[[bench]]
+name = "agm_vs_taylor_d924"
+harness = false
+required-features = ["xx-wide"]
+
 # AGM vs artanh / Taylor at D230<115>. Mid-storage crossover probe:
 # the AGM ln crossover (Brent 1976) is around ~300 decimal digits;
 # D230<115> sits at ~131 working-bit decimal digits and is expected
@@ -359,6 +367,23 @@ required-features = ["x-wide"]
 name = "d616_lookup_baseline"
 harness = false
 required-features = ["x-wide"]
+
+# Focused D924<460> per-op microbench — mid-storage popular scale on
+# the 3072-bit storage / Int12288 working-integer tier. Used to probe
+# narrow-GUARD Tang-lookup wins (and the AGM crossover for ln/exp) at
+# the D924 hot paths.
+[[bench]]
+name = "d924_s460"
+harness = false
+required-features = ["xx-wide"]
+
+# Side-by-side D924 ln at SCALE 440 (wide_kernel) vs SCALE 460 (Tang
+# lookup). Isolates the lookup-vs-kernel speedup from the underlying
+# Int12288 primitive cost.
+[[bench]]
+name = "d924_lookup_baseline"
+harness = false
+required-features = ["xx-wide"]
 
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
