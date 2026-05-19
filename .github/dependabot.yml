@@ -1,0 +1,72 @@
+version: 2
+
+# Dependabot configuration for decimal-scaled.
+#
+# Three cargo ecosystems are tracked because each Cargo.toml lives in
+# its own root (root crate, the `macros/` proc-macro crate, and the
+# standalone `bench-history/` comparison project, which is
+# deliberately outside the parent workspace).
+#
+# All schedules are Monday morning UTC, off-minute, to spread PR
+# creation across the week's start without colliding with the security
+# cron jobs.
+
+updates:
+  - package-ecosystem: cargo
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:17"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - dependabot
+
+  - package-ecosystem: cargo
+    directory: "/macros"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:23"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - dependabot
+
+  - package-ecosystem: cargo
+    directory: "/bench-history"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:29"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - dependabot
+      - benchmarks
+    # The bench-history project deliberately pins old versions of the
+    # crate itself (one cell per published tag). Patch/minor bumps on
+    # criterion are noise — keep only majors so we notice harness
+    # API breaks without churn.
+    ignore:
+      - dependency-name: "criterion"
+        update-types:
+          - version-update:semver-minor
+          - version-update:semver-patch
+
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+      day: monday
+      time: "09:35"
+      timezone: Etc/UTC
+    open-pull-requests-limit: 5
+    labels:
+      - dependencies
+      - dependabot
+      - github-actions

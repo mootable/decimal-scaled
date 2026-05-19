@@ -1,0 +1,36 @@
+name: cargo-audit
+
+# Scans the workspace's locked dependency graph against the RustSec
+# advisory database. Fails the build if any advisory matches.
+#
+# Triggers:
+#   * push to `main` — gate the integration branch;
+#   * every PR — block landing a dep bump that introduces an
+#     advisory;
+#   * nightly cron (03:47 UTC, off-minute) — catch newly-published
+#     advisories against deps that haven't moved since the last push.
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+  schedule:
+    - cron: "47 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  audit:
+    name: RustSec advisory check
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run cargo audit
+        uses: rustsec/audit-check@v2.0.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
