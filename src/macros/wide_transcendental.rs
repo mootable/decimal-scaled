@@ -1290,7 +1290,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1301,7 +1301,7 @@ macro_rules! decl_wide_transcendental {
                     // Half-angle: asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
                     // The inner argument is in (0, 0.5], so the
                     // recursive asin call takes the stable branch.
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1331,7 +1331,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1339,7 +1339,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1771,7 +1771,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1779,7 +1779,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1806,7 +1806,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1814,7 +1814,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -2401,7 +2401,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -2409,7 +2409,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -2450,7 +2450,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -2458,7 +2458,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
