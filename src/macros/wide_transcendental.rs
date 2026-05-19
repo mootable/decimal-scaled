@@ -1415,7 +1415,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
@@ -1428,7 +1428,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
@@ -1446,7 +1446,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
@@ -1465,7 +1465,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
                 let sinh = (ex - enx) / two;
                 let cosh = (ex + enx) / two;
@@ -1869,7 +1869,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -1881,7 +1881,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -1893,7 +1893,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -2013,7 +2013,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
                 let sinh = (ex - enx) / two;
                 let cosh = (ex + enx) / two;
@@ -2542,7 +2542,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -2568,7 +2568,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -2594,7 +2594,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -2620,7 +2620,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
                 let sinh = (ex - enx) / two;
                 let cosh = (ex + enx) / two;
