@@ -894,6 +894,13 @@ impl_wide_trig!(
     trig::wide_kernel::atan_strict_d462
 );
 
+// D616 — width default via `impl_wide_trig!`. The Tang-lookup
+// hyperbolic kernels at SCALE 300..=315 were bench-trialled and
+// rejected: at D616's Int8192 working integer the
+// `tang_exp_fixed + 1/exp` round trip lands at roughly the same cost
+// as the wide_kernel-backed inherent `*_strict_with` shells (200-260
+// µs in either direction). The lookup module stays in tree for the
+// shared `tang_exp_fixed` plumbing but is NOT wired in policy.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl_wide_trig!(
     D616,
@@ -902,6 +909,7 @@ impl_wide_trig!(
     trig::wide_kernel::tan_strict_d616,
     trig::wide_kernel::atan_strict_d616
 );
+
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl_wide_trig!(

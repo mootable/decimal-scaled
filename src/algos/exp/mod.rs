@@ -28,5 +28,7 @@ pub(crate) mod lookup_d57_s45_56;
 pub(crate) mod lookup_d115_s57_tang;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub(crate) mod lookup_d153_s70_82_tang;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub(crate) mod lookup_d616_s300_315_tang;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;
