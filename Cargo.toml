@@ -299,6 +299,23 @@ name = "quick_div"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
+# Focused D57<20> per-op microbench — the primary production scale
+# for the wide-tier. ~30 s wall, used for tight iteration loops on
+# SCALE 20 kernel tuning before kicking the full sweeps.
+[[bench]]
+name = "d57_s20"
+harness = false
+required-features = ["wide"]
+
+# Focused D76<6> per-op microbench — narrow-SCALE wide-tier cell
+# where the wide_transcendental working scale (w = 36) is inside
+# the MG (magic-multiply) base-2^128 long-divide kernel's
+# `1..=38` window. Used to probe MG-routing wins on hot loops.
+[[bench]]
+name = "d76_s6"
+harness = false
+required-features = ["wide"]
+
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
 name = "m2_mul_fixed"

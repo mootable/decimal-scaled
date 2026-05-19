@@ -4,3 +4,4 @@ Cargo.lock
 /bench-history/Cargo.lock
 /bench-history-results
 /lib-cmp-results
+/bench-results

@@ -463,14 +463,23 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     }
     #[inline]
     fn tan_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode));
+        }
         Self(trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE))
     }
     #[inline]
     fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode));
+        }
         Self(trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE))
     }
     #[inline]
     fn atan_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(self.0, mode));
+        }
         if matches!(SCALE, 44..=56) {
             return Self(trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(self.0, mode));
         }
@@ -478,6 +487,9 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     }
     #[inline]
     fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(self.0, mode));
+        }
         if matches!(SCALE, 44..=56) {
             return Self(trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(self.0, mode));
         }
@@ -485,42 +497,90 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     }
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(self.0, mode));
+        }
         self.asin_strict_with(mode)
     }
     #[inline]
     fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(self.0, mode));
+        }
         self.asin_strict_with(mode)
     }
     #[inline]
     fn acos_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(self.0, mode));
+        }
         self.acos_strict_with(mode)
     }
     #[inline]
     fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(self.0, mode));
+        }
         self.acos_strict_with(mode)
     }
     #[inline]
     fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(self.0, other.0, mode));
+        }
         self.atan2_strict_with(other, mode)
     }
     #[inline]
     fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(self.0, other.0, mode));
+        }
         self.atan2_strict_with(other, mode)
     }
 
     // Hyperbolics + angle conversions — delegate to inherent shells.
     #[inline]
-    fn sinh_impl(self, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+    fn sinh_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(self.0, mode));
+        }
+        self.sinh_strict_with(mode)
+    }
     #[inline]
-    fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+    fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(self.0, mode));
+        }
+        self.sinh_strict_with(mode)
+    }
     #[inline]
-    fn cosh_impl(self, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+    fn cosh_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(self.0, mode));
+        }
+        self.cosh_strict_with(mode)
+    }
     #[inline]
-    fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+    fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(self.0, mode));
+        }
+        self.cosh_strict_with(mode)
+    }
     #[inline]
-    fn tanh_impl(self, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+    fn tanh_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(self.0, mode));
+        }
+        self.tanh_strict_with(mode)
+    }
     #[inline]
-    fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+    fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 18..=22) {
+            return Self(trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(self.0, mode));
+        }
+        self.tanh_strict_with(mode)
+    }
     #[inline]
     fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
     #[inline]

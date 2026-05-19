@@ -192,6 +192,48 @@ macro_rules! decl_wide_transcendental {
                     q
                 }
             }
+            /// Half-to-even quotient `n / 10^w`, selecting the
+            /// fastest available divide kernel.
+            ///
+            /// For `1 ≤ w ≤ 38` the MG (magic-multiply) base-2^128
+            /// long-divide kernel ships a constant-time, branchless
+            /// inner loop — ~5 ops per u128 numerator limb — which
+            /// dominates the generic Knuth Algorithm D path on
+            /// pipelined CPUs. Audit `round_div_audit_mg_matches_*`
+            /// in `algos::mg_divide::tests` shows bit-exact agreement
+            /// with the generic `div_rem` reference across
+            /// 380 000 + 190 000 random inputs.
+            ///
+            /// For `w == 0` the divisor is 1 so the result is `n`
+            /// unchanged. For `1 ≤ w ≤ 38` the single-chunk MG
+            /// kernel handles the divide in one pass; for `w > 38`
+            /// the chain-MG kernel breaks the divide into a sequence
+            /// of `÷ 10^38` stages plus a final `÷ 10^(w − 38·k)`,
+            /// each one a base-`2^128` MG long-divide, with
+            /// combined-remainder bookkeeping that yields bit-exact
+            /// half-to-even. The chain audit
+            /// (`round_div_chain_audit_*` in `algos::mg_divide::tests`)
+            /// confirms agreement with the schoolbook `div_rem`
+            /// reference on 380K + 190K random inputs across every
+            /// `RoundingMode` and `w ∈ 39..=100`.
+            #[inline]
+            fn round_div_pow10(n: W, w: u32) -> W {
+                if w == 0 {
+                    return n;
+                }
+                if w <= 38 {
+                    return $crate::algos::mg_divide::div_wide_pow10_with::<W>(
+                        n,
+                        w,
+                        $crate::support::rounding::RoundingMode::HalfToEven,
+                    );
+                }
+                $crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(
+                    n,
+                    w,
+                    $crate::support::rounding::RoundingMode::HalfToEven,
+                )
+            }
             /// `(a · b) / 10^w`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
             /// `mul`: each call drops the per-op ≤ 1 LSB
@@ -200,7 +242,7 @@ macro_rules! decl_wide_transcendental {
             /// the series-evaluation core.
             #[inline]
             pub(crate) fn mul(a: W, b: W, w: u32) -> W {
-                round_div(a * b, pow10_cached(w))
+                round_div_pow10(a * b, w)
             }
             /// Loop-friendly variant of [`mul`] that takes a
             /// precomputed `10^w` divisor. Use inside Taylor /
@@ -208,6 +250,12 @@ macro_rules! decl_wide_transcendental {
             /// every iteration — saves one `lit(10).pow(w)`
             /// recomputation per call (which for D307<150> at w=180
             /// is itself a full Int4096 power of ~50 µs).
+            ///
+            /// `mul_cached` keeps the legacy generic-divide path
+            /// because the caller has already paid for `pow10_w` and
+            /// we don't know `w` at this call boundary. For the MG
+            /// fast path use [`mul`] (or [`mul_w_pow10`] when both
+            /// inputs are needed).
             #[inline]
             pub(crate) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
                 round_div(a * b, pow10_w)
@@ -334,27 +382,27 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware variant of [`round_to_storage`].
+            ///
+            /// When the narrowing distance `w - target` is in `1..=38`
+            /// the single-chunk MG kernel `div_wide_pow10_with` serves
+            /// every mode directly. For `shift > 38` the chain-MG
+            /// kernel `div_wide_pow10_chain_with` does the same via
+            /// repeated `÷ 10^38` with combined-remainder bookkeeping
+            /// (bit-exact for every `RoundingMode`; see
+            /// `round_div_chain_audit_*` in `algos::mg_divide::tests`).
             pub(crate) fn round_to_storage_with(
                 v: W,
                 w: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
-                let divisor = pow10_cached(w - target);
-                let (q, r) = v.div_rem(divisor);
-                let rounded = if r == lit(0) {
-                    q
+                let shift = w - target;
+                let rounded = if shift == 0 {
+                    v
+                } else if shift <= 38 {
+                    $crate::algos::mg_divide::div_wide_pow10_with::<W>(v, shift, mode)
                 } else {
-                    let ar = abs(r);
-                    let comp = divisor - ar;
-                    let cmp_r = ar.cmp(&comp);
-                    let q_is_odd = q.bit(0);
-                    let result_positive = v >= lit(0);
-                    if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                        if result_positive { q + lit(1) } else { q - lit(1) }
-                    } else {
-                        q
-                    }
+                    $crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(v, shift, mode)
                 };
                 let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
                 let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
@@ -1332,38 +1380,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let abs_v = if v < $core::zero() { -v } else { v };
-                if abs_v > one_w {
-                    panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
-                }
-                let half_w = one_w >> 1;
-                let r = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
-                    if v < $core::zero() { -hp } else { hp }
-                } else if abs_v <= half_w {
-                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
-                } else {
-                    // Half-angle: asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
-                    // The inner argument is in (0, 0.5], so the
-                    // recursive asin call takes the stable branch.
-                    let inner = (one_w - abs_v) >> 1;
-                    let inner_sqrt = $core::sqrt_fixed(inner, w);
-                    let inner_denom = $core::sqrt_fixed(
-                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
-                        w,
-                    );
-                    let inner_asin = $core::atan_fixed(
-                        $core::div(inner_sqrt, inner_denom, w),
-                        w,
-                    );
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
-                    if v < $core::zero() { -result_abs } else { result_abs }
-                };
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                <Self as $crate::policy::trig::TrigPolicy>::asin_impl(
+                    self,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Arccosine of `self`, in radians, in `[0, π]`, as
@@ -1373,36 +1393,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let abs_v = if v < $core::zero() { -v } else { v };
-                if abs_v > one_w {
-                    panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
-                }
-                let half_w = one_w >> 1;
-                let asin_w = if abs_v == one_w {
-                    let hp = $core::half_pi(w);
-                    if v < $core::zero() { -hp } else { hp }
-                } else if abs_v <= half_w {
-                    let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
-                    $core::atan_fixed($core::div(v, denom, w), w)
-                } else {
-                    let inner = (one_w - abs_v) >> 1;
-                    let inner_sqrt = $core::sqrt_fixed(inner, w);
-                    let inner_denom = $core::sqrt_fixed(
-                        one_w - $core::mul(inner_sqrt, inner_sqrt, w),
-                        w,
-                    );
-                    let inner_asin = $core::atan_fixed(
-                        $core::div(inner_sqrt, inner_denom, w),
-                        w,
-                    );
-                    let result_abs = $core::half_pi(w) - inner_asin - inner_asin;
-                    if v < $core::zero() { -result_abs } else { result_abs }
-                };
-                let r = $core::half_pi(w) - asin_w;
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                <Self as $crate::policy::trig::TrigPolicy>::acos_impl(
+                    self,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Four-quadrant arctangent of `self` (`y`) and `other`
@@ -1411,75 +1405,39 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
-                let w = SCALE + $core::GUARD;
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                let yraw = self.to_bits();
-                let xraw = other.to_bits();
-                let r = if xraw == z {
-                    if yraw > z {
-                        $core::half_pi(w)
-                    } else if yraw < z {
-                        -$core::half_pi(w)
-                    } else {
-                        $core::zero()
-                    }
-                } else {
-                    let y = $core::to_work(yraw);
-                    let x = $core::to_work(xraw);
-                    let zero_w = $core::zero();
-                    // Max-branch: feed atan_fixed whichever of y/x or
-                    // x/y has |·| ≤ 1, so the argument-halving cascade
-                    // doesn't blow up. The historic `atan(y/x)`-only
-                    // path lost ~log₂(|y/x|) bits of precision when
-                    // |y| ≫ |x|; the swap recovers them via the
-                    // identity `atan(t) = sign(t)·π/2 − atan(1/t)`
-                    // for `|t| > 1`.
-                    let abs_y = if y < zero_w { -y } else { y };
-                    let abs_x = if x < zero_w { -x } else { x };
-                    let base = if abs_x >= abs_y {
-                        $core::atan_fixed($core::div(y, x, w), w)
-                    } else {
-                        let inv = $core::atan_fixed($core::div(x, y, w), w);
-                        let hp = $core::half_pi(w);
-                        // sign(y/x): same iff y and x agree in sign.
-                        let same_sign = (y < zero_w) == (x < zero_w);
-                        if same_sign { hp - inv } else { -hp - inv }
-                    };
-                    if xraw > z {
-                        base
-                    } else if yraw >= z {
-                        base + $core::pi(w)
-                    } else {
-                        base - $core::pi(w)
-                    }
-                };
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                <Self as $crate::policy::trig::TrigPolicy>::atan2_impl(
+                    self,
+                    other,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Hyperbolic sine, as `(eˣ − e⁻ˣ)/2`. Strict and correctly
             /// rounded.
+            ///
+            /// Delegates to the policy-registered sinh kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn sinh_strict(self) -> Self {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = (ex - enx) >> 1;
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                <Self as $crate::policy::trig::TrigPolicy>::sinh_impl(
+                    self,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Hyperbolic cosine, as `(eˣ + e⁻ˣ)/2`. Strict and
             /// correctly rounded.
+            ///
+            /// Delegates to the policy-registered cosh kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn cosh_strict(self) -> Self {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = (ex + enx) >> 1;
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                <Self as $crate::policy::trig::TrigPolicy>::cosh_impl(
+                    self,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Hyperbolic tangent, as `sinh / cosh`. Strict and
@@ -1489,25 +1447,26 @@ macro_rules! decl_wide_transcendental {
             /// the historic path, but the divide and the two
             /// subtraction/addition operands are inlined here to
             /// avoid going through the intermediate sinh/cosh.
+            ///
+            /// Delegates to the policy-registered tanh kernel for this
+            /// `(width, SCALE)` cell — see `policy::trig`.
             #[inline]
             #[must_use]
             pub fn tanh_strict(self) -> Self {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = $core::div(ex - enx, ex + enx, w);
-                Self::from_bits($core::round_to_storage(r, w, SCALE))
+                <Self as $crate::policy::trig::TrigPolicy>::tanh_impl(
+                    self,
+                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
+                )
             }
 
             /// Joint hyperbolic sine and cosine of `self`, returned
             /// as `(sinh, cosh)`. Strict and correctly rounded.
             ///
-            /// Shares one `exp(v)` and one `exp(−v)` evaluation
-            /// between sinh and cosh — same cost as a single
-            /// `sinh_strict` or `cosh_strict` call, vs the historic
-            /// `(self.sinh_strict(), self.cosh_strict())` pair which
-            /// computed both `exp` pairs twice.
+            /// One `exp(v)` evaluation plus the `exp(-v) = 1/exp(v)`
+            /// identity gives both `eˣ` and `e⁻ˣ` for sinh + cosh.
+            /// Wide-tier `exp_fixed` is ~10-20× the cost of a wide
+            /// divide, so the identity drops this joint kernel
+            /// roughly 40% versus running two `exp_fixed` calls.
             #[inline]
             #[must_use]
             pub fn sinh_cosh_strict(self) -> (Self, Self) {
@@ -1879,7 +1838,8 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
-            /// Mode-aware sibling of [`Self::atan2_strict`].
+            /// Mode-aware sibling of [`Self::atan2_strict`]. Same
+            /// max-branch + quadrant logic.
             #[inline]
             #[must_use]
             pub fn atan2_strict_with(self, other: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
@@ -1898,7 +1858,25 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let y = $core::to_work(yraw);
                     let x = $core::to_work(xraw);
-                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    let zero_w = $core::zero();
+                    // Max-branch: feed atan_fixed whichever of y/x or
+                    // x/y has |·| ≤ 1, so the argument-halving cascade
+                    // doesn't blow up. The historic `atan(y/x)`-only
+                    // path lost ~log₂(|y/x|) bits of precision when
+                    // |y| ≫ |x|; the swap recovers them via the
+                    // identity `atan(t) = sign(t)·π/2 − atan(1/t)`
+                    // for `|t| > 1`.
+                    let abs_y = if y < zero_w { -y } else { y };
+                    let abs_x = if x < zero_w { -x } else { x };
+                    let base = if abs_x >= abs_y {
+                        $core::atan_fixed($core::div(y, x, w), w)
+                    } else {
+                        let inv = $core::atan_fixed($core::div(x, y, w), w);
+                        let hp = $core::half_pi(w);
+                        // sign(y/x): same iff y and x agree in sign.
+                        let same_sign = (y < zero_w) == (x < zero_w);
+                        if same_sign { hp - inv } else { -hp - inv }
+                    };
                     if xraw > z {
                         base
                     } else if yraw >= z {
@@ -1911,6 +1889,13 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::sinh_strict`].
+            ///
+            /// Uses the `exp(-v) = 1/exp(v)` identity to replace the
+            /// second `exp_fixed` call with one wide divide. Wide-tier
+            /// `exp_fixed` is dominated by the Tang-table reduction +
+            /// Taylor series and costs ~10-20× more than a wide
+            /// divide; the identity drops the per-call wall-clock
+            /// roughly 40%.
             #[inline]
             #[must_use]
             pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
@@ -1923,6 +1908,10 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::cosh_strict`].
+            ///
+            /// Same `exp(-v) = 1/exp(v)` identity as
+            /// [`Self::sinh_strict_with`]; one `exp_fixed` plus one
+            /// divide replaces two `exp_fixed`s.
             #[inline]
             #[must_use]
             pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
@@ -1935,6 +1924,9 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::tanh_strict`].
+            ///
+            /// Same `exp(-v) = 1/exp(v)` identity as
+            /// [`Self::sinh_strict_with`].
             #[inline]
             #[must_use]
             pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {

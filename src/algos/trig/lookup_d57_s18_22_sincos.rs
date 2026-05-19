@@ -46,7 +46,7 @@ use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 slot. See module docs for the
 /// derivation and headroom.
-const GUARD_NARROW: u32 = 12;
+const GUARD_NARROW: u32 = 8;
 
 /// Sin/cos selector. Both share every stage of the reduction; the
 /// selector only picks which output to return.
@@ -106,4 +106,23 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
 #[must_use]
 pub(crate) fn cos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     sin_cos_strict::<SCALE>(raw, mode, Which::Cos)
+}
+
+/// `tan_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22` — shares one
+/// `sin_cos_fixed` between numerator and denominator, narrowed to
+/// `GUARD_NARROW`. Panics if `cos(self) == 0` (odd multiples of π/2).
+#[inline]
+#[must_use]
+pub(crate) fn tan_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+    if raw == Int192::ZERO {
+        return Int192::ZERO;
+    }
+    let w = SCALE + GUARD_NARROW;
+    let v_w = core::to_work_w(raw, GUARD_NARROW);
+    let (sin_w, cos_w) = core::sin_cos_fixed(v_w, w);
+    if cos_w == core::zero() {
+        panic!("D57::tan: cosine is zero (argument is an odd multiple of pi/2)");
+    }
+    let r = core::div(sin_w, cos_w, w);
+    core::round_to_storage_with(r, w, SCALE, mode)
 }

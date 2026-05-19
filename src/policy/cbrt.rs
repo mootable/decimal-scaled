@@ -43,7 +43,12 @@ impl<const SCALE: u32> CbrtPolicy for D38<SCALE> {
 impl<const SCALE: u32> CbrtPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        // Scale-range slot reserved for D57<20> tuning (none yet).
+        // Scale-range overrides — first match wins.
+        if matches!(SCALE, 20..=20) {
+            // SCALE_OVERRIDE(D57, 20): narrower Int384 work integer
+            // (vs the generic Int768) cuts Newton iteration cost ~4×.
+            return Self(cbrt::lookup_d57_s20::cbrt(self.0, mode));
+        }
         Self(cbrt::generic_wide::cbrt_d57(self.0, SCALE, mode))
     }
 }
