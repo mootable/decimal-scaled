@@ -34,7 +34,11 @@ fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> i128 {
 #[must_use]
 pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = super::wide_kernel::sin_strict_d57(widened.0, mode, SCALE);
+    let raw_wide = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(widened.0, mode)
+    } else {
+        super::wide_kernel::sin_strict_d57(widened.0, mode, SCALE)
+    };
     narrow::<SCALE>(raw_wide, "sin_strict")
 }
 
@@ -42,7 +46,11 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 #[must_use]
 pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = super::wide_kernel::cos_strict_d57(widened.0, mode, SCALE);
+    let raw_wide = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(widened.0, mode)
+    } else {
+        super::wide_kernel::cos_strict_d57(widened.0, mode, SCALE)
+    };
     narrow::<SCALE>(raw_wide, "cos_strict")
 }
 
@@ -50,7 +58,11 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 #[must_use]
 pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = super::wide_kernel::tan_strict_d57(widened.0, mode, SCALE);
+    let raw_wide = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(widened.0, mode)
+    } else {
+        super::wide_kernel::tan_strict_d57(widened.0, mode, SCALE)
+    };
     narrow::<SCALE>(raw_wide, "tan_strict")
 }
 
@@ -58,7 +70,11 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 #[must_use]
 pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = super::wide_kernel::atan_strict_d57(widened.0, mode, SCALE);
+    let raw_wide = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_atan::atan_strict::<SCALE>(widened.0, mode)
+    } else {
+        super::wide_kernel::atan_strict_d57(widened.0, mode, SCALE)
+    };
     narrow::<SCALE>(raw_wide, "atan_strict")
 }
 
@@ -68,16 +84,24 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 #[must_use]
 pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let result = widened.asin_strict_with(mode);
-    narrow::<SCALE>(result.0, "asin_strict")
+    let result_raw = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(widened.0, mode)
+    } else {
+        widened.asin_strict_with(mode).0
+    };
+    narrow::<SCALE>(result_raw, "asin_strict")
 }
 
 #[inline]
 #[must_use]
 pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let result = widened.acos_strict_with(mode);
-    narrow::<SCALE>(result.0, "acos_strict")
+    let result_raw = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(widened.0, mode)
+    } else {
+        widened.acos_strict_with(mode).0
+    };
+    narrow::<SCALE>(result_raw, "acos_strict")
 }
 
 #[inline]
@@ -85,6 +109,10 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 pub(crate) fn atan2_strict<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
     let y_wide: D57<SCALE> = D38::<SCALE>::from_bits(y_raw).into();
     let x_wide: D57<SCALE> = D38::<SCALE>::from_bits(x_raw).into();
-    let result = y_wide.atan2_strict_with(x_wide, mode);
-    narrow::<SCALE>(result.0, "atan2_strict")
+    let result_raw = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(y_wide.0, x_wide.0, mode)
+    } else {
+        y_wide.atan2_strict_with(x_wide, mode).0
+    };
+    narrow::<SCALE>(result_raw, "atan2_strict")
 }

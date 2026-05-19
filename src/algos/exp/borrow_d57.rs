@@ -21,11 +21,19 @@ use crate::support::rounding::RoundingMode;
 
 /// D38 exponential via widen → D57 wide_kernel → narrow back. Strict
 /// working scale.
+///
+/// For `SCALE ∈ 18..=22` this routes through the narrow-GUARD
+/// `lookup_d57_s18_22` kernel — the D38<19> midpoint scale picks up
+/// the same ~22% reclaim the D57<20> direct path measures.
 #[inline]
 #[must_use]
 pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = super::wide_kernel::exp_strict_d57(widened.0, mode, SCALE);
+    let raw_wide = if matches!(SCALE, 18..=22) {
+        super::lookup_d57_s18_22::exp_strict::<SCALE>(widened.0, mode)
+    } else {
+        super::wide_kernel::exp_strict_d57(widened.0, mode, SCALE)
+    };
     let wide = D57::<SCALE>::from_bits(raw_wide);
     let narrowed: D38<SCALE> = wide.try_into().unwrap_or_else(|_| panic!(
         "exp_strict: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",

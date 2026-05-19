@@ -1742,7 +1742,8 @@ macro_rules! decl_wide_transcendental {
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
-            /// Mode-aware sibling of [`Self::atan2_strict`].
+            /// Mode-aware sibling of [`Self::atan2_strict`]. Same
+            /// max-branch + quadrant logic.
             #[inline]
             #[must_use]
             pub fn atan2_strict_with(self, other: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
@@ -1761,7 +1762,25 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let y = $core::to_work(yraw);
                     let x = $core::to_work(xraw);
-                    let base = $core::atan_fixed($core::div(y, x, w), w);
+                    let zero_w = $core::zero();
+                    // Max-branch: feed atan_fixed whichever of y/x or
+                    // x/y has |·| ≤ 1, so the argument-halving cascade
+                    // doesn't blow up. The historic `atan(y/x)`-only
+                    // path lost ~log₂(|y/x|) bits of precision when
+                    // |y| ≫ |x|; the swap recovers them via the
+                    // identity `atan(t) = sign(t)·π/2 − atan(1/t)`
+                    // for `|t| > 1`.
+                    let abs_y = if y < zero_w { -y } else { y };
+                    let abs_x = if x < zero_w { -x } else { x };
+                    let base = if abs_x >= abs_y {
+                        $core::atan_fixed($core::div(y, x, w), w)
+                    } else {
+                        let inv = $core::atan_fixed($core::div(x, y, w), w);
+                        let hp = $core::half_pi(w);
+                        // sign(y/x): same iff y and x agree in sign.
+                        let same_sign = (y < zero_w) == (x < zero_w);
+                        if same_sign { hp - inv } else { -hp - inv }
+                    };
                     if xraw > z {
                         base
                     } else if yraw >= z {
