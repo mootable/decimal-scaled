@@ -49,14 +49,17 @@ use crate::wide_int::Int192;
 /// cache slot with neighboring exp / ln invocations.
 const GUARD_NARROW: u32 = 8;
 
-/// `sinh_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
+/// `sinh_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`. Uses the
+/// Tang-style `exp` from
+/// [`crate::algos::exp::lookup_d57_s18_22_tang`] for both `e^v` and
+/// `e^-v` — ~3-4× faster than the unreduced `exp_fixed`.
 #[inline]
 #[must_use]
 pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
-    let ex = core::exp_fixed(v, w);
-    let enx = core::exp_fixed(-v, w);
+    let ex = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(v, w);
+    let enx = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(-v, w);
     let two = core::lit(2);
     let r = (ex - enx) / two;
     core::round_to_storage_with(r, w, SCALE, mode)
@@ -68,8 +71,8 @@ pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> 
 pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
-    let ex = core::exp_fixed(v, w);
-    let enx = core::exp_fixed(-v, w);
+    let ex = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(v, w);
+    let enx = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(-v, w);
     let two = core::lit(2);
     let r = (ex + enx) / two;
     core::round_to_storage_with(r, w, SCALE, mode)
@@ -81,8 +84,8 @@ pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> 
 pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
-    let ex = core::exp_fixed(v, w);
-    let enx = core::exp_fixed(-v, w);
+    let ex = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(v, w);
+    let enx = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(-v, w);
     let r = core::div(ex - enx, ex + enx, w);
     core::round_to_storage_with(r, w, SCALE, mode)
 }

@@ -86,21 +86,13 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     out
 }
 
-/// Tang-style `e^x` strict kernel for `D57<SCALE>` with `SCALE ∈ 18..=22`.
-///
-/// Two-stage range reduction + table multiply + short Taylor on δ.
-/// See module docs for the algorithm; identical structure to the
-/// SCALE 45..=56 sibling, tuned for the narrow-GUARD regime.
-#[inline]
+/// Tang-style `e^v_w` kernel on an already-lifted working value. Used
+/// both by [`exp_strict`] and by the hyperbolic kernels in
+/// [`crate::algos::trig::lookup_d57_s18_22_hyper`] which need a
+/// shared `(exp(v), exp(-v))` pair without paying the to_work_w lift
+/// twice.
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw == Int192::ZERO {
-        let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
-        return ten.pow(SCALE);
-    }
-
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
+pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     let one_w = core::one(w);
     let pow10_w = one_w;
     let l2 = core::ln2(w);
@@ -130,10 +122,10 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
     } else {
         ((j_signed + M as i128) as u32, -1i128)
     };
-    debug_assert!(j_idx < M, "exp_strict d57 s18..=22 tang: table index out of range");
+    debug_assert!(j_idx < M, "tang_exp_fixed d57 s18..=22: table index out of range");
 
     // Taylor on δ. |δ| ≤ ln(2)/256 ≈ 2.7·10⁻³, so δⁿ shrinks fast and
-    // the loop exits on a zero term in ~6-7 iterations at w = 32.
+    // the loop exits on a zero term in ~6-7 iterations at narrow w.
     let mut sum = one_w + delta;
     let mut term = delta;
     let mut n: u128 = 2;
@@ -149,17 +141,15 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
         }
     }
 
-    // exp(s) = table[j_idx] · sum at working scale.
     let exp_cj = table_entry(w, j_idx as usize);
     let exp_s = core::mul_cached(exp_cj, sum, pow10_w);
 
-    // Reassemble: exp(v) = 2^(k + k_adj) · exp(s).
     let k_total = k + k_adj;
-    let result = if k_total >= 0 {
+    if k_total >= 0 {
         let shift = k_total as u32;
         debug_assert!(
             core::bit_length(exp_s) + shift < core::W::BITS,
-            "exp_strict d57 s18..=22 tang: result overflows the representable range",
+            "tang_exp_fixed d57 s18..=22: result overflows the representable range",
         );
         exp_s << shift
     } else {
@@ -169,7 +159,28 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
         } else {
             exp_s >> neg_k
         }
-    };
+    }
+}
 
+/// Tang-style `e^x` strict kernel for `D57<SCALE>` with `SCALE ∈ 18..=22`.
+///
+/// Two-stage range reduction + table multiply + short Taylor on δ.
+/// See module docs for the algorithm; identical structure to the
+/// SCALE 45..=56 sibling, tuned for the narrow-GUARD regime.
+#[inline]
+#[must_use]
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+    if raw == Int192::ZERO {
+        let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
+        return ten.pow(SCALE);
+    }
+    let w = SCALE + GUARD_NARROW;
+    let v_w = core::to_work_w(raw, GUARD_NARROW);
+    let result = tang_exp_fixed(v_w, w);
     core::round_to_storage_with(result, w, SCALE, mode)
 }
+
+/// Narrow guard used by the Tang exp kernel — exposed so the
+/// hyperbolic kernels can lift their argument to the same working
+/// width before calling [`tang_exp_fixed`].
+pub(crate) const GUARD_FOR_HYPER: u32 = GUARD_NARROW;
