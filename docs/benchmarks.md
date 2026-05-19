@@ -972,421 +972,503 @@ known fix waiting to be implemented:
 See [`ROADMAP.md`](ROADMAP.md) at the repo root for the full
 list with expected wins per item and current status.
 
-## 0.3.2 sweep — full raw data
+## 0.4.0 sweep — full raw data
 
-Complete dump of the 2026-05-18 bench sweep, one table per
-bench binary. **Median** is criterion's median per-iteration
-time; **Change vs prior** is criterion's median-percentage
-verdict against the saved baseline. `n/a` means there was no
-baseline (typically a wide-tier bench that crashed mid-stream
-in the preceding aborted sweep, so this run seeded the
-baseline for future comparisons).
+Complete dump of the v0.4.0 full_matrix sweep (GitHub Actions run
+[`26069911678`](https://github.com/mootable/decimal-scaled/actions/runs/26069911678)),
+one table per bench binary. **Median** is criterion's median
+per-iteration time. The `Change vs prior` column has been
+dropped from this dump: cross-revision deltas measured across
+shared CI runners conflate real code changes with noisy
+neighbours and 1.5–2× wall-clock variance per the upstream
+Criterion guidance.
 
-**Run conditions**: 24-logical / 12-physical Windows machine,
-dispatcher pinned each lane to one physical core (logical 20+21
-lane A, 22+23 lane B) at High priority. Sweep ran ~3 hours
-wall-clock. Narrow-tier picosecond-scale measurements (D9 /
-D18 / D38 arith) sit near the bench-machine resolution floor
-and their `Change vs prior` deltas at this scale are
-dominated by pipeline / branch-predictor / interrupt jitter
-rather than real code differences — interpret those rows
-accordingly. Wide-tier ops in the µs+ range are well above
-the noise floor and the deltas there reflect real cumulative
-perf work from 0.3.x.
+**Run conditions**: GitHub-hosted `ubuntu-latest` standard
+runners — 2 vCPU shared, 7 GiB RAM, no core pinning, no
+priority bump. Each per-width matrix shard runs in its own VM
+on its own runner so cross-shard contention is zero, but
+within a shard the timer floor is the standard-runner steal
+budget. Numbers here are valid **relative to each other within
+this run** (matched algorithm-of-record families, matched
+features, matched compiler); they are **not** directly
+comparable to a cold dev-box micro-bench, which typically
+measures 30–50 % faster on the wide tiers and several × faster
+on the narrow tiers' picosecond cells.
 
-Headline `_approx` family micro-bench (run separately on a
-cold machine, not in this sweep) on D38<19> ln: **3.7×**
-faster at guard 6, 2.6× at 10, 1.8× at 15, 1.4× at 20, 1.2×
-at 25 — all vs strict's 54.8 µs.
+Picosecond-scale narrow-tier cells (D9 / D18 / D38 `add` /
+`sub` / `neg`) sit near the runner's resolution floor; treat
+their absolute values as accurate to ±20 % at best. Wide-tier
+ns+ values are reliable.
 
 ### `full_matrix_d9` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D9_s0/add` | 621.38 ps | +39.873% |
-| `arith/D9_s0/sub` | 594.94 ps | +42.252% |
-| `arith/D9_s0/mul` | 513.41 ps | +24.251% |
-| `arith/D9_s0/div` | 1.7512 ns | +9.8530% |
-| `arith/D9_s0/rem` | 1.7562 ns | +15.954% |
-| `arith/D9_s0/neg` | 441.02 ps | +54.485% |
-| `arith/D9_s5/add` | 596.65 ps | +35.921% |
-| `arith/D9_s5/sub` | 581.17 ps | +36.660% |
-| `arith/D9_s5/mul` | 1.4751 ns | +65.835% |
-| `arith/D9_s5/div` | 2.9736 ns | +13.642% |
-| `arith/D9_s5/rem` | 1.7205 ns | +19.103% |
-| `arith/D9_s5/neg` | 434.28 ps | +55.277% |
-| `arith/D9_s9/add` | 597.43 ps | +51.340% |
-| `arith/D9_s9/sub` | 580.18 ps | +46.828% |
-| `arith/D9_s9/mul` | 1.4579 ns | +100.57% |
-| `arith/D9_s9/div` | 3.9839 ns | +58.251% |
-| `arith/D9_s9/rem` | 1.7360 ns | +19.642% |
-| `arith/D9_s9/neg` | 444.83 ps | +55.581% |
-| `strict/D9_s0/ln` | 1.5343 ns | n/a |
-| `strict/D9_s0/exp` | 1.6572 ns | +11.620% |
-| `strict/D9_s0/sin` | 2.0001 ns | n/a |
-| `strict/D9_s0/sqrt` | 49.444 ns | +226.90% |
-| `strict/D9_s5/ln` | 476.61 µs | +1395.1% |
-| `strict/D9_s5/exp` | 432.92 µs | +1365.7% |
-| `strict/D9_s5/sin` | 465.16 µs | +1519.0% |
-| `strict/D9_s5/sqrt` | 61.462 ns | +224.44% |
-| `strict/D9_s9/ln` | 586.43 µs | +1360.3% |
-| `strict/D9_s9/exp` | 522.37 µs | +1372.9% |
-| `strict/D9_s9/sin` | 478.52 µs | +1462.1% |
-| `strict/D9_s9/sqrt` | 104.67 ns | +212.81% |
+| Op | Median |
+|----|--------|
+| `arith/D9_s0/add` | 934.42 ps |
+| `arith/D9_s0/sub` | 933.84 ps |
+| `arith/D9_s0/mul` | 933.75 ps |
+| `arith/D9_s0/div` | 1.8658 ns |
+| `arith/D9_s0/rem` | 1.8655 ns |
+| `arith/D9_s0/neg` | 622.20 ps |
+| `arith/D9_s5/add` | 933.09 ps |
+| `arith/D9_s5/sub` | 933.37 ps |
+| `arith/D9_s5/mul` | 1.5556 ns |
+| `arith/D9_s5/div` | 2.1845 ns |
+| `arith/D9_s5/rem` | 1.8662 ns |
+| `arith/D9_s5/neg` | 622.49 ps |
+| `arith/D9_s9/add` | 933.46 ps |
+| `arith/D9_s9/sub` | 933.80 ps |
+| `arith/D9_s9/mul` | 1.5563 ns |
+| `arith/D9_s9/div` | 2.1782 ns |
+| `arith/D9_s9/rem` | 1.8657 ns |
+| `arith/D9_s9/neg` | 621.99 ps |
+| `strict/D9_s0/ln` | 622.82 ps |
+| `strict/D9_s0/exp` | 622.61 ps |
+| `strict/D9_s0/sin` | 1.5576 ns |
+| `strict/D9_s0/sqrt` | 7.0931 ns |
+| `strict/D9_s5/ln` | 86.619 µs |
+| `strict/D9_s5/exp` | 80.799 µs |
+| `strict/D9_s5/sin` | 74.438 µs |
+| `strict/D9_s5/sqrt` | 20.697 ns |
+| `strict/D9_s9/ln` | 104.41 µs |
+| `strict/D9_s9/exp` | 95.596 µs |
+| `strict/D9_s9/sin` | 84.384 µs |
+| `strict/D9_s9/sqrt` | 20.365 ns |
 
 ### `full_matrix_d18` (36 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D18_s0/add` | 574.36 ps | +50.264% |
-| `arith/D18_s0/sub` | 591.39 ps | +32.382% |
-| `arith/D18_s0/mul` | 575.47 ps | +45.646% |
-| `arith/D18_s0/div` | 15.172 ns | +37.904% |
-| `arith/D18_s0/rem` | 1.7273 ns | +17.804% |
-| `arith/D18_s0/neg` | 434.12 ps | +38.072% |
-| `arith/D18_s9/add` | 575.77 ps | +56.399% |
-| `arith/D18_s9/sub` | 577.89 ps | +55.219% |
-| `arith/D18_s9/mul` | 14.866 ns | +57.761% |
-| `arith/D18_s9/div` | 15.578 ns | +55.731% |
-| `arith/D18_s9/rem` | 1.7302 ns | +25.417% |
-| `arith/D18_s9/neg` | 437.38 ps | +48.678% |
-| `arith/D18_s18/add` | 583.76 ps | +59.544% |
-| `arith/D18_s18/sub` | 586.78 ps | +64.247% |
-| `arith/D18_s18/mul` | 14.945 ns | +64.145% |
-| `arith/D18_s18/div` | 15.585 ns | +52.648% |
-| `arith/D18_s18/rem` | 1.7890 ns | n/a |
-| `arith/D18_s18/neg` | 439.62 ps | +27.324% |
-| `arith/fixed_i64f64/add` | 1.0007 ns | +11.869% |
-| `arith/fixed_i64f64/sub` | 1.0585 ns | +19.614% |
-| `arith/fixed_i64f64/mul` | 2.6761 ns | +79.393% |
-| `arith/fixed_i64f64/div` | 63.538 ns | +171.82% |
-| `arith/fixed_i64f64/rem` | 22.918 ns | +59.529% |
-| `arith/fixed_i64f64/neg` | 727.19 ps | +46.250% |
-| `strict/D18_s0/ln` | 751.04 ps | n/a |
-| `strict/D18_s0/exp` | 605.40 ps | n/a |
-| `strict/D18_s0/sin` | 1.7592 ns | n/a |
-| `strict/D18_s0/sqrt` | 48.610 ns | +245.59% |
-| `strict/D18_s9/ln` | 601.39 µs | +1412.8% |
-| `strict/D18_s9/exp` | 525.56 µs | +1436.3% |
-| `strict/D18_s9/sin` | 493.77 µs | +1475.0% |
-| `strict/D18_s9/sqrt` | 110.28 ns | +254.44% |
-| `strict/D18_s18/ln` | 868.64 µs | +1617.2% |
-| `strict/D18_s18/exp` | 842.72 µs | +1725.1% |
-| `strict/D18_s18/sin` | 675.80 µs | +1555.2% |
-| `strict/D18_s18/sqrt` | 148.13 ns | +331.94% |
+| Op | Median |
+|----|--------|
+| `arith/D18_s0/add` | 935.49 ps |
+| `arith/D18_s0/sub` | 934.42 ps |
+| `arith/D18_s0/mul` | 936.63 ps |
+| `arith/D18_s0/div` | 5.9201 ns |
+| `arith/D18_s0/rem` | 1.8669 ns |
+| `arith/D18_s0/neg` | 622.51 ps |
+| `arith/D18_s9/add` | 933.97 ps |
+| `arith/D18_s9/sub` | 934.31 ps |
+| `arith/D18_s9/mul` | 5.6151 ns |
+| `arith/D18_s9/div` | 6.2239 ns |
+| `arith/D18_s9/rem` | 1.8667 ns |
+| `arith/D18_s9/neg` | 622.35 ps |
+| `arith/D18_s18/add` | 936.63 ps |
+| `arith/D18_s18/sub` | 937.32 ps |
+| `arith/D18_s18/mul` | 6.0023 ns |
+| `arith/D18_s18/div` | 6.2545 ns |
+| `arith/D18_s18/rem` | 2.1813 ns |
+| `arith/D18_s18/neg` | 624.40 ps |
+| `arith/fixed_i64f64/add` | 1.8731 ns |
+| `arith/fixed_i64f64/sub` | 1.8733 ns |
+| `arith/fixed_i64f64/mul` | 2.4994 ns |
+| `arith/fixed_i64f64/div` | 30.623 ns |
+| `arith/fixed_i64f64/rem` | 13.138 ns |
+| `arith/fixed_i64f64/neg` | 1.2483 ns |
+| `strict/D18_s0/ln` | 624.26 ps |
+| `strict/D18_s0/exp` | 625.91 ps |
+| `strict/D18_s0/sin` | 1.2504 ns |
+| `strict/D18_s0/sqrt` | 6.7349 ns |
+| `strict/D18_s9/ln` | 104.72 µs |
+| `strict/D18_s9/exp` | 95.852 µs |
+| `strict/D18_s9/sin` | 84.749 µs |
+| `strict/D18_s9/sqrt` | 20.297 ns |
+| `strict/D18_s18/ln` | 145.71 µs |
+| `strict/D18_s18/exp` | 127.64 µs |
+| `strict/D18_s18/sin` | 110.04 µs |
+| `strict/D18_s18/sqrt` | 29.942 ns |
 
-### `full_matrix_d38` (30 measurements)
+### `full_matrix_d38` (36 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D38_s0/add` | 987.90 ps | n/a |
-| `arith/D38_s0/sub` | 970.88 ps | n/a |
-| `arith/D38_s0/mul` | 4.2143 ns | +31.048% |
-| `arith/D38_s0/div` | 16.117 ns | +32.160% |
-| `arith/D38_s0/rem` | 13.031 ns | +28.493% |
-| `arith/D38_s0/neg` | 740.35 ps | +18.545% |
-| `arith/D38_s19/add` | 980.05 ps | n/a |
-| `arith/D38_s19/sub` | 981.90 ps | n/a |
-| `arith/D38_s19/mul` | 28.160 ns | +94.607% |
-| `arith/D38_s19/div` | 17.299 ns | +90.403% |
-| `arith/D38_s19/rem` | 12.776 ns | +42.624% |
-| `arith/D38_s19/neg` | 720.92 ps | +55.118% |
-| `arith/D38_s38/add` | 953.57 ps | +22.238% |
-| `arith/D38_s38/sub` | 978.92 ps | +14.407% |
-| `arith/D38_s38/mul` | 29.146 ns | +146.27% |
-| `arith/D38_s38/div` | 5.6551 µs | +1200.4% |
-| `arith/D38_s38/rem` | 19.065 ns | +96.374% |
-| `arith/D38_s38/neg` | 732.29 ps | +31.770% |
-| `strict/D38_s0/ln` | 1.3741 ns | n/a |
-| `strict/D38_s0/exp` | 942.03 ps | n/a |
-| `strict/D38_s0/sin` | 1.5913 ns | n/a |
-| `strict/D38_s0/sqrt` | 48.577 ns | +253.16% |
-| `strict/D38_s19/ln` | 851.47 µs | +1373.0% |
-| `strict/D38_s19/exp` | 712.99 µs | +1403.1% |
-| `strict/D38_s19/sin` | 640.85 µs | +1386.5% |
-| `strict/D38_s19/sqrt` | 137.60 ns | +295.86% |
-| `strict/D38_s38/ln` | 909.60 µs | +1364.0% |
-| `strict/D38_s38/exp` | 416.76 µs | +1361.4% |
-| `strict/D38_s38/sin` | 696.37 µs | +3769.6% |
-| `strict/D38_s38/sqrt` | 38.584 µs | +1145.3% |
+| Op | Median |
+|----|--------|
+| `arith/D38_s0/add` | 1.1859 ns |
+| `arith/D38_s0/sub` | 1.1973 ns |
+| `arith/D38_s0/mul` | 3.4690 ns |
+| `arith/D38_s0/div` | 6.7787 ns |
+| `arith/D38_s0/rem` | 5.8664 ns |
+| `arith/D38_s0/neg` | 867.78 ps |
+| `arith/D38_s19/add` | 1.1841 ns |
+| `arith/D38_s19/sub` | 1.1827 ns |
+| `arith/D38_s19/mul` | 20.922 ns |
+| `arith/D38_s19/div` | 9.2041 ns |
+| `arith/D38_s19/rem` | 5.8757 ns |
+| `arith/D38_s19/neg` | 867.88 ps |
+| `arith/D38_s38/add` | 1.1842 ns |
+| `arith/D38_s38/sub` | 1.1808 ns |
+| `arith/D38_s38/mul` | 21.163 ns |
+| `arith/D38_s38/div` | 654.60 ns |
+| `arith/D38_s38/rem` | 9.9953 ns |
+| `arith/D38_s38/neg` | 867.73 ps |
+| `arith/rust_decimal_s19/add` | 9.2202 ns |
+| `arith/rust_decimal_s19/sub` | 9.2870 ns |
+| `arith/rust_decimal_s19/mul` | 38.262 ns |
+| `arith/rust_decimal_s19/div` | 9.1609 ns |
+| `arith/rust_decimal_s19/rem` | 17.741 ns |
+| `arith/rust_decimal_s19/neg` | 1.9816 ns |
+| `strict/D38_s0/ln` | 5.3432 µs |
+| `strict/D38_s0/exp` | 105.97 ns |
+| `strict/D38_s0/sin` | 12.033 µs |
+| `strict/D38_s0/sqrt` | 7.4930 ns |
+| `strict/D38_s19/ln` | 19.605 µs |
+| `strict/D38_s19/exp` | 16.333 µs |
+| `strict/D38_s19/sin` | 11.678 µs |
+| `strict/D38_s19/sqrt` | 34.859 ns |
+| `strict/D38_s38/ln` | 20.948 µs |
+| `strict/D38_s38/exp` | 19.044 µs |
+| `strict/D38_s38/sin` | 18.253 µs |
+| `strict/D38_s38/sqrt` | 4.2224 µs |
 
-### `full_matrix_d57` (28 measurements)
+### `full_matrix_d57` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D57_s0/add` | 2.0318 ns | n/a |
-| `arith/D57_s0/sub` | 2.6117 ns | n/a |
-| `arith/D57_s0/mul` | 63.833 ns | n/a |
-| `arith/D57_s0/div` | 199.35 ns | n/a |
-| `arith/D57_s0/rem` | 37.813 ns | n/a |
-| `arith/D57_s0/neg` | 2.2552 ns | n/a |
-| `arith/D57_s28/add` | 2.0048 ns | n/a |
-| `arith/D57_s28/sub` | 2.6179 ns | n/a |
-| `arith/D57_s28/mul` | 222.97 ns | n/a |
-| `arith/D57_s28/div` | 416.42 ns | n/a |
-| `arith/D57_s28/rem` | 134.93 ns | n/a |
-| `arith/D57_s28/neg` | 2.2434 ns | n/a |
-| `arith/D57_s56/add` | 2.0210 ns | n/a |
-| `arith/D57_s56/sub` | 2.6133 ns | n/a |
-| `arith/D57_s56/mul` | 313.87 ns | n/a |
-| `arith/D57_s56/div` | 447.76 ns | n/a |
-| `arith/D57_s56/rem` | 141.74 ns | n/a |
-| `arith/D57_s56/neg` | 2.2562 ns | n/a |
-| `strict_wide/D57_s0/ln` | 9.5528 µs | n/a |
-| `strict_wide/D57_s0/exp` | 12.124 ns | n/a |
-| `strict_wide/D57_s0/sin` | 19.232 µs | n/a |
-| `strict_wide/D57_s0/sqrt` | 214.08 ns | n/a |
-| `strict_wide/D57_s28/ln` | 32.000 µs | n/a |
-| `strict_wide/D57_s28/exp` | 26.788 µs | n/a |
-| `strict_wide/D57_s28/sin` | 20.091 µs | n/a |
-| `strict_wide/D57_s56/ln` | 44.121 µs | n/a |
-| `strict_wide/D57_s56/exp` | 33.287 µs | n/a |
-| `strict_wide/D57_s56/sin` | 27.037 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D57_s0/add` | 2.6813 ns |
+| `arith/D57_s0/sub` | 2.8485 ns |
+| `arith/D57_s0/mul` | 80.446 ns |
+| `arith/D57_s0/div` | 190.20 ns |
+| `arith/D57_s0/rem` | 24.021 ns |
+| `arith/D57_s0/neg` | 2.1822 ns |
+| `arith/D57_s28/add` | 2.6801 ns |
+| `arith/D57_s28/sub` | 2.8475 ns |
+| `arith/D57_s28/mul` | 290.95 ns |
+| `arith/D57_s28/div` | 449.22 ns |
+| `arith/D57_s28/rem` | 168.10 ns |
+| `arith/D57_s28/neg` | 2.1812 ns |
+| `arith/D57_s56/add` | 2.6802 ns |
+| `arith/D57_s56/sub` | 2.8478 ns |
+| `arith/D57_s56/mul` | 318.52 ns |
+| `arith/D57_s56/div` | 495.24 ns |
+| `arith/D57_s56/rem` | 174.59 ns |
+| `arith/D57_s56/neg` | 2.1817 ns |
+| `strict_wide/D57_s0/ln` | 9.0868 µs |
+| `strict_wide/D57_s0/exp` | 22.461 ns |
+| `strict_wide/D57_s0/sin` | 19.572 µs |
+| `strict_wide/D57_s0/sqrt` | 215.25 ns |
+| `strict_wide/D57_s28/ln` | 36.425 µs |
+| `strict_wide/D57_s28/exp` | 29.294 µs |
+| `strict_wide/D57_s28/sin` | 20.661 µs |
+| `strict_wide/D57_s28/sqrt` | 3.2400 µs |
+| `strict_wide/D57_s56/ln` | 47.921 µs |
+| `strict_wide/D57_s56/exp` | 29.499 µs |
+| `strict_wide/D57_s56/sin` | 32.103 µs |
+| `strict_wide/D57_s56/sqrt` | 3.7966 µs |
 
-### `full_matrix_d76` (34 measurements)
+### `full_matrix_d76` (36 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D76_s0/add` | 2.3579 ns | n/a |
-| `arith/D76_s0/sub` | 3.2922 ns | n/a |
-| `arith/D76_s0/mul` | 64.901 ns | n/a |
-| `arith/D76_s0/div` | 214.96 ns | +8.8461% |
-| `arith/D76_s0/rem` | 38.658 ns | n/a |
-| `arith/D76_s0/neg` | 2.5907 ns | n/a |
-| `arith/D76_s35/add` | 2.3611 ns | n/a |
-| `arith/D76_s35/sub` | 3.3064 ns | n/a |
-| `arith/D76_s35/mul` | 229.04 ns | n/a |
-| `arith/D76_s35/div` | 453.19 ns | n/a |
-| `arith/D76_s35/rem` | 139.45 ns | n/a |
-| `arith/D76_s35/neg` | 2.5964 ns | n/a |
-| `arith/D76_s76/add` | 2.3707 ns | n/a |
-| `arith/D76_s76/sub` | 3.3202 ns | n/a |
-| `arith/D76_s76/mul` | 351.59 ns | n/a |
-| `arith/D76_s76/div` | 516.41 ns | n/a |
-| `arith/D76_s76/rem` | 145.43 ns | n/a |
-| `arith/D76_s76/neg` | 2.5663 ns | n/a |
-| `arith/bnum_d76_s35/add` | 2.5674 ns | n/a |
-| `arith/bnum_d76_s35/sub` | 2.2895 ns | n/a |
-| `arith/bnum_d76_s35/mul` | 538.35 ns | n/a |
-| `arith/bnum_d76_s35/div` | 534.00 ns | n/a |
-| `arith/bnum_d76_s35/rem` | 62.890 ns | n/a |
-| `arith/bnum_d76_s35/neg` | 10.767 ns | n/a |
-| `strict_wide/D76_s0/ln` | 9.7191 µs | n/a |
-| `strict_wide/D76_s0/exp` | 13.352 ns | n/a |
-| `strict_wide/D76_s0/sin` | 18.815 µs | n/a |
-| `strict_wide/D76_s0/sqrt` | 249.41 ns | n/a |
-| `strict_wide/D76_s35/ln` | 36.192 µs | n/a |
-| `strict_wide/D76_s35/exp` | 28.466 µs | n/a |
-| `strict_wide/D76_s35/sin` | 22.198 µs | n/a |
-| `strict_wide/D76_s76/ln` | 55.892 µs | n/a |
-| `strict_wide/D76_s76/exp` | 38.210 µs | n/a |
-| `strict_wide/D76_s76/sin` | 32.830 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D76_s0/add` | 3.7185 ns |
+| `arith/D76_s0/sub` | 3.7274 ns |
+| `arith/D76_s0/mul` | 79.068 ns |
+| `arith/D76_s0/div` | 176.64 ns |
+| `arith/D76_s0/rem` | 25.622 ns |
+| `arith/D76_s0/neg` | 2.5578 ns |
+| `arith/D76_s35/add` | 3.7207 ns |
+| `arith/D76_s35/sub` | 3.7283 ns |
+| `arith/D76_s35/mul` | 288.20 ns |
+| `arith/D76_s35/div` | 464.47 ns |
+| `arith/D76_s35/rem` | 170.89 ns |
+| `arith/D76_s35/neg` | 2.5567 ns |
+| `arith/D76_s76/add` | 3.7177 ns |
+| `arith/D76_s76/sub` | 3.7286 ns |
+| `arith/D76_s76/mul` | 352.83 ns |
+| `arith/D76_s76/div` | 564.51 ns |
+| `arith/D76_s76/rem` | 179.56 ns |
+| `arith/D76_s76/neg` | 2.5607 ns |
+| `arith/bnum_d76_s35/add` | 12.175 ns |
+| `arith/bnum_d76_s35/sub` | 12.111 ns |
+| `arith/bnum_d76_s35/mul` | 472.17 ns |
+| `arith/bnum_d76_s35/div` | 482.05 ns |
+| `arith/bnum_d76_s35/rem` | 70.253 ns |
+| `arith/bnum_d76_s35/neg` | 17.054 ns |
+| `strict_wide/D76_s0/ln` | 8.9485 µs |
+| `strict_wide/D76_s0/exp` | 24.159 ns |
+| `strict_wide/D76_s0/sin` | 19.561 µs |
+| `strict_wide/D76_s0/sqrt` | 256.15 ns |
+| `strict_wide/D76_s35/ln` | 40.569 µs |
+| `strict_wide/D76_s35/exp` | 32.121 µs |
+| `strict_wide/D76_s35/sin` | 22.591 µs |
+| `strict_wide/D76_s35/sqrt` | 3.5341 µs |
+| `strict_wide/D76_s76/ln` | 58.598 µs |
+| `strict_wide/D76_s76/exp` | 41.436 µs |
+| `strict_wide/D76_s76/sin` | 33.119 µs |
+| `strict_wide/D76_s76/sqrt` | 4.4046 µs |
 
-### `full_matrix_d115` (22 measurements)
+### `full_matrix_d115` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D115_s0/add` | 3.9050 ns | n/a |
-| `arith/D115_s0/sub` | 5.2838 ns | n/a |
-| `arith/D115_s0/mul` | 77.288 ns | n/a |
-| `arith/D115_s0/div` | 247.30 ns | n/a |
-| `arith/D115_s0/rem` | 59.596 ns | n/a |
-| `arith/D115_s0/neg` | 3.6422 ns | n/a |
-| `arith/D115_s57/add` | 3.9263 ns | n/a |
-| `arith/D115_s57/sub` | 5.2969 ns | n/a |
-| `arith/D115_s57/mul` | 335.88 ns | n/a |
-| `arith/D115_s57/div` | 555.53 ns | n/a |
-| `arith/D115_s57/rem` | 166.97 ns | n/a |
-| `arith/D115_s57/neg` | 3.5728 ns | n/a |
-| `arith/D115_s114/add` | 4.0655 ns | n/a |
-| `arith/D115_s114/sub` | 5.2780 ns | n/a |
-| `arith/D115_s114/mul` | 529.70 ns | n/a |
-| `arith/D115_s114/div` | 672.39 ns | n/a |
-| `arith/D115_s114/rem` | 176.07 ns | n/a |
-| `arith/D115_s114/neg` | 3.5581 ns | n/a |
-| `strict_wide/D115_s0/ln` | 9.7944 µs | n/a |
-| `strict_wide/D115_s0/exp` | 17.225 ns | n/a |
-| `strict_wide/D115_s0/sin` | 18.719 µs | n/a |
-| `strict_wide/D115_s57/ln` | 47.706 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D115_s0/add` | 4.8551 ns |
+| `arith/D115_s0/sub` | 5.6624 ns |
+| `arith/D115_s0/mul` | 55.254 ns |
+| `arith/D115_s0/div` | 162.08 ns |
+| `arith/D115_s0/rem` | 27.116 ns |
+| `arith/D115_s0/neg` | 3.1529 ns |
+| `arith/D115_s57/add` | 4.8561 ns |
+| `arith/D115_s57/sub` | 5.6541 ns |
+| `arith/D115_s57/mul` | 229.39 ns |
+| `arith/D115_s57/div` | 420.85 ns |
+| `arith/D115_s57/rem` | 104.97 ns |
+| `arith/D115_s57/neg` | 3.1497 ns |
+| `arith/D115_s114/add` | 4.8515 ns |
+| `arith/D115_s114/sub` | 5.6554 ns |
+| `arith/D115_s114/mul` | 324.85 ns |
+| `arith/D115_s114/div` | 483.67 ns |
+| `arith/D115_s114/rem` | 114.23 ns |
+| `arith/D115_s114/neg` | 3.1523 ns |
+| `strict_wide/D115_s0/ln` | 5.4135 µs |
+| `strict_wide/D115_s0/exp` | 32.031 ns |
+| `strict_wide/D115_s0/sin` | 12.262 µs |
+| `strict_wide/D115_s0/sqrt` | 195.40 ns |
+| `strict_wide/D115_s57/ln` | 31.353 µs |
+| `strict_wide/D115_s57/exp` | 23.744 µs |
+| `strict_wide/D115_s57/sin` | 18.288 µs |
+| `strict_wide/D115_s57/sqrt` | 2.3271 µs |
+| `strict_wide/D115_s114/ln` | 46.322 µs |
+| `strict_wide/D115_s114/exp` | 33.763 µs |
+| `strict_wide/D115_s114/sin` | 28.187 µs |
+| `strict_wide/D115_s114/sqrt` | 2.7028 µs |
 
-### `full_matrix_d153` (22 measurements)
+### `full_matrix_d153` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D153_s0/add` | 5.4339 ns | n/a |
-| `arith/D153_s0/sub` | 13.093 ns | n/a |
-| `arith/D153_s0/mul` | 80.800 ns | n/a |
-| `arith/D153_s0/div` | 272.49 ns | +5.9238% |
-| `arith/D153_s0/rem` | 65.667 ns | +6.6510% |
-| `arith/D153_s0/neg` | 4.4793 ns | n/a |
-| `arith/D153_s75/add` | 5.4557 ns | n/a |
-| `arith/D153_s75/sub` | 13.113 ns | n/a |
-| `arith/D153_s75/mul` | 371.14 ns | n/a |
-| `arith/D153_s75/div` | 850.39 ns | n/a |
-| `arith/D153_s75/rem` | 191.16 ns | +9.0106% |
-| `arith/D153_s75/neg` | 4.5536 ns | n/a |
-| `arith/D153_s153/add` | 5.9852 ns | n/a |
-| `arith/D153_s153/sub` | 13.227 ns | n/a |
-| `arith/D153_s153/mul` | 776.38 ns | n/a |
-| `arith/D153_s153/div` | 1.0227 µs | n/a |
-| `arith/D153_s153/rem` | 190.33 ns | n/a |
-| `arith/D153_s153/neg` | 4.4366 ns | n/a |
-| `strict_wide/D153_s0/ln` | 15.553 µs | n/a |
-| `strict_wide/D153_s0/exp` | 19.444 ns | n/a |
-| `strict_wide/D153_s0/sin` | 31.098 µs | n/a |
-| `strict_wide/D153_s75/ln` | 80.806 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D153_s0/add` | 7.3587 ns |
+| `arith/D153_s0/sub` | 13.865 ns |
+| `arith/D153_s0/mul` | 98.866 ns |
+| `arith/D153_s0/div` | 292.26 ns |
+| `arith/D153_s0/rem` | 39.690 ns |
+| `arith/D153_s0/neg` | 5.0735 ns |
+| `arith/D153_s75/add` | 7.3488 ns |
+| `arith/D153_s75/sub` | 13.864 ns |
+| `arith/D153_s75/mul` | 382.80 ns |
+| `arith/D153_s75/div` | 871.16 ns |
+| `arith/D153_s75/rem` | 190.44 ns |
+| `arith/D153_s75/neg` | 5.0724 ns |
+| `arith/D153_s153/add` | 7.3480 ns |
+| `arith/D153_s153/sub` | 13.864 ns |
+| `arith/D153_s153/mul` | 642.64 ns |
+| `arith/D153_s153/div` | 1.0327 µs |
+| `arith/D153_s153/rem` | 204.99 ns |
+| `arith/D153_s153/neg` | 5.0731 ns |
+| `strict_wide/D153_s0/ln` | 11.115 µs |
+| `strict_wide/D153_s0/exp` | 42.388 ns |
+| `strict_wide/D153_s0/sin` | 23.975 µs |
+| `strict_wide/D153_s0/sqrt` | 280.37 ns |
+| `strict_wide/D153_s75/ln` | 67.527 µs |
+| `strict_wide/D153_s75/exp` | 53.779 µs |
+| `strict_wide/D153_s75/sin` | 40.827 µs |
+| `strict_wide/D153_s75/sqrt` | 4.9825 µs |
+| `strict_wide/D153_s153/ln` | 109.49 µs |
+| `strict_wide/D153_s153/exp` | 82.522 µs |
+| `strict_wide/D153_s153/sin` | 68.564 µs |
+| `strict_wide/D153_s153/sqrt` | 6.2663 µs |
 
-### `full_matrix_d230` (21 measurements)
+### `full_matrix_d230` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D230_s0/add` | 15.329 ns | n/a |
-| `arith/D230_s0/sub` | 18.126 ns | n/a |
-| `arith/D230_s0/mul` | 96.136 ns | n/a |
-| `arith/D230_s0/div` | 368.92 ns | n/a |
-| `arith/D230_s0/rem` | 69.260 ns | n/a |
-| `arith/D230_s0/neg` | 12.397 ns | n/a |
-| `arith/D230_s115/add` | 15.176 ns | n/a |
-| `arith/D230_s115/sub` | 18.037 ns | n/a |
-| `arith/D230_s115/mul` | 636.53 ns | n/a |
-| `arith/D230_s115/div` | 1.2000 µs | n/a |
-| `arith/D230_s115/rem` | 190.24 ns | n/a |
-| `arith/D230_s115/neg` | 13.083 ns | n/a |
-| `arith/D230_s230/add` | 15.400 ns | n/a |
-| `arith/D230_s230/sub` | 18.301 ns | n/a |
-| `arith/D230_s230/mul` | 1.3751 µs | n/a |
-| `arith/D230_s230/div` | 1.5384 µs | n/a |
-| `arith/D230_s230/rem` | 214.25 ns | n/a |
-| `arith/D230_s230/neg` | 14.183 ns | n/a |
-| `strict_wide/D230_s0/ln` | 19.945 µs | n/a |
-| `strict_wide/D230_s0/exp` | 42.433 ns | n/a |
-| `strict_wide/D230_s0/sin` | 42.267 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D230_s0/add` | 16.739 ns |
+| `arith/D230_s0/sub` | 19.019 ns |
+| `arith/D230_s0/mul` | 65.709 ns |
+| `arith/D230_s0/div` | 267.70 ns |
+| `arith/D230_s0/rem` | 52.693 ns |
+| `arith/D230_s0/neg` | 10.280 ns |
+| `arith/D230_s115/add` | 16.736 ns |
+| `arith/D230_s115/sub` | 19.016 ns |
+| `arith/D230_s115/mul` | 431.16 ns |
+| `arith/D230_s115/div` | 870.79 ns |
+| `arith/D230_s115/rem` | 138.62 ns |
+| `arith/D230_s115/neg` | 10.362 ns |
+| `arith/D230_s230/add` | 16.744 ns |
+| `arith/D230_s230/sub` | 19.014 ns |
+| `arith/D230_s230/mul` | 944.22 ns |
+| `arith/D230_s230/div` | 1.1877 µs |
+| `arith/D230_s230/rem` | 153.42 ns |
+| `arith/D230_s230/neg` | 10.651 ns |
+| `strict_wide/D230_s0/ln` | 9.4737 µs |
+| `strict_wide/D230_s0/exp` | 62.853 ns |
+| `strict_wide/D230_s0/sin` | 23.549 µs |
+| `strict_wide/D230_s0/sqrt` | 308.14 ns |
+| `strict_wide/D230_s115/ln` | 83.541 µs |
+| `strict_wide/D230_s115/exp` | 69.725 µs |
+| `strict_wide/D230_s115/sin` | 54.728 µs |
+| `strict_wide/D230_s115/sqrt` | 4.3601 µs |
+| `strict_wide/D230_s230/ln` | 151.55 µs |
+| `strict_wide/D230_s230/exp` | 116.86 µs |
+| `strict_wide/D230_s230/sin` | 102.31 µs |
+| `strict_wide/D230_s230/sqrt` | 7.0296 µs |
 
-### `full_matrix_d307` (21 measurements)
+### `full_matrix_d307` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D307_s0/add` | 19.681 ns | +147.15% |
-| `arith/D307_s0/sub` | 23.905 ns | +63.977% |
-| `arith/D307_s0/mul` | 127.33 ns | +128.12% |
-| `arith/D307_s0/div` | 458.13 ns | +82.783% |
-| `arith/D307_s0/rem` | 81.089 ns | +123.03% |
-| `arith/D307_s0/neg` | 12.549 ns | +158.19% |
-| `arith/D307_s150/add` | 19.463 ns | +149.15% |
-| `arith/D307_s150/sub` | 23.432 ns | +65.669% |
-| `arith/D307_s150/mul` | 782.59 ns | n/a |
-| `arith/D307_s150/div` | 1.4986 µs | n/a |
-| `arith/D307_s150/rem` | 214.80 ns | n/a |
-| `arith/D307_s150/neg` | 13.725 ns | +172.97% |
-| `arith/D307_s307/add` | 19.617 ns | +139.56% |
-| `arith/D307_s307/sub` | 23.463 ns | +58.996% |
-| `arith/D307_s307/mul` | 2.1567 µs | n/a |
-| `arith/D307_s307/div` | 2.6634 µs | n/a |
-| `arith/D307_s307/rem` | 243.24 ns | n/a |
-| `arith/D307_s307/neg` | 14.677 ns | +183.11% |
-| `strict_wide/D307_s0/ln` | 23.616 µs | n/a |
-| `strict_wide/D307_s0/exp` | 49.375 ns | +77.817% |
-| `strict_wide/D307_s0/sin` | 48.628 µs | +133.22% |
+| Op | Median |
+|----|--------|
+| `arith/D307_s0/add` | 23.037 ns |
+| `arith/D307_s0/sub` | 26.622 ns |
+| `arith/D307_s0/mul` | 92.466 ns |
+| `arith/D307_s0/div` | 375.04 ns |
+| `arith/D307_s0/rem` | 66.987 ns |
+| `arith/D307_s0/neg` | 13.953 ns |
+| `arith/D307_s150/add` | 22.928 ns |
+| `arith/D307_s150/sub` | 26.608 ns |
+| `arith/D307_s150/mul` | 568.68 ns |
+| `arith/D307_s150/div` | 1.3321 µs |
+| `arith/D307_s150/rem` | 229.35 ns |
+| `arith/D307_s150/neg` | 14.377 ns |
+| `arith/D307_s307/add` | 22.918 ns |
+| `arith/D307_s307/sub` | 26.621 ns |
+| `arith/D307_s307/mul` | 1.5216 µs |
+| `arith/D307_s307/div` | 2.4394 µs |
+| `arith/D307_s307/rem` | 257.63 ns |
+| `arith/D307_s307/neg` | 14.772 ns |
+| `strict_wide/D307_s0/ln` | 16.426 µs |
+| `strict_wide/D307_s0/exp` | 95.310 ns |
+| `strict_wide/D307_s0/sin` | 38.240 µs |
+| `strict_wide/D307_s0/sqrt` | 527.96 ns |
+| `strict_wide/D307_s150/ln` | 161.25 µs |
+| `strict_wide/D307_s150/exp` | 131.52 µs |
+| `strict_wide/D307_s150/sin` | 104.43 µs |
+| `strict_wide/D307_s150/sqrt` | 7.8380 µs |
+| `strict_wide/D307_s307/ln` | 299.38 µs |
+| `strict_wide/D307_s307/exp` | 233.39 µs |
+| `strict_wide/D307_s307/sin` | 209.22 µs |
+| `strict_wide/D307_s307/sqrt` | 19.518 µs |
 
-### `full_matrix_d462` (21 measurements)
+### `full_matrix_d462` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D462_s0/add` | 42.662 ns | n/a |
-| `arith/D462_s0/sub` | 57.612 ns | n/a |
-| `arith/D462_s0/mul` | 218.41 ns | n/a |
-| `arith/D462_s0/div` | 725.49 ns | n/a |
-| `arith/D462_s0/rem` | 166.05 ns | n/a |
-| `arith/D462_s0/neg` | 47.081 ns | n/a |
-| `arith/D462_s230/add` | 41.840 ns | n/a |
-| `arith/D462_s230/sub` | 57.715 ns | n/a |
-| `arith/D462_s230/mul` | 1.6512 µs | n/a |
-| `arith/D462_s230/div` | 2.8569 µs | n/a |
-| `arith/D462_s230/rem` | 322.43 ns | n/a |
-| `arith/D462_s230/neg` | 53.045 ns | n/a |
-| `arith/D462_s461/add` | 45.651 ns | n/a |
-| `arith/D462_s461/sub` | 60.098 ns | n/a |
-| `arith/D462_s461/mul` | 4.5977 µs | n/a |
-| `arith/D462_s461/div` | 4.9446 µs | n/a |
-| `arith/D462_s461/rem` | 358.87 ns | n/a |
-| `arith/D462_s461/neg` | 54.417 ns | n/a |
-| `strict_wide/D462_s0/ln` | 23.491 µs | n/a |
-| `strict_wide/D462_s0/exp` | 116.93 ns | n/a |
-| `strict_wide/D462_s0/sin` | 48.717 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D462_s0/add` | 26.347 ns |
+| `arith/D462_s0/sub` | 44.482 ns |
+| `arith/D462_s0/mul` | 148.97 ns |
+| `arith/D462_s0/div` | 529.19 ns |
+| `arith/D462_s0/rem` | 99.969 ns |
+| `arith/D462_s0/neg` | 35.756 ns |
+| `arith/D462_s230/add` | 26.372 ns |
+| `arith/D462_s230/sub` | 44.476 ns |
+| `arith/D462_s230/mul` | 1.2045 µs |
+| `arith/D462_s230/div` | 2.2243 µs |
+| `arith/D462_s230/rem` | 281.44 ns |
+| `arith/D462_s230/neg` | 36.281 ns |
+| `arith/D462_s461/add` | 26.389 ns |
+| `arith/D462_s461/sub` | 44.503 ns |
+| `arith/D462_s461/mul` | 3.1619 µs |
+| `arith/D462_s461/div` | 4.0998 µs |
+| `arith/D462_s461/rem` | 320.65 ns |
+| `arith/D462_s461/neg` | 38.117 ns |
+| `strict_wide/D462_s0/ln` | 16.914 µs |
+| `strict_wide/D462_s0/exp` | 125.95 ns |
+| `strict_wide/D462_s0/sin` | 39.960 µs |
+| `strict_wide/D462_s0/sqrt` | 699.46 ns |
+| `strict_wide/D462_s230/ln` | 229.97 µs |
+| `strict_wide/D462_s230/exp` | 174.68 µs |
+| `strict_wide/D462_s230/sin` | 159.36 µs |
+| `strict_wide/D462_s230/sqrt` | 12.295 µs |
+| `strict_wide/D462_s461/ln` | 503.23 µs |
+| `strict_wide/D462_s461/exp` | 347.27 µs |
+| `strict_wide/D462_s461/sin` | 357.09 µs |
+| `strict_wide/D462_s461/sqrt` | 28.223 µs |
 
-### `full_matrix_d616` (21 measurements)
+### `full_matrix_d616` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D616_s0/add` | 93.746 ns | n/a |
-| `arith/D616_s0/sub` | 115.29 ns | n/a |
-| `arith/D616_s0/mul` | 232.05 ns | n/a |
-| `arith/D616_s0/div` | 813.79 ns | n/a |
-| `arith/D616_s0/rem` | 198.95 ns | n/a |
-| `arith/D616_s0/neg` | 64.759 ns | n/a |
-| `arith/D616_s308/add` | 97.030 ns | n/a |
-| `arith/D616_s308/sub` | 118.91 ns | n/a |
-| `arith/D616_s308/mul` | 2.6811 µs | n/a |
-| `arith/D616_s308/div` | 4.6416 µs | n/a |
-| `arith/D616_s308/rem` | 347.50 ns | n/a |
-| `arith/D616_s308/neg` | 64.964 ns | n/a |
-| `arith/D616_s615/add` | 90.614 ns | n/a |
-| `arith/D616_s615/sub` | 114.07 ns | n/a |
-| `arith/D616_s615/mul` | 7.8695 µs | n/a |
-| `arith/D616_s615/div` | 7.7299 µs | n/a |
-| `arith/D616_s615/rem` | 434.30 ns | n/a |
-| `arith/D616_s615/neg` | 67.913 ns | n/a |
-| `strict_wide/D616_s0/ln` | 37.087 µs | n/a |
-| `strict_wide/D616_s0/exp` | 166.56 ns | n/a |
-| `strict_wide/D616_s0/sin` | 75.922 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D616_s0/add` | 44.720 ns |
+| `arith/D616_s0/sub` | 66.411 ns |
+| `arith/D616_s0/mul` | 117.66 ns |
+| `arith/D616_s0/div` | 465.22 ns |
+| `arith/D616_s0/rem` | 101.62 ns |
+| `arith/D616_s0/neg` | 38.610 ns |
+| `arith/D616_s308/add` | 44.609 ns |
+| `arith/D616_s308/sub` | 66.405 ns |
+| `arith/D616_s308/mul` | 1.7899 µs |
+| `arith/D616_s308/div` | 2.5389 µs |
+| `arith/D616_s308/rem` | 185.84 ns |
+| `arith/D616_s308/neg` | 39.818 ns |
+| `arith/D616_s615/add` | 44.735 ns |
+| `arith/D616_s615/sub` | 66.390 ns |
+| `arith/D616_s615/mul` | 5.2515 µs |
+| `arith/D616_s615/div` | 4.8258 µs |
+| `arith/D616_s615/rem` | 280.11 ns |
+| `arith/D616_s615/neg` | 41.372 ns |
+| `strict_wide/D616_s0/ln` | 19.279 µs |
+| `strict_wide/D616_s0/exp` | 122.24 ns |
+| `strict_wide/D616_s0/sin` | 40.503 µs |
+| `strict_wide/D616_s0/sqrt` | 608.99 ns |
+| `strict_wide/D616_s308/ln` | 368.73 µs |
+| `strict_wide/D616_s308/exp` | 300.48 µs |
+| `strict_wide/D616_s308/sin` | 252.42 µs |
+| `strict_wide/D616_s308/sqrt` | 15.212 µs |
+| `strict_wide/D616_s615/ln` | 847.92 µs |
+| `strict_wide/D616_s615/exp` | 646.61 µs |
+| `strict_wide/D616_s615/sin` | 644.67 µs |
+| `strict_wide/D616_s615/sqrt` | 35.257 µs |
 
-### `full_matrix_d924` (21 measurements)
+### `full_matrix_d924` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D924_s0/add` | 119.69 ns | n/a |
-| `arith/D924_s0/sub` | 143.59 ns | n/a |
-| `arith/D924_s0/mul` | 306.32 ns | n/a |
-| `arith/D924_s0/div` | 1.1615 µs | n/a |
-| `arith/D924_s0/rem` | 238.56 ns | n/a |
-| `arith/D924_s0/neg` | 74.740 ns | n/a |
-| `arith/D924_s461/add` | 115.40 ns | n/a |
-| `arith/D924_s461/sub` | 148.42 ns | n/a |
-| `arith/D924_s461/mul` | 5.1900 µs | n/a |
-| `arith/D924_s461/div` | 8.2246 µs | n/a |
-| `arith/D924_s461/rem` | 442.64 ns | n/a |
-| `arith/D924_s461/neg` | 75.659 ns | n/a |
-| `arith/D924_s923/add` | 104.87 ns | n/a |
-| `arith/D924_s923/sub` | 203.09 ns | n/a |
-| `arith/D924_s923/mul` | 16.312 µs | n/a |
-| `arith/D924_s923/div` | 13.314 µs | n/a |
-| `arith/D924_s923/rem` | 541.22 ns | n/a |
-| `arith/D924_s923/neg` | 86.028 ns | n/a |
-| `strict_wide/D924_s0/ln` | 53.300 µs | n/a |
-| `strict_wide/D924_s0/exp` | 236.94 ns | n/a |
-| `strict_wide/D924_s0/sin` | 106.94 µs | n/a |
+| Op | Median |
+|----|--------|
+| `arith/D924_s0/add` | 94.060 ns |
+| `arith/D924_s0/sub` | 120.69 ns |
+| `arith/D924_s0/mul` | 205.57 ns |
+| `arith/D924_s0/div` | 895.13 ns |
+| `arith/D924_s0/rem` | 175.60 ns |
+| `arith/D924_s0/neg` | 65.160 ns |
+| `arith/D924_s461/add` | 94.035 ns |
+| `arith/D924_s461/sub` | 120.64 ns |
+| `arith/D924_s461/mul` | 3.6839 µs |
+| `arith/D924_s461/div` | 6.1591 µs |
+| `arith/D924_s461/rem` | 392.37 ns |
+| `arith/D924_s461/neg` | 67.274 ns |
+| `arith/D924_s923/add` | 94.078 ns |
+| `arith/D924_s923/sub` | 120.60 ns |
+| `arith/D924_s923/mul` | 11.280 µs |
+| `arith/D924_s923/div` | 11.506 µs |
+| `arith/D924_s923/rem` | 479.32 ns |
+| `arith/D924_s923/neg` | 70.182 ns |
+| `strict_wide/D924_s0/ln` | 34.127 µs |
+| `strict_wide/D924_s0/exp` | 386.77 ns |
+| `strict_wide/D924_s0/sin` | 73.407 µs |
+| `strict_wide/D924_s0/sqrt` | 1.0426 µs |
+| `strict_wide/D924_s461/ln` | 873.53 µs |
+| `strict_wide/D924_s461/exp` | 715.05 µs |
+| `strict_wide/D924_s461/sin` | 690.32 µs |
+| `strict_wide/D924_s461/sqrt` | 34.839 µs |
+| `strict_wide/D924_s923/ln` | 2.1913 ms |
+| `strict_wide/D924_s923/exp` | 1.6598 ms |
+| `strict_wide/D924_s923/sin` | 1.8844 ms |
+| `strict_wide/D924_s923/sqrt` | 82.661 µs |
 
-### `full_matrix_d1232` (19 measurements)
+### `full_matrix_d1232` (30 measurements)
 
-| Op | Median | Change vs prior |
-|----|--------|-----------------|
-| `arith/D1232_s0/add` | 143.34 ns | n/a |
-| `arith/D1232_s0/sub` | 196.50 ns | n/a |
-| `arith/D1232_s0/mul` | 362.90 ns | n/a |
-| `arith/D1232_s0/div` | 1.4677 µs | n/a |
-| `arith/D1232_s0/rem` | 339.55 ns | n/a |
-| `arith/D1232_s0/neg` | 99.849 ns | n/a |
-| `arith/D1232_s616/add` | 130.52 ns | n/a |
-| `arith/D1232_s616/sub` | 186.22 ns | n/a |
-| `arith/D1232_s616/mul` | 9.0517 µs | n/a |
-| `arith/D1232_s616/div` | 10.890 µs | n/a |
-| `arith/D1232_s616/rem` | 545.46 ns | n/a |
-| `arith/D1232_s616/neg` | 103.49 ns | n/a |
-| `arith/D1232_s1231/add` | 129.54 ns | n/a |
-| `arith/D1232_s1231/sub` | 185.57 ns | n/a |
-| `arith/D1232_s1231/mul` | 29.228 µs | n/a |
-| `arith/D1232_s1231/div` | 21.273 µs | n/a |
-| `arith/D1232_s1231/rem` | 696.57 ns | n/a |
-| `arith/D1232_s1231/neg` | 114.56 ns | n/a |
-| `strict_wide/D1232_s0/ln` | 70.146 µs | n/a |
-
+| Op | Median |
+|----|--------|
+| `arith/D1232_s0/add` | 120.02 ns |
+| `arith/D1232_s0/sub` | 188.44 ns |
+| `arith/D1232_s0/mul` | 259.39 ns |
+| `arith/D1232_s0/div` | 1.0629 µs |
+| `arith/D1232_s0/rem` | 217.59 ns |
+| `arith/D1232_s0/neg` | 92.268 ns |
+| `arith/D1232_s616/add` | 119.90 ns |
+| `arith/D1232_s616/sub` | 188.67 ns |
+| `arith/D1232_s616/mul` | 6.2126 µs |
+| `arith/D1232_s616/div` | 8.9470 µs |
+| `arith/D1232_s616/rem` | 475.36 ns |
+| `arith/D1232_s616/neg` | 93.567 ns |
+| `arith/D1232_s1231/add` | 119.95 ns |
+| `arith/D1232_s1231/sub` | 188.50 ns |
+| `arith/D1232_s1231/mul` | 19.642 µs |
+| `arith/D1232_s1231/div` | 18.140 µs |
+| `arith/D1232_s1231/rem` | 593.95 ns |
+| `arith/D1232_s1231/neg` | 96.780 ns |
+| `strict_wide/D1232_s0/ln` | 44.591 µs |
+| `strict_wide/D1232_s0/exp` | 425.45 ns |
+| `strict_wide/D1232_s0/sin` | 93.371 µs |
+| `strict_wide/D1232_s0/sqrt` | 1.4626 µs |
+| `strict_wide/D1232_s616/ln` | 1.5721 ms |
+| `strict_wide/D1232_s616/exp` | 1.2906 ms |
+| `strict_wide/D1232_s616/sin` | 1.2871 ms |
+| `strict_wide/D1232_s616/sqrt` | 53.822 µs |
+| `strict_wide/D1232_s1231/ln` | 4.1530 ms |
+| `strict_wide/D1232_s1231/exp` | 3.1336 ms |
+| `strict_wide/D1232_s1231/sin` | 3.8070 ms |
+| `strict_wide/D1232_s1231/sqrt` | 132.36 µs |
