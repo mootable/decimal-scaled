@@ -25,18 +25,15 @@ fn from_int(n: i128) -> D {
 }
 
 #[track_caller]
-fn agree_within_2_storage_lsb(label: &str, a: D, b: D) {
+fn agree_within_1_storage_lsb(label: &str, a: D, b: D) {
     let diff = if a >= b { a - b } else { b - a };
-    // Two storage LSBs of slack: lookup error budget ~36 LSB-of-w with
-    // GUARD_NARROW = 10 lands well below 1 storage LSB, but the
-    // wide_kernel uses GUARD = 30 so the half-to-even rounding tie may
-    // fall on a different side. 2 storage LSBs is the wide-tier x-witness
-    // tolerance.
-    let two = D::from_int(2);
+    // One storage LSB: two correctly-rounded paths may legitimately
+    // disagree by at most 1 ULP at half-ULP-tie boundaries (one rounds
+    // up, the other rounds down). Tighter than 1 LSB would false-positive
+    // on those legitimate cases.
     let one = D::from_int(1);
     let lsb = one / D::from_int(10).pow(308);
-    // diff <= 2*lsb
-    let limit = two * lsb;
+    let limit = lsb;
     assert!(
         diff <= limit,
         "{label}: |a - b| = {diff:?}, limit = {limit:?}, a = {a:?}, b = {b:?}",
@@ -54,7 +51,7 @@ fn ln_lookup_matches_wide_kernel_at_s308() {
 
     let lookup = one_p_half.ln_strict();
     let kernel = one_p_half.ln_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("ln(1.5) D616<308>", lookup, kernel);
+    agree_within_1_storage_lsb("ln(1.5) D616<308>", lookup, kernel);
 }
 
 #[test]
@@ -63,7 +60,7 @@ fn exp_lookup_matches_wide_kernel_at_s308() {
 
     let lookup = half.exp_strict();
     let kernel = half.exp_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("exp(0.5) D616<308>", lookup, kernel);
+    agree_within_1_storage_lsb("exp(0.5) D616<308>", lookup, kernel);
 }
 
 #[test]
@@ -72,7 +69,7 @@ fn sinh_lookup_matches_wide_kernel_at_s308() {
 
     let lookup = half.sinh_strict();
     let kernel = half.sinh_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("sinh(0.5) D616<308>", lookup, kernel);
+    agree_within_1_storage_lsb("sinh(0.5) D616<308>", lookup, kernel);
 }
 
 #[test]
@@ -81,7 +78,7 @@ fn cosh_lookup_matches_wide_kernel_at_s308() {
 
     let lookup = half.cosh_strict();
     let kernel = half.cosh_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("cosh(0.5) D616<308>", lookup, kernel);
+    agree_within_1_storage_lsb("cosh(0.5) D616<308>", lookup, kernel);
 }
 
 #[test]
@@ -90,7 +87,7 @@ fn tanh_lookup_matches_wide_kernel_at_s308() {
 
     let lookup = half.tanh_strict();
     let kernel = half.tanh_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("tanh(0.5) D616<308>", lookup, kernel);
+    agree_within_1_storage_lsb("tanh(0.5) D616<308>", lookup, kernel);
 }
 
 // Identity probes: ln(exp(x)) ≈ x and exp(ln(x)) ≈ x. Composing both
@@ -100,12 +97,12 @@ fn tanh_lookup_matches_wide_kernel_at_s308() {
 fn ln_exp_round_trip_at_s308() {
     let x = from_int(1) / from_int(4); // 0.25, |x| < ln(2)/2 well inside lookup
     let round = x.exp_strict().ln_strict();
-    agree_within_2_storage_lsb("ln(exp(0.25)) D616<308>", round, x);
+    agree_within_1_storage_lsb("ln(exp(0.25)) D616<308>", round, x);
 }
 
 #[test]
 fn exp_ln_round_trip_at_s308() {
     let x = from_int(3) / from_int(2); // 1.5
     let round = x.ln_strict().exp_strict();
-    agree_within_2_storage_lsb("exp(ln(1.5)) D616<308>", round, x);
+    agree_within_1_storage_lsb("exp(ln(1.5)) D616<308>", round, x);
 }

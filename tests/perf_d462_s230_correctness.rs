@@ -37,24 +37,22 @@ const IDENTITY_TOL_LSB: u32 = 5;
 
 fn assert_close(label: &str, a: D, b: D) {
     let diff = if a >= b { a - b } else { b - a };
-    // Tolerance: 10^-200 ≈ ridiculously small slack relative to the
-    // 10^-230 storage ULP. At ~30 digits below storage precision the
-    // identity check still passes well within a percent of full
-    // precision while leaving room for ulp-level final rounding noise
-    // in the composed transcendentals.
-    // Build `10^-200` as `D::ONE / 10^200`. 10^200 fits in Int1536
-    // since 1536 bits ≈ 462 decimal digits.
+    // Tight identity-witness tolerance: IDENTITY_TOL_LSB storage LSBs.
+    // Each composed correctly-rounded transcendental contributes ≤ 0.5
+    // ULP, plus rounding noise from the comparison arithmetic. Five LSB
+    // is the documented identity-witness budget for the wider tiers.
+    // Build `IDENTITY_TOL_LSB * 10^-230` as `IDENTITY_TOL_LSB / 10^230`.
     let ten = D::from_int(10);
     let mut bound = ten;
-    for _ in 1..200 {
+    for _ in 1..230 {
         bound = bound * ten;
     }
-    let tol = D::ONE / bound;
+    let lsb = D::ONE / bound;
+    let tol = D::from_int(IDENTITY_TOL_LSB as i128) * lsb;
     assert!(
         diff <= tol,
-        "{label}: |a - b| > 10^-200; a-b raw bits diff exceeds expected identity drift"
+        "{label}: |a - b| = {diff:?} exceeds {IDENTITY_TOL_LSB} storage LSB at SCALE 230"
     );
-    let _ = IDENTITY_TOL_LSB; // hush unused on a future refactor
 }
 
 #[test]

@@ -43,21 +43,21 @@ fn agree_within_n_storage_lsb(label: &str, a: D, b: D, n_lsb: u128) {
 fn exp_ln_round_trip_at_s460_half() {
     let x = from_int(3) / from_int(2); // 1.5
     let round = x.ln_strict().exp_strict();
-    agree_within_n_storage_lsb("exp(ln(1.5)) D924<460>", round, x, 8);
+    agree_within_n_storage_lsb("exp(ln(1.5)) D924<460>", round, x, 1);
 }
 
 #[test]
 fn exp_ln_round_trip_at_s460_two() {
     let x = from_int(2);
     let round = x.ln_strict().exp_strict();
-    agree_within_n_storage_lsb("exp(ln(2)) D924<460>", round, x, 8);
+    agree_within_n_storage_lsb("exp(ln(2)) D924<460>", round, x, 1);
 }
 
 #[test]
 fn exp_ln_round_trip_at_s460_three() {
     let x = from_int(3);
     let round = x.ln_strict().exp_strict();
-    agree_within_n_storage_lsb("exp(ln(3)) D924<460>", round, x, 8);
+    agree_within_n_storage_lsb("exp(ln(3)) D924<460>", round, x, 1);
 }
 
 #[test]
