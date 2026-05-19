@@ -211,6 +211,14 @@ pub mod __bench_internals {
     ) {
         crate::wide_int::limbs_mul_u64_fixed::<L, D>(a, b, out)
     }
+    #[inline(never)]
+    pub fn mul_u64_into<const L: usize, const LP1: usize>(
+        a: &[u64; L],
+        n: u64,
+        out: &mut [u64; LP1],
+    ) {
+        crate::wide_int::limbs_mul_u64_into::<L, LP1>(a, n, out)
+    }
 }
 mod macros;
 
