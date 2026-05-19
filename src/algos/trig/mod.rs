@@ -58,5 +58,7 @@ pub(crate) mod lookup_d462_s225_235_hyper;
 pub(crate) mod lookup_d462_s225_235_sincos;
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 pub(crate) mod lookup_d616_s300_315_hyper;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub(crate) mod lookup_d1232_s610_620_hyper;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;

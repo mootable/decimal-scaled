@@ -360,6 +360,23 @@ name = "d616_lookup_baseline"
 harness = false
 required-features = ["x-wide"]
 
+# Side-by-side D1232 ln at SCALE 600 (wide_kernel) vs SCALE 615 (Tang
+# lookup). Isolates the lookup-vs-kernel speedup from the underlying
+# Int16384 primitive cost.
+[[bench]]
+name = "d1232_lookup_baseline"
+harness = false
+required-features = ["xx-wide"]
+
+# AGM vs canonical artanh ln at D1232 across SCALE 615 / 800 / 1000 /
+# 1200 — Brent's AGM ln crossover sits around ~300 decimal digits, so
+# D1232 is the first width where the canonical artanh path may finally
+# lose to AGM at the deep end of the scale range.
+[[bench]]
+name = "agm_vs_taylor_d1232"
+harness = false
+required-features = ["xx-wide"]
+
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
 name = "m2_mul_fixed"
