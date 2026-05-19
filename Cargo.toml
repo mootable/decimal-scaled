@@ -224,6 +224,13 @@ name = "d_w128_mul_div_paths"
 harness = false
 required-features = ["wide"]
 
+# Newton-Raphson reciprocal divide vs MG chain divide at D307/D616/D1232.
+# Research bench — informs ALGORITHMS.md "Evaluated and not used".
+[[bench]]
+name = "newton_vs_mg"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # AGM vs artanh / Taylor strict transcendentals at the deepest tier
 # (D307<300>). Tracks the AGM path's throughput so a future bench-
 # driven promotion has a data point.

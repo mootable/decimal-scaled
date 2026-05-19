@@ -295,7 +295,12 @@ macro_rules! decl_decimal_arithmetic {
                     } else if SCALE <= 38 {
                         $crate::algos::mg_divide::div_wide_pow10_with::<$Storage>(n, SCALE, mode)
                     } else {
-                        $crate::algos::mg_divide::div_wide_pow10_chain_with::<$Storage>(n, SCALE, mode)
+                        // Newton vs MG chain dispatch: cells in the
+                        // bench-validated matrix (Int2048 ≥ s200,
+                        // Int3072 ≥ s200, Int4096 ≥ s400) route to
+                        // Newton; everything else stays on MG. See
+                        // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
+                        $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage>(n, SCALE, mode)
                     };
                     return Self(scaled);
                 }
@@ -310,12 +315,10 @@ macro_rules! decl_decimal_arithmetic {
                 } else if SCALE <= 38 {
                     $crate::algos::mg_divide::div_wide_pow10_with::<$Wider>(n, SCALE, mode)
                 } else {
-                    // Chain-of-÷10^38 via the existing MG 2-by-1
-                    // kernel; preserves rounding for the common
-                    // non-half-tie case (≤ 1 ULP biased in the rare
-                    // multi-chunk tie). Replaces the previous
-                    // multi-limb Knuth divide at wide SCALEs.
-                    $crate::algos::mg_divide::div_wide_pow10_chain_with::<$Wider>(n, SCALE, mode)
+                    // Width-dispatch as above; the slow path's `$Wider`
+                    // numerator hits the same matrix (e.g. D307's
+                    // `$Wider = Int2048` routes Newton at SCALE ≥ 200).
+                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider>(n, SCALE, mode)
                 };
                 Self(scaled.resize::<$Storage>())
             }
