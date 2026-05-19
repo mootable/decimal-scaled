@@ -27,8 +27,10 @@ fn from_int(n: i128) -> D {
 #[track_caller]
 fn agree_within_n_storage_lsb(label: &str, a: D, b: D, n_lsb: u128) {
     let diff = if a >= b { a - b } else { b - a };
-    let one = D::from_int(1);
-    let lsb = one / D::from_int(10).pow(115);
+    // EPSILON = one storage LSB (smallest representable positive
+    // value). Avoids the `10.pow(SCALE)` overflow that bites
+    // deep-band tests where 2×SCALE > storage capacity.
+    let lsb = D::EPSILON;
     let limit = D::from_int(n_lsb as i128) * lsb;
     assert!(
         diff <= limit,
