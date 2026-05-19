@@ -377,8 +377,51 @@ impl<const SCALE: u32> LnPolicy for crate::types::widths::D153<SCALE> {
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl_wide_ln!(D230, ln::wide_kernel::ln_strict_d230);
 
+// D307 — bespoke arm so `ln_impl` can divert SCALE ∈ 140..=160 (the
+// popular mid-band centred on the half-MAX point) through the Tang-
+// style narrow-GUARD lookup before falling back to `wide_kernel`. See
+// [`crate::algos::ln::lookup_d307_s140_160_tang`] for the algorithm.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl_wide_ln!(D307, ln::wide_kernel::ln_strict_d307);
+impl<const SCALE: u32> LnPolicy for crate::types::widths::D307<SCALE> {
+    #[inline]
+    fn ln_impl(self, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 140..=160) {
+            return Self(ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(self.0, mode));
+        }
+        Self(ln::wide_kernel::ln_strict_d307(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        if matches!(SCALE, 140..=160) {
+            return Self(ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(self.0, mode));
+        }
+        Self(ln::wide_kernel::ln_strict_d307(self.0, mode, SCALE))
+    }
+    #[inline]
+    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
+        self.log_strict_with(base, mode)
+    }
+    #[inline]
+    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
+        self.log_strict_with(base, mode)
+    }
+    #[inline]
+    fn log2_impl(self, mode: RoundingMode) -> Self {
+        self.log2_strict_with(mode)
+    }
+    #[inline]
+    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        self.log2_strict_with(mode)
+    }
+    #[inline]
+    fn log10_impl(self, mode: RoundingMode) -> Self {
+        self.log10_strict_with(mode)
+    }
+    #[inline]
+    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
+        self.log10_strict_with(mode)
+    }
+}
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl_wide_ln!(D462, ln::wide_kernel::ln_strict_d462);
