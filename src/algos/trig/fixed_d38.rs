@@ -237,22 +237,15 @@ pub(crate) fn sin_fixed(v_w: Fixed, w: u32) -> Fixed {
 /// Joint sine + cosine of a working-scale value `v_w`, at working
 /// scale `w`.
 ///
-/// Replaces two independent `sin_fixed` calls (one for `sin`, one for
-/// `sin(x + π/2) = cos`) with a single sin evaluation plus a sqrt:
+/// Shares the mod-τ argument reduction between sin and cos — one
+/// reduction (1 wide divide + 1 round-to-int + 1 multiply-back +
+/// 1 sub), then two Taylor evaluations on the reduced argument.
 ///
-/// - Reduce mod τ and fold to `|r| ∈ [0, π/2]`, tracking the sin sign
-///   (from the mod-τ residue sign) and the cos sign (from whether
-///   the unfolded `|r|` exceeded π/2).
-/// - Evaluate `|sin(reduced)|` via the same π/4-split branch as
-///   `sin_fixed`.
-/// - Recover `|cos(reduced)|` from `cos² + sin² = 1`:
-///   `|cos| = √(1 − sin²)`.
-/// - Apply the cached signs.
-///
-/// One Taylor series + one wide sqrt + one wide mul, vs the historic
-/// two independent reductions + Taylors. Used by `tan_strict` /
-/// `tan_with` so the tan path pays only one reduction and one
-/// final wide divide.
+/// The naive `sin_fixed(v) + sin_fixed(v + π/2)` pays the reduction
+/// twice. Recovering `cos` via the Pythagorean identity
+/// `|cos| = √(1 − sin²)` was tried — a 256-bit Fixed sqrt is far
+/// more expensive than a second Taylor at this width, so the joint
+/// kernel sticks with two Taylors after the shared reduction.
 pub(crate) fn sin_cos_fixed(v_w: Fixed, w: u32) -> (Fixed, Fixed) {
     let tau = wide_tau(w);
     let pi = wide_pi(w);
@@ -267,24 +260,30 @@ pub(crate) fn sin_cos_fixed(v_w: Fixed, w: u32) -> (Fixed, Fixed) {
     };
     let r = v_w.sub(q_tau);
 
+    // Sin: fold |r| ∈ [0, π] to [0, π/2] via sin(π − x) = sin(x);
+    // sign comes from the residue sign.
     let sin_neg = r.negative;
     let abs_r = Fixed { negative: false, mag: r.mag };
     let cos_neg = abs_r.ge_mag(half_pi); // |r| > π/2 ⇒ cos negative.
-    let reduced = if cos_neg { pi.sub(abs_r) } else { abs_r };
-    let s_abs = if reduced.ge_mag(quarter_pi) {
-        cos_taylor(half_pi.sub(reduced), w)
+    let sin_reduced = if cos_neg { pi.sub(abs_r) } else { abs_r };
+    let s_abs = if sin_reduced.ge_mag(quarter_pi) {
+        cos_taylor(half_pi.sub(sin_reduced), w)
     } else {
-        sin_taylor(reduced, w)
+        sin_taylor(sin_reduced, w)
     };
 
-    // |cos| = √(1 − sin²). The radicand is non-negative because
-    // |sin| ≤ 1 over the reduced range.
-    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
-    let s2 = s_abs.mul(s_abs, w);
-    let cos_abs = one_w.sub(s2).sqrt(w);
+    // Cos: |cos(r)| = sin(π/2 − sin_reduced) — same π/4 split.
+    // sin_reduced is in [0, π/2], so π/2 − sin_reduced is also in
+    // [0, π/2] and the π/4 branch logic is just inverted.
+    let cos_reduced = half_pi.sub(sin_reduced);
+    let c_abs = if cos_reduced.ge_mag(quarter_pi) {
+        cos_taylor(half_pi.sub(cos_reduced), w)
+    } else {
+        sin_taylor(cos_reduced, w)
+    };
 
     let sin_result = if sin_neg { s_abs.neg() } else { s_abs };
-    let cos_result = if cos_neg { cos_abs.neg() } else { cos_abs };
+    let cos_result = if cos_neg { c_abs.neg() } else { c_abs };
     (sin_result, cos_result)
 }
 
@@ -771,7 +770,12 @@ pub(crate) fn sinh_with(
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
     let ex = exp_fixed(v, w);
-    let enx = exp_fixed(v.neg(), w);
+    // exp(-v) = 1 / exp(v). One exp_fixed plus one wide divide
+    // replaces a second exp_fixed evaluation — the divide is an
+    // order of magnitude cheaper than another exp on a 256-bit
+    // Fixed at SCALE+GUARD.
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let enx = one_w.div(ex, w);
     ex.sub(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
@@ -798,7 +802,10 @@ pub(crate) fn cosh_with(
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
     let ex = exp_fixed(v, w);
-    let enx = exp_fixed(v.neg(), w);
+    // exp(-v) = 1 / exp(v) — one exp_fixed + wide divide vs two
+    // exp_fixed calls.
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let enx = one_w.div(ex, w);
     ex.add(enx)
         .halve()
         .round_to_i128_with(w, scale, mode)
@@ -828,7 +835,10 @@ pub(crate) fn tanh_with(
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
     let ex = exp_fixed(v, w);
-    let enx = exp_fixed(v.neg(), w);
+    // exp(-v) = 1 / exp(v) — one exp_fixed + wide divide vs two
+    // exp_fixed calls.
+    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let enx = one_w.div(ex, w);
     ex.sub(enx)
         .div(ex.add(enx), w)
         .round_to_i128_with(w, scale, mode)
