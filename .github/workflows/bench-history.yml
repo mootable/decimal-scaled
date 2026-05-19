@@ -32,8 +32,11 @@ jobs:
       matrix:
         include:
           - { tag: "v0.2.5", source: "crates-io", version: "0.2.5" }
-          - { tag: "v0.3.0", source: "crates-io", version: "0.3.0" }
-          - { tag: "v0.3.1", source: "crates-io", version: "0.3.1" }
+          # v0.3.0 + v0.3.1 dropped — shipped with an ungated D923 reference
+          # in core_type.rs::widen() that fails to compile without xx-wide,
+          # and xx-wide isn't a supported combo for the rest of the matrix.
+          # The trend across v0.2.5 -> v0.3.2 -> v0.3.3 -> HEAD covers the
+          # directional read this bench is for.
           - { tag: "v0.3.2", source: "crates-io", version: "0.3.2" }
           - { tag: "v0.3.3", source: "crates-io", version: "0.3.3" }
           - { tag: "HEAD",   source: "path",      version: "" }
