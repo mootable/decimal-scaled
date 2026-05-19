@@ -60,3 +60,21 @@ jobs:
             --test precision_wide_baseline \
             --test wide_strict_transcendentals \
             --test narrow_strict_transcendentals
+
+      - name: Run mpmath-oracle golden suite (D38..D1232)
+        # External oracle: each tier's strict surface is asserted
+        # against a 500-digit mpmath truth table at the tier's
+        # design-target SCALE. Catches kernel bugs that internal
+        # cross-witness paths mirror and miss.
+        run: |
+          cargo test --release --features wide,x-wide,xx-wide,macros \
+            --test ulp_strict_golden
+
+      - name: Run proptest ULP fuzz suite
+        # Property-based identity coverage at D38<19> with a D76<19>
+        # cross-tier witness. Deterministic seed; 100 cases per
+        # block. Fixed in scope so runtime stays inside the
+        # precision-gate budget.
+        run: |
+          cargo test --release --features wide,x-wide,xx-wide,macros \
+            --test ulp_proptest

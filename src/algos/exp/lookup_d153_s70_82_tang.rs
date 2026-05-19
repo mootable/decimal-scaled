@@ -90,23 +90,69 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 /// twice.
 #[must_use]
 pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
-    let one_w = core::one(w);
-    let pow10_w = one_w;
-    let l2 = core::ln2(w);
+    // Stage 0: size an extended working scale `w_ext` from `|k|`.
+    //
+    // The final `2^k` reassembly (`exp_s << k`) multiplies the working
+    // value by up to `2^k ≈ 10^(|k|·log10 2)`. Any error living in the
+    // low digits of the reduced `s = v − k·ln 2` is amplified by that
+    // same `2^k` on the way out. The dominant contributor is the
+    // `k·ln 2` product: `ln 2(w)` carries ~`w`-scale rounding, and the
+    // `×k` multiply scales that error by `|k|`, so the reassembled
+    // result loses ~`|k|·log10(2)` digits of accuracy at the storage
+    // LSB. A fixed `GUARD_NARROW` cannot cover an unbounded `|k|`.
+    //
+    // Mitigation: run the whole reduction at `w_ext = w + extra`, with
+    // `extra = ceil(|k|·log10 2) + margin`, then narrow the final
+    // `2^k`-reassembled value back to the caller's scale `w`. This
+    // matches the dynamic-margin range reduction the generic
+    // `exp_fixed` already uses; the only difference here is that the
+    // Tang lookup folds the post-reduction squarings into a table
+    // multiply, so the residual-error budget is dominated purely by
+    // the `k·ln 2` reduction.
+    //
+    // Reference for the error budget: Muller, *Elementary Functions:
+    // Algorithms and Implementation* (3rd ed., 2016), §11.1 — the
+    // `2^k · exp(s)` reassembly amplifies the reduction residual by
+    // `2^k`.
+    let k = {
+        let one_w = core::one(w);
+        core::round_to_nearest_int(core::div_cached(v_w, core::ln2(w), one_w), w)
+    };
+    let abs_k = if k < 0 { -k } else { k } as u128;
+    let extra: u32 = if abs_k == 0 {
+        0
+    } else {
+        // `|k|·log10(2) = |k| · 30103 / 100000`, rounded up, plus a
+        // small margin for the table multiply, the δ Taylor steps and
+        // the final narrowing half-LSB.
+        let digits = ((abs_k * 30103 + 99_999) / 100_000) as u32;
+        digits + 12
+    };
 
-    // Stage 1: v = k·ln 2 + s, |s| ≤ ln 2 / 2.
-    let k = core::round_to_nearest_int(core::div_cached(v_w, l2, pow10_w), w);
+    let w_ext = w + extra;
+    let v_ext = if extra == 0 {
+        v_w
+    } else {
+        v_w * core::pow10(extra)
+    };
+
+    let one_w = core::one(w_ext);
+    let pow10_w = one_w;
+    let l2 = core::ln2(w_ext);
+
+    // Stage 1: v = k·ln 2 + s, |s| ≤ ln 2 / 2. `k` is scale-invariant,
+    // so reuse the value computed at `w` above.
     let k_l2 = if k >= 0 {
         l2 * core::lit(k as u128)
     } else {
         -(l2 * core::lit((-k) as u128))
     };
-    let s = v_w - k_l2;
+    let s = v_ext - k_l2;
 
     // Stage 2: s = j_signed · (ln 2 / M) + δ, |δ| ≤ ln 2 / (2M).
     let j_signed = core::round_to_nearest_int(
         core::div_cached(s * core::lit(M as u128), l2, pow10_w),
-        w,
+        w_ext,
     );
     let cj_signed_w = if j_signed >= 0 {
         (l2 * core::lit(j_signed as u128)) / core::lit(M as u128)
@@ -137,11 +183,11 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
         }
     }
 
-    let exp_cj = table_entry(w, j_idx as usize);
+    let exp_cj = table_entry(w_ext, j_idx as usize);
     let exp_s = core::mul_cached(exp_cj, sum, pow10_w);
 
     let k_total = k + k_adj;
-    if k_total >= 0 {
+    let scaled_at_w_ext = if k_total >= 0 {
         let shift = k_total as u32;
         debug_assert!(
             core::bit_length(exp_s) + shift < core::W::BITS,
@@ -154,6 +200,21 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
             core::zero()
         } else {
             exp_s >> neg_k
+        }
+    };
+
+    // Narrow the extended-scale result back to the caller's scale `w`
+    // with round-to-nearest (ties up via the `+ half` bias). `extra`
+    // is bounded so `10^extra` stays well inside the working width.
+    if extra == 0 {
+        scaled_at_w_ext
+    } else {
+        let p = core::pow10(extra);
+        let half = p / core::lit(2);
+        if scaled_at_w_ext >= core::zero() {
+            (scaled_at_w_ext + half) / p
+        } else {
+            -((-scaled_at_w_ext + half) / p)
         }
     }
 }
