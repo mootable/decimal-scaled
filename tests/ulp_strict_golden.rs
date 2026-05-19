@@ -122,6 +122,19 @@ mod d38 {
 // the underlying signed wide-int type; the rest is identical
 // across tiers.
 
+/// Per-band kernel-precision-bug exclusions. Inputs listed here are
+/// the *raw input* (column 1 of the golden file) and the function
+/// they target. The check loop skips them — the 0.5 ULP contract is
+/// preserved for every *other* input; these are residual kernel holes
+/// surfaced by the hard-input corpus and pending a kernel fix.
+///
+/// **Adding to this list:** every new entry must carry a
+/// `// kernel-precision-bug: <description>` comment pointing at the
+/// failure mode (e.g. "exp range-reduction at |k|·ln 2 large").
+/// **Removing from this list:** the corresponding kernel fix must
+/// land first; the gate becoming green is the witness.
+type KnownFailing = &'static [(&'static str, &'static str)];
+
 macro_rules! decl_wide_band {
     (
         mod $modname:ident,
@@ -137,13 +150,16 @@ macro_rules! decl_wide_band {
             atan = $atan:literal,
             sqrt = $sqrt:literal,
             cbrt = $cbrt:literal,
-        }
+        },
+        known_failing $kf:expr,
     ) => {
         #[$($cfg)*]
         mod $modname {
-            use super::{MAX_LSB_DELTA, parse_line};
+            use super::{MAX_LSB_DELTA, KnownFailing, parse_line};
             type D = $D;
             type Int = $Int;
+
+            const KNOWN_FAILING: KnownFailing = $kf;
 
             fn parse_int(s: &str) -> Int {
                 <Int>::from_str_radix(s, 10).expect("parse wide int")
@@ -152,6 +168,12 @@ macro_rules! decl_wide_band {
             fn abs_int(x: Int) -> Int {
                 let zero = <Int>::from_i128(0);
                 if x < zero { zero - x } else { x }
+            }
+
+            fn is_known_failing(func: &str, raw_str: &str) -> bool {
+                KNOWN_FAILING
+                    .iter()
+                    .any(|&(f, r)| f == func && r == raw_str)
             }
 
             fn call(func: &str, raw: Int) -> Int {
@@ -172,22 +194,34 @@ macro_rules! decl_wide_band {
             fn check(func: &str, table: &str) {
                 let cap = <Int>::from_i128(MAX_LSB_DELTA);
                 let mut failures = 0usize;
+                let mut skipped = 0usize;
                 for line in table.lines() {
                     let Some((lhs, rhs)) = parse_line(line) else { continue };
+                    if is_known_failing(func, lhs) {
+                        skipped += 1;
+                        continue;
+                    }
                     let raw_in = parse_int(lhs);
                     let expected = parse_int(rhs);
                     let actual = call(func, raw_in);
                     let delta = abs_int(actual - expected);
                     if delta > cap {
-                        if failures < 16 {
-                            eprintln!(
-                                "FAIL: {func} {} input={raw_in} expected={expected} \
-                                 actual={actual} delta={delta} LSB",
-                                stringify!($modname),
-                            );
-                        }
+                        // Print every failure: audit runs need every
+                        // still-failing input surfaced so it can be
+                        // triaged into KNOWN_FAILING.
+                        eprintln!(
+                            "FAIL: {func} {} input={raw_in} expected={expected} \
+                             actual={actual} delta={delta} LSB",
+                            stringify!($modname),
+                        );
                         failures += 1;
                     }
+                }
+                if skipped > 0 {
+                    eprintln!(
+                        "{}: {func}: {skipped} input(s) skipped via KNOWN_FAILING",
+                        stringify!($modname),
+                    );
                 }
                 assert!(
                     failures == 0,
@@ -224,7 +258,8 @@ decl_wide_band! {
         atan = "golden/atan_d76_s35.txt",
         sqrt = "golden/sqrt_d76_s35.txt",
         cbrt = "golden/cbrt_d76_s35.txt",
-    }
+    },
+    known_failing &[],
 }
 
 // ─── D153<76> ──────────────────────────────────────────────────────────
@@ -243,7 +278,8 @@ decl_wide_band! {
         atan = "golden/atan_d153_s76.txt",
         sqrt = "golden/sqrt_d153_s76.txt",
         cbrt = "golden/cbrt_d153_s76.txt",
-    }
+    },
+    known_failing &[],
 }
 
 // ─── D307<150> ─────────────────────────────────────────────────────────
@@ -262,7 +298,8 @@ decl_wide_band! {
         atan = "golden/atan_d307_s150.txt",
         sqrt = "golden/sqrt_d307_s150.txt",
         cbrt = "golden/cbrt_d307_s150.txt",
-    }
+    },
+    known_failing &[],
 }
 
 // ─── D616<308> ─────────────────────────────────────────────────────────
@@ -281,7 +318,8 @@ decl_wide_band! {
         atan = "golden/atan_d616_s308.txt",
         sqrt = "golden/sqrt_d616_s308.txt",
         cbrt = "golden/cbrt_d616_s308.txt",
-    }
+    },
+    known_failing &[],
 }
 
 // ─── D1232<615> ────────────────────────────────────────────────────────
@@ -300,6 +338,7 @@ decl_wide_band! {
         atan = "golden/atan_d1232_s615.txt",
         sqrt = "golden/sqrt_d1232_s615.txt",
         cbrt = "golden/cbrt_d1232_s615.txt",
-    }
+    },
+    known_failing &[],
 }
 

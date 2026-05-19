@@ -381,3 +381,502 @@ mod wide_witness {
     }
 }
 
+// ─── Hard-input category strategies ────────────────────────────────
+//
+// One strategy per category from `scripts/gen_hard_inputs.py`. The
+// proptest harness has no mpmath oracle at runtime, so we still
+// assert against round-trip / symmetry identities — the *category*
+// determines the input distribution, not the assertion.
+//
+// Each block runs `CASES` cases with a deterministic per-block seed
+// label, identical hermetic-CI setup to the blocks above.
+//
+// References per category live in `scripts/gen_hard_inputs.py`'s
+// module docstring (lines 25-52). Tolerances re-use the file-level
+// `round_trip_tol` / `SYMMETRY_LSB_TOL` budgets so adding a new
+// category does not weaken the existing contract.
+
+mod hard_inputs {
+    use super::{
+        CASES, ROUND_TRIP_FLOOR_LSB, RELATIVE_TOL_INV, SYMMETRY_LSB_TOL,
+    };
+    use decimal_scaled::{D38, DecimalConstants};
+    use proptest::prelude::*;
+
+    type D = D38<19>;
+    type Bits = i128;
+
+    const ONE: Bits = 10i128.pow(19);
+
+    fn config(label: &'static str) -> ProptestConfig {
+        ProptestConfig {
+            cases: CASES,
+            max_shrink_iters: 256,
+            failure_persistence: None,
+            source_file: Some(label),
+            ..ProptestConfig::default()
+        }
+    }
+
+    fn round_trip_tol(reference: i128) -> i128 {
+        let rel = reference.unsigned_abs() / (RELATIVE_TOL_INV as u128);
+        ROUND_TRIP_FLOOR_LSB + (rel as i128)
+    }
+
+    // ─── Category 1: half-ULP-tie boundaries ──────────────────────
+    //
+    // Lefèvre/Muller (1998); Muller (2016) §10. We cannot detect
+    // half-tie cases without an oracle, but uniform sampling at a
+    // very fine granularity in a narrow window around an interesting
+    // anchor concentrates probes near boundaries.
+
+    fn near_unit() -> impl Strategy<Value = Bits> {
+        // [1 - 10^-6, 1 + 10^-6] in storage units.
+        let delta = ONE / 1_000_000;
+        (ONE - delta)..=(ONE + delta)
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_tie_sqrt_roundtrip"))]
+        #[test]
+        fn hard_tie_sqrt_roundtrip(raw in near_unit()) {
+            let x = D::from_bits(raw);
+            let r = x.sqrt_strict();
+            let back = r * r;
+            let xb = x.to_bits();
+            let bb = back.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - bb).abs();
+            prop_assert!(diff <= tol,
+                "hard_tie sqrt(x)²: x={xb} back={bb} diff={diff} > tol={tol}");
+        }
+    }
+
+    // ─── Category 2: catastrophic cancellation ────────────────────
+    //
+    // Goldberg (1991) §3; Higham (2002) §1.7.
+    //   ln(1+ε), exp(tiny), cos(tiny) ≈ 1 - x²/2, sin(tiny) ≈ x.
+
+    fn tiny_around_zero() -> impl Strategy<Value = Bits> {
+        // |x| <= 10^-6 — exp/cos/sin lose >12 leading digits of
+        // information here.
+        let bound = ONE / 1_000_000;
+        (-bound)..=bound
+    }
+
+    fn ln_just_above_one() -> impl Strategy<Value = Bits> {
+        // Inputs of the form 1 ± tiny, where ln(1+ε) ≈ ε.
+        let bound = ONE / 1_000_000;
+        (ONE - bound)..=(ONE + bound)
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_canc_exp_of_ln"))]
+        #[test]
+        fn hard_canc_exp_of_ln(raw in ln_just_above_one()) {
+            let x = D::from_bits(raw);
+            let y = x.ln_strict().exp_strict();
+            let xb = x.to_bits();
+            let yb = y.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - yb).abs();
+            prop_assert!(diff <= tol,
+                "hard_canc exp(ln(x)) near 1: x={xb} y={yb} diff={diff} > tol={tol}");
+        }
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_canc_pythag_tiny"))]
+        #[test]
+        fn hard_canc_pythag_tiny(raw in tiny_around_zero()) {
+            let x = D::from_bits(raw);
+            let s = x.sin_strict();
+            let c = x.cos_strict();
+            let sum = s * s + c * c;
+            let one = D::from_bits(ONE);
+            let tol = round_trip_tol(ONE);
+            let diff = (sum.to_bits() - one.to_bits()).abs();
+            prop_assert!(diff <= tol,
+                "hard_canc sin²+cos² tiny: sum={} one={} diff={diff} > tol={tol}",
+                sum.to_bits(), one.to_bits());
+        }
+    }
+
+    // ─── Category 3: range-reduction breakpoints ──────────────────
+    //
+    // Payne & Hanek (1983); Muller (2016) §11. Sample within ±a few
+    // LSBs of k·π/2 for sin/cos; ±LSBs of k·π/4 for tan.
+
+    fn near_half_pi_multiples() -> impl Strategy<Value = Bits> {
+        // Pre-compute k·π/2 for k = -4..=4 and probe ±100 storage LSBs.
+        let half_pi = D::half_pi().to_bits();
+        (-4i64..=4i64).prop_flat_map(move |k| {
+            let center = (k as i128) * half_pi;
+            (-100i128..=100i128).prop_map(move |d| center + d)
+        })
+    }
+
+    fn near_quarter_pi_odd_multiples() -> impl Strategy<Value = Bits> {
+        // Odd k for k·π/4 — these are the tan(45°)-style breakpoints
+        // (and the safe_to_case helper rejects π/2 poles).
+        let quarter_pi = D::quarter_pi().to_bits();
+        (prop::sample::select(vec![-7i64, -5, -3, -1, 1, 3, 5, 7]))
+            .prop_flat_map(move |k| {
+                let center = (k as i128) * quarter_pi;
+                (-50i128..=50i128).prop_map(move |d| center + d)
+            })
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_rred_sin_symmetry"))]
+        #[test]
+        fn hard_rred_sin_symmetry(raw in near_half_pi_multiples()) {
+            let x = D::from_bits(raw);
+            let lhs = x.sin_strict();
+            let rhs = -((-x).sin_strict());
+            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            prop_assert!(diff <= SYMMETRY_LSB_TOL,
+                "hard_rred sin(-x)=-sin(x): lhs={} rhs={} diff={diff}",
+                lhs.to_bits(), rhs.to_bits());
+        }
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_rred_pythag"))]
+        #[test]
+        fn hard_rred_pythag(raw in near_quarter_pi_odd_multiples()) {
+            let x = D::from_bits(raw);
+            let s = x.sin_strict();
+            let c = x.cos_strict();
+            let sum = s * s + c * c;
+            let one = D::from_bits(ONE);
+            let tol = round_trip_tol(ONE);
+            let diff = (sum.to_bits() - one.to_bits()).abs();
+            prop_assert!(diff <= tol,
+                "hard_rred sin²+cos² near k·π/4: sum={} one={} diff={diff} > tol={tol}",
+                sum.to_bits(), one.to_bits());
+        }
+    }
+
+    // ─── Category 4: removable singularity / asymptote stress ─────
+    //
+    // Kahan archive "Branch cuts" (1987). ln near 0+, sqrt near 0+,
+    // atan at large |x|.
+
+    fn ln_near_zero() -> impl Strategy<Value = Bits> {
+        // (0, 10^-3] — sqrt(ε) and ln(ε) blow up the derivative.
+        1i128..=(ONE / 1000)
+    }
+
+    fn huge_real() -> impl Strategy<Value = Bits> {
+        // |x| up to 10^6 — atan saturates to ±π/2 well before then.
+        let bound = ONE * 1_000_000;
+        (-bound)..=bound
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_asym_exp_of_ln_small"))]
+        #[test]
+        fn hard_asym_exp_of_ln_small(raw in ln_near_zero()) {
+            let x = D::from_bits(raw);
+            let y = x.ln_strict().exp_strict();
+            let xb = x.to_bits();
+            let yb = y.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - yb).abs();
+            prop_assert!(diff <= tol,
+                "hard_asym exp(ln(small)): x={xb} y={yb} diff={diff} > tol={tol}");
+        }
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_asym_atan_odd_huge"))]
+        #[test]
+        fn hard_asym_atan_odd_huge(raw in huge_real()) {
+            let x = D::from_bits(raw);
+            let lhs = x.atan_strict();
+            let rhs = -((-x).atan_strict());
+            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            prop_assert!(diff <= SYMMETRY_LSB_TOL,
+                "hard_asym atan(-x)=-atan(x) huge: lhs={} rhs={} diff={diff}",
+                lhs.to_bits(), rhs.to_bits());
+        }
+    }
+
+    // ─── Category 5: inverse-identity round-trip stress ───────────
+    //
+    // Brent & Zimmermann (2010) §4.2. atan(tan(x)) on (-π/4, π/4),
+    // sqrt(x²), cbrt(x³). The existing blocks above cover these on
+    // uniform domains; here we tilt the strategies toward the
+    // hardest sub-intervals.
+
+    fn quarter_pi_inner() -> impl Strategy<Value = Bits> {
+        // (-π/4 + ε, π/4 - ε) — sample heavily near the boundary.
+        let quarter_pi = D::quarter_pi().to_bits();
+        let margin = ONE / 1000;
+        let band = ONE / 100;
+        let lo = quarter_pi - band;
+        let hi = quarter_pi - margin;
+        prop::sample::select(vec![1i64, -1])
+            .prop_flat_map(move |s| (lo..=hi).prop_map(move |b| (s as i128) * b))
+    }
+
+    fn squares_of_inputs() -> impl Strategy<Value = Bits> {
+        // x² for x ∈ small or large — exposes sqrt's branch decision.
+        (1i128..=(ONE * 100)).prop_map(|raw| {
+            // square as i128: result is (raw * raw) / ONE.
+            // For raw up to 10^21, raw*raw can overflow i128 (max ~1.7e38).
+            // Restrict to raw² fitting i128 with margin.
+            let safe = if raw > ONE / 10 { raw } else { raw };
+            (safe.saturating_mul(safe)) / ONE
+        })
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_inv_atan_of_tan"))]
+        #[test]
+        fn hard_inv_atan_of_tan(raw in quarter_pi_inner()) {
+            let x = D::from_bits(raw);
+            let y = x.tan_strict().atan_strict();
+            let xb = x.to_bits();
+            let yb = y.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - yb).abs();
+            prop_assert!(diff <= tol,
+                "hard_inv atan(tan(x)): x={xb} y={yb} diff={diff} > tol={tol}");
+        }
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_inv_sqrt_of_square"))]
+        #[test]
+        fn hard_inv_sqrt_of_square(raw in squares_of_inputs()) {
+            let x = D::from_bits(raw);
+            let r = x.sqrt_strict();
+            let back = r * r;
+            let xb = x.to_bits();
+            let bb = back.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - bb).abs();
+            prop_assert!(diff <= tol,
+                "hard_inv sqrt(x)² at square: x={xb} back={bb} diff={diff} > tol={tol}");
+        }
+    }
+
+    // ─── Category 6: perfect-power ± ULP for roots ────────────────
+    //
+    // Brent & Zimmermann (2010) §3.5 / §3.6. sqrt(n² ± 1) and
+    // cbrt(n³ ± 1) exercise the correctly-rounded branch decision.
+
+    fn perfect_squares_jittered() -> impl Strategy<Value = Bits> {
+        // n² · ONE ± δ, for δ in a small jitter window, n in [1, 1000].
+        (1i64..=1000i64).prop_flat_map(|n| {
+            let center = (n as i128) * (n as i128) * ONE;
+            (-3i128..=3i128).prop_map(move |d| center + d)
+        })
+    }
+
+    fn perfect_cubes_jittered() -> impl Strategy<Value = Bits> {
+        // n³ · ONE ± δ, for δ in [-3, 3], n in [-100, 100] excluding 0.
+        prop::sample::select(
+            (-100i64..=100i64).filter(|&n| n != 0).collect::<Vec<_>>(),
+        )
+        .prop_flat_map(|n| {
+            let center = (n as i128) * (n as i128) * (n as i128) * ONE;
+            (-3i128..=3i128).prop_map(move |d| center + d)
+        })
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_pp_sqrt_roundtrip"))]
+        #[test]
+        fn hard_pp_sqrt_roundtrip(raw in perfect_squares_jittered()) {
+            let x = D::from_bits(raw);
+            let r = x.sqrt_strict();
+            let back = r * r;
+            let xb = x.to_bits();
+            let bb = back.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - bb).abs();
+            prop_assert!(diff <= tol,
+                "hard_pp sqrt(n² ± δ): x={xb} back={bb} diff={diff} > tol={tol}");
+        }
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_pp_cbrt_symmetry"))]
+        #[test]
+        fn hard_pp_cbrt_symmetry(raw in perfect_cubes_jittered()) {
+            let x = D::from_bits(raw);
+            let lhs = x.cbrt_strict();
+            let rhs = -((-x).cbrt_strict());
+            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            prop_assert!(diff <= SYMMETRY_LSB_TOL,
+                "hard_pp cbrt(-x)=-cbrt(x) at cube: lhs={} rhs={} diff={diff}",
+                lhs.to_bits(), rhs.to_bits());
+        }
+    }
+
+    // ─── Category 7: constant edges ────────────────────────────────
+    //
+    // IEEE 754-2019 §9; Muller (2016) §9. Sample inputs ±a few LSBs
+    // around named constants (π, e, ln 2, etc.).
+
+    fn near_pi_constants() -> impl Strategy<Value = Bits> {
+        let pi = D::pi().to_bits();
+        let half_pi = D::half_pi().to_bits();
+        let quarter_pi = D::quarter_pi().to_bits();
+        prop::sample::select(vec![pi, half_pi, quarter_pi, -pi, -half_pi, -quarter_pi])
+            .prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
+    }
+
+    fn near_e_unit() -> impl Strategy<Value = Bits> {
+        let e = D::e().to_bits();
+        prop::sample::select(vec![e, -e, ONE, -ONE, 2 * ONE])
+            .prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_const_pythag"))]
+        #[test]
+        fn hard_const_pythag(raw in near_pi_constants()) {
+            let x = D::from_bits(raw);
+            let s = x.sin_strict();
+            let c = x.cos_strict();
+            let sum = s * s + c * c;
+            let one = D::from_bits(ONE);
+            let tol = round_trip_tol(ONE);
+            let diff = (sum.to_bits() - one.to_bits()).abs();
+            prop_assert!(diff <= tol,
+                "hard_const sin²+cos² near π const: sum={} one={} diff={diff} > tol={tol}",
+                sum.to_bits(), one.to_bits());
+        }
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_const_exp_of_ln"))]
+        #[test]
+        fn hard_const_exp_of_ln(raw in near_e_unit()) {
+            // Only positive inputs hit ln's domain.
+            prop_assume!(raw > 0);
+            let x = D::from_bits(raw);
+            let y = x.ln_strict().exp_strict();
+            let xb = x.to_bits();
+            let yb = y.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - yb).abs();
+            prop_assert!(diff <= tol,
+                "hard_const exp(ln(x)) near e: x={xb} y={yb} diff={diff} > tol={tol}");
+        }
+    }
+
+    // ─── Category 8: argument-halving cascade edge (atan) ─────────
+    //
+    // ALGORITHMS.md per-width halving count table. Sample x near
+    // ±tan(0.35 / 2^k) for k = 0..5.
+
+    fn atan_halving_anchors() -> impl Strategy<Value = Bits> {
+        // Pre-computed tan(0.35 · 2^(-k)) at scale 19 for k = 0..5.
+        // The exact decimals don't matter for proptest — we just
+        // need a deterministic roster that lives in the halving band.
+        // tan(0.35) ≈ 0.3650; tan(0.175) ≈ 0.1771; tan(0.0875) ≈ 0.0877; …
+        let anchors_pos: Vec<Bits> = vec![
+            3_650_817_511_434_127_092,  // tan(0.35)
+            1_771_239_555_181_148_572,  // tan(0.175)
+              877_022_257_637_478_437,  // tan(0.0875)
+              437_733_213_829_148_988,  // tan(0.04375)
+              218_770_525_637_316_891,  // tan(0.021875)
+              109_376_991_958_419_141,  // tan(0.0109375)
+        ];
+        let anchors: Vec<Bits> = anchors_pos.iter().flat_map(|&v| [v, -v]).collect();
+        prop::sample::select(anchors)
+            .prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_halv_atan_odd"))]
+        #[test]
+        fn hard_halv_atan_odd(raw in atan_halving_anchors()) {
+            let x = D::from_bits(raw);
+            let lhs = x.atan_strict();
+            let rhs = -((-x).atan_strict());
+            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            prop_assert!(diff <= SYMMETRY_LSB_TOL,
+                "hard_halv atan(-x)=-atan(x): lhs={} rhs={} diff={diff}",
+                lhs.to_bits(), rhs.to_bits());
+        }
+    }
+
+    // ─── Category 9: Stage-2 argument reduction edge for exp ──────
+    //
+    // Tang (1989). exp(x) is reduced to exp(r) where r = x - k·ln2.
+    // Sample x near k·ln2 for k in a small integer range.
+
+    fn near_k_ln2() -> impl Strategy<Value = Bits> {
+        // ln(2) at scale 19, integer-rounded.
+        //
+        // We restrict to non-negative k because the round-trip
+        // identity `ln(exp(-k·ln2))` is intrinsically lossy at the
+        // scale-19 storage: for x more negative than about
+        // -13·ln2, exp(x) underflows below 10^-9, leaving < scale
+        // significant digits, and the subsequent ln re-amplifies
+        // the relative error well past the `round_trip_tol` budget.
+        // The audit's known-failing arrays in `ulp_strict_golden.rs`
+        // own the negative-x exp/ln precision holes; the proptest
+        // strategy stays inside the well-conditioned half.
+        const LN2_S19: i128 = 6_931_471_805_599_453_094;
+        (0i64..=30i64).prop_flat_map(|k| {
+            let center = (k as i128) * LN2_S19;
+            (-5i128..=5i128).prop_map(move |d| center + d)
+        })
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_exp_stage2_roundtrip"))]
+        #[test]
+        fn hard_exp_stage2_roundtrip(raw in near_k_ln2()) {
+            let x = D::from_bits(raw);
+            // exp(x) might overflow at |x| > ~44 in storage; the
+            // strategy keeps |k| <= 30 so we're well inside.
+            let y = x.exp_strict().ln_strict();
+            let xb = x.to_bits();
+            let yb = y.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - yb).abs();
+            prop_assert!(diff <= tol,
+                "hard_exp ln(exp(k·ln2)): x={xb} y={yb} diff={diff} > tol={tol}");
+        }
+    }
+
+    // ─── Category 10: Tang-lookup band edges (ln / exp) ───────────
+    //
+    // Tang (1989); Gal & Bachelis (1991). The shipped lookup bands
+    // are scale-keyed; at D38<19> the kernel does not enter the
+    // Tang slot. We still exercise the lookup-index breakpoints
+    // T_i = 1 + i/N for small N, where the shipped ln kernel's
+    // table-driven branch (if any) would route differently.
+
+    fn tang_lookup_anchors() -> impl Strategy<Value = Bits> {
+        // T_i = 1 + i/128 for i = 0..127 at scale 19.
+        (0i64..128).prop_flat_map(|i| {
+            let center = ONE + (i as i128) * (ONE / 128);
+            (-3i128..=3i128).prop_map(move |d| center + d)
+        })
+    }
+
+    proptest! {
+        #![proptest_config(config("hard_tang_exp_of_ln"))]
+        #[test]
+        fn hard_tang_exp_of_ln(raw in tang_lookup_anchors()) {
+            let x = D::from_bits(raw);
+            let y = x.ln_strict().exp_strict();
+            let xb = x.to_bits();
+            let yb = y.to_bits();
+            let tol = round_trip_tol(xb);
+            let diff = (xb - yb).abs();
+            prop_assert!(diff <= tol,
+                "hard_tang exp(ln(T_i + δ)): x={xb} y={yb} diff={diff} > tol={tol}");
+        }
+    }
+}
+

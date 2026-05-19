@@ -199,3 +199,104 @@ commit the new `.txt` files under `tests/golden/`, and add a
 matching `decl_wide_band!` block (or per-function `#[test]`) to
 `tests/ulp_strict_golden.rs`. Keep the committed footprint under
 5 MB.
+
+## Hard-input categories
+
+`scripts/gen_hard_inputs.py` is a sibling generator that appends ten
+literature-derived hard-input categories to each existing golden
+file under a `## category:` header line. The harness treats
+`#` lines as comments so existing parsers see the appended rows as
+ordinary data.
+
+The categories, each cited from the precision literature
+(license-compatible — papers, not test vectors):
+
+1. **Half-ULP-tie boundaries** — inputs whose true result lands
+   within 0.45 LSB of a half-tie at the storage scale.
+   *Reference:* Lefèvre, Muller & Toma, "Toward correctly rounded
+   transcendentals" (1998); Muller, *Elementary Functions —
+   Algorithms and Implementation* (3rd ed., 2016), §10 "Table
+   maker's dilemma".
+2. **Catastrophic cancellation** — `ln(1 + ε)`, `exp(tiny)`,
+   `cos(tiny) ≈ 1 - x²/2`, `sin(tiny) ≈ x`, `sqrt(1 + ε)`,
+   `cbrt(1 + ε)`.
+   *Reference:* Goldberg, "What every computer scientist should
+   know about floating-point arithmetic" (1991) §3; Higham,
+   *Accuracy and Stability of Numerical Algorithms* (2nd ed.,
+   2002), §1.7.
+3. **Range-reduction breakpoints** — `sin`/`cos` near k·π/2,
+   `tan` near k·π/4, `exp` near k·ln 2, `atan` near 1.
+   *Reference:* Payne & Hanek, "Radian reduction for trigonometric
+   functions" (1983); Muller (2016), §11.
+4. **Removable singularity / asymptote** — `tan` near π/2 + δ,
+   `ln` near 0+, `atan(huge)`, `sqrt` near 0+.
+   *Reference:* Kahan archive, "Branch cuts for complex elementary
+   functions" (1987).
+5. **Inverse-identity round-trip stress** — `sin` near π/2,
+   `atan(tan(k·π/8))`, `exp(ln(small))`, `sqrt(x²)`, `cbrt(x³)`.
+   *Reference:* Brent & Zimmermann, *Modern Computer Arithmetic*
+   (2010), §4.2 "Inverse functions".
+6. **Perfect-power ± ULP for roots** — `sqrt(n² ± 1)`,
+   `cbrt(n³ ± 1)` for small integer `n`.
+   *Reference:* Brent & Zimmermann (2010), §3.5 "Square root", §3.6
+   "k-th root".
+7. **Constant edges** — inputs at named constants (π, π/2, π/4, e,
+   ln 2, …) ± a few LSBs.
+   *Reference:* IEEE 754-2019 standard, §9 "Recommended correctly
+   rounded functions"; Muller (2016), §9.
+8. **Argument-halving cascade** — `atan` near `tan(0.35 · 2⁻ⁿ)`
+   for the per-width halving count `n`.
+   *Reference:* Muller (2016), §6 on argument reduction; the
+   per-width cascade table in `ALGORITHMS.md`.
+9. **Stage-2 argument reduction edge for `exp`** — inputs near the
+   chosen breakpoint `v / 2ⁿ` for `n ≈ √(precision_bits)`.
+   *Reference:* Tang, "Table-driven implementation of the
+   exponential function in IEEE floating-point arithmetic" (1989).
+10. **Tang-lookup band edges** — `ln` and `exp` inputs at the
+    table-index breakpoints `T_i = 1 + i / 2ᵏ` for `k ∈ {7, 8, 9}`
+    and at the secondary-index breakpoints `j/N · ln 2` for
+    `j = 0..N-1`, `N ∈ {32, 64, 128}`.
+    *References:* Tang (1989); Gal & Bachelis, "An accurate
+    elementary mathematical library for the IEEE floating-point
+    standard" (1991).
+
+The proptest harness `tests/ulp_proptest.rs` mirrors these
+categories with per-category input strategies (100 cases each,
+deterministic seed). Identity-based assertions
+(round-trip / symmetry) substitute for the runtime oracle.
+
+### Oracle working precision
+
+The mpmath oracle's working precision must be wider than the
+tier's storage LSB. The hard-input generator uses
+`mp.dps = max(700, 2 * SCALE + 64)` per tier, where the factor
+of two covers intermediate squarings inside the oracles and the
++64 is a margin against pathological inputs in any one category.
+
+The 700-dps floor keeps narrow tiers (D38, D76, D153) fast while
+still wider than the D1232<615> storage LSB. If you add a wider
+tier than D1232<615>, the `2 * SCALE + 64` arm keeps the headroom
+automatically — you only need to extend the `TIERS` table and
+re-run the generator.
+
+If you ever see a "spurious failure" pattern where the kernel's
+output residual is small but the oracle disagrees by many digits,
+double the working precision (e.g. floor 1400, `4 * SCALE + 64`)
+and regenerate. The kernel is the source of truth only against an
+oracle wider than its storage.
+
+### Regenerating hard inputs
+
+```sh
+pip install mpmath
+python scripts/gen_hard_inputs.py
+```
+
+The script is idempotent against existing inputs — it reads each
+golden file's existing `<input_raw>` set and skips duplicates, so
+re-running on top of an existing file is a no-op (after stripping
+the previously-appended `## category:` sections).
+
+To re-append from scratch, strip from the
+`# ─── hard-input sections (see scripts/gen_hard_inputs.py) ───`
+marker to end-of-file in every `.txt` first, then re-run.

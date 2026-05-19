@@ -78,18 +78,38 @@ macro_rules! decl_trig_kernel {
 
         /// Wide-tier `tan_strict` kernel. Panics at odd multiples of
         /// π/2 where the cosine is zero.
+        ///
+        /// Near a pole the range-reduced residue folds toward ±π/2 and
+        /// `cos(r) → 0`, so dividing `sin(r)/cos(r)` at the fixed
+        /// working scale amplifies the per-op rounding error by
+        /// `1/cos(r) ≈ |tan|`. The base `GUARD` covers a few magnitude
+        /// digits, but extreme near-pole inputs need the working scale
+        /// lifted by ~log10(|tan|) extra digits (sized from a base-width
+        /// probe quotient) to hold 0.5 ULP at storage. See
+        /// [`crate::algos::trig::near_pole_tan`].
         #[inline]
         #[must_use]
         pub(crate) fn $tan_name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
-            let w = scale + core::GUARD;
-            let (sin_w, cos_w) = core::sin_cos_fixed(core::to_work(raw), w);
-            if cos_w == core::zero() {
+            let w0 = scale + core::GUARD;
+            let (sin0, cos0) = core::sin_cos_fixed(core::to_work(raw), w0);
+            if cos0 == core::zero() {
                 panic!(concat!(
                     $tier_label,
                     "::tan: cosine is zero (argument is an odd multiple of pi/2)"
                 ));
             }
+            let probe = core::div(sin0, cos0, w0);
+            let extra = crate::algos::trig::near_pole_tan::tan_extra_digits(
+                core::bit_length(probe),
+                w0,
+            )
+            .saturating_sub(core::GUARD);
+            if extra == 0 {
+                return core::round_to_storage_with(probe, w0, scale, mode);
+            }
+            let w = w0 + extra;
+            let (sin_w, cos_w) = core::sin_cos_fixed(core::to_work_w(raw, core::GUARD + extra), w);
             let r = core::div(sin_w, cos_w, w);
             core::round_to_storage_with(r, w, scale, mode)
         }
