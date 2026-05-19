@@ -81,6 +81,80 @@
 //!
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
+/// Emits the per-tier `pow10_cached(w)` helper. Two flavours:
+///
+/// - `with_const_table` — emits a `static POW10_TABLE: [W; max_scale+GUARD+1]`
+///   initialised at compile time (one `wrapping_mul` per entry, chained
+///   from the previous) and indexes it directly for in-range `w`. Out
+///   of range falls back to the TLS `Vec<(u32, W)>` cache.
+/// - `no_const_table` — keeps the TLS cache path only. Used on tiers
+///   where the const-eval step budget can't build the table in stable
+///   rust (D924, D1232).
+#[doc(hidden)]
+#[macro_export]
+macro_rules! decl_pow10_cached {
+    (with_const_table, $max_scale:literal) => {
+        /// Upper bound on the strict-path working width
+        /// `w = SCALE + GUARD`. Sizes the const `POW10_TABLE`.
+        pub(crate) const POW10_TABLE_MAX_W: u32 = ($max_scale as u32) + GUARD;
+        /// `10^w` lookup table, built at compile time by chaining
+        /// `wrapping_mul(10)` from `1`. Covers every
+        /// `w ∈ 0..=POW10_TABLE_MAX_W` — i.e. the entire strict
+        /// path. The `_approx` family with `working_digits > GUARD`
+        /// can exceed this range; those fall through to the runtime
+        /// cache below.
+        ///
+        /// Memory cost: `(POW10_TABLE_MAX_W + 1) · sizeof(W)`. For
+        /// D76 that's ~13 KB (Int1024); for D307 ~170 KB (Int4096).
+        /// The table lives in `.rodata` once per tier in builds that
+        /// enable the tier. In a hot loop a single `w` value is reused,
+        /// so only one cache line is touched repeatedly — the table
+        /// size matters for binary footprint, not per-call cache
+        /// locality.
+        pub(crate) static POW10_TABLE: [W; (POW10_TABLE_MAX_W + 1) as usize] = {
+            let mut table = [<W>::from_u128(0); (POW10_TABLE_MAX_W + 1) as usize];
+            let ten = <W>::from_u128(10);
+            table[0] = <W>::from_u128(1);
+            let mut i: usize = 1;
+            let len = (POW10_TABLE_MAX_W + 1) as usize;
+            while i < len {
+                table[i] = table[i - 1].wrapping_mul(ten);
+                i += 1;
+            }
+            table
+        };
+        /// Memoised companion to [`pow10`] keyed on `w`.
+        ///
+        /// For `w` within the strict-path range
+        /// (`0..=POW10_TABLE_MAX_W`) returns the precomputed table
+        /// entry — a single static load, no TLS / RefCell overhead.
+        /// For larger `w` (only reachable via `_approx` with
+        /// `working_digits > GUARD`) falls back to the legacy
+        /// per-thread `Vec<(u32, W)>` cache so we don't blow the
+        /// binary footprint on the rare path.
+        #[inline]
+        pub(crate) fn pow10_cached(w: u32) -> W {
+            if w <= POW10_TABLE_MAX_W {
+                return POW10_TABLE[w as usize];
+            }
+            cached(&POW10_CACHE_GET, w, pow10)
+        }
+    };
+    (no_const_table, $max_scale:literal) => {
+        /// Memoised companion to [`pow10`] keyed on `w`. This tier's
+        /// max scale puts the const-table build past the stable-rust
+        /// const-eval step budget, so we keep the legacy TLS
+        /// `Vec<(u32, W)>` cache. Typical occupancy is 1-3 entries
+        /// per thread (one per user-chosen SCALE), so the linear scan
+        /// is cheaper than the table-build would be.
+        #[inline]
+        pub(crate) fn pow10_cached(w: u32) -> W {
+            cached(&POW10_CACHE_GET, w, pow10)
+        }
+    };
+}
+pub(crate) use decl_pow10_cached;
+
 /// Emits the strict transcendental surface for a wide decimal tier.
 ///
 /// - `$Type` / `$Storage` — the decimal type and its wide storage.
@@ -88,8 +162,25 @@
 /// products: at least `2·(SCALE_max + 30)` decimal digits.
 /// - `$core` — the name of the private module the per-tier guard-digit
 /// core is emitted into.
+/// - `$max_scale` — the type's maximum supported `SCALE`. Bounds the
+/// strict-path `w` range `0..=$max_scale + GUARD`, used to size the
+/// const `POW10_TABLE` lookup table when the tier opts into it.
+///
+/// Two arms:
+/// - `$Type, $Storage, $Work, $core, $max_scale` — emits the const
+///   `POW10_TABLE`. Used for D38..=D616 where the const-eval step
+///   budget can build the table at compile time.
+/// - `$Type, $Storage, $Work, $core, $max_scale, no_const_table`
+///   — keeps the legacy TLS `Vec<(u32, W)>` cache only. Used for
+///   D924 / D1232 where the table-build's `limbs_mul × max_scale`
+///   work exceeds the stable-rust const-eval step budget.
 macro_rules! decl_wide_transcendental {
-    ($Type:ident, $Storage:ty, $Work:ty, $core:ident) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $core:ident, $max_scale:literal) => {
+        $crate::macros::wide_transcendental::decl_wide_transcendental!(
+            $Type, $Storage, $Work, $core, $max_scale, with_const_table
+        );
+    };
+    ($Type:ident, $Storage:ty, $Work:ty, $core:ident, $max_scale:literal, $table_mode:ident) => {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
         /// passed explicitly alongside the value.
@@ -140,23 +231,7 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn pow10(n: u32) -> W {
                 lit(10).pow(n)
             }
-            /// Memoised companion to [`pow10`] keyed on `w`.
-            ///
-            /// Every wide-tier `mul` / `div` / `sqrt_fixed` /
-            /// `to_work_w` / `round_to_*` call recomputes `pow10(w)`;
-            /// at D57<57>.atan the body invokes that ~198 times per
-            /// call, each `lit(10).pow(w)` running ~log₂(w) wide
-            /// squarings followed by ~w cumulative wide multiplies.
-            /// Caching collapses that into one compute per
-            /// `(thread, w)` pair, served from a tiny per-tier
-            /// thread-local `Vec<(u32, W)>` (typically 1-3 entries
-            /// matching the user's SCALE choices) — see the
-            /// `cached` / `pi_cache_get` / `ln2_cache_get` /
-            /// `ln10_cache_get` slots below for the same pattern.
-            #[inline]
-            pub(crate) fn pow10_cached(w: u32) -> W {
-                cached(&POW10_CACHE_GET, w, pow10)
-            }
+            $crate::macros::wide_transcendental::decl_pow10_cached!($table_mode, $max_scale);
             #[inline]
             pub(crate) fn one(w: u32) -> W {
                 pow10_cached(w)

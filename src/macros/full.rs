@@ -46,6 +46,29 @@
     feature = "xx-wide",
 ))]
 macro_rules! decl_decimal_full {
+    // `no_const_table` arm — used by D924 / D1232 where the per-tier
+    // const POW10_TABLE build exceeds the stable-rust const-eval step
+    // budget. Delegates to the main arm and overrides only the
+    // `decl_wide_transcendental!` table-mode token (handled below by
+    // re-emitting the macro body inline rather than recursing, so the
+    // override stays a single source of truth).
+    (
+        wide $Type:ident,
+        $Storage:ty,
+        $Unsigned:ty,
+        $Wider:ty,
+        $SqrtWide:ty,
+        $CbrtWide:ty,
+        $Work:ty,
+        $core:ident,
+        $max_scale:literal,
+        no_const_table
+    ) => {
+        $crate::macros::full::decl_decimal_full!(
+            @body $Type, $Storage, $Unsigned, $Wider, $SqrtWide, $CbrtWide,
+            $Work, $core, $max_scale, no_const_table
+        );
+    };
     (
         wide $Type:ident,
         $Storage:ty,
@@ -56,6 +79,23 @@ macro_rules! decl_decimal_full {
         $Work:ty,
         $core:ident,
         $max_scale:literal
+    ) => {
+        $crate::macros::full::decl_decimal_full!(
+            @body $Type, $Storage, $Unsigned, $Wider, $SqrtWide, $CbrtWide,
+            $Work, $core, $max_scale, with_const_table
+        );
+    };
+    (
+        @body $Type:ident,
+        $Storage:ty,
+        $Unsigned:ty,
+        $Wider:ty,
+        $SqrtWide:ty,
+        $CbrtWide:ty,
+        $Work:ty,
+        $core:ident,
+        $max_scale:literal,
+        $table_mode:ident
     ) => {
         $crate::macros::basics::decl_decimal_basics!(wide $Type, $Storage, $max_scale);
         $crate::macros::arithmetic::decl_decimal_arithmetic!(wide $Type, $Storage, $Wider);
@@ -70,7 +110,7 @@ macro_rules! decl_decimal_full {
         $crate::macros::int_methods::decl_decimal_int_methods!(wide $Type, $Storage);
         $crate::macros::wide_roots::decl_wide_roots!($Type, $Storage, $SqrtWide, $CbrtWide);
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
-            $Type, $Storage, $Work, $core
+            $Type, $Storage, $Work, $core, $max_scale, $table_mode
         );
         $crate::macros::transcendental_trait::decl_decimal_transcendental_impl!($Type);
         $crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!($Type);
