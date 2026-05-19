@@ -108,7 +108,11 @@ jobs:
         # Dispatched bench target. Features default to the full wide
         # surface; filter is empty by default and passes through as
         # Criterion's positional name-filter argument when supplied.
-        run: cargo bench --bench ${{ inputs.bench }} --features ${{ inputs.features }} -- ${{ inputs.filter }}
+        # Filter is threaded through `$FILTER` so shell metachars
+        # (parens / pipes) in a regex don't trip the bash parser.
+        env:
+          FILTER: ${{ inputs.filter }}
+        run: cargo bench --bench ${{ inputs.bench }} --features ${{ inputs.features }} -- "$FILTER"
 
       - name: Upload Criterion results
         if: always()
