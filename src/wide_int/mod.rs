@@ -2449,20 +2449,20 @@ pub(crate) trait WideStorage:
 // strict-transcendental work integers.
 // $L = u64 limb count; $D = doubled (= 2 · $L) for widening
 // products. Each Int*'s name encodes the bit width = $L · 64.
-decl_wide_int!(Uint192, Int192, 3, 6);
-decl_wide_int!(Uint256, Int256, 4, 8);
-decl_wide_int!(Uint384, Int384, 6, 12);
-decl_wide_int!(Uint512, Int512, 8, 16);
-decl_wide_int!(Uint768, Int768, 12, 24);
-decl_wide_int!(Uint1024, Int1024, 16, 32);
-decl_wide_int!(Uint1536, Int1536, 24, 48);
-decl_wide_int!(Uint2048, Int2048, 32, 64);
-decl_wide_int!(Uint3072, Int3072, 48, 96);
-decl_wide_int!(Uint4096, Int4096, 64, 128);
-decl_wide_int!(Uint6144, Int6144, 96, 192);
-decl_wide_int!(Uint8192, Int8192, 128, 256);
-decl_wide_int!(Uint12288, Int12288, 192, 384);
-decl_wide_int!(Uint16384, Int16384, 256, 512);
+decl_wide_int!(Uint192, Int192, 3, 6, 4);
+decl_wide_int!(Uint256, Int256, 4, 8, 5);
+decl_wide_int!(Uint384, Int384, 6, 12, 7);
+decl_wide_int!(Uint512, Int512, 8, 16, 9);
+decl_wide_int!(Uint768, Int768, 12, 24, 13);
+decl_wide_int!(Uint1024, Int1024, 16, 32, 17);
+decl_wide_int!(Uint1536, Int1536, 24, 48, 25);
+decl_wide_int!(Uint2048, Int2048, 32, 64, 33);
+decl_wide_int!(Uint3072, Int3072, 48, 96, 49);
+decl_wide_int!(Uint4096, Int4096, 64, 128, 65);
+decl_wide_int!(Uint6144, Int6144, 96, 192, 97);
+decl_wide_int!(Uint8192, Int8192, 128, 256, 129);
+decl_wide_int!(Uint12288, Int12288, 192, 384, 193);
+decl_wide_int!(Uint16384, Int16384, 256, 512, 257);
 
 /// Implements `WideStorage` for one signed wide integer type, by
 /// delegating each method to the inherent items the

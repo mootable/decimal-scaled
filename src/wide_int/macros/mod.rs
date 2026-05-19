@@ -22,7 +22,7 @@
 /// - `$D` — doubled u64 limb count (`2 * $L`); sizes the widening
 ///   multiply / divide intermediate buffer to `[u64; $D]`.
 macro_rules! decl_wide_int {
-    ($U:ident, $S:ident, $L:tt, $D:tt) => {
+    ($U:ident, $S:ident, $L:tt, $D:tt, $LP1:tt) => {
         // ── Unsigned ──────────────────────────────────────────────────
         /// Hand-rolled fixed-width unsigned integer, little-endian u64
         /// limbs (`$L` of them).
@@ -494,6 +494,45 @@ macro_rules! decl_wide_int {
                 let negative = self.is_negative() ^ rhs.is_negative();
                 let prod = self.unsigned_abs().wrapping_mul(rhs.unsigned_abs());
                 $S::from_mag_limbs(&prod.0, negative)
+            }
+            /// `self · (n as $S)` with the sign of `self`, panicking
+            /// on overflow. Routes through the n-by-1-word
+            /// multi-precision primitive [`limbs_mul_u64_into`], which
+            /// collapses the `L²` outer-product loop of the generic
+            /// `wrapping_mul` down to `L` widening muls + `L`
+            /// accumulator-and-carry folds when one operand fits a
+            /// single u64. Used by the wide-tier strict transcendentals'
+            /// `mul_u(a, n)` helper for `n ≤ u64::MAX`.
+            ///
+            /// Matches the panic-on-overflow semantics of the
+            /// `Mul`-operator path it replaces (which goes through
+            /// `checked_mul`): the top carry limb must be zero, and
+            /// the magnitude must fit a signed `$S` (i.e. the high
+            /// bit of the topmost magnitude limb is not set unless
+            /// the result is `$S::MIN`).
+            #[inline]
+            pub(crate) const fn checked_mul_u64(self, n: u64) -> $S {
+                let mag = self.unsigned_abs().0;
+                let mut out = [0u64; $LP1];
+                $crate::wide_int::limbs_mul_u64_into::<$L, $LP1>(&mag, n, &mut out);
+                if out[$L] != 0 {
+                    panic!(concat!(stringify!($S), ": mul overflow"));
+                }
+                let mut prod = [0u64; $L];
+                let mut i = 0;
+                while i < $L {
+                    prod[i] = out[i];
+                    i += 1;
+                }
+                let negative = self.is_negative();
+                let r = $S::from_mag_limbs(&prod, negative);
+                // `from_mag_limbs` only mishandles the `mag == 2^(BITS-1)`
+                // edge: that's `$S::MIN` for `negative = true` (legal)
+                // but overflows for `negative = false`.
+                if r.is_zero() == false && r.is_negative() != negative {
+                    panic!(concat!(stringify!($S), ": mul overflow"));
+                }
+                r
             }
             /// Full `self · rhs` product widened into a `W: WideInt`,
             /// without going through the `WideInt::to_mag_sign` /
