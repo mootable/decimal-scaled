@@ -1260,6 +1260,12 @@ macro_rules! decl_wide_transcendental {
             /// Strict and correctly rounded. A zero or negative base
             /// saturates to `ZERO` (a negative base with a fractional
             /// exponent is not real-valued).
+            ///
+            /// Integer-exponent fast path: if `exp` is an exact integer
+            /// with `|n| <= INT_POWF_FAST_PATH_THRESHOLD` (= 64), routes
+            /// to `Self::powi(n)` (square-and-multiply on storage),
+            /// skipping the `exp(y·ln(x))` chain. `powi` is exact, so
+            /// the 0.5 ULP contract is preserved.
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
@@ -1267,11 +1273,48 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
+                if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
+                    return self.powi(n);
+                }
                 let w = SCALE + $core::GUARD;
                 let ln_x = $core::ln_fixed($core::to_work(raw), w);
                 let y = $core::to_work(exp.to_bits());
                 let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
+            }
+
+            /// Integer-exponent threshold for the [`Self::powf_strict`]
+            /// / [`Self::powf_strict_with`] fast path. At `|n| <= 64`,
+            /// `powi(n)` costs at most ~12 multiplications, well below
+            /// the `exp(y·ln(x))` chain.
+            const INT_POWF_FAST_PATH_THRESHOLD: i32 = 64;
+
+            /// Returns `Some(n)` if `exp` is an exact integer value
+            /// `n: i32` with `|n| <= INT_POWF_FAST_PATH_THRESHOLD`.
+            /// Used to gate the integer fast path on `powf_strict` and
+            /// `powf_strict_with`.
+            #[inline]
+            fn powf_exp_as_small_int(exp: Self) -> ::core::option::Option<i32> {
+                let raw = exp.to_bits();
+                let mult = Self::multiplier();
+                let zero = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw % mult != zero {
+                    return ::core::option::Option::None;
+                }
+                let q = raw / mult;
+                let lo = $crate::macros::wide_roots::wide_lit!(
+                    $Storage,
+                    "-64"
+                );
+                let hi = $crate::macros::wide_roots::wide_lit!(
+                    $Storage,
+                    "64"
+                );
+                if q < lo || q > hi {
+                    return ::core::option::Option::None;
+                }
+                let q_i128: i128 = $crate::wide_int::wide_cast::<$Storage, i128>(q);
+                ::core::option::Option::Some(q_i128 as i32)
             }
 
             /// Sine of `self` (radians). Strict and correctly rounded.
@@ -1708,12 +1751,18 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::powf_strict`].
+            ///
+            /// Same integer-exponent fast path as [`Self::powf_strict`];
+            /// the `mode` argument is irrelevant for `powi` (exact).
             #[inline]
             #[must_use]
             pub fn powf_strict_with(self, exp: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
+                }
+                if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
+                    return self.powi(n);
                 }
                 let w = SCALE + $core::GUARD;
                 let ln_x = $core::ln_fixed($core::to_work(raw), w);
