@@ -9,12 +9,11 @@
 //! complete; promotion to a width override would require a
 //! `OVERRIDE_POLICY.md`-margin win.
 //!
-//! Both paths are correctly-rounded in principle, but the AGM
-//! implementation runs at the canonical working scale `w = SCALE +
-//! GUARD`; beyond `w ~ 30` it drops to ~p/2 bits of precision (see
-//! the caveat on `Dxx::ln_strict_agm` and `ALGORITHMS.md`). This
-//! bench measures pure throughput; precision is the canonical path's
-//! contract, not the AGM path's at this depth.
+//! Both paths are correctly-rounded to 0.5 ULP at storage scale.
+//! `ln_strict_agm` runs at the lifted working scale
+//! `w' = 2·SCALE + 4` via `guard_agm`; `exp_strict_agm` takes an
+//! additional `k_lift` to cover the post-Newton `x << k`
+//! amplification. This bench measures pure throughput.
 //!
 //! Run with `cargo bench --features wide --bench agm_vs_taylor_d230`.
 

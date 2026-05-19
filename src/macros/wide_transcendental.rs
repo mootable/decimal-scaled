@@ -170,6 +170,56 @@ macro_rules! decl_wide_transcendental {
                     4
                 }
             }
+            /// Extra digit lift for `exp_strict_agm` that absorbs the
+            /// `2^k` post-Newton range reassembly amplification.
+            ///
+            /// Given a raw storage value `v` at scale `SCALE`, the
+            /// Brent–Salamin `exp_fixed_agm` reduces `v = k·ln 2 + s`
+            /// with `|k| ≤ ⌈|v|/ln 2⌉`, runs Newton on `exp(s)` at
+            /// the working scale, then reassembles via `x << k`. That
+            /// reassembly amplifies the raw error of `x` by `2^k`,
+            /// i.e., `k · log₁₀(2) ≈ k · 0.30103` decimal digits.
+            ///
+            /// This helper estimates the digit lift needed by
+            /// examining the bit-length of `|raw|` against the
+            /// bit-length of `10^scale` — anything in those higher
+            /// bits represents the integer part of `|v|`, bounding
+            /// `|k| ≤ ⌈|v|/ln 2⌉`. We use rational constants
+            /// `144/100 ≈ 1/ln 2` and `301/1000 ≈ log₁₀(2)` plus
+            /// `+ 4` safety. Cheap: a few leading-zero / shift ops
+            /// inside `W`.
+            pub(crate) fn exp_agm_k_lift_from_w(v_w_at_scale: W, scale: u32) -> u32 {
+                // |v|'s integer part = |raw| / 10^SCALE. Compute as
+                // `bit_length(|v_w|) - bit_length(10^SCALE)` clamped
+                // to zero — that's a rough log₂(int_part) bound;
+                // exponentiate to a u32 upper bound on int_part.
+                let av = abs(v_w_at_scale);
+                let bl_v = bit_length(av);
+                let bl_one_s = bit_length(pow10_cached(scale));
+                if bl_v <= bl_one_s {
+                    // |v| < 1, no integer part — minimal lift.
+                    return 5;
+                }
+                // log₂(int_part) ≤ bl_v - bl_one_s + 1
+                let log2_int_part = bl_v - bl_one_s + 1;
+                // int_part ≤ 2^log2_int_part. k ≤ int_part / ln 2 + 1
+                // ≤ 2^log2_int_part · 1.443 + 1.
+                // k_lift = ⌈k · log₁₀(2)⌉ + 4 ≤ ⌈2^log2_int_part · 0.4343⌉ + 4
+                // Use 4343/10000 ≈ 0.43429 ≈ 1/ln(10).
+                // Bound 2^log2_int_part by saturating u128 shift.
+                let int_part_upper = if log2_int_part >= 128 {
+                    u128::MAX
+                } else {
+                    1u128 << log2_int_part
+                };
+                let k_lift_u128 = int_part_upper.saturating_mul(4343) / 10000 + 5;
+                if k_lift_u128 > u32::MAX as u128 {
+                    u32::MAX
+                } else {
+                    k_lift_u128 as u32
+                }
+            }
+
             /// Hard cap on series iterations — a safety net; every
             /// series terminates far sooner by reaching a zero term.
             const SERIES_CAP: u128 = 20_000;
@@ -1200,12 +1250,36 @@ macro_rules! decl_wide_transcendental {
             /// Strict and correctly rounded. Same contract as
             /// [`Self::ln_strict`]; the implementation path differs.
             /// AGM converges quadratically and scales better than the
-            /// artanh-series path at very high working scales.
+            /// artanh-series path at very high working scales in
+            /// Brent's textbook complexity analysis.
             ///
-            /// Currently an alternate; the canonical `ln_strict` stays
-            /// on the artanh path until a bench at the relevant
-            /// working scale shows AGM winning by the
-            /// `OVERRIDE_POLICY.md` margin.
+            /// **Empirical crossover (post-lift, post-MG-buffer fix):**
+            /// the lifted AGM (running at `w' = 2·SCALE + 4` with the
+            /// half-LSB `mul`/`sqrt` rounding absorbed by `guard_agm`)
+            /// loses to the chain-MG + narrow-GUARD artanh / Tang
+            /// path at every shipped tier × SCALE combination:
+            ///
+            /// | tier | SCALE  | ln_strict (artanh/Tang) | ln_strict_agm | factor |
+            /// |------|--------|-------------------------|---------------|--------|
+            /// | D307 | 300    | 230 µs                  | 720 µs        | 3.1×   |
+            /// | D616 | 300    | 21 µs (Tang)            | 812 µs        | 39×    |
+            /// | D616 | 500    | 705 µs                  | 2.05 ms       | 2.9×   |
+            /// | D924 | 500    | 980 µs                  | 2.49 ms       | 2.5×   |
+            /// | D924 | 900    | 2.43 ms                 | 7.04 ms       | 2.9×   |
+            /// | D1232| 615    | 69 µs (Tang)            | 4.04 ms       | 58×    |
+            /// | D1232| 1000   | 3.44 ms                 | 8.63 ms       | 2.5×   |
+            /// | D1232| 1200   | 4.49 ms                 | 12.04 ms      | 2.7×   |
+            ///
+            /// Brent's textbook ~300-digit crossover does not hold for
+            /// the chain-MG kernel at these widths: the artanh inner
+            /// loop runs ~`O(p)` rounded multiplies whose constant per
+            /// step is far smaller than the AGM iteration's
+            /// `sqrt_fixed` + `mul_cached` pair at the *doubled*
+            /// working scale the precision lift demands. The AGM
+            /// path remains available via this method (and the
+            /// `bench-alt` feature) for downstream apps that need the
+            /// alternate kernel, but the canonical `ln_strict` stays
+            /// on the artanh / Tang path at every tier.
             #[inline]
             #[must_use]
             pub fn ln_strict_agm(self) -> Self {
@@ -1243,11 +1317,21 @@ macro_rules! decl_wide_transcendental {
                 }
                 // Brent §3 precision lift: Newton-on-`ln_fixed_agm`
                 // inherits the AGM precision lift via the inner
-                // `ln_fixed_agm` call, so the whole iteration runs
-                // at `w' = SCALE + GUARD + guard_agm(SCALE)`.
-                let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
+                // `ln_fixed_agm` call. The base lift `guard_agm` puts
+                // ln_fixed_agm at ~0.5 ULP at storage scale. The
+                // additional `k_lift` covers the `x << k` post-Newton
+                // range reassembly: `exp(v) = 2^k · exp(s)` amplifies
+                // the raw error of `x` by `2^k`, i.e., `k · log10(2)`
+                // decimal digits. Without this lift, exp(|v|) for
+                // |v| above ~3 leaks the amplified residue into the
+                // storage scale (validated empirically against mpmath
+                // at SCALE up to 615).
+                let raw_w = $core::to_work_w(raw, 0);
+                let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
+                let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
+                let w_prime = SCALE + lift;
                 let r = $core::exp_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
+                    $core::to_work_w(raw, lift),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage(r, w_prime, SCALE))
@@ -1712,9 +1796,13 @@ macro_rules! decl_wide_transcendental {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
-                let w_prime = SCALE + $core::GUARD + $core::guard_agm(SCALE);
+                // See `exp_strict_agm` for the `k_lift` rationale.
+                let raw_w = $core::to_work_w(raw, 0);
+                let k_lift = $core::exp_agm_k_lift_from_w(raw_w, SCALE);
+                let lift = $core::GUARD + $core::guard_agm(SCALE) + k_lift;
+                let w_prime = SCALE + lift;
                 let r = $core::exp_fixed_agm(
-                    $core::to_work_w(raw, $core::GUARD + $core::guard_agm(SCALE)),
+                    $core::to_work_w(raw, lift),
                     w_prime,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w_prime, SCALE, mode))
