@@ -89,6 +89,8 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "experimental-floats", feature(f16, f128))]
+#![cfg_attr(feature = "cross-scale-ops", feature(generic_const_exprs))]
+#![cfg_attr(feature = "cross-scale-ops", allow(incomplete_features))]
 // ── Clippy allow-list ─────────────────────────────────────────────────
 //
 // These are pedantic lints whose patterns this crate uses
@@ -221,6 +223,14 @@ pub mod __bench_internals {
     }
 }
 mod macros;
+
+#[cfg(feature = "cross-scale-ops")]
+pub mod cross_scale;
+
+/// Nightly-gated auto-inferred cross-scale operations. See
+/// [`mod@cross_scale`] for details.
+#[cfg(feature = "cross-scale-ops")]
+pub use crate::cross_scale as cross;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under

@@ -93,6 +93,14 @@ rounding-ceiling = []
 # f128 are experimental in Rust; this feature requires the nightly
 # toolchain. On stable, leave the feature off.
 experimental-floats = []
+# Nightly-only: auto-inferred cross-scale operations via
+# `generic_const_exprs`. Adds a `decimal_scaled::cross` module with
+# free functions `cross::mul(a, b)` / `cross::add(a, b)` / …
+# returning a decimal at `max(width_a, width_b)`, `max(SCALE_a,
+# SCALE_b)`. Without this feature the stable `D{N}<S>::mul_of(a, b)`
+# explicit-target form is the only cross-scale entry point.
+# Requires the nightly toolchain.
+cross-scale-ops = []
 # Wide decimal tiers (D76 / D153 / D307). Each width is independently
 # opt-in; `wide` is the umbrella for the 256-bit / 512-bit tiers and
 # `x-wide` adds the 1024-bit tier. They are backed by the in-tree
