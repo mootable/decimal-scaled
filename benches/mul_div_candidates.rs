@@ -144,13 +144,13 @@ fn div256_by_i128(hi: i128, lo: u128, d: i128) -> i128 {
 }
 
 /// Binary long-divide of 256-bit (uhi, ulo) by 128-bit divisor.
-/// Returns a 128-bit quotient. Caller guarantees the quotient fits
-/// (otherwise the high bits are silently dropped; bench inputs
-/// respect this).
+/// Returns the 128-bit quotient and the 128-bit remainder. Caller
+/// guarantees the quotient fits (otherwise the high bits are
+/// silently dropped; bench inputs respect this).
 #[inline]
-fn div256_by_u128(uhi: u128, ulo: u128, d: u128) -> u128 {
+fn divrem256_by_u128(uhi: u128, ulo: u128, d: u128) -> (u128, u128) {
     if uhi == 0 {
-        return ulo / d;
+        return (ulo / d, ulo % d);
     }
     // shift-subtract long divide. ~256 iterations; ~80 ns on Skylake.
     let mut hi = uhi;
@@ -166,14 +166,20 @@ fn div256_by_u128(uhi: u128, ulo: u128, d: u128) -> u128 {
         if rem >= d {
             rem -= d;
             q |= 1;
-        } else if rem == 0 && hi == 0 {
-            // rem can never be 0 once it's grown past d, but fall
-            // through anyway -- this branch is correctness-only.
         }
     }
     let _ = hi;
     let _ = lo;
-    q
+    (q, rem)
+}
+
+/// Truncating divide-only wrapper preserved for `handrolled_mul`,
+/// which feeds `MULT` as the divisor and relies on the exact-quotient
+/// shape (the production `mul_div_pow10` rounding step happens in the
+/// magic-divide candidate, not this hand-rolled baseline).
+#[inline]
+fn div256_by_u128(uhi: u128, ulo: u128, d: u128) -> u128 {
+    divrem256_by_u128(uhi, ulo, d).0
 }
 
 #[inline(always)]
@@ -187,17 +193,68 @@ fn handrolled_mul(a: i128, b: i128) -> i128 {
     div256_by_i128(hi, lo, MULT)
 }
 
+/// Round a (signed) trunc quotient + (unsigned magnitude) remainder pair
+/// to nearest, ties-to-even, matching the production `mg_divide` path.
+/// `q` is the truncated signed quotient; `r` is the absolute remainder
+/// magnitude; `d` is the absolute divisor magnitude; `neg_result` tells
+/// us which direction the round-half-up correction goes.
+#[inline]
+fn round_half_even(q: i128, r: u128, d: u128, neg_result: bool) -> i128 {
+    // Tie: 2*r == d (only meaningful when d is even; for odd d, ties
+    // are impossible). Up: 2*r > d. Down: 2*r < d.
+    // `2*r` may overflow u128 when r is close to u128::MAX, but in this
+    // bench the divisor is always one of MULT (10^12) or a sub-i128
+    // operand, so r < d < 2^127 and 2*r is well within u128.
+    let twice_r = r << 1;
+    let bump = if twice_r > d {
+        true
+    } else if twice_r == d {
+        // tie -> round to even
+        (q & 1) != 0
+    } else {
+        false
+    };
+    if !bump {
+        return q;
+    }
+    if neg_result { q - 1 } else { q + 1 }
+}
+
 #[inline(always)]
 fn handrolled_div(a: i128, b: i128) -> i128 {
-    // Fast path: if a fits in i80 (a * 10^12 still fits i128), naive.
-    // 10^12 ~ 2^40, so a needs ~88 bits headroom -> fits if a fits i88.
-    // Cheap proxy: i64 fits comfortably.
+    // Production `mg_divide::div_pow10_div` rounds half-to-even (matches
+    // crate default `RoundingMode::HalfToEven`). To stay an apples-to-apples
+    // cross-check we have to do the same rounding here -- straight i128
+    // truncation drifts by 1 ULP on any input whose exact quotient has a
+    // non-zero fractional part above 0.5.
+    let neg_result = (a < 0) ^ (b < 0);
+    let ud = b.unsigned_abs();
+    // Fast path: if a fits in i64, a * 10^12 still fits i128 (10^12 ~ 2^40,
+    // i64 ~ 2^63, headroom ~2^23).
     if let Ok(a64) = i64::try_from(a) {
-        return ((a64 as i128) * MULT) / b;
+        let num = (a64 as i128) * MULT;
+        let q = num / b;
+        let r = (num % b).unsigned_abs();
+        return round_half_even(q, r, ud, neg_result);
     }
     // Widening: numerator = a * MULT in i256.
     let (hi, lo) = mul_full_i128(a, MULT);
-    div256_by_i128(hi, lo, b)
+    // Recover the absolute 256-bit numerator for the remainder calc.
+    let (uhi, ulo) = if hi < 0 {
+        let lo_neg = (!lo).wrapping_add(1);
+        let carry = if lo == 0 { 1 } else { 0 };
+        let hi_neg = (!(hi as u128)).wrapping_add(carry);
+        (hi_neg, lo_neg)
+    } else {
+        (hi as u128, lo)
+    };
+    let (uq, r) = divrem256_by_u128(uhi, ulo, ud);
+    let q_trunc = if neg_result {
+        if uq > i128::MAX as u128 { i128::MIN } else { -(uq as i128) }
+    } else {
+        uq as i128
+    };
+    round_half_even(q_trunc, r, ud, neg_result)
 }
 
 // -----------------------------------------------------------------------------

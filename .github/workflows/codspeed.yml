@@ -37,13 +37,7 @@ jobs:
         # Features are additive at build time; harmless for the
         # narrow-only `all_functions` bench that doesn't reach for
         # them.
-        #
-        # `mul_div_candidates` excluded — its sanity_check_consistency
-        # cross-validates the production mg_divide path against a
-        # handrolled reference, and currently asserts a mismatch at
-        # bound_1e18 (separate latent bug, tracked outside CodSpeed).
-        # Reintroduce once that assertion is reconciled.
-        run: cargo codspeed build --features wide,x-wide,xx-wide,macros --bench all_functions --bench pr_gate
+        run: cargo codspeed build --features wide,x-wide,xx-wide,macros --bench all_functions --bench pr_gate --bench mul_div_candidates
 
       - name: Run the benchmarks
         uses: CodSpeedHQ/action@v4
