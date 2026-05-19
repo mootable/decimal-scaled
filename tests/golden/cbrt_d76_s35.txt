@@ -3,7 +3,7 @@
 # each line: <input_raw>\t<expected_raw>
 # input_raw is the storage integer of x at the tier scale.
 # expected_raw is the half-to-even rounding of f(x) at the tier scale,
-# computed by mpmath at 500-digit precision.
+# computed by mpmath at max(700, 2*SCALE + 64)-digit precision.
 -88473590364731040065650671431918854913054	-9599999651502122767919417332122223577
 -31443202524929665979554935128311664488589	-6800000182016262860043082700103821207
 -274398076532072924900723982801083556161	-1399996728788398948569510080224643600

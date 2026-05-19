@@ -5,8 +5,9 @@ For each (width, scale, function) tier we emit a `.txt` file under
 `tests/golden/` with one `<input_raw_int>\t<expected_raw_int>` per
 line. `input_raw_int` is the storage value the kernel receives;
 `expected_raw_int` is the half-to-even rounding of the true real
-value f(input_raw_int / 10**scale), computed by mpmath at 500
-decimal digits of precision.
+value f(input_raw_int / 10**scale), computed by mpmath at a
+per-tier working precision of `max(700, 2*SCALE + 64)` decimal
+digits.
 
 The harness `tests/ulp_strict_golden.rs` reads each file, calls the
 corresponding kernel, and asserts `|actual - expected| <= 1` storage
@@ -60,9 +61,13 @@ def real_cbrt(x: mpf) -> mpf:
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "tests" / "golden"
 
-# Working precision wider than the widest tier (D1232<615>) so every
-# rounding is exact at the tier's storage LSB.
-mp.dps = 500
+# Working precision wider than every shipped tier. The widest tier
+# is D1232<615>, whose storage LSB is `10^-615`. Internal oracle
+# computations (squarings, intermediate range reductions) double the
+# digit count, so we need `>= 2 * SCALE + small_const`. The dps is
+# raised per tier (see `tier_dps` below); the global default is set
+# to the tightest tier and lifted before each tier is processed.
+mp.dps = 700
 
 # --- Tier targets ---------------------------------------------------------
 #
@@ -378,7 +383,7 @@ HEADER_LINES = [
     "# each line: <input_raw>\\t<expected_raw>",
     "# input_raw is the storage integer of x at the tier scale.",
     "# expected_raw is the half-to-even rounding of f(x) at the tier scale,",
-    "# computed by mpmath at 500-digit precision.",
+    "# computed by mpmath at max(700, 2*SCALE + 64)-digit precision.",
 ]
 
 
@@ -422,6 +427,13 @@ def main() -> None:
     for alias, capacity, scale, base_count in TIERS:
         max_raw = 10 ** (capacity - 1)
         counts = category_counts(base_count)
+        # Lift mpmath working precision so the oracle's intermediate
+        # squarings stay safely above the tier's storage LSB. The
+        # `2*SCALE + 64` floor covers the worst case where the oracle
+        # squares an LSB-scale residual; the global lower bound of 700
+        # keeps the narrow tiers from running unnecessarily slow on
+        # small `2*SCALE` values.
+        mp.dps = max(700, 2 * scale + 64)
 
         for func_name, oracle, _domain in FUNCS:
             seed_key = f"{alias}-{scale}-{func_name}-v1"
