@@ -415,7 +415,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos_tang::sin_strict::<SCALE>(self.0, mode));
+            return Self(trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(self.0, mode));
         }
         if matches!(SCALE, 44..=56) {
             return Self(trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(self.0, mode));
@@ -425,7 +425,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos_tang::sin_strict::<SCALE>(self.0, mode));
+            return Self(trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(self.0, mode));
         }
         if matches!(SCALE, 44..=56) {
             return Self(trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(self.0, mode));
@@ -435,7 +435,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn cos_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos_tang::cos_strict::<SCALE>(self.0, mode));
+            return Self(trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(self.0, mode));
         }
         if matches!(SCALE, 44..=56) {
             return Self(trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(self.0, mode));
@@ -445,7 +445,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos_tang::cos_strict::<SCALE>(self.0, mode));
+            return Self(trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(self.0, mode));
         }
         if matches!(SCALE, 44..=56) {
             return Self(trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(self.0, mode));
@@ -455,14 +455,14 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn tan_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos_tang::tan_strict::<SCALE>(self.0, mode));
+            return Self(trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode));
         }
         Self(trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE))
     }
     #[inline]
     fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos_tang::tan_strict::<SCALE>(self.0, mode));
+            return Self(trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode));
         }
         Self(trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE))
     }

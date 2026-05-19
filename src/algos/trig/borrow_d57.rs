@@ -35,7 +35,7 @@ fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> i128 {
 pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_sincos_tang::sin_strict::<SCALE>(widened.0, mode)
+        super::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(widened.0, mode)
     } else {
         super::wide_kernel::sin_strict_d57(widened.0, mode, SCALE)
     };
@@ -47,7 +47,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_sincos_tang::cos_strict::<SCALE>(widened.0, mode)
+        super::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(widened.0, mode)
     } else {
         super::wide_kernel::cos_strict_d57(widened.0, mode, SCALE)
     };
@@ -59,7 +59,7 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_sincos_tang::tan_strict::<SCALE>(widened.0, mode)
+        super::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(widened.0, mode)
     } else {
         super::wide_kernel::tan_strict_d57(widened.0, mode, SCALE)
     };
