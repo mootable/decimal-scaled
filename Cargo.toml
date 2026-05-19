@@ -176,6 +176,15 @@ harness = false
 name = "all_functions"
 harness = false
 
+# Focused micro-bench for the powf_strict integer-exponent fast path
+# (perf/powf-integer-fastpath-0.4.3). Compares the integer-valued
+# exponents 2.0 / 3.0 (fast path) against the non-integer 0.5 / 2.5
+# (slow exp(y · ln x) path) across D38<19>, D76<35>, D307<150>.
+[[bench]]
+name = "powf_integer"
+harness = false
+required-features = ["wide", "x-wide"]
+
 # Focused micro-bench for D38<33>::log10_strict / log2_strict / etc.
 # Used to validate the borrow-D57 migration of the secondary log/exp
 # entry points (ln/exp were borrowed by commit 09e7ea9).
