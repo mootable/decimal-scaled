@@ -714,13 +714,77 @@ macro_rules! decl_wide_transcendental {
                 // caching this would dominate the call.
                 #[cfg(feature = "perf-trace")]
                 let _reduce_span = $crate::tracing::info_span!("range_reduce").entered();
-                let one_w = one(w);
-                let l2 = ln2(w);
-                let pow10_w = one_w;
-                let k = round_to_nearest_int(div_cached(v_w, l2, pow10_w), w);
-                let s = v_w - scale_by_k(l2, k);
+                // Range reduction.
+                //
+                // Naively `s = v − k·ln 2` evaluated at the type's working
+                // scale `w` suffers catastrophic cancellation when `|v|`
+                // is large: each absorbed leading bit of `v` is paid for
+                // by an LSB of `k·ln 2`, and the final `2^k` rescaling at
+                // the end amplifies any residual error in `s` back up by
+                // the same factor. The total budget for `2^k` rescaling
+                // is roughly `2^k · LSB_w ≤ 0.5 · LSB_storage`, i.e.
+                // `k · log10(2) ≤ GUARD`. For wide-tier scales where the
+                // input `|v|` can reach `(MAX_SCALE − SCALE) · ln 10`,
+                // `k` overshoots that budget badly — D616<308>'s upper
+                // end gives `k ≈ 1020`, blowing past `GUARD = 30` by
+                // ~280 decimal digits and producing the multi-thousand-
+                // LSB drift the precision golden gate catches.
+                //
+                // Mitigation: bump the whole `exp_fixed` body to an
+                // extended working scale `w_ext = w + extra`, computed
+                // dynamically from `bit_length(|k|)`. `extra` is sized so
+                // the post-squarings amplification by `2^k` against the
+                // residual `LSB_of_w_ext` lands inside the `GUARD` budget
+                // at narrowing time. `extra = ceil(|k|·log10(2)) + 6`
+                // suffices: the `+6` covers the Taylor-series-step
+                // accumulation, the post-Taylor `n` squarings, and the
+                // half-LSB error introduced by the final narrowing.
+                //
+                // Reference for the analysis: Muller, *Elementary
+                // Functions: Algorithms and Implementation* (3rd ed.,
+                // 2016), §11.1 — range-reduction error budget with the
+                // `2^k · exp(s)` reassembly.
+                let one_w_pre = one(w);
+                let l2_pre = ln2(w);
+                let pow10_w_pre = one_w_pre;
+                let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
+                let abs_k_u128 = if k < 0 { -k } else { k } as u128;
+                let extra: u32 = if abs_k_u128 == 0 {
+                    0
+                } else {
+                    // The amplification of the LSB error in `k·ln 2` by
+                    // the final `2^k` rescaling is `2^k`, which is
+                    // `|k|·log10(2)` decimal digits. Compute that
+                    // directly from `|k|` (NOT `bit_length(|k|)`), then
+                    // add a margin for Taylor + squarings + final
+                    // narrowing.
+                    //
+                    // `|k|·log10(2) = |k| · 30103 / 100000`. Round up:
+                    let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
+                    // Cap at the type's working width to avoid blowing up
+                    // `pow10(extra)`; if `|k|` is so large the result
+                    // would overflow storage anyway, the caller's
+                    // `round_to_storage_with` will panic on narrowing.
+                    let capped = digits.min((<W>::BITS / 4) as u128) as u32;
+                    // The +k/3 margin covers the cumulative-rounding
+                    // budget of the in-extended-width Taylor series and
+                    // post-Taylor squarings. Half-LSB error per op times
+                    // ~k·sqrt-of-precision ops grows roughly with k.
+                    capped + 12 + (capped >> 2)
+                };
 
-                let p_bits = w.saturating_mul(3).saturating_add(1);
+                let w_ext = w + extra;
+                let v_ext = if extra == 0 { v_w } else { v_w * pow10(extra) };
+                let one_w = one(w_ext);
+                let l2 = ln2(w_ext);
+                let pow10_w = one_w;
+                let s = v_ext - scale_by_k(l2, k);
+
+                // From here on the body operates at `w_ext`; we narrow
+                // back to `w` after the final `2^k` reassembly so the
+                // caller's `round_to_storage_with(_, w, scale, _)` sees
+                // a value at the expected `w` scale.
+                let p_bits = w_ext.saturating_mul(3).saturating_add(1);
                 let mut n: u32 = 1;
                 while (n + 1) * (n + 1) <= p_bits {
                     n += 1;
@@ -763,7 +827,7 @@ macro_rules! decl_wide_transcendental {
 
                 #[cfg(feature = "perf-trace")]
                 let _reasm_span = $crate::tracing::info_span!("reassemble").entered();
-                if k >= 0 {
+                let scaled_at_w_ext = if k >= 0 {
                     let shift = k as u32;
                     if bit_length(sum) + shift >= W::BITS {
                         panic!(concat!(
@@ -778,6 +842,11 @@ macro_rules! decl_wide_transcendental {
                         return zero();
                     }
                     sum >> (neg_k as u32)
+                };
+                if extra == 0 {
+                    scaled_at_w_ext
+                } else {
+                    round_div_pow10(scaled_at_w_ext, extra)
                 }
             }
 
