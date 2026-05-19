@@ -132,10 +132,20 @@ macro_rules! decl_pow10_cached {
         /// `working_digits > GUARD`) falls back to the legacy
         /// per-thread `Vec<(u32, W)>` cache so we don't blow the
         /// binary footprint on the rare path.
+        ///
+        /// The in-range path uses `get_unchecked` to skip the bounds
+        /// check — safe because the preceding `w <= POW10_TABLE_MAX_W`
+        /// branch guarantees `w as usize < POW10_TABLE.len()` (the
+        /// table is sized `POW10_TABLE_MAX_W + 1`).
         #[inline]
         pub(crate) fn pow10_cached(w: u32) -> W {
             if w <= POW10_TABLE_MAX_W {
-                return POW10_TABLE[w as usize];
+                // SAFETY: `w <= POW10_TABLE_MAX_W` implies
+                // `w as usize <= POW10_TABLE_MAX_W as usize <
+                // POW10_TABLE.len()` since the table length is
+                // `POW10_TABLE_MAX_W + 1`. `u32 as usize` is
+                // lossless on all supported targets.
+                return unsafe { *POW10_TABLE.get_unchecked(w as usize) };
             }
             cached(&POW10_CACHE_GET, w, pow10)
         }
