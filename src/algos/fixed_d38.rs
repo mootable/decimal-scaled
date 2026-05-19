@@ -184,13 +184,48 @@ fn div_u512_by_word(num: U512, d: u64) -> U512 {
 /// `10^(75 - w)` which is also < 38 for any caller-relevant `w`.
 #[inline]
 fn div_u512_by_pow10(num: U512, w: u32) -> U256 {
-    if w >= 1 && w <= 38 {
+    if w == 0 {
+        return [num[0], num[1]];
+    }
+    if w <= 38 {
         return div_u512_by_pow10_small(num, w as usize);
     }
-    // Fallback for w == 0 (no-op) or w > 38 (divisor exceeds u128).
+    if w <= 76 {
+        // Chained truncating divide: floor(num / 10^w) ==
+        // floor(floor(num / 10^38) / 10^(w-38)) for integer w > 38.
+        // The first pass shrinks the dividend by ~126 bits, leaving
+        // at most ~386 bits — we keep the full 4 u128 limbs across
+        // the chain to be safe.
+        let pass1 = div_u512_by_pow10_small_full(num, 38);
+        return div_u512_by_pow10_small(pass1, (w - 38) as usize);
+    }
+    // Fallback for w > 76 — not used by any caller in this module.
     let scale = Fixed::pow10(w);
     let q = div_u512_by_u256(num, scale);
     [q[0], q[1]]
+}
+
+/// Same as [`div_u512_by_pow10_small`] but returns all four u128
+/// quotient limbs (no narrowing to U256). Used as the first pass of
+/// the `w > 38` chain where the intermediate dividend may span more
+/// than 256 bits.
+#[inline]
+fn div_u512_by_pow10_small_full(num: U512, scale_idx: usize) -> U512 {
+    debug_assert!((1..=38).contains(&scale_idx));
+    let exp = crate::algos::mg_divide::POW10_U128[scale_idx];
+    let mut rem: u128 = 0;
+    let (q3, r3) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[3], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    rem = r3;
+    let (q2, r2) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[2], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    rem = r2;
+    let (q1, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[1], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    rem = r1;
+    let (q0, _r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[0], exp, scale_idx)
+        .expect("div_u512_by_pow10_small_full: invariant violated");
+    [q0, q1, q2, q3]
 }
 
 /// `num / 10^scale_idx` where `1 <= scale_idx <= 38`, returning the
