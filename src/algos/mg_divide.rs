@@ -61,7 +61,7 @@ use crate::types::widths::D38;
 /// loop for the typical scale range) in hot paths like
 /// `div_wide_pow10_with`. Last entry `10^38` is the largest power of
 /// ten that fits in `u128`.
-const POW10_U128: [u128; 39] = {
+pub(crate) const POW10_U128: [u128; 39] = {
     let mut t = [1u128; 39];
     let mut i = 1;
     while i < 39 {
@@ -164,7 +164,7 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-fn div_exp_fast_2word_with_rem(
+pub(crate) fn div_exp_fast_2word_with_rem(
     n_high: u128,
     n_low: u128,
     exp: u128,

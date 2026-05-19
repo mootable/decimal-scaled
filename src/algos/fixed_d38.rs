@@ -163,6 +163,75 @@ fn div_u512_by_word(num: U512, d: u64) -> U512 {
     out
 }
 
+/// Quotient `num / 10^w` for a 512-bit dividend, returned as a 256-bit
+/// value (the caller must ensure the true quotient fits — every site
+/// in this file does).
+///
+/// Reuses the Möller-Granlund magic constants and the 2-by-1 kernel
+/// from [`crate::algos::mg_divide`]: instead of the
+/// 256-shift-subtract bit loop the generic `div_u512_by_u256` falls
+/// back to once the divisor exceeds `u64::MAX`, we walk the dividend
+/// in u128 limbs and apply the MG kernel once per limb. For
+/// `w <= 38` this collapses a ~256-iteration bit loop into 4 MG
+/// 2-by-1 calls.
+///
+/// For `w > 38` the divisor itself exceeds a single u128 limb and
+/// the simple per-limb MG sweep no longer applies; we fall back to
+/// the generic `div_u512_by_u256` bit loop. The fast path covers
+/// the `D38<SCALE>` native `Fixed` working scales `SCALE + 30` for
+/// `SCALE in 0..=8` — exactly the scales not borrowed to D57. The
+/// embedded-constant rescales (`wide_pi`, `wide_ln2`, …) divide by
+/// `10^(75 - w)` which is also < 38 for any caller-relevant `w`.
+#[inline]
+fn div_u512_by_pow10(num: U512, w: u32) -> U256 {
+    if w >= 1 && w <= 38 {
+        return div_u512_by_pow10_small(num, w as usize);
+    }
+    // Fallback for w == 0 (no-op) or w > 38 (divisor exceeds u128).
+    let scale = Fixed::pow10(w);
+    let q = div_u512_by_u256(num, scale);
+    [q[0], q[1]]
+}
+
+/// `num / 10^scale_idx` where `1 <= scale_idx <= 38`, returning the
+/// 256-bit quotient. The divisor fits a single u128 limb, so one MG
+/// 2-by-1 step per dividend u128 limb suffices.
+#[inline]
+fn div_u512_by_pow10_small(num: U512, scale_idx: usize) -> U256 {
+    debug_assert!((1..=38).contains(&scale_idx));
+    let exp = crate::algos::mg_divide::POW10_U128[scale_idx];
+    // Walk dividend top-down (most-significant limb first), tracking a
+    // running remainder. Quotient limbs go bottom-up; the high two
+    // quotient limbs are discarded (they're always 0 for the working-
+    // scale invariants in this module — the radicand fits 256 bits
+    // after the divide).
+    let mut rem: u128 = 0;
+    // limb 3 (highest)
+    let (q3, r3) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[3], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    debug_assert!(
+        q3 == 0,
+        "div_u512_by_pow10: quotient overflows 256 bits — caller invariant violated"
+    );
+    rem = r3;
+    // limb 2
+    let (q2, r2) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[2], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    debug_assert!(
+        q2 == 0,
+        "div_u512_by_pow10: quotient overflows 256 bits — caller invariant violated"
+    );
+    rem = r2;
+    // limb 1
+    let (out_hi, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[1], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    rem = r1;
+    // limb 0
+    let (out_lo, _r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[0], exp, scale_idx)
+        .expect("div_u512_by_pow10: invariant rem < exp violated");
+    [out_lo, out_hi]
+}
+
 /// Quotient `num / d` where `num` is 512-bit and `d` is 256-bit.
 ///
 /// Returned as `U512`; for every use in this crate the true quotient
@@ -409,11 +478,18 @@ impl Fixed {
     /// 2^128` so the 512-bit product divides back into 256 bits.
     pub(crate) fn mul(self, rhs: Fixed, w: u32) -> Fixed {
         let prod = mul_u256(self.mag, rhs.mag);
-        let scale = Fixed::pow10(w);
-        let q = div_u512_by_u256(prod, scale);
+        // Specialised `pow10(w)` divisor path. The general
+        // `div_u512_by_u256` falls back to a 256-iteration shift /
+        // subtract bit loop once the divisor exceeds `u64::MAX`
+        // (i.e. `w >= 20`); for power-of-10 divisors we have the
+        // Möller-Granlund magic table in `crate::algos::mg_divide`,
+        // which collapses one 2-limb step into a handful of u128
+        // multiplies. Chain it across the 512-bit dividend in u128
+        // limbs to avoid the bit loop entirely.
+        let q_mag = div_u512_by_pow10(prod, w);
         Fixed {
-            negative: (self.negative ^ rhs.negative) && !(q[0] == 0 && q[1] == 0),
-            mag: [q[0], q[1]],
+            negative: (self.negative ^ rhs.negative) && !(q_mag[0] == 0 && q_mag[1] == 0),
+            mag: q_mag,
         }
     }
 
