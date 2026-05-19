@@ -341,20 +341,21 @@ fn render_per_width_summary(
 //   bench-history-<tag>/<group>/<width>/new/estimates.json
 //
 // where:
-//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, HEAD }
+//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, v0.4.0, HEAD }
 //   <group> ∈ { arith_add, arith_mul, arith_div,
 //               sqrt_strict, ln_strict, sin_strict }
 //   <width> ∈ { D38, D76, D307 }
 //
-// We label the HEAD tag as v0.4.0 in the rendered chart per the
-// brief — the bench was run against the v0.4.0 source.
+// We label the HEAD tag as v0.4.2 in the rendered chart — the bench
+// was run against the v0.4.2 source.
 // ------------------------------------------------------------------
 
 const HISTORY_VERSIONS: &[(&str, &str)] = &[
     ("v0.2.5", "v0.2.5"),
     ("v0.3.2", "v0.3.2"),
     ("v0.3.3", "v0.3.3"),
-    ("HEAD",   "v0.4.0"),
+    ("v0.4.0", "v0.4.0"),
+    ("HEAD",   "v0.4.2"),
 ];
 
 const HISTORY_GROUPS: &[(&str, &str)] = &[
