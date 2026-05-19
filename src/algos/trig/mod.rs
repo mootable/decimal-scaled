@@ -25,6 +25,10 @@ pub(crate) mod fixed_d38;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s18_22_atan;
 #[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s18_22_hyper;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) mod lookup_d57_s18_22_inverse;
+#[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s18_22_sincos;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s44_56_atan;
