@@ -185,7 +185,6 @@ extern crate alloc;
 pub use ::tracing;
 
 mod algos;
-mod d_unified;
 mod identity;
 mod support;
 mod types;
@@ -213,9 +212,6 @@ pub mod __bench_internals {
         crate::wide_int::limbs_mul_u64_fixed::<L, D>(a, b, out)
     }
 }
-mod consts;
-mod consts_wide;
-mod core_type;
 mod macros;
 
 // Path shims for moved-but-still-referenced modules. After the folder
@@ -237,6 +233,13 @@ pub(crate) use crate::algos::fixed_d38 as d_w128_kernels;
 // `types/`; legacy `crate::*_strict` / `crate::*_fast` paths kept
 // alive for one release cycle.
 pub(crate) use crate::types::log_exp as log_exp_strict;
+// Type-definition shims — the biggest cascade sites. `core_type` is
+// referenced from ~50 in-crate sites (every macro emission, every
+// algos/policy file); `d_unified` / `consts` / `consts_wide` are
+// secondary.
+pub(crate) use crate::types::widths as core_type;
+pub(crate) use crate::types::unified as d_unified;
+pub(crate) use crate::types::consts;
 
 // `bitwise` and `num_traits_impls` used to live here as test-only
 // modules; their tests now run as Cargo integration tests under

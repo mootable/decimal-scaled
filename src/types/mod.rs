@@ -12,6 +12,10 @@
 
 pub(crate) mod traits;
 
+pub(crate) mod unified;
+pub(crate) mod widths;
+pub(crate) mod consts;
+
 pub(crate) mod arithmetic;
 pub(crate) mod overflow_variants;
 pub(crate) mod rescale;
