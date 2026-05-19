@@ -13,9 +13,15 @@ use decimal_scaled::{D38, D76, D307};
 // One canonical SCALE per width — picked roughly mid-range so the
 // kernel is exercised at a representative working precision rather than
 // the trivial SCALE=0 path.
+// Note: D307<30> rather than something deeper. The published v0.2.x /
+// v0.3.x lines have a u128 ceiling in FromStr (10^39 overflows the
+// intermediate); strings like "1234.5" only parse up to SCALE <= 38.
+// v0.4.0+ FromStr handles arbitrary SCALE, but for cross-version
+// like-for-like we cap at SCALE = 30 so every version cell can run
+// the same harness.
 type T38 = D38<10>;
 type T76 = D76<20>;
-type T307 = D307<50>;
+type T307 = D307<30>;
 
 fn d38_inputs() -> (T38, T38) {
     let a: T38 = "1234.5".parse().unwrap();
