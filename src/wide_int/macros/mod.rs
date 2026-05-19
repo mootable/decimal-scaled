@@ -797,9 +797,16 @@ macro_rules! decl_wide_int {
                 }
             }
             /// Widening / narrowing cast to any other `WideInt`.
+            ///
+            /// Skips the 288-u64 `wide_cast` staging buffer by
+            /// passing this type's own `$L`-limb magnitude slice
+            /// directly to `T::from_mag_sign`. The destination
+            /// truncates / zero-extends as needed.
             #[inline]
             pub(crate) fn resize<T: $crate::wide_int::WideInt>(self) -> T {
-                $crate::wide_int::wide_cast(self)
+                let negative = self.is_negative();
+                let mag = self.unsigned_abs().0;
+                T::from_mag_sign(&mag, negative)
             }
             /// Approximate `f64` value.
             pub(crate) fn as_f64(self) -> f64 {
@@ -855,6 +862,62 @@ macro_rules! decl_wide_int {
             #[inline]
             fn from_mag_sign(mag: &[u64], negative: bool) -> $S {
                 $S::from_mag_limbs(mag, negative)
+            }
+
+            /// Direct u64 → u128 limb pack into the caller's `dst`
+            /// buffer. Only the type's own `$L` u64 limbs are read
+            /// (= `($L + 1) / 2` u128 limbs); the rest of `dst` is
+            /// zero-filled. Bypasses the 288-element default buffer.
+            #[inline]
+            fn mag_into_u128(self, dst: &mut [u128]) -> bool {
+                let mag = self.unsigned_abs().0;
+                // u128 limbs needed to hold this type's magnitude
+                // (ceiling division for odd-L types like Int192).
+                const U128_LIMBS: usize = ($L + 1) / 2;
+                let n_full_pairs = $L / 2;
+                let dst_len = dst.len();
+                let mut i = 0;
+                let m = n_full_pairs.min(dst_len);
+                while i < m {
+                    dst[i] = (mag[2 * i] as u128) | ((mag[2 * i + 1] as u128) << 64);
+                    i += 1;
+                }
+                // Odd-L tail: one u64 promoted with zero high half.
+                if ($L & 1) == 1 && i < dst_len && i < U128_LIMBS {
+                    dst[i] = mag[2 * i] as u128;
+                    i += 1;
+                }
+                while i < dst_len {
+                    dst[i] = 0;
+                    i += 1;
+                }
+                self.is_negative()
+            }
+
+            /// Direct u128 → u64 limb unpack into this type's
+            /// magnitude. Only `($L + 1) / 2` u128 limbs are read;
+            /// excess is silently dropped (matches the truncating
+            /// semantics of the default `from_mag_sign`). Bypasses
+            /// the 288-element u64 staging buffer.
+            #[inline]
+            fn from_mag_sign_u128(mag: &[u128], negative: bool) -> $S {
+                const U128_LIMBS: usize = ($L + 1) / 2;
+                let mut out = [0u64; $L];
+                let m = U128_LIMBS.min(mag.len());
+                let mut i = 0;
+                let n_full_pairs = $L / 2;
+                let copy_pairs = n_full_pairs.min(m);
+                while i < copy_pairs {
+                    let v = mag[i];
+                    out[2 * i] = v as u64;
+                    out[2 * i + 1] = (v >> 64) as u64;
+                    i += 1;
+                }
+                // Odd-L tail: only the low u64 of mag[i] survives.
+                if ($L & 1) == 1 && i < m {
+                    out[2 * i] = mag[i] as u64;
+                }
+                $S::from_mag_limbs(&out, negative)
             }
         }
 

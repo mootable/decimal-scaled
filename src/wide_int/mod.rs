@@ -2302,13 +2302,57 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
 /// every wide-int's magnitude buffer is directly compatible without
 /// boundary conversion.
 pub(crate) trait WideInt: Copy {
-    /// Magnitude limbs (little-endian u64, zero-padded to 128) and sign.
-    /// 128 u64 limbs = 8192 bits, comfortably above the widest type
-    /// the crate ships (Int4096, which is 64 u64 limbs).
+    /// Magnitude limbs (little-endian u64, zero-padded to 288) and sign.
+    /// 288 u64 limbs = 18432 bits, covers Int16384 + slack.
     fn to_mag_sign(self) -> ([u64; 288], bool);
     /// Rebuilds from a magnitude limb slice and a sign, truncating
     /// the magnitude to this type's width.
     fn from_mag_sign(mag: &[u64], negative: bool) -> Self;
+
+    /// Writes the magnitude into a caller-supplied u128 limb buffer
+    /// (little-endian, `dst[0]` least significant) and returns the
+    /// sign. Implementations zero-pad `dst` to its full length. Used
+    /// by hot-path callers (`mg_divide::div_wide_pow10_with`,
+    /// `wide_transcendental` rescales) to avoid the 2.3 kB
+    /// stack-allocated buffer that the default
+    /// `to_mag_sign` → repack chain produces.
+    ///
+    /// Default impl wraps `to_mag_sign`; concrete `Int*` types
+    /// override with a direct limb copy that only touches their
+    /// `L / 2` real limbs.
+    #[inline]
+    fn mag_into_u128(self, dst: &mut [u128]) -> bool {
+        let (mag, neg) = self.to_mag_sign();
+        let n_pairs = (288 / 2).min(dst.len());
+        let mut i = 0;
+        while i < n_pairs {
+            dst[i] = (mag[2 * i] as u128) | ((mag[2 * i + 1] as u128) << 64);
+            i += 1;
+        }
+        while i < dst.len() {
+            dst[i] = 0;
+            i += 1;
+        }
+        neg
+    }
+
+    /// Rebuilds `Self` from a u128-limb magnitude and a sign. Default
+    /// impl unpacks each u128 into a pair of u64 limbs and routes
+    /// through `from_mag_sign`; concrete `Int*` types override with a
+    /// direct copy bounded by their `L / 2` real limbs (skipping the
+    /// 288-limb u64 staging buffer entirely).
+    #[inline]
+    fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self {
+        let mut out = [0u64; 288];
+        let n_pairs = mag.len().min(288 / 2);
+        let mut i = 0;
+        while i < n_pairs {
+            out[2 * i] = mag[i] as u64;
+            out[2 * i + 1] = (mag[i] >> 64) as u64;
+            i += 1;
+        }
+        Self::from_mag_sign(&out, negative)
+    }
 }
 
 /// Implements `WideInt` for a signed primitive integer. The
