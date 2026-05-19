@@ -245,21 +245,16 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W {
     debug_assert!((1..=38).contains(&scale));
-    let (mag_words, neg) = n.to_mag_sign();
     let scale_idx = scale as usize;
     let exp = POW10_U128[scale_idx];
 
-    // `to_mag_sign` returns a 128-u64-limb magnitude. The MG kernel is
-    // intrinsically base-2^128, so combine pairs of u64 limbs into
-    // u128 limbs (64 of them — same total width). The repack costs ~128
-    // shifts; trivial compared to the 8-32 hardware divides the MG
-    // long-divide spends per call.
+    // Pack the magnitude directly into a u128 limb buffer via
+    // `WideInt::mag_into_u128`. The override on the concrete
+    // `Int*` types copies only `(L + 1) / 2` u128 limbs (8 for
+    // Int512, 4 for Int256) instead of zero-initialising and
+    // copying the full 288-u64 default buffer (~2.3 kB stack).
     let mut mag = [0u128; 64];
-    let mut i = 0;
-    while i < 64 {
-        mag[i] = (mag_words[2 * i] as u128) | ((mag_words[2 * i + 1] as u128) << 64);
-        i += 1;
-    }
+    let neg = n.mag_into_u128(&mut mag);
 
     // The magnitude buffer is fixed at 64 u128 limbs (Int8192-equivalent),
     // but most calls operate on far narrower widths (`Int512` ≤ 4 limbs,
@@ -301,16 +296,10 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
         }
     }
 
-    // Unpack u128 magnitude back to u64 limbs for `from_mag_sign`.
-    let mut mag_out = [0u64; 288];
-    let mut i = 0;
-    while i < 64 {
-        mag_out[2 * i] = mag[i] as u64;
-        mag_out[2 * i + 1] = (mag[i] >> 64) as u64;
-        i += 1;
-    }
-
-    W::from_mag_sign(&mag_out, neg)
+    // Direct u128 → typed-Int unpack via the specialised
+    // `from_mag_sign_u128` override; only `(L + 1) / 2` limbs are
+    // consumed, avoiding the 288-u64 staging buffer.
+    W::from_mag_sign_u128(&mag, neg)
 }
 
 /// Chain-of-`÷ 10^38` extension of [`div_wide_pow10_with`] to scales
@@ -364,13 +353,10 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
 ) -> W {
     debug_assert!(scale > 38, "chain path is for SCALE > 38; callers handle ≤ 38");
 
-    let (mag_words, neg) = n.to_mag_sign();
+    // Pack magnitude directly into u128 limbs (same fast path as
+    // the single-chunk `div_wide_pow10_with`).
     let mut mag = [0u128; 64];
-    let mut i = 0;
-    while i < 64 {
-        mag[i] = (mag_words[2 * i] as u128) | ((mag_words[2 * i + 1] as u128) << 64);
-        i += 1;
-    }
+    let neg = n.mag_into_u128(&mut mag);
     let mut top = mag.len();
     while top > 0 && mag[top - 1] == 0 {
         top -= 1;
@@ -471,15 +457,7 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
         }
     }
 
-    let mut mag_out = [0u64; 288];
-    let mut i = 0;
-    while i < 64 {
-        mag_out[2 * i] = mag[i] as u64;
-        mag_out[2 * i + 1] = (mag[i] >> 64) as u64;
-        i += 1;
-    }
-
-    W::from_mag_sign(&mag_out, neg)
+    W::from_mag_sign_u128(&mag, neg)
 }
 
 /// Mode-aware rounding for an *unsigned* magnitude `q` with remainder

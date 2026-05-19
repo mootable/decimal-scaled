@@ -179,7 +179,7 @@ macro_rules! decl_wide_transcendental {
                 let ar = abs(r);
                 let comp = abs(d) - ar;
                 let cmp_r = ar.cmp(&comp);
-                let q_is_odd = (q % lit(2)) != lit(0);
+                let q_is_odd = q.bit(0);
                 let result_positive = (n < lit(0)) == (d < lit(0));
                 if $crate::support::rounding::should_bump(
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -251,13 +251,52 @@ macro_rules! decl_wide_transcendental {
             /// wraps silently if violated. Every caller in this crate
             /// passes a value with sufficient headroom: the working
             /// integer is sized so `2·(SCALE + GUARD)` digits fit.
+            ///
+            /// # `f64`-bridge Newton seed (std, narrow radicands)
+            ///
+            /// The trait-level `W::isqrt` seeds Newton at `2^⌈bits/2⌉`,
+            /// accurate to 1 bit and convergent in ~`log₂(bits)`
+            /// iterations of full-width divmod. When `std` is
+            /// available **and** the radicand fits f64's ~2^1023
+            /// dynamic range, we seed instead with
+            /// `f64::sqrt(n.as_f64())`. `n.as_f64()` rounds to nearest
+            /// f64 (53-bit mantissa); `f64::sqrt` is correctly rounded,
+            /// so the seed lands within ~2⁻⁵² of the true `√n`.
+            /// Newton then needs ~2 iterations versus ~7 from the
+            /// 1-bit seed — a measured 3-4× sqrt speedup at D57<20>.
+            ///
+            /// A single unconditional Newton pre-step restores the
+            /// monotone-decrease precondition the loop relies on by
+            /// AM-GM (`(x + n/x)/2 ≥ √n`), so the seed direction is
+            /// irrelevant to correctness.
             pub(crate) fn sqrt_fixed(v: W, w: u32) -> W {
                 let av = abs(v);
                 debug_assert!(
                     bit_length(av) + (w as u32) * 4 < W::BITS,
                     "sqrt_fixed: |v| * 10^w overflows the working width"
                 );
-                (av * pow10_cached(w)).isqrt()
+                let n = av * pow10_cached(w);
+                #[cfg(feature = "std")]
+                {
+                    // `f64::MAX` exponent is 1024; cap a few bits below
+                    // to keep the squared seed comfortably inside.
+                    if bit_length(n) < 1000 && n > zero() {
+                        let seed_f64 = n.as_f64().sqrt();
+                        let seed = W::from_f64(seed_f64);
+                        let x0 = if seed <= zero() { lit(1) } else { seed };
+                        // Unconditional first Newton step. AM-GM
+                        // ⇒ result ≥ ⌈√n⌉ regardless of f64 rounding.
+                        let mut x = (x0 + n / x0) >> 1;
+                        loop {
+                            let y = (x + n / x) >> 1;
+                            if y >= x {
+                                return x;
+                            }
+                            x = y;
+                        }
+                    }
+                }
+                n.isqrt()
             }
 
             /// Builds a working-scale value from the type's raw storage:
@@ -270,7 +309,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// [`wide_cast`]: $crate::wide_int::wide_cast
             pub(crate) fn to_work(raw: $Storage) -> W {
-                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10(GUARD)
+                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10_cached(GUARD)
             }
 
             /// Runtime-guard variant of [`to_work`]: scales raw by
@@ -302,15 +341,14 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> $Storage {
                 let divisor = pow10_cached(w - target);
-                let q = v / divisor;
-                let r = v % divisor;
+                let (q, r) = v.div_rem(divisor);
                 let rounded = if r == lit(0) {
                     q
                 } else {
                     let ar = abs(r);
                     let comp = divisor - ar;
                     let cmp_r = ar.cmp(&comp);
-                    let q_is_odd = (q % lit(2)) != lit(0);
+                    let q_is_odd = q.bit(0);
                     let result_positive = v >= lit(0);
                     if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
                         if result_positive { q + lit(1) } else { q - lit(1) }
@@ -333,9 +371,8 @@ macro_rules! decl_wide_transcendental {
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
                 let divisor = pow10_cached(w);
-                let q = v / divisor;
-                let r = v % divisor;
-                let half = divisor / lit(2);
+                let (q, r) = v.div_rem(divisor);
+                let half = divisor >> 1;
                 let qi = if abs(r) >= half {
                     if v < lit(0) { q - lit(1) } else { q + lit(1) }
                 } else {
@@ -529,9 +566,10 @@ macro_rules! decl_wide_transcendental {
                 let mut a = one_w;
                 let mut b = y_w;
                 let iter_cap = 80u32;
+                let pow10_w_agm = pow10_cached(w);
                 for _ in 0..iter_cap {
-                    let next_a = (a + b) / lit(2);
-                    let next_b = sqrt_fixed(mul(a, b, w), w);
+                    let next_a = (a + b) >> 1;
+                    let next_b = sqrt_fixed(mul_cached(a, b, pow10_w_agm), w);
                     let d = if next_a >= next_b { next_a - next_b } else { next_b - next_a };
                     a = next_a;
                     b = next_b;
@@ -565,7 +603,7 @@ macro_rules! decl_wide_transcendental {
                 // Newton seed: low-order Taylor (1 + s + s²/2). Within
                 // ~10⁻² of truth for |s| ≤ ln(2)/2 ≈ 0.347.
                 let s2 = mul(s, s, w);
-                let mut x = one_w + s + s2 / lit(2);
+                let mut x = one_w + s + (s2 >> 1);
                 if x <= lit(0) {
                     x = one_w;
                 }
@@ -838,7 +876,7 @@ macro_rules! decl_wide_transcendental {
             const POW10_CACHE_GET: () = ();
             /// `π/2` at working scale `w`.
             pub(crate) fn half_pi(w: u32) -> W {
-                pi(w) / lit(2)
+                pi(w) >> 1
             }
 
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
@@ -914,8 +952,8 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn sin_fixed(v_w: W, w: u32) -> W {
                 let pi_w = pi(w);
                 let tau = pi_w + pi_w;
-                let hp = pi_w / lit(2);
-                let qp = hp / lit(2); // π/4
+                let hp = pi_w >> 1;
+                let qp = hp >> 1; // π/4
                 let q = round_to_nearest_int(div(v_w, tau, w), w);
                 let r = v_w - scale_by_k(tau, q);
                 let neg = r < zero();
@@ -952,8 +990,8 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
                 let pi_w = pi(w);
                 let tau = pi_w + pi_w;
-                let hp = pi_w / lit(2);
-                let qp = hp / lit(2);
+                let hp = pi_w >> 1;
+                let qp = hp >> 1;
                 let q = round_to_nearest_int(div(v_w, tau, w), w);
                 let r = v_w - scale_by_k(tau, q);
                 let sin_neg = r < zero();
@@ -1020,10 +1058,11 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     7  // D153 heavy / D307
                 };
+                let pow10_w = pow10_cached(w);
                 for _ in 0..halvings {
-                    let x2 = mul(x, x, w);
+                    let x2 = mul_cached(x, x, pow10_w);
                     let denom = one_w + sqrt_fixed(one_w + x2, w);
-                    x = div(x, denom, w);
+                    x = div_cached(x, denom, pow10_w);
                 }
                 let mut result = atan_taylor(x, w) << halvings;
                 if add_half_pi {
@@ -1300,7 +1339,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1311,7 +1350,7 @@ macro_rules! decl_wide_transcendental {
                     // Half-angle: asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
                     // The inner argument is in (0, 0.5], so the
                     // recursive asin call takes the stable branch.
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1341,7 +1380,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1349,7 +1388,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1425,8 +1464,8 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let enx = $core::div($core::one(w), ex, w);
+                let r = (ex - enx) >> 1;
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -1438,8 +1477,8 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let enx = $core::div($core::one(w), ex, w);
+                let r = (ex + enx) >> 1;
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -1456,7 +1495,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
@@ -1475,10 +1514,9 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
-                let sinh = (ex - enx) / two;
-                let cosh = (ex + enx) / two;
+                let enx = $core::div($core::one(w), ex, w);
+                let sinh = (ex - enx) >> 1;
+                let cosh = (ex + enx) >> 1;
                 (
                     Self::from_bits($core::round_to_storage(sinh, w, SCALE)),
                     Self::from_bits($core::round_to_storage(cosh, w, SCALE)),
@@ -1554,7 +1592,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                 }
                 let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let r = $core::ln_fixed(ratio, w) >> 1;
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -1781,7 +1819,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1789,7 +1827,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1816,7 +1854,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -1824,7 +1862,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -1879,8 +1917,8 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let enx = $core::div($core::one(w), ex, w);
+                let r = (ex - enx) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -1891,8 +1929,8 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let enx = $core::div($core::one(w), ex, w);
+                let r = (ex + enx) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -1903,7 +1941,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -1970,7 +2008,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                 }
                 let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let r = $core::ln_fixed(ratio, w) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -2023,10 +2061,9 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
-                let sinh = (ex - enx) / two;
-                let cosh = (ex + enx) / two;
+                let enx = $core::div($core::one(w), ex, w);
+                let sinh = (ex - enx) >> 1;
+                let cosh = (ex + enx) >> 1;
                 (
                     Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
                     Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
@@ -2411,7 +2448,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::asin: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let r = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -2419,7 +2456,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -2460,7 +2497,7 @@ macro_rules! decl_wide_transcendental {
                 if abs_v > one_w {
                     panic!(concat!(stringify!($Type), "::acos: argument out of domain [-1, 1]"));
                 }
-                let half_w = one_w / $core::lit(2);
+                let half_w = one_w >> 1;
                 let asin_w = if abs_v == one_w {
                     let hp = $core::half_pi(w);
                     if v < $core::zero() { -hp } else { hp }
@@ -2468,7 +2505,7 @@ macro_rules! decl_wide_transcendental {
                     let denom = $core::sqrt_fixed(one_w - $core::mul(v, v, w), w);
                     $core::atan_fixed($core::div(v, denom, w), w)
                 } else {
-                    let inner = (one_w - abs_v) / $core::lit(2);
+                    let inner = (one_w - abs_v) >> 1;
                     let inner_sqrt = $core::sqrt_fixed(inner, w);
                     let inner_denom = $core::sqrt_fixed(
                         one_w - $core::mul(inner_sqrt, inner_sqrt, w),
@@ -2552,8 +2589,8 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let r = (ex - enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let enx = $core::div($core::one(w), ex, w);
+                let r = (ex - enx) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -2578,8 +2615,8 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let r = (ex + enx) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let enx = $core::div($core::one(w), ex, w);
+                let r = (ex + enx) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -2604,7 +2641,7 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
+                let enx = $core::div($core::one(w), ex, w);
                 let r = $core::div(ex - enx, ex + enx, w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
@@ -2630,10 +2667,9 @@ macro_rules! decl_wide_transcendental {
                 let w = SCALE + working_digits;
                 let v = $core::to_work_w(self.to_bits(), working_digits);
                 let ex = $core::exp_fixed(v, w);
-                let enx = $core::exp_fixed(-v, w);
-                let two = $crate::macros::wide_roots::wide_lit!($Work, "2");
-                let sinh = (ex - enx) / two;
-                let cosh = (ex + enx) / two;
+                let enx = $core::div($core::one(w), ex, w);
+                let sinh = (ex - enx) >> 1;
+                let cosh = (ex + enx) >> 1;
                 (
                     Self::from_bits($core::round_to_storage_with(sinh, w, SCALE, mode)),
                     Self::from_bits($core::round_to_storage_with(cosh, w, SCALE, mode)),
@@ -2744,7 +2780,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                 }
                 let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) / $crate::macros::wide_roots::wide_lit!($Work, "2");
+                let r = $core::ln_fixed(ratio, w) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 

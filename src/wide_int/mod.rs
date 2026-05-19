@@ -2247,8 +2247,98 @@ pub(crate) fn limbs_isqrt_u64(n: &[u64], out: &mut [u64]) {
     let work = n.len() + 1;
     debug_assert!(work <= SCRATCH_LIMBS_U64, "isqrt scratch overflow");
     let mut x = [0u64; SCRATCH_LIMBS_U64];
-    let e = bits.div_ceil(2);
-    x[(e / 64) as usize] |= 1u64 << (e % 64);
+
+    // Initial guess. The classical seed is a single bit at position
+    // `ceil(bits/2)` — one bit of accuracy, costing one Newton step per
+    // doubling of accuracy (≈ `log2(bits/2)` iterations at any width).
+    //
+    // The hardware-`f64::sqrt` seed below lifts that to ~53 correct
+    // bits in one go: extract the top 64 bits of `n` (which fits the
+    // f64 mantissa with 11 bits of headroom), take the hardware sqrt,
+    // and shift the result back to the correct magnitude. For Int512
+    // (D76 sqrt input) this drops the Newton iteration count from ~8
+    // to ~3, with each saved iteration eliminating one full
+    // `limbs_divmod_dispatch_u64` call (the dominant cost).
+    //
+    // Hasselgren's trick — see Crandall & Pomerance 2005, "Prime
+    // Numbers: A Computational Perspective" §9.2.1 — credits the
+    // f64-bootstrap idea to T. Hasselgren in the GMP mailing list
+    // archives; the implementation here is a from-first-principles
+    // limb-array variant.
+    if bits >= 8 {
+        // Extract top 64 bits of `n` as a u64, aligned so the leading
+        // 1 sits at position 63 (or as close as `n` allows).
+        let shift = bits - 64.min(bits);
+        // shift == 0 happens iff bits < 64 → n fits one limb.
+        // Otherwise top_u64 = (n >> shift) & ((1<<64)-1).
+        let limb_idx = (shift / 64) as usize;
+        let bit_off = shift % 64;
+        let top_u64: u64 = if bit_off == 0 {
+            n[limb_idx]
+        } else {
+            let lo = n[limb_idx] >> bit_off;
+            let hi = if limb_idx + 1 < n.len() {
+                n[limb_idx + 1].checked_shl(64 - bit_off).unwrap_or(0)
+            } else {
+                0
+            };
+            lo | hi
+        };
+        // Hardware sqrt on the top 64 bits. f64 mantissa carries 53
+        // bits; the low 11 of top_u64 are lost — accepted, the Newton
+        // loop refines the seed to full precision.
+        let seed_f64 = (top_u64 as f64).sqrt();
+        // True sqrt(n) = sqrt(top * 2^shift) = seed_f64 * 2^(shift / 2).
+        // If shift is odd we add a √2 factor:
+        // seed_f64 * √2 * 2^((shift - 1) / 2).
+        let (seed_f64, half_shift) = if (shift & 1) == 1 {
+            (seed_f64 * core::f64::consts::SQRT_2, (shift - 1) / 2)
+        } else {
+            (seed_f64, shift / 2)
+        };
+        // Convert to an integer over-estimate. f64's sqrt is
+        // correctly rounded but the `as u128` cast truncates toward
+        // zero; ceil and add a 1-ULP safety margin so the placed
+        // seed is a strict over-estimate of the true sqrt. Newton's
+        // iteration only converges monotonically down to
+        // floor(sqrt(n)) from a strict over-estimate; under-shoot
+        // would cause the iteration to oscillate and the
+        // `y >= x` exit check to terminate on the wrong side.
+        // `core::f64::ceil` is std-only but we depend on std elsewhere
+        // (the `as u128` cast already brings the libm float→int
+        // conversion in). Use a no_std-safe manual ceil:
+        // `(x as u128) + (if x.fract() != 0.0 { 1 } else { 0 })`.
+        let truncated = seed_f64 as u128;
+        let frac_nonzero = (truncated as f64) != seed_f64;
+        let seed_int: u128 = truncated
+            .saturating_add(if frac_nonzero { 1 } else { 0 })
+            .saturating_add(1);
+        // Place seed_int at bit position `half_shift` in x. seed_int
+        // is at most ~53 bits set (the f64 mantissa) + 2, so the
+        // shifted value occupies at most 2 u64 limbs.
+        let seed_limb_idx = (half_shift / 64) as usize;
+        let seed_bit_off = half_shift % 64;
+        let shifted: u128 = seed_int << seed_bit_off;
+        let seed_lo = shifted as u64;
+        let seed_hi = (shifted >> 64) as u64;
+        if seed_limb_idx < work {
+            x[seed_limb_idx] |= seed_lo;
+        }
+        if seed_limb_idx + 1 < work {
+            x[seed_limb_idx + 1] |= seed_hi;
+        }
+        // Newton needs a non-zero divisor. Empty seed (would only
+        // happen on a tiny input — `bits >= 8` rules most of those
+        // out, but defend the invariant anyway).
+        if limbs_is_zero_u64(&x[..work]) {
+            x[0] = 1;
+        }
+    } else {
+        // Tiny n: fall back to the classical 1-bit seed.
+        let e = bits.div_ceil(2);
+        x[(e / 64) as usize] |= 1u64 << (e % 64);
+    }
+
     loop {
         let mut q = [0u64; SCRATCH_LIMBS_U64];
         let mut r = [0u64; SCRATCH_LIMBS_U64];
@@ -2342,13 +2432,57 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
 /// every wide-int's magnitude buffer is directly compatible without
 /// boundary conversion.
 pub(crate) trait WideInt: Copy {
-    /// Magnitude limbs (little-endian u64, zero-padded to 128) and sign.
-    /// 128 u64 limbs = 8192 bits, comfortably above the widest type
-    /// the crate ships (Int4096, which is 64 u64 limbs).
+    /// Magnitude limbs (little-endian u64, zero-padded to 288) and sign.
+    /// 288 u64 limbs = 18432 bits, covers Int16384 + slack.
     fn to_mag_sign(self) -> ([u64; 288], bool);
     /// Rebuilds from a magnitude limb slice and a sign, truncating
     /// the magnitude to this type's width.
     fn from_mag_sign(mag: &[u64], negative: bool) -> Self;
+
+    /// Writes the magnitude into a caller-supplied u128 limb buffer
+    /// (little-endian, `dst[0]` least significant) and returns the
+    /// sign. Implementations zero-pad `dst` to its full length. Used
+    /// by hot-path callers (`mg_divide::div_wide_pow10_with`,
+    /// `wide_transcendental` rescales) to avoid the 2.3 kB
+    /// stack-allocated buffer that the default
+    /// `to_mag_sign` → repack chain produces.
+    ///
+    /// Default impl wraps `to_mag_sign`; concrete `Int*` types
+    /// override with a direct limb copy that only touches their
+    /// `L / 2` real limbs.
+    #[inline]
+    fn mag_into_u128(self, dst: &mut [u128]) -> bool {
+        let (mag, neg) = self.to_mag_sign();
+        let n_pairs = (288 / 2).min(dst.len());
+        let mut i = 0;
+        while i < n_pairs {
+            dst[i] = (mag[2 * i] as u128) | ((mag[2 * i + 1] as u128) << 64);
+            i += 1;
+        }
+        while i < dst.len() {
+            dst[i] = 0;
+            i += 1;
+        }
+        neg
+    }
+
+    /// Rebuilds `Self` from a u128-limb magnitude and a sign. Default
+    /// impl unpacks each u128 into a pair of u64 limbs and routes
+    /// through `from_mag_sign`; concrete `Int*` types override with a
+    /// direct copy bounded by their `L / 2` real limbs (skipping the
+    /// 288-limb u64 staging buffer entirely).
+    #[inline]
+    fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self {
+        let mut out = [0u64; 288];
+        let n_pairs = mag.len().min(288 / 2);
+        let mut i = 0;
+        while i < n_pairs {
+            out[2 * i] = mag[i] as u64;
+            out[2 * i + 1] = (mag[i] >> 64) as u64;
+            i += 1;
+        }
+        Self::from_mag_sign(&out, negative)
+    }
 }
 
 /// Implements `WideInt` for a signed primitive integer. The

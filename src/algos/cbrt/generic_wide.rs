@@ -19,7 +19,32 @@
 //! arithmetic applies to every tier listed.
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::WideStorage;
+use crate::wide_int::{wide_cast, WideStorage};
+
+/// Cube-root of a positive `f64`, available under either `std` or
+/// `libm`. The cbrt is only used to seed an integer Newton iteration,
+/// so a low-precision implementation suffices when `std` is off: we
+/// approximate via `f64::powf(1.0/3.0)` if `f64::cbrt` isn't in
+/// scope. Both `f64::cbrt` and `f64::powf` are `std`-only; the
+/// crate's hot-path features (the wide tier) already imply `std` via
+/// the `wide` / `x-wide` / `xx-wide` umbrellas.
+#[cfg(feature = "std")]
+#[inline]
+fn libm_cbrt(x: f64) -> f64 {
+    x.cbrt()
+}
+
+/// Fallback when `std` is off — falls back to the classical 1-bit
+/// seed via the caller (this function is unreachable in the no-std
+/// build because the caller branches on `sig_bits >= 8 && cfg(std)`).
+#[cfg(not(feature = "std"))]
+#[inline]
+fn libm_cbrt(_x: f64) -> f64 {
+    // Unreachable: the caller gates the f64-cbrt seed behind
+    // `cfg(feature = "std")` and falls back to the classical
+    // 1-bit seed otherwise.
+    1.0
+}
 
 /// Generic cube-root kernel for the wide-integer family.
 ///
@@ -49,7 +74,62 @@ where
     let n: W = mag * ten.pow(2 * scale);
 
     let sig_bits = W::BITS - n.leading_zeros();
-    let mut x = one << sig_bits.div_ceil(3);
+    // Seed Newton with an f64-cbrt bootstrap. The classical
+    // `1 << ceil(sig_bits/3)` seed has 1 bit of accuracy; an
+    // f64 `(top_64 as f64).cbrt()` lands within ~10⁻¹⁵ relative
+    // error, ~53 bits of accuracy. Newton's cubic-root iteration
+    // doubles correct bits per step, so the seed cuts ~5 iterations
+    // off the loop and each saved iteration eliminates one
+    // multi-limb `n / (x * x)` Knuth division — the dominant cost.
+    //
+    // Construct the seed by computing `f64::cbrt(top)` where `top`
+    // is the most-significant 64 bits of `n`, then shifting back
+    // to the correct magnitude. The shift must account for `sig_bits
+    // mod 3` (the trailing bit-width that the cbrt operation
+    // doesn't see in the truncated `top`).
+    let mut x = if cfg!(feature = "std") && sig_bits >= 8 {
+        // Extract top 64 bits of `n` as an f64-feedable value.
+        let top_shift = sig_bits - 64.min(sig_bits);
+        let mag_for_top: W = n >> top_shift;
+        // `mag_for_top` fits 64 bits by construction.
+        let top_u128: u128 = {
+            // Read the low 128 bits of mag_for_top — convert via
+            // `WideInt::mag_into_u128` (truncates to dst length).
+            let mut buf = [0u128; 1];
+            mag_for_top.mag_into_u128(&mut buf);
+            buf[0]
+        };
+        let top_f = top_u128 as f64;
+        let seed_f64 = libm_cbrt(top_f);
+        // `n ≈ top * 2^top_shift`. cbrt(n) ≈ seed_f64 * 2^(top_shift/3).
+        // top_shift may not be a multiple of 3 — handle the residue
+        // by multiplying seed_f64 by `2^(residue / 3)`.
+        let third = top_shift / 3;
+        let residue = top_shift % 3; // 0, 1, or 2
+        let factor: f64 = match residue {
+            1 => 1.2599210498948732,   // 2^(1/3)
+            2 => 1.5874010519681994,   // 2^(2/3)
+            _ => 1.0,
+        };
+        let scaled_f64 = seed_f64 * factor;
+        // Place an over-estimate seed at bit position `third` in W.
+        let truncated = scaled_f64 as u128;
+        let frac_nonzero = (truncated as f64) != scaled_f64;
+        let seed_int: u128 = truncated
+            .saturating_add(if frac_nonzero { 1 } else { 0 })
+            .saturating_add(1);
+        let mut seed_w: W = wide_cast::<u128, W>(seed_int);
+        if third > 0 {
+            seed_w = seed_w << third;
+        }
+        if seed_w == zero {
+            one
+        } else {
+            seed_w
+        }
+    } else {
+        one << sig_bits.div_ceil(3)
+    };
     loop {
         let y = (x + x + n / (x * x)) / three;
         if y >= x {
