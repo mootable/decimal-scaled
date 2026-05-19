@@ -38,7 +38,7 @@
 //! `mul_div_candidates.rs`.
 use std::hint::black_box;
 use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D38, D38s12, DecimalConsts};
+use decimal_scaled::{D38, D38s12, DecimalConstants};
 
 type D = D38<12>;
 
@@ -207,7 +207,7 @@ fn bench_conversions(c: &mut Criterion) {
 }
 
 // =============================================================================
-// consts (DecimalConsts trait)
+// consts (DecimalConstants trait)
 // =============================================================================
 fn bench_consts(c: &mut Criterion) {
     let mut g = c.benchmark_group("consts");

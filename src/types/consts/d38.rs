@@ -3,7 +3,7 @@
 //!
 //! # Constants provided
 //!
-//! The [`DecimalConsts`] trait exposes `pi`, `tau`, `half_pi`,
+//! The [`DecimalConstants`] trait exposes `pi`, `tau`, `half_pi`,
 //! `quarter_pi`, `golden`, and `e` as methods on every width. The
 //! native-tier (`D38` and narrower) impls live here; the wide tier
 //! (`D76` / `D153` / `D307`) impls live in `types/consts/wide.rs`.
@@ -271,22 +271,9 @@ pub trait DecimalConstants: Sized {
     fn e_with(mode: crate::support::rounding::RoundingMode) -> Self;
 }
 
-// Backwards-compat alias for the trait's original name. The 0.3.2
-// shipped name was `DecimalConsts`; renamed to `DecimalConstants`
-// for consistency with the spelled-out `Decimal*` style elsewhere
-// in the crate. The alias keeps existing imports compiling without
-// a SemVer-breaking bump.
-//
-// TODO(0.4): remove this alias.
-#[deprecated(
-    since = "0.3.3",
-    note = "renamed to `DecimalConstants`; the `DecimalConsts` alias will be removed in 0.4"
-)]
-pub use self::DecimalConstants as DecimalConsts;
-
 // Public-to-crate helpers that return each constant's rescaled bits at
 // the caller's target SCALE. Used by the `decl_decimal_consts!` macro
-// to provide DecimalConsts for narrower widths (D9, D18) without
+// to provide DecimalConstants for narrower widths (D9, D18) without
 // duplicating the rescale logic.
 
 pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
@@ -341,7 +328,7 @@ pub(crate) fn e_at_target_with<const TARGET: u32>(
     rescale_75_to_target_with::<TARGET>(E_RAW, "e", mode)
 }
 
-// The `DecimalConsts` impl for `D38<SCALE>` is emitted by the
+// The `DecimalConstants` impl for `D38<SCALE>` is emitted by the
 // `decl_decimal_consts!` macro — the same macro D9 / D18 / D76+ use.
 // It expands to `Self(pi_at_target::<SCALE>())` etc.; each
 // `*_at_target` helper above rescales the 75-digit Int256 reference

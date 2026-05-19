@@ -1,6 +1,6 @@
 ---
 name: decimal-scaled
-description: Invoke when working with the `decimal-scaled` crate (const-generic base-10 fixed-point decimals D9/D18/D38/D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232 with 0.5-ULP correctly-rounded integer-only transcendentals). Covers when to pick the crate over alternatives, picking the right width and SCALE, construction (`d38!` / FromStr / `from_bits` / `from_int`), strict-vs-fast routing, rounding modes via `*_with(mode)`, the `Decimal` trait for width-generic code, the `DecimalConsts` trait for pi/tau/e/etc, and common anti-patterns. Apply when the user writes Rust code involving currency, prices, measurements, scientific values that must round-trip exactly through human-readable decimals, or anywhere they need deterministic bit-identical arithmetic across platforms.
+description: Invoke when working with the `decimal-scaled` crate (const-generic base-10 fixed-point decimals D9/D18/D38/D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232 with 0.5-ULP correctly-rounded integer-only transcendentals). Covers when to pick the crate over alternatives, picking the right width and SCALE, construction (`d38!` / FromStr / `from_bits` / `from_int`), strict-vs-fast routing, rounding modes via `*_with(mode)`, the `Decimal` trait for width-generic code, the `DecimalConstants` trait for pi/tau/e/etc, and common anti-patterns. Apply when the user writes Rust code involving currency, prices, measurements, scientific values that must round-trip exactly through human-readable decimals, or anywhere they need deterministic bit-identical arithmetic across platforms.
 ---
 
 # `decimal-scaled` - agent usage guide
@@ -168,10 +168,10 @@ decimal-scaled = { version = "0.4", features = ["rounding-half-away-from-zero"] 
 
 Transcendental coverage at the policy layer includes `ln` / `log` / `log2` / `log10`, `exp` / `exp2`, the full trig family (`sin`/`cos`/`tan`/`asin`/`acos`/`atan`/`atan2`), the full hyperbolic family (`sinh`/`cosh`/`tanh`/`asinh`/`acosh`/`atanh`), `sqrt` / `cbrt`, and `pow` / `powi`.
 
-## Mathematical constants - `DecimalConsts`
+## Mathematical constants - `DecimalConstants`
 
 ```rust
-use decimal_scaled::DecimalConsts;
+use decimal_scaled::DecimalConstants;
 let pi = D38s12::pi();      // 3.141592653590
 let e  = D38s12::e();       // 2.718281828459
 let _  = D76::<35>::pi();   // 75-digit reference rescaled to 35
@@ -262,7 +262,7 @@ let total = price * D38s2::from_int(3);
 println!("{}", total);  // "59.97"
 
 // 2. Pi rendered to 12 fractional digits, deterministic everywhere.
-use decimal_scaled::{D38s12, DecimalConsts};
+use decimal_scaled::{D38s12, DecimalConstants};
 let pi = D38s12::pi();
 println!("{pi}");  // "3.141592653590"
 

@@ -1,4 +1,4 @@
-use decimal_scaled::{D57, D115, D462, D616, D924, D1232, DecimalConsts};
+use decimal_scaled::{D57, D115, D462, D616, D924, D1232, DecimalConstants};
 fn main() {
     println!("D57<5> pi  = {:?}", D57::<5>::pi());
     println!("D115<10> pi = {:?}", D115::<10>::pi());

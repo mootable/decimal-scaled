@@ -12,7 +12,7 @@ decimal-scaled = { version = "0.4", features = ["macros"] }
 ```
 
 ```rust
-use decimal_scaled::{d38, D38s12, DecimalConsts};
+use decimal_scaled::{d38, D38s12, DecimalConstants};
 use std::str::FromStr;
 
 let price: D38s12 = "19.99".parse().unwrap();
@@ -160,10 +160,10 @@ The `rounding-*` Cargo features change the **crate-wide default** for the no-arg
 decimal-scaled = { version = "0.4", features = ["rounding-half-away-from-zero"] }
 ```
 
-## Mathematical constants - `DecimalConsts`
+## Mathematical constants - `DecimalConstants`
 
 ```rust
-use decimal_scaled::DecimalConsts;
+use decimal_scaled::DecimalConstants;
 let pi = D38s12::pi();      // 3.141592653590
 let e  = D38s12::e();       // 2.718281828459
 let _  = D76::<35>::pi();   // 75-digit reference → 35 digits, 0.5 ULP
@@ -245,7 +245,7 @@ let total = price * D38s2::from_int(3);
 println!("{total}");  // "59.97"
 
 // 2. Pi rendered to 12 fractional digits - deterministic everywhere.
-use decimal_scaled::{D38s12, DecimalConsts};
+use decimal_scaled::{D38s12, DecimalConstants};
 println!("{}", D38s12::pi());  // "3.141592653590"
 
 // 3. Width-generic sum.

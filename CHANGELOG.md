@@ -5,6 +5,17 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] — 2026-05-19
+
+### Removed
+
+- **`DecimalConsts` type alias** — the deprecated alias for the
+  `DecimalConstants` trait (deprecated since 0.3.3 with note
+  "removed in 0.4") is gone. Callers should `use
+  decimal_scaled::DecimalConstants;` instead. The trait surface,
+  per-width impls, and all `pi()` / `tau()` / `e()` inherent
+  methods are unchanged.
+
 ## [0.4.0] — 2026-05-19
 
 The 0.4 release lands four roughly independent strands in one cycle:

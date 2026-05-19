@@ -235,8 +235,6 @@ pub use crate::support::serde_helpers;
 
 
 pub use crate::types::consts::DecimalConstants;
-#[allow(deprecated)]
-pub use crate::types::consts::DecimalConsts;
 pub use crate::types::traits::DecimalArithmetic;
 pub use crate::types::traits::DecimalConvert;
 pub use crate::types::unified::D;

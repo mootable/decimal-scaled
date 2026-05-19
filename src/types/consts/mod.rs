@@ -8,8 +8,6 @@ pub(crate) mod d38;
 pub(crate) mod wide;
 
 pub use d38::DecimalConstants;
-#[allow(deprecated)]
-pub use d38::DecimalConsts;
 
 // Re-export every `pub(crate)` helper from `d38` (the narrow-tier
 // constant tables) so the macros emitted by `macros/consts.rs` can
