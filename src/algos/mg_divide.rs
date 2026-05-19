@@ -1090,9 +1090,36 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
 
     let (uprod, hi_overflow) = ua.overflowing_mul(ub);
     if !hi_overflow {
-        // u128 product fits. One hardware divide replaces the magic.
-        let q_floor = uprod / exp;
-        let r = uprod - q_floor * exp;
+        // u128 product fits. For SCALE <= 19 the divisor `exp = 10^SCALE`
+        // also fits a single u64, in which case the LLVM `__udivti3`
+        // soft-call (u128/u128) can be replaced by a two-step schoolbook
+        // divide in base 2^64 — two hardware `divq` instructions on
+        // x86_64 instead of the soft routine. The branch is const-folded
+        // per-SCALE so the runtime cost is just the branch the compiler
+        // proves away.
+        let (q_floor, r) = if SCALE <= 19 {
+            let d = exp as u64;
+            let hi = (uprod >> 64) as u64;
+            let lo = uprod as u64;
+            if hi == 0 {
+                // Single-limb dividend: one hardware divide suffices.
+                let q = lo / d;
+                let r = lo % d;
+                (q as u128, r as u128)
+            } else {
+                // Two-limb schoolbook divide in base 2^64.
+                let q_hi = hi / d;
+                let r_hi = hi % d;
+                let cur = ((r_hi as u128) << 64) | (lo as u128);
+                let q_lo_u128 = cur / (d as u128);
+                let r = cur - q_lo_u128 * (d as u128);
+                let q = ((q_hi as u128) << 64) | (q_lo_u128 & u128::from(u64::MAX));
+                (q, r)
+            }
+        } else {
+            let q = uprod / exp;
+            (q, uprod - q * exp)
+        };
         let neg = (a < 0) ^ (b < 0);
         let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
         return if neg {

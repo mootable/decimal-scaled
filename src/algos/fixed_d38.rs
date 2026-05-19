@@ -68,6 +68,23 @@ fn is_zero_u256(a: U256) -> bool {
     a[0] == 0 && a[1] == 0
 }
 
+/// Full 256x128 -> 384 unsigned product, returned in U512 form
+/// (top limb is always 0).
+///
+/// Specialisation of [`mul_u256`] for the common case where one
+/// operand is a 128-bit constant — the four-sub-product schoolbook
+/// collapses to two because two of the partial products with the
+/// zero high limb are themselves zero.
+#[inline]
+fn mul_u256_by_u128(a: U256, b: u128) -> U512 {
+    let (p0_hi, p0_lo) = mul_128(a[0], b);
+    let (p1_hi, p1_lo) = mul_128(a[1], b);
+    let r0 = p0_lo;
+    let (r1, c1) = p0_hi.overflowing_add(p1_lo);
+    let r2 = p1_hi + u128::from(c1);
+    [r0, r1, r2, 0]
+}
+
 /// Full 256x256 -> 512 unsigned product.
 pub(crate) fn mul_u256(a: U256, b: U256) -> U512 {
     // a = a0 + a1·B, b = b0 + b1·B, B = 2^128.
@@ -605,7 +622,14 @@ impl Fixed {
     /// a 512-bit value and its integer square root taken exactly. The
     /// caller's working values keep `mag · 10^w < 2^512`.
     pub(crate) fn sqrt(self, w: u32) -> Fixed {
-        let radicand = mul_u256(self.mag, Fixed::pow10(w));
+        // For w <= 38 the multiplier fits a single u128; the
+        // collapsed 256x128 multiply skips the two zero sub-products
+        // of the general 256x256 schoolbook.
+        let radicand = if w <= 38 {
+            mul_u256_by_u128(self.mag, crate::algos::mg_divide::POW10_U128[w as usize])
+        } else {
+            mul_u256(self.mag, Fixed::pow10(w))
+        };
         Fixed { negative: false, mag: isqrt_u512(radicand) }
     }
 
@@ -613,8 +637,15 @@ impl Fixed {
     /// truncating toward zero. `rhs` must be non-zero. `self * 10^w`
     /// must fit 512 bits (it always does for the evaluators' inputs).
     pub(crate) fn div(self, rhs: Fixed, w: u32) -> Fixed {
-        let scale = Fixed::pow10(w);
-        let scaled = mul_u256(self.mag, scale);
+        // Build the numerator `self.mag * 10^w` as a 512-bit value.
+        // The single-u128-limb multiplier specialisation collapses
+        // half the sub-products when `w <= 38`; outside that band
+        // we go through the general 256x256 schoolbook.
+        let scaled = if w <= 38 {
+            mul_u256_by_u128(self.mag, crate::algos::mg_divide::POW10_U128[w as usize])
+        } else {
+            mul_u256(self.mag, Fixed::pow10(w))
+        };
         let q = div_u512_by_u256(scaled, rhs.mag);
         Fixed {
             negative: (self.negative ^ rhs.negative) && !(q[0] == 0 && q[1] == 0),
