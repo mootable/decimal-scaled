@@ -260,7 +260,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// [`wide_cast`]: $crate::wide_int::wide_cast
             pub(crate) fn to_work(raw: $Storage) -> W {
-                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10(GUARD)
+                $crate::wide_int::wide_cast::<$Storage, W>(raw) * pow10_cached(GUARD)
             }
 
             /// Runtime-guard variant of [`to_work`]: scales raw by
