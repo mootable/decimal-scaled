@@ -19,6 +19,7 @@ pub(crate) mod decimal;
 pub(crate) mod arithmetic;
 pub(crate) mod convert;
 pub(crate) mod transcendental;
+pub(crate) mod width_le;
 #[cfg(feature = "dyn")]
 pub mod dyn_decimal;
 
@@ -26,3 +27,4 @@ pub use decimal::Decimal;
 pub use arithmetic::DecimalArithmetic;
 pub use convert::DecimalConvert;
 pub use transcendental::DecimalTranscendental;
+pub use width_le::WidthLE;

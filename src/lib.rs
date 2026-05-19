@@ -250,6 +250,7 @@ pub use crate::types::traits::Decimal;
 pub use crate::support::error::{ConvertError, ParseError};
 pub use crate::support::rounding::RoundingMode;
 pub use crate::types::traits::DecimalTranscendental;
+pub use crate::types::traits::WidthLE;
 
 #[cfg(feature = "dyn")]
 pub use crate::types::traits::dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
