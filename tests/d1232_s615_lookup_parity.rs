@@ -20,12 +20,15 @@ fn from_int(n: i128) -> D {
 }
 
 #[track_caller]
-fn agree_within_2_storage_lsb(label: &str, a: D, b: D) {
+fn agree_within_1_storage_lsb(label: &str, a: D, b: D) {
     let diff = if a >= b { a - b } else { b - a };
-    let two = D::from_int(2);
+    // One storage LSB: two correctly-rounded paths may legitimately
+    // disagree by at most 1 ULP at half-ULP-tie boundaries (one rounds
+    // up, the other rounds down). Tighter than 1 LSB would false-positive
+    // on those legitimate cases.
     let one = D::from_int(1);
     let lsb = one / D::from_int(10).pow(615);
-    let limit = two * lsb;
+    let limit = lsb;
     assert!(
         diff <= limit,
         "{label}: |a - b| = {diff:?}, limit = {limit:?}, a = {a:?}, b = {b:?}",
@@ -41,7 +44,7 @@ fn ln_lookup_matches_wide_kernel_at_s615() {
 
     let lookup = one_p_half.ln_strict();
     let kernel = one_p_half.ln_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("ln(1.5) D1232<615>", lookup, kernel);
+    agree_within_1_storage_lsb("ln(1.5) D1232<615>", lookup, kernel);
 }
 
 // Identity probe: exp(ln(x)) ≈ x. exp uses the canonical wide_kernel
@@ -51,7 +54,7 @@ fn ln_lookup_matches_wide_kernel_at_s615() {
 fn exp_ln_round_trip_at_s615() {
     let x = from_int(3) / from_int(2); // 1.5
     let round = x.ln_strict().exp_strict();
-    agree_within_2_storage_lsb("exp(ln(1.5)) D1232<615>", round, x);
+    agree_within_1_storage_lsb("exp(ln(1.5)) D1232<615>", round, x);
 }
 
 // Boundary probe: ln(2) at the table boundary (m = 2, k = 1).
@@ -60,7 +63,7 @@ fn ln_two_at_s615() {
     let two = from_int(2);
     let lookup = two.ln_strict();
     let kernel = two.ln_strict_with(decimal_scaled::RoundingMode::HalfToEven);
-    agree_within_2_storage_lsb("ln(2) D1232<615>", lookup, kernel);
+    agree_within_1_storage_lsb("ln(2) D1232<615>", lookup, kernel);
 }
 
 // Boundary probe: ln(1) = 0 short-circuit.
