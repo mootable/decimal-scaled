@@ -2,6 +2,7 @@
 //! rationale as [`crate::policy::ln`] / [`crate::policy::exp`]).
 
 use crate::algos::pow;
+use crate::policy::triplet::{policy_triplet, wtag};
 use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
 
@@ -72,18 +73,43 @@ impl<const SCALE: u32> PowPolicy for D18<SCALE> {
 // loop for the divide-by-pow10(w). With the chained MG kernel the
 // bespoke path now wins across the whole SCALE range; the empirical
 // crossover that motivated the split is no longer present.
+// D38 routes `powf` through the `policy_triplet!` free fns keyed on a
+// const-folded `match (W, SCALE)`. There is no scale cascade and no std
+// override today — `std` is identical to `base` — but the triplet shape
+// keeps D38 uniform with the other families and ready for a future
+// override cell. The strict and `_with` forms call different kernels
+// (`powf_strict` vs `powf_with`), so each gets its own triplet; the
+// `_with` triplet carries `working_digits` as an extra param.
+policy_triplet! {
+    storage = i128,
+    base_fn = powf_d38_base, std_fn = powf_d38_std, no_std_fn = powf_d38_no_std,
+    recv = raw, mode = mode,
+    params = { exp_raw: i128 },
+    base = { (wtag::D38, _) => pow::fixed_d38::powf_strict::<SCALE>(raw, exp_raw, mode) },
+    std = {},
+}
+policy_triplet! {
+    storage = i128,
+    base_fn = powf_with_d38_base, std_fn = powf_with_d38_std, no_std_fn = powf_with_d38_no_std,
+    recv = raw, mode = mode,
+    params = { exp_raw: i128, working_digits: u32 },
+    base = { (wtag::D38, _) => pow::fixed_d38::powf_with::<SCALE>(raw, exp_raw, working_digits, mode) },
+    std = {},
+}
+
 impl<const SCALE: u32> PowPolicy for D38<SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
-        Self(pow::fixed_d38::powf_strict::<SCALE>(self.0, exp.0, mode))
+        #[cfg(feature = "std")]
+        { Self(powf_d38_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode)) }
+        #[cfg(not(feature = "std"))]
+        { Self(powf_d38_no_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode)) }
     }
     #[inline]
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(pow::fixed_d38::powf_with::<SCALE>(
-            self.0,
-            exp.0,
-            working_digits,
-            mode,
-        ))
+        #[cfg(feature = "std")]
+        { Self(powf_with_d38_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, working_digits, mode)) }
+        #[cfg(not(feature = "std"))]
+        { Self(powf_with_d38_no_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, working_digits, mode)) }
     }
 }
