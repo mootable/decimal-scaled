@@ -329,6 +329,10 @@ pub use crate::cross_scale as cross;
 // ~2k LOC of self-contained limb arithmetic plus the per-width
 // `decl_wide_int!` instantiations.
 mod wide_int;
+// 0.5.0 const-generic integer layer (`Int<N>`/`Uint<N>`), introduced
+// alongside `wide_int`'s named `IntXXXX` types during the unification.
+// See research plan; named types become `pub type` aliases over these.
+mod int;
 mod policy;
 
 #[cfg(feature = "serde")]
