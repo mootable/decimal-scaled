@@ -21,7 +21,7 @@ use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::types::consts::DecimalConstants;
 use crate::types::widths::D38;
 use crate::algos::fixed_d38::Fixed;
-use crate::support::rounding::RoundingMode;
+use crate::support::rounding::{is_nearest_mode, RoundingMode};
 
 // ── Shared Fixed primitives ────────────────────────────────────────
 
@@ -382,7 +382,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + STRICT_GUARD;
@@ -401,7 +401,7 @@ pub(crate) fn sin_with<const SCALE: u32>(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + working_digits;
@@ -450,7 +450,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + STRICT_GUARD;
@@ -475,7 +475,7 @@ pub(crate) fn tan_with<const SCALE: u32>(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + working_digits;
@@ -505,7 +505,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     if raw == -one_bits {
         return -<D38<SCALE> as DecimalConstants>::quarter_pi().0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + STRICT_GUARD;
@@ -531,7 +531,7 @@ pub(crate) fn atan_with<const SCALE: u32>(
     if raw == -one_bits {
         return -<D38<SCALE> as DecimalConstants>::quarter_pi().0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + working_digits;
@@ -548,7 +548,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + STRICT_GUARD;
@@ -590,7 +590,7 @@ pub(crate) fn asin_with<const SCALE: u32>(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold::<SCALE>() {
+    if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
     }
     let w = SCALE + working_digits;
@@ -764,7 +764,7 @@ pub(crate) fn sinh_with(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
         return raw;
     }
     let w = scale + working_digits;
@@ -829,7 +829,7 @@ pub(crate) fn tanh_with(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
         return raw;
     }
     let w = scale + working_digits;
@@ -862,7 +862,7 @@ pub(crate) fn asinh_with(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
         return raw;
     }
     let w = scale + working_digits;
@@ -936,7 +936,7 @@ pub(crate) fn atanh_with(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
         return raw;
     }
     let w = scale + working_digits;

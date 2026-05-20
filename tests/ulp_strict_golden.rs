@@ -313,11 +313,11 @@ decl_band! {
     parse |s: &str| s.parse::<i32>().expect("parse i32"),
     one 1i32,
     funcs {
-        ln   = "golden/ln_d9_s4.txt",   ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
+        ln   = "golden/ln_d9_s4.txt";
         exp  = "golden/exp_d9_s4.txt";
-        sin  = "golden/sin_d9_s4.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        sin  = "golden/sin_d9_s4.txt";
         cos  = "golden/cos_d9_s4.txt";
-        tan  = "golden/tan_d9_s4.txt",  ignore = "directed-rounding 1-LSB boundary (Floor/Ceiling)";
+        tan  = "golden/tan_d9_s4.txt";
         atan = "golden/atan_d9_s4.txt", ignore_when(not(feature = "wide")) = "narrow-path atan directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling); the wide-feature atan path is correctly rounded";
         sqrt = "golden/sqrt_d9_s4.txt";
         cbrt = "golden/cbrt_d9_s4.txt";
@@ -332,11 +332,11 @@ decl_band! {
     parse |s: &str| s.parse::<i64>().expect("parse i64"),
     one 1i64,
     funcs {
-        ln   = "golden/ln_d18_s9.txt",   ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
+        ln   = "golden/ln_d18_s9.txt";
         exp  = "golden/exp_d18_s9.txt";
-        sin  = "golden/sin_d18_s9.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        sin  = "golden/sin_d18_s9.txt";
         cos  = "golden/cos_d18_s9.txt";
-        tan  = "golden/tan_d18_s9.txt",  ignore = "directed-rounding 1-LSB boundary (Floor/Ceiling)";
+        tan  = "golden/tan_d18_s9.txt";
         atan = "golden/atan_d18_s9.txt", ignore_when(not(feature = "wide")) = "narrow-path atan directed-rounding 1-LSB boundary (Trunc/Ceiling); the wide-feature atan path is correctly rounded";
         sqrt = "golden/sqrt_d18_s9.txt";
         cbrt = "golden/cbrt_d18_s9.txt";
@@ -351,7 +351,7 @@ decl_band! {
     parse |s: &str| s.parse::<i128>().expect("parse i128"),
     one 1i128,
     funcs {
-        ln   = "golden/ln_d38_s19.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
+        ln   = "golden/ln_d38_s19.txt";
         exp  = "golden/exp_d38_s19.txt";
         sin  = "golden/sin_d38_s19.txt";
         cos  = "golden/cos_d38_s19.txt";

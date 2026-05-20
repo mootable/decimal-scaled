@@ -22,7 +22,7 @@
 //! Panics on `raw <= 0` (the typed method's contract).
 
 use crate::algos::fixed_d38::Fixed;
-use crate::support::rounding::RoundingMode;
+use crate::support::rounding::{is_nearest_mode, RoundingMode};
 
 /// Guard digits added below the storage scale for the D38 strict log
 /// family. The 256-bit `Fixed` intermediate runs at
@@ -175,7 +175,12 @@ pub(crate) fn ln_with(raw: i128, scale: u32, working_digits: u32, mode: Rounding
     }
     let delta = raw - one_bits;
     let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub((scale + 1) / 2));
-    if delta.abs() <= ln1p_band {
+    if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
+        // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … : within the band
+        // the quadratic term is below half an LSB, so the nearest-rounded
+        // result is exactly `delta`. Directed modes need the true residual
+        // sign (the value sits sub-LSB to one side of `delta`), so they
+        // fall through to the full working-scale kernel below.
         return delta;
     }
     let w = scale + working_digits;
@@ -199,7 +204,10 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     }
     let delta = raw - one_bits;
     let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
-    if delta.abs() <= ln1p_band {
+    if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
+        // See `ln_with`: the linear approximation is correctly rounded to
+        // nearest inside the band but loses the residual sign that directed
+        // modes require, so those fall through to the full kernel.
         return delta;
     }
     let w = SCALE + STRICT_GUARD;

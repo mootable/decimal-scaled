@@ -157,6 +157,27 @@ pub(crate) fn should_bump(
     }
 }
 
+/// `true` for the three round-to-nearest modes (`HalfToEven`,
+/// `HalfAwayFromZero`, `HalfTowardZero`), `false` for the directed
+/// modes (`Trunc`, `Floor`, `Ceiling`).
+///
+/// Kernels with a sub-LSB linear-approximation fast path (e.g.
+/// `ln(1 + δ)` near `δ`, `exp(δ)` near `1 + δ`) may short-circuit only
+/// under nearest rounding: those approximations land within half an LSB
+/// of the true value, which is exactly what nearest rounding needs but
+/// not enough for a directed mode, whose answer depends on which side of
+/// the boundary the true value falls. Directed modes must fall through
+/// to the full working-scale evaluation so the residual sign is known.
+#[inline(always)]
+pub(crate) const fn is_nearest_mode(mode: RoundingMode) -> bool {
+    matches!(
+        mode,
+        RoundingMode::HalfToEven
+            | RoundingMode::HalfAwayFromZero
+            | RoundingMode::HalfTowardZero
+    )
+}
+
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
