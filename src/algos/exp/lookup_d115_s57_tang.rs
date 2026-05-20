@@ -2,7 +2,7 @@
 //! `SCALE = 57` (mid-storage, popular precision tier).
 //!
 //! Direct port of [`crate::algos::exp::lookup_d57_s18_22_tang`] adapted
-//! for the `D115` storage tier (`Int384` storage, `Int1024` work
+//! for the `D115` storage tier (`Int384` storage, `Int2048` work
 //! integer). See Tang 1989 (ACM TOMS 16(4)) "Table-driven
 //! implementation of the exponential function in IEEE floating-point
 //! arithmetic" for the underlying technique:
@@ -26,7 +26,7 @@
 //!   half-ULP at SCALE=57 is `0.5·10⁻⁵⁷`, so the drift sits ~6 orders
 //!   below half-ULP.
 //! - `M = 128` matches the D57 sibling: per-thread memory cost
-//!   `M · sizeof(W) = 128 · 128 B = ~16 KB` (W = Int1024). Fits L1d.
+//!   `M · sizeof(W) = 128 · 256 B = ~32 KB` (W = Int2048). Fits L2.
 
 #![cfg(any(feature = "d115", feature = "wide"))]
 

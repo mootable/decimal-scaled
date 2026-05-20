@@ -91,7 +91,7 @@ For the strict transcendentals:
 | D38 | `d_w128_kernels::Fixed` (256-bit sign-magnitude) | 60 | artanh series for `ln`, range-reduced Taylor for `exp`, Cody–Waite for `sin`/`cos`, Machin for π, integer `isqrt` for `sqrt` |
 | D57 | `Int512` | 30 | same kernel family as D76, lifted to the half-width work integer |
 | D76 | `Int1024` | 30 | rounded `mul` / `div` (half-to-even per op); same series as D38 lifted to the limb-array core |
-| D115 | `Int1024` | 30 | same |
+| D115 | `Int2048` | 30 | same |
 | D153 | `Int2048` | 30 | same |
 | D230 | `Int3072` | 30 | same |
 | D307 | `Int4096` | 30 | same |

@@ -2,7 +2,7 @@
 //! `SCALE = 57` (mid-storage, popular precision tier).
 //!
 //! Direct port of [`crate::algos::ln::lookup_d57_s18_22_tang`] adapted
-//! for the `D115` storage tier (`Int384` storage, `Int1024` work
+//! for the `D115` storage tier (`Int384` storage, `Int2048` work
 //! integer). See Tang 1990, "Table-driven implementation of the
 //! logarithm function in IEEE floating-point arithmetic" (ACM TOMS
 //! 16(4) 378-400).
@@ -37,8 +37,8 @@
 //!   working units; storage half-ULP is `0.5·10⁻⁵⁷ = 5·10⁻⁵⁸`, so the
 //!   accumulated drift sits ~6 orders of magnitude below half-ULP.
 //! - `M = 128` mirrors the D57 ln Tang slot. Per-thread memory cost:
-//!   `(M + 1)·sizeof(W) = 129 · 128 B = ~16.5 KB` (W = Int1024). Fits
-//!   L1d; cold-start seed is `M · ln_fixed(w = 65) ≈ 128 · ~10 µs =
+//!   `(M + 1)·sizeof(W) = 129 · 256 B = ~33 KB` (W = Int2048). Fits
+//!   L2; cold-start seed is `M · ln_fixed(w = 65) ≈ 128 · ~10 µs =
 //!   ~1.3 ms`, paid once per thread per scale.
 
 #![cfg(any(feature = "d115", feature = "wide"))]
