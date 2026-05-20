@@ -261,7 +261,10 @@ pub mod __bench_internals {
 
                     #[inline(never)]
                     pub fn mg_chain(n: Storage, scale: u32) -> Storage {
-                        Storage(crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(
+                        Storage(crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                            W,
+                            { <W as crate::wide_int::WideInt>::U128_LIMBS },
+                        >(
                             n.0,
                             scale,
                             RoundingMode::HalfToEven,
@@ -270,7 +273,10 @@ pub mod __bench_internals {
 
                     #[inline(never)]
                     pub fn mg_single(n: Storage, scale: u32) -> Storage {
-                        Storage(crate::algos::mg_divide::div_wide_pow10_with::<W>(
+                        Storage(crate::algos::mg_divide::div_wide_pow10_with::<
+                            W,
+                            { <W as crate::wide_int::WideInt>::U128_LIMBS },
+                        >(
                             n.0,
                             scale,
                             RoundingMode::HalfToEven,
