@@ -380,7 +380,7 @@ decl_band! {
         tanh  = "golden/tanh_d9_s4.txt";
         asinh = "golden/asinh_d9_s4.txt";
         acosh = "golden/acosh_d9_s4.txt";
-        atanh = "golden/atanh_d9_s4.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d9_s4.txt";
         sqrt  = "golden/sqrt_d9_s4.txt";
         cbrt  = "golden/cbrt_d9_s4.txt";
         log   = "golden/log_d9_s4.txt";
@@ -413,7 +413,7 @@ decl_band! {
         tanh  = "golden/tanh_d18_s9.txt";
         asinh = "golden/asinh_d18_s9.txt";
         acosh = "golden/acosh_d18_s9.txt";
-        atanh = "golden/atanh_d18_s9.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d18_s9.txt";
         sqrt  = "golden/sqrt_d18_s9.txt";
         cbrt  = "golden/cbrt_d18_s9.txt";
         log   = "golden/log_d18_s9.txt";
@@ -446,7 +446,7 @@ decl_band! {
         tanh  = "golden/tanh_d38_s19.txt";
         asinh = "golden/asinh_d38_s19.txt";
         acosh = "golden/acosh_d38_s19.txt";
-        atanh = "golden/atanh_d38_s19.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d38_s19.txt";
         sqrt  = "golden/sqrt_d38_s19.txt";
         cbrt  = "golden/cbrt_d38_s19.txt";
         log   = "golden/log_d38_s19.txt";
@@ -481,7 +481,7 @@ decl_band! {
         tanh  = "golden/tanh_d57_s28.txt";
         asinh = "golden/asinh_d57_s28.txt";
         acosh = "golden/acosh_d57_s28.txt";
-        atanh = "golden/atanh_d57_s28.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d57_s28.txt";
         sqrt  = "golden/sqrt_d57_s28.txt";
         cbrt  = "golden/cbrt_d57_s28.txt";
         log   = "golden/log_d57_s28.txt";
@@ -514,7 +514,7 @@ decl_band! {
         tanh  = "golden/tanh_d76_s35.txt";
         asinh = "golden/asinh_d76_s35.txt";
         acosh = "golden/acosh_d76_s35.txt";
-        atanh = "golden/atanh_d76_s35.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d76_s35.txt";
         sqrt  = "golden/sqrt_d76_s35.txt";
         cbrt  = "golden/cbrt_d76_s35.txt";
         log   = "golden/log_d76_s35.txt";
@@ -547,7 +547,7 @@ decl_band! {
         tanh  = "golden/tanh_d115_s57.txt";
         asinh = "golden/asinh_d115_s57.txt";
         acosh = "golden/acosh_d115_s57.txt";
-        atanh = "golden/atanh_d115_s57.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d115_s57.txt";
         sqrt  = "golden/sqrt_d115_s57.txt";
         cbrt  = "golden/cbrt_d115_s57.txt";
         log   = "golden/log_d115_s57.txt";
@@ -580,7 +580,7 @@ decl_band! {
         tanh  = "golden/tanh_d153_s76.txt";
         asinh = "golden/asinh_d153_s76.txt";
         acosh = "golden/acosh_d153_s76.txt";
-        atanh = "golden/atanh_d153_s76.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d153_s76.txt";
         sqrt  = "golden/sqrt_d153_s76.txt";
         cbrt  = "golden/cbrt_d153_s76.txt";
         log   = "golden/log_d153_s76.txt";
@@ -613,7 +613,7 @@ decl_band! {
         tanh  = "golden/tanh_d230_s115.txt";
         asinh = "golden/asinh_d230_s115.txt";
         acosh = "golden/acosh_d230_s115.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
-        atanh = "golden/atanh_d230_s115.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d230_s115.txt";
         sqrt  = "golden/sqrt_d230_s115.txt";
         cbrt  = "golden/cbrt_d230_s115.txt";
         log   = "golden/log_d230_s115.txt";
@@ -646,7 +646,7 @@ decl_band! {
         tanh  = "golden/tanh_d307_s150.txt";
         asinh = "golden/asinh_d307_s150.txt";
         acosh = "golden/acosh_d307_s150.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
-        atanh = "golden/atanh_d307_s150.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d307_s150.txt";
         sqrt  = "golden/sqrt_d307_s150.txt";
         cbrt  = "golden/cbrt_d307_s150.txt";
         log   = "golden/log_d307_s150.txt";
@@ -679,7 +679,7 @@ decl_band! {
         tanh  = "golden/tanh_d462_s230.txt", ignore = "saturation-edge accuracy gap: at a near-±1 grid-line input the directed Ziv escalation drives exp_fixed past the wide-tier work-integer width (Int4096) and overflows; the exp_fixed width limit at the saturation edge is the same family as the sinh/cosh near-overflow-edge gap; tracked separately";
         asinh = "golden/asinh_d462_s230.txt";
         acosh = "golden/acosh_d462_s230.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
-        atanh = "golden/atanh_d462_s230.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d462_s230.txt";
         sqrt  = "golden/sqrt_d462_s230.txt";
         cbrt  = "golden/cbrt_d462_s230.txt";
         log   = "golden/log_d462_s230.txt";
@@ -712,7 +712,7 @@ decl_band! {
         tanh  = "golden/tanh_d616_s308.txt";
         asinh = "golden/asinh_d616_s308.txt";
         acosh = "golden/acosh_d616_s308.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
-        atanh = "golden/atanh_d616_s308.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d616_s308.txt";
         sqrt  = "golden/sqrt_d616_s308.txt";
         cbrt  = "golden/cbrt_d616_s308.txt";
         log   = "golden/log_d616_s308.txt";
@@ -745,7 +745,7 @@ decl_band! {
         tanh  = "golden/tanh_d924_s460.txt";
         asinh = "golden/asinh_d924_s460.txt";
         acosh = "golden/acosh_d924_s460.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
-        atanh = "golden/atanh_d924_s460.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d924_s460.txt";
         sqrt  = "golden/sqrt_d924_s460.txt";
         cbrt  = "golden/cbrt_d924_s460.txt";
         log   = "golden/log_d924_s460.txt";
@@ -778,7 +778,7 @@ decl_band! {
         tanh  = "golden/tanh_d1232_s615.txt";
         asinh = "golden/asinh_d1232_s615.txt";
         acosh = "golden/acosh_d1232_s615.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
-        atanh = "golden/atanh_d1232_s615.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
+        atanh = "golden/atanh_d1232_s615.txt";
         sqrt  = "golden/sqrt_d1232_s615.txt";
         cbrt  = "golden/cbrt_d1232_s615.txt";
         log   = "golden/log_d1232_s615.txt";

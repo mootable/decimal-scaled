@@ -2469,8 +2469,12 @@ macro_rules! decl_wide_transcendental {
                 if ax >= one_w {
                     panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                 }
-                let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) >> 1;
+                // Gap form: atanh(x) = (1/2)*[ln(1+x) - ln(1-x)].
+                // `one_w - v` is the exact working-scale gap (`v` is the
+                // storage input lifted by appending guard zeros), so
+                // neither `ln_fixed` argument suffers the `(1-x)`
+                // catastrophic cancellation the ratio form does near +-1.
+                let r = ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1;
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3103,13 +3107,16 @@ macro_rules! decl_wide_transcendental {
                         panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                     }
                 }
-                Self::from_bits($core::round_to_storage_directed(
+                Self::from_bits($core::round_to_storage_directed_near_special(
                     $core::GUARD, SCALE, mode, |guard| {
                         let w = SCALE + guard;
                         let one_w = $core::one(w);
                         let v = $core::to_work_w(raw, guard);
-                        let ratio = $core::div(one_w + v, one_w - v, w);
-                        $core::ln_fixed(ratio, w) >> 1
+                        // Gap form (1/2)*[ln(1+x) - ln(1-x)]: `one_w
+                        // - v` is the exact working-scale gap, so neither
+                        // `ln_fixed` argument suffers the `(1-x)`
+                        // cancellation the ratio form does near +-1.
+                        ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1
                     },
                 ))
             }
@@ -3881,8 +3888,12 @@ macro_rules! decl_wide_transcendental {
                 if ax >= one_w {
                     panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
                 }
-                let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) >> 1;
+                // Gap form: atanh(x) = (1/2)*[ln(1+x) - ln(1-x)].
+                // `one_w - v` is the exact working-scale gap (`v` is the
+                // storage input lifted by appending guard zeros), so
+                // neither `ln_fixed` argument suffers the `(1-x)`
+                // catastrophic cancellation the ratio form does near +-1.
+                let r = ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
