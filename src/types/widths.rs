@@ -1238,7 +1238,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::I768,
     crate::wide_int::Int768,
     crate::wide_int::Int1024,
-    crate::wide_int::Int1024,
+    crate::wide_int::Int2048,
     wide_trig_d115,
     114
 );
