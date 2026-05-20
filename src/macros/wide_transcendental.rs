@@ -717,14 +717,16 @@ macro_rules! decl_wide_transcendental {
                         let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
                         storage_digits.saturating_sub(target)
                     };
-                    // The kernels form double-width intermediate products,
-                    // so the safe working width is HALF the type's digit
-                    // capacity, less the result's integer digits and a
-                    // margin. Escalating past this overflows the kernel
-                    // scratch, so it bounds `max_guard`.
-                    let half_cap_digits = ((<W>::BITS as u64 * 30103 / 100_000) as u32 / 2)
+                    // Some kernels form wide intermediate scratch — e.g.
+                    // `sqrt_fixed` asserts `bit_length(|v|) + 4·w < W::BITS`,
+                    // i.e. roughly `7·w_decimal < W::BITS`. Cap the total
+                    // working scale at `W::BITS / 8` decimal digits (leaving
+                    // ~12% headroom over the tightest scratch) so the
+                    // recompute never overflows. Subtract the result's
+                    // integer digits and a small margin.
+                    let cap_digits = (<W>::BITS / 8)
                         .saturating_sub(int_digits + 8);
-                    let max_guard = half_cap_digits.saturating_sub(target).max(base_guard);
+                    let max_guard = cap_digits.saturating_sub(target).max(base_guard);
 
                     let mut guard = base_guard;
                     loop {
