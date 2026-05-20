@@ -2571,6 +2571,18 @@ macro_rules! decl_wide_transcendental {
                 if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
                     return self.powi(n);
                 }
+                // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
+                // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
+                // under the directed modes; the sqrt kernel pins the exact
+                // algebraic root and is correctly rounded for every input,
+                // so route the exact-half exponent through it.
+                {
+                    let two = $crate::macros::wide_roots::wide_lit!($Storage, "2");
+                    let mult = Self::multiplier();
+                    if exp.to_bits() == mult / two {
+                        return self.sqrt_strict_with(mode);
+                    }
+                }
                 let eraw = exp.to_bits();
                 // Large-result lift. `x^y = exp(y·ln x)` carries
                 // `~|y·ln x|·log10(e)` integer digits; size the working

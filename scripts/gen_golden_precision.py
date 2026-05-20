@@ -68,11 +68,18 @@ Categories of cases per (tier, function) file:
   * `monotonicity` — an `x+1` neighbour beside a sample of inputs so
     adjacent rounded outputs can be cross-checked for ordering.
 
-Exact algebraic points (perfect squares for sqrt, perfect cubes for
-cbrt) are classified symbolically by integer power-root arithmetic
-(`exact_algebraic_root`), bypassing the finite-precision oracle's
-sub-LSB residual so the exact value is pinned to the `Z` (no-bump)
-tie-class under every rounding mode.
+Exact algebraic points are classified symbolically by integer
+arithmetic, bypassing the finite-precision oracle's sub-LSB residual so
+the exact value is pinned to the `Z` (no-bump) tie-class under every
+rounding mode:
+
+  * perfect squares for sqrt, perfect cubes for cbrt
+    (`exact_algebraic_root`);
+  * `log_b(b^k) = k` where the argument is an exact power of the base
+    (`exact_log_base`) — the `log(v)/log(b)` oracle lands a hair below
+    the integer (e.g. `log_2(32) = 5 − 5.9·10**-682` at 700 dps);
+  * `base**(p/q)` where a perfect-power base meets a small rational
+    exponent (`exact_powf`, e.g. `4**0.5 = 2`).
 
 Reproducibility: the script is deterministic — every random draw is
 seeded from `random.Random(<seeded_key>)`. Two runs produce
@@ -275,6 +282,159 @@ def exact_algebraic_root(func_name: str, raw: int, scale: int) -> int | None:
         r = _exact_integer_root(-n, 3)
         return None if r is None else -r
     return None
+
+
+def exact_log_base(value_raw: int, base_raw: int, scale: int) -> int | None:
+    """Detect an EXACT `log_base(value)` at the tier scale.
+
+    `log_b(v) = k` exactly when `v == b^k` for a non-negative integer
+    `k`, with `v = value_raw / 10**scale` and `b = base_raw / 10**scale`.
+    The exact storage result is then `k * 10**scale`.
+
+    The finite-precision oracle computes `log(v) / log(b)` and lands a
+    sub-LSB residual short of (or past) the integer `k` — e.g.
+    `log(32)/log(2)` evaluates to `5 − 5.9·10**-682` at 700 dps, whose
+    floor is `5·10**scale − 1` and whose fractional class is `G`,
+    demanding a directed bump the true value (exactly 5) does not
+    warrant. Pinning the exact integer here classifies the point as
+    `Z` (no bump) under every rounding mode — the same treatment
+    `exact_algebraic_root` gives the perfect square / cube roots.
+
+    Detection is pure integer arithmetic: clearing the common `10**scale`
+    denominators, `v == b^k` is `value_raw · 10**(scale·(k−1)) ==
+    base_raw**k`. We iterate `k` upward while `base_raw**k` has not
+    overshot `value_raw · 10**(scale·(k−1))`; the base magnitude grows
+    geometrically so the loop is short.
+
+    Returns the exact `floor_raw` (`= k · 10**scale`) or `None` when the
+    pair is not an exact power.
+    """
+    one = 10 ** scale
+    if value_raw <= 0 or base_raw <= 0 or base_raw == one:
+        return None
+    # k = 0 -> v == 1 -> log = 0 (any base): value_raw == 10**scale.
+    if value_raw == one:
+        return 0
+    if value_raw < one and base_raw > one:
+        # 0 < v < 1 with b > 1 -> log_b(v) < 0, never an exact
+        # non-negative power; the oracle path classifies it.
+        return None
+    # Scan k = 1, 2, 3, … testing `value_raw · 10**(scale·(k−1)) ==
+    # base_raw**k`. Both sides are exact integers.
+    #
+    # Termination: for a true power `v = b**k`, multiplying out the
+    # `10**scale` denominators gives `base_raw**k == value_raw ·
+    # 10**(scale·(k−1))`, so `(base_raw / one)**k == value_raw / one`.
+    # The right side is the fixed ratio `v <= max representable`, so any
+    # genuine `k` satisfies `(base_raw/one)**k == v`, bounded by
+    # `k <= log(v) / log(base_raw/one)`. We cap the scan at the number of
+    # base-`b` steps needed to reach `value_raw` (computed without floats
+    # by counting how many times `base_raw` multiplies into `one` before
+    # the running power's *integer part* exceeds `value_raw // one + 1`),
+    # which both terminates the near-1 bases and admits every real power.
+    target_int = value_raw // one + 1   # ceil(v) upper bound
+    # Hard iteration cap. A genuine exact power `v = b**k` in the emitted
+    # rosters has small `k` (the generators cap their `log_b(b**k)`
+    # sweeps at `k <= 30`); a result `k · one` beyond this cap is far
+    # larger than any value the tables hold. The cap also bounds the scan
+    # for bases arbitrarily close to 1 (the ill-conditioning probe
+    # `b = 1 + 10**-kk`), where `b**k` climbs toward `ceil(v)` only over
+    # `~log(v)/log(b)` steps.
+    k_cap = 256
+    base_pow = 1                        # base_raw ** k accumulator
+    k = 0
+    while k < k_cap:
+        k += 1
+        base_pow *= base_raw
+        lhs = value_raw * (10 ** (scale * (k - 1)))
+        if base_pow == lhs:
+            return k * one
+        if base_pow > lhs:
+            # `base_raw**k` has overshot the (also-growing) target — no
+            # integer power matches.
+            return None
+        # Integer part of `b**k = base_pow / 10**(scale·k)`. Once it
+        # exceeds `ceil(v)` the running power can no longer equal `v`
+        # (b**k is monotone increasing for b > 1), so stop early.
+        bk_int = base_pow // (10 ** (scale * k))
+        if bk_int > target_int:
+            return None
+    return None
+
+
+def exact_powf(base_raw: int, exp_raw: int, scale: int) -> int | None:
+    """Detect an EXACT `base ** exp` at the tier scale.
+
+    `base ** exp` is exactly the integer storage value `r · 10**scale`
+    when `base = base_raw / 10**scale`, `exp = exp_raw / 10**scale`, and
+    the real power `(base_raw/10**scale) ** (exp_raw/10**scale)` lands on
+    a representable grid point with a zero residual. The headline case is
+    a perfect-power base with a unit-fraction exponent — e.g.
+    `4 ** 0.5 = 2`, `8 ** (1/3) = 2`, `9 ** 0.5 = 3` — where the
+    `exp(y·ln x)` evaluation carries a sub-LSB error and rounds 1 LSB
+    short under the directed modes even though the true value is exact.
+
+    Reduce `exp = exp_raw / 10**scale` to lowest terms `p / q`. Then
+    `base**(p/q)` is an exact integer iff `base**p` is a perfect `q`-th
+    power. We work in cleared-denominator integer form:
+    `base = base_raw / 10**scale`, so
+    `base**p = base_raw**p / 10**(scale·p)`, and the `q`-th root is exact
+    iff both `base_raw**p` and `10**(scale·p)` are perfect `q`-th powers
+    AND the integer roots divide to a whole `r` with `r` representable.
+    The result storage value is `r · 10**scale`.
+
+    Returns the exact `floor_raw` (`= r · 10**scale`) or `None` when the
+    pair is not an exact power. Negative / zero bases and exponents that
+    do not reduce to an exact integer result return `None` (the kernel
+    rejects negative bases and the oracle path handles the rest).
+    """
+    import math
+
+    one = 10 ** scale
+    if base_raw <= 0 or exp_raw == 0:
+        return None
+    # Reduce the exponent fraction exp_raw / 10**scale to lowest terms.
+    sign = 1 if exp_raw > 0 else -1
+    num = abs(exp_raw)
+    den = one
+    g = math.gcd(num, den)
+    p = num // g          # exponent numerator (>= 1)
+    q = den // g          # exponent denominator (>= 1)
+
+    # Only small-fraction exponents can land on an exact representable
+    # integer for a representable base (e.g. p/q ∈ {1/2, 1/3, 2/3, 3/2,
+    # …}); a fraction that does not reduce to small p,q is irrational in
+    # the exponent and the result is irrational — the finite-precision
+    # oracle classifies it. Bounding p,q also keeps `base_raw**p` and the
+    # `q`-th-root radicand from exploding to astronomically large
+    # integers for the random-exponent samples.
+    P_Q_CAP = 8
+    if p > P_Q_CAP or q > P_Q_CAP:
+        return None
+
+    # base = base_raw / 10**scale, so the real result r satisfies
+    #   r**q = base**p = base_raw**p / 10**(scale·p).
+    # Clear the denominator by scaling r up by 10**(scale·p):
+    #   (r · 10**(scale·p))**q = base_raw**p · 10**(scale·p·(q−1)).
+    # The right side is an exact integer; its exact integer q-th root,
+    # when it exists, is `r · 10**(scale·p)`, and `r` is an integer iff
+    # that root is divisible by 10**(scale·p).
+    radicand = (base_raw ** p) * (10 ** (scale * p * (q - 1)))
+    scaled_root = _exact_integer_root(radicand, q)
+    if scaled_root is None:
+        return None
+    denom = 10 ** (scale * p)
+    if scaled_root % denom != 0:
+        # base**(p/q) is irrational or a non-integer rational at this
+        # scale — let the finite-precision oracle classify it.
+        return None
+    magnitude = scaled_root // denom      # the exact real result value
+    if sign < 0:
+        # base**(−p/q) = 1 / magnitude; integer only when magnitude == 1.
+        if magnitude != 1:
+            return None
+        magnitude = 1
+    return magnitude * one
 
 
 def floor_and_class(value: mpf, scale: int) -> tuple[int, str]:
@@ -1162,6 +1322,23 @@ def main() -> None:
             cases2: list[tuple[int, int, int, str]] = []
             for a_raw, b_raw in deduped2:
                 if abs(a_raw) > max_raw or abs(b_raw) > max_raw:
+                    continue
+                # Exact-power points: `log_b(b^k) = k` and the
+                # perfect-power `base**(p/q)` are exact integers whose
+                # finite-precision `log(v)/log(b)` / `exp(y·ln x)` oracle
+                # value carries a sub-LSB residual. Classify them
+                # symbolically via integer arithmetic (mirroring
+                # `exact_algebraic_root` for sqrt / cbrt) so they pin to
+                # the `Z` (no-bump) class under every rounding mode.
+                exact2: int | None = None
+                if func_name == "log":
+                    exact2 = exact_log_base(a_raw, b_raw, scale)
+                elif func_name == "powf":
+                    exact2 = exact_powf(a_raw, b_raw, scale)
+                if exact2 is not None:
+                    if abs(exact2) > max_raw or abs(exact2) + 1 > max_raw:
+                        continue
+                    cases2.append((a_raw, b_raw, exact2, "Z"))
                     continue
                 a = from_raw(a_raw, scale)
                 b = from_raw(b_raw, scale)
