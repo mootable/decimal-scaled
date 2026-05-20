@@ -13,10 +13,11 @@
 //!
 //! Two front-end arms exist:
 //!
-//! - `decl_decimal_basics!(D38, i128, 38)` — *native* storage. The
+//! - `decl_decimal_basics!(D38, i128, 37)` — *native* storage. The
+//!   third argument is `MAX_SCALE = name - 1` (the v0.4.0 cap). The
 //! storage type is a primitive signed integer that supports the
 //! `(10 as $Storage)` literal cast and a const-fn `pow`.
-//! - `decl_decimal_basics!(wide D76, I256, 76)` — *wide* storage. The
+//! - `decl_decimal_basics!(wide D76, I256, 75)` — *wide* storage. The
 //! storage type is a hand-rolled wide integer fixed-width integer, which has no `as`
 //! cast from integer literals; the `10` and `0` constants are built
 //! via the const-fn `from_str_radix` instead.

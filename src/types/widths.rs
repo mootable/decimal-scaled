@@ -4,14 +4,17 @@
 //! storage of the matching size. The stored integer equals
 //! `actual_value * 10^SCALE`. Widths:
 //!
+//! `MAX_SCALE = name - 1` for every width (the v0.4.0 cap guaranteeing
+//! at least one integer digit of headroom at every legal `SCALE`):
+//!
 //! | Type | Storage | `MAX_SCALE` |
 //! |------|---------|-------------|
-//! | [`D9<SCALE>`]  | `i32`             | 9   |
-//! | [`D18<SCALE>`] | `i64`             | 18  |
-//! | [`D38<SCALE>`] | `i128`            | 38  |
-//! | [`D76<SCALE>`] | `crate::wide_int::I256` | 76 |
-//! | [`D153<SCALE>`] | `crate::wide_int::I512` | 153 |
-//! | [`D307<SCALE>`] | `crate::wide_int::I1024` | 307 |
+//! | [`D9<SCALE>`]  | `i32`             | 8   |
+//! | [`D18<SCALE>`] | `i64`             | 17  |
+//! | [`D38<SCALE>`] | `i128`            | 37  |
+//! | [`D76<SCALE>`] | `crate::wide_int::I256` | 75 |
+//! | [`D153<SCALE>`] | `crate::wide_int::I512` | 152 |
+//! | [`D307<SCALE>`] | `crate::wide_int::I1024` | 306 |
 //!
 //! The `#[repr(transparent)]` annotation is load-bearing: it guarantees
 //! the same ABI as the underlying integer, so `from_bits` / `to_bits`
@@ -511,7 +514,7 @@ impl<const SCALE: u32> D38<SCALE> {
 
 /// Scaled fixed-point decimal with 32-bit storage. See [`D38`] for the
 /// shape documentation; D9 has the same surface scaled to `i32` and
-/// `MAX_SCALE = 9`.
+/// `MAX_SCALE = 8` (the v0.4.0 cap: `MAX_SCALE = name - 1`).
 ///
 /// Now a type alias of the unified [`crate::D`] generic decimal type:
 /// `D9<S>` is `D<i32, S>`. Both spellings are interchangeable. The
@@ -585,7 +588,7 @@ pub type D9s8 = D9<8>;
 
 /// Scaled fixed-point decimal with 64-bit storage. See [`D38`] for the
 /// shape documentation; D18 has the same surface scaled to `i64` and
-/// `MAX_SCALE = 18`.
+/// `MAX_SCALE = 17` (the v0.4.0 cap: `MAX_SCALE = name - 1`).
 ///
 /// Now a type alias of the unified [`crate::D`] generic decimal type:
 /// `D18<S>` is `D<i64, S>`. Both spellings are interchangeable. The
@@ -755,7 +758,7 @@ pub type D18s17 = D18<17>;
 
 /// Scaled fixed-point decimal with 256-bit storage. See [`D38`] for the
 /// shape documentation; D76 has the same surface scaled to a 256-bit
-/// signed integer and `MAX_SCALE = 76`. Now a type alias of the unified
+/// signed integer and `MAX_SCALE = 75`. Now a type alias of the unified
 /// [`crate::D`] generic decimal type: `D76<S>` is
 /// `D<crate::wide_int::Int256, S>`. Both spellings are interchangeable.
 ///
@@ -883,7 +886,7 @@ impl<const SCALE: u32> D76<SCALE> {
 
 /// Scaled fixed-point decimal with 512-bit storage. See [`D38`] for the
 /// shape documentation; D153 has the same surface scaled to a 512-bit
-/// signed integer and `MAX_SCALE = 153`. Now a type alias of the unified
+/// signed integer and `MAX_SCALE = 152`. Now a type alias of the unified
 /// [`crate::D`] generic decimal type: `D153<S>` is
 /// `D<crate::wide_int::Int512, S>`. Both spellings are interchangeable.
 ///
@@ -996,7 +999,7 @@ impl<const SCALE: u32> D153<SCALE> {
 
 /// Scaled fixed-point decimal with 1024-bit storage. See [`D38`] for
 /// the shape documentation; D307 has the same surface scaled to a
-/// 1024-bit signed integer and `MAX_SCALE = 307`. Now a type alias of
+/// 1024-bit signed integer and `MAX_SCALE = 306`. Now a type alias of
 /// the unified [`crate::D`] generic decimal type: `D307<S>` is
 /// `D<crate::wide_int::Int1024, S>`. Both spellings are interchangeable.
 ///

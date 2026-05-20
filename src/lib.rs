@@ -11,23 +11,25 @@
 //!
 //! Each width has a `D<digits><const SCALE: u32>` const-generic shape with the
 //! same method surface; pick the narrowest that fits your range. The number on
-//! every `D{N}` type is `MAX_SCALE` — the highest `SCALE` the storage can hold.
+//! every `D{N}` type is its nominal precision in decimal digits; the highest
+//! `SCALE` the type accepts is `MAX_SCALE = N - 1`, leaving at least one
+//! integer digit of headroom at every legal scale.
 //!
 //! | Type | Storage | `MAX_SCALE` | Feature gate |
 //! |------|---------|-------------|--------------|
-//! | [`D9<SCALE>`]    | `i32`     |    9 | always on |
-//! | [`D18<SCALE>`]   | `i64`     |   18 | always on |
-//! | [`D38<SCALE>`]   | `i128`    |   38 | always on |
-//! | [`D57<SCALE>`]   | 192-bit   |   57 | `d57` or `wide` |
-//! | [`D76<SCALE>`]   | 256-bit   |   76 | `d76` or `wide` |
-//! | [`D115<SCALE>`]  | 384-bit   |  115 | `d115` or `wide` |
-//! | [`D153<SCALE>`]  | 512-bit   |  153 | `d153` or `wide` |
-//! | [`D230<SCALE>`]  | 768-bit   |  230 | `d230` or `wide` |
-//! | [`D307<SCALE>`]  | 1024-bit  |  307 | `d307` or `wide` |
-//! | [`D462<SCALE>`]  | 1536-bit  |  462 | `d462` or `x-wide` |
-//! | [`D616<SCALE>`]  | 2048-bit  |  616 | `d616` or `x-wide` |
-//! | [`D924<SCALE>`]  | 3072-bit  |  924 | `d924` or `xx-wide` |
-//! | [`D1232<SCALE>`] | 4096-bit  | 1232 | `d1232` or `xx-wide` |
+//! | [`D9<SCALE>`]    | `i32`     |    8 | always on |
+//! | [`D18<SCALE>`]   | `i64`     |   17 | always on |
+//! | [`D38<SCALE>`]   | `i128`    |   37 | always on |
+//! | [`D57<SCALE>`]   | 192-bit   |   56 | `d57` or `wide` |
+//! | [`D76<SCALE>`]   | 256-bit   |   75 | `d76` or `wide` |
+//! | [`D115<SCALE>`]  | 384-bit   |  114 | `d115` or `wide` |
+//! | [`D153<SCALE>`]  | 512-bit   |  152 | `d153` or `wide` |
+//! | [`D230<SCALE>`]  | 768-bit   |  229 | `d230` or `wide` |
+//! | [`D307<SCALE>`]  | 1024-bit  |  306 | `d307` or `wide` |
+//! | [`D462<SCALE>`]  | 1536-bit  |  461 | `d462` or `x-wide` |
+//! | [`D616<SCALE>`]  | 2048-bit  |  615 | `d616` or `x-wide` |
+//! | [`D924<SCALE>`]  | 3072-bit  |  923 | `d924` or `xx-wide` |
+//! | [`D1232<SCALE>`] | 4096-bit  | 1231 | `d1232` or `xx-wide` |
 //!
 //! Umbrellas: `wide` enables D57 / D76 / D115 / D153 / D230 / D307;
 //! `x-wide` adds D462 + D616; `xx-wide` adds D924 + D1232. Every
@@ -35,8 +37,9 @@
 //! helpers plus `From` / `TryFrom` impls.
 //!
 //! Concrete scale aliases such as `D38s12 = D38<12>` are emitted for every
-//! supported `SCALE`. `SCALE = MAX_SCALE + 1` is rejected at compile time —
-//! `10^(MAX_SCALE+1)` overflows the storage type.
+//! supported `SCALE`. `SCALE = MAX_SCALE + 1` (i.e. `SCALE = N` for `D{N}`) is
+//! rejected at compile time: the v0.4.0 scale cap fixes `MAX_SCALE = N - 1` so
+//! every legal scale retains at least one integer digit of headroom.
 //!
 //! The width-generic [`Decimal`] trait carries the surface that is identical
 //! across widths (constants, arithmetic operators, sign methods, integer
