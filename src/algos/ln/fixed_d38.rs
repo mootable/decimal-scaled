@@ -230,29 +230,29 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
 /// from landing a hair off the storage grid line and bumping by one LSB
 /// under a directed mode (`Trunc`/`Floor`/`Ceiling`).
 ///
-/// `value_raw` / `base_raw` are storage integers (`x · 10^scale`). The
-/// candidate `k` is derived by the caller from the nearest-rounded result.
-/// All arithmetic is `i128`; an intermediate that overflows `i128` cannot
-/// be a representable exact power, so the check returns `None`.
+/// `value_raw` is the storage integer (`x · 10^scale`); `base_int` is
+/// the *integer* base (`2` for `log2`, `10` for `log10`, or the integer
+/// part of a general `log` base — pass `0` for a non-integer base, which
+/// never has an exact integer power). Passing `base_int` rather than the
+/// scaled `base · 10^scale` avoids overflowing `i128` when forming
+/// `10^(scale+1)` at the maximal scale (the D38 max-scale ln panic).
+///
+/// The candidate `k` is derived by the caller from the nearest-rounded
+/// result. All arithmetic is `i128`; an intermediate that overflows
+/// `i128` cannot be a representable exact power, so the check returns
+/// `None`.
 #[inline]
-fn log_exact_int_pin(value_raw: i128, base_raw: i128, scale: u32, k: i128) -> Option<i128> {
+fn log_exact_int_pin(value_raw: i128, base_int: i128, scale: u32, k: i128) -> Option<i128> {
     let one_s = 10i128.checked_pow(scale)?;
     if k == 0 {
         return (value_raw == one_s).then_some(0);
     }
-    // Reduce to integer base / value where possible. `base^k = value`
-    // with integer `k` has rational sides; an exact integer result
-    // requires both `base` and `value` (or `1/value`) to themselves be
-    // exact storage multiples we can compare without scale carry. Work in
-    // the *integer* domain (`base_int = base_raw / 10^scale`) so the
-    // power never carries the `· 10^scale` factor that overflows `i128`.
-    if base_raw % one_s != 0 {
-        // Non-integer base (only the near-1 ill-conditioning probes hit
-        // this); such a base raised to an integer `k` is not an integer
-        // matching `value` at storage scale, so no exact pin applies.
+    // A non-integer base (only the near-1 ill-conditioning probes hit
+    // this) raised to an integer `k` is not an integer matching `value`
+    // at storage scale, so no exact pin applies.
+    if base_int == 0 {
         return None;
     }
-    let base_int = base_raw / one_s;
     let kk = k.unsigned_abs();
     let exact = if k > 0 {
         // value == base^|k|: compare `base_int^|k|` against the integer
@@ -322,8 +322,16 @@ pub(crate) fn log_with(
     assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
     let ratio = ln_fixed(v_w, w).div(ln_b, w);
     // Exact-power pin: `value == base^k` ⇒ result is exactly `k`.
+    // Reduce the storage `base_raw` to its integer base (`base_raw /
+    // 10^scale`) here, without forming `base · 10^scale`, so the pin's
+    // integer-domain check never carries (and never overflows) the
+    // scale factor — `0` flags a non-integer base (no exact pin).
     let k = ratio.round_to_nearest_int(w);
-    if let Some(pinned) = log_exact_int_pin(raw, base_raw, scale, k) {
+    let base_int = match 10i128.checked_pow(scale) {
+        Some(one_s) if base_raw % one_s == 0 => base_raw / one_s,
+        _ => 0,
+    };
+    if let Some(pinned) = log_exact_int_pin(raw, base_int, scale, k) {
         return pinned;
     }
     ratio
@@ -358,7 +366,7 @@ pub(crate) fn log2_with(
     let ratio = ln_fixed(v_w, w).div(wide_ln2(w), w);
     // Exact-power pin: `value == 2^k` ⇒ result is exactly `k`.
     let k = ratio.round_to_nearest_int(w);
-    if let Some(pinned) = log_exact_int_pin(raw, 2i128 * 10i128.pow(scale), scale, k) {
+    if let Some(pinned) = log_exact_int_pin(raw, 2, scale, k) {
         return pinned;
     }
     ratio
@@ -388,7 +396,7 @@ pub(crate) fn log10_with(
     let ratio = ln_fixed(v_w, w).div(wide_ln10(w), w);
     // Exact-power pin: `value == 10^k` ⇒ result is exactly `k`.
     let k = ratio.round_to_nearest_int(w);
-    if let Some(pinned) = log_exact_int_pin(raw, 10i128 * 10i128.pow(scale), scale, k) {
+    if let Some(pinned) = log_exact_int_pin(raw, 10, scale, k) {
         return pinned;
     }
     ratio
