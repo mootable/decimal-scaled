@@ -213,6 +213,15 @@ pub mod __bench_internals {
     ) {
         crate::wide_int::limbs_mul_u64_fixed::<L, D>(a, b, out)
     }
+    /// Non-allocating Karatsuba multiply forced to recurse at the given
+    /// `threshold` (rather than the parked production
+    /// `KARATSUBA_THRESHOLD_U64`), so the crossover sweep can measure the
+    /// kernel at sub-threshold widths. `threshold >= 4` (the recursion's
+    /// termination floor). `out` is zeroed by the callee.
+    #[inline(never)]
+    pub fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
+        crate::wide_int::limbs_mul_karatsuba_u64_forced(a, b, out, threshold)
+    }
     #[inline(never)]
     pub fn mul_u64_into<const L: usize, const LP1: usize>(
         a: &[u64; L],

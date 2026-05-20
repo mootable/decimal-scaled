@@ -85,6 +85,62 @@ fn bench_int_ops(c: &mut Criterion) {
     bench_width!(c, "Int4096", Int4096);
 }
 
+/// Karatsuba-crossover sweep: schoolbook (`mul_slice`) vs the
+/// non-allocating Karatsuba kernel (forced to recurse via
+/// `mul_karatsuba_forced`) on equal-length operands at the candidate
+/// limb counts spanning the predicted crossover band. The smallest `L`
+/// where Karatsuba wins is the crossover; `KARATSUBA_THRESHOLD_U64` is
+/// then set a notch above it. Requires `--features bench-alt`.
+///
+/// Operands are seeded mid-magnitude and built outside the timed
+/// closure; both paths re-zero their own output inside it (matching
+/// the contract the production dispatcher relies on).
+#[cfg(feature = "bench-alt")]
+fn bench_mul_crossover(c: &mut Criterion) {
+    use decimal_scaled::__bench_internals::{mul_karatsuba_forced, mul_slice};
+
+    fn synthetic(seed: u64, n: usize) -> Vec<u64> {
+        (0..n)
+            .map(|i| {
+                seed.wrapping_mul(0x9E37_79B9_7F4A_7C15)
+                    .wrapping_add(i as u64 * 0x1357_9BDF)
+                    ^ (i as u64).wrapping_mul(0xD1B5_4A32_D192_ED03)
+            })
+            .collect()
+    }
+
+    let mut g = c.benchmark_group("mul_crossover");
+    g.sample_size(50);
+    g.measurement_time(Duration::from_millis(800));
+
+    // For each width L, drive a SINGLE Karatsuba level: set the forced
+    // threshold to L itself, so n = L recurses exactly once into three
+    // ~L/2-limb schoolbook leaves — the exact shape the production
+    // dispatcher produces when `KARATSUBA_THRESHOLD_U64 == L`. This
+    // measures the real one-level crossover, not pathological deep
+    // recursion into tiny leaves.
+    for &l in &[8usize, 12, 16, 24, 32, 48, 64] {
+        let a = synthetic(7, l);
+        let b = synthetic(13, l);
+        let mut out = vec![0u64; 2 * l];
+
+        g.bench_function(format!("L{l}/school"), |bn| {
+            bn.iter(|| {
+                for s in out.iter_mut() {
+                    *s = 0;
+                }
+                mul_slice(black_box(&a), black_box(&b), black_box(&mut out));
+            });
+        });
+        g.bench_function(format!("L{l}/kara"), |bn| {
+            bn.iter(|| {
+                mul_karatsuba_forced(black_box(&a), black_box(&b), black_box(&mut out), l);
+            });
+        });
+    }
+    g.finish();
+}
+
 /// Short windows keep the whole file at microbench scale.
 fn micro() -> Criterion {
     Criterion::default()
@@ -93,6 +149,14 @@ fn micro() -> Criterion {
         .warm_up_time(Duration::from_millis(150))
 }
 
+#[cfg(feature = "bench-alt")]
+criterion_group! {
+    name = benches;
+    config = micro();
+    targets = bench_int_ops, bench_mul_crossover
+}
+
+#[cfg(not(feature = "bench-alt"))]
 criterion_group! {
     name = benches;
     config = micro();

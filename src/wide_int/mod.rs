@@ -1640,15 +1640,25 @@ const SCRATCH_LIMBS_U64: usize = 288;
 ///
 /// Tuned by the width-swept `mul` microbench (`benches/int_ops_micro.rs`,
 /// `mul_crossover` group) against the LLVM-unrolled schoolbook base
-/// case [`limbs_mul_u64`]. Peer u64-limb big-int crates cross over in
-/// the 20-32 word band; the non-allocating kernel here removes the
-/// per-level heap traffic that previously parked the crossover past
-/// every shipped width.
+/// case [`limbs_mul_u64`]. The one-level crossover — schoolbook vs a
+/// single Karatsuba split into `~L/2`-limb schoolbook leaves — was
+/// measured as:
+///
+/// | L (limbs) |  8  |  12 |  16 |  24 |  32 |  48 |  64 |
+/// |-----------|-----|-----|-----|-----|-----|-----|-----|
+/// | kara/school | 3.5x| 2.2x| 1.7x| 1.25x| 1.10x| 1.03x| 0.94x |
+///
+/// Karatsuba first wins at **L = 64** (≈6%); L = 48 is break-even and
+/// below it schoolbook wins clearly. The crate's schoolbook is
+/// LLVM-unrolled with a low constant factor, so the u64-base crossover
+/// lands above the 20-32 band typical of heap-backed peer crates. The
+/// threshold is set at the measured crossover; only the widest tiers
+/// (Int4096+, up to Int16384 = 256 limbs) exceed it.
 ///
 /// Must be `>= 4`: the recursion's z1 sum product runs on `⌈n/2⌉ + 1`
 /// limbs, which only strictly shrinks below `n` once `n >= 4`, so a
 /// threshold below 4 would fail to terminate.
-pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 256;
+pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 64;
 
 /// Stack scratch for the non-allocating Karatsuba kernel, in u64 limbs.
 ///
@@ -1693,6 +1703,32 @@ pub(crate) fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     );
     let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
     karatsuba_rec(a, b, out, &mut scratch, KARATSUBA_THRESHOLD_U64);
+}
+
+/// Bench-only entry that drives the production [`karatsuba_rec`] over
+/// the real fixed `[u64; KARATSUBA_SCRATCH_LIMBS]` stack scratch at an
+/// arbitrary `threshold`, so the crossover sweep can time the kernel at
+/// widths below the parked [`KARATSUBA_THRESHOLD_U64`]. `out` is zeroed
+/// here. Mirrors the production [`limbs_mul_karatsuba_u64`] exactly bar
+/// the threshold parameter.
+#[cfg(feature = "bench-alt")]
+pub(crate) fn limbs_mul_karatsuba_u64_forced(
+    a: &[u64],
+    b: &[u64],
+    out: &mut [u64],
+    threshold: usize,
+) {
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert!(out.len() >= 2 * a.len());
+    debug_assert!(
+        karatsuba_scratch_needed_th(a.len(), threshold) <= KARATSUBA_SCRATCH_LIMBS,
+        "Karatsuba scratch overflow in forced bench entry"
+    );
+    for o in out.iter_mut() {
+        *o = 0;
+    }
+    let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
+    karatsuba_rec(a, b, out, &mut scratch, threshold);
 }
 
 /// Test-only entry that drives the production [`karatsuba_rec`] at an
