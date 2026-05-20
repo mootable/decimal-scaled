@@ -1,0 +1,215 @@
+# Architecture
+
+This page is a map of how `decimal-scaled` is put together: the two
+layers (integer **backends** and decimal **front-ends**), how a method
+call is routed to one specific algorithm with **zero runtime dispatch**,
+how unused algorithm variants are **pruned** at compile time, and how the
+correctness and performance guarantees are **enforced by testing**.
+
+## The model in one sentence
+
+Every value is a plain integer that encodes `real_value × 10^SCALE`. All
+core arithmetic is integer arithmetic, so results are **bit-identical on
+every platform**, and the transcendental functions are computed with
+integer-only kernels that are **correctly rounded** — within 0.5 ULP of
+the true real value at the type's last representable place.
+
+## Two layers
+
+```
+                      ┌─────────────────────────────────────────────┐
+   DECIMAL FRONT-ENDS │  D9  D18  D38  D57  D76 … D616  D924  D1232  │
+   (typed, scaled)    │      Dxx<const SCALE: u32>  +  Decimal trait │
+                      └───────────────┬─────────────────────────────┘
+                                      │  delegates per (width, SCALE)
+                      ┌───────────────▼─────────────────────────────┐
+   DISPATCH / POLICY  │  policy traits — const-folded match on       │
+   (compile-time)     │  (width, SCALE) → one kernel; base/std/no_std│
+                      └───────────────┬─────────────────────────────┘
+                                      │  calls named algorithms
+                      ┌───────────────▼─────────────────────────────┐
+   ALGORITHMS         │  src/algos — sqrt cbrt exp ln trig pow …     │
+   (kernels)          │  (Newton, Tang tables, AGM, series, …)       │
+                      └───────────────┬─────────────────────────────┘
+                                      │  composed on top of
+                      ┌───────────────▼─────────────────────────────┐
+   INTEGER BACKENDS   │  primitives (i32/i64/i128) and the           │
+   (width-generic)    │  const-generic  Int<N> / Uint<N>  ([u64; N]) │
+                      │  + reusable width-matched limb algorithms     │
+                      └─────────────────────────────────────────────┘
+```
+
+The decimal layer sits **on top of** the integer layer: a decimal kernel
+expresses its math in terms of integer operations and never reaches into
+limb internals directly.
+
+## Integer backends
+
+The storage under a decimal type is an integer wide enough to hold
+`10^MAX_SCALE`:
+
+| Decimal tier | Storage | Backed by |
+|---|---|---|
+| D9 / D18 / D38 | `i32` / `i64` / `i128` | native primitives |
+| D57 … D1232 | 192 … 4096-bit | const-generic `Int<N>` |
+
+The wide tiers are built on a single const-generic pair —
+`Uint<const N: usize>` and `Int<const N: usize>` — stored as `[u64; N]`
+little-endian limbs (`N` = number of 64-bit limbs; bit width is `N·64`).
+Choosing the **limb count** as the one type parameter sidesteps the
+`LIMBS = ⌈BITS/64⌉` derivation that a bits-parameterised type cannot
+express on stable Rust. The historical named types (`Int256`, `Int1024`,
+…) survive as thin `pub type` aliases over `Int<N>`.
+
+The arithmetic itself lives once, as **reusable width-matched limb
+algorithms** (add/sub/mul/div/shift/compare, plus `sqr`, `cube`,
+`root_int`, `isqrt`, …) operating over `&[u64]` slices. Because `N` is a
+compile-time constant, the limb loops unroll per width and there is no
+runtime length to carry. A `FixedInt` trait exposes this surface with the
+**same method names** as the decimal arithmetic trait, so the two layers
+read as one vocabulary.
+
+`src/`:
+
+```
+int/                const-generic Int<N>/Uint<N>
+  mod.rs            the types + named aliases
+  limbs/            reusable width-matched limb algorithms
+  traits.rs         FixedInt / FixedIntConvert
+wide_int/           slice primitives; legacy named-type generator
+```
+
+## Decimal front-ends
+
+Each width is a `Dxx<const SCALE: u32>` newtype around its storage
+integer. The number in the name is `MAX_SCALE` (the largest `SCALE` the
+storage can hold); `SCALE` is a const-generic so `D38<2>` (cents) and
+`D38<18>` are distinct, zero-overhead types. Because a value has exactly
+one representation at a fixed scale, `Eq`/`Ord`/`Hash` are derived
+straight from the storage bits.
+
+The cross-width API is four traits (`src/types/traits/`):
+
+- `DecimalArithmetic` — operators, sign, integer methods, the
+  checked/wrapping/saturating/overflowing families, reductions.
+- `DecimalConvert` — round-trip, integer and float bridges.
+- `DecimalTranscendental` — `sqrt`/`cbrt`/`exp`/`ln`/trig/hyperbolic/`pow`.
+- `Decimal` — marker supertrait combining the above.
+
+The typed method shells (`D57::<20>::sqrt_strict_with(mode)`) are emitted
+by macros in `src/macros/` and immediately hand off to the dispatch layer.
+
+## Algorithm choosing — and pruning
+
+A single function (say `sqrt`) has many possible kernels: a narrow tier
+widens to D38; D38 uses a hand-tuned 256-bit isqrt; D57 at SCALE 20 has a
+bespoke lookup; everything else uses the generic wide isqrt. The choice
+is made by a **per-family policy** that matches on the compile-time
+`(width, SCALE)`:
+
+```rust
+match (W, SCALE) {
+    (W_D38, _)  => algos::sqrt::mg_divide_d38::sqrt(x, SCALE, mode),
+    (W_D57, 20) => algos::sqrt::lookup_d57_s20::sqrt(x, mode),
+    (W_D57, _)  => algos::sqrt::generic_wide::sqrt_d57(x, SCALE, mode),
+    // … one arm per cell
+}
+```
+
+Three levels of choice live in that table: a **global default** (the
+generic kernel), a **width override** (a whole tier picks a different
+kernel), and a **scale-range override** (a bespoke kernel for one band of
+scales). Top arm wins.
+
+### Pruning = dead-arm elimination
+
+`W` and `SCALE` are *constants in every monomorphisation*. So for the
+concrete type `D57<20>`, the compiler evaluates the match at compile time,
+**discards every arm that doesn't match**, and inlines the one that does.
+`D57<20>::sqrt` compiles to a direct call to exactly one kernel — no
+branch, no table, no vtable. Every other candidate kernel is pruned out
+of that type's machine code. This is what makes the rich policy table
+**zero runtime cost**.
+
+### `base` / `std` / `no_std`
+
+Each function is organised as three thin layers so the distinction
+between portable and platform-assisted code is structural, not scattered
+through the math:
+
+- **`base`** — the real algorithm, the `(width, SCALE)` match.
+- **`no_std`** — a direct pointer to `base` (the always-correct,
+  pure-integer path).
+- **`std`** — defaults to `base` and carries *only* the overrides (e.g. an
+  `f64`-seeded fast path). Opening the `std` body shows exactly what
+  differs and nothing else.
+
+An `std` override is included for a cell **only if it is benchmarked
+faster** than the `no_std` path; otherwise the cell stays on `base`.
+Where `std` uses `f64`, it is only ever a **seed** to a self-correcting
+integer iteration whose exact integer termination pins the unique
+result — so determinism is preserved regardless of the platform's `f64`.
+
+### Keeping the alternatives
+
+Algorithms that lose at today's widths (FFT/NTT multiplication, AGM below
+~D1232, …) are not deleted. They are preserved as documented references
+and, where the implementation is genuinely different, as compiled-out
+code — because a future CPU/LLVM instruction or a platform-specific build
+can flip a today-loser into a winner. See `ALGORITHMS.md`.
+
+## How the guarantees are enforced — by testing
+
+The architecture's two headline promises are **platform determinism** and
+**correct rounding**, and both are nailed down by tests rather than
+asserted by hope.
+
+**Determinism** falls out of the design (integer-only core, no floating
+point in results) and is exercised by the cross-platform CI matrix and
+bit-exact fixtures.
+
+**Correct rounding** is the contract that the strict transcendentals
+return the value within 0.5 ULP of the true real value — equivalently,
+the **exact correctly-rounded value at the storage scale (0 LSB of
+error)**, under *every* rounding mode and at *every* width. It is checked
+by independent layers (see `precision-testing.md`):
+
+1. **Hand-computed truth tables** at D38 — the smallest, human-audited net.
+2. **Cross-witness** — compute at a tier, recompute the reference at a
+   wider storage and rescale; catches storage-bit divergences.
+3. **mpmath golden tables** — an external oracle (computed at working
+   precision far wider than any tier) for every (function, tier); the
+   kernel must match the correctly-rounded oracle **exactly (delta == 0)**
+   for all six rounding modes across all widths.
+4. **Property fuzz** — identities like `exp(ln x) ≈ x`, `sin²+cos² ≈ 1`,
+   and sign symmetries, with deterministic seeds.
+
+The integer backends carry their own bit-exact tests (each algorithm
+checked against a schoolbook oracle across widths and edge cases). A
+performance change can never silently cost accuracy: the delta == 0
+precision suite is a permanent regression gate, so a faster kernel that
+rounds wrong turns CI red.
+
+## Where the rounding actually happens
+
+The kernels compute at a wider *working scale* (`SCALE + GUARD` digits)
+and then round to the storage scale. For the three nearest modes a fixed
+guard is enough; for the directed modes (toward zero / ±∞) the rounding
+decision needs the *sign and stickiness* of the sub-LSB residual — which
+the divide already computes — and, on the rare inputs sitting within the
+kernel's error of a tie, an adaptive widening step (Ziv iteration) settles
+it. The result is correct rounding under all six modes with the common,
+nearest-mode path paying nothing extra.
+
+## Map of the source tree
+
+```
+src/
+  int/        const-generic Int<N>/Uint<N> + reusable limb algorithms
+  wide_int/   slice limb primitives; legacy named-type generator
+  types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
+  policy/     per-family (width, SCALE) dispatch → kernels
+  algos/      the kernels (sqrt cbrt exp ln trig pow …)
+  macros/     code generation for the per-type method shells
+  support/    rounding modes, errors, display, serde helpers
+```
