@@ -567,6 +567,87 @@ impl<const N: usize> Neg for Int<N> {
     }
 }
 
+// ── Width conversion: widen (lossless) / narrow (fallible) ─────────
+//
+// `Uint<N>` and `Uint<M>` are different-sized stack types, so a value
+// conversion builds a fresh `[u64; M]` — there is no heap allocation,
+// and reinterpreting across widths via `transmute` would be unsound
+// (different size and layout). `resize` writes each destination limb
+// exactly once via `array::from_fn`; `widen` is the infallible extend
+// and `narrow` the information-preserving truncation. Stable Rust
+// cannot constrain `M >= N` / `M <= N` in the type system, so the
+// direction is enforced by `debug_assert!` plus, for `narrow`, the
+// `Option` return.
+
+impl<const N: usize> Uint<N> {
+    /// Resizes to `M` limbs: zero-extends when widening, drops the high
+    /// limbs when narrowing. Direction-agnostic and infallible.
+    #[inline]
+    pub fn resize<const M: usize>(self) -> Uint<M> {
+        Uint::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { 0 }))
+    }
+
+    /// Widens to a wider `Uint<M>` (`M >= N`), zero-extending the new
+    /// high limbs. Lossless.
+    #[inline]
+    pub fn widen<const M: usize>(self) -> Uint<M> {
+        debug_assert!(M >= N, "widen requires M >= N");
+        self.resize::<M>()
+    }
+
+    /// Narrows to a narrower `Uint<M>` (`M <= N`). Returns `None` if any
+    /// discarded high limb is non-zero (the value does not fit `M`).
+    #[inline]
+    pub fn narrow<const M: usize>(self) -> Option<Uint<M>> {
+        debug_assert!(M <= N, "narrow requires M <= N");
+        let keep = if M < N { M } else { N };
+        let mut i = keep;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return None;
+            }
+            i += 1;
+        }
+        Some(self.resize::<M>())
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Resizes to `M` limbs: sign-extends when widening, drops the high
+    /// limbs when narrowing. Direction-agnostic and infallible
+    /// (narrowing may change the represented value).
+    #[inline]
+    pub fn resize<const M: usize>(self) -> Int<M> {
+        let fill = if self.is_negative() { u64::MAX } else { 0 };
+        Int::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { fill }))
+    }
+
+    /// Widens to a wider `Int<M>` (`M >= N`), sign-extending. Lossless.
+    #[inline]
+    pub fn widen<const M: usize>(self) -> Int<M> {
+        debug_assert!(M >= N, "widen requires M >= N");
+        self.resize::<M>()
+    }
+
+    /// Narrows to a narrower `Int<M>` (`1 <= M <= N`). Returns `None`
+    /// unless every discarded high limb is a pure sign-extension of the
+    /// narrowed value's top bit — i.e. the value fits `M` limbs as
+    /// two's complement.
+    #[inline]
+    pub fn narrow<const M: usize>(self) -> Option<Int<M>> {
+        debug_assert!(M >= 1 && M <= N, "narrow requires 1 <= M <= N");
+        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 { u64::MAX } else { 0 };
+        let mut i = M;
+        while i < N {
+            if self.limbs[i] != sign_fill {
+                return None;
+            }
+            i += 1;
+        }
+        Some(self.resize::<M>())
+    }
+}
+
 // ── Named aliases ──────────────────────────────────────────────────
 // Preserve the existing surface so the const-generic types can be
 // introduced without renaming every call site at once. Limb counts
@@ -593,6 +674,54 @@ pub type Int4096 = Int<64>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uint_widen_zero_extends() {
+        let a = Uint::<2>::from_limbs([7, 8]);
+        let w = a.widen::<4>();
+        assert_eq!(*w.as_limbs(), [7, 8, 0, 0]);
+        assert_eq!(a.resize::<4>(), w);
+    }
+
+    #[test]
+    fn uint_narrow_checks_dropped_limbs() {
+        let fits = Uint::<4>::from_limbs([7, 8, 0, 0]);
+        assert_eq!(*fits.narrow::<2>().unwrap().as_limbs(), [7, 8]);
+
+        let too_big = Uint::<4>::from_limbs([7, 8, 1, 0]);
+        assert!(too_big.narrow::<2>().is_none());
+
+        // widen → narrow round-trips losslessly.
+        let a = Uint::<2>::from_limbs([3, 4]);
+        assert_eq!(a.widen::<4>().narrow::<2>().unwrap(), a);
+    }
+
+    #[test]
+    fn int_widen_sign_extends() {
+        // -1 is all-ones; sign-extension keeps it all-ones at any width.
+        let neg = Int::<2>::from_i64(-1);
+        assert_eq!(*neg.widen::<4>().as_limbs(), [u64::MAX; 4]);
+        assert_eq!(neg.widen::<4>(), Int::<4>::from_i64(-1));
+        // Positive values zero-extend.
+        let pos = Int::<2>::from_i64(5);
+        assert_eq!(*pos.widen::<4>().as_limbs(), [5, 0, 0, 0]);
+    }
+
+    #[test]
+    fn int_narrow_requires_sign_consistency() {
+        // Negative value whose dropped limbs are all the sign fill: fits.
+        let neg = Int::<4>::from_i64(-1);
+        assert_eq!(neg.narrow::<2>().unwrap(), Int::<2>::from_i64(-1));
+        // Positive magnitude with a non-sign high limb: does not fit.
+        let big = Int::<4>::from_limbs([0, 0, 1, 0]);
+        assert!(big.narrow::<2>().is_none());
+        // Negative top bit but a dropped limb that isn't all-ones: no fit.
+        let weird = Int::<4>::from_limbs([1, 0, 0, u64::MAX]);
+        assert!(weird.narrow::<2>().is_none());
+        // Small value round-trips.
+        let p = Int::<2>::from_i64(42);
+        assert_eq!(p.widen::<4>().narrow::<2>().unwrap(), p);
+    }
 
     #[test]
     fn consts_and_round_trip() {
