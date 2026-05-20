@@ -117,6 +117,24 @@ impl<const N: usize> Uint<N> {
         Self { limbs: out }
     }
 
+    /// Wrapping square (`self²` modulo `2^BITS`). Named entry point for
+    /// the open-coded `x * x` pattern. Currently delegates to
+    /// [`Self::wrapping_mul`]; a dedicated half-product squaring kernel
+    /// (≈ half the limb products) is the planned optimisation, gated by
+    /// the per-width baseline benchmark before it lands.
+    #[inline]
+    pub fn wrapping_sqr(self) -> Self {
+        self.wrapping_mul(self)
+    }
+
+    /// Wrapping cube (`self³` modulo `2^BITS`). Named entry point for the
+    /// open-coded `x * x * x` pattern; computed as `sqr` then one
+    /// multiply — no cheaper form exists below two multiplies.
+    #[inline]
+    pub fn wrapping_cube(self) -> Self {
+        self.wrapping_sqr().wrapping_mul(self)
+    }
+
     /// Checked addition: `None` on overflow past `2^BITS`.
     #[inline]
     pub fn checked_add(mut self, rhs: Self) -> Option<Self> {
@@ -674,6 +692,18 @@ pub type Int4096 = Int<64>;
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn uint_sqr_cube_match_naive() {
+        let x = Uint::<4>::from_limbs([123_456_789, 0, 0, 0]);
+        assert_eq!(x.wrapping_sqr(), x.wrapping_mul(x));
+        assert_eq!(x.wrapping_cube(), x.wrapping_mul(x).wrapping_mul(x));
+
+        // A value spanning two limbs, to exercise cross-limb products.
+        let y = Uint::<4>::from_limbs([0xDEAD_BEEF_CAFE, 0x1234_5678, 0, 0]);
+        assert_eq!(y.wrapping_sqr(), y.wrapping_mul(y));
+        assert_eq!(y.wrapping_cube(), y.wrapping_mul(y).wrapping_mul(y));
+    }
 
     #[test]
     fn uint_widen_zero_extends() {
