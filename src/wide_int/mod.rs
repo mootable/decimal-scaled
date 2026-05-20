@@ -2586,6 +2586,20 @@ pub(crate) trait WideStorage:
     fn resize_to<T: WideStorage>(self) -> T;
     /// Leading-zero count of the two's-complement representation.
     fn leading_zeros(self) -> u32;
+
+    /// Truncating quotient and remainder `(self / rhs, self % rhs)`.
+    fn div_rem(self, rhs: Self) -> (Self, Self);
+    /// `true` if bit `idx` of the two's-complement representation is set.
+    fn bit(self, idx: u32) -> bool;
+    /// Builds the value `v` from a signed 128-bit integer.
+    fn from_i128(v: i128) -> Self;
+    /// `self * n` for an unsigned 64-bit multiplier, panicking on
+    /// overflow (matches the `Mul`-operator semantics).
+    fn checked_mul_u64(self, n: u64) -> Self;
+    /// Nearest-`f64` value of `self` (lossy above 53 significant bits).
+    fn to_f64(self) -> f64;
+    /// Truncating conversion from `f64` (saturating on out-of-range).
+    fn from_f64_val(v: f64) -> Self;
 }
 
 // The concrete wide integer type pairs. The 256/512/1024-bit widths
@@ -2636,6 +2650,30 @@ macro_rules! impl_wide_storage {
             #[inline]
             fn leading_zeros(self) -> u32 {
                 <$S>::leading_zeros(self)
+            }
+            #[inline]
+            fn div_rem(self, rhs: Self) -> (Self, Self) {
+                <$S>::div_rem(self, rhs)
+            }
+            #[inline]
+            fn bit(self, idx: u32) -> bool {
+                <$S>::bit(self, idx)
+            }
+            #[inline]
+            fn from_i128(v: i128) -> Self {
+                <$S>::from_i128(v)
+            }
+            #[inline]
+            fn checked_mul_u64(self, n: u64) -> Self {
+                <$S>::checked_mul_u64(self, n)
+            }
+            #[inline]
+            fn to_f64(self) -> f64 {
+                <$S>::as_f64(self)
+            }
+            #[inline]
+            fn from_f64_val(v: f64) -> Self {
+                <$S>::from_f64(v)
             }
         }
     )*};

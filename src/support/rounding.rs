@@ -249,6 +249,62 @@ where
     }
 }
 
+/// Directed rounding for an odd transcendental whose true value at a
+/// tiny argument sits just *above* the grid line `raw` in magnitude —
+/// e.g. `sinh(x) = x + x³/6 + …`, where the cubic is strictly positive
+/// but below one ULP. The mirror of [`tiny_odd_compressing_directed`]
+/// (which handles the just-*below* case like `tanh`).
+///
+/// `raw` is the stored argument (= the leading term `x · 10^SCALE`),
+/// `zero`/`one` the type's storage `0` / `1`. The true value lies in
+/// `(|raw|, |raw| + 1)` in magnitude, so:
+///
+/// - nearest modes round to `raw` (the excess is < 0.5 ULP);
+/// - toward-zero (`Trunc`) drops the excess → `raw`;
+/// - `Floor` (toward −∞): `raw` if positive, `raw − 1` if negative;
+/// - `Ceiling` (toward +∞): `raw + 1` if positive, `raw` if negative.
+#[inline]
+pub(crate) fn tiny_odd_expanding_directed<T>(
+    raw: T,
+    zero: T,
+    one: T,
+    mode: RoundingMode,
+) -> T
+where
+    T: Copy
+        + PartialOrd
+        + ::core::ops::Add<Output = T>
+        + ::core::ops::Sub<Output = T>,
+{
+    if is_nearest_mode(mode) {
+        return raw;
+    }
+    let positive = raw > zero;
+    match mode {
+        // Toward zero: the excess is sub-ULP, so the magnitude stays at
+        // `|raw|` — i.e. `raw` unchanged.
+        RoundingMode::Trunc => raw,
+        // Toward −∞.
+        RoundingMode::Floor => {
+            if positive {
+                raw
+            } else {
+                raw - one
+            }
+        }
+        // Toward +∞.
+        RoundingMode::Ceiling => {
+            if positive {
+                raw + one
+            } else {
+                raw
+            }
+        }
+        // Nearest modes handled above.
+        _ => raw,
+    }
+}
+
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///

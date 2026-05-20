@@ -81,6 +81,282 @@
 //!
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
+/// Width-generic guard-digit `exp` core.
+///
+/// The per-tier `$core` modules emit an `exp_fixed` bound to one work
+/// integer `W`. Near the storage-overflow edge at high scale the
+/// `e^|x|` result carries many integer digits, so the caller's
+/// working-scale lift (≈ the result's integer-digit count) *plus*
+/// `exp_fixed`'s own internal `2^k`-reassembly lift (≈ the same size)
+/// *plus* the squaring peak inside the Taylor reassembly can exceed
+/// `W`'s decimal capacity — the value can no longer be held at the
+/// precision needed to round correctly, and the old `exp_lift_cap`
+/// clamped the lift so the kernel would not overflow (at the cost of
+/// 1+ LSB of accuracy on those cells).
+///
+/// This module lifts the `exp_fixed` body out to a free function
+/// generic over any [`WideStorage`] integer `S`, so the large-result
+/// regime can run it in the *next-wider* integer `WW` (e.g. D76's
+/// `Int1024` → `Int2048`, D462's `Int4096` → `Int8192`) where the full
+/// lift + squaring peak fit, then narrow correctly-rounded back to the
+/// tier's storage. The tier `$core::exp_fixed` becomes a thin wrapper
+/// over `exp_generic::exp_fixed::<W>`; nothing about the small / normal
+/// regime changes.
+pub(crate) mod exp_generic {
+    #![allow(unused)]
+    use crate::wide_int::WideStorage;
+    use crate::support::rounding::RoundingMode;
+
+    /// Hard cap on series iterations — a safety net; every series
+    /// terminates far sooner by reaching a zero term.
+    const SERIES_CAP: u128 = 20_000;
+
+    #[inline]
+    fn lit<S: WideStorage>(n: i128) -> S {
+        S::from_i128(n)
+    }
+    #[inline]
+    fn zero<S: WideStorage>() -> S {
+        S::ZERO
+    }
+    #[inline]
+    fn abs<S: WideStorage>(v: S) -> S {
+        if v < S::ZERO { -v } else { v }
+    }
+    #[inline]
+    fn pow10<S: WideStorage>(n: u32) -> S {
+        S::TEN.pow(n)
+    }
+    #[inline]
+    fn one<S: WideStorage>(w: u32) -> S {
+        pow10::<S>(w)
+    }
+    /// Bit length of `|v|` (0 for zero).
+    fn bit_length<S: WideStorage>(v: S) -> u32 {
+        S::BITS - abs(v).leading_zeros()
+    }
+    /// Half-to-even round of `numerator / divisor` for `S`.
+    #[inline]
+    fn round_div<S: WideStorage>(n: S, d: S) -> S {
+        let (q, r) = n.div_rem(d);
+        if r == S::ZERO {
+            return q;
+        }
+        let ar = abs(r);
+        let comp = abs(d) - ar;
+        let cmp_r = if ar < comp {
+            ::core::cmp::Ordering::Less
+        } else if ar > comp {
+            ::core::cmp::Ordering::Greater
+        } else {
+            ::core::cmp::Ordering::Equal
+        };
+        let q_is_odd = q.bit(0);
+        let result_positive = (n < S::ZERO) == (d < S::ZERO);
+        if crate::support::rounding::should_bump(
+            RoundingMode::HalfToEven,
+            cmp_r,
+            q_is_odd,
+            result_positive,
+        ) {
+            if result_positive { q + S::ONE } else { q - S::ONE }
+        } else {
+            q
+        }
+    }
+    /// Half-to-even quotient `n / 10^w`.
+    #[inline]
+    fn round_div_pow10<S: WideStorage>(n: S, w: u32) -> S {
+        if w == 0 {
+            return n;
+        }
+        round_div(n, pow10::<S>(w))
+    }
+    /// `(a · b) / 10^w`, rounded half-to-even.
+    #[inline]
+    fn mul<S: WideStorage>(a: S, b: S, w: u32) -> S {
+        round_div_pow10(a * b, w)
+    }
+    /// Loop-friendly `mul` with a precomputed `10^w` divisor.
+    #[inline]
+    fn mul_cached<S: WideStorage>(a: S, b: S, pow10_w: S) -> S {
+        round_div(a * b, pow10_w)
+    }
+    /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
+    /// factor).
+    #[inline]
+    fn div_cached<S: WideStorage>(a: S, b: S, pow10_w: S) -> S {
+        round_div(a * pow10_w, b)
+    }
+    /// `a · n` for a small unsigned multiplier.
+    #[inline]
+    fn mul_u<S: WideStorage>(a: S, n: u128) -> S {
+        if n <= u64::MAX as u128 {
+            a.checked_mul_u64(n as u64)
+        } else {
+            a * S::from_i128(n as i128)
+        }
+    }
+    /// `k · c` where `k` is a signed range-reduction count.
+    #[inline]
+    fn scale_by_k<S: WideStorage>(c: S, k: i128) -> S {
+        if k >= 0 {
+            mul_u(c, k as u128)
+        } else {
+            -mul_u(c, k.unsigned_abs())
+        }
+    }
+    /// Rounds a working-scale value to the nearest integer (ties away
+    /// from zero); used for the range-reduction quotient.
+    fn round_to_nearest_int<S: WideStorage>(v: S, w: u32) -> i128 {
+        let divisor = pow10::<S>(w);
+        let (q, r) = v.div_rem(divisor);
+        let half = divisor >> 1;
+        let qi = if abs(r) >= half {
+            if v < S::ZERO { q - S::ONE } else { q + S::ONE }
+        } else {
+            q
+        };
+        crate::wide_int::wide_cast::<S, i128>(qi)
+    }
+
+    /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
+    /// call (the wider path is only taken on the rare large-result
+    /// regime, so memoisation is not worth the per-`S` thread-local).
+    fn ln2<S: WideStorage>(w: u32) -> S {
+        let t = one::<S>(w) / lit::<S>(3);
+        let t2 = mul(t, t, w);
+        let mut sum = t;
+        let mut term = t;
+        let mut j: u128 = 1;
+        loop {
+            term = mul(term, t2, w);
+            let contrib = term / lit::<S>((2 * j + 1) as i128);
+            if contrib == S::ZERO {
+                break;
+            }
+            sum = sum + contrib;
+            j += 1;
+            if j > SERIES_CAP {
+                break;
+            }
+        }
+        sum + sum
+    }
+
+    /// `e^v` for a working-scale value `v`, generic over the work
+    /// integer `S`. Mirrors the per-tier `$core::exp_fixed` exactly
+    /// (range-reduce `v = k·ln2 + s`, extend the working scale by
+    /// `extra` to absorb the `2^k` amplification, run the
+    /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
+    /// stays width-generic so the caller can run it in a wider integer
+    /// for the large-result regime.
+    pub(crate) fn exp_fixed<S: WideStorage>(v_w: S, w: u32) -> S {
+        let one_w_pre = one::<S>(w);
+        let l2_pre = ln2::<S>(w);
+        let pow10_w_pre = one_w_pre;
+        let k = round_to_nearest_int(div_cached(v_w, l2_pre, pow10_w_pre), w);
+        let abs_k_u128 = if k < 0 { -k } else { k } as u128;
+        let extra: u32 = if abs_k_u128 == 0 {
+            0
+        } else {
+            let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
+            let capped = digits.min((S::BITS / 4) as u128) as u32;
+            capped + 12 + (capped >> 2)
+        };
+
+        let w_ext = w + extra;
+        let v_ext = if extra == 0 { v_w } else { v_w * pow10::<S>(extra) };
+        let one_w = one::<S>(w_ext);
+        let l2 = ln2::<S>(w_ext);
+        let pow10_w = one_w;
+        let s = v_ext - scale_by_k(l2, k);
+
+        let p_bits = w_ext.saturating_mul(3).saturating_add(1);
+        let mut n: u32 = 1;
+        while (n + 1) * (n + 1) <= p_bits {
+            n += 1;
+        }
+
+        let s_red = s >> n;
+        let mut sum = one_w + s_red;
+        let mut term = s_red;
+        let mut iter: u128 = 2;
+        loop {
+            term = mul_cached(term, s_red, pow10_w) / lit::<S>(iter as i128);
+            if term == S::ZERO {
+                break;
+            }
+            sum = sum + term;
+            iter += 1;
+            if iter > SERIES_CAP {
+                break;
+            }
+        }
+
+        let mut squared = sum;
+        let mut i = 0;
+        while i < n {
+            squared = mul_cached(squared, squared, pow10_w);
+            i += 1;
+        }
+        let sum = squared;
+
+        let scaled_at_w_ext = if k >= 0 {
+            let shift = k as u32;
+            if bit_length(sum) + shift >= S::BITS {
+                panic!("exp_generic::exp_fixed: result overflows the working width");
+            }
+            sum << shift
+        } else {
+            let neg_k = -k as u128;
+            if neg_k >= bit_length(sum) as u128 {
+                return zero::<S>();
+            }
+            sum >> (neg_k as u32)
+        };
+        if extra == 0 {
+            scaled_at_w_ext
+        } else {
+            round_div_pow10(scaled_at_w_ext, extra)
+        }
+    }
+
+    /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of
+    /// the per-tier `$core::div`).
+    #[inline]
+    fn div<S: WideStorage>(a: S, b: S, w: u32) -> S {
+        round_div(a * pow10::<S>(w), b)
+    }
+
+    /// `sinh(|x|)` at working scale `w` for a non-negative working
+    /// value `av_w` (= `|x|·10^w`), computed entirely in `S`:
+    /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
+    /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
+    /// the small term's relative error stays a small *absolute* error.
+    pub(crate) fn sinh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
+        let ex = exp_fixed::<S>(av_w, w);
+        let enx = div(one::<S>(w), ex, w);
+        (ex - enx) >> 1
+    }
+
+    /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
+    /// [`sinh_pos`].
+    pub(crate) fn cosh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
+        let ex = exp_fixed::<S>(av_w, w);
+        let enx = div(one::<S>(w), ex, w);
+        (ex + enx) >> 1
+    }
+
+    /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
+    /// `w`. See [`sinh_pos`].
+    pub(crate) fn tanh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
+        let ex = exp_fixed::<S>(av_w, w);
+        let enx = div(one::<S>(w), ex, w);
+        div(ex - enx, ex + enx, w)
+    }
+}
+
 /// Emits the per-tier `pow10_cached(w)` helper. Two flavours:
 ///
 /// - `with_const_table` — emits a `static POW10_TABLE: [W; max_scale+GUARD+1]`
@@ -185,12 +461,12 @@ pub(crate) use decl_pow10_cached;
 ///   D924 / D1232 where the table-build's `limbs_mul × max_scale`
 ///   work exceeds the stable-rust const-eval step budget.
 macro_rules! decl_wide_transcendental {
-    ($Type:ident, $Storage:ty, $Work:ty, $core:ident, $max_scale:literal) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal) => {
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
-            $Type, $Storage, $Work, $core, $max_scale, with_const_table
+            $Type, $Storage, $Work, $Wexp, $core, $max_scale, with_const_table
         );
     };
-    ($Type:ident, $Storage:ty, $Work:ty, $core:ident, $max_scale:literal, $table_mode:ident) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal, $table_mode:ident) => {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
         /// passed explicitly alongside the value.
@@ -203,6 +479,17 @@ macro_rules! decl_wide_transcendental {
 
             /// The working integer: a value `x` is held as `x · 10^w`.
             pub(crate) type W = $Work;
+
+            /// The wider work integer used by the large-result `exp`
+            /// path (`exp_fixed_wide`). Set to the next-wider `Int`
+            /// where one exists, else aliases `W` (the widest tier,
+            /// D1232, whose own `W` already holds the full lift). The
+            /// near-storage-overflow-edge `sinh`/`cosh`/`exp2`/`tanh`
+            /// inputs run their `exp` in `Wexp` so the result's
+            /// integer-digit lift + the internal `2^k` reassembly +
+            /// the squaring peak all fit, then narrow correctly-rounded
+            /// to storage.
+            pub(crate) type Wexp = $Wexp;
 
             /// Guard digits added below the type's own scale.
             ///
@@ -989,35 +1276,30 @@ macro_rules! decl_wide_transcendental {
             /// Squaring-safe cap on a large-result working-scale lift.
             ///
             /// `needed` is the result's integer-digit count (the ideal
-            /// lift). `exp_fixed` runs at `w_ext ≈ scale + guard + lift`
-            /// with its own `2^k` reassembly lift `≈ lift` on top, then
-            /// *squares* a value of magnitude `result · 10^w_ext` — the
-            /// squaring needs `2 · width < W`. Bounding the peak doubled
-            /// width keeps `exp_fixed` from overflowing the working
-            /// integer. When `needed` exceeds the cap the result nears the
-            /// storage overflow edge and the cell may lose LSBs — those
-            /// stay on the strict-golden ignore list as the wide-tier
-            /// `exp_fixed` squaring-width limit.
+            /// lift). The large-result `sinh`/`cosh`/`exp2`/`tanh`
+            /// closures run their `exp` in the *wider* work integer
+            /// [`Wexp`] (via [`exp_fixed_wide`]), so the budget is
+            /// `Wexp`'s decimal capacity, not `W`'s.
+            ///
+            /// `exp_fixed` (at `Wexp`) runs at
+            /// `w_ext = scale + GUARD + lift + extra` where its internal
+            /// `2^k` reassembly extra is `≈ 1.25·needed`, then *squares*
+            /// a value at scale `w_ext` — the squaring transiently needs
+            /// `2·w_ext` digits. With `lift = needed` the squaring peak
+            /// is `≈ 2·(scale + GUARD) + 4.5·needed`, which must stay
+            /// inside `Wexp`'s `~BITS·log10(2)` decimal capacity. We size
+            /// the cap from that bound (with a safety margin). Because
+            /// `Wexp` is the next-wider tier for every shipped width
+            /// (and D1232's own `Int16384` already holds the peak at its
+            /// `MAX_SCALE`), the full `needed` lift fits and the cell
+            /// rounds correctly; the cap only fires for genuinely
+            /// out-of-range inputs, which then panic on narrowing.
             pub(crate) fn exp_lift_cap(needed: u128, scale: u32) -> u32 {
-                // `exp_fixed` reassembles `result · 10^w_ext` where
-                // `w_ext = scale + GUARD + lift + exp_internal_extra` and
-                // the internal extra is itself `≈ needed`. The reassembled
-                // value occupies `≈ needed (result int part) + scale +
-                // GUARD + lift + needed (internal extra)` decimal digits,
-                // which must fit `W`. With `lift ≤ needed` the worst case
-                // is `≈ scale + GUARD + 3·needed`; cap the lift so that
-                // bound (with margin) stays inside `W`'s decimal capacity.
-                // The closure feeds `exp_fixed` an argument at working
-                // scale `w = scale + GUARD + lift`; `exp_fixed` expands
-                // internally (its `2^k` reassembly lift + the result
-                // magnitude) to roughly `3·w`. Keep `w` under a third of
-                // `W`'s decimal capacity so that expansion stays inside
-                // `W`. Inputs whose result is so large that even the
-                // capped lift is short of `needed` (the storage-overflow
-                // edge) may still lose LSBs — those stay on the ignore
-                // list as the wide-tier `exp_fixed` width limit.
-                let w_digits = <W>::BITS as u128 * 30103 / 100_000;
-                let head = (w_digits / 3).saturating_sub(scale as u128 + GUARD as u128);
+                let wexp_digits = <Wexp>::BITS as u128 * 30103 / 100_000;
+                // Solve `2·(scale+GUARD) + 4.5·lift + margin ≤ wexp_digits`
+                // for `lift`. Use 45/10 for the 4.5 factor; margin 64.
+                let base = 2 * (scale as u128 + GUARD as u128) + 64;
+                let head = wexp_digits.saturating_sub(base) * 10 / 45;
                 let lift = needed.min(head);
                 if lift > u32::MAX as u128 { u32::MAX } else { lift as u32 }
             }
@@ -1604,6 +1886,56 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     round_div_pow10(scaled_at_w_ext, extra)
                 }
+            }
+
+            /// Large-result `e^v`: runs the guard-digit `exp` core in
+            /// the wider work integer [`Wexp`] so the caller's
+            /// working-scale lift + the internal `2^k` reassembly + the
+            /// repeated-squaring peak all fit, then narrows the result
+            /// back to `W` exactly (the value is integral at scale `w`
+            /// — no rounding occurs in the narrowing).
+            ///
+            /// `Wexp` is the next-wider `Int` for every tier except
+            /// D1232 (already widest); there `Wexp == W`, and the full
+            /// lift fits because D1232's `Int16384` holds the squaring
+            /// peak at its `MAX_SCALE` anyway. Used by the near-overflow
+            /// -edge `sinh`/`cosh`/`exp2`/`tanh` cells; the normal /
+            /// small regime keeps the fast `exp_fixed` path on `W`.
+            pub(crate) fn exp_fixed_wide(v_w: W, w: u32) -> W {
+                let v_wide = $crate::wide_int::wide_cast::<W, Wexp>(v_w);
+                let r_wide = $crate::macros::wide_transcendental::exp_generic::exp_fixed::<Wexp>(v_wide, w);
+                $crate::wide_int::wide_cast::<Wexp, W>(r_wide)
+            }
+
+            /// `sinh(|x|)` at working scale `w`, composed entirely in the
+            /// wider work integer [`Wexp`] so the huge `e^|x|` term, the
+            /// `1/e^|x|` reciprocal (whose numerator `10^(2w)` would
+            /// overflow `W` on the small-`W`/high-scale tiers like
+            /// D462), and the `(e^|x| − e^-|x|)/2` sum all fit. The
+            /// composed `sinh(|x|)` itself fits `W`, so the final cast is
+            /// lossless. The caller reapplies the input sign (sinh is
+            /// odd).
+            pub(crate) fn sinh_pos_wide(av_w: W, w: u32) -> W {
+                let av_wide = $crate::wide_int::wide_cast::<W, Wexp>(av_w);
+                let r = $crate::macros::wide_transcendental::exp_generic::sinh_pos::<Wexp>(av_wide, w);
+                $crate::wide_int::wide_cast::<Wexp, W>(r)
+            }
+
+            /// `cosh(|x|)` at working scale `w`, composed in [`Wexp`].
+            /// See [`sinh_pos_wide`].
+            pub(crate) fn cosh_pos_wide(av_w: W, w: u32) -> W {
+                let av_wide = $crate::wide_int::wide_cast::<W, Wexp>(av_w);
+                let r = $crate::macros::wide_transcendental::exp_generic::cosh_pos::<Wexp>(av_wide, w);
+                $crate::wide_int::wide_cast::<Wexp, W>(r)
+            }
+
+            /// `tanh(|x|)` at working scale `w`, composed in [`Wexp`].
+            /// See [`sinh_pos_wide`]. The caller reapplies the input
+            /// sign (tanh is odd).
+            pub(crate) fn tanh_pos_wide(av_w: W, w: u32) -> W {
+                let av_wide = $crate::wide_int::wide_cast::<W, Wexp>(av_w);
+                let r = $crate::macros::wide_transcendental::exp_generic::tanh_pos::<Wexp>(av_wide, w);
+                $crate::wide_int::wide_cast::<Wexp, W>(r)
             }
 
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
@@ -2722,7 +3054,7 @@ macro_rules! decl_wide_transcendental {
                     base_guard, SCALE, mode, |guard| {
                         let w = SCALE + guard;
                         let arg = $core::mul($core::to_work_w(raw, guard), $core::ln2(w), w);
-                        $core::exp_fixed(arg, w)
+                        $core::exp_fixed_wide(arg, w)
                     },
                 ))
             }
@@ -2958,6 +3290,32 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
+                let szero = <$Storage>::from_i128(0);
+                if raw != szero {
+                    // Small-argument cubic band: `sinh(x) = x + x³/6 + …`,
+                    // the cubic strictly positive yet below one ULP, so
+                    // the true value sits just *above* the grid line
+                    // `raw` (in magnitude). No finite-precision `exp`
+                    // path resolves the sub-ULP cubic — the
+                    // `(e^x − e^-x)/2` difference collapses to exactly
+                    // `raw` (or one LSB short) — so we return the
+                    // analytic directed decision. `sinh` is odd, so the
+                    // band is symmetric. The threshold mirrors `tanh`'s:
+                    // the cubic clears half a storage ULP only once
+                    // `|raw| > ~10^(2·SCALE/3)`.
+                    let thresh_exp = SCALE - (SCALE + 2) / 3;
+                    let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
+                    if raw.abs() <= thresh {
+                        return Self::from_bits(
+                            $crate::support::rounding::tiny_odd_expanding_directed(
+                                raw,
+                                szero,
+                                <$Storage>::from_i128(1),
+                                mode,
+                            ),
+                        );
+                    }
+                }
                 // Large-argument lift. `sinh(x) ≈ e^|x|/2` carries
                 // `~|x|·log10(e)` integer-part digits; the `exp_fixed`
                 // result holds those at the high end of the working
@@ -2966,15 +3324,27 @@ macro_rules! decl_wide_transcendental {
                 // narrowing. Lift the base working scale by the same
                 // `⌈|x|·log10(e)⌉` digits (the `exp` `2^k` reassembly
                 // budget) so that absolute error stays sub-storage-ULP.
+                // Always feed `exp_fixed` the *positive* magnitude `|v|`,
+                // so the dominant `e^|x|` term is computed directly and
+                // accurately. The reciprocal then gives the tiny
+                // `e^-|x|`. Computing `exp(-|x|)` directly and
+                // reciprocating instead would amplify the small term's
+                // relative error into a large absolute error in the huge
+                // `1/exp(-|x|)`, blowing the storage-ULP budget for large
+                // `|x|`. `sinh` is odd, so the sign of the input is
+                // reapplied to the (non-negative) `sinh(|x|)` working
+                // value — `round_to_storage_directed` reads the sign off
+                // the returned value and rounds each mode accordingly.
+                let neg = raw < <$Storage>::from_i128(0);
                 let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
                     base_guard, SCALE, mode, |guard| {
                         let w = SCALE + guard;
                         let v = $core::to_work_w(raw, guard);
-                        let ex = $core::exp_fixed(v, w);
-                        let enx = $core::div($core::one(w), ex, w);
-                        (ex - enx) >> 1
+                        let av = if v < $core::zero() { -v } else { v };
+                        let sh = $core::sinh_pos_wide(av, w);
+                        if neg { -sh } else { sh }
                     },
                 ))
             }
@@ -2988,16 +3358,19 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
-                // Large-argument lift: see `sinh_strict_with`.
+                // Large-argument lift: see `sinh_strict_with`. `cosh` is
+                // even, so we always evaluate at `|v|` — feeding the
+                // positive magnitude keeps the dominant `e^|x|` term
+                // direct and accurate (see `sinh_strict_with` for why the
+                // sign matters to the budget).
                 let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
                 let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
                     base_guard, SCALE, mode, |guard| {
                         let w = SCALE + guard;
                         let v = $core::to_work_w(raw, guard);
-                        let ex = $core::exp_fixed(v, w);
-                        let enx = $core::div($core::one(w), ex, w);
-                        (ex + enx) >> 1
+                        let av = if v < $core::zero() { -v } else { v };
+                        $core::cosh_pos_wide(av, w)
                     },
                 ))
             }
@@ -3031,13 +3404,29 @@ macro_rules! decl_wide_transcendental {
                         );
                     }
                 }
+                // Saturation-edge lift. For a large `|x|` the intermediate
+                // `e^|x|` carries `~|x|·log10(e)` integer digits and runs
+                // its squaring core past `W` — so `exp_fixed_wide` runs it
+                // in the wider work integer [`Wexp`]. The result `tanh(x)`
+                // itself is in `[-1, 1]` (no result lift needed), but the
+                // `(ex − enx)/(ex + enx)` ratio needs the tiny `enx = e^-|x|`
+                // resolved to keep the directed-rounding decision correct;
+                // lift the base working scale by the `e^|x|` integer-digit
+                // count so `enx` keeps a full guard below the storage LSB.
+                // `tanh` is odd; evaluate at `|v|` (so the dominant
+                // `e^|x|` term is direct and accurate, see
+                // `sinh_strict_with`) and reapply the input sign to the
+                // non-negative `tanh(|x|)` working value.
+                let neg = raw < zero;
+                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
+                let base_guard = $core::GUARD + k_lift;
                 Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD, SCALE, mode, |guard| {
+                    base_guard, SCALE, mode, |guard| {
                         let w = SCALE + guard;
                         let v = $core::to_work_w(raw, guard);
-                        let ex = $core::exp_fixed(v, w);
-                        let enx = $core::div($core::one(w), ex, w);
-                        $core::div(ex - enx, ex + enx, w)
+                        let av = if v < $core::zero() { -v } else { v };
+                        let th = $core::tanh_pos_wide(av, w);
+                        if neg { -th } else { th }
                     },
                 ))
             }
