@@ -15,17 +15,20 @@
 //! constant, the limb loops unroll and any `match LIMBS` arms const-fold
 //! per monomorphisation — no runtime dispatch.
 
-use crate::wide_int::limbs_add_assign_u64_fixed;
+use crate::wide_int::{
+    limbs_add_assign_u64_fixed, limbs_cmp_u64_fixed, limbs_sub_assign_u64_fixed,
+};
+use core::cmp::Ordering;
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Uint<const N: usize> {
     limbs: [u64; N],
 }
 
 /// Signed (two's-complement) fixed-width integer of `N` little-endian
 /// 64-bit limbs.
-#[derive(Clone, Copy, PartialEq, Eq)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub struct Int<const N: usize> {
     limbs: [u64; N],
 }
@@ -64,6 +67,31 @@ impl<const N: usize> Uint<N> {
     pub fn wrapping_add(mut self, rhs: Self) -> Self {
         limbs_add_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
         self
+    }
+
+    /// Wrapping subtraction (modulo `2^BITS`).
+    #[inline]
+    pub fn wrapping_sub(mut self, rhs: Self) -> Self {
+        limbs_sub_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
+        self
+    }
+}
+
+impl<const N: usize> PartialOrd for Uint<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const N: usize> Ord for Uint<N> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        match limbs_cmp_u64_fixed(&self.limbs, &other.limbs) {
+            -1 => Ordering::Less,
+            1 => Ordering::Greater,
+            _ => Ordering::Equal,
+        }
     }
 }
 
@@ -139,6 +167,30 @@ mod tests {
         assert_eq!(Int256::BITS, 256);
         assert_eq!(Int4096::BITS, 4096);
         assert_eq!(Uint1024::LIMBS, 16);
+    }
+
+    #[test]
+    fn wrapping_sub_borrows_across_limbs() {
+        // 2^64 - 1 ... computed as 0 - 1 wrapping, then check a clean borrow.
+        let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        let d = a.wrapping_sub(Uint::<4>::ONE);
+        assert_eq!(*d.as_limbs(), [u64::MAX, 0, 0, 0]);
+
+        // 0 - 1 wraps to all-ones (modulo 2^256).
+        let wrap = Uint::<4>::ZERO.wrapping_sub(Uint::<4>::ONE);
+        assert_eq!(*wrap.as_limbs(), [u64::MAX; 4]);
+    }
+
+    #[test]
+    fn unsigned_ordering() {
+        let small = Uint::<4>::from_limbs([5, 0, 0, 0]);
+        let big = Uint::<4>::from_limbs([0, 1, 0, 0]); // 2^64 > 5
+        assert!(small < big);
+        assert!(big > small);
+        assert_eq!(small, small);
+        assert!(Uint::<4>::ZERO < Uint::<4>::MAX);
+        // round-trips through derived PartialOrd helpers
+        assert_eq!(small.max(big), big);
     }
 
     #[test]
