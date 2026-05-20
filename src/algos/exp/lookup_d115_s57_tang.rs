@@ -164,7 +164,38 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int384, mode: RoundingMode) -> I
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
-    let result = tang_exp_fixed(v_w, w);
-    core::round_to_storage_with(result, w, SCALE, mode)
+
+    // Range-reduction error budget. `tang_exp_fixed` reassembles the
+    // result as `exp_s · 2^k`, with `k ≈ v / ln 2`. That final shift is
+    // exact, but it amplifies the working-scale rounding error of
+    // `exp_s` by `2^k` — i.e. by `|k|·log10(2)` decimal digits. With the
+    // fixed `GUARD_NARROW = 8` slot that amplification swamps the storage
+    // half-ULP for large `|x|` (e.g. `x ≈ 116.8` gives `k ≈ 168`, so the
+    // result needs ~50 integer digits and the 8-digit guard leaves the
+    // fractional tail tens of orders of magnitude short).
+    //
+    // Widen the working scale by `extra ≈ ceil(|k|·log10(2)) + margin`
+    // so the post-shift residual lands back inside the guard, matching
+    // the adaptive lift the generic `core::exp_fixed` uses (see
+    // `wide_transcendental.rs`; Muller, *Elementary Functions* 3rd ed.,
+    // §11.1).
+    let l2_w = core::ln2(w);
+    let one_w = core::one(w);
+    let v_w_probe = core::to_work_w(raw, GUARD_NARROW);
+    let k = core::round_to_nearest_int(core::div_cached(v_w_probe, l2_w, one_w), w);
+    let abs_k = k.unsigned_abs();
+    let extra: u32 = if abs_k == 0 {
+        0
+    } else {
+        // |k|·log10(2) = |k| · 30103 / 100000, rounded up; margin for
+        // Taylor accumulation, the table multiply, and final narrowing.
+        let digits = (abs_k * 30103 + 99_999) / 100_000;
+        let capped = digits.min((core::W::BITS / 4) as u128) as u32;
+        capped + 12 + (capped >> 2)
+    };
+
+    let w_ext = w + extra;
+    let v_ext = core::to_work_w(raw, GUARD_NARROW + extra);
+    let result = tang_exp_fixed(v_ext, w_ext);
+    core::round_to_storage_with(result, w_ext, SCALE, mode)
 }
