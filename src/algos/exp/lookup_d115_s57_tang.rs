@@ -194,8 +194,13 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int384, mode: RoundingMode) -> I
         capped + 12 + (capped >> 2)
     };
 
-    let w_ext = w + extra;
-    let v_ext = core::to_work_w(raw, GUARD_NARROW + extra);
-    let result = tang_exp_fixed(v_ext, w_ext);
-    core::round_to_storage_with(result, w_ext, SCALE, mode)
+    // Directed modes (Trunc/Floor/Ceiling) decide which side of a storage
+    // grid line the *true* result falls. Near a grid line the working-scale
+    // approximation can sit on the wrong side, so route the narrowing
+    // through the shared Ziv escalation, which recomputes at a wider guard
+    // until the directed answer stabilises. The `+ extra` lift for the
+    // large-|x| range-reduction error budget is folded into every guard.
+    core::round_to_storage_directed(GUARD_NARROW + extra, SCALE, mode, |guard| {
+        tang_exp_fixed(core::to_work_w(raw, guard), SCALE + guard)
+    })
 }

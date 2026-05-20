@@ -610,6 +610,153 @@ macro_rules! decl_wide_transcendental {
                 $crate::wide_int::wide_cast::<W, $Storage>(rounded)
             }
 
+            /// Directed-rounding narrowing with Ziv escalation.
+            ///
+            /// `round_to_storage_with` rounds the working-scale
+            /// *approximation* per `mode`. For the three nearest modes the
+            /// `GUARD` budget keeps the approximation within half a storage
+            /// ULP of the true value, so a single narrowing is correctly
+            /// rounded. The directed modes (`Trunc`/`Floor`/`Ceiling`)
+            /// decide on which side of a storage grid line the *true*
+            /// value falls — and when the true value sits within the
+            /// kernel error envelope of that grid line, the approximation
+            /// can be on the wrong side, flipping the answer by one LSB.
+            ///
+            /// `recompute(guard)` returns the kernel's working-scale value
+            /// computed with `guard` guard digits (working scale
+            /// `target + guard`). When the residual lands inside the
+            /// uncertain band (`ZIV_ERR_LSB` working-scale LSB of either
+            /// grid line) we cannot trust the directed decision, so we
+            /// recompute with a wider guard and retry — Ziv's strategy.
+            /// Each step roughly doubles the guard; for the algebraic
+            /// points where the true residual is genuinely zero
+            /// (`ln 1`, `exp 0`, `sin 0`, exact quadrant multiples) the
+            /// caller resolves the value before reaching here, so the
+            /// loop always terminates on a decisive residual.
+            ///
+            /// Nearest modes never enter the loop: they narrow once.
+            pub(crate) fn round_to_storage_directed(
+                base_guard: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+                mut recompute: impl FnMut(u32) -> W,
+            ) -> $Storage {
+                use $crate::support::rounding::{is_nearest_mode, RoundingMode};
+
+                let base_w = target + base_guard;
+                if is_nearest_mode(mode) {
+                    return round_to_storage_with(recompute(base_guard), base_w, target, mode);
+                }
+
+                // Directed answer: the truncated/bumped magnitude derived
+                // from the *true* residual sign. The working value carries a
+                // kernel error that, near a storage grid line, can flip that
+                // sign. `directed_narrow` returns both the rounded result and
+                // the residual position so the caller can tell when the value
+                // sits near a grid line (and the decision is untrustworthy).
+                let mut directed_narrow = |guard: u32| -> (W, W, W) {
+                    let w = target + guard;
+                    let v = recompute(guard);
+                    let shift = w - target;
+                    let neg = v < lit(0);
+                    let mag = if neg { -v } else { v };
+                    let divisor = pow10(shift);
+                    let (q, rem) = mag.div_rem(divisor);
+                    let result_positive = !neg;
+                    let bump = rem != lit(0)
+                        && match mode {
+                            RoundingMode::Trunc => false,
+                            RoundingMode::Floor => !result_positive,
+                            RoundingMode::Ceiling => result_positive,
+                            _ => unreachable!(),
+                        };
+                    let q_mag = if bump { q + lit(1) } else { q };
+                    let signed = if neg { -q_mag } else { q_mag };
+                    // Distance from the nearer grid line, in working-scale
+                    // units: min(rem, divisor − rem).
+                    let dist = if rem < divisor - rem { rem } else { divisor - rem };
+                    (signed, dist, divisor)
+                };
+
+                // Ziv escalation. Evaluate at `base_guard`; if the residual
+                // sits well clear of either grid line (`dist` exceeds a
+                // generous fraction of the working ULP grid), the directed
+                // decision is trustworthy and we are done. Otherwise recompute
+                // at a wider guard until two consecutive evaluations agree —
+                // the residual band the kernel error spans shrinks each step,
+                // so every non-algebraic input converges. Exact algebraic
+                // points (`exp 0`, `ln 1`, `sin 0`, exact quadrant multiples)
+                // are resolved by the caller before reaching here.
+                //
+                // Guard is capped so the recompute never overflows `W`: the
+                // result needs `int_digits + target + guard` significant
+                // digits, and `W` holds about `BITS · 0.3` of them. We size
+                // the cap from the result's integer-digit count (taken from
+                // the base evaluation) leaving a safety margin.
+                let (mut lo, dist0, divisor0) = directed_narrow(base_guard);
+
+                // "Near a grid line": within 1/1000 of the working ULP grid.
+                // Comfortably above any kernel rounding noise yet far below
+                // the residual of an ordinary (non-boundary) input.
+                let band0 = divisor0 / lit(1000);
+                let near_grid = dist0 <= band0;
+
+                let signed = if !near_grid {
+                    lo
+                } else {
+                    // Capacity of `W` in decimal digits (~BITS·log10(2)),
+                    // minus the result's integer-digit count and a margin,
+                    // bounds how far we may escalate without overflow.
+                    let int_digits = {
+                        let m = if lo < lit(0) { -lo } else { lo };
+                        // `lo` is the storage value (integer part scaled by
+                        // 10^target), so its decimal length minus `target`
+                        // is the integer-part digit count. Approximate the
+                        // length via bit length.
+                        let bl = bit_length(m);
+                        let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
+                        storage_digits.saturating_sub(target)
+                    };
+                    // The kernels form double-width intermediate products,
+                    // so the safe working width is HALF the type's digit
+                    // capacity, less the result's integer digits and a
+                    // margin. Escalating past this overflows the kernel
+                    // scratch, so it bounds `max_guard`.
+                    let half_cap_digits = ((<W>::BITS as u64 * 30103 / 100_000) as u32 / 2)
+                        .saturating_sub(int_digits + 8);
+                    let max_guard = half_cap_digits.saturating_sub(target).max(base_guard);
+
+                    let mut guard = base_guard;
+                    loop {
+                        if guard >= max_guard {
+                            break lo;
+                        }
+                        // Step past `target` so a result term that only
+                        // materialises at guard ≈ target (the `+x` of
+                        // `exp(x) = 1 + x + …` for `|x| ≈ 10^-target`) is
+                        // reached, then confirm with a further step.
+                        let step = (target + base_guard).max(base_guard);
+                        let next_guard = guard.saturating_add(step).min(max_guard);
+                        let (hi, _, _) = directed_narrow(next_guard);
+                        if hi == lo {
+                            break lo;
+                        }
+                        guard = next_guard;
+                        lo = hi;
+                    }
+                };
+
+                let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
+                let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                if signed > max_w || signed < min_w {
+                    panic!(concat!(
+                        stringify!($Type),
+                        " strict transcendental: result out of range"
+                    ));
+                }
+                $crate::wide_int::wide_cast::<W, $Storage>(signed)
+            }
+
             /// Rounds a working-scale value to the nearest integer (ties
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
