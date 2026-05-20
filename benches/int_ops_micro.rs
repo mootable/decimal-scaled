@@ -17,7 +17,7 @@
 //!
 //! Run with: `cargo bench --features wide --bench int_ops_micro`.
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{criterion_group, Criterion};
 use decimal_scaled::{Int256, Int512, Int1024, Int2048, Int4096};
 use std::hint::black_box;
 use std::time::Duration;
@@ -89,8 +89,8 @@ fn bench_int_ops(c: &mut Criterion) {
 fn micro() -> Criterion {
     Criterion::default()
         .sample_size(20)
-        .measurement_time(Duration::from_millis(800))
-        .warm_up_time(Duration::from_millis(200))
+        .measurement_time(Duration::from_millis(400))
+        .warm_up_time(Duration::from_millis(150))
 }
 
 criterion_group! {
@@ -98,4 +98,18 @@ criterion_group! {
     config = micro();
     targets = bench_int_ops
 }
-criterion_main!(benches);
+
+/// Custom entry point: pin the current thread to a single fixed core
+/// before handing off to criterion, then run the standard harness.
+///
+/// Criterion's timing loop runs on this thread, so pinning it keeps the
+/// measurement on one core for the whole run and removes the
+/// cross-core-migration jitter that otherwise widens the variance of
+/// these sub-microsecond integer ops.
+fn main() {
+    if let Some(c) = core_affinity::get_core_ids().and_then(|v| v.into_iter().next()) {
+        core_affinity::set_for_current(c);
+    }
+    benches();
+    Criterion::default().configure_from_args().final_summary();
+}

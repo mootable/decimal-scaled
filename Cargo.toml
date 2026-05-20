@@ -173,6 +173,10 @@ plotters = { version = "0.3", default-features = false, features = ["bitmap_back
 # tests/ulp_proptest.rs. Pinned 1.x for deterministic, fixed-seed
 # minimisation when a counterexample is found.
 proptest = "1"
+# Pins the int_ops_micro bench process to a single CPU core so the
+# criterion timing loop doesn't migrate cross-core mid-measurement.
+# Cross-platform (incl. Windows), MIT/Apache. Bench-only.
+core_affinity = "0.8"
 
 [[bench]]
 name = "mul_div_candidates"
