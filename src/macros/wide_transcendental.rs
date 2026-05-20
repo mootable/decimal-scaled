@@ -635,17 +635,101 @@ macro_rules! decl_wide_transcendental {
             /// loop always terminates on a decisive residual.
             ///
             /// Nearest modes never enter the loop: they narrow once.
+            /// Standard directed narrowing: the base-guard evaluation
+            /// is trusted unless its residual sits within the kernel
+            /// error band of a grid line, in which case it Ziv-escalates.
             pub(crate) fn round_to_storage_directed(
                 base_guard: u32,
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
+                recompute: impl FnMut(u32) -> W,
+            ) -> $Storage {
+                round_to_storage_directed_impl(base_guard, target, mode, false, recompute)
+            }
+
+            /// Near-special-point directed narrowing for the derived
+            /// functions (`acosh` at 1, `atanh` at +-1). After the
+            /// gap/log1p reformulation the kernel is accurate, but the
+            /// base `GUARD` budget can still be a few digits short of a
+            /// correctly-rounded result on these inputs because the
+            /// result is the small difference / logarithm of a tiny gap.
+            /// `force_confirm` makes both the nearest and directed paths
+            /// always confirm the base narrowing against a wider guard
+            /// (rather than trusting a "clear" residual that the residual
+            /// kernel error could itself have placed on the wrong side),
+            /// so the answer is correctly rounded under every mode.
+            pub(crate) fn round_to_storage_directed_near_special(
+                base_guard: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+                recompute: impl FnMut(u32) -> W,
+            ) -> $Storage {
+                round_to_storage_directed_impl(base_guard, target, mode, true, recompute)
+            }
+
+            fn round_to_storage_directed_impl(
+                base_guard: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+                force_confirm: bool,
                 mut recompute: impl FnMut(u32) -> W,
             ) -> $Storage {
                 use $crate::support::rounding::{is_nearest_mode, RoundingMode};
 
                 let base_w = target + base_guard;
                 if is_nearest_mode(mode) {
-                    return round_to_storage_with(recompute(base_guard), base_w, target, mode);
+                    if !force_confirm {
+                        return round_to_storage_with(recompute(base_guard), base_w, target, mode);
+                    }
+                    // A single narrowing at `base_guard` is correctly
+                    // rounded whenever the working approximation lies
+                    // within half a storage ULP of the true value -- the
+                    // usual case the `GUARD` budget guarantees. Near a
+                    // special point (`atanh` at `+-1`, `acosh` at `1`) the
+                    // kernel's residual error grows, and a single
+                    // narrowing at the base guard can round to the wrong
+                    // storage neighbour even after the gap/log1p
+                    // reformulation removes the catastrophic cancellation.
+                    // Confirm the base narrowing against a wider-guard
+                    // recompute (Ziv): when two successive working scales
+                    // narrow to the same storage integer the result is
+                    // trustworthy. This mirrors the directed-mode loop
+                    // below but compares the rounded storage value
+                    // directly, since a nearest decision depends on the
+                    // whole residual, not just its sign. The guard is
+                    // capped from the result's integer-digit count exactly
+                    // as the directed loop is, so the recompute never
+                    // overflows `W`.
+                    let mut nearest_narrow = |guard: u32| -> $Storage {
+                        let w = target + guard;
+                        round_to_storage_with(recompute(guard), w, target, mode)
+                    };
+                    let lo = nearest_narrow(base_guard);
+                    let int_digits = {
+                        let n = $crate::wide_int::wide_cast::<$Storage, W>(lo);
+                        let m = if n < lit(0) { -n } else { n };
+                        let bl = bit_length(m);
+                        let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
+                        storage_digits.saturating_sub(target)
+                    };
+                    let cap_digits = (<W>::BITS / 8).saturating_sub(int_digits + 8);
+                    let max_guard = cap_digits.saturating_sub(target).max(base_guard);
+                    let mut guard = base_guard;
+                    let mut best = lo;
+                    loop {
+                        if guard >= max_guard {
+                            break;
+                        }
+                        let step = (target + base_guard).max(base_guard);
+                        let next_guard = guard.saturating_add(step).min(max_guard);
+                        let hi = nearest_narrow(next_guard);
+                        if hi == best {
+                            break;
+                        }
+                        guard = next_guard;
+                        best = hi;
+                    }
+                    return best;
                 }
 
                 // Directed answer: the truncated/bumped magnitude derived
@@ -699,7 +783,7 @@ macro_rules! decl_wide_transcendental {
                 // Comfortably above any kernel rounding noise yet far below
                 // the residual of an ordinary (non-boundary) input.
                 let band0 = divisor0 / lit(1000);
-                let near_grid = dist0 <= band0;
+                let near_grid = force_confirm || dist0 <= band0;
 
                 let signed = if !near_grid {
                     lo
@@ -1122,6 +1206,81 @@ macro_rules! decl_wide_transcendental {
                 // `2^l` factor from the unhalved-argument identity.
                 let ln_m = sum << (sqrt_l + 1);
                 scale_by_k(ln2(w), k as i128) + ln_m
+            }
+
+            /// `log1p(t) = ln(1 + t)` at working scale `w`, evaluated
+            /// without ever forming `1 + t`.
+            ///
+            /// Uses the Goldberg/Higham reformulation
+            /// `log1p(t) = 2*artanh( t / (2 + t) )`. The argument
+            /// `u = t / (2 + t)` is built from `t` directly: `2 + t` is
+            /// benign (no near-equal subtraction for `t > -1`) and the
+            /// divide is well-conditioned, so `u ~ t/2` carries every
+            /// significant digit of `t`. The artanh series then has the
+            /// same `O(1)` condition number on the whole near-zero range,
+            /// removing the catastrophic cancellation of the naive
+            /// `ln(1 + t)` (forming `1 + t` then reducing `m - 1`) at the
+            /// source. `t` is the working-scale gap supplied exactly by
+            /// the caller. Domain: `t > -1` (the caller guards this).
+            ///
+            /// Reference: N. J. Higham, *Accuracy and Stability of
+            /// Numerical Algorithms* 2nd ed. (2002), 1.14.1 and Problem
+            /// 1.4; J.-M. Muller, *Elementary Functions* 3rd ed. (2016),
+            /// 4.4.
+            pub(crate) fn log1p_fixed(t: W, w: u32) -> W {
+                let one_w = one(w);
+                let two_w = one_w + one_w;
+                let pow10_w = one_w;
+                let u = div_cached(t, two_w + t, pow10_w);
+                let u2 = mul_cached(u, u, pow10_w);
+                let mut sum = u;
+                let mut term = u;
+                let mut j: u128 = 1;
+                loop {
+                    term = mul_cached(term, u2, pow10_w);
+                    let contrib = term / lit(2 * j + 1);
+                    if contrib == zero() {
+                        break;
+                    }
+                    sum = sum + contrib;
+                    j += 1;
+                    if j > SERIES_CAP {
+                        break;
+                    }
+                }
+                sum + sum
+            }
+
+            /// `expm1(s) = exp(s) - 1` at working scale `w`, evaluated as
+            /// the Taylor series with the leading `1` term dropped so the
+            /// `exp(s) - 1` subtraction of two values both `~ 1` never
+            /// occurs: `expm1(s) = s + s^2/2! + s^3/3! + ...`. For tiny
+            /// `s` the result keeps every digit of `s`
+            /// (`kappa = |s/expm1(s)| -> 1`). This kernel is the
+            /// accuracy-critical small-argument case `|s| <~ ln2/2`; the
+            /// caller reduces a general argument to this band and
+            /// reassembles via the exact `2^k` shift. No range reduction
+            /// is performed here.
+            ///
+            /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed.
+            /// (2016), 4.4; Higham 1.14.1.
+            pub(crate) fn expm1_fixed(s: W, w: u32) -> W {
+                let pow10_w = one(w);
+                let mut sum = s;
+                let mut term = s;
+                let mut iter: u128 = 2;
+                loop {
+                    term = mul_cached(term, s, pow10_w) / lit(iter);
+                    if term == zero() {
+                        break;
+                    }
+                    sum = sum + term;
+                    iter += 1;
+                    if iter > SERIES_CAP {
+                        break;
+                    }
+                }
+                sum
             }
 
             /// `ln 10` at working scale `w`. Memoised, see [`ln2`].
