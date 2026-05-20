@@ -45,6 +45,7 @@
 //! [`algos::sqrt::mg_divide_d38`]: crate::algos::sqrt::mg_divide_d38
 
 use crate::algos::sqrt;
+use crate::policy::triplet::{policy_triplet, wtag};
 use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
 
@@ -92,94 +93,95 @@ impl<const SCALE: u32> SqrtPolicy for D38<SCALE> {
         Self(sqrt::mg_divide_d38::sqrt(self.0, SCALE, mode))
     }
 }
+// ── Wide tiers — base/std/no_std triplet keyed on `match (W, SCALE)` ─
+//
+// Each width emits the triplet free fns (`sqrt_dNN_{base,std,no_std}`)
+// under its feature gate; the trait method const-folds the std-vs-no_std
+// select. The only `std` override is `(D57, 20)`: the f64-seeded `isqrt`
+// path inside `lookup_d57_s20::sqrt`. Both arms name the same kernel
+// today (its own internal `#[cfg]` does the right thing) so behaviour is
+// byte-identical; the file split is deferred.
 
-// ── Wide tiers — width default: generic_wide; D57 has a scale slot ─
+macro_rules! sqrt_wide_default {
+    ($T:ident, $Storage:ty, $base_fn:ident, $std_fn:ident, $no_std_fn:ident, $kernel:path) => {
+        policy_triplet! {
+            storage   = $Storage,
+            base_fn   = $base_fn,
+            std_fn    = $std_fn,
+            no_std_fn = $no_std_fn,
+            recv      = raw,
+            mode      = mode,
+            params    = {},
+            base      = { (wtag::$T, _) => $kernel(raw, SCALE, mode) },
+            std       = {},
+        }
+
+        impl<const SCALE: u32> SqrtPolicy for crate::types::widths::$T<SCALE> {
+            #[inline]
+            fn sqrt_impl(self, mode: RoundingMode) -> Self {
+                #[cfg(feature = "std")]
+                { Self($std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
+                #[cfg(not(feature = "std"))]
+                { Self($no_std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            }
+        }
+    };
+}
+
+// D57 — width default `generic_wide::sqrt_d57`, with the bespoke
+// `(D57, 20)` cell and its f64-seeded `std` override.
+#[cfg(any(feature = "d57", feature = "wide"))]
+policy_triplet! {
+    storage   = crate::wide_int::Int192,
+    base_fn   = sqrt_d57_base,
+    std_fn    = sqrt_d57_std,
+    no_std_fn = sqrt_d57_no_std,
+    recv      = raw,
+    mode      = mode,
+    params    = {},
+    base      = {
+        (wtag::D57, 20) => sqrt::lookup_d57_s20::sqrt(raw, mode),
+        (wtag::D57, _)  => sqrt::generic_wide::sqrt_d57(raw, SCALE, mode)
+    },
+    std       = {
+        (wtag::D57, 20) => sqrt::lookup_d57_s20::sqrt(raw, mode),
+    },
+}
 
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        // Scale-range overrides — first match wins.
-        if matches!(SCALE, 20..=20) {
-            // SCALE_OVERRIDE(D57, 20): bespoke kernel slot, currently
-            // a pass-through to `generic_wide` (no behavioural change).
-            // Replace `lookup_d57_s20::sqrt` body with a tuned
-            // implementation when ready.
-            return Self(sqrt::lookup_d57_s20::sqrt(self.0, mode));
-        }
-        // Width default (global default for the wide-tier family).
-        Self(sqrt::generic_wide::sqrt_d57(self.0, SCALE, mode))
+        #[cfg(feature = "std")]
+        { Self(sqrt_d57_std::<{ wtag::D57 }, SCALE>(self.0, mode)) }
+        #[cfg(not(feature = "std"))]
+        { Self(sqrt_d57_no_std::<{ wtag::D57 }, SCALE>(self.0, mode)) }
     }
 }
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D76<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d76(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D76, crate::wide_int::Int256, sqrt_d76_base, sqrt_d76_std, sqrt_d76_no_std, sqrt::generic_wide::sqrt_d76);
 
 #[cfg(any(feature = "d115", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D115<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d115(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D115, crate::wide_int::Int384, sqrt_d115_base, sqrt_d115_std, sqrt_d115_no_std, sqrt::generic_wide::sqrt_d115);
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D153<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d153(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D153, crate::wide_int::Int512, sqrt_d153_base, sqrt_d153_std, sqrt_d153_no_std, sqrt::generic_wide::sqrt_d153);
 
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D230<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d230(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D230, crate::wide_int::Int768, sqrt_d230_base, sqrt_d230_std, sqrt_d230_no_std, sqrt::generic_wide::sqrt_d230);
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D307<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d307(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D307, crate::wide_int::Int1024, sqrt_d307_base, sqrt_d307_std, sqrt_d307_no_std, sqrt::generic_wide::sqrt_d307);
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D462<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d462(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D462, crate::wide_int::Int1536, sqrt_d462_base, sqrt_d462_std, sqrt_d462_no_std, sqrt::generic_wide::sqrt_d462);
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D616<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d616(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D616, crate::wide_int::Int2048, sqrt_d616_base, sqrt_d616_std, sqrt_d616_no_std, sqrt::generic_wide::sqrt_d616);
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D924<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d924(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D924, crate::wide_int::Int3072, sqrt_d924_base, sqrt_d924_std, sqrt_d924_no_std, sqrt::generic_wide::sqrt_d924);
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D1232<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        Self(sqrt::generic_wide::sqrt_d1232(self.0, SCALE, mode))
-    }
-}
+sqrt_wide_default!(D1232, crate::wide_int::Int4096, sqrt_d1232_base, sqrt_d1232_std, sqrt_d1232_no_std, sqrt::generic_wide::sqrt_d1232);

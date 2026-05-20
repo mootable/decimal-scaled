@@ -37,4 +37,5 @@ pub(crate) mod exp;
 pub(crate) mod ln;
 pub(crate) mod pow;
 pub(crate) mod sqrt;
+pub(crate) mod triplet;
 pub(crate) mod trig;
