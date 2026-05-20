@@ -15,11 +15,14 @@
 //! constant, the limb loops unroll and any `match LIMBS` arms const-fold
 //! per monomorphisation — no runtime dispatch.
 
+pub(crate) mod limbs;
+
 use crate::wide_int::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
     limbs_divmod_u64, limbs_is_zero_u64_fixed, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
     limbs_sub_assign_u64_fixed,
 };
+use limbs::mul::limbs_mul_low_u64_fixed;
 use core::cmp::Ordering;
 use core::ops::{
     Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Shl, Shr, Sub,
@@ -91,29 +94,8 @@ impl<const N: usize> Uint<N> {
     /// reduction.
     #[inline]
     pub fn wrapping_mul(self, rhs: Self) -> Self {
-        let (a, b) = (&self.limbs, &rhs.limbs);
         let mut out = [0u64; N];
-        let mut i = 0;
-        while i < N {
-            let ai = a[i];
-            if ai != 0 {
-                let mut carry: u64 = 0;
-                let mut j = 0;
-                // Stop once `i + j` reaches `N`: those products are
-                // entirely above `2^BITS` and drop out of the result.
-                while j < N - i {
-                    let v = (ai as u128) * (b[j] as u128)
-                        + (out[i + j] as u128)
-                        + (carry as u128);
-                    out[i + j] = v as u64;
-                    carry = (v >> 64) as u64;
-                    j += 1;
-                }
-                // The final row carry would land in limb `i + N`, which
-                // is above the width — discarded.
-            }
-            i += 1;
-        }
+        limbs_mul_low_u64_fixed(&self.limbs, &rhs.limbs, &mut out);
         Self { limbs: out }
     }
 
@@ -468,25 +450,8 @@ impl<const N: usize> Int<N> {
     /// this is the same truncated schoolbook the unsigned type uses.
     #[inline]
     pub fn wrapping_mul(self, rhs: Self) -> Self {
-        let (a, b) = (&self.limbs, &rhs.limbs);
         let mut out = [0u64; N];
-        let mut i = 0;
-        while i < N {
-            let ai = a[i];
-            if ai != 0 {
-                let mut carry: u64 = 0;
-                let mut j = 0;
-                while j < N - i {
-                    let v = (ai as u128) * (b[j] as u128)
-                        + (out[i + j] as u128)
-                        + (carry as u128);
-                    out[i + j] = v as u64;
-                    carry = (v >> 64) as u64;
-                    j += 1;
-                }
-            }
-            i += 1;
-        }
+        limbs_mul_low_u64_fixed(&self.limbs, &rhs.limbs, &mut out);
         Self { limbs: out }
     }
 
@@ -691,7 +656,37 @@ pub type Int4096 = Int<64>;
 
 #[cfg(test)]
 mod tests {
+    use super::limbs::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
     use super::*;
+
+    /// The truncated low-`N` product must equal the low `N` limbs of
+    /// the full `2N`-limb schoolbook product, across widths and edges.
+    #[test]
+    fn limbs_mul_low_matches_full_product_low_half() {
+        fn check<const N: usize, const D: usize>(a: [u64; N], b: [u64; N]) {
+            debug_assert!(D == 2 * N);
+            let mut full = [0u64; D];
+            limbs_mul_u64_fixed::<N, D>(&a, &b, &mut full);
+            let mut low = [0u64; N];
+            limbs_mul_low_u64_fixed::<N>(&a, &b, &mut low);
+            let mut expected = [0u64; N];
+            expected.copy_from_slice(&full[..N]);
+            assert_eq!(low, expected, "low-half mismatch for {a:?} * {b:?}");
+        }
+
+        // Width 4 (256-bit): zero, one, MAX, cross-limb spans.
+        check::<4, 8>([0, 0, 0, 0], [0, 0, 0, 0]);
+        check::<4, 8>([1, 0, 0, 0], [u64::MAX, u64::MAX, u64::MAX, u64::MAX]);
+        check::<4, 8>([u64::MAX; 4], [u64::MAX; 4]);
+        check::<4, 8>([0, 1, 0, 0], [0, 1, 0, 0]); // 2^64 * 2^64
+        check::<4, 8>(
+            [0xDEAD_BEEF, 0xCAFE_F00D, 0x1234, 0x5678_9ABC],
+            [0xFEED_FACE, 0x0BAD_C0DE, 0x9999, 0x0000_0001],
+        );
+        // Width 2 and width 6 to exercise other monomorphisations.
+        check::<2, 4>([u64::MAX, u64::MAX], [3, 0]);
+        check::<6, 12>([7, 8, 9, 10, 11, 12], [1, 2, 3, 4, 5, 6]);
+    }
 
     #[test]
     fn uint_sqr_cube_match_naive() {
