@@ -22,7 +22,7 @@ use crate::wide_int::{
     limbs_divmod_u64, limbs_is_zero_u64_fixed, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
     limbs_sub_assign_u64_fixed,
 };
-use limbs::mul::limbs_mul_low_u64_fixed;
+use limbs::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use core::cmp::Ordering;
 use core::ops::{
     Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Shl, Shr, Sub,
@@ -100,13 +100,15 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Wrapping square (`self²` modulo `2^BITS`). Named entry point for
-    /// the open-coded `x * x` pattern. Currently delegates to
-    /// [`Self::wrapping_mul`]; a dedicated half-product squaring kernel
-    /// (≈ half the limb products) is the planned optimisation, gated by
-    /// the per-width baseline benchmark before it lands.
+    /// the open-coded `x * x` pattern. Uses the dedicated half-product
+    /// squaring kernel ([`limbs_sqr_low_u64_fixed`]): each cross term is
+    /// formed once and doubled, so the limb-multiply count is
+    /// `N(N+1)/2` rather than the `N²` of a general multiply.
     #[inline]
     pub fn wrapping_sqr(self) -> Self {
-        self.wrapping_mul(self)
+        let mut out = [0u64; N];
+        limbs_sqr_low_u64_fixed(&self.limbs, &mut out);
+        Self { limbs: out }
     }
 
     /// Wrapping cube (`self³` modulo `2^BITS`). Named entry point for the
@@ -686,6 +688,46 @@ mod tests {
         // Width 2 and width 6 to exercise other monomorphisations.
         check::<2, 4>([u64::MAX, u64::MAX], [3, 0]);
         check::<6, 12>([7, 8, 9, 10, 11, 12], [1, 2, 3, 4, 5, 6]);
+    }
+
+    /// The dedicated squaring kernel must be bit-exact against the
+    /// general truncated product `x · x` at every width and edge case.
+    #[test]
+    fn dedicated_sqr_matches_general_mul() {
+        fn check<const N: usize>(x: [u64; N]) {
+            let a = Uint::<N>::from_limbs(x);
+            assert_eq!(
+                a.wrapping_sqr(),
+                a.wrapping_mul(a),
+                "sqr != mul(self,self) for {x:?}"
+            );
+        }
+
+        // Width 4: 0, 1, MAX, single-limb, cross-limb, full-width.
+        check::<4>([0, 0, 0, 0]);
+        check::<4>([1, 0, 0, 0]);
+        check::<4>([u64::MAX; 4]);
+        check::<4>([0x1234_5678, 0, 0, 0]);
+        check::<4>([u64::MAX, u64::MAX, 0, 0]);
+        check::<4>([0xDEAD_BEEF_CAFE_F00D, 0x0123_4567_89AB_CDEF, 0xFEDC, 0x99]);
+        // Carry-heavy: every limb all-ones but the top.
+        check::<4>([u64::MAX, u64::MAX, u64::MAX, 0]);
+        // Other widths / monomorphisations.
+        check::<1>([u64::MAX]);
+        check::<2>([u64::MAX, u64::MAX]);
+        check::<6>([7, 8, 9, 10, 11, 12]);
+        check::<8>([u64::MAX, 1, u64::MAX, 2, u64::MAX, 3, u64::MAX, 4]);
+        // A pseudo-random sweep across width 5.
+        let mut state = 0x9E37_79B9_7F4A_7C15u64;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..64 {
+            check::<5>([next(), next(), next(), next(), next()]);
+        }
     }
 
     #[test]
