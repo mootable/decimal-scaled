@@ -16,6 +16,9 @@
 //! per monomorphisation — no runtime dispatch.
 
 pub(crate) mod limbs;
+mod traits;
+
+pub use traits::{FixedInt, FixedIntConvert};
 
 use crate::wide_int::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
@@ -636,6 +639,162 @@ impl<const N: usize> Int<N> {
         }
         Self { limbs }
     }
+
+    /// `true` when the value equals one.
+    #[inline]
+    pub fn is_one(&self) -> bool {
+        if N == 0 || self.limbs[0] != 1 {
+            return false;
+        }
+        let mut i = 1;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Most negative representable value (`-2^(BITS-1)`).
+    #[inline]
+    pub fn min_value() -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[N - 1] = 1u64 << 63;
+        }
+        Self { limbs }
+    }
+
+    /// Most positive representable value (`2^(BITS-1) - 1`).
+    #[inline]
+    pub fn max_value() -> Self {
+        let mut limbs = [u64::MAX; N];
+        if N > 0 {
+            limbs[N - 1] = u64::MAX >> 1;
+        }
+        Self { limbs }
+    }
+
+    /// Checked signed addition: `None` on two's-complement overflow.
+    /// Overflow happens only when both operands share a sign and the
+    /// result's sign differs from it.
+    #[inline]
+    pub fn checked_add(self, rhs: Self) -> Option<Self> {
+        let r = self.wrapping_add(rhs);
+        let sa = self.is_negative();
+        let sb = rhs.is_negative();
+        let sr = r.is_negative();
+        if sa == sb && sr != sa { None } else { Some(r) }
+    }
+
+    /// Checked signed subtraction: `None` on two's-complement overflow.
+    #[inline]
+    pub fn checked_sub(self, rhs: Self) -> Option<Self> {
+        let r = self.wrapping_sub(rhs);
+        let sa = self.is_negative();
+        let sb = rhs.is_negative();
+        let sr = r.is_negative();
+        // Overflow when the operands' signs differ and the result takes
+        // the subtrahend's sign.
+        if sa != sb && sr != sa { None } else { Some(r) }
+    }
+
+    /// Checked signed multiplication: `None` if the true product does
+    /// not fit the signed range. Computed via magnitudes so it reuses
+    /// the unsigned overflow check, then re-signs.
+    #[inline]
+    pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+        if self.is_zero() || rhs.is_zero() {
+            return Some(Self::ZERO);
+        }
+        let neg = self.is_negative() ^ rhs.is_negative();
+        let ma = Uint::<N>::from_limbs(*self.abs().as_limbs());
+        let mb = Uint::<N>::from_limbs(*rhs.abs().as_limbs());
+        let prod = ma.checked_mul(mb)?;
+        let signed = Self::from_limbs(*prod.as_limbs());
+        if neg {
+            let r = signed.wrapping_neg();
+            // Negative magnitude must not exceed |MIN|; the round-trip
+            // through wrapping_neg detects the single MIN-magnitude case.
+            if r.is_negative() || r.is_zero() {
+                Some(r)
+            } else {
+                None
+            }
+        } else if signed.is_negative() {
+            // Positive magnitude landed in the sign bit → overflow.
+            None
+        } else {
+            Some(signed)
+        }
+    }
+
+    /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
+    /// `self^0 == 1`. Uses the dedicated squaring kernel.
+    #[inline]
+    pub fn wrapping_pow(self, mut exp: u32) -> Self {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        while exp > 0 {
+            if exp & 1 == 1 {
+                acc = acc.wrapping_mul(base);
+            }
+            exp >>= 1;
+            if exp > 0 {
+                base = base.wrapping_sqr();
+            }
+        }
+        acc
+    }
+
+    /// Exponentiation by squaring, returning `None` on signed overflow.
+    #[inline]
+    pub fn checked_pow(self, mut exp: u32) -> Option<Self> {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        loop {
+            if exp & 1 == 1 {
+                acc = acc.checked_mul(base)?;
+            }
+            exp >>= 1;
+            if exp == 0 {
+                break;
+            }
+            base = base.checked_mul(base)?;
+        }
+        Some(acc)
+    }
+
+    /// Wrapping square (`self²` modulo `2^BITS`) via the dedicated
+    /// half-product squaring kernel. The low `N` limbs of a square are
+    /// sign-independent, so the unsigned kernel applies directly.
+    #[inline]
+    pub fn wrapping_sqr(self) -> Self {
+        let mut out = [0u64; N];
+        limbs_sqr_low_u64_fixed(&self.limbs, &mut out);
+        Self { limbs: out }
+    }
+
+    /// Wrapping cube (`self³` modulo `2^BITS`): `sqr` then one multiply.
+    #[inline]
+    pub fn wrapping_cube(self) -> Self {
+        self.wrapping_sqr().wrapping_mul(self)
+    }
+
+    /// Bit length of the magnitude: `0` for zero, else
+    /// `floor(log2|self|) + 1`.
+    #[inline]
+    pub fn bit_length(&self) -> u32 {
+        limbs_bit_len_u64_fixed(self.abs().as_limbs())
+    }
+
+    /// Leading zero bits of the magnitude in the `BITS`-wide
+    /// representation.
+    #[inline]
+    pub fn leading_zeros(&self) -> u32 {
+        (Self::BITS as u32) - self.bit_length()
+    }
 }
 
 impl<const N: usize> PartialOrd for Int<N> {
@@ -685,6 +844,84 @@ impl<const N: usize> Mul for Int<N> {
     #[inline]
     fn mul(self, rhs: Self) -> Self {
         self.wrapping_mul(rhs)
+    }
+}
+
+impl<const N: usize> BitAnd for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] & rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> BitOr for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] | rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> BitXor for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn bitxor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] ^ rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> Not for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn not(self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = !self.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> Shl<u32> for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn shl(self, shift: u32) -> Self {
+        let mut out = [0u64; N];
+        limbs_shl_u64_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
+    }
+}
+
+impl<const N: usize> Shr<u32> for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn shr(self, shift: u32) -> Self {
+        // Logical right shift (matches the bitwise shift on the
+        // unsigned twin; arithmetic shift is not part of this surface).
+        let mut out = [0u64; N];
+        limbs_shr_u64_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
     }
 }
 
@@ -804,6 +1041,60 @@ pub type Int4096 = Int<64>;
 mod tests {
     use super::limbs::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
     use super::*;
+
+    /// The `FixedInt` / `FixedIntConvert` surface must compile and
+    /// behave through a fully generic bound, for both signed and
+    /// unsigned fixed-width integers.
+    #[test]
+    fn fixed_int_trait_surface() {
+        fn exercises<T: FixedInt + FixedIntConvert>(seven: T, three: T) {
+            assert_eq!(T::LIMBS * 64, T::BITS);
+            assert!(T::ZERO.is_zero());
+            assert!(T::ONE.is_one());
+            assert!(!T::ZERO.is_one());
+
+            // Operators via the supertrait bounds.
+            let ten = seven + three;
+            assert_eq!(ten - three, seven);
+            assert_eq!(ten, seven.wrapping_add(three));
+            assert_eq!(seven.wrapping_sub(three) + three, seven);
+
+            // Bitwise / shift surface.
+            let _ = (seven & three) | (seven ^ three);
+            let _ = !T::ZERO;
+            assert_eq!((T::ONE << 4) >> 4, T::ONE);
+
+            // Checked arithmetic returns Some for in-range work.
+            assert_eq!(seven.checked_add(three), Some(ten));
+            assert!(seven.checked_mul(three).is_some());
+
+            // Powers and optimisable functions agree with each other.
+            assert_eq!(three.sqr(), three * three);
+            assert_eq!(three.cube(), three * three * three);
+            assert_eq!(three.pow(2), three.sqr());
+            assert_eq!(three.wrapping_pow(3), three.cube());
+            assert_eq!(three.checked_pow(2), Some(three.sqr()));
+
+            // bit_length / leading_zeros consistency.
+            assert_eq!(T::ONE.bit_length(), 1);
+            assert_eq!(T::ZERO.bit_length(), 0);
+            assert_eq!(
+                T::ONE.leading_zeros(),
+                (T::BITS as u32) - 1
+            );
+
+            // Reductions and the limb round-trip.
+            let items = [T::ONE, T::ONE, T::ONE];
+            assert_eq!(T::sum(items), three);
+            assert_eq!(T::product([three, T::ONE]), three);
+            assert_eq!(T::from_limbs(seven.to_limbs()), seven);
+        }
+
+        exercises(Uint::<4>::from_u64(7), Uint::<4>::from_u64(3));
+        exercises(Uint::<8>::from_u64(7), Uint::<8>::from_u64(3));
+        exercises(Int::<4>::from_i64(7), Int::<4>::from_i64(3));
+        exercises(Int::<6>::from_i64(7), Int::<6>::from_i64(3));
+    }
 
     /// The truncated low-`N` product must equal the low `N` limbs of
     /// the full `2N`-limb schoolbook product, across widths and edges.
