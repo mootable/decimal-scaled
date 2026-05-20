@@ -2828,6 +2828,27 @@ macro_rules! decl_wide_transcendental {
             #[must_use]
             pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 let raw = self.to_bits();
+                let zero = <$Storage>::from_i128(0);
+                if raw != zero {
+                    // Small-argument linear band: tanh(x) = x − x³/3 + … ,
+                    // the cubic below one ULP yet strictly positive, so the
+                    // true value sits just inside the grid line `raw`. No
+                    // finite-precision exp path can resolve the sub-ULP
+                    // cubic, so the directed result is the analytic decision
+                    // (nearest modes return `raw`).
+                    let thresh_exp = SCALE - (SCALE + 2) / 3;
+                    let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
+                    if raw.abs() <= thresh {
+                        return Self::from_bits(
+                            $crate::support::rounding::tiny_odd_compressing_directed(
+                                raw,
+                                zero,
+                                <$Storage>::from_i128(1),
+                                mode,
+                            ),
+                        );
+                    }
+                }
                 Self::from_bits($core::round_to_storage_directed(
                     $core::GUARD, SCALE, mode, |guard| {
                         let w = SCALE + guard;

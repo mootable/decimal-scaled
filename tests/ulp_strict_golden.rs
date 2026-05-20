@@ -375,7 +375,7 @@ decl_band! {
         acos  = "golden/acos_d9_s4.txt";
         sinh  = "golden/sinh_d9_s4.txt";
         cosh  = "golden/cosh_d9_s4.txt";
-        tanh  = "golden/tanh_d9_s4.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d9_s4.txt";
         asinh = "golden/asinh_d9_s4.txt";
         acosh = "golden/acosh_d9_s4.txt";
         atanh = "golden/atanh_d9_s4.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -408,7 +408,7 @@ decl_band! {
         acos  = "golden/acos_d18_s9.txt";
         sinh  = "golden/sinh_d18_s9.txt";
         cosh  = "golden/cosh_d18_s9.txt";
-        tanh  = "golden/tanh_d18_s9.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d18_s9.txt";
         asinh = "golden/asinh_d18_s9.txt";
         acosh = "golden/acosh_d18_s9.txt";
         atanh = "golden/atanh_d18_s9.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -441,7 +441,7 @@ decl_band! {
         acos  = "golden/acos_d38_s19.txt";
         sinh  = "golden/sinh_d38_s19.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d38_s19.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d38_s19.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d38_s19.txt";
         asinh = "golden/asinh_d38_s19.txt";
         acosh = "golden/acosh_d38_s19.txt";
         atanh = "golden/atanh_d38_s19.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -476,7 +476,7 @@ decl_band! {
         acos  = "golden/acos_d57_s28.txt";
         sinh  = "golden/sinh_d57_s28.txt";
         cosh  = "golden/cosh_d57_s28.txt";
-        tanh  = "golden/tanh_d57_s28.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d57_s28.txt";
         asinh = "golden/asinh_d57_s28.txt";
         acosh = "golden/acosh_d57_s28.txt";
         atanh = "golden/atanh_d57_s28.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -509,7 +509,7 @@ decl_band! {
         acos  = "golden/acos_d76_s35.txt";
         sinh  = "golden/sinh_d76_s35.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d76_s35.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d76_s35.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d76_s35.txt";
         asinh = "golden/asinh_d76_s35.txt";
         acosh = "golden/acosh_d76_s35.txt";
         atanh = "golden/atanh_d76_s35.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -542,7 +542,7 @@ decl_band! {
         acos  = "golden/acos_d115_s57.txt";
         sinh  = "golden/sinh_d115_s57.txt";
         cosh  = "golden/cosh_d115_s57.txt";
-        tanh  = "golden/tanh_d115_s57.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d115_s57.txt";
         asinh = "golden/asinh_d115_s57.txt";
         acosh = "golden/acosh_d115_s57.txt";
         atanh = "golden/atanh_d115_s57.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -575,7 +575,7 @@ decl_band! {
         acos  = "golden/acos_d153_s76.txt";
         sinh  = "golden/sinh_d153_s76.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d153_s76.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d153_s76.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d153_s76.txt";
         asinh = "golden/asinh_d153_s76.txt";
         acosh = "golden/acosh_d153_s76.txt";
         atanh = "golden/atanh_d153_s76.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -608,7 +608,7 @@ decl_band! {
         acos  = "golden/acos_d230_s115.txt";
         sinh  = "golden/sinh_d230_s115.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d230_s115.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d230_s115.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d230_s115.txt";
         asinh = "golden/asinh_d230_s115.txt";
         acosh = "golden/acosh_d230_s115.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
         atanh = "golden/atanh_d230_s115.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -641,7 +641,7 @@ decl_band! {
         acos  = "golden/acos_d307_s150.txt";
         sinh  = "golden/sinh_d307_s150.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d307_s150.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d307_s150.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d307_s150.txt";
         asinh = "golden/asinh_d307_s150.txt";
         acosh = "golden/acosh_d307_s150.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
         atanh = "golden/atanh_d307_s150.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -674,7 +674,7 @@ decl_band! {
         acos  = "golden/acos_d462_s230.txt";
         sinh  = "golden/sinh_d462_s230.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d462_s230.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d462_s230.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d462_s230.txt", ignore = "saturation-edge accuracy gap: at a near-±1 grid-line input the directed Ziv escalation drives exp_fixed past the wide-tier work-integer width (Int4096) and overflows; the exp_fixed width limit at the saturation edge is the same family as the sinh/cosh near-overflow-edge gap; tracked separately";
         asinh = "golden/asinh_d462_s230.txt";
         acosh = "golden/acosh_d462_s230.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
         atanh = "golden/atanh_d462_s230.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -707,7 +707,7 @@ decl_band! {
         acos  = "golden/acos_d616_s308.txt";
         sinh  = "golden/sinh_d616_s308.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d616_s308.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d616_s308.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d616_s308.txt";
         asinh = "golden/asinh_d616_s308.txt";
         acosh = "golden/acosh_d616_s308.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
         atanh = "golden/atanh_d616_s308.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -740,7 +740,7 @@ decl_band! {
         acos  = "golden/acos_d924_s460.txt";
         sinh  = "golden/sinh_d924_s460.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d924_s460.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d924_s460.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d924_s460.txt";
         asinh = "golden/asinh_d924_s460.txt";
         acosh = "golden/acosh_d924_s460.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
         atanh = "golden/atanh_d924_s460.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";
@@ -773,7 +773,7 @@ decl_band! {
         acos  = "golden/acos_d1232_s615.txt";
         sinh  = "golden/sinh_d1232_s615.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         cosh  = "golden/cosh_d1232_s615.txt";
-        tanh  = "golden/tanh_d1232_s615.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: tiny-argument directed rounding (Trunc/Floor/Ceiling) lands 1 LSB off near tanh(x)~x; tracked for the kernel-fix pass";
+        tanh  = "golden/tanh_d1232_s615.txt";
         asinh = "golden/asinh_d1232_s615.txt";
         acosh = "golden/acosh_d1232_s615.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
         atanh = "golden/atanh_d1232_s615.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the fixed-guard ln(x)/ln(base) and exp(x*ln(base)) paths do not yet Ziv-escalate for Trunc/Floor/Ceiling at exact powers and grid-line inputs, so they round 1 LSB off the correctly-rounded directed result; tracked for the kernel-fix pass";

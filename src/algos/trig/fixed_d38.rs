@@ -829,8 +829,13 @@ pub(crate) fn tanh_with(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
-        return raw;
+    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+        // tanh(x) = x − x³/3 + … : within the linear band the cubic is
+        // below one ULP yet strictly positive, so the true value sits
+        // just inside the grid line `raw`. Nearest modes return `raw`;
+        // the directed modes need the analytic decision below — no
+        // finite-precision exp path can resolve the sub-ULP cubic.
+        return crate::support::rounding::tiny_odd_compressing_directed(raw, 0, 1, mode);
     }
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
