@@ -764,21 +764,29 @@ pub(crate) fn sinh_with(
     if raw == 0 {
         return 0;
     }
-    if raw.abs() <= small_x_linear_threshold_scale(scale) && is_nearest_mode(mode) {
-        return raw;
+    if raw.abs() <= small_x_linear_threshold_scale(scale) {
+        // sinh(x) = x + x³/6 + … : within the linear band the cubic is
+        // below one ULP yet strictly positive, so the true value sits
+        // just *above* the grid line `raw` (in magnitude). Nearest modes
+        // return `raw`; the directed modes need the analytic decision —
+        // no finite-precision exp path can resolve the sub-ULP cubic.
+        return crate::support::rounding::tiny_odd_expanding_directed(raw, 0, 1, mode);
     }
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
-    let ex = exp_fixed(v, w);
-    // exp(-v) = 1 / exp(v). One exp_fixed plus one wide divide
-    // replaces a second exp_fixed evaluation — the divide is an
-    // order of magnitude cheaper than another exp on a 256-bit
-    // Fixed at SCALE+GUARD.
+    // Evaluate at |v| so the dominant `e^|x|` term is computed directly
+    // and accurately; the reciprocal gives the tiny `e^-|x|`. (Computing
+    // `exp(-|x|)` directly and reciprocating would amplify the small
+    // term's relative error into a large absolute error.) sinh is odd,
+    // so the input sign is reapplied to the non-negative `sinh(|x|)`.
+    let neg = raw < 0;
+    let av = Fixed { negative: false, mag: v.mag };
+    let ex = exp_fixed(av, w);
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let enx = one_w.div(ex, w);
-    ex.sub(enx)
-        .halve()
-        .round_to_i128_with(w, scale, mode)
+    let sh = ex.sub(enx).halve();
+    let sh = if neg { sh.neg() } else { sh };
+    sh.round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale))
 }
 
@@ -801,9 +809,12 @@ pub(crate) fn cosh_with(
     }
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
-    let ex = exp_fixed(v, w);
-    // exp(-v) = 1 / exp(v) — one exp_fixed + wide divide vs two
-    // exp_fixed calls.
+    // cosh is even; evaluate at |v| so the dominant `e^|x|` term is
+    // computed directly (see `sinh_with` for why the sign matters: a
+    // negative argument would otherwise reciprocate the small
+    // `e^-|x|` and amplify its relative error).
+    let av = Fixed { negative: false, mag: v.mag };
+    let ex = exp_fixed(av, w);
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let enx = one_w.div(ex, w);
     ex.add(enx)
@@ -839,14 +850,16 @@ pub(crate) fn tanh_with(
     }
     let w = scale + working_digits;
     let v = to_fixed_w(raw, working_digits);
-    let ex = exp_fixed(v, w);
-    // exp(-v) = 1 / exp(v) — one exp_fixed + wide divide vs two
-    // exp_fixed calls.
+    // tanh is odd; evaluate at |v| (dominant `e^|x|` direct, see
+    // `sinh_with`) and reapply the input sign.
+    let neg = raw < 0;
+    let av = Fixed { negative: false, mag: v.mag };
+    let ex = exp_fixed(av, w);
     let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
     let enx = one_w.div(ex, w);
-    ex.sub(enx)
-        .div(ex.add(enx), w)
-        .round_to_i128_with(w, scale, mode)
+    let th = ex.sub(enx).div(ex.add(enx), w);
+    let th = if neg { th.neg() } else { th };
+    th.round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::tanh", scale))
 }
 
