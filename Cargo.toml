@@ -212,6 +212,14 @@ name = "wide_int_backends"
 harness = false
 required-features = ["wide"]
 
+# Per-width baseline for the in-tree wide signed integers
+# (`Int256` … `Int4096`): add/sub/mul/div/rem, pow, square, cube.
+# Microbench-scale snapshot for tracking integer-algorithm changes.
+[[bench]]
+name = "int_ops_micro"
+harness = false
+required-features = ["wide"]
+
 # Decimal / fixed-point backend comparison: native `D38` / `D76` vs
 # `bnum`-backed `D76`, `rust_decimal`, and `fixed` — arithmetic and
 # transcendentals (including the fast vs strict variants). Needs the
