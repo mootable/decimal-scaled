@@ -2432,6 +2432,16 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
 /// every wide-int's magnitude buffer is directly compatible without
 /// boundary conversion.
 pub(crate) trait WideInt: Copy {
+    /// Number of u128 limbs needed to hold this type's full magnitude
+    /// (`(L + 1) / 2` for an `L`-u64-limb wide integer; `1` for the
+    /// primitive impls). Hot-path callers
+    /// (`mg_divide::div_wide_pow10_with`, `div_wide_pow10_chain_with`)
+    /// pass this as a `const N` generic argument to size their
+    /// magnitude stack buffer to the exact working width — `Int512`
+    /// gets 4 limbs, `Int16384` gets 128 — instead of always
+    /// zero-initialising the widest-case 128-limb (2 kB) array.
+    const U128_LIMBS: usize = 1;
+
     /// Magnitude limbs (little-endian u64, zero-padded to 288) and sign.
     /// 288 u64 limbs = 18432 bits, covers Int16384 + slack.
     fn to_mag_sign(self) -> ([u64; 288], bool);

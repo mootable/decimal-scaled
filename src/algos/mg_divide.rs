@@ -239,11 +239,12 @@ pub(crate) fn div_exp_fast_2word_with_rem(
     feature = "xx-wide"
 ))]
 #[inline]
-pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
+pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt, const N: usize>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> W {
+    debug_assert_eq!(N, W::U128_LIMBS, "magnitude buffer must match W's u128-limb width");
     debug_assert!((1..=38).contains(&scale));
     let scale_idx = scale as usize;
     let exp = POW10_U128[scale_idx];
@@ -254,17 +255,16 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     // Int512, 4 for Int256) instead of zero-initialising and
     // copying the full 288-u64 default buffer (~2.3 kB stack).
     //
-    // Sized for `Int16384` (128 u128 limbs = 16384 bits) — the
-    // widest working integer in the crate, used by `D1232`'s
-    // wide-transcendental kernels. Narrower callers (D38–D924
-    // working ints) only populate their `L/2` leading limbs and
-    // skip the trailing zeros via the `top` cursor below.
-    let mut mag = [0u128; 128];
+    // Sized to `N = W::U128_LIMBS`, the exact u128-limb width of the
+    // work integer — 4 for `Int512`, 8 for `Int1024`, …, 128 for
+    // `Int16384` (D1232's wide-transcendental work int). The const
+    // generic keeps the stack array no wider than the actual width,
+    // so narrow tiers don't pay the widest-case zero-init.
+    let mut mag = [0u128; N];
     let neg = n.mag_into_u128(&mut mag);
 
-    // The magnitude buffer is fixed at 128 u128 limbs (Int16384-equivalent),
-    // but most calls operate on far narrower widths (`Int512` ≤ 4 limbs,
-    // `Int1024` ≤ 8 limbs, …). Skip the leading zeros.
+    // Most calls operate at widths narrower than the leading limb
+    // (`mag_into_u128` zero-pads to `N`); skip the trailing zeros.
     let mut top = mag.len();
     while top > 0 && mag[top - 1] == 0 {
         top -= 1;
@@ -365,19 +365,20 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt>(
     feature = "x-wide",
     feature = "xx-wide"
 ))]
-pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt>(
+pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt, const N: usize>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> W {
+    debug_assert_eq!(N, W::U128_LIMBS, "magnitude buffer must match W's u128-limb width");
     debug_assert!(scale > 38, "chain path is for SCALE > 38; callers handle ≤ 38");
 
     // Pack magnitude directly into u128 limbs (same fast path as
-    // the single-chunk `div_wide_pow10_with`). Sized for the
-    // widest working integer in the crate (`Int16384` = 128 u128
-    // limbs); narrower callers populate only their leading
-    // `L / 2` limbs and the `top` cursor skips the trailing zeros.
-    let mut mag = [0u128; 128];
+    // the single-chunk `div_wide_pow10_with`). Sized to
+    // `N = W::U128_LIMBS`, the exact u128-limb width of the work
+    // integer (`Int16384` = 128 u128 limbs for D1232; far fewer for
+    // narrower tiers); the `top` cursor skips the trailing zeros.
+    let mut mag = [0u128; N];
     let neg = n.mag_into_u128(&mut mag);
     let mut top = mag.len();
     while top > 0 && mag[top - 1] == 0 {
@@ -1926,7 +1927,10 @@ mod tests {
                 };
                 let n: I256 = if regime % 2 == 1 { -pos } else { pos };
 
-                let got = crate::algos::mg_divide::div_wide_pow10_with::<I256>(
+                let got = crate::algos::mg_divide::div_wide_pow10_with::<
+                    I256,
+                    { <I256 as crate::wide_int::WideInt>::U128_LIMBS },
+                >(
                     n,
                     w,
                     crate::support::rounding::RoundingMode::HalfToEven,
@@ -1964,7 +1968,10 @@ mod tests {
                         (hi << 128_u32) + lo
                     };
                     let n: I256 = if regime % 2 == 1 { -pos } else { pos };
-                    let got = crate::algos::mg_divide::div_wide_pow10_with::<I256>(n, w, mode);
+                    let got = crate::algos::mg_divide::div_wide_pow10_with::<
+                        I256,
+                        { <I256 as crate::wide_int::WideInt>::U128_LIMBS },
+                    >(n, w, mode);
                     let expected = round_div_reference_int256_with(n, w, mode);
                     assert_eq!(
                         got, expected,
@@ -2002,7 +2009,10 @@ mod tests {
                     n = -n;
                 }
 
-                let got = crate::algos::mg_divide::div_wide_pow10_with::<I1024>(
+                let got = crate::algos::mg_divide::div_wide_pow10_with::<
+                    I1024,
+                    { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                >(
                     n,
                     w,
                     crate::support::rounding::RoundingMode::HalfToEven,
@@ -2176,7 +2186,10 @@ mod tests {
                     };
                     let n: I256 = if regime % 2 == 1 { -pos } else { pos };
 
-                    let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<I256>(n, w, mode);
+                    let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                        I256,
+                        { <I256 as crate::wide_int::WideInt>::U128_LIMBS },
+                    >(n, w, mode);
                     let expected = round_div_chain_reference_int256(n, w, mode);
                     assert_eq!(
                         got, expected,
@@ -2210,7 +2223,10 @@ mod tests {
                     n = -n;
                 }
 
-                let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<I1024>(
+                let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                    I1024,
+                    { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                >(
                     n,
                     w,
                     crate::support::rounding::RoundingMode::HalfToEven,
@@ -2255,8 +2271,10 @@ mod tests {
                     if rng.next() & 1 == 1 {
                         n = -n;
                     }
-                    let got =
-                        crate::algos::mg_divide::div_wide_pow10_chain_with::<I1024>(n, w, mode);
+                    let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                        I1024,
+                        { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                    >(n, w, mode);
                     let expected = round_div_chain_reference_int1024(n, w, mode);
                     assert_eq!(
                         got, expected,
@@ -2299,16 +2317,108 @@ mod tests {
                         let pos_n = q * pow_w + half + delta;
                         let n = if sign_neg { -pos_n } else { pos_n };
                         for mode in all_modes() {
-                            let got =
-                                crate::algos::mg_divide::div_wide_pow10_chain_with::<I1024>(
-                                    n, w, mode,
-                                );
+                            let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                                I1024,
+                                { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                            >(n, w, mode);
                             let expected = round_div_chain_reference_int1024(n, w, mode);
                             assert_eq!(
                                 got, expected,
                                 "chain MG half-tie mismatch: w={w}, mode={mode:?}, n={n:?}",
                             );
                         }
+                    }
+                }
+            }
+        }
+    }
+
+    /// Builds `10^w` as an `I16384` via chunked multiply (analogue of
+    /// [`pow10_int1024`] at the widest work-integer width).
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn pow10_int16384(w: u32) -> crate::wide_int::I16384 {
+        use crate::wide_int::I16384;
+        let mut d: I16384 = crate::wide_int::wide_cast(1u128);
+        let mut remaining = w;
+        while remaining > 0 {
+            let chunk = remaining.min(38);
+            let factor: I16384 = crate::wide_int::wide_cast(POW10_U128[chunk as usize]);
+            d = d * factor;
+            remaining -= chunk;
+        }
+        d
+    }
+
+    /// Regression for the original `div_wide_pow10_chain_with` buffer
+    /// bug: `D1232`'s work integer is `Int16384` (128 u128 limbs =
+    /// 16384 bits), but the chain kernel once packed the magnitude
+    /// into a fixed 64-u128-limb (8192-bit) buffer, silently
+    /// truncating any numerator above 8192 bits.
+    ///
+    /// The width-adaptive buffer (`N = W::U128_LIMBS`) must still hand
+    /// `Int16384` its full 128-limb buffer. This test sets a bit above
+    /// the old 8192-bit ceiling (so the value is unrepresentable in a
+    /// 64-limb buffer) and divides by `10^w` at a working scale
+    /// `w ≥ 620` (D1232's wide-transcendental band). With truncation
+    /// the high bits vanish and the quotient diverges from the
+    /// schoolbook `div_rem` reference, which operates on the full
+    /// 256-u64-limb value; the assertion fails in that case.
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[test]
+    fn round_div_chain_int16384_above_8192_bits_not_truncated() {
+        use crate::wide_int::I16384;
+        let zero: I16384 = crate::wide_int::wide_cast(0u128);
+        let one: I16384 = crate::wide_int::wide_cast(1u128);
+
+        // Numerators with magnitude bits set well past the old
+        // 8192-bit (64-u128-limb) buffer ceiling: a high bit near the
+        // top of the 16384-bit range plus low-order entropy.
+        let high_bit_positions: &[u32] = &[8200, 10000, 12345, 16000];
+        let scales: &[u32] = &[620, 700, 1024];
+
+        for &bit in high_bit_positions {
+            // n = (1 << bit) | low-entropy limbs.
+            let mut n: I16384 = one << bit;
+            n = n + (crate::wide_int::wide_cast::<u128, I16384>(0xdead_beef_cafe_f00d_u128) << 64_u32);
+            n = n + crate::wide_int::wide_cast::<u128, I16384>(0x1234_5678_9abc_def0_u128);
+
+            for &w in scales {
+                for &sign_neg in &[false, true] {
+                    let nn = if sign_neg { -n } else { n };
+                    for mode in all_modes() {
+                        let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                            I16384,
+                            { <I16384 as crate::wide_int::WideInt>::U128_LIMBS },
+                        >(nn, w, mode);
+
+                        // Schoolbook reference on the untruncated value.
+                        let d = pow10_int16384(w);
+                        let (q, r) = nn.div_rem(d);
+                        let expected = if r == zero {
+                            q
+                        } else {
+                            let ar = if r < zero { -r } else { r };
+                            let comp = d - ar;
+                            let cmp_r = ar.cmp(&comp);
+                            let q_is_odd = q.bit(0);
+                            let result_positive = nn >= zero;
+                            if crate::support::rounding::should_bump(
+                                mode,
+                                cmp_r,
+                                q_is_odd,
+                                result_positive,
+                            ) {
+                                if result_positive { q + one } else { q - one }
+                            } else {
+                                q
+                            }
+                        };
+
+                        assert_eq!(
+                            got, expected,
+                            "Int16384 chain divide truncated above 8192 bits: \
+                             bit={bit}, w={w}, mode={mode:?}, neg={sign_neg}",
+                        );
                     }
                 }
             }

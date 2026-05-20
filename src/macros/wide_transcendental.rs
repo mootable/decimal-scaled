@@ -407,7 +407,7 @@ macro_rules! decl_wide_transcendental {
                     return n;
                 }
                 if w <= 38 {
-                    return $crate::algos::mg_divide::div_wide_pow10_with::<W>(
+                    return $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(
                         n,
                         w,
                         $crate::support::rounding::RoundingMode::HalfToEven,
@@ -421,7 +421,7 @@ macro_rules! decl_wide_transcendental {
                 // MG; the routing is here so a future bench at the
                 // larger widths can promote without touching this
                 // site.
-                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W>(
+                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(
                     n,
                     w,
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -593,11 +593,11 @@ macro_rules! decl_wide_transcendental {
                 let rounded = if shift == 0 {
                     v
                 } else if shift <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<W>(v, shift, mode)
+                    $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(v, shift, mode)
                 } else {
                     // Newton vs MG chain dispatch — see the matrix
                     // in [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W>(v, shift, mode)
+                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(v, shift, mode)
                 };
                 let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
                 let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);

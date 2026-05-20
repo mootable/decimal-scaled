@@ -891,6 +891,11 @@ macro_rules! decl_wide_int {
         }
 
         impl $crate::wide_int::WideInt for $S {
+            // u128 limbs needed to hold this type's magnitude (ceiling
+            // division for odd-L types like Int192). Hot-path divide
+            // kernels size their stack buffer to this exact width.
+            const U128_LIMBS: usize = ($L + 1) / 2;
+
             #[inline]
             fn to_mag_sign(self) -> ([u64; 288], bool) {
                 let mut out = [0u64; 288];
@@ -912,7 +917,7 @@ macro_rules! decl_wide_int {
                 let mag = self.unsigned_abs().0;
                 // u128 limbs needed to hold this type's magnitude
                 // (ceiling division for odd-L types like Int192).
-                const U128_LIMBS: usize = ($L + 1) / 2;
+                const U128_LIMBS: usize = <$S as $crate::wide_int::WideInt>::U128_LIMBS;
                 let n_full_pairs = $L / 2;
                 let dst_len = dst.len();
                 let mut i = 0;

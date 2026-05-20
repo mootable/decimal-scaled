@@ -404,14 +404,15 @@ mod cache {
 /// matching call sites in `macros::arithmetic::decl_decimal_arithmetic`
 /// and `macros::wide_transcendental::decl_wide_transcendental`.
 #[inline]
-pub(crate) fn dispatch_wide_pow10_with<W: crate::wide_int::WideStorage>(
+pub(crate) fn dispatch_wide_pow10_with<W: crate::wide_int::WideStorage, const N: usize>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
 ) -> W {
+    debug_assert_eq!(N, W::U128_LIMBS, "magnitude buffer must match W's u128-limb width");
     let bits = <W as crate::wide_int::WideStorage>::BITS;
     if !newton_wins(bits, scale) {
-        return crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(n, scale, mode);
+        return crate::algos::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode);
     }
 
     #[cfg(feature = "std")]
@@ -428,7 +429,7 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::wide_int::WideStorage>(
         // precompute is too costly for the wide tier (one Knuth divide
         // at storage width). Forward to MG instead — Newton wins
         // depend on amortising the table across many calls.
-        crate::algos::mg_divide::div_wide_pow10_chain_with::<W>(n, scale, mode)
+        crate::algos::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode)
     }
 }
 
@@ -451,7 +452,11 @@ mod tests {
         let n = <I1024 as crate::wide_int::WideInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain_with::<I1024>(n, scale, RoundingMode::HalfToEven);
+        let want = div_wide_pow10_chain_with::<I1024, { <I1024 as crate::wide_int::WideInt>::U128_LIMBS }>(
+            n,
+            scale,
+            RoundingMode::HalfToEven,
+        );
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
 
@@ -467,7 +472,11 @@ mod tests {
         let n = <I2048 as crate::wide_int::WideInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain_with::<I2048>(n, scale, RoundingMode::HalfToEven);
+        let want = div_wide_pow10_chain_with::<I2048, { <I2048 as crate::wide_int::WideInt>::U128_LIMBS }>(
+            n,
+            scale,
+            RoundingMode::HalfToEven,
+        );
         assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
     }
 
@@ -483,7 +492,11 @@ mod tests {
         let n = <I4096 as crate::wide_int::WideInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain_with::<I4096>(n, scale, RoundingMode::HalfToEven);
+        let want = div_wide_pow10_chain_with::<I4096, { <I4096 as crate::wide_int::WideInt>::U128_LIMBS }>(
+            n,
+            scale,
+            RoundingMode::HalfToEven,
+        );
         assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
     }
 }
