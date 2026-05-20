@@ -5,6 +5,85 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.3] — 2026-05-20
+
+A correctness-and-perf release. Closed every precision hole found by
+a new external-oracle test suite, fixed two latent wide-tier overflow
+bugs, and improved wide-tier `mul` while adding a cross-scale API.
+
+### Added
+
+- **Cross-scale `_of` operator surface** on all 13 widths (stable):
+  `mul_of` / `add_of` / `sub_of` / `div_of` / `rem_of` / `max_of` /
+  `min_of` / `clamp_of` (+ `_with(mode)` siblings) and comparators
+  `cmp_of` / `eq_of` / `lt_of` / … accepting any-narrower-width
+  any-SCALE operands via the new public `WidthLE<Target>` trait, plus
+  cross-width `PartialEq` / `PartialOrd` at equal SCALE. A
+  nightly-gated `cross-scale-ops` feature adds auto-inferred
+  `cross::{mul,add,sub,div,rem,…}` free functions.
+- **mpmath external-oracle precision suite** — `tests/ulp_strict_golden.rs`
+  (golden tables generated at `mp.dps ≥ 2·SCALE + 64`),
+  `tests/ulp_proptest.rs` (14 hard-input category strategies), and a
+  7361-case hard-input corpus covering half-ULP ties, catastrophic
+  cancellation, range-reduction breakpoints, near-pole conditioning,
+  and inverse-identity round-trips. Wired into the `precision` CI gate.
+- **powf integer-exponent fast path** (`|n| ≤ 64`) via `powi`,
+  bit-exact and ~107× at D38<19> / ~27× at D307<150> for integer
+  exponents.
+- **Tang `ln` deep-band lookup slots** extending the ladder to
+  D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>.
+- **Const `POW10_TABLE`** for the D38–D616 tiers (`get_unchecked`
+  after a bounds guard); ~22% on D76<35> `ln`, ~19% on `sin`.
+- **Newton–Raphson reciprocal divide** for the `÷ 10^SCALE` step,
+  dispatched at the bench-validated cells (Int2048 ≥ s200,
+  Int3072 ≥ s200, Int4096 ≥ s400). Cite a textbook reciprocal
+  iteration; MG magic-multiply remains canonical elsewhere.
+- **AGM precision lift** — `ln_strict_agm` / `exp_strict_agm` now hold
+  0.5 ULP at every wide tier (per-call working-scale guard sized to
+  absorb the `sqrt` / `2^k` amplification). The dispatcher keeps
+  `ln_strict` / `exp_strict` on the artanh / Tang path; lifted AGM
+  stays the alternate path (it loses to artanh / Tang at every shipped
+  tier × SCALE measured).
+- **`bench-all` workflow** — one-click orchestrator dispatching the
+  full release sweep (per-width `full_matrix` + `lib_cmp` +
+  cross-version `bench-history`).
+
+### Fixed
+
+- **D153 / D1232 `exp` precision at large `|v|`** — the narrow-GUARD
+  Tang `exp` kernel reassembled `2^k · exp(s)` at a fixed working
+  scale, amplifying the `k · ln 2` reduction residual by up to `2^k`.
+  `tang_exp_fixed` now lifts the working scale by
+  `⌈|k|·log₁₀2⌉ + guard` and narrows back, restoring 0.5 ULP.
+- **D1232 transcendental-constant truncation** — the u128 magnitude
+  buffer in `mg_divide::div_wide_pow10{,_chain}_with` was sized for
+  Int8192 (64 u128 limbs) and silently truncated the Int16384 work
+  integer, corrupting `pi` / `ln 2` and every constant at D1232
+  working scales ≳ 620. Buffer now sized to the work integer's
+  `WideInt::U128_LIMBS`.
+- **D115 high-scale transcendental overflow** — D115's transcendental
+  work integer was `Int1024`, too small for the `t·t ≈ 1040-bit`
+  intermediate in `ln 2` evaluation at SCALE 114; `exp_strict` /
+  `ln_strict` panicked. Promoted D115's work integer to `Int2048`.
+- **`tan` near-pole precision** (d153 / d307) — `tan = sin/cos`
+  amplified the working-scale rounding by `1/cos ≈ |tan|` near odd
+  multiples of π/2. The lookup sincos kernels now lift the working
+  scale by `⌈log₁₀|tan|⌉ + guard` proportional to pole proximity.
+
+### Changed
+
+- **Width-adaptive `mg_divide` buffer** restores and improves wide
+  `mul` (D76 mul ~52 ns, D307 mul ~122 ns at the history SCALEs —
+  faster than v0.4.2), by sizing the `÷ 10^SCALE` stack buffer to the
+  work integer instead of a flat 128-limb array.
+- Parity tolerances between Tang lookup and `wide_kernel` paths
+  tightened to ≤ 1 storage LSB at every audited cell.
+- `ALGORITHMS.md` documents the Tang table-driven kernels and an
+  "evaluated and not used" section (Comba, CORDIC, Johansson
+  denominator-collection, libmpfr port, Newton reciprocal trade-offs);
+  `ROADMAP.md` and `CONTRIBUTORS.md` refreshed; `docs/benchmarks.md`
+  and all figures regenerated from the v0.4.3 sweep.
+
 ## [0.4.2] — 2026-05-19
 
 A perf release. Every wide tier shipped a bespoke narrow-GUARD Tang

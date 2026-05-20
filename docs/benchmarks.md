@@ -35,7 +35,7 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > sometimes shortens via Cody-Waite range reduction, so neither is
 > a fair comparator). The bold mark goes on the row winner.**
 
-> **Bench machine.** All numbers in this doc are from the v0.4.2
+> **Bench machine.** All numbers in this doc are from the v0.4.3
 > full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
 > runners (2 vCPU shared, 7 GiB RAM, no core pinning). Per the
 > Criterion author's standing caveat, shared CI runners carry
@@ -138,14 +138,14 @@ Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
 at every public type×scale combo. Six ops: add / sub / mul / div
 / rem / neg.
 
-> **0.4.3-dev sweep refresh.** Tables below come from the latest
+> **0.4.3 sweep refresh.** Tables below come from the latest
 > full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
 > runners.
 > Narrow-tier ps-scale cells (D9 / D18 / D38 add / sub / neg)
 > sit near the runner's resolution floor and carry ±20 %
 > pipeline / steal-budget jitter; wide-tier ns+ values are
-> reliable. See the [run-conditions preamble](#043-dev-sweep--full-raw-data)
-> at the bottom of this page for the full caveat.
+> reliable. See the run-conditions note at the bottom of this page
+> for the full caveat.
 
 ### D9 - 32 bits
 
@@ -490,7 +490,7 @@ ln2 / ln10 cache, pow10-cached mul/div per inner loop, the 0.4.2
 narrow-GUARD trig family, the Tang `ln` lookup ladder, and the
 reciprocal-divide hyperbolic identity:
 
-| op | 0.2 | 0.4.3-dev | speedup |
+| op | 0.2 | 0.4.3 | speedup |
 |---|---|---|---|
 | D76<35>  ln   |  1.37 ms |  26.5 µs |  **52×** |
 | D76<35>  exp  |  1.27 ms |  28.2 µs |  **45×** |
@@ -506,11 +506,11 @@ reciprocal-divide hyperbolic identity:
 | D307<150> sqrt|  313 µs  |  5.28 µs |  **59×** |
 
 > The **0.2** column is the 0.2.5 baseline measured at the start of
-> the 0.2.x cycle on the original dev box; the **0.4.3-dev** column is
+> the 0.2.x cycle on the original dev box; the **0.4.3** column is
 > from the latest full_matrix sweep on GitHub-hosted `ubuntu-latest`
 > standard runners. The two halves of each speedup are measured on
 > **different machines** — the 0.2 column reflects cold-machine
-> dev-box runs while the 0.4.3-dev column reflects shared CI runners
+> dev-box runs while the 0.4.3 column reflects shared CI runners
 > that typically measure 1.5–2× slower per the run-conditions
 > preamble below. The four-digit `ln` ratios at D153<75> and
 > D307<150> are real — the Tang lookup slot collapses the
@@ -1026,7 +1026,7 @@ benched with the same Criterion settings. v0.3.0 / v0.3.1 /
 v0.4.1 are omitted; widths and functions are deliberately
 minimal per the bench-history scope note. v0.4.1 is skipped
 because it was a cosmetic-only release with no perf delta vs
-v0.4.0. The charted endpoint labelled 0.4.3-dev is the current
+v0.4.0. The charted endpoint labelled 0.4.3 is the current
 HEAD and isolates the 0.4.3-cycle work (wide-tier `mul`
 reciprocal kernel, the work-int fix that lets D115 bench
 cleanly) on top of the v0.4.2 Tang `ln` lookup ladder,
@@ -1040,7 +1040,7 @@ measurement rather than being inferred from HEAD.
 
 ![history at D307](figures/history/d307.png)
 
-## 0.4.3-dev sweep — full raw data
+## 0.4.3 sweep — full raw data
 
 Complete dump of the latest full_matrix sweep on GitHub Actions,
 one table per bench binary. **Median** is criterion's median
