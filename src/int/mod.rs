@@ -16,9 +16,14 @@
 //! per monomorphisation — no runtime dispatch.
 
 use crate::wide_int::{
-    limbs_add_assign_u64_fixed, limbs_cmp_u64_fixed, limbs_sub_assign_u64_fixed,
+    limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
+    limbs_divmod_u64, limbs_is_zero_u64_fixed, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
+    limbs_sub_assign_u64_fixed,
 };
 use core::cmp::Ordering;
+use core::ops::{
+    Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Shl, Shr, Sub,
+};
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
@@ -74,6 +79,270 @@ impl<const N: usize> Uint<N> {
     pub fn wrapping_sub(mut self, rhs: Self) -> Self {
         limbs_sub_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
         self
+    }
+
+    /// Wrapping multiplication (modulo `2^BITS`).
+    ///
+    /// Schoolbook multiply truncated to the low `N` limbs. Only the
+    /// product limbs that land below `2^BITS` are kept, so no
+    /// `[u64; 2*N]` output buffer is needed — the higher partial
+    /// products are simply never written. Carries that would land at or
+    /// above limb `N` are discarded, which is exactly the modular
+    /// reduction.
+    #[inline]
+    pub fn wrapping_mul(self, rhs: Self) -> Self {
+        let (a, b) = (&self.limbs, &rhs.limbs);
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            let ai = a[i];
+            if ai != 0 {
+                let mut carry: u64 = 0;
+                let mut j = 0;
+                // Stop once `i + j` reaches `N`: those products are
+                // entirely above `2^BITS` and drop out of the result.
+                while j < N - i {
+                    let v = (ai as u128) * (b[j] as u128)
+                        + (out[i + j] as u128)
+                        + (carry as u128);
+                    out[i + j] = v as u64;
+                    carry = (v >> 64) as u64;
+                    j += 1;
+                }
+                // The final row carry would land in limb `i + N`, which
+                // is above the width — discarded.
+            }
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Checked addition: `None` on overflow past `2^BITS`.
+    #[inline]
+    pub fn checked_add(mut self, rhs: Self) -> Option<Self> {
+        let carry = limbs_add_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
+        if carry { None } else { Some(self) }
+    }
+
+    /// Checked subtraction: `None` if the result would be negative.
+    #[inline]
+    pub fn checked_sub(mut self, rhs: Self) -> Option<Self> {
+        let borrow = limbs_sub_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
+        if borrow { None } else { Some(self) }
+    }
+
+    /// Checked multiplication: `None` if the true product does not fit
+    /// `2^BITS`.
+    #[inline]
+    pub fn checked_mul(self, rhs: Self) -> Option<Self> {
+        let (a, b) = (&self.limbs, &rhs.limbs);
+        let mut out = [0u64; N];
+        let mut overflow = false;
+        let mut i = 0;
+        while i < N {
+            let ai = a[i];
+            if ai != 0 {
+                let mut carry: u64 = 0;
+                let mut j = 0;
+                while j < N {
+                    let prod = (ai as u128) * (b[j] as u128);
+                    if i + j < N {
+                        let v = prod + (out[i + j] as u128) + (carry as u128);
+                        out[i + j] = v as u64;
+                        carry = (v >> 64) as u64;
+                    } else if prod != 0 || carry != 0 {
+                        // Any product or carry landing at/above limb `N`
+                        // means the true product exceeds the width.
+                        overflow = true;
+                        carry = 0;
+                    }
+                    j += 1;
+                }
+                if carry != 0 {
+                    // Row carry would spill into limb `i + N >= N`.
+                    overflow = true;
+                }
+            }
+            i += 1;
+        }
+        if overflow { None } else { Some(Self { limbs: out }) }
+    }
+
+    /// Wrapping division. Panics on a zero divisor, matching the
+    /// behaviour of the primitive unsigned integer types.
+    #[inline]
+    pub fn wrapping_div(self, rhs: Self) -> Self {
+        assert!(!rhs.is_zero(), "attempt to divide by zero");
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        limbs_divmod_u64(&self.limbs, &rhs.limbs, &mut quot, &mut rem);
+        Self { limbs: quot }
+    }
+
+    /// Wrapping remainder. Panics on a zero divisor, matching the
+    /// behaviour of the primitive unsigned integer types.
+    #[inline]
+    pub fn wrapping_rem(self, rhs: Self) -> Self {
+        assert!(!rhs.is_zero(), "attempt to calculate the remainder with a divisor of zero");
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        limbs_divmod_u64(&self.limbs, &rhs.limbs, &mut quot, &mut rem);
+        Self { limbs: rem }
+    }
+
+    /// Bitwise AND.
+    #[inline]
+    pub fn bitand(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] & rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Bitwise OR.
+    #[inline]
+    pub fn bitor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] | rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Bitwise XOR.
+    #[inline]
+    pub fn bitxor(self, rhs: Self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = self.limbs[i] ^ rhs.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Bitwise NOT (ones' complement).
+    #[inline]
+    pub fn not(self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = !self.limbs[i];
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Logical left shift by `shift` bits (modulo `2^BITS`).
+    #[inline]
+    pub fn shl(self, shift: u32) -> Self {
+        let mut out = [0u64; N];
+        limbs_shl_u64_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
+    }
+
+    /// Logical right shift by `shift` bits.
+    #[inline]
+    pub fn shr(self, shift: u32) -> Self {
+        let mut out = [0u64; N];
+        limbs_shr_u64_fixed(&self.limbs, shift, &mut out);
+        Self { limbs: out }
+    }
+
+    /// `true` when every limb is zero.
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        limbs_is_zero_u64_fixed(&self.limbs)
+    }
+
+    /// Bit length: `0` for zero, else `floor(log2(self)) + 1`
+    /// (equivalently `BITS - leading_zeros`).
+    #[inline]
+    pub fn bit_length(&self) -> u32 {
+        limbs_bit_len_u64_fixed(&self.limbs)
+    }
+
+    /// Number of leading zero bits in the `BITS`-wide representation.
+    #[inline]
+    pub fn leading_zeros(&self) -> u32 {
+        (Self::BITS as u32) - self.bit_length()
+    }
+}
+
+impl<const N: usize> Add for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        self.wrapping_add(rhs)
+    }
+}
+
+impl<const N: usize> Sub for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        self.wrapping_sub(rhs)
+    }
+}
+
+impl<const N: usize> Mul for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        self.wrapping_mul(rhs)
+    }
+}
+
+impl<const N: usize> BitAnd for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn bitand(self, rhs: Self) -> Self {
+        Uint::bitand(self, rhs)
+    }
+}
+
+impl<const N: usize> BitOr for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn bitor(self, rhs: Self) -> Self {
+        Uint::bitor(self, rhs)
+    }
+}
+
+impl<const N: usize> BitXor for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn bitxor(self, rhs: Self) -> Self {
+        Uint::bitxor(self, rhs)
+    }
+}
+
+impl<const N: usize> Not for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn not(self) -> Self {
+        Uint::not(self)
+    }
+}
+
+impl<const N: usize> Shl<u32> for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn shl(self, shift: u32) -> Self {
+        Uint::shl(self, shift)
+    }
+}
+
+impl<const N: usize> Shr<u32> for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn shr(self, shift: u32) -> Self {
+        Uint::shr(self, shift)
     }
 }
 
@@ -203,5 +472,136 @@ mod tests {
         // All-ones + 1 wraps to zero (modulo 2^256).
         let wrap = Uint::<4>::MAX.wrapping_add(Uint::<4>::ONE);
         assert_eq!(*wrap.as_limbs(), [0, 0, 0, 0]);
+    }
+
+    #[test]
+    fn uint_wrapping_mul_cross_limb_product() {
+        // 2^64 * 2^64 = 2^128 — lands exactly in limb 2.
+        let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        let p = a.wrapping_mul(a);
+        assert_eq!(*p.as_limbs(), [0, 0, 1, 0]);
+
+        // (2^64 - 1) * 3 = 3*2^64 - 3 = [u64::MAX - 2, 2, 0, 0].
+        let m = Uint::<4>::from_limbs([u64::MAX, 0, 0, 0]);
+        let three = Uint::<4>::from_limbs([3, 0, 0, 0]);
+        let q = m.wrapping_mul(three);
+        assert_eq!(*q.as_limbs(), [u64::MAX - 2, 2, 0, 0]);
+
+        // Multiply by one is identity.
+        let v = Uint::<4>::from_limbs([7, 8, 9, 10]);
+        assert_eq!(v.wrapping_mul(Uint::<4>::ONE), v);
+    }
+
+    #[test]
+    fn uint_wrapping_mul_truncates_modulo_width() {
+        // 2^192 * 2^192 = 2^384, fully above 2^256 → wraps to zero.
+        let hi = Uint::<4>::from_limbs([0, 0, 0, 1]);
+        assert_eq!(hi.wrapping_mul(hi), Uint::<4>::ZERO);
+
+        // MAX * MAX mod 2^256: (2^256 - 1)^2 = 2^512 - 2^257 + 1.
+        // mod 2^256 that is 1 (since 2^512 and 2^257 are both 0 mod
+        // 2^256). So the low limb is 1, the rest zero.
+        let r = Uint::<4>::MAX.wrapping_mul(Uint::<4>::MAX);
+        assert_eq!(*r.as_limbs(), [1, 0, 0, 0]);
+    }
+
+    #[test]
+    fn uint_checked_add_sub_overflow() {
+        assert_eq!(
+            Uint::<4>::ONE.checked_add(Uint::<4>::ONE),
+            Some(Uint::<4>::from_limbs([2, 0, 0, 0]))
+        );
+        // MAX + 1 overflows.
+        assert_eq!(Uint::<4>::MAX.checked_add(Uint::<4>::ONE), None);
+
+        assert_eq!(
+            Uint::<4>::from_limbs([5, 0, 0, 0]).checked_sub(Uint::<4>::from_limbs([3, 0, 0, 0])),
+            Some(Uint::<4>::from_limbs([2, 0, 0, 0]))
+        );
+        // 0 - 1 underflows.
+        assert_eq!(Uint::<4>::ZERO.checked_sub(Uint::<4>::ONE), None);
+    }
+
+    #[test]
+    fn uint_checked_mul_overflow() {
+        // 2^64 * 2^64 = 2^128 fits in 256 bits.
+        let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        assert_eq!(
+            a.checked_mul(a),
+            Some(Uint::<4>::from_limbs([0, 0, 1, 0]))
+        );
+        // 2^192 * 2^192 overflows 256 bits.
+        let hi = Uint::<4>::from_limbs([0, 0, 0, 1]);
+        assert_eq!(hi.checked_mul(hi), None);
+        // MAX * 2 overflows.
+        assert_eq!(Uint::<4>::MAX.checked_mul(Uint::<4>::from_limbs([2, 0, 0, 0])), None);
+    }
+
+    #[test]
+    fn uint_div_rem_with_remainder() {
+        // 1000 / 7 = 142 r 6.
+        let n = Uint::<4>::from_limbs([1000, 0, 0, 0]);
+        let d = Uint::<4>::from_limbs([7, 0, 0, 0]);
+        assert_eq!(*n.wrapping_div(d).as_limbs(), [142, 0, 0, 0]);
+        assert_eq!(*n.wrapping_rem(d).as_limbs(), [6, 0, 0, 0]);
+
+        // 2^128 / 2^64 = 2^64, remainder 0.
+        let big = Uint::<4>::from_limbs([0, 0, 1, 0]);
+        let by = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        assert_eq!(*big.wrapping_div(by).as_limbs(), [0, 1, 0, 0]);
+        assert!(big.wrapping_rem(by).is_zero());
+    }
+
+    #[test]
+    #[should_panic(expected = "divide by zero")]
+    fn uint_div_by_zero_panics() {
+        let _ = Uint::<4>::ONE.wrapping_div(Uint::<4>::ZERO);
+    }
+
+    #[test]
+    fn uint_bitwise_ops() {
+        let a = Uint::<4>::from_limbs([0b1100, 0xFF, 0, 0]);
+        let b = Uint::<4>::from_limbs([0b1010, 0x0F, 0, 0]);
+        assert_eq!(*(a & b).as_limbs(), [0b1000, 0x0F, 0, 0]);
+        assert_eq!(*(a | b).as_limbs(), [0b1110, 0xFF, 0, 0]);
+        assert_eq!(*(a ^ b).as_limbs(), [0b0110, 0xF0, 0, 0]);
+        assert_eq!(*(!Uint::<4>::ZERO).as_limbs(), [u64::MAX; 4]);
+    }
+
+    #[test]
+    fn uint_shifts() {
+        let one = Uint::<4>::ONE;
+        // 1 << 64 lands in limb 1.
+        assert_eq!(*(one << 64).as_limbs(), [0, 1, 0, 0]);
+        // 1 << 130 = limb 2 bit 2.
+        assert_eq!(*(one << 130).as_limbs(), [0, 0, 0b100, 0]);
+        // Right shift back.
+        let v = Uint::<4>::from_limbs([0, 0, 0b100, 0]);
+        assert_eq!(*(v >> 130).as_limbs(), [1, 0, 0, 0]);
+        // Shift past the width drops everything.
+        assert_eq!(one << 256, Uint::<4>::ZERO);
+    }
+
+    #[test]
+    fn uint_is_zero_bitlen_leading_zeros() {
+        assert!(Uint::<4>::ZERO.is_zero());
+        assert!(!Uint::<4>::ONE.is_zero());
+        assert_eq!(Uint::<4>::ZERO.bit_length(), 0);
+        assert_eq!(Uint::<4>::ONE.bit_length(), 1);
+        // 2^64 has bit length 65.
+        let b = Uint::<4>::from_limbs([0, 1, 0, 0]);
+        assert_eq!(b.bit_length(), 65);
+        assert_eq!(b.leading_zeros(), 256 - 65);
+        assert_eq!(Uint::<4>::ZERO.leading_zeros(), 256);
+        assert_eq!(Uint::<4>::MAX.leading_zeros(), 0);
+    }
+
+    #[test]
+    fn uint_operator_traits_delegate() {
+        let a = Uint::<4>::from_limbs([10, 0, 0, 0]);
+        let b = Uint::<4>::from_limbs([3, 0, 0, 0]);
+        assert_eq!(*(a + b).as_limbs(), [13, 0, 0, 0]);
+        assert_eq!(*(a - b).as_limbs(), [7, 0, 0, 0]);
+        assert_eq!(*(a * b).as_limbs(), [30, 0, 0, 0]);
     }
 }
