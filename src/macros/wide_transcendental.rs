@@ -773,6 +773,248 @@ macro_rules! decl_wide_transcendental {
                 $crate::wide_int::wide_cast::<W, i128>(qi)
             }
 
+            /// Exact-integer logarithm witness for `log_base(value)`.
+            ///
+            /// Given the storage-scale raw integers `value_raw` and
+            /// `base_raw` (each `x · 10^scale`) and a candidate integer
+            /// result `k`, returns `true` iff `value == base^k` *exactly*
+            /// at the storage scale — i.e. the true `log_base(value)` is
+            /// the exact integer `k`. This is the directed-rounding
+            /// exact-zero residual flag (Lindemann–Weierstrass guarantees
+            /// the logarithm is otherwise irrational, so a non-exact
+            /// witness means a genuine non-zero residual): when it fires
+            /// the kernel pins the result to exactly `k` under every mode,
+            /// rather than letting the `ln(value)/ln(base)` round-off land
+            /// a hair above/below the grid line and bump under a directed
+            /// mode.
+            ///
+            /// The check is exact integer arithmetic in `W`. For `k >= 1`
+            /// it tests `base_raw^k == value_raw · 10^(scale·(k − 1))`;
+            /// for `k == 0` it tests `value_raw == 10^scale` (`value == 1`);
+            /// negative `k` (`value < 1` with an integer base) tests the
+            /// mirror `base_raw^(−k) == 10^scale · 10^(scale·(−k − 1)) ·
+            /// 10^scale / value`… which reduces to `value_raw ·
+            /// base_raw^(−k) == 10^(scale·(−k + 1))`. Overflow of the
+            /// power short-circuits to `false` (a value that large is not
+            /// a representable exact power at this width).
+            pub(crate) fn log_is_exact_int(value_raw: W, base_raw: W, scale: u32, k: i128) -> bool {
+                let one_s = pow10_cached(scale);
+                if k == 0 {
+                    return value_raw == one_s;
+                }
+                // Reduce to the integer domain so the running power never
+                // carries the `· 10^scale` factor (which tips into a wider
+                // limb tier or overflows `W` at high scale). An integer
+                // `base^k = value` can only be an exact storage point when
+                // `base` is itself an exact integer multiple of `10^scale`
+                // (only the near-1 ill-conditioning probes are not, and
+                // those are never exact powers).
+                let (bq, br) = base_raw.div_rem(one_s);
+                if br != lit(0) {
+                    return false;
+                }
+                let base_int = bq;
+                let kk = k.unsigned_abs();
+                let limit_bits = W::BITS - 4;
+                if k > 0 {
+                    // value == base^|k|: require `value` itself integral.
+                    let (vq, vr) = value_raw.div_rem(one_s);
+                    if vr != lit(0) {
+                        return false;
+                    }
+                    let value_int = vq;
+                    let mut pow = lit(1);
+                    let mut i: u128 = 0;
+                    while i < kk {
+                        if bit_length(pow) + bit_length(base_int) >= limit_bits {
+                            return false;
+                        }
+                        pow = pow * base_int;
+                        i += 1;
+                    }
+                    pow == value_int
+                } else {
+                    // value == 1 / base^|k|: `value_raw · base_int^|k|`
+                    // must equal the storage `1` exactly.
+                    let mut cur = value_raw;
+                    let mut i: u128 = 0;
+                    while i < kk {
+                        if bit_length(cur) + bit_length(base_int) >= limit_bits {
+                            return false;
+                        }
+                        cur = cur * base_int;
+                        i += 1;
+                    }
+                    cur == one_s
+                }
+            }
+
+            /// Storage representation of the exact integer `k` at scale
+            /// `scale`: the `$Storage` value `k · 10^scale`. Panics if it
+            /// does not fit (a result that out-of-range would also panic
+            /// in `round_to_storage_with`).
+            pub(crate) fn exact_int_at_scale(k: i128, scale: u32) -> $Storage {
+                narrow_to_storage(scale_by_k(one(scale), k))
+            }
+
+            /// Range-checked narrowing of a storage-scale working value
+            /// `v` (already at scale `SCALE`, no rounding needed) to the
+            /// type's `$Storage`. Panics if out of range, matching
+            /// `round_to_storage_with`.
+            pub(crate) fn narrow_to_storage(v: W) -> $Storage {
+                let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
+                let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                if v > max_w || v < min_w {
+                    panic!(concat!(
+                        stringify!($Type),
+                        " strict transcendental: result out of range"
+                    ));
+                }
+                $crate::wide_int::wide_cast::<W, $Storage>(v)
+            }
+
+            /// Exact-power pin for `exp2`: if the storage raw `raw`
+            /// (= `x · 10^scale`) is an exact integer `x = k` and `2^k`
+            /// is representable at the storage scale, returns the exact
+            /// `$Storage` result; else `None` (fall through to the kernel).
+            pub(crate) fn exp2_exact_pin(raw: $Storage, scale: u32) -> ::core::option::Option<$Storage> {
+                let raw_w = wide_cast_storage(raw);
+                let one_s = pow10_cached(scale);
+                let (kq, kr) = raw_w.div_rem(one_s);
+                if kr != lit(0) {
+                    return ::core::option::Option::None;
+                }
+                let k = $crate::wide_int::wide_cast::<W, i128>(kq);
+                exp2_exact_pow(k, scale).map(narrow_to_storage)
+            }
+
+            #[inline]
+            fn wide_cast_storage(raw: $Storage) -> W {
+                $crate::wide_int::wide_cast::<$Storage, W>(raw)
+            }
+
+            /// Integer-digit count of the `exp2` result `2^x` for the
+            /// storage raw `raw` (= `x · 10^scale`), used as the
+            /// large-result working-scale lift. Returns
+            /// `⌈|x|·log10(2)⌉` capped so the lifted working scale, plus
+            /// `exp_fixed`'s own internal `2^k` lift (≈ the same size) and
+            /// the result's integer digits, stay inside the working
+            /// integer's decimal capacity (`~BITS·0.30103` digits). A
+            /// `2^x` whose integer part alone exceeds that capacity is not
+            /// representable at this tier and panics on narrowing.
+            /// Squaring-safe cap on a large-result working-scale lift.
+            ///
+            /// `needed` is the result's integer-digit count (the ideal
+            /// lift). `exp_fixed` runs at `w_ext ≈ scale + guard + lift`
+            /// with its own `2^k` reassembly lift `≈ lift` on top, then
+            /// *squares* a value of magnitude `result · 10^w_ext` — the
+            /// squaring needs `2 · width < W`. Bounding the peak doubled
+            /// width keeps `exp_fixed` from overflowing the working
+            /// integer. When `needed` exceeds the cap the result nears the
+            /// storage overflow edge and the cell may lose LSBs — those
+            /// stay on the strict-golden ignore list as the wide-tier
+            /// `exp_fixed` squaring-width limit.
+            pub(crate) fn exp_lift_cap(needed: u128, scale: u32) -> u32 {
+                // `exp_fixed` reassembles `result · 10^w_ext` where
+                // `w_ext = scale + GUARD + lift + exp_internal_extra` and
+                // the internal extra is itself `≈ needed`. The reassembled
+                // value occupies `≈ needed (result int part) + scale +
+                // GUARD + lift + needed (internal extra)` decimal digits,
+                // which must fit `W`. With `lift ≤ needed` the worst case
+                // is `≈ scale + GUARD + 3·needed`; cap the lift so that
+                // bound (with margin) stays inside `W`'s decimal capacity.
+                // The closure feeds `exp_fixed` an argument at working
+                // scale `w = scale + GUARD + lift`; `exp_fixed` expands
+                // internally (its `2^k` reassembly lift + the result
+                // magnitude) to roughly `3·w`. Keep `w` under a third of
+                // `W`'s decimal capacity so that expansion stays inside
+                // `W`. Inputs whose result is so large that even the
+                // capped lift is short of `needed` (the storage-overflow
+                // edge) may still lose LSBs — those stay on the ignore
+                // list as the wide-tier `exp_fixed` width limit.
+                let w_digits = <W>::BITS as u128 * 30103 / 100_000;
+                let head = (w_digits / 3).saturating_sub(scale as u128 + GUARD as u128);
+                let lift = needed.min(head);
+                if lift > u32::MAX as u128 { u32::MAX } else { lift as u32 }
+            }
+
+            /// Upper bound on the integer-digit count of `2^x` (the `exp2`
+            /// result) for storage raw `raw` (= `x · 10^scale`), capped by
+            /// [`exp_lift_cap`] for use as the large-result lift.
+            pub(crate) fn exp2_result_int_digits(raw: $Storage, scale: u32) -> u32 {
+                exp_lift_cap(pow_result_digits(abs(wide_cast_storage(raw)), scale, 30103), scale)
+            }
+
+            /// Upper bound on the integer-digit count of `e^|v|` (the
+            /// `sinh`/`cosh`/`exp` result) for a storage-scale magnitude
+            /// `mag_at_scale` (= `|v| · 10^scale`), capped by
+            /// [`exp_lift_cap`].
+            pub(crate) fn exp_result_int_digits(mag_at_scale: W, scale: u32) -> u32 {
+                exp_lift_cap(pow_result_digits(abs(mag_at_scale), scale, 43429), scale)
+            }
+
+            /// Shared estimator: `⌈|x| · factor / 100000⌉` decimal digits,
+            /// where `x = av / 10^scale` and `factor` is `log10(base)·1e5`
+            /// (`30103` for `2^x`, `43429` for `e^x`). Returns `0` when
+            /// `|x| < 1` (the result has no integer-digit growth).
+            fn pow_result_digits(av: W, scale: u32, factor: u128) -> u128 {
+                let bl_v = bit_length(av);
+                let bl_one = bit_length(pow10_cached(scale));
+                if bl_v <= bl_one {
+                    return 0;
+                }
+                let log2_int = bl_v - bl_one + 1;
+                let int_upper = if log2_int >= 127 { u128::MAX } else { 1u128 << log2_int };
+                (int_upper.saturating_mul(factor) / 100_000) as u128
+            }
+
+            /// Exact `2^k` at scale `scale`, as a `W` working value, when
+            /// `x = k` is an exact integer and `2^k` is representable at
+            /// the storage scale. `exp2(integer k) = 2^k` is an exact
+            /// algebraic point: for `k ≥ 0` it is the integer `2^k`; for
+            /// `k < 0` it is `5^|k| / 10^|k|`, finite with `|k|` decimal
+            /// places (representable iff `|k| ≤ scale`). Returns `None`
+            /// when not exactly representable, so the caller falls through
+            /// to the working-scale kernel.
+            pub(crate) fn exp2_exact_pow(k: i128, scale: u32) -> ::core::option::Option<W> {
+                let one_s = pow10_cached(scale);
+                if k == 0 {
+                    return ::core::option::Option::Some(one_s);
+                }
+                let kk = k.unsigned_abs();
+                if k > 0 {
+                    // 2^k · 10^scale, guarding the working width.
+                    let mut v = one_s;
+                    let two = lit(2);
+                    let mut i: u128 = 0;
+                    while i < kk {
+                        if bit_length(v) + 2 >= W::BITS - 4 {
+                            return ::core::option::Option::None;
+                        }
+                        v = v * two;
+                        i += 1;
+                    }
+                    ::core::option::Option::Some(v)
+                } else {
+                    // 2^-|k| = 5^|k| · 10^(scale − |k|); representable iff
+                    // |k| ≤ scale.
+                    if (kk as u128) > scale as u128 {
+                        return ::core::option::Option::None;
+                    }
+                    let mut v = pow10_cached(scale - kk as u32);
+                    let five = lit(5);
+                    let mut i: u128 = 0;
+                    while i < kk {
+                        if bit_length(v) + 3 >= W::BITS - 4 {
+                            return ::core::option::Option::None;
+                        }
+                        v = v * five;
+                        i += 1;
+                    }
+                    ::core::option::Option::Some(v)
+                }
+            }
+
             /// `k · c` where `k` is a signed range-reduction count.
             #[inline]
             fn scale_by_k(c: W, k: i128) -> W {
@@ -2177,13 +2419,34 @@ macro_rules! decl_wide_transcendental {
                 if braw <= z {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
-                let w = SCALE + $core::GUARD;
-                let ln_b = $core::ln_fixed($core::to_work(braw), w);
-                if ln_b == $core::zero() {
+                // Probe at the base guard to reject base == 1.
+                let w0 = SCALE + $core::GUARD;
+                let ln_b0 = $core::ln_fixed($core::to_work(braw), w0);
+                if ln_b0 == $core::zero() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), ln_b, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Exact-power pin: `self == base^k` ⇒ result is exactly
+                // the integer `k` (see `log10_strict_with`).
+                {
+                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), ln_b0, w0);
+                    let k = $core::round_to_nearest_int(r0, w0);
+                    if $core::log_is_exact_int(
+                        $core::to_work_w(raw, 0), $core::to_work_w(braw, 0), SCALE, k,
+                    ) {
+                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
+                    }
+                }
+                // Route the final narrowing through the directed-rounding
+                // Ziv escalation: recompute `ln(self)/ln(base)` at the
+                // requested guard so Trunc/Floor/Ceiling decide on the
+                // true residual sign, not the base-guard approximation.
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let ln_b = $core::ln_fixed($core::to_work_w(braw, guard), w);
+                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), ln_b, w)
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::log2_strict`].
@@ -2194,9 +2457,23 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
-                let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln2(w), w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Exact-power pin: `self == 2^k` ⇒ result is exactly `k`
+                // (see `log10_strict_with`).
+                {
+                    let w0 = SCALE + $core::GUARD;
+                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), $core::ln2(w0), w0);
+                    let k = $core::round_to_nearest_int(r0, w0);
+                    let base2 = $core::pow10_cached(SCALE) + $core::pow10_cached(SCALE); // 2 · 10^SCALE
+                    if $core::log_is_exact_int($core::to_work_w(raw, 0), base2, SCALE, k) {
+                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
+                    }
+                }
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), $core::ln2(w), w)
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::log10_strict`].
@@ -2207,9 +2484,26 @@ macro_rules! decl_wide_transcendental {
                 if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
-                let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln10(w), w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Exact-power pin: if `self == 10^k` the result is exactly
+                // the integer `k` (residual provably zero), so every mode
+                // returns `k` and no directed bump is taken. Without this
+                // the `ln(self)/ln 10` round-off lands a hair off the grid
+                // line and Floor/Ceiling/Trunc bump by one LSB.
+                {
+                    let w0 = SCALE + $core::GUARD;
+                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), $core::ln10(w0), w0);
+                    let k = $core::round_to_nearest_int(r0, w0);
+                    let base10 = $core::pow10_cached(SCALE + 1); // 10 · 10^SCALE
+                    if $core::log_is_exact_int($core::to_work_w(raw, 0), base10, SCALE, k) {
+                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
+                    }
+                }
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), $core::ln10(w), w)
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::exp_strict`]. Delegates
@@ -2229,10 +2523,38 @@ macro_rules! decl_wide_transcendental {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ONE;
                 }
-                let w = SCALE + $core::GUARD;
-                let arg = $core::mul($core::to_work(raw), $core::ln2(w), w);
-                let r = $core::exp_fixed(arg, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                // Exact-power pin: `exp2(integer k) = 2^k` is an exact
+                // algebraic point. Detect an integer argument and emit the
+                // exact `2^k` so a directed mode never bumps it by one LSB
+                // (the `exp(k·ln 2)` round-off otherwise lands a hair off
+                // the grid line).
+                // Exact-power pin handles the `2^k` integer-result cases.
+                if let ::core::option::Option::Some(v) = $core::exp2_exact_pin(raw, SCALE) {
+                    return Self::from_bits(v);
+                }
+                // Large-result lift: `2^x` carries `~|x|·log10(2)` integer
+                // digits, and `exp_fixed` narrows to the working scale `w`
+                // before returning, so the second narrowing here (w →
+                // SCALE) consumes the guard budget twice. Lift the base
+                // working scale by the result's integer-digit count so the
+                // final narrowing still sees a full guard. The lift is
+                // capped to keep `exp_fixed`'s internal `2^k` reassembly +
+                // post-Taylor squarings inside the working integer; for a
+                // `2^x` whose result is so large the squaring would exceed
+                // `W` (only the inputs whose result nears the storage
+                // overflow edge), the lift is clamped and the cell may
+                // still lose LSBs — those remain in the strict-golden
+                // ignore list, tracked as the wide-tier `exp_fixed`
+                // squaring-width limit.
+                let k_lift = $core::exp2_result_int_digits(raw, SCALE);
+                let base_guard = $core::GUARD + k_lift;
+                Self::from_bits($core::round_to_storage_directed(
+                    base_guard, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let arg = $core::mul($core::to_work_w(raw, guard), $core::ln2(w), w);
+                        $core::exp_fixed(arg, w)
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::powf_strict`].
@@ -2249,11 +2571,31 @@ macro_rules! decl_wide_transcendental {
                 if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
                     return self.powi(n);
                 }
-                let w = SCALE + $core::GUARD;
-                let ln_x = $core::ln_fixed($core::to_work(raw), w);
-                let y = $core::to_work(exp.to_bits());
-                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                let eraw = exp.to_bits();
+                // Large-result lift. `x^y = exp(y·ln x)` carries
+                // `~|y·ln x|·log10(e)` integer digits; size the working
+                // lift from a base-guard probe of the exp argument so the
+                // `exp_fixed` relative error stays sub-storage-ULP after
+                // narrowing (same budget sinh/cosh use, see those).
+                let k_lift = {
+                    let w0 = SCALE + $core::GUARD;
+                    let ln_x0 = $core::ln_fixed($core::to_work(raw), w0);
+                    let arg0 = $core::mul($core::to_work(eraw), ln_x0, w0);
+                    // `arg0` is the exp argument at scale `w0`; narrow it
+                    // to scale `SCALE` to feed the `e^|·|` digit sizer
+                    // (squaring-safe capped).
+                    let arg_at_scale = $core::round_to_storage_with(arg0, w0, SCALE, $crate::support::rounding::RoundingMode::Trunc);
+                    $core::exp_result_int_digits($core::to_work_w(arg_at_scale, 0), SCALE)
+                };
+                let base_guard = $core::GUARD + k_lift;
+                Self::from_bits($core::round_to_storage_directed(
+                    base_guard, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let ln_x = $core::ln_fixed($core::to_work_w(raw, guard), w);
+                        let y = $core::to_work_w(eraw, guard);
+                        $core::exp_fixed($core::mul(y, ln_x, w), w)
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::sin_strict`]. Delegates
@@ -2433,12 +2775,26 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = (ex - enx) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                let raw = self.to_bits();
+                // Large-argument lift. `sinh(x) ≈ e^|x|/2` carries
+                // `~|x|·log10(e)` integer-part digits; the `exp_fixed`
+                // result holds those at the high end of the working
+                // integer, so its ≤ 0.5 LSB-of-w relative error becomes
+                // an absolute error of `~10^(int_digits)` storage LSB on
+                // narrowing. Lift the base working scale by the same
+                // `⌈|x|·log10(e)⌉` digits (the `exp` `2^k` reassembly
+                // budget) so that absolute error stays sub-storage-ULP.
+                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
+                let base_guard = $core::GUARD + k_lift;
+                Self::from_bits($core::round_to_storage_directed(
+                    base_guard, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let v = $core::to_work_w(raw, guard);
+                        let ex = $core::exp_fixed(v, w);
+                        let enx = $core::div($core::one(w), ex, w);
+                        (ex - enx) >> 1
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::cosh_strict`].
@@ -2449,12 +2805,19 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = (ex + enx) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                let raw = self.to_bits();
+                // Large-argument lift: see `sinh_strict_with`.
+                let k_lift = $core::exp_result_int_digits($core::to_work_w(raw, 0), SCALE);
+                let base_guard = $core::GUARD + k_lift;
+                Self::from_bits($core::round_to_storage_directed(
+                    base_guard, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let v = $core::to_work_w(raw, guard);
+                        let ex = $core::exp_fixed(v, w);
+                        let enx = $core::div($core::one(w), ex, w);
+                        (ex + enx) >> 1
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::tanh_strict`].
@@ -2464,12 +2827,16 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let v = $core::to_work(self.to_bits());
-                let ex = $core::exp_fixed(v, w);
-                let enx = $core::div($core::one(w), ex, w);
-                let r = $core::div(ex - enx, ex + enx, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                let raw = self.to_bits();
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let v = $core::to_work_w(raw, guard);
+                        let ex = $core::exp_fixed(v, w);
+                        let enx = $core::div($core::one(w), ex, w);
+                        $core::div(ex - enx, ex + enx, w)
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::asinh_strict`].
@@ -2480,62 +2847,79 @@ macro_rules! decl_wide_transcendental {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return Self::ZERO;
                 }
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(raw);
-                let ax = if v < $core::zero() { -v } else { v };
-                let inner = if ax >= one_w {
-                    let inv = $core::div(one_w, ax, w);
-                    let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
-                } else {
-                    let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed(ax + root, w)
-                };
-                let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    -inner
-                } else {
-                    inner
-                };
-                Self::from_bits($core::round_to_storage_with(signed, w, SCALE, mode))
+                let neg = raw < $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let one_w = $core::one(w);
+                        let v = $core::to_work_w(raw, guard);
+                        let ax = if v < $core::zero() { -v } else { v };
+                        let inner = if ax >= one_w {
+                            let inv = $core::div(one_w, ax, w);
+                            let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
+                            $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
+                        } else {
+                            let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
+                            $core::ln_fixed(ax + root, w)
+                        };
+                        if neg { -inner } else { inner }
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::acosh_strict`].
             #[inline]
             #[must_use]
             pub fn acosh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                if v < one_w {
-                    panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
+                let raw = self.to_bits();
+                {
+                    // Domain check at the base guard.
+                    let w0 = SCALE + $core::GUARD;
+                    if $core::to_work(raw) < $core::one(w0) {
+                        panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
+                    }
                 }
-                let two_w = one_w + one_w;
-                let inner = if v >= two_w {
-                    let inv = $core::div(one_w, v, w);
-                    let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
-                } else {
-                    let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
-                    $core::ln_fixed(v + root, w)
-                };
-                Self::from_bits($core::round_to_storage_with(inner, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let one_w = $core::one(w);
+                        let v = $core::to_work_w(raw, guard);
+                        let two_w = one_w + one_w;
+                        if v >= two_w {
+                            let inv = $core::div(one_w, v, w);
+                            let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
+                            $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                        } else {
+                            let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
+                            $core::ln_fixed(v + root, w)
+                        }
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::atanh_strict`].
             #[inline]
             #[must_use]
             pub fn atanh_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let w = SCALE + $core::GUARD;
-                let one_w = $core::one(w);
-                let v = $core::to_work(self.to_bits());
-                let ax = if v < $core::zero() { -v } else { v };
-                if ax >= one_w {
-                    panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
+                let raw = self.to_bits();
+                {
+                    // Domain check at the base guard.
+                    let w0 = SCALE + $core::GUARD;
+                    let v0 = $core::to_work(raw);
+                    let ax0 = if v0 < $core::zero() { -v0 } else { v0 };
+                    if ax0 >= $core::one(w0) {
+                        panic!(concat!(stringify!($Type), "::atanh: argument out of domain (-1, 1)"));
+                    }
                 }
-                let ratio = $core::div(one_w + v, one_w - v, w);
-                let r = $core::ln_fixed(ratio, w) >> 1;
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::round_to_storage_directed(
+                    $core::GUARD, SCALE, mode, |guard| {
+                        let w = SCALE + guard;
+                        let one_w = $core::one(w);
+                        let v = $core::to_work_w(raw, guard);
+                        let ratio = $core::div(one_w + v, one_w - v, w);
+                        $core::ln_fixed(ratio, w) >> 1
+                    },
+                ))
             }
 
             /// Mode-aware sibling of [`Self::to_degrees_strict`].

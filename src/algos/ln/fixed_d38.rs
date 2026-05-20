@@ -219,6 +219,87 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
 
 // ── log / log2 / log10 kernels (D38, Fixed fallback) ──────────────
 
+/// Exact-integer-logarithm pin for the D38 log family.
+///
+/// Returns `Some(k · 10^scale)` (the exact storage representation of the
+/// integer `k`) when `value == base^k` exactly at the storage scale, i.e.
+/// when the true `log_base(value)` is the exact integer `k`. Off this
+/// allow-list the logarithm is irrational (Lindemann–Weierstrass), so the
+/// residual is genuinely non-zero and the caller's working-scale kernel
+/// runs. Pinning the exact points stops the `ln(value)/ln(base)` round-off
+/// from landing a hair off the storage grid line and bumping by one LSB
+/// under a directed mode (`Trunc`/`Floor`/`Ceiling`).
+///
+/// `value_raw` / `base_raw` are storage integers (`x · 10^scale`). The
+/// candidate `k` is derived by the caller from the nearest-rounded result.
+/// All arithmetic is `i128`; an intermediate that overflows `i128` cannot
+/// be a representable exact power, so the check returns `None`.
+#[inline]
+fn log_exact_int_pin(value_raw: i128, base_raw: i128, scale: u32, k: i128) -> Option<i128> {
+    let one_s = 10i128.checked_pow(scale)?;
+    if k == 0 {
+        return (value_raw == one_s).then_some(0);
+    }
+    // Reduce to integer base / value where possible. `base^k = value`
+    // with integer `k` has rational sides; an exact integer result
+    // requires both `base` and `value` (or `1/value`) to themselves be
+    // exact storage multiples we can compare without scale carry. Work in
+    // the *integer* domain (`base_int = base_raw / 10^scale`) so the
+    // power never carries the `· 10^scale` factor that overflows `i128`.
+    if base_raw % one_s != 0 {
+        // Non-integer base (only the near-1 ill-conditioning probes hit
+        // this); such a base raised to an integer `k` is not an integer
+        // matching `value` at storage scale, so no exact pin applies.
+        return None;
+    }
+    let base_int = base_raw / one_s;
+    let kk = k.unsigned_abs();
+    let exact = if k > 0 {
+        // value == base^|k|: compare `base_int^|k|` against the integer
+        // part of `value`, requiring `value` to be that exact integer.
+        if value_raw % one_s != 0 {
+            return None;
+        }
+        let value_int = value_raw / one_s;
+        let mut pow: i128 = 1;
+        let mut ok = true;
+        for _ in 0..kk {
+            match pow.checked_mul(base_int) {
+                Some(p) => pow = p,
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        ok && pow == value_int
+    } else {
+        // value == 1 / base^|k|: `value · base^|k| == 1` exactly, i.e.
+        // `value_raw · base_int^|k| == 10^scale`. Drive `value_raw` up by
+        // `base_int` each step (staying bounded near `10^scale`) and
+        // require exact divisibility is not needed — multiplication is
+        // exact integer; the product must hit `one_s` precisely.
+        let mut cur = value_raw;
+        let mut ok = true;
+        for _ in 0..kk {
+            match cur.checked_mul(base_int) {
+                Some(p) => cur = p,
+                None => {
+                    ok = false;
+                    break;
+                }
+            }
+        }
+        ok && cur == one_s
+    };
+    if exact {
+        k.checked_mul(one_s)
+    } else {
+        None
+    }
+}
+
+
 /// `log_base(v) = ln(v) / ln(base)`, both carried in the `Fixed` wide.
 /// Used by `LnPolicy::log_impl` when the D57 borrow path is not
 /// available (no `d57` / `wide` feature).
@@ -239,8 +320,13 @@ pub(crate) fn log_with(
     let b_w = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(pow);
     let ln_b = ln_fixed(b_w, w);
     assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
-    ln_fixed(v_w, w)
-        .div(ln_b, w)
+    let ratio = ln_fixed(v_w, w).div(ln_b, w);
+    // Exact-power pin: `value == base^k` ⇒ result is exactly `k`.
+    let k = ratio.round_to_nearest_int(w);
+    if let Some(pinned) = log_exact_int_pin(raw, base_raw, scale, k) {
+        return pinned;
+    }
+    ratio
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log", scale))
 }
@@ -269,8 +355,13 @@ pub(crate) fn log2_with(
     let w = scale + working_digits;
     let v_w =
         Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
-    ln_fixed(v_w, w)
-        .div(wide_ln2(w), w)
+    let ratio = ln_fixed(v_w, w).div(wide_ln2(w), w);
+    // Exact-power pin: `value == 2^k` ⇒ result is exactly `k`.
+    let k = ratio.round_to_nearest_int(w);
+    if let Some(pinned) = log_exact_int_pin(raw, 2i128 * 10i128.pow(scale), scale, k) {
+        return pinned;
+    }
+    ratio
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log2", scale))
 }
@@ -294,8 +385,13 @@ pub(crate) fn log10_with(
     let w = scale + working_digits;
     let v_w =
         Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
-    ln_fixed(v_w, w)
-        .div(wide_ln10(w), w)
+    let ratio = ln_fixed(v_w, w).div(wide_ln10(w), w);
+    // Exact-power pin: `value == 10^k` ⇒ result is exactly `k`.
+    let k = ratio.round_to_nearest_int(w);
+    if let Some(pinned) = log_exact_int_pin(raw, 10i128 * 10i128.pow(scale), scale, k) {
+        return pinned;
+    }
+    ratio
         .round_to_i128_with(w, scale, mode)
         .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log10", scale))
 }
