@@ -21,6 +21,7 @@
 //! Functions covered: `ln`, `log` (variable base), `log2`, `log10`.
 
 use crate::algos::ln;
+use crate::policy::triplet::{policy_triplet, wtag};
 use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
 
@@ -187,27 +188,51 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
 
 // ── Wide tiers — width default ─────────────────────────────────────
 //
-// Wide tiers route `ln` through `wide_kernel::ln_strict_<tier>`; the
-// log family methods (`log`, `log2`, `log10`) keep the inherent
-// `*_strict_with` shells emitted by `decl_wide_transcendental!` since
-// they compose `ln_fixed` / `ln2` / `ln10` from the per-tier core in a
-// way that doesn't have a free-function equivalent in
-// `algos::ln::wide_kernel` today. The `*_with_impl` collapses to
-// strict; see module docs.
+// `ln_impl` / `ln_with_impl` share ONE base arm table per width via the
+// `policy_triplet!` free fns (the `_with` form drops `working_digits`,
+// matching today's verbatim-copy behaviour). `std` is identical to
+// `base` for ln — the only std machinery is the wide-kernel constant
+// cache (a later hoist concern, not visible to the policy). The log
+// family (`log`, `log2`, `log10`) keeps the inherent `*_strict_with`
+// shells emitted by `decl_wide_transcendental!`, which compose
+// `ln_fixed` / `ln2` / `ln10` with no raw-storage free-fn equivalent.
 //
-// `impl_wide_ln!` emits the cross-cutting `LnPolicy` impl: `ln_impl`
-// via `wide_kernel`, the log family via the inherent shells.
+// `impl_wide_ln!` takes the per-width base arm table as a token block
+// and emits the triplet plus the cross-cutting `LnPolicy` impl.
 
 macro_rules! impl_wide_ln {
-    ($T:ident, $ln:path) => {
+    (
+        $T:ident, $Storage:ty,
+        $base_fn:ident, $std_fn:ident, $no_std_fn:ident,
+        recv = $recv:ident, mode = $kmode:ident,
+        base = { $( ($w:pat, $s:pat) => $base_expr:expr ),* $(,)? }
+    ) => {
+        policy_triplet! {
+            storage   = $Storage,
+            base_fn   = $base_fn,
+            std_fn    = $std_fn,
+            no_std_fn = $no_std_fn,
+            recv      = $recv,
+            mode      = $kmode,
+            params    = {},
+            base      = { $( ($w, $s) => $base_expr ),* },
+            std       = {},
+        }
+
         impl<const SCALE: u32> LnPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn ln_impl(self, mode: RoundingMode) -> Self {
-                Self($ln(self.0, mode, SCALE))
+                #[cfg(feature = "std")]
+                { Self($std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
+                #[cfg(not(feature = "std"))]
+                { Self($no_std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
             }
             #[inline]
             fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-                Self($ln(self.0, mode, SCALE))
+                #[cfg(feature = "std")]
+                { Self($std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
+                #[cfg(not(feature = "std"))]
+                { Self($no_std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
             }
             #[inline]
             fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
@@ -237,448 +262,156 @@ macro_rules! impl_wide_ln {
     };
 }
 
-// D57 — bespoke arm so `ln_impl` can divert SCALE ∈ 18..=22 through
-// the narrow-GUARD lookup before falling back to `wide_kernel`.
+// D57 — bespoke arm so `ln` can divert SCALE in 18..=22 through the
+// narrow-GUARD lookup before falling back to `wide_kernel`.
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D57<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D57, crate::wide_int::Int192,
+    ln_d57_base, ln_d57_std, ln_d57_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D57, 18..=22) => ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D57, _)       => ln::wide_kernel::ln_strict_d57(raw, mode, SCALE)
     }
 }
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl_wide_ln!(D76, ln::wide_kernel::ln_strict_d76);
-
-// D115 — bespoke arm so `ln_impl` can divert SCALE = 57 through the
-// Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
-#[cfg(any(feature = "d115", feature = "wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D115<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 50..=60) {
-            return Self(ln::lookup_d115_s57_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 50..=60) {
-            return Self(ln::lookup_d115_s57_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D76, crate::wide_int::Int256,
+    ln_d76_base, ln_d76_std, ln_d76_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D76, _) => ln::wide_kernel::ln_strict_d76(raw, mode, SCALE)
     }
 }
 
-// D153 — bespoke arm so `ln_impl` can divert SCALE ∈ 70..=82 (the
+// D115 — bespoke arm so `ln` can divert SCALE in 50..=60 through the
+// Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl_wide_ln! {
+    D115, crate::wide_int::Int384,
+    ln_d115_base, ln_d115_std, ln_d115_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D115, 50..=60) => ln::lookup_d115_s57_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D115, _)       => ln::wide_kernel::ln_strict_d115(raw, mode, SCALE)
+    }
+}
+
+// D153 — bespoke arm so `ln` can divert SCALE in 70..=82 (the
 // mid-storage band centred on SCALE = 76) through the Tang-style
 // narrow-GUARD lookup before falling back to `wide_kernel`. See
 // [`crate::algos::ln::lookup_d153_s70_82_tang`] for the algorithm.
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D153<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(ln::lookup_d153_s70_82_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(ln::lookup_d153_s70_82_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D153, crate::wide_int::Int512,
+    ln_d153_base, ln_d153_std, ln_d153_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D153, 70..=82) => ln::lookup_d153_s70_82_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D153, _)       => ln::wide_kernel::ln_strict_d153(raw, mode, SCALE)
     }
 }
 
-// D230 — bespoke arm so `ln_impl` can divert SCALE ∈ 110..=120 (the
+// D230 — bespoke arm so `ln` can divert SCALE in 110..=120 (the
 // popular mid-storage band centred on `SCALE = 115 ≈ MAX_SCALE / 2`)
 // through the Tang-style narrow-GUARD lookup before falling back to
 // `wide_kernel`. See [`crate::algos::ln::lookup_d230_s110_120_tang`].
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D230<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 110..=120) {
-            return Self(ln::lookup_d230_s110_120_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d230(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 110..=120) {
-            return Self(ln::lookup_d230_s110_120_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d230(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D230, crate::wide_int::Int768,
+    ln_d230_base, ln_d230_std, ln_d230_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D230, 110..=120) => ln::lookup_d230_s110_120_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D230, _)         => ln::wide_kernel::ln_strict_d230(raw, mode, SCALE)
     }
 }
 
-// D307 — bespoke arm so `ln_impl` can divert SCALE ∈ 140..=160 (the
-// popular mid-band centred on the half-MAX point) OR SCALE ∈ 285..=295
+// D307 — bespoke arm so `ln` can divert SCALE in 140..=160 (the
+// popular mid-band centred on the half-MAX point) OR SCALE in 285..=295
 // (the deep-storage band approaching MAX_SCALE = 306) through the
 // Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
 // See [`crate::algos::ln::lookup_d307_s140_160_tang`] and
 // [`crate::algos::ln::lookup_d307_s285_295_tang`] for the algorithm.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D307<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 285..=295) {
-            return Self(ln::lookup_d307_s285_295_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 285..=295) {
-            return Self(ln::lookup_d307_s285_295_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D307, crate::wide_int::Int1024,
+    ln_d307_base, ln_d307_std, ln_d307_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D307, 140..=160) => ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D307, 285..=295) => ln::lookup_d307_s285_295_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D307, _)         => ln::wide_kernel::ln_strict_d307(raw, mode, SCALE)
     }
 }
 
-// D462 — bespoke arm so `ln_impl` can divert SCALE ∈ 225..=235 (the
+// D462 — bespoke arm so `ln` can divert SCALE in 225..=235 (the
 // popular mid-storage band centred on `SCALE = 230 = MAX_SCALE / 2`)
 // through the Tang-style narrow-GUARD lookup before falling back to
 // `wide_kernel`. See [`crate::algos::ln::lookup_d462_s225_235_tang`].
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D462<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(ln::lookup_d462_s225_235_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(ln::lookup_d462_s225_235_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D462, crate::wide_int::Int1536,
+    ln_d462_base, ln_d462_std, ln_d462_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D462, 225..=235) => ln::lookup_d462_s225_235_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D462, _)         => ln::wide_kernel::ln_strict_d462(raw, mode, SCALE)
     }
 }
 
-// D616 — bespoke arm so `ln_impl` can divert SCALE ∈ 300..=315 (the
-// mid-storage band centred on SCALE = 308) OR SCALE ∈ 585..=595 (the
+// D616 — bespoke arm so `ln` can divert SCALE in 300..=315 (the
+// mid-storage band centred on SCALE = 308) OR SCALE in 585..=595 (the
 // deep-storage band approaching MAX_SCALE = 615) through the Tang-
 // style narrow-GUARD lookup before falling back to `wide_kernel`. See
 // [`crate::algos::ln::lookup_d616_s300_315_tang`] and
 // [`crate::algos::ln::lookup_d616_s585_595_tang`] for the algorithm.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D616<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 300..=315) {
-            return Self(ln::lookup_d616_s300_315_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 585..=595) {
-            return Self(ln::lookup_d616_s585_595_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d616(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 300..=315) {
-            return Self(ln::lookup_d616_s300_315_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 585..=595) {
-            return Self(ln::lookup_d616_s585_595_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d616(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D616, crate::wide_int::Int2048,
+    ln_d616_base, ln_d616_std, ln_d616_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D616, 300..=315) => ln::lookup_d616_s300_315_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D616, 585..=595) => ln::lookup_d616_s585_595_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D616, _)         => ln::wide_kernel::ln_strict_d616(raw, mode, SCALE)
     }
 }
 
-// D924 — bespoke arm so `ln_impl` can divert SCALE ∈ 455..=465 (the
+// D924 — bespoke arm so `ln` can divert SCALE in 455..=465 (the
 // popular mid-storage band centred on `SCALE = 461 ≈ MAX_SCALE / 2`)
-// OR SCALE ∈ 895..=905 (the deep-storage band approaching MAX_SCALE
+// OR SCALE in 895..=905 (the deep-storage band approaching MAX_SCALE
 // = 923) through the Tang-style narrow-GUARD lookup before falling
 // back to `wide_kernel`. See
 // [`crate::algos::ln::lookup_d924_s455_465_tang`] and
 // [`crate::algos::ln::lookup_d924_s895_905_tang`].
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D924<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 455..=465) {
-            return Self(ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 895..=905) {
-            return Self(ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d924(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 455..=465) {
-            return Self(ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 895..=905) {
-            return Self(ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d924(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D924, crate::wide_int::Int3072,
+    ln_d924_base, ln_d924_std, ln_d924_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D924, 455..=465) => ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D924, 895..=905) => ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D924, _)         => ln::wide_kernel::ln_strict_d924(raw, mode, SCALE)
     }
 }
 
-// D1232 — bespoke arm so `ln_impl` can divert SCALE ∈ 610..=620 (the
-// mid-storage band centred on SCALE = 615) OR SCALE ∈ 1195..=1205
+// D1232 — bespoke arm so `ln` can divert SCALE in 610..=620 (the
+// mid-storage band centred on SCALE = 615) OR SCALE in 1195..=1205
 // (the deep-storage band approaching MAX_SCALE = 1231) through the
 // Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
 // See [`crate::algos::ln::lookup_d1232_s610_620_tang`] and
 // [`crate::algos::ln::lookup_d1232_s1195_1205_tang`].
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl<const SCALE: u32> LnPolicy for crate::types::widths::D1232<SCALE> {
-    #[inline]
-    fn ln_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 610..=620) {
-            return Self(ln::lookup_d1232_s610_620_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 1195..=1205) {
-            return Self(ln::lookup_d1232_s1195_1205_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d1232(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 610..=620) {
-            return Self(ln::lookup_d1232_s610_620_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 1195..=1205) {
-            return Self(ln::lookup_d1232_s1195_1205_tang::ln_strict::<SCALE>(self.0, mode));
-        }
-        Self(ln::wide_kernel::ln_strict_d1232(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log_strict_with(base, mode)
-    }
-    #[inline]
-    fn log2_impl(self, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log2_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log2_strict_with(mode)
-    }
-    #[inline]
-    fn log10_impl(self, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
-    }
-    #[inline]
-    fn log10_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
-        self.log10_strict_with(mode)
+impl_wide_ln! {
+    D1232, crate::wide_int::Int4096,
+    ln_d1232_base, ln_d1232_std, ln_d1232_no_std,
+    recv = raw, mode = mode,
+    base = {
+        (wtag::D1232, 610..=620)   => ln::lookup_d1232_s610_620_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D1232, 1195..=1205) => ln::lookup_d1232_s1195_1205_tang::ln_strict::<SCALE>(raw, mode),
+        (wtag::D1232, _)           => ln::wide_kernel::ln_strict_d1232(raw, mode, SCALE)
     }
 }
