@@ -175,14 +175,14 @@ cargo test --release --features wide,x-wide,xx-wide,macros
 The 0.5 ULP contract has dedicated test suites. They are part of the
 PR gate — if any of them fail your kernel does not land.
 
-- [`tests/precision_strict_05_ulp.rs`](tests/precision_strict_05_ulp.rs) — D38 0.5 ULP suite. Hand-computed truth values at D38<12> for every constant and strict transcendental; the `assert_05_ulp` helper asserts `|result − truth| ≤ 1 LSB`, the strongest contract the crate makes. Compile-gated to `HalfToEven` (the crate-default rounding mode).
+- [`tests/precision_strict_05_ulp.rs`](tests/precision_strict_05_ulp.rs) — D38 0.5 ULP suite. Hand-computed truth values at D38<12> for every constant and strict transcendental, asserting the result is the *correctly-rounded* value — bit-exact (`delta == 0` storage LSB) against the hand reference. Compile-gated to `HalfToEven` (the crate-default rounding mode); the bit-exact-across-every-mode proof lives in `ulp_strict_golden.rs`.
 - [`tests/precision_wide_baseline.rs`](tests/precision_wide_baseline.rs) — D76 wide-tier 0.5 ULP measurement at D76<6>. Same `≤ 1 LSB` contract; constant `WIDE_TOLERANCE_LSB` makes the threshold explicit so a regression that drifts past it is loud. Gated to `HalfToEven`.
 - [`tests/wide_strict_transcendentals.rs`](tests/wide_strict_transcendentals.rs) — cross-witness suite for the wide tier. Computes a value at the target's storage and scale, computes the reference at a wider storage at the same scale, rescales, and asserts bit-exact or ±1 LSB agreement. The pattern to copy when adding a new bespoke kernel.
 - [`tests/narrow_strict_transcendentals.rs`](tests/narrow_strict_transcendentals.rs) — narrow tier (D9/D18/D38) inherited-method coverage.
 - [`tests/d616_s308_lookup_parity.rs`](tests/d616_s308_lookup_parity.rs), [`tests/d924_s460_lookup_parity.rs`](tests/d924_s460_lookup_parity.rs), [`tests/d1232_s615_lookup_parity.rs`](tests/d1232_s615_lookup_parity.rs) — per-tier Tang-lookup-vs-wide-kernel parity at the design SCALE. Tight `≤ 1 LSB` agreement between the two implementation paths, plus `exp(ln(x))` round-trip identities. New Tang lookup bands must add a matching parity file at their target SCALE before the kernel is allowed in.
 - [`tests/perf_d462_s230_correctness.rs`](tests/perf_d462_s230_correctness.rs) — composed-identity witnesses (`cosh² − sinh² = 1`, `sin² + cos² = 1`, …) for the D462 Tang slot. The same shape works for any new bespoke-kernel slot.
 - [`tests/powf_integer_fastpath_parity.rs`](tests/powf_integer_fastpath_parity.rs) — bit-exact assertion of `powf_strict(D::from_i32(n)).to_bits() == powi(n).to_bits()` for the `|n| ≤ 64` fast path. Any future integer-exponent specialisation has to keep this contract.
-- [`tests/ulp_strict_golden.rs`](tests/ulp_strict_golden.rs) — external-oracle suite. Reads pre-computed mpmath truth tables under `tests/golden/<func>_d<N>_s<S>.txt` and asserts `|kernel − oracle| ≤ 1 LSB` for D38<19>, D76<35>, D153<76>, D307<150>, D616<308>, D1232<615>. Catches kernel bugs that internal cross-witness paths mirror and miss. Regenerate the tables with `python scripts/gen_golden_precision.py` (requires `pip install mpmath`).
+- [`tests/ulp_strict_golden.rs`](tests/ulp_strict_golden.rs) — external-oracle suite and the crate's **definitive correctness proof**. Reads pre-computed mpmath truth tables under `tests/golden/<func>_d<N>_s<S>.txt` and asserts the kernel result is the **correctly-rounded** value — `kernel == oracle` EXACTLY (`delta == 0` storage LSB, ZERO tolerance) — for **every** `RoundingMode` (`HalfToEven`, `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling`) across **all thirteen decimal widths** at their design-target scale: D9<4>, D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>, D230<115>, D307<150>, D462<230>, D616<308>, D924<460>, D1232<615>. Each golden line stores `floor(f(x)·10^SCALE)` plus a fractional tie-class, from which the harness derives the correctly-rounded integer for each mode in-test (no per-mode tables). Catches kernel bugs that internal cross-witness paths mirror and miss. Regenerate the tables with `python scripts/gen_golden_precision.py` (requires `pip install mpmath`).
 - [`tests/ulp_proptest.rs`](tests/ulp_proptest.rs) — property-based ULP fuzz at D38<19> with a D76<19> cross-tier witness. Identities (`exp(ln(x)) ≈ x`, `sin² + cos² ≈ 1`, sign symmetries, …) with deterministic seeds and 100 cases per block.
 
 See [`docs/precision-testing.md`](docs/precision-testing.md) for the four-layer model and how to add coverage for a new tier.
@@ -377,8 +377,10 @@ runs the precision suite listed above — the four 0.5 ULP files, the
 per-tier Tang-lookup parity files, and the bespoke-slot correctness
 witnesses — on every pull request. **A failed precision check blocks
 merge full stop.** There is no reviewer override, no label dismissal,
-no waiver process. If your kernel drifts past the ±1 LSB contract the
-change does not land, regardless of how good its perf numbers look.
+no waiver process. The contract is correctly-rounded to 0 storage LSB
+(bit-exact at the last representable place) under every `RoundingMode`
+— a kernel that drifts off the correctly-rounded result by even one
+LSB does not land, regardless of how good its perf numbers look.
 
 If you hit a precision failure: the kernel parameters need adjustment
 (usually a wider `GUARD` constant, occasionally a different reduction

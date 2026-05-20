@@ -2,16 +2,41 @@
 strict transcendentals.
 
 For each (width, scale, function) tier we emit a `.txt` file under
-`tests/golden/` with one `<input_raw_int>\t<expected_raw_int>` per
-line. `input_raw_int` is the storage value the kernel receives;
-`expected_raw_int` is the half-to-even rounding of the true real
-value f(input_raw_int / 10**scale), computed by mpmath at a
-per-tier working precision of `max(700, 2*SCALE + 64)` decimal
-digits.
+`tests/golden/` with one `<input_raw>\t<floor_raw>\t<cls>` per line:
 
-The harness `tests/ulp_strict_golden.rs` reads each file, calls the
-corresponding kernel, and asserts `|actual - expected| <= 1` storage
-LSB (the 0.5 ULP contract).
+  * `input_raw` — the storage integer the kernel receives, i.e. the
+    value `x` represented as `round(x * 10**scale)` is NOT used; the
+    column is the literal storage integer and the mathematical input
+    is `input_raw / 10**scale`.
+  * `floor_raw` — `floor(f(x) * 10**scale)`, i.e. the true value of
+    the function at the tier scale rounded toward negative infinity.
+    This is mode-independent: the correctly-rounded result under any
+    `RoundingMode` is either `floor_raw` or `floor_raw + 1`, and the
+    `cls` column says which.
+  * `cls` — classification of the fractional part `frac = f(x) *
+    10**scale - floor_raw`, which lies in `[0, 1)`:
+      - `Z`  exact: `frac == 0` (the value is exactly representable
+             at the tier scale; every mode returns `floor_raw`).
+      - `L`  low:   `0 < frac < 0.5` (nearest is `floor_raw`).
+      - `E`  tie:   `frac == 0.5` exactly (half-way; nearest modes
+             break the tie, directed modes ignore it).
+      - `G`  high:  `0.5 < frac < 1` (nearest is `floor_raw + 1`).
+
+This three-column "floor + tie-class" encoding lets the Rust harness
+(`tests/ulp_strict_golden.rs`) compute the correctly-rounded result
+for EVERY `RoundingMode` from a single table — no per-mode tables.
+The harness asserts the kernel's `*_strict_with(mode)` output equals
+that mode's correctly-rounded integer EXACTLY (delta == 0 storage
+LSB). That is the crate's "0.5 ULP, correctly rounded" guarantee:
+the result is the true real value rounded to the last representable
+place under the active rounding rule, with zero tolerance.
+
+The fractional part is computed by mpmath at a per-tier working
+precision of `max(700, 2*SCALE + 64)` decimal digits — wide enough
+that the digits past the tier scale are themselves resolved to many
+extra places, so the `L` / `E` / `G` classification is unambiguous
+for the transcendental kernels (whose outputs are irrational and so
+never land exactly on a half-tie except where the input forces it).
 
 Categories of cases per (tier, function) file:
 
@@ -32,10 +57,12 @@ seeded from `random.Random(<seeded_key>)`. Two runs produce
 byte-identical golden files.
 
 Footprint budget: aim for <= 5 MB committed under `tests/golden/`.
-Case counts taper for wider tiers (where each line is hundreds of
-digits) so the budget holds.
+All thirteen decimal widths are covered; case counts taper hard for
+the wider tiers (where each line is hundreds of digits) so the
+budget holds.
 
 Usage:
+    pip install mpmath
     python scripts/gen_golden_precision.py
 """
 
@@ -65,13 +92,13 @@ OUT_DIR = ROOT / "tests" / "golden"
 # is D1232<615>, whose storage LSB is `10^-615`. Internal oracle
 # computations (squarings, intermediate range reductions) double the
 # digit count, so we need `>= 2 * SCALE + small_const`. The dps is
-# raised per tier (see `tier_dps` below); the global default is set
-# to the tightest tier and lifted before each tier is processed.
+# raised per tier (see the per-tier loop below); the global default
+# is set to the tightest tier and lifted before each tier is processed.
 mp.dps = 700
 
 # --- Tier targets ---------------------------------------------------------
 #
-# (width_alias, storage_digit_capacity, scale, max_abs_raw, label_prefix)
+# (width_alias, storage_digit_capacity, scale, base_case_count)
 #
 # `storage_digit_capacity` is the documented "decimal digits" the
 # storage type holds; `max_abs_raw` clamps random draws so the integer
@@ -79,19 +106,37 @@ mp.dps = 700
 # `10 ** (capacity - 1)` so signed arithmetic in the kernel cannot
 # trip near the type's true MAX.
 #
-# Coverage choice — we cover the design-target SCALE for every wide
-# tier, but trim case counts at the wider tiers to stay inside the
-# 5 MB committed budget. D115<57>, D462<230>, D924<460> are deferred
-# (called out in docs/precision-testing.md).
+# Coverage choice — EVERY one of the crate's thirteen decimal widths
+# is represented at its design-target SCALE (~ capacity / 2, matching
+# the bespoke-kernel slots and neighbour tiers). Case counts taper
+# hard at the wider tiers to stay inside the 5 MB committed budget;
+# every width is present even where its per-cell count is small.
+
+# Signed storage maxima for the tiers whose true range is narrower
+# than `10 ** (capacity - 1)`. Only the primitive-backed tiers need
+# an entry — the wide-int tiers hold far more than `10 ** (capacity
+# - 1)`, so their conservative decimal cap is the binding one.
+STORAGE_MAX = {
+    "d9": 2 ** 31 - 1,   # i32::MAX
+    "d18": 2 ** 63 - 1,  # i64::MAX
+    "d38": 2 ** 127 - 1, # i128::MAX
+}
 
 TIERS = [
     # (alias, storage_capacity_digits, scale, base_case_count)
-    ("d38",  38,  19,  240),
-    ("d76",  76,  35,  200),
-    ("d153", 153, 76,  140),
-    ("d307", 307, 150, 100),
-    ("d616", 616, 308, 60),
-    ("d1232", 1232, 615, 24),
+    ("d9",    9,    4,   180),
+    ("d18",   18,   9,   180),
+    ("d38",   38,   19,  160),
+    ("d57",   57,   28,  140),
+    ("d76",   76,   35,  120),
+    ("d115",  115,  57,  100),
+    ("d153",  153,  76,  90),
+    ("d230",  230,  115, 70),
+    ("d307",  307,  150, 60),
+    ("d462",  462,  230, 44),
+    ("d616",  616,  308, 36),
+    ("d924",  924,  460, 24),
+    ("d1232", 1232, 615, 20),
 ]
 
 # --- mpmath function oracles ----------------------------------------------
@@ -114,34 +159,53 @@ FUNCS: list[tuple[str, Callable[[mpf], mpf], str]] = [
 
 # --- Helpers --------------------------------------------------------------
 
-def round_half_even(value: mpf) -> int:
-    """Half-to-even rounding of an mpf to the nearest integer.
 
-    `int(...)` truncates toward zero; we need banker's rounding to
-    match the crate-default `HalfToEven` mode at the storage LSB.
+def floor_and_class(value: mpf, scale: int) -> tuple[int, str]:
+    """Return `(floor_raw, cls)` for `value` at the tier scale.
+
+    `floor_raw = floor(value * 10**scale)` (toward negative infinity).
+    `cls` classifies the fractional remainder `frac` in `[0, 1)`:
+
+      * `Z` — `frac == 0` (exactly representable),
+      * `L` — `0 < frac < 0.5`,
+      * `E` — `frac == 0.5` exactly,
+      * `G` — `0.5 < frac < 1`.
+
+    The classification is mode-independent: the harness derives the
+    correctly-rounded integer for any `RoundingMode` from
+    `(floor_raw, cls)` and the sign of `floor_raw`.
     """
-    # Use mpmath's nstr at high precision and parse, then bank-round
-    # by inspecting the fractional half. We work in two stages:
-    #  1. floor of |value|
-    #  2. fractional remainder; if exactly 0.5, bank to even.
-    sign = 1 if value >= 0 else -1
-    mag = abs(value)
-    floor_int = int(mag)
-    frac = mag - mpf(floor_int)
+    scaled = value * (mpf(10) ** scale)
+    # mpmath's floor on an mpf returns an mpf; int() of that truncates
+    # toward zero, which for a non-negative mpf equals floor. We do the
+    # floor explicitly via mp.floor to get round-toward-negative-infinity
+    # for negative values too.
+    floor_int = int(mp.floor(scaled))
+    frac = scaled - mpf(floor_int)
     half = mpf("0.5")
-    if frac < half:
-        rounded = floor_int
-    elif frac > half:
-        rounded = floor_int + 1
+    if frac == 0:
+        cls = "Z"
+    elif frac < half:
+        cls = "L"
+    elif frac == half:
+        cls = "E"
     else:
-        # Exact tie — bank to even.
-        rounded = floor_int if (floor_int % 2 == 0) else floor_int + 1
-    return sign * rounded
+        cls = "G"
+    return floor_int, cls
 
 
-def scaled(value: mpf, scale: int) -> int:
-    """Round `value * 10**scale` half-to-even to the storage LSB."""
-    return round_half_even(value * (mpf(10) ** scale))
+def round_half_even_from(floor_int: int, cls: str) -> int:
+    """Half-to-even rounded integer from a `(floor_raw, cls)` pair.
+
+    Used only for the in-budget cap check (whether the rounded result
+    fits the storage type) — the harness re-derives every mode itself.
+    """
+    if cls in ("Z", "L"):
+        return floor_int
+    if cls == "G":
+        return floor_int + 1
+    # Exact tie — bank to even.
+    return floor_int if (floor_int % 2 == 0) else floor_int + 1
 
 
 def from_raw(raw: int, scale: int) -> mpf:
@@ -380,21 +444,25 @@ def edge_inputs(func_name: str, scale: int, max_raw: int) -> list[int]:
 HEADER_LINES = [
     "# golden precision oracle table",
     "# generated by scripts/gen_golden_precision.py",
-    "# each line: <input_raw>\\t<expected_raw>",
-    "# input_raw is the storage integer of x at the tier scale.",
-    "# expected_raw is the half-to-even rounding of f(x) at the tier scale,",
-    "# computed by mpmath at max(700, 2*SCALE + 64)-digit precision.",
+    "# each line: <input_raw>\\t<floor_raw>\\t<cls>",
+    "# input_raw  storage integer of x at the tier scale (x = input_raw / 10**scale).",
+    "# floor_raw  floor(f(x) * 10**scale), rounded toward negative infinity.",
+    "# cls        fractional class of f(x)*10**scale - floor_raw, in [0,1):",
+    "#              Z = exact (frac == 0), L = 0<frac<0.5, E = frac==0.5, G = 0.5<frac<1.",
+    "# The correctly-rounded result under any RoundingMode is floor_raw or",
+    "# floor_raw+1, derived from (floor_raw, cls, sign) by the harness.",
+    "# Computed by mpmath at max(700, 2*SCALE + 64)-digit working precision.",
 ]
 
 
-def emit_file(path: Path, cases: list[tuple[int, int]]) -> int:
+def emit_file(path: Path, cases: list[tuple[int, int, str]]) -> int:
     """Write the golden table. Returns the file byte count."""
     path.parent.mkdir(parents=True, exist_ok=True)
     with path.open("w", encoding="utf-8", newline="\n") as f:
         for line in HEADER_LINES:
             f.write(line + "\n")
-        for raw_in, raw_out in cases:
-            f.write(f"{raw_in}\t{raw_out}\n")
+        for raw_in, floor_raw, cls in cases:
+            f.write(f"{raw_in}\t{floor_raw}\t{cls}\n")
     return path.stat().st_size
 
 
@@ -425,7 +493,17 @@ def main() -> None:
     total_cases = 0
 
     for alias, capacity, scale, base_count in TIERS:
+        # `max_raw` clamps both inputs and rounded outputs to what the
+        # storage type can actually hold. The documented decimal
+        # capacity (`10 ** (capacity - 1)`) is the headroom-conservative
+        # ceiling for the wide tiers, but the *primitive* tiers (D9 =
+        # i32, D18 = i64) saturate well below `10 ** (capacity - 1)`:
+        # i32::MAX ~ 2.1e9, i64::MAX ~ 9.2e18. Cap to the true signed
+        # maximum there so no input or output overflows the storage on
+        # the Rust side.
         max_raw = 10 ** (capacity - 1)
+        if alias in STORAGE_MAX:
+            max_raw = min(max_raw, STORAGE_MAX[alias])
         counts = category_counts(base_count)
         # Lift mpmath working precision so the oracle's intermediate
         # squarings stay safely above the tier's storage LSB. The
@@ -466,16 +544,23 @@ def main() -> None:
                     deduped.append(raw)
 
             # Evaluate the oracle for each input.
-            cases: list[tuple[int, int]] = []
+            cases: list[tuple[int, int, str]] = []
             for raw_in in deduped:
+                # Drop inputs the storage type can't hold (edge rosters
+                # build a few magnitudes from `one * 10**k` that exceed
+                # the narrow-tier signed maximum).
+                if abs(raw_in) > max_raw:
+                    continue
                 x = from_raw(raw_in, scale)
                 y = safe_call(oracle, x)
                 if y is None:
                     continue
-                raw_out = scaled(y, scale)
-                if abs(raw_out) > max_raw:
+                floor_raw, cls = floor_and_class(y, scale)
+                # Both neighbours (floor and floor+1) must fit the
+                # storage type — any RoundingMode may select either.
+                if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
                     continue
-                cases.append((raw_in, raw_out))
+                cases.append((raw_in, floor_raw, cls))
 
             if not cases:
                 continue
