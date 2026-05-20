@@ -1634,17 +1634,36 @@ pub(crate) const fn limbs_divmod_u64(
 // scratch slack.
 const SCRATCH_LIMBS_U64: usize = 288;
 
-/// Karatsuba threshold for the u64-base multiplier. Set above any
-/// width the crate ships so the dispatcher never routes through
-/// Karatsuba in practice. The implementation is retained for
-/// possible future use (a `simd` feature, an extra-wide tier past
-/// D1232, etc.) but the M2 gate at L=16-96 showed schoolbook wins
-/// 1.07-1.92× at every shipped width — LLVM-unrolled schoolbook
-/// + the heap allocations the recursive split needs put the
-/// crossover well past our widest tier.
+/// Karatsuba threshold for the u64-base multiplier: the operand
+/// limb-count at or above which [`limbs_mul_fast_u64`] routes through
+/// the non-allocating Karatsuba kernel instead of schoolbook.
+///
+/// Tuned by the width-swept `mul` microbench (`benches/int_ops_micro.rs`,
+/// `mul_crossover` group) against the LLVM-unrolled schoolbook base
+/// case [`limbs_mul_u64`]. Peer u64-limb big-int crates cross over in
+/// the 20-32 word band; the non-allocating kernel here removes the
+/// per-level heap traffic that previously parked the crossover past
+/// every shipped width.
+///
+/// Must be `>= 4`: the recursion's z1 sum product runs on `⌈n/2⌉ + 1`
+/// limbs, which only strictly shrinks below `n` once `n >= 4`, so a
+/// threshold below 4 would fail to terminate.
 pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 256;
 
-/// Recursive Karatsuba multiplication at u64 base.
+/// Stack scratch for the non-allocating Karatsuba kernel, in u64 limbs.
+///
+/// Each recursion level on an `n`-limb operand carves three product
+/// windows (`z0 ≈ 2·⌈n/2⌉`, `z2 ≈ 2·⌈n/2⌉`, `z1 ≈ 2·(⌈n/2⌉+1)`) plus
+/// two `(⌈n/2⌉+1)`-limb sum windows off the front of the buffer, then
+/// hands the tail to the three (sequential) child calls. That is
+/// `S(n) ≤ 6n + O(1)` limbs per level; recursing on the halves gives a
+/// geometric total `K(n) = S(n) + S(n/2) + … ≤ 2·S(n) ≤ 12n + O(log n)`.
+/// For the widest equal-length multiply the crate performs — `n = 256`
+/// limbs (Int16384) — that bound is `≤ 12·256 ≈ 3072`; rounded up with
+/// headroom. ~25 KiB on the stack, recursion depth `log2(256) = 8`.
+const KARATSUBA_SCRATCH_LIMBS: usize = 3200;
+
+/// Non-allocating recursive Karatsuba multiplication at u64 base.
 ///
 /// Reference: Karatsuba & Ofman 1962, "Multiplication of Multidigit
 /// Numbers on Automata" (Doklady Akad. Nauk SSSR 145, 293-294).
@@ -1653,10 +1672,187 @@ pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 256;
 /// `z₀ = a₀·b₀`, `z₂ = a₁·b₁`, `z₁ = (a₀+a₁)·(b₀+b₁) − z₀ − z₂`,
 /// then recombines as `z₂·B² + z₁·B + z₀`.
 ///
-/// Operands must be equal length. `out.len() >= 2 * a.len()` and
-/// `out` must be zeroed by the caller.
-#[cfg(feature = "alloc")]
+/// All temporaries live in a single fixed `[u64; KARATSUBA_SCRATCH_LIMBS]`
+/// stack buffer declared once at this public entry point; the recursion
+/// carves disjoint windows out of it with `split_at_mut` (so the borrow
+/// checker proves non-aliasing — no `unsafe`, no `Vec`, available in
+/// `no_std`/no-alloc builds). The three child products run sequentially
+/// and share the same scratch tail, which keeps the total at `~2·S(n)`.
+///
+/// Operands must be equal length. `out.len() >= 2 * a.len()` and `out`
+/// must be zeroed by the caller.
 pub(crate) fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert!(out.len() >= 2 * a.len());
+    debug_assert!(
+        karatsuba_scratch_needed(a.len()) <= KARATSUBA_SCRATCH_LIMBS,
+        "Karatsuba scratch overflow: n={} needs {} limbs, have {}",
+        a.len(),
+        karatsuba_scratch_needed(a.len()),
+        KARATSUBA_SCRATCH_LIMBS,
+    );
+    let mut scratch = [0u64; KARATSUBA_SCRATCH_LIMBS];
+    karatsuba_rec(a, b, out, &mut scratch, KARATSUBA_THRESHOLD_U64);
+}
+
+/// Test-only entry that drives the production [`karatsuba_rec`] at an
+/// arbitrary `threshold`, sizing the scratch for the deeper recursion a
+/// small threshold induces. Lets the correctness test exercise the
+/// real split/recombine algebra at every width without depending on the
+/// shipped [`KARATSUBA_THRESHOLD_U64`].
+#[cfg(test)]
+pub(crate) fn limbs_mul_karatsuba_u64_with_threshold(
+    a: &[u64],
+    b: &[u64],
+    out: &mut [u64],
+    threshold: usize,
+) {
+    debug_assert_eq!(a.len(), b.len());
+    debug_assert!(out.len() >= 2 * a.len());
+    let need = karatsuba_scratch_needed_th(a.len(), threshold);
+    let mut scratch = alloc::vec![0u64; need];
+    karatsuba_rec(a, b, out, &mut scratch, threshold);
+}
+
+/// Upper bound on the scratch (in u64 limbs) the non-allocating
+/// Karatsuba recursion consumes for an `n`-limb equal-length multiply
+/// at the production threshold. Mirrors the per-level carve below:
+/// `S(n) = 2h + 2hi + 2(hi+1) + 2(hi+1)` with `h = n/2`, `hi = n - h`,
+/// plus the geometric tail down the largest-child spine.
+const fn karatsuba_scratch_needed(n: usize) -> usize {
+    karatsuba_scratch_needed_th(n, KARATSUBA_THRESHOLD_U64)
+}
+
+/// Threshold-parameterised form of [`karatsuba_scratch_needed`] so the
+/// correctness test can size scratch for the deeper recursion a small
+/// test threshold induces.
+const fn karatsuba_scratch_needed_th(n: usize, threshold: usize) -> usize {
+    if n < threshold {
+        return 0;
+    }
+    let h = n / 2;
+    let hi = n - h;
+    let level = 2 * h + 2 * hi + (hi + 1) + (hi + 1) + 2 * (hi + 1);
+    // The deepest child is the z1 product on `hi + 1`-limb operands (the
+    // sum windows), larger than the z0/z2 children — size for it.
+    level + karatsuba_scratch_needed_th(hi + 1, threshold)
+}
+
+/// One Karatsuba recursion level. `out` is pre-zeroed by the caller for
+/// the `2·n`-limb window; `scratch` is the live tail of the entry
+/// buffer. Children below `threshold` base-case to schoolbook.
+///
+/// `threshold` is `KARATSUBA_THRESHOLD_U64` in production; it is a
+/// parameter only so the correctness test can force deeper recursion at
+/// small widths to exercise the split/recombine algebra.
+fn karatsuba_rec(a: &[u64], b: &[u64], out: &mut [u64], scratch: &mut [u64], threshold: usize) {
+    debug_assert!(threshold >= 4, "Karatsuba threshold must be >= 4 to terminate");
+    let n = a.len();
+    if n < threshold {
+        // `out` window pre-zeroed by the caller.
+        limbs_mul_u64(a, b, out);
+        return;
+    }
+    let h = n / 2;
+    let hi = n - h; // hi == h or h + 1 (n odd)
+    let (a_lo, a_hi) = a.split_at(h);
+    let (b_lo, b_hi) = b.split_at(h);
+
+    // Carve this level's windows off the FRONT of scratch; the TAIL is
+    // handed down to the (sequential) child calls. `split_at_mut` proves
+    // disjointness — no aliasing, all safe Rust.
+    let (z0, rest) = scratch.split_at_mut(2 * h);
+    let (z2, rest) = rest.split_at_mut(2 * hi);
+    let (sa, rest) = rest.split_at_mut(hi + 1);
+    let (sb, rest) = rest.split_at_mut(hi + 1);
+    let (z1, tail) = rest.split_at_mut(2 * (hi + 1));
+
+    for v in z0.iter_mut() {
+        *v = 0;
+    }
+    for v in z2.iter_mut() {
+        *v = 0;
+    }
+    for v in z1.iter_mut() {
+        *v = 0;
+    }
+
+    // z0 = a_lo · b_lo (both h limbs), z2 = a_hi · b_hi (both hi limbs).
+    // The children run one at a time, so each may reuse `tail`.
+    karatsuba_rec(a_lo, b_lo, z0, tail, threshold);
+    karatsuba_rec_unbalanced(a_hi, b_hi, z2, tail, threshold);
+
+    // sa = a_lo + a_hi, sb = b_lo + b_hi (each fits hi + 1 limbs with one
+    // limb of carry headroom — sa, sb are pre-zeroed by the carve below).
+    for v in sa.iter_mut() {
+        *v = 0;
+    }
+    for v in sb.iter_mut() {
+        *v = 0;
+    }
+    sa[..h].copy_from_slice(a_lo);
+    sb[..h].copy_from_slice(b_lo);
+    let _ = limbs_add_assign_u64(sa, a_hi);
+    let _ = limbs_add_assign_u64(sb, b_hi);
+
+    // z1 = sa · sb − z0 − z2  (sa, sb both hi + 1 limbs).
+    karatsuba_rec_unbalanced(sa, sb, z1, tail, threshold);
+    let _ = limbs_sub_assign_u64(z1, z0);
+    let _ = limbs_sub_assign_u64(z1, z2);
+
+    // Recombine into the pre-zeroed out: out = z0 + z2·B² + z1·B
+    // (B = 2^(64·h)). z0 lands at offset 0, z2 at 2h, z1 at h — the
+    // overlap-adds use carry-propagating add, not copy.
+    out[..z0.len()].copy_from_slice(z0);
+    let _ = limbs_add_assign_u64(&mut out[2 * h..], z2);
+    let _ = limbs_add_assign_u64(&mut out[h..], z1);
+}
+
+/// Karatsuba child dispatch for the equal-length sub-products that may
+/// drop below the threshold (or be the `hi + 1`-limb sum product). Both
+/// operands are equal length here; route to the recursion above the
+/// threshold, else zero the window and base-case to schoolbook.
+fn karatsuba_rec_unbalanced(
+    a: &[u64],
+    b: &[u64],
+    out: &mut [u64],
+    scratch: &mut [u64],
+    threshold: usize,
+) {
+    debug_assert_eq!(a.len(), b.len());
+    if a.len() >= threshold {
+        karatsuba_rec(a, b, out, scratch, threshold);
+    } else {
+        for v in out.iter_mut() {
+            *v = 0;
+        }
+        limbs_mul_u64(a, b, out);
+    }
+}
+
+/// Equal-length u64 multiplier dispatcher. Picks the non-allocating
+/// Karatsuba kernel at or above the threshold; otherwise schoolbook.
+/// Both operands are assumed to be the same length (the common
+/// `widen_mul` case).
+pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+    if a.len() == b.len() && a.len() >= KARATSUBA_THRESHOLD_U64 {
+        for o in out.iter_mut() {
+            *o = 0;
+        }
+        limbs_mul_karatsuba_u64(a, b, out);
+        return;
+    }
+    limbs_mul_u64(a, b, out);
+}
+
+/// Original heap-allocating Karatsuba (four `Vec`s per recursion level),
+/// retained compiled-out as the reference implementation the
+/// non-allocating kernel above replaces. Its per-level allocation
+/// overhead pushed the u64-base crossover past every shipped width;
+/// kept only for documentation / cross-checking.
+#[cfg(any())]
+#[cfg(feature = "alloc")]
+pub(crate) fn limbs_mul_karatsuba_u64_alloc(a: &[u64], b: &[u64], out: &mut [u64]) {
     debug_assert_eq!(a.len(), b.len());
     debug_assert!(out.len() >= 2 * a.len());
     let n = a.len();
@@ -1669,16 +1865,12 @@ pub(crate) fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     let (a_lo, a_hi) = a.split_at(h);
     let (b_lo, b_hi) = b.split_at(h);
 
-    // z0 = a_lo · b_lo
     let mut z0 = alloc::vec![0u64; 2 * h];
-    limbs_mul_karatsuba_padded_u64(a_lo, b_lo, &mut z0);
+    limbs_mul_karatsuba_padded_u64_alloc(a_lo, b_lo, &mut z0);
 
-    // z2 = a_hi · b_hi
     let mut z2 = alloc::vec![0u64; 2 * hi_len];
-    limbs_mul_karatsuba_padded_u64(a_hi, b_hi, &mut z2);
+    limbs_mul_karatsuba_padded_u64_alloc(a_hi, b_hi, &mut z2);
 
-    // sum_a = a_lo + a_hi, sum_b = b_lo + b_hi. The sums fit in
-    // max(h, hi_len) + 1 limbs (1 limb of carry).
     let sum_len = core::cmp::max(h, hi_len) + 1;
     let mut sum_a = alloc::vec![0u64; sum_len];
     let mut sum_b = alloc::vec![0u64; sum_len];
@@ -1687,13 +1879,11 @@ pub(crate) fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     let _ = limbs_add_assign_u64(&mut sum_a[..], a_hi);
     let _ = limbs_add_assign_u64(&mut sum_b[..], b_hi);
 
-    // z1m = sum_a · sum_b, then z1 = z1m - z0 - z2.
     let mut z1 = alloc::vec![0u64; 2 * sum_len];
-    limbs_mul_karatsuba_padded_u64(&sum_a, &sum_b, &mut z1);
+    limbs_mul_karatsuba_padded_u64_alloc(&sum_a, &sum_b, &mut z1);
     let _ = limbs_sub_assign_u64(&mut z1[..], &z0);
     let _ = limbs_sub_assign_u64(&mut z1[..], &z2);
 
-    // Combine: out = z0 + z2·B² + z1·B  (B = 2^(h·64)).
     for o in out.iter_mut().take(2 * n) {
         *o = 0;
     }
@@ -1709,35 +1899,18 @@ pub(crate) fn limbs_mul_karatsuba_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
     }
 }
 
-/// Karatsuba helper that handles uneven operand lengths at the
-/// recursion boundary (`n` odd → `n_hi = n − h > h`).
+/// Reference padded helper for [`limbs_mul_karatsuba_u64_alloc`].
+#[cfg(any())]
 #[cfg(feature = "alloc")]
-fn limbs_mul_karatsuba_padded_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
+fn limbs_mul_karatsuba_padded_u64_alloc(a: &[u64], b: &[u64], out: &mut [u64]) {
     if a.len() == b.len() && a.len() >= KARATSUBA_THRESHOLD_U64 {
-        limbs_mul_karatsuba_u64(a, b, out);
+        limbs_mul_karatsuba_u64_alloc(a, b, out);
     } else {
         for o in out.iter_mut() {
             *o = 0;
         }
         limbs_mul_u64(a, b, out);
     }
-}
-
-/// Equal-length u64 multiplier dispatcher. Picks Karatsuba above
-/// the threshold; otherwise schoolbook. Both operands are assumed
-/// to be the same length (the common `widen_mul` case).
-pub(crate) fn limbs_mul_fast_u64(a: &[u64], b: &[u64], out: &mut [u64]) {
-    #[cfg(feature = "alloc")]
-    {
-        if a.len() == b.len() && a.len() >= KARATSUBA_THRESHOLD_U64 {
-            for o in out.iter_mut() {
-                *o = 0;
-            }
-            limbs_mul_karatsuba_u64(a, b, out);
-            return;
-        }
-    }
-    limbs_mul_u64(a, b, out);
 }
 
 /// Möller–Granlund 2-by-1 invariant divisor at u64 base.
@@ -3027,7 +3200,8 @@ mod slice_tests {
 
     /// `limbs_mul_karatsuba_u64` matches `limbs_mul_u64` on equal-length
     /// operands across the carry-stressing corpus. Proves the recursive
-    /// split + recombine algebra holds for the worst-case inputs.
+    /// split + recombine algebra holds for the worst-case inputs at the
+    /// production threshold.
     #[test]
     fn limbs_mul_karatsuba_u64_matches_schoolbook() {
         for a in corpus() {
@@ -3049,6 +3223,159 @@ mod slice_tests {
                 assert_eq!(out_kara, out_school, "Karatsuba mismatch at n={n}");
             }
         }
+    }
+
+    /// Non-allocating Karatsuba is bit-exact against the schoolbook
+    /// oracle [`limbs_mul_u64`] over a large seeded corpus across every
+    /// width the crate multiplies, including odd, threshold-boundary,
+    /// and the 256-limb maximum. The recursion is driven at small
+    /// thresholds so the full split/recombine algebra is exercised even
+    /// at the narrow widths (the production threshold would otherwise
+    /// base-case them straight to schoolbook).
+    ///
+    /// Edge magnitudes (all-zero, all-ones, single high/low limb) sit
+    /// alongside uniform-random pairs to stress maximal carry
+    /// propagation. Integer multiply is exact, so the assertion is
+    /// byte-for-byte over the full `2n`-limb output with no tolerance.
+    /// Commutativity (`a·b == b·a`) is asserted in the same pass.
+    #[test]
+    fn nonalloc_karatsuba_bit_exact_vs_schoolbook() {
+        // SplitMix64 — Vigna 2014, public-domain reference algorithm.
+        let mut state: u64 = 0x5EED_1234_ABCD_0F0F;
+        let mut next = || -> u64 {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+
+        // Widths span the shipped tiers plus odd and threshold-boundary
+        // sizes; 256 is the widest equal-length multiply (Int16384).
+        const WIDTHS: &[usize] = &[
+            1, 2, 4, 7, 8, 15, 16, 17, 31, 32, 33, 48, 64, 96, 128, 255, 256,
+        ];
+        // Drive the recursion at several thresholds: 4 forces the
+        // deepest sensible recursion (a threshold below 4 cannot shrink
+        // the `hi + 1`-limb z1 sum product and would not terminate),
+        // 8/16/24 exercise mixed depths, and 256 mirrors the
+        // schoolbook-dominant production regime.
+        const THRESHOLDS: &[usize] = &[4, 8, 16, 24, 256];
+
+        let edge_fill = |buf: &mut [u64], kind: usize, next: &mut dyn FnMut() -> u64| match kind {
+            0 => buf.iter_mut().for_each(|x| *x = 0),
+            1 => buf.iter_mut().for_each(|x| *x = u64::MAX),
+            2 => {
+                buf.iter_mut().for_each(|x| *x = 0);
+                if let Some(last) = buf.last_mut() {
+                    *last = u64::MAX;
+                }
+            }
+            3 => {
+                buf.iter_mut().for_each(|x| *x = 0);
+                buf[0] = u64::MAX;
+            }
+            _ => buf.iter_mut().for_each(|x| *x = next()),
+        };
+
+        for &n in WIDTHS {
+            // Build the operand-pair set once per width: every edge×edge
+            // combination plus a batch of uniform-random pairs. Sizes
+            // are modest per width so the whole test stays fast.
+            let random_pairs = if n <= 16 {
+                400
+            } else if n <= 64 {
+                120
+            } else {
+                30
+            };
+
+            let mut pairs: alloc::vec::Vec<(alloc::vec::Vec<u64>, alloc::vec::Vec<u64>)> =
+                alloc::vec::Vec::new();
+            // 5 edge kinds: 0=zero,1=ones,2=hi-limb,3=lo-limb,4=random.
+            for ka in 0..5 {
+                for kb in 0..5 {
+                    let mut a = alloc::vec![0u64; n];
+                    let mut b = alloc::vec![0u64; n];
+                    edge_fill(&mut a, ka, &mut next);
+                    edge_fill(&mut b, kb, &mut next);
+                    pairs.push((a, b));
+                }
+            }
+            for _ in 0..random_pairs {
+                let mut a = alloc::vec![0u64; n];
+                let mut b = alloc::vec![0u64; n];
+                for x in a.iter_mut() {
+                    *x = next();
+                }
+                for x in b.iter_mut() {
+                    *x = next();
+                }
+                pairs.push((a, b));
+            }
+
+            for (a, b) in &pairs {
+                let mut oracle = alloc::vec![0u64; 2 * n];
+                limbs_mul_u64(a, b, &mut oracle);
+
+                for &th in THRESHOLDS {
+                    let mut got = alloc::vec![0u64; 2 * n];
+                    limbs_mul_karatsuba_u64_with_threshold(a, b, &mut got, th);
+                    assert_eq!(
+                        got, oracle,
+                        "non-alloc Karatsuba mismatch at n={n}, threshold={th}\na={a:?}\nb={b:?}"
+                    );
+
+                    // Commutativity: b·a must equal a·b.
+                    let mut got_swapped = alloc::vec![0u64; 2 * n];
+                    limbs_mul_karatsuba_u64_with_threshold(b, a, &mut got_swapped, th);
+                    assert_eq!(
+                        got_swapped, oracle,
+                        "non-alloc Karatsuba not commutative at n={n}, threshold={th}"
+                    );
+                }
+            }
+        }
+    }
+
+    /// The widest equal-length multiply (256 limbs, Int16384) routes
+    /// through the production [`limbs_mul_karatsuba_u64`] entry — which
+    /// declares the fixed `[u64; KARATSUBA_SCRATCH_LIMBS]` stack buffer —
+    /// without tripping the scratch-overflow `debug_assert` and matches
+    /// schoolbook. Guards the scratch sizing against future threshold
+    /// drops that deepen the recursion.
+    #[test]
+    fn nonalloc_karatsuba_max_width_fits_fixed_scratch() {
+        let mut state: u64 = 0xC0FF_EE00_1357_9BDF;
+        let mut next = || -> u64 {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+        // Scratch sizing must hold for the deepest recursion the kernel
+        // can be tuned to — threshold as low as the documented floor.
+        assert!(
+            super::karatsuba_scratch_needed_th(256, 8) <= super::KARATSUBA_SCRATCH_LIMBS,
+            "fixed scratch too small for n=256 at a threshold of 8"
+        );
+
+        let n = 256;
+        let mut a = alloc::vec![0u64; n];
+        let mut b = alloc::vec![0u64; n];
+        for x in a.iter_mut() {
+            *x = next();
+        }
+        for x in b.iter_mut() {
+            *x = next();
+        }
+        let mut oracle = alloc::vec![0u64; 2 * n];
+        let mut got = alloc::vec![0u64; 2 * n];
+        limbs_mul_u64(&a, &b, &mut oracle);
+        // Production entry: real fixed stack scratch, production threshold.
+        limbs_mul_karatsuba_u64(&a, &b, &mut got);
+        assert_eq!(got, oracle, "max-width Karatsuba mismatch via fixed scratch");
     }
 
     /// `limbs_mul_u64_fixed::<L, D>` matches `limbs_mul_u64` at
