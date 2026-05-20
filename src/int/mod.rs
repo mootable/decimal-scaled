@@ -390,6 +390,181 @@ impl<const N: usize> Int<N> {
     pub const fn as_limbs(&self) -> &[u64; N] {
         &self.limbs
     }
+
+    /// `true` when every limb is zero.
+    #[inline]
+    pub fn is_zero(&self) -> bool {
+        limbs_is_zero_u64_fixed(&self.limbs)
+    }
+
+    /// `true` when the value is strictly negative (top bit set).
+    #[inline]
+    pub fn is_negative(&self) -> bool {
+        N > 0 && (self.limbs[N - 1] >> 63) == 1
+    }
+
+    /// `true` when the value is strictly positive (non-zero and the
+    /// sign bit clear).
+    #[inline]
+    pub fn is_positive(&self) -> bool {
+        !self.is_negative() && !self.is_zero()
+    }
+
+    /// Two's-complement wrapping negation (`!self + 1`). `MIN` negates
+    /// to itself, as with the primitive signed integers.
+    #[inline]
+    pub fn wrapping_neg(self) -> Self {
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = !self.limbs[i];
+            i += 1;
+        }
+        let mut result = Self { limbs: out };
+        let mut one = [0u64; N];
+        if N > 0 {
+            one[0] = 1;
+        }
+        limbs_add_assign_u64_fixed(&mut result.limbs, &one);
+        result
+    }
+
+    /// Wrapping addition (modulo `2^BITS`). Identical bit pattern to the
+    /// unsigned add — two's-complement makes signed and unsigned
+    /// addition the same operation.
+    #[inline]
+    pub fn wrapping_add(mut self, rhs: Self) -> Self {
+        limbs_add_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
+        self
+    }
+
+    /// Wrapping subtraction (modulo `2^BITS`).
+    #[inline]
+    pub fn wrapping_sub(mut self, rhs: Self) -> Self {
+        limbs_sub_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
+        self
+    }
+
+    /// Wrapping multiplication (modulo `2^BITS`). The low `N` limbs of a
+    /// two's-complement product are independent of the operand signs, so
+    /// this is the same truncated schoolbook the unsigned type uses.
+    #[inline]
+    pub fn wrapping_mul(self, rhs: Self) -> Self {
+        let (a, b) = (&self.limbs, &rhs.limbs);
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            let ai = a[i];
+            if ai != 0 {
+                let mut carry: u64 = 0;
+                let mut j = 0;
+                while j < N - i {
+                    let v = (ai as u128) * (b[j] as u128)
+                        + (out[i + j] as u128)
+                        + (carry as u128);
+                    out[i + j] = v as u64;
+                    carry = (v >> 64) as u64;
+                    j += 1;
+                }
+            }
+            i += 1;
+        }
+        Self { limbs: out }
+    }
+
+    /// Absolute value (wrapping: `MIN.abs() == MIN`).
+    #[inline]
+    pub fn abs(self) -> Self {
+        if self.is_negative() {
+            self.wrapping_neg()
+        } else {
+            self
+        }
+    }
+
+    /// Sign: `-1`, `0`, or `1` as the value is negative, zero, or
+    /// positive.
+    #[inline]
+    pub fn signum(&self) -> i32 {
+        if self.is_zero() {
+            0
+        } else if self.is_negative() {
+            -1
+        } else {
+            1
+        }
+    }
+
+    /// Constructs from an `i64`, sign-extending into the high limbs.
+    #[inline]
+    pub fn from_i64(value: i64) -> Self {
+        // Negative values fill the upper limbs with all-ones so the
+        // two's-complement representation matches at every width.
+        let fill = if value < 0 { u64::MAX } else { 0 };
+        let mut limbs = [fill; N];
+        if N > 0 {
+            limbs[0] = value as u64;
+        }
+        Self { limbs }
+    }
+}
+
+impl<const N: usize> PartialOrd for Int<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+        Some(self.cmp(other))
+    }
+}
+
+impl<const N: usize> Ord for Int<N> {
+    #[inline]
+    fn cmp(&self, other: &Self) -> Ordering {
+        // Signed compare: a negative value is always less than a
+        // non-negative one. When the signs agree the two's-complement
+        // bit patterns order the same way as the unsigned magnitude
+        // comparison of the limbs.
+        match (self.is_negative(), other.is_negative()) {
+            (true, false) => Ordering::Less,
+            (false, true) => Ordering::Greater,
+            _ => match limbs_cmp_u64_fixed(&self.limbs, &other.limbs) {
+                -1 => Ordering::Less,
+                1 => Ordering::Greater,
+                _ => Ordering::Equal,
+            },
+        }
+    }
+}
+
+impl<const N: usize> Add for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn add(self, rhs: Self) -> Self {
+        self.wrapping_add(rhs)
+    }
+}
+
+impl<const N: usize> Sub for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn sub(self, rhs: Self) -> Self {
+        self.wrapping_sub(rhs)
+    }
+}
+
+impl<const N: usize> Mul for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn mul(self, rhs: Self) -> Self {
+        self.wrapping_mul(rhs)
+    }
+}
+
+impl<const N: usize> Neg for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn neg(self) -> Self {
+        self.wrapping_neg()
+    }
 }
 
 // ── Named aliases ──────────────────────────────────────────────────
@@ -603,5 +778,88 @@ mod tests {
         assert_eq!(*(a + b).as_limbs(), [13, 0, 0, 0]);
         assert_eq!(*(a - b).as_limbs(), [7, 0, 0, 0]);
         assert_eq!(*(a * b).as_limbs(), [30, 0, 0, 0]);
+    }
+
+    #[test]
+    fn int_from_i64_sign_extends() {
+        // Positive: only the low limb is set.
+        assert_eq!(*Int::<4>::from_i64(5).as_limbs(), [5, 0, 0, 0]);
+        // -1 sign-extends to all-ones.
+        assert_eq!(*Int::<4>::from_i64(-1).as_limbs(), [u64::MAX; 4]);
+        // -2 → low limb u64::MAX - 1, upper limbs all-ones.
+        assert_eq!(
+            *Int::<4>::from_i64(-2).as_limbs(),
+            [u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX]
+        );
+        assert!(Int::<4>::from_i64(-1).is_negative());
+        assert!(Int::<4>::from_i64(1).is_positive());
+        assert!(Int::<4>::from_i64(0).is_zero());
+    }
+
+    #[test]
+    fn int_wrapping_neg_two_complement() {
+        let five = Int::<4>::from_i64(5);
+        let neg_five = five.wrapping_neg();
+        assert_eq!(neg_five, Int::<4>::from_i64(-5));
+        // Negating twice returns the original.
+        assert_eq!(neg_five.wrapping_neg(), five);
+        // -1 negates to 1.
+        assert_eq!(Int::<4>::from_i64(-1).wrapping_neg(), Int::<4>::ONE);
+        // Neg operator delegates.
+        assert_eq!(-five, neg_five);
+    }
+
+    #[test]
+    fn int_add_sub_mul_with_signs() {
+        let a = Int::<4>::from_i64(7);
+        let b = Int::<4>::from_i64(-3);
+        // 7 + (-3) = 4
+        assert_eq!(a.wrapping_add(b), Int::<4>::from_i64(4));
+        // 7 - (-3) = 10
+        assert_eq!(a.wrapping_sub(b), Int::<4>::from_i64(10));
+        // 7 * (-3) = -21
+        assert_eq!(a.wrapping_mul(b), Int::<4>::from_i64(-21));
+        // (-3) * (-3) = 9
+        assert_eq!(b.wrapping_mul(b), Int::<4>::from_i64(9));
+        // operator delegation
+        assert_eq!(a + b, Int::<4>::from_i64(4));
+        assert_eq!(a - b, Int::<4>::from_i64(10));
+        assert_eq!(a * b, Int::<4>::from_i64(-21));
+    }
+
+    #[test]
+    fn int_mul_crosses_limbs_with_sign() {
+        // 2^64 * (-1) = -2^64.
+        let big = Int::<4>::from_i64(0).wrapping_add(Int::<4>::from_limbs([0, 1, 0, 0]));
+        let neg = big.wrapping_mul(Int::<4>::from_i64(-1));
+        assert_eq!(neg, big.wrapping_neg());
+        // -2^64 should be [0, u64::MAX, u64::MAX, u64::MAX].
+        assert_eq!(*neg.as_limbs(), [0, u64::MAX, u64::MAX, u64::MAX]);
+    }
+
+    #[test]
+    fn int_abs_signum() {
+        assert_eq!(Int::<4>::from_i64(-9).abs(), Int::<4>::from_i64(9));
+        assert_eq!(Int::<4>::from_i64(9).abs(), Int::<4>::from_i64(9));
+        assert_eq!(Int::<4>::from_i64(-9).signum(), -1);
+        assert_eq!(Int::<4>::from_i64(9).signum(), 1);
+        assert_eq!(Int::<4>::from_i64(0).signum(), 0);
+    }
+
+    #[test]
+    fn int_signed_ordering() {
+        let neg = Int::<4>::from_i64(-5);
+        let zero = Int::<4>::ZERO;
+        let pos = Int::<4>::from_i64(5);
+        // Negative < zero < positive even though -5's limbs are larger
+        // unsigned than 5's.
+        assert!(neg < zero);
+        assert!(zero < pos);
+        assert!(neg < pos);
+        // Two negatives compare by magnitude with sign accounted for.
+        assert!(Int::<4>::from_i64(-10) < Int::<4>::from_i64(-1));
+        assert_eq!(neg.max(pos), pos);
+        assert_eq!(neg.min(pos), neg);
+        assert_eq!(pos.cmp(&pos), Ordering::Equal);
     }
 }
