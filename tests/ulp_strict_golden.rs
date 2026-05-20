@@ -448,8 +448,8 @@ decl_band! {
         atan  = "golden/atan_d38_s19.txt", ignore_when(not(feature = "wide")) = "narrow-path atan directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling); the wide-feature atan path is correctly rounded";
         asin  = "golden/asin_d38_s19.txt";
         acos  = "golden/acos_d38_s19.txt";
-        sinh  = "golden/sinh_d38_s19.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d38_s19.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d38_s19.txt";
+        cosh  = "golden/cosh_d38_s19.txt";
         tanh  = "golden/tanh_d38_s19.txt";
         asinh = "golden/asinh_d38_s19.txt";
         acosh = "golden/acosh_d38_s19.txt";
@@ -507,7 +507,7 @@ decl_band! {
     funcs {
         ln    = "golden/ln_d76_s35.txt";
         exp   = "golden/exp_d76_s35.txt";
-        exp2  = "golden/exp2_d76_s35.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the exp(x*ln(base)) path loses LSBs / overflows the wide-tier exp_fixed working width at large-result inputs on this tier; tracked for the kernel-fix pass";
+        exp2  = "golden/exp2_d76_s35.txt";
         log2  = "golden/log2_d76_s35.txt";
         log10 = "golden/log10_d76_s35.txt";
         sin   = "golden/sin_d76_s35.txt";
@@ -516,8 +516,8 @@ decl_band! {
         atan  = "golden/atan_d76_s35.txt";
         asin  = "golden/asin_d76_s35.txt";
         acos  = "golden/acos_d76_s35.txt";
-        sinh  = "golden/sinh_d76_s35.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d76_s35.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d76_s35.txt";
+        cosh  = "golden/cosh_d76_s35.txt";
         tanh  = "golden/tanh_d76_s35.txt";
         asinh = "golden/asinh_d76_s35.txt";
         acosh = "golden/acosh_d76_s35.txt";
@@ -573,7 +573,7 @@ decl_band! {
     funcs {
         ln    = "golden/ln_d153_s76.txt";
         exp   = "golden/exp_d153_s76.txt";
-        exp2  = "golden/exp2_d153_s76.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the exp(x*ln(base)) path loses LSBs / overflows the wide-tier exp_fixed working width at large-result inputs on this tier; tracked for the kernel-fix pass";
+        exp2  = "golden/exp2_d153_s76.txt";
         log2  = "golden/log2_d153_s76.txt";
         log10 = "golden/log10_d153_s76.txt";
         sin   = "golden/sin_d153_s76.txt";
@@ -582,8 +582,8 @@ decl_band! {
         atan  = "golden/atan_d153_s76.txt";
         asin  = "golden/asin_d153_s76.txt";
         acos  = "golden/acos_d153_s76.txt";
-        sinh  = "golden/sinh_d153_s76.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d153_s76.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d153_s76.txt";
+        cosh  = "golden/cosh_d153_s76.txt";
         tanh  = "golden/tanh_d153_s76.txt";
         asinh = "golden/asinh_d153_s76.txt";
         acosh = "golden/acosh_d153_s76.txt";
@@ -615,8 +615,8 @@ decl_band! {
         atan  = "golden/atan_d230_s115.txt";
         asin  = "golden/asin_d230_s115.txt";
         acos  = "golden/acos_d230_s115.txt";
-        sinh  = "golden/sinh_d230_s115.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d230_s115.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d230_s115.txt";
+        cosh  = "golden/cosh_d230_s115.txt";
         tanh  = "golden/tanh_d230_s115.txt";
         asinh = "golden/asinh_d230_s115.txt";
         acosh = "golden/acosh_d230_s115.txt";
@@ -639,7 +639,7 @@ decl_band! {
     funcs {
         ln    = "golden/ln_d307_s150.txt";
         exp   = "golden/exp_d307_s150.txt";
-        exp2  = "golden/exp2_d307_s150.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the exp(x*ln(base)) path loses LSBs / overflows the wide-tier exp_fixed working width at large-result inputs on this tier; tracked for the kernel-fix pass";
+        exp2  = "golden/exp2_d307_s150.txt";
         log2  = "golden/log2_d307_s150.txt";
         log10 = "golden/log10_d307_s150.txt";
         sin   = "golden/sin_d307_s150.txt";
@@ -648,8 +648,8 @@ decl_band! {
         atan  = "golden/atan_d307_s150.txt";
         asin  = "golden/asin_d307_s150.txt";
         acos  = "golden/acos_d307_s150.txt";
-        sinh  = "golden/sinh_d307_s150.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d307_s150.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d307_s150.txt";
+        cosh  = "golden/cosh_d307_s150.txt";
         tanh  = "golden/tanh_d307_s150.txt";
         asinh = "golden/asinh_d307_s150.txt";
         acosh = "golden/acosh_d307_s150.txt";
@@ -672,7 +672,7 @@ decl_band! {
     funcs {
         ln    = "golden/ln_d462_s230.txt";
         exp   = "golden/exp_d462_s230.txt";
-        exp2  = "golden/exp2_d462_s230.txt", ignore = "derived-transcendental directed-rounding / exact-point gap: the exp(x*ln(base)) path loses LSBs / overflows the wide-tier exp_fixed working width at large-result inputs on this tier; tracked for the kernel-fix pass";
+        exp2  = "golden/exp2_d462_s230.txt";
         log2  = "golden/log2_d462_s230.txt";
         log10 = "golden/log10_d462_s230.txt";
         sin   = "golden/sin_d462_s230.txt";
@@ -681,9 +681,9 @@ decl_band! {
         atan  = "golden/atan_d462_s230.txt";
         asin  = "golden/asin_d462_s230.txt";
         acos  = "golden/acos_d462_s230.txt";
-        sinh  = "golden/sinh_d462_s230.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d462_s230.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        tanh  = "golden/tanh_d462_s230.txt", ignore = "saturation-edge accuracy gap: at a near-±1 grid-line input the directed Ziv escalation drives exp_fixed past the wide-tier work-integer width (Int4096) and overflows; the exp_fixed width limit at the saturation edge is the same family as the sinh/cosh near-overflow-edge gap; tracked separately";
+        sinh  = "golden/sinh_d462_s230.txt";
+        cosh  = "golden/cosh_d462_s230.txt";
+        tanh  = "golden/tanh_d462_s230.txt";
         asinh = "golden/asinh_d462_s230.txt";
         acosh = "golden/acosh_d462_s230.txt";
         atanh = "golden/atanh_d462_s230.txt";
@@ -714,8 +714,8 @@ decl_band! {
         atan  = "golden/atan_d616_s308.txt";
         asin  = "golden/asin_d616_s308.txt";
         acos  = "golden/acos_d616_s308.txt";
-        sinh  = "golden/sinh_d616_s308.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d616_s308.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d616_s308.txt";
+        cosh  = "golden/cosh_d616_s308.txt";
         tanh  = "golden/tanh_d616_s308.txt";
         asinh = "golden/asinh_d616_s308.txt";
         acosh = "golden/acosh_d616_s308.txt";
@@ -747,8 +747,8 @@ decl_band! {
         atan  = "golden/atan_d924_s460.txt";
         asin  = "golden/asin_d924_s460.txt";
         acos  = "golden/acos_d924_s460.txt";
-        sinh  = "golden/sinh_d924_s460.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
-        cosh  = "golden/cosh_d924_s460.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d924_s460.txt";
+        cosh  = "golden/cosh_d924_s460.txt";
         tanh  = "golden/tanh_d924_s460.txt";
         asinh = "golden/asinh_d924_s460.txt";
         acosh = "golden/acosh_d924_s460.txt";
@@ -780,7 +780,7 @@ decl_band! {
         atan  = "golden/atan_d1232_s615.txt";
         asin  = "golden/asin_d1232_s615.txt";
         acos  = "golden/acos_d1232_s615.txt";
-        sinh  = "golden/sinh_d1232_s615.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
+        sinh  = "golden/sinh_d1232_s615.txt";
         cosh  = "golden/cosh_d1232_s615.txt";
         tanh  = "golden/tanh_d1232_s615.txt";
         asinh = "golden/asinh_d1232_s615.txt";
