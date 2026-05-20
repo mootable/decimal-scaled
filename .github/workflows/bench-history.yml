@@ -42,6 +42,7 @@ jobs:
           - { tag: "v0.4.0", source: "crates-io", version: "0.4.0" }
           # v0.4.1 skipped — cosmetic only (dropped `DecimalConsts` alias);
           # no perf delta vs v0.4.0.
+          - { tag: "v0.4.2", source: "crates-io", version: "0.4.2" }
           - { tag: "HEAD",   source: "path",      version: "" }
 
     steps:
