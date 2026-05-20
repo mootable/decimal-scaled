@@ -334,17 +334,24 @@ macro_rules! decl_band {
 // analytic directed decision (the cubic compression is below any
 // achievable working precision yet pins the directed result), and route
 // `x^0.5` through the correctly-rounded `sqrt` kernel — so they are
-// correctly rounded for every mode on every width, with these exceptions
-// still carried as `ignore` entries below and explained in each entry's
-// reason string:
+// correctly rounded for every mode on every width.
+//
+// `acosh` near 1 and `atanh` near ±1 are correctly rounded under every
+// mode via the gap / `log1p` reformulation: `atanh(x) = ½·[ln(1+x) −
+// ln(1−x)]` keeps the `1∓x` gap exact, and `acosh(1+t) = log1p(t +
+// √(t·(t+2)))` forms `v²−1` as the exact `t·(t+2)` — both removing the
+// catastrophic cancellation at the source — narrowed through the
+// near-special-point path that confirms the base-guard result against a
+// wider guard.
+//
+// The one remaining exception family is still carried as `ignore` entries
+// below and explained in each entry's reason string:
 //   * `sinh` / `cosh` / `exp2` near the storage-overflow edge at high
 //     scale: the wide-tier `exp_fixed` working-width limit (the result's
 //     integer-digit lift plus `exp_fixed`'s internal `2^k` reassembly
 //     exceeds the working integer) — `tanh` at D462<230> joins this
 //     family at its near-±1 saturation grid line, where the directed Ziv
-//     escalation drives `exp_fixed` past the `Int4096` work width;
-//   * `acosh` / `atanh` near 1 / ±1: the `(v^2−1)` / `(1∓v)` catastrophic
-//     cancellation needs the gap/log1p reformulation.
+//     escalation drives `exp_fixed` past the `Int4096` work width.
 //
 // The expanded surface adds the eleven single-argument trait functions
 // (exp2 log2 log10 asin acos sinh cosh tanh asinh acosh atanh) and the
@@ -612,7 +619,7 @@ decl_band! {
         cosh  = "golden/cosh_d230_s115.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         tanh  = "golden/tanh_d230_s115.txt";
         asinh = "golden/asinh_d230_s115.txt";
-        acosh = "golden/acosh_d230_s115.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
+        acosh = "golden/acosh_d230_s115.txt";
         atanh = "golden/atanh_d230_s115.txt";
         sqrt  = "golden/sqrt_d230_s115.txt";
         cbrt  = "golden/cbrt_d230_s115.txt";
@@ -645,7 +652,7 @@ decl_band! {
         cosh  = "golden/cosh_d307_s150.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         tanh  = "golden/tanh_d307_s150.txt";
         asinh = "golden/asinh_d307_s150.txt";
-        acosh = "golden/acosh_d307_s150.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
+        acosh = "golden/acosh_d307_s150.txt";
         atanh = "golden/atanh_d307_s150.txt";
         sqrt  = "golden/sqrt_d307_s150.txt";
         cbrt  = "golden/cbrt_d307_s150.txt";
@@ -678,7 +685,7 @@ decl_band! {
         cosh  = "golden/cosh_d462_s230.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         tanh  = "golden/tanh_d462_s230.txt", ignore = "saturation-edge accuracy gap: at a near-±1 grid-line input the directed Ziv escalation drives exp_fixed past the wide-tier work-integer width (Int4096) and overflows; the exp_fixed width limit at the saturation edge is the same family as the sinh/cosh near-overflow-edge gap; tracked separately";
         asinh = "golden/asinh_d462_s230.txt";
-        acosh = "golden/acosh_d462_s230.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
+        acosh = "golden/acosh_d462_s230.txt";
         atanh = "golden/atanh_d462_s230.txt";
         sqrt  = "golden/sqrt_d462_s230.txt";
         cbrt  = "golden/cbrt_d462_s230.txt";
@@ -711,7 +718,7 @@ decl_band! {
         cosh  = "golden/cosh_d616_s308.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         tanh  = "golden/tanh_d616_s308.txt";
         asinh = "golden/asinh_d616_s308.txt";
-        acosh = "golden/acosh_d616_s308.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
+        acosh = "golden/acosh_d616_s308.txt";
         atanh = "golden/atanh_d616_s308.txt";
         sqrt  = "golden/sqrt_d616_s308.txt";
         cbrt  = "golden/cbrt_d616_s308.txt";
@@ -744,7 +751,7 @@ decl_band! {
         cosh  = "golden/cosh_d924_s460.txt", ignore = "large-argument accuracy gap: sinh/cosh ~ e^|x|/2 lose precision near the storage overflow edge at high scale (wide-tier exp_fixed working-width limit), so the result is not correctly rounded to 0 LSB; tracked for the kernel-fix pass";
         tanh  = "golden/tanh_d924_s460.txt";
         asinh = "golden/asinh_d924_s460.txt";
-        acosh = "golden/acosh_d924_s460.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
+        acosh = "golden/acosh_d924_s460.txt";
         atanh = "golden/atanh_d924_s460.txt";
         sqrt  = "golden/sqrt_d924_s460.txt";
         cbrt  = "golden/cbrt_d924_s460.txt";
@@ -777,7 +784,7 @@ decl_band! {
         cosh  = "golden/cosh_d1232_s615.txt";
         tanh  = "golden/tanh_d1232_s615.txt";
         asinh = "golden/asinh_d1232_s615.txt";
-        acosh = "golden/acosh_d1232_s615.txt", ignore = "large-argument accuracy gap: acosh near 1 has catastrophic (v^2-1) cancellation at high scale; needs the gap/log1p reformulation; tracked for the kernel-fix pass";
+        acosh = "golden/acosh_d1232_s615.txt";
         atanh = "golden/atanh_d1232_s615.txt";
         sqrt  = "golden/sqrt_d1232_s615.txt";
         cbrt  = "golden/cbrt_d1232_s615.txt";

@@ -2450,8 +2450,15 @@ macro_rules! decl_wide_transcendental {
                     let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
                     $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
                 } else {
-                    let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
-                    $core::ln_fixed(v + root, w)
+                    // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
+                    // `t = v - one_w` is the exact gap above 1, so
+                    // `v^2 - 1 = (v-1)*(v+1) = t*(t+2)` is formed without
+                    // the catastrophic cancellation of `mul(v,v) - one_w`
+                    // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
+                    // when the gap (hence `arg`) is tiny.
+                    let t = v - one_w;
+                    let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
+                    $core::log1p_fixed(t + root, w)
                 };
                 Self::from_bits($core::round_to_storage(inner, w, SCALE))
             }
@@ -3075,7 +3082,7 @@ macro_rules! decl_wide_transcendental {
                         panic!(concat!(stringify!($Type), "::acosh: argument must be >= 1"));
                     }
                 }
-                Self::from_bits($core::round_to_storage_directed(
+                Self::from_bits($core::round_to_storage_directed_near_special(
                     $core::GUARD, SCALE, mode, |guard| {
                         let w = SCALE + guard;
                         let one_w = $core::one(w);
@@ -3086,8 +3093,13 @@ macro_rules! decl_wide_transcendental {
                             let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
                             $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
                         } else {
-                            let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
-                            $core::ln_fixed(v + root, w)
+                            // Near 1: acosh(1+t) = log1p(t +
+                            // sqrt(t*(t+2))). The gap `t = v - one_w` is
+                            // exact, so `v^2 - 1 = t*(t+2)` avoids the
+                            // `mul(v,v) - one_w` cancellation as `v -> 1`.
+                            let t = v - one_w;
+                            let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
+                            $core::log1p_fixed(t + root, w)
                         }
                     },
                 ))
@@ -3857,8 +3869,15 @@ macro_rules! decl_wide_transcendental {
                     let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
                     $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
                 } else {
-                    let root = $core::sqrt_fixed($core::mul(v, v, w) - one_w, w);
-                    $core::ln_fixed(v + root, w)
+                    // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
+                    // `t = v - one_w` is the exact gap above 1, so
+                    // `v^2 - 1 = (v-1)*(v+1) = t*(t+2)` is formed without
+                    // the catastrophic cancellation of `mul(v,v) - one_w`
+                    // as `v -> 1`, and `log1p` avoids re-forming `1 + arg`
+                    // when the gap (hence `arg`) is tiny.
+                    let t = v - one_w;
+                    let root = $core::sqrt_fixed($core::mul(t, t + two_w, w), w);
+                    $core::log1p_fixed(t + root, w)
                 };
                 Self::from_bits($core::round_to_storage_with(inner, w, SCALE, mode))
             }
