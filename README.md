@@ -2,7 +2,7 @@
 
 [![crates.io](https://img.shields.io/crates/v/decimal-scaled.svg)](https://crates.io/crates/decimal-scaled) [![docs.rs](https://docs.rs/decimal-scaled/badge.svg)](https://docs.rs/decimal-scaled) [![MSRV](https://img.shields.io/badge/MSRV-1.85-blue.svg)](https://blog.rust-lang.org/) [![License](https://img.shields.io/crates/l/decimal-scaled.svg)](#license) [![site](https://github.com/mootable/decimal-scaled/actions/workflows/docs.yml/badge.svg?branch=main&label=site)](https://github.com/mootable/decimal-scaled/actions/workflows/docs.yml) [![CodSpeed](https://img.shields.io/endpoint?url=https://codspeed.io/badge.json)](https://codspeed.io/mootable/decimal-scaled?utm_source=badge) [![OpenSSF Best Practices](https://www.bestpractices.dev/projects/12895/badge)](https://www.bestpractices.dev/projects/12895) [![OpenSSF Scorecard](https://api.securityscorecards.dev/projects/github.com/mootable/decimal-scaled/badge)](https://securityscorecards.dev/viewer/?uri=github.com/mootable/decimal-scaled) [![cargo-audit](https://github.com/mootable/decimal-scaled/actions/workflows/cargo-audit.yml/badge.svg?branch=main)](https://github.com/mootable/decimal-scaled/actions/workflows/cargo-audit.yml)
 
-**[Full documentation, guides, benchmarks &amp; API reference → mootable.github.io/decimal-scaled](https://mootable.github.io/decimal-scaled/)**
+**[Docs](https://mootable.github.io/decimal-scaled/)** • **[Benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/)** • **[Algorithms](https://mootable.github.io/decimal-scaled/ALGORITHMS/)** • **[Roadmap](https://mootable.github.io/decimal-scaled/ROADMAP/)** • **[API reference](https://docs.rs/decimal-scaled)**
 
 Const-generic base-10 fixed-point decimals for Rust — **bit-exact**,
 **≤ 0.5 [ULP][ULP] correctly-rounded** integer-only transcendentals,
@@ -23,6 +23,11 @@ decimal-scaled = { version = "0.4", features = ["macros"] }
 
 ```rust
 use decimal_scaled::{d38, D38s12};
+
+// The most common way to make a value: a literal, scale inferred from
+// its digits.
+let x = d38!(1.564232);                        // D38<6>
+assert_eq!(x.to_string(), "1.564232");
 
 let price: D38s12 = "19.99".parse().unwrap();
 let qty   = D38s12::from_int(3);
@@ -63,6 +68,64 @@ The two guarantees nothing else on crates.io currently combines:
    `HalfToEven` · `HalfAwayFromZero` · `HalfTowardZero` · `Ceiling` ·
    `Floor` · `Trunc`. The crate-wide default is also selectable at
    compile time via the `rounding-*` Cargo features.
+
+---
+
+## Correctly rounded — and the only crate that is
+
+Worst-case accuracy of each transcendental, measured against a
+high-precision oracle (worst result across every tested input):
+
+| Function | decimal-scaled | g_math | fastnum | rust_decimal | dashu-float | decimal-rs |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| **exp**  | ✓ (0.50) | ✗ (2.3e19) | ✓ (1e-16)  | ✓ (2.7e-6) | ✓ (1e-16) | ✓ (1.3e-15) |
+| **ln**   | ✓ (0.50) | ✗ (49.5)   | ✓ (1e-16)  | ✗ (1.1e9)  | ✗ (1.00)  | ✓ (1e-16) |
+| **sin**  | ✓ (0.50) | ✗ (1.7e19) | ✓ (1.7e-12)| ✓ (2.1e-9) | — | — |
+| **cos**  | ✓ (0.50) | ✗ (50.0)   | ✓ (5.2e-12)| ✓ (2.4e-9) | — | — |
+| **tan**  | ✓ (0.50) | ✗ (2.1e19) | ✓ (1.4e-12)| ✗ (4.3e10) | — | — |
+| **atan** | ✓ (0.50) | ✗ (1.6e19) | ✓ (1e-16)  | — | — | — |
+| **sqrt** | ✓ (0.50) | ✗ (49.6)   | ✓ (1e-16)  | ✓ (7.2e-7) | ✓ (1e-16) | ✓ (3e-16) |
+| **cbrt** | ✓ (0.50) | — | ✓ (1e-16) | — | — | — |
+| *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
+
+**✓** = within 0.5 ULP of the true value on *every* tested input
+(correctly rounded). **✗** = worst case > 0.5 ULP. **—** = not
+implemented by that crate. Parenthesised value is the worst error, ULP.
+
+`decimal-scaled` is the only crate ✓ on every function — and its ✓ holds
+for all six rounding modes and all thirteen widths (D9 … D1232).
+
+**At deep precision the field collapses.** Repeat the test at a 150-digit
+scale and only `decimal-scaled` computes **all eight** functions
+correctly; the fixed-precision crates (g_math ≈ 19, rust_decimal ≈ 28,
+fastnum ≈ 34, decimal-rs ≈ 38 digits) can no longer represent the value
+at all, and arbitrary-precision `dashu-float` — the lone peer that
+reaches it — still misses `ln`.
+
+*Scope of this table:* measured at a 19-digit scale (`D38<19>`) and a
+150-digit scale (`D307<150>`, with `D616<308>` also verified), under
+`HalfToEven`; each cell is the worst case across the scales a library
+supports. It samples a slice of the full matrix — decimal-scaled's
+guarantee holds across **all six rounding modes** and **all thirteen
+widths** (`D9` … `D1232`). For the complete per-scale, per-width,
+per-mode tables and the methodology, see the
+[benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/).
+
+## Speed across the width range
+
+Per-operation throughput against the wider numeric ecosystem (`bnum`,
+`ruint`, `rust_decimal`, `fixed`), at two representative widths:
+
+**i128 / D38** — 128-bit, scale 19:
+
+![operations at 128-bit vs the ecosystem](https://raw.githubusercontent.com/mootable/decimal-scaled/main/docs/figures/library_comparison/summary_128bit.png)
+
+**i1024 / D307** — 1024-bit, scale 150:
+
+![operations at 1024-bit vs the ecosystem](https://raw.githubusercontent.com/mootable/decimal-scaled/main/docs/figures/library_comparison/summary_1024bit.png)
+
+Full per-width charts (32-bit … 4096-bit) and the methodology are in the
+[benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/).
 
 ---
 
