@@ -22,6 +22,7 @@ use crate::wide_int::{
     limbs_divmod_u64, limbs_is_zero_u64_fixed, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
     limbs_sub_assign_u64_fixed,
 };
+use limbs::div::limbs_isqrt_u64;
 use limbs::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use core::cmp::Ordering;
 use core::ops::{
@@ -273,6 +274,149 @@ impl<const N: usize> Uint<N> {
     #[inline]
     pub fn leading_zeros(&self) -> u32 {
         (Self::BITS as u32) - self.bit_length()
+    }
+
+    /// `true` when the value equals one.
+    #[inline]
+    pub fn is_one(&self) -> bool {
+        if N == 0 || self.limbs[0] != 1 {
+            return false;
+        }
+        let mut i = 1;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return false;
+            }
+            i += 1;
+        }
+        true
+    }
+
+    /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
+    /// `self^0 == 1`. Binary square-and-multiply using the dedicated
+    /// squaring kernel; optimal for the small fixed exponents the root
+    /// iteration needs (`k-1`, `k`).
+    #[inline]
+    pub fn wrapping_pow(self, mut exp: u32) -> Self {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        while exp > 0 {
+            if exp & 1 == 1 {
+                acc = acc.wrapping_mul(base);
+            }
+            exp >>= 1;
+            if exp > 0 {
+                base = base.wrapping_sqr();
+            }
+        }
+        acc
+    }
+
+    /// Exponentiation by squaring, returning `None` if the true power
+    /// overflows `2^BITS`. `self^0 == 1`.
+    #[inline]
+    pub fn checked_pow(self, mut exp: u32) -> Option<Self> {
+        let mut acc = Self::ONE;
+        let mut base = self;
+        loop {
+            if exp & 1 == 1 {
+                acc = acc.checked_mul(base)?;
+            }
+            exp >>= 1;
+            if exp == 0 {
+                break;
+            }
+            base = base.checked_mul(base)?;
+        }
+        Some(acc)
+    }
+
+    /// Exponentiation by squaring. Alias of [`Self::wrapping_pow`] for
+    /// the common case where the caller has already bounded the result.
+    #[inline]
+    pub fn pow(self, exp: u32) -> Self {
+        self.wrapping_pow(exp)
+    }
+
+    /// Integer square root: the largest `r` with `r² <= self`.
+    /// Delegates to the shared limb isqrt (Newton with a hardware-sqrt
+    /// seed where `std` is available).
+    #[inline]
+    pub fn isqrt(self) -> Self {
+        let mut out = [0u64; N];
+        limbs_isqrt_u64(&self.limbs, &mut out);
+        Self { limbs: out }
+    }
+
+    /// Integer `k`th root: returns `(root, exact)` where
+    /// `root = floor(self^(1/k))` and `exact` is `true` iff
+    /// `root^k == self`. `k` must be `>= 1`.
+    ///
+    /// Brent–Zimmermann RootInt (Modern Computer Arithmetic §1.5.2): the
+    /// integer projection of Newton's iteration
+    /// `u = ((k-1)·s + m / s^(k-1)) / k`, started from an upper bound on
+    /// the root and run until the monotone-decreasing sequence first
+    /// fails to decrease (`u >= s`), at which point `s` is the floor
+    /// root. The seed is the no_std-safe bit-length bound
+    /// `2^ceil(bit_length / k)` — a clean upper bound since
+    /// `(2^ceil(L/k))^k >= 2^L > m`. `k == 2` reuses the dedicated
+    /// [`Self::isqrt`]; `k == 3` is the cube root.
+    pub fn root_int(self, k: u32) -> (Self, bool) {
+        debug_assert!(k >= 1, "root_int requires k >= 1");
+        // Degenerate / trivial roots.
+        if k == 1 {
+            return (self, true);
+        }
+        if self.is_zero() {
+            return (Self::ZERO, true);
+        }
+        if self.is_one() {
+            return (Self::ONE, true);
+        }
+        if k == 2 {
+            let r = self.isqrt();
+            return (r, r.wrapping_sqr() == self);
+        }
+
+        // Seed: 2^ceil(bit_length / k) is an upper bound on the root.
+        let len = self.bit_length();
+        let seed_shift = len.div_ceil(k);
+        // ceil(len/k) <= len for k >= 2, so the seed fits the width.
+        let mut s = Self::ONE.shl(seed_shift);
+
+        // Newton: s decreases monotonically while above the root.
+        loop {
+            // t = (k-1)*s + m / s^(k-1)
+            let pow_km1 = s.wrapping_pow(k - 1);
+            // pow_km1 is non-zero (s >= 1), so the divide is defined.
+            let quot = self.wrapping_div(pow_km1);
+            let mut t = Self::ZERO;
+            let mut c = 0;
+            while c < k - 1 {
+                t = t.wrapping_add(s);
+                c += 1;
+            }
+            t = t.wrapping_add(quot);
+            // u = t / k
+            let u = t.wrapping_div(Self::from_u64(k as u64));
+            if u >= s {
+                break;
+            }
+            s = u;
+        }
+
+        let exact = s.checked_pow(k).is_some_and(|p| p == self);
+        (s, exact)
+    }
+
+    /// Constructs from a `u64`, zero-extending into the high limbs.
+    #[inline]
+    pub fn from_u64(value: u64) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = value;
+        }
+        Self { limbs }
     }
 }
 
@@ -740,6 +884,83 @@ mod tests {
         let y = Uint::<4>::from_limbs([0xDEAD_BEEF_CAFE, 0x1234_5678, 0, 0]);
         assert_eq!(y.wrapping_sqr(), y.wrapping_mul(y));
         assert_eq!(y.wrapping_cube(), y.wrapping_mul(y).wrapping_mul(y));
+    }
+
+    /// `root_int(k)` must return `floor(m^(1/k))` with the correct
+    /// exactness flag: `root^k <= m < (root+1)^k`, and `exact` iff
+    /// `root^k == m`. Checked against a brute-force reference for small
+    /// `m` and `k in {2,3,5}` across widths, plus cross-checking k=2
+    /// against the shipped isqrt and large perfect-power exactness.
+    #[test]
+    fn root_int_floor_and_exactness() {
+        // Brute-force floor kth root of a small u128.
+        fn brute(m: u128, k: u32) -> (u128, bool) {
+            if m == 0 {
+                return (0, true);
+            }
+            let mut r: u128 = 0;
+            // Smallest r with (r+1)^k > m, capped to avoid overflow.
+            while {
+                let next = r + 1;
+                next.checked_pow(k).is_some_and(|p| p <= m)
+            } {
+                r += 1;
+            }
+            (r, r.pow(k) == m)
+        }
+
+        fn check<const N: usize>(m: u128, k: u32) {
+            let lo = (m & 0xFFFF_FFFF_FFFF_FFFF) as u64;
+            let hi = (m >> 64) as u64;
+            let mut limbs = [0u64; N];
+            limbs[0] = lo;
+            if N > 1 {
+                limbs[1] = hi;
+            }
+            let n = Uint::<N>::from_limbs(limbs);
+            let (root, exact) = n.root_int(k);
+            let (eroot, eexact) = brute(m, k);
+            let root_lo = root.as_limbs()[0] as u128
+                | ((if N > 1 { root.as_limbs()[1] as u128 } else { 0 }) << 64);
+            assert_eq!(root_lo, eroot, "root mismatch for m={m}, k={k}");
+            assert_eq!(exact, eexact, "exact flag mismatch for m={m}, k={k}");
+
+            // The defining bracket, computed in-width.
+            let rk = root.pow(k);
+            assert!(rk <= n, "root^k > m for m={m}, k={k}");
+            let next = root.wrapping_add(Uint::<N>::ONE);
+            // (root+1)^k overflowing the width still satisfies > m.
+            match next.checked_pow(k) {
+                Some(p) => assert!(p > n, "(root+1)^k <= m for m={m}, k={k}"),
+                None => {}
+            }
+        }
+
+        let samples: [u128; 14] = [
+            0, 1, 2, 7, 8, 9, 26, 27, 28, 1000, 1023, 1024, 1_000_000, u64::MAX as u128,
+        ];
+        for &m in &samples {
+            for k in [2u32, 3, 5] {
+                check::<4>(m, k);
+                check::<2>(m, k);
+                check::<8>(m, k);
+            }
+        }
+
+        // k=2 cross-check against shipped isqrt for a wide value.
+        let big = Uint::<4>::from_limbs([0xFFFF_FFFF_FFFF_FFFF, 0x1234_5678, 0, 0]);
+        assert_eq!(big.root_int(2).0, big.isqrt());
+
+        // Large exact perfect cube: (2^40)^3 = 2^120.
+        let base = Uint::<4>::ONE.shl(40);
+        let cube = base.wrapping_cube();
+        let (r, exact) = cube.root_int(3);
+        assert_eq!(r, base);
+        assert!(exact);
+        // One less than a perfect cube is not exact and floors down.
+        let (r2, exact2) = cube.wrapping_sub(Uint::<4>::ONE).root_int(3);
+        assert_eq!(r2, base.wrapping_sub(Uint::<4>::ONE));
+        assert!(!exact2);
     }
 
     #[test]
