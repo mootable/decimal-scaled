@@ -16,6 +16,7 @@
 //! in [`crate::policy::ln`]).
 
 use crate::algos::trig;
+use crate::policy::triplet::{policy_triplet, wtag};
 use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
 
@@ -306,195 +307,215 @@ impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
     d38_hyperbolic_and_angle!();
 }
 
-// ── Wide tiers — width default ─────────────────────────────────────
+// ── Wide tiers — base/std/no_std triplet keyed on `match (W, SCALE)` ─
 //
-// sin / cos / tan / atan route through `trig::wide_kernel`; the
-// inverse family (asin / acos / atan2) delegates to the macro-emitted
-// inherent `*_strict_with` methods on each `Dxx<SCALE>` (those compose
-// the same per-tier `atan_fixed` / `sqrt_fixed` / `half_pi` primitives
-// internally and aren't easier as free functions). `*_with_impl`
-// ignores `working_digits` (see module docs).
+// The forward family (sin / cos / tan / atan) routes through the
+// `policy_triplet!` free fns per width: each has a const-folded
+// `match (W, SCALE)` base arm table that selects either a per-band
+// lookup kernel or the generic `wide_kernel`. `std` is identical to
+// `base` for every trig method — every trig kernel is pure-integer; the
+// only std machinery is the wide-kernel constant cache (a later hoist
+// concern, not visible to the policy).
+//
+// The inverse family (asin / acos / atan2), the hyperbolics, and the
+// angle conversions keep their existing bodies: most delegate to the
+// macro-emitted inherent `*_strict_with` shells (no raw-storage free-fn
+// equivalent), and the few per-band lookup arms (e.g. D57 inverse,
+// D57 / D115 / D153 / D307 hyperbolics) stay hand-written because their
+// fall-through is an inherent method, not a raw-storage kernel.
 
-/// Emits the `TrigPolicy` impl for one wide tier. `$T` is the typed
-/// decimal ident (e.g. `D57`) prefixed inside with `crate::types::widths::`;
-/// `$sin` / `$cos` / `$tan` / `$atan` are the corresponding
-/// `trig::wide_kernel::*` paths.
-macro_rules! impl_wide_trig {
-    ($T:ident, $sin:path, $cos:path, $tan:path, $atan:path) => {
-        impl<const SCALE: u32> TrigPolicy for crate::types::widths::$T<SCALE> {
-            #[inline]
-            fn sin_impl(self, mode: RoundingMode) -> Self {
-                Self($sin(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-                Self($sin(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn cos_impl(self, mode: RoundingMode) -> Self {
-                Self($cos(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-                Self($cos(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn tan_impl(self, mode: RoundingMode) -> Self {
-                Self($tan(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-                Self($tan(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn atan_impl(self, mode: RoundingMode) -> Self {
-                Self($atan(self.0, mode, SCALE))
-            }
-            #[inline]
-            fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-                Self($atan(self.0, mode, SCALE))
-            }
-            // Inverse family, hyperbolics, and angle conversions
-            // delegate to the macro-emitted inherent `*_strict_with`
-            // methods on the wide tier (those compose the per-tier
-            // `atan_fixed` / `sqrt_fixed` / `half_pi` / `exp_fixed` /
-            // `ln_fixed` primitives internally and aren't easier as
-            // free functions).
-            #[inline]
-            fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
-            #[inline]
-            fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
-            #[inline]
-            fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
-            #[inline]
-            fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
-            #[inline]
-            fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
-            #[inline]
-            fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+/// Default delegating tail shared by the wide-tier `TrigPolicy` impls:
+/// the inverse family (asin / acos / atan2), hyperbolics, and angle
+/// conversions all delegate to the macro-emitted inherent
+/// `*_strict_with` methods. Width-specific per-band overrides (D57
+/// inverse / hyper, D115 / D153 / D307 hyper) replace this with a
+/// hand-written tail.
+macro_rules! wide_trig_delegating_tail {
+    () => {
+        #[inline]
+        fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+        #[inline]
+        fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+        #[inline]
+        fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+        #[inline]
+        fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+        #[inline]
+        fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+        #[inline]
+        fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
 
-            #[inline]
-            fn sinh_impl(self, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
-            #[inline]
-            fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
-            #[inline]
-            fn cosh_impl(self, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
-            #[inline]
-            fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
-            #[inline]
-            fn tanh_impl(self, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
-            #[inline]
-            fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
-            #[inline]
-            fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
-            #[inline]
-            fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
-            #[inline]
-            fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
-            #[inline]
-            fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
-            #[inline]
-            fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
-            #[inline]
-            fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+        #[inline]
+        fn sinh_impl(self, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+        #[inline]
+        fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+        #[inline]
+        fn cosh_impl(self, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+        #[inline]
+        fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+        #[inline]
+        fn tanh_impl(self, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+        #[inline]
+        fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+        #[inline]
+        fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+        #[inline]
+        fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+        #[inline]
+        fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+        #[inline]
+        fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+        #[inline]
+        fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+        #[inline]
+        fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
 
-            #[inline]
-            fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
-            #[inline]
-            fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
-            #[inline]
-            fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
-            #[inline]
-            fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+        #[inline]
+        fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+        #[inline]
+        fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+        #[inline]
+        fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+        #[inline]
+        fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    };
+}
+
+/// Emits the forward-family trait methods (sin / cos / tan / atan, each
+/// strict + `_with`) for one wide tier, routing through the supplied
+/// triplet free fns (the `_with` forms drop `working_digits`).
+macro_rules! wide_trig_forward_methods {
+    (
+        $T:ident,
+        $sin_std:ident,  $sin_no:ident,
+        $cos_std:ident,  $cos_no:ident,
+        $tan_std:ident,  $tan_no:ident,
+        $atan_std:ident, $atan_no:ident
+    ) => {
+        #[inline]
+        fn sin_impl(self, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($sin_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($sin_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($sin_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($sin_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn cos_impl(self, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($cos_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($cos_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($cos_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($cos_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn tan_impl(self, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($tan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($tan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($tan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($tan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn atan_impl(self, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($atan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($atan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+        }
+        #[inline]
+        fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            #[cfg(feature = "std")]
+            { Self($atan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            #[cfg(not(feature = "std"))]
+            { Self($atan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
         }
     };
 }
 
-// D57 — hand-rolled (not via `impl_wide_trig!`) so the `atan_impl`
-// arm can route `SCALE ∈ 44..=56` through the bespoke
-// `algos::trig::lookup_d57_s44_56_atan` kernel before falling back to
-// the generic `wide_kernel::atan_strict_d57`. Lower scales (and every
-// other forward op at every scale) still hit the wide kernel. Inverse
-// family (asin / acos / atan2) continues to delegate to the macro-
-// emitted inherent `*_strict_with` methods, matching the wide-tier
-// shape `impl_wide_trig!` produces for the sibling tiers.
+// ── D57 — forward-family triplets (sin / cos / tan / atan) ──────────
+//
+// Bespoke band arms divert SCALE 18..=22 (sincos/atan) and 44..=56
+// (sin/cos/atan; tan has no 44..=56 band) before the generic kernel.
+#[cfg(any(feature = "d57", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int192,
+    base_fn = sin_d57_base, std_fn = sin_d57_std, no_std_fn = sin_d57_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D57, 18..=22) => trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(raw, mode),
+        (wtag::D57, 44..=56) => trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(raw, mode),
+        (wtag::D57, _)       => trig::wide_kernel::sin_strict_d57(raw, mode, SCALE)
+    },
+    std = {},
+}
+#[cfg(any(feature = "d57", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int192,
+    base_fn = cos_d57_base, std_fn = cos_d57_std, no_std_fn = cos_d57_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D57, 18..=22) => trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(raw, mode),
+        (wtag::D57, 44..=56) => trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(raw, mode),
+        (wtag::D57, _)       => trig::wide_kernel::cos_strict_d57(raw, mode, SCALE)
+    },
+    std = {},
+}
+#[cfg(any(feature = "d57", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int192,
+    base_fn = tan_d57_base, std_fn = tan_d57_std, no_std_fn = tan_d57_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D57, 18..=22) => trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(raw, mode),
+        (wtag::D57, _)       => trig::wide_kernel::tan_strict_d57(raw, mode, SCALE)
+    },
+    std = {},
+}
+#[cfg(any(feature = "d57", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int192,
+    base_fn = atan_d57_base, std_fn = atan_d57_std, no_std_fn = atan_d57_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D57, 18..=22) => trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(raw, mode),
+        (wtag::D57, 44..=56) => trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(raw, mode),
+        (wtag::D57, _)       => trig::wide_kernel::atan_strict_d57(raw, mode, SCALE)
+    },
+    std = {},
+}
 
+// D57 — inverse and hyperbolic families keep their per-band lookup
+// arms (SCALE 18..=22) and inherent fall-through; only the forward
+// family routes through the triplet.
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
-    #[inline]
-    fn sin_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 44..=56) {
-            return Self(trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 44..=56) {
-            return Self(trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 44..=56) {
-            return Self(trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 44..=56) {
-            return Self(trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 44..=56) {
-            return Self(trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d57(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 18..=22) {
-            return Self(trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        if matches!(SCALE, 44..=56) {
-            return Self(trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d57(self.0, mode, SCALE))
-    }
+    wide_trig_forward_methods!(
+        D57,
+        sin_d57_std, sin_d57_no_std,
+        cos_d57_std, cos_d57_no_std,
+        tan_d57_std, tan_d57_no_std,
+        atan_d57_std, atan_d57_no_std
+    );
+
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self {
         if matches!(SCALE, 18..=22) {
@@ -603,54 +624,87 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
 }
 
+// ── D76 — width default (no bands) ─────────────────────────────────
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl_wide_trig!(
-    D76,
-    trig::wide_kernel::sin_strict_d76,
-    trig::wide_kernel::cos_strict_d76,
-    trig::wide_kernel::tan_strict_d76,
-    trig::wide_kernel::atan_strict_d76
-);
+policy_triplet! {
+    storage = crate::wide_int::Int256,
+    base_fn = sin_d76_base, std_fn = sin_d76_std, no_std_fn = sin_d76_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D76, _) => trig::wide_kernel::sin_strict_d76(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d76", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int256,
+    base_fn = cos_d76_base, std_fn = cos_d76_std, no_std_fn = cos_d76_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D76, _) => trig::wide_kernel::cos_strict_d76(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d76", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int256,
+    base_fn = tan_d76_base, std_fn = tan_d76_std, no_std_fn = tan_d76_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D76, _) => trig::wide_kernel::tan_strict_d76(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d76", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int256,
+    base_fn = atan_d76_base, std_fn = atan_d76_std, no_std_fn = atan_d76_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D76, _) => trig::wide_kernel::atan_strict_d76(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d76", feature = "wide"))]
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
+    wide_trig_forward_methods!(
+        D76,
+        sin_d76_std, sin_d76_no_std,
+        cos_d76_std, cos_d76_no_std,
+        tan_d76_std, tan_d76_no_std,
+        atan_d76_std, atan_d76_no_std
+    );
+    wide_trig_delegating_tail!();
+}
 
-// D115 — hand-rolled so `sinh` / `cosh` / `tanh` at SCALE = 57 divert
-// through the Tang-style narrow-GUARD hyper lookup that shares its
-// `exp_fixed` machinery with the D115 SCALE-57 ln/exp Tang slots.
-// Other surface ops (sin / cos / tan / atan / asin / etc.) keep the
-// canonical wide-kernel / inherent paths.
+// ── D115 — forward via wide_kernel; sinh/cosh/tanh divert SCALE
+// 50..=60 through the Tang-style hyper lookup (hand-written tail). ──
+#[cfg(any(feature = "d115", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int384,
+    base_fn = sin_d115_base, std_fn = sin_d115_std, no_std_fn = sin_d115_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D115, _) => trig::wide_kernel::sin_strict_d115(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d115", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int384,
+    base_fn = cos_d115_base, std_fn = cos_d115_std, no_std_fn = cos_d115_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D115, _) => trig::wide_kernel::cos_strict_d115(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d115", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int384,
+    base_fn = tan_d115_base, std_fn = tan_d115_std, no_std_fn = tan_d115_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D115, _) => trig::wide_kernel::tan_strict_d115(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d115", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int384,
+    base_fn = atan_d115_base, std_fn = atan_d115_std, no_std_fn = atan_d115_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D115, _) => trig::wide_kernel::atan_strict_d115(raw, mode, SCALE) }, std = {},
+}
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
-    #[inline]
-    fn sin_impl(self, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::sin_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::sin_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_impl(self, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::cos_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::cos_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_impl(self, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::tan_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::tan_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_impl(self, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::atan_strict_d115(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::wide_kernel::atan_strict_d115(self.0, mode, SCALE))
-    }
+    wide_trig_forward_methods!(
+        D115,
+        sin_d115_std, sin_d115_no_std,
+        cos_d115_std, cos_d115_no_std,
+        tan_d115_std, tan_d115_no_std,
+        atan_d115_std, atan_d115_no_std
+    );
+
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
     #[inline]
@@ -718,7 +772,6 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
     fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
     #[inline]
     fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
-
     #[inline]
     fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
     #[inline]
@@ -729,67 +782,58 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
     fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
 }
 
-// D153 — bespoke arm so the SCALE 70..=82 narrow-GUARD lookup slots
-// can divert the hot calls before falling back to the generic
-// `wide_kernel` and the macro-emitted inherent shells.
+// ── D153 — forward sin/cos/tan/atan divert SCALE 70..=82; sinh/cosh/
+// tanh divert the same band (hand-written tail). ───────────────────
+#[cfg(any(feature = "d153", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int512,
+    base_fn = sin_d153_base, std_fn = sin_d153_std, no_std_fn = sin_d153_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D153, 70..=82) => trig::lookup_d153_s70_82_sincos::sin_strict::<SCALE>(raw, mode),
+        (wtag::D153, _)       => trig::wide_kernel::sin_strict_d153(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d153", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int512,
+    base_fn = cos_d153_base, std_fn = cos_d153_std, no_std_fn = cos_d153_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D153, 70..=82) => trig::lookup_d153_s70_82_sincos::cos_strict::<SCALE>(raw, mode),
+        (wtag::D153, _)       => trig::wide_kernel::cos_strict_d153(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d153", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int512,
+    base_fn = tan_d153_base, std_fn = tan_d153_std, no_std_fn = tan_d153_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D153, 70..=82) => trig::lookup_d153_s70_82_sincos::tan_strict::<SCALE>(raw, mode),
+        (wtag::D153, _)       => trig::wide_kernel::tan_strict_d153(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d153", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int512,
+    base_fn = atan_d153_base, std_fn = atan_d153_std, no_std_fn = atan_d153_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D153, 70..=82) => trig::lookup_d153_s70_82_atan::atan_strict::<SCALE>(raw, mode),
+        (wtag::D153, _)       => trig::wide_kernel::atan_strict_d153(raw, mode, SCALE)
+    }, std = {},
+}
 #[cfg(any(feature = "d153", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
-    #[inline]
-    fn sin_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d153(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 70..=82) {
-            return Self(trig::lookup_d153_s70_82_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d153(self.0, mode, SCALE))
-    }
+    wide_trig_forward_methods!(
+        D153,
+        sin_d153_std, sin_d153_no_std,
+        cos_d153_std, cos_d153_no_std,
+        tan_d153_std, tan_d153_no_std,
+        atan_d153_std, atan_d153_no_std
+    );
+
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
     #[inline]
@@ -867,76 +911,99 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
 }
 
+// ── D230 — width default (no bands) ────────────────────────────────
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl_wide_trig!(
-    D230,
-    trig::wide_kernel::sin_strict_d230,
-    trig::wide_kernel::cos_strict_d230,
-    trig::wide_kernel::tan_strict_d230,
-    trig::wide_kernel::atan_strict_d230
-);
+policy_triplet! {
+    storage = crate::wide_int::Int768,
+    base_fn = sin_d230_base, std_fn = sin_d230_std, no_std_fn = sin_d230_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D230, _) => trig::wide_kernel::sin_strict_d230(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d230", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int768,
+    base_fn = cos_d230_base, std_fn = cos_d230_std, no_std_fn = cos_d230_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D230, _) => trig::wide_kernel::cos_strict_d230(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d230", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int768,
+    base_fn = tan_d230_base, std_fn = tan_d230_std, no_std_fn = tan_d230_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D230, _) => trig::wide_kernel::tan_strict_d230(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d230", feature = "wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int768,
+    base_fn = atan_d230_base, std_fn = atan_d230_std, no_std_fn = atan_d230_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D230, _) => trig::wide_kernel::atan_strict_d230(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d230", feature = "wide"))]
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D230<SCALE> {
+    wide_trig_forward_methods!(
+        D230,
+        sin_d230_std, sin_d230_no_std,
+        cos_d230_std, cos_d230_no_std,
+        tan_d230_std, tan_d230_no_std,
+        atan_d230_std, atan_d230_no_std
+    );
+    wide_trig_delegating_tail!();
+}
 
-// D307 — bespoke arm so the SCALE 140..=160 narrow-GUARD lookup slots
-// can divert the hot calls before falling back to the generic
-// `wide_kernel` and the macro-emitted inherent shells.
+// ── D307 — forward sin/cos/tan/atan divert SCALE 140..=160; sinh/
+// cosh/tanh divert the same band (hand-written tail). ──────────────
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1024,
+    base_fn = sin_d307_base, std_fn = sin_d307_std, no_std_fn = sin_d307_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D307, 140..=160) => trig::lookup_d307_s140_160_sincos::sin_strict::<SCALE>(raw, mode),
+        (wtag::D307, _)         => trig::wide_kernel::sin_strict_d307(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1024,
+    base_fn = cos_d307_base, std_fn = cos_d307_std, no_std_fn = cos_d307_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D307, 140..=160) => trig::lookup_d307_s140_160_sincos::cos_strict::<SCALE>(raw, mode),
+        (wtag::D307, _)         => trig::wide_kernel::cos_strict_d307(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1024,
+    base_fn = tan_d307_base, std_fn = tan_d307_std, no_std_fn = tan_d307_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D307, 140..=160) => trig::lookup_d307_s140_160_sincos::tan_strict::<SCALE>(raw, mode),
+        (wtag::D307, _)         => trig::wide_kernel::tan_strict_d307(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1024,
+    base_fn = atan_d307_base, std_fn = atan_d307_std, no_std_fn = atan_d307_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D307, 140..=160) => trig::lookup_d307_s140_160_atan::atan_strict::<SCALE>(raw, mode),
+        (wtag::D307, _)         => trig::wide_kernel::atan_strict_d307(raw, mode, SCALE)
+    }, std = {},
+}
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
-    #[inline]
-    fn sin_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d307(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 140..=160) {
-            return Self(trig::lookup_d307_s140_160_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d307(self.0, mode, SCALE))
-    }
+    wide_trig_forward_methods!(
+        D307,
+        sin_d307_std, sin_d307_no_std,
+        cos_d307_std, cos_d307_no_std,
+        tan_d307_std, tan_d307_no_std,
+        atan_d307_std, atan_d307_no_std
+    );
+
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
     #[inline]
@@ -1014,152 +1081,179 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
 }
 
-// D462 — bespoke arm so the SCALE 225..=235 narrow-GUARD lookup slots
-// can divert the hot calls before falling back to the generic
-// `wide_kernel` and the macro-emitted inherent shells. Mirrors the
-// D153 mid-tier shape.
+// ── D462 — forward sin/cos/tan/atan divert SCALE 225..=235; the
+// hyperbolics keep the inherent shells (Tang slot lost here). ──────
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1536,
+    base_fn = sin_d462_base, std_fn = sin_d462_std, no_std_fn = sin_d462_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D462, 225..=235) => trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(raw, mode),
+        (wtag::D462, _)         => trig::wide_kernel::sin_strict_d462(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1536,
+    base_fn = cos_d462_base, std_fn = cos_d462_std, no_std_fn = cos_d462_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D462, 225..=235) => trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(raw, mode),
+        (wtag::D462, _)         => trig::wide_kernel::cos_strict_d462(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1536,
+    base_fn = tan_d462_base, std_fn = tan_d462_std, no_std_fn = tan_d462_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D462, 225..=235) => trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(raw, mode),
+        (wtag::D462, _)         => trig::wide_kernel::tan_strict_d462(raw, mode, SCALE)
+    }, std = {},
+}
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int1536,
+    base_fn = atan_d462_base, std_fn = atan_d462_std, no_std_fn = atan_d462_no_std,
+    recv = raw, mode = mode, params = {},
+    base = {
+        (wtag::D462, 225..=235) => trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(raw, mode),
+        (wtag::D462, _)         => trig::wide_kernel::atan_strict_d462(raw, mode, SCALE)
+    }, std = {},
+}
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
-    #[inline]
-    fn sin_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::sin_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::cos_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::tan_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_impl(self, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        if matches!(SCALE, 225..=235) {
-            return Self(trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(self.0, mode));
-        }
-        Self(trig::wide_kernel::atan_strict_d462(self.0, mode, SCALE))
-    }
-    #[inline]
-    fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
-    #[inline]
-    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
-    #[inline]
-    fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
-    #[inline]
-    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
-    #[inline]
-    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
-    #[inline]
-    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
-
-    // sinh / cosh / tanh — the Tang-exp slot (which the hyper lookup
-    // would have piggybacked on for the shared `(eˣ, e⁻ˣ)` pair) lost
-    // at D462 against the canonical `exp_fixed` Smith r/2^n path, so
-    // the hyper Tang slot loses too. Dispatch keeps the macro-emitted
-    // `sinh_strict_with` / `cosh_strict_with` / `tanh_strict_with`
-    // shells which compose the canonical `exp_fixed`.
-    #[inline]
-    fn sinh_impl(self, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
-    #[inline]
-    fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
-    #[inline]
-    fn cosh_impl(self, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
-    #[inline]
-    fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
-    #[inline]
-    fn tanh_impl(self, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
-    #[inline]
-    fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
-    #[inline]
-    fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
-    #[inline]
-    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
-    #[inline]
-    fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
-    #[inline]
-    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
-    #[inline]
-    fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
-    #[inline]
-    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
-    #[inline]
-    fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
-    #[inline]
-    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
-    #[inline]
-    fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
-    #[inline]
-    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    wide_trig_forward_methods!(
+        D462,
+        sin_d462_std, sin_d462_no_std,
+        cos_d462_std, cos_d462_no_std,
+        tan_d462_std, tan_d462_no_std,
+        atan_d462_std, atan_d462_no_std
+    );
+    wide_trig_delegating_tail!();
 }
 
-// D616 — width default via `impl_wide_trig!`. The Tang-lookup
-// hyperbolic kernels at SCALE 300..=315 were bench-trialled and
-// rejected: at D616's Int8192 working integer the
-// `tang_exp_fixed + 1/exp` round trip lands at roughly the same cost
-// as the wide_kernel-backed inherent `*_strict_with` shells (200-260
-// µs in either direction). The lookup module stays in tree for the
-// shared `tang_exp_fixed` plumbing but is NOT wired in policy.
+// ── D616 — width default (no bands) ────────────────────────────────
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl_wide_trig!(
-    D616,
-    trig::wide_kernel::sin_strict_d616,
-    trig::wide_kernel::cos_strict_d616,
-    trig::wide_kernel::tan_strict_d616,
-    trig::wide_kernel::atan_strict_d616
-);
+policy_triplet! {
+    storage = crate::wide_int::Int2048,
+    base_fn = sin_d616_base, std_fn = sin_d616_std, no_std_fn = sin_d616_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D616, _) => trig::wide_kernel::sin_strict_d616(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int2048,
+    base_fn = cos_d616_base, std_fn = cos_d616_std, no_std_fn = cos_d616_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D616, _) => trig::wide_kernel::cos_strict_d616(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int2048,
+    base_fn = tan_d616_base, std_fn = tan_d616_std, no_std_fn = tan_d616_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D616, _) => trig::wide_kernel::tan_strict_d616(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int2048,
+    base_fn = atan_d616_base, std_fn = atan_d616_std, no_std_fn = atan_d616_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D616, _) => trig::wide_kernel::atan_strict_d616(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
+    wide_trig_forward_methods!(
+        D616,
+        sin_d616_std, sin_d616_no_std,
+        cos_d616_std, cos_d616_no_std,
+        tan_d616_std, tan_d616_no_std,
+        atan_d616_std, atan_d616_no_std
+    );
+    wide_trig_delegating_tail!();
+}
 
-
+// ── D924 — width default (no bands) ────────────────────────────────
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl_wide_trig!(
-    D924,
-    trig::wide_kernel::sin_strict_d924,
-    trig::wide_kernel::cos_strict_d924,
-    trig::wide_kernel::tan_strict_d924,
-    trig::wide_kernel::atan_strict_d924
-);
+policy_triplet! {
+    storage = crate::wide_int::Int3072,
+    base_fn = sin_d924_base, std_fn = sin_d924_std, no_std_fn = sin_d924_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D924, _) => trig::wide_kernel::sin_strict_d924(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int3072,
+    base_fn = cos_d924_base, std_fn = cos_d924_std, no_std_fn = cos_d924_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D924, _) => trig::wide_kernel::cos_strict_d924(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int3072,
+    base_fn = tan_d924_base, std_fn = tan_d924_std, no_std_fn = tan_d924_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D924, _) => trig::wide_kernel::tan_strict_d924(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int3072,
+    base_fn = atan_d924_base, std_fn = atan_d924_std, no_std_fn = atan_d924_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D924, _) => trig::wide_kernel::atan_strict_d924(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
+    wide_trig_forward_methods!(
+        D924,
+        sin_d924_std, sin_d924_no_std,
+        cos_d924_std, cos_d924_no_std,
+        tan_d924_std, tan_d924_no_std,
+        atan_d924_std, atan_d924_no_std
+    );
+    wide_trig_delegating_tail!();
+}
 
+// ── D1232 — width default (no bands) ───────────────────────────────
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl_wide_trig!(
-    D1232,
-    trig::wide_kernel::sin_strict_d1232,
-    trig::wide_kernel::cos_strict_d1232,
-    trig::wide_kernel::tan_strict_d1232,
-    trig::wide_kernel::atan_strict_d1232
-);
+policy_triplet! {
+    storage = crate::wide_int::Int4096,
+    base_fn = sin_d1232_base, std_fn = sin_d1232_std, no_std_fn = sin_d1232_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D1232, _) => trig::wide_kernel::sin_strict_d1232(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int4096,
+    base_fn = cos_d1232_base, std_fn = cos_d1232_std, no_std_fn = cos_d1232_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D1232, _) => trig::wide_kernel::cos_strict_d1232(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int4096,
+    base_fn = tan_d1232_base, std_fn = tan_d1232_std, no_std_fn = tan_d1232_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D1232, _) => trig::wide_kernel::tan_strict_d1232(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+policy_triplet! {
+    storage = crate::wide_int::Int4096,
+    base_fn = atan_d1232_base, std_fn = atan_d1232_std, no_std_fn = atan_d1232_no_std,
+    recv = raw, mode = mode, params = {},
+    base = { (wtag::D1232, _) => trig::wide_kernel::atan_strict_d1232(raw, mode, SCALE) }, std = {},
+}
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl<const SCALE: u32> TrigPolicy for crate::types::widths::D1232<SCALE> {
+    wide_trig_forward_methods!(
+        D1232,
+        sin_d1232_std, sin_d1232_no_std,
+        cos_d1232_std, cos_d1232_no_std,
+        tan_d1232_std, tan_d1232_no_std,
+        atan_d1232_std, atan_d1232_no_std
+    );
+    wide_trig_delegating_tail!();
+}
