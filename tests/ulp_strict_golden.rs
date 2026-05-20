@@ -279,29 +279,24 @@ macro_rules! decl_band {
 
 // ─── Per-tier instantiation ────────────────────────────────────────────
 //
-// Each `funcs` entry that carries `ignore = "<reason>"` is a kernel
-// hole surfaced by this gate at `delta == 0` per rounding mode. Two
-// distinct holes exist in the shipped 0.4.3 kernels; the reason string
-// records which:
+// The transcendental kernels are correctly rounded (`delta == 0`) under
+// every `RoundingMode` across every width: the directed modes resolve the
+// true residual sign by recomputing the working-scale value at a wider
+// guard whenever the result lands inside the kernel error band of a
+// storage grid line (Ziv escalation), and the linear small-argument fast
+// paths defer to the full kernel for directed modes.
 //
-//  * "directed-rounding 1-LSB" — the `*_strict_with(mode)` path computes
-//    the round-to-nearest result at the storage scale and then applies
-//    the directed mode, so when the true value sits sub-LSB on one side
-//    of an integer the Trunc/Floor/Ceiling answer is off by exactly one
-//    LSB (e.g. cos near +/-1, ln near an integer multiple of the LSB).
-//    The three nearest modes (HalfToEven/HalfAwayFromZero/HalfTowardZero)
-//    are correctly rounded for these cells.
-//
-//  * "D115<57> exp precision" — a genuine precision regression: the
-//    D115<57> exp kernel loses many LSB for large magnitude inputs,
-//    failing under EVERY mode including the nearest ones. Independent
-//    of rounding.
+// The only remaining `ignore = "<reason>"` entry is the D1232<615> cbrt
+// exact perfect-cube point: `cbrt(10^-615) = 10^-205` is exactly
+// representable, so the kernel correctly returns it under every mode, but
+// the oracle's finite-precision `cbrt` reports a sub-LSB positive residual
+// and therefore expects a directed bump the exact value does not warrant.
+// The oracle is left untouched (it is otherwise truth); the cell stays
+// ignored rather than skew the kernel to match a misclassified residual.
 //
 // Ignored tests stay compiled and asserting; run them with
 //   cargo test --test ulp_strict_golden -- --include-ignored
-// to reproduce the exact failing (input, mode) tuples for the kernel
-// fix. Remove the `ignore =` once the matching kernel is correctly
-// rounded — a green run is the witness.
+// to reproduce the exact failing (input, mode) tuples.
 
 // ─── Primitive-storage bands (D9 / D18 / D38) ──────────────────────────
 
@@ -392,9 +387,9 @@ decl_band! {
     one decimal_scaled::Int256::from_i128(1),
     funcs {
         ln   = "golden/ln_d76_s35.txt";
-        exp  = "golden/exp_d76_s35.txt",  ignore = "directed-rounding 1-LSB boundary (Ceiling)";
-        sin  = "golden/sin_d76_s35.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d76_s35.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        exp  = "golden/exp_d76_s35.txt";
+        sin  = "golden/sin_d76_s35.txt";
+        cos  = "golden/cos_d76_s35.txt";
         tan  = "golden/tan_d76_s35.txt";
         atan = "golden/atan_d76_s35.txt";
         sqrt = "golden/sqrt_d76_s35.txt";
@@ -410,10 +405,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int384::from_str_radix(s, 10).expect("parse Int384"),
     one decimal_scaled::Int384::from_i128(1),
     funcs {
-        ln   = "golden/ln_d115_s57.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d115_s57.txt", ignore = "D115<57> exp large-magnitude precision loss (all modes, many LSB)";
-        sin  = "golden/sin_d115_s57.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d115_s57.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d115_s57.txt";
+        exp  = "golden/exp_d115_s57.txt";
+        sin  = "golden/sin_d115_s57.txt";
+        cos  = "golden/cos_d115_s57.txt";
         tan  = "golden/tan_d115_s57.txt";
         atan = "golden/atan_d115_s57.txt";
         sqrt = "golden/sqrt_d115_s57.txt";
@@ -429,10 +424,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int512::from_str_radix(s, 10).expect("parse Int512"),
     one decimal_scaled::Int512::from_i128(1),
     funcs {
-        ln   = "golden/ln_d153_s76.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d153_s76.txt", ignore = "directed-rounding 1-LSB boundary (Ceiling)";
-        sin  = "golden/sin_d153_s76.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d153_s76.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d153_s76.txt";
+        exp  = "golden/exp_d153_s76.txt";
+        sin  = "golden/sin_d153_s76.txt";
+        cos  = "golden/cos_d153_s76.txt";
         tan  = "golden/tan_d153_s76.txt";
         atan = "golden/atan_d153_s76.txt";
         sqrt = "golden/sqrt_d153_s76.txt";
@@ -448,10 +443,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int768::from_str_radix(s, 10).expect("parse Int768"),
     one decimal_scaled::Int768::from_i128(1),
     funcs {
-        ln   = "golden/ln_d230_s115.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d230_s115.txt", ignore = "directed-rounding 1-LSB boundary (Ceiling)";
-        sin  = "golden/sin_d230_s115.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d230_s115.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d230_s115.txt";
+        exp  = "golden/exp_d230_s115.txt";
+        sin  = "golden/sin_d230_s115.txt";
+        cos  = "golden/cos_d230_s115.txt";
         tan  = "golden/tan_d230_s115.txt";
         atan = "golden/atan_d230_s115.txt";
         sqrt = "golden/sqrt_d230_s115.txt";
@@ -467,10 +462,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int1024::from_str_radix(s, 10).expect("parse Int1024"),
     one decimal_scaled::Int1024::from_i128(1),
     funcs {
-        ln   = "golden/ln_d307_s150.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d307_s150.txt", ignore = "directed-rounding 1-LSB boundary (Ceiling)";
-        sin  = "golden/sin_d307_s150.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d307_s150.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d307_s150.txt";
+        exp  = "golden/exp_d307_s150.txt";
+        sin  = "golden/sin_d307_s150.txt";
+        cos  = "golden/cos_d307_s150.txt";
         tan  = "golden/tan_d307_s150.txt";
         atan = "golden/atan_d307_s150.txt";
         sqrt = "golden/sqrt_d307_s150.txt";
@@ -486,10 +481,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int1536::from_str_radix(s, 10).expect("parse Int1536"),
     one decimal_scaled::Int1536::from_i128(1),
     funcs {
-        ln   = "golden/ln_d462_s230.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d462_s230.txt", ignore = "directed-rounding 1-LSB boundary (Ceiling)";
-        sin  = "golden/sin_d462_s230.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d462_s230.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d462_s230.txt";
+        exp  = "golden/exp_d462_s230.txt";
+        sin  = "golden/sin_d462_s230.txt";
+        cos  = "golden/cos_d462_s230.txt";
         tan  = "golden/tan_d462_s230.txt";
         atan = "golden/atan_d462_s230.txt";
         sqrt = "golden/sqrt_d462_s230.txt";
@@ -505,10 +500,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int2048::from_str_radix(s, 10).expect("parse Int2048"),
     one decimal_scaled::Int2048::from_i128(1),
     funcs {
-        ln   = "golden/ln_d616_s308.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d616_s308.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        sin  = "golden/sin_d616_s308.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d616_s308.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d616_s308.txt";
+        exp  = "golden/exp_d616_s308.txt";
+        sin  = "golden/sin_d616_s308.txt";
+        cos  = "golden/cos_d616_s308.txt";
         tan  = "golden/tan_d616_s308.txt";
         atan = "golden/atan_d616_s308.txt";
         sqrt = "golden/sqrt_d616_s308.txt";
@@ -524,10 +519,10 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int3072::from_str_radix(s, 10).expect("parse Int3072"),
     one decimal_scaled::Int3072::from_i128(1),
     funcs {
-        ln   = "golden/ln_d924_s460.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d924_s460.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        sin  = "golden/sin_d924_s460.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d924_s460.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d924_s460.txt";
+        exp  = "golden/exp_d924_s460.txt";
+        sin  = "golden/sin_d924_s460.txt";
+        cos  = "golden/cos_d924_s460.txt";
         tan  = "golden/tan_d924_s460.txt";
         atan = "golden/atan_d924_s460.txt";
         sqrt = "golden/sqrt_d924_s460.txt";
@@ -543,13 +538,13 @@ decl_band! {
     parse |s: &str| decimal_scaled::Int4096::from_str_radix(s, 10).expect("parse Int4096"),
     one decimal_scaled::Int4096::from_i128(1),
     funcs {
-        ln   = "golden/ln_d1232_s615.txt",  ignore = "directed-rounding 1-LSB boundary (Trunc/Floor)";
-        exp  = "golden/exp_d1232_s615.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        sin  = "golden/sin_d1232_s615.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
-        cos  = "golden/cos_d1232_s615.txt", ignore = "directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling)";
+        ln   = "golden/ln_d1232_s615.txt";
+        exp  = "golden/exp_d1232_s615.txt";
+        sin  = "golden/sin_d1232_s615.txt";
+        cos  = "golden/cos_d1232_s615.txt";
         tan  = "golden/tan_d1232_s615.txt";
         atan = "golden/atan_d1232_s615.txt";
         sqrt = "golden/sqrt_d1232_s615.txt";
-        cbrt = "golden/cbrt_d1232_s615.txt", ignore = "directed-rounding 1-LSB boundary (Floor/Ceiling)";
+        cbrt = "golden/cbrt_d1232_s615.txt", ignore = "exact perfect-cube point cbrt(10^-615)=10^-205: the kernel returns the exactly representable value (correct under every mode) but the oracle's finite-precision cbrt classifies the residual as a sub-LSB positive fraction, so it expects a directed Ceiling/Floor bump the true value does not warrant";
     },
 }
