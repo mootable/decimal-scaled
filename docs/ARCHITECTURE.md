@@ -93,11 +93,11 @@ read as one vocabulary.
 `src/`:
 
 ```
-int/                const-generic Int<N>/Uint<N>
-  mod.rs            the types + named aliases
-  limbs/            reusable width-matched limb algorithms
-  traits.rs         FixedInt / FixedIntConvert
-wide_int/           slice primitives; legacy named-type generator
+int/                const-generic integer layer
+  types/            Int<N>/Uint<N> + named aliases; FixedInt / FixedIntConvert
+  policy/           per-width / limb-count algorithm-selection dispatch
+  algos/            reusable width-matched algorithms
+  limbs/            raw slice limb primitives; legacy named-type generator
 ```
 
 ## Decimal front-ends
@@ -226,8 +226,11 @@ nearest-mode path paying nothing extra.
 
 ```
 src/
-  int/        const-generic Int<N>/Uint<N> + reusable limb algorithms
-  wide_int/   slice limb primitives; legacy named-type generator
+  int/        const-generic integer layer
+    types/    Int<N>/Uint<N> + named aliases; FixedInt / FixedIntConvert
+    policy/   per-width / limb-count algorithm-selection dispatch
+    algos/    reusable width-matched algorithms
+    limbs/    raw slice limb primitives; legacy named-type generator
   types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
   policy/     per-family (width, SCALE) dispatch → kernels
   algos/      the kernels (sqrt cbrt exp ln trig pow …)
