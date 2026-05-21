@@ -694,6 +694,29 @@ width exceeds the largest current tier. The MG path also yields
 chain-MG (`limbs_divmod_dispatch_u64` plus `MG2by1U64`) which already
 covers the multi-limb divisor case at hardware speed.
 
+### Round-to-odd directed rounding
+
+Boldo–Melquiond's round-to-odd technique: round the wide working value
+to an "odd" sticky representative, then re-round once to the storage
+scale, so the directed modes (`Floor` / `Ceiling` / `Trunc` /
+`HalfTowardZero` / `HalfAwayFromZero`) need only a single narrowing.
+Prototyped behind an off-by-default feature and A/B-benched against the
+shipped residual-sign Ziv escalation. **Not adopted:** it tied Ziv
+mid-cell and *regressed ~30 % near grid lines* — the very inputs it was
+meant to accelerate. The cause is structural: the kernels deliver 0.5
+ULP at the *storage* scale, not at the working-scale LSB, so the
+round-to-odd marker is unreliable precisely near a boundary, and the
+implementation has to defer those cases back to Ziv — computing the
+value twice. Unlike the multiplication / division entries above (which
+a future CPU or a wider tier could flip into a win), this mismatch is
+inherent to the fixed-point rounding model, so the technique is **not
+retained even as compiled-out reference**.
+
+> Boldo, S. & Melquiond, G. (2008). **"Emulation of FMA and
+> correctly rounded sums: proved algorithms using rounding to odd."**
+> *IEEE Transactions on Computers* **57(4)**, 462–471.
+> DOI: [10.1109/TC.2007.70819](https://doi.org/10.1109/TC.2007.70819).
+
 ## Related external crates (benchmark baselines only)
 
 - [`bnum`](https://github.com/isaacholt100/bnum) - fixed-width
