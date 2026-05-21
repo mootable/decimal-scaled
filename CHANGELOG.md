@@ -5,6 +5,57 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.4] — unreleased
+
+A correctness release. Every `*_strict` transcendental is now provably
+correctly rounded — within 0.5 ULP, i.e. 0 LSB of error at the storage
+scale — under **all six rounding modes**, at **all thirteen widths**,
+across the **full 22-function surface**. 0.4.3 secured the primary
+functions under nearest rounding; 0.4.4 extends the guarantee to the
+directed rounding modes and the derived functions, with no exceptions
+and no ignored cells.
+
+### Fixed
+
+- **Directed rounding** (`Trunc` / `Floor` / `Ceiling` /
+  `HalfTowardZero` / `HalfAwayFromZero`) for the wide-tier
+  transcendentals: the working-scale approximation could previously
+  round one LSB the wrong way near a storage grid line. Resolved with
+  residual-sign Ziv escalation; the nearest-mode fast path is unchanged.
+- **Derived transcendentals** `log` / `log2` / `log10` / `exp2` /
+  `sinh` / `cosh` / `tanh` / `asinh` / `acosh` / `atanh` / `powf` are
+  now correctly rounded under every mode (they previously applied their
+  final rounding without the directed-rounding escalation, and several
+  carried cancellation or overflow-edge error at extreme inputs).
+- **`acosh` near 1 and `atanh` near ±1**: removed catastrophic
+  cancellation by reformulating through `log1p`, computing `1∓x` and
+  `v²−1` as exact working-scale gaps.
+- **`sinh` / `cosh` / `tanh` at large arguments**: corrected a
+  sign-direction error that turned the relative error of `e^−|x|` into a
+  large absolute error in its reciprocal; the dominant term is now
+  always evaluated at `|x|`. Wide tiers near the storage-overflow edge
+  now compute in a wider working integer.
+- **`log_b(b^k)` and exact-power `powf`** (e.g. `powf(4, 0.5)`) return
+  the exact result under directed rounding.
+- **`tanh` tiny arguments**: directed rounding of the compressing
+  linear band.
+- **`D38` `log2` / `log10` at maximum scale**: removed an `i128`
+  overflow in the exact-power detection.
+
+### Changed
+
+- The correct-rounding guarantee — previously documented for the
+  primary functions under nearest rounding — now holds for the entire
+  transcendental surface under all six rounding modes and all widths.
+
+### Internal
+
+- Added correctly-rounded integer `log1p` / `expm1` kernels (internal;
+  a public API is planned).
+- Expanded the strict-golden suite to the full 22-function × 13-width ×
+  6-mode matrix, asserting `delta == 0` against an external mpmath
+  oracle (286 cells, none ignored).
+
 ## [0.4.3] — 2026-05-20
 
 A correctness-and-perf release. Closed every precision hole found by
