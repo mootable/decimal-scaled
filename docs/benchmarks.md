@@ -35,9 +35,11 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > sometimes shortens via Cody-Waite range reduction, so neither is
 > a fair comparator). The bold mark goes on the row winner.**
 
-> **Bench machine.** All numbers in this doc are from the v0.4.3
-> full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
-> runners (2 vCPU shared, 7 GiB RAM, no core pinning). Per the
+> **Bench machine.** The library-comparison figures (§5) are from
+> the v0.4.4 `lib_cmp` full sweep (2026-05-21) on GitHub-hosted
+> `ubuntu-latest` standard runners; the §1–§3 timing tables carry
+> over from the v0.4.3 full_matrix sweep on the same runner class
+> (2 vCPU shared, 7 GiB RAM, no core pinning). Per the
 > Criterion author's standing caveat, shared CI runners carry
 > 20–50 % wall-clock variance per cell. Cells are valid relative
 > to each other within this run (matched compiler, matched
@@ -129,6 +131,87 @@ Alternate divide paths:
 | `*_strict` transcendentals - D76 / D153 / D307 | within **0.5 ULP** at storage at typical scales; at deepest scales the rounded-intermediate budget tightens - see `ALGORITHMS.md` |
 | `*` (lossy) transcendentals - D9 / D18 / D38 | f64-bridge: ~16 decimal digits, platform-libm-dependent, **not** correctly rounded |
 | `*` plain transcendental name - wide tiers (D76 / D153 / D307) | with `strict` feature, dispatches to `*_strict`; with `fast` or `not(strict)`, the f64-bridge `*_fast` is used. Both `*_strict` and `*_fast` named methods are always available regardless of the active mode |
+
+---
+
+## Precision vs other crates
+
+Worst-case transcendental error of each crate, measured against a
+high-precision oracle (worst result across every tested input). The
+metric is **LSBε** — *least significant bits in error*, the count of
+low-order bits of the stored value that are wrong — with the worst
+**[ULP][ULP]** distance from the true value in parentheses. **0 LSBε**
+means correctly rounded: the stored value is exactly right, within
+0.5 ULP of true. Numbers come from the precision shootout in
+[`benches/lib_cmp_precision.rs`](../benches/lib_cmp_precision.rs).
+
+[ULP]: https://en.wikipedia.org/wiki/Unit_in_the_last_place
+
+**Legend.** **✓** = **0 LSBε** (correctly rounded, ≤ 0.5 ULP from
+true) on *every* tested input. **✗** = at least one input with
+**≥ 1 LSBε**. **—** = not implemented by, or not representable in,
+that crate. First number = worst-case LSBε; parenthesised = worst
+ULP distance from the true value.
+
+### Scale 19 (`D38<19>`)
+
+Measured at a 19-digit scale under `HalfToEven`; each cell is the
+worst case across the inputs each library supports.
+
+| Function | decimal-scaled | g_math | fastnum | rust_decimal | dashu-float | decimal-rs |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| **exp**  | ✓ 0 (0.50) | ✗ 65 (2.3e19) | ✓ 0 (1e-16)  | ✓ 0 (2.7e-6) | ✓ 0 (1e-16) | ✓ 0 (1.3e-15) |
+| **ln**   | ✓ 0 (0.50) | ✗ 6 (49.5)    | ✓ 0 (1e-16)  | ✗ 31 (1.1e9) | ✗ 1 (1.00) | ✓ 0 (1e-16) |
+| **sin**  | ✓ 0 (0.50) | ✗ 64 (1.7e19) | ✓ 0 (1.7e-12)| ✓ 0 (2.1e-9) | — | — |
+| **cos**  | ✓ 0 (0.50) | ✗ 6 (50.0)    | ✓ 0 (5.2e-12)| ✓ 0 (2.4e-9) | — | — |
+| **tan**  | ✓ 0 (0.50) | ✗ 65 (2.1e19) | ✓ 0 (1.4e-12)| ✗ 36 (4.3e10) | — | — |
+| **atan** | ✓ 0 (0.50) | ✗ 64 (1.6e19) | ✓ 0 (1e-16)  | — | — | — |
+| **sqrt** | ✓ 0 (0.50) | ✗ 6 (49.6)    | ✓ 0 (1e-16)  | ✓ 0 (7.2e-7) | ✓ 0 (1e-16) | ✓ 0 (3e-16) |
+| **cbrt** | ✓ 0 (0.50) | — | ✓ 0 (1e-16) | — | — | — |
+| *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
+
+`decimal-scaled` is the only crate ✓ on every function — and its ✓
+holds for all six rounding modes and all thirteen widths
+(`D9` … `D1232`).
+
+### Deep scale 150 (`D307<150>`)
+
+Repeat the test at a 150-digit scale. The fixed-precision crates
+(g_math ≈ 19, rust_decimal ≈ 28, fastnum ≈ 34, decimal-rs ≈ 38
+digits) can no longer represent the value at all, so they score "—".
+The lone arbitrary-precision peer that reaches it, `dashu-float`,
+still misses `ln`. Only `decimal-scaled` computes all eight functions
+correctly at this depth.
+
+| Function | decimal-scaled | dashu-float | g_math | fastnum | rust_decimal | decimal-rs | bigdecimal |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| **exp**  | ✓ 0 (0.00) | ✓ 0 (0.00) | — | — | — | — | — |
+| **ln**   | ✓ 0 (0.00) | ✗ 1 (1.00) | — | — | — | — | — |
+| **sin**  | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **cos**  | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **tan**  | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **atan** | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **sqrt** | ✓ 0 (0.00) | ✓ 0 (0.00) | — | — | — | — | — |
+| **cbrt** | ✓ 0 (0.00) | — | — | — | — | — | — |
+
+`decimal-scaled` is the only all-✓ crate at both scales — the
+guarantee holds across all six rounding modes and all thirteen
+widths.
+
+### 0.4.4 precision-fix perf impact
+
+The 0.4.4 precision-hole closure changed the rounding path, so its
+throughput cost was measured directly in
+[`benches/prec_fix_impact.rs`](../benches/prec_fix_impact.rs):
+
+- **Default / nearest path (`HalfToEven`):** flat versus 0.4.3 — no
+  measurable regression on the common case.
+- **Directed modes near boundaries:** +10–27 %, and only near
+  rounding boundaries, where the residual-sign Ziv escalation does
+  the extra work needed to guarantee the correct last digit. Away
+  from boundaries the directed modes are unchanged.
+- **Round-to-odd** was evaluated as an alternative and rejected: it
+  regressed near boundaries rather than improving them.
 
 ---
 
