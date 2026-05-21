@@ -9,8 +9,8 @@ criterion output directories. Each matched directory should contain
 estimates.json files in `<group>/<bench>/new/`.
 
 Example:
-    python scripts/bench_compare.py 'bench-results/baseline-*/D57_s20' \
-                                    'bench-results/narrow-*/D57_s20'
+    python scripts/bench_compare.py 'tmp/bench-results/baseline-*/D57_s20' \
+                                    'tmp/bench-results/narrow-*/D57_s20'
 """
 import glob
 import json
