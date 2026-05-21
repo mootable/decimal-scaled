@@ -84,5 +84,4 @@ accepting mixed-width, mixed-`SCALE` operands.
 
 | Term | Expansion |
 |------|-----------|
-| **IEEE 754** | The [floating-point standard](https://en.wikipedia.org/wiki/IEEE_754) whose `HalfToEven` default and rounding-mode set this crate mirrors. |
-| **GDA** | [General Decimal Arithmetic](https://speleotrove.com/decimal/) — the decimal-arithmetic specification. |
+| **IEEE 754** | The IEEE [floating-point standard](https://en.wikipedia.org/wiki/IEEE_754). This crate is decimal fixed-point — not an IEEE 754 float type — but its `RoundingMode` set and the `HalfToEven` default mirror IEEE 754's rounding conventions. |
