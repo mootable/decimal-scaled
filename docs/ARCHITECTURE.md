@@ -23,23 +23,16 @@ A decimal kernel expresses its math in integer operations and never
 reaches into limb internals directly.
 
 ```mermaid
-flowchart TB
-  subgraph DEC["Decimal layer — src/types · src/policy · src/algos"]
-    direction TB
-    D1["Front-ends: D9 … D1232 — Dxx, const SCALE + Decimal trait"]
-    D2["Dispatch: const-folded match on width, SCALE — base / std / no_std"]
-    D3["Kernels: sqrt cbrt exp ln trig pow — Newton, Tang, AGM, series"]
-    D1 --> D2 --> D3
+flowchart LR
+  subgraph DEC["Decimal layer"]
+    direction LR
+    D1(["Front-ends<br/>Dxx, SCALE"]) --> D2(["Dispatch<br/>match width, SCALE"]) --> D3(["Kernels<br/>sqrt · exp · ln · trig"])
   end
-  subgraph INT["Integer layer — src/int · src/wide_int"]
-    direction TB
-    I1["Backends: i32 / i64 / i128 and Int / Uint over u64 limbs — FixedInt trait"]
-    I2["Dispatch: const-folded match on width / limb count"]
-    I3["Algorithms: mul div sqr cube root_int isqrt — schoolbook / Karatsuba, MG / Burnikel-Ziegler"]
-    I4["Limb primitives: per-width unrolled u64-array kernels"]
-    I1 --> I2 --> I3 --> I4
+  subgraph INT["Integer layer"]
+    direction LR
+    I1(["Backends<br/>Int / Uint · FixedInt"]) --> I2(["Dispatch<br/>match width / limbs"]) --> I3(["Algorithms<br/>mul · div · root_int"]) --> I4(["Limb primitives<br/>u64 arrays"])
   end
-  D3 -->|composed on| I1
+  D3 -. composed on .-> I1
 ```
 
 The key point the older sketch hid: **the integer layer is not just
