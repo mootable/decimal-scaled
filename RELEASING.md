@@ -132,11 +132,22 @@ gh workflow run bench-all.yml --ref release/<version>
 # 2. Wait for the bench-full matrix runs to finish (the wide tiers are
 #    slow, ~40 min). Poll with `gh run list`.
 
-# 3. Pull the per-width Criterion artifacts and regenerate:
-scripts/refresh_bench_artifacts.sh          # download the run artifacts
-cargo run --release --example chart_gen      # -> docs/figures/library_comparison/*.png
-python scripts/fill_benchmarks.py            # benchmarks.md.draft + criterion -> docs/benchmarks.md
+# 3. Download every per-width Criterion artifact from the run into one
+#    directory (each unzips to a `criterion-full_matrix-D<N>/` subdir),
+#    then regenerate from the JSON — no stdout logs, no manual fill:
+gh run download <run-id> --dir bench-artifacts   # criterion-full_matrix-D*/ subdirs
+python scripts/full_matrix_ingest.py \
+    --artifacts bench-artifacts --fill            # criterion JSON -> docs/benchmarks.md §1–§3
+cargo run --release --example chart_gen           # §5 figures -> docs/figures/library_comparison/*.png
 ```
+
+`full_matrix_ingest.py --fill` reads `docs/benchmarks.md.draft`, pulls
+each cell's median straight from `*/new/estimates.json`, picks the
+per-row natural unit, bolds the row winner, and writes
+`docs/benchmarks.md` §1 (arithmetic) / §2 (fast transcendentals) /
+§3 (strict transcendentals). A missing leaf renders as `—` and is
+listed on stderr — values are never fabricated. The §4 prose and
+§5 figures/precision tables are still maintained as below.
 
 - Update the "Bench machine … vX.Y.Z full_matrix sweep" provenance note
   in `benchmarks.md` to the new version and date.

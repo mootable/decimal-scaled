@@ -1,6 +1,17 @@
-"""Parse criterion stdout from the full_matrix bench runs and
-substitute the timings (with per-row winner emboldened) into the
-docs/benchmarks.md.draft template.
+"""SUPERSEDED — use ``scripts/full_matrix_ingest.py --fill`` instead.
+
+This module parses criterion *stdout* logs from the full_matrix bench
+runs and substitutes the timings into ``docs/benchmarks.md.draft``. It
+depends on transient log files and a hand-kept placeholder map, so the
+release refresh now reads the criterion JSON artifacts directly:
+
+    gh run download <run-id> --dir bench-artifacts
+    python scripts/full_matrix_ingest.py --artifacts bench-artifacts --fill
+
+That fills §1–§3 of ``docs/benchmarks.md`` end-to-end from
+``*/new/estimates.json`` with no stdout capture and no manual step.
+This file is kept only for the rare case of reconstructing tables from
+an archived stdout log.
 
 Run from the crate root:
     python scripts/fill_benchmarks.py
