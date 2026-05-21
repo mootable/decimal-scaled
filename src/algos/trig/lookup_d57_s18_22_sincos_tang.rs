@@ -45,34 +45,7 @@ const M: u32 = 64;
 
 type Entry = (core::W, core::W);
 
-#[cfg(feature = "std")]
-::std::thread_local! {
-    static TABLE_CACHE: ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<Entry>)>> =
-        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
-}
-
-#[cfg(feature = "std")]
-fn table_entry(w: u32, j_idx: usize) -> Entry {
-    TABLE_CACHE.with(|c| {
-        {
-            let cache = c.borrow();
-            for (cw, tbl) in cache.iter() {
-                if *cw == w {
-                    return tbl[j_idx];
-                }
-            }
-        }
-        let tbl = compute_table(w);
-        let entry = tbl[j_idx];
-        c.borrow_mut().push((w, tbl));
-        entry
-    })
-}
-
-#[cfg(not(feature = "std"))]
-fn table_entry(w: u32, j_idx: usize) -> Entry {
-    compute_table(w)[j_idx]
-}
+crate::policy::table_cache::decl_table_cache!(entry = Entry, compute = compute_table);
 
 fn compute_table(w: u32) -> alloc::vec::Vec<Entry> {
     let mut out = alloc::vec::Vec::with_capacity((M + 1) as usize);

@@ -57,40 +57,7 @@ use crate::wide_int::Int192;
 /// the D57 wide-tier transcendental core), so 64 KB at M = 512.
 const M: u32 = 512;
 
-#[cfg(feature = "std")]
-::std::thread_local! {
-    /// Per-thread cache of `exp(j · ln 2 / M)` tables keyed on the
-    /// working scale `w`. One entry per distinct `w` (typically one
-    /// per `SCALE` choice).
-    static TABLE_CACHE: ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<core::W>)>> =
-        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
-}
-
-/// Returns `exp(c_{j_idx})` at working scale `w` from the per-thread
-/// table, populating the table on first request. `core::W` is `Copy`
-/// so this returns a value, not a borrow.
-#[cfg(feature = "std")]
-fn table_entry(w: u32, j_idx: usize) -> core::W {
-    TABLE_CACHE.with(|c| {
-        {
-            let cache = c.borrow();
-            for (cw, tbl) in cache.iter() {
-                if *cw == w {
-                    return tbl[j_idx];
-                }
-            }
-        }
-        let tbl = compute_table(w);
-        let entry = tbl[j_idx];
-        c.borrow_mut().push((w, tbl));
-        entry
-    })
-}
-
-#[cfg(not(feature = "std"))]
-fn table_entry(w: u32, j_idx: usize) -> core::W {
-    compute_table(w)[j_idx]
-}
+crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
 
 /// Build the `exp(j · ln 2 / M)` table at working scale `w` using the
 /// canonical `exp_fixed` kernel (one call per slot, paid once per
