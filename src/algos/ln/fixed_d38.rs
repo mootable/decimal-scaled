@@ -70,7 +70,7 @@ const LN10_RAW: crate::wide_int::Int256 =
 /// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
 #[inline]
 fn fixed_from_int256(raw: crate::wide_int::Int256) -> Fixed {
-    let words = raw.0;
+    let words = raw.limbs_le();
     Fixed {
         negative: false,
         mag: [

@@ -45,7 +45,7 @@ pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
 /// `consts::PI_RAW` (Int256 holding `π × 10^75`).
 pub(crate) fn wide_pi(w: u32) -> Fixed {
     debug_assert!(w <= 75, "wide_pi: working scale {w} exceeds embedded 75-digit π");
-    let words = crate::types::consts::PI_RAW.0;
+    let words = crate::types::consts::PI_RAW.limbs_le();
     let pi_at_75 = Fixed {
         negative: false,
         mag: [

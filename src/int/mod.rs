@@ -15,8 +15,9 @@
 //!   types compose on (truncated mul / sqr, isqrt, root_int, the
 //!   re-exported full-width products and divide entry points).
 //! - [`limbs`] — the raw `&[u64]` / `&[u128]` slice limb primitives
-//!   (add/sub/cmp/shift/mul/divmod) plus the `decl_wide_int!` named-type
-//!   generator, absorbed from the former `src/wide_int/`.
+//!   (add/sub/cmp/shift/mul/divmod) plus the `WideInt` / `WideStorage`
+//!   traits and the named-type re-exports, absorbed from the former
+//!   `src/wide_int/`.
 
 pub(crate) mod limbs;
 pub(crate) mod algos;
