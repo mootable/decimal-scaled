@@ -171,6 +171,7 @@ under its own native rounding mode (shown in the `mode` column).
 The full 22-function surface at a 19-digit scale, each crate under its
 native mode:
 
+<!-- BEGIN GENERATED:precision:D38 -->
 | library | mode | sqrt | cbrt | exp | ln | log2 | log10 | exp2 | sin | cos | tan | atan | asin | acos | sinh | cosh | tanh | asinh | acosh | atanh | log | atan2 | powf |
 |---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
@@ -180,6 +181,7 @@ native mode:
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | n/a | n/a | n/a | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (9.2e18) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.3e20) |
+<!-- END GENERATED:precision:D38 -->
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
 rounded on every function, and that holds for all six rounding modes
@@ -201,6 +203,7 @@ The 35-digit subset that has an oracle table. `fastnum` and
 significant digits, so it cannot reach 35 either and is `n/a` as well;
 `decimal-rs` reaches it but accumulates large gaps on `sqrt` and `exp`.
 
+<!-- BEGIN GENERATED:precision:D76 -->
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
@@ -210,6 +213,7 @@ significant digits, so it cannot reach 35 either and is `n/a` as well;
 | decimal-rs | HalfToEven | 58 (2.3e17) | n/a | 130 (3.3e38) | 1 (1.00) | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a |
 | g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+<!-- END GENERATED:precision:D76 -->
 
 `decimal-scaled` remains `0 (0)` across this width too, and `dashu-float`
 stays correctly rounded on the surface it exposes.
@@ -226,6 +230,7 @@ working precision past the result magnitude, is still tens-to-hundreds
 of LSBε off, and `bigdecimal`'s context `sqrt`/`cbrt` are hundreds of
 LSBε off at this depth.
 
+<!-- BEGIN GENERATED:precision:D307 -->
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
@@ -235,6 +240,7 @@ LSBε off at this depth.
 | decimal-rs | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 761 (2.2e228) | 339 (3.8e101) | n/a | n/a | n/a | n/a | n/a | n/a |
 | g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+<!-- END GENERATED:precision:D307 -->
 
 `decimal-scaled` is the only crate that is `0 (0)` — correctly rounded
 to the last of the 150 stored digits — at this depth, and it stays so

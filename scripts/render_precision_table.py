@@ -98,7 +98,15 @@ def methods_in_order(dir_, width):
     return order
 
 
-def render_width(dir_, width, only=None):
+def render_table(dir_, width, only=None):
+    """The markdown table BODY only (header + separator + one row per
+    library), no heading and no legend, no trailing newline.
+
+    This is the single source consumed by `scripts/render_docs.py` when
+    it fills the `<!-- BEGIN GENERATED:precision:* -->` regions in the
+    README / benchmarks docs, so the prose tables there trace back to
+    exactly the same TSV rows as the standalone CLI output below.
+    """
     methods = methods_in_order(dir_, width)
     if only:
         wanted = [m.strip() for m in only.split(",")]
@@ -111,12 +119,6 @@ def render_width(dir_, width, only=None):
         modes[lib] = mode or "-"
 
     out = []
-    out.append(f"## {width} (scale {SCALE.get(width, '?')}) — LSBε (ULP)\n")
-    out.append(
-        "Cell = LSBε (max |ULP distance to true|). 0 (0) = correctly "
-        "rounded (bit-exact under the subject's reported mode). `n/a` = "
-        "method not exposed or width/scale not representable.\n"
-    )
     header = "| library | mode |" + "".join(f" {m} |" for m in methods)
     sep = "|---|---|" + "---|" * len(methods)
     out.append(header)
@@ -132,6 +134,19 @@ def render_width(dir_, width, only=None):
                 s = f"{cell[1]} ({fmt_ulp(cell[2])})"
             row += f" {s} |"
         out.append(row)
+    return "\n".join(out)
+
+
+def render_width(dir_, width, only=None):
+    """Standalone CLI form: heading + legend + table + trailing blank."""
+    out = []
+    out.append(f"## {width} (scale {SCALE.get(width, '?')}) — LSBε (ULP)\n")
+    out.append(
+        "Cell = LSBε (max |ULP distance to true|). 0 (0) = correctly "
+        "rounded (bit-exact under the subject's reported mode). `n/a` = "
+        "method not exposed or width/scale not representable.\n"
+    )
+    out.append(render_table(dir_, width, only=only))
     out.append("")
     return "\n".join(out)
 

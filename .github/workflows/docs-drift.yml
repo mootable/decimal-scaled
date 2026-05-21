@@ -1,0 +1,64 @@
+name: "\U0001F4DD docs drift"
+
+# Single-source-of-truth gate for the documentation.
+#
+# Several facts are repeated across README.md and docs/ — the crate
+# version, the storage-width tier family, the `MAX_SCALE = N - 1` rule,
+# and the precision (LSBe) shootout tables. Each lives in exactly ONE
+# source (Cargo.toml, docs/_data/*.json, or results/precision/*.tsv) and
+# is rendered into clearly-delimited
+# `<!-- BEGIN/END GENERATED:<key> -->` regions by
+# scripts/render_docs.py. This gate regenerates those regions from their
+# sources and fails if the committed docs are stale, so the prose can
+# never drift from the data.
+#
+# DETERMINISTIC ONLY. This gate covers facts that regenerate identically
+# on any runner with no benchmarking — including the precision tables,
+# which are rendered from the committed result TSVs, not by re-running
+# the oracle sweep. It deliberately does NOT touch the benchmark TIMING
+# tables in docs/benchmarks.md — those require a GHA bench sweep (see
+# bench-full.yml / bench-history.yml) and are owned by the benchmark
+# self-refresh workflows, not this PR-time gate.
+#
+# The pull_request trigger has no branch filter on purpose: it must also
+# cover release/* -> main PRs, where the docs are regenerated and
+# committed as part of the release PR (see RELEASING.md).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: docs-drift-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  docs-drift:
+    name: docs-drift
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.x"
+
+      - name: Regenerate single-sourced doc regions
+        # Rewrites every GENERATED region in place from Cargo.toml +
+        # docs/_data/*.json + results/precision/*.tsv. No external deps
+        # (stdlib json + re only).
+        run: python scripts/render_docs.py
+
+      - name: Fail if the committed docs are stale
+        # Any change here means a GENERATED region was edited by hand or
+        # its data source moved without re-rendering. Fix locally with
+        # `python scripts/render_docs.py` and commit the result.
+        run: git diff --exit-code

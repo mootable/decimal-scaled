@@ -1,0 +1,18 @@
+{
+  "_comment": "Single source of truth for the storage-width tier family. Edit ONLY here; run `python scripts/render_docs.py` to propagate into the docs (see scripts/render_docs.py and docs/_data/README.md). The `MAX_SCALE` shown in the docs is derived as `digits - 1`, not stored, so it can never drift from the digit count.",
+  "tiers": [
+    { "name": "D9",    "digits": 9,    "bits": 32,   "int": "i32",     "max_at_s0": "±2.1 × 10⁹",    "feature": "always available" },
+    { "name": "D18",   "digits": 18,   "bits": 64,   "int": "i64",     "max_at_s0": "±9.2 × 10¹⁸",   "feature": "always available" },
+    { "name": "D38",   "digits": 38,   "bits": 128,  "int": "i128",    "max_at_s0": "±1.7 × 10³⁸",   "feature": "always available" },
+    { "name": "D57",   "digits": 57,   "bits": 192,  "int": "Int192",  "max_at_s0": "±3.1 × 10⁵⁷",   "feature": "`d57` / `wide`" },
+    { "name": "D76",   "digits": 76,   "bits": 256,  "int": "Int256",  "max_at_s0": "±5.8 × 10⁷⁶",   "feature": "`d76` / `wide`" },
+    { "name": "D115",  "digits": 115,  "bits": 384,  "int": "Int384",  "max_at_s0": "±2.0 × 10¹¹⁵",  "feature": "`d115` / `wide`" },
+    { "name": "D153",  "digits": 153,  "bits": 512,  "int": "Int512",  "max_at_s0": "±6.7 × 10¹⁵³",  "feature": "`d153` / `wide`" },
+    { "name": "D230",  "digits": 230,  "bits": 768,  "int": "Int768",  "max_at_s0": "±7.7 × 10²³⁰",  "feature": "`d230` / `wide`" },
+    { "name": "D307",  "digits": 307,  "bits": 1024, "int": "Int1024", "max_at_s0": "±9.0 × 10³⁰⁷",  "feature": "`d307` / `wide`" },
+    { "name": "D462",  "digits": 462,  "bits": 1536, "int": "Int1536", "max_at_s0": "±1.0 × 10⁴⁶²",  "feature": "`d462` / `x-wide`" },
+    { "name": "D616",  "digits": 616,  "bits": 2048, "int": "Int2048", "max_at_s0": "±1.6 × 10⁶¹⁶",  "feature": "`d616` / `x-wide`" },
+    { "name": "D924",  "digits": 924,  "bits": 3072, "int": "Int3072", "max_at_s0": "±2.3 × 10⁹²⁴",  "feature": "`d924` / `xx-wide`" },
+    { "name": "D1232", "digits": 1232, "bits": 4096, "int": "Int4096", "max_at_s0": "±2.7 × 10¹²³²", "feature": "`d1232` / `xx-wide`" }
+  ]
+}
