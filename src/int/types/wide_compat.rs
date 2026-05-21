@@ -16,7 +16,7 @@
 //! crate (Int16384 = 256 limbs) with isqrt scratch slack.
 
 use super::{Int, Uint};
-use crate::int::limbs::WideInt;
+use crate::int::limbs::{WideInt, WideStorage};
 
 /// 288 u64 limbs = 18432 bits — the shared `to_mag_sign` staging width.
 const MAG_LIMBS: usize = 288;
@@ -155,5 +155,78 @@ impl<const N: usize> WideInt for Uint<N> {
             out[2 * i] = mag[i] as u64;
         }
         Uint::from_limbs(out)
+    }
+}
+
+// ── WideStorage for Int<N> ──────────────────────────────────────────
+//
+// The kernel-facing storage trait. Const-generic port of the
+// `impl_wide_storage!` macro body. The `Div + Rem + Neg` supertraits are
+// satisfied by the operator impls in the parent module (Div / Rem
+// delegate to the dispatching `div_rem`, matching the macro types'
+// divide algorithm).
+
+impl<const N: usize> WideStorage for Int<N> {
+    const BITS: u32 = (N * 64) as u32;
+    const ZERO: Self = Int::<N>::ZERO;
+    const ONE: Self = Int::<N>::ONE;
+    const TEN: Self = Int::<N>::TEN;
+
+    #[inline]
+    fn pow(self, exp: u32) -> Self {
+        // Wrapping power, matching the macro's `$S::pow`.
+        Int::wrapping_pow(self, exp)
+    }
+
+    #[inline]
+    fn isqrt(self) -> Self {
+        // Magnitude isqrt, matching the macro's signed `isqrt`
+        // (`$S(self.unsigned_abs().isqrt().0)`).
+        Self::from_limbs(*self.unsigned_abs().isqrt().as_limbs())
+    }
+
+    #[inline]
+    fn resize_to<T: WideStorage>(self) -> T {
+        // `WideStorage: WideInt`, so the magnitude-bridge cast applies.
+        // Skips the 288-u64 staging buffer by handing this type's own
+        // N-limb magnitude straight to `T::from_mag_sign`.
+        let negative = self.is_negative();
+        let mag = *self.unsigned_abs().as_limbs();
+        T::from_mag_sign(&mag, negative)
+    }
+
+    #[inline]
+    fn leading_zeros(self) -> u32 {
+        Int::leading_zeros(&self)
+    }
+
+    #[inline]
+    fn div_rem(self, rhs: Self) -> (Self, Self) {
+        Int::div_rem(self, rhs)
+    }
+
+    #[inline]
+    fn bit(self, idx: u32) -> bool {
+        Int::bit(self, idx)
+    }
+
+    #[inline]
+    fn from_i128(v: i128) -> Self {
+        Int::from_i128(v)
+    }
+
+    #[inline]
+    fn checked_mul_u64(self, n: u64) -> Self {
+        Int::checked_mul_u64(self, n)
+    }
+
+    #[inline]
+    fn to_f64(self) -> f64 {
+        Int::to_f64(self)
+    }
+
+    #[inline]
+    fn from_f64_val(v: f64) -> Self {
+        Int::from_f64(v)
     }
 }

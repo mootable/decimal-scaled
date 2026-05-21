@@ -29,7 +29,7 @@ use crate::int::algos::div::limbs_isqrt_u64;
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use core::cmp::Ordering;
 use core::ops::{
-    Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Shl, Shr, Sub,
+    Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub,
 };
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
@@ -1188,6 +1188,29 @@ impl<const N: usize> Neg for Int<N> {
     }
 }
 
+// ── Div / Rem ───────────────────────────────────────────────────────
+//
+// Truncating signed division / remainder, delegating to the dispatching
+// `div_rem` so the operators share the macro types' divide algorithm
+// (`limbs_divmod_dispatch_u64`: Knuth / Burnikel–Ziegler for multi-limb
+// divisors). These supertraits are what `WideStorage` requires.
+
+impl<const N: usize> Div for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        self.div_rem(rhs).0
+    }
+}
+
+impl<const N: usize> Rem for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn rem(self, rhs: Self) -> Self {
+        self.div_rem(rhs).1
+    }
+}
+
 // ── Display / FromStr ───────────────────────────────────────────────
 //
 // Delegate to the same limb fmt / parse path the `decl_wide_int!` macro
@@ -1926,6 +1949,71 @@ mod tests {
     fn int_checked_mul_u64_overflow_panics() {
         // max_value * 2 overflows the signed range.
         let _ = Int::<4>::max_value().checked_mul_u64(2);
+    }
+
+    #[test]
+    fn int_div_rem_operators_match_div_rem() {
+        // The Div / Rem operators must agree with the inherent div_rem,
+        // which is what WideStorage requires as supertraits.
+        let a = Int::<4>::from_i128(-1000);
+        let b = Int::<4>::from_i128(7);
+        assert_eq!(a / b, Int::<4>::from_i128(-1000 / 7));
+        assert_eq!(a % b, Int::<4>::from_i128(-1000 % 7));
+        let (q, r) = a.div_rem(b);
+        assert_eq!(a / b, q);
+        assert_eq!(a % b, r);
+    }
+
+    #[test]
+    fn int_wide_storage_surface() {
+        use crate::int::limbs::WideStorage;
+        fn exercises<T: WideStorage>() {
+            assert!(<T as WideStorage>::ZERO == <T as WideStorage>::from_i128(0));
+            assert!(<T as WideStorage>::ONE == <T as WideStorage>::from_i128(1));
+            assert!(<T as WideStorage>::TEN == <T as WideStorage>::from_i128(10));
+
+            let twelve = <T as WideStorage>::from_i128(12);
+            let three = <T as WideStorage>::from_i128(3);
+            // pow / isqrt
+            assert!(three.pow(3) == <T as WideStorage>::from_i128(27));
+            assert!(<T as WideStorage>::from_i128(144).isqrt()
+                == <T as WideStorage>::from_i128(12));
+            // div_rem
+            let (q, r) = twelve.div_rem(<T as WideStorage>::from_i128(5));
+            assert!(q == <T as WideStorage>::from_i128(2));
+            assert!(r == <T as WideStorage>::from_i128(2));
+            // bit / leading_zeros
+            assert!(twelve.bit(2) && twelve.bit(3) && !twelve.bit(0));
+            assert!(<T as WideStorage>::ONE.leading_zeros()
+                == <T as WideStorage>::BITS - 1);
+            // checked_mul_u64 / f64 round-trips
+            assert!(twelve.checked_mul_u64(10) == <T as WideStorage>::from_i128(120));
+            assert!(twelve.to_f64() == 12.0);
+            assert!(<T as WideStorage>::from_f64_val(7.9)
+                == <T as WideStorage>::from_i128(7));
+        }
+        exercises::<Int<4>>();
+        exercises::<Int<8>>();
+
+        // resize_to widens/narrows across the family.
+        let v = Int::<4>::from_i128(-123_456_789);
+        let w: Int<8> = WideStorage::resize_to(v);
+        assert_eq!(w.to_i128_checked(), Some(-123_456_789));
+        let back: Int<4> = WideStorage::resize_to(w);
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn int_isqrt_matches_uint_magnitude() {
+        use crate::int::limbs::WideStorage;
+        // Signed isqrt is the magnitude isqrt (macro parity).
+        let n = Int::<4>::from_i128(1_000_000_000_000);
+        let r = WideStorage::isqrt(n);
+        assert_eq!(r, Int::<4>::from_i128(1_000_000));
+        // Perfect square round-trip at width 8.
+        let big = Int::<8>::from_i128(987_654_321);
+        let sq = big.checked_mul(big).unwrap();
+        assert_eq!(WideStorage::isqrt(sq), big);
     }
 
     #[test]
