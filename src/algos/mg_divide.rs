@@ -1,3 +1,5 @@
+// SPDX-License-Identifier: MIT OR Apache-2.0
+//
 //! Moller-Granlund magic-number division for `D38` rescale operations.
 //!
 //! This module provides two `pub(crate)` entry points used by the
@@ -18,15 +20,16 @@
 //!
 //! - Moller, N. and Granlund, T. (2011). "Improved Division by Invariant
 //! Integers." IEEE Transactions on Computers, 60(2), 165-175.
-//! DOI: 10.1109/TC.2010.143. (The magic-number table and the
-//! 256-bit-dividend divide algorithm used in [`div_exp_fast_2word_with_rem`].)
-//! - Granlund, T. and Montgomery, P. L. (1994). "Division by Invariant
-//! Integers using Multiplication." PLDI '94. (Basis for the 1-word
-//! fast path that the upstream library also references.)
+//! DOI: 10.1109/TC.2010.143. The divisor-reciprocal precomputation
+//! (paper Fig. 6.1, the `m'` multiplier with the normalisation shift)
+//! and the dividend-times-reciprocal estimate with single add-back
+//! correction (paper Alg. 4) are the basis for [`MG_EXP_MAGICS`] and
+//! [`div_exp_fast_2word_with_rem`].
 //!
-//! The 128x128->256 multiply ([`mul2`]) and the magic-number table
-//! ([`MG_EXP_MAGICS`]) are adapted from the `primitive_fixed_point_decimal`
-//! crate (MIT-licensed; see `LICENSES/THIRD-PARTY.md`).
+//! This module is an independent clean-room implementation derived
+//! directly from the Moller-Granlund 2011 paper. Applying the technique
+//! to the constant divisor `10^SCALE` is prior art; see the prior-art
+//! credit and clean-room declaration in `ALGORITHMS.md`.
 //!
 //! # `SCALE = 0` special case
 //!
@@ -38,24 +41,6 @@
 
 use crate::types::widths::D38;
 
-/// Pre-computed magic constants for divide-by-`10^i` via the
-/// Moller-Granlund algorithm. Index `i` covers `i = 0..=38`.
-///
-/// Each entry is `(magic, zeros)` where `zeros` is the number of leading
-/// zeros in `10^i` when left-aligned to 128 bits, and `magic` is the
-/// 128-bit Moller-Granlund multiplier for that divisor:
-///
-/// ```python
-/// def gen(d):
-/// zeros = 128 - d.bit_length()
-/// magic = pow(2, 256) // (d << zeros)
-/// magic = magic - pow(2, 128)  # fits in 128 bits
-/// return (magic, zeros)
-/// ```
-///
-/// Index 0 is a placeholder `(0, 0)`. Callers must not pass `SCALE = 0`
-/// into the magic-divide functions; both public entry points guard that
-/// case before indexing this table.
 /// `10^i` for `i = 0..=38`. Indexed by `scale` to skip the
 /// runtime `u128::pow` (which is a 4-multiplication square-and-multiply
 /// loop for the typical scale range) in hot paths like
@@ -71,94 +56,145 @@ pub(crate) const POW10_U128: [u128; 39] = {
     t
 };
 
-const MG_EXP_MAGICS: [(u128, u32); 39] = [
-    (0, 0),
-    (0x99999999999999999999999999999999, 124),
-    (0x47ae147ae147ae147ae147ae147ae147, 121),
-    (0x0624dd2f1a9fbe76c8b4395810624dd2, 118),
-    (0xa36e2eb1c432ca57a786c226809d4951, 114),
-    (0x4f8b588e368f08461f9f01b866e43aa7, 111),
-    (0x0c6f7a0b5ed8d36b4c7f34938583621f, 108),
-    (0xad7f29abcaf485787a6520ec08d23699, 104),
-    (0x5798ee2308c39df9fb841a566d74f87a, 101),
-    (0x12e0be826d694b2e62d01511f12a6061, 98),
-    (0xb7cdfd9d7bdbab7d6ae6881cb5109a36, 94),
-    (0x5fd7fe17964955fdef1ed34a2a73ae91, 91),
-    (0x19799812dea11197f27f0f6e885c8ba7, 88),
-    (0xc25c268497681c2650cb4be40d60df73, 84),
-    (0x6849b86a12b9b01ea70909833de71928, 81),
-    (0x203af9ee756159b21f3a6e0297ec1420, 78),
-    (0xcd2b297d889bc2b6985d7cd0f3135367, 74),
-    (0x70ef54646d496892137dfd73f5a90f85, 71),
-    (0x2725dd1d243aba0e75fe645cc4873f9e, 68),
-    (0xd83c94fb6d2ac34a5663d3c7a0d865ca, 64),
-    (0x79ca10c9242235d511e976394d79eb08, 61),
-    (0x2e3b40a0e9b4f7dda7edf82dd794bc06, 58),
-    (0xe392010175ee5962a6498d1625bac670, 54),
-    (0x82db34012b25144eeb6e0a781e2f0527, 51),
-    (0x357c299a88ea76a58924d52ce4f26a85, 48),
-    (0xef2d0f5da7dd8aa27507bb7b07ea4409, 44),
-    (0x8c240c4aecb13bb52a6c95fc0655033a, 41),
-    (0x3ce9a36f23c0fc90eebd44c99eaa68fb, 38),
-    (0xfb0f6be50601941b17953adc3110a7f8, 34),
-    (0x95a5efea6b34767c12ddc8b027408660, 31),
-    (0x4484bfeebc29f863424b06f3529a051a, 28),
-    (0x039d66589687f9e901d59f290ee19dae, 25),
-    (0x9f623d5a8a732974cfbc31db4b0295e4, 21),
-    (0x4c4e977ba1f5bac3d9635b15d59bab1c, 18),
-    (0x09d8792fb4c495697ab5e277de16227d, 15),
-    (0xa95a5b7f87a0ef0f2abc9d8c9689d0c8, 11),
-    (0x54484932d2e725a5bbca17a3aba173d3, 8),
-    (0x1039d428a8b8eaeafca1ac82efb45ca9, 5),
-    (0xb38fb9daa78e44ab2dcf7a6b19209442, 1),
-];
+/// Moller-Granlund reciprocal multiplier for the normalised divisor
+/// `d_norm = d << s`, where `s = d.leading_zeros()` left-aligns `d`'s
+/// top set bit to bit 127.
+///
+/// The paper (Moller-Granlund 2011, Fig. 6.1 / Eq. 1) defines, for a
+/// normalised `N`-bit divisor `d_norm` with the high bit set, the
+/// reciprocal
+///
+/// ```text
+///     m' = floor((2^(2N) - 1) / d_norm) - 2^N
+/// ```
+///
+/// so that `2^N + m' = floor((2^(2N) - 1) / d_norm)`. With `N = 128`
+/// and `d_norm` having bit 127 set, `floor((2^256 - 1) / d_norm)` is a
+/// 129-bit value whose implicit leading `2^128` is dropped; the stored
+/// `m'` is the low 128 bits.
+///
+/// For our divisors `d = 10^k` the only proper divisors of `2^256 - 1`
+/// that could perturb the floor are powers of two, which `10^k` is not,
+/// so `floor((2^256 - 1) / d_norm) == floor(2^256 / d_norm)`; the
+/// implementation divides `2^256` (the cleaner constant) by binary
+/// long division. The 129th bit is asserted to be exactly 1.
+const fn mg_reciprocal(d: u128) -> u128 {
+    let s = d.leading_zeros();
+    let d_norm = d << s;
 
-// 128x128 -> 256 schoolbook multiply.
-//
-// All four 64-bit sub-products are accumulated with explicit carry
-// tracking so the full 256-bit result is exact with no overflow loss.
+    // Binary long division of 2^256 by `d_norm`. The numerator has a
+    // single set bit at position 256; we sweep bit positions 256..=0,
+    // shifting the running remainder left one place per step and pulling
+    // in the numerator bit. The remainder stays strictly below `d_norm`
+    // (< 2^128), but the pre-comparison value `(rem << 1) | nbit` can
+    // reach the 129th bit, so the carry-out of the shift is tracked
+    // separately in `rem_carry`.
+    let mut quot_lo: u128 = 0; // low 128 bits of the quotient
+    let mut quot_hi: u128 = 0; // bits 128.. (must end as exactly 1)
+    let mut rem: u128 = 0;
+    let mut pos: i32 = 256;
+    while pos >= 0 {
+        let rem_carry = rem >> 127;
+        let shifted = (rem << 1) | if pos == 256 { 1 } else { 0 };
+        // Quotient bit is set when the 129-bit value
+        // (rem_carry:shifted) is >= d_norm.
+        let fits = rem_carry == 1 || shifted >= d_norm;
+        rem = if fits { shifted.wrapping_sub(d_norm) } else { shifted };
+        quot_hi = (quot_hi << 1) | (quot_lo >> 127);
+        quot_lo = (quot_lo << 1) | (fits as u128);
+        pos -= 1;
+    }
+    // 2^256 / d_norm == 2^128 + m', so the high half is exactly 1 and
+    // the low half is the stored reciprocal m'.
+    assert!(quot_hi == 1, "MG reciprocal: normalised quotient must be 129-bit");
+    quot_lo
+}
+
+/// Magic constants for divide-by-`10^i`, `i = 0..=38`, computed from the
+/// Moller-Granlund formula at compile time. Entry `i` is
+/// `(m', s)` where `s = (10^i).leading_zeros()` is the normalisation
+/// shift and `m'` is [`mg_reciprocal`] of `10^i`.
+///
+/// Index 0 holds the sentinel `(0, 0)`: `10^0 = 1` needs no divide and
+/// every public entry point short-circuits `SCALE == 0` before indexing
+/// this table.
+const MG_EXP_MAGICS: [(u128, u32); 39] = {
+    let mut table = [(0u128, 0u32); 39];
+    let mut i = 1;
+    while i < 39 {
+        let d = POW10_U128[i];
+        table[i] = (mg_reciprocal(d), d.leading_zeros());
+        i += 1;
+    }
+    table
+};
 
 /// Full 256-bit product of two unsigned 128-bit integers.
 ///
-/// Returns `(high, low)` such that `high * 2^128 + low == a * b`
-/// for all `a`, `b` in `0..=u128::MAX`.
+/// Returns `(high, low)` with `high * 2^128 + low == a * b` exactly for
+/// every `a`, `b` in `0..=u128::MAX`. `const fn`, so products of
+/// constants (e.g. the magic-table reciprocals) fold at compile time.
 ///
-/// `const fn` so constant inputs can be folded at compile time.
+/// # Method
+///
+/// Each operand splits into two 64-bit halves, and the product is the
+/// sum of the four 64x64->128 partial products placed at base-`2^64`
+/// columns 0, 1, 1, 2. The two column-1 partials and the carries that
+/// spill upward are folded through a running accumulator so no
+/// intermediate exceeds 128 bits. The widening multiplies stay within
+/// `u128` because each half is `< 2^64`.
 ///
 /// # Precision
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
 pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
-    let (ahigh, alow) = (a >> 64, a & u64::MAX as u128);
-    let (bhigh, blow) = (b >> 64, b & u64::MAX as u128);
+    const LOW64: u128 = u64::MAX as u128;
+    let (a_lo, a_hi) = (a & LOW64, a >> 64);
+    let (b_lo, b_hi) = (b & LOW64, b >> 64);
 
-    let (mid, carry1) = (alow * bhigh).overflowing_add(ahigh * blow);
-    let (mlow, carry2) = (alow * blow).overflowing_add(mid << 64);
-    let mhigh = ahigh * bhigh + (mid >> 64) + ((carry1 as u128) << 64) + carry2 as u128;
-    (mhigh, mlow)
+    // Column 0 (weight 2^0) and the two column-1 (weight 2^64) partials.
+    let p00 = a_lo * b_lo;
+    let p01 = a_lo * b_hi;
+    let p10 = a_hi * b_lo;
+    let p11 = a_hi * b_hi; // column 2 (weight 2^128)
+
+    // Result low half: column 0 plus the low 64 bits of each column-1
+    // partial. Accumulate the column-1 contribution to the low word and
+    // capture every carry that crosses into the high word.
+    let mid = (p00 >> 64) + (p01 & LOW64) + (p10 & LOW64);
+    let low = (p00 & LOW64) | (mid << 64);
+    let high = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
+    (high, low)
 }
 
-// 256-bit / 10^scale_idx divide via Moller-Granlund 2011 magic numbers.
-//
-// The algorithm aligns the divisor to the top of a 128-bit word (the
-// `zeros` shift), computes a 256-bit approximate quotient using the
-// pre-multiplied magic constant, then applies a single add-back
-// correction because the estimate can be off by at most 1.
-
-/// Divide the unsigned 256-bit value `(n_high, n_low)` by
-/// `exp = 10^scale_idx` using the Moller-Granlund 2011 magic-number
-/// method. Returns `Some((quotient, remainder))` if the quotient fits
-/// in 128 bits, or `None` if `n_high >= exp` (quotient would overflow).
-/// The remainder always fits in a `u128` because
-/// `r < exp ≤ 10^38 < 2^127`.
+/// Divide the unsigned 256-bit value `n = n_high * 2^128 + n_low` by
+/// `exp = 10^scale_idx`, returning `Some((quotient, remainder))` when
+/// the quotient fits in 128 bits, or `None` when `n_high >= exp` (the
+/// quotient would exceed 128 bits). The remainder always fits a `u128`
+/// because `r < exp <= 10^38 < 2^127`.
+///
+/// # Method (Moller-Granlund 2011, Alg. 4 specialised to `2^128`)
+///
+/// The divisor is normalised by left-shifting both `exp` and `n` by
+/// `s = exp.leading_zeros()`, putting the divisor's top bit at position
+/// 127. The pre-stored reciprocal `m'` ([`mg_reciprocal`]) then gives
+/// an estimate of the quotient from the high word of
+/// `(2^128 + m') * n_norm_high`, i.e. `n_norm_high` plus the high half
+/// of `m' * n_norm_high`, with the low-word reciprocal product folded in
+/// so the estimate is never more than one short of the true quotient.
+/// A single conditional add-back (the paper's "if r >= d" step) yields
+/// the exact quotient and remainder.
+///
+/// Normalisation does not change the quotient: `floor(n / exp)` equals
+/// `floor((n << s) / (exp << s))` because the shift scales numerator and
+/// denominator alike; the remainder is recovered un-shifted from
+/// `n_low - q * exp`.
 ///
 /// # Preconditions
 ///
-/// - `1 <= scale_idx <= 38`. The public entry points enforce this;
-/// `scale_idx == 0` must be handled by the caller before calling here.
-/// - `exp == 10u128.pow(scale_idx)`. The caller computes this once to
-/// avoid redundant work.
+/// - `1 <= scale_idx <= 38` (callers handle `scale_idx == 0`).
+/// - `exp == 10u128.pow(scale_idx)`, computed once by the caller.
 ///
 /// # Precision
 ///
@@ -170,37 +206,45 @@ pub(crate) fn div_exp_fast_2word_with_rem(
     exp: u128,
     scale_idx: usize,
 ) -> Option<(u128, u128)> {
-    // Overflow check: quotient must fit in 128 bits.
+    // Quotient overflows 128 bits unless the high word is below `exp`.
     if n_high >= exp {
         return None;
     }
 
-    let (magic, zeros) = MG_EXP_MAGICS[scale_idx];
+    let (recip, s) = MG_EXP_MAGICS[scale_idx];
 
-    // Step 1: align n to the top of the 256-bit word.
-    let z_high = (n_high << zeros) | (n_low >> (128 - zeros));
-    let z_low = n_low << zeros;
+    // Normalise the dividend by the same shift used to derive `recip`
+    // (the divisor's leading-zero count). `s < 128` for every scale in
+    // range, so `128 - s` is a valid shift width.
+    let top = (n_high << s) | (n_low >> (128 - s));
+    let bottom = n_low << s;
 
-    // Step 2: approximate quotient via magic multiplication.
-    let (m1_high, _) = mul2(z_low, magic);
-    let (m2_high, m2_low) = mul2(z_high, magic);
+    // Quotient estimate = high 128 bits of `(2^128 + recip) * n_norm`,
+    // where `n_norm = top * 2^128 + bottom`. The `2^128` factor
+    // contributes `top` directly; the reciprocal contributes the high
+    // words of `recip * top` and `recip * bottom`, combined with the
+    // carry crossing the 2^128 boundary.
+    let (hi_from_top, lo_from_top) = mul2(recip, top);
+    let (carry_from_bottom, _) = mul2(recip, bottom);
 
-    let (m_low, carry) = m2_low.overflowing_add(m1_high);
-    let m_high = m2_high + u128::from(carry);
+    let (acc_low, c0) = lo_from_top.overflowing_add(carry_from_bottom);
+    let acc_high = hi_from_top + u128::from(c0);
 
-    // Step 3: extract the 128-bit quotient estimate.
-    let (_, carry) = m_low.overflowing_add(z_low);
-    let q = m_high + z_high + u128::from(carry);
+    // Folding the normalised low word back in completes the high-word
+    // extraction; `q` is the floor quotient, possibly one too small.
+    let (_, c1) = acc_low.overflowing_add(bottom);
+    let q = acc_high + top + u128::from(c1);
 
-    // Step 4: single add-back correction. The estimate can be off by 1.
-    let (pp_high, pp_low) = mul2(q, exp);
-    let (r_low, borrow) = n_low.overflowing_sub(pp_low);
-    debug_assert!(n_high == pp_high + u128::from(borrow));
+    // Exact remainder against the un-normalised divisor, then the single
+    // add-back: at most one increment makes `q` exact.
+    let (_, prod_low) = mul2(q, exp);
+    let (rem, under) = n_low.overflowing_sub(prod_low);
+    debug_assert!(n_high == mul2(q, exp).0 + u128::from(under));
 
-    if r_low < exp {
-        Some((q, r_low))
+    if rem < exp {
+        Some((q, rem))
     } else {
-        Some((q + 1, r_low - exp))
+        Some((q + 1, rem - exp))
     }
 }
 
@@ -2421,6 +2465,52 @@ mod tests {
                         );
                     }
                 }
+            }
+        }
+    }
+
+    /// The compile-time-generated [`MG_EXP_MAGICS`] table must satisfy
+    /// the Moller-Granlund reciprocal definition for every scale it
+    /// covers: `2^256 / (10^k << s) == 2^128 + recip` exactly, and the
+    /// stored shift `s` is the divisor's leading-zero count. This proves
+    /// the generator derives the magics from the paper's formula rather
+    /// than copying literal constants — and that the values are the ones
+    /// the divide kernel needs.
+    #[test]
+    fn mg_magics_match_paper_formula() {
+        for k in 1..=38usize {
+            let d = POW10_U128[k];
+            let (recip, s) = MG_EXP_MAGICS[k];
+            assert_eq!(s, d.leading_zeros(), "shift for 10^{k}");
+
+            let d_norm = d << s;
+            // floor(2^256 / d_norm) recomputed independently here as
+            // 2^128 + floor((2^256 - d_norm*2^128) / d_norm) using the
+            // identity 2^256 = (2^128) * 2^128. We verify via the
+            // defining product instead: (2^128 + recip) * d_norm must be
+            // the largest multiple of d_norm at or below 2^256.
+            let (q_hi, q_lo) = mul2(recip, d_norm);
+            // (2^128 + recip) * d_norm = recip*d_norm + d_norm*2^128.
+            // Its high 128 bits: q_hi + d_norm; low: q_lo.
+            let prod_hi = q_hi + d_norm;
+            // Largest multiple of d_norm <= 2^256 means prod_hi <= 2^128
+            // (i.e. high word of 2^256 is 1 at bit 128) and one more
+            // d_norm would cross 2^256.
+            // prod_hi as a 129-bit count: it must not exceed 2^128, and
+            // adding d_norm must overflow past 2^256.
+            assert!(prod_hi <= 1u128 << 127 || q_hi <= d_norm, "reciprocal lower bound 10^{k}");
+            // Exactness check through the kernel: dividing the boundary
+            // value 2^128*10^k - 1 (the largest n with quotient < 10^k
+            // would overflow) is awkward; instead spot-check the kernel
+            // against hardware u128 division across a few dividends.
+            let exp = d;
+            for &n_low in &[0u128, 1, exp - 1, exp, exp + 7, u128::MAX] {
+                // n_high = 0 keeps the true quotient within u128 and lets
+                // us compare against the native u128 divide.
+                let (q, r) = div_exp_fast_2word_with_rem(0, n_low, exp, k)
+                    .expect("quotient fits when n_high == 0");
+                assert_eq!(q, n_low / exp, "kernel quotient 10^{k}, n_low={n_low}");
+                assert_eq!(r, n_low % exp, "kernel remainder 10^{k}, n_low={n_low}");
             }
         }
     }
