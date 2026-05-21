@@ -242,9 +242,9 @@ jobs:
         if: steps.present.outputs.history == 'true'
         run: |
           set -euo pipefail
-          # chart_gen history reads bench-history-results/bench-history-<tag>/...
-          mkdir -p bench-history-results
-          cp -r bench-artifacts/bench-history-* bench-history-results/
+          # chart_gen history reads tmp/bench-history-results/bench-history-<tag>/...
+          mkdir -p tmp/bench-history-results
+          cp -r bench-artifacts/bench-history-* tmp/bench-history-results/
           cargo run --release --example chart_gen --features wide,x-wide,xx-wide,macros history
 
       - name: Commit refreshed benchmarks back to the swept branch

@@ -24,7 +24,7 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
     // Subcommand routing — the default (no args) runs the
     // library-comparison + per-width-summary pipeline; `history`
     // renders the cross-version trend charts from
-    // bench-history-results/.
+    // tmp/bench-history-results/.
     let mode = std::env::args().nth(1).unwrap_or_default();
     if mode == "history" {
         return render_history();
@@ -333,10 +333,10 @@ fn render_per_width_summary(
 }
 
 // ------------------------------------------------------------------
-// History mode — read bench-history-results/ and render per-width
+// History mode — read tmp/bench-history-results/ and render per-width
 // cross-version trend lines.
 //
-// Layout on disk (rooted at bench-history-results/):
+// Layout on disk (rooted at tmp/bench-history-results/):
 //
 //   bench-history-<tag>/<group>/<width>/new/estimates.json
 //
@@ -380,7 +380,7 @@ fn render_history() -> Result<(), Box<dyn std::error::Error>> {
         for (group, fn_label) in HISTORY_GROUPS {
             for width in HISTORY_WIDTHS {
                 let p = format!(
-                    "bench-history-results/bench-history-{tag}/{group}/{width}/new/estimates.json",
+                    "tmp/bench-history-results/bench-history-{tag}/{group}/{width}/new/estimates.json",
                 );
                 if !Path::new(&p).exists() {
                     eprintln!("history: missing {p}");
