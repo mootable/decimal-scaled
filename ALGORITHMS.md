@@ -2,10 +2,9 @@
 
 Catalogue of the published algorithms the crate evaluates, with
 academic citations and the source files where each is implemented.
-This is engineering credit - it complements `LICENSES/THIRD-PARTY.md`
-(which covers verbatim/adapted code from upstream repositories) by
-giving the *idea* attributions. For the lines-of-code attributions
-see `LICENSES/THIRD-PARTY.md`.
+This is engineering credit for the *ideas* the crate's own code is
+built from. The crate incorporates no third-party source code; see
+`LICENSES/THIRD-PARTY.md`.
 
 ## Integer arithmetic
 
@@ -28,11 +27,26 @@ Earlier foundational reference for the magic-multiplier idea:
 > Integers using Multiplication."** *Proc. PLDI '94*. ACM, 61–72.
 > DOI: [10.1145/178243.178249](https://doi.org/10.1145/178243.178249).
 
-Implementation: `src/mg_divide.rs` (`mul2`, `div_exp_fast_2word`,
-`div_exp_fast_2word_with_rem`, `MG_EXP_MAGICS`). The algorithm shape
-was adapted from the
+Implementation: `src/algos/mg_divide.rs` (`mul2`,
+`div_exp_fast_2word_with_rem`, `MG_EXP_MAGICS`, `mg_reciprocal`). The
+magic table is re-derived from the paper's reciprocal formula by a
+`const fn` generator (`mg_reciprocal`) that performs the
+`floor(2^256 / (10^k << s))` long division at compile time, and the
+divide body follows the paper's normalise / estimate / single-add-back
+algorithm.
+
+**Prior art and clean-room declaration.** Applying Möller–Granlund to
+the constant divisor `10^SCALE` for fixed-point rescaling is prior art:
+it appears in
 [`primitive_fixed_point_decimal`](https://github.com/WuBingzheng/primitive_fixed_point_decimal)
-crate - see `LICENSES/THIRD-PARTY.md` for the verbatim attribution.
+by Wu Bingzheng (MIT-licensed), which we acknowledge as the inspiration
+for this approach. This crate's implementation is nonetheless an
+independent clean-room rewrite derived directly from the Möller–Granlund
+2011 paper — its code expression, structure, naming, comments, and the
+generated magic table are the crate's own and were not copied or adapted
+from that crate's source. The computed magics are mathematically
+determined facts; their bit-identity to any correct implementation is a
+property of the algorithm, not of shared code.
 
 Further reading:
 

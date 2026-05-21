@@ -18,11 +18,10 @@
 //!      type. Comparison point only; we are not committing to this
 //!      dep.
 //!   D. **Moller-Granlund magic-number divide on schoolbook product**
-//!      -- the algorithm shape ConstScaleFpdec uses (MIT).
-//!      Translates the 1994 Granlund-Montgomery + 2011 Moller-Granlund
-//!      papers; precomputed magic constant for divisor 10^12 baked in
-//!      const. We hand-code one entry of their 38-entry table here for
-//!      D38s12.
+//!      -- translates the 1994 Granlund-Montgomery + 2011
+//!      Moller-Granlund papers; precomputed magic constant for divisor
+//!      10^12 baked in const. We hand-code one entry of the 38-entry
+//!      reciprocal table here for D38s12.
 //!   E. **Production `D38<12>` operators** -- the actual shipping
 //!      `core_type::D38::Mul` / `Div` impls, which route through
 //!      `mg_divide::mul_div_pow10` / `div_pow10_div`. Includes the
@@ -70,9 +69,8 @@ fn naive_div(a: i128, b: i128) -> i128 {
 
 // -----------------------------------------------------------------------------
 // Candidate B: hand-rolled u128 -> u256 schoolbook + binary long-divide.
-// No deps. The schoolbook 128x128 -> 256 is the same shape as the
-// `mul2` function in WuBingzheng's MIT-licensed inner_i128.rs, which
-// is a textbook formulation; we re-derive here rather than copy.
+// No deps. The schoolbook 128x128 -> 256 multiply is the textbook
+// four-half-product formulation, derived here directly.
 // -----------------------------------------------------------------------------
 
 /// Compute a (signed) 256-bit product `a * b` and return it as
@@ -280,11 +278,9 @@ fn i256_div(a: i128, b: i128) -> i128 {
 // -----------------------------------------------------------------------------
 // Candidate D: Moller-Granlund magic-number divide on the schoolbook
 // product. Implements the *concept* of MG2011 Algorithm 4 specialised
-// to divisor=10^12. The magic numbers below are computed with the
-// same Python recipe as ConstScaleFpdec's `MG_EXP_MAGICS[12]` (we
-// re-derive them here in this comment block for traceability;
-// numeric value matches their table entry, which is correct by
-// construction):
+// to divisor=10^12. The magic numbers below are derived directly from
+// the paper's reciprocal formula (computed with the recipe shown, which
+// is correct by construction):
 //
 //   def gen(d):
 //       zeros = 128 - d.bit_length()
@@ -308,7 +304,7 @@ const MG_DIVISOR: u128 = 1_000_000_000_000;
 #[inline]
 fn mg_div_by_pow10_12(n_high: u128, n_low: u128) -> u128 {
     // Algorithm: zn = n << zeros; q = (((magic * zn) >> 128) + zn) >> 128
-    // (256-bit dividend variant; see ConstScaleFpdec's div_exp_fast_2word)
+    // (256-bit dividend variant of Moller-Granlund 2011, Alg. 4).
     debug_assert!(n_high < MG_DIVISOR, "MG: dividend high half exceeds divisor");
 
     // (z_high, z_low) := n << zeros
