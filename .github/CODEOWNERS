@@ -1,0 +1,6 @@
+# Code owners for decimal-scaled.
+# The owner is auto-requested for review on PRs touching these paths.
+# (With 0 required approvals today this is advisory; it becomes a gate
+# if the required-review count is raised once a second maintainer joins.)
+
+*       @jackmoxley
