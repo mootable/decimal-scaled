@@ -130,3 +130,136 @@ jobs:
           path: target/criterion/
           if-no-files-found: warn
           retention-days: 14
+
+  # ------------------------------------------------------------------
+  # Self-refresh: once every per-width sweep cell has finished, collect
+  # the Criterion artifacts this run produced and regenerate the parts
+  # of docs/benchmarks.md they feed, committing the result straight back
+  # to the branch the sweep ran on.
+  #
+  # A run carries one family's artifacts (the orchestrator dispatches
+  # full_matrix and lib_cmp as separate runs), so this job regenerates
+  # only what the present artifacts support:
+  #   * criterion-full_matrix-D* -> §1–§3 tables (full_matrix_ingest.py --fill)
+  #   * criterion-lib_cmp-D*      -> §5 figures (chart_gen, via medians.tsv)
+  # bench-history artifacts live in a separate workflow's run, so the
+  # history charts are only re-rendered if a prior step left them here.
+  #
+  # Release branches are not protected, so a github-actions[bot] commit
+  # is fine here. The commit message carries NO attribution trailer —
+  # the commit-hygiene gate would reject one, and we never want one.
+  regenerate:
+    name: "\U0001FA91 regenerate benchmarks.md (${{ inputs.bench_family }})"
+    needs: sweep
+    # Run even if some width cells failed: a partial sweep still
+    # refreshes every cell it does have data for (missing leaves render
+    # as `—`, never fabricated).
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      # Push the refreshed docs/benchmarks.md + docs/figures back to the
+      # release branch this sweep ran on.
+      contents: write
+
+    steps:
+      - name: Checkout the swept ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Guard — never self-commit to a default/protected branch
+        env:
+          REF: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            main|master)
+              echo "::error::refusing to self-commit benchmarks to '$REF'"
+              exit 1
+              ;;
+          esac
+          echo "Will refresh + commit benchmarks on '$REF'."
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system libs (fontconfig for plotters dev-dep)
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Download every Criterion artifact from this run
+        uses: actions/download-artifact@v4
+        with:
+          # No `name` -> pulls every artifact this run uploaded, each
+          # into a subdir named after the artifact
+          # (criterion-full_matrix-D9/, criterion-lib_cmp-D9/, ...) —
+          # exactly the per-width layout both ingest scripts walk.
+          path: bench-artifacts
+
+      - name: Detect which artifact families are present
+        id: present
+        run: |
+          set -euo pipefail
+          full_matrix=false
+          lib_cmp=false
+          history=false
+          if ls -d bench-artifacts/criterion-full_matrix-D* >/dev/null 2>&1; then
+            full_matrix=true
+          fi
+          if ls -d bench-artifacts/criterion-lib_cmp-D* >/dev/null 2>&1; then
+            lib_cmp=true
+          fi
+          if ls -d bench-artifacts/bench-history-* >/dev/null 2>&1; then
+            history=true
+          fi
+          echo "full_matrix=$full_matrix" >> "$GITHUB_OUTPUT"
+          echo "lib_cmp=$lib_cmp"         >> "$GITHUB_OUTPUT"
+          echo "history=$history"         >> "$GITHUB_OUTPUT"
+          echo "full_matrix=$full_matrix lib_cmp=$lib_cmp history=$history"
+
+      - name: Fill §1–§3 tables from full_matrix artifacts
+        if: steps.present.outputs.full_matrix == 'true'
+        run: |
+          set -euo pipefail
+          python scripts/full_matrix_ingest.py --artifacts bench-artifacts --fill
+
+      - name: Render §5 library-comparison figures from lib_cmp artifacts
+        if: steps.present.outputs.lib_cmp == 'true'
+        run: |
+          set -euo pipefail
+          mkdir -p target
+          # Build target/medians.tsv from the fresh per-width lib_cmp
+          # artifacts (no prior tsv to merge — a full sweep covers every
+          # width), then render the figures chart_gen consumes.
+          touch target/medians.tsv
+          python scripts/lib_cmp_ingest.py \
+            --artifacts bench-artifacts \
+            --existing target/medians.tsv \
+            --out target/medians.tsv
+          cargo run --release --example chart_gen --features wide,x-wide,xx-wide,macros
+
+      - name: Render history figures if history artifacts are present
+        if: steps.present.outputs.history == 'true'
+        run: |
+          set -euo pipefail
+          # chart_gen history reads bench-history-results/bench-history-<tag>/...
+          mkdir -p bench-history-results
+          cp -r bench-artifacts/bench-history-* bench-history-results/
+          cargo run --release --example chart_gen --features wide,x-wide,xx-wide,macros history
+
+      - name: Commit refreshed benchmarks back to the swept branch
+        env:
+          REF: ${{ github.ref_name }}
+          FAMILY: ${{ inputs.bench_family }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/benchmarks.md docs/figures
+          if git diff --cached --quiet; then
+            echo "No benchmark changes to commit."
+            exit 0
+          fi
+          # Plain message, no attribution trailer (commit-hygiene gate).
+          git commit -m "docs(benchmarks): regenerate from ${FAMILY} sweep"
+          git push origin "HEAD:${REF}"
