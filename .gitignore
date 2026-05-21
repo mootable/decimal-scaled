@@ -9,3 +9,6 @@ Cargo.lock
 /algo-lab-results
 /sweep-results-v0.4.2
 /bench-history-results-v0.4.2
+
+# scratch / local-only generated data — benches, sweeps, traces, profiling output
+/tmp/
