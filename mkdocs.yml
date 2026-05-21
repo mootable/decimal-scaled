@@ -92,6 +92,7 @@ nav:
       - Cargo features: features.md
       - Comparisons: comparisons.md
       - Precision testing: precision-testing.md
+      - Glossary: glossary.md
   - Benchmarks: benchmarks.md
   - Algorithms: ALGORITHMS.md
   - Roadmap: ROADMAP.md
