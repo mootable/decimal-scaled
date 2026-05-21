@@ -71,7 +71,7 @@ The storage under a decimal type is an integer wide enough to hold
 
 | Decimal tier | Storage | Backed by |
 |---|---|---|
-| D9 / D18 / D38 | `i32` / `i64` / `i128` | native primitives |
+| D18 / D38 | `i64` / `i128` | native primitives |
 | D57 … D1232 | 192 … 4096-bit | const-generic `Int<N>` |
 
 The wide tiers are built on a single const-generic pair —

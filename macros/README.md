@@ -28,7 +28,6 @@ let cost = d38!(19.99, scale 2);   // D38<2>::from_bits(1999)
 
 | macro | target | storage | `MAX_SCALE` | feature gate |
 |---|---|---|---|---|
-| `d9!`    | `D9<SCALE>`    | `i32`     |   8  | always              |
 | `d18!`   | `D18<SCALE>`   | `i64`     |  17  | always              |
 | `d38!`   | `D38<SCALE>`   | `i128`    |  37  | always              |
 | `d57!`   | `D57<SCALE>`   | `Int192`  |  56  | `d57` / `wide`      |
@@ -203,7 +202,7 @@ let with_scale = d38!(basis, scale 4);  // basis × 10^4 at runtime
 
 // Per-scale wrappers (curated subset; pre-bake `scale N`).
 let pi  = d38s12!(3.141_592_653_590); // == d38!(…, scale 12)
-let cents_alias = d9s2!(0.50);        // == d9!(0.50, scale 2)
+let cents_alias = d18s2!(0.50);       // == d18!(0.50, scale 2)
 ```
 
 Wide-tier (requires `wide` / `x-wide`):
@@ -227,15 +226,14 @@ width - the long tail remains reachable via the explicit
 
 | width | wrappers |
 |---|---|
-| D9 | `d9s0!`, `d9s2!`, `d9s4!`, `d9s6!` |
 | D18 | `d18s0!`, `d18s2!`, `d18s4!`, `d18s6!`, `d18s9!`, `d18s12!` |
 | D38 | `d38s0!`, `d38s2!`, `d38s4!`, `d38s6!`, `d38s8!`, `d38s9!`, `d38s12!`, `d38s15!`, `d38s18!`, `d38s24!`, `d38s35!`, `d38s37!` |
 | D76 | `d76s0!`, `d76s2!`, `d76s6!`, `d76s12!`, `d76s18!`, `d76s35!`, `d76s50!`, `d76s75!` |
 | D153 | `d153s0!`, `d153s35!`, `d153s75!`, `d153s150!`, `d153s152!` |
 | D307 | `d307s0!`, `d307s35!`, `d307s150!`, `d307s300!`, `d307s306!` |
 
-Per-scale wrappers at the old `MAX_SCALE == name` cap (`d9s9!`,
-`d18s18!`, `d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`) were
+Per-scale wrappers at the old `MAX_SCALE == name` cap (`d18s18!`,
+`d38s38!`, `d76s76!`, `d153s153!`, `d307s307!`) were
 removed in 0.4.0 along with the matching scale aliases.
 
 Each wrapper forwards every other qualifier unchanged:
@@ -254,7 +252,7 @@ d38s2!(1.234_567, rounded)
 | Scale exceeds width max | `scale 38 exceeds max for D38 (max = 37)` |
 | Scale required for expression | `scale must be specified for an expression value: d38!(expr, scale N)` |
 | Lossy literal without `rounded` | `literal 1.234567 has 6 fractional digits, target scale 2 would lose precision; pass rounded to opt into half-to-even rounding` |
-| Bits overflow storage | `scaled value 1234567890000000000000000 overflows D9's storage (i32)` |
+| Bits overflow storage | `scaled value 1234567890000000000000000 overflows D18's storage (i64)` |
 | Bare leading/trailing dot | `decimal literals require a digit on each side of the dot (write 0.5 not .5)` |
 | Inferred scale exceeds max | `1e-50 implies scale 50, which exceeds D38::MAX_SCALE (37); use an explicit scale or a wider entry point` |
 | Type suffix on literal | `type suffixes (e.g. _i64, _f32) are not accepted in decimal-scaled literals` |
@@ -270,12 +268,12 @@ d38s2!(1.234_567, rounded)
 For literal input, the macro evaluates the bit pattern at
 proc-macro time:
 
-- **Narrow tiers** (D9 / D18 / D38) emit a typed integer literal
+- **Narrow tiers** (D18 / D38) emit a typed integer literal
   directly:
   ```rust
   d38!(1.23)            // → ::decimal_scaled::D38::<2>::from_bits(123_i128)
   d18!(1.5, scale 6)    // → ::decimal_scaled::D18::<6>::from_bits(1_500_000_i64)
-  d9!(0x7F)             // → ::decimal_scaled::D9::<0>::from_bits(127_i32)
+  d18!(0x7F)            // → ::decimal_scaled::D18::<0>::from_bits(127_i64)
   ```
 - **Wide tiers** (D76 / D153 / D307) materialise the bits via the
   storage type's `from_str_radix` (a `const fn`):

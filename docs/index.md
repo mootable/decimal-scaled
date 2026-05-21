@@ -9,7 +9,7 @@ hide:
 <div class="hero-tagline">Bit-exact decimal arithmetic for Rust</div>
 <h1 class="hero-wordmark"><span class="a">decimal</span><span class="b">-scaled</span></h1>
 
-Const-generic base-10 fixed-point decimals — thirteen widths from **D9 to D1232** — with **≤ 0.5 ULP correctly-rounded** integer-only transcendentals. Deterministic across every platform. `no_std`-friendly. Caller-chosen rounding mode at every lossy operation.
+Const-generic base-10 fixed-point decimals — twelve widths from **D18 to D1232** — with **≤ 0.5 ULP correctly-rounded** integer-only transcendentals. Deterministic across every platform. `no_std`-friendly. Caller-chosen rounding mode at every lossy operation.
 { .hero-lede }
 
 <div class="hero-install"><span class="prompt">$ </span>cargo add decimal-scaled</div>

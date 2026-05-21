@@ -21,7 +21,7 @@ its docs, and its benchmarks — in one place.
 |------|---------|
 | **`SCALE`** | The compile-time const generic fixing the number of fractional digits. A value is stored as `raw × 10^SCALE`. |
 | **`MAX_SCALE`** | The largest `SCALE` a width supports = *N − 1* for `D{N}` (e.g. `D38` → 37), leaving ≥1 integer digit of headroom. |
-| **`D9` … `D1232`** | The thirteen storage widths; the number is the type's nominal precision in decimal digits. `D9`=`i32`, `D18`=`i64`, `D38`=`i128`, `D57`+ use wide integers. |
+| **`D18` … `D1232`** | The twelve storage widths; the number is the type's nominal precision in decimal digits. `D18`=`i64`, `D38`=`i128`, `D57`+ use wide integers. |
 | **limb** | One `u64` word of a wide integer. A wide value is `[u64; N]`, little-endian. |
 | **wide integers** | The hand-rolled wide-integer backend for `D57`+: a value is an array of `u64` limbs, little-endian. |
 | **`no_std`** | Builds without the standard library (embedded-friendly). The strict, integer-only path is `no_std`-compatible. |

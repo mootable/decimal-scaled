@@ -69,7 +69,7 @@ Tactical perf and fast-path wins, with bench evidence in
 | Adaptive halvings in `atan_fixed` (halve while `|y| > ~0.2`, max 8; was fixed 3) | 3-5× on atan with small / reciprocal-reduced inputs (D38<19>: `atan(0.001)` 44 → 14 µs; `atan(1e8)` 44 → 8 µs) |
 | 17 trig fast paths: zero / ±1 / small-x linear band for `atan`, `sin`, `cos`, `tan`, `asin`, `acos`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `to_degrees`, `to_radians` | ~1000-10000× on the fast-path inputs (`atan(0)` 68 µs → 5 ns; `atan(1e-7)` 68 µs → 5 ns); best-in-class small-x atan vs both fastnum and g_math |
 | `ln(1) = 0` + `ln(1+ε) ≈ ε` linear-band fast paths in `ln_strict` | <10 ns on fast-path inputs vs prior 1.4 µs |
-| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D9 through D1232 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
+| Per-width bench split: `benches/lib_cmp_d{N}.rs` for D18 through D1232 | minutes vs hours per-tier iteration; was a 0.3.x infrastructure TODO, now done |
 | Profiling infrastructure: `perf-trace` feature, section spans in `exp_fixed` / `atan_fixed`, samply + perfetto example drivers + parser scripts | establishes the M2-gate discipline used through the rest of this work |
 | `benches/atan_inputs.rs` — input-class atan timing (decimal-scaled vs fastnum vs g_math) | exposed two bench-validity issues (fastnum `atan(|x|>1)` = NaN, fastnum `ln(2)` = const lookup) — recorded in `docs/benchmarks.md` |
 
@@ -148,7 +148,7 @@ width - a precision cliff that's hard to communicate.
 
 ## More decimal widths - fill the tier ladder
 
-Tier ladder is now complete from 32-bit storage (D9) up to 4096-bit
+Tier ladder is now complete from 64-bit storage (D18) up to 4096-bit
 storage (D1232), covering every multiple-of-64 step. The half-step
 tiers between each power-of-two (D57, D115, D230, D462, D924) shipped
 in 0.3.0 and let callers pay only for the precision they need
@@ -156,7 +156,6 @@ without jumping a full storage doubling.
 
 | storage bits | type | safe decimal digits | status |
 |---|---|---|---|
-| 32   | `D9`    | 9    | shipped |
 | 64   | `D18`   | 18   | shipped |
 | 128  | `D38`   | 38   | shipped |
 | 192  | `D57`   | 57   | shipped (0.3.0) |
@@ -187,7 +186,7 @@ default build times sane.
 
 ## Narrow-tier - already competitive
 
-D9 / D18 / D38 arithmetic already matches or beats
+D18 / D38 arithmetic already matches or beats
 `fixed::I*F*` (the only directly-comparable competitor at these
 widths). D38 transcendentals are 1.47 µs `ln`, 40.5 µs `exp` at
 s=19, vs `fastnum`'s 16 ns / 8.92 µs - but those are
