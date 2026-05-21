@@ -30,14 +30,6 @@
 - [ ] glossary / guides document only shipped behaviour; standards claims honest (recognized bodies only)
 - [ ] REUSE / `LICENSES/` headers intact for any new files
 
-## Publish (after merge — each step needs explicit authorization)
-
-- [ ] Merge this PR into `main`
-- [ ] Wait for the `main` docs run (`gh run watch`) **before** pushing the tag
-- [ ] Tag `vX.Y.Z` pushed
-- [ ] `cargo publish` (dry-run first)
-- [ ] GitHub release notes published
-
 ---
 
-Full process: see [`RELEASING.md`](../../RELEASING.md).
+Merge, tag, and `cargo publish` happen **after** this PR — see [`RELEASING.md`](../../RELEASING.md) §7. Full release process: [`RELEASING.md`](../../RELEASING.md).
