@@ -1,7 +1,7 @@
 //! Width-matched limb multiplication primitives.
 //!
 //! The full-width products (`limbs_mul_u64*`) are re-exported from
-//! [`crate::wide_int`]; see [`super`] for the re-export rationale. The
+//! [`crate::int::limbs`]; see [`super`] for the re-export rationale. The
 //! truncated low-`N` product [`limbs_mul_low_u64_fixed`] is new here:
 //! the existing `limbs_mul_u64` writes every `out[i + j]` and a
 //! cross-row carry tail unconditionally, so it cannot serve a product
@@ -11,7 +11,7 @@
 //! reduction the wrapping operators want.
 
 #[allow(unused_imports)]
-pub(crate) use crate::wide_int::{
+pub(crate) use crate::int::limbs::{
     limbs_mul_u64, limbs_mul_u64_fixed, limbs_mul_u64_into,
 };
 

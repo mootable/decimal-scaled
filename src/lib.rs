@@ -340,11 +340,20 @@ pub use crate::cross_scale as cross;
 // not just `feature = "wide"` builds. Compile-time impact is modest:
 // ~2k LOC of self-contained limb arithmetic plus the per-width
 // `decl_wide_int!` instantiations.
-mod wide_int;
-// 0.5.0 const-generic integer layer (`Int<N>`/`Uint<N>`), introduced
-// alongside `wide_int`'s named `IntXXXX` types during the unification.
-// See research plan; named types become `pub type` aliases over these.
+// 0.5.0 const-generic integer layer. The integer side of the crate
+// now mirrors the decimal layer's bucket split, all under `int/`:
+// `int::types` (the `Int<N>`/`Uint<N>` types + named `IntXXXX`
+// aliases), `int::policy` (algorithm-selection dispatch), `int::algos`
+// (width-matched algorithms), and `int::limbs` (the raw slice limb
+// primitives + the `decl_wide_int!` generator, absorbed from the former
+// `src/wide_int/`).
 mod int;
+// Compatibility re-export: the raw limb primitives and named `IntXXXX`
+// types moved from `src/wide_int/` into `src/int/limbs/`. The ~90
+// call sites that reach them via `crate::wide_int::…` (and the
+// `$crate::wide_int::…` paths the `decl_wide_int!` macro emits) keep
+// resolving through this alias — no churn at the use sites.
+pub(crate) use crate::int::limbs as wide_int;
 mod policy;
 
 #[cfg(feature = "serde")]
