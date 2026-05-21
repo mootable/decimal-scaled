@@ -179,6 +179,7 @@ native mode:
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | n/a | n/a | n/a | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 65 (3.1e19) | 65 (3.1e19) | 65 (2.3e19) | 6 (5.4e1) | 64 (9.2e18) | 64 (1.8e19) | 6 (5.0e1) | 69 (4.4e20) | n/a | 66 (6.3e19) | 70 (7.3e20) |
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
 rounded on every function, and that holds for all six rounding modes
@@ -187,14 +188,18 @@ peer: correctly rounded almost everywhere, failing only `tan`
 (67 LSBε) and `asinh` (58 LSBε) at this scale. `dashu-float` is
 correctly rounded on the `exp` / `ln` / `sqrt` surface it exposes.
 `rust_decimal`, `decimal-rs`, and `bigdecimal` carry genuine
-1-or-more-LSB gaps on the functions they implement.
+1-or-more-LSB gaps on the functions they implement. `g_math` —
+which markets "0 ULP transcendentals" — is in fact tens of LSBε off
+across most of its surface (`exp` 65, `sin` 64, `tan` 65, `powf` 70),
+the empirical refutation of that claim at the matched 19-digit width.
 
 ### Wide tier (`D76<35>`)
 
 The 35-digit subset that has an oracle table. `fastnum` and
 `rust_decimal` have no representation at this scale, so they score
-`n/a` throughout; `decimal-rs` reaches it but accumulates large gaps on
-`sqrt` and `exp`.
+`n/a` throughout; `g_math`'s binary fixed-point tops out near 19
+significant digits, so it cannot reach 35 either and is `n/a` as well;
+`decimal-rs` reaches it but accumulates large gaps on `sqrt` and `exp`.
 
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
 |---|---|---|---|---|---|---|---|---|---|
@@ -204,9 +209,36 @@ The 35-digit subset that has an oracle table. `fastnum` and
 | dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a |
 | decimal-rs | HalfToEven | 58 (2.3e17) | n/a | 130 (3.3e38) | 1 (1.00) | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 
 `decimal-scaled` remains `0 (0)` across this width too, and `dashu-float`
 stays correctly rounded on the surface it exposes.
+
+### Deep scale (`D307<150>`)
+
+The same surface at a 150-digit scale, against the mpmath golden
+oracle. Every fixed-precision peer is out of range here —
+`rust_decimal` (~28 digits), `fastnum` (~34), `decimal-rs` (~38), and
+`g_math` (~19, binary fixed-point) cannot represent a value of the
+target precision, so they score `n/a`. The arbitrary-precision peers
+that reach it no longer track the true value: `dashu-float`, given
+working precision past the result magnitude, is still tens-to-hundreds
+of LSBε off, and `bigdecimal`'s context `sqrt`/`cbrt` are hundreds of
+LSBε off at this depth.
+
+| library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan |
+|---|---|---|---|---|---|---|---|---|---|
+| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| fastnum | HalfAwayFromZero | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| rust_decimal | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| dashu-float | HalfAwayFromZero | 126 (6.5e37) | n/a | 386 (3.0e115) | 53 (6.1e15) | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 761 (2.2e228) | 339 (3.8e101) | n/a | n/a | n/a | n/a | n/a | n/a |
+| g_math | HalfToEven | n/a | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
+
+`decimal-scaled` is the only crate that is `0 (0)` — correctly rounded
+to the last of the 150 stored digits — at this depth, and it stays so
+across all six rounding modes and the full 22-function surface.
 
 ### 0.4.4 precision-fix perf impact
 

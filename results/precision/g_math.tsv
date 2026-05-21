@@ -1,34 +1,34 @@
-# library: decimal-rs
+# library: g_math
 # key: method	width	scale	rounding	result
 # result columns: kind(executed|na)	max_lsbe	max_ulp	scored	correctly_rounded
 # source: benches/lib_cmp_precision.rs (regenerate with `cargo bench --bench lib_cmp_precision --features wide,x-wide,xx-wide,macros`)
 method	width	scale	rounding	kind	max_lsbe	max_ulp	scored	correctly_rounded
-sqrt	D38	19	HalfToEven	executed	1	1.000000	68	65
+sqrt	D38	19	HalfToEven	executed	6	49.000000	68	18
 cbrt	D38	19	HalfToEven	na	-1	na	0	0
-exp	D38	19	HalfToEven	executed	1	1.000000	59	49
-ln	D38	19	HalfToEven	executed	1	1.000000	58	50
+exp	D38	19	HalfToEven	executed	65	2.331e19	59	1
+ln	D38	19	HalfToEven	executed	6	48.000000	58	1
 log2	D38	19	HalfToEven	na	-1	na	0	0
 log10	D38	19	HalfToEven	na	-1	na	0	0
 exp2	D38	19	HalfToEven	na	-1	na	0	0
-sin	D38	19	HalfToEven	na	-1	na	0	0
-cos	D38	19	HalfToEven	na	-1	na	0	0
-tan	D38	19	HalfToEven	na	-1	na	0	0
-atan	D38	19	HalfToEven	na	-1	na	0	0
-asin	D38	19	HalfToEven	na	-1	na	0	0
-acos	D38	19	HalfToEven	na	-1	na	0	0
-sinh	D38	19	HalfToEven	na	-1	na	0	0
-cosh	D38	19	HalfToEven	na	-1	na	0	0
-tanh	D38	19	HalfToEven	na	-1	na	0	0
-asinh	D38	19	HalfToEven	na	-1	na	0	0
-acosh	D38	19	HalfToEven	na	-1	na	0	0
-atanh	D38	19	HalfToEven	na	-1	na	0	0
+sin	D38	19	HalfToEven	executed	64	1.542e19	68	9
+cos	D38	19	HalfToEven	executed	6	49.000000	68	17
+tan	D38	19	HalfToEven	executed	65	2.003e19	66	8
+atan	D38	19	HalfToEven	executed	64	1.565e19	58	2
+asin	D38	19	HalfToEven	executed	65	3.142e19	78	3
+acos	D38	19	HalfToEven	executed	65	3.142e19	78	1
+sinh	D38	19	HalfToEven	executed	65	2.347e19	59	1
+cosh	D38	19	HalfToEven	executed	6	54.000000	59	4
+tanh	D38	19	HalfToEven	executed	64	9.242e18	84	1
+asinh	D38	19	HalfToEven	executed	64	1.759e19	62	1
+acosh	D38	19	HalfToEven	executed	6	50.000000	65	2
+atanh	D38	19	HalfToEven	executed	69	4.444e20	76	2
 log	D38	19	HalfToEven	na	-1	na	0	0
-atan2	D38	19	HalfToEven	na	-1	na	0	0
-powf	D38	19	HalfToEven	na	-1	na	0	0
-sqrt	D76	35	HalfToEven	executed	58	2.281e17	55	24
+atan2	D38	19	HalfToEven	executed	66	6.283e19	54	1
+powf	D38	19	HalfToEven	executed	70	7.272e20	54	14
+sqrt	D76	35	HalfToEven	na	-1	na	0	0
 cbrt	D76	35	HalfToEven	na	-1	na	0	0
-exp	D76	35	HalfToEven	executed	130	3.259e38	46	32
-ln	D76	35	HalfToEven	executed	1	1.000000	45	43
+exp	D76	35	HalfToEven	na	-1	na	0	0
+ln	D76	35	HalfToEven	na	-1	na	0	0
 sin	D76	35	HalfToEven	na	-1	na	0	0
 cos	D76	35	HalfToEven	na	-1	na	0	0
 tan	D76	35	HalfToEven	na	-1	na	0	0
