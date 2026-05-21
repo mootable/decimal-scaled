@@ -2835,11 +2835,14 @@ pub(crate) trait WideStorage:
 // `I192` / `U192` short aliases below, and the d57 kernel shims) keeps
 // resolving. The kernels run on `Int<3>` through the Phase-0
 // `WideStorage` impl in `int::types::wide_compat`.
-pub use crate::int::types::{Int192, Uint192};
+// Some of these are unused in low-feature builds (e.g. only `Int256`
+// is reached by D38 under default features); the re-export must list
+// them all so every feature combination resolves.
+#[allow(unused_imports)]
+pub use crate::int::types::{
+    Int192, Int256, Int384, Int512, Uint192, Uint256, Uint384, Uint512,
+};
 
-decl_wide_int!(Uint256, Int256, 4, 8, 5);
-decl_wide_int!(Uint384, Int384, 6, 12, 7);
-decl_wide_int!(Uint512, Int512, 8, 16, 9);
 decl_wide_int!(Uint768, Int768, 12, 24, 13);
 decl_wide_int!(Uint1024, Int1024, 16, 32, 17);
 decl_wide_int!(Uint1536, Int1536, 24, 48, 25);
@@ -2908,10 +2911,11 @@ macro_rules! impl_wide_storage {
     )*};
 }
 
-// Int192's `WideStorage` impl is the const-generic blanket one in
-// `int::types::wide_compat` (it is now `Int<3>`), so it is omitted here.
+// Int192 / Int256 / Int384 / Int512 are now const-generic `Int<N>`;
+// their `WideStorage` impl is the blanket one in
+// `int::types::wide_compat`, so they are omitted here.
 impl_wide_storage!(
-    Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
+    Int768, Int1024, Int1536, Int2048,
     Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
 );
 

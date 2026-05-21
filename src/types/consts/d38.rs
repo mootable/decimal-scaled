@@ -134,7 +134,7 @@ fn rescale_75_to_target_with<const TARGET: u32>(
     name: &'static str,
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
-    let words = raw.0;
+    let words = raw.limbs_le();
     let mag: [u128; 2] = [
         (words[0] as u128) | ((words[1] as u128) << 64),
         (words[2] as u128) | ((words[3] as u128) << 64),
