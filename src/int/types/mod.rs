@@ -33,14 +33,14 @@ use core::ops::{
 };
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Uint<const N: usize> {
     limbs: [u64; N],
 }
 
 /// Signed (two's-complement) fixed-width integer of `N` little-endian
 /// 64-bit limbs.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
 pub struct Int<const N: usize> {
     limbs: [u64; N],
 }
@@ -48,8 +48,10 @@ pub struct Int<const N: usize> {
 impl<const N: usize> Uint<N> {
     /// Number of 64-bit limbs.
     pub const LIMBS: usize = N;
-    /// Bit width (`LIMBS * 64`).
-    pub const BITS: usize = N * 64;
+    /// Bit width (`LIMBS * 64`). `u32` so it composes directly with the
+    /// `leading_zeros` / `count_ones` `u32` surface and matches the
+    /// historic named-type `BITS` constant.
+    pub const BITS: u32 = (N as u32) * 64;
 
     /// Additive identity.
     pub const ZERO: Self = Self { limbs: [0; N] };
@@ -421,6 +423,104 @@ impl<const N: usize> Uint<N> {
         }
         Self { limbs }
     }
+
+    /// Builds from an unsigned 128-bit value (zero-extends the upper
+    /// limbs).
+    #[inline]
+    pub const fn from_u128(v: u128) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = v as u64;
+        }
+        if N > 1 {
+            limbs[1] = (v >> 64) as u64;
+        }
+        Self { limbs }
+    }
+
+    /// Reinterprets the bit pattern as the signed sibling.
+    #[inline]
+    pub const fn cast_signed(self) -> Int<N> {
+        Int::from_limbs(self.limbs)
+    }
+
+    /// Approximate `f64` value (positive; truncated toward zero on
+    /// overflow).
+    pub fn as_f64(self) -> f64 {
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut acc = 0.0f64;
+        let mut i = N;
+        while i > 0 {
+            i -= 1;
+            acc = acc * radix + self.limbs[i] as f64;
+        }
+        acc
+    }
+
+    /// Set-bit count across all limbs.
+    #[inline]
+    pub const fn count_ones(self) -> u32 {
+        let mut total = 0;
+        let mut i = 0;
+        while i < N {
+            total += self.limbs[i].count_ones();
+            i += 1;
+        }
+        total
+    }
+
+    /// `true` when exactly one bit is set.
+    #[inline]
+    pub const fn is_power_of_two(self) -> bool {
+        self.count_ones() == 1
+    }
+
+    /// Smallest power of two `>= self` (`1` for zero), wrapping on
+    /// overflow.
+    pub fn next_power_of_two(self) -> Self {
+        if self.is_zero() {
+            return Self::ONE;
+        }
+        if self.is_power_of_two() {
+            return self;
+        }
+        let bits = self.bit_length();
+        let mut out = [0u64; N];
+        if (bits as usize) < N * 64 {
+            out[(bits / 64) as usize] = 1u64 << (bits % 64);
+        }
+        Self { limbs: out }
+    }
+
+    /// Parses an unsigned decimal string. Only base 10 is supported.
+    pub const fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+        if radix != 10 {
+            return Err(());
+        }
+        let bytes = s.as_bytes();
+        if bytes.is_empty() {
+            return Err(());
+        }
+        let mut acc = [0u64; N];
+        let mut k = 0;
+        while k < bytes.len() {
+            let ch = bytes[k];
+            if ch < b'0' || ch > b'9' {
+                return Err(());
+            }
+            let d = (ch - b'0') as u64;
+            let mut carry: u64 = d;
+            let mut j = 0;
+            while j < N {
+                let p = (acc[j] as u128) * 10u128 + (carry as u128);
+                acc[j] = p as u64;
+                carry = (p >> 64) as u64;
+                j += 1;
+            }
+            k += 1;
+        }
+        Ok(Self { limbs: acc })
+    }
 }
 
 impl<const N: usize> Add for Uint<N> {
@@ -516,8 +616,10 @@ impl<const N: usize> Ord for Uint<N> {
 impl<const N: usize> Int<N> {
     /// Number of 64-bit limbs.
     pub const LIMBS: usize = N;
-    /// Bit width (`LIMBS * 64`).
-    pub const BITS: usize = N * 64;
+    /// Bit width (`LIMBS * 64`). `u32` so it composes directly with the
+    /// `leading_zeros` / `count_ones` `u32` surface and matches the
+    /// historic named-type `BITS` constant.
+    pub const BITS: u32 = (N as u32) * 64;
 
     /// Additive identity.
     pub const ZERO: Self = Self { limbs: [0; N] };
@@ -525,6 +627,18 @@ impl<const N: usize> Int<N> {
     pub const ONE: Self = {
         let mut limbs = [0u64; N];
         limbs[0] = 1;
+        Self { limbs }
+    };
+    /// Most positive representable value (`2^(BITS-1) - 1`).
+    pub const MAX: Self = {
+        let mut limbs = [u64::MAX; N];
+        limbs[N - 1] = i64::MAX as u64;
+        Self { limbs }
+    };
+    /// Most negative representable value (`-2^(BITS-1)`).
+    pub const MIN: Self = {
+        let mut limbs = [0u64; N];
+        limbs[N - 1] = 1u64 << 63;
         Self { limbs }
     };
 
@@ -542,27 +656,27 @@ impl<const N: usize> Int<N> {
 
     /// `true` when every limb is zero.
     #[inline]
-    pub fn is_zero(&self) -> bool {
+    pub const fn is_zero(&self) -> bool {
         limbs_is_zero_u64_fixed(&self.limbs)
     }
 
     /// `true` when the value is strictly negative (top bit set).
     #[inline]
-    pub fn is_negative(&self) -> bool {
+    pub const fn is_negative(&self) -> bool {
         N > 0 && (self.limbs[N - 1] >> 63) == 1
     }
 
     /// `true` when the value is strictly positive (non-zero and the
     /// sign bit clear).
     #[inline]
-    pub fn is_positive(&self) -> bool {
+    pub const fn is_positive(&self) -> bool {
         !self.is_negative() && !self.is_zero()
     }
 
     /// Two's-complement wrapping negation (`!self + 1`). `MIN` negates
     /// to itself, as with the primitive signed integers.
     #[inline]
-    pub fn wrapping_neg(self) -> Self {
+    pub const fn wrapping_neg(self) -> Self {
         let mut out = [0u64; N];
         let mut i = 0;
         while i < N {
@@ -582,14 +696,14 @@ impl<const N: usize> Int<N> {
     /// unsigned add — two's-complement makes signed and unsigned
     /// addition the same operation.
     #[inline]
-    pub fn wrapping_add(mut self, rhs: Self) -> Self {
+    pub const fn wrapping_add(mut self, rhs: Self) -> Self {
         limbs_add_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
         self
     }
 
     /// Wrapping subtraction (modulo `2^BITS`).
     #[inline]
-    pub fn wrapping_sub(mut self, rhs: Self) -> Self {
+    pub const fn wrapping_sub(mut self, rhs: Self) -> Self {
         limbs_sub_assign_u64_fixed(&mut self.limbs, &rhs.limbs);
         self
     }
@@ -598,7 +712,7 @@ impl<const N: usize> Int<N> {
     /// two's-complement product are independent of the operand signs, so
     /// this is the same truncated schoolbook the unsigned type uses.
     #[inline]
-    pub fn wrapping_mul(self, rhs: Self) -> Self {
+    pub const fn wrapping_mul(self, rhs: Self) -> Self {
         let mut out = [0u64; N];
         limbs_mul_low_u64_fixed(&self.limbs, &rhs.limbs, &mut out);
         Self { limbs: out }
@@ -606,7 +720,7 @@ impl<const N: usize> Int<N> {
 
     /// Absolute value (wrapping: `MIN.abs() == MIN`).
     #[inline]
-    pub fn abs(self) -> Self {
+    pub const fn abs(self) -> Self {
         if self.is_negative() {
             self.wrapping_neg()
         } else {
@@ -680,7 +794,7 @@ impl<const N: usize> Int<N> {
     /// Overflow happens only when both operands share a sign and the
     /// result's sign differs from it.
     #[inline]
-    pub fn checked_add(self, rhs: Self) -> Option<Self> {
+    pub const fn checked_add(self, rhs: Self) -> Option<Self> {
         let r = self.wrapping_add(rhs);
         let sa = self.is_negative();
         let sb = rhs.is_negative();
@@ -690,7 +804,7 @@ impl<const N: usize> Int<N> {
 
     /// Checked signed subtraction: `None` on two's-complement overflow.
     #[inline]
-    pub fn checked_sub(self, rhs: Self) -> Option<Self> {
+    pub const fn checked_sub(self, rhs: Self) -> Option<Self> {
         let r = self.wrapping_sub(rhs);
         let sa = self.is_negative();
         let sb = rhs.is_negative();
@@ -733,7 +847,7 @@ impl<const N: usize> Int<N> {
     /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
     /// `self^0 == 1`. Uses the dedicated squaring kernel.
     #[inline]
-    pub fn wrapping_pow(self, mut exp: u32) -> Self {
+    pub const fn wrapping_pow(self, mut exp: u32) -> Self {
         let mut acc = Self::ONE;
         let mut base = self;
         while exp > 0 {
@@ -770,7 +884,7 @@ impl<const N: usize> Int<N> {
     /// half-product squaring kernel. The low `N` limbs of a square are
     /// sign-independent, so the unsigned kernel applies directly.
     #[inline]
-    pub fn wrapping_sqr(self) -> Self {
+    pub const fn wrapping_sqr(self) -> Self {
         let mut out = [0u64; N];
         limbs_sqr_low_u64_fixed(&self.limbs, &mut out);
         Self { limbs: out }
@@ -778,7 +892,7 @@ impl<const N: usize> Int<N> {
 
     /// Wrapping cube (`self³` modulo `2^BITS`): `sqr` then one multiply.
     #[inline]
-    pub fn wrapping_cube(self) -> Self {
+    pub const fn wrapping_cube(self) -> Self {
         self.wrapping_sqr().wrapping_mul(self)
     }
 
@@ -852,12 +966,18 @@ impl<const N: usize> Int<N> {
     /// Builds a signed value from a non-negative magnitude limb slice
     /// and a sign, truncating the magnitude into `N` limbs.
     #[inline]
-    fn from_mag_limbs(mag: &[u64], negative: bool) -> Self {
+    pub(crate) const fn from_mag_limbs(mag: &[u64], negative: bool) -> Self {
         let mut out = [0u64; N];
         let n = if mag.len() < N { mag.len() } else { N };
-        out[..n].copy_from_slice(&mag[..n]);
+        let mut i = 0;
+        while i < n {
+            out[i] = mag[i];
+            i += 1;
+        }
         let v = Self { limbs: out };
-        if negative && !v.is_zero() {
+        // Inherent `const` zero-check (avoids the non-const `FixedInt`
+        // trait method that name-resolution would otherwise pick here).
+        if negative && !limbs_is_zero_u64_fixed(&v.limbs) {
             v.wrapping_neg()
         } else {
             v
@@ -866,7 +986,7 @@ impl<const N: usize> Int<N> {
 
     /// `true` if bit `idx` of the two's-complement representation is set.
     #[inline]
-    pub fn bit(self, idx: u32) -> bool {
+    pub const fn bit(self, idx: u32) -> bool {
         let limb = (idx / 64) as usize;
         if limb >= N {
             return self.is_negative();
@@ -876,14 +996,14 @@ impl<const N: usize> Int<N> {
 
     /// Builds from a signed 128-bit value.
     #[inline]
-    pub fn from_i128(v: i128) -> Self {
+    pub const fn from_i128(v: i128) -> Self {
         let mag = v.unsigned_abs();
         Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
     }
 
     /// Builds from an unsigned 128-bit value.
     #[inline]
-    pub fn from_u128(v: u128) -> Self {
+    pub const fn from_u128(v: u128) -> Self {
         Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false)
     }
 
@@ -1017,18 +1137,18 @@ impl<const N: usize> Int<N> {
     /// Parses a signed decimal magnitude from `s`. Accepts an optional
     /// leading `-`, then ASCII digits. Only `radix == 10` is supported;
     /// any other value returns `Err(())`.
-    pub fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+    pub const fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
         if radix != 10 {
             return Err(());
         }
         let bytes = s.as_bytes();
-        let (negative, digits): (bool, &[u8]) =
+        let (negative, start): (bool, usize) =
             if !bytes.is_empty() && bytes[0] == b'-' {
-                (true, &bytes[1..])
+                (true, 1)
             } else {
-                (false, bytes)
+                (false, 0)
             };
-        if digits.is_empty() {
+        if start >= bytes.len() {
             return Err(());
         }
         // acc = acc * 10 + d per digit, truncating into N limbs — the
@@ -1036,19 +1156,249 @@ impl<const N: usize> Int<N> {
         // + `limbs_add_assign_u64`, but the low-N-limb multiply-by-10 is
         // folded into one n-by-1-word pass (no `2*N` staging buffer).
         let mut acc = [0u64; N];
-        for &ch in digits {
-            if !ch.is_ascii_digit() {
+        let mut k = start;
+        while k < bytes.len() {
+            let ch = bytes[k];
+            if ch < b'0' || ch > b'9' {
                 return Err(());
             }
             let d = (ch - b'0') as u64;
             let mut carry: u64 = d;
-            for limb in acc.iter_mut() {
-                let p = (*limb as u128) * 10u128 + (carry as u128);
-                *limb = p as u64;
+            let mut j = 0;
+            while j < N {
+                let p = (acc[j] as u128) * 10u128 + (carry as u128);
+                acc[j] = p as u64;
                 carry = (p >> 64) as u64;
+                j += 1;
             }
+            k += 1;
         }
         Ok(Self::from_mag_limbs(&acc, negative))
+    }
+
+    // ── Named-type API parity (the `decl_wide_int!` `$S` surface) ─────
+    //
+    // The methods below complete the inherent surface the macro `Int*`
+    // structs expose, so the `IntXXXX = Int<N>` aliases keep every call
+    // site resolving. Behaviour-preserving ports of the macro bodies.
+
+    /// Integer power: `self^exp` (wrapping on overflow). Alias of
+    /// [`Self::wrapping_pow`], matching the macro's `pow` name.
+    #[inline]
+    pub const fn pow(self, exp: u32) -> Self {
+        self.wrapping_pow(exp)
+    }
+
+    /// Reinterprets the bit pattern as the unsigned sibling.
+    #[inline]
+    pub const fn cast_unsigned(self) -> Uint<N> {
+        Uint::from_limbs(self.limbs)
+    }
+
+    /// Approximate `f64` value. Alias of [`Self::to_f64`], matching the
+    /// macro's `as_f64` name.
+    #[inline]
+    pub fn as_f64(self) -> f64 {
+        self.to_f64()
+    }
+
+    /// Count of set bits across the two's-complement representation.
+    #[inline]
+    pub const fn count_ones(self) -> u32 {
+        let mut total = 0;
+        let mut i = 0;
+        while i < N {
+            total += self.limbs[i].count_ones();
+            i += 1;
+        }
+        total
+    }
+
+    /// Count of clear bits across the two's-complement representation.
+    #[inline]
+    pub const fn count_zeros(self) -> u32 {
+        Self::BITS - self.count_ones()
+    }
+
+    /// Number of trailing zero bits; `BITS` for zero.
+    #[inline]
+    pub const fn trailing_zeros(self) -> u32 {
+        let mut i = 0;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return i as u32 * 64 + self.limbs[i].trailing_zeros();
+            }
+            i += 1;
+        }
+        Self::BITS
+    }
+
+    /// Checked negation: `None` exactly at `MIN` (whose negation
+    /// overflows the signed range).
+    #[inline]
+    pub fn checked_neg(self) -> Option<Self> {
+        if self == Self::MIN {
+            None
+        } else {
+            Some(self.wrapping_neg())
+        }
+    }
+
+    /// Checked division: `None` on a zero divisor.
+    #[inline]
+    pub fn checked_div(self, rhs: Self) -> Option<Self> {
+        if rhs.is_zero() {
+            None
+        } else {
+            Some(self.div_rem(rhs).0)
+        }
+    }
+
+    /// Checked remainder: `None` on a zero divisor.
+    #[inline]
+    pub fn checked_rem(self, rhs: Self) -> Option<Self> {
+        if rhs.is_zero() {
+            None
+        } else {
+            Some(self.div_rem(rhs).1)
+        }
+    }
+
+    /// Euclidean division: the quotient that leaves a non-negative
+    /// remainder.
+    #[inline]
+    pub fn div_euclid(self, rhs: Self) -> Self {
+        let (q, r) = self.div_rem(rhs);
+        if r.is_negative() {
+            if rhs.is_negative() {
+                q.wrapping_add(Self::ONE)
+            } else {
+                q.wrapping_sub(Self::ONE)
+            }
+        } else {
+            q
+        }
+    }
+
+    /// Euclidean remainder — always non-negative.
+    #[inline]
+    pub fn rem_euclid(self, rhs: Self) -> Self {
+        let r = self.div_rem(rhs).1;
+        if r.is_negative() {
+            r.wrapping_add(rhs.abs())
+        } else {
+            r
+        }
+    }
+
+    /// Wrapping addition paired with the two's-complement overflow flag.
+    #[inline]
+    pub const fn overflowing_add(self, rhs: Self) -> (Self, bool) {
+        let r = self.wrapping_add(rhs);
+        let sa = self.is_negative();
+        let sb = rhs.is_negative();
+        let sr = r.is_negative();
+        (r, sa == sb && sr != sa)
+    }
+
+    /// Wrapping subtraction paired with the two's-complement overflow
+    /// flag.
+    #[inline]
+    pub const fn overflowing_sub(self, rhs: Self) -> (Self, bool) {
+        let r = self.wrapping_sub(rhs);
+        let sa = self.is_negative();
+        let sb = rhs.is_negative();
+        let sr = r.is_negative();
+        (r, sa != sb && sr != sa)
+    }
+
+    /// Wrapping negation paired with the overflow flag (`true` only at
+    /// `MIN`).
+    #[inline]
+    pub const fn overflowing_neg(self) -> (Self, bool) {
+        let ov = limbs_cmp_u64_fixed(&self.limbs, &Self::MIN.limbs) == 0;
+        (self.wrapping_neg(), ov)
+    }
+
+    /// Wrapping remainder paired with an overflow flag (always `false`;
+    /// the remainder never overflows the signed range).
+    #[inline]
+    pub fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
+        (self.div_rem(rhs).1, false)
+    }
+
+    /// Saturating addition: clamps to `MIN` / `MAX` on overflow.
+    #[inline]
+    pub const fn saturating_add(self, rhs: Self) -> Self {
+        match self.checked_add(rhs) {
+            Some(v) => v,
+            None => {
+                if self.is_negative() { Self::MIN } else { Self::MAX }
+            }
+        }
+    }
+
+    /// Saturating subtraction: clamps to `MIN` / `MAX` on overflow.
+    #[inline]
+    pub const fn saturating_sub(self, rhs: Self) -> Self {
+        match self.checked_sub(rhs) {
+            Some(v) => v,
+            None => {
+                if self.is_negative() { Self::MIN } else { Self::MAX }
+            }
+        }
+    }
+
+    /// Saturating negation: `MIN` saturates to `MAX`.
+    #[inline]
+    pub fn saturating_neg(self) -> Self {
+        match self.checked_neg() {
+            Some(v) => v,
+            None => Self::MAX,
+        }
+    }
+
+    /// Rotates the bits left by `n` (modulo `BITS`).
+    #[inline]
+    pub fn rotate_left(self, n: u32) -> Self {
+        let bits = Self::BITS;
+        let n = n % bits;
+        if n == 0 {
+            return self;
+        }
+        let u = self.cast_unsigned();
+        Self::from_limbs(((u.shl(n)) | (u.shr(bits - n))).limbs)
+    }
+
+    /// Rotates the bits right by `n` (modulo `BITS`).
+    #[inline]
+    pub fn rotate_right(self, n: u32) -> Self {
+        self.rotate_left(Self::BITS - (n % Self::BITS))
+    }
+
+    /// Truncating cast to `i128` (low 128 bits, sign-applied).
+    #[inline]
+    pub const fn as_i128(self) -> i128 {
+        let mag = *self.abs().as_limbs();
+        let lo = if N > 0 { mag[0] as u128 } else { 0 };
+        let hi = if N > 1 { mag[1] as u128 } else { 0 };
+        let combined = lo | (hi << 64);
+        if self.is_negative() {
+            (combined as i128).wrapping_neg()
+        } else {
+            combined as i128
+        }
+    }
+
+    /// Widening / narrowing cast to any other [`WideInt`] type, via the
+    /// shared magnitude + sign bridge. Matches the macro's
+    /// `resize::<T>()` signature so the decimal-tier code that calls
+    /// `storage.resize::<$Wider>()` resolves against `Int<N>`.
+    #[inline]
+    pub fn resize<T: crate::int::limbs::WideInt>(self) -> T {
+        let negative = self.is_negative();
+        let mag = *self.unsigned_abs().as_limbs();
+        T::from_mag_sign(&mag, negative)
     }
 }
 
@@ -1240,6 +1590,45 @@ impl<const N: usize> core::str::FromStr for Int<N> {
     }
 }
 
+// ── Radix formatting (raw two's-complement bit pattern) ─────────────
+//
+// `LowerHex` / `UpperHex` / `Octal` / `Binary` print the raw limb bit
+// pattern (not a signed magnitude), matching the macro `$S` impls.
+// Stack scratch sized to the widest tier (256 limbs = Int16384), as in
+// the `Display` impl above.
+
+impl<const N: usize> core::fmt::LowerHex for Int<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf = [0u8; 256 * 64];
+        let s = limbs_fmt_into_u64(&self.limbs, 16, true, &mut buf);
+        f.pad_integral(true, "0x", s)
+    }
+}
+
+impl<const N: usize> core::fmt::UpperHex for Int<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf = [0u8; 256 * 64];
+        let s = limbs_fmt_into_u64(&self.limbs, 16, false, &mut buf);
+        f.pad_integral(true, "0x", s)
+    }
+}
+
+impl<const N: usize> core::fmt::Octal for Int<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf = [0u8; 256 * 64];
+        let s = limbs_fmt_into_u64(&self.limbs, 8, true, &mut buf);
+        f.pad_integral(true, "0o", s)
+    }
+}
+
+impl<const N: usize> core::fmt::Binary for Int<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mut buf = [0u8; 256 * 64];
+        let s = limbs_fmt_into_u64(&self.limbs, 2, true, &mut buf);
+        f.pad_integral(true, "0b", s)
+    }
+}
+
 // ── Width conversion: widen (lossless) / narrow (fallible) ─────────
 //
 // `Uint<N>` and `Uint<M>` are different-sized stack types, so a value
@@ -1255,8 +1644,12 @@ impl<const N: usize> core::str::FromStr for Int<N> {
 impl<const N: usize> Uint<N> {
     /// Resizes to `M` limbs: zero-extends when widening, drops the high
     /// limbs when narrowing. Direction-agnostic and infallible.
+    ///
+    /// Named `resize_n` (not `resize`) so the const-generic width bridge
+    /// does not collide with the type-generic [`Int::resize`] the named-
+    /// type API expects.
     #[inline]
-    pub fn resize<const M: usize>(self) -> Uint<M> {
+    pub fn resize_n<const M: usize>(self) -> Uint<M> {
         Uint::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { 0 }))
     }
 
@@ -1265,7 +1658,7 @@ impl<const N: usize> Uint<N> {
     #[inline]
     pub fn widen<const M: usize>(self) -> Uint<M> {
         debug_assert!(M >= N, "widen requires M >= N");
-        self.resize::<M>()
+        self.resize_n::<M>()
     }
 
     /// Narrows to a narrower `Uint<M>` (`M <= N`). Returns `None` if any
@@ -1281,7 +1674,7 @@ impl<const N: usize> Uint<N> {
             }
             i += 1;
         }
-        Some(self.resize::<M>())
+        Some(self.resize_n::<M>())
     }
 }
 
@@ -1289,8 +1682,12 @@ impl<const N: usize> Int<N> {
     /// Resizes to `M` limbs: sign-extends when widening, drops the high
     /// limbs when narrowing. Direction-agnostic and infallible
     /// (narrowing may change the represented value).
+    ///
+    /// Named `resize_n` (not `resize`) so the const-generic width bridge
+    /// does not collide with the type-generic [`Int::resize`] the named-
+    /// type API expects (the magnitude-bridge cast over any `WideInt`).
     #[inline]
-    pub fn resize<const M: usize>(self) -> Int<M> {
+    pub fn resize_n<const M: usize>(self) -> Int<M> {
         let fill = if self.is_negative() { u64::MAX } else { 0 };
         Int::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { fill }))
     }
@@ -1299,7 +1696,7 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub fn widen<const M: usize>(self) -> Int<M> {
         debug_assert!(M >= N, "widen requires M >= N");
-        self.resize::<M>()
+        self.resize_n::<M>()
     }
 
     /// Narrows to a narrower `Int<M>` (`1 <= M <= N`). Returns `None`
@@ -1317,7 +1714,7 @@ impl<const N: usize> Int<N> {
             }
             i += 1;
         }
-        Some(self.resize::<M>())
+        Some(self.resize_n::<M>())
     }
 }
 
@@ -1566,7 +1963,7 @@ mod tests {
         let a = Uint::<2>::from_limbs([7, 8]);
         let w = a.widen::<4>();
         assert_eq!(*w.as_limbs(), [7, 8, 0, 0]);
-        assert_eq!(a.resize::<4>(), w);
+        assert_eq!(a.resize_n::<4>(), w);
     }
 
     #[test]
