@@ -16,19 +16,20 @@
 //! per monomorphisation — no runtime dispatch.
 
 mod traits;
+mod wide_compat;
 
 pub use traits::{FixedInt, FixedIntConvert};
 
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
-    limbs_divmod_u64, limbs_is_zero_u64_fixed, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
-    limbs_sub_assign_u64_fixed,
+    limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
+    limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
 use crate::int::algos::div::limbs_isqrt_u64;
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use core::cmp::Ordering;
 use core::ops::{
-    Add, BitAnd, BitOr, BitXor, Mul, Neg, Not, Shl, Shr, Sub,
+    Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub,
 };
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
@@ -794,6 +795,261 @@ impl<const N: usize> Int<N> {
     pub fn leading_zeros(&self) -> u32 {
         (Self::BITS as u32) - self.bit_length()
     }
+
+    // ── WideStorage / WideInt parity surface ─────────────────────────
+    //
+    // The methods below mirror the `decl_wide_int!`-generated `Int*`
+    // surface so the const-generic `Int<N>` can satisfy the kernel-facing
+    // `WideStorage` / `WideInt` traits and the public `IntXXXX` API. Most
+    // delegate to the existing inherent methods or the `Uint<N>` twin.
+
+    /// Integer constant `10`, used by decimal-scale `10^scale`
+    /// rescaling.
+    pub const TEN: Self = {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = 10;
+        }
+        Self { limbs }
+    };
+
+    /// `|self|` as the unsigned twin. `MIN` maps to `2^(BITS-1)`.
+    #[inline]
+    fn unsigned_abs(self) -> Uint<N> {
+        Uint::from_limbs(*self.abs().as_limbs())
+    }
+
+    /// Two's-complement negation. Alias of [`Self::wrapping_neg`],
+    /// matching the `decl_wide_int!` `negate` name.
+    #[inline]
+    pub fn negate(self) -> Self {
+        self.wrapping_neg()
+    }
+
+    /// Truncating quotient and remainder `(self / rhs, self % rhs)` in a
+    /// single divmod call. Routes through the dispatching divmod
+    /// (Knuth / Burnikel–Ziegler) — matching the `decl_wide_int!`
+    /// `div_rem` so the const-generic and macro families share one
+    /// divide algorithm. Panics on a zero divisor.
+    #[inline]
+    pub fn div_rem(self, rhs: Self) -> (Self, Self) {
+        assert!(!rhs.is_zero(), "attempt to divide by zero");
+        let neg_q = self.is_negative() ^ rhs.is_negative();
+        let neg_r = self.is_negative();
+        let mut quot = [0u64; N];
+        let mut rem = [0u64; N];
+        limbs_divmod_dispatch_u64(
+            self.unsigned_abs().as_limbs(),
+            rhs.unsigned_abs().as_limbs(),
+            &mut quot,
+            &mut rem,
+        );
+        let q = Self::from_mag_limbs(&quot, neg_q);
+        let r = Self::from_mag_limbs(&rem, neg_r);
+        (q, r)
+    }
+
+    /// Builds a signed value from a non-negative magnitude limb slice
+    /// and a sign, truncating the magnitude into `N` limbs.
+    #[inline]
+    fn from_mag_limbs(mag: &[u64], negative: bool) -> Self {
+        let mut out = [0u64; N];
+        let n = if mag.len() < N { mag.len() } else { N };
+        out[..n].copy_from_slice(&mag[..n]);
+        let v = Self { limbs: out };
+        if negative && !v.is_zero() {
+            v.wrapping_neg()
+        } else {
+            v
+        }
+    }
+
+    /// `true` if bit `idx` of the two's-complement representation is set.
+    #[inline]
+    pub fn bit(self, idx: u32) -> bool {
+        let limb = (idx / 64) as usize;
+        if limb >= N {
+            return self.is_negative();
+        }
+        (self.limbs[limb] >> (idx % 64)) & 1 == 1
+    }
+
+    /// Builds from a signed 128-bit value.
+    #[inline]
+    pub fn from_i128(v: i128) -> Self {
+        let mag = v.unsigned_abs();
+        Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
+    }
+
+    /// Builds from an unsigned 128-bit value.
+    #[inline]
+    pub fn from_u128(v: u128) -> Self {
+        Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false)
+    }
+
+    /// Builds directly from the little-endian u64 limb array. Alias of
+    /// [`Self::from_limbs`], matching the `decl_wide_int!` `from_limbs_le`
+    /// name (the historic public surface).
+    #[inline]
+    pub const fn from_limbs_le(limbs: [u64; N]) -> Self {
+        Self { limbs }
+    }
+
+    /// Returns the little-endian u64 limbs by value. Symmetric with
+    /// [`Self::from_limbs_le`].
+    #[inline]
+    pub const fn limbs_le(self) -> [u64; N] {
+        self.limbs
+    }
+
+    /// `self · (n as Self)` with the sign of `self`, panicking on
+    /// overflow. Computes the n-by-1-word product (identical limb
+    /// recurrence to the macro's `limbs_mul_u64_into`) and rejects a
+    /// non-zero top carry — matching the `decl_wide_int!`
+    /// `checked_mul_u64`.
+    #[inline]
+    pub fn checked_mul_u64(self, n: u64) -> Self {
+        let mag = *self.unsigned_abs().as_limbs();
+        let mut prod = [0u64; N];
+        let mut carry: u64 = 0;
+        let mut i = 0;
+        while i < N {
+            let p = (mag[i] as u128) * (n as u128) + (carry as u128);
+            prod[i] = p as u64;
+            carry = (p >> 64) as u64;
+            i += 1;
+        }
+        if carry != 0 {
+            panic!("Int: mul overflow");
+        }
+        let negative = self.is_negative();
+        let r = Self::from_mag_limbs(&prod, negative);
+        // `from_mag_limbs` only mishandles the `mag == 2^(BITS-1)` edge:
+        // legal as MIN for `negative`, overflow otherwise.
+        if !r.is_zero() && r.is_negative() != negative {
+            panic!("Int: mul overflow");
+        }
+        r
+    }
+
+    /// Exact `i128` value, or `None` if it does not fit.
+    pub fn to_i128_checked(self) -> Option<i128> {
+        let negative = self.is_negative();
+        let mag = *self.unsigned_abs().as_limbs();
+        // First two u64 limbs make up the low u128; the rest must be 0.
+        let mut i = 2;
+        while i < N {
+            if mag[i] != 0 {
+                return None;
+            }
+            i += 1;
+        }
+        let lo = if N > 0 { mag[0] as u128 } else { 0 };
+        let hi = if N > 1 { mag[1] as u128 } else { 0 };
+        let lo_u128 = lo | (hi << 64);
+        if negative {
+            if lo_u128 <= (i128::MAX as u128) + 1 {
+                Some((lo_u128 as i128).wrapping_neg())
+            } else {
+                None
+            }
+        } else if lo_u128 <= i128::MAX as u128 {
+            Some(lo_u128 as i128)
+        } else {
+            None
+        }
+    }
+
+    /// Exact `u128` value, or `None` if negative / too large.
+    pub fn to_u128_checked(self) -> Option<u128> {
+        if self.is_negative() {
+            return None;
+        }
+        let mut i = 2;
+        while i < N {
+            if self.limbs[i] != 0 {
+                return None;
+            }
+            i += 1;
+        }
+        let lo = if N > 0 { self.limbs[0] as u128 } else { 0 };
+        let hi = if N > 1 { self.limbs[1] as u128 } else { 0 };
+        Some(lo | (hi << 64))
+    }
+
+    /// Approximate `f64` value of `self` (lossy above 53 significant
+    /// bits).
+    pub fn to_f64(self) -> f64 {
+        let mag = *self.unsigned_abs().as_limbs();
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut acc = 0.0f64;
+        let mut i = N;
+        while i > 0 {
+            i -= 1;
+            acc = acc * radix + mag[i] as f64;
+        }
+        if self.is_negative() { -acc } else { acc }
+    }
+
+    /// Builds from an `f64`, truncating toward zero. Saturates to
+    /// `MIN` / `MAX` on out-of-range; non-finite maps to `ZERO`.
+    pub fn from_f64(v: f64) -> Self {
+        if !v.is_finite() {
+            return Self::ZERO;
+        }
+        let negative = v < 0.0;
+        let mut m = if negative { -v } else { v };
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut limbs = [0u64; N];
+        let mut i = 0;
+        while m >= 1.0 && i < N {
+            let rem = m % radix;
+            limbs[i] = rem as u64;
+            m = (m - rem) / radix;
+            i += 1;
+        }
+        if m >= 1.0 {
+            return if negative { Self::min_value() } else { Self::max_value() };
+        }
+        Self::from_mag_limbs(&limbs, negative)
+    }
+
+    /// Parses a signed decimal magnitude from `s`. Accepts an optional
+    /// leading `-`, then ASCII digits. Only `radix == 10` is supported;
+    /// any other value returns `Err(())`.
+    pub fn from_str_radix(s: &str, radix: u32) -> Result<Self, ()> {
+        if radix != 10 {
+            return Err(());
+        }
+        let bytes = s.as_bytes();
+        let (negative, digits): (bool, &[u8]) =
+            if !bytes.is_empty() && bytes[0] == b'-' {
+                (true, &bytes[1..])
+            } else {
+                (false, bytes)
+            };
+        if digits.is_empty() {
+            return Err(());
+        }
+        // acc = acc * 10 + d per digit, truncating into N limbs — the
+        // same Horner recurrence the macro runs through `limbs_mul_u64`
+        // + `limbs_add_assign_u64`, but the low-N-limb multiply-by-10 is
+        // folded into one n-by-1-word pass (no `2*N` staging buffer).
+        let mut acc = [0u64; N];
+        for &ch in digits {
+            if !ch.is_ascii_digit() {
+                return Err(());
+            }
+            let d = (ch - b'0') as u64;
+            let mut carry: u64 = d;
+            for limb in acc.iter_mut() {
+                let p = (*limb as u128) * 10u128 + (carry as u128);
+                *limb = p as u64;
+                carry = (p >> 64) as u64;
+            }
+        }
+        Ok(Self::from_mag_limbs(&acc, negative))
+    }
 }
 
 impl<const N: usize> PartialOrd for Int<N> {
@@ -929,6 +1185,58 @@ impl<const N: usize> Neg for Int<N> {
     #[inline]
     fn neg(self) -> Self {
         self.wrapping_neg()
+    }
+}
+
+// ── Div / Rem ───────────────────────────────────────────────────────
+//
+// Truncating signed division / remainder, delegating to the dispatching
+// `div_rem` so the operators share the macro types' divide algorithm
+// (`limbs_divmod_dispatch_u64`: Knuth / Burnikel–Ziegler for multi-limb
+// divisors). These supertraits are what `WideStorage` requires.
+
+impl<const N: usize> Div for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        self.div_rem(rhs).0
+    }
+}
+
+impl<const N: usize> Rem for Int<N> {
+    type Output = Self;
+    #[inline]
+    fn rem(self, rhs: Self) -> Self {
+        self.div_rem(rhs).1
+    }
+}
+
+// ── Display / FromStr ───────────────────────────────────────────────
+//
+// Delegate to the same limb fmt / parse path the `decl_wide_int!` macro
+// types use, so the const-generic surface round-trips identically.
+
+impl<const N: usize> core::fmt::Display for Int<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        let mag = *self.unsigned_abs().as_limbs();
+        // Decimal needs <= BITS bytes (`BITS * log10(2) < BITS`); the
+        // formatter writes from the buffer tail. A stack scratch sized
+        // to the crate's widest tier (256 limbs = Int16384) keeps the
+        // const-generic body `core`-clean — no `[u8; N*64]` const
+        // expression and no `alloc` dependency, matching the macro's
+        // per-width `[u8; $L * 64]` buffer.
+        const MAX_DIGITS: usize = 256 * 64;
+        let mut buf = [0u8; MAX_DIGITS];
+        let s = limbs_fmt_into_u64(&mag, 10, true, &mut buf);
+        f.pad_integral(!self.is_negative() || self.is_zero(), "", s)
+    }
+}
+
+impl<const N: usize> core::str::FromStr for Int<N> {
+    type Err = ();
+    #[inline]
+    fn from_str(s: &str) -> Result<Self, ()> {
+        Self::from_str_radix(s, 10)
     }
 }
 
@@ -1551,6 +1859,212 @@ mod tests {
         assert_eq!(Int::<4>::from_i64(-9).signum(), -1);
         assert_eq!(Int::<4>::from_i64(9).signum(), 1);
         assert_eq!(Int::<4>::from_i64(0).signum(), 0);
+    }
+
+    #[test]
+    fn int_from_i128_round_trips() {
+        for v in [0i128, 1, -1, 42, -42, i64::MAX as i128, i64::MIN as i128,
+                  i128::MAX, i128::MIN, 123_456_789_012_345_678] {
+            let a = Int::<4>::from_i128(v);
+            assert_eq!(a.to_i128_checked(), Some(v), "round-trip i128 {v}");
+            let b = Int::<8>::from_i128(v);
+            assert_eq!(b.to_i128_checked(), Some(v), "round-trip i128 {v} (N=8)");
+        }
+        // from_u128 of a value above i128::MAX is not representable as i128.
+        let big = Int::<4>::from_u128(u128::MAX);
+        assert_eq!(big.to_i128_checked(), None);
+        assert_eq!(big.to_u128_checked(), Some(u128::MAX));
+        // Negative has no u128.
+        assert_eq!(Int::<4>::from_i128(-1).to_u128_checked(), None);
+    }
+
+    #[test]
+    fn int_from_str_radix_and_display_round_trip() {
+        let cases = ["0", "1", "-1", "42", "-42", "1000000000000000000000",
+                     "-340282366920938463463374607431768211455"];
+        for s in cases {
+            let v = Int::<4>::from_str_radix(s, 10).unwrap();
+            assert_eq!(format!("{v}"), s, "display round-trip {s}");
+            // FromStr delegates to from_str_radix(_, 10).
+            let v2: Int<4> = s.parse().unwrap();
+            assert_eq!(v, v2);
+        }
+        // Non-base-10 and malformed input reject.
+        assert!(Int::<4>::from_str_radix("10", 16).is_err());
+        assert!(Int::<4>::from_str_radix("12x", 10).is_err());
+        assert!(Int::<4>::from_str_radix("", 10).is_err());
+        assert!(Int::<4>::from_str_radix("-", 10).is_err());
+    }
+
+    #[test]
+    fn int_div_rem_signs_match_truncating() {
+        // Truncating division: quotient truncates toward zero, remainder
+        // carries the sign of the dividend.
+        let cases: [(i128, i128); 6] = [
+            (1000, 7), (-1000, 7), (1000, -7), (-1000, -7), (7, 1000), (-7, 1000),
+        ];
+        for (a, b) in cases {
+            let (q, r) = Int::<4>::from_i128(a).div_rem(Int::<4>::from_i128(b));
+            assert_eq!(q.to_i128_checked(), Some(a / b), "quot {a}/{b}");
+            assert_eq!(r.to_i128_checked(), Some(a % b), "rem {a}%{b}");
+        }
+    }
+
+    #[test]
+    #[should_panic(expected = "divide by zero")]
+    fn int_div_rem_by_zero_panics() {
+        let _ = Int::<4>::ONE.div_rem(Int::<4>::ZERO);
+    }
+
+    #[test]
+    fn int_bit_reads_twos_complement() {
+        let v = Int::<4>::from_i128(0b1010);
+        assert!(!v.bit(0));
+        assert!(v.bit(1));
+        assert!(!v.bit(2));
+        assert!(v.bit(3));
+        // Above the value's set bits: clear for positive.
+        assert!(!v.bit(200));
+        // Negative: high bits read as the sign extension (all ones).
+        let neg = Int::<4>::from_i128(-1);
+        assert!(neg.bit(0));
+        assert!(neg.bit(255));
+        assert!(neg.bit(1000)); // out of range → sign bit
+    }
+
+    #[test]
+    fn int_checked_mul_u64_matches_wide_mul() {
+        let v = Int::<4>::from_i128(123_456_789);
+        assert_eq!(v.checked_mul_u64(1000), Int::<4>::from_i128(123_456_789_000));
+        // Sign preserved.
+        let n = Int::<4>::from_i128(-123_456_789);
+        assert_eq!(n.checked_mul_u64(1000), Int::<4>::from_i128(-123_456_789_000));
+        // Times zero / one.
+        assert_eq!(v.checked_mul_u64(0), Int::<4>::ZERO);
+        assert_eq!(v.checked_mul_u64(1), v);
+    }
+
+    #[test]
+    #[should_panic(expected = "mul overflow")]
+    fn int_checked_mul_u64_overflow_panics() {
+        // max_value * 2 overflows the signed range.
+        let _ = Int::<4>::max_value().checked_mul_u64(2);
+    }
+
+    #[test]
+    fn int_div_rem_operators_match_div_rem() {
+        // The Div / Rem operators must agree with the inherent div_rem,
+        // which is what WideStorage requires as supertraits.
+        let a = Int::<4>::from_i128(-1000);
+        let b = Int::<4>::from_i128(7);
+        assert_eq!(a / b, Int::<4>::from_i128(-1000 / 7));
+        assert_eq!(a % b, Int::<4>::from_i128(-1000 % 7));
+        let (q, r) = a.div_rem(b);
+        assert_eq!(a / b, q);
+        assert_eq!(a % b, r);
+    }
+
+    #[test]
+    fn int_wide_storage_surface() {
+        use crate::int::limbs::WideStorage;
+        fn exercises<T: WideStorage>() {
+            assert!(<T as WideStorage>::ZERO == <T as WideStorage>::from_i128(0));
+            assert!(<T as WideStorage>::ONE == <T as WideStorage>::from_i128(1));
+            assert!(<T as WideStorage>::TEN == <T as WideStorage>::from_i128(10));
+
+            let twelve = <T as WideStorage>::from_i128(12);
+            let three = <T as WideStorage>::from_i128(3);
+            // pow / isqrt
+            assert!(three.pow(3) == <T as WideStorage>::from_i128(27));
+            assert!(<T as WideStorage>::from_i128(144).isqrt()
+                == <T as WideStorage>::from_i128(12));
+            // div_rem
+            let (q, r) = twelve.div_rem(<T as WideStorage>::from_i128(5));
+            assert!(q == <T as WideStorage>::from_i128(2));
+            assert!(r == <T as WideStorage>::from_i128(2));
+            // bit / leading_zeros
+            assert!(twelve.bit(2) && twelve.bit(3) && !twelve.bit(0));
+            assert!(<T as WideStorage>::ONE.leading_zeros()
+                == <T as WideStorage>::BITS - 1);
+            // checked_mul_u64 / f64 round-trips
+            assert!(twelve.checked_mul_u64(10) == <T as WideStorage>::from_i128(120));
+            assert!(twelve.to_f64() == 12.0);
+            assert!(<T as WideStorage>::from_f64_val(7.9)
+                == <T as WideStorage>::from_i128(7));
+        }
+        exercises::<Int<4>>();
+        exercises::<Int<8>>();
+
+        // resize_to widens/narrows across the family.
+        let v = Int::<4>::from_i128(-123_456_789);
+        let w: Int<8> = WideStorage::resize_to(v);
+        assert_eq!(w.to_i128_checked(), Some(-123_456_789));
+        let back: Int<4> = WideStorage::resize_to(w);
+        assert_eq!(back, v);
+    }
+
+    #[test]
+    fn int_isqrt_matches_uint_magnitude() {
+        use crate::int::limbs::WideStorage;
+        // Signed isqrt is the magnitude isqrt (macro parity).
+        let n = Int::<4>::from_i128(1_000_000_000_000);
+        let r = WideStorage::isqrt(n);
+        assert_eq!(r, Int::<4>::from_i128(1_000_000));
+        // Perfect square round-trip at width 8.
+        let big = Int::<8>::from_i128(987_654_321);
+        let sq = big.checked_mul(big).unwrap();
+        assert_eq!(WideStorage::isqrt(sq), big);
+    }
+
+    #[test]
+    fn int_wideint_mag_sign_round_trips() {
+        use crate::int::limbs::WideInt;
+        // to_mag_sign / from_mag_sign round-trip for signed values,
+        // including the magnitude + sign split.
+        for v in [0i128, 1, -1, 123_456_789_012_345_678, -987_654_321] {
+            let a = Int::<4>::from_i128(v);
+            let (mag, neg) = a.to_mag_sign();
+            assert_eq!(neg, a.is_negative());
+            assert_eq!(Int::<4>::from_mag_sign(&mag, neg), a, "mag/sign {v}");
+        }
+        // U128_LIMBS = ceil(N/2): even and odd N.
+        assert_eq!(<Int<4> as WideInt>::U128_LIMBS, 2);
+        assert_eq!(<Int<3> as WideInt>::U128_LIMBS, 2);
+        assert_eq!(<Int<8> as WideInt>::U128_LIMBS, 4);
+
+        // mag_into_u128 / from_mag_sign_u128 round-trip (the hot-path
+        // buffer bypass), including the odd-N tail at N=3.
+        let v3 = Int::<3>::from_i128(-170_141_183_460_469_231_731);
+        let mut buf = [0u128; 2];
+        let neg = v3.mag_into_u128(&mut buf);
+        assert_eq!(Int::<3>::from_mag_sign_u128(&buf, neg), v3);
+
+        let v4 = Int::<4>::from_i128(i128::MIN);
+        let mut buf4 = [0u128; 2];
+        let neg4 = v4.mag_into_u128(&mut buf4);
+        assert_eq!(Int::<4>::from_mag_sign_u128(&buf4, neg4), v4);
+
+        // Unsigned WideInt: sign is always false, magnitude round-trips.
+        let u = Uint::<4>::from_limbs([7, 8, 9, 10]);
+        let (umag, usign) = u.to_mag_sign();
+        assert!(!usign);
+        assert_eq!(Uint::<4>::from_mag_sign(&umag, false), u);
+    }
+
+    #[test]
+    fn int_to_from_f64_and_negate_ten() {
+        assert_eq!(Int::<4>::from_i64(5).to_f64(), 5.0);
+        assert_eq!(Int::<4>::from_i64(-5).to_f64(), -5.0);
+        assert_eq!(Int::<4>::from_f64(42.9), Int::<4>::from_i64(42));
+        assert_eq!(Int::<4>::from_f64(-42.9), Int::<4>::from_i64(-42));
+        // Non-finite maps to ZERO.
+        assert_eq!(Int::<4>::from_f64(f64::NAN), Int::<4>::ZERO);
+        // negate is wrapping_neg; TEN const is 10.
+        assert_eq!(Int::<4>::from_i64(5).negate(), Int::<4>::from_i64(-5));
+        assert_eq!(Int::<4>::TEN, Int::<4>::from_i64(10));
+        // from_limbs_le / limbs_le round-trip.
+        let v = Int::<4>::from_i128(-9_876_543_210);
+        assert_eq!(Int::<4>::from_limbs_le(v.limbs_le()), v);
     }
 
     #[test]
