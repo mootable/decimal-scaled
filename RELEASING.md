@@ -55,8 +55,15 @@ the rest are **manual** and must be verified by hand before merge.
   golden suite (D38…D1232, **delta == 0 across all six rounding modes**),
   and the proptest ULP fuzz. The precision guarantee is *enforced here,
   not assumed* — a kernel that rounds wrong turns the PR red.
-- **CodSpeed** — perf-regression tracking on the PR.
+- **Run benchmarks** — `codspeed.yml`; the CodSpeed harness job. The
+  benches must compile and run (this is a required context).
 - **cargo-audit** — RustSec advisory check.
+
+> **CodSpeed Performance Analysis is advisory, never a gate.** It is
+> configured *Informational on failure* (PR comment *On Change*), so it
+> reports perf shifts on the PR but never blocks the merge, and it is
+> **not** in the branch-protection required contexts. Perf is a signal;
+> correctness (the precision gate) is the release blocker.
 
 ### Manual — run / verify before merge (NOT auto-gated)
 
