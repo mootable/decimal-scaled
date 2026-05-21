@@ -71,13 +71,12 @@ accepting mixed-width, mixed-`SCALE` operands.
 |------|----------|
 | **MG** — [Möller–Granlund](https://gmplib.org/~tege/division-paper.pdf) | division by a constant (`÷ 10^SCALE`) via magic-multiply |
 | **BZ** — Burnikel–Ziegler | recursive divide-and-conquer division (wide tiers) |
-| **Karatsuba** / **Toom-Cook** | subquadratic multiplication |
-| **NTT / FFT** | number-theoretic / fast Fourier transform multiply (evaluated; above the crate's width ceiling) |
+| **Karatsuba** | subquadratic multiplication |
 | **Newton** ([Newton–Raphson](https://en.wikipedia.org/wiki/Newton%27s_method)) | precision-doubling iteration for roots/reciprocals |
 | **Ziv** | [Ziv's strategy](https://en.wikipedia.org/wiki/Rounding#Table-maker's_dilemma): widen the working precision until the rounding is provably correct |
 | **AGM** | arithmetic–geometric mean (asymptotic `ln` at extreme scales) |
 | **Tang tables** | table-driven seed for `exp`/`ln` |
-| **Cody–Waite** / **Payne–Hanek** | argument range reduction for trig |
+| **Cody–Waite** | argument range reduction for trig |
 | **Brent–Zimmermann** | the reference text for the integer/float algorithms used here |
 
 ## Standards
