@@ -40,8 +40,10 @@
 // inside each family are individually feature-gated.
 pub(crate) mod cbrt;
 pub(crate) mod exp;
+pub(crate) mod float_seed;
 pub(crate) mod ln;
 pub(crate) mod pow;
 pub(crate) mod sqrt;
+pub(crate) mod table_cache;
 pub(crate) mod triplet;
 pub(crate) mod trig;
