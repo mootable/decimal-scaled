@@ -25,7 +25,7 @@ use crate::int::limbs::{
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
     limbs_mul_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
-use crate::int::algos::div::limbs_isqrt_u64;
+use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use core::cmp::Ordering;
 use core::ops::{
@@ -344,12 +344,14 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Integer square root: the largest `r` with `r² <= self`.
-    /// Delegates to the shared limb isqrt (Newton with a hardware-sqrt
-    /// seed where `std` is available).
+    /// Delegates to the const-`N` fast-arm ([`isqrt_mag_fixed`]): native
+    /// `u64::isqrt` at `N == 1`, `u128::isqrt` at `N == 2`, and the shared
+    /// limb isqrt (Newton with a hardware-sqrt seed) for wider `N`. All
+    /// arms return the identical floor root.
     #[inline]
     pub fn isqrt(self) -> Self {
         let mut out = [0u64; N];
-        limbs_isqrt_u64(&self.limbs, &mut out);
+        isqrt_mag_fixed::<N>(&self.limbs, &mut out);
         Self { limbs: out }
     }
 
@@ -967,10 +969,13 @@ impl<const N: usize> Int<N> {
     }
 
     /// Truncating quotient and remainder `(self / rhs, self % rhs)` in a
-    /// single divmod call. Routes through the dispatching divmod
-    /// (Knuth / Burnikel–Ziegler) — matching the `decl_wide_int!`
-    /// `div_rem` so the const-generic and macro families share one
-    /// divide algorithm. Panics on a zero divisor.
+    /// single divmod call. The quotient truncates toward zero and the
+    /// remainder takes the sign of the dividend. Routes through the
+    /// const-`N` fast-arm ([`div_rem_mag_fixed`]): native `u64` idiv at
+    /// `N == 1`, native `u128` divide at `N == 2`, and the dispatching
+    /// divmod (Knuth / Burnikel–Ziegler) for wider `N` — matching the
+    /// `decl_wide_int!` `div_rem` so the const-generic and macro families
+    /// share one divide algorithm. Panics on a zero divisor.
     #[inline]
     pub fn div_rem(self, rhs: Self) -> (Self, Self) {
         assert!(!rhs.is_zero(), "attempt to divide by zero");
@@ -978,7 +983,7 @@ impl<const N: usize> Int<N> {
         let neg_r = self.is_negative();
         let mut quot = [0u64; N];
         let mut rem = [0u64; N];
-        limbs_divmod_dispatch_u64(
+        div_rem_mag_fixed::<N>(
             self.unsigned_abs().as_limbs(),
             rhs.unsigned_abs().as_limbs(),
             &mut quot,
