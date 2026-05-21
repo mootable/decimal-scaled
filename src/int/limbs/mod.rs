@@ -2823,8 +2823,10 @@ pub(crate) trait WideStorage:
 // features), so the re-export carries `allow(unused_imports)`.
 #[allow(unused_imports)]
 pub use crate::int::types::{
+    Int64, Int128,
     Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
     Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
+    Uint64, Uint128,
     Uint192, Uint256, Uint384, Uint512, Uint768, Uint1024, Uint1536, Uint2048,
     Uint3072, Uint4096, Uint6144, Uint8192, Uint12288, Uint16384,
 };

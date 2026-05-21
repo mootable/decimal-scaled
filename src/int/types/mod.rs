@@ -1830,6 +1830,8 @@ impl<const N: usize> Int<N> {
 // introduced without renaming every call site at once. Limb counts
 // match `decl_wide_int!`: bit_width / 64.
 
+pub type Uint64 = Uint<1>;
+pub type Uint128 = Uint<2>;
 pub type Uint192 = Uint<3>;
 pub type Uint256 = Uint<4>;
 pub type Uint384 = Uint<6>;
@@ -1845,6 +1847,8 @@ pub type Uint8192 = Uint<128>;
 pub type Uint12288 = Uint<192>;
 pub type Uint16384 = Uint<256>;
 
+pub type Int64 = Int<1>;
+pub type Int128 = Int<2>;
 pub type Int192 = Int<3>;
 pub type Int256 = Int<4>;
 pub type Int384 = Int<6>;
@@ -2599,5 +2603,143 @@ mod tests {
         assert_eq!(neg.max(pos), pos);
         assert_eq!(neg.min(pos), neg);
         assert_eq!(pos.cmp(&pos), Ordering::Equal);
+    }
+}
+
+/// Feasibility proof for the unified narrow-tier divide path: the same
+/// `widen_mul` → `div_wide_pow10_with` pipeline the wide tiers already
+/// run must produce the correct `(a · b) / 10^scale` at the narrow
+/// limb widths `N = 1` (`Int64`) and `N = 2` (`Int128`) that the
+/// D18/D38-unify steps will rewire onto. This locks in the
+/// `widen_mul::<wider>` then `div_wide_pow10_with::<wider, U128_LIMBS>`
+/// composition before any decimal type is rewired; it is additive and
+/// asserts only — no behaviour is changed here.
+#[cfg(all(test, feature = "wide"))]
+mod unified_mg_feasibility {
+    use super::Int;
+    use crate::algos::mg_divide::div_wide_pow10_with;
+    use crate::int::limbs::WideInt;
+    use crate::support::rounding::RoundingMode;
+
+    /// `(a · b) / 10^scale` through the unified pipeline, computed as
+    /// `Int<N>::widen_mul::<Int<M>>` (full product into the wider type)
+    /// then `div_wide_pow10_with::<Int<M>, LW>`. `LW` is the wider type's
+    /// `U128_LIMBS` (`(M + 1) / 2`), supplied explicitly by each caller
+    /// because a `<Int<M> as WideInt>::U128_LIMBS` expression cannot
+    /// appear in a const-generic argument over a generic `M`. Returns the
+    /// scaled wider-width quotient.
+    fn scaled<const N: usize, const M: usize, const LW: usize>(
+        a: Int<N>,
+        b: Int<N>,
+        scale: u32,
+    ) -> Int<M>
+    where
+        Int<M>: WideInt,
+    {
+        let prod: Int<M> = a.widen_mul::<Int<M>>(b);
+        div_wide_pow10_with::<Int<M>, LW>(prod, scale, RoundingMode::HalfToEven)
+    }
+
+    /// N = 2 → widen to N = 4, scale 5 (the plan's anchor case).
+    #[test]
+    fn n2_widen4_scale5() {
+        let a = Int::<2>::from_i64(123456789);
+        let b = Int::<2>::from_i64(987654321);
+        let got = scaled::<2, 4, 2>(a, b, 5);
+        assert_eq!(got, Int::<4>::from_i64(1219326311126));
+    }
+
+    /// N = 1 → widen to N = 2, scale 3 (the plan's anchor case).
+    #[test]
+    fn n1_widen2_scale3() {
+        let a = Int::<1>::from_i64(123456);
+        let b = Int::<1>::from_i64(654321);
+        let got = scaled::<1, 2, 1>(a, b, 3);
+        assert_eq!(got, Int::<2>::from_i64(80779853));
+    }
+
+    /// Round-trip: `(x · 10^k) / 10^k == x` at both narrow widths. The
+    /// widen_mul forms `x · 10^k` exactly in the wider type and the MG
+    /// divide undoes it with no residue.
+    #[test]
+    fn round_trip_mul_then_div() {
+        // N = 1 → 2: x = 4242, k = 4.
+        let x1 = 4242i64;
+        let ten_pow_4 = Int::<1>::from_i64(10_000);
+        let rt1 = scaled::<1, 2, 1>(Int::<1>::from_i64(x1), ten_pow_4, 4);
+        assert_eq!(rt1, Int::<2>::from_i64(x1));
+
+        // N = 2 → 4: x = 9_876_543_210, k = 7.
+        let x2 = 9_876_543_210i64;
+        let ten_pow_7 = Int::<2>::from_i64(10_000_000);
+        let rt2 = scaled::<2, 4, 2>(Int::<2>::from_i64(x2), ten_pow_7, 7);
+        assert_eq!(rt2, Int::<4>::from_i64(x2));
+    }
+
+    /// Scale-0 identity: callers short-circuit `scale == 0` as a no-op
+    /// (`div_wide_pow10_with` is only ever invoked for `1..=38`), so the
+    /// scaled value at scale 0 is exactly the full widen_mul product.
+    /// This locks that contract for the narrow widths.
+    #[test]
+    fn scale_zero_is_widen_mul_identity() {
+        // N = 1 → 2.
+        let a1 = Int::<1>::from_i64(123456);
+        let b1 = Int::<1>::from_i64(654321);
+        let prod1: Int<2> = a1.widen_mul::<Int<2>>(b1);
+        assert_eq!(prod1, Int::<2>::from_i64(123456 * 654321));
+
+        // N = 2 → 4.
+        let a2 = Int::<2>::from_i64(123456789);
+        let b2 = Int::<2>::from_i64(987654321);
+        let prod2: Int<4> = a2.widen_mul::<Int<4>>(b2);
+        assert_eq!(prod2, Int::<4>::from_i64(123456789i64 * 987654321i64));
+    }
+
+    /// Max-operand case at each narrow width: the widest product the
+    /// source width can hold must widen and scale without truncation.
+    #[test]
+    fn max_operand_each_width() {
+        // N = 1: u64::MAX-ish operands. Use the largest i64 magnitudes
+        // whose product the widen_mul (into N = 2) holds exactly, then
+        // scale by 10^9 and check against the u128 reference.
+        let a1 = Int::<1>::from_i64(i64::MAX);
+        let b1 = Int::<1>::from_i64(i64::MAX);
+        let got1 = scaled::<1, 2, 1>(a1, b1, 9);
+        let exact1 = (i64::MAX as i128) * (i64::MAX as i128);
+        let pow9 = 1_000_000_000i128;
+        let q1 = exact1 / pow9;
+        let r1 = exact1 % pow9;
+        // HalfToEven bump when the remainder is past the halfway point.
+        let half = pow9 / 2;
+        let expect1 = if r1 > half || (r1 == half && (q1 & 1) == 1) {
+            q1 + 1
+        } else {
+            q1
+        };
+        assert_eq!(got1, Int::<2>::from_i128(expect1));
+
+        // N = 2: the most-positive signed operand (2^127 - 1) squared,
+        // widened into N = 4, then scaled by 10^20. Compare against the
+        // exact reference reconstructed from the full 256-bit product.
+        let big = Int::<2>::MAX; // 2^127 - 1
+        let got2 = scaled::<2, 4, 2>(big, big, 20);
+        let prod2: Int<4> = big.widen_mul::<Int<4>>(big);
+        // Exact (2^127 - 1)^2 / 10^20, HalfToEven, via the wider type's
+        // own div_rem against 10^20 built in Int<4>.
+        let pow20 = Int::<4>::TEN.pow(20);
+        let (q2, r2) = prod2.div_rem(pow20);
+        let half20 = pow20.div_rem(Int::<4>::from_i64(2)).0;
+        let expect2 = match r2.cmp(&half20) {
+            core::cmp::Ordering::Greater => q2.wrapping_add(Int::<4>::ONE),
+            core::cmp::Ordering::Equal => {
+                if (q2.as_limbs()[0] & 1) == 1 {
+                    q2.wrapping_add(Int::<4>::ONE)
+                } else {
+                    q2
+                }
+            }
+            core::cmp::Ordering::Less => q2,
+        };
+        assert_eq!(got2, expect2);
     }
 }
