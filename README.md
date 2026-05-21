@@ -75,8 +75,8 @@ The two guarantees nothing else on crates.io currently combines:
 
 Worst-case error of each transcendental, measured against a
 high-precision oracle (worst result across every tested input). Each
-cell shows the **LSB error** — least-significant bits of the stored
-value that differ from the correctly-rounded result — with the worst
+cell shows the **LSBe** — *least significant bits in error*, the count
+of low-order bits of the stored value that are wrong — with the worst
 **ULP** distance from the true value in parentheses:
 
 | Function | decimal-scaled | g_math | fastnum | rust_decimal | dashu-float | decimal-rs |
@@ -91,11 +91,11 @@ value that differ from the correctly-rounded result — with the worst
 | **cbrt** | ✓ 0 (0.50) | — | ✓ 0 (1e-16) | — | — | — |
 | *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
 
-**✓** = **0 LSB** of error (correctly rounded — the stored value is
-exactly right, ≤ 0.5 ULP from true) on *every* tested input. **✗** = at
-least one input off by **≥ 1 LSB**. **—** = not implemented by that
-crate. First number = worst-case LSB error; parenthesised = worst ULP
-distance from the true value.
+**✓** = **0 LSBe** (correctly rounded — the stored value is exactly
+right, ≤ 0.5 ULP from true) on *every* tested input. **✗** = at least
+one input with **≥ 1 LSBe**. **—** = not implemented by that crate.
+First number = worst-case **LSBe** (least significant bits in error);
+parenthesised = worst ULP distance from the true value.
 
 `decimal-scaled` is the only crate ✓ on every function — and its ✓ holds
 for all six rounding modes and all thirteen widths (D9 … D1232).
