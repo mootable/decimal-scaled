@@ -71,50 +71,52 @@ The two guarantees nothing else on crates.io currently combines:
 
 ---
 
-## Correctly rounded — and the only crate that is
+## Correctly rounded across the whole surface
 
 Worst-case error of each transcendental, measured against a
-high-precision oracle (worst result across every tested input). Each
-cell shows the **LSBε** — *least significant bits in error*, the count
-of low-order bits of the stored value that are wrong — with the worst
-**ULP** distance from the true value in parentheses:
+high-precision [mpmath][mpmath] oracle (worst result across every tested
+input). Each cell is the **LSBε** — *least significant bits in error*,
+the count of low-order bits of the stored value that are wrong — with
+the worst **[ULP][ULP]** distance from the true value in parentheses.
+`0 (0)` means correctly rounded: the stored value is bit-exact under
+that crate's reported mode.
 
-| Function | decimal-scaled | g_math | fastnum | rust_decimal | dashu-float | decimal-rs |
-|---|:--:|:--:|:--:|:--:|:--:|:--:|
-| **exp**  | ✓ 0 (0.50) | ✗ 65 (2.3e19) | ✓ 0 (1e-16)  | ✓ 0 (2.7e-6) | ✓ 0 (1e-16) | ✓ 0 (1.3e-15) |
-| **ln**   | ✓ 0 (0.50) | ✗ 6 (49.5)    | ✓ 0 (1e-16)  | ✗ 31 (1.1e9) | ✗ 1 (1.00) | ✓ 0 (1e-16) |
-| **sin**  | ✓ 0 (0.50) | ✗ 64 (1.7e19) | ✓ 0 (1.7e-12)| ✓ 0 (2.1e-9) | — | — |
-| **cos**  | ✓ 0 (0.50) | ✗ 6 (50.0)    | ✓ 0 (5.2e-12)| ✓ 0 (2.4e-9) | — | — |
-| **tan**  | ✓ 0 (0.50) | ✗ 65 (2.1e19) | ✓ 0 (1.4e-12)| ✗ 36 (4.3e10) | — | — |
-| **atan** | ✓ 0 (0.50) | ✗ 64 (1.6e19) | ✓ 0 (1e-16)  | — | — | — |
-| **sqrt** | ✓ 0 (0.50) | ✗ 6 (49.6)    | ✓ 0 (1e-16)  | ✓ 0 (7.2e-7) | ✓ 0 (1e-16) | ✓ 0 (3e-16) |
-| **cbrt** | ✓ 0 (0.50) | — | ✓ 0 (1e-16) | — | — | — |
-| *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
+[mpmath]: https://mpmath.org/
 
-**✓** = **0 LSBε** (correctly rounded — the stored value is exactly
-right, ≤ 0.5 ULP from true) on *every* tested input. **✗** = at least
-one input with **≥ 1 LSBε**. **—** = not implemented by that crate.
-First number = worst-case **LSBε** (least significant bits in error);
-parenthesised = worst ULP distance from the true value.
+Measured at a 19-digit scale (`D38<19>`), generated straight from the
+committed shootout result files:
 
-`decimal-scaled` is the only crate ✓ on every function — and its ✓ holds
-for all six rounding modes and all thirteen widths (D9 … D1232).
+| library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan | asinh |
+|---|---|---|---|---|---|---|---|---|---|---|
+| decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
+| fastnum | HalfAwayFromZero | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 67 (1.1e20) | 0 (0) | 58 (2.0e17) |
+| rust_decimal | HalfToEven | 1 (1.00) | n/a | 33 (7.2e9) | 31 (1.1e9) | 1 (1.00) | 1 (1.00) | 36 (4.3e10) | n/a | n/a |
+| dashu-float | HalfAwayFromZero | 0 (0) | n/a | 0 (0) | 0 (0) | n/a | n/a | n/a | n/a | n/a |
+| decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a |
+| bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 
-**At deep precision the field collapses.** Repeat the test at a 150-digit
-scale and only `decimal-scaled` computes **all eight** functions
-correctly; the fixed-precision crates (g_math ≈ 19, rust_decimal ≈ 28,
-fastnum ≈ 34, decimal-rs ≈ 38 digits) can no longer represent the value
-at all, and arbitrary-precision `dashu-float` — the lone peer that
-reaches it — still misses `ln`.
+`0 (0)` = correctly rounded (0 LSBε, bit-exact under that crate's
+reported mode) on *every* tested input; the first number is worst-case
+LSBε, the parenthesised one the worst ULP distance from true. `n/a` =
+not exposed by that crate, or the width/scale isn't representable.
 
-*Scope of this table:* measured at a 19-digit scale (`D38<19>`) and a
-150-digit scale (`D307<150>`, with `D616<308>` also verified), under
-`HalfToEven`; each cell is the worst case across the scales a library
-supports. It samples a slice of the full matrix — decimal-scaled's
-guarantee holds across **all six rounding modes** and **all thirteen
-widths** (`D9` … `D1232`). For the complete per-scale, per-width,
-per-mode tables and the methodology, see the
+**`decimal-scaled` is `0 (0)` on the entire surface** — and that holds
+for all six rounding modes and all thirteen widths (`D9` … `D1232`).
+`fastnum` is the closest peer: correctly rounded almost everywhere,
+missing only `tan` (67 LSBε) and `asinh` (58 LSBε) at this scale.
+`dashu-float` is correctly rounded on the `exp` / `ln` / `sqrt` surface
+it exposes. `rust_decimal`, `decimal-rs`, and `bigdecimal` carry genuine
+1-or-more-LSB gaps on the functions they implement.
+
+*Scope of this table:* it shows a representative slice of the full
+22-function surface at `D38<19>` under each crate's native mode; the
+complete per-method, per-width tables (`D38` and the `D76` subset) are
+generated from the same result files by
+[`scripts/render_precision_table.py`](scripts/render_precision_table.py)
+and reproduced in the
 [benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/).
+decimal-scaled's `0 (0)` holds across **all six rounding modes** and
+**all thirteen widths**.
 
 ## Speed across the width range
 
