@@ -61,6 +61,11 @@ jobs:
           restore-keys: |
             cargo-ci-tests-${{ runner.os }}-
 
+      - name: Install system libs (fontconfig for the plotters dev-dep)
+        # The full `cargo test` builds every target including the
+        # chart_gen example, which pulls plotters → yeslogic-fontconfig-sys.
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: Full test suite (wide tiers + macros)
         # The full `cargo test` — no `--test` scoping — so every
         # example and bench target is compiled as part of the run.
