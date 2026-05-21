@@ -554,17 +554,18 @@ name = "lib_cmp_d1232"
 harness = false
 required-features = ["xx-wide"]
 
-# Precision (accuracy) shootout — NOT a timing bench. Runs the eight
-# transcendentals over the golden input roster at a common 19-digit
-# comparison scale and reports each library's continuous distance from
-# the true value (computed by the proven-correctly-rounded D76<35>
-# oracle), in ULPs, alongside the rounding mode each library uses.
-# Emits a markdown table for docs/benchmarks.md. `harness = false`
-# with a plain `fn main` — no criterion timing machinery.
+# Library-agnostic precision shootout — NOT a timing bench. The ONE
+# precision-comparison path: sweeps every PrecisionSubject (decimal-scaled
+# + dashu-float / rust_decimal / fastnum / decimal-rs / bigdecimal) over
+# the mpmath golden oracle via the shared harness in tests/support/,
+# writes the deterministic per-library result files under
+# results/precision/, and renders the LSBε/ULP shootout table FROM those
+# committed files. `harness = false` with a plain `fn main` — no
+# criterion timing machinery.
 [[bench]]
 name = "lib_cmp_precision"
 harness = false
-required-features = ["wide", "x-wide"]
+required-features = ["wide", "x-wide", "xx-wide", "macros"]
 
 [[bench]]
 name = "prec_fix_impact"
