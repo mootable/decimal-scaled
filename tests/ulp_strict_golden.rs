@@ -1,40 +1,57 @@
 //! Correctly-rounded (0 storage LSB) gate against the mpmath oracle,
-//! under EVERY `RoundingMode`.
+//! under EVERY `RoundingMode`, driven through the library-agnostic
+//! precision harness.
 //!
-//! Each golden table under `tests/golden/<func>_d<N>_s<S>.txt` is
-//! produced by `scripts/gen_golden_precision.py` at a per-tier working
-//! precision of `max(700, 2*SCALE + 64)` decimal digits, with one
-//! `<input_raw>\t<floor_raw>\t<cls>` per line:
+//! This is the crate's "0.5 ULP, correctly rounded" guarantee proved
+//! with ZERO tolerance: for every golden case, every one of the six
+//! rounding modes, and every one of the thirteen decimal widths, the
+//! kernel's `*_strict_with(mode)` output equals the correctly-rounded
+//! oracle integer EXACTLY — `lsbe == 0` (delta == 0 storage LSB).
 //!
-//! * `input_raw` — the storage integer of `x` at the tier scale.
-//! * `floor_raw` — `floor(f(x) * 10^SCALE)`, rounded toward negative
-//!   infinity. Mode-independent.
-//! * `cls` — fractional class of `f(x)*10^SCALE - floor_raw` in
-//!   `[0, 1)`: `Z` exact, `L` below half, `E` exact tie, `G` above half.
+//! # One precision library
 //!
-//! From `(floor_raw, cls)` the harness derives the correctly-rounded
-//! integer for ANY `RoundingMode` and asserts the kernel's
-//! `*_strict_with(mode)` output equals it EXACTLY — `delta == 0`
-//! storage LSB. That is the crate's "0.5 ULP, correctly rounded"
-//! guarantee proved with ZERO tolerance, for all six rounding modes
-//! and every one of the crate's thirteen decimal widths.
+//! The gate is built ON the same [`PrecisionSubject`] harness the
+//! comparative shootout uses (`tests/support/precision_harness.rs`).
+//! `decimal-scaled` is the reference [`PrecisionSubject`]
+//! (`tests/support/precision_subject_ds.rs`); the harness owns the
+//! oracle (the mpmath golden tables under `tests/golden/`) and folds it
+//! to the correctly-rounded integer under the subject's reported mode.
+//! Asserting `lsbe == 0` across all six modes and all thirteen widths is
+//! exactly the bit-exact invariant — there is no second, bespoke
+//! comparison path.
+//!
+//! Each golden table under `tests/golden/<func>_d<N>_s<S>.txt` carries
+//! one `<input_raw>\t<floor_raw>\t<cls>` per line (four columns for the
+//! two-argument `log`/`atan2`/`powf` tables). From `(floor_raw, cls)`
+//! the harness derives the correctly-rounded integer for ANY mode and
+//! the gate asserts the kernel matches it exactly.
 //!
 //! Test split per width (`d9`, `d18`, …, `d1232`) so the local
 //! iteration loop is fast: `cargo test --test ulp_strict_golden d76`
 //! runs only the D76<35> band.
 //!
-//! This suite is rounding-mode agnostic: it drives each kernel through
-//! `*_strict_with(mode)` for every mode explicitly, so it runs and
-//! asserts identically regardless of which (if any) `rounding-*` Cargo
-//! default feature is active. It is gated off only under `fast` (where
-//! the strict path is not the dispatch target).
+//! Run the whole matrix (all six modes, every width, every function):
+//!   cargo test --test ulp_strict_golden --features wide,x-wide,xx-wide,macros
+//!
+//! Gated off under `fast` (where the strict path is not the dispatch
+//! target).
 
 #![cfg(not(feature = "fast"))]
 
-use decimal_scaled::RoundingMode;
+#[path = "support/precision_harness.rs"]
+mod harness;
 
-/// The six rounding modes, in the order `src/support/rounding.rs`
-/// declares them. Every golden case is checked under all six.
+#[path = "support/precision_subject_ds.rs"]
+mod subject_ds;
+
+use decimal_scaled::RoundingMode;
+use harness::{
+    Cls, GoldenCase, Harness, Input, Method, PrecisionResult, PrecisionSubject, Width,
+    parse_golden_line,
+};
+use subject_ds::DecimalScaledSubject;
+
+/// The six rounding modes. Every golden case is checked under all six.
 pub const MODES: [RoundingMode; 6] = [
     RoundingMode::HalfToEven,
     RoundingMode::HalfAwayFromZero,
@@ -44,141 +61,130 @@ pub const MODES: [RoundingMode; 6] = [
     RoundingMode::Ceiling,
 ];
 
-/// Fractional class parsed from the golden table's third column.
-#[derive(Clone, Copy, PartialEq, Eq, Debug)]
-pub enum Cls {
-    /// `frac == 0` — the value is exactly representable at the scale.
-    Exact,
-    /// `0 < frac < 0.5`.
-    Low,
-    /// `frac == 0.5` exactly — a half-way tie.
-    Tie,
-    /// `0.5 < frac < 1`.
-    High,
+/// Map a golden-table function name to the harness [`Method`].
+fn method_of(func: &str) -> Method {
+    match func {
+        "ln" => Method::Ln,
+        "exp" => Method::Exp,
+        "exp2" => Method::Exp2,
+        "log2" => Method::Log2,
+        "log10" => Method::Log10,
+        "sin" => Method::Sin,
+        "cos" => Method::Cos,
+        "tan" => Method::Tan,
+        "atan" => Method::Atan,
+        "asin" => Method::Asin,
+        "acos" => Method::Acos,
+        "sinh" => Method::Sinh,
+        "cosh" => Method::Cosh,
+        "tanh" => Method::Tanh,
+        "asinh" => Method::Asinh,
+        "acosh" => Method::Acosh,
+        "atanh" => Method::Atanh,
+        "sqrt" => Method::Sqrt,
+        "cbrt" => Method::Cbrt,
+        "log" => Method::Log,
+        "atan2" => Method::Atan2,
+        "powf" => Method::Pow,
+        other => panic!("unknown function: {other}"),
+    }
 }
 
-impl Cls {
-    fn parse(s: &str) -> Self {
-        match s {
-            "Z" => Cls::Exact,
-            "L" => Cls::Low,
-            "E" => Cls::Tie,
-            "G" => Cls::High,
-            other => panic!("unknown class column: {other:?}"),
+/// Drive the reference subject (`decimal-scaled`) through the harness for
+/// one `(func, width)` table, across all six modes, and assert every
+/// scored cell is correctly rounded (`lsbe == 0`). A mismatch prints the
+/// full (input, mode) detail and is counted; a non-zero count fails.
+fn check(func: &str, width: Width, table: &str) {
+    let subject = DecimalScaledSubject;
+    let method = method_of(func);
+    let scale = width.canonical_scale();
+    let mut failures = 0usize;
+
+    for line in table.lines() {
+        let Some(GoldenCase {
+            input,
+            input2,
+            floor,
+            cls,
+        }) = parse_golden_line(line)
+        else {
+            continue;
+        };
+        let case = GoldenCase {
+            input: input.clone(),
+            input2: input2.clone(),
+            floor: floor.clone(),
+            cls,
+        };
+        let inp = Input {
+            raw: input.clone(),
+            input2: input2.clone(),
+            width,
+            scale,
+        };
+        for &mode in MODES.iter() {
+            let out = subject.eval(method, width, scale, &inp, mode);
+            match Harness::score(&out, &case, scale) {
+                PrecisionResult::NotApplicable => {
+                    eprintln!(
+                        "FAIL: {func} {} mode={mode:?} input={input} \
+                         input2={input2:?}: subject returned NotApplicable",
+                        width.name(),
+                    );
+                    failures += 1;
+                }
+                PrecisionResult::Executed { lsbe, ulp, value, .. } => {
+                    if lsbe != 0 {
+                        // Print every failure: an audit run needs every
+                        // still-failing (input, mode) surfaced.
+                        eprintln!(
+                            "FAIL: {func} {} mode={mode:?} input={input} \
+                             input2={input2:?} floor={floor} cls={cls:?} \
+                             value={value} lsbe={lsbe} ulp={ulp}",
+                            width.name(),
+                        );
+                        failures += 1;
+                    }
+                }
+            }
         }
     }
+    assert!(
+        failures == 0,
+        "{}: {func}: {failures} (case, mode) pairs not correctly rounded (lsbe != 0)",
+        width.name(),
+    );
 }
 
-/// One parsed golden line: the raw input column(s) plus the
-/// floor-and-class reference columns.
-///
-/// Single-argument tables have three columns
-/// (`input \t floor \t cls`); two-argument tables (`log`, `atan2`,
-/// `powf`) have four (`input \t input2 \t floor \t cls`). `input2` is
-/// `None` for the single-argument shape.
-pub struct Case<'a> {
-    pub input: &'a str,
-    pub input2: Option<&'a str>,
-    pub floor: &'a str,
-    pub cls: Cls,
-}
-
-/// Parse a line: drop comments (`#`) and blanks, split the TSV columns.
-/// Three columns ⇒ single-arg `(input, floor, cls)`; four columns ⇒
-/// two-arg `(input, input2, floor, cls)`.
-pub fn parse_line(line: &str) -> Option<Case<'_>> {
-    let line = line.trim();
-    if line.is_empty() || line.starts_with('#') {
-        return None;
-    }
-    let parts: Vec<&str> = line.split('\t').collect();
-    match parts.len() {
-        3 => Some(Case {
-            input: parts[0],
-            input2: None,
-            floor: parts[1],
-            cls: Cls::parse(parts[2]),
-        }),
-        4 => Some(Case {
-            input: parts[0],
-            input2: Some(parts[1]),
-            floor: parts[2],
-            cls: Cls::parse(parts[3]),
-        }),
-        other => panic!("golden line has {other} columns, expected 3 or 4: {line:?}"),
-    }
-}
-
-/// Which neighbour (`floor` or `floor + 1`) is correctly rounded for
-/// `mode`, given the fractional class and the sign of the true value.
-///
-/// `true_nonneg` is the sign of the true real value `v` (`v >= 0`),
-/// NOT of `floor` — for `v` in `(-1, 0)` the floor is `-1` while `v`
-/// is negative, and directed modes need the value's sign.
-///
-/// Returns `false` to select `floor`, `true` to select `floor + 1`.
-/// Centralising the rule here keeps the per-tier macro free of mode
-/// logic and means the primitive and wide bands prove the identical
-/// rule. The `HalfToEven` exact-tie case is resolved in the macro
-/// (it needs the storage parity of `floor`); for every other
-/// (mode, class) pair this is the whole decision.
-pub fn bump_to_ceil(mode: RoundingMode, cls: Cls, true_nonneg: bool) -> bool {
-    match cls {
-        // Exactly representable: every mode returns floor, no bump.
-        Cls::Exact => false,
-        // Below half: nearest is floor for all "nearest" modes.
-        Cls::Low => match mode {
-            RoundingMode::HalfToEven
-            | RoundingMode::HalfAwayFromZero
-            | RoundingMode::HalfTowardZero => false,
-            RoundingMode::Trunc => !true_nonneg, // toward zero: v<0 -> ceil
-            RoundingMode::Floor => false,
-            RoundingMode::Ceiling => true,
-        },
-        // Above half: nearest is ceil for all "nearest" modes.
-        Cls::High => match mode {
-            RoundingMode::HalfToEven
-            | RoundingMode::HalfAwayFromZero
-            | RoundingMode::HalfTowardZero => true,
-            RoundingMode::Trunc => !true_nonneg,
-            RoundingMode::Floor => false,
-            RoundingMode::Ceiling => true,
-        },
-        // Exact half-way tie: each mode breaks it its own way.
-        // `HalfToEven` is handled in the macro (parity-dependent).
-        Cls::Tie => match mode {
-            RoundingMode::HalfToEven => true, // safety net; macro overrides
-            RoundingMode::HalfAwayFromZero => true_nonneg, // away: v>=0 -> ceil
-            RoundingMode::HalfTowardZero => !true_nonneg,  // toward zero
-            RoundingMode::Trunc => !true_nonneg,
-            RoundingMode::Floor => false,
-            RoundingMode::Ceiling => true,
-        },
-    }
-}
-
-// ─── Per-band driver macro ─────────────────────────────────────────────
+// ─── Per-tier band macro ───────────────────────────────────────────────
 //
-// Every band — primitive (D9/D18/D38) or wide (D57…D1232) — has the
-// same shape: parse `(input, floor, cls)`, lift the input to the typed
-// decimal, call `*_strict_with(mode)` for every mode, derive the
-// correctly-rounded reference integer from `(floor, cls, sign)`, and
-// assert bit-exact (`delta == 0`).
+// Every band (D9 … D1232) has the same shape: one `#[test]` per function
+// that pulls its golden table in at compile time (`include_str!`) and
+// routes it through `check(func, width, table)`. The harness handles the
+// storage type, the strict-method dispatch, the per-mode oracle fold, and
+// the bit-exact (`lsbe == 0`) verdict — there is no per-width call/
+// reference logic here anymore; the single harness library does it all.
 //
-// The two storage families differ only in two primitives, supplied
-// per invocation:
-//   * `parse` — string -> storage integer.
-//   * `one`   — the storage value `1` (for `floor + 1`).
-// Everything else is identical.
+// The directed transcendental kernels are correctly rounded under every
+// `RoundingMode` across every width (Ziv escalation resolves the true
+// residual sign at the storage grid line). Exact algebraic points
+// (perfect squares/cubes, `log_b(b^k)`, `base^(p/q)`) are pinned by the
+// generator with the `Z` (no-bump) class and the kernel returns them
+// exactly under every mode. `acosh` near 1 and `atanh` near ±1 use the
+// gap / `log1p` reformulation so the catastrophic cancellation is removed
+// at the source.
+//
+// The remaining `ignore` family is carried per entry with its reason:
+//   * narrow-path `atan` directed-rounding 1-LSB boundary, only on the
+//     non-`wide` build (the wide-feature atan path is correctly rounded);
+//   * `sinh`/`cosh`/`exp2`/`tanh` near the storage-overflow edge at high
+//     scale where the wide-tier `exp_fixed` working width is exceeded.
 
 macro_rules! decl_band {
     (
         mod $modname:ident,
-        type $D:ty,
-        storage $Int:ty,
+        width $width:expr,
         feature_gate $($cfg:meta)*,
-        parse $parse:expr,
-        one $one:expr,
         funcs {
             $(
                 $fn:ident = $file:literal
@@ -190,186 +196,27 @@ macro_rules! decl_band {
     ) => {
         #[$($cfg)*]
         mod $modname {
-            use super::{Case, Cls, MODES, bump_to_ceil, parse_line};
-            use decimal_scaled::RoundingMode;
-            type D = $D;
-            type Int = $Int;
-
-            #[allow(clippy::redundant_closure_call)]
-            fn parse_int(s: &str) -> Int {
-                ($parse)(s)
-            }
-
-            fn one() -> Int {
-                $one
-            }
-
-            fn is_neg(x: &Int) -> bool {
-                let zero = parse_int("0");
-                *x < zero
-            }
-
-            fn call(func: &str, raw: Int, raw2: Option<Int>, mode: RoundingMode) -> Int {
-                let d = <D>::from_bits(raw);
-                let d2 = || <D>::from_bits(raw2.expect("two-arg function needs input2"));
-                match func {
-                    "ln"    => d.ln_strict_with(mode).to_bits(),
-                    "exp"   => d.exp_strict_with(mode).to_bits(),
-                    "exp2"  => d.exp2_strict_with(mode).to_bits(),
-                    "log2"  => d.log2_strict_with(mode).to_bits(),
-                    "log10" => d.log10_strict_with(mode).to_bits(),
-                    "sin"   => d.sin_strict_with(mode).to_bits(),
-                    "cos"   => d.cos_strict_with(mode).to_bits(),
-                    "tan"   => d.tan_strict_with(mode).to_bits(),
-                    "atan"  => d.atan_strict_with(mode).to_bits(),
-                    "asin"  => d.asin_strict_with(mode).to_bits(),
-                    "acos"  => d.acos_strict_with(mode).to_bits(),
-                    "sinh"  => d.sinh_strict_with(mode).to_bits(),
-                    "cosh"  => d.cosh_strict_with(mode).to_bits(),
-                    "tanh"  => d.tanh_strict_with(mode).to_bits(),
-                    "asinh" => d.asinh_strict_with(mode).to_bits(),
-                    "acosh" => d.acosh_strict_with(mode).to_bits(),
-                    "atanh" => d.atanh_strict_with(mode).to_bits(),
-                    "sqrt"  => d.sqrt_strict_with(mode).to_bits(),
-                    "cbrt"  => d.cbrt_strict_with(mode).to_bits(),
-                    // Two-argument: input2 carries the second operand.
-                    "log"   => d.log_strict_with(d2(), mode).to_bits(),
-                    "atan2" => d.atan2_strict_with(d2(), mode).to_bits(),
-                    "powf"  => d.powf_strict_with(d2(), mode).to_bits(),
-                    other   => panic!("unknown function: {other}"),
-                }
-            }
-
-            /// Correctly-rounded reference integer at the tier scale,
-            /// for `mode`, derived from `(floor, cls)`.
-            fn reference(floor: Int, cls: Cls, mode: RoundingMode) -> Int {
-                let ceil = floor + one();
-                // Sign of the true value v = (floor + frac)/10^S.
-                //   v >= 0  ⇔  floor >= 0   (floor < 0 ⇒ v < 0, since
-                //   frac < 1 keeps v inside [floor, floor+1)).
-                let true_nonneg = !is_neg(&floor);
-
-                if cls == Cls::Tie && mode == RoundingMode::HalfToEven {
-                    // Half-to-even on an exact tie: pick the even
-                    // neighbour. `floor` even ⇒ floor, else ceil.
-                    let two = one() + one();
-                    let zero = parse_int("0");
-                    let rem = floor - (floor / two) * two; // floor mod 2
-                    return if rem == zero { floor } else { ceil };
-                }
-
-                if bump_to_ceil(mode, cls, true_nonneg) {
-                    ceil
-                } else {
-                    floor
-                }
-            }
-
-            fn check(func: &str, table: &str) {
-                let mut failures = 0usize;
-                for line in table.lines() {
-                    let Some(Case { input, input2, floor, cls }) = parse_line(line) else {
-                        continue;
-                    };
-                    let raw_in = parse_int(input);
-                    let raw_in2 = input2.map(parse_int);
-                    let floor_int = parse_int(floor);
-                    for &mode in MODES.iter() {
-                        let expected = reference(floor_int, cls, mode);
-                        let actual = call(func, raw_in, raw_in2, mode);
-                        if actual != expected {
-                            // Print every failure: an audit run needs
-                            // every still-failing (input, mode) surfaced.
-                            eprintln!(
-                                "FAIL: {func} {} mode={mode:?} input={input} \
-                                 input2={input2:?} floor={floor} cls={cls:?} \
-                                 expected={expected} actual={actual}",
-                                stringify!($modname),
-                            );
-                            failures += 1;
-                        }
-                    }
-                }
-                assert!(
-                    failures == 0,
-                    "{}: {func}: {failures} (case, mode) pairs not correctly \
-                     rounded (delta != 0)",
-                    stringify!($modname),
-                );
-            }
+            use super::{Width, check};
+            const WIDTH: Width = $width;
 
             $(
                 #[test]
                 $(#[ignore = $reason])?
                 $(#[cfg_attr($icfg, ignore = $creason)])?
-                fn $fn() { check(stringify!($fn), include_str!($file)); }
+                fn $fn() {
+                    check(stringify!($fn), WIDTH, include_str!($file));
+                }
             )+
         }
     };
 }
 
-// ─── Per-tier instantiation ────────────────────────────────────────────
-//
-// The transcendental kernels are correctly rounded (`delta == 0`) under
-// every `RoundingMode` across every width: the directed modes resolve the
-// true residual sign by recomputing the working-scale value at a wider
-// guard whenever the result lands inside the kernel error band of a
-// storage grid line (Ziv escalation), and the linear small-argument fast
-// paths defer to the full kernel for directed modes.
-//
-// Exact algebraic points are classified symbolically by the generator
-// via integer arithmetic, bypassing the finite-precision oracle's
-// sub-LSB residual: perfect squares for sqrt and perfect cubes for cbrt
-// (`cbrt(10^-615) = 10^-205` at D1232<615>), `log_b(b^k) = k` where the
-// argument is an exact power of the base (the `log(v)/log(b)` oracle
-// otherwise lands a hair below the integer, e.g. `log_2(32)`), and the
-// perfect-power `base^(p/q)` (`4^0.5 = 2`). Each is emitted with the
-// exact result and the `Z` (no-bump) tie-class; the kernel returns that
-// exactly representable value under every rounding mode.
-//
-// The derived transcendentals route their final narrowing through the
-// same `round_to_storage_directed` Ziv escalation as the primary kernels,
-// pin the exact algebraic points, lift the working scale for large-result
-// `exp2`/`sinh`/`cosh`, evaluate `tanh`'s tiny linear band with the
-// analytic directed decision (the cubic compression is below any
-// achievable working precision yet pins the directed result), and route
-// `x^0.5` through the correctly-rounded `sqrt` kernel — so they are
-// correctly rounded for every mode on every width.
-//
-// `acosh` near 1 and `atanh` near ±1 are correctly rounded under every
-// mode via the gap / `log1p` reformulation: `atanh(x) = ½·[ln(1+x) −
-// ln(1−x)]` keeps the `1∓x` gap exact, and `acosh(1+t) = log1p(t +
-// √(t·(t+2)))` forms `v²−1` as the exact `t·(t+2)` — both removing the
-// catastrophic cancellation at the source — narrowed through the
-// near-special-point path that confirms the base-guard result against a
-// wider guard.
-//
-// The one remaining exception family is still carried as `ignore` entries
-// below and explained in each entry's reason string:
-//   * `sinh` / `cosh` / `exp2` near the storage-overflow edge at high
-//     scale: the wide-tier `exp_fixed` working-width limit (the result's
-//     integer-digit lift plus `exp_fixed`'s internal `2^k` reassembly
-//     exceeds the working integer) — `tanh` at D462<230> joins this
-//     family at its near-±1 saturation grid line, where the directed Ziv
-//     escalation drives `exp_fixed` past the `Int4096` work width.
-//
-// The expanded surface adds the eleven single-argument trait functions
-// (exp2 log2 log10 asin acos sinh cosh tanh asinh acosh atanh) and the
-// three two-argument functions (log / atan2 / powf, carried in a 4-column
-// golden table), each at every one of the thirteen widths.
-//
-// Run the whole matrix (all six modes, every width, every function) with
-//   cargo test --test ulp_strict_golden --features wide,x-wide,xx-wide,macros
-
 // ─── Primitive-storage bands (D9 / D18 / D38) ──────────────────────────
 
 decl_band! {
     mod d9,
-    type decimal_scaled::D9<4>,
-    storage i32,
+    width Width::D9,
     feature_gate cfg(all()),
-    parse |s: &str| s.parse::<i32>().expect("parse i32"),
-    one 1i32,
     funcs {
         ln    = "golden/ln_d9_s4.txt";
         exp   = "golden/exp_d9_s4.txt";
@@ -398,11 +245,8 @@ decl_band! {
 
 decl_band! {
     mod d18,
-    type decimal_scaled::D18<9>,
-    storage i64,
+    width Width::D18,
     feature_gate cfg(all()),
-    parse |s: &str| s.parse::<i64>().expect("parse i64"),
-    one 1i64,
     funcs {
         ln    = "golden/ln_d18_s9.txt";
         exp   = "golden/exp_d18_s9.txt";
@@ -431,11 +275,8 @@ decl_band! {
 
 decl_band! {
     mod d38,
-    type decimal_scaled::D38<19>,
-    storage i128,
+    width Width::D38,
     feature_gate cfg(all()),
-    parse |s: &str| s.parse::<i128>().expect("parse i128"),
-    one 1i128,
     funcs {
         ln    = "golden/ln_d38_s19.txt";
         exp   = "golden/exp_d38_s19.txt";
@@ -466,11 +307,8 @@ decl_band! {
 
 decl_band! {
     mod d57,
-    type decimal_scaled::D57<28>,
-    storage decimal_scaled::Int192,
+    width Width::D57,
     feature_gate cfg(any(feature = "d57", feature = "wide")),
-    parse |s: &str| decimal_scaled::Int192::from_str_radix(s, 10).expect("parse Int192"),
-    one decimal_scaled::Int192::from_i128(1),
     funcs {
         ln    = "golden/ln_d57_s28.txt";
         exp   = "golden/exp_d57_s28.txt";
@@ -499,11 +337,8 @@ decl_band! {
 
 decl_band! {
     mod d76,
-    type decimal_scaled::D76<35>,
-    storage decimal_scaled::Int256,
+    width Width::D76,
     feature_gate cfg(any(feature = "d76", feature = "wide")),
-    parse |s: &str| decimal_scaled::Int256::from_str_radix(s, 10).expect("parse Int256"),
-    one decimal_scaled::Int256::from_i128(1),
     funcs {
         ln    = "golden/ln_d76_s35.txt";
         exp   = "golden/exp_d76_s35.txt";
@@ -532,11 +367,8 @@ decl_band! {
 
 decl_band! {
     mod d115,
-    type decimal_scaled::D115<57>,
-    storage decimal_scaled::Int384,
+    width Width::D115,
     feature_gate cfg(any(feature = "d115", feature = "wide")),
-    parse |s: &str| decimal_scaled::Int384::from_str_radix(s, 10).expect("parse Int384"),
-    one decimal_scaled::Int384::from_i128(1),
     funcs {
         ln    = "golden/ln_d115_s57.txt";
         exp   = "golden/exp_d115_s57.txt";
@@ -565,11 +397,8 @@ decl_band! {
 
 decl_band! {
     mod d153,
-    type decimal_scaled::D153<76>,
-    storage decimal_scaled::Int512,
+    width Width::D153,
     feature_gate cfg(any(feature = "d153", feature = "wide")),
-    parse |s: &str| decimal_scaled::Int512::from_str_radix(s, 10).expect("parse Int512"),
-    one decimal_scaled::Int512::from_i128(1),
     funcs {
         ln    = "golden/ln_d153_s76.txt";
         exp   = "golden/exp_d153_s76.txt";
@@ -598,11 +427,8 @@ decl_band! {
 
 decl_band! {
     mod d230,
-    type decimal_scaled::D230<115>,
-    storage decimal_scaled::Int768,
+    width Width::D230,
     feature_gate cfg(any(feature = "d230", feature = "wide")),
-    parse |s: &str| decimal_scaled::Int768::from_str_radix(s, 10).expect("parse Int768"),
-    one decimal_scaled::Int768::from_i128(1),
     funcs {
         ln    = "golden/ln_d230_s115.txt";
         exp   = "golden/exp_d230_s115.txt";
@@ -631,11 +457,8 @@ decl_band! {
 
 decl_band! {
     mod d307,
-    type decimal_scaled::D307<150>,
-    storage decimal_scaled::Int1024,
+    width Width::D307,
     feature_gate cfg(any(feature = "d307", feature = "x-wide")),
-    parse |s: &str| decimal_scaled::Int1024::from_str_radix(s, 10).expect("parse Int1024"),
-    one decimal_scaled::Int1024::from_i128(1),
     funcs {
         ln    = "golden/ln_d307_s150.txt";
         exp   = "golden/exp_d307_s150.txt";
@@ -664,11 +487,8 @@ decl_band! {
 
 decl_band! {
     mod d462,
-    type decimal_scaled::D462<230>,
-    storage decimal_scaled::Int1536,
+    width Width::D462,
     feature_gate cfg(any(feature = "d462", feature = "x-wide")),
-    parse |s: &str| decimal_scaled::Int1536::from_str_radix(s, 10).expect("parse Int1536"),
-    one decimal_scaled::Int1536::from_i128(1),
     funcs {
         ln    = "golden/ln_d462_s230.txt";
         exp   = "golden/exp_d462_s230.txt";
@@ -697,11 +517,8 @@ decl_band! {
 
 decl_band! {
     mod d616,
-    type decimal_scaled::D616<308>,
-    storage decimal_scaled::Int2048,
+    width Width::D616,
     feature_gate cfg(any(feature = "d616", feature = "x-wide")),
-    parse |s: &str| decimal_scaled::Int2048::from_str_radix(s, 10).expect("parse Int2048"),
-    one decimal_scaled::Int2048::from_i128(1),
     funcs {
         ln    = "golden/ln_d616_s308.txt";
         exp   = "golden/exp_d616_s308.txt";
@@ -730,11 +547,8 @@ decl_band! {
 
 decl_band! {
     mod d924,
-    type decimal_scaled::D924<460>,
-    storage decimal_scaled::Int3072,
+    width Width::D924,
     feature_gate cfg(any(feature = "d924", feature = "xx-wide")),
-    parse |s: &str| decimal_scaled::Int3072::from_str_radix(s, 10).expect("parse Int3072"),
-    one decimal_scaled::Int3072::from_i128(1),
     funcs {
         ln    = "golden/ln_d924_s460.txt";
         exp   = "golden/exp_d924_s460.txt";
@@ -763,11 +577,8 @@ decl_band! {
 
 decl_band! {
     mod d1232,
-    type decimal_scaled::D1232<615>,
-    storage decimal_scaled::Int4096,
+    width Width::D1232,
     feature_gate cfg(any(feature = "d1232", feature = "xx-wide")),
-    parse |s: &str| decimal_scaled::Int4096::from_str_radix(s, 10).expect("parse Int4096"),
-    one decimal_scaled::Int4096::from_i128(1),
     funcs {
         ln    = "golden/ln_d1232_s615.txt";
         exp   = "golden/exp_d1232_s615.txt";

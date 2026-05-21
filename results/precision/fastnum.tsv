@@ -1,0 +1,35 @@
+# library: fastnum
+# key: method	width	scale	rounding	result
+# result columns: kind(executed|na)	max_lsbe	max_ulp	scored	correctly_rounded
+# source: benches/lib_cmp_precision.rs (regenerate with `cargo bench --bench lib_cmp_precision --features wide,x-wide,xx-wide,macros`)
+method	width	scale	rounding	kind	max_lsbe	max_ulp	scored	correctly_rounded
+sqrt	D38	19	HalfAwayFromZero	executed	0	0	66	66
+cbrt	D38	19	HalfAwayFromZero	executed	0	0	38	38
+exp	D38	19	HalfAwayFromZero	executed	0	0	51	51
+ln	D38	19	HalfAwayFromZero	executed	0	0	55	55
+log2	D38	19	HalfAwayFromZero	executed	0	0	113	113
+log10	D38	19	HalfAwayFromZero	executed	0	0	72	72
+exp2	D38	19	HalfAwayFromZero	na	-1	na	0	0
+sin	D38	19	HalfAwayFromZero	executed	0	0	56	56
+cos	D38	19	HalfAwayFromZero	executed	0	0	63	63
+tan	D38	19	HalfAwayFromZero	executed	67	1.071e20	61	58
+atan	D38	19	HalfAwayFromZero	executed	0	0	17	17
+asin	D38	19	HalfAwayFromZero	executed	0	0	78	78
+acos	D38	19	HalfAwayFromZero	executed	0	0	73	73
+sinh	D38	19	HalfAwayFromZero	executed	0	0	57	57
+cosh	D38	19	HalfAwayFromZero	executed	0	0	59	59
+tanh	D38	19	HalfAwayFromZero	executed	0	0	82	82
+asinh	D38	19	HalfAwayFromZero	executed	58	2.020e17	59	44
+acosh	D38	19	HalfAwayFromZero	executed	0	0	60	60
+atanh	D38	19	HalfAwayFromZero	executed	0	0	76	76
+log	D38	19	HalfAwayFromZero	na	-1	na	0	0
+atan2	D38	19	HalfAwayFromZero	na	-1	na	0	0
+powf	D38	19	HalfAwayFromZero	executed	0	0	54	54
+sqrt	D76	35	HalfAwayFromZero	na	-1	na	0	0
+cbrt	D76	35	HalfAwayFromZero	na	-1	na	0	0
+exp	D76	35	HalfAwayFromZero	na	-1	na	0	0
+ln	D76	35	HalfAwayFromZero	na	-1	na	0	0
+sin	D76	35	HalfAwayFromZero	na	-1	na	0	0
+cos	D76	35	HalfAwayFromZero	na	-1	na	0	0
+tan	D76	35	HalfAwayFromZero	na	-1	na	0	0
+atan	D76	35	HalfAwayFromZero	na	-1	na	0	0
