@@ -29,11 +29,17 @@ its docs, and its benchmarks — in one place.
 
 ## Rounding modes
 
-`HalfToEven` (IEEE 754 default · banker's) · `HalfAwayFromZero` ·
-`HalfTowardZero` · `Ceiling` (toward +∞) · `Floor` (toward −∞) ·
-`Trunc` (toward zero). Every lossy operation has a `*_with(mode)`
-sibling; the crate-wide default is selectable via the `rounding-*`
-Cargo features.
+| Mode | Behaviour |
+|------|-----------|
+| `HalfToEven` | Nearest; ties to even — the IEEE 754 default (banker's rounding). |
+| `HalfAwayFromZero` | Nearest; ties away from zero. |
+| `HalfTowardZero` | Nearest; ties toward zero. |
+| `Ceiling` | Toward +∞. |
+| `Floor` | Toward −∞. |
+| `Trunc` | Toward zero (truncate). |
+
+Every lossy operation has a `*_with(mode)` sibling; the crate-wide
+default is selectable at compile time via the `rounding-*` Cargo features.
 
 ## Operation shortenings
 
