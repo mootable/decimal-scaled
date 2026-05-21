@@ -1,6 +1,6 @@
 # The width family
 
-`decimal-scaled` ships thirteen storage widths. They all share the same
+`decimal-scaled` ships <!-- BEGIN GENERATED:widths:count -->thirteen storage widths<!-- END GENERATED:widths:count -->. They all share the same
 API shape — the same methods, the same const generic `SCALE`, the same
 `Decimal` trait impl — and differ only in the size of the backing
 integer, which sets the range and the maximum usable scale.
@@ -12,21 +12,23 @@ guarantees at least one integer digit at every legal `SCALE` (and so
 every representable value has a sign-and-integer-part to render). The
 overall scaffold:
 
+<!-- BEGIN GENERATED:widths:table -->
 | Type | Constructor macro | Underlying signed integer | `MAX_SCALE` | Max value at SCALE 0 | Required feature |
 |---|---|---|---|---|---|
-| `D9<S>`    | `d9!`    | `i32` (32 bits)        |   8  | ±2.1 × 10⁹    | always available |
-| `D18<S>`   | `d18!`   | `i64` (64 bits)        |  17  | ±9.2 × 10¹⁸   | always available |
-| `D38<S>`   | `d38!`   | `i128` (128 bits)      |  37  | ±1.7 × 10³⁸   | always available |
-| `D57<S>`   | `d57!`   | `Int192` (192 bits)    |  56  | ±3.1 × 10⁵⁷   | `d57` / `wide`   |
-| `D76<S>`   | `d76!`   | `Int256` (256 bits)    |  75  | ±5.8 × 10⁷⁶   | `d76` / `wide`   |
-| `D115<S>`  | `d115!`  | `Int384` (384 bits)    | 114  | ±2.0 × 10¹¹⁵  | `d115` / `wide`  |
-| `D153<S>`  | `d153!`  | `Int512` (512 bits)    | 152  | ±6.7 × 10¹⁵³  | `d153` / `wide`  |
-| `D230<S>`  | `d230!`  | `Int768` (768 bits)    | 229  | ±7.7 × 10²³⁰  | `d230` / `wide`  |
-| `D307<S>`  | `d307!`  | `Int1024` (1024 bits)  | 306  | ±9.0 × 10³⁰⁷  | `d307` / `wide`  |
-| `D462<S>`  | `d462!`  | `Int1536` (1536 bits)  | 461  | ±1.0 × 10⁴⁶²  | `d462` / `x-wide`|
-| `D616<S>`  | `d616!`  | `Int2048` (2048 bits)  | 615  | ±1.6 × 10⁶¹⁶  | `d616` / `x-wide`|
-| `D924<S>`  | `d924!`  | `Int3072` (3072 bits)  | 923  | ±2.3 × 10⁹²⁴  | `d924` / `xx-wide`|
-| `D1232<S>` | `d1232!` | `Int4096` (4096 bits)  | 1231 | ±2.7 × 10¹²³² | `d1232` / `xx-wide`|
+| `D9<S>` | `d9!` | `i32` (32 bits) | 8 | ±2.1 × 10⁹ | always available |
+| `D18<S>` | `d18!` | `i64` (64 bits) | 17 | ±9.2 × 10¹⁸ | always available |
+| `D38<S>` | `d38!` | `i128` (128 bits) | 37 | ±1.7 × 10³⁸ | always available |
+| `D57<S>` | `d57!` | `Int192` (192 bits) | 56 | ±3.1 × 10⁵⁷ | `d57` / `wide` |
+| `D76<S>` | `d76!` | `Int256` (256 bits) | 75 | ±5.8 × 10⁷⁶ | `d76` / `wide` |
+| `D115<S>` | `d115!` | `Int384` (384 bits) | 114 | ±2.0 × 10¹¹⁵ | `d115` / `wide` |
+| `D153<S>` | `d153!` | `Int512` (512 bits) | 152 | ±6.7 × 10¹⁵³ | `d153` / `wide` |
+| `D230<S>` | `d230!` | `Int768` (768 bits) | 229 | ±7.7 × 10²³⁰ | `d230` / `wide` |
+| `D307<S>` | `d307!` | `Int1024` (1024 bits) | 306 | ±9.0 × 10³⁰⁷ | `d307` / `wide` |
+| `D462<S>` | `d462!` | `Int1536` (1536 bits) | 461 | ±1.0 × 10⁴⁶² | `d462` / `x-wide` |
+| `D616<S>` | `d616!` | `Int2048` (2048 bits) | 615 | ±1.6 × 10⁶¹⁶ | `d616` / `x-wide` |
+| `D924<S>` | `d924!` | `Int3072` (3072 bits) | 923 | ±2.3 × 10⁹²⁴ | `d924` / `xx-wide` |
+| `D1232<S>` | `d1232!` | `Int4096` (4096 bits) | 1231 | ±2.7 × 10¹²³² | `d1232` / `xx-wide` |
+<!-- END GENERATED:widths:table -->
 
 The half-width tiers (`D57`, `D115`, `D230`, `D462`, `D924`) fill in
 the storage-cost gap between each pair of power-of-two widths, so you

@@ -14,10 +14,12 @@ deterministic on every platform, `no_std`-friendly.
 
 ## Install
 
+<!-- BEGIN GENERATED:install:dependency -->
 ```toml
 [dependencies]
 decimal-scaled = { version = "0.4", features = ["macros"] }
 ```
+<!-- END GENERATED:install:dependency -->
 
 ## First use
 
@@ -86,6 +88,7 @@ that crate's reported mode.
 Measured at a 19-digit scale (`D38<19>`), generated straight from the
 committed shootout result files:
 
+<!-- BEGIN GENERATED:precision:D38:readme -->
 | library | mode | sqrt | cbrt | exp | ln | sin | cos | tan | atan | asinh |
 |---|---|---|---|---|---|---|---|---|---|---|
 | decimal-scaled | HalfToEven | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) | 0 (0) |
@@ -95,6 +98,7 @@ committed shootout result files:
 | decimal-rs | HalfToEven | 1 (1.00) | n/a | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a |
 | bigdecimal | HalfToEven | 1 (1.00) | 1 (1.00) | n/a | n/a | n/a | n/a | n/a | n/a | n/a |
 | g_math | HalfToEven | 6 (4.9e1) | n/a | 65 (2.3e19) | 6 (4.8e1) | 64 (1.5e19) | 6 (4.9e1) | 65 (2.0e19) | 64 (1.6e19) | 64 (1.8e19) |
+<!-- END GENERATED:precision:D38:readme -->
 
 `0 (0)` = correctly rounded (0 LSBε, bit-exact under that crate's
 reported mode) on *every* tested input; the first number is worst-case
