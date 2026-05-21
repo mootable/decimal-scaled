@@ -2840,13 +2840,10 @@ pub(crate) trait WideStorage:
 // them all so every feature combination resolves.
 #[allow(unused_imports)]
 pub use crate::int::types::{
-    Int192, Int256, Int384, Int512, Uint192, Uint256, Uint384, Uint512,
+    Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
+    Uint192, Uint256, Uint384, Uint512, Uint768, Uint1024, Uint1536, Uint2048,
 };
 
-decl_wide_int!(Uint768, Int768, 12, 24, 13);
-decl_wide_int!(Uint1024, Int1024, 16, 32, 17);
-decl_wide_int!(Uint1536, Int1536, 24, 48, 25);
-decl_wide_int!(Uint2048, Int2048, 32, 64, 33);
 decl_wide_int!(Uint3072, Int3072, 48, 96, 49);
 decl_wide_int!(Uint4096, Int4096, 64, 128, 65);
 decl_wide_int!(Uint6144, Int6144, 96, 192, 97);
@@ -2911,11 +2908,10 @@ macro_rules! impl_wide_storage {
     )*};
 }
 
-// Int192 / Int256 / Int384 / Int512 are now const-generic `Int<N>`;
-// their `WideStorage` impl is the blanket one in
-// `int::types::wide_compat`, so they are omitted here.
+// Int192…Int2048 are now const-generic `Int<N>`; their `WideStorage`
+// impl is the blanket one in `int::types::wide_compat`, so they are
+// omitted here.
 impl_wide_storage!(
-    Int768, Int1024, Int1536, Int2048,
     Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
 );
 

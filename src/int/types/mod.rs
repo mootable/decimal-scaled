@@ -1215,6 +1215,13 @@ impl<const N: usize> Int<N> {
         self.wrapping_pow(exp)
     }
 
+    /// Integer square root of the magnitude (`floor(sqrt(|self|))`),
+    /// returned non-negative. Matches the macro's signed `isqrt`.
+    #[inline]
+    pub fn isqrt(self) -> Self {
+        Self::from_limbs(*self.unsigned_abs().isqrt().as_limbs())
+    }
+
     /// Reinterprets the bit pattern as the unsigned sibling.
     #[inline]
     pub const fn cast_unsigned(self) -> Uint<N> {
