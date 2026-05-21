@@ -180,6 +180,21 @@ proptest = "1"
 # microbench (benches/prec_fix_impact.rs) to cut scheduler jitter.
 core_affinity = "0.8"
 
+# Profiling / internal-benchmark examples need extra features; gating them
+# with required-features means a plain `cargo test` (without these features)
+# skips them rather than failing to build.
+[[example]]
+name = "karabench"
+required-features = ["bench-alt"]
+
+[[example]]
+name = "profile_atan_perfetto"
+required-features = ["perf-trace"]
+
+[[example]]
+name = "profile_exp_perfetto"
+required-features = ["perf-trace"]
+
 [[bench]]
 name = "mul_div_candidates"
 harness = false
