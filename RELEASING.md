@@ -144,11 +144,19 @@ python scripts/fill_benchmarks.py            # benchmarks.md.draft + criterion -
 See the manual checklist above — CHANGELOG, README, ROADMAP, glossary
 and guides all get a pass.
 
-## 5. Version bump (only when ready to publish)
+## 5. Version bump + CHANGELOG — a commit *in* the PR (only when ready to publish)
 
-- Bump `version` in `Cargo.toml` to `X.Y.Z`.
-- Date the CHANGELOG section.
-- This is part of the publish action set — do it only with explicit
+The version bump and CHANGELOG date are **committed to the release branch
+so they ride into `main` through the PR — never applied to `main` after
+the merge.** Branch protection forbids direct pushes to `main`, so a
+post-merge bump would need its own PR; the bump belongs on the release
+branch before the merge.
+
+- Bump `version` in `Cargo.toml` to `X.Y.Z`, **and** the lockstep
+  `decimal_scaled_macros` dependency line + `macros/Cargo.toml` to match.
+- Date the CHANGELOG section (`## [X.Y.Z] — <date>`).
+- Commit and push to the release branch; CI re-runs on the open PR.
+- This is the publish-authorization step — do it only with explicit
   authorization.
 
 ## 6. PR `release/<version>` → `main` + approval
