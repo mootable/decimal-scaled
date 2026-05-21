@@ -1,0 +1,138 @@
+name: "✅ ci (pre-merge gates)"
+
+# Pre-merge enforcement for the release checks that were previously
+# trusted-but-manual. Runs on every pull request so a broken build,
+# broken docs, or a clippy regression is caught BEFORE merge — not
+# discovered post-merge or at release time.
+#
+# Why this exists alongside precision.yml / docs.yml:
+#   * precision.yml runs only the precision-specific `--test` files,
+#     so it never compiles the example/bench targets. The 0.4.4
+#     example-gating breakage (`karabench` / `profile_*` examples
+#     failing to build under the wrong feature set) was therefore
+#     invisible to CI. A FULL `cargo test` build — which compiles
+#     every target — would have caught it. This workflow runs that.
+#   * docs.yml only runs on push to `main`, i.e. AFTER merge. Broken
+#     intra-doc links thus reach `main` before anyone notices. This
+#     workflow runs the same `-D warnings` doc build pre-merge.
+#
+# Gates (must pass): tests, docs.
+# Informational (never fails the build): clippy.
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+      - "release/*"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # GATE: the full test suite. Builds every target (lib, tests,
+  # examples, benches) under the widest stable feature set, then the
+  # default-feature suite. Builds-all is the point — it is what would
+  # have caught the 0.4.4 example-gating breakage that precision.yml's
+  # per-file `--test` scope misses.
+  tests:
+    name: tests (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-tests-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-tests-${{ runner.os }}-
+
+      - name: Full test suite (wide tiers + macros)
+        # The full `cargo test` — no `--test` scoping — so every
+        # example and bench target is compiled as part of the run.
+        run: cargo test --features wide,x-wide,xx-wide,macros
+
+      - name: Default-feature test suite
+        run: cargo test
+
+  # GATE: rustdoc with warnings-as-errors. Catches broken intra-doc
+  # links before merge; docs.yml only runs this post-merge on `main`.
+  docs:
+    name: docs (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-docs-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-docs-${{ runner.os }}-
+
+      - name: Build rustdoc (-D warnings)
+        # `--no-deps` documents only this crate, so plotters (a
+        # dev-dependency) is not compiled and no fontconfig system
+        # lib is required. RUSTDOCFLAGS=-D warnings fails on any
+        # broken intra-doc link.
+        run: cargo doc --no-deps --features wide,x-wide,xx-wide,macros
+        env:
+          RUSTDOCFLAGS: "-D warnings"
+
+  # INFORMATIONAL: clippy on the lib. The lib currently emits ~214
+  # pre-existing macro-generated warnings, so a `-D warnings` clippy
+  # gate would red-fail every PR. Run it without `-D warnings` and
+  # never fail the build (continue-on-error).
+  #
+  # TODO(0.5.0): drive clippy warnings to zero, then promote to a gate
+  # (add `-- -D warnings` and drop continue-on-error).
+  clippy:
+    name: clippy (informational)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: clippy
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-clippy-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-clippy-${{ runner.os }}-
+
+      - name: Clippy (lib, informational — no -D warnings)
+        run: cargo clippy --lib --features wide,x-wide,xx-wide,macros
