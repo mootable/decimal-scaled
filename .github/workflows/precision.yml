@@ -61,14 +61,19 @@ jobs:
             --test wide_strict_transcendentals \
             --test narrow_strict_transcendentals
 
-      - name: Run mpmath-oracle golden suite (D38..D1232)
-        # External oracle: each tier's strict surface is asserted
-        # against a 500-digit mpmath truth table at the tier's
-        # design-target SCALE. Catches kernel bugs that internal
-        # cross-witness paths mirror and miss.
+      - name: Run mpmath-oracle golden suite (harness-based gate)
+        # THE harness-based gate. `ulp_strict_golden` drives decimal-scaled
+        # as the reference PrecisionSubject through the shared precision
+        # harness (tests/support/), folding the 500-digit mpmath oracle to
+        # the correctly-rounded integer under each of the six rounding modes
+        # and asserting lsbe == 0 (0 storage LSB) at every tier's
+        # design-target SCALE. The harness's own LSBε/ULP accounting and
+        # fairness fold are unit-tested by `precision_harness_smoke`, run
+        # alongside so a broken harness can't mask a kernel regression.
         run: |
           cargo test --release --features wide,x-wide,xx-wide,macros \
-            --test ulp_strict_golden
+            --test ulp_strict_golden \
+            --test precision_harness_smoke
 
       - name: Run proptest ULP fuzz suite
         # Property-based identity coverage at D38<19> with a D76<19>
@@ -78,3 +83,16 @@ jobs:
         run: |
           cargo test --release --features wide,x-wide,xx-wide,macros \
             --test ulp_proptest
+
+      - name: Upload committed decimal-scaled precision result
+        # The committed reference TSV the harness scores against — the
+        # single source of truth for the README precision tables. Uploaded
+        # for at-a-glance inspection of the gated run; the refresh of this
+        # file is owned by the lib-cmp-precision workflow, not this gate.
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: precision-decimal-scaled-tsv
+          path: results/precision/decimal_scaled.tsv
+          if-no-files-found: warn
+          retention-days: 14

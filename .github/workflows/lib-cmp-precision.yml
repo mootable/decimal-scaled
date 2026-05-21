@@ -1,0 +1,100 @@
+name: "\U0001F4CF lib-cmp precision (LSBε shootout refresh)"
+
+# Comparative precision shootout. Runs the ONE precision-comparison path —
+# `benches/lib_cmp_precision`, built on the shared PrecisionSubject harness
+# that also backs the correctness gate (tests/ulp_strict_golden.rs). The
+# runner sweeps (method × width × scale) over decimal-scaled plus the five
+# peer libraries, scores every cell against the mpmath golden oracle,
+# WRITES the deterministic per-library result files under
+# results/precision/<library>.tsv, and renders the LSBε(ULP) shootout table
+# FROM those committed files.
+#
+# This workflow self-refreshes: after the run it commits the regenerated
+# results/precision/*.tsv straight back to the branch the run executed on,
+# so the committed result files (the single source of truth for the README
+# precision tables) never drift from the harness output. The self-commit
+# pattern mirrors the `regenerate` job in bench-full.yml.
+#
+# Triggers:
+#   * pull_request — refresh the result files on the PR branch so a kernel
+#     change that shifts an LSBε cell shows up in the diff under review.
+#   * workflow_dispatch — manual refresh.
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: lib-cmp-precision-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  refresh:
+    name: refresh results/precision
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    permissions:
+      # Push the regenerated results/precision/*.tsv back to the branch
+      # this run executed on.
+      contents: write
+
+    steps:
+      - name: Checkout the run's ref
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ github.head_ref || github.ref_name }}
+
+      - name: Guard — never self-commit to a default/protected branch
+        env:
+          REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          case "$REF" in
+            main|master)
+              echo "::error::refusing to self-commit precision results to '$REF'"
+              exit 1
+              ;;
+          esac
+          echo "Will refresh + commit results/precision on '$REF'."
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system libs (fontconfig for plotters dev-dep)
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-lib-cmp-precision-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-lib-cmp-precision-${{ runner.os }}-
+
+      - name: Run the comparative precision runner
+        # Writes results/precision/*.tsv and renders the LSBε(ULP) shootout
+        # table to stdout. `harness = false` — accuracy harness, not timing.
+        run: |
+          cargo bench --bench lib_cmp_precision \
+            --features wide,x-wide,xx-wide,macros
+
+      - name: Commit refreshed precision results back to the run's branch
+        env:
+          REF: ${{ github.head_ref || github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name  "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add results/precision
+          if git diff --cached --quiet; then
+            echo "No precision result changes to commit."
+            exit 0
+          fi
+          # Plain message, no attribution trailer (commit-hygiene gate).
+          git commit -m "results(precision): regenerate from lib_cmp_precision sweep"
+          git push origin "HEAD:${REF}"
