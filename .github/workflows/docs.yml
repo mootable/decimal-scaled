@@ -70,7 +70,7 @@ jobs:
 
       - name: Stage root-level narrative files into docs/
         # MkDocs only reads under `docs/`. Copy ROADMAP, CHANGELOG,
-        # and ALGORITHMS in so they become first-class pages
+        # ALGORITHMS, and CONTRIBUTORS in so they become first-class pages
         # (referenced from nav in mkdocs.yml). README is NOT
         # staged — docs/README.md already exists as the guides
         # index; the root README is reached via the GitHub link
@@ -80,6 +80,7 @@ jobs:
           [ -f ROADMAP.md ]    && cp ROADMAP.md    docs/ROADMAP.md
           [ -f CHANGELOG.md ]  && cp CHANGELOG.md  docs/CHANGELOG.md
           [ -f ALGORITHMS.md ] && cp ALGORITHMS.md docs/ALGORITHMS.md
+          [ -f CONTRIBUTORS.md ] && cp CONTRIBUTORS.md docs/CONTRIBUTORS.md
 
       - name: Build MkDocs site
         run: mkdocs build --strict --site-dir _site
