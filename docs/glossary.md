@@ -81,14 +81,13 @@ accepting mixed-width, mixed-`SCALE` operands.
 
 ## Standards
 
-| Term | Expansion |
-|------|-----------|
-| **IEEE 754** | The IEEE [floating-point standard](https://en.wikipedia.org/wiki/IEEE_754). This crate is decimal fixed-point — not an IEEE 754 float type — but its `RoundingMode` set and the `HalfToEven` default mirror IEEE 754's rounding conventions. |
+Standards this project genuinely follows or supports. The crate is
+decimal fixed-point — not an IEEE 754 float type — so this is
+rounding-convention and serialisation alignment, **not** format
+conformance.
 
-Recognised standards bodies this project will cite where relevant:
-**IEEE** (Institute of Electrical and Electronics Engineers), **ANSI**
-(American National Standards Institute), **ISO/IEC** (International
-Organization for Standardization / International Electrotechnical
-Commission), **BSI** (British Standards Institution), **CEN** (European
-Committee for Standardization), and **WSC** (World Standards
-Cooperation).
+| Body | Standard | What `decimal-scaled` follows / supports |
+|------|----------|------------------------------------------|
+| **IEEE** | [IEEE 754-2019](https://en.wikipedia.org/wiki/IEEE_754) | The six `RoundingMode`s follow the rounding-direction attributes; `HalfToEven` = the default `roundTiesToEven`. |
+| **ISO/IEC** | ISO/IEC 60559:2020 | The ISO/IEC adoption of IEEE 754 — same rounding alignment. |
+| **IETF** | RFC 8259 (JSON), RFC 7493 (I-JSON) | The serde significand is emitted as a JSON string for lossless round-trip beyond 2⁵³, per I-JSON. |
