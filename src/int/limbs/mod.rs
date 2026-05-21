@@ -2777,37 +2777,25 @@ pub(crate) fn wide_cast<S: WideInt, T: WideInt>(src: S) -> T {
 /// Implemented only for the wide signed integers; the primitive
 /// integer kernels live in `wide_int` separately.
 pub(crate) trait WideStorage:
-    Copy
-    + PartialEq
-    + PartialOrd
+    crate::int::types::FixedInt
     + WideInt
-    + ::core::ops::Add<Output = Self>
-    + ::core::ops::Sub<Output = Self>
-    + ::core::ops::Mul<Output = Self>
     + ::core::ops::Div<Output = Self>
     + ::core::ops::Rem<Output = Self>
     + ::core::ops::Neg<Output = Self>
-    + ::core::ops::Shl<u32, Output = Self>
-    + ::core::ops::Shr<u32, Output = Self>
 {
-    /// Width of this storage type in bits (`L * 64`).
+    /// Width of this storage type in bits (`L * 64`), as a `u32` for the
+    /// kernels' bit-length arithmetic. The public [`FixedInt::BITS`]
+    /// carries the same value typed as `usize`; this kernel-facing const
+    /// keeps the `u32` form the seed / shift math relies on.
     const BITS: u32;
-    /// Additive identity.
-    const ZERO: Self;
-    /// Multiplicative identity.
-    const ONE: Self;
     /// Integer constant `10`, used by the decimal-scale `10^scale`
     /// rescaling that every kernel performs.
     const TEN: Self;
 
-    /// Integer power: `self^exp` via right-to-left binary exponentiation.
-    fn pow(self, exp: u32) -> Self;
     /// Exact integer square root.
     fn isqrt(self) -> Self;
     /// Widening / narrowing cast to a sibling wide-storage type.
     fn resize_to<T: WideStorage>(self) -> T;
-    /// Leading-zero count of the two's-complement representation.
-    fn leading_zeros(self) -> u32;
 
     /// Truncating quotient and remainder `(self / rhs, self % rhs)`.
     fn div_rem(self, rhs: Self) -> (Self, Self);

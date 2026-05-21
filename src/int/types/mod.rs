@@ -2483,9 +2483,10 @@ mod tests {
     #[test]
     fn int_wide_storage_surface() {
         use crate::int::limbs::WideStorage;
+        use crate::int::types::FixedInt;
         fn exercises<T: WideStorage>() {
-            assert!(<T as WideStorage>::ZERO == <T as WideStorage>::from_i128(0));
-            assert!(<T as WideStorage>::ONE == <T as WideStorage>::from_i128(1));
+            assert!(<T as FixedInt>::ZERO == <T as WideStorage>::from_i128(0));
+            assert!(<T as FixedInt>::ONE == <T as WideStorage>::from_i128(1));
             assert!(<T as WideStorage>::TEN == <T as WideStorage>::from_i128(10));
 
             let twelve = <T as WideStorage>::from_i128(12);
@@ -2500,7 +2501,7 @@ mod tests {
             assert!(r == <T as WideStorage>::from_i128(2));
             // bit / leading_zeros
             assert!(twelve.bit(2) && twelve.bit(3) && !twelve.bit(0));
-            assert!(<T as WideStorage>::ONE.leading_zeros()
+            assert!(<T as FixedInt>::ONE.leading_zeros()
                 == <T as WideStorage>::BITS - 1);
             // checked_mul_u64 / f64 round-trips
             assert!(twelve.checked_mul_u64(10) == <T as WideStorage>::from_i128(120));

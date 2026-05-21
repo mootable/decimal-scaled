@@ -48,7 +48,7 @@ where
     let mag = if negative { -widened } else { widened };
     let n: W = mag * ten.pow(2 * scale);
 
-    let sig_bits = W::BITS - n.leading_zeros();
+    let sig_bits = <W as WideStorage>::BITS - n.leading_zeros();
     // Seed Newton with an f64-cbrt bootstrap. The classical
     // `1 << ceil(sig_bits/3)` seed has 1 bit of accuracy; an
     // f64 `(top_64 as f64).cbrt()` lands within ~10⁻¹⁵ relative
