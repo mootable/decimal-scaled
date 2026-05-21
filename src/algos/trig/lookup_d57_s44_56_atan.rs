@@ -70,39 +70,7 @@ use crate::wide_int::Int192;
 /// `Int1024` wide-tier trig core, so ~64 KB at M = 512.
 const M: u32 = 512;
 
-#[cfg(feature = "std")]
-::std::thread_local! {
-    /// Per-thread cache of `atan(j / M)` tables keyed on the
-    /// working scale `w`. One entry per distinct `w` (typically one
-    /// per `SCALE` choice).
-    static TABLE_CACHE: ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<core::W>)>> =
-        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
-}
-
-/// Returns `atan(c_j) = atan(j / M)` at working scale `w` from the
-/// per-thread table, populating the table on first request.
-#[cfg(feature = "std")]
-fn table_entry(w: u32, j_idx: usize) -> core::W {
-    TABLE_CACHE.with(|c| {
-        {
-            let cache = c.borrow();
-            for (cw, tbl) in cache.iter() {
-                if *cw == w {
-                    return tbl[j_idx];
-                }
-            }
-        }
-        let tbl = compute_table(w);
-        let entry = tbl[j_idx];
-        c.borrow_mut().push((w, tbl));
-        entry
-    })
-}
-
-#[cfg(not(feature = "std"))]
-fn table_entry(w: u32, j_idx: usize) -> core::W {
-    compute_table(w)[j_idx]
-}
+crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
 
 /// Build the `atan(j / M)` table at working scale `w` using the
 /// canonical `atan_fixed` kernel (one call per slot, paid once per

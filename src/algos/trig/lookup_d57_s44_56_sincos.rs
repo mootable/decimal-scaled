@@ -90,39 +90,7 @@ const M: u32 = 512;
 /// table's working scale.
 type Entry = (core::W, core::W);
 
-#[cfg(feature = "std")]
-::std::thread_local! {
-    /// Per-thread cache of sin/cos tables keyed on the working scale
-    /// `w`. One entry per distinct `w` (typically one per `SCALE`
-    /// choice).
-    static TABLE_CACHE: ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<Entry>)>> =
-        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
-}
-
-/// Returns `(sin(c_{j_idx}), cos(c_{j_idx}))` at working scale `w`
-/// from the per-thread table, populating the table on first request.
-#[cfg(feature = "std")]
-fn table_entry(w: u32, j_idx: usize) -> Entry {
-    TABLE_CACHE.with(|c| {
-        {
-            let cache = c.borrow();
-            for (cw, tbl) in cache.iter() {
-                if *cw == w {
-                    return tbl[j_idx];
-                }
-            }
-        }
-        let tbl = compute_table(w);
-        let entry = tbl[j_idx];
-        c.borrow_mut().push((w, tbl));
-        entry
-    })
-}
-
-#[cfg(not(feature = "std"))]
-fn table_entry(w: u32, j_idx: usize) -> Entry {
-    compute_table(w)[j_idx]
-}
+crate::policy::table_cache::decl_table_cache!(entry = Entry, compute = compute_table);
 
 /// Build the `(sin(c_j), cos(c_j))` table at working scale `w` using
 /// the canonical `sin_cos_fixed` kernel (one call per slot, paid once

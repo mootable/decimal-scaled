@@ -56,38 +56,7 @@ const GUARD_NARROW: u32 = 10;
 /// Table size — number of `ln(1 + i/M)` entries per working scale.
 const M: u32 = 128;
 
-#[cfg(feature = "std")]
-::std::thread_local! {
-    /// Per-thread cache of `(ln_table[i] = ln(1 + i/M))` tables keyed
-    /// on the working scale `w`. Table index range is `[0, M]`
-    /// inclusive so the `m = 2` boundary case can land at `i = M`
-    /// without going out of range.
-    static TABLE_CACHE: ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<core::W>)>> =
-        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
-}
-
-#[cfg(feature = "std")]
-fn table_entry(w: u32, i_idx: usize) -> core::W {
-    TABLE_CACHE.with(|c| {
-        {
-            let cache = c.borrow();
-            for (cw, tbl) in cache.iter() {
-                if *cw == w {
-                    return tbl[i_idx];
-                }
-            }
-        }
-        let tbl = compute_table(w);
-        let entry = tbl[i_idx];
-        c.borrow_mut().push((w, tbl));
-        entry
-    })
-}
-
-#[cfg(not(feature = "std"))]
-fn table_entry(w: u32, i_idx: usize) -> core::W {
-    compute_table(w)[i_idx]
-}
+crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
 
 /// Build the `ln(1 + i/M)` table at working scale `w` using the
 /// canonical `ln_fixed` kernel (one call per slot, paid once per

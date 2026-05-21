@@ -59,36 +59,7 @@ const GUARD_NARROW: u32 = 8;
 /// `ln(2) / M` keeps the cheap integer-division path.
 const M: u32 = 128;
 
-#[cfg(feature = "std")]
-::std::thread_local! {
-    /// Per-thread cache of `exp(j · ln 2 / M)` tables keyed on the
-    /// working scale `w`.
-    static TABLE_CACHE: ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<core::W>)>> =
-        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
-}
-
-#[cfg(feature = "std")]
-fn table_entry(w: u32, j_idx: usize) -> core::W {
-    TABLE_CACHE.with(|c| {
-        {
-            let cache = c.borrow();
-            for (cw, tbl) in cache.iter() {
-                if *cw == w {
-                    return tbl[j_idx];
-                }
-            }
-        }
-        let tbl = compute_table(w);
-        let entry = tbl[j_idx];
-        c.borrow_mut().push((w, tbl));
-        entry
-    })
-}
-
-#[cfg(not(feature = "std"))]
-fn table_entry(w: u32, j_idx: usize) -> core::W {
-    compute_table(w)[j_idx]
-}
+crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
 
 fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     let mut out = alloc::vec::Vec::with_capacity(M as usize);

@@ -41,36 +41,12 @@
 use crate::support::rounding::RoundingMode;
 use crate::wide_int::{Int192, Int256, WideStorage};
 
-/// Newton `isqrt` over `Int256` seeded via the `f64::sqrt` bridge.
-///
-/// Returns `⌊√n⌋` for `n > 0`. `n.as_f64()` + `f64::sqrt` lands a
-/// seed within ~2⁻⁵² relative error of the true `√n`. The standard
-/// `y ≥ x` monotone-decrease loop requires the seed to be
-/// `≥ ⌈√n⌉`; an `f64` round-down on `as_f64` can leave us below
-/// that threshold, so a single unconditional Newton step is taken
-/// first. By AM-GM `(x + n/x)/2 ≥ √n` for any positive `x`, which
-/// re-establishes the loop's precondition regardless of which way
-/// the f64 rounding went.
-#[cfg(feature = "std")]
-#[inline]
-fn isqrt_f64_seeded(n: Int256) -> Int256 {
-    let seed_f64 = n.as_f64().sqrt();
-    let seed = Int256::from_f64(seed_f64);
-    let x0 = if seed <= Int256::ZERO { Int256::ONE } else { seed };
-    // Unconditional first Newton step. AM-GM ⇒ result ≥ ⌈√n⌉.
-    let mut x = (x0 + n / x0) >> 1;
-    loop {
-        let y = (x + n / x) >> 1;
-        if y >= x {
-            break x;
-        }
-        x = y;
-    }
-}
-
-/// `D57<20>` square-root kernel. Runs Newton-on-`Int256` seeded via
-/// the `f64::sqrt` bridge when `std` is available; falls back to the
-/// trait-level `isqrt` (1-bit seed) on `no_std` builds.
+/// `D57<20>` square-root kernel. The Newton-on-`Int256` floor-root is
+/// seeded via the `f64::sqrt` bridge when `std` is available and via
+/// the classical 1-bit seed otherwise — that std/no_std choice lives in
+/// [`crate::policy::float_seed::isqrt`], so this body is cfg-free. The
+/// result `⌊√(raw·10^20)⌋` is bit-identical either way; only the
+/// iteration count differs.
 #[inline]
 #[must_use]
 pub(crate) fn sqrt(raw: Int192, mode: RoundingMode) -> Int192 {
@@ -81,10 +57,7 @@ pub(crate) fn sqrt(raw: Int192, mode: RoundingMode) -> Int192 {
     // so `raw · 10^20` ≤ ~10^77 which fits Int256 (~10^77).
     const SCALE: u32 = 20;
     let n: Int256 = raw.resize_to::<Int256>() * Int256::TEN.pow(SCALE);
-    #[cfg(feature = "std")]
-    let q: Int256 = isqrt_f64_seeded(n);
-    #[cfg(not(feature = "std"))]
-    let q: Int256 = n.isqrt();
+    let q: Int256 = crate::policy::float_seed::isqrt::<Int256>(n);
     let diff: Int256 = n - q * q;
     let halfway_round_up = diff > q;
     let diff_nonzero = diff != Int256::ZERO;
