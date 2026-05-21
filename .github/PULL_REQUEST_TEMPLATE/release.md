@@ -32,4 +32,4 @@
 
 ---
 
-Merge, tag, and `cargo publish` happen **after** this PR — see [`RELEASING.md`](../../RELEASING.md) §7. Full release process: [`RELEASING.md`](../../RELEASING.md).
+Full release process: [`RELEASING.md`](../../RELEASING.md).
