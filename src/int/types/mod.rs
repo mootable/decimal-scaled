@@ -16,6 +16,7 @@
 //! per monomorphisation — no runtime dispatch.
 
 mod traits;
+mod wide_compat;
 
 pub use traits::{FixedInt, FixedIntConvert};
 
@@ -1925,6 +1926,41 @@ mod tests {
     fn int_checked_mul_u64_overflow_panics() {
         // max_value * 2 overflows the signed range.
         let _ = Int::<4>::max_value().checked_mul_u64(2);
+    }
+
+    #[test]
+    fn int_wideint_mag_sign_round_trips() {
+        use crate::int::limbs::WideInt;
+        // to_mag_sign / from_mag_sign round-trip for signed values,
+        // including the magnitude + sign split.
+        for v in [0i128, 1, -1, 123_456_789_012_345_678, -987_654_321] {
+            let a = Int::<4>::from_i128(v);
+            let (mag, neg) = a.to_mag_sign();
+            assert_eq!(neg, a.is_negative());
+            assert_eq!(Int::<4>::from_mag_sign(&mag, neg), a, "mag/sign {v}");
+        }
+        // U128_LIMBS = ceil(N/2): even and odd N.
+        assert_eq!(<Int<4> as WideInt>::U128_LIMBS, 2);
+        assert_eq!(<Int<3> as WideInt>::U128_LIMBS, 2);
+        assert_eq!(<Int<8> as WideInt>::U128_LIMBS, 4);
+
+        // mag_into_u128 / from_mag_sign_u128 round-trip (the hot-path
+        // buffer bypass), including the odd-N tail at N=3.
+        let v3 = Int::<3>::from_i128(-170_141_183_460_469_231_731);
+        let mut buf = [0u128; 2];
+        let neg = v3.mag_into_u128(&mut buf);
+        assert_eq!(Int::<3>::from_mag_sign_u128(&buf, neg), v3);
+
+        let v4 = Int::<4>::from_i128(i128::MIN);
+        let mut buf4 = [0u128; 2];
+        let neg4 = v4.mag_into_u128(&mut buf4);
+        assert_eq!(Int::<4>::from_mag_sign_u128(&buf4, neg4), v4);
+
+        // Unsigned WideInt: sign is always false, magnitude round-trips.
+        let u = Uint::<4>::from_limbs([7, 8, 9, 10]);
+        let (umag, usign) = u.to_mag_sign();
+        assert!(!usign);
+        assert_eq!(Uint::<4>::from_mag_sign(&umag, false), u);
     }
 
     #[test]
