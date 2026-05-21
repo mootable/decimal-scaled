@@ -16,7 +16,7 @@ name: "✅ ci (pre-merge gates)"
 #     intra-doc links thus reach `main` before anyone notices. This
 #     workflow runs the same `-D warnings` doc build pre-merge.
 #
-# Gates (must pass): tests, docs.
+# Gates (must pass): tests, no_std, docs.
 # Informational (never fails the build): clippy.
 
 on:
@@ -80,6 +80,41 @@ jobs:
         # behaviour. (TODO(0.5.0): gate the wide-tier test files so a
         # default `cargo test` can run the narrow-tier subset.)
         run: cargo check
+
+  # GATE: the no_std + alloc build. The crate is `#![no_std]` under
+  # non-default features, but no workflow exercised that build, so a
+  # missing-import regression (bare `Vec` / `vec!` / std-only f64
+  # intrinsics in the integer + algo layers) compiled cleanly under
+  # `std` and only broke `no_std` consumers. This job is the real gate:
+  # a plain library `cargo check` with `default-features` off and the
+  # wide tiers on. No fontconfig — no examples or benches are built.
+  no_std:
+    name: no_std (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-nostd-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-nostd-${{ runner.os }}-
+
+      - name: no_std + alloc lib check (wide tiers + macros)
+        # `--no-default-features` drops `std`, leaving the `#![no_std]`
+        # path with the `alloc` base. Lib-only `cargo check` (no
+        # examples/benches), so no system libs are required.
+        run: cargo check --no-default-features --features alloc,wide,x-wide,xx-wide,macros
 
   # GATE: rustdoc with warnings-as-errors. Catches broken intra-doc
   # links before merge; docs.yml only runs this post-merge on `main`.

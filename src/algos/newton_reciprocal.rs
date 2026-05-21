@@ -42,6 +42,12 @@
 //! The Newton-iteration view of the same reciprocal is
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
+// `Vec` / `vec!` come from the prelude under `std`; on `no_std + alloc`
+// they must be imported explicitly. Gated so the std prelude path is
+// unaffected (no shadowing, no unused-import warning).
+#[cfg(not(feature = "std"))]
+use alloc::{vec, vec::Vec};
+
 use crate::wide_int::{limbs_divmod_dispatch, limbs_mul, limbs_sub_assign};
 
 /// Pre-computed reciprocal table for a single `(SCALE, mag_width)` pair.

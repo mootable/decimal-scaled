@@ -123,7 +123,12 @@ macro_rules! decl_wide_int {
                 let mut i = 0;
                 let radix: f64 = 18_446_744_073_709_551_616.0;
                 while i < $L && m >= 1.0 {
-                    let limb = m.rem_euclid(radix) as u64;
+                    // `m >= 1.0` and `radix > 0`, so the Euclidean remainder
+                    // is just `m % radix` (result already in `[0, radix)`).
+                    // Using the core `%` operator keeps this `no_std`-clean
+                    // (`f64::rem_euclid` is std-only) and is bit-identical to
+                    // the previous `m.rem_euclid(radix)` for these inputs.
+                    let limb = (m % radix) as u64;
                     limbs[i] = limb;
                     m = (m / radix).floor();
                     i += 1;
