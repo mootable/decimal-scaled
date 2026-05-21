@@ -1,0 +1,10 @@
+# Subject: one line, <= 70 chars, imperative mood, lowercase kind prefix.
+#   e.g. perf: tighten the D57 sqrt inner loop
+#   kinds: perf | fix | docs | ci | refactor | test | release | chore
+#
+# (blank line above the body)
+#
+# Body: explain what changed and why. Wrap at ~72 chars. For perf
+# commits, cite before/after ns/op and the bench run ID.
+#
+# Do NOT add Co-Authored-By / AI / generated-by trailers (project rule).

@@ -459,5 +459,22 @@ compare against it.
 - Bench output files and probe scripts stay out of the tree —
   the `.gitignore` and `.git/info/exclude` handle the common cases.
 
+### Commit-message template and attribution policy
+
+Point your local Git at the in-tree message template once per clone:
+
+```sh
+git config commit.template .gitmessage
+```
+
+The template ships subject-line and body guidance and a reminder of
+the project's attribution policy: **commit messages must not carry
+machine-attribution trailers** — no `Co-Authored-By` lines naming an
+assistant, no `generated-with` notes, no robot emoji. A `commit-hygiene`
+CI job scans every commit in the PR range and **fails the build** if any
+message matches those patterns, so a non-compliant commit cannot land.
+If the gate flags a commit, reword it (`git rebase` / `git commit
+--amend`) to drop the offending line and push again.
+
 Open a pull request against `main`. CI runs the unit-test suite and
 the docs build (`RUSTDOCFLAGS=-D warnings`). Both must pass.
