@@ -6,7 +6,7 @@ output) and emit the same `<source>\\t<id>\\t<median>\\t<unit>` TSV that
 Designed for the per-width artifact layout uploaded by the
 `bench-full` workflow with `bench_family = lib_cmp`:
 
-    lib-cmp-results/
+    tmp/lib-cmp-results/
       criterion-lib_cmp-D<N>/
         lib_cmp_<bitwidth>_s<scale>/
           <lib>_<op>/
@@ -22,7 +22,7 @@ stay untouched. Non-`lib_cmp/...` rows are kept as-is.
 
 Usage:
     python scripts/lib_cmp_ingest.py \\
-        --artifacts lib-cmp-results \\
+        --artifacts tmp/lib-cmp-results \\
         --existing target/medians.tsv \\
         --out target/medians.tsv
 """
