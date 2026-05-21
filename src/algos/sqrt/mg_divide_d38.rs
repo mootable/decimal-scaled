@@ -2,7 +2,7 @@
 //!
 //! Captures the **width-level specialisation** that has lived on D38
 //! since before the algorithm library existed: a hand-tuned isqrt on a
-//! 256-bit intermediate (`mul2` + `isqrt_256`) tailored to the `u128`
+//! 256-bit intermediate (`mul_u128_to_u256` + `isqrt_256`) tailored to the `u128`
 //! storage. Strictly faster than the generic wide kernel (which would
 //! widen `i128 → Int512` and use the generic `Int512::isqrt`).
 //!

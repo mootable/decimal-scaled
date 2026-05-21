@@ -11,7 +11,7 @@
 //!   (D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 /
 //!   D1232). The result is exact to the last representable place
 //!   (within 0.5 ULP) under any of the six [`RoundingMode`]s.
-//! - [`mg_divide_d38`] — hand-tuned `mul2` + 256-bit `isqrt_256`
+//! - [`mg_divide_d38`] — hand-tuned `mul_u128_to_u256` + 256-bit `isqrt_256`
 //!   tailored to D38's `i128` storage. **Width specialisation for
 //!   D38** — captures the kernel that has shipped with D38 since
 //!   before the algorithm library existed.

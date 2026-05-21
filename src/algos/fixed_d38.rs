@@ -231,16 +231,16 @@ fn div_u512_by_pow10_small_full(num: U512, scale_idx: usize) -> U512 {
     debug_assert!((1..=38).contains(&scale_idx));
     let exp = crate::algos::mg_divide::POW10_U128[scale_idx];
     let mut rem: u128 = 0;
-    let (q3, r3) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[3], exp, scale_idx)
+    let (q3, r3) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[3], exp, scale_idx)
         .expect("div_u512_by_pow10_small_full: invariant violated");
     rem = r3;
-    let (q2, r2) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[2], exp, scale_idx)
+    let (q2, r2) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[2], exp, scale_idx)
         .expect("div_u512_by_pow10_small_full: invariant violated");
     rem = r2;
-    let (q1, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[1], exp, scale_idx)
+    let (q1, r1) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[1], exp, scale_idx)
         .expect("div_u512_by_pow10_small_full: invariant violated");
     rem = r1;
-    let (q0, _r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[0], exp, scale_idx)
+    let (q0, _r0) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[0], exp, scale_idx)
         .expect("div_u512_by_pow10_small_full: invariant violated");
     [q0, q1, q2, q3]
 }
@@ -259,7 +259,7 @@ fn div_u512_by_pow10_small(num: U512, scale_idx: usize) -> U256 {
     // after the divide).
     let mut rem: u128 = 0;
     // limb 3 (highest)
-    let (q3, r3) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[3], exp, scale_idx)
+    let (q3, r3) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[3], exp, scale_idx)
         .expect("div_u512_by_pow10: invariant rem < exp violated");
     debug_assert!(
         q3 == 0,
@@ -267,7 +267,7 @@ fn div_u512_by_pow10_small(num: U512, scale_idx: usize) -> U256 {
     );
     rem = r3;
     // limb 2
-    let (q2, r2) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[2], exp, scale_idx)
+    let (q2, r2) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[2], exp, scale_idx)
         .expect("div_u512_by_pow10: invariant rem < exp violated");
     debug_assert!(
         q2 == 0,
@@ -275,11 +275,11 @@ fn div_u512_by_pow10_small(num: U512, scale_idx: usize) -> U256 {
     );
     rem = r2;
     // limb 1
-    let (out_hi, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[1], exp, scale_idx)
+    let (out_hi, r1) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[1], exp, scale_idx)
         .expect("div_u512_by_pow10: invariant rem < exp violated");
     rem = r1;
     // limb 0
-    let (out_lo, _r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(rem, num[0], exp, scale_idx)
+    let (out_lo, _r0) = crate::algos::mg_divide::divmod_pow10_2word(rem, num[0], exp, scale_idx)
         .expect("div_u512_by_pow10: invariant rem < exp violated");
     [out_lo, out_hi]
 }
@@ -829,9 +829,9 @@ fn divmod_u256_by_pow10(a: U256, divisor: U256, w: u32) -> (U256, U256) {
     if w >= 1 && w <= 38 {
         let exp = crate::algos::mg_divide::POW10_U128[w as usize];
         // Walk dividend top-down (limb 1, then limb 0).
-        let (q_hi, r1) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(0, a[1], exp, w as usize)
+        let (q_hi, r1) = crate::algos::mg_divide::divmod_pow10_2word(0, a[1], exp, w as usize)
             .expect("divmod_u256_by_pow10: invariant violated");
-        let (q_lo, r0) = crate::algos::mg_divide::div_exp_fast_2word_with_rem(r1, a[0], exp, w as usize)
+        let (q_lo, r0) = crate::algos::mg_divide::divmod_pow10_2word(r1, a[0], exp, w as usize)
             .expect("divmod_u256_by_pow10: invariant violated");
         // The remainder is `r0` (< exp ≤ u128); the high remainder limb is 0.
         return ([q_lo, q_hi], [r0, 0]);

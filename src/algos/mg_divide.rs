@@ -24,7 +24,7 @@
 //! (paper Fig. 6.1, the `m'` multiplier with the normalisation shift)
 //! and the dividend-times-reciprocal estimate with single add-back
 //! correction (paper Alg. 4) are the basis for [`MG_EXP_MAGICS`] and
-//! [`div_exp_fast_2word_with_rem`].
+//! [`divmod_pow10_2word`].
 //!
 //! This module is an independent clean-room implementation derived
 //! directly from the Moller-Granlund 2011 paper. Applying the technique
@@ -148,7 +148,7 @@ const MG_EXP_MAGICS: [(u128, u32); 39] = {
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
+pub(crate) const fn mul_u128_to_u256(a: u128, b: u128) -> (u128, u128) {
     const LOW64: u128 = u64::MAX as u128;
     let (a_lo, a_hi) = (a & LOW64, a >> 64);
     let (b_lo, b_hi) = (b & LOW64, b >> 64);
@@ -200,7 +200,7 @@ pub(crate) const fn mul2(a: u128, b: u128) -> (u128, u128) {
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 #[inline]
-pub(crate) fn div_exp_fast_2word_with_rem(
+pub(crate) fn divmod_pow10_2word(
     n_high: u128,
     n_low: u128,
     exp: u128,
@@ -224,8 +224,8 @@ pub(crate) fn div_exp_fast_2word_with_rem(
     // contributes `top` directly; the reciprocal contributes the high
     // words of `recip * top` and `recip * bottom`, combined with the
     // carry crossing the 2^128 boundary.
-    let (hi_from_top, lo_from_top) = mul2(recip, top);
-    let (carry_from_bottom, _) = mul2(recip, bottom);
+    let (hi_from_top, lo_from_top) = mul_u128_to_u256(recip, top);
+    let (carry_from_bottom, _) = mul_u128_to_u256(recip, bottom);
 
     let (acc_low, c0) = lo_from_top.overflowing_add(carry_from_bottom);
     let acc_high = hi_from_top + u128::from(c0);
@@ -237,9 +237,9 @@ pub(crate) fn div_exp_fast_2word_with_rem(
 
     // Exact remainder against the un-normalised divisor, then the single
     // add-back: at most one increment makes `q` exact.
-    let (_, prod_low) = mul2(q, exp);
+    let (_, prod_low) = mul_u128_to_u256(q, exp);
     let (rem, under) = n_low.overflowing_sub(prod_low);
-    debug_assert!(n_high == mul2(q, exp).0 + u128::from(under));
+    debug_assert!(n_high == mul_u128_to_u256(q, exp).0 + u128::from(under));
 
     if rem < exp {
         Some((q, rem))
@@ -257,7 +257,7 @@ pub(crate) fn div_exp_fast_2word_with_rem(
 /// entry in [`MG_EXP_MAGICS`]); the work is base-`2^128` schoolbook
 /// long division over the input's magnitude, with each
 /// `(rem, limb) / exp` step served by the existing
-/// [`div_exp_fast_2word_with_rem`] kernel. The magnitude buffer is
+/// [`divmod_pow10_2word`] kernel. The magnitude buffer is
 /// 64 limbs, so the same routine serves every width from `Int256`
 /// to `Int8192`.
 ///
@@ -320,7 +320,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt, const N: usize>(
     while i > 0 {
         i -= 1;
         let limb = mag[i];
-        let (q_limb, r_limb) = div_exp_fast_2word_with_rem(rem, limb, exp, scale_idx)
+        let (q_limb, r_limb) = divmod_pow10_2word(rem, limb, exp, scale_idx)
             .expect("MG: rem < exp invariant violated");
         mag[i] = q_limb;
         rem = r_limb;
@@ -452,7 +452,7 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt, const N: us
         let mut i = top;
         while i > 0 {
             i -= 1;
-            let (q, r) = div_exp_fast_2word_with_rem(rem, mag[i], exp38, 38)
+            let (q, r) = divmod_pow10_2word(rem, mag[i], exp38, 38)
                 .expect("MG: rem < exp invariant violated");
             mag[i] = q;
             rem = r;
@@ -476,7 +476,7 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt, const N: us
     let mut i = top;
     while i > 0 {
         i -= 1;
-        let (q, r) = div_exp_fast_2word_with_rem(r_last, mag[i], exp_last, scale_idx)
+        let (q, r) = divmod_pow10_2word(r_last, mag[i], exp_last, scale_idx)
             .expect("MG: rem < exp invariant violated");
         mag[i] = q;
         r_last = r;
@@ -775,9 +775,9 @@ pub(crate) fn sqrt_raw_with(r: u128, scale: u32, mode: crate::support::rounding:
 
     // Widening path: `r · 10^SCALE` overflows `u128`, so the full
     // 256-bit machinery is required.
-    let (hi, lo) = mul2(r, pow);
+    let (hi, lo) = mul_u128_to_u256(r, pow);
     let q = isqrt_256(hi, lo);
-    let (q_sq_hi, q_sq_lo) = mul2(q, q);
+    let (q_sq_hi, q_sq_lo) = mul_u128_to_u256(q, q);
     let (diff_hi, diff_lo) = if lo >= q_sq_lo {
         (hi - q_sq_hi, lo - q_sq_lo)
     } else {
@@ -813,15 +813,15 @@ fn pow10_256(exp: u32) -> [u128; 2] {
         [10u128.pow(exp), 0]
     } else {
         // 10^exp = 10^38 * 10^(exp-38); both factors fit u128 for exp <= 76.
-        let (hi, lo) = mul2(10u128.pow(38), 10u128.pow(exp - 38));
+        let (hi, lo) = mul_u128_to_u256(10u128.pow(38), 10u128.pow(exp - 38));
         [lo, hi]
     }
 }
 
 /// `a * m` where `m` is a 256-bit value `[lo, hi]`; result is 384-bit.
 fn mul_u128_by_256(a: u128, m: [u128; 2]) -> [u128; 3] {
-    let (p0_hi, p0_lo) = mul2(a, m[0]);
-    let (p1_hi, p1_lo) = mul2(a, m[1]);
+    let (p0_hi, p0_lo) = mul_u128_to_u256(a, m[0]);
+    let (p1_hi, p1_lo) = mul_u128_to_u256(a, m[1]);
     let limb0 = p0_lo;
     let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
     let limb2 = p1_hi + u128::from(c1);
@@ -830,8 +830,8 @@ fn mul_u128_by_256(a: u128, m: [u128; 2]) -> [u128; 3] {
 
 /// `s * b` where `s` is a 256-bit value `[lo, hi]`; result is 384-bit.
 fn mul_u256_by_u128(s: [u128; 2], b: u128) -> [u128; 3] {
-    let (p0_hi, p0_lo) = mul2(s[0], b);
-    let (p1_hi, p1_lo) = mul2(s[1], b);
+    let (p0_hi, p0_lo) = mul_u128_to_u256(s[0], b);
+    let (p1_hi, p1_lo) = mul_u128_to_u256(s[1], b);
     let limb0 = p0_lo;
     let (limb1, c1) = p0_hi.overflowing_add(p1_lo);
     let limb2 = p1_hi + u128::from(c1);
@@ -937,7 +937,7 @@ fn icbrt_384(n: [u128; 3]) -> u128 {
     let mut y: u128 = 1u128 << (bits.div_ceil(3).min(127));
     loop {
         // y² as a 256-bit divisor.
-        let (yy_hi, yy_lo) = mul2(y, y);
+        let (yy_hi, yy_lo) = mul_u128_to_u256(y, y);
         // nq = N / y²; y >= cbrt(N) keeps this below 2^128.
         let nq = div_384_by_256(n, [yy_lo, yy_hi]);
         // y_next = (2y + nq) / 3, computed via a (carry, sum) pair so
@@ -1024,7 +1024,7 @@ pub(crate) fn cbrt_raw_with_signed(
     let q = icbrt_384(n);
     let eight_n = shl3_384(n);
     let two_q_plus_1 = 2 * q + 1;
-    let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
+    let (sq_hi, sq_lo) = mul_u128_to_u256(two_q_plus_1, two_q_plus_1);
     let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
     let halfway_geq = ge_384(eight_n, cube);
     let halfway_gt = gt_384(eight_n, cube);
@@ -1035,7 +1035,7 @@ pub(crate) fn cbrt_raw_with_signed(
     // the eight_n vs (2q)³ comparison: 8N > 8q³ iff N > q³ iff there's
     // a residual.
     let two_q = q + q;
-    let (tq_sq_hi, tq_sq_lo) = mul2(two_q, two_q);
+    let (tq_sq_hi, tq_sq_lo) = mul_u128_to_u256(two_q, two_q);
     let eight_q_cubed = if q == 0 {
         [0u128, 0, 0]
     } else {
@@ -1067,7 +1067,7 @@ fn gt_384(a: [u128; 3], b: [u128; 3]) -> bool {
 /// When `a * b` fits in `i128` the multiply is done directly and the
 /// result is divided by the scale multiplier. When the product would
 /// overflow `i128`, the unsigned absolute values are multiplied to a
-/// full 256-bit result via [`mul2`], divided by `10^SCALE` using the
+/// full 256-bit result via [`mul_u128_to_u256`], divided by `10^SCALE` using the
 /// Moller-Granlund magic-number algorithm, and the correct sign is
 /// restored.
 ///
@@ -1127,7 +1127,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     // magic-divide when the unsigned product overflows u128 too. The
     // u128 fast path covers the operand band sqrt(i128::MAX) < |op| <
     // sqrt(u128::MAX), i.e. ~1.3e19 < |op| < ~1.8e19 — the SCALE 19
-    // typical-input window that previously paid the full mul2 +
+    // typical-input window that previously paid the full mul_u128_to_u256 +
     // div_exp_fast_2word machinery for no reason.
     let ua = a.unsigned_abs();
     let ub = b.unsigned_abs();
@@ -1183,8 +1183,8 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     }
 
     // Truly wide path: unsigned 256-bit product, magic-divide by 10^SCALE.
-    let (mhigh, mlow) = mul2(ua, ub);
-    let (q_floor, r) = div_exp_fast_2word_with_rem(mhigh, mlow, exp, SCALE as usize)?;
+    let (mhigh, mlow) = mul_u128_to_u256(ua, ub);
+    let (q_floor, r) = divmod_pow10_2word(mhigh, mlow, exp, SCALE as usize)?;
     // Sign: result is negative iff exactly one operand is negative.
     let neg = (a < 0) ^ (b < 0);
     let q = round_mag_with_mode(q_floor, r, exp, mode, !neg);
@@ -1214,7 +1214,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
 /// When `a * 10^SCALE` fits in `i128` the multiply-then-divide is done
 /// directly. When it would overflow, the unsigned absolute value of `a`
 /// is multiplied by the scale multiplier to a full 256-bit result via
-/// [`mul2`], divided by `|b|` using the binary long-divide, and the
+/// [`mul_u128_to_u256`], divided by `|b|` using the binary long-divide, and the
 /// correct sign is restored.
 ///
 /// At `SCALE = 0` the multiplier is 1 and the function reduces to
@@ -1270,7 +1270,7 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
     // Fast path 2: `|a| * mult` overflows `i128` but still fits `u128`
     // (so the i128-signed `checked_mul` rejected it only because of the
     // sign bit, OR `|a|` is just past `i128::MAX / mult`). Skip the
-    // 256-bit `mul2 + div_long_256_by_128` path — a single hardware
+    // 256-bit `mul_u128_to_u256 + div_long_256_by_128` path — a single hardware
     // `u128 / u128` suffices.
     //
     // Predicate: `|a| ≤ u128::MAX / mult`. Const-folded per SCALE.
@@ -1301,7 +1301,7 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
     // Widening path: |a|*mult overflows u128. Compute it as a 256-bit
     // unsigned, divide by |b| keeping the remainder, round per `mode`,
     // restore sign.
-    let (mhigh, mlow) = mul2(ua, umult);
+    let (mhigh, mlow) = mul_u128_to_u256(ua, umult);
 
     let ub = b.unsigned_abs();
     let (q_floor, r) = div_long_256_by_128_with_rem(mhigh, mlow, ub)?;
@@ -1604,7 +1604,7 @@ mod tests {
             (i128::MAX as u128) / 7,
         ] {
             let q = sqrt_raw_correctly_rounded(r, 12);
-            let (n_hi, n_lo) = mul2(r, POW10_U128[12]);
+            let (n_hi, n_lo) = mul_u128_to_u256(r, POW10_U128[12]);
             let q_floor = isqrt_256(n_hi, n_lo);
             // q must be either floor(sqrt(N)) or floor+1.
             assert!(
@@ -1612,7 +1612,7 @@ mod tests {
                 "sqrt({r}, 12): q={q}, floor={q_floor}",
             );
             // The round-up decision must agree with `N - q² > q`.
-            let (qq_hi, qq_lo) = mul2(q_floor, q_floor);
+            let (qq_hi, qq_lo) = mul_u128_to_u256(q_floor, q_floor);
             let (diff_hi, diff_lo) = if n_lo >= qq_lo {
                 (n_hi - qq_hi, n_lo - qq_lo)
             } else {
@@ -1650,7 +1650,7 @@ mod tests {
             );
             let eight_n = shl3_384(n);
             let two_q_plus_1 = 2 * q_floor + 1;
-            let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
+            let (sq_hi, sq_lo) = mul_u128_to_u256(two_q_plus_1, two_q_plus_1);
             let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
             let expected = if ge_384(eight_n, cube) { q_floor + 1 } else { q_floor };
             assert_eq!(q, expected, "cbrt({r}, 12): wrong round-up decision");
@@ -1691,7 +1691,7 @@ mod tests {
             // `8·N ≥ (2q_floor+1)³` test.
             let eight_n = shl3_384(n);
             let two_q_plus_1 = 2 * q_floor + 1;
-            let (sq_hi, sq_lo) = mul2(two_q_plus_1, two_q_plus_1);
+            let (sq_hi, sq_lo) = mul_u128_to_u256(two_q_plus_1, two_q_plus_1);
             let cube = mul_u256_by_u128([sq_lo, sq_hi], two_q_plus_1);
             let should_round_up = ge_384(eight_n, cube);
             let expected = if should_round_up { q_floor + 1 } else { q_floor };
@@ -1712,15 +1712,15 @@ mod tests {
     // SCALEs that straddle the fast-path/widening boundary.
 
     /// Reference sqrt that bypasses the fast path: always uses the
-    /// 256-bit `mul2 + isqrt_256` machinery.
+    /// 256-bit `mul_u128_to_u256 + isqrt_256` machinery.
     fn sqrt_raw_reference(r: u128, scale: u32, mode: crate::support::rounding::RoundingMode) -> u128 {
         use crate::support::rounding::RoundingMode;
         if r == 0 {
             return 0;
         }
-        let (hi, lo) = mul2(r, POW10_U128[scale as usize]);
+        let (hi, lo) = mul_u128_to_u256(r, POW10_U128[scale as usize]);
         let q = isqrt_256(hi, lo);
-        let (q_sq_hi, q_sq_lo) = mul2(q, q);
+        let (q_sq_hi, q_sq_lo) = mul_u128_to_u256(q, q);
         let (diff_hi, diff_lo) = if lo >= q_sq_lo {
             (hi - q_sq_hi, lo - q_sq_lo)
         } else {
@@ -1813,7 +1813,7 @@ mod tests {
         let mult = D38::<SCALE>::multiplier();
         let ua = a.unsigned_abs();
         let umult = mult as u128;
-        let (mhigh, mlow) = mul2(ua, umult);
+        let (mhigh, mlow) = mul_u128_to_u256(ua, umult);
         let ub = b.unsigned_abs();
         let (q_floor, r) = div_long_256_by_128_with_rem(mhigh, mlow, ub)?;
         let neg = (a < 0) ^ (b < 0);
@@ -2489,7 +2489,7 @@ mod tests {
             // identity 2^256 = (2^128) * 2^128. We verify via the
             // defining product instead: (2^128 + recip) * d_norm must be
             // the largest multiple of d_norm at or below 2^256.
-            let (q_hi, q_lo) = mul2(recip, d_norm);
+            let (q_hi, q_lo) = mul_u128_to_u256(recip, d_norm);
             // (2^128 + recip) * d_norm = recip*d_norm + d_norm*2^128.
             // Its high 128 bits: q_hi + d_norm; low: q_lo.
             let prod_hi = q_hi + d_norm;
@@ -2507,7 +2507,7 @@ mod tests {
             for &n_low in &[0u128, 1, exp - 1, exp, exp + 7, u128::MAX] {
                 // n_high = 0 keeps the true quotient within u128 and lets
                 // us compare against the native u128 divide.
-                let (q, r) = div_exp_fast_2word_with_rem(0, n_low, exp, k)
+                let (q, r) = divmod_pow10_2word(0, n_low, exp, k)
                     .expect("quotient fits when n_high == 0");
                 assert_eq!(q, n_low / exp, "kernel quotient 10^{k}, n_low={n_low}");
                 assert_eq!(r, n_low % exp, "kernel remainder 10^{k}, n_low={n_low}");
