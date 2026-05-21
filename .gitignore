@@ -3,12 +3,13 @@ Cargo.lock
 /bench-history/target
 /bench-history/Cargo.lock
 /bench-history-results
-/lib-cmp-results
-/bench-results
-/bench-results-final
-/algo-lab-results
-/sweep-results-v0.4.2
-/bench-history-results-v0.4.2
+
+# Profiler artefacts (local-only)
+*.stackdump
+flamegraph*.svg
+perf.data*
+profile.json*
+*.dtrace
 
 # scratch / local-only generated data — benches, sweeps, traces, profiling output
 /tmp/
