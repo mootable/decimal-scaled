@@ -22,18 +22,7 @@ surface, a **const-folded width dispatch**, and an **algorithm library**.
 A decimal kernel expresses its math in integer operations and never
 reaches into limb internals directly.
 
-```mermaid
-flowchart LR
-  subgraph DEC["Decimal layer"]
-    direction LR
-    D1(["Front-ends<br/>Dxx, SCALE"]) --> D2(["Dispatch<br/>match width, SCALE"]) --> D3(["Kernels<br/>sqrt · exp · ln · trig"])
-  end
-  subgraph INT["Integer layer"]
-    direction LR
-    I1(["Backends<br/>Int / Uint · FixedInt"]) --> I2(["Dispatch<br/>match width / limbs"]) --> I3(["Algorithms<br/>mul · div · root_int"]) --> I4(["Limb primitives<br/>u64 arrays"])
-  end
-  D3 -. composed on .-> I1
-```
+![decimal-scaled layer architecture: the decimal layer (front-ends → dispatch → kernels) composed on the integer layer (backends → dispatch → algorithms → limb primitives), each layer carrying its own width dispatch and algorithm library](figures/architecture/layers.svg)
 
 The key point the older sketch hid: **the integer layer is not just
 primitives — it has its own dispatch policy and algorithm library**,
@@ -47,24 +36,31 @@ layers compile to a single direct call per monomorphisation.
 
 ## A call through the layers
 
-`D57<20>::sqrt_strict()` traverses both layers: the front-end dispatches
-on `(width, SCALE)` to one kernel, which composes integer operations
-from the layer below and hands back a correctly-rounded raw value.
+`D57<20>::sqrt_strict()` traverses **both layers' dispatch + kernels**:
+the front-end dispatches on `(width, SCALE)` to one decimal kernel, which
+calls the integer layer — itself dispatching on width to a matched
+algorithm down to the limb primitives — and hands back a
+correctly-rounded raw value.
 
 ```mermaid
 sequenceDiagram
   autonumber
   participant U as caller
   participant FE as D57 front-end
-  participant P as sqrt policy
-  participant K as sqrt kernel
-  participant I as Int192 limbs
+  participant DP as decimal policy
+  participant DK as sqrt kernel
+  participant IP as int policy
+  participant IK as int algorithm
+  participant L as limb primitives
   U->>FE: sqrt_strict()
-  FE->>P: dispatch width 192, SCALE 20
-  P->>K: const-folded to lookup_d57_s20
-  K->>I: scale, isqrt, round-decision (limb ops)
-  I-->>K: integer root + residual
-  K-->>FE: correctly-rounded raw
+  FE->>DP: dispatch (width 192, SCALE 20)
+  DP->>DK: const-folded → lookup_d57_s20
+  DK->>IP: root_int / isqrt on Int192 (FixedInt)
+  IP->>IK: const-folded → width-matched isqrt
+  IK->>L: limb ops on [u64; 3]
+  L-->>IK: limbs
+  IK-->>DK: integer root + residual
+  DK-->>FE: correctly-rounded raw
   FE-->>U: D57 value
 ```
 
