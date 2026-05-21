@@ -200,6 +200,14 @@ required-features = ["perf-trace"]
 name = "mul_div_candidates"
 harness = false
 
+# Focused micro-bench for the wide-int decimal `to_string` base case
+# (#38): base-10^19 19-digit chunking vs the historic one-divide-per-
+# digit loop, across Int256 / Int512 / Int1024 / Int4096.
+[[bench]]
+name = "int_to_string_base1e19"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide"]
+
 # Per-PR perf-regression gate, driven by CodSpeed under simulation
 # instrumentation. See .github/workflows/codspeed.yml.
 [[bench]]
