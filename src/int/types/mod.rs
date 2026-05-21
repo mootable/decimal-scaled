@@ -1610,11 +1610,15 @@ impl<const N: usize> Shr<u32> for Int<N> {
     type Output = Self;
     #[inline]
     fn shr(self, shift: u32) -> Self {
-        // Logical right shift (matches the bitwise shift on the
-        // unsigned twin; arithmetic shift is not part of this surface).
+        // Arithmetic (sign-preserving) right shift — matches Rust's signed
+        // `>>` and the prior macro `Int*` types the transcendental range
+        // reduction relies on. Two's-complement: x >> s == !((!x) >> s) for x < 0.
+        let neg = self.is_negative();
+        let src = if neg { !self } else { self };
         let mut out = [0u64; N];
-        limbs_shr_u64_fixed(&self.limbs, shift, &mut out);
-        Self { limbs: out }
+        limbs_shr_u64_fixed(&src.limbs, shift, &mut out);
+        let shifted = Self { limbs: out };
+        if neg { !shifted } else { shifted }
     }
 }
 
