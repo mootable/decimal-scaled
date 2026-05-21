@@ -80,7 +80,6 @@ extra:
 nav:
   - Home: index.md
   - Getting started: getting-started.md
-  - Architecture: ARCHITECTURE.md
   - Guides:
       - Index: guides.md
       - Widths: widths.md
@@ -97,6 +96,7 @@ nav:
   - Algorithms: ALGORITHMS.md
   - Roadmap: ROADMAP.md
   - Changelog: CHANGELOG.md
+  - Contributing: CONTRIBUTORS.md
   - API reference (rustdoc): https://mootable.github.io/decimal-scaled/api/decimal_scaled/
 
 markdown_extensions:
