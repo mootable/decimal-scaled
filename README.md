@@ -75,7 +75,7 @@ The two guarantees nothing else on crates.io currently combines:
 
 Worst-case error of each transcendental, measured against a
 high-precision oracle (worst result across every tested input). Each
-cell shows the **LSBe** — *least significant bits in error*, the count
+cell shows the **LSBε** — *least significant bits in error*, the count
 of low-order bits of the stored value that are wrong — with the worst
 **ULP** distance from the true value in parentheses:
 
@@ -91,10 +91,10 @@ of low-order bits of the stored value that are wrong — with the worst
 | **cbrt** | ✓ 0 (0.50) | — | ✓ 0 (1e-16) | — | — | — |
 | *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
 
-**✓** = **0 LSBe** (correctly rounded — the stored value is exactly
+**✓** = **0 LSBε** (correctly rounded — the stored value is exactly
 right, ≤ 0.5 ULP from true) on *every* tested input. **✗** = at least
-one input with **≥ 1 LSBe**. **—** = not implemented by that crate.
-First number = worst-case **LSBe** (least significant bits in error);
+one input with **≥ 1 LSBε**. **—** = not implemented by that crate.
+First number = worst-case **LSBε** (least significant bits in error);
 parenthesised = worst ULP distance from the true value.
 
 `decimal-scaled` is the only crate ✓ on every function — and its ✓ holds

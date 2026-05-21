@@ -7,7 +7,7 @@ its docs, and its benchmarks — in one place.
 
 | Term | Expansion | Meaning |
 |------|-----------|---------|
-| **LSBe** | **Least Significant Bits in error** | The count of low-order bits of the stored integer that differ from the correctly-rounded result. **`0` means the value is exactly correctly rounded** (bit-for-bit). A larger number means that many of the bottom bits are wrong; it is bounded by the type's storage width (≤128 at `D38`, ≤1024 at `D307`, ≤4096 at `D1232`). A deliberate play on *LSB*. |
+| **LSBε** (ASCII: **LSBe**) | **Least Significant Bits in error** (the Greek *ε* denotes error) | The count of low-order bits of the stored integer that differ from the correctly-rounded result. **`0` means the value is exactly correctly rounded** (bit-for-bit). A larger number means that many of the bottom bits are wrong; bounded by the type's storage width (≤128 at `D38`, ≤1024 at `D307`, ≤4096 at `D1232`). A deliberate play on *LSB*. Written **LSBε** everywhere; **LSBe** is the plain-ASCII fallback. |
 | **ULP** | [Unit in the Last Place](https://en.wikipedia.org/wiki/Unit_in_the_last_place) | The size of one step in the last representable digit. Here, 1 ULP = `10^(-SCALE)`. "Within 0.5 ULP" of the true value ⇔ correctly rounded ⇔ `0` LSBe. |
 | **LSB** | Least Significant Bit | The bit of weight `2^0` (= 1) — the smallest possible change to an integer. |
 | **MSB** | Most Significant Bit | The highest-weight bit. |
@@ -23,7 +23,7 @@ its docs, and its benchmarks — in one place.
 | **`MAX_SCALE`** | The largest `SCALE` a width supports = *N − 1* for `D{N}` (e.g. `D38` → 37), leaving ≥1 integer digit of headroom. |
 | **`D9` … `D1232`** | The thirteen storage widths; the number is the type's nominal precision in decimal digits. `D9`=`i32`, `D18`=`i64`, `D38`=`i128`, `D57`+ use wide integers. |
 | **limb** | One `u64` word of a wide integer. A wide value is `[u64; N]`, little-endian. |
-| **`Int<N>` / `Uint<N>`** | The const-generic wide-integer backend (`N` = limb count). |
+| **wide integers** | The hand-rolled wide-integer backend for `D57`+: a value is an array of `u64` limbs, little-endian. |
 | **`no_std`** | Builds without the standard library (embedded-friendly). The strict, integer-only path is `no_std`-compatible. |
 | **strict / fast / approx** | `*_strict` = correctly-rounded integer path (default). `*_fast` / `*_approx` = the `f64`-bridge path (~16 digits, platform-dependent, not CR). |
 
