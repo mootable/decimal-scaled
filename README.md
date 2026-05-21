@@ -73,24 +73,29 @@ The two guarantees nothing else on crates.io currently combines:
 
 ## Correctly rounded — and the only crate that is
 
-Worst-case accuracy of each transcendental, measured against a
-high-precision oracle (worst result across every tested input):
+Worst-case error of each transcendental, measured against a
+high-precision oracle (worst result across every tested input). Each
+cell shows the **LSB error** — least-significant bits of the stored
+value that differ from the correctly-rounded result — with the worst
+**ULP** distance from the true value in parentheses:
 
 | Function | decimal-scaled | g_math | fastnum | rust_decimal | dashu-float | decimal-rs |
 |---|:--:|:--:|:--:|:--:|:--:|:--:|
-| **exp**  | ✓ (0.50) | ✗ (2.3e19) | ✓ (1e-16)  | ✓ (2.7e-6) | ✓ (1e-16) | ✓ (1.3e-15) |
-| **ln**   | ✓ (0.50) | ✗ (49.5)   | ✓ (1e-16)  | ✗ (1.1e9)  | ✗ (1.00)  | ✓ (1e-16) |
-| **sin**  | ✓ (0.50) | ✗ (1.7e19) | ✓ (1.7e-12)| ✓ (2.1e-9) | — | — |
-| **cos**  | ✓ (0.50) | ✗ (50.0)   | ✓ (5.2e-12)| ✓ (2.4e-9) | — | — |
-| **tan**  | ✓ (0.50) | ✗ (2.1e19) | ✓ (1.4e-12)| ✗ (4.3e10) | — | — |
-| **atan** | ✓ (0.50) | ✗ (1.6e19) | ✓ (1e-16)  | — | — | — |
-| **sqrt** | ✓ (0.50) | ✗ (49.6)   | ✓ (1e-16)  | ✓ (7.2e-7) | ✓ (1e-16) | ✓ (3e-16) |
-| **cbrt** | ✓ (0.50) | — | ✓ (1e-16) | — | — | — |
+| **exp**  | ✓ 0 (0.50) | ✗ 65 (2.3e19) | ✓ 0 (1e-16)  | ✓ 0 (2.7e-6) | ✓ 0 (1e-16) | ✓ 0 (1.3e-15) |
+| **ln**   | ✓ 0 (0.50) | ✗ 6 (49.5)    | ✓ 0 (1e-16)  | ✗ 31 (1.1e9) | ✗ 1 (1.00) | ✓ 0 (1e-16) |
+| **sin**  | ✓ 0 (0.50) | ✗ 64 (1.7e19) | ✓ 0 (1.7e-12)| ✓ 0 (2.1e-9) | — | — |
+| **cos**  | ✓ 0 (0.50) | ✗ 6 (50.0)    | ✓ 0 (5.2e-12)| ✓ 0 (2.4e-9) | — | — |
+| **tan**  | ✓ 0 (0.50) | ✗ 65 (2.1e19) | ✓ 0 (1.4e-12)| ✗ 36 (4.3e10) | — | — |
+| **atan** | ✓ 0 (0.50) | ✗ 64 (1.6e19) | ✓ 0 (1e-16)  | — | — | — |
+| **sqrt** | ✓ 0 (0.50) | ✗ 6 (49.6)    | ✓ 0 (1e-16)  | ✓ 0 (7.2e-7) | ✓ 0 (1e-16) | ✓ 0 (3e-16) |
+| **cbrt** | ✓ 0 (0.50) | — | ✓ 0 (1e-16) | — | — | — |
 | *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
 
-**✓** = within 0.5 ULP of the true value on *every* tested input
-(correctly rounded). **✗** = worst case > 0.5 ULP. **—** = not
-implemented by that crate. Parenthesised value is the worst error, ULP.
+**✓** = **0 LSB** of error (correctly rounded — the stored value is
+exactly right, ≤ 0.5 ULP from true) on *every* tested input. **✗** = at
+least one input off by **≥ 1 LSB**. **—** = not implemented by that
+crate. First number = worst-case LSB error; parenthesised = worst ULP
+distance from the true value.
 
 `decimal-scaled` is the only crate ✓ on every function — and its ✓ holds
 for all six rounding modes and all thirteen widths (D9 … D1232).
