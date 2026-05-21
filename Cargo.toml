@@ -164,6 +164,9 @@ g_math = "0.4"
 fastnum = { version = "0.7", default-features = false, features = ["std"] }
 bigdecimal = "0.4"
 dashu-float = "0.4"
+# dashu-int provides IBig for the deep-scale shootout's exact base-10
+# integer scaling of dashu-float results (benches/lib_cmp_precision.rs).
+dashu-int = { version = "0.4", default-features = false, features = ["std"] }
 decimal-rs = "0.1"
 scientific = "0.5"
 # Chart generation for docs/figures/library_comparison/*.png — pure
@@ -173,6 +176,9 @@ plotters = { version = "0.3", default-features = false, features = ["bitmap_back
 # tests/ulp_proptest.rs. Pinned 1.x for deterministic, fixed-seed
 # minimisation when a counterexample is found.
 proptest = "1"
+# Pin the bench process to a single core for the precision-fix impact
+# microbench (benches/prec_fix_impact.rs) to cut scheduler jitter.
+core_affinity = "0.8"
 
 [[bench]]
 name = "mul_div_candidates"
@@ -523,6 +529,23 @@ required-features = ["xx-wide"]
 name = "lib_cmp_d1232"
 harness = false
 required-features = ["xx-wide"]
+
+# Precision (accuracy) shootout — NOT a timing bench. Runs the eight
+# transcendentals over the golden input roster at a common 19-digit
+# comparison scale and reports each library's continuous distance from
+# the true value (computed by the proven-correctly-rounded D76<35>
+# oracle), in ULPs, alongside the rounding mode each library uses.
+# Emits a markdown table for docs/benchmarks.md. `harness = false`
+# with a plain `fn main` — no criterion timing machinery.
+[[bench]]
+name = "lib_cmp_precision"
+harness = false
+required-features = ["wide", "x-wide"]
+
+[[bench]]
+name = "prec_fix_impact"
+harness = false
+required-features = ["wide", "x-wide", "macros"]
 
 [lints.rust]
 unused_variables = "allow"
