@@ -60,13 +60,14 @@ macro_rules! decl_decimal_full {
         $SqrtWide:ty,
         $CbrtWide:ty,
         $Work:ty,
+        $Wexp:ty,
         $core:ident,
         $max_scale:literal,
         no_const_table
     ) => {
         $crate::macros::full::decl_decimal_full!(
             @body $Type, $Storage, $Unsigned, $Wider, $SqrtWide, $CbrtWide,
-            $Work, $core, $max_scale, no_const_table
+            $Work, $Wexp, $core, $max_scale, no_const_table
         );
     };
     (
@@ -77,12 +78,13 @@ macro_rules! decl_decimal_full {
         $SqrtWide:ty,
         $CbrtWide:ty,
         $Work:ty,
+        $Wexp:ty,
         $core:ident,
         $max_scale:literal
     ) => {
         $crate::macros::full::decl_decimal_full!(
             @body $Type, $Storage, $Unsigned, $Wider, $SqrtWide, $CbrtWide,
-            $Work, $core, $max_scale, with_const_table
+            $Work, $Wexp, $core, $max_scale, with_const_table
         );
     };
     (
@@ -93,6 +95,7 @@ macro_rules! decl_decimal_full {
         $SqrtWide:ty,
         $CbrtWide:ty,
         $Work:ty,
+        $Wexp:ty,
         $core:ident,
         $max_scale:literal,
         $table_mode:ident
@@ -110,7 +113,7 @@ macro_rules! decl_decimal_full {
         $crate::macros::int_methods::decl_decimal_int_methods!(wide $Type, $Storage);
         $crate::macros::wide_roots::decl_wide_roots!($Type, $Storage, $SqrtWide, $CbrtWide);
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
-            $Type, $Storage, $Work, $core, $max_scale, $table_mode
+            $Type, $Storage, $Work, $Wexp, $core, $max_scale, $table_mode
         );
         $crate::macros::transcendental_trait::decl_decimal_transcendental_impl!($Type);
         $crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!($Type);

@@ -129,6 +129,39 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 // ── exp2 kernel (D38, Fixed fallback) ─────────────────────────────
 
+/// Exact-power pin for the D38 `exp2`. Returns `Some(2^k · 10^scale)`
+/// when `raw` is an exact integer `k` and `2^k` is representable at the
+/// storage scale; else `None`. See the wide-tier `exp2_exact_pow`.
+#[inline]
+fn exp2_exact_pin(raw: i128, scale: u32) -> Option<i128> {
+    let one_s = 10i128.checked_pow(scale)?;
+    if raw % one_s != 0 {
+        return None;
+    }
+    let k = raw / one_s;
+    if k == 0 {
+        return Some(one_s);
+    }
+    let kk = k.unsigned_abs();
+    if k > 0 {
+        let mut v: i128 = one_s;
+        for _ in 0..kk {
+            v = v.checked_mul(2)?;
+        }
+        Some(v)
+    } else {
+        // 2^-|k| = 5^|k| · 10^(scale − |k|); representable iff |k| ≤ scale.
+        if kk > scale as u128 {
+            return None;
+        }
+        let mut v = 10i128.checked_pow(scale - kk as u32)?;
+        for _ in 0..kk {
+            v = v.checked_mul(5)?;
+        }
+        Some(v)
+    }
+}
+
 /// `2^x = exp(x · ln 2)` on the `Fixed` intermediate. Used by
 /// `ExpPolicy::exp2_impl` when the D57 borrow path is not available.
 #[inline]
@@ -136,6 +169,13 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 pub(crate) fn exp2_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 10_i128.pow(scale);
+    }
+    // Exact-power pin: `exp2(integer k) = 2^k` is an exact algebraic
+    // point (integer for `k >= 0`, `5^|k|·10^(scale−|k|)` for `k < 0`).
+    // Emitting it directly stops the `exp(k·ln 2)` round-off from
+    // bumping a directed mode by one LSB at the exact power.
+    if let Some(pinned) = exp2_exact_pin(raw, scale) {
+        return pinned;
     }
     let w = scale + working_digits;
     let negative_input = raw < 0;

@@ -45,9 +45,9 @@ macro_rules! decl_exp_kernel {
                     .expect(concat!("exp_strict_", $tier_label, ": invalid base-10 literal"));
                 return ten.pow(scale);
             }
-            let w = scale + core::GUARD;
-            let r = core::exp_fixed(core::to_work(raw), w);
-            core::round_to_storage_with(r, w, scale, mode)
+            core::round_to_storage_directed(core::GUARD, scale, mode, |guard| {
+                core::exp_fixed(core::to_work_w(raw, guard), scale + guard)
+            })
         }
     };
 }

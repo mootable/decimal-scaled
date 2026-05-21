@@ -791,6 +791,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int512,
     crate::wide_int::Int1024,
     crate::wide_int::Int1024,
+    crate::wide_int::Int2048,
     wide_trig_d76,
     75
 );
@@ -919,6 +920,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int1024,
     crate::wide_int::Int2048,
     crate::wide_int::Int2048,
+    crate::wide_int::Int4096,
     wide_trig_d153,
     152
 );
@@ -1032,6 +1034,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int2048,
     crate::wide_int::Int4096,
     crate::wide_int::Int4096,
+    crate::wide_int::Int8192,
     wide_trig_d307,
     306
 );
@@ -1163,6 +1166,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int384,
     crate::wide_int::Int512,
     crate::wide_int::Int1024,
+    crate::wide_int::Int2048,
     wide_trig_d57,
     56
 );
@@ -1239,6 +1243,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int768,
     crate::wide_int::Int1024,
     crate::wide_int::Int2048,
+    crate::wide_int::Int4096,
     wide_trig_d115,
     114
 );
@@ -1313,6 +1318,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int1536,
     crate::wide_int::Int3072,
     crate::wide_int::Int3072,
+    crate::wide_int::Int6144,
     wide_trig_d230,
     229
 );
@@ -1387,6 +1393,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int3072,
     crate::wide_int::Int4096,
     crate::wide_int::Int4096,
+    crate::wide_int::Int8192,
     wide_trig_d462,
     461
 );
@@ -1462,6 +1469,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int4096,
     crate::wide_int::Int8192,
     crate::wide_int::Int8192,
+    crate::wide_int::Int16384,
     wide_trig_d616,
     615
 );
@@ -1539,6 +1547,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::Int6144,
     crate::wide_int::Int12288,
     crate::wide_int::Int12288,
+    crate::wide_int::Int16384,
     wide_trig_d924,
     923,
     no_const_table
@@ -1617,6 +1626,7 @@ crate::macros::full::decl_decimal_full!(
     crate::wide_int::U4096,
     crate::wide_int::I8192,
     crate::wide_int::Int8192,
+    crate::wide_int::Int16384,
     crate::wide_int::Int16384,
     crate::wide_int::Int16384,
     wide_trig_d1232,

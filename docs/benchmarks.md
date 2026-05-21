@@ -35,9 +35,10 @@ cargo bench --features wide --bench d_w128_mul_div_paths
 > sometimes shortens via Cody-Waite range reduction, so neither is
 > a fair comparator). The bold mark goes on the row winner.**
 
-> **Bench machine.** All numbers in this doc are from the v0.4.3
-> full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
-> runners (2 vCPU shared, 7 GiB RAM, no core pinning). Per the
+> **Bench machine.** The library-comparison figures (§5) and the
+> §1–§3 timing tables are both from the v0.4.4 full_matrix sweep
+> (2026-05-21) on GitHub-hosted `ubuntu-latest` standard runners
+> (2 vCPU shared, 7 GiB RAM, no core pinning). Per the
 > Criterion author's standing caveat, shared CI runners carry
 > 20–50 % wall-clock variance per cell. Cells are valid relative
 > to each other within this run (matched compiler, matched
@@ -132,13 +133,94 @@ Alternate divide paths:
 
 ---
 
+## Precision vs other crates
+
+Worst-case transcendental error of each crate, measured against a
+high-precision oracle (worst result across every tested input). The
+metric is **LSBε** — *least significant bits in error*, the count of
+low-order bits of the stored value that are wrong — with the worst
+**[ULP][ULP]** distance from the true value in parentheses. **0 LSBε**
+means correctly rounded: the stored value is exactly right, within
+0.5 ULP of true. Numbers come from the precision shootout in
+[`benches/lib_cmp_precision.rs`](../benches/lib_cmp_precision.rs).
+
+[ULP]: https://en.wikipedia.org/wiki/Unit_in_the_last_place
+
+**Legend.** **✓** = **0 LSBε** (correctly rounded, ≤ 0.5 ULP from
+true) on *every* tested input. **✗** = at least one input with
+**≥ 1 LSBε**. **—** = not implemented by, or not representable in,
+that crate. First number = worst-case LSBε; parenthesised = worst
+ULP distance from the true value.
+
+### Scale 19 (`D38<19>`)
+
+Measured at a 19-digit scale under `HalfToEven`; each cell is the
+worst case across the inputs each library supports.
+
+| Function | decimal-scaled | g_math | fastnum | rust_decimal | dashu-float | decimal-rs |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|
+| **exp**  | ✓ 0 (0.50) | ✗ 65 (2.3e19) | ✓ 0 (1e-16)  | ✓ 0 (2.7e-6) | ✓ 0 (1e-16) | ✓ 0 (1.3e-15) |
+| **ln**   | ✓ 0 (0.50) | ✗ 6 (49.5)    | ✓ 0 (1e-16)  | ✗ 31 (1.1e9) | ✗ 1 (1.00) | ✓ 0 (1e-16) |
+| **sin**  | ✓ 0 (0.50) | ✗ 64 (1.7e19) | ✓ 0 (1.7e-12)| ✓ 0 (2.1e-9) | — | — |
+| **cos**  | ✓ 0 (0.50) | ✗ 6 (50.0)    | ✓ 0 (5.2e-12)| ✓ 0 (2.4e-9) | — | — |
+| **tan**  | ✓ 0 (0.50) | ✗ 65 (2.1e19) | ✓ 0 (1.4e-12)| ✗ 36 (4.3e10) | — | — |
+| **atan** | ✓ 0 (0.50) | ✗ 64 (1.6e19) | ✓ 0 (1e-16)  | — | — | — |
+| **sqrt** | ✓ 0 (0.50) | ✗ 6 (49.6)    | ✓ 0 (1e-16)  | ✓ 0 (7.2e-7) | ✓ 0 (1e-16) | ✓ 0 (3e-16) |
+| **cbrt** | ✓ 0 (0.50) | — | ✓ 0 (1e-16) | — | — | — |
+| *rounding* | **all 6, caller-chosen** | nearest | HalfUp | HalfEven | HalfAway | unspec. |
+
+`decimal-scaled` is the only crate ✓ on every function — and its ✓
+holds for all six rounding modes and all thirteen widths
+(`D9` … `D1232`).
+
+### Deep scale 150 (`D307<150>`)
+
+Repeat the test at a 150-digit scale. The fixed-precision crates
+(g_math ≈ 19, rust_decimal ≈ 28, fastnum ≈ 34, decimal-rs ≈ 38
+digits) can no longer represent the value at all, so they score "—".
+The lone arbitrary-precision peer that reaches it, `dashu-float`,
+still misses `ln`. Only `decimal-scaled` computes all eight functions
+correctly at this depth.
+
+| Function | decimal-scaled | dashu-float | g_math | fastnum | rust_decimal | decimal-rs | bigdecimal |
+|---|:--:|:--:|:--:|:--:|:--:|:--:|:--:|
+| **exp**  | ✓ 0 (0.00) | ✓ 0 (0.00) | — | — | — | — | — |
+| **ln**   | ✓ 0 (0.00) | ✗ 1 (1.00) | — | — | — | — | — |
+| **sin**  | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **cos**  | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **tan**  | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **atan** | ✓ 0 (0.00) | — | — | — | — | — | — |
+| **sqrt** | ✓ 0 (0.00) | ✓ 0 (0.00) | — | — | — | — | — |
+| **cbrt** | ✓ 0 (0.00) | — | — | — | — | — | — |
+
+`decimal-scaled` is the only all-✓ crate at both scales — the
+guarantee holds across all six rounding modes and all thirteen
+widths.
+
+### 0.4.4 precision-fix perf impact
+
+The 0.4.4 precision-hole closure changed the rounding path, so its
+throughput cost was measured directly in
+[`benches/prec_fix_impact.rs`](../benches/prec_fix_impact.rs):
+
+- **Default / nearest path (`HalfToEven`):** flat versus 0.4.3 — no
+  measurable regression on the common case.
+- **Directed modes near boundaries:** +10–27 %, and only near
+  rounding boundaries, where the residual-sign Ziv escalation does
+  the extra work needed to guarantee the correct last digit. Away
+  from boundaries the directed modes are unchanged.
+- **Round-to-odd** was evaluated as an alternative and rejected: it
+  regressed near boundaries rather than improving them.
+
+---
+
 ## 1. Arithmetic
 
 Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
 at every public type×scale combo. Six ops: add / sub / mul / div
 / rem / neg.
 
-> **0.4.3 sweep refresh.** Tables below come from the latest
+> **0.4.4 sweep refresh.** Tables below come from the latest
 > full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
 > runners.
 > Narrow-tier ps-scale cells (D9 / D18 / D38 add / sub / neg)
@@ -151,144 +233,144 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 
 | op | s = 0 | s = 5 | s = 9 |
 |---|---|---|---|
-| add | 1.0545 ns | 1.0544 ns | 1.0543 ns |
-| sub | 1.0546 ns | 1.0548 ns | 1.0544 ns |
-| mul | 1.0546 ns | 1.7609 ns | 1.7641 ns |
-| div | 2.1084 ns | 2.4603 ns | 2.4607 ns |
-| rem | 2.1085 ns | 2.1086 ns | 2.1082 ns |
-| neg | 702.82 ps | 703.01 ps | 702.89 ps |
+| add | 933.57 ps | 933.27 ps | 933.13 ps |
+| sub | 933.11 ps | 933.3 ps | 933.21 ps |
+| mul | 933.26 ps | 1.5562 ns | 1.5552 ns |
+| div | 1.8667 ns | 2.1833 ns | 2.1768 ns |
+| rem | 1.8658 ns | 1.8668 ns | 1.8657 ns |
+| neg | 622.25 ps | 622.19 ps | 622.13 ps |
 
 ### D18 - 64 bits
 
 | op | s = 0 | s = 9 | s = 18 |
 |---|---|---|---|
-| add | 590.06 ps | 589.83 ps | 589.9 ps |
-| sub | 589.67 ps | 589.91 ps | 589.64 ps |
-| mul | 592.46 ps | 2.1865 ns | 3.8812 ns |
-| div | 1.729 ns | 2.8923 ns | 5.7612 ns |
-| rem | 1.7275 ns | 1.7278 ns | 2.8776 ns |
-| neg | 360.03 ps | 359.86 ps | 359.88 ps |
+| add | 1.055 ns | 1.0546 ns | 1.0542 ns |
+| sub | 1.0547 ns | 1.0543 ns | 1.0544 ns |
+| mul | 1.0548 ns | 2.4695 ns | 4.2202 ns |
+| div | 2.1094 ns | 2.4778 ns | 6.8532 ns |
+| rem | 2.1083 ns | 2.1079 ns | 2.4587 ns |
+| neg | 703.11 ps | 703.11 ps | 702.83 ps |
 
 ### D38 - 128 bits
 
 | op | s = 0 | s = 19 | s = 38 |
 |---|---|---|---|
-| add | 1.8681 ns | 1.8669 ns | 1.8674 ns |
-| sub | 1.8672 ns | 1.8666 ns | 1.8669 ns |
-| mul | 3.7348 ns | 10.168 ns | 21.855 ns |
-| div | 7.1593 ns | 8.377 ns | 968.05 ns |
-| rem | 6.5417 ns | 6.5409 ns | 10.28 ns |
-| neg | 1.2446 ns | 1.2443 ns | 1.2444 ns |
+| add | 1.8675 ns | 1.8667 ns | 1.8663 ns |
+| sub | 1.8674 ns | 1.8667 ns | 1.8663 ns |
+| mul | 3.4254 ns | 10.579 ns | 21.801 ns |
+| div | 6.8486 ns | 8.3201 ns | 967.01 ns |
+| rem | 6.5408 ns | 6.5403 ns | 9.9672 ns |
+| neg | 1.2446 ns | 1.2439 ns | 1.2439 ns |
 
 ### D57 - 192 bits
 
 | op | s = 0 | s = 28 | s = 56 |
 |---|---|---|---|
-| add | 2.9737 ns | 2.9767 ns | 2.9723 ns |
-| sub | 2.9849 ns | 2.983 ns | 2.9789 ns |
-| mul | 15.241 ns | 52.992 ns | 120.81 ns |
-| div | 72.947 ns | 300.34 ns | 547.18 ns |
-| rem | 24.755 ns | 119.17 ns | 132.67 ns |
-| neg | 2.0983 ns | 2.0989 ns | 2.0975 ns |
+| add | 2.6756 ns | 2.6768 ns | 2.676 ns |
+| sub | 2.8445 ns | 2.8447 ns | 2.8447 ns |
+| mul | 14.604 ns | 46.871 ns | 105.86 ns |
+| div | 63.329 ns | 326.78 ns | 543.42 ns |
+| rem | 23.999 ns | 168.23 ns | 174.93 ns |
+| neg | 2.1811 ns | 2.1811 ns | 2.1825 ns |
 
 ### D76 - 256 bits
 
 | op | s = 0 | s = 35 | s = 76 |
 |---|---|---|---|
-| add | 3.7295 ns | 3.7208 ns | 3.718 ns |
-| sub | 3.7287 ns | 3.7253 ns | 3.7336 ns |
-| mul | 17.962 ns | 48.396 ns | 133.09 ns |
-| div | 70.043 ns | 361.72 ns | 634.89 ns |
-| rem | 26.134 ns | 172.02 ns | 179.61 ns |
-| neg | 2.5618 ns | 2.5589 ns | 2.5622 ns |
+| add | 3.7101 ns | 3.7125 ns | 3.7041 ns |
+| sub | 3.7202 ns | 3.7219 ns | 3.7237 ns |
+| mul | 16.151 ns | 48.849 ns | 133.41 ns |
+| div | 67.579 ns | 360.99 ns | 633.86 ns |
+| rem | 25.605 ns | 170.35 ns | 177.91 ns |
+| neg | 2.5539 ns | 2.5591 ns | 2.5558 ns |
 
 ### D115 - 384 bits
 
 | op | s = 0 | s = 57 | s = 114 |
 |---|---|---|---|
-| add | 6.2755 ns | 6.2637 ns | 6.2645 ns |
-| sub | 7.2932 ns | 7.2934 ns | 7.2911 ns |
-| mul | 22.306 ns | 127.14 ns | 275.21 ns |
-| div | 87.16 ns | 403.37 ns | 799.57 ns |
-| rem | 35.034 ns | 137.68 ns | 145.32 ns |
-| neg | 4.0638 ns | 4.0618 ns | 4.0635 ns |
+| add | 6.2606 ns | 6.2617 ns | 6.2636 ns |
+| sub | 7.2869 ns | 7.2831 ns | 7.2948 ns |
+| mul | 23.413 ns | 123.86 ns | 272.25 ns |
+| div | 86.732 ns | 400.51 ns | 801.1 ns |
+| rem | 34.824 ns | 136.7 ns | 147.27 ns |
+| neg | 4.0581 ns | 4.0698 ns | 4.0554 ns |
 
 ### D153 - 512 bits
 
 | op | s = 0 | s = 75 | s = 153 |
 |---|---|---|---|
-| add | 6.6417 ns | 6.6452 ns | 6.6329 ns |
-| sub | 12.116 ns | 12.115 ns | 12.126 ns |
-| mul | 35.371 ns | 138.78 ns | 419.61 ns |
-| div | 91.302 ns | 525.62 ns | 1.1145 µs |
-| rem | 35.805 ns | 108.8 ns | 122.74 ns |
-| neg | 5.0623 ns | 5.0621 ns | 5.0632 ns |
+| add | 6.6908 ns | 6.5173 ns | 6.5411 ns |
+| sub | 11.899 ns | 11.898 ns | 11.89 ns |
+| mul | 35.385 ns | 138.34 ns | 416.22 ns |
+| div | 91.167 ns | 521.12 ns | 1.1128 µs |
+| rem | 35.214 ns | 109.64 ns | 123.21 ns |
+| neg | 5.0663 ns | 5.0676 ns | 5.0684 ns |
 
 ### D230 - 768 bits
 
 | op | s = 0 | s = 115 | s = 230 |
 |---|---|---|---|
-| add | 16.993 ns | 16.994 ns | 16.994 ns |
-| sub | 19.637 ns | 19.645 ns | 19.634 ns |
-| mul | 57.005 ns | 314.79 ns | 848.42 ns |
-| div | 188.98 ns | 958.75 ns | 2.0137 µs |
-| rem | 52.594 ns | 210.22 ns | 229.89 ns |
-| neg | 11.233 ns | 11.675 ns | 12.381 ns |
+| add | 18.097 ns | 18.1 ns | 18.092 ns |
+| sub | 21.099 ns | 21.088 ns | 21.096 ns |
+| mul | 65.57 ns | 364.44 ns | 955.83 ns |
+| div | 180.87 ns | 981.24 ns | 2.1755 µs |
+| rem | 56.295 ns | 167.38 ns | 187.1 ns |
+| neg | 12.259 ns | 12.632 ns | 13.521 ns |
 
 ### D307 - 1024 bits
 
 | op | s = 0 | s = 150 | s = 307 |
 |---|---|---|---|
-| add | 22.818 ns | 22.822 ns | 22.819 ns |
-| sub | 26.606 ns | 26.602 ns | 26.607 ns |
-| mul | 71.08 ns | 417.61 ns | 1.8675 µs |
-| div | 211.76 ns | 1.1605 µs | 3.2083 µs |
-| rem | 67.296 ns | 230.99 ns | 256.65 ns |
-| neg | 13.858 ns | 14.322 ns | 14.783 ns |
+| add | 22.768 ns | 22.778 ns | 22.765 ns |
+| sub | 26.465 ns | 26.467 ns | 26.499 ns |
+| mul | 71.351 ns | 423.19 ns | 1.8854 µs |
+| div | 200.86 ns | 1.164 µs | 3.2291 µs |
+| rem | 66.359 ns | 229.33 ns | 257.86 ns |
+| neg | 13.85 ns | 14.339 ns | 14.723 ns |
 
 ### D462 - 1536 bits
 
 | op | s = 0 | s = 230 | s = 461 |
 |---|---|---|---|
-| add | 26.185 ns | 26.184 ns | 26.186 ns |
-| sub | 44.47 ns | 44.49 ns | 44.51 ns |
-| mul | 121.11 ns | 1.0178 µs | 3.4136 µs |
-| div | 355.05 ns | 2.0886 µs | 5.6204 µs |
-| rem | 102.23 ns | 275.55 ns | 320.26 ns |
-| neg | 37.947 ns | 37.698 ns | 38.061 ns |
+| add | 41.193 ns | 41.188 ns | 41.17 ns |
+| sub | 50.067 ns | 50.057 ns | 50.036 ns |
+| mul | 127.19 ns | 1.1254 µs | 3.753 µs |
+| div | 460.75 ns | 2.44 µs | 6.2755 µs |
+| rem | 115.75 ns | 245.47 ns | 292.49 ns |
+| neg | 44.476 ns | 44.001 ns | 44.17 ns |
 
 ### D616 - 2048 bits
 
 | op | s = 0 | s = 308 | s = 615 |
 |---|---|---|---|
-| add | 55.877 ns | 55.865 ns | 55.954 ns |
-| sub | 80.945 ns | 80.964 ns | 81.039 ns |
-| mul | 125.74 ns | 1.825 µs | 5.4833 µs |
-| div | 361.49 ns | 4.5889 µs | 7.6547 µs |
-| rem | 115.08 ns | 277.58 ns | 360.67 ns |
-| neg | 41.404 ns | 43.342 ns | 44.654 ns |
+| add | 85.558 ns | 85.571 ns | 86.274 ns |
+| sub | 115.08 ns | 115.17 ns | 115.21 ns |
+| mul | 144.56 ns | 2.0523 µs | 6.1245 µs |
+| div | 404.09 ns | 4.6537 µs | 7.9728 µs |
+| rem | 132.75 ns | 256.58 ns | 340.86 ns |
+| neg | 49.429 ns | 50.395 ns | 54.291 ns |
 
 ### D924 - 3072 bits
 
 | op | s = 0 | s = 461 | s = 923 |
 |---|---|---|---|
-| add | 97.447 ns | 98.31 ns | 97.471 ns |
-| sub | 128.78 ns | 128.7 ns | 128.72 ns |
-| mul | 187.83 ns | 3.907 µs | 11.658 µs |
-| div | 632.29 ns | 5.8236 µs | 15.661 µs |
-| rem | 187.01 ns | 390.67 ns | 476.66 ns |
-| neg | 68.476 ns | 68.967 ns | 71.525 ns |
+| add | 96.042 ns | 96.105 ns | 96.064 ns |
+| sub | 141.29 ns | 141.41 ns | 141.47 ns |
+| mul | 193.64 ns | 3.8172 µs | 11.773 µs |
+| div | 612.35 ns | 5.7362 µs | 15.405 µs |
+| rem | 186.04 ns | 389.88 ns | 477.78 ns |
+| neg | 67.446 ns | 67.753 ns | 75.273 ns |
 
 ### D1232 - 4096 bits
 
 | op | s = 0 | s = 616 | s = 1231 |
 |---|---|---|---|
-| add | 124.7 ns | 124.72 ns | 124.7 ns |
-| sub | 217.34 ns | 216.24 ns | 216 ns |
-| mul | 256.44 ns | 7.0733 µs | 22.179 µs |
-| div | 741.77 ns | 8.9315 µs | 25.899 µs |
-| rem | 247.05 ns | 447.61 ns | 574.96 ns |
-| neg | 100.07 ns | 100.36 ns | 116.02 ns |
+| add | 79.947 ns | 79.739 ns | 79.761 ns |
+| sub | 151.57 ns | 151.61 ns | 151.64 ns |
+| mul | 187.94 ns | 6.2704 µs | 19.854 µs |
+| div | 627.49 ns | 7.252 µs | 21.54 µs |
+| rem | 189.96 ns | 368.19 ns | 496.15 ns |
+| neg | 83.759 ns | 85.74 ns | 88.803 ns |
 
 ## 2. Fast transcendentals (`f64`-bridge)
 
@@ -428,10 +510,10 @@ platforms, `no_std`-compatible, 0.5 ULP at storage.
 
 | fn | D9 (s=5) | D18 (s=9) | D38 (s=19) |
 |---|---|---|---|
-| ln | 7.2689 µs | 4.6874 µs | 8.1203 µs |
-| exp | 6.8133 µs | 4.1301 µs | 7.6369 µs |
-| sin | 9.7907 µs | 3.3419 µs | 6.7225 µs |
-| sqrt | 21.319 ns | 21.134 ns | 29.958 ns |
+| ln | 6.7669 µs | 6.9353 µs | 8.1117 µs |
+| exp | 6.2344 µs | 6.9092 µs | 7.6812 µs |
+| sin | 8.8738 µs | 5.9569 µs | 6.7603 µs |
+| sqrt | 19.936 ns | 20.78 ns | 31.694 ns |
 
 ### Wide-tier strict - D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 / D1232
 
@@ -443,10 +525,10 @@ populates every cell.
 
 | fn | D57 (s=28) | D76 (s=35) | D115 (s=57) | D153 (s=75) | D230 (s=115) | D307 (s=150) |
 |---|---|---|---|---|---|---|
-| ln | 20.133 µs | 26.486 µs | 3.3799 µs | 2.6310 µs | 5.3209 µs | 7.3855 µs |
-| exp | 21.097 µs | 28.198 µs | 27.125 µs | 29.210 µs | 82.901 µs | 115.56 µs |
-| sin | 12.830 µs | 17.074 µs | 25.102 µs | 19.155 µs | 58.905 µs | 79.012 µs |
-| sqrt | 1.0791 µs | 1.7160 µs | 1.9579 µs | 1.8138 µs | 4.2906 µs | 5.2790 µs |
+| ln | 23.438 µs | 26.123 µs | 3.3836 µs | 2.6131 µs | 5.5435 µs | 7.1979 µs |
+| exp | 25.678 µs | 28.54 µs | 33.185 µs | 30.084 µs | 75.748 µs | 114.14 µs |
+| sin | 15.71 µs | 17.398 µs | 24.978 µs | 18.873 µs | 55.733 µs | 76.788 µs |
+| sqrt | 1.4589 µs | 1.739 µs | 1.9549 µs | 1.8151 µs | 3.7087 µs | 5.1769 µs |
 
 The dramatic `ln` drops at D115 / D153 / D307 are the Tang
 lookup slots landing exactly at the column's SCALE; D57<28>
@@ -459,10 +541,10 @@ shared-kernel-only improvement over v0.4.0.
 
 | fn | D462 (s=230) | D616 (s=308) |
 |---|---|---|
-| ln | 8.3678 µs | 16.053 µs |
-| exp | 161.47 µs | 309.54 µs |
-| sin | 122.49 µs | 252.11 µs |
-| sqrt | 9.2121 µs | 15.005 µs |
+| ln | 8.6986 µs | 16.46 µs |
+| exp | 155.68 µs | 331.93 µs |
+| sin | 118.66 µs | 268.54 µs |
+| sqrt | 8.6053 µs | 13.778 µs |
 
 D462<230> and D616<308> sit on their Tang `ln` slots (27.6×
 and 26.1× over v0.4.0 respectively).
@@ -471,10 +553,10 @@ and 26.1× over v0.4.0 respectively).
 
 | fn | D924 (s=461) | D1232 (s=616) |
 |---|---|---|
-| ln | 29.309 µs | 50.891 µs |
-| exp | 671.59 µs | 1.3466 ms |
-| sin | 615.30 µs | 1.3055 ms |
-| sqrt | 27.296 µs | 41.377 µs |
+| ln | 28.486 µs | 43.273 µs |
+| exp | 672.04 µs | 1.179 ms |
+| sin | 616.72 µs | 1.1486 ms |
+| sqrt | 27.269 µs | 33.865 µs |
 
 D924<461> sits one off its Tang slot (SCALE 460) and D1232<616>
 sits one off its Tang slot (SCALE 615) — both are still
@@ -490,27 +572,27 @@ ln2 / ln10 cache, pow10-cached mul/div per inner loop, the 0.4.2
 narrow-GUARD trig family, the Tang `ln` lookup ladder, and the
 reciprocal-divide hyperbolic identity:
 
-| op | 0.2 | 0.4.3 | speedup |
+| op | 0.2 | 0.4.4 | speedup |
 |---|---|---|---|
-| D76<35>  ln   |  1.37 ms |  26.5 µs |  **52×** |
-| D76<35>  exp  |  1.27 ms |  28.2 µs |  **45×** |
-| D76<35>  sin  |  1.08 ms |  17.1 µs |  **63×** |
-| D76<35>  sqrt | 20.5 µs  |  1.72 µs |  **12×** |
-| D153<75> ln   |  6.40 ms |  2.63 µs | **2433×** |
-| D153<75> exp  |  5.87 ms |  29.2 µs |  **201×** |
-| D153<75> sin  |  4.82 ms |  19.2 µs |  **252×** |
-| D153<75> sqrt | 83.6 µs  |  1.81 µs |  **46×** |
-| D307<150> ln  | 34.1 ms  |  7.39 µs | **4617×** |
-| D307<150> exp | 31.2 ms  |  116 µs  |  **270×** |
-| D307<150> sin | 25.5 ms  |  79.0 µs |  **323×** |
-| D307<150> sqrt|  313 µs  |  5.28 µs |  **59×** |
+| D76<35>  ln   |  1.37 ms |  26.1 µs |  **52×** |
+| D76<35>  exp  |  1.27 ms |  28.5 µs |  **44×** |
+| D76<35>  sin  |  1.08 ms |  17.4 µs |  **62×** |
+| D76<35>  sqrt | 20.5 µs  |  1.74 µs |  **12×** |
+| D153<75> ln   |  6.40 ms |  2.61 µs | **2449×** |
+| D153<75> exp  |  5.87 ms |  30.1 µs |  **195×** |
+| D153<75> sin  |  4.82 ms |  18.9 µs |  **255×** |
+| D153<75> sqrt | 83.6 µs  |  1.82 µs |  **46×** |
+| D307<150> ln  | 34.1 ms  |  7.20 µs | **4737×** |
+| D307<150> exp | 31.2 ms  |  114 µs  |  **273×** |
+| D307<150> sin | 25.5 ms  |  76.8 µs |  **332×** |
+| D307<150> sqrt|  313 µs  |  5.18 µs |  **60×** |
 
 > The **0.2** column is the 0.2.5 baseline measured at the start of
-> the 0.2.x cycle on the original dev box; the **0.4.3** column is
+> the 0.2.x cycle on the original dev box; the **0.4.4** column is
 > from the latest full_matrix sweep on GitHub-hosted `ubuntu-latest`
 > standard runners. The two halves of each speedup are measured on
 > **different machines** — the 0.2 column reflects cold-machine
-> dev-box runs while the 0.4.3 column reflects shared CI runners
+> dev-box runs while the 0.4.4 column reflects shared CI runners
 > that typically measure 1.5–2× slower per the run-conditions
 > preamble below. The four-digit `ln` ratios at D153<75> and
 > D307<150> are real — the Tang lookup slot collapses the

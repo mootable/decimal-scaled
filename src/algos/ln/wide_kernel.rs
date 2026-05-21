@@ -55,9 +55,9 @@ macro_rules! decl_ln_kernel {
             if raw <= zero {
                 panic!(concat!($tier_label, "::ln: argument must be positive"));
             }
-            let w = scale + core::GUARD;
-            let r = core::ln_fixed(core::to_work(raw), w);
-            core::round_to_storage_with(r, w, scale, mode)
+            core::round_to_storage_directed(core::GUARD, scale, mode, |guard| {
+                core::ln_fixed(core::to_work_w(raw, guard), scale + guard)
+            })
         }
     };
 }

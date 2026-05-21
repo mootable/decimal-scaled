@@ -53,13 +53,17 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
         };
     }
 
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
-    let result = match which {
-        Which::Sin => core::sin_fixed(v_w, w),
-        Which::Cos => core::cos_fixed(v_w, w),
-    };
-    core::round_to_storage_with(result, w, SCALE, mode)
+    // Directed modes decide which side of a storage grid line the true
+    // value falls; near a grid line (e.g. cos near ±1, sin near a quadrant
+    // multiple) the working-scale approximation can land on the wrong side.
+    // Route through the shared Ziv escalation; nearest modes narrow once.
+    core::round_to_storage_directed(GUARD_NARROW, SCALE, mode, |guard| {
+        let v_w = core::to_work_w(raw, guard);
+        match which {
+            Which::Sin => core::sin_fixed(v_w, SCALE + guard),
+            Which::Cos => core::cos_fixed(v_w, SCALE + guard),
+        }
+    })
 }
 
 #[inline]

@@ -157,6 +157,154 @@ pub(crate) fn should_bump(
     }
 }
 
+/// `true` for the three round-to-nearest modes (`HalfToEven`,
+/// `HalfAwayFromZero`, `HalfTowardZero`), `false` for the directed
+/// modes (`Trunc`, `Floor`, `Ceiling`).
+///
+/// Kernels with a sub-LSB linear-approximation fast path (e.g.
+/// `ln(1 + δ)` near `δ`, `exp(δ)` near `1 + δ`) may short-circuit only
+/// under nearest rounding: those approximations land within half an LSB
+/// of the true value, which is exactly what nearest rounding needs but
+/// not enough for a directed mode, whose answer depends on which side of
+/// the boundary the true value falls. Directed modes must fall through
+/// to the full working-scale evaluation so the residual sign is known.
+#[inline(always)]
+pub(crate) const fn is_nearest_mode(mode: RoundingMode) -> bool {
+    matches!(
+        mode,
+        RoundingMode::HalfToEven
+            | RoundingMode::HalfAwayFromZero
+            | RoundingMode::HalfTowardZero
+    )
+}
+
+/// Correctly-rounded result of an odd, strictly-compressing function
+/// (`tanh`) at a tiny argument, for any rounding mode.
+///
+/// For `tanh` the Maclaurin series is `tanh(x) = x − x³/3 + …`, an
+/// alternating series in odd powers of `x`. Within the small-argument
+/// linear band the cubic correction `|x|³/3` is below one storage ULP
+/// yet strictly positive, so the true value `t = tanh(x)·10^SCALE`
+/// satisfies, for `raw = x·10^SCALE`:
+///
+/// ```text
+///   raw > 0 :  raw − 1 < t < raw          (just below the grid line raw)
+///   raw < 0 :  raw     < t < raw + 1      (just above the grid line raw)
+/// ```
+///
+/// i.e. `|t|` lies strictly inside `(|raw| − 1, |raw|)`. The result is
+/// therefore exactly determined by integer arithmetic on `raw` — no
+/// finite-precision kernel can resolve the sub-ULP cubic, so the
+/// directed modes must use this analytic decision rather than rounding
+/// the (grid-exact) linear approximation. The three nearest modes round
+/// to `raw` (the cubic is well under half a ULP in the band).
+///
+/// `one` is the storage value `1`; `zero` the storage value `0`. The
+/// caller guarantees `0 < |raw| <= threshold`, the band where the cubic
+/// stays under one ULP.
+#[inline]
+pub(crate) fn tiny_odd_compressing_directed<T>(
+    raw: T,
+    zero: T,
+    one: T,
+    mode: RoundingMode,
+) -> T
+where
+    T: Copy
+        + PartialOrd
+        + ::core::ops::Add<Output = T>
+        + ::core::ops::Sub<Output = T>,
+{
+    if is_nearest_mode(mode) {
+        return raw;
+    }
+    let positive = raw > zero;
+    match mode {
+        // Toward zero: drop the sub-ULP magnitude, landing on |raw| − 1.
+        RoundingMode::Trunc => {
+            if positive {
+                raw - one
+            } else {
+                raw + one
+            }
+        }
+        // Toward −∞.
+        RoundingMode::Floor => {
+            if positive {
+                raw - one
+            } else {
+                raw
+            }
+        }
+        // Toward +∞.
+        RoundingMode::Ceiling => {
+            if positive {
+                raw
+            } else {
+                raw + one
+            }
+        }
+        // Nearest modes handled above.
+        _ => raw,
+    }
+}
+
+/// Directed rounding for an odd transcendental whose true value at a
+/// tiny argument sits just *above* the grid line `raw` in magnitude —
+/// e.g. `sinh(x) = x + x³/6 + …`, where the cubic is strictly positive
+/// but below one ULP. The mirror of [`tiny_odd_compressing_directed`]
+/// (which handles the just-*below* case like `tanh`).
+///
+/// `raw` is the stored argument (= the leading term `x · 10^SCALE`),
+/// `zero`/`one` the type's storage `0` / `1`. The true value lies in
+/// `(|raw|, |raw| + 1)` in magnitude, so:
+///
+/// - nearest modes round to `raw` (the excess is < 0.5 ULP);
+/// - toward-zero (`Trunc`) drops the excess → `raw`;
+/// - `Floor` (toward −∞): `raw` if positive, `raw − 1` if negative;
+/// - `Ceiling` (toward +∞): `raw + 1` if positive, `raw` if negative.
+#[inline]
+pub(crate) fn tiny_odd_expanding_directed<T>(
+    raw: T,
+    zero: T,
+    one: T,
+    mode: RoundingMode,
+) -> T
+where
+    T: Copy
+        + PartialOrd
+        + ::core::ops::Add<Output = T>
+        + ::core::ops::Sub<Output = T>,
+{
+    if is_nearest_mode(mode) {
+        return raw;
+    }
+    let positive = raw > zero;
+    match mode {
+        // Toward zero: the excess is sub-ULP, so the magnitude stays at
+        // `|raw|` — i.e. `raw` unchanged.
+        RoundingMode::Trunc => raw,
+        // Toward −∞.
+        RoundingMode::Floor => {
+            if positive {
+                raw
+            } else {
+                raw - one
+            }
+        }
+        // Toward +∞.
+        RoundingMode::Ceiling => {
+            if positive {
+                raw + one
+            } else {
+                raw
+            }
+        }
+        // Nearest modes handled above.
+        _ => raw,
+    }
+}
+
 /// Applies `mode` to integer division `raw / divisor`, returning the
 /// rounded quotient.
 ///
