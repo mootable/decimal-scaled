@@ -133,7 +133,7 @@ pub(crate) mod exp_generic {
     }
     /// Bit length of `|v|` (0 for zero).
     fn bit_length<S: WideStorage>(v: S) -> u32 {
-        S::BITS - abs(v).leading_zeros()
+        <S as WideStorage>::BITS - abs(v).leading_zeros()
     }
     /// Half-to-even round of `numerator / divisor` for `S`.
     #[inline]
@@ -261,7 +261,7 @@ pub(crate) mod exp_generic {
             0
         } else {
             let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
-            let capped = digits.min((S::BITS / 4) as u128) as u32;
+            let capped = digits.min((<S as WideStorage>::BITS / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };
 
@@ -304,7 +304,7 @@ pub(crate) mod exp_generic {
 
         let scaled_at_w_ext = if k >= 0 {
             let shift = k as u32;
-            if bit_length(sum) + shift >= S::BITS {
+            if bit_length(sum) + shift >= <S as WideStorage>::BITS {
                 panic!("exp_generic::exp_fixed: result overflows the working width");
             }
             sum << shift

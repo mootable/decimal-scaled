@@ -168,15 +168,7 @@ impl<const N: usize> WideInt for Uint<N> {
 
 impl<const N: usize> WideStorage for Int<N> {
     const BITS: u32 = (N * 64) as u32;
-    const ZERO: Self = Int::<N>::ZERO;
-    const ONE: Self = Int::<N>::ONE;
     const TEN: Self = Int::<N>::TEN;
-
-    #[inline]
-    fn pow(self, exp: u32) -> Self {
-        // Wrapping power, matching the macro's `$S::pow`.
-        Int::wrapping_pow(self, exp)
-    }
 
     #[inline]
     fn isqrt(self) -> Self {
@@ -193,11 +185,6 @@ impl<const N: usize> WideStorage for Int<N> {
         let negative = self.is_negative();
         let mag = *self.unsigned_abs().as_limbs();
         T::from_mag_sign(&mag, negative)
-    }
-
-    #[inline]
-    fn leading_zeros(self) -> u32 {
-        Int::leading_zeros(&self)
     }
 
     #[inline]
