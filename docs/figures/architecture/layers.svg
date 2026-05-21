@@ -1,65 +1,74 @@
-<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 666" font-family="ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 760 760" font-family="ui-sans-serif, system-ui, Segoe UI, Roboto, Helvetica, Arial, sans-serif">
   <defs>
     <marker id="ar" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
       <path d="M0 0 L10 5 L0 10 z" fill="#475569"/>
     </marker>
     <style>
-      .title  { font-size: 20px; font-weight: 700; fill: #0f172a; }
-      .layer  { font-size: 12px; font-weight: 700; letter-spacing: .12em; }
-      .bt     { font-size: 15px; font-weight: 700; fill: #0f172a; }
-      .bd     { font-size: 12px; fill: #475569; font-family: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace; }
-      .edge   { font-size: 11px; fill: #64748b; }
-      .conn   { stroke: #475569; stroke-width: 1.6; fill: none; }
-      .box    { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; }
+      .title { font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .layer { font-size: 12px; font-weight: 700; letter-spacing: .12em; }
+      .bt    { font-size: 15px; font-weight: 700; fill: #0f172a; }
+      .pd    { font-size: 11.5px; font-weight: 600; fill: #1d4ed8; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+      .pi    { font-size: 11.5px; font-weight: 600; fill: #15803d; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+      .bd    { font-size: 12px; fill: #475569; font-family: ui-monospace, "SFMono-Regular", Consolas, monospace; }
+      .edge  { font-size: 11px; fill: #64748b; }
+      .conn  { stroke: #475569; stroke-width: 1.6; fill: none; }
+      .box   { fill: #ffffff; stroke: #cbd5e1; stroke-width: 1.2; }
     </style>
   </defs>
 
   <text x="380" y="30" text-anchor="middle" class="title">decimal-scaled — two layers, same shape</text>
 
   <!-- Decimal layer -->
-  <rect x="16" y="46" width="728" height="256" rx="14" fill="#eef4ff" stroke="#c7d7f5"/>
-  <text x="34" y="68" class="layer" fill="#1d4ed8">DECIMAL LAYER · src/types · src/policy · src/algos</text>
+  <rect x="16" y="44" width="728" height="288" rx="14" fill="#eef4ff" stroke="#c7d7f5"/>
+  <text x="34" y="66" class="layer" fill="#1d4ed8">DECIMAL LAYER</text>
 
-  <rect x="56" y="80" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="103" class="bt">Front-ends</text>
-  <text x="72" y="122" class="bd">D9 … D1232  —  Dxx&lt;const SCALE: u32&gt;  +  Decimal trait</text>
+  <rect x="56" y="78" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="102" class="bt">Front-ends</text>
+  <text x="72" y="120" class="pd">src/types</text>
+  <text x="72" y="136" class="bd">D9 … D1232 · Dxx&lt;const SCALE: u32&gt; · Decimal trait</text>
 
-  <rect x="56" y="158" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="181" class="bt">Dispatch / policy</text>
-  <text x="72" y="200" class="bd">const-folded match (width, SCALE) → one kernel · base / std / no_std</text>
+  <rect x="56" y="162" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="186" class="bt">Dispatch / policy</text>
+  <text x="72" y="204" class="pd">src/policy</text>
+  <text x="72" y="220" class="bd">match (width, SCALE) → one algorithm · base / std / no_std</text>
 
-  <rect x="56" y="236" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="259" class="bt">Kernels</text>
-  <text x="72" y="278" class="bd">src/algos — sqrt cbrt exp ln trig pow · Newton, Tang, AGM, series</text>
+  <rect x="56" y="246" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="270" class="bt">Algorithms</text>
+  <text x="72" y="288" class="pd">src/algos</text>
+  <text x="72" y="304" class="bd">sqrt cbrt exp ln trig pow · Newton, Tang, AGM, series</text>
 
-  <line x1="380" y1="134" x2="380" y2="158" class="conn" marker-end="url(#ar)"/>
-  <line x1="380" y1="212" x2="380" y2="236" class="conn" marker-end="url(#ar)"/>
+  <line x1="380" y1="148" x2="380" y2="162" class="conn" marker-end="url(#ar)"/>
+  <line x1="380" y1="232" x2="380" y2="246" class="conn" marker-end="url(#ar)"/>
 
-  <!-- composed on -->
-  <line x1="380" y1="290" x2="380" y2="318" class="conn" marker-end="url(#ar)"/>
-  <text x="392" y="308" class="edge">composed on</text>
+  <!-- composed on (centred in the gap between the layer bands) -->
+  <line x1="380" y1="332" x2="380" y2="372" class="conn" marker-end="url(#ar)"/>
+  <text x="392" y="356" class="edge">composed on</text>
 
   <!-- Integer layer -->
-  <rect x="16" y="320" width="728" height="330" rx="14" fill="#ecfdf3" stroke="#bbe7c9"/>
-  <text x="34" y="342" class="layer" fill="#15803d">INTEGER LAYER · src/int · src/wide_int</text>
+  <rect x="16" y="372" width="728" height="370" rx="14" fill="#ecfdf3" stroke="#bbe7c9"/>
+  <text x="34" y="394" class="layer" fill="#15803d">INTEGER LAYER</text>
 
-  <rect x="56" y="354" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="377" class="bt">Backends</text>
-  <text x="72" y="396" class="bd">i32 / i64 / i128  and  Int&lt;N&gt; / Uint&lt;N&gt; ([u64; N])  —  FixedInt trait</text>
+  <rect x="56" y="406" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="430" class="bt">Backends</text>
+  <text x="72" y="448" class="pi">src/int</text>
+  <text x="72" y="464" class="bd">i32 / i64 / i128 · Int&lt;N&gt; / Uint&lt;N&gt; ([u64; N]) · FixedInt trait</text>
 
-  <rect x="56" y="432" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="455" class="bt">Dispatch / policy</text>
-  <text x="72" y="474" class="bd">const-folded match (width / limb count) → one algorithm</text>
+  <rect x="56" y="490" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="514" class="bt">Dispatch / policy</text>
+  <text x="72" y="532" class="pi">src/int/policy</text>
+  <text x="72" y="548" class="bd">match (width / limb count) → one algorithm</text>
 
-  <rect x="56" y="510" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="533" class="bt">Algorithms</text>
-  <text x="72" y="552" class="bd">mul div sqr cube root_int isqrt · schoolbook / Karatsuba, MG / Burnikel–Ziegler</text>
+  <rect x="56" y="574" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="598" class="bt">Algorithms</text>
+  <text x="72" y="616" class="pi">src/int/algos</text>
+  <text x="72" y="632" class="bd">mul div root_int · schoolbook / Karatsuba · MG / Burnikel–Ziegler</text>
 
-  <rect x="56" y="588" width="648" height="54" rx="9" class="box"/>
-  <text x="72" y="611" class="bt">Limb primitives</text>
-  <text x="72" y="630" class="bd">per-width unrolled [u64; N] kernels</text>
+  <rect x="56" y="658" width="648" height="70" rx="9" class="box"/>
+  <text x="72" y="682" class="bt">Limb primitives</text>
+  <text x="72" y="700" class="pi">src/int/limbs</text>
+  <text x="72" y="716" class="bd">per-width [u64; N] limb routines</text>
 
-  <line x1="380" y1="408" x2="380" y2="432" class="conn" marker-end="url(#ar)"/>
-  <line x1="380" y1="486" x2="380" y2="510" class="conn" marker-end="url(#ar)"/>
-  <line x1="380" y1="564" x2="380" y2="588" class="conn" marker-end="url(#ar)"/>
+  <line x1="380" y1="476" x2="380" y2="490" class="conn" marker-end="url(#ar)"/>
+  <line x1="380" y1="560" x2="380" y2="574" class="conn" marker-end="url(#ar)"/>
+  <line x1="380" y1="644" x2="380" y2="658" class="conn" marker-end="url(#ar)"/>
 </svg>

@@ -37,7 +37,7 @@ layers compile to a single direct call per monomorphisation.
 ## A call through the layers
 
 `D57<20>::sqrt_strict()` traverses **both layers' dispatch + kernels**:
-the front-end dispatches on `(width, SCALE)` to one decimal kernel, which
+the front-end dispatches on `(width, SCALE)` to one decimal algorithm, which
 calls the integer layer — itself dispatching on width to a matched
 algorithm down to the limb primitives — and hands back a
 correctly-rounded raw value.
@@ -48,7 +48,7 @@ sequenceDiagram
   participant U as caller
   participant FE as D57 front-end
   participant DP as decimal policy
-  participant DK as sqrt kernel
+  participant DK as sqrt algorithm
   participant IP as int policy
   participant IK as int algorithm
   participant L as limb primitives
