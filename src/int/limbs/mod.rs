@@ -2601,18 +2601,27 @@ fn limbs_div_small_u64(limbs: &mut [u64], radix: u64) -> u64 {
     rem
 }
 
+/// `10^19` — the largest power of ten that fits in a `u64`
+/// (`10^19 < 2^64 < 10^20`). Dividing the magnitude by this constant
+/// peels off 19 decimal digits per full-width pass instead of one.
+const POW10_19: u64 = 10_000_000_000_000_000_000;
+/// Number of decimal digits emitted per `POW10_19` chunk.
+const POW10_19_DIGITS: usize = 19;
+
 /// Format a u64 limb slice into `buf` in the given radix (`2..=16`).
+///
+/// For the decimal radix this peels 19 digits per full-width divide by
+/// dividing the magnitude by `10^19` (the largest power of ten below
+/// `2^64`) and emitting the 19-digit `u64` remainder with cheap native
+/// arithmetic. The expensive `O(limbs)` full-width small-divide then
+/// runs once per 19 digits rather than once per digit. The other radixes
+/// (2 / 8 / 16) keep the one-divide-per-digit loop.
 pub(crate) fn limbs_fmt_into_u64<'a>(
     limbs: &[u64],
     radix: u64,
     lower: bool,
     buf: &'a mut [u8],
 ) -> &'a str {
-    let digits: &[u8] = if lower {
-        b"0123456789abcdef"
-    } else {
-        b"0123456789ABCDEF"
-    };
     if limbs_is_zero_u64(limbs) {
         let last = buf.len() - 1;
         buf[last] = b'0';
@@ -2622,6 +2631,40 @@ pub(crate) fn limbs_fmt_into_u64<'a>(
     work[..limbs.len()].copy_from_slice(limbs);
     let wl = limbs.len();
     let mut pos = buf.len();
+
+    if radix == 10 {
+        // Peel one 19-digit base-10^19 chunk per full-width divide.
+        loop {
+            let chunk = limbs_div_small_u64(&mut work[..wl], POW10_19);
+            if limbs_is_zero_u64(&work[..wl]) {
+                // Most-significant chunk: emit without leading-zero pad.
+                let mut v = chunk;
+                loop {
+                    pos -= 1;
+                    buf[pos] = b'0' + (v % 10) as u8;
+                    v /= 10;
+                    if v == 0 {
+                        break;
+                    }
+                }
+                break;
+            }
+            // Interior chunk: always exactly 19 zero-padded digits.
+            let mut v = chunk;
+            for _ in 0..POW10_19_DIGITS {
+                pos -= 1;
+                buf[pos] = b'0' + (v % 10) as u8;
+                v /= 10;
+            }
+        }
+        return core::str::from_utf8(&buf[pos..]).unwrap();
+    }
+
+    let digits: &[u8] = if lower {
+        b"0123456789abcdef"
+    } else {
+        b"0123456789ABCDEF"
+    };
     while !limbs_is_zero_u64(&work[..wl]) {
         let r = limbs_div_small_u64(&mut work[..wl], radix);
         pos -= 1;
