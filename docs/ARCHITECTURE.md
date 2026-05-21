@@ -14,34 +14,66 @@ every platform**, and the transcendental functions are computed with
 integer-only kernels that are **correctly rounded** — within 0.5 ULP of
 the true real value at the type's last representable place.
 
-## Two layers
+## Two layers, same shape
 
-```
-                      ┌─────────────────────────────────────────────┐
-   DECIMAL FRONT-ENDS │  D9  D18  D38  D57  D76 … D616  D924  D1232  │
-   (typed, scaled)    │      Dxx<const SCALE: u32>  +  Decimal trait │
-                      └───────────────┬─────────────────────────────┘
-                                      │  delegates per (width, SCALE)
-                      ┌───────────────▼─────────────────────────────┐
-   DISPATCH / POLICY  │  policy traits — const-folded match on       │
-   (compile-time)     │  (width, SCALE) → one kernel; base/std/no_std│
-                      └───────────────┬─────────────────────────────┘
-                                      │  calls named algorithms
-                      ┌───────────────▼─────────────────────────────┐
-   ALGORITHMS         │  src/algos — sqrt cbrt exp ln trig pow …     │
-   (kernels)          │  (Newton, Tang tables, AGM, series, …)       │
-                      └───────────────┬─────────────────────────────┘
-                                      │  composed on top of
-                      ┌───────────────▼─────────────────────────────┐
-   INTEGER BACKENDS   │  primitives (i32/i64/i128) and the           │
-   (width-generic)    │  const-generic  Int<N> / Uint<N>  ([u64; N]) │
-                      │  + reusable width-matched limb algorithms     │
-                      └─────────────────────────────────────────────┘
+The crate is **two layers that mirror each other** — a decimal layer on
+top of an integer layer. Each has the *same three tiers*: a typed
+surface, a **const-folded width dispatch**, and an **algorithm library**.
+A decimal kernel expresses its math in integer operations and never
+reaches into limb internals directly.
+
+```mermaid
+flowchart TB
+  subgraph DEC["Decimal layer — src/types · src/policy · src/algos"]
+    direction TB
+    D1["Front-ends: D9 … D1232 — Dxx, const SCALE + Decimal trait"]
+    D2["Dispatch: const-folded match on width, SCALE — base / std / no_std"]
+    D3["Kernels: sqrt cbrt exp ln trig pow — Newton, Tang, AGM, series"]
+    D1 --> D2 --> D3
+  end
+  subgraph INT["Integer layer — src/int · src/wide_int"]
+    direction TB
+    I1["Backends: i32 / i64 / i128 and Int / Uint over u64 limbs — FixedInt trait"]
+    I2["Dispatch: const-folded match on width / limb count"]
+    I3["Algorithms: mul div sqr cube root_int isqrt — schoolbook / Karatsuba, MG / Burnikel-Ziegler"]
+    I4["Limb primitives: per-width unrolled u64-array kernels"]
+    I1 --> I2 --> I3 --> I4
+  end
+  D3 -->|composed on| I1
 ```
 
-The decimal layer sits **on top of** the integer layer: a decimal kernel
-expresses its math in terms of integer operations and never reaches into
-limb internals directly.
+The key point the older sketch hid: **the integer layer is not just
+primitives — it has its own dispatch policy and algorithm library**,
+mirroring the decimal layer. A `FixedInt` method (`mul`, `div`,
+`root_int`, …) routes on the compile-time width / limb count to one
+matched algorithm — schoolbook below the Karatsuba threshold and the
+non-allocating Karatsuba above it, Möller–Granlund divide at the narrow
+tiers and Burnikel–Ziegler at the wide ones — and the compiler prunes
+the rest, exactly as the decimal policy keys on `(width, SCALE)`. Both
+layers compile to a single direct call per monomorphisation.
+
+## A call through the layers
+
+`D57<20>::sqrt_strict()` traverses both layers: the front-end dispatches
+on `(width, SCALE)` to one kernel, which composes integer operations
+from the layer below and hands back a correctly-rounded raw value.
+
+```mermaid
+sequenceDiagram
+  autonumber
+  participant U as caller
+  participant FE as D57 front-end
+  participant P as sqrt policy
+  participant K as sqrt kernel
+  participant I as Int192 limbs
+  U->>FE: sqrt_strict()
+  FE->>P: dispatch width 192, SCALE 20
+  P->>K: const-folded to lookup_d57_s20
+  K->>I: scale, isqrt, round-decision (limb ops)
+  I-->>K: integer root + residual
+  K-->>FE: correctly-rounded raw
+  FE-->>U: D57 value
+```
 
 ## Integer backends
 
