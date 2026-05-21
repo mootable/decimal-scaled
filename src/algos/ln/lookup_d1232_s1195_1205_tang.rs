@@ -112,8 +112,20 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> I
     if raw <= Int4096::ZERO {
         panic!("D1232::ln: argument must be positive");
     }
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
+    // Directed modes decide which side of a storage grid line the true
+    // value falls; near a grid line (e.g. ln(1 + 10^-SCALE), whose value
+    // sits ~SCALE digits below the unit) the working-scale approximation
+    // can land on the wrong side. Route through the shared Ziv escalation;
+    // nearest modes narrow once.
+    core::round_to_storage_directed(GUARD_NARROW, SCALE, mode, |guard| {
+        ln_value(core::to_work_w(raw, guard), SCALE + guard)
+    })
+}
+
+/// Tang-style `ln(v)` for a working-scale value `v_w` (`= x · 10^w`),
+/// returned at the same working scale `w`. Shared across guard widths so
+/// the Ziv escalation can re-evaluate at a wider scale.
+fn ln_value(v_w: core::W, w: u32) -> core::W {
     let one_w = core::one(w);
     let pow10_w = one_w;
     let two_w = one_w + one_w;
@@ -137,14 +149,13 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> I
 
     // Stage 2: pick i. Boundary `m = 1` short-circuits.
     if m_w == one_w {
-        let r = if k >= 0 {
+        return if k >= 0 {
             core::ln2(w) * core::lit(k as u128)
         } else if k < 0 {
             -(core::ln2(w) * core::lit((-k) as u128))
         } else {
             core::zero()
         };
-        return core::round_to_storage_with(r, w, SCALE, mode);
     }
 
     let i_raw = ((m_w - one_w) * core::lit(M as u128)) / one_w;
@@ -181,6 +192,5 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> I
     } else {
         -(core::ln2(w) * core::lit((-k) as u128))
     };
-    let r = k_ln2 + ln_m;
-    core::round_to_storage_with(r, w, SCALE, mode)
+    k_ln2 + ln_m
 }

@@ -346,8 +346,7 @@ fn render_per_width_summary(
 //               sqrt_strict, ln_strict, sin_strict }
 //   <width> ∈ { D38, D76, D307 }
 //
-// We label the HEAD tag as 0.4.3-dev in the rendered chart — the bench
-// was run against the unreleased 0.4.3 candidate source.
+// HEAD is the current released source (v0.4.4).
 // ------------------------------------------------------------------
 
 const HISTORY_VERSIONS: &[(&str, &str)] = &[
@@ -356,7 +355,8 @@ const HISTORY_VERSIONS: &[(&str, &str)] = &[
     ("v0.3.3", "v0.3.3"),
     ("v0.4.0", "v0.4.0"),
     ("v0.4.2", "v0.4.2"),
-    ("HEAD",   "0.4.3-dev"),
+    ("v0.4.3", "v0.4.3"),
+    ("HEAD",   "v0.4.4"),
 ];
 
 const HISTORY_GROUPS: &[(&str, &str)] = &[

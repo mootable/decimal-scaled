@@ -57,9 +57,9 @@ macro_rules! decl_trig_kernel {
         #[must_use]
         pub(crate) fn $sin_name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
-            let w = scale + core::GUARD;
-            let r = core::sin_fixed(core::to_work(raw), w);
-            core::round_to_storage_with(r, w, scale, mode)
+            core::round_to_storage_directed(core::GUARD, scale, mode, |guard| {
+                core::sin_fixed(core::to_work_w(raw, guard), scale + guard)
+            })
         }
 
         /// Wide-tier `cos_strict` kernel — standalone `cos_fixed`
@@ -71,9 +71,9 @@ macro_rules! decl_trig_kernel {
         #[must_use]
         pub(crate) fn $cos_name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
-            let w = scale + core::GUARD;
-            let r = core::cos_fixed(core::to_work(raw), w);
-            core::round_to_storage_with(r, w, scale, mode)
+            core::round_to_storage_directed(core::GUARD, scale, mode, |guard| {
+                core::cos_fixed(core::to_work_w(raw, guard), scale + guard)
+            })
         }
 
         /// Wide-tier `tan_strict` kernel. Panics at odd multiples of
@@ -119,9 +119,9 @@ macro_rules! decl_trig_kernel {
         #[must_use]
         pub(crate) fn $atan_name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
-            let w = scale + core::GUARD;
-            let r = core::atan_fixed(core::to_work(raw), w);
-            core::round_to_storage_with(r, w, scale, mode)
+            core::round_to_storage_directed(core::GUARD, scale, mode, |guard| {
+                core::atan_fixed(core::to_work_w(raw, guard), scale + guard)
+            })
         }
     };
 }

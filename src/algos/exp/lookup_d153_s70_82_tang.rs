@@ -228,10 +228,15 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> I
         let ten: Int512 = crate::wide_int::wide_cast::<u128, Int512>(10);
         return ten.pow(SCALE);
     }
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
-    let result = tang_exp_fixed(v_w, w);
-    core::round_to_storage_with(result, w, SCALE, mode)
+    // Directed modes decide which side of a storage grid line the true
+    // result falls; near a grid line the working-scale approximation can
+    // land on the wrong side, so route the narrowing through the shared
+    // Ziv escalation. `tang_exp_fixed` already widens internally for the
+    // large-|x| range-reduction budget, so the closure only varies the
+    // base guard. Nearest modes narrow once (no escalation).
+    core::round_to_storage_directed(GUARD_NARROW, SCALE, mode, |guard| {
+        tang_exp_fixed(core::to_work_w(raw, guard), SCALE + guard)
+    })
 }
 
 /// Narrow guard used by the Tang exp kernel — exposed so the

@@ -80,6 +80,27 @@ pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int2048, mode: RoundingMode) ->
 #[inline]
 #[must_use]
 pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int2048, mode: RoundingMode) -> Int2048 {
+    let zero = Int2048::from_i128(0);
+    if raw != zero {
+        // Small-argument linear band: tanh(x) = x − x³/3 + … , the cubic
+        // below one ULP yet strictly positive, so the true value sits
+        // just inside the grid line `raw`. No finite-precision exp path
+        // can resolve the sub-ULP cubic, so the directed result is the
+        // analytic decision below (nearest modes return `raw`).
+        let thresh_exp = SCALE - (SCALE + 2) / 3;
+        let thresh = Int2048::from_i128(10).pow(thresh_exp);
+        if raw.abs() <= thresh {
+            return crate::support::rounding::tiny_odd_compressing_directed(
+                raw,
+                zero,
+                Int2048::from_i128(1),
+                mode,
+            );
+        }
+    }
+    // General path: outside the tiny band the kernel error is far below
+    // half a storage ULP, so a single narrowing is correctly rounded for
+    // every mode.
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let (ex, enx) = ex_enx(v, w);

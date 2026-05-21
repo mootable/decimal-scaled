@@ -31,7 +31,7 @@ fn main() {
         // Argument varies in (0, ~2) to exercise both the reciprocal-
         // reduction branch (x > 1) and the direct-Taylor branch
         // (x < 1).
-        let x = Work::from_int(2) - Work::from_int(i as i128) / Work::from_int(1_000);
+        let x = Work::from_int(2) - Work::from_int(i as i64) / Work::from_int(1_000);
         acc = acc + x.atan_strict();
     }
     println!("{} iters; acc = {}", iters, black_box(acc));
