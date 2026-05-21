@@ -1653,27 +1653,37 @@ const SCRATCH_LIMBS_U64: usize = 288;
 /// limb-count at or above which [`limbs_mul_fast_u64`] routes through
 /// the non-allocating Karatsuba kernel instead of schoolbook.
 ///
-/// Tuned by the width-swept `mul` microbench (`benches/int_ops_micro.rs`,
-/// `mul_crossover` group) against the LLVM-unrolled schoolbook base
-/// case [`limbs_mul_u64`]. The one-level crossover — schoolbook vs a
-/// single Karatsuba split into `~L/2`-limb schoolbook leaves — was
-/// measured as:
+/// The dispatcher [`limbs_mul_fast_u64`] is the single site every
+/// equal-length wide multiply flows through (via the `Int<N>` widening
+/// product), so one threshold governs the crossover for every tier from
+/// one place. Set at **256 u64 limbs** — above the widest equal-length
+/// multiply the crate emits (D1232 storage = 64 limbs; the widest
+/// transcendental work-int is 192–256 limbs). At this setting every
+/// shipped tier base-cases to the LLVM-unrolled schoolbook
+/// [`limbs_mul_u64`], so the kernel is reachable and correct without
+/// changing the product behaviour of any shipped width.
 ///
-/// | L (limbs) |  8  |  12 |  16 |  24 |  32 |  48 |  64 |
-/// |-----------|-----|-----|-----|-----|-----|-----|-----|
-/// | kara/school | 3.5x| 2.2x| 1.7x| 1.25x| 1.10x| 1.03x| 0.94x |
+/// Why above the shipped widths: a focused u64 microbench
+/// (`examples/karabench_u64.rs`) of the non-alloc kernel against
+/// schoolbook at the wide-tier storage widths — L = 24 (D462), 32
+/// (D616), 48 (D924), 64 (D1232) — shows schoolbook at break-even or
+/// faster across the whole band, at every recursion base case tried
+/// (8…32). The asymptotic 3·(n/2)² limb-mul saving does not yet outrun
+/// the recombine (carve + zero + add/sub) overhead because the
+/// schoolbook leaf keeps both `u64 × u64 → u128` multiplier ports
+/// saturated. The crossover lands beyond the widest shipped multiply.
 ///
-/// Karatsuba first wins at **L = 64** (≈6%); L = 48 is break-even and
-/// below it schoolbook wins clearly. The crate's schoolbook is
-/// LLVM-unrolled with a low constant factor, so the u64-base crossover
-/// lands above the 20-32 band typical of heap-backed peer crates. The
-/// threshold is set at the measured crossover; only the widest tiers
-/// (Int4096+, up to Int16384 = 256 limbs) exceed it.
+/// NEEDS-BENCH: the 256 value is the spec/architecture default, not a
+/// tuned crossover. It must be re-swept on the pinned GHA bench
+/// (`benches/int_ops_micro.rs`, `mul_crossover`, plus the per-tier wide
+/// `mul` cells) before being lowered to engage any shipped tier; the
+/// local microbench above is unpinned and noisy and only establishes
+/// that no shipped width is a clear win today.
 ///
 /// Must be `>= 4`: the recursion's z1 sum product runs on `⌈n/2⌉ + 1`
 /// limbs, which only strictly shrinks below `n` once `n >= 4`, so a
 /// threshold below 4 would fail to terminate.
-pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 64;
+pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 256;
 
 /// Stack scratch for the non-allocating Karatsuba kernel, in u64 limbs.
 ///

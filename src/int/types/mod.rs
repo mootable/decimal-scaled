@@ -23,7 +23,7 @@ pub use traits::{FixedInt, FixedIntConvert};
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
-    limbs_mul_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
+    limbs_mul_fast_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
 use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
@@ -1489,8 +1489,14 @@ impl<const N: usize> Int<N> {
         let b = *rhs.unsigned_abs().as_limbs();
         // Full product spans 2·N limbs; the shared 288-limb magnitude
         // staging width (covers Int16384) bounds every instantiation.
+        // Route through the equal-length multiply dispatcher: both
+        // operands are `[u64; N]`, so this is the single site every wide
+        // tier's full product flows through. The dispatcher base-cases to
+        // schoolbook below `KARATSUBA_THRESHOLD_U64` (every shipped tier)
+        // and engages the non-allocating Karatsuba kernel at or above it,
+        // so one call lifts every width that crosses the threshold.
         let mut prod = [0u64; 288];
-        limbs_mul_u64(&a, &b, &mut prod[..2 * N]);
+        limbs_mul_fast_u64(&a, &b, &mut prod[..2 * N]);
         W::from_mag_sign(&prod, negative)
     }
 }
