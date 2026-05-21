@@ -30,11 +30,12 @@ LIBS = [
     "dashu-float",
     "decimal-rs",
     "bigdecimal",
+    "g_math",
 ]
 
 # D-type -> canonical scale, matches Width::canonical_scale() and the
 # scale column in the TSVs.
-SCALE = {"D38": 19, "D76": 35}
+SCALE = {"D38": 19, "D76": 35, "D307": 150}
 
 
 def file_stem(name):
@@ -149,7 +150,7 @@ def main():
     if not os.path.isdir(args.dir):
         sys.exit(f"results dir not found: {args.dir}")
 
-    widths = [args.width] if args.width else ["D38", "D76"]
+    widths = [args.width] if args.width else ["D38", "D76", "D307"]
     out = sys.stdout
     out.reconfigure(encoding="utf-8")
     for w in widths:

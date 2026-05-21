@@ -41,7 +41,8 @@ use std::path::PathBuf;
 use decimal_scaled::RoundingMode;
 use subject_ds::DecimalScaledSubject;
 use subjects_peers::{
-    BigDecimalSubject, DashuSubject, DecimalRsSubject, FastnumSubject, RustDecimalSubject,
+    BigDecimalSubject, DashuSubject, DecimalRsSubject, FastnumSubject, GMathSubject,
+    RustDecimalSubject,
 };
 
 /// Cap on golden inputs scored per cell. Accuracy, not timing — a couple
@@ -55,9 +56,10 @@ const SAMPLE_CAP: usize = 200;
 const DRIVE_MODE: RoundingMode = RoundingMode::HalfToEven;
 
 /// The widths swept. The transcendental golden tables embedded in the
-/// harness cover D38 (full surface) and a D76 subset; the table renders
-/// the cells that have an oracle.
-const WIDTHS: [Width; 2] = [Width::D38, Width::D76];
+/// harness cover D38 (full surface), a D76 subset, and D307<150> (the
+/// deep-scale tier, full surface); the table renders the cells that have
+/// an oracle.
+const WIDTHS: [Width; 3] = [Width::D38, Width::D76, Width::D307];
 
 fn subjects() -> Vec<Box<dyn PrecisionSubject>> {
     vec![
@@ -67,6 +69,7 @@ fn subjects() -> Vec<Box<dyn PrecisionSubject>> {
         Box::new(DashuSubject),
         Box::new(DecimalRsSubject),
         Box::new(BigDecimalSubject),
+        Box::new(GMathSubject),
     ]
 }
 
@@ -224,6 +227,7 @@ fn render_from_files(dir: &PathBuf, width: Width) -> String {
         "dashu-float",
         "decimal-rs",
         "bigdecimal",
+        "g_math",
     ];
     for lib in libs {
         let path = dir.join(format!("{}.tsv", file_stem(lib)));

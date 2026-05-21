@@ -989,6 +989,33 @@ golden_tables! {
     "cos"   @ "d76_s35" => "cos_d76_s35.txt",
     "tan"   @ "d76_s35" => "tan_d76_s35.txt",
     "atan"  @ "d76_s35" => "atan_d76_s35.txt",
+    // D307<150> — the deep-scale reference tier. Full transcendental
+    // surface, the same mpmath golden roster `tests/ulp_strict_golden.rs`
+    // proves the kernels correctly-rounded against. Lets the comparative
+    // shootout render a deep-scale row where every fixed-precision peer
+    // is out of range.
+    "sqrt"  @ "d307_s150" => "sqrt_d307_s150.txt",
+    "cbrt"  @ "d307_s150" => "cbrt_d307_s150.txt",
+    "exp"   @ "d307_s150" => "exp_d307_s150.txt",
+    "ln"    @ "d307_s150" => "ln_d307_s150.txt",
+    "log2"  @ "d307_s150" => "log2_d307_s150.txt",
+    "log10" @ "d307_s150" => "log10_d307_s150.txt",
+    "exp2"  @ "d307_s150" => "exp2_d307_s150.txt",
+    "sin"   @ "d307_s150" => "sin_d307_s150.txt",
+    "cos"   @ "d307_s150" => "cos_d307_s150.txt",
+    "tan"   @ "d307_s150" => "tan_d307_s150.txt",
+    "atan"  @ "d307_s150" => "atan_d307_s150.txt",
+    "asin"  @ "d307_s150" => "asin_d307_s150.txt",
+    "acos"  @ "d307_s150" => "acos_d307_s150.txt",
+    "sinh"  @ "d307_s150" => "sinh_d307_s150.txt",
+    "cosh"  @ "d307_s150" => "cosh_d307_s150.txt",
+    "tanh"  @ "d307_s150" => "tanh_d307_s150.txt",
+    "asinh" @ "d307_s150" => "asinh_d307_s150.txt",
+    "acosh" @ "d307_s150" => "acosh_d307_s150.txt",
+    "atanh" @ "d307_s150" => "atanh_d307_s150.txt",
+    "log"   @ "d307_s150" => "log_d307_s150.txt",
+    "atan2" @ "d307_s150" => "atan2_d307_s150.txt",
+    "powf"  @ "d307_s150" => "powf_d307_s150.txt",
 }
 
 // ════════════════════════════════════════════════════════════════════
