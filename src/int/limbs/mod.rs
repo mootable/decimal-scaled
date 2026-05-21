@@ -2632,6 +2632,9 @@ pub(crate) const fn scmp_u64(a_neg: bool, a: &[u64], b_neg: bool, b: &[u64]) -> 
 // ─────────────────────────────────────────────────────────────────────
 
 mod macros;
+// Retained only until the macro-removal step; no longer invoked now
+// that every width is a const-generic `Int<N>` alias.
+#[allow(unused_imports)]
 use macros::decl_wide_int;
 
 
@@ -2841,19 +2844,18 @@ pub(crate) trait WideStorage:
 #[allow(unused_imports)]
 pub use crate::int::types::{
     Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
+    Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
     Uint192, Uint256, Uint384, Uint512, Uint768, Uint1024, Uint1536, Uint2048,
+    Uint3072, Uint4096, Uint6144, Uint8192, Uint12288, Uint16384,
 };
-
-decl_wide_int!(Uint3072, Int3072, 48, 96, 49);
-decl_wide_int!(Uint4096, Int4096, 64, 128, 65);
-decl_wide_int!(Uint6144, Int6144, 96, 192, 97);
-decl_wide_int!(Uint8192, Int8192, 128, 256, 129);
-decl_wide_int!(Uint12288, Int12288, 192, 384, 193);
-decl_wide_int!(Uint16384, Int16384, 256, 512, 257);
 
 /// Implements `WideStorage` for one signed wide integer type, by
 /// delegating each method to the inherent items the
 /// `decl_wide_int!` macro already emits.
+///
+/// No longer invoked (every width is a const-generic `Int<N>`); kept
+/// only until the macro-removal step.
+#[allow(unused_macros)]
 macro_rules! impl_wide_storage {
     ($($S:ty),* $(,)?) => {$(
         impl WideStorage for $S {
@@ -2908,12 +2910,11 @@ macro_rules! impl_wide_storage {
     )*};
 }
 
-// Int192…Int2048 are now const-generic `Int<N>`; their `WideStorage`
-// impl is the blanket one in `int::types::wide_compat`, so they are
-// omitted here.
-impl_wide_storage!(
-    Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
-);
+// Every width is now the const-generic `Int<N>`; its `WideStorage`
+// impl is the blanket one in `int::types::wide_compat`. The
+// `impl_wide_storage!` macro and the `decl_wide_int!` generator are
+// retained only until the macro-removal step and are no longer
+// invoked.
 
 // Short aliases used by the decimal-tier macros (replacing the former
 // `crate::wide` re-export shim). The signed alias is exposed at each

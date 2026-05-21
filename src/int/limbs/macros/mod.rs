@@ -21,6 +21,7 @@
 ///   `[u64; $L]` little-endian limbs.
 /// - `$D` — doubled u64 limb count (`2 * $L`); sizes the widening
 ///   multiply / divide intermediate buffer to `[u64; $D]`.
+#[allow(unused_macros)]
 macro_rules! decl_wide_int {
     ($U:ident, $S:ident, $L:tt, $D:tt, $LP1:tt) => {
         // ── Unsigned ──────────────────────────────────────────────────
