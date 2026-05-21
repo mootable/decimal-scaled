@@ -84,3 +84,11 @@ accepting mixed-width, mixed-`SCALE` operands.
 | Term | Expansion |
 |------|-----------|
 | **IEEE 754** | The IEEE [floating-point standard](https://en.wikipedia.org/wiki/IEEE_754). This crate is decimal fixed-point — not an IEEE 754 float type — but its `RoundingMode` set and the `HalfToEven` default mirror IEEE 754's rounding conventions. |
+
+Recognised standards bodies this project will cite where relevant:
+**IEEE** (Institute of Electrical and Electronics Engineers), **ANSI**
+(American National Standards Institute), **ISO/IEC** (International
+Organization for Standardization / International Electrotechnical
+Commission), **BSI** (British Standards Institution), **CEN** (European
+Committee for Standardization), and **WSC** (World Standards
+Cooperation).
