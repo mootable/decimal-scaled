@@ -125,29 +125,43 @@ figures and tables regenerated from a **fresh GitHub-Actions sweep**
 numbers).
 
 ```sh
-# 1. Trigger the release sweep on the release branch (fans out to
-#    bench-full full_matrix + bench-full lib_cmp + bench-history):
+# Trigger the release sweep on the release branch (fans out to
+# bench-full full_matrix + bench-full lib_cmp + bench-history):
 gh workflow run bench-all.yml --ref release/<version>
 
-# 2. Wait for the bench-full matrix runs to finish (the wide tiers are
-#    slow, ~40 min). Poll with `gh run list`.
+# Then just wait. Poll with `gh run list`. The wide tiers are slow
+# (~40 min); the lib_cmp run finishes sooner.
+```
 
-# 3. Download every per-width Criterion artifact from the run into one
-#    directory (each unzips to a `criterion-full_matrix-D<N>/` subdir),
-#    then regenerate from the JSON — no stdout logs, no manual fill:
-gh run download <run-id> --dir bench-artifacts   # criterion-full_matrix-D*/ subdirs
+The sweep is self-refreshing. Once every per-width cell of a
+`bench-full` run finishes, that workflow's `regenerate` job collects
+the run's own Criterion artifacts and commits the refreshed docs
+straight back to the swept release branch — no manual download, ingest,
+or chart step:
+
+- The **full_matrix** run regenerates `docs/benchmarks.md` §1–§3 via
+  `full_matrix_ingest.py --fill` (reads `docs/benchmarks.md.draft`,
+  pulls each cell's median from `*/new/estimates.json`, picks the
+  per-row natural unit, bolds the row winner). A missing leaf renders
+  as `—` and is listed in the job log — values are never fabricated.
+- The **lib_cmp** run regenerates the §5 figures under
+  `docs/figures/library_comparison/` via `lib_cmp_ingest.py` +
+  `cargo run --release --example chart_gen`.
+
+Each run pushes its own `docs(benchmarks): regenerate from <family>
+sweep` commit (author `github-actions[bot]`, no attribution trailer)
+to the release branch. Pull the branch after both runs land. The §4
+prose and §5 precision tables are still maintained by hand as below.
+
+If a run's regenerate job is skipped or you need a manual rebuild, the
+same steps run locally against a downloaded artifact set:
+
+```sh
+gh run download <run-id> --dir bench-artifacts   # criterion-*-D*/ subdirs
 python scripts/full_matrix_ingest.py \
     --artifacts bench-artifacts --fill            # criterion JSON -> docs/benchmarks.md §1–§3
 cargo run --release --example chart_gen           # §5 figures -> docs/figures/library_comparison/*.png
 ```
-
-`full_matrix_ingest.py --fill` reads `docs/benchmarks.md.draft`, pulls
-each cell's median straight from `*/new/estimates.json`, picks the
-per-row natural unit, bolds the row winner, and writes
-`docs/benchmarks.md` §1 (arithmetic) / §2 (fast transcendentals) /
-§3 (strict transcendentals). A missing leaf renders as `—` and is
-listed on stderr — values are never fabricated. The §4 prose and
-§5 figures/precision tables are still maintained as below.
 
 - Update the "Bench machine … vX.Y.Z full_matrix sweep" provenance note
   in `benchmarks.md` to the new version and date.
