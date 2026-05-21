@@ -1,6 +1,6 @@
 ---
 name: decimal-scaled
-description: Invoke when working with the `decimal-scaled` crate (const-generic base-10 fixed-point decimals D9/D18/D38/D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232 with 0.5-ULP correctly-rounded integer-only transcendentals). Covers when to pick the crate over alternatives, picking the right width and SCALE, construction (`d38!` / FromStr / `from_bits` / `from_int`), strict-vs-fast routing, rounding modes via `*_with(mode)`, the `Decimal` trait for width-generic code, the `DecimalConstants` trait for pi/tau/e/etc, and common anti-patterns. Apply when the user writes Rust code involving currency, prices, measurements, scientific values that must round-trip exactly through human-readable decimals, or anywhere they need deterministic bit-identical arithmetic across platforms.
+description: Invoke when working with the `decimal-scaled` crate (const-generic base-10 fixed-point decimals D18/D38/D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232 with 0.5-ULP correctly-rounded integer-only transcendentals). Covers when to pick the crate over alternatives, picking the right width and SCALE, construction (`d38!` / FromStr / `from_bits` / `from_int`), strict-vs-fast routing, rounding modes via `*_with(mode)`, the `Decimal` trait for width-generic code, the `DecimalConstants` trait for pi/tau/e/etc, and common anti-patterns. Apply when the user writes Rust code involving currency, prices, measurements, scientific values that must round-trip exactly through human-readable decimals, or anywhere they need deterministic bit-identical arithmetic across platforms.
 ---
 
 # `decimal-scaled` - agent usage guide
@@ -15,7 +15,6 @@ The number in each `D<N>` type name is **the maximum number of all-nines base-10
 
 | Type       | Storage                | `MAX_SCALE` | Required feature       |
 |------------|------------------------|------------:|------------------------|
-| `D9<S>`    | `i32`                  |    8        | always available       |
 | `D18<S>`   | `i64`                  |   17        | always available       |
 | `D38<S>`   | `i128`                 |   37        | always available       |
 | `D57<S>`   | in-tree `Int192`       |   56        | `d57`  / `wide`        |
@@ -49,7 +48,7 @@ The half-width tiers (`D57`, `D115`, `D230`, `D462`, `D924`) fill the cost gap b
 ## Picking a width
 
 - **`D38<S>`** is the default. 38 digits handles every reasonable money-or-measurement scenario with comfortable headroom.
-- **`D9<S>` / `D18<S>`** when you need compact storage and your values fit (e.g. cents in a single tax-line table - `D18<2>` covers ±9.2×10¹⁶).
+- **`D18<S>`** when you need compact storage and your values fit (e.g. cents in a single tax-line table - `D18<2>` covers ±9.2×10¹⁶).
 - **`D57` … `D307`** for scientific work needing > 38 digits. The wide tier is opt-in via the matching Cargo feature; widening (`From`) is free, narrowing (`TryFrom`) is fallible. Half-width siblings (`D57`, `D115`, `D230`) let you size storage to your precision budget without paying for an unnecessary power-of-two jump.
 - **`D462` / `D616`** (extra-wide, `x-wide`) for cryptographic or scientific work that needs > 307 digits but not the full xx-wide compile cost.
 - **`D924` / `D1232`** (xx-wide) is research-grade — `D1232<1231>` transcendentals approach a second per call.
@@ -91,7 +90,7 @@ let f = D38s12::from_f64(1.5);
 
 ## Per-width macros and per-scale wrappers
 
-Every width has a matching macro: `d9!`, `d18!`, `d38!`, `d57!`, `d76!`, `d115!`, `d153!`, `d230!`, `d307!`, `d462!`, `d616!`, `d924!`, `d1232!`. Per-scale wrappers (e.g. `d38s12!`, `d18s6!`) skip the `, scale N` qualifier:
+Every width has a matching macro: `d18!`, `d38!`, `d57!`, `d76!`, `d115!`, `d153!`, `d230!`, `d307!`, `d462!`, `d616!`, `d924!`, `d1232!`. Per-scale wrappers (e.g. `d38s12!`, `d18s6!`) skip the `, scale N` qualifier:
 
 ```rust
 use decimal_scaled::{d38s12, d18s2};
@@ -200,7 +199,7 @@ Most call sites still bound on `Decimal`. Use the split traits when a generic on
 
 **Out of scope for the trait** (use the concrete type):
 - `rescale<TARGET>` - needs a const-generic method parameter,
-- `from_int` - source-integer type varies per width (`i32` / `i64` / `i128` / `Int192` / …),
+- `from_int` - source-integer type varies per width (`i64` / `i128` / `Int192` / …),
 - transcendentals - feature-gated, on `DecimalTranscendental`.
 
 For runtime polymorphism, enable the `dyn` feature: the object-safe `DynDecimal` trait + the `DecimalWidth` enum erase the storage type at the cost of a heap allocation per binary op.
@@ -240,7 +239,7 @@ The string form is bit-faithful and round-trips exactly. Floats are rejected by 
 | `alloc` | ✓ | String formatting / parsing |
 | `serde` | ✓ | `Serialize` / `Deserialize` on every width |
 | `strict` | ✓ | Plain `*` dispatches to integer-only `*_strict`; `no_std`-compatible |
-| `macros` | ✗ | Enables `d9!` … `d1232!` proc-macros + per-scale wrappers |
+| `macros` | ✗ | Enables `d18!` … `d1232!` proc-macros + per-scale wrappers |
 | `fast` | ✗ | Forces plain `*` to dispatch to f64-bridge `*_fast` (overridden by `strict` when both are set) |
 | `dyn` | ✗ | Object-safe `DynDecimal` trait + `DecimalWidth` enum (heap boxing per op) |
 | `wide` | ✗ | Enables D57 / D76 / D115 / D153 / D230 / D307 (individual `d57` … `d307` flags also exist) |

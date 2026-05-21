@@ -422,7 +422,7 @@ Taylor series for `atan` converges in `~p_bits / (2l)` terms.
 
 The halving count is chosen per working scale `w`:
 
-- `w < 60` → 5 halvings (D38 / D9 / D18 strict path)
+- `w < 60` → 5 halvings (D38 / D18 strict path)
 - `60 ≤ w < 110` → 6 halvings (D57 / D76 / light D115)
 - `w ≥ 110` → 7 halvings (D115 / D153 / D230 / D307 / D462 / D616 /
   D924 / D1232)

@@ -14,7 +14,7 @@ The contract is proved at `delta == 0` storage LSB against a
 high-precision [mpmath](https://mpmath.org/) oracle, for **every**
 [`RoundingMode`](../src/support/rounding.rs) — `HalfToEven`,
 `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling` —
-across **all thirteen** decimal widths at their design-target scale.
+across **all twelve** decimal widths at their design-target scale.
 
 There are four independent layers, each catching a different
 failure mode.
@@ -76,8 +76,8 @@ covers all modes, no per-mode tables — and asserts the kernel's
 `floor_raw` / `cls` at `max(700, 2·SCALE + 64)` decimal digits of
 working precision (see "Oracle working precision" below).
 
-Tiers covered: **all thirteen** decimal widths at their design-target
-SCALE — D9<4>, D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>,
+Tiers covered: **all twelve** decimal widths at their design-target
+SCALE — D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>,
 D230<115>, D307<150>, D462<230>, D616<308>, D924<460>, D1232<615>.
 Functions: ln, exp, sin, cos, tan, atan, sqrt, cbrt.
 
@@ -123,7 +123,7 @@ Regenerate when:
 - adding a new function to `FUNCS` in the generator
 - adding a new decimal width to the `TIERS` table
 - increasing case counts (commit footprint budget is ≤ 5 MB; current
-  generation lands ~1.5 MB across all thirteen widths)
+  generation lands ~1.5 MB across all twelve widths)
 
 Do **not** regenerate to "fix" a kernel that fails the gate — the
 oracle is the source of truth, the kernel is what's wrong. The
@@ -232,7 +232,7 @@ tolerance.
 
 ## What isn't covered yet
 
-The golden suite now covers **all thirteen** widths × **every**
+The golden suite now covers **all twelve** widths × **every**
 `RoundingMode` at the design-target SCALE. Remaining gaps:
 
 - **Higher-derivative function families** — `powf`,

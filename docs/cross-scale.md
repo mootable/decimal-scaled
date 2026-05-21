@@ -26,9 +26,9 @@ The receiver type names the destination width and SCALE; the
 operands may be any width less-than-or-equal to it and any SCALE.
 
 ```rust
-use decimal_scaled::{D9s4, D18s6, D38, D38s12};
+use decimal_scaled::{D18s4, D18s6, D38, D38s12};
 
-let a = D9s4::from_int(5);          // D9<4>
+let a = D18s4::from_int(5);         // D18<4>
 let b = D18s6::from_int(7);         // D18<6>
 
 // Target = D38<12>. Operands widen to i128, rescale to SCALE=12,
@@ -113,7 +113,7 @@ For the common case of comparing across widths at the **same**
 `SCALE`, the operator overloads work directly:
 
 ```rust
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 
 let small: D18<12> = D18::<12>::from_int(5);
 let big:   D38<12> = D38::<12>::from_int(5);

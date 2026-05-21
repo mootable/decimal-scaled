@@ -52,7 +52,7 @@ Why a dual API:
   bridge by a downstream crate flipping a feature. The same applies in
   reverse: `*_fast` always reaches the f64 bridge.
 
-The `*_strict` surface covers, on `D38` (and on `D9` / `D18` by
+The `*_strict` surface covers, on `D38` (and on `D18` by
 widen-compute-narrow delegation):
 
 | Group | `*_strict` methods |

@@ -1,6 +1,6 @@
 # The width family
 
-`decimal-scaled` ships <!-- BEGIN GENERATED:widths:count -->thirteen storage widths<!-- END GENERATED:widths:count -->. They all share the same
+`decimal-scaled` ships <!-- BEGIN GENERATED:widths:count -->twelve storage widths<!-- END GENERATED:widths:count -->. They all share the same
 API shape — the same methods, the same const generic `SCALE`, the same
 `Decimal` trait impl — and differ only in the size of the backing
 integer, which sets the range and the maximum usable scale.
@@ -15,7 +15,6 @@ overall scaffold:
 <!-- BEGIN GENERATED:widths:table -->
 | Type | Constructor macro | Underlying signed integer | `MAX_SCALE` | Max value at SCALE 0 | Required feature |
 |---|---|---|---|---|---|
-| `D9<S>` | `d9!` | `i32` (32 bits) | 8 | ±2.1 × 10⁹ | always available |
 | `D18<S>` | `d18!` | `i64` (64 bits) | 17 | ±9.2 × 10¹⁸ | always available |
 | `D38<S>` | `d38!` | `i128` (128 bits) | 37 | ±1.7 × 10³⁸ | always available |
 | `D57<S>` | `d57!` | `Int192` (192 bits) | 56 | ±3.1 × 10⁵⁷ | `d57` / `wide` |
@@ -47,7 +46,7 @@ The range at a given scale is roughly `storage_max / 10^SCALE`. Pick
 the *narrowest* width whose range covers your values at the scale you
 need — narrower storage is faster and smaller.
 
-- **`D9` / `D18`** — native integer storage, single-instruction add /
+- **`D18`** — native integer storage, single-instruction add /
   sub / compare. `D18` at `SCALE = 9` covers ±9.2 × 10⁹ with
   nanosecond-grade fractional precision.
 - **`D38`** — the default choice. At `SCALE = 12` the range is roughly
@@ -73,7 +72,7 @@ need — narrower storage is faster and smaller.
 Each width exposes curated `…s<N>` aliases for common scales:
 
 ```rust
-use decimal_scaled::{D9s2, D18s9, D38s12};
+use decimal_scaled::{D18s9, D38s12};
 # #[cfg(feature = "wide")]
 use decimal_scaled::{D76s35, D153s75, D307s150};
 ```
@@ -147,7 +146,7 @@ let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 ```
 
 Every adjacent pair in the comprehensive ladder
-(D9 → D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
+(D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
 D462 → D616 → D924 → D1232) has a `From` / `TryFrom` pair plus
 `.widen()` / `.narrow()` helper methods that step **one rung**
 in either direction. Chain them to skip multiple rungs, or use

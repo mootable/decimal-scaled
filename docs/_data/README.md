@@ -44,8 +44,8 @@ match their sources.
 | Source | Region key | Target | What it fills |
 |---|---|---|---|
 | `Cargo.toml` `[package] version` | `install:dependency` | `README.md` | the install `[dependencies]` snippet, version pinned to the current `major.minor` |
-| `docs/_data/tiers.json` | `widths:table` | `docs/widths.md` | the full thirteen-row tier table; `MAX_SCALE` is derived as `digits − 1`, so it can never drift from the type name |
-| `docs/_data/tiers.json` | `widths:count` | `docs/widths.md` | the spelled-out tier count in the lede (`thirteen storage widths`) |
+| `docs/_data/tiers.json` | `widths:table` | `docs/widths.md` | the full twelve-row tier table; `MAX_SCALE` is derived as `digits − 1`, so it can never drift from the type name |
+| `docs/_data/tiers.json` | `widths:count` | `docs/widths.md` | the spelled-out tier count in the lede (`twelve storage widths`) |
 
 ### Precision (LSBε) tables
 

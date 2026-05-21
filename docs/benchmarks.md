@@ -70,7 +70,6 @@ exercising.
 
 | width | storage | widening | `÷ 10^SCALE` kernel |
 |---|---|---|---|
-| D9 | `i32` | `i64` | hardware `i64 / i64` |
 | D18 | `i64` | `i128` | hardware `i128 / i128` |
 | D38 | `i128` | hand-rolled 256-bit `Fixed` | **Möller–Granlund 2011** magic-multiply for `÷ 10^SCALE`; `mg_divide` |
 | D57 | `Int192` (3×u64) | `Int384` | MG magic-multiply lifted to limb arithmetic |
@@ -88,7 +87,7 @@ For the strict transcendentals:
 
 | width | work integer | guard | algorithm |
 |---|---|---|---|
-| D9 / D18 | delegates to D38 | - | (see D38 row) |
+| D18 | delegates to D38 | - | (see D38 row) |
 | D38 | `d_w128_kernels::Fixed` (256-bit sign-magnitude) | 60 | artanh series for `ln`, range-reduced Taylor for `exp`, Cody–Waite for `sin`/`cos`, Machin for π, integer `isqrt` for `sqrt` |
 | D57 | `Int512` | 30 | same kernel family as D76, lifted to the half-width work integer |
 | D76 | `Int1024` | 30 | rounded `mul` / `div` (half-to-even per op); same series as D38 lifted to the limb-array core |
@@ -128,7 +127,7 @@ Alternate divide paths:
 | `×` / `÷` | rounded per `DEFAULT_ROUNDING_MODE` (HalfToEven default), within 0.5 ULP at storage scale |
 | `*_strict` transcendentals - D38 | within **0.5 ULP** at storage; correctly rounded under HalfToEven, deterministic across platforms, `no_std`-compatible |
 | `*_strict` transcendentals - D76 / D153 / D307 | within **0.5 ULP** at storage at typical scales; at deepest scales the rounded-intermediate budget tightens - see `ALGORITHMS.md` |
-| `*` (lossy) transcendentals - D9 / D18 / D38 | f64-bridge: ~16 decimal digits, platform-libm-dependent, **not** correctly rounded |
+| `*` (lossy) transcendentals - D18 / D38 | f64-bridge: ~16 decimal digits, platform-libm-dependent, **not** correctly rounded |
 | `*` plain transcendental name - wide tiers (D76 / D153 / D307) | with `strict` feature, dispatches to `*_strict`; with `fast` or `not(strict)`, the f64-bridge `*_fast` is used. Both `*_strict` and `*_fast` named methods are always available regardless of the active mode |
 
 ---
@@ -185,7 +184,7 @@ native mode:
 
 `decimal-scaled` is `0 (0)` across the entire surface — correctly
 rounded on every function, and that holds for all six rounding modes
-and all thirteen widths (`D9` … `D1232`). `fastnum` is the closest
+and all twelve widths (`D18` … `D1232`). `fastnum` is the closest
 peer: correctly rounded almost everywhere, failing only `tan`
 (67 LSBε) and `asinh` (58 LSBε) at this scale. `dashu-float` is
 correctly rounded on the `exp` / `ln` / `sqrt` surface it exposes.
@@ -272,7 +271,7 @@ at every public type×scale combo. Six ops: add / sub / mul / div
 > **0.4.4 sweep refresh.** Tables below come from the latest
 > full_matrix sweep on GitHub-hosted `ubuntu-latest` standard
 > runners.
-> Narrow-tier ps-scale cells (D9 / D18 / D38 add / sub / neg)
+> Narrow-tier ps-scale cells (D18 / D38 add / sub / neg)
 > sit near the runner's resolution floor and carry ±20 %
 > pipeline / steal-budget jitter; wide-tier ns+ values are
 > reliable. See the run-conditions note at the bottom of this page
@@ -435,7 +434,7 @@ For anything where last-digit accuracy or cross-platform
 determinism matters, stay on the default `*_strict` path.
 
 The `*_fast` methods route through `f64::ln` / `f64::sin` / etc.
-Available at every width - narrow tiers (D9 / D18 / D38) and wide
+Available at every width - narrow tiers (D18 / D38) and wide
 tiers (D76 / D153 / D307) all expose them - but only useful below
 D38 where the f64 mantissa carries enough precision; on wide
 tiers the result collapses to ~16 decimal digits regardless of
@@ -456,8 +455,8 @@ rounded; results vary with platform libm.
 | sin  | **43.5 ns** | 226 ns | 2,955 ns |
 | sqrt | **31.0 ns** | 197 ns |   658 ns |
 
-D9 / D18 `*_fast` aren't separately benched: they share the D38
-f64-bridge kernel through `to_f64` / `from_f64` and incur only a
+D18 `*_fast` isn't separately benched: it shares the D38
+f64-bridge kernel through `to_f64` / `from_f64` and incurs only a
 sub-ns round-trip on top of the D38 numbers above.
 
 `rust_decimal`'s transcendentals are software-implemented (no f64
@@ -548,7 +547,7 @@ platforms, `no_std`-compatible, 0.5 ULP at storage.
 > exactly at MAX/2 (e.g. D57's slot is at SCALE 20, not 28).
 
 > **Sweep — narrow-tier caveat.** The narrow-tier
-> (D9 / D18 / D38) values below were recorded on shared GHA
+> (D18 / D38) values below were recorded on shared GHA
 > standard runners over a multi-hour sweep window. Cold-machine
 > micro-benches of the same code typically measure several ×
 > faster; treat the absolute µs values here as an upper-bound
@@ -1122,7 +1121,7 @@ At 1024 bits the native back-end takes div / rem on its own
 
 ## Roadmap
 
-`decimal-scaled` already wins the narrow tier (D9 / D18 / D38)
+`decimal-scaled` already wins the narrow tier (D18 / D38)
 and the 0-ULP accuracy column at every tier. The honest losses
 are at D76 and above on `mul` / `div`, and on the throughput of
 the correctly-rounded wide-tier transcendentals. They aren't
@@ -1193,7 +1192,7 @@ comparable to a cold dev-box micro-bench, which typically
 measures 30–50 % faster on the wide tiers and several × faster
 on the narrow tiers' picosecond cells.
 
-Picosecond-scale narrow-tier cells (D9 / D18 / D38 `add` /
+Picosecond-scale narrow-tier cells (D18 / D38 `add` /
 `sub` / `neg`) sit near the runner's resolution floor; treat
 their absolute values as accurate to ±20 % at best. Wide-tier
 ns+ values are reliable.

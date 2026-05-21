@@ -17,7 +17,7 @@ pitch and the "why another numeric type" comparison, see the
 | Guide | What it covers |
 |---|---|
 | [Getting started](getting-started.md) | Installing, constructing values, basic arithmetic, formatting, parsing. |
-| [The width family](widths.md) | Thirteen widths from `D9` to `D1232` — when to pick which, scale aliases, the `Decimal` trait. |
+| [The width family](widths.md) | Twelve widths from `D18` to `D1232` — when to pick which, scale aliases, the `Decimal` trait. |
 | [Conversions](conversions.md) | Integer / float conversions, cross-width widening and narrowing, `to_int`, the float bridge. |
 | [Rounding](rounding.md) | `RoundingMode`, the `_with` method pairs, `rescale`, and the compile-time `rounding-*` feature flags. |
 | [Strict mode](strict-mode.md) | Integer-only transcendentals (`ln`, `exp`, `sqrt`, trig, …) under `--features strict`. |

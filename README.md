@@ -50,7 +50,7 @@ exactly one bit pattern per logical value — no normalisation, no
 per-value scale byte, no heap allocation. `0.1 + 0.2 == 0.3` is `true`,
 and so is `hash(1.10) == hash(1.1)` at the same scale.
 
-Thirteen storage widths from `D9` (32-bit, ~9 decimal digits) to
+Twelve storage widths from `D18` (64-bit, ~18 decimal digits) to
 `D1232` (4096-bit, ~1232 decimal digits) share an identical API.
 Pick the narrowest width that covers your range.
 
@@ -106,7 +106,7 @@ LSBε, the parenthesised one the worst ULP distance from true. `n/a` =
 not exposed by that crate, or the width/scale isn't representable.
 
 **`decimal-scaled` is `0 (0)` on the entire surface** — and that holds
-for all six rounding modes and all thirteen widths (`D9` … `D1232`).
+for all six rounding modes and all twelve widths (`D18` … `D1232`).
 `fastnum` is the closest peer: correctly rounded almost everywhere,
 missing only `tan` (67 LSBε) and `asinh` (58 LSBε) at this scale.
 `dashu-float` is correctly rounded on the `exp` / `ln` / `sqrt` surface
@@ -124,7 +124,7 @@ deep-scale `D307<150>` tier) are generated from the same result files by
 and reproduced in the
 [benchmarks](https://mootable.github.io/decimal-scaled/benchmarks/).
 decimal-scaled's `0 (0)` holds across **all six rounding modes** and
-**all thirteen widths**.
+**all twelve widths**.
 
 ## Speed across the width range
 
@@ -149,7 +149,7 @@ Full per-width charts (32-bit … 4096-bit) and the methodology are in the
 In-depth guides live under [`docs/`](docs/):
 
 - [Getting started](docs/getting-started.md) — constructing values, arithmetic, formatting, parsing.
-- [The width family](docs/widths.md) — `D9` through `D1232`, scale aliases, the `Decimal` trait, picking a tier.
+- [The width family](docs/widths.md) — `D18` through `D1232`, scale aliases, the `Decimal` trait, picking a tier.
 - [Conversions](docs/conversions.md) — integers, floats, cross-width widening / narrowing, the float bridge.
 - [Cross-scale operations](docs/cross-scale.md) — `mul_of` / `add_of` / `cmp_of` / `clamp_of` / etc. on every width for mixed-width mixed-SCALE expressions, plus the nightly-gated `cross::mul(a, b)` auto-inferred form.
 - [Rounding](docs/rounding.md) — `RoundingMode`, the `_with` pairs, `rescale`, the compile-time `rounding-*` features.
