@@ -23,7 +23,7 @@ pub use traits::{FixedInt, FixedIntConvert};
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
-    limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
+    limbs_mul_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
 use crate::int::algos::div::limbs_isqrt_u64;
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
@@ -595,6 +595,32 @@ impl<const N: usize> Shr<u32> for Uint<N> {
     }
 }
 
+// Truncating unsigned division / remainder via the dispatching divmod
+// (Knuth / Burnikel–Ziegler), matching the macro `$U` operators so the
+// const-generic and named unsigned types share one divide algorithm.
+
+impl<const N: usize> Div for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn div(self, rhs: Self) -> Self {
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        limbs_divmod_dispatch_u64(&self.limbs, &rhs.limbs, &mut q, &mut r);
+        Self { limbs: q }
+    }
+}
+
+impl<const N: usize> Rem for Uint<N> {
+    type Output = Self;
+    #[inline]
+    fn rem(self, rhs: Self) -> Self {
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        limbs_divmod_dispatch_u64(&self.limbs, &rhs.limbs, &mut q, &mut r);
+        Self { limbs: r }
+    }
+}
+
 impl<const N: usize> PartialOrd for Uint<N> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
@@ -929,7 +955,7 @@ impl<const N: usize> Int<N> {
 
     /// `|self|` as the unsigned twin. `MIN` maps to `2^(BITS-1)`.
     #[inline]
-    fn unsigned_abs(self) -> Uint<N> {
+    pub const fn unsigned_abs(self) -> Uint<N> {
         Uint::from_limbs(*self.abs().as_limbs())
     }
 
@@ -1236,8 +1262,8 @@ impl<const N: usize> Int<N> {
     /// Checked negation: `None` exactly at `MIN` (whose negation
     /// overflows the signed range).
     #[inline]
-    pub fn checked_neg(self) -> Option<Self> {
-        if self == Self::MIN {
+    pub const fn checked_neg(self) -> Option<Self> {
+        if limbs_cmp_u64_fixed(&self.limbs, &Self::MIN.limbs) == 0 {
             None
         } else {
             Some(self.wrapping_neg())
@@ -1246,29 +1272,30 @@ impl<const N: usize> Int<N> {
 
     /// Checked division: `None` on a zero divisor.
     #[inline]
-    pub fn checked_div(self, rhs: Self) -> Option<Self> {
-        if rhs.is_zero() {
+    pub const fn checked_div(self, rhs: Self) -> Option<Self> {
+        if limbs_is_zero_u64_fixed(&rhs.limbs) {
             None
         } else {
-            Some(self.div_rem(rhs).0)
+            Some(self.wrapping_div(rhs))
         }
     }
 
     /// Checked remainder: `None` on a zero divisor.
     #[inline]
-    pub fn checked_rem(self, rhs: Self) -> Option<Self> {
-        if rhs.is_zero() {
+    pub const fn checked_rem(self, rhs: Self) -> Option<Self> {
+        if limbs_is_zero_u64_fixed(&rhs.limbs) {
             None
         } else {
-            Some(self.div_rem(rhs).1)
+            Some(self.wrapping_rem(rhs))
         }
     }
 
     /// Euclidean division: the quotient that leaves a non-negative
     /// remainder.
     #[inline]
-    pub fn div_euclid(self, rhs: Self) -> Self {
-        let (q, r) = self.div_rem(rhs);
+    pub const fn div_euclid(self, rhs: Self) -> Self {
+        let q = self.wrapping_div(rhs);
+        let r = self.wrapping_rem(rhs);
         if r.is_negative() {
             if rhs.is_negative() {
                 q.wrapping_add(Self::ONE)
@@ -1282,8 +1309,8 @@ impl<const N: usize> Int<N> {
 
     /// Euclidean remainder — always non-negative.
     #[inline]
-    pub fn rem_euclid(self, rhs: Self) -> Self {
-        let r = self.div_rem(rhs).1;
+    pub const fn rem_euclid(self, rhs: Self) -> Self {
+        let r = self.wrapping_rem(rhs);
         if r.is_negative() {
             r.wrapping_add(rhs.abs())
         } else {
@@ -1323,8 +1350,8 @@ impl<const N: usize> Int<N> {
     /// Wrapping remainder paired with an overflow flag (always `false`;
     /// the remainder never overflows the signed range).
     #[inline]
-    pub fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
-        (self.div_rem(rhs).1, false)
+    pub const fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
+        (self.wrapping_rem(rhs), false)
     }
 
     /// Saturating addition: clamps to `MIN` / `MAX` on overflow.
@@ -1351,7 +1378,7 @@ impl<const N: usize> Int<N> {
 
     /// Saturating negation: `MIN` saturates to `MAX`.
     #[inline]
-    pub fn saturating_neg(self) -> Self {
+    pub const fn saturating_neg(self) -> Self {
         match self.checked_neg() {
             Some(v) => v,
             None => Self::MAX,
@@ -1395,10 +1422,64 @@ impl<const N: usize> Int<N> {
     /// `resize::<T>()` signature so the decimal-tier code that calls
     /// `storage.resize::<$Wider>()` resolves against `Int<N>`.
     #[inline]
-    pub fn resize<T: crate::int::limbs::WideInt>(self) -> T {
+    pub(crate) fn resize<T: crate::int::limbs::WideInt>(self) -> T {
         let negative = self.is_negative();
         let mag = *self.unsigned_abs().as_limbs();
         T::from_mag_sign(&mag, negative)
+    }
+
+    /// Truncating division toward zero. Panics on a zero divisor.
+    /// Matches the macro's `wrapping_div` (single-limb-aware
+    /// `limbs_divmod_u64`, not the dispatching `div_rem`).
+    #[inline]
+    pub const fn wrapping_div(self, rhs: Self) -> Self {
+        if limbs_is_zero_u64_fixed(&rhs.limbs) {
+            panic!("attempt to divide by zero");
+        }
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        limbs_divmod_u64(
+            self.unsigned_abs().as_limbs(),
+            rhs.unsigned_abs().as_limbs(),
+            &mut q,
+            &mut r,
+        );
+        Self::from_mag_limbs(&q, negative)
+    }
+
+    /// Truncating remainder; result carries the sign of `self`. Panics
+    /// on a zero divisor. Matches the macro's `wrapping_rem`.
+    #[inline]
+    pub const fn wrapping_rem(self, rhs: Self) -> Self {
+        if limbs_is_zero_u64_fixed(&rhs.limbs) {
+            panic!("attempt to calculate the remainder with a divisor of zero");
+        }
+        let mut q = [0u64; N];
+        let mut r = [0u64; N];
+        limbs_divmod_u64(
+            self.unsigned_abs().as_limbs(),
+            rhs.unsigned_abs().as_limbs(),
+            &mut q,
+            &mut r,
+        );
+        Self::from_mag_limbs(&r, self.is_negative())
+    }
+
+    /// Full `self · rhs` product widened into a `W: WideInt`, in one
+    /// step (no double trip through the magnitude staging buffer). Used
+    /// by the wide-tier `Mul` operator to compute
+    /// `Storage * Storage → Wider`. Matches the macro's `widen_mul`.
+    #[inline]
+    pub(crate) fn widen_mul<W: crate::int::limbs::WideInt>(self, rhs: Self) -> W {
+        let negative = self.is_negative() ^ rhs.is_negative();
+        let a = *self.unsigned_abs().as_limbs();
+        let b = *rhs.unsigned_abs().as_limbs();
+        // Full product spans 2·N limbs; the shared 288-limb magnitude
+        // staging width (covers Int16384) bounds every instantiation.
+        let mut prod = [0u64; 288];
+        limbs_mul_u64(&a, &b, &mut prod[..2 * N]);
+        W::from_mag_sign(&prod, negative)
     }
 }
 
@@ -1565,6 +1646,16 @@ impl<const N: usize> Rem for Int<N> {
 //
 // Delegate to the same limb fmt / parse path the `decl_wide_int!` macro
 // types use, so the const-generic surface round-trips identically.
+
+impl<const N: usize> core::fmt::Display for Uint<N> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        // Stack scratch sized to the widest tier (256 limbs = Uint16384),
+        // matching the `Int<N>` Display impl below.
+        let mut buf = [0u8; 256 * 64];
+        let s = limbs_fmt_into_u64(&self.limbs, 10, true, &mut buf);
+        f.pad_integral(true, "", s)
+    }
+}
 
 impl<const N: usize> core::fmt::Display for Int<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {

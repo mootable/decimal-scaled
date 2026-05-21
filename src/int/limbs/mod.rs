@@ -2828,7 +2828,15 @@ pub(crate) trait WideStorage:
 // strict-transcendental work integers.
 // $L = u64 limb count; $D = doubled (= 2 · $L) for widening
 // products. Each Int*'s name encodes the bit width = $L · 64.
-decl_wide_int!(Uint192, Int192, 3, 6, 4);
+//
+// Int192 / Uint192 are no longer macro-generated: they are the
+// const-generic `Int<3>` / `Uint<3>`, re-exported from `int::types` so
+// every `crate::wide_int::Int192` path (the `lib.rs` re-export, the
+// `I192` / `U192` short aliases below, and the d57 kernel shims) keeps
+// resolving. The kernels run on `Int<3>` through the Phase-0
+// `WideStorage` impl in `int::types::wide_compat`.
+pub use crate::int::types::{Int192, Uint192};
+
 decl_wide_int!(Uint256, Int256, 4, 8, 5);
 decl_wide_int!(Uint384, Int384, 6, 12, 7);
 decl_wide_int!(Uint512, Int512, 8, 16, 9);
@@ -2900,8 +2908,10 @@ macro_rules! impl_wide_storage {
     )*};
 }
 
+// Int192's `WideStorage` impl is the const-generic blanket one in
+// `int::types::wide_compat` (it is now `Int<3>`), so it is omitted here.
 impl_wide_storage!(
-    Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
+    Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
     Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
 );
 
