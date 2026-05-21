@@ -23,9 +23,40 @@ exactness when they need it and an opt-out when they don't.
 | **0.4.0** (shipped) | Foundation release — `src/` six-bucket layout (`types/`, `algos/`, `macros/`, `wide_int/`, `consts/`, `prelude/`); type renames D56 family → D57; FromStr wide-tier fix; OpenSSF Best Practices + Scorecard + cargo-audit CI; REUSE LICENSES/. |
 | **0.4.1** (shipped) | Cosmetic-only — dropped the `DecimalConsts` alias. No perf delta. |
 | **0.4.2** (shipped) | Tang ln ladder 13×-34× across narrow-GUARD bands (D57<18-22> through D1232<610-620>); AGM crossover empirically located at SCALE 1000 (3× past textbook 300 digits); D18 mul/div -60% / -47%; chain-MG bit-exact half-to-even for w > 38; `limbs_mul_u64_into<L, LP1>` primitive; benchmarks.md refresh. |
-| **0.4.3** (candidate) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (mpmath golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
-| **0.5.0** (planned) | Cryptographically-secure RNG surface (see "Random number generation" section). |
+| **0.4.3** (shipped) | See "0.4.3 candidates" section. Tang completion sweep (5 deeper bands: D230<115>, D307<290>, D616<590>, D924<900>, D1232<1200>); const POW10_TABLE for D38–D616; powf integer-exponent fast path (107× at D38<19> for `x.powf(2.0)`); cross-scale `_of` API + nightly `cross::*` auto-inference; precision-coverage expansion (mpmath golden tables + proptest fuzz + CI gate); parity-test tightening to ±1 LSB. |
+| **0.4.4** (this release) | **Full correct-rounding completion** — every `*_strict` transcendental is 0 LSBε / ≤ 0.5 ULP under all six rounding modes, all thirteen widths, across the whole 22-function surface (directed-rounding Ziv escalation; correctly-rounded derived functions; log1p/gap reformulation for `acosh`/`atanh`; sign-stable + wider-work-int hyperbolics; exact-power pins). Strict-golden suite: 286 cells, 0 ignored, delta==0 vs an external mpmath oracle. |
+| **0.5.0** (incoming) | **Integer / decimal architecture rewrite** — a unified const-generic `Int<N>` / `Uint<N>` backend (the named `IntXXXX` become aliases) plus a reusable width-matched integer-algorithm layer with method parity to the decimals; a base/std/no_std policy collapse keyed on a const-folded `(width, SCALE)` match; non-allocating stack-scratch Karatsuba with the threshold re-swept to the measured crossover; and the 0.4.4 precision corrections folded in. See the "0.5.0 architecture" section. |
+| **0.5+** (proposed) | RNG surface; public `expm1` / `log1p`; GDA `round-up` / `round-05up` modes; the DB / serialisation adapter crates (incl. CBOR tag-4); the ecosystem crates (`-math`, `-finance`, the lazy/reactive expression engine); ecosystem trait impls (`approx`, `Euclid`/`Inv`/`Pow`, nalgebra/ndarray); standards-conformance evidence (`dectest` rounding vectors, I-JSON round-trip). Each lands when it earns its place; none gate 1.0. |
 | **1.0.0** | The version stays pre-1.0 until either (a) the wide-tier `mul` / `div` numbers are *competitive with the best peer* at every shipped width — currently the `dashu-float` heap-arbitrary-precision baseline, which we trail by ~14× to ~100× at the wide tiers — *or* (b) the gap has a clearly-defensible structural reason (different storage shape, different precision invariant, different ULP contract) documented per row in the benchmarks. Adapter + ecosystem crates (per the sections below) ship at their own pace and do not gate the core 1.0. |
+
+## 0.5.0 architecture (incoming)
+
+0.5.0 is a structural release. It does **not** change the accuracy
+contract — it re-lays the foundations so the integer backend and the
+decimal front-ends share one vocabulary and the dispatch is provably
+zero-cost.
+
+- **Unified `Int<N>` / `Uint<N>` backend.** One const-generic wide
+  integer over `[u64; N]` replaces the hand-named `IntXXXX` family (kept
+  as `pub type` aliases). A reusable width-matched integer-algorithm
+  layer (add / sub / mul / div / shift / `sqr` / `cube` / `root_int`)
+  gives the integers full method parity with the decimals behind a
+  `FixedInt` trait that mirrors `DecimalArithmetic`.
+- **base / std / no_std policy.** Each function's dispatch collapses to a
+  const-folded `match (width, SCALE)` (the `base` table), a `no_std`
+  pointer to it, and a `std` layer carrying only the benchmarked-faster
+  overrides — so the rich per-tier policy compiles to one direct call per
+  monomorphisation, with no runtime dispatch.
+- **Integer perf pass.** Non-allocating stack-scratch Karatsuba (no
+  `Vec`, `no_std`-capable) with `KARATSUBA_THRESHOLD_U64` re-swept to the
+  measured u64 crossover; it unblocks the wide-tier Burnikel–Ziegler and
+  Karatsuba-sqrt work.
+- **Precision corrections folded in.** The full 0.4.4 correct-rounding
+  work merges forward, with the delta==0 strict-golden suite kept as a
+  permanent regression gate.
+
+The 0.5.0 architecture is documented in the Architecture overview that
+ships with 0.5.0.
 
 ## Shipped recently in 0.3.x
 
@@ -191,7 +222,7 @@ expressible by promoting one tier and using a positive scale.
 
 ---
 
-## Random number generation (0.4.0 target)
+## Random number generation (0.5+ / proposed)
 
 A cryptographically-secure RNG surface for sampling decimals.
 Same out-of-tree-via-trait pattern as the rest of the
@@ -223,7 +254,7 @@ Design choices:
   provides the uniform primitives that everything else
   composes on top of.
 
-## Adapter crates (in-workspace) — DB / serialisation bridges
+## Adapter crates (in-workspace) — DB / serialisation bridges (0.5+ / proposed)
 
 The core crate is deliberately compile-time-fixed-precision: a
 runtime-variable scale would break const-fn arithmetic,
@@ -252,7 +283,7 @@ caller's compile-time-fixed tier.
 
 ---
 
-## Ecosystem crates (separate repos under the `mootable` org) — applications of the 0-ULP core
+## Ecosystem crates (separate repos under the `mootable` org) — applications of the 0-ULP core (0.5+ / proposed)
 
 **Layout decision: ecosystem crates live in their own repos
 under a shared GitHub org**, not in this workspace. They're
