@@ -66,7 +66,7 @@ pub type D38<const SCALE: u32> = crate::D<crate::int::types::Int<2>, SCALE>;
 /// This lets `#[derive(Default)]` work correctly on structs that contain
 /// `D38<S>` fields.
 ///
-/// Implemented on the underlying `crate::D<crate::int::types::Int<2>, SCALE>` because
+/// Implemented on the underlying `crate::D<decimal_scaled::Int<2>, SCALE>` because
 /// `D38<SCALE>` is now an alias of that type. `ZERO` is emitted by
 /// the basics macro further down in this file.
 impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<2>, SCALE> {
