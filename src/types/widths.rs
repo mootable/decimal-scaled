@@ -392,62 +392,62 @@ pub use crate::support::error::ParseError;
 // Inherent basics + Decimal trait impl: emitted by the macro generator
 // (one invocation per width). See src/decimal_macro.rs for the macro
 // definition and the surface it produces.
-crate::macros::basics::decl_decimal_basics!(D38, i128, 37);
-crate::macros::display::decl_decimal_display!(D38);
+crate::macros::basics::decl_decimal_basics!(wide D38, crate::wide_int::Int128, 37);
+crate::macros::display::decl_decimal_display!(wide D38, crate::wide_int::Uint128);
 // FromStr and the raw-storage hex / octal / binary formatters: the
 // shared macros. D38's hand-coded versions were equivalent (`FromStr`
 // delegated to the same `parse_decimal` path; the formatters delegate
 // straight to the `i128` formatter).
-crate::macros::from_str::decl_decimal_from_str!(D38, i128);
+crate::macros::from_str::decl_decimal_from_str!(wide D38, crate::wide_int::Int128);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D38);
 // Bitwise operators (BitAnd/Or/Xor/Not, Shl/Shr) and bit-manipulation
 // methods (unsigned_shr, rotate_*, *_zeros, count_*, *_power_of_two) on
 // the raw storage. Previously hand-coded for D38 only; now a shared
 // macro so every width has the surface.
-crate::macros::bitwise::decl_decimal_bitwise!(D38, i128);
+crate::macros::bitwise::decl_decimal_bitwise!(wide D38, crate::wide_int::Int128);
 // Euclidean / floor / ceil division, abs_diff, midpoint, and the
 // is_zero / is_normal / is_nan / is_infinite / is_finite predicates.
-crate::macros::int_methods::decl_decimal_int_methods!(D38, i128);
+crate::macros::int_methods::decl_decimal_int_methods!(wide D38, crate::wide_int::Int128);
 // FromPrimitive / ToPrimitive / NumCast via the shared macro.
-crate::macros::num_traits::decl_decimal_num_traits_conversions!(D38, i128);
-crate::macros::float_bridge::decl_decimal_float_bridge!(D38, i128);
-crate::macros::conversions::decl_from_primitive!(D38, i128, i8);
-crate::macros::conversions::decl_from_primitive!(D38, i128, i16);
-crate::macros::conversions::decl_from_primitive!(D38, i128, i32);
-crate::macros::conversions::decl_from_primitive!(D38, i128, i64);
-crate::macros::conversions::decl_from_primitive!(D38, i128, u8);
-crate::macros::conversions::decl_from_primitive!(D38, i128, u16);
-crate::macros::conversions::decl_from_primitive!(D38, i128, u32);
-crate::macros::conversions::decl_from_primitive!(D38, i128, u64);
-crate::macros::conversions::decl_try_from_i128!(D38, i128);
-crate::macros::conversions::decl_try_from_u128!(D38, i128);
+crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D38, crate::wide_int::Int128);
+crate::macros::float_bridge::decl_decimal_float_bridge!(wide D38, crate::wide_int::Int128);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, i8);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, i16);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, i32);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, i64);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, u8);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, u16);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, u32);
+crate::macros::conversions::decl_from_primitive!(wide D38, crate::wide_int::Int128, u64);
+crate::macros::conversions::decl_try_from_i128!(wide D38, crate::wide_int::Int128);
+crate::macros::conversions::decl_try_from_u128!(wide D38, crate::wide_int::Int128);
 crate::macros::conversions::decl_try_from_i128!(D18, i64);
 crate::macros::conversions::decl_try_from_u128!(D18, i64);
 crate::macros::conversions::decl_try_from_i128!(D9, i32);
 crate::macros::conversions::decl_try_from_u128!(D9, i32);
-crate::macros::conversions::decl_try_from_f64!(D38, i128);
-crate::macros::conversions::decl_try_from_f32!(D38, i128);
+crate::macros::conversions::decl_try_from_f64!(wide D38, crate::wide_int::Int128);
+crate::macros::conversions::decl_try_from_f32!(wide D38, crate::wide_int::Int128);
 crate::macros::conversions::decl_try_from_f64!(D18, i64);
 crate::macros::conversions::decl_try_from_f32!(D18, i64);
 crate::macros::conversions::decl_try_from_f64!(D9, i32);
 crate::macros::conversions::decl_try_from_f32!(D9, i32);
-crate::macros::conversions::decl_decimal_int_conversion_methods!(D38, i128, i64);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D38, crate::wide_int::Int128, i64);
 // abs / signum / is_positive / is_negative, min / max / clamp / recip /
 // copysign, and floor / ceil / round / trunc / fract are emitted by the
 // shared macros — D38's hand-coded versions were byte-identical to the
 // macro output (see `src/macros/{sign,helpers,rounding_methods}.rs`).
-crate::macros::sign::decl_decimal_sign_methods!(D38, i128);
-crate::macros::helpers::decl_decimal_helpers!(D38);
-crate::macros::rounding_methods::decl_decimal_rounding_methods!(D38);
+crate::macros::sign::decl_decimal_sign_methods!(wide D38, crate::wide_int::Int128);
+crate::macros::helpers::decl_decimal_helpers!(wide D38);
+crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D38);
 // Overflow-variant families for add / sub / neg / rem: the macro's
 // shared `@common` arm. D38's hand-coded versions were byte-identical.
 // The mul / div variants stay hand-coded in `src/overflow_variants.rs`
 // because they route through the type-specific `mg_divide` path.
-crate::macros::overflow::decl_decimal_overflow_variants!(@common D38, i128);
+crate::macros::overflow::decl_decimal_overflow_variants!(wide D38, crate::wide_int::Int128, crate::wide_int::Int256);
 // Add / Sub / Neg / Rem operator impls (and their `*Assign` forms): the
 // arithmetic macro's shared `@common` arm. Mul / Div stay hand-coded in
 // `src/arithmetic.rs` (the `mg_divide` 256-bit-widening path).
-crate::macros::arithmetic::decl_decimal_arithmetic!(@common D38, i128);
+crate::macros::arithmetic::decl_decimal_arithmetic!(wide D38, crate::wide_int::Int128, crate::wide_int::Int256);
 // num-traits: Zero / One / Num / Bounded / Signed / Checked{Add,Sub,Mul,
 // Div,Rem,Neg} via the shared macro — D38's hand-coded impls were
 // equivalent. FromPrimitive / ToPrimitive / NumCast stay hand-coded in
