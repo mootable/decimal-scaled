@@ -1355,6 +1355,58 @@ impl<const N: usize> Int<N> {
         if self.is_negative() { -acc } else { acc }
     }
 
+    /// Approximate `f32` value of `self` (round-to-nearest; lossy above
+    /// 24 significant bits). Routes through the `f64` accumulation to keep
+    /// one summation path.
+    pub fn to_f32(self) -> f32 {
+        self.to_f64() as f32
+    }
+
+    /// Exact conversion from an `f64`, or `None` when `v` is NaN, ±inf,
+    /// has a fractional part, or lies outside the `Int<N>` range.
+    ///
+    /// Not `const`: float classification (`is_finite` / `fract`) and the
+    /// float→int `as` cast are not const-stable. The integer helpers it
+    /// composes with stay `const`.
+    pub(crate) fn try_from_f64(v: f64) -> Option<Self> {
+        if !v.is_finite() || v.fract() != 0.0 {
+            return None;
+        }
+        let negative = v < 0.0;
+        let mut m = if negative { -v } else { v };
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut limbs = [0u64; N];
+        let mut i = 0;
+        while m >= 1.0 && i < N {
+            let rem = m % radix;
+            limbs[i] = rem as u64;
+            m = (m - rem) / radix;
+            i += 1;
+        }
+        if m >= 1.0 {
+            // Magnitude needs more than `N` limbs — out of range.
+            return None;
+        }
+        let built = Self::from_mag_limbs(&limbs, negative);
+        // Reject the sign-bit overflow: a positive magnitude that landed
+        // negative, or a negative one that is not the legal `MIN` edge.
+        if built.is_zero() {
+            Some(built)
+        } else if built.is_negative() != negative {
+            None
+        } else {
+            Some(built)
+        }
+    }
+
+    /// Exact conversion from an `f32`, or `None` on NaN, ±inf, a
+    /// fractional part, or out-of-range. Widens to `f64` (lossless for
+    /// `f32`) and defers to [`Self::try_from_f64`]. Not `const` for the
+    /// same float-op reason.
+    pub(crate) fn try_from_f32(v: f32) -> Option<Self> {
+        Self::try_from_f64(v as f64)
+    }
+
     /// Builds from an `f64`, truncating toward zero. Saturates to
     /// `MIN` / `MAX` on out-of-range; non-finite maps to `ZERO`.
     pub fn from_f64(v: f64) -> Self {
@@ -2282,6 +2334,27 @@ impl<const N: usize> TryFrom<u128> for Uint<N> {
     #[inline]
     fn try_from(v: u128) -> Result<Self, Self::Error> {
         Self::from_u128_checked(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// ── Floats ───────────────────────────────────────────────────────────
+// Float → Int<N> is fallible (NaN, ±inf, non-integer, out-of-range), so
+// `TryFrom`. There is no `From<Int<N>> for f64/f32`: that direction is
+// lossy above the mantissa width and is offered only as the inherent
+// `to_f64` / `to_f32` round-to-nearest methods.
+impl<const N: usize> TryFrom<f64> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: f64) -> Result<Self, Self::Error> {
+        Self::try_from_f64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<f32> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: f32) -> Result<Self, Self::Error> {
+        Self::try_from_f32(v).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
