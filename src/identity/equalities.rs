@@ -38,7 +38,7 @@ use crate::types::widths::{D18, D38};
 // `decl_eq_all_integers!` macro family in `src/macros/equalities.rs`.
 // The same surface is generated for every decimal width.
 crate::macros::equalities::decl_eq_all_integers!(wide D38);
-crate::macros::equalities::decl_eq_all_integers!(D18);
+crate::macros::equalities::decl_eq_all_integers!(wide D18);
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 use crate::types::widths::D76;

@@ -45,7 +45,7 @@ pub(crate) fn powf_strict_d18<const SCALE: u32>(
     mode: RoundingMode,
 ) -> D18<SCALE> {
     if base.to_bits() > 0 {
-        if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits() as i128) {
+        if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits().as_i128()) {
             return base.powi(n);
         }
     }
@@ -67,7 +67,7 @@ pub(crate) fn powf_with_d18<const SCALE: u32>(
     mode: RoundingMode,
 ) -> D18<SCALE> {
     if base.to_bits() > 0 {
-        if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits() as i128) {
+        if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits().as_i128()) {
             return base.powi(n);
         }
     }

@@ -62,8 +62,8 @@ pub(crate) trait SqrtPolicy: Sized {
 impl<const SCALE: u32> SqrtPolicy for D18<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        if self.0 <= 0 {
-            return Self(0);
+        if self <= Self::ZERO {
+            return Self::ZERO;
         }
         // Width override: widen to D38, sqrt there, narrow back.
         sqrt::widen_to_d38::sqrt_d18(self, mode)

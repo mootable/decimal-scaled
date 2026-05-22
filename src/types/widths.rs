@@ -420,12 +420,12 @@ crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::In
 crate::macros::conversions::decl_from_primitive!(wide D38, crate::int::types::Int<2>, u64);
 crate::macros::conversions::decl_try_from_i128!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_u128!(wide D38, crate::int::types::Int<2>);
-crate::macros::conversions::decl_try_from_i128!(D18, i64);
-crate::macros::conversions::decl_try_from_u128!(D18, i64);
+crate::macros::conversions::decl_try_from_i128!(wide D18, crate::int::types::Int<1>);
+crate::macros::conversions::decl_try_from_u128!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_f64!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f32!(wide D38, crate::int::types::Int<2>);
-crate::macros::conversions::decl_try_from_f64!(D18, i64);
-crate::macros::conversions::decl_try_from_f32!(D18, i64);
+crate::macros::conversions::decl_try_from_f64!(wide D18, crate::int::types::Int<1>);
+crate::macros::conversions::decl_try_from_f32!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D38, crate::int::types::Int<2>, i64);
 // abs / signum / is_positive / is_negative, min / max / clamp / recip /
 // copysign, and floor / ceil / round / trunc / fract are emitted by the
@@ -476,7 +476,7 @@ crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 // they land: `*_lossy_override` opt-in companion, canonical name
 // reserved for the chosen-winner implementation.
 
-crate::macros::conversions::decl_decimal_int_conversion_methods!(D18, i64, i64);
+crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D18, crate::int::types::Int<1>, i64);
 
 // ─── D38 narrow ───────────────────────────────────────────────────────
 // D38::widen is wide-tier-only and is emitted further down in the
@@ -513,51 +513,51 @@ impl<const SCALE: u32> D38<SCALE> {
 /// `#[repr(transparent)]` layout over `i64` is preserved through the
 /// alias because the underlying [`crate::D`] is itself
 /// `#[repr(transparent)]` over its storage parameter.
-pub type D18<const SCALE: u32> = crate::D<i64, SCALE>;
+pub type D18<const SCALE: u32> = crate::D<crate::int::types::Int<1>, SCALE>;
 
-/// `Default` returns `ZERO`, matching `i64::default() == 0`.
+/// `Default` returns `ZERO`.
 ///
-/// Implemented on the underlying `crate::D<i64, SCALE>` because
+/// Implemented on the underlying `crate::D<Int<1>, SCALE>` because
 /// `D18<SCALE>` is now an alias of that type. `ZERO` is emitted by
 /// the basics macro further down in this file.
-impl<const SCALE: u32> Default for crate::D<i64, SCALE> {
+impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn default() -> Self {
         Self::ZERO
     }
 }
 
-crate::macros::basics::decl_decimal_basics!(D18, i64, 17);
-crate::macros::arithmetic::decl_decimal_arithmetic!(D18, i64, i128);
-crate::macros::conversions::decl_from_primitive!(D18, i64, i8);
-crate::macros::conversions::decl_from_primitive!(D18, i64, i16);
-crate::macros::conversions::decl_from_primitive!(D18, i64, i32);
-crate::macros::conversions::decl_from_primitive!(D18, i64, u8);
-crate::macros::conversions::decl_from_primitive!(D18, i64, u16);
-crate::macros::conversions::decl_from_primitive!(D18, i64, u32);
-crate::macros::display::decl_decimal_display!(D18);
-crate::macros::overflow::decl_decimal_overflow_variants!(D18, i64, i128);
+crate::macros::basics::decl_decimal_basics!(wide D18, crate::int::types::Int<1>, 17);
+crate::macros::arithmetic::decl_decimal_arithmetic!(wide D18, crate::int::types::Int<1>, crate::int::types::Int<2>);
+crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, i8);
+crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, i16);
+crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, i32);
+crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, u8);
+crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, u16);
+crate::macros::conversions::decl_from_primitive!(wide D18, crate::int::types::Int<1>, u32);
+crate::macros::display::decl_decimal_display!(wide D18, crate::int::types::Uint<1>);
+crate::macros::overflow::decl_decimal_overflow_variants!(wide D18, crate::int::types::Int<1>, crate::int::types::Int<2>);
 crate::macros::num_traits::decl_decimal_num_traits_basics!(D18);
-crate::macros::sign::decl_decimal_sign_methods!(D18, i64);
-crate::macros::consts::decl_decimal_consts!(D18, i64);
-crate::macros::from_str::decl_decimal_from_str!(D18, i64);
-crate::macros::float_bridge::decl_decimal_float_bridge!(D18, i64);
+crate::macros::sign::decl_decimal_sign_methods!(wide D18, crate::int::types::Int<1>);
+crate::macros::consts::decl_decimal_consts!(wide D18, crate::int::types::Int<1>);
+crate::macros::from_str::decl_decimal_from_str!(wide D18, crate::int::types::Int<1>);
+crate::macros::float_bridge::decl_decimal_float_bridge!(wide D18, crate::int::types::Int<1>);
 crate::macros::storage_formatters::decl_decimal_storage_formatters!(D18);
 crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D18);
 crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D18);
 crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D18);
 crate::macros::pow::decl_decimal_pow!(D18);
-crate::macros::rounding_methods::decl_decimal_rounding_methods!(D18);
-crate::macros::helpers::decl_decimal_helpers!(D18);
-crate::macros::bitwise::decl_decimal_bitwise!(D18, i64);
-crate::macros::int_methods::decl_decimal_int_methods!(D18, i64);
-crate::macros::num_traits::decl_decimal_num_traits_conversions!(D18, i64);
+crate::macros::rounding_methods::decl_decimal_rounding_methods!(wide D18);
+crate::macros::helpers::decl_decimal_helpers!(wide D18);
+crate::macros::bitwise::decl_decimal_bitwise!(wide D18, crate::int::types::Int<1>);
+crate::macros::int_methods::decl_decimal_int_methods!(wide D18, crate::int::types::Int<1>);
+crate::macros::num_traits::decl_decimal_num_traits_conversions!(wide D18, crate::int::types::Int<1>);
 
 // Cross-width widening (lossless). D18 -> D38.
-crate::macros::conversions::decl_cross_width_widening!(wide D38, crate::int::types::Int<2>, D18, i64);
+crate::macros::conversions::decl_cross_width_widening!(wide D38, crate::int::types::Int<2>, D18, crate::int::types::Int<1>);
 
 // Cross-width narrowing (fallible). D38 -> D18.
-crate::macros::conversions::decl_cross_width_narrowing!(wide D18, i64, D38, crate::int::types::Int<2>);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D18, crate::int::types::Int<1>, D38, crate::int::types::Int<2>);
 
 // ─── `widen` — hop one storage tier up ────────────────────────────────
 //
@@ -675,7 +675,7 @@ crate::macros::full::decl_decimal_full!(
 // Cross-width widening into D76 (lossless): D9 / D18 / D38 -> D76.
 #[cfg(any(feature = "d76", feature = "wide"))]
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D18, i64);
+crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D18, crate::int::types::Int<1>);
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D38, crate::int::types::Int<2>);
 // Cross-width narrowing from D76 (fallible): D76 -> D38 / D18 / D9.
@@ -1925,7 +1925,7 @@ impl<const SCALE: u32> D1232<SCALE> {
 // `crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops` for
 // the body.
 
-crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D18, i64);
+crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D18, crate::int::types::Int<1>);
 crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D38, crate::int::types::Int<2>);
 
 #[cfg(any(feature = "d57", feature = "wide"))]
@@ -1981,27 +1981,27 @@ crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D1232, crate::wide
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 
 // D18 row.
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D38, crate::int::types::Int<2>);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D38, crate::int::types::Int<2>);
 #[cfg(any(feature = "d57", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D57, crate::wide_int::Int192);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D57, crate::wide_int::Int192);
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D76, crate::wide_int::Int256);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D76, crate::wide_int::Int256);
 #[cfg(any(feature = "d115", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D115, crate::wide_int::Int384);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D115, crate::wide_int::Int384);
 #[cfg(any(feature = "d153", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D153, crate::wide_int::Int512);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D153, crate::wide_int::Int512);
 #[cfg(any(feature = "d230", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D230, crate::wide_int::Int768);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D230, crate::wide_int::Int768);
 #[cfg(any(feature = "d307", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D307, crate::wide_int::Int1024);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D307, crate::wide_int::Int1024);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D462, crate::wide_int::Int1536);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D462, crate::wide_int::Int1536);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D616, crate::wide_int::Int2048);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D616, crate::wide_int::Int2048);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D924, crate::wide_int::Int3072);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D924, crate::wide_int::Int3072);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D1232, crate::wide_int::Int4096);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, crate::int::types::Int<1>, D1232, crate::wide_int::Int4096);
 
 // D38 row.
 #[cfg(any(feature = "d57", feature = "wide"))]

@@ -30,4 +30,4 @@ use crate::types::widths::{D18, D38};
 // `crate::macros::rescale::decl_decimal_rescale!` — same macro for
 // every width; wide tiers receive it from `macros::full`.
 crate::macros::rescale::decl_decimal_rescale!(wide D38, crate::int::types::Int<2>);
-crate::macros::rescale::decl_decimal_rescale!(D18, i64);
+crate::macros::rescale::decl_decimal_rescale!(wide D18, crate::int::types::Int<1>);

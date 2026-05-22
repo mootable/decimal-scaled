@@ -1572,6 +1572,41 @@ impl PartialOrd<Int<2>> for i128 {
     }
 }
 
+// `i64` interop for the 64-bit storage `Int<1>` (D18's backend). `Int<1>`
+// *is* an `i64`, so the bridge is the direct value (its `as_i128()` is the
+// sign-extended `i64`) — letting `to_bits()` results compare against `i64`
+// literals without an explicit conversion. Deliberately `Int<1>`-only.
+impl From<Int<1>> for i64 {
+    #[inline]
+    fn from(v: Int<1>) -> i64 {
+        v.as_i128() as i64
+    }
+}
+impl PartialEq<i64> for Int<1> {
+    #[inline]
+    fn eq(&self, other: &i64) -> bool {
+        self.as_i128() == *other as i128
+    }
+}
+impl PartialEq<Int<1>> for i64 {
+    #[inline]
+    fn eq(&self, other: &Int<1>) -> bool {
+        *self as i128 == other.as_i128()
+    }
+}
+impl PartialOrd<i64> for Int<1> {
+    #[inline]
+    fn partial_cmp(&self, other: &i64) -> Option<Ordering> {
+        self.as_i128().partial_cmp(&(i128::from(*other)))
+    }
+}
+impl PartialOrd<Int<1>> for i64 {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<1>) -> Option<Ordering> {
+        i128::from(*self).partial_cmp(&other.as_i128())
+    }
+}
+
 impl<const N: usize> Ord for Int<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {

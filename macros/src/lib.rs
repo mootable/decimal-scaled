@@ -122,8 +122,9 @@ const D18: Width = Width {
     name: "d18",
     max_scale: 17,
     type_leaf: "D18",
-    storage_path: "i64",
-    wide: false,
+    // D18 now backs onto `Int<1>` (was `i64`); emit via the wide path.
+    storage_path: "Int::<1>",
+    wide: true,
 };
 const D38: Width = Width {
     name: "d38",
@@ -969,16 +970,21 @@ fn expand_expression(width: Width, expr: Expr, scale: u32, scale_span: Span) -> 
         "{}! overflow: expression * 10^SCALE exceeds storage range",
         width.name
     );
-    let out = if width.wide && width.storage_path == "Int::<2>" {
-        // D38: the storage is the 128-bit `Int<2>`, but an expression
-        // value is naturally an `i128`-valued expression (as it was when
-        // D38 stored `i128`). Bridge it to `Int<2>` so callers keep the
-        // ergonomic `d38!(some_i128_expr, scale N)` form.
+    let out = if width.wide && (width.storage_path == "Int::<2>" || width.storage_path == "Int::<1>") {
+        // D38 / D18: the storage is `Int<2>` / `Int<1>`, but an expression
+        // value is naturally an `i128` / `i64`-valued expression (as it was
+        // when these stored `i128` / `i64`). Bridge it to the storage type so
+        // callers keep the ergonomic `dNN!(some_int_expr, scale N)` form.
+        let bridged = if width.storage_path == "Int::<1>" {
+            quote! { <#sp>::from_i64((#expr) as i64) }
+        } else {
+            quote! { <#sp>::from_i128((#expr) as i128) }
+        };
         quote! {
             #tp :: <#scale> :: from_bits({
-                let _v: #sp = <#sp>::from_i128((#expr) as i128);
+                let _v: #sp = #bridged;
                 let mult: #sp = <#sp>::from_str_radix("10", 10)
-                    .expect("d38! mult literal")
+                    .expect("dNN! mult literal")
                     .pow(#scale);
                 _v.checked_mul(mult).expect(#err_msg)
             })
