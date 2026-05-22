@@ -338,7 +338,7 @@ pub(crate) fn e_at_target_with<const TARGET: u32>(
 // down to the caller's `SCALE` via half-to-even and narrows to i128
 // (or panics with a clear message if the constant's magnitude
 // exceeds the storage range at that scale).
-crate::macros::consts::decl_decimal_consts!(D38, i128);
+crate::macros::consts::decl_decimal_consts!(wide D38, crate::int::types::Int<2>);
 
 // EPSILON / MIN_POSITIVE for every width are now emitted by
 // `decl_decimal_basics!`. The D38-specific inherent impl that used

@@ -309,7 +309,7 @@ crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
 );
 
 crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D38, i128, D38, I128, 38,
+    D38, crate::int::types::Int<2>, D38, I128, 38,
     scales = [
         0 1 2 3 4 5 6 7 8 9
         10 11 12 13 14 15 16 17 18 19
