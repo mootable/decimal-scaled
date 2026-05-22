@@ -6,10 +6,6 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D18, D38};
-
-/// `D9` cube-root via widen → D38 → narrow.
-#[inline]
-#[must_use]
 /// `D18` cube-root via widen → D38 → narrow.
 #[inline]
 #[must_use]

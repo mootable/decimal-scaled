@@ -13,10 +13,6 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D18, D38};
-
-/// `D9` square-root via widen → D38 → narrow.
-#[inline]
-#[must_use]
 /// `D18` square-root via widen → D38 → narrow.
 #[inline]
 #[must_use]

@@ -8,10 +8,6 @@ use crate::types::widths::{D18, D38};
 
 #[inline]
 #[must_use]
-#[inline]
-#[must_use]
-#[inline]
-#[must_use]
 pub(crate) fn exp_strict_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::exp_strict::<SCALE>(widened.0, mode);

@@ -36,13 +36,6 @@ fn exp_as_small_int_i128<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
         None
     }
 }
-
-/// `D9` powf via widen → D38 → narrow. Strict working-scale.
-#[inline]
-#[must_use]
-/// `D9` powf with caller-chosen working digits.
-#[inline]
-#[must_use]
 /// `D18` powf via widen → D38 → narrow. Strict working-scale.
 #[inline]
 #[must_use]

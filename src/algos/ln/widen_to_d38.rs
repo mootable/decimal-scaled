@@ -6,13 +6,6 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D18, D38};
-
-/// `D9` natural log via widen → D38 → narrow. Strict working-scale.
-#[inline]
-#[must_use]
-/// `D9` natural log with caller-chosen working digits.
-#[inline]
-#[must_use]
 /// `D18` natural log via widen → D38 → narrow. Strict working-scale.
 #[inline]
 #[must_use]
