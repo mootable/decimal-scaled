@@ -84,7 +84,6 @@
 //! cause. `D38::ONE.powi(i32::MIN)` therefore evaluates correctly as
 //! `D38::ONE / D38::ONE.pow(2_147_483_648_u32)`.
 
-use crate::algos::mg_divide::mul_div_pow10;
 use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
@@ -434,19 +433,19 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn checked_pow(self, exp: u32) -> Option<Self> {
-        let mut acc: i128 = Self::ONE.0;
-        let mut base: i128 = self.0;
+        let mut acc = Self::ONE;
+        let mut base = self;
         let mut e = exp;
         while e > 0 {
             if e & 1 == 1 {
-                acc = mul_div_pow10::<SCALE>(acc, base)?;
+                acc = acc.checked_mul(base)?;
             }
             e >>= 1;
             if e > 0 {
-                base = mul_div_pow10::<SCALE>(base, base)?;
+                base = base.checked_mul(base)?;
             }
         }
-        Some(Self(acc))
+        Some(acc)
     }
 
     /// Returns `self^exp`, wrapping two's-complement on overflow at
@@ -474,26 +473,19 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn wrapping_pow(self, exp: u32) -> Self {
-        let mut acc: i128 = Self::ONE.0;
-        let mut base: i128 = self.0;
+        let mut acc = Self::ONE;
+        let mut base = self;
         let mut e = exp;
-        let mult = Self::multiplier();
         while e > 0 {
             if e & 1 == 1 {
-                acc = match mul_div_pow10::<SCALE>(acc, base) {
-                    Some(q) => q,
-                    None => acc.wrapping_mul(base).wrapping_div(mult),
-                };
+                acc = acc.wrapping_mul(base);
             }
             e >>= 1;
             if e > 0 {
-                base = match mul_div_pow10::<SCALE>(base, base) {
-                    Some(q) => q,
-                    None => base.wrapping_mul(base).wrapping_div(mult),
-                };
+                base = base.wrapping_mul(base);
             }
         }
-        Self(acc)
+        acc
     }
 
     /// Returns `self^exp`, clamping to `D38::MAX` or `D38::MIN` on
@@ -524,14 +516,14 @@ impl<const SCALE: u32> D38<SCALE> {
         if exp == 0 {
             return Self::ONE;
         }
-        let mut acc: i128 = Self::ONE.0;
-        let mut base: i128 = self.0;
+        let mut acc = Self::ONE;
+        let mut base = self;
         let mut e = exp;
         // The final result is negative iff the base is negative and exp is odd.
-        let result_negative_if_overflow = self.0 < 0 && (exp & 1) == 1;
+        let result_negative_if_overflow = self.is_negative() && (exp & 1) == 1;
         while e > 0 {
             if e & 1 == 1 {
-                match mul_div_pow10::<SCALE>(acc, base) {
+                match acc.checked_mul(base) {
                     Some(q) => acc = q,
                     None => {
                         return if result_negative_if_overflow {
@@ -544,7 +536,7 @@ impl<const SCALE: u32> D38<SCALE> {
             }
             e >>= 1;
             if e > 0 {
-                match mul_div_pow10::<SCALE>(base, base) {
+                match base.checked_mul(base) {
                     Some(q) => base = q,
                     None => {
                         // base*base is non-negative (squared); clamp by the
@@ -558,7 +550,7 @@ impl<const SCALE: u32> D38<SCALE> {
                 }
             }
         }
-        Self(acc)
+        acc
     }
 
     /// Returns `(self^exp, overflowed)`.
@@ -584,31 +576,24 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn overflowing_pow(self, exp: u32) -> (Self, bool) {
-        let mut acc: i128 = Self::ONE.0;
-        let mut base: i128 = self.0;
+        let mut acc = Self::ONE;
+        let mut base = self;
         let mut e = exp;
         let mut overflowed = false;
-        let mult = Self::multiplier();
         while e > 0 {
             if e & 1 == 1 {
-                acc = if let Some(q) = mul_div_pow10::<SCALE>(acc, base) {
-                    q
-                } else {
-                    overflowed = true;
-                    acc.wrapping_mul(base).wrapping_div(mult)
-                };
+                let (q, o) = acc.overflowing_mul(base);
+                acc = q;
+                overflowed |= o;
             }
             e >>= 1;
             if e > 0 {
-                base = if let Some(q) = mul_div_pow10::<SCALE>(base, base) {
-                    q
-                } else {
-                    overflowed = true;
-                    base.wrapping_mul(base).wrapping_div(mult)
-                };
+                let (q, o) = base.overflowing_mul(base);
+                base = q;
+                overflowed |= o;
             }
         }
-        (Self(acc), overflowed)
+        (acc, overflowed)
     }
 }
 
