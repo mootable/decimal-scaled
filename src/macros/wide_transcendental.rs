@@ -4814,19 +4814,19 @@ mod tests {
                 "ln",
                 raw,
                 w.ln_strict().to_bits().as_i128(),
-                n.ln_strict().to_bits(),
+                n.ln_strict().to_bits().as_i128(),
             );
             agree(
                 "log2",
                 raw,
                 w.log2_strict().to_bits().as_i128(),
-                n.log2_strict().to_bits(),
+                n.log2_strict().to_bits().as_i128(),
             );
             agree(
                 "log10",
                 raw,
                 w.log10_strict().to_bits().as_i128(),
-                n.log10_strict().to_bits(),
+                n.log10_strict().to_bits().as_i128(),
             );
         }
         for raw in all {
@@ -4838,43 +4838,43 @@ mod tests {
                 "exp",
                 raw,
                 w.exp_strict().to_bits().as_i128(),
-                n.exp_strict().to_bits(),
+                n.exp_strict().to_bits().as_i128(),
             );
             agree(
                 "sin",
                 raw,
                 w.sin_strict().to_bits().as_i128(),
-                n.sin_strict().to_bits(),
+                n.sin_strict().to_bits().as_i128(),
             );
             agree(
                 "cos",
                 raw,
                 w.cos_strict().to_bits().as_i128(),
-                n.cos_strict().to_bits(),
+                n.cos_strict().to_bits().as_i128(),
             );
             agree(
                 "atan",
                 raw,
                 w.atan_strict().to_bits().as_i128(),
-                n.atan_strict().to_bits(),
+                n.atan_strict().to_bits().as_i128(),
             );
             agree(
                 "sinh",
                 raw,
                 w.sinh_strict().to_bits().as_i128(),
-                n.sinh_strict().to_bits(),
+                n.sinh_strict().to_bits().as_i128(),
             );
             agree(
                 "cosh",
                 raw,
                 w.cosh_strict().to_bits().as_i128(),
-                n.cosh_strict().to_bits(),
+                n.cosh_strict().to_bits().as_i128(),
             );
             agree(
                 "tanh",
                 raw,
                 w.tanh_strict().to_bits().as_i128(),
-                n.tanh_strict().to_bits(),
+                n.tanh_strict().to_bits().as_i128(),
             );
         }
         for raw in unit_range {
@@ -4886,19 +4886,19 @@ mod tests {
                 "asin",
                 raw,
                 w.asin_strict().to_bits().as_i128(),
-                n.asin_strict().to_bits(),
+                n.asin_strict().to_bits().as_i128(),
             );
             agree(
                 "acos",
                 raw,
                 w.acos_strict().to_bits().as_i128(),
-                n.acos_strict().to_bits(),
+                n.acos_strict().to_bits().as_i128(),
             );
             agree(
                 "atanh",
                 raw,
                 w.atanh_strict().to_bits().as_i128(),
-                n.atanh_strict().to_bits(),
+                n.atanh_strict().to_bits().as_i128(),
             );
         }
     }
