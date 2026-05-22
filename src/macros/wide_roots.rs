@@ -2,7 +2,7 @@
 //! decimal tiers (D76 / D153 / D307).
 //!
 //! D38 and the narrow tiers get their roots from the 128/256/384-bit
-//! integer machinery in `mg_divide.rs`, and D9 / D18 delegate into
+//! integer machinery in `mg_divide.rs`, and D18 delegate into
 //! D38. The wide tiers cannot widen into D38 — their scale range
 //! exceeds it — so they compute roots directly on a hand-rolled wide integer one
 //! or two sizes up.

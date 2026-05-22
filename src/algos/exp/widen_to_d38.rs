@@ -1,6 +1,6 @@
 //! Narrow-tier exponential kernel — widen to D38, exp, narrow back.
 //!
-//! Width-level specialisation for D9 / D18. Same pattern as
+//! Width-level specialisation for D18. Same pattern as
 //! [`crate::algos::ln::widen_to_d38`].
 
 use crate::support::rounding::RoundingMode;

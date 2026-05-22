@@ -1,6 +1,6 @@
 //! Floating-point power algorithm family — narrow-tier kernels.
 //!
-//! Only D9 / D18 / D38 have policy-routed `powf_strict` today. The wide
+//! Only D18 / D38 have policy-routed `powf_strict` today. The wide
 //! tiers still ship `powf` through their per-tier macro shells; migrating
 //! those mirrors the deferral on [`crate::algos::ln`] / [`crate::algos::exp`].
 //!
@@ -17,7 +17,7 @@
 //! - [`borrow_d57`] — D38 widen → D57 inherent `powf_strict_with` /
 //!   `powf_approx_with` → narrow back. Picks up the ln + exp wide-tier
 //!   speedups in composed form. Gated on `d57` / `wide`.
-//! - [`widen_to_d38`] — D9 / D18 widen → `fixed_d38::powf` → narrow.
+//! - [`widen_to_d38`] — D18 widen → `fixed_d38::powf` → narrow.
 
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod borrow_d57;

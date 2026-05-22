@@ -27,7 +27,7 @@
 //!   widths in this crate stay in the schoolbook range.
 //! - **÷ 10^SCALE** (decimal scale-narrowing) — this `(W, SCALE)`-keyed
 //!   path is part of the **decimal** storage boundary, not the integer
-//!   layer: D9 / D18 narrow tiers divide on hardware
+//!   layer: D18 narrow tiers divide on hardware
 //!   (`i128_divrem_by_u64_with_mode`), D38 takes the 2-word MG path, and
 //!   the wide tiers route `mg_divide::div_wide_pow10_with`, which selects
 //!   MG-single (`SCALE ≤ 19`, divisor fits one word) vs MG-lifted

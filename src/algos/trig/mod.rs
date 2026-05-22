@@ -1,6 +1,6 @@
 //! Trigonometric algorithm family.
 //!
-//! Narrow tier (D9 / D18 / D38) carries forward + inverse + atan2 on
+//! Narrow tier (D18 / D38) carries forward + inverse + atan2 on
 //! the 256-bit `Fixed` intermediate. Wide tier (D57 .. D1232)
 //! currently covers only sin / cos / tan / atan via per-tier kernels
 //! in [`wide_kernel`]; the inverse family (asin / acos / atan2) for
@@ -13,7 +13,7 @@
 //!   intermediate via the shared `sin_fixed`, `atan_fixed`, and
 //!   `atan2_kernel` cores. The fast paths (`x == 0`, the ±1 endpoints
 //!   for atan / acos, and the small-x linear band) are preserved.
-//! - [`widen_to_d38`] — D9 / D18 widen → `fixed_d38::*` → narrow.
+//! - [`widen_to_d38`] — D18 widen → `fixed_d38::*` → narrow.
 //! - [`wide_kernel`] — per-tier `sin_strict_<tier>` / `cos_strict_<tier>`
 //!   / `tan_strict_<tier>` / `atan_strict_<tier>` free functions for
 //!   the wide tiers (D57 / D76 / D115 / D153 / D230 / D307 / D462 /

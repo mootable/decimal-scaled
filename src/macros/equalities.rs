@@ -1,7 +1,7 @@
 //! Macro-generated `PartialEq` impls between a decimal type and the
 //! primitive integer / float types.
 //!
-//! Each macro takes a target `$Type` (e.g. `D9`, `D18`, `D38`) and
+//! Each macro takes a target `$Type` (e.g. `D18`, `D38`) and
 //! emits a pair of `PartialEq` impls (both directions). Comparisons
 //! against primitives go through `i128` arithmetic to keep one path
 //! per source type regardless of the target's storage width.

@@ -1,6 +1,6 @@
 //! Natural-logarithm policy (plus `log` / `log2` / `log10`).
 //!
-//! Narrow tier (D9 / D18 / D38) routes the `Fixed` 256-bit
+//! Narrow tier (D18 / D38) routes the `Fixed` 256-bit
 //! intermediate kernels; wide tier (D57 .. D1232) routes the per-tier
 //! kernels in [`crate::algos::ln::wide_kernel`] that wrap each tier's
 //! macro-emitted `wide_trig_<tier>::ln_fixed` core. The wide-tier
@@ -60,9 +60,9 @@ pub(crate) trait LnPolicy: Sized {
 
 // ── Narrow tier — width override: widen → D38 ───────────────────────
 //
-// D9 / D18 widen into D38 for every log-family method; the narrow
+// D18 widen into D38 for every log-family method; the narrow
 // strict tests verify this widen-narrow path. `log` / `log2` / `log10`
-// for D9 / D18 widen, call D38's method, then narrow back via
+// for D18 widen, call D38's method, then narrow back via
 // `TryInto` — identical to the shape `decl_strict_transcendental!`
 // already uses in the macro.
 

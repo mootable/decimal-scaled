@@ -15,7 +15,7 @@
 //!   the kernel that has shipped with D38 since before the algorithm
 //!   library existed.
 //! - [`widen_to_d38`] — widen → `mg_divide_d38::cbrt` → narrow.
-//!   **Width specialisation for D9 and D18**.
+//!   **Width specialisation for D18**.
 
 pub(crate) mod generic_wide;
 pub(crate) mod mg_divide_d38;

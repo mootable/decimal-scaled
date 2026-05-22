@@ -2,7 +2,7 @@
 //!
 //! See `macros/README.md` for the full spec. This crate now ships:
 //!
-//! - `d9!(…)`, `d18!(…)`, `d38!(…)` — narrow-tier entry points
+//! - `d18!(…)`, `d38!(…)` — narrow-tier entry points
 //!   (i32 / i64 / i128 storage).
 //! - `d76!(…)`, `d153!(…)`, `d307!(…)` — wide-tier entry points
 //!   (Int256 / Int512 / Int1024 storage). Available when the
@@ -111,13 +111,6 @@ fn storage_path_tokens(width: Width) -> proc_macro2::TokenStream {
     }
 }
 
-const D9: Width = Width {
-    name: "d9",
-    max_scale: 8,
-    type_leaf: "D9",
-    storage_path: "i32",
-    wide: false,
-};
 const D18: Width = Width {
     name: "d18",
     max_scale: 17,
@@ -207,13 +200,6 @@ const D1232: Width = Width {
 };
 
 // ── Public proc-macro entry points ────────────────────────────────────
-
-/// `d9!` — construct a `decimal_scaled::D9<SCALE>` value at
-/// compile time. See the crate-level docs and `macros/README.md`.
-#[proc_macro]
-pub fn d9(input: TokenStream) -> TokenStream {
-    expand_for(D9, input)
-}
 
 /// `d18!` — construct a `decimal_scaled::D18<SCALE>` value at
 /// compile time. See the crate-level docs and `macros/README.md`.

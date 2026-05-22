@@ -1,7 +1,7 @@
 //! Internal `decl_*!` macros that emit per-width surface for the
 //! decimal type family.
 //!
-//! Every macro takes the target `$Type` (e.g. `D9`, `D18`, `D38`)
+//! Every macro takes the target `$Type` (e.g. `D18`, `D38`)
 //! and the relevant storage / widening types as parameters, then
 //! emits the corresponding impl block. Each width's `types/widths.rs`
 //! entry then becomes a series of one-line macro invocations.

@@ -1,9 +1,9 @@
 //! Macro-generated strict-mode transcendentals for the narrow decimal
-//! widths (D9 / D18), by delegation to the D38 strict path.
+//! widths (D18), by delegation to the D38 strict path.
 //!
 //! For each method the input is widened to `D38<SCALE>`, the D38
 //! `*_strict` implementation is called, and the result is narrowed
-//! back. This gives D9 / D18 the full integer-only transcendental
+//! back. This gives D18 the full integer-only transcendental
 //! surface (ln, log, log2, log10, exp, exp2, sqrt, cbrt, powf, and the
 //! trig / hyperbolic / angle family) without duplicating the
 //! algorithmic work. The narrowing step panics if the result exceeds
@@ -15,7 +15,7 @@
 //! is set. Integer-only; `no_std`-compatible.
 //! - `<method>` — a dispatcher present only under
 //! `#[cfg(not(all(feature = "fast", not(feature = "strict"))))]`,
-//! forwarding to `<method>_strict`. (D9 / D18 have no f64-bridge
+//! forwarding to `<method>_strict`. (D18 have no f64-bridge
 //! transcendentals of their own, so there is no non-strict `<method>`
 //! for these widths.)
 
@@ -320,7 +320,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             // Without these the
             // `decl_decimal_transcendental_impl!` macro would emit
             // trait method bodies that resolve back to themselves,
-            // causing infinite recursion at runtime on D9 / D18.
+            // causing infinite recursion at runtime on D18.
 
             // ─ Logarithms ────────────────────────────────────────
             #[inline]

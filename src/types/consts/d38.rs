@@ -23,7 +23,7 @@
 //!
 //! | Tier           | Reference storage | `SCALE_REF` (= reference digits) | Source file       |
 //! |----------------|-------------------|----------------------------------|-------------------|
-//! | D9 / D18 / D38 | `Int256`          | 75                               | this file         |
+//! | D18 / D38 | `Int256`          | 75                               | this file         |
 //! | D76            | `Int256`          | 75                               | `types/consts/wide.rs`  |
 //! | D153           | `Int512`          | 153                              | `types/consts/wide.rs`  |
 //! | D307           | `Int1024`         | 307                              | `types/consts/wide.rs`  |
@@ -155,12 +155,12 @@ fn rescale_75_to_target_with<const TARGET: u32>(
 }
 
 /// Well-known mathematical constants available on every decimal width
-/// (`D9` / `D18` / `D38` / `D76` / `D153` / `D307`).
+/// (`D18` / `D38` / `D76` / `D153` / `D307`).
 ///
 /// Import this trait to call `D38s12::pi()`, `D76::<35>::e()`, etc.
 ///
 /// All returned values are computed from a raw integer reference at
-/// the tier's maximum storage precision (75 digits for D9/D18/D38 and
+/// the tier's maximum storage precision (75 digits for D18/D38 and
 /// D76; 153 for D153; 307 for D307) without passing through `f64`,
 /// then rescaled down to the caller's `SCALE` with half-to-even
 /// rounding. The result is **within 0.5 ULP** of the canonical
@@ -276,7 +276,7 @@ pub trait DecimalConstants: Sized {
 
 // Public-to-crate helpers that return each constant's rescaled bits at
 // the caller's target SCALE. Used by the `decl_decimal_consts!` macro
-// to provide DecimalConstants for narrower widths (D9, D18) without
+// to provide DecimalConstants for narrower widths (D18) without
 // duplicating the rescale logic.
 
 pub(crate) fn pi_at_target<const TARGET: u32>() -> i128 {
@@ -332,7 +332,7 @@ pub(crate) fn e_at_target_with<const TARGET: u32>(
 }
 
 // The `DecimalConstants` impl for `D38<SCALE>` is emitted by the
-// `decl_decimal_consts!` macro — the same macro D9 / D18 / D76+ use.
+// `decl_decimal_consts!` macro — the same macro D18 / D76+ use.
 // It expands to `Self(pi_at_target::<SCALE>())` etc.; each
 // `*_at_target` helper above rescales the 75-digit Int256 reference
 // down to the caller's `SCALE` via half-to-even and narrows to i128
@@ -343,7 +343,7 @@ crate::macros::consts::decl_decimal_consts!(wide D38, crate::int::types::Int<2>)
 // EPSILON / MIN_POSITIVE for every width are now emitted by
 // `decl_decimal_basics!`. The D38-specific inherent impl that used
 // to live here has been removed in favour of the macro-emitted ones
-// so D9 / D18 / D38 / D57 / D76 / D115 / D153 / D230 / D307 / D462 /
+// so D18 / D38 / D57 / D76 / D115 / D153 / D230 / D307 / D462 /
 // D616 / D924 / D1232 all share the same EPSILON / MIN_POSITIVE
 // surface.
 

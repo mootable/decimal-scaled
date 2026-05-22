@@ -1,6 +1,6 @@
 //! Narrow-tier (D18) sin / cos / tan / atan / atan2 via widen → D38 → narrow.
 //!
-//! D18 is the only narrow tier left (D9 was dropped); it widens losslessly to
+//! D18 is the only narrow tier left; it widens losslessly to
 //! D38, runs the hand-tuned `fixed_d38` kernel there, and narrows back.
 
 use crate::support::rounding::RoundingMode;

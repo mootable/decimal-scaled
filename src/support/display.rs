@@ -13,7 +13,7 @@
 //! integer / fractional digit slices into a storage value is
 //! *per-storage*:
 //!
-//! - Narrow tier (D9 / D18 / D38) accumulates in `u128` inside
+//! - Narrow tier (D18 / D38) accumulates in `u128` inside
 //!   [`parse_decimal_bits`] — fast and the `10^SCALE` multiplier always
 //!   fits since SCALE ≤ 38.
 //! - Wide tier (D76 … D1231) accumulates in the storage type itself

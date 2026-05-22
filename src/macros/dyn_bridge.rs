@@ -7,14 +7,14 @@
 //! and ordering.
 //!
 //! The macro is intentionally only invoked for the narrow-tier widths
-//! (`D9`, `D18`, `D38`) — see the module docs for
+//! (`D18`, `D38`) — see the module docs for
 //! [`crate::types::traits::dyn_decimal`] for the scope rationale.
 
 /// Emits `impl<const SCALE: u32> DynDecimal for $Type<SCALE>` plus
 /// internal dispatch helpers.
 ///
 /// Args:
-/// - `$Type`           — concrete decimal type (`D9` / `D18` / `D38`).
+/// - `$Type`           — concrete decimal type (`D18` / `D38`).
 /// - `$Storage`        — underlying primitive integer (`i32` / `i64` / `i128`).
 /// - `$width_variant`  — matching variant of [`crate::types::traits::dyn_decimal::DecimalWidth`].
 /// - `$raw_variant`    — matching variant of [`crate::types::traits::dyn_decimal::RawStorage`].

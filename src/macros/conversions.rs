@@ -46,7 +46,7 @@ macro_rules! decl_from_primitive {
 pub(crate) use decl_from_primitive;
 
 /// Generates `From<$Src<SCALE>> for $Dest<SCALE>` for a lossless
-/// widening conversion (e.g. D9 -> D18, D18 -> D38). `$SrcStorage`
+/// widening conversion (e.g. D18, D18 -> D38). `$SrcStorage`
 /// must widen losslessly to `$DestStorage` via an `as` cast.
 macro_rules! decl_cross_width_widening {
     // Widening *into* wide storage. The source storage is
@@ -243,7 +243,7 @@ pub(crate) use decl_try_from_f64;
 /// Emits the named integer constructors and `to_int` /
 /// `to_int_with` on a decimal type. `$Storage` is the storage
 /// integer; `$IntSrc` is the wider integer source for `from_int`
-/// (typically `i64` for D18/D38 and `i32` for D9). `from_int` and
+/// (typically `i64` for D18/D38). `from_int` and
 /// `from_i32` scale directly (they do not depend on a `From<iN>` impl
 /// existing for the width).
 macro_rules! decl_decimal_int_conversion_methods {

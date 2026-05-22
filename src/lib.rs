@@ -370,7 +370,6 @@ pub use crate::types::widths::{
     D38s36, D38s37,
 };
 
-// D9 — 32-bit storage, scale 0..=9.
 
 // D18 — 64-bit storage, scale 0..=18.
 pub use crate::types::widths::{

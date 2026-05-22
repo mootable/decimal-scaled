@@ -1,5 +1,5 @@
 //! Macro-generated overflow-aware arithmetic variants for the decimal
-//! widths that use a *uniform* mul/div pattern (D9, D18, and the wide
+//! widths that use a *uniform* mul/div pattern (D18, and the wide
 //! tier D76 / D153 / D307).
 //!
 //! Emits the four standard families (`checked_*`, `wrapping_*`,
@@ -28,7 +28,7 @@
 
 /// Emits overflow variants for a decimal type.
 ///
-/// - `decl_decimal_overflow_variants!(D9, i32, i64)` — *native*
+/// - `decl_decimal_overflow_variants!(i32, i64)` — *native*
 /// storage; `$Wider` is a primitive integer.
 /// - `decl_decimal_overflow_variants!(wide D76, I256, I512)` — *wide*
 /// storage; `$Wider` is the next size up.

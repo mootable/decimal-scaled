@@ -2,7 +2,7 @@
 //! except D38.
 //!
 //! D38 has the fast transcendentals hand-written in
-//! `log_exp_fast.rs` / `trig_fast.rs` / `powers_fast.rs`; D9 / D18 and
+//! `log_exp_fast.rs` / `trig_fast.rs` / `powers_fast.rs`; D18 and
 //! the wide tiers D76 / D153 / D307 all share the same delegation
 //! shape — convert to `f64`, call the platform intrinsic, convert back —
 //! so it lives in one macro reused per width.
@@ -14,7 +14,7 @@
 //! default strict/fast mode.
 //! - `<method>` — a dispatcher present only under
 //! `#[cfg(all(feature = "std", feature = "fast", not(feature = "strict")))]`,
-//! forwarding to `<method>_fast`. Plain `<method>` for D9 / D18 / wide
+//! forwarding to `<method>_fast`. Plain `<method>` for D18 / wide
 //! widths therefore tracks the same dispatch rule as the strict file's
 //! plain `<method>` and the two are mutually exclusive.
 //!

@@ -27,7 +27,6 @@
 /// Width tags for the `(W, SCALE)` match discriminant. Each tag equals
 /// the width literally; `u16` gives headroom past 1232.
 pub(crate) mod wtag {
-    pub(crate) const D9: u16 = 9;
     pub(crate) const D18: u16 = 18;
     pub(crate) const D38: u16 = 38;
     pub(crate) const D57: u16 = 57;

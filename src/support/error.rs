@@ -10,7 +10,7 @@
 //! callers can surface a precise diagnostic.
 //!
 //! Both types are width-neutral — the same enum is returned by every
-//! width (D9, D18, D38, D76, D153, D307).
+//! width (D18, D38, D76, D153, D307).
 
 /// Error returned by the fallible [`TryFrom`] impls.
 ///

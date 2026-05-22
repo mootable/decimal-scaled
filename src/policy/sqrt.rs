@@ -29,7 +29,7 @@
 //!    fall-through arm calls the matching tier-instantiation.
 //! 2. **Width override** — a per-width impl's fall-through arm picks
 //!    a different kernel. Captured here today:
-//!    - `D9` / `D18` → [`algos::sqrt::widen_to_d38`] (delegate via D38).
+//!    - `D18` → [`algos::sqrt::widen_to_d38`] (delegate via D38).
 //!    - `D38` → [`algos::sqrt::mg_divide_d38`] (hand-tuned 256-bit
 //!      isqrt over `i128` storage).
 //! 3. **Scale-range override** — a leading `if matches!(SCALE, range)`

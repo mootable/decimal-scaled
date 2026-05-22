@@ -1,13 +1,13 @@
 //! Narrow-tier floating-point power kernel — widen both base and
 //! exponent to D38, `powf`, narrow back.
 //!
-//! Width-level specialisation for D9 / D18. Same pattern as
+//! Width-level specialisation for D18. Same pattern as
 //! [`crate::algos::ln::widen_to_d38`], but the wrapper takes two values
 //! (base and exponent) which are widened independently before the
 //! kernel call.
 //!
 //! Integer-exponent fast path: if `exp` is an exact integer with
-//! `|n| <= INT_FAST_PATH_THRESHOLD`, route directly to D9/D18's
+//! `|n| <= INT_FAST_PATH_THRESHOLD`, route directly to D18's
 //! macro-emitted `powi(n)` (square-and-multiply on the native
 //! storage) and skip the widen-to-D38 + exp(y·ln(x)) chain.
 

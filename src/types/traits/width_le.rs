@@ -227,7 +227,7 @@ impls_native_to_one_wide!(crate::wide_int::Int4096);
 // ── D38 storage (`Int<2>`) WidthLE web. ──────────────────────────────
 //
 // D38 is a base type (no feature gate), so the reflexive impl and the
-// narrow-source widenings (`i32`/`i64` → `Int<2>`, i.e. D9 / D18 → D38)
+// narrow-source widenings (`i32`/`i64` → `Int<2>`, i.e. D18 → D38)
 // are unconditional. Widening `Int<2>` up into the wider tiers (D38 vs
 // D57+ cross-width comparisons) is gated on each wider tier's feature.
 impl WidthLE<crate::int::types::Int<2>> for crate::int::types::Int<2> {
@@ -272,7 +272,7 @@ impl_width_le_wide_pair!(crate::wide_int::Int4096, crate::int::types::Int<2>);
 
 // ── D18 storage (`Int<1>`) WidthLE web. ──────────────────────────────
 //
-// D18 is the narrowest base type (D9 was dropped), so the reflexive impl
+// D18 is the narrowest base type, so the reflexive impl
 // and the widening into D38 (`Int<1>` → `Int<2>`) are unconditional.
 // Widening `Int<1>` up into the wider tiers is gated on each wider tier's
 // feature, exactly as for the `Int<2>` web above.

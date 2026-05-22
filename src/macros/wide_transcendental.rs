@@ -2,7 +2,7 @@
 //! (D76 / D153 / D307).
 //!
 //! D38 and the narrow tiers run their strict transcendentals on the
-//! 256-bit `algos::fixed_d38::Fixed` guard-digit intermediate; D9 / D18
+//! 256-bit `algos::fixed_d38::Fixed` guard-digit intermediate; D18
 //! delegate into D38. The wide tiers cannot widen into D38 — their
 //! scale range exceeds it — so they need their own guard-digit core.
 //!

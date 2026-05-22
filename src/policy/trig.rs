@@ -1,6 +1,6 @@
 //! Trigonometric policy.
 //!
-//! Narrow tier (D9 / D18 / D38) covers forward + inverse + atan2 on
+//! Narrow tier (D18 / D38) covers forward + inverse + atan2 on
 //! the `Fixed` 256-bit intermediate. Wide tier (D57 .. D1232) covers
 //! the forward kernels (sin / cos / tan / atan) via per-tier kernels
 //! in [`crate::algos::trig::wide_kernel`]; the inverse family

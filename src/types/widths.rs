@@ -672,13 +672,13 @@ crate::macros::full::decl_decimal_full!(
     wide_trig_d76,
     75
 );
-// Cross-width widening into D76 (lossless): D9 / D18 / D38 -> D76.
+// Cross-width widening into D76 (lossless): D18 / D38 -> D76.
 #[cfg(any(feature = "d76", feature = "wide"))]
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D18, crate::int::types::Int<1>);
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D38, crate::int::types::Int<2>);
-// Cross-width narrowing from D76 (fallible): D76 -> D38 / D18 / D9.
+// Cross-width narrowing from D76 (fallible): D76 -> D38 / D18.
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D38, crate::int::types::Int<2>, D76, crate::wide_int::I256);
 #[cfg(any(feature = "d76", feature = "wide"))]
@@ -1665,7 +1665,7 @@ pub type D1232s1231 = D1232<1231>;
 // 0.2.6 tier ladder fills in half-widths between each pair plus
 // extends to D1232; the complete ladder is:
 //
-//   D9 → D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
+//   D18 → D38 → D57 → D76 → D115 → D153 → D230 → D307 →
 //   D462 → D616 → D924 → D1232
 //
 // The next-neighbour .widen() / .narrow() methods on the new tiers go
@@ -1676,7 +1676,7 @@ pub type D1232s1231 = D1232<1231>;
 // D38/D76/D153/D307 blocks.
 //
 // Coverage strategy: declare every NEW adjacent pair both ways. The
-// existing legacy declarations (D9↔D18, D9/D18/D38↔D76, D38/D76↔D153,
+// existing legacy declarations (D18/D18/D38↔D76, D38/D76↔D153,
 // D76/D153↔D307) stay where they are; this block adds the conversions
 // that hop through the new tiers (D38↔D57, D57↔D76, D76↔D115, etc.).
 
@@ -1968,7 +1968,6 @@ crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D1232, crate::wide
 // Pairs are organised by narrower-width row. Feature gates ensure the
 // impl is only emitted when both types in the pair exist in the build.
 
-// D9 row.
 #[cfg(any(feature = "d57", feature = "wide"))]
 #[cfg(any(feature = "d76", feature = "wide"))]
 #[cfg(any(feature = "d115", feature = "wide"))]
@@ -2608,7 +2607,7 @@ mod tests {
         assert_eq!(D0::ONE.to_bits(), 1_i128);
     }
 
-    // ----- D9 / D18 sanity tests -----
+    // ----- D18 sanity tests -----
 
     #[test]
     fn d18_basics() {

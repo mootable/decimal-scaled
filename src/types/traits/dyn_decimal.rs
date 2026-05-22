@@ -55,7 +55,7 @@
 //! # Scope
 //!
 //! The `dyn` feature ships impls for the narrow-tier widths only —
-//! [`D9`], [`D18`], [`D38`]. The wide and extra-wide tiers
+//! [`D18`], [`D38`]. The wide and extra-wide tiers
 //! (D57/D76/D115/D153/D230/D307/D462/D616/D924/D1232) are deliberately
 //! excluded: their per-scale monomorphisation footprint
 //! (`MAX_SCALE + 1` instantiations per op per width, up to 1233 for
@@ -292,11 +292,6 @@ pub trait DynDecimal: 'static {
 // match arms in `add` / `sub` / `mul` / `div` / `rem` / `rescale_to_with`
 // / `eq_dyn` / `cmp_dyn` cover the full range. Out-of-range scales fall
 // through to `None` (or `false` for `eq_dyn`).
-
-crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D9, i32, D9, I32, 9,
-    scales = [0 1 2 3 4 5 6 7 8 9]
-);
 
 crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
     D18, i64, D18, I64, 18,

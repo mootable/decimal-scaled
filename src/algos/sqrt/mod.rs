@@ -16,7 +16,7 @@
 //!   D38** — captures the kernel that has shipped with D38 since
 //!   before the algorithm library existed.
 //! - [`widen_to_d38`] — widen → `mg_divide_d38::sqrt` → narrow.
-//!   **Width specialisation for D9 and D18**; captures the existing
+//!   **Width specialisation for D18**; captures the existing
 //!   delegation pattern from `decl_strict_transcendentals_via_d38!`.
 //! - [`lookup_d57_s20`] — stub kernel slot for `D57<20>` tuning;
 //!   currently delegates to `generic_wide` byte-for-byte.

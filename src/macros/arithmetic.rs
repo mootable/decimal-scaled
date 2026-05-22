@@ -1,8 +1,8 @@
 //! Macro-generated arithmetic operator overloads for the decimal
-//! widths that use a *uniform* mul/div pattern (D9, D18, and the wide
+//! widths that use a *uniform* mul/div pattern (D18, and the wide
 //! tier D76 / D153 / D307).
 //!
-//! For D9 / D18 the storage type is a primitive (`i32` / `i64`) and a
+//! For D18 the storage type is a primitive (`i32` / `i64`) and a
 //! native wider integer (`i64` / `i128`) carries the mul/div widening
 //! step. For D76 / D153 / D307 the storage type is a hand-rolled wide integer
 //! fixed-width integer and the widening type is the next size up
@@ -169,7 +169,7 @@ pub(crate) use round_with_mode_wide;
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
-/// - `decl_decimal_arithmetic!(D9, i32, i64)` — *native* storage; the
+/// - `decl_decimal_arithmetic!(i32, i64)` — *native* storage; the
 /// widening type is a primitive integer, `as`-casts and the
 /// `(10 as $Wider)` literal carry the mul/div step.
 /// - `decl_decimal_arithmetic!(wide D76, I256, I512)` — *wide*

@@ -1,7 +1,7 @@
 //! Mathematical constants (`pi`, `e`, `ln(2)`, …).
 //!
 //! The [`DecimalConstants`] trait carries the public surface; per-width
-//! impls live in [`d38`] (narrow tier — D9 / D18 / D38) and [`wide`]
+//! impls live in [`d38`] (narrow tier — D18 / D38) and [`wide`]
 //! (wide tier — D57 and above).
 
 pub(crate) mod d38;

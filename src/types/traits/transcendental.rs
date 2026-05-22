@@ -1,7 +1,7 @@
 //! The [`DecimalTranscendental`] trait — the width-generic
 //! transcendental + root surface shared by every decimal type.
 //!
-//! Implemented by every width (`D9`, `D18`, `D38`, `D57`, `D76`,
+//! Implemented by every width (`D18`, `D38`, `D57`, `D76`,
 //! `D115`, `D153`, `D230`, `D307`, `D462`, `D616`, `D924`, `D1232`).
 //! Each impl is a one-line delegator to the inherent method of the
 //! same name, so the trait costs nothing at runtime — `#[inline]` on
@@ -40,7 +40,7 @@
 //! # What's NOT on the trait
 //!
 //! - Joint kernels like `sin_cos` / `sinh_cosh` exist only on the
-//!   wide-tier macros and aren't available on D9 / D18 / D38. Access
+//!   wide-tier macros and aren't available on D18 / D38. Access
 //!   them via the concrete type.
 //! - Mathematical constants (`pi`, `tau`, `e`, …) live on the
 //!   separate [`DecimalConstants`] trait so callers can opt in to just

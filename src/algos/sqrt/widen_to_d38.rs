@@ -1,6 +1,6 @@
 //! Narrow-tier square-root kernel — widen to D38, sqrt, narrow back.
 //!
-//! Captures the **width-level specialisation** that has lived on D9 /
+//! Captures the **width-level specialisation** that has lived on 
 //! D18 since the strict transcendentals shipped: the narrow tiers
 //! don't have their own integer-sqrt path — they widen losslessly to
 //! D38 (same SCALE), call D38's `sqrt_strict`, and narrow back. The

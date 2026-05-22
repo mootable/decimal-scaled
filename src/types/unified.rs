@@ -15,7 +15,7 @@
 //! # Storage parameterisation
 //!
 //! `S` is the storage integer. For the narrow primitive tiers
-//! `S` is `i32` (D9), `i64` (D18), `i128` (D38). For the wide tiers
+//! `S` is `i64` (D18), `i128` (D38). For the wide tiers
 //! `S` is one of the `crate::wide_int::Int{192,256,384,…,4096}`
 //! types.
 //!
@@ -40,7 +40,7 @@
 //!
 //! # Compatibility
 //!
-//! Existing names (`D9`, `D18`, `D38`, `D57`, …, `D1232`) become
+//! Existing names (`D18`, `D38`, `D57`, …, `D1232`) become
 //! type aliases of `D<…, SCALE>`. Source-compatible. The
 //! `#[repr(transparent)]` layout is preserved per storage, so the
 //! raw-bytes representation of `D38<5>` is unchanged.
