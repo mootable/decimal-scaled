@@ -34,7 +34,7 @@
 /// `D38::<SCALE_REF>::from_bits(_).rescale::<SCALE>()` path to be
 /// available (i.e. the rescale macro is already invoked for D38).
 ///
-/// - `decl_decimal_consts!(D9, i32)` — *native* storage; the `i128`
+/// - `decl_decimal_consts!(D18, i64)` — *native* storage; the `i128`
 /// reference bits narrow via an `as`-cast.
 /// - `decl_decimal_consts!(wide D76, I256)` — *wide* storage; the
 /// `i128` reference bits widen via the `BigInt` cast. Because the

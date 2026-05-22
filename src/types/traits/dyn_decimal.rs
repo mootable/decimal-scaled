@@ -65,7 +65,6 @@
 //! [`RawStorage`] enums still carry variants for the wider tiers so
 //! that the API is forward-compatible if those impls are added later.
 //!
-//! [`D9`]: crate::D9
 //! [`D18`]: crate::D18
 //! [`D38`]: crate::D38
 
@@ -94,8 +93,6 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq, Debug, Hash)]
 #[non_exhaustive]
 pub enum DecimalWidth {
-    /// 32-bit storage; corresponds to [`crate::D9`].
-    D9,
     /// 64-bit storage; corresponds to [`crate::D18`].
     D18,
     /// 128-bit storage; corresponds to [`crate::D38`].
@@ -141,8 +138,6 @@ pub enum DecimalWidth {
 #[derive(Clone, Debug)]
 #[non_exhaustive]
 pub enum RawStorage {
-    /// 32-bit signed integer — D9.
-    I32(i32),
     /// 64-bit signed integer — D18.
     I64(i64),
     /// 128-bit signed integer — D38.

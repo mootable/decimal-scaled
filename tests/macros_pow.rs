@@ -174,9 +174,9 @@ fn saturating_pow_positive_overflow_saturates_to_max() {
 
 #[test]
 fn saturating_pow_negative_odd_saturates_to_min() {
-    let neg_ten = D9_0::from_int(-10);
-    // -10^5 = -100000 (in range); -10^9 = -10^9 overflows MIN side
-    assert_eq!(neg_ten.saturating_pow(11), D9_0::MIN);
+    let neg_ten = D9_0::from_int(-10); // D9_0 is now D18<0> (i64 storage)
+    // -10^19 = -1e19 overflows i64 on the MIN side (i64::MIN ≈ -9.2e18).
+    assert_eq!(neg_ten.saturating_pow(19), D9_0::MIN);
     let neg_ten = D18_0::from_int(-10);
     assert_eq!(neg_ten.saturating_pow(41), D18_0::MIN);
     let neg_ten = D38_0::from_int(-10);

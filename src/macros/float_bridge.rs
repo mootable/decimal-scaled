@@ -15,7 +15,7 @@
 /// Emits `from_f64(value)`, `from_f64_with(value, mode)`,
 /// `to_f64(self)`, `to_f32(self)` for a decimal type.
 ///
-/// - `decl_decimal_float_bridge!(D9, i32)` — *native* storage; the
+/// - `decl_decimal_float_bridge!(D18, i64)` — *native* storage; the
 /// `f64` <-> storage conversions use `as`-casts.
 /// - `decl_decimal_float_bridge!(wide D76, I256)` — *wide* storage;
 /// the conversions use the `BigInt` cast. The experimental `f16` /

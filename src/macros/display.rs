@@ -7,7 +7,7 @@
 //!
 //! Two arms exist:
 //!
-//! - `decl_decimal_display!(D9)` — *native* storage. The magnitude
+//! - `decl_decimal_display!(D18)` — *native* storage. The magnitude
 //! fits in `u128`, so the split arithmetic is done there.
 //! - `decl_decimal_display!(wide D76, U256)` — *wide* storage. The
 //! magnitude is an unsigned wide integer (`unsigned_abs()` handles

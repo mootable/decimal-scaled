@@ -17,7 +17,6 @@
 //!
 //! | Type | Storage | `MAX_SCALE` | Feature gate |
 //! |------|---------|-------------|--------------|
-//! | [`D9<SCALE>`]    | `i32`     |    8 | always on |
 //! | [`D18<SCALE>`]   | `i64`     |   17 | always on |
 //! | [`D38<SCALE>`]   | `i128`    |   37 | always on |
 //! | [`D57<SCALE>`]   | 192-bit   |   56 | `d57` or `wide` |
