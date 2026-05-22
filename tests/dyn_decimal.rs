@@ -21,33 +21,24 @@ use decimal_scaled::{D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMod
 
 #[test]
 fn width_and_scale_round_trip() {
-    let d9: Box<dyn DynDecimal> = Box::new(D9::<3>::from_i32(7));
     let d18: Box<dyn DynDecimal> = Box::new(D18::<5>::from_i32(7));
     let d38: Box<dyn DynDecimal> = Box::new(D38::<12>::from_i32(7));
 
-    assert_eq!(d9.width(), DecimalWidth::D9);
     assert_eq!(d18.width(), DecimalWidth::D18);
     assert_eq!(d38.width(), DecimalWidth::D38);
 
-    assert_eq!(d9.scale_dyn(), 3);
     assert_eq!(d18.scale_dyn(), 5);
     assert_eq!(d38.scale_dyn(), 12);
 
-    assert_eq!(d9.max_scale(), 9);
     assert_eq!(d18.max_scale(), 18);
     assert_eq!(d38.max_scale(), 38);
 }
 
 #[test]
 fn raw_storage_tagged_correctly() {
-    let d9: Box<dyn DynDecimal> = Box::new(D9::<3>::from_i32(7));
     let d18: Box<dyn DynDecimal> = Box::new(D18::<5>::from_i32(7));
     let d38: Box<dyn DynDecimal> = Box::new(D38::<12>::from_i32(7));
 
-    match d9.raw_storage() {
-        RawStorage::I32(v) => assert_eq!(v, 7 * 10_i32.pow(3)),
-        _ => panic!("expected I32"),
-    }
     match d18.raw_storage() {
         RawStorage::I64(v) => assert_eq!(v, 7 * 10_i64.pow(5)),
         _ => panic!("expected I64"),
@@ -146,10 +137,10 @@ fn sub_mul_div_rem_same_scale() {
     );
 
     let quot = a.div(&*b).unwrap();
-    // 20 / 3 at scale 2 = 6.67 (banker's rounding).
+    // 20 / 3 at scale 2 = 6.66 (HalfToEven: 6.666... rounds down).
     assert_eq!(
         *quot.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>(667)
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(666))
     );
 
     let rem = a.rem(&*b).unwrap();
@@ -164,20 +155,27 @@ fn sub_mul_div_rem_same_scale() {
 #[test]
 fn add_same_width_different_scale_auto_rescales_up() {
     // D38<2> value 1.50  +  D38<5> value 0.00007  →  D38<5> value 1.50007
-    let a: Box<dyn DynDecimal> = Box::new(D38::<2>(150));
-    let b: Box<dyn DynDecimal> = Box::new(D38::<5>(7));
+    let a: Box<dyn DynDecimal> =
+        Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)));
+    let b: Box<dyn DynDecimal> =
+        Box::new(D38::<5>::from_bits(decimal_scaled::Int::<2>::from_i128(7)));
     let sum = a.add(&*b).unwrap();
     assert_eq!(sum.scale_dyn(), 5);
     assert_eq!(sum.width(), DecimalWidth::D38);
     let typed = sum.as_any().downcast_ref::<D38<5>>().unwrap();
-    assert_eq!(*typed, D38::<5>(150_007));
+    assert_eq!(
+        *typed,
+        D38::<5>::from_bits(decimal_scaled::Int::<2>::from_i128(150_007))
+    );
 }
 
 #[test]
 fn cmp_dyn_uses_lossless_rescale() {
     // 1.50 and 1.50000 are equal logically; rescale up preserves that.
-    let a: Box<dyn DynDecimal> = Box::new(D38::<2>(150));
-    let b: Box<dyn DynDecimal> = Box::new(D38::<5>(150_000));
+    let a: Box<dyn DynDecimal> =
+        Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)));
+    let b: Box<dyn DynDecimal> =
+        Box::new(D38::<5>::from_bits(decimal_scaled::Int::<2>::from_i128(150_000)));
     assert_eq!(a.cmp_dyn(&*b), Some(core::cmp::Ordering::Equal));
     assert!(a.eq_dyn(&*b));
 }
@@ -186,8 +184,10 @@ fn cmp_dyn_uses_lossless_rescale() {
 fn cmp_dyn_distinguishes_unequal_finer_scale() {
     // 1.50 vs 1.50001 (D38<5>): the finer-scale value carries info the
     // narrower scale can't, and the lossless rescale-up preserves it.
-    let a: Box<dyn DynDecimal> = Box::new(D38::<2>(150));
-    let b: Box<dyn DynDecimal> = Box::new(D38::<5>(150_001));
+    let a: Box<dyn DynDecimal> =
+        Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)));
+    let b: Box<dyn DynDecimal> =
+        Box::new(D38::<5>::from_bits(decimal_scaled::Int::<2>::from_i128(150_001)));
     assert_eq!(a.cmp_dyn(&*b), Some(core::cmp::Ordering::Less));
     assert!(!a.eq_dyn(&*b));
 }
@@ -211,41 +211,41 @@ fn cross_width_arithmetic_returns_none() {
 
 #[test]
 fn rescale_to_within_range() {
-    let v: Box<dyn DynDecimal> = Box::new(D38::<2>(150));
+    let v: Box<dyn DynDecimal> =
+        Box::new(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)));
     let up = v.rescale_to(5).unwrap();
     assert_eq!(up.scale_dyn(), 5);
     assert_eq!(
         *up.as_any().downcast_ref::<D38<5>>().unwrap(),
-        D38::<5>(150_000)
+        D38::<5>::from_bits(decimal_scaled::Int::<2>::from_i128(150_000))
     );
 
     let down = up.rescale_to(2).unwrap();
     assert_eq!(
         *down.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>(150)
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150))
     );
 }
 
 #[test]
 fn rescale_to_with_explicit_rounding_mode() {
     // 1.555 at scale 3 → scale 2 with Trunc → 1.55; with Ceiling → 1.56.
-    let v: Box<dyn DynDecimal> = Box::new(D38::<3>(1555));
+    let v: Box<dyn DynDecimal> =
+        Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::from_i128(1555)));
     let truncated = v.rescale_to_with(2, RoundingMode::Trunc).unwrap();
     assert_eq!(
         *truncated.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>(155)
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(155))
     );
     let ceiled = v.rescale_to_with(2, RoundingMode::Ceiling).unwrap();
     assert_eq!(
         *ceiled.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>(156)
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(156))
     );
 }
 
 #[test]
 fn rescale_to_above_max_returns_none() {
-    let v: Box<dyn DynDecimal> = Box::new(D9::<3>::from_i32(5));
-    assert!(v.rescale_to(10).is_none()); // max_scale = 9
     let v18: Box<dyn DynDecimal> = Box::new(D18::<3>::from_i32(5));
     assert!(v18.rescale_to(19).is_none()); // max_scale = 18
     let v38: Box<dyn DynDecimal> = Box::new(D38::<3>::from_i32(5));
@@ -280,21 +280,24 @@ fn div_by_zero_returns_none() {
 
 #[test]
 fn display_matches_typed_format() {
-    let v: Box<dyn DynDecimal> = Box::new(D38::<3>(1234));
+    let v: Box<dyn DynDecimal> =
+        Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::from_i128(1234)));
     assert_eq!(v.display(), "1.234");
 }
 
 #[cfg(feature = "std")]
 #[test]
 fn to_f64_round_trip_low_scale() {
-    let v: Box<dyn DynDecimal> = Box::new(D38::<3>(1500));
+    let v: Box<dyn DynDecimal> =
+        Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::from_i128(1500)));
     let f = v.to_f64();
     assert!((f - 1.5).abs() < 1e-12);
 }
 
 #[test]
 fn to_int_truncates() {
-    let v: Box<dyn DynDecimal> = Box::new(D38::<3>(7_500)); // 7.500
+    let v: Box<dyn DynDecimal> =
+        Box::new(D38::<3>::from_bits(decimal_scaled::Int::<2>::from_i128(7_500))); // 7.500
     // Crate default is HalfToEven; 7.5 → 8 (rounds to even).
     // We don't assert the exact rounding mode (depends on Cargo features);
     // just that the call succeeds and is in the right neighbourhood.
@@ -302,19 +305,7 @@ fn to_int_truncates() {
     assert!(i == 7 || i == 8);
 }
 
-// ── Cross-scale arithmetic on D9 and D18 ──────────────────────────────
-
-#[test]
-fn d9_cross_scale_add() {
-    let a: Box<dyn DynDecimal> = Box::new(D9::<2>::from_bits(150)); // 1.50
-    let b: Box<dyn DynDecimal> = Box::new(D9::<4>::from_bits(7)); // 0.0007
-    let sum = a.add(&*b).unwrap();
-    assert_eq!(sum.scale_dyn(), 4);
-    assert_eq!(
-        *sum.as_any().downcast_ref::<D9<4>>().unwrap(),
-        D9::<4>::from_bits(15_007)
-    );
-}
+// ── Cross-scale arithmetic on D18 ────────────────────────────────────
 
 #[test]
 fn d18_cross_scale_mul() {
@@ -334,17 +325,13 @@ fn d18_cross_scale_mul() {
 #[test]
 fn vec_of_mixed_widths() {
     let values: Vec<Box<dyn DynDecimal>> = vec![
-        Box::new(D9::<2>::from_i32(1)),
         Box::new(D18::<3>::from_i32(2)),
         Box::new(D38::<5>::from_i32(3)),
     ];
 
     let widths: Vec<DecimalWidth> = values.iter().map(|v| v.width()).collect();
-    assert_eq!(
-        widths,
-        vec![DecimalWidth::D9, DecimalWidth::D18, DecimalWidth::D38]
-    );
+    assert_eq!(widths, vec![DecimalWidth::D18, DecimalWidth::D38]);
 
     let displays: Vec<String> = values.iter().map(|v| v.display()).collect();
-    assert_eq!(displays, vec!["1.00", "2.000", "3.00000"]);
+    assert_eq!(displays, vec!["2.000", "3.00000"]);
 }
