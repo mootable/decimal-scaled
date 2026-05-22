@@ -144,14 +144,14 @@ fn checked_pow_overflow_returns_none_d38() {
 // ─── wrapping_pow ──────────────────────────────────────────────────────
 
 #[test]
-fn wrapping_pow_matches_arithmetic_d9() {
-    let two = D9_0::from_int(2);
+fn wrapping_pow_matches_arithmetic_d18() {
+    let two = D9_0::from_int(2); // D9_0 is now D18<0> (i64 storage)
     // 2^10 == 1024, well within range.
     assert_eq!(two.wrapping_pow(10).to_bits(), 1024);
-    // 2^31 wraps in i32: (2 as i32).wrapping_pow(31) == i32::MIN.
-    assert_eq!(two.wrapping_pow(31).to_bits(), 2i32.wrapping_pow(31));
-    // 2^32 wraps to zero (high bit only, drops).
-    assert_eq!(two.wrapping_pow(32).to_bits(), 2i32.wrapping_pow(32));
+    // 2^63 wraps in i64: (2 as i64).wrapping_pow(63) == i64::MIN.
+    assert_eq!(two.wrapping_pow(63).to_bits(), 2i64.wrapping_pow(63));
+    // 2^64 wraps to zero (high bit only, drops).
+    assert_eq!(two.wrapping_pow(64).to_bits(), 2i64.wrapping_pow(64));
 }
 
 #[test]
