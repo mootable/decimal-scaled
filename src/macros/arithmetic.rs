@@ -23,47 +23,6 @@
 //! variants (`checked_*`, `saturating_*`, `wrapping_*`) live in a
 //! companion module.
 
-/// Rounds `n / m` (truncating-toward-zero quotient) according to
-/// `$mode` (a [`RoundingMode`]) for *primitive* signed integer types
-/// (`i32` / `i64` / `i128`).
-///
-/// Mode-specific behaviour is delegated to
-/// [`crate::support::rounding::should_bump`], which receives the three
-/// pre-computed inputs every mode needs: the `|r|` vs `|m|−|r|`
-/// ordering (the round-up test without the `2·|r|` overflow risk),
-/// the parity of the truncated quotient, and the result sign. The
-/// caller bumps the quotient by ±1 in the result direction.
-///
-/// Passing `crate::support::rounding::DEFAULT_ROUNDING_MODE` yields the
-/// crate-wide default (IEEE-754 round-half-to-even unless a
-/// `rounding-*` feature overrides it).
-///
-/// [`RoundingMode`]: crate::support::rounding::RoundingMode
-macro_rules! round_with_mode_native {
-    ($n:expr, $m:expr, $mode:expr) => {{
-        let n = $n;
-        let m = $m;
-        let mode = $mode;
-        let q = n / m;
-        let r = n % m;
-        if r == 0 {
-            q
-        } else {
-            let abs_r = if r < 0 { -r } else { r };
-            let abs_m = if m < 0 { -m } else { m };
-            let comp = abs_m - abs_r;
-            let cmp_r = abs_r.cmp(&comp);
-            let q_is_odd = (q & 1) != 0;
-            let result_positive = (n < 0) == (m < 0);
-            if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                if result_positive { q + 1 } else { q - 1 }
-            } else {
-                q
-            }
-        }
-    }};
-}
-pub(crate) use round_with_mode_native;
 
 /// Divides a signed `i128` magnitude-bearing numerator by an unsigned
 /// `u64` divisor magnitude using two hardware `divq` instructions (one
@@ -394,102 +353,9 @@ macro_rules! decl_decimal_arithmetic {
         }
     };
 
-    // Native (primitive integer) storage — `i64`-widening branch (D9).
-    //
-    // Storage is `i32`, widening is `i64`. The rebalance divisor
-    // `10^SCALE` (SCALE <= 9) and the runtime divisor `rhs.0`
-    // (`|rhs.0| <= i32::MAX`) both fit a single 32-bit word, so the
-    // `i64 / i64` divide LLVM emits is a single hardware `idivq` —
-    // already optimal. No `i128_divrem_by_u64` fast path applies.
-    ($Type:ident, $Storage:ty, i64) => {
-        $crate::macros::arithmetic::decl_decimal_arithmetic!(@common $Type, $Storage);
-        $crate::macros::arithmetic::decl_decimal_arithmetic!(@native_i64_wider $Type, $Storage);
-    };
-
-    // Native (primitive integer) storage — `i128`-widening branch (D18).
-    //
-    // Storage is `i64`, widening is `i128`. The naive `i128 / i128`
-    // divide lowers to LLVM's `__divti3` soft-call (≈10 ns) even
-    // though both the rebalance divisor `10^SCALE` (SCALE <= 18, fits
-    // u64) and the runtime divisor `rhs.0.unsigned_abs()` (i64
-    // magnitude, fits u64) are u64. Routing through
-    // `i128_divrem_by_u64_with_mode` replaces the soft-call with
-    // two hardware `divq` instructions, cutting D18 mul/div ~60%.
     ($Type:ident, $Storage:ty, i128) => {
         $crate::macros::arithmetic::decl_decimal_arithmetic!(@common $Type, $Storage);
         $crate::macros::arithmetic::decl_decimal_arithmetic!(@native_i128_wider $Type, $Storage);
-    };
-
-    // i64-widening body: original code, unchanged.
-    (@native_i64_wider $Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> ::core::ops::Mul for $Type<SCALE> {
-            type Output = Self;
-            /// Multiply two values of the same scale. Widens to `i64`
-            /// to hold `a · b` exactly, divides by `10^SCALE` using the
-            /// crate-default [`RoundingMode`] (IEEE-754 round-to-nearest;
-            /// within 0.5 ULP), and narrows back to `$Storage`. See
-            /// [`Self::mul_with`] to choose a non-default rounding mode.
-            ///
-            /// [`RoundingMode`]: $crate::support::rounding::RoundingMode
-            #[inline]
-            fn mul(self, rhs: Self) -> Self {
-                self.mul_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::MulAssign for $Type<SCALE> {
-            #[inline]
-            fn mul_assign(&mut self, rhs: Self) {
-                *self = *self * rhs;
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::Div for $Type<SCALE> {
-            type Output = Self;
-            /// Divide two values of the same scale using the crate-default
-            /// `RoundingMode` (within 0.5 ULP).
-            #[inline]
-            fn div(self, rhs: Self) -> Self {
-                self.div_with(rhs, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
-            }
-        }
-
-        impl<const SCALE: u32> $Type<SCALE> {
-            /// Multiply two values of the same scale, rounding the
-            /// scale-narrowing step according to `mode`. Within 0.5 ULP
-            /// for the half-* family.
-            #[inline]
-            pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let a = self.0 as i64;
-                let b = rhs.0 as i64;
-                let m = (10i64).pow(SCALE);
-                let n = a * b;
-                let scaled =
-                    $crate::macros::arithmetic::round_with_mode_native!(n, m, mode);
-                Self(scaled as $Storage)
-            }
-
-            /// Divide two values of the same scale, rounding the
-            /// scale-narrowing step according to `mode`. Within 0.5 ULP
-            /// for the half-* family.
-            #[inline]
-            pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let a = self.0 as i64;
-                let b = rhs.0 as i64;
-                let m = (10i64).pow(SCALE);
-                let n = a * m;
-                let result =
-                    $crate::macros::arithmetic::round_with_mode_native!(n, b, mode);
-                Self(result as $Storage)
-            }
-        }
-
-        impl<const SCALE: u32> ::core::ops::DivAssign for $Type<SCALE> {
-            #[inline]
-            fn div_assign(&mut self, rhs: Self) {
-                *self = *self / rhs;
-            }
-        }
     };
 
     // i128-widening body: u128/u64 schoolbook fast path.
