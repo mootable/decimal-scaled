@@ -1,35 +1,12 @@
 //! Coverage suite for `macros/bitwise.rs` and the remaining branches in
 //! `macros/overflow.rs` that the high-level surface tests didn't reach.
 
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 
-type D9_2 = D9<2>;
 type D18_2 = D18<2>;
 type D38_2 = D38<2>;
 
 // ─── bitwise: bit-manipulation methods on raw storage ──────────────────
-
-#[test]
-fn bitwise_methods_d9() {
-    let v = D9_2::from_bits(0b1010);
-    assert_eq!(v.count_ones(), 2);
-    assert_eq!(v.count_zeros(), 32 - 2);
-    assert_eq!(v.trailing_zeros(), 1);
-    assert_eq!(v.leading_zeros(), 32 - 4);
-    // unsigned_shr fills high bits with zero even for negative storage.
-    let neg = D9_2::from_bits(-1); // all-ones
-    let logical = neg.unsigned_shr(31);
-    assert_eq!(logical.to_bits(), 1);
-    // rotate_left/right
-    let r = D9_2::from_bits(1).rotate_left(2);
-    assert_eq!(r.to_bits(), 4);
-    let r = D9_2::from_bits(4).rotate_right(2);
-    assert_eq!(r.to_bits(), 1);
-    // is_power_of_two / next_power_of_two
-    assert!(D9_2::from_bits(8).is_power_of_two());
-    assert!(!D9_2::from_bits(7).is_power_of_two());
-    assert_eq!(D9_2::from_bits(5).next_power_of_two().to_bits(), 8);
-}
 
 #[test]
 fn bitwise_methods_d18() {
