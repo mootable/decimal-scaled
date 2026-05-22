@@ -341,7 +341,7 @@ fn bitwise_ops_d9_d18() {
     c ^= b;
     assert_eq!(c.to_bits(), 0b0110);
     // Not
-    assert_eq!((!D9_2::from_bits(0)).to_bits(), !0i32);
+    assert_eq!((!D9_2::from_bits(0)).to_bits(), !0i64);
     // Shifts
     let s = D9_2::from_bits(1);
     assert_eq!((s.shl(3_u32)).to_bits(), 8);

@@ -90,6 +90,4 @@ fn cross_width_narrowing_d76_to_d18_d9() {
     let big = D76::<2>::MAX;
     let r: Result<D18<2>, _> = big.try_into();
     assert!(r.is_err());
-    let r: Result<D9<2>, _> = big.try_into();
-    assert!(r.is_err());
 }

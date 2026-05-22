@@ -106,17 +106,6 @@ fn main() {
     println!();
     println!("| type / s   | ln noise | exp noise | sin noise | sqrt noise |");
     println!("|------------|----------|-----------|-----------|------------|");
-
-    row!(
-        D9<5>,
-        "D9<5>",
-        D9::<5>::from_int(1) + D9::<5>::from_int(1) / D9::<5>::from_int(2)
-    );
-    row!(
-        D9<9>,
-        "D9<9>",
-        D9::<9>::from_int(1) + D9::<9>::from_int(1) / D9::<9>::from_int(2)
-    );
     row!(
         D18<9>,
         "D18<9>",
