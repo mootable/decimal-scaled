@@ -8,7 +8,7 @@ use decimal_scaled::{D38s12, RoundingMode};
 #[test]
 fn mul_with_modes() {
     // 1.5 * 2.0 = 3.0 (exact at any mode)
-    let a = D38s12::from_bits(1_500_000_000_000);
+    let a = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
     let b = D38s12::from_int(2);
     for m in [
         RoundingMode::HalfToEven,
@@ -56,7 +56,7 @@ fn div_with_zero_panics() {
 
 #[test]
 fn mul_assign_div_assign() {
-    let mut v = D38s12::from_bits(1_500_000_000_000); // 1.5
+    let mut v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000)); // 1.5
     v *= D38s12::from_int(2);
     assert_eq!(v.to_bits(), 3_000_000_000_000);
     v /= D38s12::from_int(3);

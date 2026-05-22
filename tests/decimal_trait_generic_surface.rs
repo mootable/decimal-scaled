@@ -107,7 +107,7 @@ fn trait_to_int_with_modes() {
     fn cast<D: Decimal>(d: D, mode: RoundingMode) -> i64 {
         DecimalConvert::to_int_with(d, mode)
     }
-    let v = D38::<2>::from_bits(151);
+    let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(151));
     assert_eq!(cast(v, RoundingMode::Floor), 1);
     assert_eq!(cast(v, RoundingMode::Ceiling), 2);
     assert_eq!(cast(v, RoundingMode::Trunc), 1);
@@ -120,8 +120,8 @@ fn trait_bitwise_supertraits() {
     fn high_bits_off<D: Decimal>(v: D, mask: D) -> D {
         v & !mask
     }
-    let v = D38::<0>::from_bits(0b1111);
-    let mask = D38::<0>::from_bits(0b1100);
+    let v = D38::<0>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1111));
+    let mask = D38::<0>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1100));
     let r = high_bits_off(v, mask);
     assert_eq!(r.to_bits(), 0b0011);
 }

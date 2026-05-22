@@ -32,6 +32,6 @@ fn log10_strict_on_saturated_d38_scale38() {
 /// failure to the kernel rather than `from_f64`'s saturation policy.
 #[test]
 fn log10_strict_on_near_max_d38_scale38() {
-    let v = D38::<38>::from_bits(i128::MAX);
+    let v = D38::<38>::from_bits(decimal_scaled::Int::<2>::from_i128(i128::MAX));
     let _ = v.log10_strict();
 }

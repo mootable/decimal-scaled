@@ -185,7 +185,7 @@ fn wide_checked_div_quotient_overflow() {
     let a = D::MAX;
     // 1.0 at S=74 is 10^74 — make rhs = 1 LSB so q = a * 10^74 / 1 → way past storage.
     // Build a 1-LSB tiny value by lifting D38<74> from_bits(1).
-    let tiny: D = D38::<74>::from_bits(1).into();
+    let tiny: D = D38::<74>::from_bits(decimal_scaled::Int::<2>::from_i128(1)).into();
     let r = a.checked_div(tiny);
     assert!(r.is_none(), "tiny divisor on huge dividend should overflow");
 }

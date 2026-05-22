@@ -106,9 +106,9 @@ fn from_u64_at_boundary_is_lossless() {
 #[test]
 fn to_int_lossy_default_rounds_half_to_even() {
     // 2.5 with HalfToEven default -> 2 (even neighbour).
-    assert_eq!(D38s12::from_bits(2_500_000_000_000).to_int(), 2);
+    assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_500_000_000_000)).to_int(), 2);
     // 3.5 with HalfToEven -> 4 (even).
-    assert_eq!(D38s12::from_bits(3_500_000_000_000).to_int(), 4);
+    assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(3_500_000_000_000)).to_int(), 4);
 }
 
 #[test]

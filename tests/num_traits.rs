@@ -68,7 +68,7 @@ fn zero_is_zero_const() {
 fn zero_is_zero_predicate() {
     assert!(<D38s12 as Zero>::is_zero(&D38s12::ZERO));
     assert!(!<D38s12 as Zero>::is_zero(&D38s12::ONE));
-    assert!(!<D38s12 as Zero>::is_zero(&D38s12::from_bits(1)));
+    assert!(!<D38s12 as Zero>::is_zero(&D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1))));
 }
 
 #[test]
@@ -81,7 +81,7 @@ fn one_is_one_predicate() {
     assert!(<D38s12 as One>::is_one(&D38s12::ONE));
     assert!(!<D38s12 as One>::is_one(&D38s12::ZERO));
     // A non-canonical raw value (1 LSB) is not "one".
-    assert!(!<D38s12 as One>::is_one(&D38s12::from_bits(1)));
+    assert!(!<D38s12 as One>::is_one(&D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1))));
 }
 
 // ---------------------------------------------------------------------------
@@ -100,8 +100,8 @@ fn bounded_min_max() {
 
 #[test]
 fn signed_abs_basic() {
-    let pos = D38s12::from_bits(1_500_000_000_000);
-    let neg = D38s12::from_bits(-1_500_000_000_000);
+    let pos = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
+    let neg = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1_500_000_000_000));
     assert_eq!(<D38s12 as Signed>::abs(&pos), pos);
     assert_eq!(<D38s12 as Signed>::abs(&neg), pos);
     assert_eq!(<D38s12 as Signed>::abs(&D38s12::ZERO), D38s12::ZERO);
@@ -109,8 +109,8 @@ fn signed_abs_basic() {
 
 #[test]
 fn signed_signum_basic() {
-    let pos = D38s12::from_bits(1_500_000_000_000);
-    let neg = D38s12::from_bits(-1_500_000_000_000);
+    let pos = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
+    let neg = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1_500_000_000_000));
     assert_eq!(<D38s12 as Signed>::signum(&pos), D38s12::ONE);
     assert_eq!(<D38s12 as Signed>::signum(&neg), -D38s12::ONE);
     assert_eq!(<D38s12 as Signed>::signum(&D38s12::ZERO), D38s12::ZERO);
@@ -118,8 +118,8 @@ fn signed_signum_basic() {
 
 #[test]
 fn signed_is_positive_negative() {
-    let pos = D38s12::from_bits(1_500_000_000_000);
-    let neg = D38s12::from_bits(-1_500_000_000_000);
+    let pos = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
+    let neg = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1_500_000_000_000));
     assert!(<D38s12 as Signed>::is_positive(&pos));
     assert!(!<D38s12 as Signed>::is_positive(&neg));
     assert!(!<D38s12 as Signed>::is_positive(&D38s12::ZERO));
@@ -132,11 +132,11 @@ fn signed_is_positive_negative() {
 /// `abs_sub(a, b)` clamps to zero when `a <= b`.
 #[test]
 fn signed_abs_sub_clamps_to_zero() {
-    let two = D38s12::from_bits(2_000_000_000_000);
-    let five = D38s12::from_bits(5_000_000_000_000);
+    let two = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000));
+    let five = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(5_000_000_000_000));
 
     // 5 - 2 = 3 (positive case)
-    let three = D38s12::from_bits(3_000_000_000_000);
+    let three = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(3_000_000_000_000));
     assert_eq!(<D38s12 as Signed>::abs_sub(&five, &two), three);
 
     // 2 - 5 clamps to ZERO (a <= b)
@@ -156,11 +156,11 @@ fn from_primitive_i64_in_range() {
     assert_eq!(<D38s12 as FromPrimitive>::from_i64(1), Some(D38s12::ONE));
     assert_eq!(
         <D38s12 as FromPrimitive>::from_i64(42),
-        Some(D38s12::from_bits(42_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(42_000_000_000_000)))
     );
     assert_eq!(
         <D38s12 as FromPrimitive>::from_i64(-42),
-        Some(D38s12::from_bits(-42_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-42_000_000_000_000)))
     );
 }
 
@@ -169,7 +169,7 @@ fn from_primitive_u64_in_range() {
     assert_eq!(<D38s12 as FromPrimitive>::from_u64(0), Some(D38s12::ZERO));
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u64(42),
-        Some(D38s12::from_bits(42_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(42_000_000_000_000)))
     );
     // u64::MAX * 10^12 fits in i128, so this succeeds.
     let large = <D38s12 as FromPrimitive>::from_u64(u64::MAX);
@@ -186,7 +186,7 @@ fn from_primitive_i128_overflow_returns_none() {
     // Small values succeed.
     assert_eq!(
         <D38s12 as FromPrimitive>::from_i128(7),
-        Some(D38s12::from_bits(7_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(7_000_000_000_000)))
     );
 }
 
@@ -198,7 +198,7 @@ fn from_primitive_u128_overflow_returns_none() {
     // Small values succeed.
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u128(99),
-        Some(D38s12::from_bits(99_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(99_000_000_000_000)))
     );
 }
 
@@ -235,24 +235,24 @@ fn from_primitive_f64_basic() {
 fn from_primitive_smaller_int_types_via_default_impl() {
     assert_eq!(
         <D38s12 as FromPrimitive>::from_i32(7),
-        Some(D38s12::from_bits(7_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(7_000_000_000_000)))
     );
     assert_eq!(
         <D38s12 as FromPrimitive>::from_i16(-3),
-        Some(D38s12::from_bits(-3_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-3_000_000_000_000)))
     );
     assert_eq!(<D38s12 as FromPrimitive>::from_i8(0), Some(D38s12::ZERO));
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u32(7),
-        Some(D38s12::from_bits(7_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(7_000_000_000_000)))
     );
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u16(3),
-        Some(D38s12::from_bits(3_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(3_000_000_000_000)))
     );
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u8(255),
-        Some(D38s12::from_bits(255_000_000_000_000))
+        Some(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(255_000_000_000_000)))
     );
 }
 
@@ -262,10 +262,10 @@ fn from_primitive_smaller_int_types_via_default_impl() {
 
 #[test]
 fn to_primitive_i64_in_range() {
-    let v = D38s12::from_bits(42_000_000_000_000);
+    let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(42_000_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_i64(&v), Some(42_i64));
 
-    let neg = D38s12::from_bits(-42_000_000_000_000);
+    let neg = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-42_000_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_i64(&neg), Some(-42_i64));
 
     assert_eq!(<D38s12 as ToPrimitive>::to_i64(&D38s12::ZERO), Some(0_i64));
@@ -274,11 +274,11 @@ fn to_primitive_i64_in_range() {
 #[test]
 fn to_primitive_i64_truncates_toward_zero() {
     // 2.5 truncates to 2
-    let v = D38s12::from_bits(2_500_000_000_000);
+    let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_500_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_i64(&v), Some(2_i64));
 
     // -2.5 truncates to -2 (toward zero, not toward -inf)
-    let neg = D38s12::from_bits(-2_500_000_000_000);
+    let neg = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-2_500_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_i64(&neg), Some(-2_i64));
 }
 
@@ -291,13 +291,13 @@ fn to_primitive_i64_out_of_range_returns_none() {
 
 #[test]
 fn to_primitive_u64_negative_returns_none() {
-    let neg = D38s12::from_bits(-1_000_000_000_000);
+    let neg = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1_000_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_u64(&neg), None);
 }
 
 #[test]
 fn to_primitive_u64_in_range() {
-    let v = D38s12::from_bits(42_000_000_000_000);
+    let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(42_000_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_u64(&v), Some(42_u64));
 
     assert_eq!(<D38s12 as ToPrimitive>::to_u64(&D38s12::ZERO), Some(0_u64));
@@ -314,7 +314,7 @@ fn to_primitive_i128_always_succeeds() {
         Some(0_i128)
     );
     assert_eq!(
-        <D38s12 as ToPrimitive>::to_i128(&D38s12::from_bits(42_000_000_000_000)),
+        <D38s12 as ToPrimitive>::to_i128(&D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(42_000_000_000_000))),
         Some(42_i128)
     );
 }
@@ -322,7 +322,7 @@ fn to_primitive_i128_always_succeeds() {
 #[test]
 fn to_primitive_u128_negative_returns_none() {
     assert_eq!(
-        <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(-1)),
+        <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1))),
         None
     );
 }
@@ -334,7 +334,7 @@ fn to_primitive_u128_in_range() {
         Some(0_u128)
     );
     assert_eq!(
-        <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(99_000_000_000_000)),
+        <D38s12 as ToPrimitive>::to_u128(&D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(99_000_000_000_000))),
         Some(99_u128)
     );
 }
@@ -353,7 +353,7 @@ fn to_primitive_f64_round_trip_within_lsb() {
 
 #[test]
 fn to_primitive_f32_matches_to_f32_lossy() {
-    let v = D38s12::from_bits(1_500_000_000_000);
+    let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_f32(&v), Some(v.to_f32()));
 }
 
@@ -361,7 +361,7 @@ fn to_primitive_f32_matches_to_f32_lossy() {
 /// via `to_i64` / `to_u64`. Verify the delegation chain works.
 #[test]
 fn to_primitive_smaller_int_types_via_default_impl() {
-    let v = D38s12::from_bits(42_000_000_000_000);
+    let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(42_000_000_000_000));
     assert_eq!(<D38s12 as ToPrimitive>::to_i32(&v), Some(42_i32));
     assert_eq!(<D38s12 as ToPrimitive>::to_u32(&v), Some(42_u32));
     assert_eq!(<D38s12 as ToPrimitive>::to_i16(&v), Some(42_i16));
@@ -370,7 +370,7 @@ fn to_primitive_smaller_int_types_via_default_impl() {
     assert_eq!(<D38s12 as ToPrimitive>::to_u8(&v), Some(42_u8));
 
     // Out-of-range narrowing returns None.
-    let big = D38s12::from_bits(40_000_000_000_000_000); // 40_000
+    let big = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(40_000_000_000_000_000)); // 40_000
     assert_eq!(<D38s12 as ToPrimitive>::to_i8(&big), None);
     assert_eq!(<D38s12 as ToPrimitive>::to_u8(&big), None);
 }
@@ -382,7 +382,7 @@ fn to_primitive_smaller_int_types_via_default_impl() {
 #[test]
 fn checked_add_basic() {
     let one = D38s12::ONE;
-    let two = D38s12::from_bits(2_000_000_000_000);
+    let two = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000));
     assert_eq!(<D38s12 as CheckedAdd>::checked_add(&one, &one), Some(two));
 }
 
@@ -402,8 +402,8 @@ fn checked_add_overflow_returns_none() {
 
 #[test]
 fn checked_sub_basic() {
-    let three = D38s12::from_bits(3_000_000_000_000);
-    let two = D38s12::from_bits(2_000_000_000_000);
+    let three = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(3_000_000_000_000));
+    let two = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000));
     assert_eq!(
         <D38s12 as CheckedSub>::checked_sub(&three, &two),
         Some(D38s12::ONE)
@@ -425,8 +425,8 @@ fn checked_sub_underflow_returns_none() {
 
 #[test]
 fn checked_mul_basic() {
-    let half = D38s12::from_bits(500_000_000_000); // 0.5
-    let quarter = D38s12::from_bits(250_000_000_000); // 0.25
+    let half = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)); // 0.5
+    let quarter = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(250_000_000_000)); // 0.25
     assert_eq!(
         <D38s12 as CheckedMul>::checked_mul(&half, &half),
         Some(quarter)
@@ -436,7 +436,7 @@ fn checked_mul_basic() {
 #[test]
 fn checked_mul_overflow_returns_none() {
     // MAX * 2 overflows.
-    let two = D38s12::from_bits(2_000_000_000_000);
+    let two = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000));
     assert_eq!(
         <D38s12 as CheckedMul>::checked_mul(&D38s12::MAX, &two),
         None
@@ -445,9 +445,9 @@ fn checked_mul_overflow_returns_none() {
 
 #[test]
 fn checked_div_basic() {
-    let half = D38s12::from_bits(500_000_000_000); // 0.5
-    let quarter = D38s12::from_bits(250_000_000_000); // 0.25
-    let two = D38s12::from_bits(2_000_000_000_000); // 2.0
+    let half = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)); // 0.5
+    let quarter = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(250_000_000_000)); // 0.25
+    let two = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000)); // 2.0
     // 0.5 / 2.0 == 0.25
     assert_eq!(
         <D38s12 as CheckedDiv>::checked_div(&half, &two),
@@ -481,9 +481,9 @@ fn checked_div_overflow_returns_none() {
 
 #[test]
 fn checked_rem_basic() {
-    let a = D38s12::from_bits(5_500_000_000_000); // 5.5
-    let b = D38s12::from_bits(2_000_000_000_000); // 2.0
-    let expected = D38s12::from_bits(1_500_000_000_000); // 1.5
+    let a = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(5_500_000_000_000)); // 5.5
+    let b = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000)); // 2.0
+    let expected = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000)); // 1.5
     assert_eq!(<D38s12 as CheckedRem>::checked_rem(&a, &b), Some(expected));
 }
 
@@ -545,8 +545,8 @@ fn lcg_i128_seq(seed: i128, n: usize) -> Vec<i128> {
 fn checked_mul_trait_matches_inherent_256_pairs() {
     let seeds = lcg_i128_seq(0x1234_5678_9ABC_DEF0, 512);
     for pair in seeds.chunks_exact(2) {
-        let a = D38s12::from_bits(pair[0]);
-        let b = D38s12::from_bits(pair[1]);
+        let a = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(pair[0]));
+        let b = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(pair[1]));
         let trait_result = <D38s12 as CheckedMul>::checked_mul(&a, &b);
         let inherent_result = a.checked_mul(b);
         assert_eq!(
@@ -562,7 +562,7 @@ fn checked_mul_trait_matches_inherent_256_pairs() {
 fn checked_div_trait_matches_inherent_256_pairs() {
     let seeds = lcg_i128_seq(0xDEAD_BEEF_CAFE_0001, 512);
     for pair in seeds.chunks_exact(2) {
-        let a = D38s12::from_bits(pair[0]);
+        let a = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(pair[0]));
         // Avoid divide-by-zero: if the LCG lands on zero, substitute ONE.
         // The by-zero case is covered by a dedicated test.
         let b_bits = if pair[1] == 0 {
@@ -570,7 +570,7 @@ fn checked_div_trait_matches_inherent_256_pairs() {
         } else {
             pair[1]
         };
-        let b = D38s12::from_bits(b_bits);
+        let b = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(b_bits));
         let trait_result = <D38s12 as CheckedDiv>::checked_div(&a, &b);
         let inherent_result = a.checked_div(b);
         assert_eq!(
@@ -590,11 +590,11 @@ fn checked_mul_trait_matches_inherent_boundary() {
         (D38s12::MIN, D38s12::ONE),
         (D38s12::MAX, D38s12::MAX),
         (D38s12::MIN, D38s12::MIN),
-        (D38s12::from_bits(0), D38s12::from_bits(0)),
-        (D38s12::from_bits(1), D38s12::from_bits(1)),
-        (D38s12::from_bits(-1), D38s12::from_bits(1)),
-        (D38s12::from_bits(1), D38s12::from_bits(-1)),
-        (D38s12::from_bits(-1), D38s12::from_bits(-1)),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(0)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(0))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1))),
     ];
     for &(a, b) in cases {
         let trait_result = <D38s12 as CheckedMul>::checked_mul(&a, &b);
@@ -622,10 +622,10 @@ fn checked_div_trait_matches_inherent_boundary() {
         (D38s12::MAX, D38s12::ZERO),
         // true overflow case: MIN / -ONE
         (D38s12::MIN, neg_one),
-        (D38s12::from_bits(1), D38s12::from_bits(1)),
-        (D38s12::from_bits(-1), D38s12::from_bits(1)),
-        (D38s12::from_bits(1), D38s12::from_bits(-1)),
-        (D38s12::from_bits(-1), D38s12::from_bits(-1)),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1))),
+        (D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1)), D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(-1))),
     ];
     for &(a, b) in cases {
         let trait_result = <D38s12 as CheckedDiv>::checked_div(&a, &b);
