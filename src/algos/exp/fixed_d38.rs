@@ -12,6 +12,7 @@
 
 use crate::algos::fixed_d38::Fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, wide_ln2};
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
 /// `e` raised to a working-scale value `v_w`, returned at the same
@@ -102,7 +103,13 @@ pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
 /// `e^x` with caller-chosen `working_digits` above the storage scale.
 #[inline]
 #[must_use]
-pub(crate) fn exp_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn exp_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(exp_with_raw(raw.as_i128(), scale, working_digits, mode))
+}
+
+/// `i128` core of [`exp_with`].
+#[inline]
+fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 10_i128.pow(scale); // ONE for this scale
     }
@@ -120,7 +127,13 @@ pub(crate) fn exp_with(raw: i128, scale: u32, working_digits: u32, mode: Roundin
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(exp_strict_raw::<SCALE>(raw.as_i128(), mode))
+}
+
+/// `i128` core of [`exp_strict`].
+#[inline]
+fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 10_i128.pow(SCALE);
     }
@@ -174,7 +187,13 @@ fn exp2_exact_pin(raw: i128, scale: u32) -> Option<i128> {
 /// `ExpPolicy::exp2_impl` when the D57 borrow path is not available.
 #[inline]
 #[must_use]
-pub(crate) fn exp2_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn exp2_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(exp2_with_raw(raw.as_i128(), scale, working_digits, mode))
+}
+
+/// `i128` core of [`exp2_with`].
+#[inline]
+fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 10_i128.pow(scale);
     }
@@ -199,6 +218,6 @@ pub(crate) fn exp2_with(raw: i128, scale: u32, working_digits: u32, mode: Roundi
 
 #[inline]
 #[must_use]
-pub(crate) fn exp2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     exp2_with(raw, SCALE, STRICT_GUARD, mode)
 }

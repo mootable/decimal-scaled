@@ -15,13 +15,25 @@
 //! [`crate::algos::mg_divide::sqrt_raw_with`] which only accepts non-negative
 //! input.
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
 /// D38 square-root kernel. Input `raw` must be non-negative; the
 /// policy caller saturates negatives to zero before invoking this.
+///
+/// `Int<2>` entry point: bridges the decimal storage type to the `i128`
+/// core ([`sqrt_raw`]) at the algorithm boundary. `i128` does not escape
+/// this module.
 #[inline]
 #[must_use]
-pub(crate) fn sqrt(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn sqrt(raw: Int<2>, scale: u32, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(sqrt_raw(raw.as_i128(), scale, mode))
+}
+
+/// `i128` core of the D38 square-root kernel.
+#[inline]
+#[must_use]
+fn sqrt_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
     debug_assert!(
         raw >= 0,
         "mg_divide_d38::sqrt: negative input — caller must saturate"
