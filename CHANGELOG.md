@@ -5,6 +5,196 @@ All notable changes to `decimal-scaled` are documented here.
 The format is loosely based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project follows [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] — Unreleased
+
+An architecture release. Every decimal width is now backed by the
+const-generic `Int<N>` / `Uint<N>` integer layer introduced in this
+cycle, unifying storage across the full tier table and eliminating the
+native (primitive-integer) backend entirely. The 32-bit tier `D9` is
+removed. The integer layer itself gains a parallel types / policy /
+algos / limbs layout mirroring the decimal layer, plus a suite of
+performance and correctness fixes that fed directly into the decimal
+migration. The crate-wide default rounding mode features, docs
+single-source tooling, precision harness, and pre-merge CI gates all
+land alongside.
+
+### Removed
+
+- **`D9` (32-bit tier) removed in full.** The `D9<SCALE>` type, the
+  `d9!` construction macro (both `const` and `fn` forms), the
+  `wtag::D9` tag constant, the `dyn` registry entry, and all
+  corresponding documentation and prose are gone. `D18` is now the
+  narrowest supported width. Callers using `D9` should migrate to
+  `D18`; the operator surface, rounding, and conversion APIs are
+  identical.
+- **Native decimal backend removed.** The non-wide macro arms that
+  dispatched arithmetic, display, sign, conversions, equalities, and
+  `num_traits` through primitive-integer storage are deleted. Every
+  decimal tier now routes through the unified `Int<N>` wide arms.
+  The dead `round_with_mode_native` helper and the `i64`-widening
+  arithmetic machinery (`@native_i64_wider`, `i64` dispatch arm)
+  that served only `D9` are gone.
+- **`Unsigned` trait removed.** The internal marker trait carried no
+  live impls after the native backend was dropped.
+
+### Changed
+
+- **`D18` storage changed from `i64` to `Int<1>`.** The 64-bit tier
+  now stores its scaled integer in `Int<1>` (a one-limb
+  const-generic integer) instead of a bare `i64`. `to_bits` and
+  `from_bits` now accept and return `Int<1>` where they previously
+  used `i64`. This is a breaking type change for call sites that
+  stored or pattern-matched the raw bits directly.
+- **`D38` storage changed from `i128` to `Int<2>`.** The 128-bit
+  tier is now backed by `Int<2>` (two 64-bit limbs). `to_bits` and
+  `from_bits` now use `Int<2>` instead of `i128`. Existing call
+  sites that bridged through `i128` should call `as_i128()` /
+  `Int::from_i128()` at the boundary. This is a breaking type change.
+- **`D18` narrowing conversions tightened.** `TryFrom<i128>` and
+  `TryFrom<u128>` for `D18` now reject values outside the `i64`
+  storage range (previously the wide arms assumed ≥ 128-bit storage
+  and silently truncated). `FromPrimitive::from_u64` on narrow
+  `Int<1>` storage likewise rejects out-of-range inputs.
+- **`checked_div` / `wrapping_div` / `overflowing_div` /
+  `saturating_div` round to nearest like the `/` operator.** These
+  four methods previously performed a truncating integer divide of
+  the scaled numerator, disagreeing with the rounding `/` operator
+  (e.g. `20/3` at SCALE 2 returned `666` instead of `667`). They
+  now route through the same `round_with_mode_wide` step that `/`
+  uses. This fixes a long-standing divergence on the wide tiers.
+- **`Int<N>` / `Uint<N>` are now the public storage types.** All
+  shipped widths (D18 through D1232) expose `Int<N>` as their
+  `Storage` type. `Int<N>` / `Uint<N>` are re-exported from the
+  crate root. The named-width aliases (`Int192`, `Int384`, …,
+  `Int16384`) are now type aliases over `Int<N>`, and
+  `decl_wide_int!` is removed.
+
+### Fixed
+
+- **`saturating_div` with a zero divisor now panics** (matching
+  `std`). Previously it saturated to `MAX`, silently returning a
+  nonsense value where every other integer type in Rust panics in
+  debug.
+- **`checked_rem` / `overflowing_rem` honour `MIN % -1` overflow.**
+  `checked_rem(MIN, -1)` now returns `None`; `overflowing_rem(MIN,
+  -1)` returns `(ZERO, true)`, matching the primitive integer
+  contract. Both tests that covered this case were un-ignored.
+- **`dyn` feature compiles after the `Int<N>` migration.** The
+  `dyn_bridge` macro previously assumed primitive storage (`10 as
+  $Storage`); it now constructs the rescale multiplier via
+  `Int::from_i128(10).pow(shift)` and converts to the `RawStorage`
+  variant primitive with `as_i128()`. `D18` fits the `i64` variant,
+  `D38` fits the `i128` variant exactly.
+- **`Int<N>` arithmetic sign-preserving right-shift restored.**
+  `Shr` was not sign-extending correctly for negative values,
+  corrupting wide-tier transcendental range-reduction. Fixed;
+  confirmed against the 286-cell golden suite.
+- **`Int<N>::leading_zeros` is two's-complement-faithful.** Negative
+  values now correctly return `0` (all bits set under negation),
+  matching `iN::leading_zeros` parity. The wide `Mul` / `Div`
+  fast-path now takes magnitude via `unsigned_abs` rather than
+  calling `leading_zeros` on signed values.
+- **`D38` doc examples use the public `decimal_scaled::Int` path.**
+  Examples that used `crate::int` failed in downstream doctests;
+  corrected to the external-crate path.
+- **Intra-doc link warnings resolved under `-D warnings`.** Broken
+  links surfaced by the new `cargo doc --no-deps -D warnings` gate
+  are fixed. `cargo doc` is now clean under `-D warnings`.
+- **`D18` narrowing `TryFrom<u128>` rejects values past signed
+  storage range.** Wide arms previously assumed ≥ 128-bit storage
+  and truncated silently. `Int<1>` is the first narrow wide-storage
+  tier; the guard is a no-op for wider tiers.
+
+### Added
+
+- **`Int<N>` / `Uint<N>` const-generic integer layer.** A
+  const-generic fixed-width signed / unsigned integer pair
+  parameterised by 64-bit limb count (`N`) backs every decimal tier.
+  `Int<1>` replaces `i64`; `Int<2>` replaces `i128`; wider tiers map
+  to `Int<3>` through `Int<64>`. The layer is mirrored under
+  `src/int/` with types / policy / algos / limbs sub-modules
+  matching the decimal layer's six-bucket layout.
+- **`FixedInt` / `FixedIntConvert` traits** — parity trait surface
+  for `Int<N>`, providing the same method coverage as the named-type
+  API (`LIMBS`, `BITS`, `ZERO`, `ONE`, `MAX`, `MIN`, `leading_zeros`,
+  `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `div_rem`,
+  `isqrt`, `widen`, `narrow`, …).
+- **`Int<N>` checked primitive conversions (std-aligned).** Fills the
+  gap left by the silently-truncating `from_i128` / `as_i128`:
+  - `Int<N>::from_i128_checked` — value conversion, returns
+    `Option<Int<N>>`, rejects out-of-range.
+  - `Int<N>::from_i128_bits` — bit-reinterpretation (truncating),
+    analogous to `i64::from_ne_bytes`.
+  - `Int<N>::as_i128_bits` — bit-reinterpretation to `i128`.
+  - `Uint<N>::from_u128_checked`, `Uint<N>::from_u128_bits` —
+    same pattern for the unsigned half.
+  - `From<i8..i64>` for `Int<N>`, `From<u8..u64>` for `Uint<N>`
+    — infallible widening from narrow primitives.
+  - `TryFrom<i128>` for `Int<N>`, `TryFrom<u128>` for `Uint<N>`
+    — fallible narrowing (returns `ConvertError::Overflow`).
+- **Non-allocating stack-scratch Karatsuba multiply** in
+  `wide_int::widen_mul`. The non-alloc Karatsuba dispatcher is wired
+  into `widen_mul`; the schoolbook path remains optimal at all
+  currently-shipped widths (crossover would require limb counts beyond
+  `Int<64>`), so the threshold is parked for GHA bench validation.
+- **`div-by-10^19` base case for wide-int `to_string`.** The
+  `to_string` implementation now peels 19-digit chunks by dividing by
+  `10^19` (the largest power-of-ten below `2^64`), emitting each
+  chunk with native arithmetic and calling the expensive
+  full-width divide once per 19 digits. Measured speedup:
+  2.3× (`Int256` / D76) to 14.9× (`Int4096` / D1232).
+- **`mg_divide` clean-room rewrite from the Möller–Granlund 2011
+  paper.** `MG_EXP_MAGICS` is now generated at compile time by a
+  `const fn` (`mg_reciprocal`) that computes the magic constant via
+  binary long division, following the paper's reciprocal formula.
+  No literal table values are copied from any prior implementation.
+  The function names `mul_u128_to_u256` and `divmod_pow10_2word`
+  replace the prior upstream-derived identifiers. `LICENSES/THIRD-PARTY.md`
+  confirms no third-party code is incorporated; `ALGORITHMS.md`
+  carries the clean-room declaration and a courtesy prior-art note.
+- **`no_std` + `alloc` build restored and CI-gated.** A regression
+  where `alloc` and `num_traits::Float` imports were missing from the
+  no-std path is fixed. A dedicated CI job now builds and tests the
+  crate under `--no-default-features` to prevent future regressions.
+- **`std` / `no_std` abstraction layer in policy.** `table_cache` and
+  `float_seed` now live in `src/policy/` shims that select the
+  `std`-backed (thread-local, memoised) or `no_std` (recompute)
+  implementation at compile time, instead of having `std` / `no_std`
+  conditional logic scattered across algorithm bodies.
+- **`src/int/` integer layer layout.** The `wide_int/` sub-crate is
+  absorbed; integer code is reorganised under `src/int/types/`,
+  `src/int/policy/`, `src/int/algos/`, and `src/int/limbs/` mirroring
+  the decimal six-bucket layout. The `FixedInt` / `WideStorage` /
+  `WideInt` traits are now rooted in `src/int/types/traits/`.
+- **Precision harness unified.** `tests/ulp_strict_golden.rs` and the
+  comparative precision suite share a single `PrecisionSubject`
+  harness with committable result TSV files under
+  `results/precision/`. The `precision` CI workflow is extended with a
+  `lib-cmp-precision` self-refresh that regenerates the TSVs after a
+  clean matrix pass. Precision tables in `README.md` and
+  `docs/benchmarks.md` are generated from those TSVs via
+  `render_docs.py` to prevent prose drift.
+- **Pre-merge CI gates.** `.github/workflows/ci.yml` runs on every
+  pull request and every push to `main` / `release/*`, enforcing:
+  full `cargo test` under all feature combinations (including default
+  features), `cargo doc --no-deps -D warnings` (catches broken
+  intra-doc links before merge), and an informational `cargo clippy
+  --lib` step. A separate commit-hygiene gate rejects attribution
+  trailers in commit messages.
+- **`bench-full` self-refresh.** After each per-width matrix sweep,
+  the `bench-full` workflow commits a refreshed `docs/benchmarks.md`
+  so bench data and prose stay in lockstep without a manual step.
+- **Architecture documentation.** `docs/ARCHITECTURE.md` ships a
+  Mermaid layer diagram and sequence diagram showing the integer
+  layer's own dispatch / algorithm tiers alongside the decimal layer.
+  `src/int/` folders mirror `src/` under the diagram. `mkdocs.yml`
+  enables Mermaid rendering.
+- **`RELEASING.md` and release PR checklist template.** The release
+  system of record (versioning policy, branch workflow, docs +
+  benchmark refresh, publish steps) is codified in `RELEASING.md`
+  and a PR checklist template. CodSpeed is noted as advisory (not a
+  required gate).
+
 ## [0.4.4] — 2026-05-21
 
 A correctness release. Every `*_strict` transcendental is now provably
