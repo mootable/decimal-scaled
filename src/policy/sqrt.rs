@@ -86,8 +86,8 @@ impl<const SCALE: u32> SqrtPolicy for D18<SCALE> {
 impl<const SCALE: u32> SqrtPolicy for D38<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        if self.0 <= 0 {
-            return Self(0);
+        if self <= Self::ZERO {
+            return Self::ZERO;
         }
         // Width override: 256-bit isqrt tailored to i128 storage.
         Self(sqrt::mg_divide_d38::sqrt(self.0, SCALE, mode))

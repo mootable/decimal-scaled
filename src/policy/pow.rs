@@ -81,18 +81,18 @@ impl<const SCALE: u32> PowPolicy for D18<SCALE> {
 // (`powf_strict` vs `powf_with`), so each gets its own triplet; the
 // `_with` triplet carries `working_digits` as an extra param.
 policy_triplet! {
-    storage = i128,
+    storage = crate::int::types::Int<2>,
     base_fn = powf_d38_base, std_fn = powf_d38_std, no_std_fn = powf_d38_no_std,
     recv = raw, mode = mode,
-    params = { exp_raw: i128 },
+    params = { exp_raw: crate::int::types::Int<2> },
     base = { (wtag::D38, _) => pow::fixed_d38::powf_strict::<SCALE>(raw, exp_raw, mode) },
     std = {},
 }
 policy_triplet! {
-    storage = i128,
+    storage = crate::int::types::Int<2>,
     base_fn = powf_with_d38_base, std_fn = powf_with_d38_std, no_std_fn = powf_with_d38_no_std,
     recv = raw, mode = mode,
-    params = { exp_raw: i128, working_digits: u32 },
+    params = { exp_raw: crate::int::types::Int<2>, working_digits: u32 },
     base = { (wtag::D38, _) => pow::fixed_d38::powf_with::<SCALE>(raw, exp_raw, working_digits, mode) },
     std = {},
 }

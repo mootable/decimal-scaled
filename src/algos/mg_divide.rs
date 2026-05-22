@@ -1142,7 +1142,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     if let Some(prod) = a.checked_mul(b) {
         return Some(crate::support::rounding::apply_rounding(
             prod,
-            D38::<SCALE>::multiplier(),
+            D38::<SCALE>::multiplier().as_i128(),
             mode,
         ));
     }
@@ -1157,7 +1157,7 @@ pub(crate) fn mul_div_pow10_with<const SCALE: u32>(
     // div_exp_fast_2word machinery for no reason.
     let ua = a.unsigned_abs();
     let ub = b.unsigned_abs();
-    let exp = D38::<SCALE>::multiplier() as u128;
+    let exp = D38::<SCALE>::multiplier().as_i128() as u128;
 
     let (uprod, hi_overflow) = ua.overflowing_mul(ub);
     if !hi_overflow {
@@ -1284,7 +1284,7 @@ pub(crate) fn div_pow10_div_with<const SCALE: u32>(
         return Some(crate::support::rounding::apply_rounding(a, b, mode));
     }
 
-    let mult = D38::<SCALE>::multiplier();
+    let mult = D38::<SCALE>::multiplier().as_i128();
 
     // Fast path 1: a * mult fits in i128. At SCALE <= 18, i64::MAX * 10^18
     // fits with headroom; for larger SCALE the overflow check below
@@ -1866,7 +1866,7 @@ mod tests {
         if SCALE == 0 {
             return Some(crate::support::rounding::apply_rounding(a, b, mode));
         }
-        let mult = D38::<SCALE>::multiplier();
+        let mult = D38::<SCALE>::multiplier().as_i128();
         let ua = a.unsigned_abs();
         let umult = mult as u128;
         let (mhigh, mlow) = mul_u128_to_u256(ua, umult);
