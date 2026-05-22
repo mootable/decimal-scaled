@@ -608,7 +608,7 @@ mod tests {
 
     #[cfg(feature = "std")]
     fn within_lsb(actual: D38s12, expected: D38s12, lsb: i128) -> bool {
-        let diff = (actual.to_bits() - expected.to_bits()).abs();
+        let diff = (actual.to_bits().as_i128() - expected.to_bits().as_i128()).abs();
         diff <= lsb
     }
 
@@ -740,9 +740,9 @@ mod tests {
         assert!(
             within_lsb(powf_result, sqrt_result, TWO_LSB),
             "powf(0.5)={}, sqrt={}, diff={}",
-            powf_result.to_bits(),
-            sqrt_result.to_bits(),
-            (powf_result.to_bits() - sqrt_result.to_bits()).abs(),
+            powf_result.to_bits().as_i128(),
+            sqrt_result.to_bits().as_i128(),
+            (powf_result.to_bits().as_i128() - sqrt_result.to_bits().as_i128()).abs(),
         );
     }
 
@@ -812,7 +812,7 @@ mod tests {
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
             let x = crate::types::widths::D38::<S>::from_bits(raw);
-            let q = x.sqrt_strict().to_bits();
+            let q = x.sqrt_strict().to_bits().as_i128();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
             let mult = 10u128.pow(S);
@@ -878,7 +878,7 @@ mod tests {
         use i256::U256;
         fn check<const S: u32>(raw: i128) {
             let x = crate::types::widths::D38::<S>::from_bits(raw);
-            let q = x.cbrt_strict().to_bits();
+            let q = x.cbrt_strict().to_bits().as_i128();
             // Sign must match the input.
             assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");
             let qa = q.unsigned_abs();
@@ -947,10 +947,10 @@ mod tests {
         assert!(
             within_lsb(recovered, abs_v, TWO_LSB),
             "sqrt({})={}, expected~={}, diff={}",
-            squared.to_bits(),
-            recovered.to_bits(),
-            abs_v.to_bits(),
-            (recovered.to_bits() - abs_v.to_bits()).abs(),
+            squared.to_bits().as_i128(),
+            recovered.to_bits().as_i128(),
+            abs_v.to_bits().as_i128(),
+            (recovered.to_bits().as_i128() - abs_v.to_bits().as_i128()).abs(),
         );
     }
 
@@ -1007,8 +1007,8 @@ mod tests {
         assert!(
             within_lsb(neg_eight.cbrt(), neg_two, TWO_LSB),
             "cbrt(-8) = {}, expected ~ {}",
-            neg_eight.cbrt().to_bits(),
-            neg_two.to_bits(),
+            neg_eight.cbrt().to_bits().as_i128(),
+            neg_two.to_bits().as_i128(),
         );
     }
 
@@ -1219,9 +1219,9 @@ mod tests {
         assert!(
             within_lsb(result, five, HYPOT_TOLERANCE_LSB),
             "hypot(3, 4)={}, expected~={}, diff={}",
-            result.to_bits(),
-            five.to_bits(),
-            (result.to_bits() - five.to_bits()).abs(),
+            result.to_bits().as_i128(),
+            five.to_bits().as_i128(),
+            (result.to_bits().as_i128() - five.to_bits().as_i128()).abs(),
         );
     }
 
@@ -1241,8 +1241,8 @@ mod tests {
         assert!(
             within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
             "hypot(0, 7)={}, expected~={}",
-            result.to_bits(),
-            x.abs().to_bits(),
+            result.to_bits().as_i128(),
+            x.abs().to_bits().as_i128(),
         );
     }
 
@@ -1255,8 +1255,8 @@ mod tests {
         assert!(
             within_lsb(result, x.abs(), HYPOT_TOLERANCE_LSB),
             "hypot(-9, 0)={}, expected~={}",
-            result.to_bits(),
-            x.abs().to_bits(),
+            result.to_bits().as_i128(),
+            x.abs().to_bits().as_i128(),
         );
     }
 
@@ -1302,9 +1302,9 @@ mod tests {
         assert!(
             within_lsb(h, naive, HYPOT_TOLERANCE_LSB),
             "hypot(12, 13)={}, naive sqrt(a^2+b^2)={}, diff={}",
-            h.to_bits(),
-            naive.to_bits(),
-            (h.to_bits() - naive.to_bits()).abs(),
+            h.to_bits().as_i128(),
+            naive.to_bits().as_i128(),
+            (h.to_bits().as_i128() - naive.to_bits().as_i128()).abs(),
         );
     }
 }

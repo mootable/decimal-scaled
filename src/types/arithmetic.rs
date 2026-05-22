@@ -67,7 +67,7 @@ mod tests {
     fn one_plus_one_is_two_in_scaled_bits() {
         let two = D38s12::ONE + D38s12::ONE;
         // 2 * 10^12 = 2_000_000_000_000
-        assert_eq!(two.to_bits(), 2_000_000_000_000);
+        assert_eq!(two.to_bits().as_i128(), 2_000_000_000_000);
     }
 
     /// `-ONE + ONE == ZERO` -- additive inverse property.
@@ -110,9 +110,9 @@ mod tests {
     fn add_assign_accumulates() {
         let mut v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(100));
         v += D38s12::from_bits(crate::int::types::Int::<2>::from_i128(250));
-        assert_eq!(v.to_bits(), 350);
+        assert_eq!(v.to_bits().as_i128(), 350);
         v += D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-50));
-        assert_eq!(v.to_bits(), 300);
+        assert_eq!(v.to_bits().as_i128(), 300);
     }
 
     /// SubAssign with non-zero values.
@@ -120,7 +120,7 @@ mod tests {
     fn sub_assign_accumulates() {
         let mut v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1000));
         v -= D38s12::from_bits(crate::int::types::Int::<2>::from_i128(250));
-        assert_eq!(v.to_bits(), 750);
+        assert_eq!(v.to_bits().as_i128(), 750);
     }
 
     // ── Mul / Div / Rem ──

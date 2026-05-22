@@ -366,7 +366,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        assert_eq!(D38s12::pi().to_bits(), 3_141_592_653_590_i128);
+        assert_eq!(D38s12::pi().to_bits().as_i128(), 3_141_592_653_590_i128);
     }
 
     /// tau at SCALE=12: raw / 10^23.
@@ -377,7 +377,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        assert_eq!(D38s12::tau().to_bits(), 6_283_185_307_180_i128);
+        assert_eq!(D38s12::tau().to_bits().as_i128(), 6_283_185_307_180_i128);
     }
 
     /// half_pi at SCALE=12: raw / 10^23.
@@ -388,7 +388,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        assert_eq!(D38s12::half_pi().to_bits(), 1_570_796_326_795_i128);
+        assert_eq!(D38s12::half_pi().to_bits().as_i128(), 1_570_796_326_795_i128);
     }
 
     /// quarter_pi at SCALE=12: raw / 10^23.
@@ -399,7 +399,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        assert_eq!(D38s12::quarter_pi().to_bits(), 785_398_163_397_i128);
+        assert_eq!(D38s12::quarter_pi().to_bits().as_i128(), 785_398_163_397_i128);
     }
 
     /// e at SCALE=12: raw / 10^23.
@@ -410,7 +410,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        assert_eq!(D38s12::e().to_bits(), 2_718_281_828_459_i128);
+        assert_eq!(D38s12::e().to_bits().as_i128(), 2_718_281_828_459_i128);
     }
 
     /// golden at SCALE=12: raw / 10^23.
@@ -421,7 +421,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        assert_eq!(D38s12::golden().to_bits(), 1_618_033_988_750_i128);
+        assert_eq!(D38s12::golden().to_bits().as_i128(), 1_618_033_988_750_i128);
     }
 
     // Closeness checks against core::f64::consts.
@@ -481,13 +481,13 @@ mod tests {
 
     #[test]
     fn epsilon_is_one_ulp() {
-        assert_eq!(D38s12::EPSILON.to_bits(), 1_i128);
+        assert_eq!(D38s12::EPSILON.to_bits().as_i128(), 1_i128);
         assert!(D38s12::EPSILON > D38s12::ZERO);
     }
 
     #[test]
     fn min_positive_is_one_ulp() {
-        assert_eq!(D38s12::MIN_POSITIVE.to_bits(), 1_i128);
+        assert_eq!(D38s12::MIN_POSITIVE.to_bits().as_i128(), 1_i128);
         assert_eq!(D38s12::MIN_POSITIVE, D38s12::EPSILON);
     }
 
@@ -495,8 +495,8 @@ mod tests {
     #[test]
     fn epsilon_at_scale_6_is_one_ulp() {
         type D6 = D38<6>;
-        assert_eq!(D6::EPSILON.to_bits(), 1_i128);
-        assert_eq!(D6::MIN_POSITIVE.to_bits(), 1_i128);
+        assert_eq!(D6::EPSILON.to_bits().as_i128(), 1_i128);
+        assert_eq!(D6::MIN_POSITIVE.to_bits().as_i128(), 1_i128);
     }
 
     // Cross-scale exercises
@@ -509,7 +509,7 @@ mod tests {
             return;
         }
         type D6 = D38<6>;
-        assert_eq!(D6::pi().to_bits(), 3_141_593_i128);
+        assert_eq!(D6::pi().to_bits().as_i128(), 3_141_593_i128);
     }
 
     /// At SCALE = 0, pi() rounds to 3 (first fractional digit is 1, no
@@ -520,7 +520,7 @@ mod tests {
             return;
         }
         type D0 = D38<0>;
-        assert_eq!(D0::pi().to_bits(), 3_i128);
+        assert_eq!(D0::pi().to_bits().as_i128(), 3_i128);
     }
 
     /// `D38<37>::pi()` is the canonical pi rounded half-to-even to 37
@@ -535,7 +535,7 @@ mod tests {
         //                   keep 37 frac digits; the 38th digit is 0
         //                   so half-to-even rounds down — no bump.
         let expected: i128 = 31_415_926_535_897_932_384_626_433_832_795_028_842;
-        assert_eq!(D37::pi().to_bits(), expected);
+        assert_eq!(D37::pi().to_bits().as_i128(), expected);
     }
 
     // `D38<38>` storage range is approximately ±1.70141 (i128::MAX /
@@ -577,7 +577,7 @@ mod tests {
     fn fitting_constants_at_scale_38_are_correctly_rounded() {
         // half_pi to 38 digits: 1.57079632679489661923132169163975144210
         let expected_half_pi: i128 = 157_079_632_679_489_661_923_132_169_163_975_144_210;
-        let got = D38::<38>::half_pi().to_bits();
+        let got = D38::<38>::half_pi().to_bits().as_i128();
         let diff = (got - expected_half_pi).abs();
         assert!(
             diff <= 1,
@@ -586,7 +586,7 @@ mod tests {
 
         // quarter_pi to 38 digits: 0.78539816339744830961566084581987572105
         let expected_quarter_pi: i128 = 78_539_816_339_744_830_961_566_084_581_987_572_105;
-        let got = D38::<38>::quarter_pi().to_bits();
+        let got = D38::<38>::quarter_pi().to_bits().as_i128();
         let diff = (got - expected_quarter_pi).abs();
         assert!(
             diff <= 1,
@@ -595,7 +595,7 @@ mod tests {
 
         // golden to 38 digits: 1.61803398874989484820458683436563811772
         let expected_golden: i128 = 161_803_398_874_989_484_820_458_683_436_563_811_772;
-        let got = D38::<38>::golden().to_bits();
+        let got = D38::<38>::golden().to_bits().as_i128();
         let diff = (got - expected_golden).abs();
         assert!(
             diff <= 1,
@@ -611,7 +611,7 @@ mod tests {
         }
         let pi = D38s12::pi();
         let neg_pi = -pi;
-        assert_eq!(neg_pi.to_bits(), -3_141_592_653_590_i128);
+        assert_eq!(neg_pi.to_bits().as_i128(), -3_141_592_653_590_i128);
     }
 
     // (`rescale_from_ref` boundary tests removed: the rounding logic now
