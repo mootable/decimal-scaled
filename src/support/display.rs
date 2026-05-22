@@ -106,7 +106,7 @@ impl<const SCALE: u32> fmt::LowerExp for D38<SCALE> {
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp(self.0, SCALE, false, f)
+        format_exp(self.0.as_i128(), SCALE, false, f)
     }
 }
 
@@ -128,7 +128,7 @@ impl<const SCALE: u32> fmt::UpperExp for D38<SCALE> {
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-        format_exp(self.0, SCALE, true, f)
+        format_exp(self.0.as_i128(), SCALE, true, f)
     }
 }
 
@@ -311,7 +311,7 @@ pub(crate) fn parse_components<const SCALE: u32>(
 ///
 /// Strict: all arithmetic is integer-only; result is bit-exact.
 pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
-    parse_decimal::<SCALE>(s).map(crate::types::widths::D38::to_bits)
+    parse_decimal::<SCALE>(s).map(|d| d.to_bits().as_i128())
 }
 
 fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
@@ -386,7 +386,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
         combined as i128
     };
 
-    Ok(D38::<SCALE>::from_bits(raw))
+    Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(raw)))
 }
 
 #[cfg(test)]

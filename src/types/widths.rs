@@ -641,8 +641,8 @@ crate::macros::conversions::decl_cross_width_widening!(wide D38, crate::int::typ
 crate::macros::conversions::decl_cross_width_widening!(wide D38, crate::int::types::Int<2>, D18, i64);
 
 // Cross-width narrowing (fallible). D38 -> D18, D38 -> D9, D18 -> D9.
-crate::macros::conversions::decl_cross_width_narrowing!(D18, i64, D38, crate::int::types::Int<2>);
-crate::macros::conversions::decl_cross_width_narrowing!(D9, i32, D38, crate::int::types::Int<2>);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D18, i64, D38, crate::int::types::Int<2>);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D9, i32, D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_cross_width_narrowing!(D9, i32, D18, i64);
 
 // ─── `widen` / `narrow` — hop one storage tier at a time ──────────────
@@ -2166,7 +2166,7 @@ crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D38, crate::int::types:
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
     D38,
-    i128,
+    crate::int::types::Int<2>,
     D1232,
     crate::wide_int::Int4096
 );
