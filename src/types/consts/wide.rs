@@ -31,7 +31,7 @@ use crate::types::consts::DecimalConstants;
     feature = "wide",
     feature = "x-wide"
 ))]
-use crate::wide_int::{Int256, Int512, Int1024};
+use crate::int::types::Int;
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
@@ -41,73 +41,73 @@ include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 const D76_SCALE_REF: u32 = 75;
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-const PI_RAW_D256: Int256 = match Int256::from_str_radix(PI_D76_S75, 10) {
+const PI_RAW_D256: Int<4> = match Int::<4>::from_str_radix(PI_D76_S75, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: PI_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
-const TAU_RAW_D256: Int256 = match Int256::from_str_radix(TAU_D76_S75, 10) {
+const TAU_RAW_D256: Int<4> = match Int::<4>::from_str_radix(TAU_D76_S75, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: TAU_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
-const HALF_PI_RAW_D256: Int256 = match Int256::from_str_radix(HALF_PI_D76_S75, 10) {
+const HALF_PI_RAW_D256: Int<4> = match Int::<4>::from_str_radix(HALF_PI_D76_S75, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: HALF_PI_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
-const QUARTER_PI_RAW_D256: Int256 = match Int256::from_str_radix(QUARTER_PI_D76_S75, 10) {
+const QUARTER_PI_RAW_D256: Int<4> = match Int::<4>::from_str_radix(QUARTER_PI_D76_S75, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: QUARTER_PI_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
-const E_RAW_D256: Int256 = match Int256::from_str_radix(E_D76_S75, 10) {
+const E_RAW_D256: Int<4> = match Int::<4>::from_str_radix(E_D76_S75, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: E_D76_S75 not parseable"),
 };
 #[cfg(any(feature = "d76", feature = "wide"))]
-const GOLDEN_RAW_D256: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
+const GOLDEN_RAW_D256: Int<4> = match Int::<4>::from_str_radix(GOLDEN_D76_S75, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: GOLDEN_D76_S75 not parseable"),
 };
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) fn pi_at_target_d76<const TARGET: u32>() -> Int256 {
+pub(crate) fn pi_at_target_d76<const TARGET: u32>() -> Int<4> {
     use crate::types::widths::D76;
     D76::<D76_SCALE_REF>::from_bits(PI_RAW_D256)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) fn tau_at_target_d76<const TARGET: u32>() -> Int256 {
+pub(crate) fn tau_at_target_d76<const TARGET: u32>() -> Int<4> {
     use crate::types::widths::D76;
     D76::<D76_SCALE_REF>::from_bits(TAU_RAW_D256)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) fn half_pi_at_target_d76<const TARGET: u32>() -> Int256 {
+pub(crate) fn half_pi_at_target_d76<const TARGET: u32>() -> Int<4> {
     use crate::types::widths::D76;
     D76::<D76_SCALE_REF>::from_bits(HALF_PI_RAW_D256)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) fn quarter_pi_at_target_d76<const TARGET: u32>() -> Int256 {
+pub(crate) fn quarter_pi_at_target_d76<const TARGET: u32>() -> Int<4> {
     use crate::types::widths::D76;
     D76::<D76_SCALE_REF>::from_bits(QUARTER_PI_RAW_D256)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) fn e_at_target_d76<const TARGET: u32>() -> Int256 {
+pub(crate) fn e_at_target_d76<const TARGET: u32>() -> Int<4> {
     use crate::types::widths::D76;
     D76::<D76_SCALE_REF>::from_bits(E_RAW_D256)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) fn golden_at_target_d76<const TARGET: u32>() -> Int256 {
+pub(crate) fn golden_at_target_d76<const TARGET: u32>() -> Int<4> {
     use crate::types::widths::D76;
     D76::<D76_SCALE_REF>::from_bits(GOLDEN_RAW_D256)
         .rescale::<TARGET>()
@@ -120,73 +120,73 @@ pub(crate) fn golden_at_target_d76<const TARGET: u32>() -> Int256 {
 const D153_SCALE_REF: u32 = 152;
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-const PI_RAW_D512: Int512 = match Int512::from_str_radix(PI_D153_S152, 10) {
+const PI_RAW_D512: Int<8> = match Int::<8>::from_str_radix(PI_D153_S152, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: PI_D153_S152 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
-const TAU_RAW_D512: Int512 = match Int512::from_str_radix(TAU_D153_S152, 10) {
+const TAU_RAW_D512: Int<8> = match Int::<8>::from_str_radix(TAU_D153_S152, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: TAU_D153_S152 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
-const HALF_PI_RAW_D512: Int512 = match Int512::from_str_radix(HALF_PI_D153_S152, 10) {
+const HALF_PI_RAW_D512: Int<8> = match Int::<8>::from_str_radix(HALF_PI_D153_S152, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: HALF_PI_D153_S152 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
-const QUARTER_PI_RAW_D512: Int512 = match Int512::from_str_radix(QUARTER_PI_D153_S152, 10) {
+const QUARTER_PI_RAW_D512: Int<8> = match Int::<8>::from_str_radix(QUARTER_PI_D153_S152, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: QUARTER_PI_D153_S152 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
-const E_RAW_D512: Int512 = match Int512::from_str_radix(E_D153_S152, 10) {
+const E_RAW_D512: Int<8> = match Int::<8>::from_str_radix(E_D153_S152, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: E_D153_S152 not parseable"),
 };
 #[cfg(any(feature = "d153", feature = "wide"))]
-const GOLDEN_RAW_D512: Int512 = match Int512::from_str_radix(GOLDEN_D153_S152, 10) {
+const GOLDEN_RAW_D512: Int<8> = match Int::<8>::from_str_radix(GOLDEN_D153_S152, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: GOLDEN_D153_S152 not parseable"),
 };
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) fn pi_at_target_d153<const TARGET: u32>() -> Int512 {
+pub(crate) fn pi_at_target_d153<const TARGET: u32>() -> Int<8> {
     use crate::types::widths::D153;
     D153::<D153_SCALE_REF>::from_bits(PI_RAW_D512)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) fn tau_at_target_d153<const TARGET: u32>() -> Int512 {
+pub(crate) fn tau_at_target_d153<const TARGET: u32>() -> Int<8> {
     use crate::types::widths::D153;
     D153::<D153_SCALE_REF>::from_bits(TAU_RAW_D512)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) fn half_pi_at_target_d153<const TARGET: u32>() -> Int512 {
+pub(crate) fn half_pi_at_target_d153<const TARGET: u32>() -> Int<8> {
     use crate::types::widths::D153;
     D153::<D153_SCALE_REF>::from_bits(HALF_PI_RAW_D512)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) fn quarter_pi_at_target_d153<const TARGET: u32>() -> Int512 {
+pub(crate) fn quarter_pi_at_target_d153<const TARGET: u32>() -> Int<8> {
     use crate::types::widths::D153;
     D153::<D153_SCALE_REF>::from_bits(QUARTER_PI_RAW_D512)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) fn e_at_target_d153<const TARGET: u32>() -> Int512 {
+pub(crate) fn e_at_target_d153<const TARGET: u32>() -> Int<8> {
     use crate::types::widths::D153;
     D153::<D153_SCALE_REF>::from_bits(E_RAW_D512)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) fn golden_at_target_d153<const TARGET: u32>() -> Int512 {
+pub(crate) fn golden_at_target_d153<const TARGET: u32>() -> Int<8> {
     use crate::types::widths::D153;
     D153::<D153_SCALE_REF>::from_bits(GOLDEN_RAW_D512)
         .rescale::<TARGET>()
@@ -199,73 +199,73 @@ pub(crate) fn golden_at_target_d153<const TARGET: u32>() -> Int512 {
 const D307_SCALE_REF: u32 = 306;
 
 #[cfg(any(feature = "d307", feature = "wide"))]
-const PI_RAW_D1024: Int1024 = match Int1024::from_str_radix(PI_D307_S306, 10) {
+const PI_RAW_D1024: Int<16> = match Int::<16>::from_str_radix(PI_D307_S306, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: PI_D307_S306 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
-const TAU_RAW_D1024: Int1024 = match Int1024::from_str_radix(TAU_D307_S306, 10) {
+const TAU_RAW_D1024: Int<16> = match Int::<16>::from_str_radix(TAU_D307_S306, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: TAU_D307_S306 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
-const HALF_PI_RAW_D1024: Int1024 = match Int1024::from_str_radix(HALF_PI_D307_S306, 10) {
+const HALF_PI_RAW_D1024: Int<16> = match Int::<16>::from_str_radix(HALF_PI_D307_S306, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: HALF_PI_D307_S306 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
-const QUARTER_PI_RAW_D1024: Int1024 = match Int1024::from_str_radix(QUARTER_PI_D307_S306, 10) {
+const QUARTER_PI_RAW_D1024: Int<16> = match Int::<16>::from_str_radix(QUARTER_PI_D307_S306, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: QUARTER_PI_D307_S306 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
-const E_RAW_D1024: Int1024 = match Int1024::from_str_radix(E_D307_S306, 10) {
+const E_RAW_D1024: Int<16> = match Int::<16>::from_str_radix(E_D307_S306, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: E_D307_S306 not parseable"),
 };
 #[cfg(any(feature = "d307", feature = "wide"))]
-const GOLDEN_RAW_D1024: Int1024 = match Int1024::from_str_radix(GOLDEN_D307_S306, 10) {
+const GOLDEN_RAW_D1024: Int<16> = match Int::<16>::from_str_radix(GOLDEN_D307_S306, 10) {
     Ok(v) => v,
     Err(()) => panic!("consts_wide: GOLDEN_D307_S306 not parseable"),
 };
 
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub(crate) fn pi_at_target_d307<const TARGET: u32>() -> Int1024 {
+pub(crate) fn pi_at_target_d307<const TARGET: u32>() -> Int<16> {
     use crate::types::widths::D307;
     D307::<D307_SCALE_REF>::from_bits(PI_RAW_D1024)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub(crate) fn tau_at_target_d307<const TARGET: u32>() -> Int1024 {
+pub(crate) fn tau_at_target_d307<const TARGET: u32>() -> Int<16> {
     use crate::types::widths::D307;
     D307::<D307_SCALE_REF>::from_bits(TAU_RAW_D1024)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub(crate) fn half_pi_at_target_d307<const TARGET: u32>() -> Int1024 {
+pub(crate) fn half_pi_at_target_d307<const TARGET: u32>() -> Int<16> {
     use crate::types::widths::D307;
     D307::<D307_SCALE_REF>::from_bits(HALF_PI_RAW_D1024)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub(crate) fn quarter_pi_at_target_d307<const TARGET: u32>() -> Int1024 {
+pub(crate) fn quarter_pi_at_target_d307<const TARGET: u32>() -> Int<16> {
     use crate::types::widths::D307;
     D307::<D307_SCALE_REF>::from_bits(QUARTER_PI_RAW_D1024)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub(crate) fn e_at_target_d307<const TARGET: u32>() -> Int1024 {
+pub(crate) fn e_at_target_d307<const TARGET: u32>() -> Int<16> {
     use crate::types::widths::D307;
     D307::<D307_SCALE_REF>::from_bits(E_RAW_D1024)
         .rescale::<TARGET>()
         .to_bits()
 }
 #[cfg(any(feature = "d307", feature = "wide"))]
-pub(crate) fn golden_at_target_d307<const TARGET: u32>() -> Int1024 {
+pub(crate) fn golden_at_target_d307<const TARGET: u32>() -> Int<16> {
     use crate::types::widths::D307;
     D307::<D307_SCALE_REF>::from_bits(GOLDEN_RAW_D1024)
         .rescale::<TARGET>()
@@ -695,20 +695,6 @@ macro_rules! decl_wide_consts_tier {
     };
 }
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-use crate::wide_int::Int192;
-#[cfg(any(feature = "d115", feature = "wide"))]
-use crate::wide_int::Int384;
-#[cfg(any(feature = "d230", feature = "wide"))]
-use crate::wide_int::Int768;
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-use crate::wide_int::Int1536;
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-use crate::wide_int::Int2048;
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-use crate::wide_int::Int3072;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-use crate::wide_int::Int4096;
 
 // SCALE_REF per tier = highest k where τ × 10^k still fits the
 // storage's signed range. Computed in build.rs and matched here.
@@ -717,7 +703,7 @@ use crate::wide_int::Int4096;
 // D1232 borderline cases work at 230 / 1231 respectively.
 decl_wide_consts_tier!(
     D57,
-    Int192,
+    Int<3>,
     56,
     D57_SCALE_REF,
     PI_D57_S56,
@@ -744,7 +730,7 @@ decl_wide_consts_tier!(
 
 decl_wide_consts_tier!(
     D115,
-    Int384,
+    Int<6>,
     114,
     D115_SCALE_REF,
     PI_D115_S114,
@@ -771,7 +757,7 @@ decl_wide_consts_tier!(
 
 decl_wide_consts_tier!(
     D230,
-    Int768,
+    Int<12>,
     229,
     D230_SCALE_REF,
     PI_D230_S229,
@@ -798,7 +784,7 @@ decl_wide_consts_tier!(
 
 decl_wide_consts_tier!(
     D462,
-    Int1536,
+    Int<24>,
     461,
     D462_SCALE_REF,
     PI_D462_S461,
@@ -825,7 +811,7 @@ decl_wide_consts_tier!(
 
 decl_wide_consts_tier!(
     D616,
-    Int2048,
+    Int<32>,
     615,
     D616_SCALE_REF,
     PI_D616_S615,
@@ -852,7 +838,7 @@ decl_wide_consts_tier!(
 
 decl_wide_consts_tier!(
     D924,
-    Int3072,
+    Int<48>,
     923,
     D924_SCALE_REF,
     PI_D924_S923,
@@ -879,7 +865,7 @@ decl_wide_consts_tier!(
 
 decl_wide_consts_tier!(
     D1232,
-    Int4096,
+    Int<64>,
     1231,
     D1232_SCALE_REF,
     PI_D1232_S1231,
