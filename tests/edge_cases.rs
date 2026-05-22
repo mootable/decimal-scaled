@@ -12,7 +12,7 @@
 
 use decimal_scaled::DecimalArithmetic;
 use decimal_scaled::{
-    D9s0, D9s2, D9s4, D9s8, D18s0, D18s6, D18s9, D18s17, D38, D38s0, D38s2, D38s9, D38s12, D38s37,
+    D18s0, D18s6, D18s9, D18s17, D38, D38s0, D38s2, D38s9, D38s12, D38s37,
     RoundingMode,
 };
 
@@ -31,10 +31,6 @@ fn zero_one_max_min_storage_patterns() {
     assert_eq!(D38s12::MAX.to_bits(), i128::MAX);
     assert_eq!(D38s12::MIN.to_bits(), i128::MIN);
 
-    assert_eq!(D9s0::ONE.to_bits(), 1);
-    assert_eq!(D9s8::ONE.to_bits(), 10_i32.pow(8));
-    assert_eq!(D9s0::MAX.to_bits(), i32::MAX);
-    assert_eq!(D9s0::MIN.to_bits(), i32::MIN);
 
     assert_eq!(D18s17::ONE.to_bits(), 10_i64.pow(17));
     assert_eq!(D18s0::MAX.to_bits(), i64::MAX);
@@ -44,7 +40,6 @@ fn zero_one_max_min_storage_patterns() {
 fn multiplier_at_scale_extremes() {
     assert_eq!(D38s0::multiplier(), 1);
     assert_eq!(D38s37::multiplier(), 10_i128.pow(37));
-    assert_eq!(D9s8::multiplier(), 10_i32.pow(8));
     assert_eq!(D18s17::multiplier(), 10_i64.pow(17));
 }
 
@@ -52,7 +47,6 @@ fn multiplier_at_scale_extremes() {
 fn max_scale_per_width() {
     // v0.4.0 cap: MAX_SCALE = name - 1 (guarantees at least one integer
     // digit at every legal SCALE).
-    assert_eq!(<D9s0 as DecimalArithmetic>::MAX_SCALE, 8);
     assert_eq!(<D18s0 as DecimalArithmetic>::MAX_SCALE, 17);
     assert_eq!(<D38s0 as DecimalArithmetic>::MAX_SCALE, 37);
 }
@@ -98,7 +92,6 @@ fn neg_of_min_overflows() {
 #[test]
 fn checked_div_by_zero_is_none() {
     assert_eq!(D38s12::ONE.checked_div(D38s12::ZERO), None);
-    assert_eq!(D9s0::ONE.checked_div(D9s0::ZERO), None);
     assert_eq!(D18s0::ONE.checked_div(D18s0::ZERO), None);
 }
 
@@ -287,10 +280,6 @@ fn cross_width_narrowing_at_boundary() {
     let fail: Result<D18s0, _> = past_edge.try_into();
     assert!(fail.is_err());
 
-    // Widening is always lossless.
-    let small = D9s0::from_bits(i32::MIN);
-    let wide: D38s0 = small.into();
-    assert_eq!(wide.to_bits(), i32::MIN as i128);
 }
 
 #[test]
@@ -339,7 +328,6 @@ fn additive_and_multiplicative_identities() {
             assert_eq!(v - v, zero);
         }};
     }
-    check!(D9s8, 7_i32);
     check!(D18s17, 7_i64);
     check!(D38s12, decimal_scaled::Int::<2>::from_i128(7));
     check!(D38s37, decimal_scaled::Int::<2>::from_i128(7));
@@ -359,7 +347,6 @@ fn from_bits_to_bits_round_trips_at_extremes() {
         assert_eq!(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(raw)).to_bits(), raw);
     }
     for raw in [0_i32, 1, -1, i32::MAX, i32::MIN] {
-        assert_eq!(D9s0::from_bits(raw).to_bits(), raw);
     }
 }
 
@@ -373,11 +360,6 @@ fn from_bits_to_bits_round_trips_at_extremes() {
 fn cross_width_widen_then_narrow_round_trips() {
     // Widening is lossless; narrowing back recovers the original when
     // the value is in range.
-    let v32 = D9s2::from_bits(-12_345);
-    let wide: D38s2 = v32.into();
-    let back: D9s2 = wide.try_into().unwrap();
-    assert_eq!(back, v32);
-
     let v64 = D18s9::from_bits(i64::MIN + 1);
     let wide: D38s9 = v64.into();
     let back: D18s9 = wide.try_into().unwrap();
@@ -405,7 +387,6 @@ fn overflow_variants_consistency_across_widths() {
             assert_eq!(a.overflowing_add(b), (a.wrapping_add(b), false));
         }};
     }
-    check!(D9s4, |x: i128| x as i32);
     check!(D18s9, |x: i128| x as i64);
     check!(D38s12, |x: i128| decimal_scaled::Int::<2>::from_i128(x));
 }
@@ -431,7 +412,6 @@ fn rounding_methods_on_every_width() {
             assert_eq!(n.fract(), n - n.trunc());
         }};
     }
-    check!(D9s2, 250);
     check!(D18s6, 2_500_000);
     check!(D38s12, decimal_scaled::Int::<2>::from_i128(2_500_000_000_000));
 }
