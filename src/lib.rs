@@ -380,6 +380,12 @@ pub use crate::types::widths::{
     D18s12, D18s13, D18s14, D18s15, D18s16, D18s17,
 };
 
+// The generic hand-rolled integer `Int<N>` (and unsigned `Uint<N>`) — the
+// storage backend for D38 (`Int<2>`) and every wide tier. Exported so callers
+// can name a decimal's storage type, e.g. for `from_bits` / `to_bits`. The
+// fixed-width aliases (`Int256`, …) are the same types at specific `N`.
+pub use crate::int::types::{Int, Uint};
+
 // D76 — 256-bit storage, behind the `d76` / `wide` features.
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub use crate::types::widths::{
