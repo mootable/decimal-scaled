@@ -37,7 +37,7 @@
 /// - `decl_decimal_consts!(D9, i32)` — *native* storage; the `i128`
 /// reference bits narrow via an `as`-cast.
 /// - `decl_decimal_consts!(wide D76, I256)` — *wide* storage; the
-/// `i128` reference bits widen via the `WideInt` cast. Because the
+/// `i128` reference bits widen via the `BigInt` cast. Because the
 /// reference constants are only carried to `SCALE_REF = 35` digits,
 /// wide widths gain no extra precision above that scale (the trailing
 /// digits are zero-extended) — the value is still correct, just not

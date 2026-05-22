@@ -3,9 +3,9 @@
 //! The integer layer's primitive bucket (absorbed from the former
 //! `src/wide_int/`): the raw `&[u64]` / `&[u128]` slice arithmetic that
 //! the const-generic `Int<N>` / `Uint<N>` types and the width-matched
-//! [`crate::int::algos`] compose on, plus the `WideInt` trait that
+//! [`crate::int::algos`] compose on, plus the `BigInt` trait that
 //! casts losslessly between any two widths (or a primitive `i128` /
-//! `i64` / `u128`) and the kernel-facing `WideStorage` trait. The named
+//! `i64` / `u128`) and the kernel-facing `BigInt` trait. The named
 //! signed `Int*` / unsigned `Uint*` two's-complement integers from 192
 //! to 16384 bits are now `pub type` aliases over `Int<N>` / `Uint<N>`
 //! (defined in [`crate::int::types`]) and re-exported here so the
@@ -21,7 +21,7 @@
 //!   return-type problem a widening multiply would otherwise hit. The
 //!   core routines are `const fn` so the integer types built on them
 //!   can expose `const` constructors and constants.
-//! - **`WideInt` / `WideStorage` traits** — the magnitude/sign cast
+//! - **`BigInt` / `BigInt` traits** — the magnitude/sign cast
 //!   bridge and the kernel-facing storage surface; implemented for
 //!   `Int<N>` / `Uint<N>` in [`crate::int::types`] and for the
 //!   primitive `i128` / `i64` / `u128` here.
@@ -2708,7 +2708,7 @@ pub(crate) use crate::int::types::traits::{wide_cast, BigInt};
 // `int::types` so every `crate::wide_int::IntXXXX` path (the `lib.rs`
 // re-exports, the `I*` / `U*` short aliases below, and the kernel
 // shims) keeps resolving with no change at the use sites. The kernels
-// run on `Int<N>` through the blanket `WideStorage` impl in
+// run on `Int<N>` through the blanket `BigInt` impl in
 // `int::types::wide_compat`. Some widths are unused in low-feature
 // builds (e.g. only `Int256` is reached by D38 under default
 // features), so the re-export carries `allow(unused_imports)`.
@@ -3686,7 +3686,7 @@ mod slice_tests {
         assert_eq!(out, [0, 0]);
     }
 
-    /// `WideInt::from_mag_sign` for `u128` reads the first limb and
+    /// `BigInt::from_mag_sign` for `u128` reads the first limb and
     /// ignores the sign flag. Exercised through a chained `wide_cast`
     /// `Int256 → u128`.
     #[test]

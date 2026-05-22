@@ -283,7 +283,7 @@ pub(crate) fn divmod_pow10_2word(
     feature = "xx-wide"
 ))]
 #[inline]
-pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt, const N: usize>(
+pub(crate) fn div_wide_pow10_with<W: crate::wide_int::BigInt, const N: usize>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
@@ -294,7 +294,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt, const N: usize>(
     let exp = POW10_U128[scale_idx];
 
     // Pack the magnitude directly into a u128 limb buffer via
-    // `WideInt::mag_into_u128`. The override on the concrete
+    // `BigInt::mag_into_u128`. The override on the concrete
     // `Int*` types copies only `(L + 1) / 2` u128 limbs (8 for
     // Int512, 4 for Int256) instead of zero-initialising and
     // copying the full 288-u64 default buffer (~2.3 kB stack).
@@ -409,7 +409,7 @@ pub(crate) fn div_wide_pow10_with<W: crate::wide_int::WideInt, const N: usize>(
     feature = "x-wide",
     feature = "xx-wide"
 ))]
-pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::WideInt, const N: usize>(
+pub(crate) fn div_wide_pow10_chain_with<W: crate::wide_int::BigInt, const N: usize>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
@@ -1973,7 +1973,7 @@ mod tests {
 
                 let got = crate::algos::mg_divide::div_wide_pow10_with::<
                     I256,
-                    { <I256 as crate::wide_int::WideInt>::U128_LIMBS },
+                    { <I256 as crate::wide_int::BigInt>::U128_LIMBS },
                 >(
                     n,
                     w,
@@ -2014,7 +2014,7 @@ mod tests {
                     let n: I256 = if regime % 2 == 1 { -pos } else { pos };
                     let got = crate::algos::mg_divide::div_wide_pow10_with::<
                         I256,
-                        { <I256 as crate::wide_int::WideInt>::U128_LIMBS },
+                        { <I256 as crate::wide_int::BigInt>::U128_LIMBS },
                     >(n, w, mode);
                     let expected = round_div_reference_int256_with(n, w, mode);
                     assert_eq!(
@@ -2055,7 +2055,7 @@ mod tests {
 
                 let got = crate::algos::mg_divide::div_wide_pow10_with::<
                     I1024,
-                    { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                    { <I1024 as crate::wide_int::BigInt>::U128_LIMBS },
                 >(
                     n,
                     w,
@@ -2232,7 +2232,7 @@ mod tests {
 
                     let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
                         I256,
-                        { <I256 as crate::wide_int::WideInt>::U128_LIMBS },
+                        { <I256 as crate::wide_int::BigInt>::U128_LIMBS },
                     >(n, w, mode);
                     let expected = round_div_chain_reference_int256(n, w, mode);
                     assert_eq!(
@@ -2269,7 +2269,7 @@ mod tests {
 
                 let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
                     I1024,
-                    { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                    { <I1024 as crate::wide_int::BigInt>::U128_LIMBS },
                 >(
                     n,
                     w,
@@ -2317,7 +2317,7 @@ mod tests {
                     }
                     let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
                         I1024,
-                        { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                        { <I1024 as crate::wide_int::BigInt>::U128_LIMBS },
                     >(n, w, mode);
                     let expected = round_div_chain_reference_int1024(n, w, mode);
                     assert_eq!(
@@ -2363,7 +2363,7 @@ mod tests {
                         for mode in all_modes() {
                             let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
                                 I1024,
-                                { <I1024 as crate::wide_int::WideInt>::U128_LIMBS },
+                                { <I1024 as crate::wide_int::BigInt>::U128_LIMBS },
                             >(n, w, mode);
                             let expected = round_div_chain_reference_int1024(n, w, mode);
                             assert_eq!(
@@ -2432,7 +2432,7 @@ mod tests {
                     for mode in all_modes() {
                         let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
                             I16384,
-                            { <I16384 as crate::wide_int::WideInt>::U128_LIMBS },
+                            { <I16384 as crate::wide_int::BigInt>::U128_LIMBS },
                         >(nn, w, mode);
 
                         // Schoolbook reference on the untruncated value.

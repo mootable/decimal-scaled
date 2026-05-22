@@ -26,7 +26,7 @@
 //! working digits and delegate to the strict path; this is intentional
 //! and documented at the policy call site.
 //!
-//! # Why this file stays per-tier (no `WideStorage` collapse)
+//! # Why this file stays per-tier (no `BigInt` collapse)
 //!
 //! See the matching note in [`crate::algos::ln::wide_kernel`] — the
 //! same reasoning applies, with the extra wrinkle that the trig

@@ -13,14 +13,14 @@
 //! # Generic kernel + per-tier shims
 //!
 //! The kernel is parameterised over `(Storage, SqrtWide)` via the
-//! [`crate::wide_int::WideStorage`] trait, which exposes the unifrom
+//! [`crate::wide_int::BigInt`] trait, which exposes the unifrom
 //! surface (`ZERO` / `ONE` / `TEN`, `pow`, `isqrt`, `resize_to`, the
 //! standard arithmetic ops) every wide signed integer in the family
 //! ships. The kernel collapses to a single function:
 //!
 //! - [`sqrt`] — `pub(crate) fn sqrt<S, W>(raw: S, scale, mode) -> S`
-//!   where `S: WideStorage` is the storage type and
-//!   `W: WideStorage` is the next-up width used to form the radicand
+//!   where `S: BigInt` is the storage type and
+//!   `W: BigInt` is the next-up width used to form the radicand
 //!   without overflow.
 //!
 //! Per-tier free functions ([`sqrt_d57`], [`sqrt_d76`], …) remain as
@@ -32,7 +32,7 @@
 //! saturate-not-panic policy matching the typed `sqrt_strict` surface).
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::WideStorage;
+use crate::wide_int::BigInt;
 
 /// Generic square-root kernel for the wide-integer family.
 ///
@@ -43,8 +43,8 @@ use crate::wide_int::WideStorage;
 #[must_use]
 pub(crate) fn sqrt<S, W>(raw: S, scale: u32, mode: RoundingMode) -> S
 where
-    S: WideStorage,
-    W: WideStorage,
+    S: BigInt,
+    W: BigInt,
 {
     if raw <= S::ZERO {
         return S::ZERO;

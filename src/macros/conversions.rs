@@ -27,7 +27,7 @@
 /// is the lossless case; the subsequent multiply is the overflow risk.
 macro_rules! decl_from_primitive {
     // Wide storage: the primitive widens into wide
-    // storage via the `WideInt` cast, then scales by `10^SCALE`.
+    // storage via the `BigInt` cast, then scales by `10^SCALE`.
     (wide $Type:ident, $Storage:ty, $Src:ty) => {
         impl<const SCALE: u32> ::core::convert::From<$Src> for $Type<SCALE> {
             /// Constructs from an integer by scaling to `value * 10^SCALE`.
@@ -63,12 +63,12 @@ pub(crate) use decl_from_primitive;
 macro_rules! decl_cross_width_widening {
     // Widening *into* wide storage. The source storage is
     // a primitive integer or a narrower wide integer; either way
-    // the `WideInt` cast performs the lossless widen.
+    // the `BigInt` cast performs the lossless widen.
     (wide $Dest:ident, $DestStorage:ty, $Src:ident, $SrcStorage:ty) => {
         impl<const SCALE: u32> ::core::convert::From<$Src<SCALE>> for $Dest<SCALE> {
             /// Widens a narrower decimal type to this wider one. The
             /// scale is unchanged; the storage is widened via
-            /// the `WideInt` cast (lossless because the source domain is
+            /// the `BigInt` cast (lossless because the source domain is
             /// a subset of the destination).
             #[inline]
             fn from(value: $Src<SCALE>) -> Self {
@@ -102,7 +102,7 @@ pub(crate) use decl_cross_width_widening;
 macro_rules! decl_cross_width_narrowing {
     // Narrowing *from* wide storage. The destination may
     // be a primitive integer (e.g. D76 -> D38) or a narrower wide integer
-    // integer (e.g. D153 -> D76); the `WideInt` cast handles the bound
+    // integer (e.g. D153 -> D76); the `BigInt` cast handles the bound
     // widening and the final narrowing cast in both cases.
     (wide $Dest:ident, $DestStorage:ty, $Src:ident, $SrcStorage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<$Src<SCALE>> for $Dest<SCALE> {
@@ -240,8 +240,8 @@ pub(crate) use decl_try_from_u128;
 /// construction, use `from_f64_with`.
 macro_rules! decl_try_from_f64 {
     // Wide storage. The multiplier and storage bounds
-    // round-trip through `f64` via the `WideInt` cast; the final
-    // `f64` -> wide cast is also the `WideInt` cast.
+    // round-trip through `f64` via the `BigInt` cast; the final
+    // `f64` -> wide cast is also the `BigInt` cast.
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<f64> for $Type<SCALE> {
             type Error = $crate::support::error::ConvertError;
@@ -323,8 +323,8 @@ pub(crate) use decl_try_from_f64;
 macro_rules! decl_decimal_int_conversion_methods {
     // Wide storage. The rounding logic mirrors the native
     // arm but is carried in the wide storage type throughout; the
-    // `i128` source widens via the `WideInt` cast, and the final
-    // saturating narrow to `i64` also goes through the `WideInt` cast.
+    // `i128` source widens via the `BigInt` cast, and the final
+    // saturating narrow to `i64` also goes through the `BigInt` cast.
     (wide $Type:ident, $Storage:ty, $IntSrc:ty) => {
         impl<const SCALE: u32> $Type<SCALE> {
             /// Constructs from an integer source, scaling by `10^SCALE`.

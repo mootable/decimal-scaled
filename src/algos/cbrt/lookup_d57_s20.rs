@@ -38,7 +38,7 @@
 #![cfg(any(feature = "d57", feature = "wide"))]
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::{Int192, Int384, WideStorage};
+use crate::wide_int::{Int192, Int384, BigInt};
 
 const SCALE: u32 = 20;
 

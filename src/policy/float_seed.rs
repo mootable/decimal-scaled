@@ -21,7 +21,7 @@
 //! here lets the root kernels stay cfg-free: they call
 //! [`isqrt`] / [`icbrt`] and never name a float method directly.
 
-use crate::wide_int::WideStorage;
+use crate::wide_int::BigInt;
 
 /// Whether the `std` float intrinsics (`f64::sqrt` / `f64::cbrt`, used
 /// as Newton seeds) are available in this build.
@@ -59,7 +59,7 @@ pub(crate) fn cbrt_f64(x: f64) -> f64 {
 /// either way.
 #[inline]
 #[must_use]
-pub(crate) fn isqrt<W: WideStorage>(n: W) -> W {
+pub(crate) fn isqrt<W: BigInt>(n: W) -> W {
     #[cfg(feature = "std")]
     {
         let seed_f64 = n.to_f64().sqrt();
@@ -94,7 +94,7 @@ pub(crate) fn isqrt<W: WideStorage>(n: W) -> W {
 /// the bespoke `D57<20>` kernel uses it directly.
 #[inline]
 #[must_use]
-pub(crate) fn icbrt<W: WideStorage>(n: W) -> W {
+pub(crate) fn icbrt<W: BigInt>(n: W) -> W {
     let three = W::ONE + W::ONE + W::ONE;
     #[cfg(feature = "std")]
     let x0 = {

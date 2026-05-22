@@ -4,7 +4,7 @@
 //!
 //! See [`crate::algos::sqrt::generic_wide`] for the parallel sqrt
 //! kernel — same parameterisation shape. The kernel is parameterised
-//! over `(Storage, CbrtWide)` via the [`crate::wide_int::WideStorage`]
+//! over `(Storage, CbrtWide)` via the [`crate::wide_int::BigInt`]
 //! trait; a small per-tier shim macro forwards each tier to the
 //! generic [`cbrt`] function so call sites stay unchanged.
 //!
@@ -19,7 +19,7 @@
 //! arithmetic applies to every tier listed.
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::{wide_cast, WideStorage};
+use crate::wide_int::{wide_cast, BigInt};
 
 /// Generic cube-root kernel for the wide-integer family.
 ///
@@ -32,8 +32,8 @@ use crate::wide_int::{wide_cast, WideStorage};
 #[must_use]
 pub(crate) fn cbrt<S, W>(raw: S, scale: u32, mode: RoundingMode) -> S
 where
-    S: WideStorage,
-    W: WideStorage,
+    S: BigInt,
+    W: BigInt,
 {
     if raw == S::ZERO {
         return S::ZERO;
@@ -48,7 +48,7 @@ where
     let mag = if negative { -widened } else { widened };
     let n: W = mag * ten.pow(2 * scale);
 
-    let sig_bits = <W as WideStorage>::BITS - n.leading_zeros();
+    let sig_bits = <W as BigInt>::BITS - n.leading_zeros();
     // Seed Newton with an f64-cbrt bootstrap. The classical
     // `1 << ceil(sig_bits/3)` seed has 1 bit of accuracy; an
     // f64 `(top_64 as f64).cbrt()` lands within ~10⁻¹⁵ relative
@@ -69,7 +69,7 @@ where
         // `mag_for_top` fits 64 bits by construction.
         let top_u128: u128 = {
             // Read the low 128 bits of mag_for_top — convert via
-            // `WideInt::mag_into_u128` (truncates to dst length).
+            // `BigInt::mag_into_u128` (truncates to dst length).
             let mut buf = [0u128; 1];
             mag_for_top.mag_into_u128(&mut buf);
             buf[0]

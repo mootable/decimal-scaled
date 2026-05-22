@@ -201,7 +201,7 @@ pub(crate) use decl_decimal_num_traits_basics;
 /// `checked_mul`; the `to_*` integer methods divide the raw storage
 /// by `10^SCALE` and narrow with `TryFrom`.
 /// - `decl_decimal_num_traits_conversions!(wide D76, I256)` — wide
-/// storage. `from_i64` / `from_u64` widen via the `WideInt` cast; the
+/// storage. `from_i64` / `from_u64` widen via the `BigInt` cast; the
 /// `to_*` methods divide the wide storage and narrow with the
 /// wide-to-primitive `TryFrom` impls.
 ///

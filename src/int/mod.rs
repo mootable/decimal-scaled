@@ -4,7 +4,7 @@
 //! split into four buckets:
 //!
 //! - [`types`] — the `Int<N>` / `Uint<N>` const-generic type
-//!   definitions, their `FixedInt` / `FixedIntConvert` traits, and the
+//!   definitions, their `BigInt` / `BigInt` traits, and the
 //!   named `IntXXXX` / `UintXXXX` `pub type` aliases preserved for the
 //!   existing call sites.
 //! - [`policy`] — per-width / limb-count algorithm-selection dispatch
@@ -15,7 +15,7 @@
 //!   types compose on (truncated mul / sqr, isqrt, root_int, the
 //!   re-exported full-width products and divide entry points).
 //! - [`limbs`] — the raw `&[u64]` / `&[u128]` slice limb primitives
-//!   (add/sub/cmp/shift/mul/divmod) plus the `WideInt` / `WideStorage`
+//!   (add/sub/cmp/shift/mul/divmod) plus the `BigInt` / `BigInt`
 //!   traits and the named-type re-exports, absorbed from the former
 //!   `src/wide_int/`.
 
@@ -25,4 +25,4 @@ pub(crate) mod policy;
 pub(crate) mod types;
 
 #[allow(unused_imports)]
-pub(crate) use types::{FixedInt, FixedIntConvert, Int, Uint};
+pub(crate) use types::{BigInt, Int, Uint};

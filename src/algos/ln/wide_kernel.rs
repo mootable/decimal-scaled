@@ -20,11 +20,11 @@
 //! strict path; this is intentional and documented at the policy call
 //! site.
 //!
-//! # Why this file stays per-tier (no `WideStorage` collapse)
+//! # Why this file stays per-tier (no `BigInt` collapse)
 //!
 //! Unlike [`crate::algos::sqrt::generic_wide`] and
 //! [`crate::algos::cbrt::generic_wide`], the per-tier wrappers here do
-//! *not* collapse to a single generic function over `WideStorage`.
+//! *not* collapse to a single generic function over `BigInt`.
 //! Each wrapper calls `core::ln_fixed`, `core::to_work`,
 //! `core::round_to_storage_with`, and `core::GUARD` from the per-tier
 //! `crate::types::widths::wide_trig_<tier>` module — these are emitted by

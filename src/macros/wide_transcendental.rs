@@ -95,7 +95,7 @@
 /// 1+ LSB of accuracy on those cells).
 ///
 /// This module lifts the `exp_fixed` body out to a free function
-/// generic over any [`WideStorage`] integer `S`, so the large-result
+/// generic over any [`BigInt`] integer `S`, so the large-result
 /// regime can run it in the *next-wider* integer `WW` (e.g. D76's
 /// `Int1024` → `Int2048`, D462's `Int4096` → `Int8192`) where the full
 /// lift + squaring peak fit, then narrow correctly-rounded back to the
@@ -104,7 +104,7 @@
 /// regime changes.
 pub(crate) mod exp_generic {
     #![allow(unused)]
-    use crate::wide_int::WideStorage;
+    use crate::wide_int::BigInt;
     use crate::support::rounding::RoundingMode;
 
     /// Hard cap on series iterations — a safety net; every series
@@ -112,32 +112,32 @@ pub(crate) mod exp_generic {
     const SERIES_CAP: u128 = 20_000;
 
     #[inline]
-    fn lit<S: WideStorage>(n: i128) -> S {
+    fn lit<S: BigInt>(n: i128) -> S {
         S::from_i128(n)
     }
     #[inline]
-    fn zero<S: WideStorage>() -> S {
+    fn zero<S: BigInt>() -> S {
         S::ZERO
     }
     #[inline]
-    fn abs<S: WideStorage>(v: S) -> S {
+    fn abs<S: BigInt>(v: S) -> S {
         if v < S::ZERO { -v } else { v }
     }
     #[inline]
-    fn pow10<S: WideStorage>(n: u32) -> S {
+    fn pow10<S: BigInt>(n: u32) -> S {
         S::TEN.pow(n)
     }
     #[inline]
-    fn one<S: WideStorage>(w: u32) -> S {
+    fn one<S: BigInt>(w: u32) -> S {
         pow10::<S>(w)
     }
     /// Bit length of `|v|` (0 for zero).
-    fn bit_length<S: WideStorage>(v: S) -> u32 {
-        <S as WideStorage>::BITS - abs(v).leading_zeros()
+    fn bit_length<S: BigInt>(v: S) -> u32 {
+        <S as BigInt>::BITS - abs(v).leading_zeros()
     }
     /// Half-to-even round of `numerator / divisor` for `S`.
     #[inline]
-    fn round_div<S: WideStorage>(n: S, d: S) -> S {
+    fn round_div<S: BigInt>(n: S, d: S) -> S {
         let (q, r) = n.div_rem(d);
         if r == S::ZERO {
             return q;
@@ -166,7 +166,7 @@ pub(crate) mod exp_generic {
     }
     /// Half-to-even quotient `n / 10^w`.
     #[inline]
-    fn round_div_pow10<S: WideStorage>(n: S, w: u32) -> S {
+    fn round_div_pow10<S: BigInt>(n: S, w: u32) -> S {
         if w == 0 {
             return n;
         }
@@ -174,23 +174,23 @@ pub(crate) mod exp_generic {
     }
     /// `(a · b) / 10^w`, rounded half-to-even.
     #[inline]
-    fn mul<S: WideStorage>(a: S, b: S, w: u32) -> S {
+    fn mul<S: BigInt>(a: S, b: S, w: u32) -> S {
         round_div_pow10(a * b, w)
     }
     /// Loop-friendly `mul` with a precomputed `10^w` divisor.
     #[inline]
-    fn mul_cached<S: WideStorage>(a: S, b: S, pow10_w: S) -> S {
+    fn mul_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
         round_div(a * b, pow10_w)
     }
     /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
     /// factor).
     #[inline]
-    fn div_cached<S: WideStorage>(a: S, b: S, pow10_w: S) -> S {
+    fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
         round_div(a * pow10_w, b)
     }
     /// `a · n` for a small unsigned multiplier.
     #[inline]
-    fn mul_u<S: WideStorage>(a: S, n: u128) -> S {
+    fn mul_u<S: BigInt>(a: S, n: u128) -> S {
         if n <= u64::MAX as u128 {
             a.checked_mul_u64(n as u64)
         } else {
@@ -199,7 +199,7 @@ pub(crate) mod exp_generic {
     }
     /// `k · c` where `k` is a signed range-reduction count.
     #[inline]
-    fn scale_by_k<S: WideStorage>(c: S, k: i128) -> S {
+    fn scale_by_k<S: BigInt>(c: S, k: i128) -> S {
         if k >= 0 {
             mul_u(c, k as u128)
         } else {
@@ -208,7 +208,7 @@ pub(crate) mod exp_generic {
     }
     /// Rounds a working-scale value to the nearest integer (ties away
     /// from zero); used for the range-reduction quotient.
-    fn round_to_nearest_int<S: WideStorage>(v: S, w: u32) -> i128 {
+    fn round_to_nearest_int<S: BigInt>(v: S, w: u32) -> i128 {
         let divisor = pow10::<S>(w);
         let (q, r) = v.div_rem(divisor);
         let half = divisor >> 1;
@@ -223,7 +223,7 @@ pub(crate) mod exp_generic {
     /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
     /// call (the wider path is only taken on the rare large-result
     /// regime, so memoisation is not worth the per-`S` thread-local).
-    fn ln2<S: WideStorage>(w: u32) -> S {
+    fn ln2<S: BigInt>(w: u32) -> S {
         let t = one::<S>(w) / lit::<S>(3);
         let t2 = mul(t, t, w);
         let mut sum = t;
@@ -251,7 +251,7 @@ pub(crate) mod exp_generic {
     /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
     /// stays width-generic so the caller can run it in a wider integer
     /// for the large-result regime.
-    pub(crate) fn exp_fixed<S: WideStorage>(v_w: S, w: u32) -> S {
+    pub(crate) fn exp_fixed<S: BigInt>(v_w: S, w: u32) -> S {
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
         let pow10_w_pre = one_w_pre;
@@ -261,7 +261,7 @@ pub(crate) mod exp_generic {
             0
         } else {
             let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
-            let capped = digits.min((<S as WideStorage>::BITS / 4) as u128) as u32;
+            let capped = digits.min((<S as BigInt>::BITS / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };
 
@@ -304,7 +304,7 @@ pub(crate) mod exp_generic {
 
         let scaled_at_w_ext = if k >= 0 {
             let shift = k as u32;
-            if bit_length(sum) + shift >= <S as WideStorage>::BITS {
+            if bit_length(sum) + shift >= <S as BigInt>::BITS {
                 panic!("exp_generic::exp_fixed: result overflows the working width");
             }
             sum << shift
@@ -325,7 +325,7 @@ pub(crate) mod exp_generic {
     /// `(a · 10^w) / b`, rounded half-to-even (the generic sibling of
     /// the per-tier `$core::div`).
     #[inline]
-    fn div<S: WideStorage>(a: S, b: S, w: u32) -> S {
+    fn div<S: BigInt>(a: S, b: S, w: u32) -> S {
         round_div(a * pow10::<S>(w), b)
     }
 
@@ -334,7 +334,7 @@ pub(crate) mod exp_generic {
     /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
     /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
     /// the small term's relative error stays a small *absolute* error.
-    pub(crate) fn sinh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
+    pub(crate) fn sinh_pos<S: BigInt>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex - enx) >> 1
@@ -342,7 +342,7 @@ pub(crate) mod exp_generic {
 
     /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
     /// [`sinh_pos`].
-    pub(crate) fn cosh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
+    pub(crate) fn cosh_pos<S: BigInt>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex + enx) >> 1
@@ -350,7 +350,7 @@ pub(crate) mod exp_generic {
 
     /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
     /// `w`. See [`sinh_pos`].
-    pub(crate) fn tanh_pos<S: WideStorage>(av_w: S, w: u32) -> S {
+    pub(crate) fn tanh_pos<S: BigInt>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         div(ex - enx, ex + enx, w)
@@ -694,7 +694,7 @@ macro_rules! decl_wide_transcendental {
                     return n;
                 }
                 if w <= 38 {
-                    return $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(
+                    return $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::BigInt>::U128_LIMBS }>(
                         n,
                         w,
                         $crate::support::rounding::RoundingMode::HalfToEven,
@@ -708,7 +708,7 @@ macro_rules! decl_wide_transcendental {
                 // MG; the routing is here so a future bench at the
                 // larger widths can promote without touching this
                 // site.
-                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(
+                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::BigInt>::U128_LIMBS }>(
                     n,
                     w,
                     $crate::support::rounding::RoundingMode::HalfToEven,
@@ -880,11 +880,11 @@ macro_rules! decl_wide_transcendental {
                 let rounded = if shift == 0 {
                     v
                 } else if shift <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(v, shift, mode)
+                    $crate::algos::mg_divide::div_wide_pow10_with::<W, { <W as $crate::wide_int::BigInt>::U128_LIMBS }>(v, shift, mode)
                 } else {
                     // Newton vs MG chain dispatch — see the matrix
                     // in [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::WideInt>::U128_LIMBS }>(v, shift, mode)
+                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<W, { <W as $crate::wide_int::BigInt>::U128_LIMBS }>(v, shift, mode)
                 };
                 let max_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MAX);
                 let min_w = $crate::wide_int::wide_cast::<$Storage, W>(<$Storage>::MIN);

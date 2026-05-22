@@ -18,7 +18,7 @@
 /// - `decl_decimal_float_bridge!(D9, i32)` — *native* storage; the
 /// `f64` <-> storage conversions use `as`-casts.
 /// - `decl_decimal_float_bridge!(wide D76, I256)` — *wide* storage;
-/// the conversions use the `WideInt` cast. The experimental `f16` /
+/// the conversions use the `BigInt` cast. The experimental `f16` /
 /// `f128` entry points route through `f64` for wide storage (the wide integer
 /// only provides `f32` / `f64` casts), so they are lossier on the
 /// wide tier than on D38-and-narrower.

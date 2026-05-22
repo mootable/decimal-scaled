@@ -20,7 +20,7 @@
 //! the wide integers expose with the same names and `const`-ness as the
 //! primitive integers — so those families live in a shared `@common`
 //! arm. Mul / div widen to `$Wider` for the intermediate; only the
-//! widening *spelling* differs (native `as`-casts vs the `WideInt` cast),
+//! widening *spelling* differs (native `as`-casts vs the `BigInt` cast),
 //! so they are written inline per front-end arm.
 //!
 //! D38 is the exception: its overflow mul/div go through the

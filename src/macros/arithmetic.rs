@@ -206,7 +206,7 @@ pub(crate) use round_with_mode_wide;
 /// widening type is a primitive integer, `as`-casts and the
 /// `(10 as $Wider)` literal carry the mul/div step.
 /// - `decl_decimal_arithmetic!(wide D76, I256, I512)` — *wide*
-/// storage; the widening type is a hand-rolled wide integer, the `WideInt` cast
+/// storage; the widening type is a hand-rolled wide integer, the `BigInt` cast
 /// carries the width casts and `from_str_radix` builds the
 /// `10^SCALE` factor.
 macro_rules! decl_decimal_arithmetic {
@@ -293,14 +293,14 @@ macro_rules! decl_decimal_arithmetic {
                     let scaled = if SCALE == 0 {
                         n
                     } else if SCALE <= 38 {
-                        $crate::algos::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
+                        $crate::algos::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                     } else {
                         // Newton vs MG chain dispatch: cells in the
                         // bench-validated matrix (Int2048 ≥ s200,
                         // Int3072 ≥ s200, Int4096 ≥ s400) route to
                         // Newton; everything else stays on MG. See
                         // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                        $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
+                        $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                     };
                     return Self(scaled);
                 }
@@ -308,17 +308,17 @@ macro_rules! decl_decimal_arithmetic {
                 // `widen_mul` does the `$Storage × $Storage → $Wider`
                 // product in one step — no Int{2W} wrapping mul with
                 // half-empty operands, and no double trip through the
-                // 64-limb `WideInt::to_mag_sign` buffer.
+                // 64-limb `BigInt::to_mag_sign` buffer.
                 let n: $Wider = self.0.widen_mul::<$Wider>(rhs.0);
                 let scaled = if SCALE == 0 {
                     n
                 } else if SCALE <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
+                    $crate::algos::mg_divide::div_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                 } else {
                     // Width-dispatch as above; the slow path's `$Wider`
                     // numerator hits the same matrix (e.g. D307's
                     // `$Wider = Int2048` routes Newton at SCALE ≥ 200).
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::WideInt>::U128_LIMBS }>(n, SCALE, mode)
+                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                 };
                 Self(scaled.resize::<$Storage>())
             }

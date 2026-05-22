@@ -264,7 +264,7 @@ pub mod __bench_internals {
                     /// Build a representative non-zero numerator from a top-limb position.
                     #[inline(never)]
                     pub fn build_numerator(top_limb_idx: usize) -> Storage {
-                        use crate::wide_int::WideInt;
+                        use crate::wide_int::BigInt;
                         let mut mag = [0u128; 64];
                         mag[top_limb_idx] = 1u128 << 32;
                         mag[1] = 0xdeadbeef_cafef00d_u128;
@@ -275,7 +275,7 @@ pub mod __bench_internals {
                     pub fn mg_chain(n: Storage, scale: u32) -> Storage {
                         Storage(crate::algos::mg_divide::div_wide_pow10_chain_with::<
                             W,
-                            { <W as crate::wide_int::WideInt>::U128_LIMBS },
+                            { <W as crate::wide_int::BigInt>::U128_LIMBS },
                         >(
                             n.0,
                             scale,
@@ -287,7 +287,7 @@ pub mod __bench_internals {
                     pub fn mg_single(n: Storage, scale: u32) -> Storage {
                         Storage(crate::algos::mg_divide::div_wide_pow10_with::<
                             W,
-                            { <W as crate::wide_int::WideInt>::U128_LIMBS },
+                            { <W as crate::wide_int::BigInt>::U128_LIMBS },
                         >(
                             n.0,
                             scale,
