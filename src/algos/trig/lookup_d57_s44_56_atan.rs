@@ -8,7 +8,7 @@
 //! GUARD = 74..=87` and the per-tier halving cap at 7, the halving
 //! chain itself burns ~7 wide sqrts (each ~1.2 µs at D57<57>) before
 //! the Taylor loop runs ~30 terms — and every iteration of every
-//! kernel goes through the same `Int1024 / Int1024` Knuth divide that
+//! kernel goes through the same `Int<16> / Int<16>` Knuth divide that
 //! dominates wide arithmetic at this width. This kernel collapses the
 //! halving chain into a single table lookup using the atan addition
 //! formula:
@@ -51,7 +51,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
+use crate::int::types::Int;
 
 /// Table size — number of `atan(j / M)` entries per working scale.
 /// Power of two so the index quantisation step `1/M` keeps the cheap
@@ -59,7 +59,7 @@ use crate::wide_int::Int192;
 /// `|y| ≤ 1/(2M)` and so shaves Taylor iterations.
 ///
 /// Mirrors the tuning from the D57 exp lookup (see
-/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int1024`-wide
+/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int<16>`-wide
 /// work integer, same Knuth-dispatch arithmetic cost per slot, same
 /// per-thread memoisation pattern. `M = 512` strikes the same balance
 /// here — the post-table Taylor remainder is small enough that the
@@ -67,7 +67,7 @@ use crate::wide_int::Int192;
 /// table seed of `M · atan_fixed(w)` calls (~22 ms at SCALE=57).
 ///
 /// Per-thread memory cost: `M · sizeof(W) = M · 128 B` for the
-/// `Int1024` wide-tier trig core, so ~64 KB at M = 512.
+/// `Int<16>` wide-tier trig core, so ~64 KB at M = 512.
 const M: u32 = 512;
 
 crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
@@ -102,10 +102,10 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 ///    `atan(x)`.
 #[inline]
 #[must_use]
-pub(crate) fn atan_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     // atan(0) = 0 short-circuit.
-    if raw == Int192::ZERO {
-        return Int192::ZERO;
+    if raw == Int::<3>::ZERO {
+        return Int::<3>::ZERO;
     }
 
     let w = SCALE + core::GUARD;

@@ -26,7 +26,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d153 as core;
-use crate::wide_int::Int512;
+use crate::int::types::Int;
 
 const GUARD_NARROW: u32 = 10;
 
@@ -39,15 +39,15 @@ pub(crate) enum Which {
 #[inline]
 #[must_use]
 pub(crate) fn sin_cos_strict<const SCALE: u32>(
-    raw: Int512,
+    raw: Int<8>,
     mode: RoundingMode,
     which: Which,
-) -> Int512 {
-    if raw == Int512::ZERO {
+) -> Int<8> {
+    if raw == Int::<8>::ZERO {
         return match which {
-            Which::Sin => Int512::ZERO,
+            Which::Sin => Int::<8>::ZERO,
             Which::Cos => {
-                let ten: Int512 = crate::int::types::traits::wide_cast::<u128, Int512>(10);
+                let ten: Int<8> = crate::int::types::traits::wide_cast::<u128, Int<8>>(10);
                 ten.pow(SCALE)
             }
         };
@@ -68,21 +68,21 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn sin_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
+pub(crate) fn sin_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
     sin_cos_strict::<SCALE>(raw, mode, Which::Sin)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn cos_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
+pub(crate) fn cos_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
     sin_cos_strict::<SCALE>(raw, mode, Which::Cos)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn tan_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
-    if raw == Int512::ZERO {
-        return Int512::ZERO;
+pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
+    if raw == Int::<8>::ZERO {
+        return Int::<8>::ZERO;
     }
     // Near a pole (input close to an odd multiple of π/2) the range-
     // reduced residue folds toward ±π/2 where cos(r) → 0, so the

@@ -4,7 +4,7 @@
 //! At deep storage scales the wide-tier `sin_cos_fixed` evaluates a
 //! Taylor series on a reduced argument `r ∈ [0, π/4]`. The series
 //! converges quadratically in the *argument squared*, but at `w = SCALE
-//! + GUARD = 74..=87` the wide-int `Int1024` `mul`/`div` cost per term
+//! + GUARD = 74..=87` the wide-int `Int<16>` `mul`/`div` cost per term
 //! dominates: ~30 rounded muls per call, each running the full Knuth
 //! divide. The strict `cos_strict` path additionally pays one wide
 //! `sqrt_fixed` (for the Pythagorean identity that recovers cos).
@@ -64,7 +64,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
+use crate::int::types::Int;
 
 /// Table size — number of `(sin(c_j), cos(c_j))` entries per working
 /// scale, with `c_j = j · π / (4M)` and `j ∈ [0, M]`. Power of two so
@@ -74,7 +74,7 @@ use crate::wide_int::Int192;
 ///
 /// Mirrors the tuning from the D57 atan + exp lookups (see
 /// [`crate::algos::trig::lookup_d57_s44_56_atan::M`] and
-/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int1024`-wide
+/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int<16>`-wide
 /// work integer, same Knuth-dispatch arithmetic cost per slot, same
 /// per-thread memoisation pattern. `M = 512` strikes the same balance
 /// here — the post-table Taylor remainders are small enough that each
@@ -83,7 +83,7 @@ use crate::wide_int::Int192;
 /// `SCALE = 57`).
 ///
 /// Per-thread memory cost: `2·(M+1)·sizeof(W) = (M+1) · 256 B` for the
-/// `Int1024` wide-tier trig core, so ~128 KB at M = 512.
+/// `Int<16>` wide-tier trig core, so ~128 KB at M = 512.
 const M: u32 = 512;
 
 /// One entry of the per-thread table: `(sin(c_j), cos(c_j))` at the
@@ -139,17 +139,17 @@ pub(crate) enum Which {
 #[inline]
 #[must_use]
 pub(crate) fn sin_cos_strict<const SCALE: u32>(
-    raw: Int192,
+    raw: Int<3>,
     mode: RoundingMode,
     which: Which,
-) -> Int192 {
+) -> Int<3> {
     // sin(0) = 0, cos(0) = 1 short-circuits — match `wide_kernel`.
-    if raw == Int192::ZERO {
+    if raw == Int::<3>::ZERO {
         return match which {
-            Which::Sin => Int192::ZERO,
+            Which::Sin => Int::<3>::ZERO,
             // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
             Which::Cos => {
-                let ten: Int192 = crate::int::types::traits::wide_cast::<u128, Int192>(10);
+                let ten: Int<3> = crate::int::types::traits::wide_cast::<u128, Int<3>>(10);
                 ten.pow(SCALE)
             }
         };
@@ -296,7 +296,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
 /// `SCALE ∈ 44..=56`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
-pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn sin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     sin_cos_strict::<SCALE>(raw, mode, Which::Sin)
 }
 
@@ -304,6 +304,6 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
 /// `SCALE ∈ 44..=56`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
-pub(crate) fn cos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn cos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     sin_cos_strict::<SCALE>(raw, mode, Which::Cos)
 }

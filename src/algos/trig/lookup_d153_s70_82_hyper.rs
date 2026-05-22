@@ -35,7 +35,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d153 as core;
-use crate::wide_int::Int512;
+use crate::int::types::Int;
 
 /// Narrow guard for the SCALE 70..=82 hyperbolic slot — matches the
 /// sibling Tang exp/ln guard so the per-thread `pow10_w` cache slot
@@ -54,7 +54,7 @@ fn ex_enx(v: core::W, w: u32) -> (core::W, core::W) {
 /// `sinh_strict` for `D153<SCALE>` with `SCALE ∈ 70..=82`.
 #[inline]
 #[must_use]
-pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
+pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let (ex, enx) = ex_enx(v, w);
@@ -66,7 +66,7 @@ pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> 
 /// `cosh_strict` for `D153<SCALE>` with `SCALE ∈ 70..=82`.
 #[inline]
 #[must_use]
-pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
+pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let (ex, enx) = ex_enx(v, w);
@@ -78,8 +78,8 @@ pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> 
 /// `tanh_strict` for `D153<SCALE>` with `SCALE ∈ 70..=82`.
 #[inline]
 #[must_use]
-pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
-    let zero = Int512::from_i128(0);
+pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
+    let zero = Int::<8>::from_i128(0);
     if raw != zero {
         // Small-argument linear band: tanh(x) = x − x³/3 + … , the cubic
         // below one ULP yet strictly positive, so the true value sits
@@ -87,12 +87,12 @@ pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> 
         // can resolve the sub-ULP cubic, so the directed result is the
         // analytic decision below (nearest modes return `raw`).
         let thresh_exp = SCALE - (SCALE + 2) / 3;
-        let thresh = Int512::from_i128(10).pow(thresh_exp);
+        let thresh = Int::<8>::from_i128(10).pow(thresh_exp);
         if raw.abs() <= thresh {
             return crate::support::rounding::tiny_odd_compressing_directed(
                 raw,
                 zero,
-                Int512::from_i128(1),
+                Int::<8>::from_i128(1),
                 mode,
             );
         }

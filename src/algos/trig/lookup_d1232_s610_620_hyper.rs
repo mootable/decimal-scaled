@@ -12,7 +12,7 @@
 //! Carried for completeness alongside the per-width hyperbolic Tang
 //! stack and for downstream re-probing. The D616 hyperbolic Tang slot
 //! at SCALE 300..=315 was bench-trialled and rejected (break-even
-//! against the canonical `*_strict_with`); D1232's deeper Int16384
+//! against the canonical `*_strict_with`); D1232's deeper Int<256>
 //! working width is expected to be at least as flat. The lookup
 //! kernels are NOT wired into [`crate::policy::trig`] surface
 //! dispatch; the macro-emitted inherent `*_strict_with` shells stay in
@@ -33,7 +33,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d1232 as core;
-use crate::wide_int::Int4096;
+use crate::int::types::Int;
 
 /// Narrow guard for the SCALE 610..=620 hyperbolic slot — matches the
 /// sibling Tang exp/ln guard so the per-thread `pow10_w` cache slot is
@@ -52,7 +52,7 @@ fn ex_enx(v: core::W, w: u32) -> (core::W, core::W) {
 /// `sinh_strict` for `D1232<SCALE>` with `SCALE ∈ 610..=620`.
 #[inline]
 #[must_use]
-pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> Int4096 {
+pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int<64>, mode: RoundingMode) -> Int<64> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let (ex, enx) = ex_enx(v, w);
@@ -64,7 +64,7 @@ pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) ->
 /// `cosh_strict` for `D1232<SCALE>` with `SCALE ∈ 610..=620`.
 #[inline]
 #[must_use]
-pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> Int4096 {
+pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int<64>, mode: RoundingMode) -> Int<64> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let (ex, enx) = ex_enx(v, w);
@@ -76,8 +76,8 @@ pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) ->
 /// `tanh_strict` for `D1232<SCALE>` with `SCALE ∈ 610..=620`.
 #[inline]
 #[must_use]
-pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> Int4096 {
-    let zero = Int4096::from_i128(0);
+pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int<64>, mode: RoundingMode) -> Int<64> {
+    let zero = Int::<64>::from_i128(0);
     if raw != zero {
         // Small-argument linear band: tanh(x) = x − x³/3 + … , the cubic
         // below one ULP yet strictly positive, so the true value sits
@@ -85,12 +85,12 @@ pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) ->
         // can resolve the sub-ULP cubic, so the directed result is the
         // analytic decision below (nearest modes return `raw`).
         let thresh_exp = SCALE - (SCALE + 2) / 3;
-        let thresh = Int4096::from_i128(10).pow(thresh_exp);
+        let thresh = Int::<64>::from_i128(10).pow(thresh_exp);
         if raw.abs() <= thresh {
             return crate::support::rounding::tiny_odd_compressing_directed(
                 raw,
                 zero,
-                Int4096::from_i128(1),
+                Int::<64>::from_i128(1),
                 mode,
             );
         }
