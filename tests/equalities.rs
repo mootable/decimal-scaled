@@ -29,8 +29,8 @@ fn eq_signed_one_lsb_is_false() {
 
 #[test]
 fn eq_i128_no_overflow_at_extremes() {
-    let huge = i128::MAX / D38s12::multiplier();
-    let d = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(huge * D38s12::multiplier()));
+    let huge = i128::MAX / D38s12::multiplier().as_i128();
+    let d = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(huge * D38s12::multiplier().as_i128()));
     assert!(d == huge);
 }
 
@@ -60,7 +60,7 @@ fn eq_unsigned_negative_is_false() {
 #[test]
 fn eq_u128_large_value() {
     let n: u128 = 1_000_000_u128;
-    let d = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128((n as i128) * D38s12::multiplier()));
+    let d = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128((n as i128) * D38s12::multiplier().as_i128()));
     assert!(d == n);
 }
 

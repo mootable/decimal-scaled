@@ -98,7 +98,13 @@ fn type_path(width: Width) -> proc_macro2::TokenStream {
 fn storage_path_tokens(width: Width) -> proc_macro2::TokenStream {
     if width.wide {
         let root = crate_root();
-        let leaf = proc_macro2::Ident::new(width.storage_path, proc_macro2::Span::call_site());
+        // Parsed (not a bare `Ident`) so a storage leaf may carry generic
+        // args, e.g. D38's `Int::<2>`. Plain leaves like `Int256` parse to a
+        // single ident, unchanged.
+        let leaf: proc_macro2::TokenStream = width
+            .storage_path
+            .parse()
+            .expect("storage_path is a valid type path");
         quote::quote! { #root :: #leaf }
     } else {
         width.storage_path.parse().unwrap()
@@ -123,8 +129,10 @@ const D38: Width = Width {
     name: "d38",
     max_scale: 37,
     type_leaf: "D38",
-    storage_path: "i128",
-    wide: false,
+    // D38 now backs onto `Int<2>` (was `i128`); emit via the wide
+    // `from_str_radix` path so the raw bits build at the storage type.
+    storage_path: "Int::<2>",
+    wide: true,
 };
 const D76: Width = Width {
     name: "d76",
@@ -961,7 +969,21 @@ fn expand_expression(width: Width, expr: Expr, scale: u32, scale_span: Span) -> 
         "{}! overflow: expression * 10^SCALE exceeds storage range",
         width.name
     );
-    let out = if width.wide {
+    let out = if width.wide && width.storage_path == "Int::<2>" {
+        // D38: the storage is the 128-bit `Int<2>`, but an expression
+        // value is naturally an `i128`-valued expression (as it was when
+        // D38 stored `i128`). Bridge it to `Int<2>` so callers keep the
+        // ergonomic `d38!(some_i128_expr, scale N)` form.
+        quote! {
+            #tp :: <#scale> :: from_bits({
+                let _v: #sp = <#sp>::from_i128((#expr) as i128);
+                let mult: #sp = <#sp>::from_str_radix("10", 10)
+                    .expect("d38! mult literal")
+                    .pow(#scale);
+                _v.checked_mul(mult).expect(#err_msg)
+            })
+        }
+    } else if width.wide {
         quote! {
             #tp :: <#scale> :: from_bits({
                 let _v: #sp = (#expr);

@@ -241,10 +241,13 @@ fn expression_negative_result() {
 }
 
 #[test]
-fn expression_const_context_works() {
+fn expression_value_at_runtime() {
+    // NB: the expression form of `d38!` is no longer `const`-evaluable —
+    // D38's storage is `Int<2>`, whose `checked_mul`/`pow` are not `const fn`
+    // (the literal form stays const). See research/2026_05_22_const_fn_arithmetic_followup.md.
     const N: i128 = 42;
-    const V: D38s2 = d38!(N * 3, scale 2);
-    assert_eq!(V, D38s2::from_bits(decimal_scaled::Int::<2>::from_i128(12_600)));
+    let v: D38s2 = d38!(N * 3, scale 2);
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::from_i128(12_600)));
 }
 
 // ── Per-width entry points: narrow tiers ──────────────────────────────
