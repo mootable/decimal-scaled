@@ -19,9 +19,91 @@
 use crate::algos::exp::fixed_d38::exp_fixed;
 use crate::algos::fixed_d38::Fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
+use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 use crate::types::consts::DecimalConstants;
 use crate::types::widths::D38;
+
+// ── Int<2> entry points ─────────────────────────────────────────────
+//
+// The decimal storage type is `Int<2>`; the hand-tuned trig kernels do
+// their math in `i128`. These thin wrappers bridge `Int<2> → i128` at
+// the algorithm boundary — the `*_raw` cores below are unchanged — so
+// `i128` never escapes this module. The policy layer forwards `self.0`
+// (an `Int<2>`) straight to these entry points.
+macro_rules! int2_trig {
+    (strict $pub:ident, $core:ident) => {
+        pub(crate) fn $pub<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+            Int::<2>::from_i128($core::<SCALE>(raw.as_i128(), mode))
+        }
+    };
+    (with $pub:ident, $core:ident) => {
+        pub(crate) fn $pub<const SCALE: u32>(
+            raw: Int<2>,
+            working_digits: u32,
+            mode: RoundingMode,
+        ) -> Int<2> {
+            Int::<2>::from_i128($core::<SCALE>(raw.as_i128(), working_digits, mode))
+        }
+    };
+    (with_scale $pub:ident, $core:ident) => {
+        pub(crate) fn $pub(
+            raw: Int<2>,
+            scale: u32,
+            working_digits: u32,
+            mode: RoundingMode,
+        ) -> Int<2> {
+            Int::<2>::from_i128($core(raw.as_i128(), scale, working_digits, mode))
+        }
+    };
+    (atan2_strict $pub:ident, $core:ident) => {
+        pub(crate) fn $pub<const SCALE: u32>(
+            y_raw: Int<2>,
+            x_raw: Int<2>,
+            mode: RoundingMode,
+        ) -> Int<2> {
+            Int::<2>::from_i128($core::<SCALE>(y_raw.as_i128(), x_raw.as_i128(), mode))
+        }
+    };
+    (atan2_with $pub:ident, $core:ident) => {
+        pub(crate) fn $pub<const SCALE: u32>(
+            y_raw: Int<2>,
+            x_raw: Int<2>,
+            working_digits: u32,
+            mode: RoundingMode,
+        ) -> Int<2> {
+            Int::<2>::from_i128($core::<SCALE>(
+                y_raw.as_i128(),
+                x_raw.as_i128(),
+                working_digits,
+                mode,
+            ))
+        }
+    };
+}
+
+int2_trig!(strict sin_strict, sin_strict_raw);
+int2_trig!(strict cos_strict, cos_strict_raw);
+int2_trig!(strict tan_strict, tan_strict_raw);
+int2_trig!(strict atan_strict, atan_strict_raw);
+int2_trig!(strict asin_strict, asin_strict_raw);
+int2_trig!(strict acos_strict, acos_strict_raw);
+int2_trig!(atan2_strict atan2_strict, atan2_strict_raw);
+int2_trig!(with sin_with, sin_with_raw);
+int2_trig!(with cos_with, cos_with_raw);
+int2_trig!(with tan_with, tan_with_raw);
+int2_trig!(with atan_with, atan_with_raw);
+int2_trig!(with asin_with, asin_with_raw);
+int2_trig!(with acos_with, acos_with_raw);
+int2_trig!(atan2_with atan2_with, atan2_with_raw);
+int2_trig!(with_scale sinh_with, sinh_with_raw);
+int2_trig!(with_scale cosh_with, cosh_with_raw);
+int2_trig!(with_scale tanh_with, tanh_with_raw);
+int2_trig!(with_scale asinh_with, asinh_with_raw);
+int2_trig!(with_scale acosh_with, acosh_with_raw);
+int2_trig!(with_scale atanh_with, atanh_with_raw);
+int2_trig!(with_scale to_degrees_with, to_degrees_with_raw);
+int2_trig!(with_scale to_radians_with, to_radians_with_raw);
 
 // ── Shared Fixed primitives ────────────────────────────────────────
 
@@ -382,7 +464,7 @@ pub(crate) fn atan_fixed(v_w: Fixed, w: u32) -> Fixed {
 
 #[inline]
 #[must_use]
-pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn sin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -397,7 +479,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 #[inline]
 #[must_use]
-pub(crate) fn sin_with<const SCALE: u32>(
+pub(crate) fn sin_with_raw<const SCALE: u32>(
     raw: i128,
     working_digits: u32,
     mode: RoundingMode,
@@ -418,7 +500,7 @@ pub(crate) fn sin_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn cos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 10_i128.pow(SCALE);
     }
@@ -431,7 +513,7 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 #[inline]
 #[must_use]
-pub(crate) fn cos_with<const SCALE: u32>(
+pub(crate) fn cos_with_raw<const SCALE: u32>(
     raw: i128,
     working_digits: u32,
     mode: RoundingMode,
@@ -450,7 +532,7 @@ pub(crate) fn cos_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn tan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -471,7 +553,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 #[inline]
 #[must_use]
-pub(crate) fn tan_with<const SCALE: u32>(
+pub(crate) fn tan_with_raw<const SCALE: u32>(
     raw: i128,
     working_digits: u32,
     mode: RoundingMode,
@@ -498,16 +580,16 @@ pub(crate) fn tan_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return <D38<SCALE> as DecimalConstants>::quarter_pi().0;
+        return <D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw == -one_bits {
-        return -<D38<SCALE> as DecimalConstants>::quarter_pi().0;
+        return -<D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
@@ -520,7 +602,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 
 #[inline]
 #[must_use]
-pub(crate) fn atan_with<const SCALE: u32>(
+pub(crate) fn atan_with_raw<const SCALE: u32>(
     raw: i128,
     working_digits: u32,
     mode: RoundingMode,
@@ -530,10 +612,10 @@ pub(crate) fn atan_with<const SCALE: u32>(
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return <D38<SCALE> as DecimalConstants>::quarter_pi().0;
+        return <D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw == -one_bits {
-        return -<D38<SCALE> as DecimalConstants>::quarter_pi().0;
+        return -<D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
@@ -548,7 +630,7 @@ pub(crate) fn atan_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn asin_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -599,7 +681,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 
 #[inline]
 #[must_use]
-pub(crate) fn asin_with<const SCALE: u32>(
+pub(crate) fn asin_with_raw<const SCALE: u32>(
     raw: i128,
     working_digits: u32,
     mode: RoundingMode,
@@ -656,16 +738,16 @@ pub(crate) fn asin_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn acos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
-        return <D38<SCALE> as DecimalConstants>::half_pi().0;
+        return <D38<SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
     if raw == -one_bits {
-        return <D38<SCALE> as DecimalConstants>::pi().0;
+        return <D38<SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + STRICT_GUARD;
     let one_w = Fixed {
@@ -708,20 +790,20 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 
 #[inline]
 #[must_use]
-pub(crate) fn acos_with<const SCALE: u32>(
+pub(crate) fn acos_with_raw<const SCALE: u32>(
     raw: i128,
     working_digits: u32,
     mode: RoundingMode,
 ) -> i128 {
     if raw == 0 {
-        return <D38<SCALE> as DecimalConstants>::half_pi().0;
+        return <D38<SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
     if raw == -one_bits {
-        return <D38<SCALE> as DecimalConstants>::pi().0;
+        return <D38<SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + working_digits;
     let one_w = Fixed {
@@ -766,7 +848,7 @@ pub(crate) fn acos_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn atan2_strict<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn atan2_strict_raw<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
     let w = SCALE + STRICT_GUARD;
     atan2_kernel(to_fixed(y_raw), to_fixed(x_raw), y_raw, w)
         .round_to_i128_with(w, SCALE, mode)
@@ -775,7 +857,7 @@ pub(crate) fn atan2_strict<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: Rou
 
 #[inline]
 #[must_use]
-pub(crate) fn atan2_with<const SCALE: u32>(
+pub(crate) fn atan2_with_raw<const SCALE: u32>(
     y_raw: i128,
     x_raw: i128,
     working_digits: u32,
@@ -801,13 +883,13 @@ pub(crate) fn atan2_with<const SCALE: u32>(
 
 #[inline]
 #[must_use]
-pub(crate) fn sinh_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn sinh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     sinh_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn sinh_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn sinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -846,13 +928,13 @@ pub(crate) fn sinh_with(raw: i128, scale: u32, working_digits: u32, mode: Roundi
 
 #[inline]
 #[must_use]
-pub(crate) fn cosh_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn cosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     cosh_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn cosh_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 10_i128.pow(scale);
     }
@@ -882,13 +964,13 @@ pub(crate) fn cosh_with(raw: i128, scale: u32, working_digits: u32, mode: Roundi
 
 #[inline]
 #[must_use]
-pub(crate) fn tanh_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn tanh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     tanh_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn tanh_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn tanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -924,13 +1006,13 @@ pub(crate) fn tanh_with(raw: i128, scale: u32, working_digits: u32, mode: Roundi
 
 #[inline]
 #[must_use]
-pub(crate) fn asinh_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn asinh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     asinh_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn asinh_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn asinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -965,13 +1047,13 @@ pub(crate) fn asinh_with(raw: i128, scale: u32, working_digits: u32, mode: Round
 
 #[inline]
 #[must_use]
-pub(crate) fn acosh_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn acosh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     acosh_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn acosh_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn acosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     let one_bits: i128 = 10_i128.pow(scale);
     if raw == one_bits {
         return 0;
@@ -1002,13 +1084,13 @@ pub(crate) fn acosh_with(raw: i128, scale: u32, working_digits: u32, mode: Round
 
 #[inline]
 #[must_use]
-pub(crate) fn atanh_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn atanh_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     atanh_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn atanh_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+pub(crate) fn atanh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     if raw == 0 {
         return 0;
     }
@@ -1042,13 +1124,13 @@ pub(crate) fn atanh_with(raw: i128, scale: u32, working_digits: u32, mode: Round
 
 #[inline]
 #[must_use]
-pub(crate) fn to_degrees_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn to_degrees_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     to_degrees_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn to_degrees_with(
+pub(crate) fn to_degrees_with_raw(
     raw: i128,
     scale: u32,
     working_digits: u32,
@@ -1069,13 +1151,13 @@ pub(crate) fn to_degrees_with(
 
 #[inline]
 #[must_use]
-pub(crate) fn to_radians_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn to_radians_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     to_radians_with(raw, SCALE, STRICT_GUARD, mode)
 }
 
 #[inline]
 #[must_use]
-pub(crate) fn to_radians_with(
+pub(crate) fn to_radians_with_raw(
     raw: i128,
     scale: u32,
     working_digits: u32,

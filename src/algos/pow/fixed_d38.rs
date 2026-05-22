@@ -19,6 +19,7 @@
 use crate::algos::exp::fixed_d38::exp_fixed;
 use crate::algos::fixed_d38::Fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::D38;
 
@@ -60,6 +61,22 @@ fn exp_as_small_int<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
 #[inline]
 #[must_use]
 pub(crate) fn powf_with<const SCALE: u32>(
+    base: Int<2>,
+    exp: Int<2>,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Int<2> {
+    Int::<2>::from_i128(powf_with_raw::<SCALE>(
+        base.as_i128(),
+        exp.as_i128(),
+        working_digits,
+        mode,
+    ))
+}
+
+/// `i128` core of [`powf_with`].
+#[inline]
+fn powf_with_raw<const SCALE: u32>(
     base: i128,
     exp: i128,
     working_digits: u32,
@@ -69,7 +86,10 @@ pub(crate) fn powf_with<const SCALE: u32>(
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return D38::<SCALE>::from_bits(base).powi(n).to_bits();
+        return D38::<SCALE>::from_bits(Int::<2>::from_i128(base))
+            .powi(n)
+            .to_bits()
+            .as_i128();
     }
     let w = SCALE + working_digits;
     let pow = 10u128.pow(working_digits);
@@ -87,12 +107,21 @@ pub(crate) fn powf_with<const SCALE: u32>(
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Int<2> {
+    Int::<2>::from_i128(powf_strict_raw::<SCALE>(base.as_i128(), exp.as_i128(), mode))
+}
+
+/// `i128` core of [`powf_strict`].
+#[inline]
+fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
     if base <= 0 {
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return D38::<SCALE>::from_bits(base).powi(n).to_bits();
+        return D38::<SCALE>::from_bits(Int::<2>::from_i128(base))
+            .powi(n)
+            .to_bits()
+            .as_i128();
     }
     let w = SCALE + STRICT_GUARD;
     let pow = 10u128.pow(STRICT_GUARD);
