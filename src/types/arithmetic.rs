@@ -399,24 +399,24 @@ mod tests {
             return;
         }
         type D0 = crate::types::widths::D38<0>;
-        let a = D0::from_bits(15);
-        let b = D0::from_bits(4);
+        let a = D0::from_bits(crate::int::types::Int::<2>::from_i128(15));
+        let b = D0::from_bits(crate::int::types::Int::<2>::from_i128(4));
         // 15 / 4 = 3.75 -> 4 under HalfToEven (no tie at .75).
-        assert_eq!(a / b, D0::from_bits(4));
-        assert_eq!((-a) / b, D0::from_bits(-4));
+        assert_eq!(a / b, D0::from_bits(crate::int::types::Int::<2>::from_i128(4)));
+        assert_eq!((-a) / b, D0::from_bits(crate::int::types::Int::<2>::from_i128(-4)));
         // Exact divide is unchanged.
-        let c = D0::from_bits(16);
-        assert_eq!(c / b, D0::from_bits(4));
+        let c = D0::from_bits(crate::int::types::Int::<2>::from_i128(16));
+        assert_eq!(c / b, D0::from_bits(crate::int::types::Int::<2>::from_i128(4)));
     }
 
     /// Mul at SCALE = 0: reduces to plain `i128 *`.
     #[test]
     fn mul_scale_zero_matches_i128_mul() {
         type D0 = crate::types::widths::D38<0>;
-        let a = D0::from_bits(7);
-        let b = D0::from_bits(11);
-        assert_eq!(a * b, D0::from_bits(77));
-        assert_eq!((-a) * b, D0::from_bits(-77));
+        let a = D0::from_bits(crate::int::types::Int::<2>::from_i128(7));
+        let b = D0::from_bits(crate::int::types::Int::<2>::from_i128(11));
+        assert_eq!(a * b, D0::from_bits(crate::int::types::Int::<2>::from_i128(77)));
+        assert_eq!((-a) * b, D0::from_bits(crate::int::types::Int::<2>::from_i128(-77)));
     }
 
     /// Default policy: division by zero panics.

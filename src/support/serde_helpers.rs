@@ -509,7 +509,7 @@ mod tests {
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&D38s12::ONE).unwrap();
         // Verify the raw 16 LE bytes appear somewhere in the postcard
         // output (postcard may prepend a varint length prefix).
-        let raw = D38s12::ONE.to_bits().to_le_bytes();
+        let raw = D38s12::ONE.to_bits().as_i128().to_le_bytes();
         assert!(bytes.windows(16).any(|w| w == raw));
         let back: D38s12 = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, D38s12::ONE);
@@ -551,7 +551,7 @@ mod tests {
     fn postcard_byte_order_matches_le() {
         let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128));
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
-        let raw = v.to_bits().to_le_bytes();
+        let raw = v.to_bits().as_i128().to_le_bytes();
         let found = bytes.windows(16).position(|w| w == raw);
         assert!(
             found.is_some(),
@@ -573,7 +573,7 @@ mod tests {
         let inner = json.trim_matches('"');
         let parsed: i128 = inner.parse().unwrap();
         let json_bytes = parsed.to_le_bytes();
-        let direct_bytes = v.to_bits().to_le_bytes();
+        let direct_bytes = v.to_bits().as_i128().to_le_bytes();
         assert_eq!(json_bytes, direct_bytes);
     }
 

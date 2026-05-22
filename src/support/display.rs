@@ -465,7 +465,7 @@ mod tests {
         type D0 = D38<0>;
         assert_eq!(D0::ONE.to_string(), "1");
         assert_eq!(D0::ZERO.to_string(), "0");
-        assert_eq!(D0::from_bits(-42).to_string(), "-42");
+        assert_eq!(D0::from_bits(crate::int::types::Int::<2>::from_i128(-42)).to_string(), "-42");
     }
 
     // ── Debug ──
@@ -811,7 +811,7 @@ mod tests {
             i128::MIN,
         ];
         for &raw in cases {
-            let v = D6::from_bits(raw);
+            let v = D6::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let s = v.to_string();
             let parsed: D6 = s.parse().expect("round-trip parse");
             assert_eq!(
@@ -830,7 +830,7 @@ mod tests {
         type D0 = D38<0>;
         let cases: &[i128] = &[0, 1, -1, 42, -42, i128::MAX, i128::MIN];
         for &raw in cases {
-            let v = D0::from_bits(raw);
+            let v = D0::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let s = v.to_string();
             let parsed: D0 = s.parse().expect("round-trip parse");
             assert_eq!(
