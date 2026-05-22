@@ -2175,19 +2175,31 @@ impl<const N: usize> Int<N> {
 
 // ── std-aligned primitive conversions ───────────────────────────────
 // Infallible widening (the source always fits `Int<N>` / `Uint<N>` for
-// N >= 1) is `From`. Fallible narrowing (the value may exceed the target
-// range) is `TryFrom`, returning [`ConvertError::Overflow`]. The
-// truncating bit-reinterpret stays on the inherent `*_bits` methods.
+// N >= 1, judged against the `N == 1` = `i64` floor) is `From`. Fallible
+// narrowing (the value may exceed the target range) is `TryFrom`,
+// returning [`ConvertError::Overflow`]. Each impl is a thin one-line
+// delegate to the inherent const base. `Into` / `TryInto` come for free.
 
+// ── IN: primitive → Int<N> ───────────────────────────────────────────
 macro_rules! int_from_signed {
-    ($($prim:ty),+) => {$(
+    ($($prim:ty => $base:ident),+) => {$(
         impl<const N: usize> From<$prim> for Int<N> {
             #[inline]
-            fn from(v: $prim) -> Self { Self::from_i64(v as i64) }
+            fn from(v: $prim) -> Self { Self::$base(v) }
         }
     )+};
 }
-int_from_signed!(i8, i16, i32, i64);
+int_from_signed!(i8 => from_i8, i16 => from_i16, i32 => from_i32, i64 => from_i64);
+
+macro_rules! int_from_unsigned {
+    ($($prim:ty => $base:ident),+) => {$(
+        impl<const N: usize> From<$prim> for Int<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::$base(v) }
+        }
+    )+};
+}
+int_from_unsigned!(u8 => from_u8, u16 => from_u16, u32 => from_u32);
 
 macro_rules! uint_from_unsigned {
     ($($prim:ty),+) => {$(
@@ -2199,17 +2211,71 @@ macro_rules! uint_from_unsigned {
 }
 uint_from_unsigned!(u8, u16, u32, u64);
 
+// Fallible IN: `u64` can overflow `Int<1>`; `i128` / `u128` can overflow
+// the narrow tiers (see the inherent `try_from_*`).
+impl<const N: usize> TryFrom<u64> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u64) -> Result<Self, Self::Error> {
+        Self::try_from_u64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
 impl<const N: usize> TryFrom<i128> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
     fn try_from(v: i128) -> Result<Self, Self::Error> {
-        Self::from_i128_checked(v).ok_or(crate::support::error::ConvertError::Overflow)
+        Self::try_from_i128(v).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
-// Int<1> / Int<2> already have infallible `From<Int<_>> for i128` (they
-// fit exactly); wider widths use the inherent `to_i128_checked`. A blanket
-// `TryFrom<Int<N>> for i128` would conflict with those, so it is omitted.
+impl<const N: usize> TryFrom<u128> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u128) -> Result<Self, Self::Error> {
+        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// ── OUT: Int<N> → primitive ──────────────────────────────────────────
+// `i64` / `i128` are always representable on the fitting tiers, so those
+// are infallible `From` (declared above: `From<Int<1>> for i64`,
+// `From<Int<1>>` / `From<Int<2>> for i128`). The std blanket
+// `impl<T,U: From<T>> TryFrom<T> for U` then derives the matching
+// `TryFrom` for those tiers, so a generic `TryFrom<Int<N>> for i64`/`i128`
+// is omitted to avoid the coherence conflict. The remaining widths /
+// targets are genuinely fallible:
+impl<const N: usize> TryFrom<Int<N>> for i32 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_i32().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u32 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u32().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u64 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u64().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u128 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u128().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
 
 impl<const N: usize> TryFrom<u128> for Uint<N> {
     type Error = crate::support::error::ConvertError;
