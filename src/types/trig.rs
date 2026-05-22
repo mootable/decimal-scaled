@@ -723,7 +723,7 @@ mod tests {
     const ANGLE_TOLERANCE_LSB: i128 = 32;
 
     fn within_lsb(actual: D38s12, expected: D38s12, lsb: i128) -> bool {
-        let diff = (actual.to_bits() - expected.to_bits()).abs();
+        let diff = (actual.to_bits().as_i128() - expected.to_bits().as_i128()).abs();
         diff <= lsb
     }
 
@@ -762,13 +762,13 @@ mod tests {
             12_000_000_000,
         ] {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            check!("sin", raw, x.sin_strict().to_bits(), f64::sin);
-            check!("cos", raw, x.cos_strict().to_bits(), f64::cos);
-            check!("atan", raw, x.atan_strict().to_bits(), f64::atan);
-            check!("sinh", raw, x.sinh_strict().to_bits(), f64::sinh);
-            check!("cosh", raw, x.cosh_strict().to_bits(), f64::cosh);
-            check!("tanh", raw, x.tanh_strict().to_bits(), f64::tanh);
-            check!("asinh", raw, x.asinh_strict().to_bits(), f64::asinh);
+            check!("sin", raw, x.sin_strict().to_bits().as_i128(), f64::sin);
+            check!("cos", raw, x.cos_strict().to_bits().as_i128(), f64::cos);
+            check!("atan", raw, x.atan_strict().to_bits().as_i128(), f64::atan);
+            check!("sinh", raw, x.sinh_strict().to_bits().as_i128(), f64::sinh);
+            check!("cosh", raw, x.cosh_strict().to_bits().as_i128(), f64::cosh);
+            check!("tanh", raw, x.tanh_strict().to_bits().as_i128(), f64::tanh);
+            check!("asinh", raw, x.asinh_strict().to_bits().as_i128(), f64::asinh);
         }
         for &raw in &[
             -1_000_000_000_i128,
@@ -780,12 +780,12 @@ mod tests {
             999_999_999,
         ] {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            check!("asin", raw, x.asin_strict().to_bits(), f64::asin);
-            check!("acos", raw, x.acos_strict().to_bits(), f64::acos);
+            check!("asin", raw, x.asin_strict().to_bits().as_i128(), f64::asin);
+            check!("acos", raw, x.acos_strict().to_bits().as_i128(), f64::acos);
         }
         for &raw in &[-900_000_000_i128, -300_000_000, 1, 300_000_000, 900_000_000] {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            check!("atanh", raw, x.atanh_strict().to_bits(), f64::atanh);
+            check!("atanh", raw, x.atanh_strict().to_bits().as_i128(), f64::atanh);
         }
         for &raw in &[
             1_000_000_000_i128,
@@ -794,7 +794,7 @@ mod tests {
             50_000_000_000,
         ] {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            check!("acosh", raw, x.acosh_strict().to_bits(), f64::acosh);
+            check!("acosh", raw, x.acosh_strict().to_bits().as_i128(), f64::acosh);
         }
         for &raw in &[
             -1_000_000_000_i128,
@@ -804,7 +804,7 @@ mod tests {
             1_400_000_000,
         ] {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            check!("tan", raw, x.tan_strict().to_bits(), f64::tan);
+            check!("tan", raw, x.tan_strict().to_bits().as_i128(), f64::tan);
         }
     }
 
@@ -824,13 +824,13 @@ mod tests {
         let expected_35: i128 = 84_147_098_480_789_650_665_250_232_163_029_900;
         let expected_37: i128 = 8_414_709_848_078_965_066_525_023_216_302_989_996;
 
-        let got_35 = D38::<35>::ONE.sin_strict().to_bits();
+        let got_35 = D38::<35>::ONE.sin_strict().to_bits().as_i128();
         assert!(
             (got_35 - expected_35).abs() <= 1,
             "sin(1) @ D38<35>: got {got_35}, expected {expected_35}"
         );
 
-        let got_37 = D38::<37>::ONE.sin_strict().to_bits();
+        let got_37 = D38::<37>::ONE.sin_strict().to_bits().as_i128();
         assert!(
             (got_37 - expected_37).abs() <= 1,
             "sin(1) @ D38<37>: got {got_37}, expected {expected_37}"
@@ -866,8 +866,8 @@ mod tests {
             assert!(
                 within_lsb(sum, D38s12::ONE, FOUR_LSB),
                 "sin^2 + cos^2 != 1 for raw={raw}: got bits {} (delta {})",
-                sum.to_bits(),
-                (sum.to_bits() - D38s12::ONE.to_bits()).abs(),
+                sum.to_bits().as_i128(),
+                (sum.to_bits().as_i128() - D38s12::ONE.to_bits().as_i128()).abs(),
             );
         }
     }
@@ -890,8 +890,8 @@ mod tests {
         assert!(
             within_lsb(result, D38s12::half_pi(), FOUR_LSB),
             "acos(0) bits {}, half_pi bits {}",
-            result.to_bits(),
-            D38s12::half_pi().to_bits(),
+            result.to_bits().as_i128(),
+            D38s12::half_pi().to_bits().as_i128(),
         );
     }
 
@@ -915,8 +915,8 @@ mod tests {
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
                 "asin(sin(x)) != x for raw={raw}: got bits {} (delta {})",
-                recovered.to_bits(),
-                (recovered.to_bits() - x.to_bits()).abs(),
+                recovered.to_bits().as_i128(),
+                (recovered.to_bits().as_i128() - x.to_bits().as_i128()).abs(),
             );
         }
     }
@@ -930,8 +930,8 @@ mod tests {
         assert!(
             within_lsb(result, D38s12::quarter_pi(), TWO_LSB),
             "atan2(1, 1) bits {}, quarter_pi bits {}",
-            result.to_bits(),
-            D38s12::quarter_pi().to_bits(),
+            result.to_bits().as_i128(),
+            D38s12::quarter_pi().to_bits().as_i128(),
         );
     }
 
@@ -944,8 +944,8 @@ mod tests {
         assert!(
             within_lsb(result, expected, TWO_LSB),
             "atan2(-1, -1) bits {}, expected -3pi/4 bits {}",
-            result.to_bits(),
-            expected.to_bits(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
         );
     }
 
@@ -959,8 +959,8 @@ mod tests {
         assert!(
             within_lsb(result, expected, TWO_LSB),
             "atan2(1, -1) bits {}, expected 3pi/4 bits {}",
-            result.to_bits(),
-            expected.to_bits(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
         );
     }
 
@@ -973,8 +973,8 @@ mod tests {
         assert!(
             within_lsb(result, expected, TWO_LSB),
             "atan2(-1, 1) bits {}, expected -pi/4 bits {}",
-            result.to_bits(),
-            expected.to_bits(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
         );
     }
 
@@ -1036,8 +1036,8 @@ mod tests {
             assert!(
                 within_lsb(diff, D38s12::ONE, FOUR_LSB),
                 "cosh^2 - sinh^2 != 1 for raw={raw}: got bits {} (delta {})",
-                diff.to_bits(),
-                (diff.to_bits() - D38s12::ONE.to_bits()).abs(),
+                diff.to_bits().as_i128(),
+                (diff.to_bits().as_i128() - D38s12::ONE.to_bits().as_i128()).abs(),
             );
         }
     }
@@ -1055,9 +1055,9 @@ mod tests {
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(pi) bits {}, expected 180 bits {} (delta {})",
-            result.to_bits(),
-            expected.to_bits(),
-            (result.to_bits() - expected.to_bits()).abs(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
+            (result.to_bits().as_i128() - expected.to_bits().as_i128()).abs(),
         );
     }
 
@@ -1069,9 +1069,9 @@ mod tests {
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_radians(180) bits {}, expected pi bits {} (delta {})",
-            result.to_bits(),
-            expected.to_bits(),
-            (result.to_bits() - expected.to_bits()).abs(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
+            (result.to_bits().as_i128() - expected.to_bits().as_i128()).abs(),
         );
     }
 
@@ -1098,8 +1098,8 @@ mod tests {
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
                 "to_radians(to_degrees(x)) != x for raw={raw}: got bits {} (delta {})",
-                recovered.to_bits(),
-                (recovered.to_bits() - x.to_bits()).abs(),
+                recovered.to_bits().as_i128(),
+                (recovered.to_bits().as_i128() - x.to_bits().as_i128()).abs(),
             );
         }
     }
@@ -1114,9 +1114,9 @@ mod tests {
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(half_pi) bits {}, expected 90 bits {} (delta {})",
-            result.to_bits(),
-            expected.to_bits(),
-            (result.to_bits() - expected.to_bits()).abs(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
+            (result.to_bits().as_i128() - expected.to_bits().as_i128()).abs(),
         );
     }
 
@@ -1127,9 +1127,9 @@ mod tests {
         assert!(
             within_lsb(result, expected, ANGLE_TOLERANCE_LSB),
             "to_degrees(quarter_pi) bits {}, expected 45 bits {} (delta {})",
-            result.to_bits(),
-            expected.to_bits(),
-            (result.to_bits() - expected.to_bits()).abs(),
+            result.to_bits().as_i128(),
+            expected.to_bits().as_i128(),
+            (result.to_bits().as_i128() - expected.to_bits().as_i128()).abs(),
         );
     }
 
@@ -1150,8 +1150,8 @@ mod tests {
             assert!(
                 within_lsb(t, sc, FOUR_LSB),
                 "tan(x) != sin/cos for raw={raw}: tan bits {}, sin/cos bits {}",
-                t.to_bits(),
-                sc.to_bits(),
+                t.to_bits().as_i128(),
+                sc.to_bits().as_i128(),
             );
         }
     }
@@ -1170,8 +1170,8 @@ mod tests {
             assert!(
                 within_lsb(t, sc, FOUR_LSB),
                 "tanh(x) != sinh/cosh for raw={raw}: tanh bits {}, sinh/cosh bits {}",
-                t.to_bits(),
-                sc.to_bits(),
+                t.to_bits().as_i128(),
+                sc.to_bits().as_i128(),
             );
         }
     }
