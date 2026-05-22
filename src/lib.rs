@@ -372,7 +372,6 @@ pub use crate::types::widths::{
 };
 
 // D9 — 32-bit storage, scale 0..=9.
-pub use crate::types::widths::{D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8};
 
 // D18 — 64-bit storage, scale 0..=18.
 pub use crate::types::widths::{
@@ -488,7 +487,7 @@ pub use wide_int::{Int8192, Int16384, Uint8192, Uint16384};
 /// `macros` feature; the wide-tier proc-macros are additionally
 /// feature-gated to match their target type's availability.
 #[cfg(feature = "macros")]
-pub use decimal_scaled_macros::{d9, d18, d38};
+pub use decimal_scaled_macros::{d18, d38};
 
 #[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
 pub use decimal_scaled_macros::d76;
@@ -534,25 +533,6 @@ pub use decimal_scaled_macros::d1232;
 // that aren't available in stable Rust; explicit per-line
 // declarations keep things debuggable and only cost ~40 lines.
 
-// D9 curated scales.
-/// `d9s0!(value)` — equivalent to `d9!(value, scale 0)`.
-#[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! d9s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 0  $(, $($rest)*)?) }; }
-/// `d9s2!(value)` — equivalent to `d9!(value, scale 2)`.
-#[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! d9s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 2  $(, $($rest)*)?) }; }
-/// `d9s4!(value)` — equivalent to `d9!(value, scale 4)`.
-#[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! d9s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 4  $(, $($rest)*)?) }; }
-/// `d9s6!(value)` — equivalent to `d9!(value, scale 6)`.
-#[cfg(feature = "macros")]
-#[macro_export]
-macro_rules! d9s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 6  $(, $($rest)*)?) }; }
-
-// D18 curated scales.
 /// `d18s0!(value)` — equivalent to `d18!(value, scale 0)`.
 #[cfg(feature = "macros")]
 #[macro_export]

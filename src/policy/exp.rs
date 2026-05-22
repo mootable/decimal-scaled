@@ -12,7 +12,7 @@
 use crate::algos::exp;
 use crate::policy::triplet::{policy_triplet, wtag};
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 pub(crate) trait ExpPolicy: Sized {
     /// `e^self` (strict, const-folded `SCALE + STRICT_GUARD`).
@@ -68,11 +68,6 @@ macro_rules! impl_exp_widen {
     };
 }
 
-impl_exp_widen!(
-    D9,
-    exp::widen_to_d38::exp_strict_d9,
-    exp::widen_to_d38::exp_with_d9
-);
 impl_exp_widen!(
     D18,
     exp::widen_to_d38::exp_strict_d18,

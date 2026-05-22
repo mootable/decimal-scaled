@@ -18,7 +18,7 @@
 use crate::algos::trig;
 use crate::policy::triplet::{policy_triplet, wtag};
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 pub(crate) trait TrigPolicy: Sized {
     fn sin_impl(self, mode: RoundingMode) -> Self;
@@ -323,23 +323,6 @@ macro_rules! impl_narrow_trig {
     };
 }
 
-impl_narrow_trig!(
-    D9,
-    trig::widen_to_d38::sin_strict_d9,
-    trig::widen_to_d38::sin_with_d9,
-    trig::widen_to_d38::cos_strict_d9,
-    trig::widen_to_d38::cos_with_d9,
-    trig::widen_to_d38::tan_strict_d9,
-    trig::widen_to_d38::tan_with_d9,
-    trig::widen_to_d38::atan_strict_d9,
-    trig::widen_to_d38::atan_with_d9,
-    trig::widen_to_d38::asin_strict_d9,
-    trig::widen_to_d38::asin_with_d9,
-    trig::widen_to_d38::acos_strict_d9,
-    trig::widen_to_d38::acos_with_d9,
-    trig::widen_to_d38::atan2_strict_d9,
-    trig::widen_to_d38::atan2_with_d9
-);
 
 impl_narrow_trig!(
     D18,

@@ -23,7 +23,7 @@
 use crate::algos::ln;
 use crate::policy::triplet::{policy_triplet, wtag};
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 /// Per-width policy for natural log and the log family. See module
 /// docs.
@@ -155,11 +155,6 @@ macro_rules! impl_log_widen {
     };
 }
 
-impl_log_widen!(
-    D9,
-    ln::widen_to_d38::ln_strict_d9,
-    ln::widen_to_d38::ln_with_d9
-);
 impl_log_widen!(
     D18,
     ln::widen_to_d38::ln_strict_d18,

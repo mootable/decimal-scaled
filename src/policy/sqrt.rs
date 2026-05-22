@@ -47,7 +47,7 @@
 use crate::algos::sqrt;
 use crate::policy::triplet::{policy_triplet, wtag};
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 /// Per-width policy: which kernel a `Dxx<SCALE>` uses for
 /// `sqrt_strict_with`. See module docs for the cascade structure.
@@ -58,17 +58,6 @@ pub(crate) trait SqrtPolicy: Sized {
 }
 
 // ── Narrow tier — width override: widen → D38 ───────────────────────
-
-impl<const SCALE: u32> SqrtPolicy for D9<SCALE> {
-    #[inline]
-    fn sqrt_impl(self, mode: RoundingMode) -> Self {
-        if self.0 <= 0 {
-            return Self(0);
-        }
-        // Width override: widen to D38, sqrt there, narrow back.
-        sqrt::widen_to_d38::sqrt_d9(self, mode)
-    }
-}
 
 impl<const SCALE: u32> SqrtPolicy for D18<SCALE> {
     #[inline]

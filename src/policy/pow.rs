@@ -4,7 +4,7 @@
 use crate::algos::pow;
 use crate::policy::triplet::{policy_triplet, wtag};
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 pub(crate) trait PowPolicy: Sized {
     /// `self^exp` (strict, const-folded `SCALE + STRICT_GUARD`).
@@ -12,17 +12,6 @@ pub(crate) trait PowPolicy: Sized {
 
     /// `self^exp` with caller-chosen working digits.
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self;
-}
-
-impl<const SCALE: u32> PowPolicy for D9<SCALE> {
-    #[inline]
-    fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
-        pow::widen_to_d38::powf_strict_d9(self, exp, mode)
-    }
-    #[inline]
-    fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        pow::widen_to_d38::powf_with_d9(self, exp, working_digits, mode)
-    }
 }
 
 impl<const SCALE: u32> PowPolicy for D18<SCALE> {

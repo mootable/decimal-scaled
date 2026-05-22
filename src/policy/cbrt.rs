@@ -3,7 +3,7 @@
 use crate::algos::cbrt;
 use crate::policy::triplet::{policy_triplet, wtag};
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 /// Per-width policy: which kernel a `Dxx<SCALE>` uses for
 /// `cbrt_strict_with`. See [`crate::policy`] module docs for the
@@ -14,13 +14,6 @@ pub(crate) trait CbrtPolicy: Sized {
 }
 
 // ── Narrow tier — width override: widen → D38 ───────────────────────
-
-impl<const SCALE: u32> CbrtPolicy for D9<SCALE> {
-    #[inline]
-    fn cbrt_impl(self, mode: RoundingMode) -> Self {
-        cbrt::widen_to_d38::cbrt_d9(self, mode)
-    }
-}
 
 impl<const SCALE: u32> CbrtPolicy for D18<SCALE> {
     #[inline]

@@ -32,14 +32,13 @@
 //! Each impl provides both directions (`D38<S> == T` and `T == D38<S>`) so
 //! comparisons are symmetric at the call site.
 
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 // Cross-equality with primitive integer types is emitted by the
 // `decl_eq_all_integers!` macro family in `src/macros/equalities.rs`.
 // The same surface is generated for every decimal width.
 crate::macros::equalities::decl_eq_all_integers!(wide D38);
 crate::macros::equalities::decl_eq_all_integers!(D18);
-crate::macros::equalities::decl_eq_all_integers!(D9);
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 use crate::types::widths::D76;
@@ -67,9 +66,7 @@ crate::macros::equalities::decl_eq_float!(D18, f32);
 #[cfg(feature = "std")]
 crate::macros::equalities::decl_eq_float!(D18, f64);
 #[cfg(feature = "std")]
-crate::macros::equalities::decl_eq_float!(D9, f32);
 #[cfg(feature = "std")]
-crate::macros::equalities::decl_eq_float!(D9, f64);
 
 // Wide tiers share the same float-bridge surface, so the same macro
 // applies unchanged.
