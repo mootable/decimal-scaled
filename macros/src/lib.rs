@@ -5,7 +5,7 @@
 //! - `d18!(…)`, `d38!(…)` — narrow-tier entry points
 //!   (i32 / i64 / i128 storage).
 //! - `d76!(…)`, `d153!(…)`, `d307!(…)` — wide-tier entry points
-//!   (Int256 / Int512 / Int1024 storage). Available when the
+//!   (Int::<4> / Int::<8> / Int::<16> storage). Available when the
 //!   parent crate's `d76` / `d153` / `d307` (or umbrella `wide` /
 //!   `x-wide`) feature is on.
 //! - Per-scale wrappers `d9s2!`, `d38s12!`, etc. live in the parent
@@ -51,8 +51,8 @@ struct Width {
     /// Storage type for the inline-expression form's `let _v: …`
     /// anchor. For narrow widths this is a primitive (`"i32"` /
     /// `"i64"` / `"i128"`) and used as-is. For wide widths it's a
-    /// leaf inside the decimal-scaled crate (`"Int256"` /
-    /// `"Int512"` / `"Int1024"`) and prefixed with the resolved
+    /// leaf inside the decimal-scaled crate (`"Int::<4>"` /
+    /// `"Int::<8>"` / `"Int::<16>"`) and prefixed with the resolved
     /// root path at emit time.
     storage_path: &'static str,
     /// `true` for D76 / D153 / D307 (hand-rolled wide integer
@@ -99,7 +99,7 @@ fn storage_path_tokens(width: Width) -> proc_macro2::TokenStream {
     if width.wide {
         let root = crate_root();
         // Parsed (not a bare `Ident`) so a storage leaf may carry generic
-        // args, e.g. D38's `Int::<2>`. Plain leaves like `Int256` parse to a
+        // args, e.g. D38's `Int::<2>`. Plain leaves like `Int::<4>` parse to a
         // single ident, unchanged.
         let leaf: proc_macro2::TokenStream = width
             .storage_path
@@ -132,70 +132,70 @@ const D76: Width = Width {
     name: "d76",
     max_scale: 75,
     type_leaf: "D76",
-    storage_path: "Int256",
+    storage_path: "Int::<4>",
     wide: true,
 };
 const D153: Width = Width {
     name: "d153",
     max_scale: 152,
     type_leaf: "D153",
-    storage_path: "Int512",
+    storage_path: "Int::<8>",
     wide: true,
 };
 const D307: Width = Width {
     name: "d307",
     max_scale: 306,
     type_leaf: "D307",
-    storage_path: "Int1024",
+    storage_path: "Int::<16>",
     wide: true,
 };
 const D57: Width = Width {
     name: "d57",
     max_scale: 56,
     type_leaf: "D57",
-    storage_path: "Int192",
+    storage_path: "Int::<3>",
     wide: true,
 };
 const D115: Width = Width {
     name: "d115",
     max_scale: 114,
     type_leaf: "D115",
-    storage_path: "Int384",
+    storage_path: "Int::<6>",
     wide: true,
 };
 const D230: Width = Width {
     name: "d230",
     max_scale: 229,
     type_leaf: "D230",
-    storage_path: "Int768",
+    storage_path: "Int::<12>",
     wide: true,
 };
 const D462: Width = Width {
     name: "d462",
     max_scale: 461,
     type_leaf: "D462",
-    storage_path: "Int1536",
+    storage_path: "Int::<24>",
     wide: true,
 };
 const D616: Width = Width {
     name: "d616",
     max_scale: 615,
     type_leaf: "D616",
-    storage_path: "Int2048",
+    storage_path: "Int::<32>",
     wide: true,
 };
 const D924: Width = Width {
     name: "d924",
     max_scale: 923,
     type_leaf: "D924",
-    storage_path: "Int3072",
+    storage_path: "Int::<48>",
     wide: true,
 };
 const D1232: Width = Width {
     name: "d1232",
     max_scale: 1231,
     type_leaf: "D1232",
-    storage_path: "Int4096",
+    storage_path: "Int::<64>",
     wide: true,
 };
 

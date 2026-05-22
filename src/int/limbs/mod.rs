@@ -204,7 +204,7 @@ pub(crate) const fn limbs_shr(a: &[u128], shift: u32, out: &mut [u128]) {
 /// `out` must be zeroed by the caller.
 pub(crate) const fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
     // Fast path for the 2-limb × 2-limb → 4-limb shape used by
-    // `Int256::wrapping_mul` (the densest wide-int call site). Hand
+    // `Int::<4>::wrapping_mul` (the densest wide-int call site). Hand
     // unrolled so the compiler sees four independent `mul_128`
     // sub-products that can issue in parallel; the inner loop variant
     // can't express that.
@@ -722,7 +722,7 @@ const fn div_2_by_1(high: u128, low: u128, d: u128) -> (u128, u128) {
 ///
 /// Complexity is `O(m·n)` multi-limb ops on `m+n / n`-limb inputs,
 /// versus the binary shift-subtract path's `O((m+n)·n·128)`. For
-/// `n = 32` limbs (Int4096) the difference is ~14×. For `n ≤ 2`
+/// `n = 32` limbs (Int<64>) the difference is ~14×. For `n ≤ 2`
 /// limbs there's no win and the caller should keep using the
 /// existing single-limb fast paths in `limbs_divmod`.
 ///
@@ -918,7 +918,7 @@ pub(crate) fn limbs_divmod_knuth(num: &[u128], den: &[u128], quot: &mut [u128], 
 /// On Karatsuba-multiplied operands BZ runs in `O(n^{1.58} · log n)`
 /// time vs Knuth's `O(n²)`.
 ///
-/// For the widths this crate actually uses (Int256 … Int4096, ≤ 32
+/// For the widths this crate actually uses (Int<4> … Int<64>, ≤ 32
 /// limbs) the recursion only saves a constant factor over Knuth and
 /// the canonical `limbs_divmod` path stays untouched. BZ is exposed
 /// here so a bench-driven follow-up can promote it once a clear win
@@ -1621,7 +1621,7 @@ pub(crate) const fn limbs_divmod_u64(num: &[u64], den: &[u64], quot: &mut [u64],
 /// Scratch capacity for the runtime u64-limb kernels — 144 u64 limbs
 /// (9216 bits), matching the u128 path's 72-limb scratch.
 // 288 u64 limbs = 18432 bits — covers the widest work integer in
-// the crate (Int16384 used by D1232 cbrt, 256 u64 limbs) with isqrt
+// the crate (Int<256> used by D1232 cbrt, 256 u64 limbs) with isqrt
 // scratch slack.
 const SCRATCH_LIMBS_U64: usize = 288;
 
@@ -1670,7 +1670,7 @@ pub(crate) const KARATSUBA_THRESHOLD_U64: usize = 256;
 /// `S(n) ≤ 6n + O(1)` limbs per level; recursing on the halves gives a
 /// geometric total `K(n) = S(n) + S(n/2) + … ≤ 2·S(n) ≤ 12n + O(log n)`.
 /// For the widest equal-length multiply the crate performs — `n = 256`
-/// limbs (Int16384) — that bound is `≤ 12·256 ≈ 3072`; rounded up with
+/// limbs (Int<256>) — that bound is `≤ 12·256 ≈ 3072`; rounded up with
 /// headroom. ~25 KiB on the stack, recursion depth `log2(256) = 8`.
 const KARATSUBA_SCRATCH_LIMBS: usize = 3200;
 
@@ -2438,7 +2438,7 @@ pub(crate) fn limbs_divmod_bz_u64(num: &[u64], den: &[u64], quot: &mut [u64], re
 ///
 /// History: this routine previously called the *const* [`limbs_divmod_u64`]
 /// per iteration, which routes multi-limb divisors through the
-/// O(bits²) shift-subtract path. At Int4096 (n=64 u64 limbs) that
+/// O(bits²) shift-subtract path. At Int<64> (n=64 u64 limbs) that
 /// dominates wall time — Newton converges in ~log₂(b) ≈ 12 iterations,
 /// each one a `~65k`-limb-op divmod. Switching to
 /// [`limbs_divmod_dispatch_u64`] gets Knuth-base-2⁶⁴ per iteration
@@ -2466,7 +2466,7 @@ pub(crate) fn limbs_isqrt_u64(n: &[u64], out: &mut [u64]) {
     // The hardware-`f64::sqrt` seed below lifts that to ~53 correct
     // bits in one go: extract the top 64 bits of `n` (which fits the
     // f64 mantissa with 11 bits of headroom), take the hardware sqrt,
-    // and shift the result back to the correct magnitude. For Int512
+    // and shift the result back to the correct magnitude. For Int<8>
     // (D76 sqrt input) this drops the Newton iteration count from ~8
     // to ~3, with each saved iteration eliminating one full
     // `limbs_divmod_dispatch_u64` call (the dominant cost).
@@ -2683,15 +2683,8 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
 // shims) keeps resolving with no change at the use sites. The kernels
 // run on `Int<N>` through the blanket `BigInt` impl in
 // `int::types::wide_compat`. Some widths are unused in low-feature
-// builds (e.g. only `Int256` is reached by D38 under default
+// builds (e.g. only `Int<4>` is reached by D38 under default
 // features), so the re-export carries `allow(unused_imports)`.
-#[allow(unused_imports)]
-pub use crate::int::types::{
-    Int64, Int128, Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048, Int3072,
-    Int4096, Int6144, Int8192, Int12288, Int16384, Uint64, Uint128, Uint192, Uint256, Uint384,
-    Uint512, Uint768, Uint1024, Uint1536, Uint2048, Uint3072, Uint4096, Uint6144, Uint8192,
-    Uint12288, Uint16384,
-};
 
 // Short aliases used by the decimal-tier macros (replacing the former
 // `crate::wide` re-export shim). The signed alias is exposed at each
@@ -2702,84 +2695,11 @@ pub use crate::int::types::{
 // backs storage or serves as a mul/div widening step for some tier,
 // and a matching `U*` (unsigned) when `Display`'s magnitude path
 // needs it.
-#[cfg(any(feature = "d57", feature = "d76", feature = "wide"))]
-pub(crate) use self::Int384 as I384;
-#[cfg(any(feature = "d76", feature = "d115", feature = "d153", feature = "wide"))]
-pub(crate) use self::Int512 as I512;
-#[cfg(any(feature = "d115", feature = "d153", feature = "d230", feature = "wide"))]
-pub(crate) use self::Int768 as I768;
-#[cfg(any(
-    feature = "d153",
-    feature = "d230",
-    feature = "d307",
-    feature = "wide",
-    feature = "x-wide"
-))]
-pub(crate) use self::Int1024 as I1024;
-#[cfg(any(
-    feature = "d230",
-    feature = "d307",
-    feature = "d462",
-    feature = "wide",
-    feature = "x-wide"
-))]
-pub(crate) use self::Int1536 as I1536;
-#[cfg(any(
-    feature = "d462",
-    feature = "d616",
-    feature = "d924",
-    feature = "x-wide",
-    feature = "xx-wide"
-))]
-pub(crate) use self::Int3072 as I3072;
-#[cfg(any(
-    feature = "d616",
-    feature = "d924",
-    feature = "d1232",
-    feature = "x-wide",
-    feature = "xx-wide"
-))]
-pub(crate) use self::Int4096 as I4096;
-#[cfg(any(feature = "d924", feature = "d1232", feature = "xx-wide"))]
-pub(crate) use self::Int6144 as I6144;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub(crate) use self::Int8192 as I8192;
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-#[allow(unused_imports)]
-pub(crate) use self::Int12288 as I12288;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-#[allow(unused_imports)]
-pub(crate) use self::Int16384 as I16384;
-#[cfg(any(feature = "d115", feature = "wide"))]
-pub(crate) use self::Uint384 as U384;
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) use self::Uint512 as U512;
-#[cfg(any(feature = "d230", feature = "wide"))]
-pub(crate) use self::Uint768 as U768;
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-pub(crate) use self::Uint1536 as U1536;
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-pub(crate) use self::Uint2048 as U2048;
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-pub(crate) use self::Uint3072 as U3072;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub(crate) use self::Uint4096 as U4096;
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) use self::{Int192 as I192, Uint192 as U192};
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) use self::{Int256 as I256, Uint256 as U256};
-#[cfg(any(
-    feature = "d307",
-    feature = "d462",
-    feature = "d616",
-    feature = "wide",
-    feature = "x-wide"
-))]
-pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
 
 #[cfg(test)]
 mod karatsuba_tests {
     use super::*;
+    use crate::int::types::{Int, Uint};
 
     /// Karatsuba and schoolbook must agree bit-for-bit on every
     /// equal-length input that meets the threshold.
@@ -2820,143 +2740,144 @@ mod karatsuba_tests {
 #[cfg(test)]
 mod hint_tests {
     use super::*;
+    use crate::int::types::{Int, Uint};
 
     #[test]
     fn signed_add_sub_neg() {
-        let a = Int256::from_i128(5);
-        let b = Int256::from_i128(3);
-        assert_eq!(a.wrapping_add(b), Int256::from_i128(8));
-        assert_eq!(a.wrapping_sub(b), Int256::from_i128(2));
-        assert_eq!(b.wrapping_sub(a), Int256::from_i128(-2));
-        assert_eq!(a.negate(), Int256::from_i128(-5));
-        assert_eq!(Int256::ZERO.negate(), Int256::ZERO);
+        let a = Int::<4>::from_i128(5);
+        let b = Int::<4>::from_i128(3);
+        assert_eq!(a.wrapping_add(b), Int::<4>::from_i128(8));
+        assert_eq!(a.wrapping_sub(b), Int::<4>::from_i128(2));
+        assert_eq!(b.wrapping_sub(a), Int::<4>::from_i128(-2));
+        assert_eq!(a.negate(), Int::<4>::from_i128(-5));
+        assert_eq!(Int::<4>::ZERO.negate(), Int::<4>::ZERO);
     }
 
     #[test]
     fn signed_mul_div_rem() {
-        let six = Int512::from_i128(6);
-        let two = Int512::from_i128(2);
-        let three = Int512::from_i128(3);
-        assert_eq!(six.wrapping_mul(three), Int512::from_i128(18));
+        let six = Int::<8>::from_i128(6);
+        let two = Int::<8>::from_i128(2);
+        let three = Int::<8>::from_i128(3);
+        assert_eq!(six.wrapping_mul(three), Int::<8>::from_i128(18));
         assert_eq!(six.wrapping_div(two), three);
         assert_eq!(
-            Int512::from_i128(7).wrapping_rem(three),
-            Int512::from_i128(1)
+            Int::<8>::from_i128(7).wrapping_rem(three),
+            Int::<8>::from_i128(1)
         );
         assert_eq!(
-            Int512::from_i128(-7).wrapping_rem(three),
-            Int512::from_i128(-1)
+            Int::<8>::from_i128(-7).wrapping_rem(three),
+            Int::<8>::from_i128(-1)
         );
-        assert_eq!(six.negate().wrapping_mul(three), Int512::from_i128(-18));
+        assert_eq!(six.negate().wrapping_mul(three), Int::<8>::from_i128(-18));
     }
 
     #[test]
     fn checked_overflow() {
-        assert_eq!(Int256::MAX.checked_add(Int256::ONE), None);
-        assert_eq!(Int256::MIN.checked_sub(Int256::ONE), None);
-        assert_eq!(Int256::MIN.checked_neg(), None);
+        assert_eq!(Int::<4>::MAX.checked_add(Int::<4>::ONE), None);
+        assert_eq!(Int::<4>::MIN.checked_sub(Int::<4>::ONE), None);
+        assert_eq!(Int::<4>::MIN.checked_neg(), None);
         assert_eq!(
-            Int256::from_i128(2).checked_add(Int256::from_i128(3)),
-            Some(Int256::from_i128(5))
+            Int::<4>::from_i128(2).checked_add(Int::<4>::from_i128(3)),
+            Some(Int::<4>::from_i128(5))
         );
     }
 
     #[test]
     fn from_str_and_pow() {
-        let ten = Int1024::from_str_radix("10", 10).unwrap();
-        assert_eq!(ten, Int1024::from_i128(10));
-        assert_eq!(ten.pow(3), Int1024::from_i128(1000));
-        let big = Int1024::from_str_radix("10", 10).unwrap().pow(40);
+        let ten = Int::<16>::from_str_radix("10", 10).unwrap();
+        assert_eq!(ten, Int::<16>::from_i128(10));
+        assert_eq!(ten.pow(3), Int::<16>::from_i128(1000));
+        let big = Int::<16>::from_str_radix("10", 10).unwrap().pow(40);
         let from_str =
-            Int1024::from_str_radix("10000000000000000000000000000000000000000", 10).unwrap();
+            Int::<16>::from_str_radix("10000000000000000000000000000000000000000", 10).unwrap();
         assert_eq!(big, from_str);
         assert_eq!(
-            Int256::from_str_radix("-42", 10).unwrap(),
-            Int256::from_i128(-42)
+            Int::<4>::from_str_radix("-42", 10).unwrap(),
+            Int::<4>::from_i128(-42)
         );
     }
 
     #[test]
     fn ordering_and_resize() {
-        assert!(Int256::from_i128(-1) < Int256::ZERO);
-        assert!(Int256::MIN < Int256::MAX);
-        let v = Int256::from_i128(-123_456_789);
-        let wide: Int1024 = v.resize();
-        let back: Int256 = wide.resize();
+        assert!(Int::<4>::from_i128(-1) < Int::<4>::ZERO);
+        assert!(Int::<4>::MIN < Int::<4>::MAX);
+        let v = Int::<4>::from_i128(-123_456_789);
+        let wide: Int<16> = v.resize();
+        let back: Int<4> = wide.resize();
         assert_eq!(back, v);
-        assert_eq!(wide, Int1024::from_i128(-123_456_789));
+        assert_eq!(wide, Int::<16>::from_i128(-123_456_789));
     }
 
     #[test]
     fn isqrt_and_f64() {
-        assert_eq!(Int512::from_i128(144).isqrt(), Int512::from_i128(12));
-        assert_eq!(Int256::from_i128(1_000_000).as_f64(), 1_000_000.0);
-        assert_eq!(Int256::from_f64(-2_500.0), Int256::from_i128(-2500));
+        assert_eq!(Int::<8>::from_i128(144).isqrt(), Int::<8>::from_i128(12));
+        assert_eq!(Int::<4>::from_i128(1_000_000).as_f64(), 1_000_000.0);
+        assert_eq!(Int::<4>::from_f64(-2_500.0), Int::<4>::from_i128(-2500));
     }
 
-    /// `Uint256` (the unsigned macro emission) supports the same
+    /// `Uint<4>` (the unsigned macro emission) supports the same
     /// bit/sign-manipulation surface as the signed sibling. Methods
     /// here are reachable through the wide decimal types but not always
     /// exercised by name; verify the contracts directly.
     #[test]
     fn uint256_is_zero_and_bit_helpers() {
-        let zero = Uint256::ZERO;
-        let one = Uint256::from_str_radix("1", 10).unwrap();
-        let two = Uint256::from_str_radix("2", 10).unwrap();
+        let zero = Uint::<4>::ZERO;
+        let one = Uint::<4>::from_str_radix("1", 10).unwrap();
+        let two = Uint::<4>::from_str_radix("2", 10).unwrap();
         assert!(zero.is_zero());
         assert!(!one.is_zero());
         assert!(one.is_power_of_two());
         assert!(two.is_power_of_two());
-        let three = Uint256::from_str_radix("3", 10).unwrap();
+        let three = Uint::<4>::from_str_radix("3", 10).unwrap();
         assert!(!three.is_power_of_two());
         // next_power_of_two(0) == 1
         assert_eq!(zero.next_power_of_two(), one);
         // next_power_of_two(1) == 1 (already power of two)
         assert_eq!(one.next_power_of_two(), one);
         // next_power_of_two(3) == 4
-        let four = Uint256::from_str_radix("4", 10).unwrap();
+        let four = Uint::<4>::from_str_radix("4", 10).unwrap();
         assert_eq!(three.next_power_of_two(), four);
         // count_ones / leading_zeros
         assert_eq!(zero.count_ones(), 0);
         assert_eq!(one.count_ones(), 1);
-        assert_eq!(zero.leading_zeros(), Uint256::BITS);
-        assert_eq!(one.leading_zeros(), Uint256::BITS - 1);
+        assert_eq!(zero.leading_zeros(), Uint::<4>::BITS);
+        assert_eq!(one.leading_zeros(), Uint::<4>::BITS - 1);
     }
 
     #[test]
     fn uint256_parse_arithmetic_and_pow() {
         // from_str_radix only accepts radix 10.
-        assert!(Uint256::from_str_radix("10", 2).is_err());
+        assert!(Uint::<4>::from_str_radix("10", 2).is_err());
         // Non-digit byte rejected.
-        assert!(Uint256::from_str_radix("1a", 10).is_err());
+        assert!(Uint::<4>::from_str_radix("1a", 10).is_err());
         // Arithmetic: 3 - 2 = 1, 6 / 2 = 3, 7 % 3 = 1, 3·3 = 9.
-        let two = Uint256::from_str_radix("2", 10).unwrap();
-        let three = Uint256::from_str_radix("3", 10).unwrap();
-        let six = Uint256::from_str_radix("6", 10).unwrap();
-        let seven = Uint256::from_str_radix("7", 10).unwrap();
-        assert_eq!(three - two, Uint256::from_str_radix("1", 10).unwrap());
+        let two = Uint::<4>::from_str_radix("2", 10).unwrap();
+        let three = Uint::<4>::from_str_radix("3", 10).unwrap();
+        let six = Uint::<4>::from_str_radix("6", 10).unwrap();
+        let seven = Uint::<4>::from_str_radix("7", 10).unwrap();
+        assert_eq!(three - two, Uint::<4>::from_str_radix("1", 10).unwrap());
         assert_eq!(six / two, three);
-        assert_eq!(seven % three, Uint256::from_str_radix("1", 10).unwrap());
+        assert_eq!(seven % three, Uint::<4>::from_str_radix("1", 10).unwrap());
         // BitAnd / BitOr / BitXor
-        let five = Uint256::from_str_radix("5", 10).unwrap(); // 101
-        let four = Uint256::from_str_radix("4", 10).unwrap(); // 100
-        let one = Uint256::from_str_radix("1", 10).unwrap(); // 001
+        let five = Uint::<4>::from_str_radix("5", 10).unwrap(); // 101
+        let four = Uint::<4>::from_str_radix("4", 10).unwrap(); // 100
+        let one = Uint::<4>::from_str_radix("1", 10).unwrap(); // 001
         assert_eq!(five & four, four); // 100
         assert_eq!(five | one, five); // 101
         assert_eq!(five ^ four, one); // 001
         // pow: 2^10 = 1024
         let p10 = two.pow(10);
-        assert_eq!(p10, Uint256::from_str_radix("1024", 10).unwrap());
+        assert_eq!(p10, Uint::<4>::from_str_radix("1024", 10).unwrap());
         // cast_signed round-trip
         let signed = three.cast_signed();
-        assert_eq!(signed, Int256::from_i128(3));
+        assert_eq!(signed, Int::<4>::from_i128(3));
     }
 
-    /// `Int256::bit` reports the two's-complement bit at any index;
+    /// `Int::<4>::bit` reports the two's-complement bit at any index;
     /// indices past the storage width return the sign bit.
     #[test]
     fn signed_bit_and_trailing_zeros() {
-        let v = Int256::from_i128(0b1100);
+        let v = Int::<4>::from_i128(0b1100);
         assert!(v.bit(2));
         assert!(v.bit(3));
         assert!(!v.bit(0));
@@ -2964,17 +2885,18 @@ mod hint_tests {
         // Out-of-range bit returns the sign — non-negative for v.
         assert!(!v.bit(1000));
         // Negative input: sign bit returns true past the storage.
-        let n = Int256::from_i128(-1);
+        let n = Int::<4>::from_i128(-1);
         assert!(n.bit(1000));
         // trailing_zeros
-        assert_eq!(Int256::from_i128(8).trailing_zeros(), 3);
-        assert_eq!(Int256::ZERO.trailing_zeros(), Int256::BITS);
+        assert_eq!(Int::<4>::from_i128(8).trailing_zeros(), 3);
+        assert_eq!(Int::<4>::ZERO.trailing_zeros(), Int::<4>::BITS);
     }
 }
 
 #[cfg(test)]
 mod slice_tests {
     use super::*;
+    use crate::int::types::{Int, Uint};
 
     #[test]
     fn mul_and_divmod_round_trip() {
@@ -3161,7 +3083,7 @@ mod slice_tests {
         };
 
         // Widths span the shipped tiers plus odd and threshold-boundary
-        // sizes; 256 is the widest equal-length multiply (Int16384).
+        // sizes; 256 is the widest equal-length multiply (Int<256>).
         const WIDTHS: &[usize] = &[
             1, 2, 4, 7, 8, 15, 16, 17, 31, 32, 33, 48, 64, 96, 128, 255, 256,
         ];
@@ -3248,7 +3170,7 @@ mod slice_tests {
         }
     }
 
-    /// The widest equal-length multiply (256 limbs, Int16384) routes
+    /// The widest equal-length multiply (256 limbs, Int<256>) routes
     /// through the production [`limbs_mul_karatsuba_u64`] entry — which
     /// declares the fixed `[u64; KARATSUBA_SCRATCH_LIMBS]` stack buffer —
     /// without tripping the scratch-overflow `debug_assert` and matches
@@ -3733,15 +3655,15 @@ mod slice_tests {
 
     /// `BigInt::from_mag_sign` for `u128` reads the first limb and
     /// ignores the sign flag. Exercised through a chained `wide_cast`
-    /// `Int256 → u128`.
+    /// `Int<4> → u128`.
     #[test]
     fn wide_cast_into_u128_returns_first_limb() {
         use crate::int::types::traits::wide_cast;
-        let src = Int256::from_i128(123_456_789);
+        let src = Int::<4>::from_i128(123_456_789);
         let dst: u128 = wide_cast(src);
         assert_eq!(dst, 123_456_789);
         // Casting ZERO yields 0.
-        let dst: u128 = wide_cast(Int256::ZERO);
+        let dst: u128 = wide_cast(Int::<4>::ZERO);
         assert_eq!(dst, 0);
     }
 

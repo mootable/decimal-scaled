@@ -390,12 +390,6 @@ pub use crate::types::widths::{
     D76s28, D76s32, D76s35, D76s38, D76s42, D76s48, D76s50, D76s56, D76s64, D76s70, D76s75,
 };
 
-// The hand-rolled wide-integer types — the storage backend for the
-// wide decimal tiers, also useful on their own.
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
-pub use wide_int::{
-    Int256, Int512, Int1024, Int2048, Int4096, Uint256, Uint512, Uint1024, Uint2048, Uint4096,
-};
 
 // D153 — 512-bit storage, behind the `d153` / `wide` features.
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -421,8 +415,6 @@ pub use crate::types::widths::{
     D57, D57s0, D57s1, D57s2, D57s4, D57s6, D57s9, D57s12, D57s18, D57s20, D57s24, D57s28, D57s32,
     D57s38, D57s42, D57s48, D57s52, D57s56,
 };
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub use wide_int::{Int192, Uint192};
 
 // D115 — 384-bit; half-width between D76 and D153.
 #[cfg(any(feature = "d115", feature = "wide"))]
@@ -430,8 +422,6 @@ pub use crate::types::widths::{
     D115, D115s0, D115s1, D115s4, D115s8, D115s16, D115s24, D115s32, D115s38, D115s50, D115s57,
     D115s64, D115s76, D115s90, D115s100, D115s110, D115s114,
 };
-#[cfg(any(feature = "d115", feature = "wide"))]
-pub use wide_int::{Int384, Uint384};
 
 // D230 — 768-bit; half-width between D153 and D307.
 #[cfg(any(feature = "d230", feature = "wide"))]
@@ -439,8 +429,6 @@ pub use crate::types::widths::{
     D230, D230s0, D230s1, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115, D230s140,
     D230s153, D230s175, D230s200, D230s215, D230s225, D230s229,
 };
-#[cfg(any(feature = "d230", feature = "wide"))]
-pub use wide_int::{Int768, Uint768};
 
 // D462 — 1536-bit; half-width between D307 and D616.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
@@ -448,8 +436,6 @@ pub use crate::types::widths::{
     D462, D462s0, D462s1, D462s18, D462s38, D462s75, D462s115, D462s153, D462s200, D462s230,
     D462s275, D462s307, D462s350, D462s400, D462s440, D462s460, D462s461,
 };
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-pub use wide_int::{Int1536, Uint1536};
 
 // D616 — 2048-bit; new top wide tier. Int2048 / Uint2048 are
 // already exported above for x-wide / d307 widening; no re-export
@@ -466,8 +452,6 @@ pub use crate::types::widths::{
     D924, D924s0, D924s1, D924s75, D924s153, D924s230, D924s307, D924s400, D924s461, D924s462,
     D924s500, D924s616, D924s700, D924s800, D924s860, D924s900, D924s920, D924s923,
 };
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
 
 // D1232 — 4096-bit; widest tier shipped.
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
@@ -476,8 +460,6 @@ pub use crate::types::widths::{
     D1232s700, D1232s800, D1232s900, D1232s924, D1232s1000, D1232s1100, D1232s1180, D1232s1220,
     D1232s1230, D1232s1231,
 };
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub use wide_int::{Int8192, Int16384, Uint8192, Uint16384};
 
 // ─── Construction macros (re-exports + per-scale wrappers) ────────────
 

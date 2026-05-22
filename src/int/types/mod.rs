@@ -2014,44 +2014,7 @@ impl<const N: usize> Int<N> {
     }
 }
 
-// ── Named aliases ──────────────────────────────────────────────────
-// Preserve the existing surface so the const-generic types can be
-// introduced without renaming every call site at once. Limb counts
-// match `decl_wide_int!`: bit_width / 64.
 
-pub type Uint64 = Uint<1>;
-pub type Uint128 = Uint<2>;
-pub type Uint192 = Uint<3>;
-pub type Uint256 = Uint<4>;
-pub type Uint384 = Uint<6>;
-pub type Uint512 = Uint<8>;
-pub type Uint768 = Uint<12>;
-pub type Uint1024 = Uint<16>;
-pub type Uint1536 = Uint<24>;
-pub type Uint2048 = Uint<32>;
-pub type Uint3072 = Uint<48>;
-pub type Uint4096 = Uint<64>;
-pub type Uint6144 = Uint<96>;
-pub type Uint8192 = Uint<128>;
-pub type Uint12288 = Uint<192>;
-pub type Uint16384 = Uint<256>;
-
-pub type Int64 = Int<1>;
-pub type Int128 = Int<2>;
-pub type Int192 = Int<3>;
-pub type Int256 = Int<4>;
-pub type Int384 = Int<6>;
-pub type Int512 = Int<8>;
-pub type Int768 = Int<12>;
-pub type Int1024 = Int<16>;
-pub type Int1536 = Int<24>;
-pub type Int2048 = Int<32>;
-pub type Int3072 = Int<48>;
-pub type Int4096 = Int<64>;
-pub type Int6144 = Int<96>;
-pub type Int8192 = Int<128>;
-pub type Int12288 = Int<192>;
-pub type Int16384 = Int<256>;
 
 // ── std-aligned primitive conversions ───────────────────────────────
 // Infallible widening (the source always fits `Int<N>` / `Uint<N>` for
