@@ -5,34 +5,14 @@
 //! ln kernel, narrow back.
 
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 /// `D9` natural log via widen → D38 → narrow. Strict working-scale.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<SCALE> {
-    let widened: D38<SCALE> = v.into();
-    let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
-    D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
-        crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
-    })
-}
-
 /// `D9` natural log with caller-chosen working digits.
 #[inline]
 #[must_use]
-pub(crate) fn ln_with_d9<const SCALE: u32>(
-    v: D9<SCALE>,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> D9<SCALE> {
-    let widened: D38<SCALE> = v.into();
-    let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
-    D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
-        crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE)
-    })
-}
-
 /// `D18` natural log via widen → D38 → narrow. Strict working-scale.
 #[inline]
 #[must_use]

@@ -12,22 +12,11 @@
 //! policy file's per-width impls are straight-line.
 
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D9, D18, D38};
+use crate::types::widths::{D18, D38};
 
 /// `D9` square-root via widen → D38 → narrow.
 #[inline]
 #[must_use]
-pub(crate) fn sqrt_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<SCALE> {
-    let widened: D38<SCALE> = v.into();
-    let sqrt_d38 = super::mg_divide_d38::sqrt(widened.0, SCALE, mode);
-    let narrowed: D9<SCALE> = D38::<SCALE>::from_bits(sqrt_d38)
-        .try_into()
-        .unwrap_or_else(|_| {
-            crate::support::diagnostics::overflow_panic_with_scale("widen_to_d38::sqrt_d9", SCALE)
-        });
-    narrowed
-}
-
 /// `D18` square-root via widen → D38 → narrow.
 #[inline]
 #[must_use]
