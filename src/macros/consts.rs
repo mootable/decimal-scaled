@@ -121,59 +121,6 @@ macro_rules! decl_decimal_consts {
         }
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> $crate::types::consts::DecimalConstants for $Type<SCALE> {
-            #[inline]
-            fn pi() -> Self {
-                Self($crate::types::consts::pi_at_target::<SCALE>() as $Storage)
-            }
-            #[inline]
-            fn tau() -> Self {
-                Self($crate::types::consts::tau_at_target::<SCALE>() as $Storage)
-            }
-            #[inline]
-            fn half_pi() -> Self {
-                Self($crate::types::consts::half_pi_at_target::<SCALE>() as $Storage)
-            }
-            #[inline]
-            fn quarter_pi() -> Self {
-                Self($crate::types::consts::quarter_pi_at_target::<SCALE>() as $Storage)
-            }
-            #[inline]
-            fn golden() -> Self {
-                Self($crate::types::consts::golden_at_target::<SCALE>() as $Storage)
-            }
-            #[inline]
-            fn e() -> Self {
-                Self($crate::types::consts::e_at_target::<SCALE>() as $Storage)
-            }
-            #[inline]
-            fn pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self($crate::types::consts::pi_at_target_with::<SCALE>(mode) as $Storage)
-            }
-            #[inline]
-            fn tau_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self($crate::types::consts::tau_at_target_with::<SCALE>(mode) as $Storage)
-            }
-            #[inline]
-            fn half_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self($crate::types::consts::half_pi_at_target_with::<SCALE>(mode) as $Storage)
-            }
-            #[inline]
-            fn quarter_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self($crate::types::consts::quarter_pi_at_target_with::<SCALE>(mode) as $Storage)
-            }
-            #[inline]
-            fn golden_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self($crate::types::consts::golden_at_target_with::<SCALE>(mode) as $Storage)
-            }
-            #[inline]
-            fn e_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self($crate::types::consts::e_at_target_with::<SCALE>(mode) as $Storage)
-            }
-        }
-    };
 }
 
 pub(crate) use decl_decimal_consts;

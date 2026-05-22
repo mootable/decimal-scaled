@@ -75,54 +75,6 @@ macro_rules! decl_decimal_int_methods {
         }
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty) => {
-        $crate::macros::int_methods::decl_decimal_int_methods!(@common $Type, $Storage);
-
-        impl<const SCALE: u32> $Type<SCALE> {
-            /// Floor-rounded division: `floor(self / rhs)` as an integer
-            /// multiple of `ONE`. Panics on `rhs == ZERO`.
-            ///
-            /// Inlined rather than using `i128::div_floor`, which is
-            /// still unstable for signed types.
-            #[inline]
-            #[must_use]
-            pub fn div_floor(self, rhs: Self) -> Self {
-                let q = self.0 / rhs.0;
-                let r = self.0 % rhs.0;
-                // XOR of sign bits detects a remainder/divisor sign mismatch.
-                let raw = if r != 0 && (r ^ rhs.0) < 0 { q - 1 } else { q };
-                Self(raw * Self::multiplier())
-            }
-
-            /// Ceil-rounded division: `ceil(self / rhs)` as an integer
-            /// multiple of `ONE`. Panics on `rhs == ZERO`.
-            #[inline]
-            #[must_use]
-            pub fn div_ceil(self, rhs: Self) -> Self {
-                let q = self.0 / rhs.0;
-                let r = self.0 % rhs.0;
-                let raw = if r != 0 && (r ^ rhs.0) >= 0 { q + 1 } else { q };
-                Self(raw * Self::multiplier())
-            }
-
-            /// `true` if `self` is the additive identity.
-            #[inline]
-            #[must_use]
-            pub const fn is_zero(self) -> bool {
-                self.0 == 0
-            }
-
-            /// Returns `true` for any non-zero value. A fixed-point
-            /// decimal has no subnormals, so zero is the only value that
-            /// is not "normal".
-            #[inline]
-            #[must_use]
-            pub const fn is_normal(self) -> bool {
-                self.0 != 0
-            }
-        }
-    };
 
     // Shared: div_euclid / rem_euclid / abs_diff / midpoint, plus the
     // float-shape predicates that are constant for a fixed-point type.

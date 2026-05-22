@@ -53,15 +53,6 @@ macro_rules! decl_decimal_basics {
         }
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty, $max_scale:literal) => {
-        $crate::macros::basics::decl_decimal_basics! {
-            @impl $Type, $Storage, $max_scale,
-            multiplier = { (10 as $Storage).pow(SCALE) },
-            zero = { 0 },
-            one_lsb = { 1 as $Storage }
-        }
-    };
 
     // Shared implementation body. `$mult` is the const expression for
     // `10^SCALE`; `$zero` is the const expression for the storage zero;

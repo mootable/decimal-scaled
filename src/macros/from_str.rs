@@ -153,21 +153,6 @@ macro_rules! decl_decimal_from_str {
         }
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> ::core::str::FromStr for $Type<SCALE> {
-            type Err = $crate::types::widths::ParseError;
-            fn from_str(s: &str) -> ::core::result::Result<Self, Self::Err> {
-                let bits_i128 = $crate::support::display::parse_decimal_bits::<SCALE>(s)?;
-                if bits_i128 > <$Storage>::MAX as i128 || bits_i128 < <$Storage>::MIN as i128 {
-                    return ::core::result::Result::Err(
-                        $crate::types::widths::ParseError::OutOfRange,
-                    );
-                }
-                ::core::result::Result::Ok(Self(bits_i128 as $Storage))
-            }
-        }
-    };
 }
 
 pub(crate) use decl_decimal_from_str;

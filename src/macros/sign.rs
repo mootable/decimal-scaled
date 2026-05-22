@@ -54,47 +54,6 @@ macro_rules! decl_decimal_sign_methods {
         }
     };
 
-    // Native (primitive integer) storage.
-    ($Type:ident, $Storage:ty) => {
-        impl<const SCALE: u32> $Type<SCALE> {
-            /// Returns the absolute value of `self`.
-            ///
-            /// Note: `abs(MIN)` overflows (because |MIN| has no positive
-            /// counterpart in two's complement). Debug builds panic;
-            /// release builds wrap.
-            #[inline]
-            #[must_use]
-            pub const fn abs(self) -> Self {
-                Self(self.0.abs())
-            }
-
-            /// Returns the sign of `self` encoded as a scaled `Self`:
-            /// `-ONE`, `ZERO`, or `+ONE`.
-            #[inline]
-            #[must_use]
-            pub fn signum(self) -> Self {
-                match self.0.signum() {
-                    1 => Self::ONE,
-                    -1 => Self(-Self::multiplier()),
-                    _ => Self::ZERO,
-                }
-            }
-
-            /// Returns `true` if `self` is strictly greater than zero.
-            #[inline]
-            #[must_use]
-            pub const fn is_positive(self) -> bool {
-                self.0 > 0
-            }
-
-            /// Returns `true` if `self` is strictly less than zero.
-            #[inline]
-            #[must_use]
-            pub const fn is_negative(self) -> bool {
-                self.0 < 0
-            }
-        }
-    };
 }
 
 pub(crate) use decl_decimal_sign_methods;
