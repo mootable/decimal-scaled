@@ -1,11 +1,10 @@
 //! Macro-generated sign-aware inherent methods (`abs`, `signum`,
 //! `is_positive`, `is_negative`) for the decimal widths.
 //!
-//! The native arm delegates to the primitive integer intrinsics. The
-//! `wide` arm delegates to the wide integer's equivalents: `signum` on a wide
-//! integer returns the storage type (not a primitive `i32`), and
-//! integer literals cannot be compared against wide-integer values, so the
-//! bodies are spelled with `is_positive()` / `is_negative()` instead.
+//! The methods delegate to the `Int<N>` storage's equivalents: `signum`
+//! returns the storage type (not a primitive `i32`), and integer literals
+//! cannot be compared against `Int<N>` values, so the bodies are spelled
+//! with `is_positive()` / `is_negative()` instead.
 
 /// Emits `abs`, `signum`, `is_positive`, `is_negative` for a decimal
 /// type with the given storage.

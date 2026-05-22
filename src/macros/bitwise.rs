@@ -175,21 +175,4 @@ macro_rules! decl_decimal_bitwise {
     };
 }
 
-/// Maps a native signed storage type to its unsigned counterpart, used
-/// by the `unsigned_shr` / `is_power_of_two` / `next_power_of_two`
-/// "reinterpret as unsigned" step in the native arm of
-/// `decl_decimal_bitwise!`.
-pub(crate) trait Unsigned {
-    type U;
-}
-impl Unsigned for i32 {
-    type U = u32;
-}
-impl Unsigned for i64 {
-    type U = u64;
-}
-impl Unsigned for i128 {
-    type U = u128;
-}
-
 pub(crate) use decl_decimal_bitwise;
