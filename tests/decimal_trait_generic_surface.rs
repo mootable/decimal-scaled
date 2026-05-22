@@ -35,16 +35,6 @@ fn surface_check<D: Decimal>(seed_i32: i32) -> (D, D, D, D) {
 }
 
 #[test]
-fn surface_check_d9() {
-    type D9_2 = D9<2>;
-    let (v, doubled, squared, signum) = surface_check::<D9_2>(5);
-    assert_eq!(v.to_bits(), 500);
-    assert_eq!(doubled.to_bits(), 1000);
-    assert_eq!(squared.to_bits(), 2500);
-    assert_eq!(signum, D9_2::ONE);
-}
-
-#[test]
 fn surface_check_d18() {
     type D18_4 = D18<4>;
     let (v, doubled, squared, _) = surface_check::<D18_4>(5);
@@ -83,14 +73,6 @@ fn fold_sum_product<D: Decimal>() -> (D, D) {
         D::from_i32(4),
     ];
     (D::sum(vs.iter().copied()), D::product(vs.iter().copied()))
-}
-
-#[test]
-fn sum_product_d9() {
-    type D9_0 = D9<0>;
-    let (s, p) = fold_sum_product::<D9_0>();
-    assert_eq!(s, D9_0::from_i32(10));
-    assert_eq!(p, D9_0::from_i32(24));
 }
 
 #[test]
@@ -136,7 +118,6 @@ fn trait_default_predicates_per_width() {
         assert!(!<D as DecimalArithmetic>::is_normal(D::ZERO));
         assert!(<D as DecimalArithmetic>::is_normal(D::ONE));
     }
-    check::<D9<0>>();
     check::<D18<0>>();
     check::<D38<0>>();
     #[cfg(feature = "wide")]

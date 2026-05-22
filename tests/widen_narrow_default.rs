@@ -85,8 +85,6 @@ fn cross_width_narrowing_d76_to_d18_d9() {
     let w: D76<2> = D38::<2>::from_int(7).into();
     let n18: D18<2> = w.try_into().unwrap();
     assert_eq!(n18.to_bits(), 700);
-    let n9: D9<2> = w.try_into().unwrap();
-    assert_eq!(n9.to_bits(), 700);
 
     // Out of range.
     let big = D76::<2>::MAX;

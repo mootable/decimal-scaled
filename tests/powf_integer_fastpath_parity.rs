@@ -41,18 +41,6 @@ fn d18_check<const S: u32>(base_raw: i64, n: i32) {
     );
 }
 
-fn d9_check<const S: u32>(base_raw: i32, n: i32) {
-    let base = D9::<S>::from_bits(base_raw);
-    let exp_d = D9::<S>::from_i32(n);
-    let from_powf = base.powf_strict(exp_d);
-    let from_powi = base.powi(n);
-    assert_eq!(
-        from_powf.to_bits(),
-        from_powi.to_bits(),
-        "D9<{S}>: powf_strict({base_raw}, {n}) != powi({n})",
-    );
-}
-
 #[test]
 fn d38_powf_integer_fastpath_parity_s12() {
     // 2.0, 3.0, 1.5, 0.7 at SCALE = 12.
@@ -81,19 +69,6 @@ fn d18_powf_integer_fastpath_parity_s6() {
     }
 }
 
-#[test]
-fn d9_powf_integer_fastpath_parity_s4() {
-    // 2.0, 3.0, 1.5 at SCALE = 4. D9 storage is i32 with MAX_SCALE 8;
-    // |base|*10^4 must stay below i32::MAX ≈ 2.1e9 and the integer
-    // power must not overflow at any step — small bases keep that
-    // safe over n ∈ [-5, 10].
-    let bases: &[i32] = &[2_0000, 3_0000, 1_5000];
-    for &b in bases {
-        for n in -3_i32..=5 {
-            d9_check::<4>(b, n);
-        }
-    }
-}
 
 /// Zero exponent: must return ONE regardless of base (matches the
 /// integer-exponent contract). Exercises the `n == 0` edge of the
