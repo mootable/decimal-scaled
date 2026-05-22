@@ -38,7 +38,7 @@ fn d57_max_scale_cbrt_does_not_panic() {
 #[test]
 fn d57_max_scale_cbrt_of_one() {
     let one = D57::<57>::from_bits(
-        decimal_scaled::Int192::from_str_radix(
+        decimal_scaled::Int::<3>::from_str_radix(
             "1000000000000000000000000000000000000000000000000000000000",
             10,
         )
@@ -52,12 +52,12 @@ fn d57_max_scale_cbrt_of_one() {
 #[test]
 fn d57_max_scale_cbrt_of_one_eighth() {
     // 0.125 = 1/8 at SCALE=57 → raw = 125 * 10^54.
-    let raw = decimal_scaled::Int192::from_str_radix(
+    let raw = decimal_scaled::Int::<3>::from_str_radix(
         "125000000000000000000000000000000000000000000000000000000",
         10,
     )
     .unwrap();
-    let half_raw = decimal_scaled::Int192::from_str_radix(
+    let half_raw = decimal_scaled::Int::<3>::from_str_radix(
         "500000000000000000000000000000000000000000000000000000000",
         10,
     )
@@ -72,7 +72,7 @@ fn d57_max_scale_cbrt_of_one_eighth() {
 /// path is unaffected.
 #[test]
 fn d57_max_scale_cbrt_of_zero() {
-    let zero = D57::<57>::from_bits(decimal_scaled::Int192::from_str_radix("0", 10).unwrap());
+    let zero = D57::<57>::from_bits(decimal_scaled::Int::<3>::from_str_radix("0", 10).unwrap());
     let r = zero.cbrt_strict();
     assert_eq!(r, zero, "cbrt(0) at D57<57> should equal 0");
 }

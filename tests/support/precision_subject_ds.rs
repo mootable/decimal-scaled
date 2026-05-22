@@ -18,9 +18,7 @@ use decimal_scaled::RoundingMode;
 use decimal_scaled::{D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232};
 #[allow(unused_imports)]
 use decimal_scaled::{DecimalConvert, DecimalTranscendental};
-use decimal_scaled::{
-    Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048, Int3072, Int4096,
-};
+use decimal_scaled::Int;
 
 /// `decimal-scaled` strict kernels — the reference subject. Correctly
 /// rounded to 0 storage LSB under every mode (proven by the golden gate),
@@ -108,16 +106,16 @@ impl PrecisionSubject for DecimalScaledSubject {
         match width {
             Width::D18 => eval_typed!(D18<9>, decimal_scaled::Int<1>, method, input, mode),
             Width::D38 => eval_typed!(D38<19>, decimal_scaled::Int<2>, method, input, mode),
-            Width::D57 => eval_typed!(D57<28>, Int192, method, input, mode),
-            Width::D76 => eval_typed!(D76<35>, Int256, method, input, mode),
-            Width::D115 => eval_typed!(D115<57>, Int384, method, input, mode),
-            Width::D153 => eval_typed!(D153<76>, Int512, method, input, mode),
-            Width::D230 => eval_typed!(D230<115>, Int768, method, input, mode),
-            Width::D307 => eval_typed!(D307<150>, Int1024, method, input, mode),
-            Width::D462 => eval_typed!(D462<230>, Int1536, method, input, mode),
-            Width::D616 => eval_typed!(D616<308>, Int2048, method, input, mode),
-            Width::D924 => eval_typed!(D924<460>, Int3072, method, input, mode),
-            Width::D1232 => eval_typed!(D1232<615>, Int4096, method, input, mode),
+            Width::D57 => eval_typed!(D57<28>, Int<3>, method, input, mode),
+            Width::D76 => eval_typed!(D76<35>, Int<4>, method, input, mode),
+            Width::D115 => eval_typed!(D115<57>, Int<6>, method, input, mode),
+            Width::D153 => eval_typed!(D153<76>, Int<8>, method, input, mode),
+            Width::D230 => eval_typed!(D230<115>, Int<12>, method, input, mode),
+            Width::D307 => eval_typed!(D307<150>, Int<16>, method, input, mode),
+            Width::D462 => eval_typed!(D462<230>, Int<24>, method, input, mode),
+            Width::D616 => eval_typed!(D616<308>, Int<32>, method, input, mode),
+            Width::D924 => eval_typed!(D924<460>, Int<48>, method, input, mode),
+            Width::D1232 => eval_typed!(D1232<615>, Int<64>, method, input, mode),
         }
     }
 }
