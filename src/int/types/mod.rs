@@ -2426,10 +2426,10 @@ mod tests {
     }
 
     #[test]
-    fn aliases_have_expected_widths() {
-        assert_eq!(Int256::BITS, 256);
-        assert_eq!(Int4096::BITS, 4096);
-        assert_eq!(Uint1024::LIMBS, 16);
+    fn widths_have_expected_bits() {
+        assert_eq!(Int::<4>::BITS, 256);
+        assert_eq!(Int::<64>::BITS, 4096);
+        assert_eq!(Uint::<16>::LIMBS, 16);
     }
 
     #[test]
