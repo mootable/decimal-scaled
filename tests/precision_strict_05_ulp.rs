@@ -73,16 +73,16 @@ fn assert_05_ulp(label: &str, actual: i128, expected_truth: i128) {
 ///   φ    = 1.618033988749894848204586834365638118...
 #[test]
 fn constants_at_scale_12() {
-    assert_05_ulp("pi", D38s12::pi().to_bits(), 3_141_592_653_590);
-    assert_05_ulp("tau", D38s12::tau().to_bits(), 6_283_185_307_180);
-    assert_05_ulp("half_pi", D38s12::half_pi().to_bits(), 1_570_796_326_795);
+    assert_05_ulp("pi", D38s12::pi().to_bits().as_i128(), 3_141_592_653_590);
+    assert_05_ulp("tau", D38s12::tau().to_bits().as_i128(), 6_283_185_307_180);
+    assert_05_ulp("half_pi", D38s12::half_pi().to_bits().as_i128(), 1_570_796_326_795);
     assert_05_ulp(
         "quarter_pi",
-        D38s12::quarter_pi().to_bits(),
+        D38s12::quarter_pi().to_bits().as_i128(),
         785_398_163_397,
     );
-    assert_05_ulp("e", D38s12::e().to_bits(), 2_718_281_828_459);
-    assert_05_ulp("golden", D38s12::golden().to_bits(), 1_618_033_988_750);
+    assert_05_ulp("e", D38s12::e().to_bits().as_i128(), 2_718_281_828_459);
+    assert_05_ulp("golden", D38s12::golden().to_bits().as_i128(), 1_618_033_988_750);
 }
 
 // ─── Multiplication ───────────────────────────────────────────────────
@@ -96,7 +96,7 @@ fn mul_strict_at_scale_12() {
     let a = D38s12::from_int(3) / D38s12::from_int(2); // 1.5 from rescale
     let b = D38s12::from_int(2);
     let r = a * b;
-    assert_05_ulp("1.5 * 2.0", r.to_bits(), 3_000_000_000_000);
+    assert_05_ulp("1.5 * 2.0", r.to_bits().as_i128(), 3_000_000_000_000);
 
     // 1.234567890123 × 0.000000000007 = 8.641975230861e-12 (exact at SCALE=12 = 9)
     // Truth: 1.234567890123 * 7e-12 = 8.641975230861e-12.
@@ -105,17 +105,17 @@ fn mul_strict_at_scale_12() {
     let b = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(7)); // 7e-12
     let r = a * b;
     // truth = 8.641... → at SCALE=12, the result is 9 LSBs (rounds 8.64 up).
-    assert_05_ulp("1.234e0 * 7e-12", r.to_bits(), 9);
+    assert_05_ulp("1.234e0 * 7e-12", r.to_bits().as_i128(), 9);
 
     // Negative * positive
     let r = (-a) * b;
-    assert_05_ulp("(-1.234e0) * 7e-12", r.to_bits(), -9);
+    assert_05_ulp("(-1.234e0) * 7e-12", r.to_bits().as_i128(), -9);
 
     // Exact-tie half: (5e-12) * (3) = 15e-12, rescale to SCALE=12 gives 15.
     let a = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(5)); // 5e-12
     let b = D38s12::from_int(3);
     let r = a * b;
-    assert_05_ulp("5e-12 * 3", r.to_bits(), 15);
+    assert_05_ulp("5e-12 * 3", r.to_bits().as_i128(), 15);
 }
 
 // ─── Division ─────────────────────────────────────────────────────────
@@ -124,19 +124,19 @@ fn mul_strict_at_scale_12() {
 fn div_strict_at_scale_12() {
     // 1.0 / 3.0 = 0.333333333333... → at SCALE=12: 333_333_333_333
     let r = D38s12::from_int(1) / D38s12::from_int(3);
-    assert_05_ulp("1/3", r.to_bits(), 333_333_333_333);
+    assert_05_ulp("1/3", r.to_bits().as_i128(), 333_333_333_333);
 
     // 1.0 / 7.0 = 0.142857142857... → at SCALE=12: 142_857_142_857
     let r = D38s12::from_int(1) / D38s12::from_int(7);
-    assert_05_ulp("1/7", r.to_bits(), 142_857_142_857);
+    assert_05_ulp("1/7", r.to_bits().as_i128(), 142_857_142_857);
 
     // -1.0 / 3.0 = -0.333333... → -333_333_333_333
     let r = (-D38s12::from_int(1)) / D38s12::from_int(3);
-    assert_05_ulp("-1/3", r.to_bits(), -333_333_333_333);
+    assert_05_ulp("-1/3", r.to_bits().as_i128(), -333_333_333_333);
 
     // 22.0 / 7.0 ≈ 3.142857142857 (close to π)
     let r = D38s12::from_int(22) / D38s12::from_int(7);
-    assert_05_ulp("22/7", r.to_bits(), 3_142_857_142_857);
+    assert_05_ulp("22/7", r.to_bits().as_i128(), 3_142_857_142_857);
 
     // 1.0 / 1e-12 = 1e12, exact at SCALE=12.
     let one = D38s12::ONE;
@@ -149,7 +149,7 @@ fn div_strict_at_scale_12() {
 
     // 1.0 / 2.0 = 0.5, exact at S=12 (raw 500_000_000_000)
     let r = D38s12::from_int(1) / D38s12::from_int(2);
-    assert_05_ulp("1/2", r.to_bits(), 500_000_000_000);
+    assert_05_ulp("1/2", r.to_bits().as_i128(), 500_000_000_000);
 }
 
 // ─── rescale ──────────────────────────────────────────────────────────
@@ -162,26 +162,26 @@ fn rescale_strict_at_scale_12() {
     // Half-to-even at exact halves.
     let micros = D38s6::from_bits(decimal_scaled::Int::<2>::from_i128(1_235_000)); // 1.235000
     let r: D2 = micros.rescale::<2>();
-    assert_05_ulp("1.235 -> cents (half to even = 1.24)", r.to_bits(), 124);
+    assert_05_ulp("1.235 -> cents (half to even = 1.24)", r.to_bits().as_i128(), 124);
 
     let micros = D38s6::from_bits(decimal_scaled::Int::<2>::from_i128(1_225_000)); // 1.225000
     let r: D2 = micros.rescale::<2>();
-    assert_05_ulp("1.225 -> cents (half to even = 1.22)", r.to_bits(), 122);
+    assert_05_ulp("1.225 -> cents (half to even = 1.22)", r.to_bits().as_i128(), 122);
 
     // Below half: 1.234999 → 1.23
     let micros = D38s6::from_bits(decimal_scaled::Int::<2>::from_i128(1_234_999));
     let r: D2 = micros.rescale::<2>();
-    assert_05_ulp("1.234999 -> 1.23", r.to_bits(), 123);
+    assert_05_ulp("1.234999 -> 1.23", r.to_bits().as_i128(), 123);
 
     // Above half: 1.235001 → 1.24
     let micros = D38s6::from_bits(decimal_scaled::Int::<2>::from_i128(1_235_001));
     let r: D2 = micros.rescale::<2>();
-    assert_05_ulp("1.235001 -> 1.24", r.to_bits(), 124);
+    assert_05_ulp("1.235001 -> 1.24", r.to_bits().as_i128(), 124);
 
     // Negative ties: -1.235000 → -1.24 (sign-symmetric half-to-even)
     let micros = D38s6::from_bits(decimal_scaled::Int::<2>::from_i128(-1_235_000));
     let r: D2 = micros.rescale::<2>();
-    assert_05_ulp("-1.235 -> -1.24", r.to_bits(), -124);
+    assert_05_ulp("-1.235 -> -1.24", r.to_bits().as_i128(), -124);
 }
 
 // ─── ln ───────────────────────────────────────────────────────────────
@@ -195,26 +195,26 @@ fn rescale_strict_at_scale_12() {
 ///   ln(0.1) = -ln(10) = -2.302585092994  → -2_302_585_092_994
 #[test]
 fn ln_strict_at_scale_12() {
-    assert_05_ulp("ln(1)", D38s12::ONE.ln_strict().to_bits(), 0);
+    assert_05_ulp("ln(1)", D38s12::ONE.ln_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "ln(2)",
-        D38s12::from_int(2).ln_strict().to_bits(),
+        D38s12::from_int(2).ln_strict().to_bits().as_i128(),
         693_147_180_560,
     );
     let e = D38s12::e();
     let r = e.ln_strict();
-    assert_05_ulp("ln(e)", r.to_bits(), 1_000_000_000_000);
+    assert_05_ulp("ln(e)", r.to_bits().as_i128(), 1_000_000_000_000);
     assert_05_ulp(
         "ln(10)",
-        D38s12::from_int(10).ln_strict().to_bits(),
+        D38s12::from_int(10).ln_strict().to_bits().as_i128(),
         2_302_585_092_994,
     );
     // ln(0.5) = -ln(2)
     let half = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000));
-    assert_05_ulp("ln(0.5)", half.ln_strict().to_bits(), -693_147_180_560);
+    assert_05_ulp("ln(0.5)", half.ln_strict().to_bits().as_i128(), -693_147_180_560);
     // ln(0.1) = -ln(10)
     let tenth = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(100_000_000_000));
-    assert_05_ulp("ln(0.1)", tenth.ln_strict().to_bits(), -2_302_585_092_994);
+    assert_05_ulp("ln(0.1)", tenth.ln_strict().to_bits().as_i128(), -2_302_585_092_994);
 }
 
 // ─── exp ──────────────────────────────────────────────────────────────
@@ -229,28 +229,28 @@ fn ln_strict_at_scale_12() {
 fn exp_strict_at_scale_12() {
     assert_05_ulp(
         "exp(0)",
-        D38s12::ZERO.exp_strict().to_bits(),
+        D38s12::ZERO.exp_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "exp(1)",
-        D38s12::ONE.exp_strict().to_bits(),
+        D38s12::ONE.exp_strict().to_bits().as_i128(),
         2_718_281_828_459,
     );
     assert_05_ulp(
         "exp(-1)",
-        (-D38s12::ONE).exp_strict().to_bits(),
+        (-D38s12::ONE).exp_strict().to_bits().as_i128(),
         367_879_441_171,
     );
 
     // Round-trip ln/exp; verify ≤ a couple of LSB at the boundary
     let two = D38s12::from_int(2);
     let r = two.ln_strict().exp_strict();
-    assert_05_ulp("exp(ln(2)) ~= 2", r.to_bits(), 2_000_000_000_000);
+    assert_05_ulp("exp(ln(2)) ~= 2", r.to_bits().as_i128(), 2_000_000_000_000);
 
     let ten = D38s12::from_int(10);
     let r = ten.ln_strict().exp_strict();
-    assert_05_ulp("exp(ln(10)) ~= 10", r.to_bits(), 10_000_000_000_000);
+    assert_05_ulp("exp(ln(10)) ~= 10", r.to_bits().as_i128(), 10_000_000_000_000);
 }
 
 // ─── sin / cos / tan ──────────────────────────────────────────────────
@@ -269,25 +269,25 @@ fn exp_strict_at_scale_12() {
 ///   tan(π/4)  = 1
 #[test]
 fn sin_strict_at_scale_12() {
-    assert_05_ulp("sin(0)", D38s12::ZERO.sin_strict().to_bits(), 0);
+    assert_05_ulp("sin(0)", D38s12::ZERO.sin_strict().to_bits().as_i128(), 0);
     let half_pi = D38s12::half_pi();
     assert_05_ulp(
         "sin(π/2)",
-        half_pi.sin_strict().to_bits(),
+        half_pi.sin_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     let pi = D38s12::pi();
     // sin(π) ≈ 0 (subject to π's own 1 LSB rounding)
-    let r = pi.sin_strict().to_bits();
+    let r = pi.sin_strict().to_bits().as_i128();
     assert!(r.abs() <= 2, "sin(π) was {r}, expected ~0 (≤ 2 LSB)");
     assert_05_ulp(
         "sin(1)",
-        D38s12::ONE.sin_strict().to_bits(),
+        D38s12::ONE.sin_strict().to_bits().as_i128(),
         841_470_984_808,
     );
     assert_05_ulp(
         "sin(-1)",
-        (-D38s12::ONE).sin_strict().to_bits(),
+        (-D38s12::ONE).sin_strict().to_bits().as_i128(),
         -841_470_984_808,
     );
 }
@@ -296,28 +296,28 @@ fn sin_strict_at_scale_12() {
 fn cos_strict_at_scale_12() {
     assert_05_ulp(
         "cos(0)",
-        D38s12::ZERO.cos_strict().to_bits(),
+        D38s12::ZERO.cos_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     let pi = D38s12::pi();
-    assert_05_ulp("cos(π)", pi.cos_strict().to_bits(), -1_000_000_000_000);
+    assert_05_ulp("cos(π)", pi.cos_strict().to_bits().as_i128(), -1_000_000_000_000);
     let half_pi = D38s12::half_pi();
-    let r = half_pi.cos_strict().to_bits();
+    let r = half_pi.cos_strict().to_bits().as_i128();
     assert!(r.abs() <= 2, "cos(π/2) was {r}, expected ~0 (≤ 2 LSB)");
     assert_05_ulp(
         "cos(1)",
-        D38s12::ONE.cos_strict().to_bits(),
+        D38s12::ONE.cos_strict().to_bits().as_i128(),
         540_302_305_868,
     );
 }
 
 #[test]
 fn tan_strict_at_scale_12() {
-    assert_05_ulp("tan(0)", D38s12::ZERO.tan_strict().to_bits(), 0);
+    assert_05_ulp("tan(0)", D38s12::ZERO.tan_strict().to_bits().as_i128(), 0);
     let quarter_pi = D38s12::quarter_pi();
     let r = quarter_pi.tan_strict();
     // tan(π/4) = 1, but π/4 has its own 1 LSB error.
-    assert_05_ulp("tan(π/4)", r.to_bits(), 1_000_000_000_000);
+    assert_05_ulp("tan(π/4)", r.to_bits().as_i128(), 1_000_000_000_000);
 }
 
 // ─── atan / asin / acos ───────────────────────────────────────────────
@@ -335,43 +335,43 @@ fn tan_strict_at_scale_12() {
 ///   acos(-1) = π                              → 3_141_592_653_590
 #[test]
 fn atan_strict_at_scale_12() {
-    assert_05_ulp("atan(0)", D38s12::ZERO.atan_strict().to_bits(), 0);
+    assert_05_ulp("atan(0)", D38s12::ZERO.atan_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "atan(1)",
-        D38s12::ONE.atan_strict().to_bits(),
+        D38s12::ONE.atan_strict().to_bits().as_i128(),
         785_398_163_397,
     );
     assert_05_ulp(
         "atan(-1)",
-        (-D38s12::ONE).atan_strict().to_bits(),
+        (-D38s12::ONE).atan_strict().to_bits().as_i128(),
         -785_398_163_397,
     );
 }
 
 #[test]
 fn asin_strict_at_scale_12() {
-    assert_05_ulp("asin(0)", D38s12::ZERO.asin_strict().to_bits(), 0);
+    assert_05_ulp("asin(0)", D38s12::ZERO.asin_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "asin(1)",
-        D38s12::ONE.asin_strict().to_bits(),
+        D38s12::ONE.asin_strict().to_bits().as_i128(),
         1_570_796_326_795,
     );
     let half = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000));
     // asin(0.5) = π/6
-    assert_05_ulp("asin(0.5)", half.asin_strict().to_bits(), 523_598_775_598);
+    assert_05_ulp("asin(0.5)", half.asin_strict().to_bits().as_i128(), 523_598_775_598);
 }
 
 #[test]
 fn acos_strict_at_scale_12() {
-    assert_05_ulp("acos(1)", D38s12::ONE.acos_strict().to_bits(), 0);
+    assert_05_ulp("acos(1)", D38s12::ONE.acos_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "acos(0)",
-        D38s12::ZERO.acos_strict().to_bits(),
+        D38s12::ZERO.acos_strict().to_bits().as_i128(),
         1_570_796_326_795,
     );
     assert_05_ulp(
         "acos(-1)",
-        (-D38s12::ONE).acos_strict().to_bits(),
+        (-D38s12::ONE).acos_strict().to_bits().as_i128(),
         3_141_592_653_590,
     );
 }
@@ -385,27 +385,27 @@ fn atan2_strict_at_scale_12() {
     // atan2(1, 1) = π/4
     assert_05_ulp(
         "atan2(1, 1)",
-        one.atan2_strict(one).to_bits(),
+        one.atan2_strict(one).to_bits().as_i128(),
         785_398_163_397,
     );
     // atan2(0, 1) = 0
-    assert_05_ulp("atan2(0, 1)", zero.atan2_strict(one).to_bits(), 0);
+    assert_05_ulp("atan2(0, 1)", zero.atan2_strict(one).to_bits().as_i128(), 0);
     // atan2(1, 0) = π/2
     assert_05_ulp(
         "atan2(1, 0)",
-        one.atan2_strict(zero).to_bits(),
+        one.atan2_strict(zero).to_bits().as_i128(),
         1_570_796_326_795,
     );
     // atan2(-1, 0) = -π/2
     assert_05_ulp(
         "atan2(-1, 0)",
-        (-one).atan2_strict(zero).to_bits(),
+        (-one).atan2_strict(zero).to_bits().as_i128(),
         -1_570_796_326_795,
     );
     // atan2(0, -1) = π
     assert_05_ulp(
         "atan2(0, -1)",
-        zero.atan2_strict(-one).to_bits(),
+        zero.atan2_strict(-one).to_bits().as_i128(),
         3_141_592_653_590,
     );
 }
@@ -426,61 +426,61 @@ fn atan2_strict_at_scale_12() {
 ///   cbrt(27) = 3 (exact)
 #[test]
 fn sqrt_strict_at_scale_12() {
-    assert_05_ulp("sqrt(0)", D38s12::ZERO.sqrt_strict().to_bits(), 0);
+    assert_05_ulp("sqrt(0)", D38s12::ZERO.sqrt_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "sqrt(1)",
-        D38s12::ONE.sqrt_strict().to_bits(),
+        D38s12::ONE.sqrt_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "sqrt(2)",
-        D38s12::from_int(2).sqrt_strict().to_bits(),
+        D38s12::from_int(2).sqrt_strict().to_bits().as_i128(),
         1_414_213_562_373,
     );
     assert_05_ulp(
         "sqrt(3)",
-        D38s12::from_int(3).sqrt_strict().to_bits(),
+        D38s12::from_int(3).sqrt_strict().to_bits().as_i128(),
         1_732_050_807_569,
     );
     assert_05_ulp(
         "sqrt(4)",
-        D38s12::from_int(4).sqrt_strict().to_bits(),
+        D38s12::from_int(4).sqrt_strict().to_bits().as_i128(),
         2_000_000_000_000,
     );
     assert_05_ulp(
         "sqrt(5)",
-        D38s12::from_int(5).sqrt_strict().to_bits(),
+        D38s12::from_int(5).sqrt_strict().to_bits().as_i128(),
         2_236_067_977_500,
     );
 }
 
 #[test]
 fn cbrt_strict_at_scale_12() {
-    assert_05_ulp("cbrt(0)", D38s12::ZERO.cbrt_strict().to_bits(), 0);
+    assert_05_ulp("cbrt(0)", D38s12::ZERO.cbrt_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "cbrt(1)",
-        D38s12::ONE.cbrt_strict().to_bits(),
+        D38s12::ONE.cbrt_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "cbrt(2)",
-        D38s12::from_int(2).cbrt_strict().to_bits(),
+        D38s12::from_int(2).cbrt_strict().to_bits().as_i128(),
         1_259_921_049_895,
     );
     assert_05_ulp(
         "cbrt(8)",
-        D38s12::from_int(8).cbrt_strict().to_bits(),
+        D38s12::from_int(8).cbrt_strict().to_bits().as_i128(),
         2_000_000_000_000,
     );
     assert_05_ulp(
         "cbrt(27)",
-        D38s12::from_int(27).cbrt_strict().to_bits(),
+        D38s12::from_int(27).cbrt_strict().to_bits().as_i128(),
         3_000_000_000_000,
     );
     // cbrt(-8) = -2
     assert_05_ulp(
         "cbrt(-8)",
-        D38s12::from_int(-8).cbrt_strict().to_bits(),
+        D38s12::from_int(-8).cbrt_strict().to_bits().as_i128(),
         -2_000_000_000_000,
     );
 }
@@ -496,15 +496,15 @@ fn cbrt_strict_at_scale_12() {
 ///   tanh(1) = 0.761594155955764888...   → 761_594_155_956 (13th=8 round up)
 #[test]
 fn sinh_strict_at_scale_12() {
-    assert_05_ulp("sinh(0)", D38s12::ZERO.sinh_strict().to_bits(), 0);
+    assert_05_ulp("sinh(0)", D38s12::ZERO.sinh_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "sinh(1)",
-        D38s12::ONE.sinh_strict().to_bits(),
+        D38s12::ONE.sinh_strict().to_bits().as_i128(),
         1_175_201_193_644,
     );
     assert_05_ulp(
         "sinh(-1)",
-        (-D38s12::ONE).sinh_strict().to_bits(),
+        (-D38s12::ONE).sinh_strict().to_bits().as_i128(),
         -1_175_201_193_644,
     );
 }
@@ -513,28 +513,28 @@ fn sinh_strict_at_scale_12() {
 fn cosh_strict_at_scale_12() {
     assert_05_ulp(
         "cosh(0)",
-        D38s12::ZERO.cosh_strict().to_bits(),
+        D38s12::ZERO.cosh_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "cosh(1)",
-        D38s12::ONE.cosh_strict().to_bits(),
+        D38s12::ONE.cosh_strict().to_bits().as_i128(),
         1_543_080_634_815,
     );
     // cosh is even
     assert_05_ulp(
         "cosh(-1)",
-        (-D38s12::ONE).cosh_strict().to_bits(),
+        (-D38s12::ONE).cosh_strict().to_bits().as_i128(),
         1_543_080_634_815,
     );
 }
 
 #[test]
 fn tanh_strict_at_scale_12() {
-    assert_05_ulp("tanh(0)", D38s12::ZERO.tanh_strict().to_bits(), 0);
+    assert_05_ulp("tanh(0)", D38s12::ZERO.tanh_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "tanh(1)",
-        D38s12::ONE.tanh_strict().to_bits(),
+        D38s12::ONE.tanh_strict().to_bits().as_i128(),
         761_594_155_956,
     );
 }
@@ -558,22 +558,22 @@ fn tanh_strict_at_scale_12() {
 fn angle_conversion_strict_at_scale_12() {
     assert_05_ulp(
         "to_degrees(0)",
-        D38s12::ZERO.to_degrees_strict().to_bits(),
+        D38s12::ZERO.to_degrees_strict().to_bits().as_i128(),
         0,
     );
     assert_05_ulp(
         "to_degrees(1 rad)",
-        D38s12::ONE.to_degrees_strict().to_bits(),
+        D38s12::ONE.to_degrees_strict().to_bits().as_i128(),
         57_295_779_513_082,
     );
     assert_05_ulp(
         "to_degrees(2 rad)",
-        D38s12::from_int(2).to_degrees_strict().to_bits(),
+        D38s12::from_int(2).to_degrees_strict().to_bits().as_i128(),
         114_591_559_026_165,
     );
     assert_05_ulp(
         "to_radians(0)",
-        D38s12::ZERO.to_radians_strict().to_bits(),
+        D38s12::ZERO.to_radians_strict().to_bits().as_i128(),
         0,
     );
     // to_radians(180 deg) — the input is exact-at-storage; output
@@ -583,7 +583,7 @@ fn angle_conversion_strict_at_scale_12() {
     let deg180 = D38s12::from_int(180);
     assert_05_ulp(
         "to_radians(180 deg) == stored pi",
-        deg180.to_radians_strict().to_bits(),
+        deg180.to_radians_strict().to_bits().as_i128(),
         3_141_592_653_590,
     );
 }
@@ -604,31 +604,31 @@ fn angle_conversion_strict_at_scale_12() {
 ///     12 frac = 301029995663, 13th = 9 → round up to 664. So 301_029_995_664.
 #[test]
 fn log_strict_at_scale_12() {
-    assert_05_ulp("log2(1)", D38s12::ONE.log2_strict().to_bits(), 0);
+    assert_05_ulp("log2(1)", D38s12::ONE.log2_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "log2(2)",
-        D38s12::from_int(2).log2_strict().to_bits(),
+        D38s12::from_int(2).log2_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "log2(4)",
-        D38s12::from_int(4).log2_strict().to_bits(),
+        D38s12::from_int(4).log2_strict().to_bits().as_i128(),
         2_000_000_000_000,
     );
-    assert_05_ulp("log10(1)", D38s12::ONE.log10_strict().to_bits(), 0);
+    assert_05_ulp("log10(1)", D38s12::ONE.log10_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "log10(10)",
-        D38s12::from_int(10).log10_strict().to_bits(),
+        D38s12::from_int(10).log10_strict().to_bits().as_i128(),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "log10(100)",
-        D38s12::from_int(100).log10_strict().to_bits(),
+        D38s12::from_int(100).log10_strict().to_bits().as_i128(),
         2_000_000_000_000,
     );
     assert_05_ulp(
         "log10(2)",
-        D38s12::from_int(2).log10_strict().to_bits(),
+        D38s12::from_int(2).log10_strict().to_bits().as_i128(),
         301_029_995_664,
     );
 }
@@ -646,17 +646,17 @@ fn powf_strict_at_scale_12() {
     let ten = D38s12::from_int(10);
     assert_05_ulp(
         "2^10",
-        two.powf_strict(D38s12::from_int(10)).to_bits(),
+        two.powf_strict(D38s12::from_int(10)).to_bits().as_i128(),
         1_024_000_000_000_000,
     );
     // 2^0.5 = sqrt(2)
     let half = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000));
     let r = two.powf_strict(half);
-    assert_05_ulp("2^0.5 ~= sqrt(2)", r.to_bits(), 1_414_213_562_373);
+    assert_05_ulp("2^0.5 ~= sqrt(2)", r.to_bits().as_i128(), 1_414_213_562_373);
     // 10^2 = 100
     assert_05_ulp(
         "10^2",
-        ten.powf_strict(D38s12::from_int(2)).to_bits(),
+        ten.powf_strict(D38s12::from_int(2)).to_bits().as_i128(),
         100_000_000_000_000,
     );
 }
@@ -674,27 +674,27 @@ fn powf_strict_at_scale_12() {
 ///   atanh(0.5) = 0.549306144334054846...  → 549_306_144_334 (13th=0 no round)
 #[test]
 fn asinh_strict_at_scale_12() {
-    assert_05_ulp("asinh(0)", D38s12::ZERO.asinh_strict().to_bits(), 0);
+    assert_05_ulp("asinh(0)", D38s12::ZERO.asinh_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "asinh(1)",
-        D38s12::ONE.asinh_strict().to_bits(),
+        D38s12::ONE.asinh_strict().to_bits().as_i128(),
         881_373_587_020,
     );
 }
 
 #[test]
 fn acosh_strict_at_scale_12() {
-    assert_05_ulp("acosh(1)", D38s12::ONE.acosh_strict().to_bits(), 0);
+    assert_05_ulp("acosh(1)", D38s12::ONE.acosh_strict().to_bits().as_i128(), 0);
     assert_05_ulp(
         "acosh(2)",
-        D38s12::from_int(2).acosh_strict().to_bits(),
+        D38s12::from_int(2).acosh_strict().to_bits().as_i128(),
         1_316_957_896_925,
     );
 }
 
 #[test]
 fn atanh_strict_at_scale_12() {
-    assert_05_ulp("atanh(0)", D38s12::ZERO.atanh_strict().to_bits(), 0);
+    assert_05_ulp("atanh(0)", D38s12::ZERO.atanh_strict().to_bits().as_i128(), 0);
     let half = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000));
-    assert_05_ulp("atanh(0.5)", half.atanh_strict().to_bits(), 549_306_144_334);
+    assert_05_ulp("atanh(0.5)", half.atanh_strict().to_bits().as_i128(), 549_306_144_334);
 }

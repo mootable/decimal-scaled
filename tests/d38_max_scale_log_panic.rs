@@ -20,7 +20,7 @@ fn log10_strict_on_saturated_d38_scale38() {
     let v = D38::<38>::from_f64(2.0);
     let r = v.log10_strict();
     // log10(1.7014…) ≈ 0.23099…  -> at scale 38, bits ≈ 2.31e37
-    let bits = r.to_bits();
+    let bits = r.to_bits().as_i128();
     assert!(bits > 0, "log10(MAX) must be positive, got {bits}");
     assert!(
         bits < 3 * 10_i128.pow(37),

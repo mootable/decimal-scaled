@@ -85,13 +85,13 @@ fn mul_of_with_rounding_modes() {
     let a = D38::<1>::from_bits(decimal_scaled::Int::<2>::from_i128(15)); // 1.5
     let b = D38::<0>::from_bits(decimal_scaled::Int::<2>::from_i128(1)); // 1
     let trunc: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Trunc);
-    assert_eq!(trunc.to_bits(), 1); // 1.5 truncates to 1, then 1*1
+    assert_eq!(trunc.to_bits().as_i128(), 1); // 1.5 truncates to 1, then 1*1
     let away: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::HalfAwayFromZero);
-    assert_eq!(away.to_bits(), 2); // 1.5 rounds away to 2, then 2*1
+    assert_eq!(away.to_bits().as_i128(), 2); // 1.5 rounds away to 2, then 2*1
     let floor: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Floor);
-    assert_eq!(floor.to_bits(), 1);
+    assert_eq!(floor.to_bits().as_i128(), 1);
     let ceil: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Ceiling);
-    assert_eq!(ceil.to_bits(), 2);
+    assert_eq!(ceil.to_bits().as_i128(), 2);
 }
 
 // ── Overflow panic on mul. ───────────────────────────────────────────

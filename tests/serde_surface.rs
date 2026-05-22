@@ -21,11 +21,11 @@ fn visit_i8() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_i8::<DeError>(7)
         .unwrap();
-    assert_eq!(v.to_bits(), 7);
+    assert_eq!(v.to_bits().as_i128(), 7);
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_i8::<DeError>(-7)
         .unwrap();
-    assert_eq!(v.to_bits(), -7);
+    assert_eq!(v.to_bits().as_i128(), -7);
 }
 
 #[test]
@@ -33,7 +33,7 @@ fn visit_i16() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_i16::<DeError>(7)
         .unwrap();
-    assert_eq!(v.to_bits(), 7);
+    assert_eq!(v.to_bits().as_i128(), 7);
 }
 
 #[test]
@@ -41,7 +41,7 @@ fn visit_i32() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_i32::<DeError>(7)
         .unwrap();
-    assert_eq!(v.to_bits(), 7);
+    assert_eq!(v.to_bits().as_i128(), 7);
 }
 
 #[test]
@@ -49,7 +49,7 @@ fn visit_i128() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_i128::<DeError>(123_456_789_012_345_678_901_234)
         .unwrap();
-    assert_eq!(v.to_bits(), 123_456_789_012_345_678_901_234);
+    assert_eq!(v.to_bits().as_i128(), 123_456_789_012_345_678_901_234);
 }
 
 #[test]
@@ -57,15 +57,15 @@ fn visit_u8_u16_u32() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_u8::<DeError>(7)
         .unwrap();
-    assert_eq!(v.to_bits(), 7);
+    assert_eq!(v.to_bits().as_i128(), 7);
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_u16::<DeError>(7)
         .unwrap();
-    assert_eq!(v.to_bits(), 7);
+    assert_eq!(v.to_bits().as_i128(), 7);
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_u32::<DeError>(7)
         .unwrap();
-    assert_eq!(v.to_bits(), 7);
+    assert_eq!(v.to_bits().as_i128(), 7);
 }
 
 #[test]
@@ -73,7 +73,7 @@ fn visit_u128_in_range() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_u128::<DeError>(123_456)
         .unwrap();
-    assert_eq!(v.to_bits(), 123_456);
+    assert_eq!(v.to_bits().as_i128(), 123_456);
 }
 
 #[test]
@@ -94,7 +94,7 @@ fn visit_borrowed_str() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_borrowed_str::<DeError>("12345")
         .unwrap();
-    assert_eq!(v.to_bits(), 12345);
+    assert_eq!(v.to_bits().as_i128(), 12345);
 }
 
 #[test]
@@ -103,7 +103,7 @@ fn visit_string_alloc() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_string::<DeError>(s)
         .unwrap();
-    assert_eq!(v.to_bits(), 12345);
+    assert_eq!(v.to_bits().as_i128(), 12345);
 }
 
 #[test]
@@ -111,7 +111,7 @@ fn visit_bytes_valid_and_error() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_bytes::<DeError>(&123_i128.to_le_bytes())
         .unwrap();
-    assert_eq!(v.to_bits(), 123);
+    assert_eq!(v.to_bits().as_i128(), 123);
     // Wrong length
     let r: Result<D38s12, _> = DecimalVisitor::<12>(PhantomData).visit_bytes::<DeError>(&[0u8; 15]);
     assert!(r.is_err());
@@ -122,7 +122,7 @@ fn visit_borrowed_bytes() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_borrowed_bytes::<DeError>(&123_i128.to_le_bytes())
         .unwrap();
-    assert_eq!(v.to_bits(), 123);
+    assert_eq!(v.to_bits().as_i128(), 123);
 }
 
 #[test]
@@ -131,7 +131,7 @@ fn visit_byte_buf_alloc() {
     let v = DecimalVisitor::<12>(PhantomData)
         .visit_byte_buf::<DeError>(buf)
         .unwrap();
-    assert_eq!(v.to_bits(), 123);
+    assert_eq!(v.to_bits().as_i128(), 123);
 }
 
 #[test]
