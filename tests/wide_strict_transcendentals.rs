@@ -36,7 +36,10 @@ fn d76_bits_at_scale_6(d: D76<6>) -> i128 {
 }
 
 #[track_caller]
-fn agree(label: &str, wide: i128, d38: i128) {
+fn agree<T: Into<i128>>(label: &str, wide: i128, d38: T) {
+    // `d38` accepts both `i128` (AGM cross-checks) and D38's `Int<2>`
+    // `to_bits()` (via `From<Int<2>> for i128`), bridged to `i128` here.
+    let d38: i128 = d38.into();
     let diff = (wide - d38).abs();
     assert!(
         diff <= WIDE_TOL_LSB,

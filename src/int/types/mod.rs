@@ -1538,6 +1538,15 @@ impl<const N: usize> PartialOrd for Int<N> {
 // against `i128` literals without an explicit conversion at the call
 // site. Deliberately `Int<2>`-only: for wider tiers an `i128` comparison
 // would be a lossy narrowing and is not offered.
+// `Int<2>` *is* a 128-bit integer, so the conversion to `i128` is exact
+// (the trait form of `as_i128`). Enables `i128::from(int2)` / `.into()`.
+impl From<Int<2>> for i128 {
+    #[inline]
+    fn from(v: Int<2>) -> i128 {
+        v.as_i128()
+    }
+}
+
 impl PartialEq<i128> for Int<2> {
     #[inline]
     fn eq(&self, other: &i128) -> bool {
