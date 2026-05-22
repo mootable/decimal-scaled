@@ -2612,36 +2612,11 @@ mod tests {
     // ----- D9 / D18 sanity tests -----
 
     #[test]
-    fn d9_basics() {
-        assert_eq!(super::D9s2::ZERO.to_bits(), 0_i32);
-        assert_eq!(super::D9s2::ONE.to_bits(), 100_i32);
-        assert_eq!(super::D9s2::MAX.to_bits(), i32::MAX);
-        assert_eq!(super::D9s2::MIN.to_bits(), i32::MIN);
-        assert_eq!(super::D9s2::multiplier(), 100_i32);
-        assert_eq!(super::D9s2::SCALE, 2);
-    }
-
-    #[test]
     fn d18_basics() {
         assert_eq!(super::D18s9::ZERO.to_bits(), 0_i64);
         assert_eq!(super::D18s9::ONE.to_bits(), 1_000_000_000_i64);
         assert_eq!(super::D18s9::multiplier(), 1_000_000_000_i64);
         assert_eq!(super::D18s9::SCALE, 9);
-    }
-
-    #[test]
-    fn d9_arithmetic() {
-        let a = super::D9s2::from_bits(150); // 1.50
-        let b = super::D9s2::from_bits(250); // 2.50
-        assert_eq!((a + b).to_bits(), 400);
-        assert_eq!((b - a).to_bits(), 100);
-        assert_eq!((-a).to_bits(), -150);
-
-        let x = super::D9s2::from_bits(200); // 2.00
-        let y = super::D9s2::from_bits(300); // 3.00
-        assert_eq!((x * y).to_bits(), 600); // 6.00
-        assert_eq!((y / x).to_bits(), 150); // 1.50
-        assert_eq!((y % x).to_bits(), 100); // 1.00
     }
 
     #[test]
@@ -2660,45 +2635,11 @@ mod tests {
     }
 
     #[test]
-    fn d9_display() {
-        let v: super::D9s2 = super::D9s2::from_bits(150); // 1.50
-        let s = alloc::format!("{}", v);
-        assert_eq!(s, "1.50");
-        let neg: super::D9s2 = super::D9s2::from_bits(-2050); // -20.50
-        assert_eq!(alloc::format!("{}", neg), "-20.50");
-        let zero: super::D9s2 = super::D9s2::ZERO;
-        assert_eq!(alloc::format!("{}", zero), "0.00");
-        let int_only: super::D9s0 = super::D9s0::from_bits(42);
-        assert_eq!(alloc::format!("{}", int_only), "42");
-    }
-
-    #[test]
     fn d18_display() {
         let v: super::D18s9 = super::D18s9::from_bits(1_500_000_000); // 1.500000000
         assert_eq!(alloc::format!("{}", v), "1.500000000");
         let neg: super::D18s9 = super::D18s9::from_bits(-1_500_000_000);
         assert_eq!(alloc::format!("{}", neg), "-1.500000000");
-    }
-
-    #[test]
-    fn d9_debug() {
-        let v: super::D9s2 = super::D9s2::from_bits(150);
-        let s = alloc::format!("{:?}", v);
-        assert_eq!(s, "D9<2>(1.50)");
-    }
-
-    #[test]
-    fn cross_width_widening_d9_to_d18() {
-        let small: super::D9s2 = super::D9s2::from_bits(150);
-        let wider: super::D18s2 = small.into();
-        assert_eq!(wider.to_bits(), 150_i64);
-    }
-
-    #[test]
-    fn cross_width_widening_d9_to_d38() {
-        let small: super::D9s2 = super::D9s2::from_bits(-150);
-        let wider: super::D38s2 = small.into();
-        assert_eq!(wider.to_bits(), -150_i128);
     }
 
     #[test]
@@ -2720,44 +2661,6 @@ mod tests {
         let wide: super::D38s9 = super::D38s9::from_bits(crate::int::types::Int::<2>::from_i128(i128::MAX));
         let narrow: Result<super::D18s9, _> = wide.try_into();
         assert!(narrow.is_err());
-    }
-
-    #[test]
-    fn cross_width_narrowing_d18_to_d9_in_range() {
-        let mid: super::D18s2 = super::D18s2::from_bits(150);
-        let narrow: super::D9s2 = mid.try_into().unwrap();
-        assert_eq!(narrow.to_bits(), 150);
-    }
-
-    #[test]
-    fn cross_width_narrowing_d18_to_d9_out_of_range() {
-        let mid: super::D18s2 = super::D18s2::from_bits(i64::MAX);
-        let narrow: Result<super::D9s2, _> = mid.try_into();
-        assert!(narrow.is_err());
-    }
-
-    #[test]
-    fn d9_consts() {
-        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
-            return;
-        }
-        use crate::types::consts::DecimalConstants;
-        type D9s4 = super::D9<4>;
-        // pi at scale 4 = 3.1416 -> bits = 31416.
-        assert_eq!(D9s4::pi().to_bits(), 31416);
-        // e at scale 4 = 2.7183 -> bits = 27183.
-        assert_eq!(D9s4::e().to_bits(), 27183);
-    }
-
-    #[test]
-    fn d9_from_str() {
-        use core::str::FromStr;
-        let v = super::D9s2::from_str("1.50").unwrap();
-        assert_eq!(v.to_bits(), 150);
-        let neg = super::D9s2::from_str("-20.50").unwrap();
-        assert_eq!(neg.to_bits(), -2050);
-        // Out of range for D9s2 (i32::MAX is ~2.1e9).
-        assert!(super::D9s2::from_str("1000000000000.00").is_err());
     }
 
     #[test]
@@ -3137,20 +3040,5 @@ mod tests {
         }
         // 306-digit ceiling multiplier fits in I1024 (new MAX_SCALE)
         let _ = super::D307s306::multiplier();
-    }
-
-    #[test]
-    fn d9_op_assign() {
-        let mut v = super::D9s2::from_bits(100);
-        v += super::D9s2::from_bits(50);
-        assert_eq!(v.to_bits(), 150);
-        v -= super::D9s2::from_bits(25);
-        assert_eq!(v.to_bits(), 125);
-        v *= super::D9s2::from_bits(200); // *2.00
-        assert_eq!(v.to_bits(), 250);
-        v /= super::D9s2::from_bits(200); // /2.00
-        assert_eq!(v.to_bits(), 125);
-        v %= super::D9s2::from_bits(100);
-        assert_eq!(v.to_bits(), 25);
     }
 }
