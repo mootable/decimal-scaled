@@ -43,9 +43,9 @@
 
 #![cfg(any(feature = "d230", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d230 as core;
-use crate::wide_int::Int768;
 
 /// Narrow guard for the Tang-style ln slot at SCALE 110..=120. See
 /// module docs for the derivation and headroom.
@@ -75,8 +75,8 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 /// `SCALE ∈ 110..=120`. Panics if `raw <= 0`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int768, mode: RoundingMode) -> Int768 {
-    if raw <= Int768::ZERO {
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<12>, mode: RoundingMode) -> Int<12> {
+    if raw <= Int::<12>::ZERO {
         panic!("D230::ln: argument must be positive");
     }
     // Directed modes decide which side of a storage grid line the true

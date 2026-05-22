@@ -39,9 +39,9 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
 
 /// Narrow guard for the Tang-style ln slot at SCALE 18..=22.
 const GUARD_NARROW: u32 = 8;
@@ -76,8 +76,8 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 /// `SCALE ∈ 18..=22`. Panics if `raw <= 0`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw <= Int192::ZERO {
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+    if raw <= Int::<3>::ZERO {
         panic!("D57::ln: argument must be positive");
     }
     let w = SCALE + GUARD_NARROW;

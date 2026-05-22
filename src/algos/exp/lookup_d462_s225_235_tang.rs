@@ -36,9 +36,9 @@
 // re-tuned) does not have to rebuild the kernel from scratch.
 #![allow(dead_code)]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d462 as core;
-use crate::wide_int::Int1536;
 
 /// Narrow guard for the SCALE 225..=235 Tang-exp slot.
 const GUARD_NARROW: u32 = 10;
@@ -140,9 +140,9 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
 /// `SCALE ∈ 225..=235`.
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int1536, mode: RoundingMode) -> Int1536 {
-    if raw == Int1536::ZERO {
-        let ten: Int1536 = crate::int::types::traits::wide_cast::<u128, Int1536>(10);
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<24>, mode: RoundingMode) -> Int<24> {
+    if raw == Int::<24>::ZERO {
+        let ten: Int<24> = crate::int::types::traits::wide_cast::<u128, Int<24>>(10);
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;

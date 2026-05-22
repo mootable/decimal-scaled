@@ -47,10 +47,10 @@
 #![cfg(any(feature = "d1232", feature = "xx-wide"))]
 
 #[cfg(test)]
+use crate::int::types::Int;
+#[cfg(test)]
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d1232 as core;
-#[cfg(test)]
-use crate::wide_int::Int4096;
 
 /// Narrow guard for the SCALE 610..=620 Tang-exp slot.
 const GUARD_NARROW: u32 = 8;
@@ -155,9 +155,9 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
 #[cfg(test)]
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int4096, mode: RoundingMode) -> Int4096 {
-    if raw == Int4096::ZERO {
-        let ten: Int4096 = crate::int::types::traits::wide_cast::<u128, Int4096>(10);
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<64>, mode: RoundingMode) -> Int<64> {
+    if raw == Int::<64>::ZERO {
+        let ten: Int<64> = crate::int::types::traits::wide_cast::<u128, Int<64>>(10);
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;

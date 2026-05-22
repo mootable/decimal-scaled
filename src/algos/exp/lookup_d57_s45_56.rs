@@ -35,9 +35,9 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
 
 /// Table size — number of `exp(j · ln(2) / M)` entries per working
 /// scale. Power of two so the index quantisation step `ln(2) / M`
@@ -87,11 +87,11 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 /// `M = 512`).
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     // exp(0) = 1 short-circuit (matches generic wide_kernel).
-    if raw == Int192::ZERO {
+    if raw == Int::<3>::ZERO {
         // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
-        let ten: Int192 = crate::int::types::traits::wide_cast::<u128, Int192>(10);
+        let ten: Int<3> = crate::int::types::traits::wide_cast::<u128, Int<3>>(10);
         return ten.pow(SCALE);
     }
 

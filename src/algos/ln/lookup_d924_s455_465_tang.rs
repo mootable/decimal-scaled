@@ -46,9 +46,9 @@
 
 #![cfg(any(feature = "d924", feature = "xx-wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d924 as core;
-use crate::wide_int::Int3072;
 
 /// Narrow guard for the Tang-style ln slot at SCALE 455..=465. Matches
 /// the D462 sibling — error budget is dominated by the artanh-series
@@ -80,8 +80,8 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 /// `SCALE ∈ 455..=465`. Panics if `raw <= 0`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int3072, mode: RoundingMode) -> Int3072 {
-    if raw <= Int3072::ZERO {
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<48>, mode: RoundingMode) -> Int<48> {
+    if raw <= Int::<48>::ZERO {
         panic!("D924::ln: argument must be positive");
     }
     // Directed modes decide which side of a storage grid line the true

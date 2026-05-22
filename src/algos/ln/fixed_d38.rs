@@ -42,7 +42,7 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 // (no input that fits `i128` at `SCALE > 38` exists).
 //
 // Half-to-even rounded ln(2) × 10^75 and ln(10) × 10^75; both fit an
-// `Int256` (max ≈ 5.78 × 10⁷⁶). The next-digit rounding is documented
+// `Int<4>` (max ≈ 5.78 × 10⁷⁶). The next-digit rounding is documented
 // in-line so the truncation step is auditable from this file alone.
 
 /// `ln(2) × 10^75`, half-to-even rounded (76th frac digit is 4 — round
@@ -54,22 +54,22 @@ const LN2_S75: &str = "693147180559945309417232121458176568075500134360255254120
 const LN10_S75: &str =
     "2302585092994045684017991454684364207601101488628772976033327900967572609677";
 
-const LN2_RAW: crate::wide_int::Int256 = match crate::wide_int::Int256::from_str_radix(LN2_S75, 10)
+const LN2_RAW: Int<4> = match Int::<4>::from_str_radix(LN2_S75, 10)
 {
     Ok(v) => v,
     Err(_) => panic!("algos::ln::fixed_d38: LN2_S75 not parseable"),
 };
 
-const LN10_RAW: crate::wide_int::Int256 =
-    match crate::wide_int::Int256::from_str_radix(LN10_S75, 10) {
+const LN10_RAW: Int<4> =
+    match Int::<4>::from_str_radix(LN10_S75, 10) {
         Ok(v) => v,
         Err(_) => panic!("algos::ln::fixed_d38: LN10_S75 not parseable"),
     };
 
-/// Repacks an `Int256` reference (internally `[u64; 4]`) into a
+/// Repacks an `Int<4>` (internally `[u64; 4]`) into a
 /// `Fixed` magnitude (`[u128; 2]`) sourced at scale `75`.
 #[inline]
-fn fixed_from_int256(raw: crate::wide_int::Int256) -> Fixed {
+fn fixed_from_int256(raw: Int<4>) -> Fixed {
     let words = raw.limbs_le();
     Fixed {
         negative: false,

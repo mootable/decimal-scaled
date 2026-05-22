@@ -31,9 +31,9 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 slot. See module docs for the
 /// derivation and headroom.
@@ -46,9 +46,9 @@ const GUARD_NARROW: u32 = 8;
 /// to `Dxx<SCALE>::ONE` (`10^SCALE`).
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw == Int192::ZERO {
-        let ten: Int192 = crate::int::types::traits::wide_cast::<u128, Int192>(10);
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+    if raw == Int::<3>::ZERO {
+        let ten: Int<3> = crate::int::types::traits::wide_cast::<u128, Int<3>>(10);
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;
