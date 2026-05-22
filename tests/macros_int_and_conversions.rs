@@ -12,7 +12,6 @@
 use decimal_scaled::{D18, D38, RoundingMode};
 
 type D38_2 = D38<2>;
-type D9_2 = D18<2>;
 type D18_2 = D18<2>;
 
 // ─── int_methods coverage ──────────────────────────────────────────────
@@ -77,13 +76,11 @@ fn abs_diff_midpoint_mul_add() {
     let r = D38_2::from_int(2).mul_add(D38_2::from_int(3), D38_2::from_int(5));
     assert_eq!(r.to_bits(), 1100);
 
-    // Narrow variants
-    assert_eq!(D9_2::from_int(7).abs_diff(D9_2::from_int(3)).to_bits(), 400);
+    // Narrow variant
     assert_eq!(
         D18_2::from_int(7).abs_diff(D18_2::from_int(3)).to_bits(),
         400
     );
-    let _ = D9_2::from_int(2).mul_add(D9_2::from_int(3), D9_2::from_int(5));
     let _ = D18_2::from_int(2).mul_add(D18_2::from_int(3), D18_2::from_int(5));
 }
 
@@ -97,11 +94,10 @@ fn is_zero_normal_nan_infinite_finite() {
     assert!(!D38_2::ZERO.is_infinite());
     assert!(D38_2::ZERO.is_finite());
     // narrow variants
-    assert!(D9_2::ZERO.is_zero());
-    assert!(!D9_2::ONE.is_zero());
     assert!(D18_2::ZERO.is_zero());
+    assert!(!D18_2::ONE.is_zero());
     assert!(D18_2::ONE.is_normal());
-    assert!(!D9_2::ONE.is_nan());
+    assert!(!D18_2::ONE.is_nan());
     assert!(D18_2::ONE.is_finite());
 }
 
@@ -295,26 +291,6 @@ fn to_int_narrow_widths() {
     // Each width has its own to_int_with body emitted by the macro,
     // so call them all.
     assert_eq!(
-        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(149)).to_int_with(RoundingMode::HalfToEven),
-        1
-    );
-    assert_eq!(
-        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::HalfToEven),
-        2
-    );
-    assert_eq!(
-        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(-150)).to_int_with(RoundingMode::HalfTowardZero),
-        -1
-    );
-    assert_eq!(D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::Floor), 1);
-    assert_eq!(D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::Ceiling), 2);
-    assert_eq!(D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::Trunc), 1);
-    assert_eq!(
-        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::HalfAwayFromZero),
-        2
-    );
-
-    assert_eq!(
         D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(149)).to_int_with(RoundingMode::HalfToEven),
         1
     );
@@ -337,7 +313,6 @@ fn to_int_narrow_widths() {
     );
 
     // to_int default delegator
-    let _ = D9_2::from_int(5).to_int();
     let _ = D18_2::from_int(5).to_int();
     let _ = D38_2::from_int(5).to_int();
 }
@@ -405,13 +380,9 @@ fn to_int_wide_saturation() {
 #[test]
 fn try_from_i128_narrow() {
     // In-range
-    let v: D9_2 = i128::try_from(100i32).unwrap().try_into().unwrap();
-    assert_eq!(v.to_bits(), 10_000);
     let v: D18_2 = 100_i128.try_into().unwrap();
     assert_eq!(v.to_bits(), 10_000);
     // Overflow
-    let res: Result<D9_2, _> = i128::MAX.try_into();
-    assert!(res.is_err());
     let res: Result<D18_2, _> = i128::MAX.try_into();
     assert!(res.is_err());
     let res: Result<D38_2, _> = i128::MAX.try_into();
@@ -421,14 +392,12 @@ fn try_from_i128_narrow() {
 #[test]
 fn try_from_u128_narrow() {
     // Below i128::MAX
-    let v: D9_2 = 100_u128.try_into().unwrap();
-    assert_eq!(v.to_bits(), 10_000);
     let v: D18_2 = 100_u128.try_into().unwrap();
     assert_eq!(v.to_bits(), 10_000);
     let v: D38_2 = 100_u128.try_into().unwrap();
     assert_eq!(v.to_bits(), 10_000);
     // u128 above i128::MAX
-    let res: Result<D9_2, _> = u128::MAX.try_into();
+    let res: Result<D18_2, _> = u128::MAX.try_into();
     assert!(res.is_err());
     let res: Result<D38_2, _> = u128::MAX.try_into();
     assert!(res.is_err());
@@ -437,28 +406,28 @@ fn try_from_u128_narrow() {
 #[cfg(feature = "std")]
 #[test]
 fn try_from_f64_narrow() {
-    let v: D9_2 = 1.5_f64.try_into().unwrap();
+    let v: D18_2 = 1.5_f64.try_into().unwrap();
     assert_eq!(v.to_bits(), 150);
     let v: D38_2 = 1.5_f64.try_into().unwrap();
     assert_eq!(v.to_bits(), 150);
     // Non-finite → NotFinite
-    let res: Result<D9_2, _> = f64::NAN.try_into();
+    let res: Result<D18_2, _> = f64::NAN.try_into();
     assert!(res.is_err());
-    let res: Result<D9_2, _> = f64::INFINITY.try_into();
+    let res: Result<D18_2, _> = f64::INFINITY.try_into();
     assert!(res.is_err());
     // Overflow
-    let res: Result<D9_2, _> = (1e18_f64).try_into();
+    let res: Result<D18_2, _> = (1e18_f64).try_into();
     assert!(res.is_err());
 }
 
 #[cfg(feature = "std")]
 #[test]
 fn try_from_f32_narrow() {
-    let v: D9_2 = 1.5_f32.try_into().unwrap();
+    let v: D18_2 = 1.5_f32.try_into().unwrap();
     assert_eq!(v.to_bits(), 150);
     let v: D38_2 = 1.5_f32.try_into().unwrap();
     assert_eq!(v.to_bits(), 150);
-    let res: Result<D9_2, _> = f32::INFINITY.try_into();
+    let res: Result<D18_2, _> = f32::INFINITY.try_into();
     assert!(res.is_err());
 }
 

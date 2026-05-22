@@ -27,7 +27,6 @@ use decimal_scaled::{D18, D38};
 // assertions can be written in terms of plain integers.
 
 type D18_0 = D18<0>;
-type D9_0 = D18<0>;
 type D38_0 = D38<0>;
 
 #[test]
@@ -83,10 +82,9 @@ fn powi_negative_exponent_d38_scale12() {
 #[test]
 fn powi_d9_d18_positive_negative_exp() {
     use decimal_scaled::{D18};
-    type D9_4 = D18<4>;
     type D18_8 = D18<8>;
-    // D9<4>: 2^3 = 8 → 80_000
-    let two = D9_4::from_int(2);
+    // D18<4>: 2^3 = 8 → 80_000
+    let two = D18::<4>::from_int(2);
     assert_eq!(two.powi(3).to_bits(), 80_000);
     assert_eq!(two.powi(0).to_bits(), 10_000);
     // 2^-3 = 0.125 → 1_250
@@ -116,17 +114,10 @@ fn powi_handles_i32_min_without_signed_negation_overflow_d38() {
 // ─── checked_pow ───────────────────────────────────────────────────────
 
 #[test]
-fn checked_pow_normal_succeeds_d9() {
-    let two = D9_0::from_int(2);
-    assert_eq!(two.checked_pow(10), Some(D9_0::from_int(1024)));
-    assert_eq!(two.checked_pow(0), Some(D9_0::ONE));
-}
-
-#[test]
-fn checked_pow_overflow_returns_none_d9() {
-    // i32::MAX ≈ 2.1e9; D9<0>::MAX ≈ 9.99e8. 10^9 > MAX.
-    let ten = D9_0::from_int(10);
-    assert!(ten.checked_pow(20).is_none(), "10^20 overflows D18<0>");
+fn checked_pow_normal_succeeds_d18() {
+    let two = D18_0::from_int(2);
+    assert_eq!(two.checked_pow(10), Some(D18_0::from_int(1024)));
+    assert_eq!(two.checked_pow(0), Some(D18_0::ONE));
 }
 
 #[test]
@@ -145,7 +136,7 @@ fn checked_pow_overflow_returns_none_d38() {
 
 #[test]
 fn wrapping_pow_matches_arithmetic_d18() {
-    let two = D9_0::from_int(2); // D9_0 is now D18<0> (i64 storage)
+    let two = D18_0::from_int(2);
     // 2^10 == 1024, well within range.
     assert_eq!(two.wrapping_pow(10).to_bits(), 1024);
     // 2^63 wraps in i64: (2 as i64).wrapping_pow(63) == i64::MIN.
@@ -164,8 +155,6 @@ fn wrapping_pow_exp_zero_returns_one() {
 
 #[test]
 fn saturating_pow_positive_overflow_saturates_to_max() {
-    let ten = D9_0::from_int(10);
-    assert_eq!(ten.saturating_pow(20), D9_0::MAX);
     let ten = D18_0::from_int(10);
     assert_eq!(ten.saturating_pow(40), D18_0::MAX);
     let ten = D38_0::from_int(10);
@@ -174,9 +163,6 @@ fn saturating_pow_positive_overflow_saturates_to_max() {
 
 #[test]
 fn saturating_pow_negative_odd_saturates_to_min() {
-    let neg_ten = D9_0::from_int(-10); // D9_0 is now D18<0> (i64 storage)
-    // -10^19 = -1e19 overflows i64 on the MIN side (i64::MIN ≈ -9.2e18).
-    assert_eq!(neg_ten.saturating_pow(19), D9_0::MIN);
     let neg_ten = D18_0::from_int(-10);
     assert_eq!(neg_ten.saturating_pow(41), D18_0::MIN);
     let neg_ten = D38_0::from_int(-10);
@@ -187,8 +173,8 @@ fn saturating_pow_negative_odd_saturates_to_min() {
 fn saturating_pow_negative_even_saturates_to_max() {
     // negative base raised to an even power is positive, so the
     // saturation direction is MAX, not MIN.
-    let neg_ten = D9_0::from_int(-10);
-    assert_eq!(neg_ten.saturating_pow(20), D9_0::MAX);
+    let neg_ten = D18_0::from_int(-10);
+    assert_eq!(neg_ten.saturating_pow(20), D18_0::MAX);
 }
 
 #[test]
@@ -201,19 +187,10 @@ fn saturating_pow_exp_zero_returns_one() {
 
 #[test]
 fn overflowing_pow_no_overflow_returns_false() {
-    let two = D9_0::from_int(2);
+    let two = D18_0::from_int(2);
     let (v, ov) = two.overflowing_pow(10);
     assert_eq!(v.to_bits(), 1024);
     assert!(!ov);
-}
-
-#[test]
-fn overflowing_pow_detects_overflow_d9() {
-    let ten = D9_0::from_int(10);
-    let (v, ov) = ten.overflowing_pow(20);
-    assert!(ov, "10^20 should overflow D9<0>");
-    // The returned value is the wrapping form.
-    assert_eq!(v, ten.wrapping_pow(20));
 }
 
 #[test]

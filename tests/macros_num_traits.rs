@@ -8,7 +8,6 @@ use num_traits::{
     Num, NumCast, One, Signed, ToPrimitive, Zero,
 };
 
-type D9_2 = D18<2>;
 type D18_2 = D18<2>;
 type D38_2 = D38<2>;
 
@@ -18,8 +17,6 @@ type D38_2 = D38<2>;
 fn num_from_str_radix_10() {
     let v = <D38_2 as Num>::from_str_radix("1.50", 10).unwrap();
     assert_eq!(v.to_bits(), 150);
-    let v = <D9_2 as Num>::from_str_radix("3", 10).unwrap();
-    assert_eq!(v.to_bits(), 300);
     let v = <D18_2 as Num>::from_str_radix("3", 10).unwrap();
     assert_eq!(v.to_bits(), 300);
 }
@@ -28,7 +25,6 @@ fn num_from_str_radix_10() {
 fn num_from_str_radix_non_10_returns_err() {
     // Non-decimal radix is rejected.
     assert!(<D38_2 as Num>::from_str_radix("FF", 16).is_err());
-    assert!(<D9_2 as Num>::from_str_radix("10", 2).is_err());
     assert!(<D18_2 as Num>::from_str_radix("10", 8).is_err());
 }
 
@@ -59,15 +55,7 @@ fn checked_add_sub_mul_div_rem_neg_traits() {
     assert!(<D38_2 as CheckedAdd>::checked_add(&D38_2::MAX, &D38_2::ONE).is_none());
     assert!(<D38_2 as CheckedNeg>::checked_neg(&D38_2::MIN).is_none());
 
-    // narrow widths:
-    let a = D9_2::from_int(3);
-    let b = D9_2::from_int(2);
-    let _ = <D9_2 as CheckedAdd>::checked_add(&a, &b).unwrap();
-    let _ = <D9_2 as CheckedSub>::checked_sub(&a, &b).unwrap();
-    let _ = <D9_2 as CheckedMul>::checked_mul(&a, &b).unwrap();
-    let _ = <D9_2 as CheckedDiv>::checked_div(&a, &b).unwrap();
-    let _ = <D9_2 as CheckedRem>::checked_rem(&a, &b).unwrap();
-    let _ = <D9_2 as CheckedNeg>::checked_neg(&a).unwrap();
+    // narrow width:
     let a = D18_2::from_int(3);
     let b = D18_2::from_int(2);
     let _ = <D18_2 as CheckedAdd>::checked_add(&a, &b).unwrap();
@@ -98,14 +86,6 @@ fn signed_traits() {
     assert_eq!(D38_2::from_int(2).abs_sub(&pos), D38_2::ZERO);
 
     // narrow
-    let pos9 = D9_2::from_int(3);
-    let neg9 = D9_2::from_int(-3);
-    assert_eq!(<D9_2 as Signed>::abs(&pos9), pos9);
-    assert_eq!(<D9_2 as Signed>::signum(&neg9), -D9_2::ONE);
-    assert!(<D9_2 as Signed>::is_positive(&pos9));
-    assert!(<D9_2 as Signed>::is_negative(&neg9));
-    let _ = pos9.abs_sub(&D9_2::from_int(1));
-
     let pos18 = D18_2::from_int(3);
     let neg18 = D18_2::from_int(-3);
     let _ = <D18_2 as Signed>::abs(&pos18);
@@ -125,7 +105,6 @@ fn from_primitive_all_widths() {
         <D38_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(),
         500
     );
-    assert_eq!(<D9_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(), 500);
     assert_eq!(
         <D18_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(),
         500
@@ -135,13 +114,12 @@ fn from_primitive_all_widths() {
         <D38_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(),
         500
     );
-    assert_eq!(<D9_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(), 500);
     assert_eq!(
         <D18_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(),
         500
     );
-    // u64 overflow on D9 (D9<2> max ~21M; from_u64(u64::MAX) overflows)
-    assert!(<D9_2 as FromPrimitive>::from_u64(u64::MAX).is_none());
+    // u64 overflow on narrow width (D18<2> max ~92PQ; from_u64(u64::MAX) overflows)
+    assert!(<D18_2 as FromPrimitive>::from_u64(u64::MAX).is_none());
     // i128 / u128
     assert_eq!(
         <D38_2 as FromPrimitive>::from_i128(5).unwrap().to_bits(),
@@ -163,25 +141,7 @@ fn from_primitive_all_widths() {
     assert!(<D38_2 as FromPrimitive>::from_f32(f32::NAN).is_none());
     assert!(<D38_2 as FromPrimitive>::from_f64(f64::INFINITY).is_none());
 
-    // narrow widths f32/f64/i128/u128
-    assert_eq!(
-        <D9_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(),
-        150
-    );
-    assert_eq!(
-        <D9_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(),
-        150
-    );
-    assert_eq!(
-        <D9_2 as FromPrimitive>::from_i128(3).unwrap().to_bits(),
-        300
-    );
-    assert_eq!(
-        <D9_2 as FromPrimitive>::from_u128(3).unwrap().to_bits(),
-        300
-    );
-    assert!(<D9_2 as FromPrimitive>::from_i128(i128::MAX).is_none());
-    assert!(<D9_2 as FromPrimitive>::from_u128(u128::MAX).is_none());
+    // narrow width f32/f64/i128/u128
     assert_eq!(
         <D18_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(),
         150
@@ -198,6 +158,8 @@ fn from_primitive_all_widths() {
         <D18_2 as FromPrimitive>::from_u128(3).unwrap().to_bits(),
         300
     );
+    assert!(<D18_2 as FromPrimitive>::from_i128(i128::MAX).is_none());
+    assert!(<D18_2 as FromPrimitive>::from_u128(u128::MAX).is_none());
 }
 
 // ─── ToPrimitive ───────────────────────────────────────────────────────
@@ -216,17 +178,6 @@ fn to_primitive_all_widths() {
     assert_eq!(<D38_2 as ToPrimitive>::to_u64(&neg), None);
     assert_eq!(<D38_2 as ToPrimitive>::to_u128(&neg), None);
     assert_eq!(<D38_2 as ToPrimitive>::to_i64(&neg), Some(-7));
-
-    let v9 = D9_2::from_int(7);
-    assert_eq!(<D9_2 as ToPrimitive>::to_i64(&v9), Some(7));
-    assert_eq!(<D9_2 as ToPrimitive>::to_u64(&v9), Some(7));
-    assert_eq!(<D9_2 as ToPrimitive>::to_i128(&v9), Some(7));
-    assert_eq!(<D9_2 as ToPrimitive>::to_u128(&v9), Some(7));
-    assert_eq!(<D9_2 as ToPrimitive>::to_f64(&v9), Some(7.0));
-    // negative narrow → u64/u128 None
-    let neg9 = D9_2::from_int(-7);
-    assert_eq!(<D9_2 as ToPrimitive>::to_u64(&neg9), None);
-    assert_eq!(<D9_2 as ToPrimitive>::to_u128(&neg9), None);
 
     let v18 = D18_2::from_int(7);
     assert_eq!(<D18_2 as ToPrimitive>::to_i64(&v18), Some(7));
@@ -247,8 +198,6 @@ fn numcast_integer_path() {
     assert_eq!(v.to_bits(), 500);
     let v: D38_2 = <D38_2 as NumCast>::from(5_u64).unwrap();
     assert_eq!(v.to_bits(), 500);
-    let v: D9_2 = <D9_2 as NumCast>::from(5i32).unwrap();
-    assert_eq!(v.to_bits(), 500);
     let v: D18_2 = <D18_2 as NumCast>::from(5i32).unwrap();
     assert_eq!(v.to_bits(), 500);
 }
@@ -258,14 +207,14 @@ fn numcast_float_path() {
     // Non-integer f64 takes the float path.
     let v: D38_2 = <D38_2 as NumCast>::from(1.5_f64).unwrap();
     assert_eq!(v.to_bits(), 150);
-    let v: D9_2 = <D9_2 as NumCast>::from(1.5_f64).unwrap();
+    let v: D18_2 = <D18_2 as NumCast>::from(1.5_f64).unwrap();
     assert_eq!(v.to_bits(), 150);
 }
 
 #[test]
 fn numcast_none_path() {
     // NaN / out-of-range returns None.
-    assert!(<D9_2 as NumCast>::from(f64::NAN).is_none());
+    assert!(<D18_2 as NumCast>::from(f64::NAN).is_none());
     assert!(<D38_2 as NumCast>::from(f64::INFINITY).is_none());
 }
 
@@ -275,10 +224,6 @@ fn numcast_none_path() {
 
 #[test]
 fn zero_one_bounded_redux() {
-    assert!(<D9_2 as Zero>::zero().is_zero());
-    assert!(<D9_2 as One>::one().is_one());
-    assert_eq!(<D9_2 as Bounded>::min_value(), D9_2::MIN);
-    assert_eq!(<D9_2 as Bounded>::max_value(), D9_2::MAX);
     assert!(<D18_2 as Zero>::zero().is_zero());
     assert!(<D18_2 as One>::one().is_one());
     assert_eq!(<D18_2 as Bounded>::min_value(), D18_2::MIN);
