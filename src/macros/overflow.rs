@@ -109,21 +109,21 @@ macro_rules! decl_decimal_overflow_variants {
             // ----- div ----------------------------------------------
 
             /// Checked division. Returns `None` if `rhs` is zero or
-            /// the result would overflow [`Self`]. Rounded toward
-            /// zero. The numerator is pre-multiplied by `10^SCALE`
-            /// in `$Wider` so the intermediate carries the scale-up
-            /// step without losing precision.
+            /// the result would overflow [`Self`]. Rounds to nearest
+            /// using the crate-default [`RoundingMode`], identical to
+            /// the `/` operator. The numerator is pre-multiplied by
+            /// `10^SCALE` in `$Wider` so the intermediate carries the
+            /// scale-up step exactly before rounding.
             #[inline]
             #[must_use]
             pub fn checked_div(self, rhs: Self) -> Option<Self> {
                 if rhs == Self::ZERO {
                     return None;
                 }
-                let a: $Wider = self.0.resize::<$Wider>();
                 let b: $Wider = rhs.0.resize::<$Wider>();
-                let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
-                let scaled_numer = a.checked_mul(m)?;
-                let result = scaled_numer / b;
+                let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
+                let result = $crate::macros::arithmetic::round_with_mode_wide!(
+                    n, b, $Wider, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
                 let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
                 if result > storage_max || result < storage_min {
@@ -133,10 +133,11 @@ macro_rules! decl_decimal_overflow_variants {
                 }
             }
 
-            /// Wrapping division. Computes `self / rhs` with the
-            /// scale-up step done modulo `$Wider`'s range and the
-            /// final narrowing wrapping. **Panics** on divide-by-zero
-            /// (matches `i128::wrapping_div` semantics).
+            /// Wrapping division. Computes `self / rhs` rounded to
+            /// nearest using the crate-default [`RoundingMode`] (like
+            /// the `/` operator), with the scale-up step done modulo
+            /// `$Wider`'s range and the final narrowing wrapping.
+            /// **Panics** on divide-by-zero (matches `i128::wrapping_div`).
             #[inline]
             #[must_use]
             pub fn wrapping_div(self, rhs: Self) -> Self {
@@ -144,7 +145,8 @@ macro_rules! decl_decimal_overflow_variants {
                 let b: $Wider = rhs.0.resize::<$Wider>();
                 let m: $Wider = $Type::<SCALE>::multiplier().resize::<$Wider>();
                 let scaled_numer = a.wrapping_mul(m);
-                let result = scaled_numer / b;
+                let result = $crate::macros::arithmetic::round_with_mode_wide!(
+                    scaled_numer, b, $Wider, $crate::support::rounding::DEFAULT_ROUNDING_MODE);
                 Self(result.resize::<$Storage>())
             }
 

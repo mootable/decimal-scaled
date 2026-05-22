@@ -381,6 +381,20 @@ mod tests {
     }
 
     #[test]
+    fn checked_and_wrapping_div_round_like_the_operator() {
+        // 20 / 3 = 6.666… does not divide evenly; the checked/wrapping
+        // variants must round to nearest using the crate-default mode,
+        // identically to the `/` operator — not truncate toward zero.
+        let twenty = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(20_000_000_000_000));
+        let three = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(3_000_000_000_000));
+        let rounded = twenty / three;
+        let truncated = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_666_666_666_666));
+        assert_ne!(rounded, truncated, "the operator must round, not truncate");
+        assert_eq!(twenty.checked_div(three), Some(rounded));
+        assert_eq!(twenty.wrapping_div(three), rounded);
+    }
+
+    #[test]
     fn overflowing_div_normal() {
         let six = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(6_000_000_000_000));
         assert_eq!(six.overflowing_div(two()), (three(), false));
