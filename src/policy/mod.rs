@@ -11,7 +11,7 @@
 //!
 //! ```ignore
 //! policy_triplet! {
-//!     storage = crate::wide_int::Int192,
+//!     storage = crate::int::types::Int<3>,
 //!     base_fn = sqrt_d57_base, std_fn = sqrt_d57_std, no_std_fn = sqrt_d57_no_std,
 //!     recv = raw, mode = mode, params = {},
 //!     base = {

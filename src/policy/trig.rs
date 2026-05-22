@@ -788,7 +788,7 @@ macro_rules! wide_trig_forward_methods {
 // (sin/cos/atan; tan has no 44..=56 band) before the generic kernel.
 #[cfg(any(feature = "d57", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int192,
+    storage = crate::int::types::Int<3>,
     base_fn = sin_d57_base, std_fn = sin_d57_std, no_std_fn = sin_d57_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -800,7 +800,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d57", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int192,
+    storage = crate::int::types::Int<3>,
     base_fn = cos_d57_base, std_fn = cos_d57_std, no_std_fn = cos_d57_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -812,7 +812,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d57", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int192,
+    storage = crate::int::types::Int<3>,
     base_fn = tan_d57_base, std_fn = tan_d57_std, no_std_fn = tan_d57_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -823,7 +823,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d57", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int192,
+    storage = crate::int::types::Int<3>,
     base_fn = atan_d57_base, std_fn = atan_d57_std, no_std_fn = atan_d57_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1006,28 +1006,28 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
 // ── D76 — width default (no bands) ─────────────────────────────────
 #[cfg(any(feature = "d76", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int256,
+    storage = crate::int::types::Int<4>,
     base_fn = sin_d76_base, std_fn = sin_d76_std, no_std_fn = sin_d76_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D76, _) => trig::wide_kernel::sin_strict_d76(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int256,
+    storage = crate::int::types::Int<4>,
     base_fn = cos_d76_base, std_fn = cos_d76_std, no_std_fn = cos_d76_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D76, _) => trig::wide_kernel::cos_strict_d76(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int256,
+    storage = crate::int::types::Int<4>,
     base_fn = tan_d76_base, std_fn = tan_d76_std, no_std_fn = tan_d76_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D76, _) => trig::wide_kernel::tan_strict_d76(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d76", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int256,
+    storage = crate::int::types::Int<4>,
     base_fn = atan_d76_base, std_fn = atan_d76_std, no_std_fn = atan_d76_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D76, _) => trig::wide_kernel::atan_strict_d76(raw, mode, SCALE) }, std = {},
@@ -1052,28 +1052,28 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
 // 50..=60 through the Tang-style hyper lookup (hand-written tail). ──
 #[cfg(any(feature = "d115", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int384,
+    storage = crate::int::types::Int<6>,
     base_fn = sin_d115_base, std_fn = sin_d115_std, no_std_fn = sin_d115_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D115, _) => trig::wide_kernel::sin_strict_d115(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d115", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int384,
+    storage = crate::int::types::Int<6>,
     base_fn = cos_d115_base, std_fn = cos_d115_std, no_std_fn = cos_d115_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D115, _) => trig::wide_kernel::cos_strict_d115(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d115", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int384,
+    storage = crate::int::types::Int<6>,
     base_fn = tan_d115_base, std_fn = tan_d115_std, no_std_fn = tan_d115_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D115, _) => trig::wide_kernel::tan_strict_d115(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d115", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int384,
+    storage = crate::int::types::Int<6>,
     base_fn = atan_d115_base, std_fn = atan_d115_std, no_std_fn = atan_d115_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D115, _) => trig::wide_kernel::atan_strict_d115(raw, mode, SCALE) }, std = {},
@@ -1217,7 +1217,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
 // tanh divert the same band (hand-written tail). ───────────────────
 #[cfg(any(feature = "d153", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int512,
+    storage = crate::int::types::Int<8>,
     base_fn = sin_d153_base, std_fn = sin_d153_std, no_std_fn = sin_d153_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1227,7 +1227,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int512,
+    storage = crate::int::types::Int<8>,
     base_fn = cos_d153_base, std_fn = cos_d153_std, no_std_fn = cos_d153_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1237,7 +1237,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int512,
+    storage = crate::int::types::Int<8>,
     base_fn = tan_d153_base, std_fn = tan_d153_std, no_std_fn = tan_d153_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1247,7 +1247,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d153", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int512,
+    storage = crate::int::types::Int<8>,
     base_fn = atan_d153_base, std_fn = atan_d153_std, no_std_fn = atan_d153_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1393,28 +1393,28 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
 // ── D230 — width default (no bands) ────────────────────────────────
 #[cfg(any(feature = "d230", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int768,
+    storage = crate::int::types::Int<12>,
     base_fn = sin_d230_base, std_fn = sin_d230_std, no_std_fn = sin_d230_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D230, _) => trig::wide_kernel::sin_strict_d230(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d230", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int768,
+    storage = crate::int::types::Int<12>,
     base_fn = cos_d230_base, std_fn = cos_d230_std, no_std_fn = cos_d230_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D230, _) => trig::wide_kernel::cos_strict_d230(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d230", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int768,
+    storage = crate::int::types::Int<12>,
     base_fn = tan_d230_base, std_fn = tan_d230_std, no_std_fn = tan_d230_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D230, _) => trig::wide_kernel::tan_strict_d230(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d230", feature = "wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int768,
+    storage = crate::int::types::Int<12>,
     base_fn = atan_d230_base, std_fn = atan_d230_std, no_std_fn = atan_d230_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D230, _) => trig::wide_kernel::atan_strict_d230(raw, mode, SCALE) }, std = {},
@@ -1439,7 +1439,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D230<SCALE> {
 // cosh/tanh divert the same band (hand-written tail). ──────────────
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1024,
+    storage = crate::int::types::Int<16>,
     base_fn = sin_d307_base, std_fn = sin_d307_std, no_std_fn = sin_d307_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1449,7 +1449,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1024,
+    storage = crate::int::types::Int<16>,
     base_fn = cos_d307_base, std_fn = cos_d307_std, no_std_fn = cos_d307_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1459,7 +1459,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1024,
+    storage = crate::int::types::Int<16>,
     base_fn = tan_d307_base, std_fn = tan_d307_std, no_std_fn = tan_d307_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1469,7 +1469,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1024,
+    storage = crate::int::types::Int<16>,
     base_fn = atan_d307_base, std_fn = atan_d307_std, no_std_fn = atan_d307_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1616,7 +1616,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
 // hyperbolics keep the inherent shells (Tang slot lost here). ──────
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1536,
+    storage = crate::int::types::Int<24>,
     base_fn = sin_d462_base, std_fn = sin_d462_std, no_std_fn = sin_d462_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1626,7 +1626,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1536,
+    storage = crate::int::types::Int<24>,
     base_fn = cos_d462_base, std_fn = cos_d462_std, no_std_fn = cos_d462_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1636,7 +1636,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1536,
+    storage = crate::int::types::Int<24>,
     base_fn = tan_d462_base, std_fn = tan_d462_std, no_std_fn = tan_d462_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1646,7 +1646,7 @@ policy_triplet! {
 }
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int1536,
+    storage = crate::int::types::Int<24>,
     base_fn = atan_d462_base, std_fn = atan_d462_std, no_std_fn = atan_d462_no_std,
     recv = raw, mode = mode, params = {},
     base = {
@@ -1673,28 +1673,28 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
 // ── D616 — width default (no bands) ────────────────────────────────
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int2048,
+    storage = crate::int::types::Int<32>,
     base_fn = sin_d616_base, std_fn = sin_d616_std, no_std_fn = sin_d616_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D616, _) => trig::wide_kernel::sin_strict_d616(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int2048,
+    storage = crate::int::types::Int<32>,
     base_fn = cos_d616_base, std_fn = cos_d616_std, no_std_fn = cos_d616_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D616, _) => trig::wide_kernel::cos_strict_d616(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int2048,
+    storage = crate::int::types::Int<32>,
     base_fn = tan_d616_base, std_fn = tan_d616_std, no_std_fn = tan_d616_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D616, _) => trig::wide_kernel::tan_strict_d616(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int2048,
+    storage = crate::int::types::Int<32>,
     base_fn = atan_d616_base, std_fn = atan_d616_std, no_std_fn = atan_d616_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D616, _) => trig::wide_kernel::atan_strict_d616(raw, mode, SCALE) }, std = {},
@@ -1718,28 +1718,28 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
 // ── D924 — width default (no bands) ────────────────────────────────
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int3072,
+    storage = crate::int::types::Int<48>,
     base_fn = sin_d924_base, std_fn = sin_d924_std, no_std_fn = sin_d924_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D924, _) => trig::wide_kernel::sin_strict_d924(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int3072,
+    storage = crate::int::types::Int<48>,
     base_fn = cos_d924_base, std_fn = cos_d924_std, no_std_fn = cos_d924_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D924, _) => trig::wide_kernel::cos_strict_d924(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int3072,
+    storage = crate::int::types::Int<48>,
     base_fn = tan_d924_base, std_fn = tan_d924_std, no_std_fn = tan_d924_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D924, _) => trig::wide_kernel::tan_strict_d924(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int3072,
+    storage = crate::int::types::Int<48>,
     base_fn = atan_d924_base, std_fn = atan_d924_std, no_std_fn = atan_d924_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D924, _) => trig::wide_kernel::atan_strict_d924(raw, mode, SCALE) }, std = {},
@@ -1763,28 +1763,28 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
 // ── D1232 — width default (no bands) ───────────────────────────────
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int4096,
+    storage = crate::int::types::Int<64>,
     base_fn = sin_d1232_base, std_fn = sin_d1232_std, no_std_fn = sin_d1232_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D1232, _) => trig::wide_kernel::sin_strict_d1232(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int4096,
+    storage = crate::int::types::Int<64>,
     base_fn = cos_d1232_base, std_fn = cos_d1232_std, no_std_fn = cos_d1232_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D1232, _) => trig::wide_kernel::cos_strict_d1232(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int4096,
+    storage = crate::int::types::Int<64>,
     base_fn = tan_d1232_base, std_fn = tan_d1232_std, no_std_fn = tan_d1232_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D1232, _) => trig::wide_kernel::tan_strict_d1232(raw, mode, SCALE) }, std = {},
 }
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 policy_triplet! {
-    storage = crate::wide_int::Int4096,
+    storage = crate::int::types::Int<64>,
     base_fn = atan_d1232_base, std_fn = atan_d1232_std, no_std_fn = atan_d1232_no_std,
     recv = raw, mode = mode, params = {},
     base = { (wtag::D1232, _) => trig::wide_kernel::atan_strict_d1232(raw, mode, SCALE) }, std = {},
