@@ -265,8 +265,8 @@ pub(crate) fn divmod_pow10_2word(
 /// long division over the input's magnitude, with each
 /// `(rem, limb) / exp` step served by the existing
 /// [`divmod_pow10_2word`] kernel. The magnitude buffer is
-/// 64 limbs, so the same routine serves every width from `Int256`
-/// to `Int8192`.
+/// 64 limbs, so the same routine serves every width from `Int<4>`
+/// to `Int<128>`.
 ///
 /// Caller short-circuits `scale == 0` (no-op) and any `scale > 38`
 /// (the magic table only covers `0..=38`).
@@ -307,12 +307,12 @@ pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N:
     // Pack the magnitude directly into a u128 limb buffer via
     // `BigInt::mag_into_u128`. The override on the concrete
     // `Int*` types copies only `(L + 1) / 2` u128 limbs (8 for
-    // Int512, 4 for Int256) instead of zero-initialising and
+    // Int<8>, 4 for Int<4>) instead of zero-initialising and
     // copying the full 288-u64 default buffer (~2.3 kB stack).
     //
     // Sized to `N = W::U128_LIMBS`, the exact u128-limb width of the
-    // work integer — 4 for `Int512`, 8 for `Int1024`, …, 128 for
-    // `Int16384` (D1232's wide-transcendental work int). The const
+    // work integer — 4 for `Int<8>`, 8 for `Int<16>`, …, 128 for
+    // `Int<256>` (D1232's wide-transcendental work int). The const
     // generic keeps the stack array no wider than the actual width,
     // so narrow tiers don't pay the widest-case zero-init.
     let mut mag = [0u128; N];
@@ -385,8 +385,8 @@ pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N:
 /// a tie-break on whether any of the lower-chunk remainders is
 /// non-zero — captured by the `lower_any_nonzero` flag and the
 /// `r_last vs half` ordering below. Audited against the
-/// schoolbook `div_rem` reference on 380K+ random I256 + 190K
-/// random I1024 inputs × every w ∈ 39..=100 × every
+/// schoolbook `div_rem` reference on 380K+ random Int<4> + 190K
+/// random Int<16> inputs × every w ∈ 39..=100 × every
 /// `RoundingMode` (see `round_div_chain_audit_*` tests in this
 /// file).
 ///
@@ -438,7 +438,7 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::int::types::traits::BigInt, co
     // Pack magnitude directly into u128 limbs (same fast path as
     // the single-chunk `div_wide_pow10_with`). Sized to
     // `N = W::U128_LIMBS`, the exact u128-limb width of the work
-    // integer (`Int16384` = 128 u128 limbs for D1232; far fewer for
+    // integer (`Int<256>` = 128 u128 limbs for D1232; far fewer for
     // narrower tiers); the `top` cursor skips the trailing zeros.
     let mut mag = [0u128; N];
     let neg = n.mag_into_u128(&mut mag);
@@ -1937,12 +1937,12 @@ mod tests {
     /// is the audit gate for routing `round_div` through the MG kernel
     /// whenever the divisor is `10^w` with `w ≤ 38`.
     #[cfg(any(feature = "d76", feature = "wide"))]
-    fn round_div_reference_int256(n: crate::wide_int::I256, w: u32) -> crate::wide_int::I256 {
-        use crate::wide_int::I256;
+    fn round_div_reference_int256(n: crate::int::types::Int<4>, w: u32) -> crate::int::types::Int<4> {
+        use crate::int::types::Int;
         let d_u128 = POW10_U128[w as usize];
-        let d: I256 = crate::int::types::traits::wide_cast(d_u128);
-        let zero: I256 = crate::int::types::traits::wide_cast(0u128);
-        let one: I256 = crate::int::types::traits::wide_cast(1u128);
+        let d: Int<4> = crate::int::types::traits::wide_cast(d_u128);
+        let zero: Int<4> = crate::int::types::traits::wide_cast(0u128);
+        let one: Int<4> = crate::int::types::traits::wide_cast(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -1967,7 +1967,7 @@ mod tests {
 
     /// Bit-exact audit: `div_wide_pow10_with(..HalfToEven)` must produce
     /// the same quotient as the generic-`div_rem` half-to-even reference
-    /// for every divisor `10^w` with `1 ≤ w ≤ 38`, across random `I256`
+    /// for every divisor `10^w` with `1 ≤ w ≤ 38`, across random `Int<4>`
     /// numerators in both signs.
     ///
     /// If this passes the MG kernel is a drop-in replacement for the
@@ -1981,15 +1981,15 @@ mod tests {
     /// path passes.
     #[cfg(any(feature = "d76", feature = "wide"))]
     fn round_div_reference_int256_with(
-        n: crate::wide_int::I256,
+        n: crate::int::types::Int<4>,
         w: u32,
         mode: crate::support::rounding::RoundingMode,
-    ) -> crate::wide_int::I256 {
-        use crate::wide_int::I256;
+    ) -> crate::int::types::Int<4> {
+        use crate::int::types::Int;
         let d_u128 = POW10_U128[w as usize];
-        let d: I256 = crate::int::types::traits::wide_cast(d_u128);
-        let zero: I256 = crate::int::types::traits::wide_cast(0u128);
-        let one: I256 = crate::int::types::traits::wide_cast(1u128);
+        let d: Int<4> = crate::int::types::traits::wide_cast(d_u128);
+        let zero: Int<4> = crate::int::types::traits::wide_cast(0u128);
+        let one: Int<4> = crate::int::types::traits::wide_cast(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -2010,7 +2010,7 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn round_div_audit_mg_matches_div_rem_int256() {
-        use crate::wide_int::I256;
+        use crate::int::types::Int;
         const ITERS: usize = 10_000;
         for w in 1u32..=38 {
             let mut rng = SplitMix64(0xA17D17_u64.wrapping_add(w as u64));
@@ -2026,17 +2026,17 @@ mod tests {
                     0
                 };
                 let mag_low = rng.next_u128();
-                let pos: I256 = {
-                    let lo: I256 = crate::int::types::traits::wide_cast(mag_low);
-                    let hi: I256 = crate::int::types::traits::wide_cast(mag_high);
+                let pos: Int<4> = {
+                    let lo: Int<4> = crate::int::types::traits::wide_cast(mag_low);
+                    let hi: Int<4> = crate::int::types::traits::wide_cast(mag_high);
                     (hi << 128_u32) + lo
                 };
-                let n: I256 = if regime % 2 == 1 { -pos } else { pos };
+                let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
                 let got =
                     crate::algos::mg_divide::div_wide_pow10_with::<
-                        I256,
-                        { <I256 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                        Int<4>,
+                        { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
                 let expected = round_div_reference_int256(n, w);
                 assert_eq!(got, expected, "round_div MG audit mismatch: w={w}, n={n:?}",);
@@ -2052,7 +2052,7 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn round_div_audit_mg_all_modes_int256() {
-        use crate::wide_int::I256;
+        use crate::int::types::Int;
         const ITERS: usize = 2_000;
         let scales: &[u32] = &[1, 5, 10, 19, 28, 38];
         for &w in scales {
@@ -2066,15 +2066,15 @@ mod tests {
                         0
                     };
                     let mag_low = rng.next_u128();
-                    let pos: I256 = {
-                        let lo: I256 = crate::int::types::traits::wide_cast(mag_low);
-                        let hi: I256 = crate::int::types::traits::wide_cast(mag_high);
+                    let pos: Int<4> = {
+                        let lo: Int<4> = crate::int::types::traits::wide_cast(mag_low);
+                        let hi: Int<4> = crate::int::types::traits::wide_cast(mag_high);
                         (hi << 128_u32) + lo
                     };
-                    let n: I256 = if regime % 2 == 1 { -pos } else { pos };
+                    let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
                     let got = crate::algos::mg_divide::div_wide_pow10_with::<
-                        I256,
-                        { <I256 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                        Int<4>,
+                        { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, mode);
                     let expected = round_div_reference_int256_with(n, w, mode);
                     assert_eq!(
@@ -2093,20 +2093,20 @@ mod tests {
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
     fn round_div_audit_mg_matches_div_rem_int1024() {
-        use crate::wide_int::I1024;
-        let zero: I1024 = crate::int::types::traits::wide_cast(0u128);
-        let one: I1024 = crate::int::types::traits::wide_cast(1u128);
+        use crate::int::types::Int;
+        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
+        let one: Int<16> = crate::int::types::traits::wide_cast(1u128);
         const ITERS: usize = 5_000;
         for w in 1u32..=38 {
             let mut rng = SplitMix64(0xB02ED2_u64.wrapping_add(w as u64));
-            let d: I1024 = crate::int::types::traits::wide_cast(POW10_U128[w as usize]);
+            let d: Int<16> = crate::int::types::traits::wide_cast(POW10_U128[w as usize]);
             for _ in 0..ITERS {
                 // Fill up to 6 u128 limbs (768 bits) of magnitude — well
                 // past one MG kernel pass.
                 let limbs = (rng.next() % 7) as usize;
-                let mut n: I1024 = zero;
+                let mut n: Int<16> = zero;
                 for k in 0..limbs {
-                    let chunk: I1024 = crate::int::types::traits::wide_cast(rng.next_u128());
+                    let chunk: Int<16> = crate::int::types::traits::wide_cast(rng.next_u128());
                     n = n + (chunk << ((k * 128) as u32));
                 }
                 if rng.next() & 1 == 1 {
@@ -2115,8 +2115,8 @@ mod tests {
 
                 let got =
                     crate::algos::mg_divide::div_wide_pow10_with::<
-                        I1024,
-                        { <I1024 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                        Int<16>,
+                        { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
                 // Reference half-to-even via div_rem.
                 let (q, r) = n.div_rem(d);
@@ -2140,7 +2140,7 @@ mod tests {
                         q
                     }
                 };
-                assert_eq!(got, expected, "round_div MG audit (I1024) mismatch: w={w}",);
+                assert_eq!(got, expected, "round_div MG audit (Int<16>) mismatch: w={w}",);
             }
         }
     }
@@ -2160,21 +2160,21 @@ mod tests {
     //   - sub-w divisor magnitude (quotient = 0, exact rounding driven
     //     entirely by the remainder),
     //   - mid-range magnitudes that straddle the chunk boundary,
-    //   - full I256 / I1024 magnitudes,
+    //   - full Int<4> / Int<16> magnitudes,
     //   - half-tie inputs constructed as `q·10^SCALE + 10^SCALE/2`
     //     (probes the cross-chunk Equal vs Greater decision),
     //   - sign-flipped versions of all of the above.
 
     /// Build `10^w` in the target wide integer width.
     #[cfg(any(feature = "d76", feature = "wide"))]
-    fn pow10_int256(w: u32) -> crate::wide_int::I256 {
-        use crate::wide_int::I256;
-        let mut d: I256 = crate::int::types::traits::wide_cast(1u128);
+    fn pow10_int256(w: u32) -> crate::int::types::Int<4> {
+        use crate::int::types::Int;
+        let mut d: Int<4> = crate::int::types::traits::wide_cast(1u128);
         // 10^38 fits in u128, so we can build with chunks of up to 38.
         let mut remaining = w;
         while remaining > 0 {
             let chunk = remaining.min(38);
-            let factor: I256 = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
+            let factor: Int<4> = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
             d = d * factor;
             remaining -= chunk;
         }
@@ -2182,33 +2182,33 @@ mod tests {
     }
 
     #[cfg(any(feature = "d307", feature = "wide"))]
-    fn pow10_int1024(w: u32) -> crate::wide_int::I1024 {
-        use crate::wide_int::I1024;
-        let mut d: I1024 = crate::int::types::traits::wide_cast(1u128);
+    fn pow10_int1024(w: u32) -> crate::int::types::Int<16> {
+        use crate::int::types::Int;
+        let mut d: Int<16> = crate::int::types::traits::wide_cast(1u128);
         let mut remaining = w;
         while remaining > 0 {
             let chunk = remaining.min(38);
-            let factor: I1024 = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
+            let factor: Int<16> = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
             d = d * factor;
             remaining -= chunk;
         }
         d
     }
 
-    /// I256 reference quotient via div_rem + should_bump for any
+    /// Int<4> reference quotient via div_rem + should_bump for any
     /// `RoundingMode`. Same shape as `round_div_reference_int256_with`
     /// but `d = 10^w` is constructed via `pow10_int256` instead of a
     /// single u128 limb (so w can exceed 38).
     #[cfg(any(feature = "d76", feature = "wide"))]
     fn round_div_chain_reference_int256(
-        n: crate::wide_int::I256,
+        n: crate::int::types::Int<4>,
         w: u32,
         mode: crate::support::rounding::RoundingMode,
-    ) -> crate::wide_int::I256 {
-        use crate::wide_int::I256;
+    ) -> crate::int::types::Int<4> {
+        use crate::int::types::Int;
         let d = pow10_int256(w);
-        let zero: I256 = crate::int::types::traits::wide_cast(0u128);
-        let one: I256 = crate::int::types::traits::wide_cast(1u128);
+        let zero: Int<4> = crate::int::types::traits::wide_cast(0u128);
+        let one: Int<4> = crate::int::types::traits::wide_cast(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -2228,14 +2228,14 @@ mod tests {
 
     #[cfg(any(feature = "d307", feature = "wide"))]
     fn round_div_chain_reference_int1024(
-        n: crate::wide_int::I1024,
+        n: crate::int::types::Int<16>,
         w: u32,
         mode: crate::support::rounding::RoundingMode,
-    ) -> crate::wide_int::I1024 {
-        use crate::wide_int::I1024;
+    ) -> crate::int::types::Int<16> {
+        use crate::int::types::Int;
         let d = pow10_int1024(w);
-        let zero: I1024 = crate::int::types::traits::wide_cast(0u128);
-        let one: I1024 = crate::int::types::traits::wide_cast(1u128);
+        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
+        let one: Int<16> = crate::int::types::traits::wide_cast(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -2253,14 +2253,14 @@ mod tests {
         }
     }
 
-    /// Random I256 numerators, every mode, every w in 39..=76 (the
+    /// Random Int<4> numerators, every mode, every w in 39..=76 (the
     /// 2-chunk regime). HalfToEven gets a higher iteration count
     /// since it's the production default; the other modes get a
     /// smaller sample.
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn round_div_chain_audit_int256_w39_76_all_modes() {
-        use crate::wide_int::I256;
+        use crate::int::types::Int;
         const ITERS_HTE: usize = 5_000;
         const ITERS_OTHER: usize = 1_000;
         for w in 39u32..=76 {
@@ -2279,44 +2279,44 @@ mod tests {
                         0
                     };
                     let mag_low = rng.next_u128();
-                    let pos: I256 = {
-                        let lo: I256 = crate::int::types::traits::wide_cast(mag_low);
-                        let hi: I256 = crate::int::types::traits::wide_cast(mag_high);
+                    let pos: Int<4> = {
+                        let lo: Int<4> = crate::int::types::traits::wide_cast(mag_low);
+                        let hi: Int<4> = crate::int::types::traits::wide_cast(mag_high);
                         (hi << 128_u32) + lo
                     };
-                    let n: I256 = if regime % 2 == 1 { -pos } else { pos };
+                    let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
                     let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
-                        I256,
-                        { <I256 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                        Int<4>,
+                        { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, mode);
                     let expected = round_div_chain_reference_int256(n, w, mode);
                     assert_eq!(
                         got, expected,
-                        "chain MG audit (I256) mismatch: w={w}, mode={mode:?}, n={n:?}",
+                        "chain MG audit (Int<4>) mismatch: w={w}, mode={mode:?}, n={n:?}",
                     );
                 }
             }
         }
     }
 
-    /// Multi-limb numerators (I1024 up to ~768 bits magnitude) across
+    /// Multi-limb numerators (Int<16> up to ~768 bits magnitude) across
     /// the full w ∈ 39..=100 range. This is the high-chunk regime —
     /// w=100 means 3 chain passes (38·2 = 76, then 24) — and is
     /// where the cross-chunk Equal-vs-Greater decision matters most.
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
     fn round_div_chain_audit_int1024_w39_100() {
-        use crate::wide_int::I1024;
-        let zero: I1024 = crate::int::types::traits::wide_cast(0u128);
+        use crate::int::types::Int;
+        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
         const ITERS_HTE: usize = 3_000;
         for w in 39u32..=100 {
             let mut rng = SplitMix64(0x5C5C_u64.wrapping_add(w as u64));
             for _ in 0..ITERS_HTE {
                 let limbs = (rng.next() % 7) as usize;
-                let mut n: I1024 = zero;
+                let mut n: Int<16> = zero;
                 for k in 0..limbs {
-                    let chunk: I1024 = crate::int::types::traits::wide_cast(rng.next_u128());
+                    let chunk: Int<16> = crate::int::types::traits::wide_cast(rng.next_u128());
                     n = n + (chunk << ((k * 128) as u32));
                 }
                 if rng.next() & 1 == 1 {
@@ -2325,20 +2325,20 @@ mod tests {
 
                 let got =
                     crate::algos::mg_divide::div_wide_pow10_chain_with::<
-                        I1024,
-                        { <I1024 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                        Int<16>,
+                        { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
                 let expected = round_div_chain_reference_int1024(
                     n,
                     w,
                     crate::support::rounding::RoundingMode::HalfToEven,
                 );
-                assert_eq!(got, expected, "chain MG audit (I1024 HTE) mismatch: w={w}",);
+                assert_eq!(got, expected, "chain MG audit (Int<16> HTE) mismatch: w={w}",);
             }
         }
     }
 
-    /// All-modes I1024 sweep over a w sample that hits each chain-
+    /// All-modes Int<16> sweep over a w sample that hits each chain-
     /// pass count boundary: w=39 (2 passes, last chunk = 1),
     /// w=50 (2 passes, last = 12 — the D57<20> production width),
     /// w=76 (2 passes, last = 38), w=77 (3 passes, last = 1),
@@ -2346,8 +2346,8 @@ mod tests {
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
     fn round_div_chain_audit_int1024_all_modes_sample_w() {
-        use crate::wide_int::I1024;
-        let zero: I1024 = crate::int::types::traits::wide_cast(0u128);
+        use crate::int::types::Int;
+        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
         const ITERS: usize = 1_000;
         let ws: &[u32] = &[39, 50, 57, 76, 77, 88, 100];
         for &w in ws {
@@ -2355,22 +2355,22 @@ mod tests {
                 let mut rng = SplitMix64(0x9E15_u64.wrapping_add((w as u64) << 4 ^ mode as u64));
                 for _ in 0..ITERS {
                     let limbs = (rng.next() % 7) as usize;
-                    let mut n: I1024 = zero;
+                    let mut n: Int<16> = zero;
                     for k in 0..limbs {
-                        let chunk: I1024 = crate::int::types::traits::wide_cast(rng.next_u128());
+                        let chunk: Int<16> = crate::int::types::traits::wide_cast(rng.next_u128());
                         n = n + (chunk << ((k * 128) as u32));
                     }
                     if rng.next() & 1 == 1 {
                         n = -n;
                     }
                     let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
-                        I1024,
-                        { <I1024 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                        Int<16>,
+                        { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, mode);
                     let expected = round_div_chain_reference_int1024(n, w, mode);
                     assert_eq!(
                         got, expected,
-                        "chain MG audit (I1024 all modes) mismatch: w={w}, mode={mode:?}",
+                        "chain MG audit (Int<16> all modes) mismatch: w={w}, mode={mode:?}",
                     );
                 }
             }
@@ -2386,22 +2386,22 @@ mod tests {
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
     fn round_div_chain_audit_int1024_constructed_half_ties() {
-        use crate::wide_int::I1024;
-        let two: I1024 = crate::int::types::traits::wide_cast(2u128);
+        use crate::int::types::Int;
+        let two: Int<16> = crate::int::types::traits::wide_cast(2u128);
         let ws: &[u32] = &[39, 50, 57, 76, 77, 100];
         for &w in ws {
             let pow_w = pow10_int1024(w);
             let half = pow_w / two;
             // Three q values: 0, 1, large.
-            let qs: [I1024; 3] = [
-                crate::int::types::traits::wide_cast::<u128, I1024>(0u128),
-                crate::int::types::traits::wide_cast::<u128, I1024>(1u128),
-                crate::int::types::traits::wide_cast::<u128, I1024>(7u128) << 200_u32,
+            let qs: [Int<16>; 3] = [
+                crate::int::types::traits::wide_cast::<u128, Int<16>>(0u128),
+                crate::int::types::traits::wide_cast::<u128, Int<16>>(1u128),
+                crate::int::types::traits::wide_cast::<u128, Int<16>>(7u128) << 200_u32,
             ];
-            let deltas: [I1024; 3] = [
-                crate::int::types::traits::wide_cast::<u128, I1024>(0u128),
-                -crate::int::types::traits::wide_cast::<u128, I1024>(1u128),
-                crate::int::types::traits::wide_cast::<u128, I1024>(1u128),
+            let deltas: [Int<16>; 3] = [
+                crate::int::types::traits::wide_cast::<u128, Int<16>>(0u128),
+                -crate::int::types::traits::wide_cast::<u128, Int<16>>(1u128),
+                crate::int::types::traits::wide_cast::<u128, Int<16>>(1u128),
             ];
             for q in qs {
                 for delta in deltas {
@@ -2410,8 +2410,8 @@ mod tests {
                         let n = if sign_neg { -pos_n } else { pos_n };
                         for mode in all_modes() {
                             let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
-                                I1024,
-                                { <I1024 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                                Int<16>,
+                                { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                             >(n, w, mode);
                             let expected = round_div_chain_reference_int1024(n, w, mode);
                             assert_eq!(
@@ -2425,16 +2425,16 @@ mod tests {
         }
     }
 
-    /// Builds `10^w` as an `I16384` via chunked multiply (analogue of
+    /// Builds `10^w` as an `Int<256>` via chunked multiply (analogue of
     /// [`pow10_int1024`] at the widest work-integer width).
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    fn pow10_int16384(w: u32) -> crate::wide_int::I16384 {
-        use crate::wide_int::I16384;
-        let mut d: I16384 = crate::int::types::traits::wide_cast(1u128);
+    fn pow10_int16384(w: u32) -> crate::int::types::Int<256> {
+        use crate::int::types::Int;
+        let mut d: Int<256> = crate::int::types::traits::wide_cast(1u128);
         let mut remaining = w;
         while remaining > 0 {
             let chunk = remaining.min(38);
-            let factor: I16384 = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
+            let factor: Int<256> = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
             d = d * factor;
             remaining -= chunk;
         }
@@ -2442,13 +2442,13 @@ mod tests {
     }
 
     /// Regression for the original `div_wide_pow10_chain_with` buffer
-    /// bug: `D1232`'s work integer is `Int16384` (128 u128 limbs =
+    /// bug: `D1232`'s work integer is `Int<256>` (128 u128 limbs =
     /// 16384 bits), but the chain kernel once packed the magnitude
     /// into a fixed 64-u128-limb (8192-bit) buffer, silently
     /// truncating any numerator above 8192 bits.
     ///
     /// The width-adaptive buffer (`N = W::U128_LIMBS`) must still hand
-    /// `Int16384` its full 128-limb buffer. This test sets a bit above
+    /// `Int<256>` its full 128-limb buffer. This test sets a bit above
     /// the old 8192-bit ceiling (so the value is unrepresentable in a
     /// 64-limb buffer) and divides by `10^w` at a working scale
     /// `w ≥ 620` (D1232's wide-transcendental band). With truncation
@@ -2458,9 +2458,9 @@ mod tests {
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
     #[test]
     fn round_div_chain_int16384_above_8192_bits_not_truncated() {
-        use crate::wide_int::I16384;
-        let zero: I16384 = crate::int::types::traits::wide_cast(0u128);
-        let one: I16384 = crate::int::types::traits::wide_cast(1u128);
+        use crate::int::types::Int;
+        let zero: Int<256> = crate::int::types::traits::wide_cast(0u128);
+        let one: Int<256> = crate::int::types::traits::wide_cast(1u128);
 
         // Numerators with magnitude bits set well past the old
         // 8192-bit (64-u128-limb) buffer ceiling: a high bit near the
@@ -2470,19 +2470,19 @@ mod tests {
 
         for &bit in high_bit_positions {
             // n = (1 << bit) | low-entropy limbs.
-            let mut n: I16384 = one << bit;
+            let mut n: Int<256> = one << bit;
             n = n
-                + (crate::int::types::traits::wide_cast::<u128, I16384>(0xdead_beef_cafe_f00d_u128)
+                + (crate::int::types::traits::wide_cast::<u128, Int<256>>(0xdead_beef_cafe_f00d_u128)
                     << 64_u32);
-            n = n + crate::int::types::traits::wide_cast::<u128, I16384>(0x1234_5678_9abc_def0_u128);
+            n = n + crate::int::types::traits::wide_cast::<u128, Int<256>>(0x1234_5678_9abc_def0_u128);
 
             for &w in scales {
                 for &sign_neg in &[false, true] {
                     let nn = if sign_neg { -n } else { n };
                     for mode in all_modes() {
                         let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
-                            I16384,
-                            { <I16384 as crate::int::types::traits::BigInt>::U128_LIMBS },
+                            Int<256>,
+                            { <Int<256> as crate::int::types::traits::BigInt>::U128_LIMBS },
                         >(nn, w, mode);
 
                         // Schoolbook reference on the untruncated value.
@@ -2510,7 +2510,7 @@ mod tests {
 
                         assert_eq!(
                             got, expected,
-                            "Int16384 chain divide truncated above 8192 bits: \
+                            "Int<256> chain divide truncated above 8192 bits: \
                              bit={bit}, w={w}, mode={mode:?}, neg={sign_neg}",
                         );
                     }
