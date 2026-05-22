@@ -9,7 +9,6 @@
 use decimal_scaled::DecimalArithmetic;
 use decimal_scaled::{D18, D38};
 
-type D9_2 = D18<2>;
 type D18_2 = D18<2>;
 type D38_2 = D38<2>;
 
@@ -80,14 +79,6 @@ fn eq_d38_all_unsigned_ints_and_sign_rejection() {
 
 #[test]
 fn eq_narrow_signed_unsigned_int() {
-    let v9 = D9_2::from_int(7);
-    assert_eq!(v9, 7i8);
-    assert_eq!(v9, 7u8);
-    assert_eq!(v9, 7i32);
-    assert_eq!(v9, 7u32);
-    let neg9 = D9_2::from_int(-3);
-    assert_ne!(neg9, 0u8);
-
     let v18 = D18_2::from_int(100);
     assert_eq!(v18, 100i16);
     assert_eq!(v18, 100u16);
@@ -139,7 +130,6 @@ fn eq_d38_floats() {
 
 #[test]
 fn from_int_narrow_signed() {
-    assert_eq!(D9_2::from_int(7).to_bits(), 700);
     assert_eq!(D18_2::from_int(100).to_bits(), 10_000);
     assert_eq!(D38_2::from_int(42).to_bits(), 4_200);
     // negative
@@ -163,11 +153,7 @@ fn from_primitive_paths_d38() {
 }
 
 #[test]
-fn from_primitive_paths_d9_d18() {
-    let _ = D9_2::from(7_i8);
-    let _ = D9_2::from(7_i16);
-    let _ = D9_2::from(7_u8);
-    let _ = D9_2::from(7_u16);
+fn from_primitive_paths_d18() {
     let _ = D18_2::from(7_i8);
     let _ = D18_2::from(7_i16);
     let _ = D18_2::from(7_i32);
@@ -179,75 +165,66 @@ fn from_primitive_paths_d9_d18() {
 // ─── macros/overflow.rs: checked_*, wrapping_*, saturating_*, overflowing_* ─
 
 #[test]
-fn overflow_variants_add_d9_d18() {
-    let a = D9_2::MAX;
-    let b = D9_2::from_int(1);
-    assert!(a.checked_add(b).is_none());
-    assert_eq!(a.saturating_add(b), D9_2::MAX);
-    let (_, ov) = a.overflowing_add(b);
-    assert!(ov);
-    // wrapping (just exercises the branch)
-    let _ = a.wrapping_add(b);
-
+fn overflow_variants_add_d18() {
     let a = D18_2::MAX;
     let b = D18_2::from_int(1);
     assert!(a.checked_add(b).is_none());
     assert_eq!(a.saturating_add(b), D18_2::MAX);
+    let (_, ov) = a.overflowing_add(b);
+    assert!(ov);
+    // wrapping (just exercises the branch)
+    let _ = a.wrapping_add(b);
 }
 
 #[test]
-fn overflow_variants_sub_d9_d18() {
-    let a = D9_2::MIN;
-    let b = D9_2::from_int(1);
+fn overflow_variants_sub_d18() {
+    let a = D18_2::MIN;
+    let b = D18_2::from_int(1);
     assert!(a.checked_sub(b).is_none());
-    assert_eq!(a.saturating_sub(b), D9_2::MIN);
+    assert_eq!(a.saturating_sub(b), D18_2::MIN);
     let (_, ov) = a.overflowing_sub(b);
     assert!(ov);
     let _ = a.wrapping_sub(b);
 }
 
 #[test]
-fn overflow_variants_neg_d9_d18() {
+fn overflow_variants_neg_d18() {
     // MIN is not representable as positive; negating overflows.
-    assert!(D9_2::MIN.checked_neg().is_none());
-    assert_eq!(D9_2::MIN.saturating_neg(), D9_2::MAX);
-    let (_, ov) = D9_2::MIN.overflowing_neg();
+    assert!(D18_2::MIN.checked_neg().is_none());
+    assert_eq!(D18_2::MIN.saturating_neg(), D18_2::MAX);
+    let (_, ov) = D18_2::MIN.overflowing_neg();
     assert!(ov);
-    let _ = D9_2::MIN.wrapping_neg();
+    let _ = D18_2::MIN.wrapping_neg();
     // Non-MIN case
-    assert_eq!(D9_2::from_int(5).checked_neg().unwrap(), D9_2::from_int(-5));
+    assert_eq!(D18_2::from_int(5).checked_neg().unwrap(), D18_2::from_int(-5));
 }
 
 #[test]
-fn overflow_variants_mul_d9_d18() {
-    let a = D9_2::MAX;
-    let b = D9_2::from_int(2);
+fn overflow_variants_mul_d18() {
+    let a = D18_2::MAX;
+    let b = D18_2::from_int(2);
     assert!(a.checked_mul(b).is_none());
-    assert_eq!(a.saturating_mul(b), D9_2::MAX);
+    assert_eq!(a.saturating_mul(b), D18_2::MAX);
     let (_, ov) = a.overflowing_mul(b);
     assert!(ov);
     let _ = a.wrapping_mul(b);
 
     // Negative * positive saturating goes to MIN
-    let neg_max = D9_2::MIN;
-    let big = D9_2::from_int(3);
-    assert_eq!(neg_max.saturating_mul(big), D9_2::MIN);
-
-    let a = D18_2::MAX;
-    let b = D18_2::from_int(2);
-    assert!(a.checked_mul(b).is_none());
+    let neg_max = D18_2::MIN;
+    let big = D18_2::from_int(3);
+    assert_eq!(neg_max.saturating_mul(big), D18_2::MIN);
 }
 
 #[test]
-fn overflow_variants_div_rem_d9_d18() {
-    let a = D9_2::from_int(7);
-    let b = D9_2::from_int(2);
+fn overflow_variants_div_rem_d18() {
+    let a = D18_2::from_int(7);
+    let b = D18_2::from_int(2);
     let q = a.checked_div(b).unwrap();
     // 7.00 / 2.00 = 3.50 → 350 at S=2.
     assert_eq!(q.to_bits(), 350);
     // div by zero — checked_div returns None (matches i32::checked_div);
     // saturating_div by zero panics (covered by saturating_div_by_zero_panics).
-    assert!(D9_2::from_int(7).checked_div(D9_2::ZERO).is_none());
+    assert!(D18_2::from_int(7).checked_div(D18_2::ZERO).is_none());
     // overflowing_div(0) / wrapping_div(0) / wrapping_rem(0) on most
     // integer storage types panic (matches i32::overflowing_div), so we
     // don't exercise those paths here — they're well-known and the
@@ -255,13 +232,7 @@ fn overflow_variants_div_rem_d9_d18() {
     // rem
     let r = a.checked_rem(b).unwrap();
     let _ = r;
-    assert!(D9_2::from_int(7).checked_rem(D9_2::ZERO).is_none());
-
-    // D18 variants
-    let a = D18_2::from_int(7);
-    let b = D18_2::from_int(2);
-    let _ = a.checked_div(b).unwrap();
-    let _ = a.checked_rem(b).unwrap();
+    assert!(D18_2::from_int(7).checked_rem(D18_2::ZERO).is_none());
 }
 
 #[cfg(feature = "wide")]
@@ -301,11 +272,10 @@ fn num_traits_zero_one_bounded() {
     assert_eq!(<D38_2 as Bounded>::min_value(), D38_2::MIN);
     assert_eq!(<D38_2 as Bounded>::max_value(), D38_2::MAX);
 
-    assert_eq!(<D9_2 as Zero>::zero(), D9_2::ZERO);
     assert_eq!(<D18_2 as Zero>::zero(), D18_2::ZERO);
-    assert!(<D9_2 as Zero>::zero().is_zero());
+    assert!(<D18_2 as Zero>::zero().is_zero());
     assert!(<D18_2 as One>::one().is_one());
-    assert_eq!(<D9_2 as Bounded>::min_value(), D9_2::MIN);
+    assert_eq!(<D18_2 as Bounded>::min_value(), D18_2::MIN);
     assert_eq!(<D18_2 as Bounded>::max_value(), D18_2::MAX);
 }
 
@@ -324,10 +294,10 @@ fn num_traits_wide() {
 // ─── macros/bitwise.rs ─────────────────────────────────────────────────
 
 #[test]
-fn bitwise_ops_d9_d18() {
+fn bitwise_ops_d18() {
     use core::ops::*;
-    let a = D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1100));
-    let b = D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
+    let a = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1100));
+    let b = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
     assert_eq!((a & b).to_bits(), 0b1000);
     assert_eq!((a | b).to_bits(), 0b1110);
     assert_eq!((a ^ b).to_bits(), 0b0110);
@@ -341,18 +311,11 @@ fn bitwise_ops_d9_d18() {
     c ^= b;
     assert_eq!(c.to_bits(), 0b0110);
     // Not
-    assert_eq!((!D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(0))).to_bits(), !0i64);
+    assert_eq!((!D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0))).to_bits(), !0i64);
     // Shifts
-    let s = D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(1));
+    let s = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(1));
     assert_eq!((s.shl(3_u32)).to_bits(), 8);
-    assert_eq!((D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(16)).shr(2_u32)).to_bits(), 4);
-
-    // D18
-    let a = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1100));
-    let b = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
-    assert_eq!((a & b).to_bits(), 0b1000);
-    assert_eq!((a | b).to_bits(), 0b1110);
-    assert_eq!((a ^ b).to_bits(), 0b0110);
+    assert_eq!((D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(16)).shr(2_u32)).to_bits(), 4);
 }
 
 // ─── macros/float_bridge.rs: from_f32 / to_f32 / from_f64 / to_f64 ─────
@@ -370,21 +333,16 @@ fn float_bridge_narrow() {
     // -inf saturates to MIN
     assert_eq!(D38_2::from_f64(f64::NEG_INFINITY), D38_2::MIN);
 
-    // f64 bridge for narrow widths
-    assert_eq!(D9_2::from_f64(1.5).to_bits(), 150);
+    // f64 bridge for narrow width
     assert_eq!(D18_2::from_f64(1.5).to_bits(), 150);
-    assert_eq!(D9_2::from_f64(2.5).to_bits(), 250);
     assert_eq!(D18_2::from_f64(2.5).to_bits(), 250);
 
     // Out-of-range saturation
-    assert_eq!(D9_2::from_f64(f64::INFINITY), D9_2::MAX);
-    assert_eq!(D9_2::from_f64(f64::NEG_INFINITY), D9_2::MIN);
-    assert_eq!(D9_2::from_f64(f64::NAN), D9_2::ZERO);
     assert_eq!(D18_2::from_f64(f64::INFINITY), D18_2::MAX);
+    assert_eq!(D18_2::from_f64(f64::NEG_INFINITY), D18_2::MIN);
+    assert_eq!(D18_2::from_f64(f64::NAN), D18_2::ZERO);
 
     // to_f32 / to_f64
-    assert_eq!(D9_2::from_int(1).to_f32(), 1.0_f32);
-    assert_eq!(D9_2::from_int(1).to_f64(), 1.0);
     assert_eq!(D18_2::from_int(1).to_f32(), 1.0_f32);
     assert_eq!(D18_2::from_int(1).to_f64(), 1.0);
 
@@ -399,15 +357,6 @@ fn float_bridge_narrow() {
 // ─── macros/conversions.rs: TryFrom narrowing ──────────────────────────
 
 #[test]
-fn try_from_narrowing_d38_to_d9_in_range() {
-    // 5.00 fits D9_2.
-    let v = D38_2::from_int(5);
-    let r: D9_2 = v.try_into().unwrap();
-    assert_eq!(r.to_bits(), 500);
-}
-
-
-#[test]
 fn try_from_d38_to_d18_in_range() {
     let v = D38_2::from_int(5);
     let r: D18_2 = v.try_into().unwrap();
@@ -419,20 +368,16 @@ fn try_from_d38_to_d18_in_range() {
 
 #[test]
 fn default_impls() {
-    assert_eq!(D9_2::default(), D9_2::ZERO);
     assert_eq!(D18_2::default(), D18_2::ZERO);
     assert_eq!(D38_2::default(), D38_2::ZERO);
 }
 
 #[test]
 fn from_bits_zero_one_max_min() {
-    assert_eq!(D9_2::ZERO.to_bits(), 0);
     assert_eq!(D18_2::ZERO.to_bits(), 0);
     assert_eq!(D38_2::ZERO.to_bits(), 0);
-    assert_eq!(D9_2::ONE.to_bits(), 100);
     assert_eq!(D18_2::ONE.to_bits(), 100);
     assert_eq!(D38_2::ONE.to_bits(), 100);
-    assert!(D9_2::MAX > D9_2::ZERO);
     assert!(D18_2::MAX > D18_2::ZERO);
     assert!(D38_2::MAX > D38_2::ZERO);
 }
