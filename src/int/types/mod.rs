@@ -1308,14 +1308,26 @@ impl<const N: usize> Int<N> {
         }
     }
 
-    /// Checked remainder: `None` on a zero divisor.
+    /// Checked remainder: `None` on a zero divisor, and `None` for the
+    /// `MIN % -1` overflow case (the paired division `MIN / -1` overflows
+    /// the signed range), matching the primitive integer contract.
     #[inline]
     pub const fn checked_rem(self, rhs: Self) -> Option<Self> {
         if limbs_is_zero_u64_fixed(&rhs.limbs) {
             None
+        } else if self.is_min_neg_one(rhs) {
+            None
         } else {
             Some(self.wrapping_rem(rhs))
         }
+    }
+
+    /// `true` when `self == MIN` and `rhs == -1` — the remainder/division
+    /// overflow case where `MIN / -1` exceeds the signed range.
+    #[inline]
+    const fn is_min_neg_one(self, rhs: Self) -> bool {
+        limbs_cmp_u64_fixed(&self.limbs, &Self::MIN.limbs) == 0
+            && limbs_cmp_u64_fixed(&rhs.wrapping_neg().limbs, &Self::ONE.limbs) == 0
     }
 
     /// Euclidean division: the quotient that leaves a non-negative
@@ -1375,11 +1387,16 @@ impl<const N: usize> Int<N> {
         (self.wrapping_neg(), ov)
     }
 
-    /// Wrapping remainder paired with an overflow flag (always `false`;
-    /// the remainder never overflows the signed range).
+    /// Wrapping remainder paired with an overflow flag. The flag is `true`
+    /// only for `MIN % -1` (whose paired division overflows the signed
+    /// range), in which case the remainder is `0`; otherwise `false`.
     #[inline]
     pub const fn overflowing_rem(self, rhs: Self) -> (Self, bool) {
-        (self.wrapping_rem(rhs), false)
+        if self.is_min_neg_one(rhs) {
+            (Self::ZERO, true)
+        } else {
+            (self.wrapping_rem(rhs), false)
+        }
     }
 
     /// Saturating addition: clamps to `MIN` / `MAX` on overflow.
