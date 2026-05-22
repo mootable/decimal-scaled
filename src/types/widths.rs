@@ -491,7 +491,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// use decimal_scaled::D38s9;
     /// let a = D38s9::from_int(1_000_000);
     /// let b = a.narrow().unwrap();
-    /// assert_eq!(b.to_bits() as i128, a.to_bits());
+    /// assert_eq!(i128::from(b.to_bits()), i128::from(a.to_bits()));
     /// ```
     #[inline]
     pub fn narrow(self) -> Result<D18<SCALE>, crate::support::error::ConvertError> {
@@ -574,7 +574,7 @@ impl<const SCALE: u32> D18<SCALE> {
     /// use decimal_scaled::D18s9;
     /// let a = D18s9::from_int(7);
     /// let b = a.widen();              // D38<9>
-    /// assert_eq!(b.to_bits(), a.to_bits() as i128);
+    /// assert_eq!(i128::from(b.to_bits()), i128::from(a.to_bits()));
     /// ```
     #[inline]
     #[must_use]
