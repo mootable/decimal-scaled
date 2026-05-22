@@ -45,7 +45,10 @@ fn parse_decimal_string_to_d19_bits(s: &str) -> i128 {
     sign * (int_value * 10_i128.pow(19) + frac_value)
 }
 
-fn ulp(a: i128, b: i128) -> u128 {
+fn ulp<A: Into<i128>, B: Into<i128>>(a: A, b: B) -> u128 {
+    // Accepts D38's `Int<2>` to_bits (via `From<Int<2>> for i128`) and plain
+    // `i128` reference values alike.
+    let (a, b): (i128, i128) = (a.into(), b.into());
     a.wrapping_sub(b).unsigned_abs()
 }
 
