@@ -19,14 +19,12 @@
 
 use decimal_scaled::{D18};
 
-type D18_8 = D18<8>;
-
 /// Loose tolerance for the f64-bridge: 4 LSB at S=4 is 4·10⁻⁴ ≈ 4e-4,
 /// orders of magnitude above the f64 quantisation noise.
 const D18_TOL: i64 = 64;
 
 #[track_caller]
-fn close_d18(label: &str, actual: D18_8, expected_bits: i64) {
+fn close_d18(label: &str, actual: D18<8>, expected_bits: i64) {
     let diff = (actual.to_bits().as_i128() - i128::from(expected_bits)).abs();
     assert!(
         diff <= i128::from(D18_TOL),
@@ -37,56 +35,56 @@ fn close_d18(label: &str, actual: D18_8, expected_bits: i64) {
 
 #[test]
 fn d18_logs_exps_fast() {
-    assert_eq!(D18_8::ONE.ln_fast().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.exp_fast().to_bits(), 100_000_000);
-    close_d18("ln(2)", D18_8::from_int(2).ln_fast(), 69_314_718);
-    close_d18("exp(1)", D18_8::ONE.exp_fast(), 271_828_183);
-    assert_eq!(D18_8::from_int(2).log2_fast().to_bits(), 100_000_000);
-    assert_eq!(D18_8::from_int(10).log10_fast().to_bits(), 100_000_000);
-    assert_eq!(D18_8::from_int(10).exp2_fast().to_bits(), 102_400_000_000);
+    assert_eq!(D18::<8>::ONE.ln_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.exp_fast().to_bits(), 100_000_000);
+    close_d18("ln(2)", D18::<8>::from_int(2).ln_fast(), 69_314_718);
+    close_d18("exp(1)", D18::<8>::ONE.exp_fast(), 271_828_183);
+    assert_eq!(D18::<8>::from_int(2).log2_fast().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from_int(10).log10_fast().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from_int(10).exp2_fast().to_bits(), 102_400_000_000);
 }
 
 #[test]
 fn d18_roots_pow_fast() {
-    assert_eq!(D18_8::from_int(4).sqrt_fast().to_bits(), 200_000_000);
-    assert_eq!(D18_8::from_int(27).cbrt_fast().to_bits(), 300_000_000);
+    assert_eq!(D18::<8>::from_int(4).sqrt_fast().to_bits(), 200_000_000);
+    assert_eq!(D18::<8>::from_int(27).cbrt_fast().to_bits(), 300_000_000);
     close_d18(
         "2^10",
-        D18_8::from_int(2).powf_fast(D18_8::from_int(10)),
+        D18::<8>::from_int(2).powf_fast(D18::<8>::from_int(10)),
         102_400_000_000,
     );
     close_d18(
         "hypot(3,4)",
-        D18_8::from_int(3).hypot_fast(D18_8::from_int(4)),
+        D18::<8>::from_int(3).hypot_fast(D18::<8>::from_int(4)),
         500_000_000,
     );
     close_d18(
         "log_2(8)",
-        D18_8::from_int(8).log_fast(D18_8::from_int(2)),
+        D18::<8>::from_int(8).log_fast(D18::<8>::from_int(2)),
         300_000_000,
     );
 }
 
 #[test]
 fn d18_trig_inverse_hyperbolic_fast() {
-    assert_eq!(D18_8::ZERO.sin_fast().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.cos_fast().to_bits(), 100_000_000);
-    close_d18("sin(1)", D18_8::ONE.sin_fast(), 84_147_098);
-    close_d18("atan(1)", D18_8::ONE.atan_fast(), 78_539_816);
-    close_d18("atan2(1,1)", D18_8::ONE.atan2_fast(D18_8::ONE), 78_539_816);
-    assert_eq!(D18_8::ZERO.tan_fast().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.asin_fast().to_bits(), 0);
-    assert_eq!(D18_8::ONE.acos_fast().to_bits(), 0);
-    close_d18("sinh(1)", D18_8::ONE.sinh_fast(), 117_520_119);
-    close_d18("cosh(1)", D18_8::ONE.cosh_fast(), 154_308_063);
-    close_d18("tanh(1)", D18_8::ONE.tanh_fast(), 76_159_416);
-    assert_eq!(D18_8::ZERO.asinh_fast().to_bits(), 0);
-    assert_eq!(D18_8::ONE.acosh_fast().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.atanh_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.sin_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.cos_fast().to_bits(), 100_000_000);
+    close_d18("sin(1)", D18::<8>::ONE.sin_fast(), 84_147_098);
+    close_d18("atan(1)", D18::<8>::ONE.atan_fast(), 78_539_816);
+    close_d18("atan2(1,1)", D18::<8>::ONE.atan2_fast(D18::<8>::ONE), 78_539_816);
+    assert_eq!(D18::<8>::ZERO.tan_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.asin_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ONE.acos_fast().to_bits(), 0);
+    close_d18("sinh(1)", D18::<8>::ONE.sinh_fast(), 117_520_119);
+    close_d18("cosh(1)", D18::<8>::ONE.cosh_fast(), 154_308_063);
+    close_d18("tanh(1)", D18::<8>::ONE.tanh_fast(), 76_159_416);
+    assert_eq!(D18::<8>::ZERO.asinh_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ONE.acosh_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.atanh_fast().to_bits(), 0);
 }
 
 #[test]
 fn d18_angle_conversion_fast() {
-    assert_eq!(D18_8::ZERO.to_degrees_fast().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.to_radians_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.to_degrees_fast().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.to_radians_fast().to_bits(), 0);
 }

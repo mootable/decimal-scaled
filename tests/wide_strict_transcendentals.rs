@@ -49,16 +49,13 @@ fn agree<T: Into<i128>>(label: &str, wide: i128, d38: T) {
 
 // ─── D76<6> strict surface — match D38<6> within 1 LSB ─────────────────
 
-type D76_6 = D76<6>;
-type D38_6 = D38<6>;
-
-fn lift(n: D38_6) -> D76_6 {
+fn lift(n: D38<6>) -> D76<6> {
     n.into()
 }
 
 #[test]
 fn d76_ln() {
-    let n = D38_6::from_int(2);
+    let n = D38::<6>::from_int(2);
     agree(
         "ln(2)",
         d76_bits_at_scale_6(lift(n).ln_strict()),
@@ -67,7 +64,7 @@ fn d76_ln() {
 }
 #[test]
 fn d76_log2() {
-    let n = D38_6::from_int(8);
+    let n = D38::<6>::from_int(8);
     agree(
         "log2(8)",
         d76_bits_at_scale_6(lift(n).log2_strict()),
@@ -76,7 +73,7 @@ fn d76_log2() {
 }
 #[test]
 fn d76_log10() {
-    let n = D38_6::from_int(1000);
+    let n = D38::<6>::from_int(1000);
     agree(
         "log10(1000)",
         d76_bits_at_scale_6(lift(n).log10_strict()),
@@ -85,8 +82,8 @@ fn d76_log10() {
 }
 #[test]
 fn d76_log() {
-    let n = D38_6::from_int(8);
-    let b = D38_6::from_int(2);
+    let n = D38::<6>::from_int(8);
+    let b = D38::<6>::from_int(2);
     agree(
         "log_2(8)",
         d76_bits_at_scale_6(lift(n).log_strict(lift(b))),
@@ -95,28 +92,28 @@ fn d76_log() {
 }
 #[test]
 fn d76_exp() {
-    let n = D38_6::ONE;
+    let n = D38::<6>::ONE;
     agree(
         "exp(1)",
         d76_bits_at_scale_6(lift(n).exp_strict()),
         n.exp_strict().to_bits(),
     );
-    assert_eq!(D76_6::ZERO.exp_strict(), D76_6::ONE);
+    assert_eq!(D76::<6>::ZERO.exp_strict(), D76::<6>::ONE);
 }
 #[test]
 fn d76_exp2() {
-    let n = D38_6::from_int(10);
+    let n = D38::<6>::from_int(10);
     agree(
         "exp2(10)",
         d76_bits_at_scale_6(lift(n).exp2_strict()),
         n.exp2_strict().to_bits(),
     );
-    assert_eq!(D76_6::ZERO.exp2_strict(), D76_6::ONE);
+    assert_eq!(D76::<6>::ZERO.exp2_strict(), D76::<6>::ONE);
 }
 #[test]
 fn d76_sqrt() {
     for v in [2_i64, 4, 5, 9] {
-        let n = D38_6::from_int(v);
+        let n = D38::<6>::from_int(v);
         agree(
             &format!("sqrt({v})"),
             d76_bits_at_scale_6(lift(n).sqrt_strict()),
@@ -127,7 +124,7 @@ fn d76_sqrt() {
 #[test]
 fn d76_cbrt() {
     for v in [2_i64, 8, 27, -8] {
-        let n = D38_6::from_int(v);
+        let n = D38::<6>::from_int(v);
         agree(
             &format!("cbrt({v})"),
             d76_bits_at_scale_6(lift(n).cbrt_strict()),
@@ -137,8 +134,8 @@ fn d76_cbrt() {
 }
 #[test]
 fn d76_powf() {
-    let two = D38_6::from_int(2);
-    let ten = D38_6::from_int(10);
+    let two = D38::<6>::from_int(2);
+    let ten = D38::<6>::from_int(10);
     agree(
         "2^10",
         d76_bits_at_scale_6(lift(two).powf_strict(lift(ten))),
@@ -146,13 +143,13 @@ fn d76_powf() {
     );
     // Negative base → ZERO
     assert_eq!(
-        lift(D38_6::from_int(-2)).powf_strict(lift(two)),
-        D76_6::ZERO
+        lift(D38::<6>::from_int(-2)).powf_strict(lift(two)),
+        D76::<6>::ZERO
     );
 }
 #[test]
 fn d76_sin_cos_tan() {
-    let n = D38_6::ONE;
+    let n = D38::<6>::ONE;
     agree(
         "sin(1)",
         d76_bits_at_scale_6(lift(n).sin_strict()),
@@ -171,8 +168,8 @@ fn d76_sin_cos_tan() {
 }
 #[test]
 fn d76_atan_asin_acos() {
-    let one = D38_6::ONE;
-    let half = D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(500_000));
+    let one = D38::<6>::ONE;
+    let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000));
     agree(
         "atan(1)",
         d76_bits_at_scale_6(lift(one).atan_strict()),
@@ -207,8 +204,8 @@ fn d76_atan_asin_acos() {
 }
 #[test]
 fn d76_atan2_quadrants() {
-    let one = D38_6::ONE;
-    let zero = D38_6::ZERO;
+    let one = D38::<6>::ONE;
+    let zero = D38::<6>::ZERO;
     // four-quadrant + axis cases
     agree(
         "atan2(1,1)",
@@ -243,7 +240,7 @@ fn d76_atan2_quadrants() {
 }
 #[test]
 fn d76_hyperbolic() {
-    let n = D38_6::ONE;
+    let n = D38::<6>::ONE;
     agree(
         "sinh(1)",
         d76_bits_at_scale_6(lift(n).sinh_strict()),
@@ -267,9 +264,9 @@ fn d76_hyperbolic() {
 }
 #[test]
 fn d76_inverse_hyperbolic() {
-    let one = D38_6::ONE;
-    let two = D38_6::from_int(2);
-    let half = D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(500_000));
+    let one = D38::<6>::ONE;
+    let two = D38::<6>::from_int(2);
+    let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000));
     agree(
         "asinh(1)",
         d76_bits_at_scale_6(lift(one).asinh_strict()),
@@ -291,7 +288,7 @@ fn d76_inverse_hyperbolic() {
         half.atanh_strict().to_bits(),
     );
     // asinh of ZERO → ZERO short-circuit
-    assert_eq!(D76_6::ZERO.asinh_strict(), D76_6::ZERO);
+    assert_eq!(D76::<6>::ZERO.asinh_strict(), D76::<6>::ZERO);
     // Stress |x|>=1 branch of asinh:
     agree(
         "asinh(2)",
@@ -299,7 +296,7 @@ fn d76_inverse_hyperbolic() {
         two.asinh_strict().to_bits(),
     );
     // Stress |x|>=2 branch of acosh:
-    let three = D38_6::from_int(3);
+    let three = D38::<6>::from_int(3);
     agree(
         "acosh(3)",
         d76_bits_at_scale_6(lift(three).acosh_strict()),
@@ -308,13 +305,13 @@ fn d76_inverse_hyperbolic() {
 }
 #[test]
 fn d76_angle_conversion() {
-    let n = D38_6::ONE;
+    let n = D38::<6>::ONE;
     agree(
         "to_degrees(1)",
         d76_bits_at_scale_6(lift(n).to_degrees_strict()),
         n.to_degrees_strict().to_bits(),
     );
-    let d180 = D38_6::from_int(180);
+    let d180 = D38::<6>::from_int(180);
     agree(
         "to_radians(180)",
         d76_bits_at_scale_6(lift(d180).to_radians_strict()),
@@ -327,7 +324,7 @@ fn d76_angle_conversion() {
 #[test]
 fn d76_ln_agm() {
     for v in [2_i64, 7, 100] {
-        let n = D38_6::from_int(v);
+        let n = D38::<6>::from_int(v);
         let agm = lift(n).ln_strict_agm();
         let canonical = lift(n).ln_strict();
         // AGM must agree with canonical within 1 LSB.
@@ -341,7 +338,7 @@ fn d76_ln_agm() {
 
 #[test]
 fn d76_exp_agm() {
-    let n = D38_6::ONE;
+    let n = D38::<6>::ONE;
     let agm = lift(n).exp_strict_agm();
     let canonical = lift(n).exp_strict();
     agree(
@@ -350,7 +347,7 @@ fn d76_exp_agm() {
         d76_bits_at_scale_6(canonical),
     );
     // ZERO short-circuit
-    assert_eq!(D76_6::ZERO.exp_strict_agm(), D76_6::ONE);
+    assert_eq!(D76::<6>::ZERO.exp_strict_agm(), D76::<6>::ONE);
 }
 
 // ─── Mode-aware _with siblings (D76 only) ──────────────────────────────
@@ -363,10 +360,10 @@ use decimal_scaled::RoundingMode;
 
 #[test]
 fn d76_strict_with_modes() {
-    let two = lift(D38_6::from_int(2));
-    let ten = lift(D38_6::from_int(10));
-    let one = lift(D38_6::ONE);
-    let half = lift(D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)));
+    let two = lift(D38::<6>::from_int(2));
+    let ten = lift(D38::<6>::from_int(10));
+    let one = lift(D38::<6>::ONE);
+    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)));
 
     // HalfToEven matches the plain *_strict form bit-exactly.
     assert_eq!(
@@ -436,20 +433,20 @@ fn d76_strict_with_modes() {
     );
     // atan2 axis branches in the _with form:
     assert_eq!(
-        D76_6::ZERO.atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven),
-        D76_6::ZERO.atan2_strict(D76_6::ZERO)
+        D76::<6>::ZERO.atan2_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven),
+        D76::<6>::ZERO.atan2_strict(D76::<6>::ZERO)
     );
     assert_eq!(
-        one.atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven),
-        one.atan2_strict(D76_6::ZERO)
+        one.atan2_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven),
+        one.atan2_strict(D76::<6>::ZERO)
     );
     assert_eq!(
-        (-one).atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven),
-        (-one).atan2_strict(D76_6::ZERO)
+        (-one).atan2_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven),
+        (-one).atan2_strict(D76::<6>::ZERO)
     );
     assert_eq!(
-        D76_6::ZERO.atan2_strict_with(-one, RoundingMode::HalfToEven),
-        D76_6::ZERO.atan2_strict(-one)
+        D76::<6>::ZERO.atan2_strict_with(-one, RoundingMode::HalfToEven),
+        D76::<6>::ZERO.atan2_strict(-one)
     );
     assert_eq!(
         one.sinh_strict_with(RoundingMode::HalfToEven),
@@ -468,10 +465,10 @@ fn d76_strict_with_modes() {
         one.asinh_strict()
     );
     assert_eq!(
-        D76_6::ZERO.asinh_strict_with(RoundingMode::HalfToEven),
-        D76_6::ZERO
+        D76::<6>::ZERO.asinh_strict_with(RoundingMode::HalfToEven),
+        D76::<6>::ZERO
     );
-    let two_val = lift(D38_6::from_int(2));
+    let two_val = lift(D38::<6>::from_int(2));
     assert_eq!(
         two_val.acosh_strict_with(RoundingMode::HalfToEven),
         two_val.acosh_strict()
@@ -500,8 +497,8 @@ fn d76_strict_with_modes() {
     );
     // exp_strict_agm_with ZERO short-circuit
     assert_eq!(
-        D76_6::ZERO.exp_strict_agm_with(RoundingMode::HalfToEven),
-        D76_6::ONE
+        D76::<6>::ZERO.exp_strict_agm_with(RoundingMode::HalfToEven),
+        D76::<6>::ONE
     );
 
     // Non-HalfToEven modes — just call each variant to exercise the
@@ -521,12 +518,12 @@ fn d76_strict_with_modes() {
 #[cfg(feature = "strict")]
 #[test]
 fn d76_plain_dispatcher_matches_strict() {
-    let one = lift(D38_6::ONE);
-    let two = lift(D38_6::from_int(2));
-    let ten = lift(D38_6::from_int(10));
-    let four = lift(D38_6::from_int(4));
-    let half = lift(D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)));
-    let twenty_seven = lift(D38_6::from_int(27));
+    let one = lift(D38::<6>::ONE);
+    let two = lift(D38::<6>::from_int(2));
+    let ten = lift(D38::<6>::from_int(10));
+    let four = lift(D38::<6>::from_int(4));
+    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)));
+    let twenty_seven = lift(D38::<6>::from_int(27));
 
     assert_eq!(two.ln(), two.ln_strict());
     assert_eq!(two.log(ten), two.log_strict(ten));
@@ -562,57 +559,57 @@ fn d76_plain_dispatcher_matches_strict() {
 #[test]
 #[should_panic(expected = "ln: argument must be positive")]
 fn d76_ln_zero_panics() {
-    let _ = D76_6::ZERO.ln_strict();
+    let _ = D76::<6>::ZERO.ln_strict();
 }
 
 #[test]
 #[should_panic(expected = "ln: argument must be positive")]
 fn d76_ln_negative_panics() {
-    let _ = (-D76_6::ONE).ln_strict();
+    let _ = (-D76::<6>::ONE).ln_strict();
 }
 
 #[test]
 #[should_panic(expected = "log: argument must be positive")]
 fn d76_log_zero_panics() {
-    let _ = D76_6::ZERO.log_strict(D76_6::from_int(2).into());
+    let _ = D76::<6>::ZERO.log_strict(D76::<6>::from_int(2).into());
 }
 
 #[test]
 #[should_panic(expected = "log: base must be positive")]
 fn d76_log_base_zero_panics() {
-    let one: D76_6 = D38_6::ONE.into();
-    let _ = one.log_strict(D76_6::ZERO);
+    let one: D76<6> = D38::<6>::ONE.into();
+    let _ = one.log_strict(D76::<6>::ZERO);
 }
 
 #[test]
 #[should_panic(expected = "log: base must not equal 1")]
 fn d76_log_base_one_panics() {
-    let one: D76_6 = D38_6::ONE.into();
+    let one: D76<6> = D38::<6>::ONE.into();
     let _ = one.log_strict(one);
 }
 
 #[test]
 #[should_panic(expected = "asin: argument out of domain")]
 fn d76_asin_out_of_domain_panics() {
-    let _ = lift(D38_6::from_int(2)).asin_strict();
+    let _ = lift(D38::<6>::from_int(2)).asin_strict();
 }
 
 #[test]
 #[should_panic(expected = "acos: argument out of domain")]
 fn d76_acos_out_of_domain_panics() {
-    let _ = lift(D38_6::from_int(2)).acos_strict();
+    let _ = lift(D38::<6>::from_int(2)).acos_strict();
 }
 
 #[test]
 #[should_panic(expected = "acosh: argument must be >= 1")]
 fn d76_acosh_below_one_panics() {
-    let _ = D76_6::ZERO.acosh_strict();
+    let _ = D76::<6>::ZERO.acosh_strict();
 }
 
 #[test]
 #[should_panic(expected = "atanh: argument out of domain")]
 fn d76_atanh_at_boundary_panics() {
-    let _ = lift(D38_6::ONE).atanh_strict();
+    let _ = lift(D38::<6>::ONE).atanh_strict();
 }
 
 // ─── _with-mode domain panics ──────────────────────────────────────────
@@ -624,69 +621,69 @@ fn d76_atanh_at_boundary_panics() {
 #[test]
 #[should_panic(expected = "ln: argument must be positive")]
 fn d76_ln_with_zero_panics() {
-    let _ = D76_6::ZERO.ln_strict_with(RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.ln_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "asin: argument out of domain")]
 fn d76_asin_with_oob_panics() {
-    let _ = lift(D38_6::from_int(2)).asin_strict_with(RoundingMode::HalfToEven);
+    let _ = lift(D38::<6>::from_int(2)).asin_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "log: argument must be positive")]
 fn d76_log_strict_with_zero_panics() {
-    let _ = D76_6::ZERO.log_strict_with(lift(D38_6::from_int(2)), RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::from_int(2)), RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "log: base must be positive")]
 fn d76_log_strict_with_base_zero_panics() {
-    let one: D76_6 = D38_6::ONE.into();
-    let _ = one.log_strict_with(D76_6::ZERO, RoundingMode::HalfToEven);
+    let one: D76<6> = D38::<6>::ONE.into();
+    let _ = one.log_strict_with(D76::<6>::ZERO, RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "log: base must not equal 1")]
 fn d76_log_strict_with_base_one_panics() {
-    let one: D76_6 = D38_6::ONE.into();
+    let one: D76<6> = D38::<6>::ONE.into();
     let _ = one.log_strict_with(one, RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "log2: argument must be positive")]
 fn d76_log2_strict_with_zero_panics() {
-    let _ = D76_6::ZERO.log2_strict_with(RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.log2_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "log10: argument must be positive")]
 fn d76_log10_strict_with_zero_panics() {
-    let _ = D76_6::ZERO.log10_strict_with(RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.log10_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "ln_agm: argument must be positive")]
 fn d76_ln_agm_with_zero_panics() {
-    let _ = D76_6::ZERO.ln_strict_agm_with(RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.ln_strict_agm_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "acos: argument out of domain")]
 fn d76_acos_strict_with_oob_panics() {
-    let _ = lift(D38_6::from_int(2)).acos_strict_with(RoundingMode::HalfToEven);
+    let _ = lift(D38::<6>::from_int(2)).acos_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "acosh: argument must be >= 1")]
 fn d76_acosh_strict_with_below_one_panics() {
-    let _ = D76_6::ZERO.acosh_strict_with(RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.acosh_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "atanh: argument out of domain")]
 fn d76_atanh_strict_with_boundary_panics() {
-    let _ = lift(D38_6::ONE).atanh_strict_with(RoundingMode::HalfToEven);
+    let _ = lift(D38::<6>::ONE).atanh_strict_with(RoundingMode::HalfToEven);
 }
 
 // ─── _with-mode algorithmic branches ──────────────────────────────────
@@ -697,9 +694,9 @@ fn d76_atanh_strict_with_boundary_panics() {
 
 #[test]
 fn d76_asinh_strict_with_abs_ge_one_branch() {
-    let two = lift(D38_6::from_int(2));
+    let two = lift(D38::<6>::from_int(2));
     let _ = two.asinh_strict_with(RoundingMode::HalfToEven);
-    let neg_two = lift(D38_6::from_int(-2));
+    let neg_two = lift(D38::<6>::from_int(-2));
     let _ = neg_two.asinh_strict_with(RoundingMode::HalfToEven);
     // Canonical body too
     let _ = two.asinh_strict();
@@ -708,7 +705,7 @@ fn d76_asinh_strict_with_abs_ge_one_branch() {
 
 #[test]
 fn d76_acosh_strict_with_v_ge_two_branch() {
-    let three = lift(D38_6::from_int(3));
+    let three = lift(D38::<6>::from_int(3));
     let _ = three.acosh_strict_with(RoundingMode::HalfToEven);
 }
 
@@ -748,13 +745,10 @@ mod x_wide {
 
     #[test]
     fn d153_d307_strict_surface_callable() {
-        type D38_6 = D38<6>;
-        type D153_6 = D153<6>;
-        type D307_6 = D307<6>;
 
-        let one_a: D153_6 = D38_6::ONE.into();
-        let two_a: D153_6 = D38_6::from_int(2).into();
-        let half_a: D153_6 = D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)).into();
+        let one_a: D153<6> = D38::<6>::ONE.into();
+        let two_a: D153<6> = D38::<6>::from_int(2).into();
+        let half_a: D153<6> = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)).into();
 
         let _ = two_a.ln_strict();
         let _ = two_a.log2_strict();
@@ -785,10 +779,10 @@ mod x_wide {
 
         // D307 — convert via D76 since D38 → D307 is not a direct From.
         use decimal_scaled::D76;
-        type D76_6 = D76<6>;
-        let one_b: D307_6 = <D76_6 as Into<D307_6>>::into(D38_6::ONE.into());
-        let two_b: D307_6 = <D76_6 as Into<D307_6>>::into(D38_6::from_int(2).into());
-        let half_b: D307_6 = <D76_6 as Into<D307_6>>::into(D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)).into());
+
+        let one_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::ONE.into());
+        let two_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_int(2).into());
+        let half_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)).into());
         let _ = two_b.ln_strict();
         let _ = two_b.log2_strict();
         let _ = two_b.log10_strict();
@@ -836,13 +830,10 @@ mod x_wide {
 fn d57_s50_exp_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_50 = D57<50>;
-    type D76_50 = D76<50>;
-
     // exp(2) is representable at SCALE=50 (e² ≈ 7.389; storage ≤ 8·10⁵⁰
     // fits Int192 max ≈ 3.14·10⁵⁷ comfortably).
-    let n_56 = D57_50::from_int(2);
-    let n_76: D76_50 = n_56.into();
+    let n_56 = D57::<50>::from_int(2);
+    let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.exp_strict();
     let r_76 = n_76.exp_strict();
@@ -851,7 +842,7 @@ fn d57_s50_exp_matches_d76_baseline() {
     // (unaffected by this change). Narrow the D76 reference back to
     // D57 via `try_into`; the strict 0.5-ULP contract for D57 means
     // the two results must agree exactly at D57's storage scale.
-    let r_76_as_56: D57_50 = r_76.try_into().expect("e² fits D57<50>");
+    let r_76_as_56: D57<50> = r_76.try_into().expect("e² fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
         "D57<50>::exp(2) bespoke kernel does not match D76<50> narrowed reference",
@@ -877,14 +868,11 @@ fn d57_s50_exp_matches_d76_baseline() {
 fn d57_s50_atan_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_50 = D57<50>;
-    type D76_50 = D76<50>;
-
     // atan(2) ≈ 1.107 rad. The reciprocal-fold branch runs because
     // |2| > 1, then a non-trivial table entry is picked (j ≈ M/2)
     // and the Taylor residual is small.
-    let n_56 = D57_50::from_int(2);
-    let n_76: D76_50 = n_56.into();
+    let n_56 = D57::<50>::from_int(2);
+    let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.atan_strict();
     let r_76 = n_76.atan_strict();
@@ -893,7 +881,7 @@ fn d57_s50_atan_matches_d76_baseline() {
     // (unaffected by this change). Narrow the D76 reference back to
     // D57 via `try_into`; the strict 0.5-ULP contract for D57 means
     // the two results must agree exactly at D57's storage scale.
-    let r_76_as_56: D57_50 = r_76.try_into().expect("atan(2) fits D57<50>");
+    let r_76_as_56: D57<50> = r_76.try_into().expect("atan(2) fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
         "D57<50>::atan(2) bespoke kernel does not match D76<50> narrowed reference",
@@ -908,17 +896,14 @@ fn d57_s50_atan_matches_d76_baseline() {
 fn d57_s44_atan_small_arg_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_44 = D57<44>;
-    type D76_44 = D76<44>;
-
     // 1/3 at SCALE=44 — round to nearest.
-    let one_third_56 = D57_44::from_int(1) / D57_44::from_int(3);
-    let one_third_76: D76_44 = one_third_56.into();
+    let one_third_56 = D57::<44>::from_int(1) / D57::<44>::from_int(3);
+    let one_third_76: D76<44> = one_third_56.into();
 
     let r_56 = one_third_56.atan_strict();
     let r_76 = one_third_76.atan_strict();
 
-    let r_76_as_56: D57_44 = r_76.try_into().expect("atan(1/3) fits D57<44>");
+    let r_76_as_56: D57<44> = r_76.try_into().expect("atan(1/3) fits D57<44>");
     assert_eq!(
         r_56, r_76_as_56,
         "D57<44>::atan(1/3) bespoke kernel does not match D76<44> narrowed reference",
@@ -939,18 +924,15 @@ fn d57_s44_atan_small_arg_matches_d76_baseline() {
 fn d57_s50_sin_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_50 = D57<50>;
-    type D76_50 = D76<50>;
-
     // sin(2) ≈ 0.909. k = round(2 / (π/2)) = 1, so the quadrant
     // permutation picks the cos(r) branch — exercises the k ≠ 0 path.
-    let n_56 = D57_50::from_int(2);
-    let n_76: D76_50 = n_56.into();
+    let n_56 = D57::<50>::from_int(2);
+    let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.sin_strict();
     let r_76 = n_76.sin_strict();
 
-    let r_76_as_56: D57_50 = r_76.try_into().expect("sin(2) fits D57<50>");
+    let r_76_as_56: D57<50> = r_76.try_into().expect("sin(2) fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
         "D57<50>::sin(2) bespoke kernel does not match D76<50> narrowed reference",
@@ -961,18 +943,15 @@ fn d57_s50_sin_matches_d76_baseline() {
 fn d57_s50_cos_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_50 = D57<50>;
-    type D76_50 = D76<50>;
-
     // cos(2) ≈ −0.416. Same quadrant as sin(2) — sin and cos share
     // the reduction table, so this exercises the cos selector arm.
-    let n_56 = D57_50::from_int(2);
-    let n_76: D76_50 = n_56.into();
+    let n_56 = D57::<50>::from_int(2);
+    let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.cos_strict();
     let r_76 = n_76.cos_strict();
 
-    let r_76_as_56: D57_50 = r_76.try_into().expect("cos(2) fits D57<50>");
+    let r_76_as_56: D57<50> = r_76.try_into().expect("cos(2) fits D57<50>");
     assert_eq!(
         r_56, r_76_as_56,
         "D57<50>::cos(2) bespoke kernel does not match D76<50> narrowed reference",
@@ -986,15 +965,12 @@ fn d57_s50_cos_matches_d76_baseline() {
 fn d57_s44_sin_cos_small_arg_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_44 = D57<44>;
-    type D76_44 = D76<44>;
-
-    let one_third_56 = D57_44::from_int(1) / D57_44::from_int(3);
-    let one_third_76: D76_44 = one_third_56.into();
+    let one_third_56 = D57::<44>::from_int(1) / D57::<44>::from_int(3);
+    let one_third_76: D76<44> = one_third_56.into();
 
     let sin_56 = one_third_56.sin_strict();
     let sin_76 = one_third_76.sin_strict();
-    let sin_76_as_56: D57_44 = sin_76.try_into().expect("sin(1/3) fits D57<44>");
+    let sin_76_as_56: D57<44> = sin_76.try_into().expect("sin(1/3) fits D57<44>");
     assert_eq!(
         sin_56, sin_76_as_56,
         "D57<44>::sin(1/3) bespoke kernel does not match D76<44> narrowed reference",
@@ -1002,7 +978,7 @@ fn d57_s44_sin_cos_small_arg_matches_d76_baseline() {
 
     let cos_56 = one_third_56.cos_strict();
     let cos_76 = one_third_76.cos_strict();
-    let cos_76_as_56: D57_44 = cos_76.try_into().expect("cos(1/3) fits D57<44>");
+    let cos_76_as_56: D57<44> = cos_76.try_into().expect("cos(1/3) fits D57<44>");
     assert_eq!(
         cos_56, cos_76_as_56,
         "D57<44>::cos(1/3) bespoke kernel does not match D76<44> narrowed reference",
@@ -1023,16 +999,13 @@ fn d57_s44_sin_cos_small_arg_matches_d76_baseline() {
 fn d57_s18_sin_cos_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_18 = D57<18>;
-    type D76_18 = D76<18>;
-
     // arg = 1 — small enough that k = 0 (the canonical Taylor path).
-    let n_56 = D57_18::from_int(1);
-    let n_76: D76_18 = n_56.into();
+    let n_56 = D57::<18>::from_int(1);
+    let n_76: D76<18> = n_56.into();
 
     let sin_56 = n_56.sin_strict();
     let sin_76 = n_76.sin_strict();
-    let sin_76_as_56: D57_18 = sin_76.try_into().expect("sin(1) fits D57<18>");
+    let sin_76_as_56: D57<18> = sin_76.try_into().expect("sin(1) fits D57<18>");
     let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits())
         .to_i128_checked()
         .expect("sin diff fits i128")
@@ -1044,7 +1017,7 @@ fn d57_s18_sin_cos_matches_d76_baseline() {
 
     let cos_56 = n_56.cos_strict();
     let cos_76 = n_76.cos_strict();
-    let cos_76_as_56: D57_18 = cos_76.try_into().expect("cos(1) fits D57<18>");
+    let cos_76_as_56: D57<18> = cos_76.try_into().expect("cos(1) fits D57<18>");
     let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits())
         .to_i128_checked()
         .expect("cos diff fits i128")
@@ -1059,17 +1032,14 @@ fn d57_s18_sin_cos_matches_d76_baseline() {
 fn d57_s20_sin_cos_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_20 = D57<20>;
-    type D76_20 = D76<20>;
-
     // arg = 2 — exercises the quadrant-shift branch (k = 1) of the
     // shared sin_fixed reduction.
-    let n_56 = D57_20::from_int(2);
-    let n_76: D76_20 = n_56.into();
+    let n_56 = D57::<20>::from_int(2);
+    let n_76: D76<20> = n_56.into();
 
     let sin_56 = n_56.sin_strict();
     let sin_76 = n_76.sin_strict();
-    let sin_76_as_56: D57_20 = sin_76.try_into().expect("sin(2) fits D57<20>");
+    let sin_76_as_56: D57<20> = sin_76.try_into().expect("sin(2) fits D57<20>");
     let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits())
         .to_i128_checked()
         .expect("sin diff fits i128")
@@ -1081,7 +1051,7 @@ fn d57_s20_sin_cos_matches_d76_baseline() {
 
     let cos_56 = n_56.cos_strict();
     let cos_76 = n_76.cos_strict();
-    let cos_76_as_56: D57_20 = cos_76.try_into().expect("cos(2) fits D57<20>");
+    let cos_76_as_56: D57<20> = cos_76.try_into().expect("cos(2) fits D57<20>");
     let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits())
         .to_i128_checked()
         .expect("cos diff fits i128")
@@ -1096,17 +1066,14 @@ fn d57_s20_sin_cos_matches_d76_baseline() {
 fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_22 = D57<22>;
-    type D76_22 = D76<22>;
-
     // Small non-integer argument — stresses the Taylor residual at the
     // top end of the slot.
-    let third_56 = D57_22::from_int(1) / D57_22::from_int(3);
-    let third_76: D76_22 = third_56.into();
+    let third_56 = D57::<22>::from_int(1) / D57::<22>::from_int(3);
+    let third_76: D76<22> = third_56.into();
 
     let sin_56 = third_56.sin_strict();
     let sin_76 = third_76.sin_strict();
-    let sin_76_as_56: D57_22 = sin_76.try_into().expect("sin(1/3) fits D57<22>");
+    let sin_76_as_56: D57<22> = sin_76.try_into().expect("sin(1/3) fits D57<22>");
     let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits())
         .to_i128_checked()
         .expect("sin diff fits i128")
@@ -1118,7 +1085,7 @@ fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
 
     let cos_56 = third_56.cos_strict();
     let cos_76 = third_76.cos_strict();
-    let cos_76_as_56: D57_22 = cos_76.try_into().expect("cos(1/3) fits D57<22>");
+    let cos_76_as_56: D57<22> = cos_76.try_into().expect("cos(1/3) fits D57<22>");
     let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits())
         .to_i128_checked()
         .expect("cos diff fits i128")
@@ -1144,30 +1111,27 @@ fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
 fn d57_s20_sqrt_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_20 = D57<20>;
-    type D76_20 = D76<20>;
-
-    let inputs: &[D57_20] = &[
-        D57_20::from_int(1),
-        D57_20::from_int(2),
-        D57_20::from_int(3),
-        D57_20::from_int(4),
-        D57_20::from_int(9),
-        D57_20::from_int(16),
-        D57_20::from_int(100),
-        D57_20::from_int(1_000_000),
-        D57_20::from_int(1) / D57_20::from_int(4),
-        D57_20::from_int(1) / D57_20::from_int(3),
-        D57_20::from_int(3) / D57_20::from_int(2),
-        D57_20::from_int(7) / D57_20::from_int(11),
-        D57_20::from_int(123_456_789),
+    let inputs: &[D57<20>] = &[
+        D57::<20>::from_int(1),
+        D57::<20>::from_int(2),
+        D57::<20>::from_int(3),
+        D57::<20>::from_int(4),
+        D57::<20>::from_int(9),
+        D57::<20>::from_int(16),
+        D57::<20>::from_int(100),
+        D57::<20>::from_int(1_000_000),
+        D57::<20>::from_int(1) / D57::<20>::from_int(4),
+        D57::<20>::from_int(1) / D57::<20>::from_int(3),
+        D57::<20>::from_int(3) / D57::<20>::from_int(2),
+        D57::<20>::from_int(7) / D57::<20>::from_int(11),
+        D57::<20>::from_int(123_456_789),
     ];
 
     for &n in inputs {
-        let wide: D76_20 = n.into();
+        let wide: D76<20> = n.into();
         let r_56 = n.sqrt_strict();
         let r_76 = wide.sqrt_strict();
-        let r_76_as_56: D57_20 = r_76.try_into().expect("sqrt fits D57<20>");
+        let r_76_as_56: D57<20> = r_76.try_into().expect("sqrt fits D57<20>");
         let diff = (r_56.to_bits() - r_76_as_56.to_bits())
             .to_i128_checked()
             .expect("sqrt diff fits i128")
@@ -1192,30 +1156,27 @@ fn d57_s20_sqrt_matches_d76_baseline() {
 fn d57_s20_cbrt_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    type D57_20 = D57<20>;
-    type D76_20 = D76<20>;
-
-    let inputs: &[D57_20] = &[
-        D57_20::from_int(1),
-        D57_20::from_int(2),
-        D57_20::from_int(3),
-        D57_20::from_int(8),
-        D57_20::from_int(27),
-        D57_20::from_int(64),
-        D57_20::from_int(125),
-        D57_20::from_int(1_000),
-        D57_20::from_int(1_000_000),
-        D57_20::from_int(1) / D57_20::from_int(8),
-        D57_20::from_int(1) / D57_20::from_int(3),
-        D57_20::from_int(7) / D57_20::from_int(11),
-        D57_20::from_int(123_456_789),
+    let inputs: &[D57<20>] = &[
+        D57::<20>::from_int(1),
+        D57::<20>::from_int(2),
+        D57::<20>::from_int(3),
+        D57::<20>::from_int(8),
+        D57::<20>::from_int(27),
+        D57::<20>::from_int(64),
+        D57::<20>::from_int(125),
+        D57::<20>::from_int(1_000),
+        D57::<20>::from_int(1_000_000),
+        D57::<20>::from_int(1) / D57::<20>::from_int(8),
+        D57::<20>::from_int(1) / D57::<20>::from_int(3),
+        D57::<20>::from_int(7) / D57::<20>::from_int(11),
+        D57::<20>::from_int(123_456_789),
     ];
 
     for &n in inputs {
-        let wide: D76_20 = n.into();
+        let wide: D76<20> = n.into();
         let r_56 = n.cbrt_strict();
         let r_76 = wide.cbrt_strict();
-        let r_76_as_56: D57_20 = r_76.try_into().expect("cbrt fits D57<20>");
+        let r_76_as_56: D57<20> = r_76.try_into().expect("cbrt fits D57<20>");
         let diff = (r_56.to_bits() - r_76_as_56.to_bits())
             .to_i128_checked()
             .expect("cbrt diff fits i128")
@@ -1242,18 +1203,15 @@ fn d57_s20_cbrt_matches_d76_baseline() {
 fn d307_s150_ln_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    type D307_150 = D307<150>;
-    type D462_150 = D462<150>;
-
     // ln(1.5) — exercises the non-trivial table-index branch (Tang's
     // i = 64 for f_i = 1.5 at M = 128). ln(2) hits a short-circuit so
     // is a weak stress.
-    let arg_307 = D307_150::from_int(3) / D307_150::from_int(2);
-    let arg_462: D462_150 = arg_307.into();
+    let arg_307 = D307::<150>::from_int(3) / D307::<150>::from_int(2);
+    let arg_462: D462<150> = arg_307.into();
 
     let r_307 = arg_307.ln_strict();
     let r_462 = arg_462.ln_strict();
-    let r_462_as_307: D307_150 = r_462.try_into().expect("ln(1.5) fits D307<150>");
+    let r_462_as_307: D307<150> = r_462.try_into().expect("ln(1.5) fits D307<150>");
     let diff = (r_307.to_bits() - r_462_as_307.to_bits())
         .to_i128_checked()
         .expect("ln diff fits i128")
@@ -1269,16 +1227,13 @@ fn d307_s150_ln_matches_d462_baseline() {
 fn d307_s150_exp_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    type D307_150 = D307<150>;
-    type D462_150 = D462<150>;
-
     // exp(2) — well-conditioned and lands inside D307<150> storage.
-    let arg_307 = D307_150::from_int(2);
-    let arg_462: D462_150 = arg_307.into();
+    let arg_307 = D307::<150>::from_int(2);
+    let arg_462: D462<150> = arg_307.into();
 
     let r_307 = arg_307.exp_strict();
     let r_462 = arg_462.exp_strict();
-    let r_462_as_307: D307_150 = r_462.try_into().expect("exp(2) fits D307<150>");
+    let r_462_as_307: D307<150> = r_462.try_into().expect("exp(2) fits D307<150>");
     let diff = (r_307.to_bits() - r_462_as_307.to_bits())
         .to_i128_checked()
         .expect("exp diff fits i128")
@@ -1294,16 +1249,13 @@ fn d307_s150_exp_matches_d462_baseline() {
 fn d307_s150_sin_cos_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    type D307_150 = D307<150>;
-    type D462_150 = D462<150>;
-
     // arg = 1 — small enough that k = 0 (canonical Taylor path).
-    let n_307 = D307_150::from_int(1);
-    let n_462: D462_150 = n_307.into();
+    let n_307 = D307::<150>::from_int(1);
+    let n_462: D462<150> = n_307.into();
 
     let sin_307 = n_307.sin_strict();
     let sin_462 = n_462.sin_strict();
-    let sin_462_as_307: D307_150 = sin_462.try_into().expect("sin(1) fits D307<150>");
+    let sin_462_as_307: D307<150> = sin_462.try_into().expect("sin(1) fits D307<150>");
     let sin_diff = (sin_307.to_bits() - sin_462_as_307.to_bits())
         .to_i128_checked()
         .expect("sin diff fits i128")
@@ -1315,7 +1267,7 @@ fn d307_s150_sin_cos_matches_d462_baseline() {
 
     let cos_307 = n_307.cos_strict();
     let cos_462 = n_462.cos_strict();
-    let cos_462_as_307: D307_150 = cos_462.try_into().expect("cos(1) fits D307<150>");
+    let cos_462_as_307: D307<150> = cos_462.try_into().expect("cos(1) fits D307<150>");
     let cos_diff = (cos_307.to_bits() - cos_462_as_307.to_bits())
         .to_i128_checked()
         .expect("cos diff fits i128")
@@ -1331,15 +1283,12 @@ fn d307_s150_sin_cos_matches_d462_baseline() {
 fn d307_s150_tan_atan_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    type D307_150 = D307<150>;
-    type D462_150 = D462<150>;
-
-    let n_307 = D307_150::from_int(1) / D307_150::from_int(3);
-    let n_462: D462_150 = n_307.into();
+    let n_307 = D307::<150>::from_int(1) / D307::<150>::from_int(3);
+    let n_462: D462<150> = n_307.into();
 
     let tan_307 = n_307.tan_strict();
     let tan_462 = n_462.tan_strict();
-    let tan_462_as_307: D307_150 = tan_462.try_into().expect("tan(1/3) fits D307<150>");
+    let tan_462_as_307: D307<150> = tan_462.try_into().expect("tan(1/3) fits D307<150>");
     let tan_diff = (tan_307.to_bits() - tan_462_as_307.to_bits())
         .to_i128_checked()
         .expect("tan diff fits i128")
@@ -1351,7 +1300,7 @@ fn d307_s150_tan_atan_matches_d462_baseline() {
 
     let atan_307 = n_307.atan_strict();
     let atan_462 = n_462.atan_strict();
-    let atan_462_as_307: D307_150 = atan_462.try_into().expect("atan(1/3) fits D307<150>");
+    let atan_462_as_307: D307<150> = atan_462.try_into().expect("atan(1/3) fits D307<150>");
     let atan_diff = (atan_307.to_bits() - atan_462_as_307.to_bits())
         .to_i128_checked()
         .expect("atan diff fits i128")
@@ -1367,15 +1316,12 @@ fn d307_s150_tan_atan_matches_d462_baseline() {
 fn d307_s150_hyperbolics_match_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    type D307_150 = D307<150>;
-    type D462_150 = D462<150>;
-
-    let n_307 = D307_150::from_int(1);
-    let n_462: D462_150 = n_307.into();
+    let n_307 = D307::<150>::from_int(1);
+    let n_462: D462<150> = n_307.into();
 
     let sinh_307 = n_307.sinh_strict();
     let sinh_462 = n_462.sinh_strict();
-    let sinh_462_as_307: D307_150 = sinh_462.try_into().expect("sinh(1) fits D307<150>");
+    let sinh_462_as_307: D307<150> = sinh_462.try_into().expect("sinh(1) fits D307<150>");
     let sinh_diff = (sinh_307.to_bits() - sinh_462_as_307.to_bits())
         .to_i128_checked()
         .expect("sinh diff fits i128")
@@ -1387,7 +1333,7 @@ fn d307_s150_hyperbolics_match_d462_baseline() {
 
     let cosh_307 = n_307.cosh_strict();
     let cosh_462 = n_462.cosh_strict();
-    let cosh_462_as_307: D307_150 = cosh_462.try_into().expect("cosh(1) fits D307<150>");
+    let cosh_462_as_307: D307<150> = cosh_462.try_into().expect("cosh(1) fits D307<150>");
     let cosh_diff = (cosh_307.to_bits() - cosh_462_as_307.to_bits())
         .to_i128_checked()
         .expect("cosh diff fits i128")
@@ -1399,7 +1345,7 @@ fn d307_s150_hyperbolics_match_d462_baseline() {
 
     let tanh_307 = n_307.tanh_strict();
     let tanh_462 = n_462.tanh_strict();
-    let tanh_462_as_307: D307_150 = tanh_462.try_into().expect("tanh(1) fits D307<150>");
+    let tanh_462_as_307: D307<150> = tanh_462.try_into().expect("tanh(1) fits D307<150>");
     let tanh_diff = (tanh_307.to_bits() - tanh_462_as_307.to_bits())
         .to_i128_checked()
         .expect("tanh diff fits i128")

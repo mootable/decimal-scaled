@@ -9,24 +9,24 @@ use decimal_scaled::{D38, D76};
 #[cfg(feature = "strict")]
 #[test]
 fn d76_sqrt_cbrt_plain_dispatcher() {
-    type D76_6 = D76<6>;
-    let four: D76_6 = D38::<6>::from_int(4).into();
-    let twenty_seven: D76_6 = D38::<6>::from_int(27).into();
+
+    let four: D76<6> = D38::<6>::from_int(4).into();
+    let twenty_seven: D76<6> = D38::<6>::from_int(27).into();
     assert_eq!(four.sqrt(), four.sqrt_strict());
     assert_eq!(twenty_seven.cbrt(), twenty_seven.cbrt_strict());
 }
 
 #[test]
 fn d76_hypot_strict_zero_zero() {
-    type D76_6 = D76<6>;
-    assert_eq!(D76_6::ZERO.hypot_strict(D76_6::ZERO), D76_6::ZERO);
+
+    assert_eq!(D76::<6>::ZERO.hypot_strict(D76::<6>::ZERO), D76::<6>::ZERO);
 }
 
 #[test]
 fn d76_hypot_strict_zero_x() {
-    type D76_6 = D76<6>;
-    let five: D76_6 = D38::<6>::from_int(5).into();
-    let r = D76_6::ZERO.hypot_strict(five);
+
+    let five: D76<6> = D38::<6>::from_int(5).into();
+    let r = D76::<6>::ZERO.hypot_strict(five);
     // |5| with possible 1 LSB rounding
     let diff = (r.to_bits() - five.to_bits())
         .to_i128_checked()
@@ -37,10 +37,10 @@ fn d76_hypot_strict_zero_x() {
 
 #[test]
 fn d76_hypot_strict_3_4_is_5() {
-    type D76_6 = D76<6>;
-    let three: D76_6 = D38::<6>::from_int(3).into();
-    let four: D76_6 = D38::<6>::from_int(4).into();
-    let five: D76_6 = D38::<6>::from_int(5).into();
+
+    let three: D76<6> = D38::<6>::from_int(3).into();
+    let four: D76<6> = D38::<6>::from_int(4).into();
+    let five: D76<6> = D38::<6>::from_int(5).into();
     let r = three.hypot_strict(four);
     let diff = (r.to_bits() - five.to_bits())
         .to_i128_checked()
@@ -53,21 +53,20 @@ fn d76_hypot_strict_3_4_is_5() {
 #[test]
 fn d153_d307_dispatchers_and_hypot() {
     use decimal_scaled::{D153, D307};
-    type D153_6 = D153<6>;
-    type D307_6 = D307<6>;
-    let four: D153_6 = D38::<6>::from_int(4).into();
+
+    let four: D153<6> = D38::<6>::from_int(4).into();
     assert_eq!(four.sqrt(), four.sqrt_strict());
-    let twenty_seven: D153_6 = D38::<6>::from_int(27).into();
+    let twenty_seven: D153<6> = D38::<6>::from_int(27).into();
     assert_eq!(twenty_seven.cbrt(), twenty_seven.cbrt_strict());
 
-    let three: D153_6 = D38::<6>::from_int(3).into();
-    let four_a: D153_6 = D38::<6>::from_int(4).into();
+    let three: D153<6> = D38::<6>::from_int(3).into();
+    let four_a: D153<6> = D38::<6>::from_int(4).into();
     let _ = three.hypot_strict(four_a);
 
-    let four_b: D307_6 = D76::<6>::from_int(4).into();
-    let twenty_seven_b: D307_6 = D76::<6>::from_int(27).into();
+    let four_b: D307<6> = D76::<6>::from_int(4).into();
+    let twenty_seven_b: D307<6> = D76::<6>::from_int(27).into();
     assert_eq!(four_b.sqrt(), four_b.sqrt_strict());
     assert_eq!(twenty_seven_b.cbrt(), twenty_seven_b.cbrt_strict());
-    let three_b: D307_6 = D76::<6>::from_int(3).into();
+    let three_b: D307<6> = D76::<6>::from_int(3).into();
     let _ = three_b.hypot_strict(four_b);
 }

@@ -158,10 +158,10 @@ fn expecting_message_works() {
 #[test]
 fn d76_serde_json_round_trip() {
     use decimal_scaled::D76;
-    type D76_6 = D76<6>;
-    let v: D76_6 = D38::<6>::from_int(42).into();
+
+    let v: D76<6> = D38::<6>::from_int(42).into();
     let s = serde_json::to_string(&v).unwrap();
-    let back: D76_6 = serde_json::from_str(&s).unwrap();
+    let back: D76<6> = serde_json::from_str(&s).unwrap();
     assert_eq!(back, v);
 }
 
@@ -169,8 +169,8 @@ fn d76_serde_json_round_trip() {
 #[test]
 fn d76_serde_str_error() {
     use decimal_scaled::D76;
-    type D76_6 = D76<6>;
-    let r: Result<D76_6, _> = serde_json::from_str("\"xyz\"");
+
+    let r: Result<D76<6>, _> = serde_json::from_str("\"xyz\"");
     assert!(r.is_err());
 }
 
@@ -178,17 +178,15 @@ fn d76_serde_str_error() {
 #[test]
 fn d153_d307_serde_json_round_trip() {
     use decimal_scaled::{D76, D153, D307};
-    type D153_6 = D153<6>;
-    type D307_6 = D307<6>;
-    type D76_6 = D76<6>;
-    let v: D153_6 = D38::<6>::from_int(42).into();
+
+    let v: D153<6> = D38::<6>::from_int(42).into();
     let s = serde_json::to_string(&v).unwrap();
-    let back: D153_6 = serde_json::from_str(&s).unwrap();
+    let back: D153<6> = serde_json::from_str(&s).unwrap();
     assert_eq!(back, v);
 
-    let lift: D76_6 = D38::<6>::from_int(42).into();
-    let v: D307_6 = lift.into();
+    let lift: D76<6> = D38::<6>::from_int(42).into();
+    let v: D307<6> = lift.into();
     let s = serde_json::to_string(&v).unwrap();
-    let back: D307_6 = serde_json::from_str(&s).unwrap();
+    let back: D307<6> = serde_json::from_str(&s).unwrap();
     assert_eq!(back, v);
 }

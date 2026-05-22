@@ -36,8 +36,8 @@ fn surface_check<D: Decimal>(seed_i32: i32) -> (D, D, D, D) {
 
 #[test]
 fn surface_check_d18() {
-    type D18_4 = D18<4>;
-    let (v, doubled, squared, _) = surface_check::<D18_4>(5);
+
+    let (v, doubled, squared, _) = surface_check::<D18<4>>(5);
     assert_eq!(v.to_bits(), 50_000);
     assert_eq!(doubled.to_bits(), 100_000);
     assert_eq!(squared.to_bits(), 250_000);
@@ -45,8 +45,8 @@ fn surface_check_d18() {
 
 #[test]
 fn surface_check_d38() {
-    type D38_6 = D38<6>;
-    let (v, doubled, squared, _) = surface_check::<D38_6>(5);
+
+    let (v, doubled, squared, _) = surface_check::<D38<6>>(5);
     assert_eq!(v.to_bits(), 5_000_000);
     assert_eq!(doubled.to_bits(), 10_000_000);
     assert_eq!(squared.to_bits(), 25_000_000);
@@ -56,10 +56,10 @@ fn surface_check_d38() {
 #[test]
 fn surface_check_d76() {
     use decimal_scaled::D76;
-    type D76_6 = D76<6>;
-    let (v, _, squared, _) = surface_check::<D76_6>(5);
-    let expected_v: D76_6 = D38::<6>::from_int(5).into();
-    let expected_squared: D76_6 = D38::<6>::from_int(25).into();
+
+    let (v, _, squared, _) = surface_check::<D76<6>>(5);
+    let expected_v: D76<6> = D38::<6>::from_int(5).into();
+    let expected_squared: D76<6> = D38::<6>::from_int(25).into();
     assert_eq!(v, expected_v);
     assert_eq!(squared, expected_squared);
 }
@@ -77,10 +77,10 @@ fn fold_sum_product<D: Decimal>() -> (D, D) {
 
 #[test]
 fn sum_product_d38() {
-    type D38_2 = D38<2>;
-    let (s, p) = fold_sum_product::<D38_2>();
-    assert_eq!(s, D38_2::from_i32(10));
-    assert_eq!(p, D38_2::from_i32(24));
+
+    let (s, p) = fold_sum_product::<D38<2>>();
+    assert_eq!(s, D38::<2>::from_i32(10));
+    assert_eq!(p, D38::<2>::from_i32(24));
 }
 
 /// `to_int_with` exercised via trait dispatch under each rounding mode.

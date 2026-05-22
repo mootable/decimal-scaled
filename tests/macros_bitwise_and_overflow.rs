@@ -3,56 +3,53 @@
 
 use decimal_scaled::{D18, D38};
 
-type D18_2 = D18<2>;
-type D38_2 = D38<2>;
-
 // ─── bitwise: bit-manipulation methods on raw storage ──────────────────
 
 #[test]
 fn bitwise_methods_d18() {
-    let v = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
+    let v = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
     assert_eq!(v.count_ones(), 2);
     assert_eq!(v.count_zeros(), 64 - 2);
     assert_eq!(v.trailing_zeros(), 1);
     assert_eq!(v.leading_zeros(), 64 - 4);
-    let neg = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(-1));
+    let neg = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(-1));
     let logical = neg.unsigned_shr(63);
     assert_eq!(logical.to_bits(), 1);
-    let r = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(1)).rotate_left(2);
+    let r = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(1)).rotate_left(2);
     assert_eq!(r.to_bits(), 4);
-    let r = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(4)).rotate_right(2);
+    let r = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(4)).rotate_right(2);
     assert_eq!(r.to_bits(), 1);
-    assert!(D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(8)).is_power_of_two());
-    assert!(!D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(7)).is_power_of_two());
-    assert_eq!(D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(5)).next_power_of_two().to_bits(), 8);
+    assert!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(8)).is_power_of_two());
+    assert!(!D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(7)).is_power_of_two());
+    assert_eq!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(5)).next_power_of_two().to_bits(), 8);
 }
 
 #[test]
 fn bitwise_methods_d38() {
-    let v = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(0b1010));
+    let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1010));
     assert_eq!(v.count_ones(), 2);
     assert_eq!(v.count_zeros(), 128 - 2);
     assert_eq!(v.trailing_zeros(), 1);
     assert_eq!(v.leading_zeros(), 128 - 4);
-    let neg = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(-1));
+    let neg = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(-1));
     let logical = neg.unsigned_shr(127);
     assert_eq!(logical.to_bits(), 1);
-    let r = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(1)).rotate_left(2);
+    let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(1)).rotate_left(2);
     assert_eq!(r.to_bits(), 4);
-    let r = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(4)).rotate_right(2);
+    let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4)).rotate_right(2);
     assert_eq!(r.to_bits(), 1);
-    assert!(D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(8)).is_power_of_two());
-    assert!(!D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(7)).is_power_of_two());
-    assert_eq!(D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(5)).next_power_of_two().to_bits(), 8);
+    assert!(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(8)).is_power_of_two());
+    assert!(!D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(7)).is_power_of_two());
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(5)).next_power_of_two().to_bits(), 8);
 }
 
 #[cfg(feature = "wide")]
 #[test]
 fn bitwise_methods_wide() {
     use decimal_scaled::D76;
-    type D76_2 = D76<2>;
-    let one: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(1)).into();
-    let zero = D76_2::ZERO;
+
+    let one: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(1)).into();
+    let zero = D76::<2>::ZERO;
     assert_eq!(zero.count_ones(), 0);
     assert!(one.count_ones() >= 1);
     let _ = zero.count_zeros();
@@ -66,8 +63,8 @@ fn bitwise_methods_wide() {
     let _ = one.next_power_of_two();
 
     // Bitwise operators on wide
-    let a: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(0b1100)).into();
-    let b: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(0b1010)).into();
+    let a: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1100)).into();
+    let b: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1010)).into();
     let _ = a & b;
     let _ = a | b;
     let _ = a ^ b;
@@ -98,16 +95,16 @@ fn bitwise_methods_wide() {
 #[test]
 fn wrapping_div_rem_non_zero() {
     // narrow widths
-    let a = D18_2::from_int(7);
-    let b = D18_2::from_int(2);
+    let a = D18::<2>::from_int(7);
+    let b = D18::<2>::from_int(2);
     let q = a.wrapping_div(b);
     // 7.00 / 2.00 = 3.50 → 350 at S=2
     assert_eq!(q.to_bits(), 350);
     let r = a.wrapping_rem(b);
     let _ = r;
 
-    let a = D18_2::from_int(7);
-    let b = D18_2::from_int(2);
+    let a = D18::<2>::from_int(7);
+    let b = D18::<2>::from_int(2);
     let _ = a.wrapping_div(b);
     let _ = a.wrapping_rem(b);
 
@@ -115,11 +112,11 @@ fn wrapping_div_rem_non_zero() {
     #[cfg(feature = "wide")]
     {
         use decimal_scaled::D76;
-        type D76_2 = D76<2>;
-        let a: D76_2 = D38_2::from_int(7).into();
-        let b: D76_2 = D38_2::from_int(2).into();
+
+        let a: D76<2> = D38::<2>::from_int(7).into();
+        let b: D76<2> = D38::<2>::from_int(2).into();
         let q = a.wrapping_div(b);
-        let expected: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(350)).into();
+        let expected: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(350)).into();
         assert_eq!(q, expected);
         let _ = a.wrapping_rem(b);
     }
@@ -131,9 +128,9 @@ fn wrapping_div_rem_non_zero() {
 #[test]
 fn wide_overflow_variants_success_cases() {
     use decimal_scaled::D76;
-    type D76_2 = D76<2>;
-    let a: D76_2 = D38_2::from_int(7).into();
-    let b: D76_2 = D38_2::from_int(2).into();
+
+    let a: D76<2> = D38::<2>::from_int(7).into();
+    let b: D76<2> = D38::<2>::from_int(2).into();
     // saturating_mul success path
     let _ = a.saturating_mul(b);
     // saturating_div success path
@@ -170,31 +167,31 @@ fn wide_checked_div_quotient_overflow() {
 fn saturating_div_overflow_signs() {
     // D18<2>::MIN / -ONE wraps because MIN's negation is unrepresentable.
     // saturating_div should clamp.
-    let r = D18_2::MIN.saturating_div(-D18_2::ONE);
-    assert!(r == D18_2::MIN || r == D18_2::MAX);
-    let r = D18_2::MIN.saturating_div(-D18_2::ONE);
-    assert!(r == D18_2::MIN || r == D18_2::MAX);
+    let r = D18::<2>::MIN.saturating_div(-D18::<2>::ONE);
+    assert!(r == D18::<2>::MIN || r == D18::<2>::MAX);
+    let r = D18::<2>::MIN.saturating_div(-D18::<2>::ONE);
+    assert!(r == D18::<2>::MIN || r == D18::<2>::MAX);
 }
 
 // ─── overflow: overflowing_rem ─────────────────────────────────────────
 
 #[test]
 fn overflowing_rem_non_zero_no_overflow() {
-    let a = D18_2::from_int(7);
-    let b = D18_2::from_int(2);
+    let a = D18::<2>::from_int(7);
+    let b = D18::<2>::from_int(2);
     let (_, ov) = a.overflowing_rem(b);
     assert!(!ov);
-    let a = D18_2::from_int(7);
-    let b = D18_2::from_int(2);
+    let a = D18::<2>::from_int(7);
+    let b = D18::<2>::from_int(2);
     let (_, ov) = a.overflowing_rem(b);
     assert!(!ov);
 
     #[cfg(feature = "wide")]
     {
         use decimal_scaled::D76;
-        type D76_2 = D76<2>;
-        let a: D76_2 = D38_2::from_int(7).into();
-        let b: D76_2 = D38_2::from_int(2).into();
+
+        let a: D76<2> = D38::<2>::from_int(7).into();
+        let b: D76<2> = D38::<2>::from_int(2).into();
         let (_, ov) = a.overflowing_rem(b);
         assert!(!ov);
     }
@@ -218,33 +215,33 @@ fn float_bridge_rounding_modes() {
         RoundingMode::Ceiling,
     ] {
         // exercise the dispatch branch in from_f64_with for each mode.
-        let _ = D38_2::from_f64_with(1.005, mode);
-        let _ = D18_2::from_f64_with(1.005, mode);
-        let _ = D18_2::from_f64_with(1.005, mode);
+        let _ = D38::<2>::from_f64_with(1.005, mode);
+        let _ = D18::<2>::from_f64_with(1.005, mode);
+        let _ = D18::<2>::from_f64_with(1.005, mode);
     }
 
     // Negative side
-    let _ = D38_2::from_f64_with(-1.005, RoundingMode::Floor);
-    let _ = D18_2::from_f64_with(-1.005, RoundingMode::Ceiling);
+    let _ = D38::<2>::from_f64_with(-1.005, RoundingMode::Floor);
+    let _ = D18::<2>::from_f64_with(-1.005, RoundingMode::Ceiling);
 
     // Exact zero
     assert_eq!(
-        D38_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        D38::<2>::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
         0
     );
     assert_eq!(
-        D18_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        D18::<2>::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
         0
     );
     assert_eq!(
-        D18_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        D18::<2>::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
         0
     );
 
     #[cfg(feature = "wide")]
     {
         use decimal_scaled::D76;
-        type D76_2 = D76<2>;
+
         for mode in [
             RoundingMode::HalfToEven,
             RoundingMode::HalfAwayFromZero,
@@ -253,7 +250,7 @@ fn float_bridge_rounding_modes() {
             RoundingMode::Floor,
             RoundingMode::Ceiling,
         ] {
-            let _ = D76_2::from_f64_with(1.005, mode);
+            let _ = D76::<2>::from_f64_with(1.005, mode);
         }
     }
 }
@@ -264,8 +261,8 @@ fn float_bridge_rounding_modes() {
 #[test]
 fn eq_wide_float() {
     use decimal_scaled::D76;
-    type D76_2 = D76<2>;
-    let v: D76_2 = D38_2::from_int(42).into();
+
+    let v: D76<2> = D38::<2>::from_int(42).into();
     assert_eq!(v, 42.0_f64);
     assert_eq!(42.0_f64, v);
     assert_eq!(v, 42.0_f32);
@@ -273,6 +270,6 @@ fn eq_wide_float() {
     assert_ne!(v, f64::INFINITY);
     assert_ne!(v, f32::NAN);
     // Fractional
-    let frac: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)).into();
+    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)).into();
     assert_ne!(frac, 42.0_f64);
 }
