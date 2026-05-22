@@ -7,7 +7,7 @@
 //! working digits to clear 0.5 LSB at storage, so running the
 //! `sin_fixed` / `cos_fixed` kernels at the full `SCALE + 30 = 48..52`
 //! width is over-provisioned. Halving the working width roughly halves
-//! the per-iteration `Int192` `mul` / `div` cost.
+//! the per-iteration `Int<3>` `mul` / `div` cost.
 //!
 //! Unlike the SCALE 44..=56 sibling
 //! ([`super::lookup_d57_s44_56_sincos`]), this slot does NOT carry an
@@ -42,7 +42,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
+use crate::int::types::Int;
 
 /// Narrow guard for the SCALE 18..=22 slot. See module docs for the
 /// derivation and headroom.
@@ -67,17 +67,17 @@ pub(crate) enum Which {
 #[inline]
 #[must_use]
 pub(crate) fn sin_cos_strict<const SCALE: u32>(
-    raw: Int192,
+    raw: Int<3>,
     mode: RoundingMode,
     which: Which,
-) -> Int192 {
+) -> Int<3> {
     // sin(0) = 0, cos(0) = 1 short-circuit — match `wide_kernel`.
-    if raw == Int192::ZERO {
+    if raw == Int::<3>::ZERO {
         return match which {
-            Which::Sin => Int192::ZERO,
+            Which::Sin => Int::<3>::ZERO,
             // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
             Which::Cos => {
-                let ten: Int192 = crate::int::types::traits::wide_cast::<u128, Int192>(10);
+                let ten: Int<3> = crate::int::types::traits::wide_cast::<u128, Int<3>>(10);
                 ten.pow(SCALE)
             }
         };
@@ -96,7 +96,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
 /// `SCALE ∈ 18..=22`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
-pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn sin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     sin_cos_strict::<SCALE>(raw, mode, Which::Sin)
 }
 
@@ -104,7 +104,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
 /// `SCALE ∈ 18..=22`. See [`sin_cos_strict`] for the algorithm.
 #[inline]
 #[must_use]
-pub(crate) fn cos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn cos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     sin_cos_strict::<SCALE>(raw, mode, Which::Cos)
 }
 
@@ -113,9 +113,9 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
 /// `GUARD_NARROW`. Panics if `cos(self) == 0` (odd multiples of π/2).
 #[inline]
 #[must_use]
-pub(crate) fn tan_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw == Int192::ZERO {
-        return Int192::ZERO;
+pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+    if raw == Int::<3>::ZERO {
+        return Int::<3>::ZERO;
     }
     let w = SCALE + GUARD_NARROW;
     let v_w = core::to_work_w(raw, GUARD_NARROW);

@@ -40,7 +40,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
+use crate::int::types::Int;
 
 /// Narrow guard for the SCALE 18..=22 inverse-trig slot. Matches the
 /// `lookup_d57_s18_22_atan` guard.
@@ -77,7 +77,7 @@ fn asin_fixed(v: core::W, w: u32) -> core::W {
 /// `asin_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn asin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let r = asin_fixed(v, w);
@@ -87,7 +87,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> 
 /// `acos_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 #[inline]
 #[must_use]
-pub(crate) fn acos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
     let v = core::to_work_w(raw, GUARD_NARROW);
     let asin_w = asin_fixed(v, w);
@@ -99,12 +99,12 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> 
 #[inline]
 #[must_use]
 pub(crate) fn atan2_strict<const SCALE: u32>(
-    y_raw: Int192,
-    x_raw: Int192,
+    y_raw: Int<3>,
+    x_raw: Int<3>,
     mode: RoundingMode,
-) -> Int192 {
+) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
-    let zero_s = Int192::ZERO;
+    let zero_s = Int::<3>::ZERO;
     let r = if x_raw == zero_s {
         if y_raw > zero_s {
             core::half_pi(w)

@@ -30,7 +30,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
+use crate::int::types::Int;
 
 /// Narrow guard for the SCALE 18..=22 atan slot. Slightly larger than
 /// the sincos/ln/exp `GUARD_NARROW = 12` because atan's series can
@@ -43,7 +43,7 @@ const GUARD_NARROW: u32 = 10;
 /// working width `w = SCALE + GUARD_NARROW`.
 #[inline]
 #[must_use]
-pub(crate) fn atan_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
+pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
     let w = SCALE + GUARD_NARROW;
     let v_w = core::to_work_w(raw, GUARD_NARROW);
     let r = core::atan_fixed(v_w, w);
