@@ -114,11 +114,10 @@ land alongside.
   to `Int<3>` through `Int<64>`. The layer is mirrored under
   `src/int/` with types / policy / algos / limbs sub-modules
   matching the decimal layer's six-bucket layout.
-- **`FixedInt` / `FixedIntConvert` traits** — parity trait surface
-  for `Int<N>`, providing the same method coverage as the named-type
-  API (`LIMBS`, `BITS`, `ZERO`, `ONE`, `MAX`, `MIN`, `leading_zeros`,
-  `wrapping_add`, `wrapping_sub`, `wrapping_mul`, `div_rem`,
-  `isqrt`, `widen`, `narrow`, …).
+- **`BigInt` trait** — a single unified trait surface for `Int<N>`,
+  providing the full method coverage (`LIMBS`, `BITS`, `ZERO`, `ONE`,
+  `MAX`, `MIN`, `leading_zeros`, `wrapping_add`, `wrapping_sub`,
+  `wrapping_mul`, `div_rem`, `isqrt`, `widen`, `narrow`, …).
 - **`Int<N>` checked primitive conversions (std-aligned).** Fills the
   gap left by the silently-truncating `from_i128` / `as_i128`:
   - `Int<N>::from_i128_checked` — value conversion, returns
@@ -164,8 +163,9 @@ land alongside.
 - **`src/int/` integer layer layout.** The `wide_int/` sub-crate is
   absorbed; integer code is reorganised under `src/int/types/`,
   `src/int/policy/`, `src/int/algos/`, and `src/int/limbs/` mirroring
-  the decimal six-bucket layout. The `FixedInt` / `WideStorage` /
-  `WideInt` traits are now rooted in `src/int/types/traits/`.
+  the decimal six-bucket layout. The former `FixedInt` / `WideStorage` /
+  `WideInt` traits are unified into the single `BigInt` trait, rooted in
+  `src/int/types/traits/`.
 - **Precision harness unified.** `tests/ulp_strict_golden.rs` and the
   comparative precision suite share a single `PrecisionSubject`
   harness with committable result TSV files under
