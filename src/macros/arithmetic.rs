@@ -294,8 +294,11 @@ macro_rules! decl_decimal_arithmetic {
                 // only value with magnitude `2^(BITS - 1)`, and at
                 // `lz = 0` the test fails so MIN takes the slow
                 // path.
-                let lz_a = self.0.leading_zeros();
-                let lz_b = rhs.0.leading_zeros();
+                // Magnitude headroom: `leading_zeros` is now two's-complement
+                // (negatives → 0), so take it over `unsigned_abs()` to keep the
+                // fast-path estimate on the operand magnitude.
+                let lz_a = self.0.unsigned_abs().leading_zeros();
+                let lz_b = rhs.0.unsigned_abs().leading_zeros();
                 if lz_a + lz_b > <$Storage>::BITS {
                     let n: $Storage = self.0.wrapping_mul(rhs.0);
                     let scaled = if SCALE == 0 {
@@ -359,7 +362,10 @@ macro_rules! decl_decimal_arithmetic {
                 // SCALE is a const, so the branch's predicate is one
                 // `leading_zeros` call on `self.0`.
                 let mult: $Storage = $Type::<SCALE>::multiplier();
-                let lz_n = self.0.leading_zeros();
+                // `mult` (the scale multiplier) is positive, so its
+                // two's-complement `leading_zeros` already equals the magnitude
+                // count; `self.0` may be negative, so take its magnitude.
+                let lz_n = self.0.unsigned_abs().leading_zeros();
                 let lz_m = mult.leading_zeros();
                 if lz_n + lz_m > <$Storage>::BITS {
                     let n: $Storage = self.0.wrapping_mul(mult);

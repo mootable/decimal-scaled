@@ -938,11 +938,17 @@ impl<const N: usize> Int<N> {
         limbs_bit_len_u64_fixed(self.abs().as_limbs())
     }
 
-    /// Leading zero bits of the magnitude in the `BITS`-wide
-    /// representation.
+    /// Leading zero bits of the two's-complement representation, matching
+    /// the primitive `iN::leading_zeros` contract. A negative value has its
+    /// sign bit (the MSB) set, so it has zero leading zeros; a non-negative
+    /// value's leading-zero count is `BITS - bit_length` (`BITS` for zero).
     #[inline]
     pub fn leading_zeros(&self) -> u32 {
-        (Self::BITS as u32) - self.bit_length()
+        if self.is_negative() {
+            0
+        } else {
+            (Self::BITS as u32) - self.bit_length()
+        }
     }
 
     // ── BigInt / BigInt parity surface ─────────────────────────
