@@ -44,7 +44,7 @@ pub(crate) mod wtag {
 /// Emit the `base`/`no_std`/`std` free-function triplet for one policy
 /// method on one width's raw storage.
 ///
-/// - `storage`  — the per-width raw integer type (e.g. `Int192`).
+/// - `storage`  — the per-width raw integer type (e.g. `Int<3>`).
 /// - the three fn idents (`base_fn`/`std_fn`/`no_std_fn`) are passed
 ///   explicitly so the macro needs no `concat_idents!`/`paste` dependency.
 /// - `recv` / `mode` — the identifiers the arm expressions use for the raw

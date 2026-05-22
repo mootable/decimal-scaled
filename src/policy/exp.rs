@@ -176,7 +176,7 @@ macro_rules! impl_wide_exp {
 // through their lookup tables before the generic `wide_kernel`.
 #[cfg(any(feature = "d57", feature = "wide"))]
 policy_triplet! {
-    storage   = crate::wide_int::Int192,
+    storage   = crate::int::types::Int<3>,
     base_fn   = exp_d57_base,
     std_fn    = exp_d57_std,
     no_std_fn = exp_d57_no_std,
@@ -228,7 +228,7 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D57<SCALE> {
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl_wide_exp!(
     D76,
-    crate::wide_int::Int256,
+    crate::int::types::Int<4>,
     exp_d76_base,
     exp_d76_std,
     exp_d76_no_std,
@@ -239,7 +239,7 @@ impl_wide_exp!(
 // Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
 #[cfg(any(feature = "d115", feature = "wide"))]
 policy_triplet! {
-    storage   = crate::wide_int::Int384,
+    storage   = crate::int::types::Int<6>,
     base_fn   = exp_d115_base,
     std_fn    = exp_d115_std,
     no_std_fn = exp_d115_no_std,
@@ -292,7 +292,7 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D115<SCALE> {
 // [`crate::algos::exp::lookup_d153_s70_82_tang`].
 #[cfg(any(feature = "d153", feature = "wide"))]
 policy_triplet! {
-    storage   = crate::wide_int::Int512,
+    storage   = crate::int::types::Int<8>,
     base_fn   = exp_d153_base,
     std_fn    = exp_d153_std,
     no_std_fn = exp_d153_no_std,
@@ -343,7 +343,7 @@ impl<const SCALE: u32> ExpPolicy for crate::types::widths::D153<SCALE> {
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl_wide_exp!(
     D230,
-    crate::wide_int::Int768,
+    crate::int::types::Int<12>,
     exp_d230_base,
     exp_d230_std,
     exp_d230_no_std,
@@ -363,7 +363,7 @@ impl_wide_exp!(
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 impl_wide_exp!(
     D307,
-    crate::wide_int::Int1024,
+    crate::int::types::Int<16>,
     exp_d307_base,
     exp_d307_std,
     exp_d307_no_std,
@@ -382,7 +382,7 @@ impl_wide_exp!(
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl_wide_exp!(
     D462,
-    crate::wide_int::Int1536,
+    crate::int::types::Int<24>,
     exp_d462_base,
     exp_d462_std,
     exp_d462_no_std,
@@ -402,7 +402,7 @@ impl_wide_exp!(
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl_wide_exp!(
     D616,
-    crate::wide_int::Int2048,
+    crate::int::types::Int<32>,
     exp_d616_base,
     exp_d616_std,
     exp_d616_no_std,
@@ -412,7 +412,7 @@ impl_wide_exp!(
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl_wide_exp!(
     D924,
-    crate::wide_int::Int3072,
+    crate::int::types::Int<48>,
     exp_d924_base,
     exp_d924_std,
     exp_d924_no_std,
@@ -422,7 +422,7 @@ impl_wide_exp!(
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl_wide_exp!(
     D1232,
-    crate::wide_int::Int4096,
+    crate::int::types::Int<64>,
     exp_d1232_base,
     exp_d1232_std,
     exp_d1232_no_std,

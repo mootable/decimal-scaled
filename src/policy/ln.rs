@@ -307,7 +307,7 @@ macro_rules! impl_wide_ln {
 // narrow-GUARD lookup before falling back to `wide_kernel`.
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl_wide_ln! {
-    D57, crate::wide_int::Int192,
+    D57, crate::int::types::Int<3>,
     ln_d57_base, ln_d57_std, ln_d57_no_std,
     recv = raw, mode = mode,
     base = {
@@ -318,7 +318,7 @@ impl_wide_ln! {
 
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl_wide_ln! {
-    D76, crate::wide_int::Int256,
+    D76, crate::int::types::Int<4>,
     ln_d76_base, ln_d76_std, ln_d76_no_std,
     recv = raw, mode = mode,
     base = {
@@ -330,7 +330,7 @@ impl_wide_ln! {
 // Tang-style narrow-GUARD lookup before falling back to `wide_kernel`.
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl_wide_ln! {
-    D115, crate::wide_int::Int384,
+    D115, crate::int::types::Int<6>,
     ln_d115_base, ln_d115_std, ln_d115_no_std,
     recv = raw, mode = mode,
     base = {
@@ -345,7 +345,7 @@ impl_wide_ln! {
 // [`crate::algos::ln::lookup_d153_s70_82_tang`] for the algorithm.
 #[cfg(any(feature = "d153", feature = "wide"))]
 impl_wide_ln! {
-    D153, crate::wide_int::Int512,
+    D153, crate::int::types::Int<8>,
     ln_d153_base, ln_d153_std, ln_d153_no_std,
     recv = raw, mode = mode,
     base = {
@@ -360,7 +360,7 @@ impl_wide_ln! {
 // `wide_kernel`. See [`crate::algos::ln::lookup_d230_s110_120_tang`].
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl_wide_ln! {
-    D230, crate::wide_int::Int768,
+    D230, crate::int::types::Int<12>,
     ln_d230_base, ln_d230_std, ln_d230_no_std,
     recv = raw, mode = mode,
     base = {
@@ -377,7 +377,7 @@ impl_wide_ln! {
 // [`crate::algos::ln::lookup_d307_s285_295_tang`] for the algorithm.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 impl_wide_ln! {
-    D307, crate::wide_int::Int1024,
+    D307, crate::int::types::Int<16>,
     ln_d307_base, ln_d307_std, ln_d307_no_std,
     recv = raw, mode = mode,
     base = {
@@ -393,7 +393,7 @@ impl_wide_ln! {
 // `wide_kernel`. See [`crate::algos::ln::lookup_d462_s225_235_tang`].
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl_wide_ln! {
-    D462, crate::wide_int::Int1536,
+    D462, crate::int::types::Int<24>,
     ln_d462_base, ln_d462_std, ln_d462_no_std,
     recv = raw, mode = mode,
     base = {
@@ -410,7 +410,7 @@ impl_wide_ln! {
 // [`crate::algos::ln::lookup_d616_s585_595_tang`] for the algorithm.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl_wide_ln! {
-    D616, crate::wide_int::Int2048,
+    D616, crate::int::types::Int<32>,
     ln_d616_base, ln_d616_std, ln_d616_no_std,
     recv = raw, mode = mode,
     base = {
@@ -429,7 +429,7 @@ impl_wide_ln! {
 // [`crate::algos::ln::lookup_d924_s895_905_tang`].
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl_wide_ln! {
-    D924, crate::wide_int::Int3072,
+    D924, crate::int::types::Int<48>,
     ln_d924_base, ln_d924_std, ln_d924_no_std,
     recv = raw, mode = mode,
     base = {
@@ -447,7 +447,7 @@ impl_wide_ln! {
 // [`crate::algos::ln::lookup_d1232_s1195_1205_tang`].
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl_wide_ln! {
-    D1232, crate::wide_int::Int4096,
+    D1232, crate::int::types::Int<64>,
     ln_d1232_base, ln_d1232_std, ln_d1232_no_std,
     recv = raw, mode = mode,
     base = {

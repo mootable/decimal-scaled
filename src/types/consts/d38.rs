@@ -23,10 +23,10 @@
 //!
 //! | Tier           | Reference storage | `SCALE_REF` (= reference digits) | Source file       |
 //! |----------------|-------------------|----------------------------------|-------------------|
-//! | D18 / D38 | `Int256`          | 75                               | this file         |
-//! | D76            | `Int256`          | 75                               | `types/consts/wide.rs`  |
-//! | D153           | `Int512`          | 153                              | `types/consts/wide.rs`  |
-//! | D307           | `Int1024`         | 307                              | `types/consts/wide.rs`  |
+//! | D18 / D38 | `Int<4>`          | 75                               | this file         |
+//! | D76            | `Int<4>`          | 75                               | `types/consts/wide.rs`  |
+//! | D153           | `Int<8>`          | 153                              | `types/consts/wide.rs`  |
+//! | D307           | `Int<16>`         | 307                              | `types/consts/wide.rs`  |
 //!
 //! The rescale from `SCALE_REF` to the caller's `SCALE` uses integer
 //! division with the crate-default [`RoundingMode`] (half-to-even by
@@ -56,10 +56,10 @@
 
 use crate::algos::fixed_d38::Fixed;
 use crate::types::widths::D38;
-use crate::wide_int::Int256;
+use crate::int::types::Int;
 
 /// Reference scale for every constant in this file: the 75-digit
-/// representation that fits an `Int256` (`2 · 128` bits). Every D38
+/// representation that fits an `Int<4>` (`4 · 64` bits). Every D38
 /// scale (0..=38) is at most 38 digits, so we always rescale **down**
 /// from 75 → SCALE, never up. The half-to-even rescale-down step is
 /// performed by [`Fixed::round_to_i128`] (`Fixed` is the same 256-bit
@@ -77,46 +77,46 @@ const SCALE_REF: u32 = 75;
 // that emits the wide-tier constants). Sources: ISO 80000-2 (pi, tau,
 // pi/2, pi/4), OEIS A001113 (e), OEIS A001622 (golden ratio).
 //
-// The build-time string -> Int256 parse is `const fn` (via
-// `Int256::from_str_radix`, base 10 only). The 75-digit reference is
-// the largest decimal expansion that always fits Int256 for the
-// biggest of these constants (tau ≈ 6.28×10⁷⁵ < Int256::MAX ≈
+// The build-time string -> Int<4> parse is `const fn` (via
+// `Int::<4>::from_str_radix`, base 10 only). The 75-digit reference is
+// the largest decimal expansion that always fits Int<4> for the
+// biggest of these constants (tau ≈ 6.28×10⁷⁵ < Int::<4>::MAX ≈
 // 5.78×10⁷⁶); a single shared SCALE_REF keeps the rescale helpers
 // uniform across all six methods on the trait.
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
-pub(crate) const PI_RAW: Int256 = match Int256::from_str_radix(PI_D76_S75, 10) {
+pub(crate) const PI_RAW: Int<4> = match Int::<4>::from_str_radix(PI_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: PI_D76_S75 not parseable"),
 };
-const TAU_RAW: Int256 = match Int256::from_str_radix(TAU_D76_S75, 10) {
+const TAU_RAW: Int<4> = match Int::<4>::from_str_radix(TAU_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: TAU_D76_S75 not parseable"),
 };
-const HALF_PI_RAW: Int256 = match Int256::from_str_radix(HALF_PI_D76_S75, 10) {
+const HALF_PI_RAW: Int<4> = match Int::<4>::from_str_radix(HALF_PI_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: HALF_PI_D76_S75 not parseable"),
 };
-const QUARTER_PI_RAW: Int256 = match Int256::from_str_radix(QUARTER_PI_D76_S75, 10) {
+const QUARTER_PI_RAW: Int<4> = match Int::<4>::from_str_radix(QUARTER_PI_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: QUARTER_PI_D76_S75 not parseable"),
 };
-const E_RAW: Int256 = match Int256::from_str_radix(E_D76_S75, 10) {
+const E_RAW: Int<4> = match Int::<4>::from_str_radix(E_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: E_D76_S75 not parseable"),
 };
-const GOLDEN_RAW: Int256 = match Int256::from_str_radix(GOLDEN_D76_S75, 10) {
+const GOLDEN_RAW: Int<4> = match Int::<4>::from_str_radix(GOLDEN_D76_S75, 10) {
     Ok(v) => v,
     Err(_) => panic!("consts: GOLDEN_D76_S75 not parseable"),
 };
 
-/// Rescale a 75-digit `Int256` reference down to the caller's `TARGET`
+/// Rescale a 75-digit `Int<4>` reference down to the caller's `TARGET`
 /// scale as an `i128`, half-to-even. Panics if the value at `TARGET`
 /// does not fit `i128` (the type's storage range at that scale just
 /// doesn't include this constant — e.g. `pi ≈ 3.14` at `D38<38>` would
 /// need `3.14 × 10^38 ≈ 3.14e38`, which exceeds `i128::MAX ≈ 1.7e38`).
-fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i128 {
+fn rescale_75_to_target<const TARGET: u32>(raw: Int<4>, name: &'static str) -> i128 {
     rescale_75_to_target_with::<TARGET>(raw, name, crate::support::rounding::DEFAULT_ROUNDING_MODE)
 }
 
@@ -130,7 +130,7 @@ fn rescale_75_to_target<const TARGET: u32>(raw: Int256, name: &'static str) -> i
 /// constants (no integer mantissa hits the exact half-way point at
 /// the 75-digit reference scale).
 fn rescale_75_to_target_with<const TARGET: u32>(
-    raw: Int256,
+    raw: Int<4>,
     name: &'static str,
     mode: crate::support::rounding::RoundingMode,
 ) -> i128 {
@@ -334,7 +334,7 @@ pub(crate) fn e_at_target_with<const TARGET: u32>(
 // The `DecimalConstants` impl for `D38<SCALE>` is emitted by the
 // `decl_decimal_consts!` macro — the same macro D18 / D76+ use.
 // It expands to `Self(pi_at_target::<SCALE>())` etc.; each
-// `*_at_target` helper above rescales the 75-digit Int256 reference
+// `*_at_target` helper above rescales the 75-digit Int<4> reference
 // down to the caller's `SCALE` via half-to-even and narrows to i128
 // (or panics with a clear message if the constant's magnitude
 // exceeds the storage range at that scale).
@@ -524,7 +524,7 @@ mod tests {
     }
 
     /// `D38<37>::pi()` is the canonical pi rounded half-to-even to 37
-    /// fractional digits. The 75-digit Int256 reference is rescaled
+    /// fractional digits. The 75-digit Int<4> reference is rescaled
     /// down to 37 digits; the result is bit-identical to the
     /// hand-tabulated constant.
     #[test]

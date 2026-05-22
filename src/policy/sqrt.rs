@@ -125,7 +125,7 @@ macro_rules! sqrt_wide_default {
 // `(D57, 20)` cell and its f64-seeded `std` override.
 #[cfg(any(feature = "d57", feature = "wide"))]
 policy_triplet! {
-    storage   = crate::wide_int::Int192,
+    storage   = crate::int::types::Int<3>,
     base_fn   = sqrt_d57_base,
     std_fn    = sqrt_d57_std,
     no_std_fn = sqrt_d57_no_std,
@@ -159,7 +159,7 @@ impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D57<SCALE> {
 #[cfg(any(feature = "d76", feature = "wide"))]
 sqrt_wide_default!(
     D76,
-    crate::wide_int::Int256,
+    crate::int::types::Int<4>,
     sqrt_d76_base,
     sqrt_d76_std,
     sqrt_d76_no_std,
@@ -169,7 +169,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d115", feature = "wide"))]
 sqrt_wide_default!(
     D115,
-    crate::wide_int::Int384,
+    crate::int::types::Int<6>,
     sqrt_d115_base,
     sqrt_d115_std,
     sqrt_d115_no_std,
@@ -179,7 +179,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d153", feature = "wide"))]
 sqrt_wide_default!(
     D153,
-    crate::wide_int::Int512,
+    crate::int::types::Int<8>,
     sqrt_d153_base,
     sqrt_d153_std,
     sqrt_d153_no_std,
@@ -189,7 +189,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d230", feature = "wide"))]
 sqrt_wide_default!(
     D230,
-    crate::wide_int::Int768,
+    crate::int::types::Int<12>,
     sqrt_d230_base,
     sqrt_d230_std,
     sqrt_d230_no_std,
@@ -199,7 +199,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 sqrt_wide_default!(
     D307,
-    crate::wide_int::Int1024,
+    crate::int::types::Int<16>,
     sqrt_d307_base,
     sqrt_d307_std,
     sqrt_d307_no_std,
@@ -209,7 +209,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 sqrt_wide_default!(
     D462,
-    crate::wide_int::Int1536,
+    crate::int::types::Int<24>,
     sqrt_d462_base,
     sqrt_d462_std,
     sqrt_d462_no_std,
@@ -219,7 +219,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 sqrt_wide_default!(
     D616,
-    crate::wide_int::Int2048,
+    crate::int::types::Int<32>,
     sqrt_d616_base,
     sqrt_d616_std,
     sqrt_d616_no_std,
@@ -229,7 +229,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 sqrt_wide_default!(
     D924,
-    crate::wide_int::Int3072,
+    crate::int::types::Int<48>,
     sqrt_d924_base,
     sqrt_d924_std,
     sqrt_d924_no_std,
@@ -239,7 +239,7 @@ sqrt_wide_default!(
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 sqrt_wide_default!(
     D1232,
-    crate::wide_int::Int4096,
+    crate::int::types::Int<64>,
     sqrt_d1232_base,
     sqrt_d1232_std,
     sqrt_d1232_no_std,
