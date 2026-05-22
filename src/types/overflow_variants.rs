@@ -466,8 +466,8 @@ mod tests {
     fn variants_at_scale_6() {
         type D6 = D38<6>;
         let one = D6::ONE;
-        let two_d6 = D6::from_bits(2_000_000); // 2.0 at SCALE=6
-        let one_lsb = D6::from_bits(1);
+        let two_d6 = D6::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000)); // 2.0 at SCALE=6
+        let one_lsb = D6::from_bits(crate::int::types::Int::<2>::from_i128(1));
 
         assert_eq!(one.checked_add(one), Some(two_d6));
         // MAX + 1 LSB overflows / wraps to MIN under two's-complement.

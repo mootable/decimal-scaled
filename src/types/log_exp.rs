@@ -396,7 +396,7 @@ mod strict_tests {
     const STRICT_TOLERANCE_LSB: i128 = 2;
 
     fn within(actual: D38s12, expected_bits: i128, tolerance: i128) -> bool {
-        (actual.to_bits() - expected_bits).abs() <= tolerance
+        (actual.to_bits().as_i128() - expected_bits).abs() <= tolerance
     }
 
     /// ln(1) == 0 exactly (no series terms contribute).
@@ -414,7 +414,7 @@ mod strict_tests {
         use crate::types::widths::D38;
         fn check(raw: i128) {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.ln_strict().to_bits();
+            let strict = x.ln_strict().to_bits().as_i128();
             let reference = {
                 let v = raw as f64 / 1e9;
                 (v.ln() * 1e9).round() as i128
@@ -447,7 +447,7 @@ mod strict_tests {
         use crate::types::widths::D38;
         fn check_exp(raw: i128) {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.exp_strict().to_bits();
+            let strict = x.exp_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
@@ -456,7 +456,7 @@ mod strict_tests {
         }
         fn check_log2(raw: i128) {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.log2_strict().to_bits();
+            let strict = x.log2_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
@@ -465,7 +465,7 @@ mod strict_tests {
         }
         fn check_log10(raw: i128) {
             let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-            let strict = x.log10_strict().to_bits();
+            let strict = x.log10_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
             assert!(
                 (strict - reference).abs() <= 1,
@@ -506,7 +506,7 @@ mod strict_tests {
         use crate::types::widths::D38;
         for k in 0_i128..=12 {
             let x = D38::<12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
-            let got = x.exp2_strict().to_bits();
+            let got = x.exp2_strict().to_bits().as_i128();
             let expected = (1i128 << k) * 10i128.pow(12);
             assert_eq!(got, expected, "2^{k}");
         }
@@ -519,7 +519,7 @@ mod strict_tests {
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
             let x = D38::<18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
-            let got = x.ln_strict().to_bits();
+            let got = x.ln_strict().to_bits().as_i128();
             let expected = k * ln2_s18;
             let tol = k / 2 + 2;
             assert!(
@@ -537,7 +537,7 @@ mod strict_tests {
         assert!(
             within(result, 693_147_180_560, STRICT_TOLERANCE_LSB),
             "ln(2) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -549,7 +549,7 @@ mod strict_tests {
         assert!(
             within(result, 1_000_000_000_000, STRICT_TOLERANCE_LSB),
             "ln(e) bits = {}, expected ~1_000_000_000_000",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -561,7 +561,7 @@ mod strict_tests {
         assert!(
             within(result, 2_302_585_092_994, STRICT_TOLERANCE_LSB),
             "ln(10) bits = {}, expected ~2_302_585_092_994",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -570,7 +570,7 @@ mod strict_tests {
     fn ln_above_one_is_positive() {
         let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         let result = v.ln();
-        assert!(result.to_bits() > 0);
+        assert!(result.to_bits().as_i128() > 0);
     }
 
     /// ln of a value in (0, 1) is negative.
@@ -578,11 +578,11 @@ mod strict_tests {
     fn ln_below_one_is_negative() {
         let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
         let result = v.ln();
-        assert!(result.to_bits() < 0);
+        assert!(result.to_bits().as_i128() < 0);
         assert!(
             within(result, -693_147_180_560, STRICT_TOLERANCE_LSB),
             "ln(0.5) bits = {}, expected ~-693_147_180_560",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -611,7 +611,7 @@ mod strict_tests {
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
             "log2(2) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -623,7 +623,7 @@ mod strict_tests {
         assert!(
             within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
             "log2(8) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -635,7 +635,7 @@ mod strict_tests {
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
             "log10(10) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -647,7 +647,7 @@ mod strict_tests {
         assert!(
             within(result, 2_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
             "log10(100) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -659,7 +659,7 @@ mod strict_tests {
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
             "log_5(5) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -672,7 +672,7 @@ mod strict_tests {
         assert!(
             within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
             "log_2(8) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -701,7 +701,7 @@ mod strict_tests {
         assert!(
             within(result, 2_718_281_828_459, EXP_TOLERANCE_LSB),
             "exp(1) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -713,7 +713,7 @@ mod strict_tests {
         assert!(
             within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
             "exp(ln 2) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -725,7 +725,7 @@ mod strict_tests {
         assert!(
             within(result, 367_879_441_171, EXP_TOLERANCE_LSB),
             "exp(-1) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -742,7 +742,7 @@ mod strict_tests {
         assert!(
             within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
             "exp2(1) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 
@@ -754,7 +754,7 @@ mod strict_tests {
         assert!(
             within(result, 1_024_000_000_000_000, EXP_TOLERANCE_LSB * 10),
             "exp2(10) bits = {}",
-            result.to_bits()
+            result.to_bits().as_i128()
         );
     }
 }

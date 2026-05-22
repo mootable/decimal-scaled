@@ -811,7 +811,7 @@ mod tests {
         // So a correctly-rounded q satisfies q^2 - q < N ≤ q^2 + q  (q>0),
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
-            let x = crate::types::widths::D38::<S>::from_bits(raw);
+            let x = crate::types::widths::D38::<S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let q = x.sqrt_strict().to_bits().as_i128();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
@@ -877,7 +877,7 @@ mod tests {
         // hold the 384-bit cubes (i256 is already a dev-dependency).
         use i256::U256;
         fn check<const S: u32>(raw: i128) {
-            let x = crate::types::widths::D38::<S>::from_bits(raw);
+            let x = crate::types::widths::D38::<S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let q = x.cbrt_strict().to_bits().as_i128();
             // Sign must match the input.
             assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");
