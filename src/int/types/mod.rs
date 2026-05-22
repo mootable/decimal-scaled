@@ -1582,6 +1582,13 @@ impl From<Int<1>> for i64 {
         v.as_i128() as i64
     }
 }
+// `Int<1>` is 64-bit, so widening to `i128` is exact.
+impl From<Int<1>> for i128 {
+    #[inline]
+    fn from(v: Int<1>) -> i128 {
+        v.as_i128()
+    }
+}
 impl PartialEq<i64> for Int<1> {
     #[inline]
     fn eq(&self, other: &i64) -> bool {

@@ -15,7 +15,7 @@ fn widen_narrow_one_tier_hop_narrow_arm() {
     use decimal_scaled::{D18s6, D38s6};
     let a = D18s6::from_int(123);
     let b: D38s6 = a.widen(); // D18 → D38
-    assert_eq!(b.to_bits(), a.to_bits() as i128);
+    assert_eq!(b.to_bits(), a.to_bits().as_i128());
     let c: D18s6 = b.narrow().unwrap(); // D38 → D18
     assert_eq!(c.to_bits(), a.to_bits());
 }

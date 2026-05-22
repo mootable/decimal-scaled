@@ -326,8 +326,8 @@ fn num_traits_wide() {
 #[test]
 fn bitwise_ops_d9_d18() {
     use core::ops::*;
-    let a = D9_2::from_bits(0b1100);
-    let b = D9_2::from_bits(0b1010);
+    let a = D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1100));
+    let b = D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
     assert_eq!((a & b).to_bits(), 0b1000);
     assert_eq!((a | b).to_bits(), 0b1110);
     assert_eq!((a ^ b).to_bits(), 0b0110);
@@ -341,15 +341,15 @@ fn bitwise_ops_d9_d18() {
     c ^= b;
     assert_eq!(c.to_bits(), 0b0110);
     // Not
-    assert_eq!((!D9_2::from_bits(0)).to_bits(), !0i64);
+    assert_eq!((!D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(0))).to_bits(), !0i64);
     // Shifts
-    let s = D9_2::from_bits(1);
+    let s = D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(1));
     assert_eq!((s.shl(3_u32)).to_bits(), 8);
-    assert_eq!((D9_2::from_bits(16).shr(2_u32)).to_bits(), 4);
+    assert_eq!((D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(16)).shr(2_u32)).to_bits(), 4);
 
     // D18
-    let a = D18_2::from_bits(0b1100);
-    let b = D18_2::from_bits(0b1010);
+    let a = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1100));
+    let b = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
     assert_eq!((a & b).to_bits(), 0b1000);
     assert_eq!((a | b).to_bits(), 0b1110);
     assert_eq!((a ^ b).to_bits(), 0b0110);

@@ -41,7 +41,11 @@ fn assert_le_1_lsb_i32(label: &str, actual: i32, truth: i32) {
     );
 }
 #[track_caller]
-fn assert_le_1_lsb_i64(label: &str, actual: i64, truth: i64) {
+fn assert_le_1_lsb_i64<A: Into<i128>>(label: &str, actual: A, truth: i64) {
+    // `actual` accepts D18's `Int<1>` to_bits (via `From<Int<1>> for i128`)
+    // as well as plain `i64`; both are bridged to `i128` for the diff.
+    let actual: i128 = actual.into();
+    let truth = i128::from(truth);
     let diff = (actual - truth).abs();
     assert!(
         diff <= 1,

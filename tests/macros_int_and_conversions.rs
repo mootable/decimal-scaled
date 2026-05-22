@@ -295,44 +295,44 @@ fn to_int_narrow_widths() {
     // Each width has its own to_int_with body emitted by the macro,
     // so call them all.
     assert_eq!(
-        D9_2::from_bits(149).to_int_with(RoundingMode::HalfToEven),
+        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(149)).to_int_with(RoundingMode::HalfToEven),
         1
     );
     assert_eq!(
-        D9_2::from_bits(150).to_int_with(RoundingMode::HalfToEven),
+        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::HalfToEven),
         2
     );
     assert_eq!(
-        D9_2::from_bits(-150).to_int_with(RoundingMode::HalfTowardZero),
+        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(-150)).to_int_with(RoundingMode::HalfTowardZero),
         -1
     );
-    assert_eq!(D9_2::from_bits(150).to_int_with(RoundingMode::Floor), 1);
-    assert_eq!(D9_2::from_bits(150).to_int_with(RoundingMode::Ceiling), 2);
-    assert_eq!(D9_2::from_bits(150).to_int_with(RoundingMode::Trunc), 1);
+    assert_eq!(D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::Floor), 1);
+    assert_eq!(D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::Ceiling), 2);
+    assert_eq!(D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::Trunc), 1);
     assert_eq!(
-        D9_2::from_bits(150).to_int_with(RoundingMode::HalfAwayFromZero),
+        D9_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::HalfAwayFromZero),
         2
     );
 
     assert_eq!(
-        D18_2::from_bits(149).to_int_with(RoundingMode::HalfToEven),
+        D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(149)).to_int_with(RoundingMode::HalfToEven),
         1
     );
     assert_eq!(
-        D18_2::from_bits(250).to_int_with(RoundingMode::HalfToEven),
+        D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(250)).to_int_with(RoundingMode::HalfToEven),
         2
     );
-    assert_eq!(D18_2::from_bits(-150).to_int_with(RoundingMode::Floor), -2);
+    assert_eq!(D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(-150)).to_int_with(RoundingMode::Floor), -2);
     assert_eq!(
-        D18_2::from_bits(-150).to_int_with(RoundingMode::Ceiling),
+        D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(-150)).to_int_with(RoundingMode::Ceiling),
         -1
     );
     assert_eq!(
-        D18_2::from_bits(150).to_int_with(RoundingMode::HalfAwayFromZero),
+        D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(150)).to_int_with(RoundingMode::HalfAwayFromZero),
         2
     );
     assert_eq!(
-        D18_2::from_bits(-150).to_int_with(RoundingMode::HalfTowardZero),
+        D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(-150)).to_int_with(RoundingMode::HalfTowardZero),
         -1
     );
 

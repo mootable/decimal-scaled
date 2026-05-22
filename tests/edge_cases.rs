@@ -328,7 +328,7 @@ fn additive_and_multiplicative_identities() {
             assert_eq!(v - v, zero);
         }};
     }
-    check!(D18s17, 7_i64);
+    check!(D18s17, decimal_scaled::Int::<1>::from_i64(7));
     check!(D38s12, decimal_scaled::Int::<2>::from_i128(7));
     check!(D38s37, decimal_scaled::Int::<2>::from_i128(7));
 }
@@ -387,7 +387,7 @@ fn overflow_variants_consistency_across_widths() {
             assert_eq!(a.overflowing_add(b), (a.wrapping_add(b), false));
         }};
     }
-    check!(D18s9, |x: i128| x as i64);
+    check!(D18s9, |x: i128| decimal_scaled::Int::<1>::from_i64(x as i64));
     check!(D38s12, |x: i128| decimal_scaled::Int::<2>::from_i128(x));
 }
 
@@ -412,7 +412,7 @@ fn rounding_methods_on_every_width() {
             assert_eq!(n.fract(), n - n.trunc());
         }};
     }
-    check!(D18s6, 2_500_000);
+    check!(D18s6, decimal_scaled::Int::<1>::from_i64(2_500_000));
     check!(D38s12, decimal_scaled::Int::<2>::from_i128(2_500_000_000_000));
 }
 

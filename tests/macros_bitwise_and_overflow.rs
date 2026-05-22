@@ -10,21 +10,21 @@ type D38_2 = D38<2>;
 
 #[test]
 fn bitwise_methods_d18() {
-    let v = D18_2::from_bits(0b1010);
+    let v = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
     assert_eq!(v.count_ones(), 2);
     assert_eq!(v.count_zeros(), 64 - 2);
     assert_eq!(v.trailing_zeros(), 1);
     assert_eq!(v.leading_zeros(), 64 - 4);
-    let neg = D18_2::from_bits(-1);
+    let neg = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(-1));
     let logical = neg.unsigned_shr(63);
     assert_eq!(logical.to_bits(), 1);
-    let r = D18_2::from_bits(1).rotate_left(2);
+    let r = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(1)).rotate_left(2);
     assert_eq!(r.to_bits(), 4);
-    let r = D18_2::from_bits(4).rotate_right(2);
+    let r = D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(4)).rotate_right(2);
     assert_eq!(r.to_bits(), 1);
-    assert!(D18_2::from_bits(8).is_power_of_two());
-    assert!(!D18_2::from_bits(7).is_power_of_two());
-    assert_eq!(D18_2::from_bits(5).next_power_of_two().to_bits(), 8);
+    assert!(D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(8)).is_power_of_two());
+    assert!(!D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(7)).is_power_of_two());
+    assert_eq!(D18_2::from_bits(decimal_scaled::Int::<1>::from_i64(5)).next_power_of_two().to_bits(), 8);
 }
 
 #[test]

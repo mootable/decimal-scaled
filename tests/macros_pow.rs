@@ -33,7 +33,7 @@ type D38_0 = D38<0>;
 #[test]
 fn pow_exp_zero_returns_one_d18() {
     for raw in [0i64, 1, -1, 5, -5, 123_456_789_012i64] {
-        let v = D18_0::from_bits(raw);
+        let v = D18_0::from_bits(decimal_scaled::Int::<1>::from_i64(raw));
         assert_eq!(v.pow(0).to_bits(), 1, "0^0=1 contract: input raw {raw}");
     }
 }
@@ -41,7 +41,7 @@ fn pow_exp_zero_returns_one_d18() {
 #[test]
 fn pow_exp_one_returns_self_d18() {
     for raw in [0i64, 1, -1, 5, -5, 12345] {
-        let v = D18_0::from_bits(raw);
+        let v = D18_0::from_bits(decimal_scaled::Int::<1>::from_i64(raw));
         assert_eq!(v.pow(1).to_bits(), raw, "x^1=x");
     }
 }

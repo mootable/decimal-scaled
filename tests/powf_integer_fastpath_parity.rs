@@ -30,7 +30,7 @@ fn d38_check<const S: u32>(base_raw: i128, n: i32) {
 }
 
 fn d18_check<const S: u32>(base_raw: i64, n: i32) {
-    let base = D18::<S>::from_bits(base_raw);
+    let base = D18::<S>::from_bits(decimal_scaled::Int::<1>::from_i64(base_raw));
     let exp_d = D18::<S>::from_i32(n);
     let from_powf = base.powf_strict(exp_d);
     let from_powi = base.powi(n);

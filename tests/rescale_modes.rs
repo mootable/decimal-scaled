@@ -17,8 +17,8 @@ const ALL_MODES: [RoundingMode; 6] = [
 fn d18_rescale_with_all_modes() {
     type D18_4 = D18<4>;
     type D18_2 = D18<2>;
-    let v = D18_4::from_bits(15050);
-    let neg = D18_4::from_bits(-15050);
+    let v = D18_4::from_bits(decimal_scaled::Int::<1>::from_i64(15050));
+    let neg = D18_4::from_bits(decimal_scaled::Int::<1>::from_i64(-15050));
     for m in ALL_MODES {
         let r: D18_2 = v.rescale_with::<2>(m);
         let _ = r;
