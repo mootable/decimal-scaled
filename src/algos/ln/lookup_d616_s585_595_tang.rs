@@ -42,9 +42,9 @@
 
 #![cfg(any(feature = "d616", feature = "x-wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d616 as core;
-use crate::wide_int::Int2048;
 
 /// Narrow guard for the Tang-style ln slot at SCALE 585..=595. See
 /// module docs for the derivation and headroom.
@@ -74,8 +74,8 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
 /// `SCALE ∈ 585..=595`. Panics if `raw <= 0`.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int2048, mode: RoundingMode) -> Int2048 {
-    if raw <= Int2048::ZERO {
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<32>, mode: RoundingMode) -> Int<32> {
+    if raw <= Int::<32>::ZERO {
         panic!("D616::ln: argument must be positive");
     }
     // Directed modes decide which side of a storage grid line the true

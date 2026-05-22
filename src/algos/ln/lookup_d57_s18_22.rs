@@ -34,9 +34,9 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d57 as core;
-use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 slot. See module docs for the
 /// derivation and headroom.
@@ -51,8 +51,8 @@ const GUARD_NARROW: u32 = 8;
 /// — matches the wide_kernel contract.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw <= Int192::ZERO {
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+    if raw <= Int::<3>::ZERO {
         panic!("D57::ln: argument must be positive");
     }
     let w = SCALE + GUARD_NARROW;

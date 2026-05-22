@@ -30,9 +30,9 @@
 
 #![cfg(any(feature = "d153", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d153 as core;
-use crate::wide_int::Int512;
 
 /// Narrow guard for the SCALE 70..=82 Tang-exp slot.
 const GUARD_NARROW: u32 = 10;
@@ -197,9 +197,9 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
 /// `SCALE ∈ 70..=82`.
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
-    if raw == Int512::ZERO {
-        let ten: Int512 = crate::int::types::traits::wide_cast::<u128, Int512>(10);
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<8>, mode: RoundingMode) -> Int<8> {
+    if raw == Int::<8>::ZERO {
+        let ten: Int<8> = crate::int::types::traits::wide_cast::<u128, Int<8>>(10);
         return ten.pow(SCALE);
     }
     // Directed modes decide which side of a storage grid line the true

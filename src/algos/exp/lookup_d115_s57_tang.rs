@@ -30,9 +30,9 @@
 
 #![cfg(any(feature = "d115", feature = "wide"))]
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d115 as core;
-use crate::wide_int::Int384;
 
 /// Narrow guard for the Tang-style exp slot at SCALE = 57.
 pub(crate) const GUARD_NARROW: u32 = 8;
@@ -130,9 +130,9 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
 /// Tang-style `e^x` strict kernel for `D115<SCALE>` with `SCALE = 57`.
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int384, mode: RoundingMode) -> Int384 {
-    if raw == Int384::ZERO {
-        let ten: Int384 = crate::int::types::traits::wide_cast::<u128, Int384>(10);
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<6>, mode: RoundingMode) -> Int<6> {
+    if raw == Int::<6>::ZERO {
+        let ten: Int<6> = crate::int::types::traits::wide_cast::<u128, Int<6>>(10);
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;
