@@ -798,7 +798,7 @@ impl<const N: usize> Int<N> {
 
     /// Constructs from an `i64`, sign-extending into the high limbs.
     #[inline]
-    pub fn from_i64(value: i64) -> Self {
+    pub const fn from_i64(value: i64) -> Self {
         // Negative values fill the upper limbs with all-ones so the
         // two's-complement representation matches at every width.
         let fill = if value < 0 { u64::MAX } else { 0 };
@@ -807,6 +807,163 @@ impl<const N: usize> Int<N> {
             limbs[0] = value as u64;
         }
         Self { limbs }
+    }
+
+    /// Constructs from an `i8` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i8(value: i8) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from an `i16` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i16(value: i16) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from an `i32` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i32(value: i32) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from a `u8` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u8(value: u8) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Constructs from a `u16` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u16(value: u16) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Constructs from a `u32` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u32(value: u32) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Zero-extends an unsigned 64-bit value into limb 0. Internal helper
+    /// for the unsigned `from_*` family; the public fitting check is in
+    /// [`Self::try_from_u64`].
+    #[inline]
+    const fn from_u64_unsigned(value: u64) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = value;
+        }
+        Self { limbs }
+    }
+
+    /// Exact conversion from a `u64`, or `None` if it does not fit
+    /// `Int<N>`. Only `N == 1` (the `i64` floor) can fail, when the value
+    /// exceeds `i64::MAX`; every wider tier holds all of `u64`.
+    #[inline]
+    pub(crate) const fn try_from_u64(value: u64) -> Option<Self> {
+        if N >= 2 || value <= i64::MAX as u64 {
+            Some(Self::from_u64_unsigned(value))
+        } else {
+            None
+        }
+    }
+
+    /// Exact conversion from an `i128`, or `None` if it does not fit
+    /// `Int<N>`. Only `N == 1` (64-bit storage) can fail; `N >= 2` holds
+    /// every `i128`.
+    #[inline]
+    pub(crate) const fn try_from_i128(v: i128) -> Option<Self> {
+        let mag = v.unsigned_abs();
+        let built = Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0);
+        if N >= 2 || built.as_i128() == v {
+            Some(built)
+        } else {
+            None
+        }
+    }
+
+    /// Exact conversion from a `u128`, or `None` if it does not fit
+    /// `Int<N>`. `N == 1` fails above `i64::MAX`; `N == 2` fails above
+    /// `i128::MAX` (the sign bit); `N >= 3` holds every `u128`.
+    #[inline]
+    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
+        let built = Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false);
+        if N >= 3 {
+            Some(built)
+        } else if built.is_negative() {
+            // Magnitude landed in the sign bit of the N-limb storage.
+            None
+        } else if N >= 2 || built.as_i128() as u128 == v {
+            Some(built)
+        } else {
+            None
+        }
+    }
+
+    /// Lossless `i64` value, valid on the `N == 1` tier where `Int<N>`
+    /// *is* an `i64`. The trait form is `From<Int<1>> for i64`.
+    #[inline]
+    pub(crate) const fn to_i64(self) -> i64 {
+        self.as_i128() as i64
+    }
+
+    /// Lossless `i128` value, valid on the `N <= 2` tiers where every
+    /// `Int<N>` fits an `i128`. The trait forms are `From<Int<1>>` /
+    /// `From<Int<2>> for i128`.
+    #[inline]
+    pub(crate) const fn to_i128(self) -> i128 {
+        self.as_i128()
+    }
+
+    /// Exact `i32` value, or `None` if out of range.
+    #[inline]
+    pub(crate) fn try_to_i32(self) -> Option<i32> {
+        match self.to_i128_checked() {
+            Some(v) if v >= i32::MIN as i128 && v <= i32::MAX as i128 => Some(v as i32),
+            _ => None,
+        }
+    }
+
+    /// Exact `u32` value, or `None` if negative or out of range.
+    #[inline]
+    pub(crate) fn try_to_u32(self) -> Option<u32> {
+        match self.to_u128_checked() {
+            Some(v) if v <= u32::MAX as u128 => Some(v as u32),
+            _ => None,
+        }
+    }
+
+    /// Exact `i64` value, or `None` if out of range.
+    #[inline]
+    pub(crate) fn try_to_i64(self) -> Option<i64> {
+        match self.to_i128_checked() {
+            Some(v) if v >= i64::MIN as i128 && v <= i64::MAX as i128 => Some(v as i64),
+            _ => None,
+        }
+    }
+
+    /// Exact `u64` value, or `None` if negative or out of range.
+    #[inline]
+    pub(crate) fn try_to_u64(self) -> Option<u64> {
+        match self.to_u128_checked() {
+            Some(v) if v <= u64::MAX as u128 => Some(v as u64),
+            _ => None,
+        }
+    }
+
+    /// Exact `i128` value, or `None` if out of range. Surface alias of
+    /// [`Self::to_i128_checked`].
+    #[inline]
+    pub(crate) fn try_to_i128(self) -> Option<i128> {
+        self.to_i128_checked()
+    }
+
+    /// Exact `u128` value, or `None` if negative or out of range. Surface
+    /// alias of [`Self::to_u128_checked`].
+    #[inline]
+    pub(crate) fn try_to_u128(self) -> Option<u128> {
+        self.to_u128_checked()
     }
 
     /// `true` when the value equals one.
