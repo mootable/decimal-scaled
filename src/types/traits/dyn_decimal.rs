@@ -294,12 +294,12 @@ pub trait DynDecimal: 'static {
 // through to `None` (or `false` for `eq_dyn`).
 
 crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D18, i64, D18, I64, 18,
+    D18, crate::int::types::Int<1>, D18, I64, i64, 18,
     scales = [0 1 2 3 4 5 6 7 8 9 10 11 12 13 14 15 16 17 18]
 );
 
 crate::macros::dyn_bridge::decl_decimal_dyn_impl!(
-    D38, crate::int::types::Int<2>, D38, I128, 38,
+    D38, crate::int::types::Int<2>, D38, I128, i128, 38,
     scales = [
         0 1 2 3 4 5 6 7 8 9
         10 11 12 13 14 15 16 17 18 19
