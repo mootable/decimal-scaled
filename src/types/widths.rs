@@ -55,7 +55,7 @@
 /// as trivial type aliases without duplicating any method implementations.
 /// Mixed-scale arithmetic is deliberately not provided; callers convert
 /// explicitly.
-pub type D38<const SCALE: u32> = crate::D<i128, SCALE>;
+pub type D38<const SCALE: u32> = crate::D<crate::wide_int::Int128, SCALE>;
 
 // Manual `Debug` is implemented in `display.rs` (via the
 // `decl_decimal_display!` macro) and renders via `Display` so the
@@ -66,10 +66,10 @@ pub type D38<const SCALE: u32> = crate::D<i128, SCALE>;
 /// This lets `#[derive(Default)]` work correctly on structs that contain
 /// `D38<S>` fields.
 ///
-/// Implemented on the underlying `crate::D<i128, SCALE>` because
+/// Implemented on the underlying `crate::D<crate::wide_int::Int128, SCALE>` because
 /// `D38<SCALE>` is now an alias of that type. `ZERO` is emitted by
 /// the basics macro further down in this file.
-impl<const SCALE: u32> Default for crate::D<i128, SCALE> {
+impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int128, SCALE> {
     #[inline]
     fn default() -> Self {
         Self::ZERO
