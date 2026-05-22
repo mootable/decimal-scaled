@@ -234,7 +234,7 @@ impl MagSign for u128 {
 }
 
 /// `Int<N>` bridges through its full `BigInt` magnitude/sign impl.
-impl<const N: u32> MagSign for Int<N> {
+impl<const N: usize> MagSign for Int<N> {
     #[inline]
     fn to_mag_sign(self) -> ([u64; MAG_LIMBS], bool) {
         let mut out = [0u64; MAG_LIMBS];
@@ -259,7 +259,7 @@ pub(crate) fn wide_cast<S: MagSign, T: MagSign>(src: S) -> T {
 
 // ── BigInt for Int<N> ───────────────────────────────────────────────
 
-impl<const N: u32> BigInt for Int<N> {
+impl<const N: usize> BigInt for Int<N> {
     type Limbs = [u64; N];
 
     const LIMBS: usize = N;
