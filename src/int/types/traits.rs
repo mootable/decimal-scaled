@@ -59,7 +59,7 @@ pub trait BigInt:
     /// Number of u128 limbs needed to hold this type's full magnitude
     /// (`(L + 1) / 2`). Hot-path divide / rescale callers pass this as a
     /// `const N` to size their magnitude stack buffer to the exact width.
-    const U128_LIMBS: usize = 1;
+    const U128_LIMBS: usize;
 
     // ── Predicates ────────────────────────────────────────────────────
 
