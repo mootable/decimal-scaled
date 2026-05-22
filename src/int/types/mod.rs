@@ -435,7 +435,7 @@ impl<const N: usize> Uint<N> {
 
     /// Builds from an unsigned 128-bit value, zero-extending the upper
     /// limbs. **Truncating** for `Uint<1>` (the high 64 bits of `v` are
-    /// discarded); use [`Self::try_from_u128`] (or `TryFrom`) when `v` may
+    /// discarded); use the checked `TryFrom` conversion when `v` may
     /// not fit.
     #[inline]
     pub const fn from_u128(v: u128) -> Self {
@@ -1209,8 +1209,8 @@ impl<const N: usize> Int<N> {
     }
 
     /// Builds from a signed 128-bit value. **Truncating** for `Int<1>`
-    /// (the high 64 bits of `v` are discarded); use [`Self::try_from_i128`]
-    /// (or `TryFrom`) when `v` may not fit.
+    /// (the high 64 bits of `v` are discarded); use the checked `TryFrom`
+    /// conversion when `v` may not fit.
     #[inline]
     pub const fn from_i128(v: i128) -> Self {
         let mag = v.unsigned_abs();
