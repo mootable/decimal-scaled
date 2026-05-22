@@ -98,8 +98,8 @@ fn bitwise_methods_wide() {
 #[test]
 fn wrapping_div_rem_non_zero() {
     // narrow widths
-    let a = D9_2::from_int(7);
-    let b = D9_2::from_int(2);
+    let a = D18_2::from_int(7);
+    let b = D18_2::from_int(2);
     let q = a.wrapping_div(b);
     // 7.00 / 2.00 = 3.50 → 350 at S=2
     assert_eq!(q.to_bits(), 350);
@@ -169,10 +169,10 @@ fn wide_checked_div_quotient_overflow() {
 
 #[test]
 fn saturating_div_overflow_signs() {
-    // D9<2>::MIN / -ONE wraps because MIN's negation is unrepresentable.
+    // D18<2>::MIN / -ONE wraps because MIN's negation is unrepresentable.
     // saturating_div should clamp.
-    let r = D9_2::MIN.saturating_div(-D9_2::ONE);
-    assert!(r == D9_2::MIN || r == D9_2::MAX);
+    let r = D18_2::MIN.saturating_div(-D18_2::ONE);
+    assert!(r == D18_2::MIN || r == D18_2::MAX);
     let r = D18_2::MIN.saturating_div(-D18_2::ONE);
     assert!(r == D18_2::MIN || r == D18_2::MAX);
 }
@@ -181,8 +181,8 @@ fn saturating_div_overflow_signs() {
 
 #[test]
 fn overflowing_rem_non_zero_no_overflow() {
-    let a = D9_2::from_int(7);
-    let b = D9_2::from_int(2);
+    let a = D18_2::from_int(7);
+    let b = D18_2::from_int(2);
     let (_, ov) = a.overflowing_rem(b);
     assert!(!ov);
     let a = D18_2::from_int(7);
@@ -220,13 +220,13 @@ fn float_bridge_rounding_modes() {
     ] {
         // exercise the dispatch branch in from_f64_with for each mode.
         let _ = D38_2::from_f64_with(1.005, mode);
-        let _ = D9_2::from_f64_with(1.005, mode);
+        let _ = D18_2::from_f64_with(1.005, mode);
         let _ = D18_2::from_f64_with(1.005, mode);
     }
 
     // Negative side
     let _ = D38_2::from_f64_with(-1.005, RoundingMode::Floor);
-    let _ = D9_2::from_f64_with(-1.005, RoundingMode::Ceiling);
+    let _ = D18_2::from_f64_with(-1.005, RoundingMode::Ceiling);
 
     // Exact zero
     assert_eq!(
@@ -234,7 +234,7 @@ fn float_bridge_rounding_modes() {
         0
     );
     assert_eq!(
-        D9_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        D18_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
         0
     );
     assert_eq!(

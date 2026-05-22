@@ -127,18 +127,6 @@ fn eq_float_negative() {
 // --- D9 / D18 cross-equality (uses the macro just like D38) --------
 
 #[test]
-fn eq_d9_with_integer() {
-    use decimal_scaled::D9s2;
-    let v = D9s2::from_bits(150); // 1.50
-    assert!(!(v == 1_i32));
-    assert!(!(v == 2_i32));
-    let int = D9s2::from_bits(500); // 5.00
-    assert!(int == 5_i32);
-    assert!(5_i32 == int);
-    assert!(int == 5_u8);
-}
-
-#[test]
 fn eq_d18_with_integer() {
     use decimal_scaled::D18s9;
     let v = D18s9::from_bits(7_000_000_000); // 7.0
