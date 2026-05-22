@@ -274,21 +274,6 @@ pub(crate) fn divmod_pow10_2word(
 /// Gated on the same `wide`/`x-wide` feature umbrella as
 /// `crate::wide_int` — it's only invoked from the wide-tier
 /// decimal `Mul` macro arm.
-#[cfg(any(
-    feature = "d57",
-    feature = "d76",
-    feature = "d115",
-    feature = "d153",
-    feature = "d230",
-    feature = "d307",
-    feature = "d462",
-    feature = "d616",
-    feature = "d924",
-    feature = "d1232",
-    feature = "wide",
-    feature = "x-wide",
-    feature = "xx-wide"
-))]
 #[inline]
 pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N: usize>(
     n: W,
@@ -405,21 +390,6 @@ pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N:
 /// pass, so ~320 ops for four passes. Comparable to Knuth on op
 /// count BUT with a branchless inner loop that the CPU pipelines
 /// far better than Knuth's q̂-and-correct scheme.
-#[cfg(any(
-    feature = "d57",
-    feature = "d76",
-    feature = "d115",
-    feature = "d153",
-    feature = "d230",
-    feature = "d307",
-    feature = "d462",
-    feature = "d616",
-    feature = "d924",
-    feature = "d1232",
-    feature = "wide",
-    feature = "x-wide",
-    feature = "xx-wide"
-))]
 pub(crate) fn div_wide_pow10_chain_with<W: crate::int::types::traits::BigInt, const N: usize>(
     n: W,
     scale: u32,

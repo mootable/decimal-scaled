@@ -140,21 +140,6 @@ macro_rules! impl_width_le_native_to_wide {
     };
 }
 
-#[cfg(any(
-    feature = "d57",
-    feature = "d76",
-    feature = "d115",
-    feature = "d153",
-    feature = "d230",
-    feature = "d307",
-    feature = "d462",
-    feature = "d616",
-    feature = "d924",
-    feature = "d1232",
-    feature = "wide",
-    feature = "x-wide",
-    feature = "xx-wide",
-))]
 macro_rules! impl_width_le_wide_pair {
     ($Wider:ty, $Narrower:ty) => {
         impl $crate::types::traits::width_le::WidthLE<$Wider> for $Narrower {

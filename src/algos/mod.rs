@@ -58,18 +58,8 @@ pub(crate) mod mg_divide;
 // Gated on every wide tier — D307's `$Wider = Int2048` is in the
 // matrix's 2048-bit slot, so D307's `mul` slow path also routes
 // through the dispatcher.
-#[cfg(any(
-    feature = "d76",
-    feature = "d115",
-    feature = "d153",
-    feature = "d230",
-    feature = "d307",
-    feature = "d462",
-    feature = "d616",
-    feature = "d924",
-    feature = "d1232",
-    feature = "wide",
-    feature = "x-wide",
-    feature = "xx-wide"
-))]
+// Always compiled: the unified `decl_decimal_arithmetic!` mul/div path used by
+// D18/D38 (default features) references the dispatcher in a const-folded
+// `SCALE > 38` branch — dead for the narrow tiers but still type-checked. The
+// kernels are generic over `Int<N>`, so this adds compile time, not a feature.
 pub mod newton_reciprocal;
