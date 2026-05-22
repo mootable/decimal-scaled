@@ -154,6 +154,9 @@ macro_rules! decl_decimal_overflow_variants {
             #[inline]
             #[must_use]
             pub fn saturating_div(self, rhs: Self) -> Self {
+                if rhs == Self::ZERO {
+                    panic!("attempt to divide by zero");
+                }
                 match self.checked_div(rhs) {
                     Some(v) => v,
                     None => {

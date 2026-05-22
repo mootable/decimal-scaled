@@ -361,7 +361,6 @@ mod tests {
     }
 
     #[test]
-    #[ignore = "wide overflow arm: Int<2> div-by-zero in saturating_div doesn't panic — real bug, see status memo"]
     #[should_panic(expected = "attempt to divide by zero")]
     fn saturating_div_by_zero_panics() {
         let _ = D38s12::ONE.saturating_div(D38s12::ZERO);
