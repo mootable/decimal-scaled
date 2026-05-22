@@ -155,7 +155,7 @@ fn open_interval_neg1_to_1() -> impl Strategy<Value = Bits> {
 fn open_quarter_pi() -> impl Strategy<Value = Bits> {
     // (-π/4 + 0.001, π/4 - 0.001) — for atan(tan(x)) round-trip.
     let half = ONE / 1000;
-    let quarter_pi_bits = D::quarter_pi().to_bits();
+    let quarter_pi_bits = D::quarter_pi().to_bits().as_i128();
     (-quarter_pi_bits + half)..=(quarter_pi_bits - half)
 }
 
@@ -165,10 +165,10 @@ proptest! {
     #![proptest_config(proptest_config("exp_of_ln_roundtrip"))]
     #[test]
     fn exp_of_ln_roundtrip(raw in positive_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let y = x.ln_strict().exp_strict();
-        let xb = x.to_bits();
-        let yb = y.to_bits();
+        let xb = x.to_bits().as_i128();
+        let yb = y.to_bits().as_i128();
         let tol = round_trip_tol(xb);
         prop_assert_within!("exp(ln(x))", xb, yb, (xb - yb).abs(), tol);
     }
@@ -178,10 +178,10 @@ proptest! {
     #![proptest_config(proptest_config("ln_of_exp_roundtrip"))]
     #[test]
     fn ln_of_exp_roundtrip(raw in ln_exp_domain()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let y = x.exp_strict().ln_strict();
-        let xb = x.to_bits();
-        let yb = y.to_bits();
+        let xb = x.to_bits().as_i128();
+        let yb = y.to_bits().as_i128();
         let tol = round_trip_tol(xb);
         prop_assert_within!("ln(exp(x))", xb, yb, (xb - yb).abs(), tol);
     }
@@ -191,15 +191,15 @@ proptest! {
     #![proptest_config(proptest_config("sin2_plus_cos2_is_one"))]
     #[test]
     fn sin2_plus_cos2_is_one(raw in real_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let s = x.sin_strict();
         let c = x.cos_strict();
         let sum = s * s + c * c;
-        let one = D::from_bits(ONE);
+        let one = D::from_bits(decimal_scaled::Int::<2>::from_i128(ONE));
         let tol = round_trip_tol(ONE);
         prop_assert_within!("sin²+cos²",
-                            sum.to_bits(), one.to_bits(),
-                            (sum.to_bits() - one.to_bits()).abs(), tol);
+                            sum.to_bits().as_i128(), one.to_bits().as_i128(),
+                            (sum.to_bits().as_i128() - one.to_bits().as_i128()).abs(), tol);
     }
 }
 
@@ -207,11 +207,11 @@ proptest! {
     #![proptest_config(proptest_config("sqrt_squared_roundtrip"))]
     #[test]
     fn sqrt_squared_roundtrip(raw in nonneg_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let r = x.sqrt_strict();
         let back = r * r;
-        let xb = x.to_bits();
-        let bb = back.to_bits();
+        let xb = x.to_bits().as_i128();
+        let bb = back.to_bits().as_i128();
         let tol = round_trip_tol(xb);
         prop_assert_within!("sqrt(x)²", xb, bb, (xb - bb).abs(), tol);
     }
@@ -221,11 +221,11 @@ proptest! {
     #![proptest_config(proptest_config("cbrt_cubed_roundtrip"))]
     #[test]
     fn cbrt_cubed_roundtrip(raw in real_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let r = x.cbrt_strict();
         let back = r * r * r;
-        let xb = x.to_bits();
-        let bb = back.to_bits();
+        let xb = x.to_bits().as_i128();
+        let bb = back.to_bits().as_i128();
         let tol = round_trip_tol(xb);
         prop_assert_within!("cbrt(x)³", xb, bb, (xb - bb).abs(), tol);
     }
@@ -235,10 +235,10 @@ proptest! {
     #![proptest_config(proptest_config("atan_of_tan_roundtrip"))]
     #[test]
     fn atan_of_tan_roundtrip(raw in open_quarter_pi()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let y = x.tan_strict().atan_strict();
-        let xb = x.to_bits();
-        let yb = y.to_bits();
+        let xb = x.to_bits().as_i128();
+        let yb = y.to_bits().as_i128();
         let tol = round_trip_tol(xb);
         prop_assert_within!("atan(tan(x))", xb, yb, (xb - yb).abs(), tol);
     }
@@ -248,10 +248,10 @@ proptest! {
     #![proptest_config(proptest_config("tanh_atanh_roundtrip"))]
     #[test]
     fn tanh_atanh_roundtrip(raw in open_interval_neg1_to_1()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let y = x.atanh_strict().tanh_strict();
-        let xb = x.to_bits();
-        let yb = y.to_bits();
+        let xb = x.to_bits().as_i128();
+        let yb = y.to_bits().as_i128();
         let tol = round_trip_tol(xb);
         prop_assert_within!("tanh(atanh(x))", xb, yb, (xb - yb).abs(), tol);
     }
@@ -261,11 +261,11 @@ proptest! {
     #![proptest_config(proptest_config("sin_odd_symmetry"))]
     #[test]
     fn sin_odd_symmetry(raw in real_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let lhs = x.sin_strict();
         let rhs = -((-x).sin_strict());
-        prop_assert_within!("sin(-x)=-sin(x)", lhs.to_bits(), rhs.to_bits(),
-                            (lhs.to_bits() - rhs.to_bits()).abs(),
+        prop_assert_within!("sin(-x)=-sin(x)", lhs.to_bits().as_i128(), rhs.to_bits().as_i128(),
+                            (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs(),
                             SYMMETRY_LSB_TOL);
     }
 }
@@ -274,11 +274,11 @@ proptest! {
     #![proptest_config(proptest_config("cos_even_symmetry"))]
     #[test]
     fn cos_even_symmetry(raw in real_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let lhs = x.cos_strict();
         let rhs = (-x).cos_strict();
-        prop_assert_within!("cos(-x)=cos(x)", lhs.to_bits(), rhs.to_bits(),
-                            (lhs.to_bits() - rhs.to_bits()).abs(),
+        prop_assert_within!("cos(-x)=cos(x)", lhs.to_bits().as_i128(), rhs.to_bits().as_i128(),
+                            (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs(),
                             SYMMETRY_LSB_TOL);
     }
 }
@@ -287,11 +287,11 @@ proptest! {
     #![proptest_config(proptest_config("atan_odd_symmetry"))]
     #[test]
     fn atan_odd_symmetry(raw in real_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let lhs = x.atan_strict();
         let rhs = -((-x).atan_strict());
-        prop_assert_within!("atan(-x)=-atan(x)", lhs.to_bits(), rhs.to_bits(),
-                            (lhs.to_bits() - rhs.to_bits()).abs(),
+        prop_assert_within!("atan(-x)=-atan(x)", lhs.to_bits().as_i128(), rhs.to_bits().as_i128(),
+                            (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs(),
                             SYMMETRY_LSB_TOL);
     }
 }
@@ -300,11 +300,11 @@ proptest! {
     #![proptest_config(proptest_config("cbrt_odd_symmetry"))]
     #[test]
     fn cbrt_odd_symmetry(raw in real_x()) {
-        let x = D::from_bits(raw);
+        let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
         let lhs = x.cbrt_strict();
         let rhs = -((-x).cbrt_strict());
-        prop_assert_within!("cbrt(-x)=-cbrt(x)", lhs.to_bits(), rhs.to_bits(),
-                            (lhs.to_bits() - rhs.to_bits()).abs(),
+        prop_assert_within!("cbrt(-x)=-cbrt(x)", lhs.to_bits().as_i128(), rhs.to_bits().as_i128(),
+                            (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs(),
                             SYMMETRY_LSB_TOL);
     }
 }
@@ -354,9 +354,9 @@ mod wide_witness {
         #![proptest_config(config("d76_sqrt_witness"))]
         #[test]
         fn d76_sqrt_agrees_with_d38(raw in nonneg_x()) {
-            let n = N::from_bits(raw);
+            let n = N::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let w: W = n.into();
-            let nb = n.sqrt_strict().to_bits();
+            let nb = n.sqrt_strict().to_bits().as_i128();
             let wb = w.sqrt_strict().to_bits().to_i128_checked()
                 .expect("D76<19>::sqrt fits i128");
             let diff = (wb - nb).abs();
@@ -369,9 +369,9 @@ mod wide_witness {
         #![proptest_config(config("d76_exp_witness"))]
         #[test]
         fn d76_exp_agrees_with_d38(raw in moderate_real()) {
-            let n = N::from_bits(raw);
+            let n = N::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let w: W = n.into();
-            let nb = n.exp_strict().to_bits();
+            let nb = n.exp_strict().to_bits().as_i128();
             let wb = w.exp_strict().to_bits().to_i128_checked()
                 .expect("D76<19>::exp fits i128 at moderate x");
             let diff = (wb - nb).abs();
@@ -438,11 +438,11 @@ mod hard_inputs {
         #![proptest_config(config("hard_tie_sqrt_roundtrip"))]
         #[test]
         fn hard_tie_sqrt_roundtrip(raw in near_unit()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let r = x.sqrt_strict();
             let back = r * r;
-            let xb = x.to_bits();
-            let bb = back.to_bits();
+            let xb = x.to_bits().as_i128();
+            let bb = back.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - bb).abs();
             prop_assert!(diff <= tol,
@@ -472,10 +472,10 @@ mod hard_inputs {
         #![proptest_config(config("hard_canc_exp_of_ln"))]
         #[test]
         fn hard_canc_exp_of_ln(raw in ln_just_above_one()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let y = x.ln_strict().exp_strict();
-            let xb = x.to_bits();
-            let yb = y.to_bits();
+            let xb = x.to_bits().as_i128();
+            let yb = y.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - yb).abs();
             prop_assert!(diff <= tol,
@@ -487,16 +487,16 @@ mod hard_inputs {
         #![proptest_config(config("hard_canc_pythag_tiny"))]
         #[test]
         fn hard_canc_pythag_tiny(raw in tiny_around_zero()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let s = x.sin_strict();
             let c = x.cos_strict();
             let sum = s * s + c * c;
-            let one = D::from_bits(ONE);
+            let one = D::from_bits(decimal_scaled::Int::<2>::from_i128(ONE));
             let tol = round_trip_tol(ONE);
-            let diff = (sum.to_bits() - one.to_bits()).abs();
+            let diff = (sum.to_bits().as_i128() - one.to_bits().as_i128()).abs();
             prop_assert!(diff <= tol,
                 "hard_canc sin²+cos² tiny: sum={} one={} diff={diff} > tol={tol}",
-                sum.to_bits(), one.to_bits());
+                sum.to_bits().as_i128(), one.to_bits().as_i128());
         }
     }
 
@@ -507,7 +507,7 @@ mod hard_inputs {
 
     fn near_half_pi_multiples() -> impl Strategy<Value = Bits> {
         // Pre-compute k·π/2 for k = -4..=4 and probe ±100 storage LSBs.
-        let half_pi = D::half_pi().to_bits();
+        let half_pi = D::half_pi().to_bits().as_i128();
         (-4i64..=4i64).prop_flat_map(move |k| {
             let center = (k as i128) * half_pi;
             (-100i128..=100i128).prop_map(move |d| center + d)
@@ -517,7 +517,7 @@ mod hard_inputs {
     fn near_quarter_pi_odd_multiples() -> impl Strategy<Value = Bits> {
         // Odd k for k·π/4 — these are the tan(45°)-style breakpoints
         // (and the safe_to_case helper rejects π/2 poles).
-        let quarter_pi = D::quarter_pi().to_bits();
+        let quarter_pi = D::quarter_pi().to_bits().as_i128();
         (prop::sample::select(vec![-7i64, -5, -3, -1, 1, 3, 5, 7])).prop_flat_map(move |k| {
             let center = (k as i128) * quarter_pi;
             (-50i128..=50i128).prop_map(move |d| center + d)
@@ -528,13 +528,13 @@ mod hard_inputs {
         #![proptest_config(config("hard_rred_sin_symmetry"))]
         #[test]
         fn hard_rred_sin_symmetry(raw in near_half_pi_multiples()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let lhs = x.sin_strict();
             let rhs = -((-x).sin_strict());
-            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            let diff = (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs();
             prop_assert!(diff <= SYMMETRY_LSB_TOL,
                 "hard_rred sin(-x)=-sin(x): lhs={} rhs={} diff={diff}",
-                lhs.to_bits(), rhs.to_bits());
+                lhs.to_bits().as_i128(), rhs.to_bits().as_i128());
         }
     }
 
@@ -542,16 +542,16 @@ mod hard_inputs {
         #![proptest_config(config("hard_rred_pythag"))]
         #[test]
         fn hard_rred_pythag(raw in near_quarter_pi_odd_multiples()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let s = x.sin_strict();
             let c = x.cos_strict();
             let sum = s * s + c * c;
-            let one = D::from_bits(ONE);
+            let one = D::from_bits(decimal_scaled::Int::<2>::from_i128(ONE));
             let tol = round_trip_tol(ONE);
-            let diff = (sum.to_bits() - one.to_bits()).abs();
+            let diff = (sum.to_bits().as_i128() - one.to_bits().as_i128()).abs();
             prop_assert!(diff <= tol,
                 "hard_rred sin²+cos² near k·π/4: sum={} one={} diff={diff} > tol={tol}",
-                sum.to_bits(), one.to_bits());
+                sum.to_bits().as_i128(), one.to_bits().as_i128());
         }
     }
 
@@ -575,10 +575,10 @@ mod hard_inputs {
         #![proptest_config(config("hard_asym_exp_of_ln_small"))]
         #[test]
         fn hard_asym_exp_of_ln_small(raw in ln_near_zero()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let y = x.ln_strict().exp_strict();
-            let xb = x.to_bits();
-            let yb = y.to_bits();
+            let xb = x.to_bits().as_i128();
+            let yb = y.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - yb).abs();
             prop_assert!(diff <= tol,
@@ -590,13 +590,13 @@ mod hard_inputs {
         #![proptest_config(config("hard_asym_atan_odd_huge"))]
         #[test]
         fn hard_asym_atan_odd_huge(raw in huge_real()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let lhs = x.atan_strict();
             let rhs = -((-x).atan_strict());
-            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            let diff = (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs();
             prop_assert!(diff <= SYMMETRY_LSB_TOL,
                 "hard_asym atan(-x)=-atan(x) huge: lhs={} rhs={} diff={diff}",
-                lhs.to_bits(), rhs.to_bits());
+                lhs.to_bits().as_i128(), rhs.to_bits().as_i128());
         }
     }
 
@@ -609,7 +609,7 @@ mod hard_inputs {
 
     fn quarter_pi_inner() -> impl Strategy<Value = Bits> {
         // (-π/4 + ε, π/4 - ε) — sample heavily near the boundary.
-        let quarter_pi = D::quarter_pi().to_bits();
+        let quarter_pi = D::quarter_pi().to_bits().as_i128();
         let margin = ONE / 1000;
         let band = ONE / 100;
         let lo = quarter_pi - band;
@@ -633,10 +633,10 @@ mod hard_inputs {
         #![proptest_config(config("hard_inv_atan_of_tan"))]
         #[test]
         fn hard_inv_atan_of_tan(raw in quarter_pi_inner()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let y = x.tan_strict().atan_strict();
-            let xb = x.to_bits();
-            let yb = y.to_bits();
+            let xb = x.to_bits().as_i128();
+            let yb = y.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - yb).abs();
             prop_assert!(diff <= tol,
@@ -648,11 +648,11 @@ mod hard_inputs {
         #![proptest_config(config("hard_inv_sqrt_of_square"))]
         #[test]
         fn hard_inv_sqrt_of_square(raw in squares_of_inputs()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let r = x.sqrt_strict();
             let back = r * r;
-            let xb = x.to_bits();
-            let bb = back.to_bits();
+            let xb = x.to_bits().as_i128();
+            let bb = back.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - bb).abs();
             prop_assert!(diff <= tol,
@@ -686,11 +686,11 @@ mod hard_inputs {
         #![proptest_config(config("hard_pp_sqrt_roundtrip"))]
         #[test]
         fn hard_pp_sqrt_roundtrip(raw in perfect_squares_jittered()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let r = x.sqrt_strict();
             let back = r * r;
-            let xb = x.to_bits();
-            let bb = back.to_bits();
+            let xb = x.to_bits().as_i128();
+            let bb = back.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - bb).abs();
             prop_assert!(diff <= tol,
@@ -702,13 +702,13 @@ mod hard_inputs {
         #![proptest_config(config("hard_pp_cbrt_symmetry"))]
         #[test]
         fn hard_pp_cbrt_symmetry(raw in perfect_cubes_jittered()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let lhs = x.cbrt_strict();
             let rhs = -((-x).cbrt_strict());
-            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            let diff = (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs();
             prop_assert!(diff <= SYMMETRY_LSB_TOL,
                 "hard_pp cbrt(-x)=-cbrt(x) at cube: lhs={} rhs={} diff={diff}",
-                lhs.to_bits(), rhs.to_bits());
+                lhs.to_bits().as_i128(), rhs.to_bits().as_i128());
         }
     }
 
@@ -718,15 +718,15 @@ mod hard_inputs {
     // around named constants (π, e, ln 2, etc.).
 
     fn near_pi_constants() -> impl Strategy<Value = Bits> {
-        let pi = D::pi().to_bits();
-        let half_pi = D::half_pi().to_bits();
-        let quarter_pi = D::quarter_pi().to_bits();
+        let pi = D::pi().to_bits().as_i128();
+        let half_pi = D::half_pi().to_bits().as_i128();
+        let quarter_pi = D::quarter_pi().to_bits().as_i128();
         prop::sample::select(vec![pi, half_pi, quarter_pi, -pi, -half_pi, -quarter_pi])
             .prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
     }
 
     fn near_e_unit() -> impl Strategy<Value = Bits> {
-        let e = D::e().to_bits();
+        let e = D::e().to_bits().as_i128();
         prop::sample::select(vec![e, -e, ONE, -ONE, 2 * ONE])
             .prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
     }
@@ -735,16 +735,16 @@ mod hard_inputs {
         #![proptest_config(config("hard_const_pythag"))]
         #[test]
         fn hard_const_pythag(raw in near_pi_constants()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let s = x.sin_strict();
             let c = x.cos_strict();
             let sum = s * s + c * c;
-            let one = D::from_bits(ONE);
+            let one = D::from_bits(decimal_scaled::Int::<2>::from_i128(ONE));
             let tol = round_trip_tol(ONE);
-            let diff = (sum.to_bits() - one.to_bits()).abs();
+            let diff = (sum.to_bits().as_i128() - one.to_bits().as_i128()).abs();
             prop_assert!(diff <= tol,
                 "hard_const sin²+cos² near π const: sum={} one={} diff={diff} > tol={tol}",
-                sum.to_bits(), one.to_bits());
+                sum.to_bits().as_i128(), one.to_bits().as_i128());
         }
     }
 
@@ -754,10 +754,10 @@ mod hard_inputs {
         fn hard_const_exp_of_ln(raw in near_e_unit()) {
             // Only positive inputs hit ln's domain.
             prop_assume!(raw > 0);
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let y = x.ln_strict().exp_strict();
-            let xb = x.to_bits();
-            let yb = y.to_bits();
+            let xb = x.to_bits().as_i128();
+            let yb = y.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - yb).abs();
             prop_assert!(diff <= tol,
@@ -791,13 +791,13 @@ mod hard_inputs {
         #![proptest_config(config("hard_halv_atan_odd"))]
         #[test]
         fn hard_halv_atan_odd(raw in atan_halving_anchors()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let lhs = x.atan_strict();
             let rhs = -((-x).atan_strict());
-            let diff = (lhs.to_bits() - rhs.to_bits()).abs();
+            let diff = (lhs.to_bits().as_i128() - rhs.to_bits().as_i128()).abs();
             prop_assert!(diff <= SYMMETRY_LSB_TOL,
                 "hard_halv atan(-x)=-atan(x): lhs={} rhs={} diff={diff}",
-                lhs.to_bits(), rhs.to_bits());
+                lhs.to_bits().as_i128(), rhs.to_bits().as_i128());
         }
     }
 
@@ -829,12 +829,12 @@ mod hard_inputs {
         #![proptest_config(config("hard_exp_stage2_roundtrip"))]
         #[test]
         fn hard_exp_stage2_roundtrip(raw in near_k_ln2()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             // exp(x) might overflow at |x| > ~44 in storage; the
             // strategy keeps |k| <= 30 so we're well inside.
             let y = x.exp_strict().ln_strict();
-            let xb = x.to_bits();
-            let yb = y.to_bits();
+            let xb = x.to_bits().as_i128();
+            let yb = y.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - yb).abs();
             prop_assert!(diff <= tol,
@@ -862,10 +862,10 @@ mod hard_inputs {
         #![proptest_config(config("hard_tang_exp_of_ln"))]
         #[test]
         fn hard_tang_exp_of_ln(raw in tang_lookup_anchors()) {
-            let x = D::from_bits(raw);
+            let x = D::from_bits(decimal_scaled::Int::<2>::from_i128(raw));
             let y = x.ln_strict().exp_strict();
-            let xb = x.to_bits();
-            let yb = y.to_bits();
+            let xb = x.to_bits().as_i128();
+            let yb = y.to_bits().as_i128();
             let tol = round_trip_tol(xb);
             let diff = (xb - yb).abs();
             prop_assert!(diff <= tol,
