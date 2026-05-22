@@ -174,22 +174,22 @@ impl_widen_scale!(i64);
 impl_widen_scale!(i128);
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int192);
+impl_widen_scale!(crate::int::types::Int<3>);
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int256);
+impl_widen_scale!(crate::int::types::Int<4>);
 #[cfg(any(feature = "d115", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int384);
+impl_widen_scale!(crate::int::types::Int<6>);
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int512);
+impl_widen_scale!(crate::int::types::Int<8>);
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int768);
+impl_widen_scale!(crate::int::types::Int<12>);
 #[cfg(any(feature = "d307", feature = "wide"))]
-impl_widen_scale!(crate::wide_int::Int1024);
+impl_widen_scale!(crate::int::types::Int<16>);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl_widen_scale!(crate::wide_int::Int1536);
+impl_widen_scale!(crate::int::types::Int<24>);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl_widen_scale!(crate::wide_int::Int2048);
+impl_widen_scale!(crate::int::types::Int<32>);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl_widen_scale!(crate::wide_int::Int3072);
+impl_widen_scale!(crate::int::types::Int<48>);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl_widen_scale!(crate::wide_int::Int4096);
+impl_widen_scale!(crate::int::types::Int<64>);

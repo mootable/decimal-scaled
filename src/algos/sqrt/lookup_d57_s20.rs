@@ -40,7 +40,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::int::types::traits::BigInt;
-use crate::wide_int::{Int192, Int256};
+use crate::int::types::Int;
 
 /// `D57<20>` square-root kernel. The Newton-on-`Int256` floor-root is
 /// seeded via the `f64::sqrt` bridge when `std` is available and via
@@ -50,18 +50,18 @@ use crate::wide_int::{Int192, Int256};
 /// iteration count differs.
 #[inline]
 #[must_use]
-pub(crate) fn sqrt(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw <= Int192::ZERO {
-        return Int192::ZERO;
+pub(crate) fn sqrt(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+    if raw <= Int::<3>::ZERO {
+        return Int::<3>::ZERO;
     }
     // SCALE = 20 ⇒ scale-10 multiplier is 10^20. `raw` ≤ ~10^57,
-    // so `raw · 10^20` ≤ ~10^77 which fits Int256 (~10^77).
+    // so `raw · 10^20` ≤ ~10^77 which fits Int<4> (~10^77).
     const SCALE: u32 = 20;
-    let n: Int256 = raw.resize_to::<Int256>() * Int256::TEN.pow(SCALE);
-    let q: Int256 = crate::policy::float_seed::isqrt::<Int256>(n);
-    let diff: Int256 = n - q * q;
+    let n: Int<4> = raw.resize_to::<Int<4>>() * Int::<4>::TEN.pow(SCALE);
+    let q: Int<4> = crate::policy::float_seed::isqrt::<Int<4>>(n);
+    let diff: Int<4> = n - q * q;
     let halfway_round_up = diff > q;
-    let diff_nonzero = diff != Int256::ZERO;
+    let diff_nonzero = diff != Int::<4>::ZERO;
     let bump = match mode {
         RoundingMode::HalfToEven
         | RoundingMode::HalfAwayFromZero
@@ -69,6 +69,6 @@ pub(crate) fn sqrt(raw: Int192, mode: RoundingMode) -> Int192 {
         RoundingMode::Trunc | RoundingMode::Floor => false,
         RoundingMode::Ceiling => diff_nonzero,
     };
-    let q = if bump { q + Int256::ONE } else { q };
-    q.resize_to::<Int192>()
+    let q = if bump { q + Int::<4>::ONE } else { q };
+    q.resize_to::<Int<3>>()
 }
