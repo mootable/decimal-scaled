@@ -39,7 +39,7 @@
 
 use crate::support::rounding::RoundingMode;
 use crate::int::types::traits::BigInt;
-use crate::wide_int::{Int192, Int384};
+use crate::int::types::Int;
 
 const SCALE: u32 = 20;
 
@@ -53,18 +53,18 @@ const SCALE: u32 = 20;
 /// the generic `Int768`) and the seed source change.
 #[inline]
 #[must_use]
-pub(crate) fn cbrt(raw: Int192, mode: RoundingMode) -> Int192 {
-    if raw == Int192::ZERO {
-        return Int192::ZERO;
+pub(crate) fn cbrt(raw: Int<3>, mode: RoundingMode) -> Int<3> {
+    if raw == Int::<3>::ZERO {
+        return Int::<3>::ZERO;
     }
-    let zero = Int384::ZERO;
-    let one = Int384::ONE;
-    let widened: Int384 = raw.resize_to::<Int384>();
+    let zero = Int::<6>::ZERO;
+    let one = Int::<6>::ONE;
+    let widened: Int<6> = raw.resize_to::<Int<6>>();
     let negative = widened < zero;
     let mag = if negative { -widened } else { widened };
-    let n: Int384 = mag * Int384::TEN.pow(2 * SCALE);
+    let n: Int<6> = mag * Int::<6>::TEN.pow(2 * SCALE);
 
-    let q = crate::policy::float_seed::icbrt::<Int384>(n);
+    let q = crate::policy::float_seed::icbrt::<Int<6>>(n);
 
     // ── Rounding (same logic as generic_wide). ────────────────
     let eight_n = n << 3u32;
@@ -91,5 +91,5 @@ pub(crate) fn cbrt(raw: Int192, mode: RoundingMode) -> Int192 {
     };
     let q = if bump { q + one } else { q };
     let signed = if negative { -q } else { q };
-    signed.resize_to::<Int192>()
+    signed.resize_to::<Int<3>>()
 }

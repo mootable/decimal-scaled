@@ -78,52 +78,54 @@ macro_rules! decl_sqrt_kernel_shim {
     };
 }
 
+use crate::int::types::Int;
+
 #[cfg(any(feature = "d57", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d57, crate::wide_int::Int192, crate::wide_int::Int384);
+decl_sqrt_kernel_shim!(sqrt_d57, Int<3>, Int<6>);
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d76, crate::wide_int::Int256, crate::wide_int::Int512);
+decl_sqrt_kernel_shim!(sqrt_d76, Int<4>, Int<8>);
 
 #[cfg(any(feature = "d115", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d115, crate::wide_int::Int384, crate::wide_int::Int768);
+decl_sqrt_kernel_shim!(sqrt_d115, Int<6>, Int<12>);
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d153, crate::wide_int::Int512, crate::wide_int::Int1024);
+decl_sqrt_kernel_shim!(sqrt_d153, Int<8>, Int<16>);
 
 #[cfg(any(feature = "d230", feature = "wide"))]
-decl_sqrt_kernel_shim!(sqrt_d230, crate::wide_int::Int768, crate::wide_int::Int1536);
+decl_sqrt_kernel_shim!(sqrt_d230, Int<12>, Int<24>);
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 decl_sqrt_kernel_shim!(
     sqrt_d307,
-    crate::wide_int::Int1024,
-    crate::wide_int::Int2048
+    Int<16>,
+    Int<32>
 );
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 decl_sqrt_kernel_shim!(
     sqrt_d462,
-    crate::wide_int::Int1536,
-    crate::wide_int::Int3072
+    Int<24>,
+    Int<48>
 );
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 decl_sqrt_kernel_shim!(
     sqrt_d616,
-    crate::wide_int::Int2048,
-    crate::wide_int::Int4096
+    Int<32>,
+    Int<64>
 );
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 decl_sqrt_kernel_shim!(
     sqrt_d924,
-    crate::wide_int::Int3072,
-    crate::wide_int::Int6144
+    Int<48>,
+    Int<96>
 );
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 decl_sqrt_kernel_shim!(
     sqrt_d1232,
-    crate::wide_int::Int4096,
-    crate::wide_int::Int8192
+    Int<64>,
+    Int<128>
 );
