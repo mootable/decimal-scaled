@@ -1,0 +1,7 @@
+# Feature set rust-analyzer / RustRover should analyse with, matching the
+# crate's real build. The wide tiers (D57…D1232) and the proc-macro layer
+# are gated behind these; without them the IDE flags all gated code red
+# even though `cargo build` is clean. (Do NOT use "all features" — some
+# `rounding-*` features are mutually exclusive.)
+[cargo]
+features = ["wide", "x-wide", "xx-wide", "macros"]
