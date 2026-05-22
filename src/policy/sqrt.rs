@@ -31,7 +31,7 @@
 //!    a different kernel. Captured here today:
 //!    - `D18` → [`algos::sqrt::widen_to_d38`] (delegate via D38).
 //!    - `D38` → [`algos::sqrt::mg_divide_d38`] (hand-tuned 256-bit
-//!      isqrt over `i128` storage).
+//!      isqrt over the `Int<2>` storage).
 //! 3. **Scale-range override** — a leading `if matches!(SCALE, range)`
 //!    arm picks a bespoke kernel for one or more scales. `matches!`
 //!    accepts range patterns (`20..=20`, `18..=22`, `(5 | 10)`), so
@@ -78,7 +78,7 @@ impl<const SCALE: u32> SqrtPolicy for D38<SCALE> {
         if self <= Self::ZERO {
             return Self::ZERO;
         }
-        // Width override: 256-bit isqrt tailored to i128 storage.
+        // Width override: 256-bit isqrt tailored to the D38 `Int<2>` storage.
         Self(sqrt::mg_divide_d38::sqrt(self.0, SCALE, mode))
     }
 }

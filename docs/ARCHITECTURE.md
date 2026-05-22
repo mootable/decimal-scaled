@@ -26,7 +26,7 @@ reaches into limb internals directly.
 
 The key point the older sketch hid: **the integer layer is not just
 primitives — it has its own dispatch policy and algorithm library**,
-mirroring the decimal layer. A `FixedInt` method (`mul`, `div`,
+mirroring the decimal layer. A `BigInt` method (`mul`, `div`,
 `root_int`, …) routes on the compile-time width / limb count to one
 matched algorithm — schoolbook below the Karatsuba threshold and the
 non-allocating Karatsuba above it, Möller–Granlund divide at the narrow
@@ -55,7 +55,7 @@ sequenceDiagram
   U->>FE: sqrt_strict()
   FE->>DP: dispatch (width 192, SCALE 20)
   DP->>DK: const-folded → lookup_d57_s20
-  DK->>IP: root_int / isqrt on Int192 (FixedInt)
+  DK->>IP: root_int / isqrt on Int<3> (BigInt)
   IP->>IK: const-folded → width-matched isqrt
   IK->>L: limb ops on [u64; 3]
   L-->>IK: limbs
@@ -69,24 +69,23 @@ sequenceDiagram
 The storage under a decimal type is an integer wide enough to hold
 `10^MAX_SCALE`:
 
-| Decimal tier | Storage | Backed by |
-|---|---|---|
-| D18 / D38 | `i64` / `i128` | native primitives |
-| D57 … D1232 | 192 … 4096-bit | const-generic `Int<N>` |
+| Decimal tier | Storage |
+|---|---|
+| D18 / D38 | `Int<1>` / `Int<2>` |
+| D57 … D1232 | `Int<3>` … `Int<64>` |
 
-The wide tiers are built on a single const-generic pair —
+Every tier is built on a single const-generic pair —
 `Uint<const N: usize>` and `Int<const N: usize>` — stored as `[u64; N]`
 little-endian limbs (`N` = number of 64-bit limbs; bit width is `N·64`).
 Choosing the **limb count** as the one type parameter sidesteps the
 `LIMBS = ⌈BITS/64⌉` derivation that a bits-parameterised type cannot
-express on stable Rust. The historical named types (`Int256`, `Int1024`,
-…) survive as thin `pub type` aliases over `Int<N>`.
+express on stable Rust.
 
 The arithmetic itself lives once, as **reusable width-matched limb
 algorithms** (add/sub/mul/div/shift/compare, plus `sqr`, `cube`,
 `root_int`, `isqrt`, …) operating over `&[u64]` slices. Because `N` is a
 compile-time constant, the limb loops unroll per width and there is no
-runtime length to carry. A `FixedInt` trait exposes this surface with the
+runtime length to carry. A `BigInt` trait exposes this surface with the
 **same method names** as the decimal arithmetic trait, so the two layers
 read as one vocabulary.
 
@@ -94,10 +93,10 @@ read as one vocabulary.
 
 ```
 int/                const-generic integer layer
-  types/            Int<N>/Uint<N> + named aliases; FixedInt / FixedIntConvert
+  types/            Int<N>/Uint<N>; the BigInt trait
   policy/           per-width / limb-count algorithm-selection dispatch
   algos/            reusable width-matched algorithms
-  limbs/            raw slice limb primitives; legacy named-type generator
+  limbs/            raw slice limb primitives
 ```
 
 ## Decimal front-ends
@@ -227,10 +226,10 @@ nearest-mode path paying nothing extra.
 ```
 src/
   int/        const-generic integer layer
-    types/    Int<N>/Uint<N> + named aliases; FixedInt / FixedIntConvert
+    types/    Int<N>/Uint<N>; the BigInt trait
     policy/   per-width / limb-count algorithm-selection dispatch
     algos/    reusable width-matched algorithms
-    limbs/    raw slice limb primitives; legacy named-type generator
+    limbs/    raw slice limb primitives
   types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
   policy/     per-family (width, SCALE) dispatch → kernels
   algos/      the kernels (sqrt cbrt exp ln trig pow …)

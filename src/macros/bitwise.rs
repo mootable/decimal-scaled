@@ -5,17 +5,14 @@
 //! (`value * 10^SCALE`), not the logical decimal value.
 //!
 //! The operator surface (`BitAnd` / `BitOr` / `BitXor` / `Not` / `Shl`
-//! / `Shr` and the `*Assign` forms) is textually identical for
-//! primitive-integer and wide storage, so it lives in a shared
-//! `@common` arm. The inherent bit-manipulation methods differ only in
-//! how the "reinterpret as unsigned" step is spelled — an `as u128`
-//! cast for native storage, the wide integer's `cast_unsigned` / `cast_signed`
-//! for wide storage — so they are written per front-end arm.
+//! / `Shr` and the `*Assign` forms) is textually identical across the
+//! `Int<N>` storage widths, so it lives in a shared `@common` arm. The
+//! inherent bit-manipulation methods spell the "reinterpret as unsigned"
+//! step with the `Int<N>` storage's `cast_unsigned` / `cast_signed`.
 
 /// Emits the bitwise operator + method surface for a decimal type.
 ///
-/// - `decl_decimal_bitwise!(D38, i128)` — *native* storage.
-/// - `decl_decimal_bitwise!(wide D76, I256)` — *wide* storage.
+/// - `decl_decimal_bitwise!(wide D76, Int<4>)` — `Int<N>` storage.
 macro_rules! decl_decimal_bitwise {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {

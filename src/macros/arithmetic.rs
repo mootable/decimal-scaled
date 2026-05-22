@@ -2,12 +2,11 @@
 //! widths that use a *uniform* mul/div pattern (D18, and the wide
 //! tier D76 / D153 / D307).
 //!
-//! For D18 the storage type is a primitive (`i32` / `i64`) and a
-//! native wider integer (`i64` / `i128`) carries the mul/div widening
-//! step. For D76 / D153 / D307 the storage type is a hand-rolled wide integer
-//! fixed-width integer and the widening type is the next size up
-//! up; the only thing that changes is *how* the `10^SCALE` literal and
-//! the width casts are spelled.
+//! Every decimal width stores its value in an `Int<N>` and carries the
+//! mul/div widening step in the next size up (`Int<1>`→`Int<2>` for D18,
+//! `Int<2>`→`Int<4>` for the wide tier, …); the only thing that changes
+//! across widths is *how* the `10^SCALE` literal and the width casts are
+//! spelled.
 //!
 //! D38 is the exception: its mul/div go through the hand-rolled
 //! 256-bit `mg_divide` path and are not generated here.
@@ -50,7 +49,7 @@
 ///
 /// # Precision
 ///
-/// Strict: identical bit-for-bit result to `round_with_mode_native!`
+/// Strict: identical bit-for-bit result to [`round_with_mode_wide!`]
 /// at the same `(n, m, mode)`. Proof: both compute
 /// `n.signum() * (|n| / m_mag)` for the truncated quotient (Rust signed
 /// `/` truncates toward zero, identical to `(-|n|/m_mag) * sign(n)`
@@ -115,11 +114,10 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
     }
 }
 
-/// Wide-storage counterpart of [`round_with_mode_native!`] — the same
-/// strategy-pattern dispatch over [`crate::support::rounding::should_bump`],
-/// adapted to a hand-rolled wide integer `$W`. Uses
-/// `<$W>::from_i128(0/1)` for the small constants and the type's
-/// operators throughout.
+/// Rounds a widened division residual using a strategy-pattern dispatch
+/// over [`crate::support::rounding::should_bump`], expressed in terms of
+/// the `Int<N>` storage `$W`. Uses `<$W>::from_i128(0/1)` for the small
+/// constants and the type's operators throughout.
 #[cfg(any(
     feature = "d76",
     feature = "d153",
@@ -169,13 +167,10 @@ pub(crate) use round_with_mode_wide;
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
-/// - `decl_decimal_arithmetic!(i32, i64)` — *native* storage; the
-/// widening type is a primitive integer, `as`-casts and the
-/// `(10 as $Wider)` literal carry the mul/div step.
-/// - `decl_decimal_arithmetic!(wide D76, I256, I512)` — *wide*
-/// storage; the widening type is a hand-rolled wide integer, the `BigInt` cast
-/// carries the width casts and `from_str_radix` builds the
-/// `10^SCALE` factor.
+/// Invoked as `decl_decimal_arithmetic!(wide D76, Int<4>, Int<8>)`: the
+/// storage is an `Int<N>` and the widening type the next size up. The
+/// `BigInt` cast carries the width casts and `from_str_radix` builds the
+/// `10^SCALE` factor (`Int<N>` has no `as` literal cast).
 macro_rules! decl_decimal_arithmetic {
     // Wide storage.
     (wide $Type:ident, $Storage:ty, $Wider:ty) => {
@@ -353,8 +348,8 @@ macro_rules! decl_decimal_arithmetic {
         }
     };
 
-    // Add / Sub / Neg / Rem and their assign forms — identical for
-    // native and wide storage (the `core::ops` impls on the wide integers
+    // Add / Sub / Neg / Rem and their assign forms — identical across the
+    // `Int<N>` storage widths (the `core::ops` impls on the wide integers
     // match the primitive integer surface).
     (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::ops::Add for $Type<SCALE> {

@@ -51,7 +51,7 @@ pub(crate) mod wtag {
 ///   storage value and the rounding mode (passed so they share macro
 ///   hygiene with the caller-supplied arm bodies).
 /// - `params`   — zero or more `name: Ty` carried past `recv` into the
-///   kernels (e.g. `exp_raw: i128` for `powf`).
+///   kernels (e.g. `exp_raw: Int<2>` for `powf`).
 /// - `base`     — the real algorithm: `(W_pat, SCALE_pat) => expr` arms in
 ///   first-match order. The arm body sees `recv`, the `params`, `mode`, and
 ///   `SCALE` (the impl's const generic).

@@ -11,19 +11,14 @@
 //! Invoke once per width (see `types/widths.rs` for the per-width
 //! invocations).
 //!
-//! Two front-end arms exist:
+//! Invoked as `decl_decimal_basics!(wide D76, Int<4>, 75)`: the storage
+//! type is an `Int<N>` and the third argument is `MAX_SCALE = name - 1`.
+//! `Int<N>` has no `as` cast from integer literals, so the `10` and `0`
+//! constants are built via const-fns (`from_i128` / `from_str_radix`)
+//! rather than a literal cast.
 //!
-//! - `decl_decimal_basics!(D38, i128, 37)` — *native* storage. The
-//!   third argument is `MAX_SCALE = name - 1` (the v0.4.0 cap). The
-//! storage type is a primitive signed integer that supports the
-//! `(10 as $Storage)` literal cast and a const-fn `pow`.
-//! - `decl_decimal_basics!(wide D76, I256, 75)` — *wide* storage. The
-//! storage type is a hand-rolled wide integer fixed-width integer, which has no `as`
-//! cast from integer literals; the `10` and `0` constants are built
-//! via the const-fn `from_str_radix` instead.
-//!
-//! Both arms forward to a shared `@impl` arm so the bulk of the surface
-//! is defined exactly once.
+//! The front-end arm forwards to a shared `@impl` arm so the bulk of the
+//! surface is defined exactly once.
 
 macro_rules! decl_decimal_basics {
     // Wide storage: literal `10` / `0` are constructed via
