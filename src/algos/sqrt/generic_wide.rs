@@ -13,7 +13,7 @@
 //! # Generic kernel + per-tier shims
 //!
 //! The kernel is parameterised over `(Storage, SqrtWide)` via the
-//! [`crate::wide_int::BigInt`] trait, which exposes the unifrom
+//! [`crate::int::types::traits::BigInt`] trait, which exposes the unifrom
 //! surface (`ZERO` / `ONE` / `TEN`, `pow`, `isqrt`, `resize_to`, the
 //! standard arithmetic ops) every wide signed integer in the family
 //! ships. The kernel collapses to a single function:
@@ -32,7 +32,7 @@
 //! saturate-not-panic policy matching the typed `sqrt_strict` surface).
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::BigInt;
+use crate::int::types::traits::BigInt;
 
 /// Generic square-root kernel for the wide-integer family.
 ///

@@ -1452,7 +1452,7 @@ impl<const N: usize> Int<N> {
     /// `resize::<T>()` signature so the decimal-tier code that calls
     /// `storage.resize::<$Wider>()` resolves against `Int<N>`.
     #[inline]
-    pub(crate) fn resize<T: crate::int::limbs::BigInt>(self) -> T {
+    pub(crate) fn resize<T: crate::int::types::traits::BigInt>(self) -> T {
         let negative = self.is_negative();
         let mag = *self.unsigned_abs().as_limbs();
         T::from_mag_sign(&mag, negative)
@@ -1501,7 +1501,7 @@ impl<const N: usize> Int<N> {
     /// by the wide-tier `Mul` operator to compute
     /// `Storage * Storage → Wider`. Matches the macro's `widen_mul`.
     #[inline]
-    pub(crate) fn widen_mul<W: crate::int::limbs::BigInt>(self, rhs: Self) -> W {
+    pub(crate) fn widen_mul<W: crate::int::types::traits::BigInt>(self, rhs: Self) -> W {
         let negative = self.is_negative() ^ rhs.is_negative();
         let a = *self.unsigned_abs().as_limbs();
         let b = *rhs.unsigned_abs().as_limbs();
@@ -2554,7 +2554,7 @@ mod tests {
 
     #[test]
     fn int_wide_storage_surface() {
-        use crate::int::limbs::BigInt;
+        use crate::int::types::traits::BigInt;
         fn exercises<T: BigInt>() {
             assert!(<T as BigInt>::ZERO == <T as BigInt>::from_i128(0));
             assert!(<T as BigInt>::ONE == <T as BigInt>::from_i128(1));
@@ -2590,7 +2590,7 @@ mod tests {
 
     #[test]
     fn int_isqrt_matches_uint_magnitude() {
-        use crate::int::limbs::BigInt;
+        use crate::int::types::traits::BigInt;
         // Signed isqrt is the magnitude isqrt (macro parity).
         let n = Int::<4>::from_i128(1_000_000_000_000);
         let r = BigInt::isqrt(n);
@@ -2603,7 +2603,7 @@ mod tests {
 
     #[test]
     fn int_wideint_mag_sign_round_trips() {
-        use crate::int::limbs::BigInt;
+        use crate::int::types::traits::BigInt;
         use crate::int::types::traits::MagSign;
         // to_mag_sign / from_mag_sign round-trip for signed values,
         // including the magnitude + sign split.
@@ -2677,7 +2677,7 @@ mod tests {
 mod unified_mg_feasibility {
     use super::Int;
     use crate::algos::mg_divide::div_wide_pow10_with;
-    use crate::int::limbs::BigInt;
+    use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 
     /// `(a · b) / 10^scale` through the unified pipeline, computed as

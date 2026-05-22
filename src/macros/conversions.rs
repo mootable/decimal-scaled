@@ -35,7 +35,7 @@ macro_rules! decl_from_primitive {
             /// (debug-mode panic, release-mode wrap).
             #[inline]
             fn from(value: $Src) -> Self {
-                let widened: $Storage = $crate::wide_int::wide_cast(value as i128);
+                let widened: $Storage = $crate::int::types::traits::wide_cast(value as i128);
                 Self(widened * Self::multiplier())
             }
         }
@@ -72,7 +72,7 @@ macro_rules! decl_cross_width_widening {
             /// a subset of the destination).
             #[inline]
             fn from(value: $Src<SCALE>) -> Self {
-                Self($crate::wide_int::wide_cast(value.to_bits()))
+                Self($crate::int::types::traits::wide_cast(value.to_bits()))
             }
         }
     };
@@ -113,14 +113,14 @@ macro_rules! decl_cross_width_narrowing {
             #[inline]
             fn try_from(value: $Src<SCALE>) -> ::core::result::Result<Self, Self::Error> {
                 let bits = value.to_bits();
-                let dest_max: $SrcStorage = $crate::wide_int::wide_cast(<$DestStorage>::MAX);
-                let dest_min: $SrcStorage = $crate::wide_int::wide_cast(<$DestStorage>::MIN);
+                let dest_max: $SrcStorage = $crate::int::types::traits::wide_cast(<$DestStorage>::MAX);
+                let dest_min: $SrcStorage = $crate::int::types::traits::wide_cast(<$DestStorage>::MIN);
                 if bits > dest_max || bits < dest_min {
                     return ::core::result::Result::Err(
                         $crate::support::error::ConvertError::Overflow,
                     );
                 }
-                ::core::result::Result::Ok(Self($crate::wide_int::wide_cast(bits)))
+                ::core::result::Result::Ok(Self($crate::int::types::traits::wide_cast(bits)))
             }
         }
     };
@@ -163,7 +163,7 @@ macro_rules! decl_try_from_i128 {
             type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: i128) -> ::core::result::Result<Self, Self::Error> {
-                let widened: $Storage = $crate::wide_int::wide_cast(value);
+                let widened: $Storage = $crate::int::types::traits::wide_cast(value);
                 let scaled = widened
                     .checked_mul(Self::multiplier())
                     .ok_or($crate::support::error::ConvertError::Overflow)?;
@@ -331,14 +331,14 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// Overflow follows the wide integer's default arithmetic semantics.
             #[inline]
             pub fn from_int(value: $IntSrc) -> Self {
-                let widened: $Storage = $crate::wide_int::wide_cast(value as i128);
+                let widened: $Storage = $crate::int::types::traits::wide_cast(value as i128);
                 Self(widened * Self::multiplier())
             }
 
             /// Constructs from an `i32`, scaling by `10^SCALE`.
             #[inline]
             pub fn from_i32(value: i32) -> Self {
-                let widened: $Storage = $crate::wide_int::wide_cast(value as i128);
+                let widened: $Storage = $crate::int::types::traits::wide_cast(value as i128);
                 Self(widened * Self::multiplier())
             }
 
@@ -427,14 +427,14 @@ macro_rules! decl_decimal_int_conversion_methods {
                         }
                     }
                 };
-                let i64_max: $Storage = $crate::wide_int::wide_cast(i64::MAX);
-                let i64_min: $Storage = $crate::wide_int::wide_cast(i64::MIN);
+                let i64_max: $Storage = $crate::int::types::traits::wide_cast(i64::MAX);
+                let i64_min: $Storage = $crate::int::types::traits::wide_cast(i64::MIN);
                 if int_rounded > i64_max {
                     i64::MAX
                 } else if int_rounded < i64_min {
                     i64::MIN
                 } else {
-                    $crate::wide_int::wide_cast::<_, i64>(int_rounded)
+                    $crate::int::types::traits::wide_cast::<_, i64>(int_rounded)
                 }
             }
         }

@@ -199,7 +199,7 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
 #[must_use]
 pub(crate) fn exp_strict<const SCALE: u32>(raw: Int512, mode: RoundingMode) -> Int512 {
     if raw == Int512::ZERO {
-        let ten: Int512 = crate::wide_int::wide_cast::<u128, Int512>(10);
+        let ten: Int512 = crate::int::types::traits::wide_cast::<u128, Int512>(10);
         return ten.pow(SCALE);
     }
     // Directed modes decide which side of a storage grid line the true

@@ -21,7 +21,7 @@
 //! here lets the root kernels stay cfg-free: they call
 //! [`isqrt`] / [`icbrt`] and never name a float method directly.
 
-use crate::wide_int::BigInt;
+use crate::int::types::traits::BigInt;
 
 /// Whether the `std` float intrinsics (`f64::sqrt` / `f64::cbrt`, used
 /// as Newton seeds) are available in this build.

@@ -9,7 +9,7 @@
 //! The trait is implemented for the reflexive case (`W: WidthLE<W>`)
 //! and for every (narrower, wider) storage pair the crate ships. The
 //! widening is performed by the existing
-//! [`crate::wide_int::wide_cast`] helper for the wide tier and a
+//! [`crate::int::types::traits::wide_cast`] helper for the wide tier and a
 //! plain `as` cast for the narrow primitive tier.
 //!
 //! `WidthLE` is intentionally not exposed as a public trait method on
@@ -134,7 +134,7 @@ macro_rules! impl_width_le_native_to_wide {
         impl $crate::types::traits::width_le::WidthLE<$Wide> for $Native {
             #[inline]
             fn widen_into(self) -> $Wide {
-                $crate::wide_int::wide_cast(self as i128)
+                $crate::int::types::traits::wide_cast(self as i128)
             }
         }
     };
@@ -160,7 +160,7 @@ macro_rules! impl_width_le_wide_pair {
         impl $crate::types::traits::width_le::WidthLE<$Wider> for $Narrower {
             #[inline]
             fn widen_into(self) -> $Wider {
-                $crate::wide_int::wide_cast(self)
+                $crate::int::types::traits::wide_cast(self)
             }
         }
     };

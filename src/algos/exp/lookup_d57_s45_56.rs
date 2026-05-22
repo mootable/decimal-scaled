@@ -91,7 +91,7 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
     // exp(0) = 1 short-circuit (matches generic wide_kernel).
     if raw == Int192::ZERO {
         // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
-        let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
+        let ten: Int192 = crate::int::types::traits::wide_cast::<u128, Int192>(10);
         return ten.pow(SCALE);
     }
 

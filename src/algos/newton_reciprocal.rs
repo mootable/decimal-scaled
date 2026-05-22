@@ -234,7 +234,7 @@ fn cmp_limbs(a: &[u128], b: &[u128]) -> core::cmp::Ordering {
 ///
 /// Direct analogue of [`crate::algos::mg_divide::div_wide_pow10_chain_with`]
 /// — same signature, same semantics, different inner algorithm.
-pub(crate) fn div_wide_pow10_newton_with<W: crate::wide_int::BigInt>(
+pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
@@ -410,7 +410,7 @@ mod cache {
 /// matching call sites in `macros::arithmetic::decl_decimal_arithmetic`
 /// and `macros::wide_transcendental::decl_wide_transcendental`.
 #[inline]
-pub(crate) fn dispatch_wide_pow10_with<W: crate::wide_int::BigInt, const N: usize>(
+pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, const N: usize>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
@@ -420,7 +420,7 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::wide_int::BigInt, const N: usiz
         W::U128_LIMBS,
         "magnitude buffer must match W's u128-limb width"
     );
-    let bits = <W as crate::wide_int::BigInt>::BITS;
+    let bits = <W as crate::int::types::traits::BigInt>::BITS;
     if !newton_wins(bits, scale) {
         return crate::algos::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode);
     }
@@ -459,12 +459,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[6] = 1u128 << 32;
         limbs[0] = 42;
-        let n = <I1024 as crate::wide_int::BigInt>::from_mag_sign_u128(&limbs, false);
+        let n = <I1024 as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain_with::<
             I1024,
-            { <I1024 as crate::wide_int::BigInt>::U128_LIMBS },
+            { <I1024 as crate::int::types::traits::BigInt>::U128_LIMBS },
         >(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
@@ -478,12 +478,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[14] = 1u128 << 16;
         limbs[3] = 0xdeadbeef;
-        let n = <I2048 as crate::wide_int::BigInt>::from_mag_sign_u128(&limbs, false);
+        let n = <I2048 as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain_with::<
             I2048,
-            { <I2048 as crate::wide_int::BigInt>::U128_LIMBS },
+            { <I2048 as crate::int::types::traits::BigInt>::U128_LIMBS },
         >(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
     }
@@ -497,12 +497,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[30] = 1u128 << 8;
         limbs[5] = 0xcafef00d;
-        let n = <I4096 as crate::wide_int::BigInt>::from_mag_sign_u128(&limbs, false);
+        let n = <I4096 as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain_with::<
             I4096,
-            { <I4096 as crate::wide_int::BigInt>::U128_LIMBS },
+            { <I4096 as crate::int::types::traits::BigInt>::U128_LIMBS },
         >(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
     }

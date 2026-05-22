@@ -47,7 +47,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
         return match which {
             Which::Sin => Int512::ZERO,
             Which::Cos => {
-                let ten: Int512 = crate::wide_int::wide_cast::<u128, Int512>(10);
+                let ten: Int512 = crate::int::types::traits::wide_cast::<u128, Int512>(10);
                 ten.pow(SCALE)
             }
         };

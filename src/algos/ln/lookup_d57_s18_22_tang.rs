@@ -123,7 +123,7 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> In
     // clamp to M-1 so the table lookup stays in range, then the
     // residual t handles the remaining tiny piece.
     let i_raw = ((m_w - one_w) * core::lit(M as u128)) / one_w;
-    let i_i128 = crate::wide_int::wide_cast::<core::W, i128>(i_raw);
+    let i_i128 = crate::int::types::traits::wide_cast::<core::W, i128>(i_raw);
     let i_idx = if i_i128 >= M as i128 {
         (M - 1) as usize
     } else {

@@ -2675,7 +2675,6 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
     }
 }
 
-pub(crate) use crate::int::types::traits::{BigInt, wide_cast};
 
 // The named wide-integer type family. Every width is now the
 // const-generic `Int<N>` / `Uint<N>`, re-exported here from
@@ -3737,6 +3736,7 @@ mod slice_tests {
     /// `Int256 → u128`.
     #[test]
     fn wide_cast_into_u128_returns_first_limb() {
+        use crate::int::types::traits::wide_cast;
         let src = Int256::from_i128(123_456_789);
         let dst: u128 = wide_cast(src);
         assert_eq!(dst, 123_456_789);

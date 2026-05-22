@@ -39,7 +39,8 @@
 #![cfg(any(feature = "d57", feature = "wide"))]
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::{BigInt, Int192, Int256};
+use crate::int::types::traits::BigInt;
+use crate::wide_int::{Int192, Int256};
 
 /// `D57<20>` square-root kernel. The Newton-on-`Int256` floor-root is
 /// seeded via the `f64::sqrt` bridge when `std` is available and via

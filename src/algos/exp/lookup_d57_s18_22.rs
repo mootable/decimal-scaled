@@ -48,7 +48,7 @@ const GUARD_NARROW: u32 = 8;
 #[must_use]
 pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> Int192 {
     if raw == Int192::ZERO {
-        let ten: Int192 = crate::wide_int::wide_cast::<u128, Int192>(10);
+        let ten: Int192 = crate::int::types::traits::wide_cast::<u128, Int192>(10);
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;

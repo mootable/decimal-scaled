@@ -301,14 +301,14 @@ macro_rules! decl_decimal_arithmetic {
                     let scaled = if SCALE == 0 {
                         n
                     } else if SCALE <= 38 {
-                        $crate::algos::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
+                        $crate::algos::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                     } else {
                         // Newton vs MG chain dispatch: cells in the
                         // bench-validated matrix (Int2048 ≥ s200,
                         // Int3072 ≥ s200, Int4096 ≥ s400) route to
                         // Newton; everything else stays on MG. See
                         // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                        $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
+                        $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                     };
                     return Self(scaled);
                 }
@@ -321,12 +321,12 @@ macro_rules! decl_decimal_arithmetic {
                 let scaled = if SCALE == 0 {
                     n
                 } else if SCALE <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
+                    $crate::algos::mg_divide::div_wide_pow10_with::<$Wider, { <$Wider as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                 } else {
                     // Width-dispatch as above; the slow path's `$Wider`
                     // numerator hits the same matrix (e.g. D307's
                     // `$Wider = Int2048` routes Newton at SCALE ≥ 200).
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::wide_int::BigInt>::U128_LIMBS }>(n, SCALE, mode)
+                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                 };
                 Self(scaled.resize::<$Storage>())
             }

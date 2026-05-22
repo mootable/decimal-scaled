@@ -4,7 +4,7 @@
 //!
 //! See [`crate::algos::sqrt::generic_wide`] for the parallel sqrt
 //! kernel — same parameterisation shape. The kernel is parameterised
-//! over `(Storage, CbrtWide)` via the [`crate::wide_int::BigInt`]
+//! over `(Storage, CbrtWide)` via the [`crate::int::types::traits::BigInt`]
 //! trait; a small per-tier shim macro forwards each tier to the
 //! generic [`cbrt`] function so call sites stay unchanged.
 //!
@@ -19,7 +19,7 @@
 //! arithmetic applies to every tier listed.
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::{BigInt, wide_cast};
+use crate::int::types::traits::{BigInt, wide_cast};
 
 /// Generic cube-root kernel for the wide-integer family.
 ///
