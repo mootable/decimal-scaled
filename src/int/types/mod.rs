@@ -437,6 +437,15 @@ impl<const N: usize> Uint<N> {
     /// limbs).
     #[inline]
     pub const fn from_u128(v: u128) -> Self {
+        Self::from_u128_bits(v)
+    }
+
+    /// Reinterprets an unsigned 128-bit value into the low 128 bits,
+    /// zero-extending the rest. **Truncating** — for `Uint<1>` the high
+    /// 64 bits of `v` are discarded; use [`Self::from_u128_checked`]
+    /// (or `TryFrom`) when `v` may not fit.
+    #[inline]
+    pub const fn from_u128_bits(v: u128) -> Self {
         let mut limbs = [0u64; N];
         if N > 0 {
             limbs[0] = v as u64;
@@ -445,6 +454,17 @@ impl<const N: usize> Uint<N> {
             limbs[1] = (v >> 64) as u64;
         }
         Self { limbs }
+    }
+
+    /// Exact value conversion from `u128`, or `None` if `v` does not fit
+    /// `Uint<N>` (only possible for `N < 2`). For `N >= 2` every `u128` fits.
+    #[inline]
+    pub const fn from_u128_checked(v: u128) -> Option<Self> {
+        if N >= 2 || v <= u64::MAX as u128 {
+            Some(Self::from_u128_bits(v))
+        } else {
+            None
+        }
     }
 
     /// Reinterprets the bit pattern as the signed sibling.
@@ -1045,6 +1065,29 @@ impl<const N: usize> Int<N> {
         Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
     }
 
+    /// Reinterprets a signed 128-bit value into the low 128 bits of the
+    /// storage, sign-extending the rest. **Truncating** — for `Int<1>`
+    /// the high 64 bits of `v` are discarded; use [`Self::from_i128_checked`]
+    /// (or `TryFrom`) when `v` may not fit. Identical to [`Self::from_i128`].
+    #[inline]
+    pub const fn from_i128_bits(v: i128) -> Self {
+        let mag = v.unsigned_abs();
+        Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
+    }
+
+    /// Exact value conversion from `i128`, or `None` if `v` does not fit
+    /// `Int<N>` (only possible for `N < 2`, where the storage is narrower
+    /// than 128 bits). For `N >= 2` every `i128` fits.
+    #[inline]
+    pub const fn from_i128_checked(v: i128) -> Option<Self> {
+        let bits = Self::from_i128_bits(v);
+        if N >= 2 || bits.as_i128_bits() == v {
+            Some(bits)
+        } else {
+            None
+        }
+    }
+
     /// Builds from an unsigned 128-bit value.
     #[inline]
     pub const fn from_u128(v: u128) -> Self {
@@ -1459,7 +1502,16 @@ impl<const N: usize> Int<N> {
     /// Truncating cast to `i128` (low 128 bits, sign-applied).
     #[inline]
     pub const fn as_i128(self) -> i128 {
-        let mag = *self.abs().as_limbs();
+        self.as_i128_bits()
+    }
+
+    /// Reinterprets the low 128 bits as `i128`, sign-applied.
+    /// **Truncating** — for `Int<3+>` any value outside the `i128` range
+    /// loses its high limbs; use [`Self::to_i128_checked`] (or `TryFrom`)
+    /// when the value may not fit.
+    #[inline]
+    pub const fn as_i128_bits(self) -> i128 {
+        let mag = *self.unsigned_abs().as_limbs();
         let lo = if N > 0 { mag[0] as u128 } else { 0 };
         let hi = if N > 1 { mag[1] as u128 } else { 0 };
         let combined = lo | (hi << 64);
@@ -2001,10 +2053,97 @@ pub type Int8192 = Int<128>;
 pub type Int12288 = Int<192>;
 pub type Int16384 = Int<256>;
 
+// ── std-aligned primitive conversions ───────────────────────────────
+// Infallible widening (the source always fits `Int<N>` / `Uint<N>` for
+// N >= 1) is `From`. Fallible narrowing (the value may exceed the target
+// range) is `TryFrom`, returning [`ConvertError::Overflow`]. The
+// truncating bit-reinterpret stays on the inherent `*_bits` methods.
+
+macro_rules! int_from_signed {
+    ($($prim:ty),+) => {$(
+        impl<const N: usize> From<$prim> for Int<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::from_i64(v as i64) }
+        }
+    )+};
+}
+int_from_signed!(i8, i16, i32, i64);
+
+macro_rules! uint_from_unsigned {
+    ($($prim:ty),+) => {$(
+        impl<const N: usize> From<$prim> for Uint<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::from_u64(v as u64) }
+        }
+    )+};
+}
+uint_from_unsigned!(u8, u16, u32, u64);
+
+impl<const N: usize> TryFrom<i128> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: i128) -> Result<Self, Self::Error> {
+        Self::from_i128_checked(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// Int<1> / Int<2> already have infallible `From<Int<_>> for i128` (they
+// fit exactly); wider widths use the inherent `to_i128_checked`. A blanket
+// `TryFrom<Int<N>> for i128` would conflict with those, so it is omitted.
+
+impl<const N: usize> TryFrom<u128> for Uint<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u128) -> Result<Self, Self::Error> {
+        Self::from_u128_checked(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
+
+    #[test]
+    fn from_i128_checked_detects_narrow_overflow() {
+        // Int<2> (128-bit) holds every i128.
+        assert_eq!(Int::<2>::from_i128_checked(i128::MAX), Some(Int::<2>::from_i128_bits(i128::MAX)));
+        assert_eq!(Int::<2>::from_i128_checked(i128::MIN), Some(Int::<2>::from_i128_bits(i128::MIN)));
+        // Int<1> (64-bit) holds only the i64 range.
+        assert_eq!(Int::<1>::from_i128_checked(i64::MAX as i128 + 1), None);
+        assert_eq!(Int::<1>::from_i128_checked(i64::MIN as i128 - 1), None);
+        assert_eq!(
+            Int::<1>::from_i128_checked(i64::MAX as i128),
+            Some(Int::<1>::from_i64(i64::MAX))
+        );
+        // TryFrom mirrors it.
+        assert!(<Int<1> as TryFrom<i128>>::try_from(i64::MAX as i128 + 1).is_err());
+        assert_eq!(<Int<2> as TryFrom<i128>>::try_from(-5_i128), Ok(Int::<2>::from_i64(-5)));
+    }
+
+    #[test]
+    fn from_u128_checked_detects_narrow_overflow() {
+        assert_eq!(Uint::<2>::from_u128_checked(u128::MAX), Some(Uint::<2>::from_u128_bits(u128::MAX)));
+        assert_eq!(Uint::<1>::from_u128_checked(u64::MAX as u128 + 1), None);
+        assert_eq!(Uint::<1>::from_u128_checked(u64::MAX as u128), Some(Uint::<1>::from_u64(u64::MAX)));
+        assert!(<Uint<1> as TryFrom<u128>>::try_from(u64::MAX as u128 + 1).is_err());
+    }
+
+    #[test]
+    fn as_i128_bits_round_trips_at_edges() {
+        // MIN/MAX of the 128-bit storage reinterpret exactly.
+        assert_eq!(Int::<2>::MAX.as_i128_bits(), i128::MAX);
+        assert_eq!(Int::<2>::MIN.as_i128_bits(), i128::MIN);
+        assert_eq!(Int::<1>::from_i64(-123).as_i128_bits(), -123_i128);
+    }
+
+    #[test]
+    fn from_traits_are_infallible_for_fitting_prims() {
+        assert_eq!(Int::<1>::from(-7_i32), Int::<1>::from_i64(-7));
+        assert_eq!(Int::<4>::from(42_i64), Int::<4>::from_i64(42));
+        assert_eq!(Uint::<1>::from(7_u32), Uint::<1>::from_u64(7));
+        assert_eq!(Uint::<4>::from(u64::MAX), Uint::<4>::from_u64(u64::MAX));
+    }
 
     /// The `BigInt` / `BigInt` surface must compile and
     /// behave through a fully generic bound, for both signed and
