@@ -55,128 +55,126 @@ fn assert_le_1_lsb_i64<A: Into<i128>>(label: &str, actual: A, truth: i64) {
 
 // ─── D18 strict suite (SCALE=8, range fits i64) ────────────────────────
 
-type D18_8 = D18<8>;
-
 #[test]
 fn d18_ln_strict() {
-    assert_eq!(D18_8::ONE.ln_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ONE.ln_strict().to_bits(), 0);
     // ln(2) = 0.69314718... → at S=8: 69_314_718
     assert_le_1_lsb_i64(
         "ln(2)",
-        D18_8::from_int(2).ln_strict().to_bits(),
+        D18::<8>::from_int(2).ln_strict().to_bits(),
         69_314_718,
     );
 }
 
 #[test]
 fn d18_exp_strict() {
-    assert_eq!(D18_8::ZERO.exp_strict().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::ZERO.exp_strict().to_bits(), 100_000_000);
     // exp(1)=e ≈ 2.71828183 → 271_828_183
-    assert_le_1_lsb_i64("exp(1)", D18_8::ONE.exp_strict().to_bits(), 271_828_183);
+    assert_le_1_lsb_i64("exp(1)", D18::<8>::ONE.exp_strict().to_bits(), 271_828_183);
 }
 
 #[test]
 fn d18_log2_log10_strict() {
-    assert_eq!(D18_8::from_int(2).log2_strict().to_bits(), 100_000_000);
-    assert_eq!(D18_8::from_int(10).log10_strict().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from_int(2).log2_strict().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from_int(10).log10_strict().to_bits(), 100_000_000);
 }
 
 #[test]
 fn d18_sqrt_cbrt_strict() {
-    assert_eq!(D18_8::from_int(4).sqrt_strict().to_bits(), 200_000_000);
-    assert_eq!(D18_8::from_int(27).cbrt_strict().to_bits(), 300_000_000);
+    assert_eq!(D18::<8>::from_int(4).sqrt_strict().to_bits(), 200_000_000);
+    assert_eq!(D18::<8>::from_int(27).cbrt_strict().to_bits(), 300_000_000);
     // sqrt(2)=1.41421356... → 141_421_356
     assert_le_1_lsb_i64(
         "sqrt(2)",
-        D18_8::from_int(2).sqrt_strict().to_bits(),
+        D18::<8>::from_int(2).sqrt_strict().to_bits(),
         141_421_356,
     );
 }
 
 #[test]
 fn d18_trig_strict() {
-    assert_eq!(D18_8::ZERO.sin_strict().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.cos_strict().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::ZERO.sin_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.cos_strict().to_bits(), 100_000_000);
     // sin(1) ≈ 0.84147098 → 84_147_098
-    assert_le_1_lsb_i64("sin(1)", D18_8::ONE.sin_strict().to_bits(), 84_147_098);
+    assert_le_1_lsb_i64("sin(1)", D18::<8>::ONE.sin_strict().to_bits(), 84_147_098);
 }
 
 #[test]
 fn d18_inverse_trig_hyperbolic_strict() {
     // atan(1)=π/4 ≈ 0.78539816 → 78_539_816
-    assert_le_1_lsb_i64("atan(1)", D18_8::ONE.atan_strict().to_bits(), 78_539_816);
+    assert_le_1_lsb_i64("atan(1)", D18::<8>::ONE.atan_strict().to_bits(), 78_539_816);
     assert_le_1_lsb_i64(
         "atan2(1,1)",
-        D18_8::ONE.atan2_strict(D18_8::ONE).to_bits(),
+        D18::<8>::ONE.atan2_strict(D18::<8>::ONE).to_bits(),
         78_539_816,
     );
-    assert_eq!(D18_8::ZERO.asin_strict().to_bits(), 0);
-    assert_eq!(D18_8::ONE.acos_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.asin_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ONE.acos_strict().to_bits(), 0);
     // sinh(1) ≈ 1.17520119
-    assert_le_1_lsb_i64("sinh(1)", D18_8::ONE.sinh_strict().to_bits(), 117_520_119);
-    assert_eq!(D18_8::ZERO.asinh_strict().to_bits(), 0);
-    assert_eq!(D18_8::ONE.acosh_strict().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.atanh_strict().to_bits(), 0);
+    assert_le_1_lsb_i64("sinh(1)", D18::<8>::ONE.sinh_strict().to_bits(), 117_520_119);
+    assert_eq!(D18::<8>::ZERO.asinh_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ONE.acosh_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.atanh_strict().to_bits(), 0);
 }
 
 #[test]
 fn d18_angle_powf_log_exp2_strict() {
-    assert_eq!(D18_8::ZERO.to_degrees_strict().to_bits(), 0);
-    assert_eq!(D18_8::ZERO.to_radians_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.to_degrees_strict().to_bits(), 0);
+    assert_eq!(D18::<8>::ZERO.to_radians_strict().to_bits(), 0);
     // 2^10 = 1024
     assert_eq!(
-        D18_8::from_int(2)
-            .powf_strict(D18_8::from_int(10))
+        D18::<8>::from_int(2)
+            .powf_strict(D18::<8>::from_int(10))
             .to_bits(),
         102_400_000_000,
     );
     // log_2(8) = 3
     assert_eq!(
-        D18_8::from_int(8).log_strict(D18_8::from_int(2)).to_bits(),
+        D18::<8>::from_int(8).log_strict(D18::<8>::from_int(2)).to_bits(),
         300_000_000,
     );
     // exp2(10) = 1024
-    assert_eq!(D18_8::from_int(10).exp2_strict().to_bits(), 102_400_000_000);
+    assert_eq!(D18::<8>::from_int(10).exp2_strict().to_bits(), 102_400_000_000);
 }
 
 #[cfg(feature = "strict")]
 #[test]
 fn d18_dispatcher_matches_strict() {
-    assert_eq!(D18_8::ONE.ln(), D18_8::ONE.ln_strict());
-    assert_eq!(D18_8::ONE.exp(), D18_8::ONE.exp_strict());
-    assert_eq!(D18_8::ONE.sin(), D18_8::ONE.sin_strict());
-    assert_eq!(D18_8::ONE.cos(), D18_8::ONE.cos_strict());
-    assert_eq!(D18_8::ONE.tan(), D18_8::ONE.tan_strict());
-    assert_eq!(D18_8::ONE.sinh(), D18_8::ONE.sinh_strict());
-    assert_eq!(D18_8::ONE.cosh(), D18_8::ONE.cosh_strict());
-    assert_eq!(D18_8::ONE.tanh(), D18_8::ONE.tanh_strict());
-    assert_eq!(D18_8::from_int(4).sqrt(), D18_8::from_int(4).sqrt_strict());
+    assert_eq!(D18::<8>::ONE.ln(), D18::<8>::ONE.ln_strict());
+    assert_eq!(D18::<8>::ONE.exp(), D18::<8>::ONE.exp_strict());
+    assert_eq!(D18::<8>::ONE.sin(), D18::<8>::ONE.sin_strict());
+    assert_eq!(D18::<8>::ONE.cos(), D18::<8>::ONE.cos_strict());
+    assert_eq!(D18::<8>::ONE.tan(), D18::<8>::ONE.tan_strict());
+    assert_eq!(D18::<8>::ONE.sinh(), D18::<8>::ONE.sinh_strict());
+    assert_eq!(D18::<8>::ONE.cosh(), D18::<8>::ONE.cosh_strict());
+    assert_eq!(D18::<8>::ONE.tanh(), D18::<8>::ONE.tanh_strict());
+    assert_eq!(D18::<8>::from_int(4).sqrt(), D18::<8>::from_int(4).sqrt_strict());
     assert_eq!(
-        D18_8::from_int(27).cbrt(),
-        D18_8::from_int(27).cbrt_strict()
+        D18::<8>::from_int(27).cbrt(),
+        D18::<8>::from_int(27).cbrt_strict()
     );
-    assert_eq!(D18_8::ONE.atan(), D18_8::ONE.atan_strict());
+    assert_eq!(D18::<8>::ONE.atan(), D18::<8>::ONE.atan_strict());
     assert_eq!(
-        D18_8::ONE.atan2(D18_8::ONE),
-        D18_8::ONE.atan2_strict(D18_8::ONE)
+        D18::<8>::ONE.atan2(D18::<8>::ONE),
+        D18::<8>::ONE.atan2_strict(D18::<8>::ONE)
     );
-    assert_eq!(D18_8::ZERO.asin(), D18_8::ZERO.asin_strict());
-    assert_eq!(D18_8::ONE.acos(), D18_8::ONE.acos_strict());
-    assert_eq!(D18_8::ZERO.asinh(), D18_8::ZERO.asinh_strict());
-    assert_eq!(D18_8::ONE.acosh(), D18_8::ONE.acosh_strict());
-    assert_eq!(D18_8::ZERO.atanh(), D18_8::ZERO.atanh_strict());
-    assert_eq!(D18_8::ONE.log2(), D18_8::ONE.log2_strict());
-    assert_eq!(D18_8::ONE.log10(), D18_8::ONE.log10_strict());
-    assert_eq!(D18_8::ONE.exp2(), D18_8::ONE.exp2_strict());
-    assert_eq!(D18_8::ZERO.to_degrees(), D18_8::ZERO.to_degrees_strict());
-    assert_eq!(D18_8::ZERO.to_radians(), D18_8::ZERO.to_radians_strict());
+    assert_eq!(D18::<8>::ZERO.asin(), D18::<8>::ZERO.asin_strict());
+    assert_eq!(D18::<8>::ONE.acos(), D18::<8>::ONE.acos_strict());
+    assert_eq!(D18::<8>::ZERO.asinh(), D18::<8>::ZERO.asinh_strict());
+    assert_eq!(D18::<8>::ONE.acosh(), D18::<8>::ONE.acosh_strict());
+    assert_eq!(D18::<8>::ZERO.atanh(), D18::<8>::ZERO.atanh_strict());
+    assert_eq!(D18::<8>::ONE.log2(), D18::<8>::ONE.log2_strict());
+    assert_eq!(D18::<8>::ONE.log10(), D18::<8>::ONE.log10_strict());
+    assert_eq!(D18::<8>::ONE.exp2(), D18::<8>::ONE.exp2_strict());
+    assert_eq!(D18::<8>::ZERO.to_degrees(), D18::<8>::ZERO.to_degrees_strict());
+    assert_eq!(D18::<8>::ZERO.to_radians(), D18::<8>::ZERO.to_radians_strict());
     assert_eq!(
-        D18_8::from_int(8).log(D18_8::from_int(2)),
-        D18_8::from_int(8).log_strict(D18_8::from_int(2)),
+        D18::<8>::from_int(8).log(D18::<8>::from_int(2)),
+        D18::<8>::from_int(8).log_strict(D18::<8>::from_int(2)),
     );
     assert_eq!(
-        D18_8::from_int(2).powf(D18_8::from_int(10)),
-        D18_8::from_int(2).powf_strict(D18_8::from_int(10)),
+        D18::<8>::from_int(2).powf(D18::<8>::from_int(10)),
+        D18::<8>::from_int(2).powf_strict(D18::<8>::from_int(10)),
     );
 }
 

@@ -15,35 +15,33 @@ const ALL_MODES: [RoundingMode; 6] = [
 
 #[test]
 fn d18_rescale_with_all_modes() {
-    type D18_4 = D18<4>;
-    type D18_2 = D18<2>;
-    let v = D18_4::from_bits(decimal_scaled::Int::<1>::from_i64(15050));
-    let neg = D18_4::from_bits(decimal_scaled::Int::<1>::from_i64(-15050));
+
+    let v = D18::<4>::from_bits(decimal_scaled::Int::<1>::from_i64(15050));
+    let neg = D18::<4>::from_bits(decimal_scaled::Int::<1>::from_i64(-15050));
     for m in ALL_MODES {
-        let r: D18_2 = v.rescale_with::<2>(m);
+        let r: D18<2> = v.rescale_with::<2>(m);
         let _ = r;
-        let r: D18_2 = neg.rescale_with::<2>(m);
+        let r: D18<2> = neg.rescale_with::<2>(m);
         let _ = r;
     }
     // Identity scale
-    let r: D18_4 = v.rescale_with::<4>(RoundingMode::HalfToEven);
+    let r: D18<4> = v.rescale_with::<4>(RoundingMode::HalfToEven);
     assert_eq!(r.to_bits(), 15050);
 }
 
 #[test]
 fn d38_rescale_with_all_modes() {
-    type D38_4 = D38<4>;
-    type D38_2 = D38<2>;
-    let v = D38_4::from_bits(decimal_scaled::Int::<2>::from_i128(15050));
-    let neg = D38_4::from_bits(decimal_scaled::Int::<2>::from_i128(-15050));
+
+    let v = D38::<4>::from_bits(decimal_scaled::Int::<2>::from_i128(15050));
+    let neg = D38::<4>::from_bits(decimal_scaled::Int::<2>::from_i128(-15050));
     for m in ALL_MODES {
-        let r: D38_2 = v.rescale_with::<2>(m);
+        let r: D38<2> = v.rescale_with::<2>(m);
         let _ = r;
-        let r: D38_2 = neg.rescale_with::<2>(m);
+        let r: D38<2> = neg.rescale_with::<2>(m);
         let _ = r;
     }
     // Identity scale
-    let r: D38_4 = v.rescale_with::<4>(RoundingMode::HalfToEven);
+    let r: D38<4> = v.rescale_with::<4>(RoundingMode::HalfToEven);
     assert_eq!(r.to_bits(), 15050);
 }
 
@@ -53,21 +51,20 @@ fn d38_rescale_with_all_modes() {
 #[test]
 fn d76_rescale_with_all_modes() {
     use decimal_scaled::D76;
-    type D76_4 = D76<4>;
-    type D76_2 = D76<2>;
-    let v: D76_4 = D38::<4>::from_bits(decimal_scaled::Int::<2>::from_i128(15050)).into();
-    let neg: D76_4 = D38::<4>::from_bits(decimal_scaled::Int::<2>::from_i128(-15050)).into();
+
+    let v: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::from_i128(15050)).into();
+    let neg: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::from_i128(-15050)).into();
     for m in ALL_MODES {
-        let r: D76_2 = v.rescale_with::<2>(m);
+        let r: D76<2> = v.rescale_with::<2>(m);
         let _ = r;
-        let r: D76_2 = neg.rescale_with::<2>(m);
+        let r: D76<2> = neg.rescale_with::<2>(m);
         let _ = r;
     }
     // Identity scale
-    let r: D76_4 = v.rescale_with::<4>(RoundingMode::HalfToEven);
+    let r: D76<4> = v.rescale_with::<4>(RoundingMode::HalfToEven);
     assert_eq!(r, v);
     // with_scale path
-    let _: D76_2 = v.with_scale::<2>();
+    let _: D76<2> = v.with_scale::<2>();
 }
 
 #[cfg(feature = "wide")]
