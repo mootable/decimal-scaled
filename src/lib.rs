@@ -300,10 +300,10 @@ pub mod __bench_internals {
                 }
             };
         }
-        shim!(d307, crate::wide_int::I1024, "x-wide");
-        shim!(d616, crate::wide_int::I2048, "x-wide");
-        shim!(d924, crate::wide_int::I3072, "xx-wide");
-        shim!(d1232, crate::wide_int::I4096, "xx-wide");
+        shim!(d307, crate::int::types::Int<16>, "x-wide");
+        shim!(d616, crate::int::types::Int<32>, "x-wide");
+        shim!(d924, crate::int::types::Int<48>, "xx-wide");
+        shim!(d1232, crate::int::types::Int<64>, "xx-wide");
     }
 }
 mod macros;
