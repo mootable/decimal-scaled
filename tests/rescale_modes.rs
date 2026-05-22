@@ -103,8 +103,8 @@ fn d18_rescale_with_all_modes() {
 fn d38_rescale_with_all_modes() {
     type D38_4 = D38<4>;
     type D38_2 = D38<2>;
-    let v = D38_4::from_bits(15050);
-    let neg = D38_4::from_bits(-15050);
+    let v = D38_4::from_bits(decimal_scaled::Int::<2>::from_i128(15050));
+    let neg = D38_4::from_bits(decimal_scaled::Int::<2>::from_i128(-15050));
     for m in ALL_MODES {
         let r: D38_2 = v.rescale_with::<2>(m);
         let _ = r;

@@ -15,7 +15,7 @@ fn reciprocal_signed_int_eq() {
     assert!(42_i64 == v);
     assert!(42_i128 == v);
     // Fractional vs primitive — false even from the primitive side.
-    let frac: D76_2 = D38_2::from_bits(4201).into();
+    let frac: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(4201)).into();
     assert!(!(42_i32 == frac));
     assert!(!(42_i64 == frac));
 }
@@ -55,6 +55,6 @@ fn wide_i128_quotient_out_of_range_is_false() {
 
 #[test]
 fn wide_fractional_vs_i128_is_false() {
-    let frac: D76_2 = D38_2::from_bits(123).into(); // 0.... at S=2
+    let frac: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(123)).into(); // 0.... at S=2
     assert!(!(frac == 0_i128));
 }

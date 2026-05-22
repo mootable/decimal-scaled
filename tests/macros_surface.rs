@@ -36,7 +36,7 @@ fn eq_d38_all_signed_ints() {
     assert_eq!(42i128, v);
 
     // Fractional values are NEVER equal to any integer.
-    let frac = D38_2::from_bits(4_201); // 42.01
+    let frac = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)); // 42.01
     assert_ne!(frac, 42i32);
     assert_ne!(frac, 42i64);
     assert_ne!(frac, 42i128);
@@ -73,7 +73,7 @@ fn eq_d38_all_unsigned_ints_and_sign_rejection() {
     assert_ne!(neg, 5u32);
 
     // Fractional vs unsigned.
-    let frac = D38_2::from_bits(4_201);
+    let frac = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(4_201));
     assert_ne!(frac, 42u32);
     assert_ne!(frac, 42u128);
 }
@@ -110,7 +110,7 @@ fn eq_wide_int() {
     assert_eq!(v, 42i128);
     assert_eq!(v, 42u128);
     // Fractional
-    let frac: D76_2 = D38_2::from_bits(4_201).into();
+    let frac: D76_2 = D38_2::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)).into();
     assert_ne!(frac, 42i32);
     assert_ne!(frac, 42u32);
     // Negative vs unsigned

@@ -77,7 +77,7 @@ fn sin_d76_baseline() {
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     for raw in [1_000_000i64, 2_345_678i64, 7_500_000i64] {
-        let n = D38_6::from_bits(raw as i128);
+        let n = D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(raw as i128));
         let w: D76<6> = n.into();
         agree_within("sin", wide_bits(w.sin_strict()), n.sin_strict().to_bits());
     }
@@ -88,7 +88,7 @@ fn atan_d76_baseline() {
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     for raw in [1_000_000i64, -1_500_000i64, 3_000_000i64] {
-        let n = D38_6::from_bits(raw as i128);
+        let n = D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(raw as i128));
         let w: D76<6> = n.into();
         agree_within(
             "atan",
@@ -104,7 +104,7 @@ fn sqrt_d76_tight() {
     use decimal_scaled::D38;
     type D38_6 = D38<6>;
     for raw in [4_000_000i64, 9_000_000i64, 16_000_000i64, 25_000_000i64] {
-        let n = D38_6::from_bits(raw as i128);
+        let n = D38_6::from_bits(decimal_scaled::Int::<2>::from_i128(raw as i128));
         let w: D76<6> = n.into();
         let wide = wide_bits(w.sqrt_strict());
         let narrow = n.sqrt_strict().to_bits();
