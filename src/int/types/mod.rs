@@ -107,7 +107,7 @@ impl<const N: usize> Uint<N> {
 
     /// Wrapping square (`self²` modulo `2^BITS`). Named entry point for
     /// the open-coded `x * x` pattern. Uses the dedicated half-product
-    /// squaring kernel ([`limbs_sqr_low_u64_fixed`]): each cross term is
+    /// squaring kernel (`limbs_sqr_low_u64_fixed`): each cross term is
     /// formed once and doubled, so the limb-multiply count is
     /// `N(N+1)/2` rather than the `N²` of a general multiply.
     #[inline]
@@ -351,7 +351,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Integer square root: the largest `r` with `r² <= self`.
-    /// Delegates to the const-`N` fast-arm ([`isqrt_mag_fixed`]): native
+    /// Delegates to the const-`N` fast-arm (`isqrt_mag_fixed`): native
     /// `u64::isqrt` at `N == 1`, `u128::isqrt` at `N == 2`, and the shared
     /// limb isqrt (Newton with a hardware-sqrt seed) for wider `N`. All
     /// arms return the identical floor root.
@@ -984,7 +984,7 @@ impl<const N: usize> Int<N> {
     /// Truncating quotient and remainder `(self / rhs, self % rhs)` in a
     /// single divmod call. The quotient truncates toward zero and the
     /// remainder takes the sign of the dividend. Routes through the
-    /// const-`N` fast-arm ([`div_rem_mag_fixed`]): native `u64` idiv at
+    /// const-`N` fast-arm (`div_rem_mag_fixed`): native `u64` idiv at
     /// `N == 1`, native `u128` divide at `N == 2`, and the dispatching
     /// divmod (Knuth / Burnikel–Ziegler) for wider `N` — matching the
     /// `decl_wide_int!` `div_rem` so the const-generic and macro families
@@ -1882,7 +1882,7 @@ impl<const N: usize> Uint<N> {
     /// limbs when narrowing. Direction-agnostic and infallible.
     ///
     /// Named `resize_n` (not `resize`) so the const-generic width bridge
-    /// does not collide with the type-generic [`Int::resize`] the named-
+    /// does not collide with the type-generic `Int::resize` the named-
     /// type API expects.
     #[inline]
     pub fn resize_n<const M: usize>(self) -> Uint<M> {
@@ -1922,7 +1922,7 @@ impl<const N: usize> Int<N> {
     /// (narrowing may change the represented value).
     ///
     /// Named `resize_n` (not `resize`) so the const-generic width bridge
-    /// does not collide with the type-generic [`Int::resize`] the named-
+    /// does not collide with the type-generic `Int::resize` the named-
     /// type API expects (the magnitude-bridge cast over any `BigInt`).
     #[inline]
     pub fn resize_n<const M: usize>(self) -> Int<M> {

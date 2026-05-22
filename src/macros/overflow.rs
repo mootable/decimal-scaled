@@ -110,8 +110,8 @@ macro_rules! decl_decimal_overflow_variants {
 
             /// Checked division. Returns `None` if `rhs` is zero or
             /// the result would overflow [`Self`]. Rounds to nearest
-            /// using the crate-default [`RoundingMode`], identical to
-            /// the `/` operator. The numerator is pre-multiplied by
+            /// using the crate-default [`RoundingMode`](crate::RoundingMode),
+            /// identical to the `/` operator. The numerator is pre-multiplied by
             /// `10^SCALE` in `$Wider` so the intermediate carries the
             /// scale-up step exactly before rounding.
             #[inline]
@@ -134,8 +134,8 @@ macro_rules! decl_decimal_overflow_variants {
             }
 
             /// Wrapping division. Computes `self / rhs` rounded to
-            /// nearest using the crate-default [`RoundingMode`] (like
-            /// the `/` operator), with the scale-up step done modulo
+            /// nearest using the crate-default [`RoundingMode`](crate::RoundingMode)
+            /// (like the `/` operator), with the scale-up step done modulo
             /// `$Wider`'s range and the final narrowing wrapping.
             /// **Panics** on divide-by-zero (matches `i128::wrapping_div`).
             #[inline]
