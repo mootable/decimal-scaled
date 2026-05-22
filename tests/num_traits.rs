@@ -341,7 +341,7 @@ fn to_primitive_u128_in_range() {
 
 #[test]
 fn to_primitive_f64_round_trip_within_lsb() {
-    let lsb = 1.0 / (D38s12::multiplier() as f64);
+    let lsb = 1.0 / (D38s12::multiplier().as_i128() as f64);
     // Use a value not close to any well-known math constant.
     let v = D38s12::from_f64(1.234567890123_f64);
     let back = <D38s12 as ToPrimitive>::to_f64(&v).expect("to_f64 always returns Some");
@@ -566,7 +566,7 @@ fn checked_div_trait_matches_inherent_256_pairs() {
         // Avoid divide-by-zero: if the LCG lands on zero, substitute ONE.
         // The by-zero case is covered by a dedicated test.
         let b_bits = if pair[1] == 0 {
-            D38s12::multiplier()
+            D38s12::multiplier().as_i128()
         } else {
             pair[1]
         };

@@ -250,6 +250,12 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn to_u64(&self) -> ::core::option::Option<u64> {
+                // A negative value has no `u64` representation. Guard the sign
+                // before the truncating divide, which would otherwise map a
+                // small negative (e.g. -1 LSB) to integer-part `0`.
+                if self.0.is_negative() {
+                    return ::core::option::Option::None;
+                }
                 (self.0 / Self::multiplier())
                     .to_u128_checked()
                     .and_then(|v| u64::try_from(v).ok())
@@ -260,6 +266,12 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn to_u128(&self) -> ::core::option::Option<u128> {
+                // Negative values have no `u128` representation; guard the
+                // sign before the truncating divide (which maps small
+                // negatives to integer-part `0`).
+                if self.0.is_negative() {
+                    return ::core::option::Option::None;
+                }
                 (self.0 / Self::multiplier()).to_u128_checked()
             }
             #[inline]

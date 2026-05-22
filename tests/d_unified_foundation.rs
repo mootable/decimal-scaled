@@ -36,9 +36,12 @@ fn copy_and_clone() {
 
 #[test]
 fn equality_by_raw_storage() {
-    let a: D<i128, 5> = D(123);
-    let b: D<i128, 5> = D(123);
-    let c: D<i128, 5> = D(124);
+    // Uses `i64` storage: `Debug` (needed by assert_eq!/assert_ne!) is
+    // emitted per-storage by `decl_decimal_display!`, and `i128` is no
+    // longer a decimal storage type (D38 now backs onto `Int<2>`).
+    let a: D<i64, 5> = D(123);
+    let b: D<i64, 5> = D(123);
+    let c: D<i64, 5> = D(124);
     assert_eq!(a, b);
     assert_ne!(a, c);
 }

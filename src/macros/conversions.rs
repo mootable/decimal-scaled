@@ -209,6 +209,15 @@ macro_rules! decl_try_from_u128 {
             #[inline]
             fn try_from(value: u128) -> ::core::result::Result<Self, Self::Error> {
                 let widened: $Storage = <$Storage>::from_u128(value);
+                // For storage wider than 128 bits this always holds; for the
+                // 128-bit `Int<2>` (D38) a `u128` above `i128::MAX` lands in
+                // the sign bit, so a negative result means the input did not
+                // fit the signed storage's positive range — reject as overflow.
+                if widened.is_negative() {
+                    return ::core::result::Result::Err(
+                        $crate::support::error::ConvertError::Overflow,
+                    );
+                }
                 let scaled = widened
                     .checked_mul(Self::multiplier())
                     .ok_or($crate::support::error::ConvertError::Overflow)?;
