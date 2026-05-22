@@ -1,33 +1,33 @@
 //! Native D38 mul/div (Möller–Granlund) vs the wide-arm algorithm
-//! (widen to `Int256`, multiply, divide by `10^SCALE` via the generic
+//! (widen to `Int<4>`, multiply, divide by `10^SCALE` via the generic
 //! `limbs_divmod`, narrow back).
 //!
 //! D38 currently uses its hand-written `mg_divide::mul_div_pow10` /
 //! `div_pow10_div` path — a 256-bit schoolbook product followed by a
 //! Möller–Granlund magic-number divide for `10^SCALE`. The wide tiers
 //! (D76 / D115 / …) take a different path through
-//! `decl_decimal_arithmetic!(wide …)`: widen to the next-up `Int*`,
+//! `decl_decimal_arithmetic!(wide …)`: widen to the next-up `Int<N>`,
 //! multiply, divide by `10^SCALE` using the generic `limbs_divmod`
 //! (which has hardware fast paths for divisors fitting `u64`).
 //!
 //! This bench applies the *wide-arm* algorithm to a D38-sized
-//! problem using `Int256`, so the two paths can be compared
+//! problem using `Int<4>`, so the two paths can be compared
 //! head-to-head on identical operands.
 //!
 //! Run with: `cargo bench --features wide --bench d_w128_mul_div_paths`.
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use decimal_scaled::{D38, Int256};
+use decimal_scaled::{D38, Int};
 use std::hint::black_box;
 
-/// `(a · b) / 10^SCALE`, computed wide-arm style with `Int256` as the
+/// `(a · b) / 10^SCALE`, computed wide-arm style with `Int<4>` as the
 /// widening intermediate — mirroring `decl_decimal_arithmetic!(wide D,
-/// I, Int256)`.
+/// I, Int<4>)`.
 #[inline]
 fn mul_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> {
-    let a256 = Int256::from_i128(a.to_bits());
-    let b256 = Int256::from_i128(b.to_bits());
-    let m = Int256::from_str_radix("10", 10)
+    let a256 = Int::<4>::from_i128(a.to_bits());
+    let b256 = Int::<4>::from_i128(b.to_bits());
+    let m = Int::<4>::from_str_radix("10", 10)
         .expect("base-10 literal")
         .pow(SCALE);
     let r = (a256 * b256) / m;
@@ -37,9 +37,9 @@ fn mul_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> 
 /// `(a · 10^SCALE) / b`, wide-arm style.
 #[inline]
 fn div_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> {
-    let a256 = Int256::from_i128(a.to_bits());
-    let b256 = Int256::from_i128(b.to_bits());
-    let m = Int256::from_str_radix("10", 10)
+    let a256 = Int::<4>::from_i128(a.to_bits());
+    let b256 = Int::<4>::from_i128(b.to_bits());
+    let m = Int::<4>::from_str_radix("10", 10)
         .expect("base-10 literal")
         .pow(SCALE);
     let r = (a256 * m) / b256;

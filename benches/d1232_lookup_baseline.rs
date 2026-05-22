@@ -1,6 +1,6 @@
 //! Side-by-side: D1232 ln at SCALE 600 (outside the Tang-lookup band,
 //! wide_kernel path) vs SCALE 615 (centre of the Tang-lookup band).
-//! Both scales work on the same Int16384 working integer so the per-op
+//! Both scales work on the same `Int<256>` working integer so the per-op
 //! cost of the underlying primitives is matched; the speed delta
 //! isolates the lookup-vs-kernel routing.
 //!

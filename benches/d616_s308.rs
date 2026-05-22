@@ -1,5 +1,5 @@
 //! Focused microbench for D616<308> — the mid-storage popular scale
-//! on the 2048-bit storage / Int8192 working-integer tier.
+//! on the 2048-bit storage / `Int<128>` working-integer tier.
 //!
 //! Mirrors `benches/d153_s76.rs` and `benches/d57_s20.rs`: one
 //! `*_strict` call per public path that is a candidate for the

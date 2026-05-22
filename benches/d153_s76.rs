@@ -1,5 +1,5 @@
 //! Focused microbench for D153<76> — the mid-storage popular scale on
-//! the 512-bit storage / Int1024 working-integer tier.
+//! the 512-bit storage / `Int<16>` working-integer tier.
 //!
 //! Mirrors `benches/d57_s20.rs` and `benches/d76_s6.rs`: one
 //! `*_strict` call per public path that is a candidate for the D153

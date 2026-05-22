@@ -3,7 +3,7 @@
 //! ln crossover is ~300 decimal digits but every wider tier we've
 //! shipped so far (D230 / D307 / D462 / D616) has shown AGM *losing*
 //! against the chain-MG + narrow-GUARD artanh kernel through SCALE
-//! 500. D924's storage (Int3072, MAX_SCALE 923) reaches 200-400
+//! 500. D924's storage (`Int<48>`, MAX_SCALE 923) reaches 200-400
 //! more digits of precision than D616 — this is the first half-width
 //! tier whose **upper** working scales (700+) might tip past the
 //! crossover.
