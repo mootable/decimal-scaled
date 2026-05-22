@@ -1337,46 +1337,118 @@ impl<const N: usize> Int<N> {
     /// Exact conversion from an `f64`, or `None` when `v` is NaN, ±inf,
     /// has a fractional part, or lies outside the `Int<N>` range.
     ///
-    /// Not `const`: float classification (`is_finite` / `fract`) and the
-    /// float→int `as` cast are not const-stable. The integer helpers it
-    /// composes with stay `const`.
-    pub(crate) fn try_from_f64(v: f64) -> Option<Self> {
-        if !v.is_finite() || v.fract() != 0.0 {
+    /// `const`: classification and decomposition go through the const
+    /// `f64::to_bits` plus integer/bit ops only — never the non-const
+    /// `is_finite` / `fract` / float-`as` paths.
+    pub(crate) const fn try_from_f64(v: f64) -> Option<Self> {
+        let bits = v.to_bits();
+        let negative = (bits >> 63) & 1 == 1;
+        let exp = ((bits >> 52) & 0x7ff) as i32;
+        let mant = bits & 0x000f_ffff_ffff_ffff;
+        if exp == 0x7ff {
+            // NaN / ±inf.
             return None;
         }
-        let negative = v < 0.0;
-        let mut m = if negative { -v } else { v };
-        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
-        let mut limbs = [0u64; N];
-        let mut i = 0;
-        while m >= 1.0 && i < N {
-            let rem = m % radix;
-            limbs[i] = rem as u64;
-            m = (m - rem) / radix;
-            i += 1;
+        if exp == 0 {
+            // ±0 is exact zero; a subnormal is a non-zero |v| < 1, i.e.
+            // never an integer.
+            return if mant == 0 { Some(Self::ZERO) } else { None };
         }
-        if m >= 1.0 {
-            // Magnitude needs more than `N` limbs — out of range.
+        let significand = (1u64 << 52) | mant; // 53-bit normalized value
+        let shift = exp - 1075; // (exp - 1023) - 52
+        Self::from_significand_shift(significand, shift, negative)
+    }
+
+    /// Exact conversion from an `f32`, or `None` on NaN, ±inf, a
+    /// fractional part, or out-of-range. Decomposes via the const
+    /// `f32::to_bits` (8-bit exponent, 23-bit mantissa, bias 127, 24-bit
+    /// significand) with integer/bit ops only — `const` for the same
+    /// reason as [`Self::try_from_f64`].
+    pub(crate) const fn try_from_f32(v: f32) -> Option<Self> {
+        let bits = v.to_bits();
+        let negative = (bits >> 31) & 1 == 1;
+        let exp = ((bits >> 23) & 0xff) as i32;
+        let mant = (bits & 0x007f_ffff) as u64;
+        if exp == 0xff {
+            // NaN / ±inf.
             return None;
         }
-        let built = Self::from_mag_limbs(&limbs, negative);
-        // Reject the sign-bit overflow: a positive magnitude that landed
-        // negative, or a negative one that is not the legal `MIN` edge.
-        if built.is_zero() {
+        if exp == 0 {
+            return if mant == 0 { Some(Self::ZERO) } else { None };
+        }
+        let significand = (1u64 << 23) | mant; // 24-bit normalized value
+        let shift = exp - 150; // (exp - 127) - 23
+        Self::from_significand_shift(significand, shift, negative)
+    }
+
+    /// Builds `Int<N>` from `(-1)^sign * significand * 2^shift`, where
+    /// `significand` fits in 64 bits. Returns `None` when the value has a
+    /// fractional part (`shift < 0` with low bits set) or does not fit the
+    /// signed `Int<N>` range. Pure const integer/bit arithmetic — no float
+    /// ops — so both float entry points are `const`.
+    const fn from_significand_shift(significand: u64, shift: i32, negative: bool) -> Option<Self> {
+        if shift < 0 {
+            let s = (-shift) as u32;
+            if s >= 64 {
+                // Whole value is fractional (|v| < 1, non-zero) — not an
+                // integer.
+                return None;
+            }
+            if significand & ((1u64 << s) - 1) != 0 {
+                // Fractional bits set — not an integer.
+                return None;
+            }
+            let mag = significand >> s; // integral, fits a single limb
+            let built = Self::from_mag_limbs(&[mag], negative);
+            Self::accept_signed(built, negative)
+        } else {
+            // Place `significand` left-shifted by `shift` into an N-limb
+            // magnitude, rejecting any bit that lands beyond limb N-1.
+            let s = shift as u32;
+            let limb_off = (s / 64) as usize;
+            let bit_off = s % 64;
+            let mut mag = [0u64; N];
+            // Low chunk into limb `limb_off`; carry into the next limb.
+            let lo = significand << bit_off;
+            // The part of `significand` pushed past this limb's top.
+            let hi = if bit_off == 0 {
+                0
+            } else {
+                significand >> (64 - bit_off)
+            };
+            if limb_off < N {
+                mag[limb_off] = lo;
+            } else if lo != 0 {
+                return None;
+            }
+            if hi != 0 {
+                if limb_off + 1 < N {
+                    mag[limb_off + 1] = hi;
+                } else {
+                    return None;
+                }
+            }
+            let built = Self::from_mag_limbs(&mag, negative);
+            Self::accept_signed(built, negative)
+        }
+    }
+
+    /// Sign-overflow gate shared by the float builders: a zero is always
+    /// fine; otherwise the built sign must match the requested one, which
+    /// rejects a positive magnitude that wrapped into the sign bit while
+    /// still admitting the exact `MIN` edge (magnitude `2^(bits-1)` with
+    /// the sign set, which `wrapping_neg` reproduces as itself).
+    #[inline]
+    const fn accept_signed(built: Self, negative: bool) -> Option<Self> {
+        // Inherent const zero-check (the `BigInt::is_zero` trait method
+        // name-resolution would otherwise pick is not const).
+        if limbs_is_zero_u64_fixed(&built.limbs) {
             Some(built)
         } else if built.is_negative() != negative {
             None
         } else {
             Some(built)
         }
-    }
-
-    /// Exact conversion from an `f32`, or `None` on NaN, ±inf, a
-    /// fractional part, or out-of-range. Widens to `f64` (lossless for
-    /// `f32`) and defers to [`Self::try_from_f64`]. Not `const` for the
-    /// same float-op reason.
-    pub(crate) fn try_from_f32(v: f32) -> Option<Self> {
-        Self::try_from_f64(v as f64)
     }
 
     /// Builds from an `f64`, truncating toward zero. Saturates to
@@ -2383,20 +2455,81 @@ mod tests {
         assert_eq!(Int::<2>::try_from_f64(f64::NAN), None);
         assert_eq!(Int::<2>::try_from_f64(f64::INFINITY), None);
         assert_eq!(Int::<2>::try_from_f64(f64::NEG_INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f64(0.5), None);
         assert_eq!(Int::<2>::try_from_f64(3.5), None);
         assert_eq!(Int::<2>::try_from_f32(f32::NAN), None);
+        assert_eq!(Int::<2>::try_from_f32(f32::INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f32(0.5), None);
+        assert_eq!(Int::<2>::try_from_f32(3.5), None);
         assert_eq!(Int::<1>::try_from_f64(1e30), None); // out of i64 range
+        // ±0 maps to ZERO.
+        assert_eq!(Int::<2>::try_from_f64(0.0), Some(Int::<2>::ZERO));
+        assert_eq!(Int::<2>::try_from_f64(-0.0), Some(Int::<2>::ZERO));
+        assert_eq!(Int::<2>::try_from_f32(0.0), Some(Int::<2>::ZERO));
+        assert_eq!(Int::<2>::try_from_f32(-0.0), Some(Int::<2>::ZERO));
         // In-range integers round-trip exactly.
         assert_eq!(Int::<4>::try_from_f64(42.0), Some(Int::<4>::from_i64(42)));
         assert_eq!(Int::<4>::try_from_f64(-42.0), Some(Int::<4>::from_i64(-42)));
         assert_eq!(Int::<4>::try_from_f32(7.0), Some(Int::<4>::from_i64(7)));
+        assert_eq!(Int::<4>::try_from_f32(-7.0), Some(Int::<4>::from_i64(-7)));
         // TryFrom mirrors the helper.
         assert!(<Int<2> as TryFrom<f64>>::try_from(f64::NAN).is_err());
         assert_eq!(<Int<2> as TryFrom<f64>>::try_from(-9.0), Ok(Int::<2>::from_i64(-9)));
+        assert_eq!(<Int<2> as TryFrom<f32>>::try_from(-9.0), Ok(Int::<2>::from_i64(-9)));
         // OUT to_f64 / to_f32 round-trip small values.
         assert_eq!(Int::<4>::from_i64(123).to_f64(), 123.0);
         assert_eq!(Int::<4>::from_i64(-123).to_f64(), -123.0);
         assert_eq!(Int::<4>::from_i64(123).to_f32(), 123.0_f32);
+    }
+
+    #[test]
+    fn float_conversions_wide_and_boundaries() {
+        // A large exact integer (2^64) needs two limbs: it overflows
+        // Int<1> but fits Int<2>.
+        let big = 2f64.powi(64); // exactly representable
+        assert_eq!(Int::<1>::try_from_f64(big), None);
+        assert_eq!(
+            Int::<2>::try_from_f64(big),
+            Some(Int::<2>::from_u128(1u128 << 64))
+        );
+
+        // 2^63 is exactly i64::MAX + 1 — just over the Int<1> positive
+        // range, so it must reject.
+        let two_63 = 2f64.powi(63);
+        assert_eq!(Int::<1>::try_from_f64(two_63), None);
+        // i64::MAX itself (2^63 - 1) is not f64-exact, but 2^63 - 2^10 is;
+        // confirm a representable value strictly below the cap fits.
+        let near_max = (i64::MAX - 1023) as f64; // exact in f64
+        assert_eq!(near_max as i64, i64::MAX - 1023);
+        assert_eq!(
+            Int::<1>::try_from_f64(near_max),
+            Some(Int::<1>::from_i64(i64::MAX - 1023))
+        );
+
+        // The MIN edge: -2^63 == i64::MIN fits Int<1> exactly.
+        let min_edge = -(2f64.powi(63));
+        assert_eq!(
+            Int::<1>::try_from_f64(min_edge),
+            Some(Int::<1>::from_i64(i64::MIN))
+        );
+        // One magnitude bit past the negative edge does not fit.
+        assert_eq!(Int::<1>::try_from_f64(-(2f64.powi(64))), None);
+
+        // f32 analogues: 2^24 fits Int<1>; the round-trip is exact.
+        let two_24 = 2f32.powi(24);
+        assert_eq!(
+            Int::<1>::try_from_f32(two_24),
+            Some(Int::<1>::from_i64(1 << 24))
+        );
+    }
+
+    #[test]
+    fn float_conversions_are_const() {
+        // Proves the float→int path is usable in const context.
+        const X: Option<Int<2>> = Int::<2>::try_from_f64(42.0);
+        const Y: Option<Int<2>> = Int::<2>::try_from_f32(42.0);
+        assert_eq!(X, Some(Int::<2>::from_i64(42)));
+        assert_eq!(Y, Some(Int::<2>::from_i64(42)));
     }
 
     #[test]
