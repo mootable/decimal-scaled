@@ -253,21 +253,6 @@ fn expression_value_at_runtime() {
 // ── Per-width entry points: narrow tiers ──────────────────────────────
 
 #[test]
-fn d9_literal_inferred_scale() {
-    use decimal_scaled::{D9s2, d9};
-    let v = d9!(1.23);
-    assert_eq!(v, D9s2::from_bits(123));
-}
-
-#[test]
-fn d9_max_scale_8() {
-    // v0.4.0 cap: MAX_SCALE for D9 is 8.
-    use decimal_scaled::{D9s8, d9};
-    let v = d9!(0.000_000_01); // raw 1 at scale 8
-    assert_eq!(v, D9s8::from_bits(1));
-}
-
-#[test]
 fn d18_literal_inferred_scale() {
     use decimal_scaled::{D18s4, d18};
     let v = d18!(1234.5678);
@@ -329,13 +314,6 @@ fn d307_literal_inferred() {
 }
 
 // ── Per-scale wrapper macros ──────────────────────────────────────────
-
-#[test]
-fn d9_per_scale_wrapper_d9s2() {
-    use decimal_scaled::{D9s2, d9s2};
-    let v: D9s2 = d9s2!(1.23);
-    assert_eq!(v, D9s2::from_bits(123));
-}
 
 #[test]
 fn d18_per_scale_wrapper_d18s12() {

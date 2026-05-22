@@ -99,14 +99,8 @@ fn wide_strict_surface_callable() {
 
 #[test]
 fn narrow_strict_surface_callable() {
-    use decimal_scaled::{D9, D18};
-    type D9_4 = D9<4>;
+    use decimal_scaled::{D18};
     type D18_8 = D18<8>;
-    let x9 = D9_4::from_int(2);
-    let _ = x9.ln_strict();
-    let _ = x9.sin_strict();
-    let _ = x9.sqrt_strict();
-    let _ = x9.exp_strict();
     let x18 = D18_8::from_int(2);
     let _ = x18.ln_strict();
     let _ = x18.sin_strict();
@@ -117,14 +111,8 @@ fn narrow_strict_surface_callable() {
 #[cfg(feature = "std")]
 #[test]
 fn narrow_fast_surface_callable() {
-    use decimal_scaled::{D9, D18};
-    type D9_4 = D9<4>;
+    use decimal_scaled::{D18};
     type D18_8 = D18<8>;
-    let x9 = D9_4::from_int(2);
-    let _ = x9.ln_fast();
-    let _ = x9.sin_fast();
-    let _ = x9.sqrt_fast();
-    let _ = x9.exp_fast();
     let x18 = D18_8::from_int(2);
     let _ = x18.ln_fast();
     let _ = x18.sin_fast();

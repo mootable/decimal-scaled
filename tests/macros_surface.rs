@@ -7,7 +7,7 @@
 //! back to the source file directly.
 
 use decimal_scaled::DecimalArithmetic;
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 
 type D9_2 = D9<2>;
 type D18_2 = D18<2>;

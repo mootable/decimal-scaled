@@ -2,13 +2,13 @@
 //! impls emitted for every decimal width. Covers Num, Signed,
 //! CheckedAdd/Sub/Mul/Div/Rem/Neg, FromPrimitive, ToPrimitive, NumCast.
 
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 use num_traits::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, FromPrimitive,
     Num, NumCast, One, Signed, ToPrimitive, Zero,
 };
 
-type D9_2 = D9<2>;
+type D9_2 = D18<2>;
 type D18_2 = D18<2>;
 type D38_2 = D38<2>;
 

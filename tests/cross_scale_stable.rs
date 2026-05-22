@@ -11,7 +11,7 @@
 //! - Comparator pairwise consistency (cmp_of vs eq_of/lt_of/etc.).
 
 use decimal_scaled::{
-    D9, D9s4, D18, D18s6, D18s9, D38, D38s6, D38s9, D38s12, D38s18, RoundingMode,
+    D18, D18s6, D18s9, D38, D38s6, D38s9, D38s12, D38s18, RoundingMode,
 };
 
 // ── Same-width, cross-scale: D38 arithmetic. ─────────────────────────

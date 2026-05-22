@@ -20,14 +20,6 @@ fn widen_narrow_one_tier_hop_narrow_arm() {
     assert_eq!(c.to_bits(), a.to_bits());
 }
 
-#[test]
-fn narrow_overflow_is_err() {
-    use decimal_scaled::D18s0;
-    // 5 × 10⁹ doesn't fit i32 (max ~2.147 × 10⁹).
-    let big = D18s0::from_int(5_000_000_000_i64);
-    assert!(big.narrow().is_err());
-}
-
 #[cfg(feature = "wide")]
 #[test]
 fn widen_narrow_into_wide_tier() {

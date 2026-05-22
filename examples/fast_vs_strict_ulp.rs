@@ -7,7 +7,7 @@
 //! cargo run --release --example fast_vs_strict_ulp --features "wide x-wide xx-wide fast"
 //! ```
 
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 #[cfg(feature = "wide")]
 use decimal_scaled::{D57, D76, D115, D153, D230, D307};
 #[cfg(feature = "x-wide")]

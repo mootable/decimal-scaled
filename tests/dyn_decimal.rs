@@ -15,7 +15,7 @@
 
 #![cfg(feature = "dyn")]
 
-use decimal_scaled::{D9, D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMode};
+use decimal_scaled::{D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMode};
 
 // ── Identity surface ──────────────────────────────────────────────────
 

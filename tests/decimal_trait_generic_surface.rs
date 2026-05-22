@@ -2,7 +2,7 @@
 //! surface: a single generic function works on every width without
 //! reaching for inherent methods.
 
-use decimal_scaled::{D9, D18, D38, Decimal, RoundingMode};
+use decimal_scaled::{D18, D38, Decimal, RoundingMode};
 use decimal_scaled::{DecimalArithmetic, DecimalConvert};
 
 /// A width-generic helper that touches each major surface area: ops,

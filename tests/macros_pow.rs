@@ -19,7 +19,7 @@
 //! * `overflowing_pow` returns `(wrapping_result, true)` exactly when
 //!   any step overflowed.
 
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 
 // ─── Narrow-tier (D9<0>, D18<0>, D38<0>) base-case identities ──────────
 //
@@ -111,7 +111,7 @@ fn powi_negative_exponent_d38_scale12() {
 
 #[test]
 fn powi_d9_d18_positive_negative_exp() {
-    use decimal_scaled::{D9, D18};
+    use decimal_scaled::{D18};
     type D9_4 = D9<4>;
     type D18_8 = D18<8>;
     // D9<4>: 2^3 = 8 → 80_000

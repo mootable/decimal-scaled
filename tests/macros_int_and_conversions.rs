@@ -9,10 +9,10 @@
 //! has three branches (under-half / over-half / exact-half) and two sign
 //! branches; we systematically hit every cell.
 
-use decimal_scaled::{D9, D18, D38, RoundingMode};
+use decimal_scaled::{D18, D38, RoundingMode};
 
 type D38_2 = D38<2>;
-type D9_2 = D9<2>;
+type D9_2 = D18<2>;
 type D18_2 = D18<2>;
 
 // ─── int_methods coverage ──────────────────────────────────────────────

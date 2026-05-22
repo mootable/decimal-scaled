@@ -11,7 +11,7 @@
 //! For non-integer exponents (e.g. 0.5, 2.5), the fast path does not
 //! fire; that case is exercised by the existing `powf_*` lib tests.
 
-use decimal_scaled::{D9, D18, D38};
+use decimal_scaled::{D18, D38};
 
 /// Exercises both `from_i32` and a manual `from_bits(n * multiplier)`
 /// shape, since the integer-detection helper checks
