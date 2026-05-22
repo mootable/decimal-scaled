@@ -137,10 +137,11 @@ fn sub_mul_div_rem_same_scale() {
     );
 
     let quot = a.div(&*b).unwrap();
-    // 20 / 3 at scale 2 = 6.66 (HalfToEven: 6.666... rounds down).
+    // 20 / 3 at scale 2 = 6.6666… → rounds to 6.67 (667 at S=2), matching
+    // the `/` operator; dyn div rounds via checked_div, it does not truncate.
     assert_eq!(
         *quot.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(666))
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(667))
     );
 
     let rem = a.rem(&*b).unwrap();
