@@ -433,19 +433,12 @@ impl<const N: usize> Uint<N> {
         Self { limbs }
     }
 
-    /// Builds from an unsigned 128-bit value (zero-extends the upper
-    /// limbs).
+    /// Builds from an unsigned 128-bit value, zero-extending the upper
+    /// limbs. **Truncating** for `Uint<1>` (the high 64 bits of `v` are
+    /// discarded); use [`Self::try_from_u128`] (or `TryFrom`) when `v` may
+    /// not fit.
     #[inline]
     pub const fn from_u128(v: u128) -> Self {
-        Self::from_u128_bits(v)
-    }
-
-    /// Reinterprets an unsigned 128-bit value into the low 128 bits,
-    /// zero-extending the rest. **Truncating** — for `Uint<1>` the high
-    /// 64 bits of `v` are discarded; use [`Self::from_u128_checked`]
-    /// (or `TryFrom`) when `v` may not fit.
-    #[inline]
-    pub const fn from_u128_bits(v: u128) -> Self {
         let mut limbs = [0u64; N];
         if N > 0 {
             limbs[0] = v as u64;
@@ -459,9 +452,9 @@ impl<const N: usize> Uint<N> {
     /// Exact value conversion from `u128`, or `None` if `v` does not fit
     /// `Uint<N>` (only possible for `N < 2`). For `N >= 2` every `u128` fits.
     #[inline]
-    pub const fn from_u128_checked(v: u128) -> Option<Self> {
+    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
         if N >= 2 || v <= u64::MAX as u128 {
-            Some(Self::from_u128_bits(v))
+            Some(Self::from_u128(v))
         } else {
             None
         }
@@ -798,7 +791,7 @@ impl<const N: usize> Int<N> {
 
     /// Constructs from an `i64`, sign-extending into the high limbs.
     #[inline]
-    pub fn from_i64(value: i64) -> Self {
+    pub const fn from_i64(value: i64) -> Self {
         // Negative values fill the upper limbs with all-ones so the
         // two's-complement representation matches at every width.
         let fill = if value < 0 { u64::MAX } else { 0 };
@@ -807,6 +800,163 @@ impl<const N: usize> Int<N> {
             limbs[0] = value as u64;
         }
         Self { limbs }
+    }
+
+    /// Constructs from an `i8` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i8(value: i8) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from an `i16` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i16(value: i16) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from an `i32` (always representable; sign-extends).
+    #[inline]
+    pub(crate) const fn from_i32(value: i32) -> Self {
+        Self::from_i64(value as i64)
+    }
+
+    /// Constructs from a `u8` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u8(value: u8) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Constructs from a `u16` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u16(value: u16) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Constructs from a `u32` (always representable; zero-extends).
+    #[inline]
+    pub(crate) const fn from_u32(value: u32) -> Self {
+        Self::from_u64_unsigned(value as u64)
+    }
+
+    /// Zero-extends an unsigned 64-bit value into limb 0. Internal helper
+    /// for the unsigned `from_*` family; the public fitting check is in
+    /// [`Self::try_from_u64`].
+    #[inline]
+    const fn from_u64_unsigned(value: u64) -> Self {
+        let mut limbs = [0u64; N];
+        if N > 0 {
+            limbs[0] = value;
+        }
+        Self { limbs }
+    }
+
+    /// Exact conversion from a `u64`, or `None` if it does not fit
+    /// `Int<N>`. Only `N == 1` (the `i64` floor) can fail, when the value
+    /// exceeds `i64::MAX`; every wider tier holds all of `u64`.
+    #[inline]
+    pub(crate) const fn try_from_u64(value: u64) -> Option<Self> {
+        if N >= 2 || value <= i64::MAX as u64 {
+            Some(Self::from_u64_unsigned(value))
+        } else {
+            None
+        }
+    }
+
+    /// Exact conversion from an `i128`, or `None` if it does not fit
+    /// `Int<N>`. Only `N == 1` (64-bit storage) can fail; `N >= 2` holds
+    /// every `i128`.
+    #[inline]
+    pub(crate) const fn try_from_i128(v: i128) -> Option<Self> {
+        let mag = v.unsigned_abs();
+        let built = Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0);
+        if N >= 2 || built.as_i128() == v {
+            Some(built)
+        } else {
+            None
+        }
+    }
+
+    /// Exact conversion from a `u128`, or `None` if it does not fit
+    /// `Int<N>`. `N == 1` fails above `i64::MAX`; `N == 2` fails above
+    /// `i128::MAX` (the sign bit); `N >= 3` holds every `u128`.
+    #[inline]
+    pub(crate) const fn try_from_u128(v: u128) -> Option<Self> {
+        let built = Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false);
+        if N >= 3 {
+            Some(built)
+        } else if built.is_negative() {
+            // Magnitude landed in the sign bit of the N-limb storage.
+            None
+        } else if N >= 2 || built.as_i128() as u128 == v {
+            Some(built)
+        } else {
+            None
+        }
+    }
+
+    /// Lossless `i64` value, valid on the `N == 1` tier where `Int<N>`
+    /// *is* an `i64`. The trait form is `From<Int<1>> for i64`.
+    #[inline]
+    pub(crate) const fn to_i64(self) -> i64 {
+        self.as_i128() as i64
+    }
+
+    /// Lossless `i128` value, valid on the `N <= 2` tiers where every
+    /// `Int<N>` fits an `i128`. The trait forms are `From<Int<1>>` /
+    /// `From<Int<2>> for i128`.
+    #[inline]
+    pub(crate) const fn to_i128(self) -> i128 {
+        self.as_i128()
+    }
+
+    /// Exact `i32` value, or `None` if out of range.
+    #[inline]
+    pub(crate) fn try_to_i32(self) -> Option<i32> {
+        match self.to_i128_checked() {
+            Some(v) if v >= i32::MIN as i128 && v <= i32::MAX as i128 => Some(v as i32),
+            _ => None,
+        }
+    }
+
+    /// Exact `u32` value, or `None` if negative or out of range.
+    #[inline]
+    pub(crate) fn try_to_u32(self) -> Option<u32> {
+        match self.to_u128_checked() {
+            Some(v) if v <= u32::MAX as u128 => Some(v as u32),
+            _ => None,
+        }
+    }
+
+    /// Exact `i64` value, or `None` if out of range.
+    #[inline]
+    pub(crate) fn try_to_i64(self) -> Option<i64> {
+        match self.to_i128_checked() {
+            Some(v) if v >= i64::MIN as i128 && v <= i64::MAX as i128 => Some(v as i64),
+            _ => None,
+        }
+    }
+
+    /// Exact `u64` value, or `None` if negative or out of range.
+    #[inline]
+    pub(crate) fn try_to_u64(self) -> Option<u64> {
+        match self.to_u128_checked() {
+            Some(v) if v <= u64::MAX as u128 => Some(v as u64),
+            _ => None,
+        }
+    }
+
+    /// Exact `i128` value, or `None` if out of range. Surface alias of
+    /// [`Self::to_i128_checked`].
+    #[inline]
+    pub(crate) fn try_to_i128(self) -> Option<i128> {
+        self.to_i128_checked()
+    }
+
+    /// Exact `u128` value, or `None` if negative or out of range. Surface
+    /// alias of [`Self::to_u128_checked`].
+    #[inline]
+    pub(crate) fn try_to_u128(self) -> Option<u128> {
+        self.to_u128_checked()
     }
 
     /// `true` when the value equals one.
@@ -1058,34 +1208,13 @@ impl<const N: usize> Int<N> {
         (self.limbs[limb] >> (idx % 64)) & 1 == 1
     }
 
-    /// Builds from a signed 128-bit value.
+    /// Builds from a signed 128-bit value. **Truncating** for `Int<1>`
+    /// (the high 64 bits of `v` are discarded); use [`Self::try_from_i128`]
+    /// (or `TryFrom`) when `v` may not fit.
     #[inline]
     pub const fn from_i128(v: i128) -> Self {
         let mag = v.unsigned_abs();
         Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
-    }
-
-    /// Reinterprets a signed 128-bit value into the low 128 bits of the
-    /// storage, sign-extending the rest. **Truncating** — for `Int<1>`
-    /// the high 64 bits of `v` are discarded; use [`Self::from_i128_checked`]
-    /// (or `TryFrom`) when `v` may not fit. Identical to [`Self::from_i128`].
-    #[inline]
-    pub const fn from_i128_bits(v: i128) -> Self {
-        let mag = v.unsigned_abs();
-        Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
-    }
-
-    /// Exact value conversion from `i128`, or `None` if `v` does not fit
-    /// `Int<N>` (only possible for `N < 2`, where the storage is narrower
-    /// than 128 bits). For `N >= 2` every `i128` fits.
-    #[inline]
-    pub const fn from_i128_checked(v: i128) -> Option<Self> {
-        let bits = Self::from_i128_bits(v);
-        if N >= 2 || bits.as_i128_bits() == v {
-            Some(bits)
-        } else {
-            None
-        }
     }
 
     /// Builds from an unsigned 128-bit value.
@@ -1196,6 +1325,58 @@ impl<const N: usize> Int<N> {
             acc = acc * radix + mag[i] as f64;
         }
         if self.is_negative() { -acc } else { acc }
+    }
+
+    /// Approximate `f32` value of `self` (round-to-nearest; lossy above
+    /// 24 significant bits). Routes through the `f64` accumulation to keep
+    /// one summation path.
+    pub fn to_f32(self) -> f32 {
+        self.to_f64() as f32
+    }
+
+    /// Exact conversion from an `f64`, or `None` when `v` is NaN, ±inf,
+    /// has a fractional part, or lies outside the `Int<N>` range.
+    ///
+    /// Not `const`: float classification (`is_finite` / `fract`) and the
+    /// float→int `as` cast are not const-stable. The integer helpers it
+    /// composes with stay `const`.
+    pub(crate) fn try_from_f64(v: f64) -> Option<Self> {
+        if !v.is_finite() || v.fract() != 0.0 {
+            return None;
+        }
+        let negative = v < 0.0;
+        let mut m = if negative { -v } else { v };
+        let radix: f64 = 18_446_744_073_709_551_616.0; // 2^64
+        let mut limbs = [0u64; N];
+        let mut i = 0;
+        while m >= 1.0 && i < N {
+            let rem = m % radix;
+            limbs[i] = rem as u64;
+            m = (m - rem) / radix;
+            i += 1;
+        }
+        if m >= 1.0 {
+            // Magnitude needs more than `N` limbs — out of range.
+            return None;
+        }
+        let built = Self::from_mag_limbs(&limbs, negative);
+        // Reject the sign-bit overflow: a positive magnitude that landed
+        // negative, or a negative one that is not the legal `MIN` edge.
+        if built.is_zero() {
+            Some(built)
+        } else if built.is_negative() != negative {
+            None
+        } else {
+            Some(built)
+        }
+    }
+
+    /// Exact conversion from an `f32`, or `None` on NaN, ±inf, a
+    /// fractional part, or out-of-range. Widens to `f64` (lossless for
+    /// `f32`) and defers to [`Self::try_from_f64`]. Not `const` for the
+    /// same float-op reason.
+    pub(crate) fn try_from_f32(v: f32) -> Option<Self> {
+        Self::try_from_f64(v as f64)
     }
 
     /// Builds from an `f64`, truncating toward zero. Saturates to
@@ -1500,17 +1681,11 @@ impl<const N: usize> Int<N> {
     }
 
     /// Truncating cast to `i128` (low 128 bits, sign-applied).
-    #[inline]
-    pub const fn as_i128(self) -> i128 {
-        self.as_i128_bits()
-    }
-
-    /// Reinterprets the low 128 bits as `i128`, sign-applied.
     /// **Truncating** — for `Int<3+>` any value outside the `i128` range
     /// loses its high limbs; use [`Self::to_i128_checked`] (or `TryFrom`)
     /// when the value may not fit.
     #[inline]
-    pub const fn as_i128_bits(self) -> i128 {
+    pub const fn as_i128(self) -> i128 {
         let mag = *self.unsigned_abs().as_limbs();
         let lo = if N > 0 { mag[0] as u128 } else { 0 };
         let hi = if N > 1 { mag[1] as u128 } else { 0 };
@@ -2018,19 +2193,31 @@ impl<const N: usize> Int<N> {
 
 // ── std-aligned primitive conversions ───────────────────────────────
 // Infallible widening (the source always fits `Int<N>` / `Uint<N>` for
-// N >= 1) is `From`. Fallible narrowing (the value may exceed the target
-// range) is `TryFrom`, returning [`ConvertError::Overflow`]. The
-// truncating bit-reinterpret stays on the inherent `*_bits` methods.
+// N >= 1, judged against the `N == 1` = `i64` floor) is `From`. Fallible
+// narrowing (the value may exceed the target range) is `TryFrom`,
+// returning [`ConvertError::Overflow`]. Each impl is a thin one-line
+// delegate to the inherent const base. `Into` / `TryInto` come for free.
 
+// ── IN: primitive → Int<N> ───────────────────────────────────────────
 macro_rules! int_from_signed {
-    ($($prim:ty),+) => {$(
+    ($($prim:ty => $base:ident),+) => {$(
         impl<const N: usize> From<$prim> for Int<N> {
             #[inline]
-            fn from(v: $prim) -> Self { Self::from_i64(v as i64) }
+            fn from(v: $prim) -> Self { Self::$base(v) }
         }
     )+};
 }
-int_from_signed!(i8, i16, i32, i64);
+int_from_signed!(i8 => from_i8, i16 => from_i16, i32 => from_i32, i64 => from_i64);
+
+macro_rules! int_from_unsigned {
+    ($($prim:ty => $base:ident),+) => {$(
+        impl<const N: usize> From<$prim> for Int<N> {
+            #[inline]
+            fn from(v: $prim) -> Self { Self::$base(v) }
+        }
+    )+};
+}
+int_from_unsigned!(u8 => from_u8, u16 => from_u16, u32 => from_u32);
 
 macro_rules! uint_from_unsigned {
     ($($prim:ty),+) => {$(
@@ -2042,23 +2229,98 @@ macro_rules! uint_from_unsigned {
 }
 uint_from_unsigned!(u8, u16, u32, u64);
 
+// Fallible IN: `u64` can overflow `Int<1>`; `i128` / `u128` can overflow
+// the narrow tiers (see the inherent `try_from_*`).
+impl<const N: usize> TryFrom<u64> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u64) -> Result<Self, Self::Error> {
+        Self::try_from_u64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
 impl<const N: usize> TryFrom<i128> for Int<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
     fn try_from(v: i128) -> Result<Self, Self::Error> {
-        Self::from_i128_checked(v).ok_or(crate::support::error::ConvertError::Overflow)
+        Self::try_from_i128(v).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
-// Int<1> / Int<2> already have infallible `From<Int<_>> for i128` (they
-// fit exactly); wider widths use the inherent `to_i128_checked`. A blanket
-// `TryFrom<Int<N>> for i128` would conflict with those, so it is omitted.
+impl<const N: usize> TryFrom<u128> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: u128) -> Result<Self, Self::Error> {
+        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// ── OUT: Int<N> → primitive ──────────────────────────────────────────
+// `i64` / `i128` are always representable on the fitting tiers, so those
+// are infallible `From` (declared above: `From<Int<1>> for i64`,
+// `From<Int<1>>` / `From<Int<2>> for i128`). The std blanket
+// `impl<T,U: From<T>> TryFrom<T> for U` then derives the matching
+// `TryFrom` for those tiers, so a generic `TryFrom<Int<N>> for i64`/`i128`
+// is omitted to avoid the coherence conflict. The remaining widths /
+// targets are genuinely fallible:
+impl<const N: usize> TryFrom<Int<N>> for i32 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_i32().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u32 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u32().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u64 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u64().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<Int<N>> for u128 {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: Int<N>) -> Result<Self, Self::Error> {
+        v.try_to_u128().ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
 
 impl<const N: usize> TryFrom<u128> for Uint<N> {
     type Error = crate::support::error::ConvertError;
     #[inline]
     fn try_from(v: u128) -> Result<Self, Self::Error> {
-        Self::from_u128_checked(v).ok_or(crate::support::error::ConvertError::Overflow)
+        Self::try_from_u128(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+// ── Floats ───────────────────────────────────────────────────────────
+// Float → Int<N> is fallible (NaN, ±inf, non-integer, out-of-range), so
+// `TryFrom`. There is no `From<Int<N>> for f64/f32`: that direction is
+// lossy above the mantissa width and is offered only as the inherent
+// `to_f64` / `to_f32` round-to-nearest methods.
+impl<const N: usize> TryFrom<f64> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: f64) -> Result<Self, Self::Error> {
+        Self::try_from_f64(v).ok_or(crate::support::error::ConvertError::Overflow)
+    }
+}
+
+impl<const N: usize> TryFrom<f32> for Int<N> {
+    type Error = crate::support::error::ConvertError;
+    #[inline]
+    fn try_from(v: f32) -> Result<Self, Self::Error> {
+        Self::try_from_f32(v).ok_or(crate::support::error::ConvertError::Overflow)
     }
 }
 
@@ -2068,15 +2330,15 @@ mod tests {
     use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
 
     #[test]
-    fn from_i128_checked_detects_narrow_overflow() {
+    fn try_from_i128_detects_narrow_overflow() {
         // Int<2> (128-bit) holds every i128.
-        assert_eq!(Int::<2>::from_i128_checked(i128::MAX), Some(Int::<2>::from_i128_bits(i128::MAX)));
-        assert_eq!(Int::<2>::from_i128_checked(i128::MIN), Some(Int::<2>::from_i128_bits(i128::MIN)));
+        assert_eq!(Int::<2>::try_from_i128(i128::MAX), Some(Int::<2>::from_i128(i128::MAX)));
+        assert_eq!(Int::<2>::try_from_i128(i128::MIN), Some(Int::<2>::from_i128(i128::MIN)));
         // Int<1> (64-bit) holds only the i64 range.
-        assert_eq!(Int::<1>::from_i128_checked(i64::MAX as i128 + 1), None);
-        assert_eq!(Int::<1>::from_i128_checked(i64::MIN as i128 - 1), None);
+        assert_eq!(Int::<1>::try_from_i128(i64::MAX as i128 + 1), None);
+        assert_eq!(Int::<1>::try_from_i128(i64::MIN as i128 - 1), None);
         assert_eq!(
-            Int::<1>::from_i128_checked(i64::MAX as i128),
+            Int::<1>::try_from_i128(i64::MAX as i128),
             Some(Int::<1>::from_i64(i64::MAX))
         );
         // TryFrom mirrors it.
@@ -2085,19 +2347,56 @@ mod tests {
     }
 
     #[test]
-    fn from_u128_checked_detects_narrow_overflow() {
-        assert_eq!(Uint::<2>::from_u128_checked(u128::MAX), Some(Uint::<2>::from_u128_bits(u128::MAX)));
-        assert_eq!(Uint::<1>::from_u128_checked(u64::MAX as u128 + 1), None);
-        assert_eq!(Uint::<1>::from_u128_checked(u64::MAX as u128), Some(Uint::<1>::from_u64(u64::MAX)));
+    fn try_from_u128_detects_narrow_overflow() {
+        // Uint twin: every u128 fits Uint<2+>; Uint<1> only holds u64.
+        assert_eq!(Uint::<2>::try_from_u128(u128::MAX), Some(Uint::<2>::from_u128(u128::MAX)));
+        assert_eq!(Uint::<1>::try_from_u128(u64::MAX as u128 + 1), None);
+        assert_eq!(Uint::<1>::try_from_u128(u64::MAX as u128), Some(Uint::<1>::from_u64(u64::MAX)));
         assert!(<Uint<1> as TryFrom<u128>>::try_from(u64::MAX as u128 + 1).is_err());
+        // Int<N> u128 entry: Int<1> fails above i64::MAX, Int<2> above i128::MAX.
+        assert_eq!(Int::<1>::try_from_u128(u64::MAX as u128), None);
+        assert_eq!(Int::<2>::try_from_u128(u128::MAX), None);
+        assert_eq!(Int::<3>::try_from_u128(u128::MAX), Some(Int::<3>::from_u128(u128::MAX)));
+        assert!(<Int<2> as TryFrom<u128>>::try_from(u128::MAX).is_err());
     }
 
     #[test]
-    fn as_i128_bits_round_trips_at_edges() {
-        // MIN/MAX of the 128-bit storage reinterpret exactly.
-        assert_eq!(Int::<2>::MAX.as_i128_bits(), i128::MAX);
-        assert_eq!(Int::<2>::MIN.as_i128_bits(), i128::MIN);
-        assert_eq!(Int::<1>::from_i64(-123).as_i128_bits(), -123_i128);
+    fn try_from_u64_and_out_conversions_at_edges() {
+        // u64 entry: Int<1> rejects above i64::MAX, wider tiers accept.
+        assert!(<Int<1> as TryFrom<u64>>::try_from(u64::MAX).is_err());
+        assert_eq!(<Int<2> as TryFrom<u64>>::try_from(u64::MAX), Ok(Int::<2>::from_u128(u64::MAX as u128)));
+        // OUT lossless: Int<1> -> i64, Int<2> -> i128 are exact From.
+        assert_eq!(i128::from(Int::<2>::MAX), i128::MAX);
+        assert_eq!(i128::from(Int::<2>::MIN), i128::MIN);
+        assert_eq!(i64::from(Int::<1>::from_i64(-123)), -123_i64);
+        // OUT fallible: a wide value out of i128 range rejects (inherent
+        // base; i128 has no generic TryFrom — it is From-derived on N<=2).
+        let big = Int::<3>::from_u128(u128::MAX);
+        assert_eq!(big.try_to_i128(), None);
+        assert_eq!(<i32 as TryFrom<Int<4>>>::try_from(Int::<4>::from_i64(-7)), Ok(-7_i32));
+        assert!(<u32 as TryFrom<Int<4>>>::try_from(Int::<4>::from_i64(-1)).is_err());
+    }
+
+    #[test]
+    fn float_conversions_reject_and_round_trip() {
+        // Rejections.
+        assert_eq!(Int::<2>::try_from_f64(f64::NAN), None);
+        assert_eq!(Int::<2>::try_from_f64(f64::INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f64(f64::NEG_INFINITY), None);
+        assert_eq!(Int::<2>::try_from_f64(3.5), None);
+        assert_eq!(Int::<2>::try_from_f32(f32::NAN), None);
+        assert_eq!(Int::<1>::try_from_f64(1e30), None); // out of i64 range
+        // In-range integers round-trip exactly.
+        assert_eq!(Int::<4>::try_from_f64(42.0), Some(Int::<4>::from_i64(42)));
+        assert_eq!(Int::<4>::try_from_f64(-42.0), Some(Int::<4>::from_i64(-42)));
+        assert_eq!(Int::<4>::try_from_f32(7.0), Some(Int::<4>::from_i64(7)));
+        // TryFrom mirrors the helper.
+        assert!(<Int<2> as TryFrom<f64>>::try_from(f64::NAN).is_err());
+        assert_eq!(<Int<2> as TryFrom<f64>>::try_from(-9.0), Ok(Int::<2>::from_i64(-9)));
+        // OUT to_f64 / to_f32 round-trip small values.
+        assert_eq!(Int::<4>::from_i64(123).to_f64(), 123.0);
+        assert_eq!(Int::<4>::from_i64(-123).to_f64(), -123.0);
+        assert_eq!(Int::<4>::from_i64(123).to_f32(), 123.0_f32);
     }
 
     #[test]
