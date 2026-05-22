@@ -10,9 +10,9 @@
 //! `$Work` chosen per tier to be wide enough to hold the working-scale
 //! products without overflow:
 //!
-//! - D76 → `I1024` (working scale ≤ 106 digits);
-//! - D153 → `I2048` (working scale ≤ 183 digits);
-//! - D307 → `I4096` (working scale ≤ 337 digits).
+//! - D76 → `Int<16>` (working scale ≤ 106 digits);
+//! - D153 → `Int<32>` (working scale ≤ 183 digits);
+//! - D307 → `Int<64>` (working scale ≤ 337 digits).
 //!
 //! A working value `x` is held as the `$Work` integer `x · 10^w`, where
 //! `w = SCALE + GUARD` and `GUARD = 30` guard digits. the wide integers
@@ -97,7 +97,7 @@
 /// This module lifts the `exp_fixed` body out to a free function
 /// generic over any [`BigInt`] integer `S`, so the large-result
 /// regime can run it in the *next-wider* integer `WW` (e.g. D76's
-/// `Int1024` → `Int2048`, D462's `Int4096` → `Int8192`) where the full
+/// `Int<16>` → `Int<32>`, D462's `Int<64>` → `Int<128>`) where the full
 /// lift + squaring peak fit, then narrow correctly-rounded back to the
 /// tier's storage. The tier `$core::exp_fixed` becomes a thin wrapper
 /// over `exp_generic::exp_fixed::<W>`; nothing about the small / normal
@@ -389,7 +389,7 @@ macro_rules! decl_pow10_cached {
         /// cache below.
         ///
         /// Memory cost: `(POW10_TABLE_MAX_W + 1) · sizeof(W)`. For
-        /// D76 that's ~13 KB (Int1024); for D307 ~170 KB (Int4096).
+        /// D76 that's ~13 KB (Int<16>); for D307 ~170 KB (Int<64>).
         /// The table lives in `.rodata` once per tier in builds that
         /// enable the tier. In a hot loop a single `w` value is reused,
         /// so only one cache line is touched repeatedly — the table
@@ -720,8 +720,8 @@ macro_rules! decl_wide_transcendental {
                 // Newton vs MG chain dispatch (see the matrix in
                 // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`]).
                 // For most wide-tier `$Work` integers `W::BITS` lands
-                // outside the bench-validated cells (Int8192 /
-                // Int12288 / Int16384) and the dispatcher forwards to
+                // outside the bench-validated cells (Int<128> /
+                // Int<192> / Int<256>) and the dispatcher forwards to
                 // MG; the routing is here so a future bench at the
                 // larger widths can promote without touching this
                 // site.
@@ -745,7 +745,7 @@ macro_rules! decl_wide_transcendental {
             /// AGM / Newton loops where `w` is constant across
             /// every iteration — saves one `lit(10).pow(w)`
             /// recomputation per call (which for D307<150> at w=180
-            /// is itself a full Int4096 power of ~50 µs).
+            /// is itself a full Int<64> power of ~50 µs).
             ///
             /// `mul_cached` keeps the legacy generic-divide path
             /// because the caller has already paid for `pow10_w` and
@@ -1323,7 +1323,7 @@ macro_rules! decl_wide_transcendental {
             /// inside `Wexp`'s `~BITS·log10(2)` decimal capacity. We size
             /// the cap from that bound (with a safety margin). Because
             /// `Wexp` is the next-wider tier for every shipped width
-            /// (and D1232's own `Int16384` already holds the peak at its
+            /// (and D1232's own `Int<256>` already holds the peak at its
             /// `MAX_SCALE`), the full `needed` lift fits and the cell
             /// rounds correctly; the cap only fires for genuinely
             /// out-of-range inputs, which then panic on narrowing.
@@ -1945,7 +1945,7 @@ macro_rules! decl_wide_transcendental {
             ///
             /// `Wexp` is the next-wider `Int` for every tier except
             /// D1232 (already widest); there `Wexp == W`, and the full
-            /// lift fits because D1232's `Int16384` holds the squaring
+            /// lift fits because D1232's `Int<256>` holds the squaring
             /// peak at its `MAX_SCALE` anyway. Used by the near-overflow
             /// -edge `sinh`/`cosh`/`exp2`/`tanh` cells; the normal /
             /// small regime keeps the fast `exp_fixed` path on `W`.
@@ -4807,7 +4807,7 @@ mod tests {
 
         for raw in positives {
             let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
+            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
                 raw as i128,
             ));
             agree(
@@ -4831,7 +4831,7 @@ mod tests {
         }
         for raw in all {
             let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
+            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
                 raw as i128,
             ));
             agree(
@@ -4879,7 +4879,7 @@ mod tests {
         }
         for raw in unit_range {
             let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
+            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
                 raw as i128,
             ));
             agree(
@@ -4938,7 +4938,7 @@ mod tests {
         }
 
         for raw in positives {
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
+            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
                 raw as i128,
             ));
             agree(
@@ -4949,7 +4949,7 @@ mod tests {
             );
         }
         for raw in all {
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
+            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
                 raw as i128,
             ));
             agree(

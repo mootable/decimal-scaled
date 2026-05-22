@@ -24,8 +24,8 @@
 //!   `S = 37`.
 //!
 //! Closing this needs per-width raw constants stored in the storage
-//! type itself (e.g. a 75-digit raw `Int256` for D76 built via
-//! `Int256::from_str_radix`), with the precision growing to 153
+//! type itself (e.g. a 75-digit raw `Int<4>` for D76 built via
+//! `Int::<4>::from_str_radix`), with the precision growing to 153
 //! digits for D153 and 307 for D307. Recorded as a substantial
 //! follow-up — verifying ~308 digits of each constant for D307 is
 //! the bulk of the work.
@@ -36,7 +36,7 @@
 ///
 /// - `decl_decimal_consts!(D18, i64)` — *native* storage; the `i128`
 /// reference bits narrow via an `as`-cast.
-/// - `decl_decimal_consts!(wide D76, I256)` — *wide* storage; the
+/// - `decl_decimal_consts!(wide D76, Int<4>)` — *wide* storage; the
 /// `i128` reference bits widen via the `BigInt` cast. Because the
 /// reference constants are only carried to `SCALE_REF = 35` digits,
 /// wide widths gain no extra precision above that scale (the trailing

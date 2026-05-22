@@ -230,7 +230,7 @@ macro_rules! decl_decimal_arithmetic {
                 // skip the widen → mg_divide-in-`$Wider` → narrow
                 // chain. The check is one `leading_zeros` per operand
                 // on the storage type's `[u64; L]` limbs (4 ops for
-                // Int256, 6 for Int384, …); negligible vs the
+                // Int<4>, 6 for Int<6>, …); negligible vs the
                 // 4 × L² limb mul that follows. When the path is
                 // taken we save (a) one set of `$Storage → $Wider`
                 // resizes, (b) one `$Wider → $Storage` resize at
@@ -261,8 +261,8 @@ macro_rules! decl_decimal_arithmetic {
                         $crate::algos::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                     } else {
                         // Newton vs MG chain dispatch: cells in the
-                        // bench-validated matrix (Int2048 ≥ s200,
-                        // Int3072 ≥ s200, Int4096 ≥ s400) route to
+                        // bench-validated matrix (Int<32> ≥ s200,
+                        // Int<48> ≥ s200, Int<64> ≥ s400) route to
                         // Newton; everything else stays on MG. See
                         // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
                         $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
@@ -282,7 +282,7 @@ macro_rules! decl_decimal_arithmetic {
                 } else {
                     // Width-dispatch as above; the slow path's `$Wider`
                     // numerator hits the same matrix (e.g. D307's
-                    // `$Wider = Int2048` routes Newton at SCALE ≥ 200).
+                    // `$Wider = Int<32>` routes Newton at SCALE ≥ 200).
                     $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                 };
                 Self(scaled.resize::<$Storage>())

@@ -22,12 +22,12 @@
 ///
 /// Args:
 /// - `$Type`       — decimal type name (`D76`, `D153`, `D307`).
-/// - `$Storage`    — signed storage int (`Int256`, `Int512`, `Int1024`).
-/// - `$Unsigned`   — matching unsigned int for `Display` (`Uint256`, …).
-/// - `$Wider`      — next-up signed int for mul/div (`Int512`, `Int1024`, `Int2048`).
+/// - `$Storage`    — signed storage int (`Int<4>`, `Int<8>`, `Int<16>`).
+/// - `$Unsigned`   — matching unsigned int for `Display` (`Uint<4>`, …).
+/// - `$Wider`      — next-up signed int for mul/div (`Int<8>`, `Int<16>`, `Int<32>`).
 /// - `$SqrtWide`   — wide int for `sqrt`'s `r·10^SCALE` (usually `$Storage`).
 /// - `$CbrtWide`   — wide int for `cbrt`'s `r·10^(2·SCALE)` (next-up usually).
-/// - `$Work`       — wide int for the transcendental core (`Int1024` for D76, …).
+/// - `$Work`       — wide int for the transcendental core (`Int<16>` for D76, …).
 /// - `$core`       — unique module name for the transcendental core.
 /// - `$max_scale`  — the type's maximum supported `SCALE`.
 #[cfg(any(

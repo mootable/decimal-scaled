@@ -61,7 +61,7 @@ macro_rules! decl_exp_kernel {
 #[cfg(any(feature = "d57", feature = "wide"))]
 decl_exp_kernel!(
     exp_strict_d57,
-    crate::wide_int::I192,
+    crate::int::types::Int<3>,
     crate::types::widths::wide_trig_d57,
     "D57"
 );
@@ -69,7 +69,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d76", feature = "wide"))]
 decl_exp_kernel!(
     exp_strict_d76,
-    crate::wide_int::I256,
+    crate::int::types::Int<4>,
     crate::types::widths::wide_trig_d76,
     "D76"
 );
@@ -77,7 +77,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d115", feature = "wide"))]
 decl_exp_kernel!(
     exp_strict_d115,
-    crate::wide_int::I384,
+    crate::int::types::Int<6>,
     crate::types::widths::wide_trig_d115,
     "D115"
 );
@@ -85,7 +85,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d153", feature = "wide"))]
 decl_exp_kernel!(
     exp_strict_d153,
-    crate::wide_int::I512,
+    crate::int::types::Int<8>,
     crate::types::widths::wide_trig_d153,
     "D153"
 );
@@ -93,7 +93,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d230", feature = "wide"))]
 decl_exp_kernel!(
     exp_strict_d230,
-    crate::wide_int::I768,
+    crate::int::types::Int<12>,
     crate::types::widths::wide_trig_d230,
     "D230"
 );
@@ -101,7 +101,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 decl_exp_kernel!(
     exp_strict_d307,
-    crate::wide_int::I1024,
+    crate::int::types::Int<16>,
     crate::types::widths::wide_trig_d307,
     "D307"
 );
@@ -109,7 +109,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 decl_exp_kernel!(
     exp_strict_d462,
-    crate::wide_int::I1536,
+    crate::int::types::Int<24>,
     crate::types::widths::wide_trig_d462,
     "D462"
 );
@@ -117,7 +117,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 decl_exp_kernel!(
     exp_strict_d616,
-    crate::wide_int::I2048,
+    crate::int::types::Int<32>,
     crate::types::widths::wide_trig_d616,
     "D616"
 );
@@ -125,7 +125,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 decl_exp_kernel!(
     exp_strict_d924,
-    crate::wide_int::I3072,
+    crate::int::types::Int<48>,
     crate::types::widths::wide_trig_d924,
     "D924"
 );
@@ -133,7 +133,7 @@ decl_exp_kernel!(
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 decl_exp_kernel!(
     exp_strict_d1232,
-    crate::wide_int::I4096,
+    crate::int::types::Int<64>,
     crate::types::widths::wide_trig_d1232,
     "D1232"
 );

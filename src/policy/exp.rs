@@ -352,9 +352,9 @@ impl_wide_exp!(
 
 // D307 — Tang exp surface dispatch was bench-trialed at SCALE 150 and
 // showed a ~5% regression on `exp(2)` against the canonical
-// `wide_kernel::exp_strict_d307`. D307's Int1024 working integer is
+// `wide_kernel::exp_strict_d307`. D307's Int<16> working integer is
 // approaching the Tang-exp crossover identified at D462/D616
-// (Int3072+ where adaptive Smith r/2^n in `exp_fixed` matches the
+// (Int<48>+ where adaptive Smith r/2^n in `exp_fixed` matches the
 // Tang table-multiply cost). Surface `exp_impl` therefore keeps the
 // generic `wide_kernel`. The `tang_exp_fixed` machinery is still
 // retained for the hyperbolic kernels at SCALE 140..=160, where the
@@ -371,7 +371,7 @@ impl_wide_exp!(
 );
 
 // D462 — Tang exp probed at SCALE 225..=235 and LOST (~75% regression
-// against the canonical `wide_kernel::exp_strict_d462`). At Int3072
+// against the canonical `wide_kernel::exp_strict_d462`). At Int<48>
 // working width the Tang post-reduction Taylor needs ~95 wide mults
 // (one per term) vs. the canonical Smith r/2^n path's ~28 wide
 // squarings — the table-elimination of the reduction does not pay for

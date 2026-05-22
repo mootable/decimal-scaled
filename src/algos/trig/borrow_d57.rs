@@ -17,10 +17,9 @@
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D38, D57};
-use crate::wide_int::I192;
 
 #[inline]
-fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> Int<2> {
+fn narrow<const SCALE: u32>(raw_wide: Int<3>, op: &'static str) -> Int<2> {
     let wide = D57::<SCALE>::from_bits(raw_wide);
     let r: D38<SCALE> = wide.try_into().unwrap_or_else(|_| panic!(
         "{op}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",

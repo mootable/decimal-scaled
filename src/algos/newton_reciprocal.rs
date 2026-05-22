@@ -299,14 +299,14 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
 ///
 /// | Storage  | bits | Newton min SCALE |
 /// |----------|------|------------------|
-/// | I2048    | 2048 |  ≥ 200           |
-/// | I3072    | 3072 |  ≥ 200           |
-/// | I4096    | 4096 |  ≥ 400           |
+/// | Int<32>    | 2048 |  ≥ 200           |
+/// | Int<48>    | 3072 |  ≥ 200           |
+/// | Int<64>    | 4096 |  ≥ 400           |
 ///
 /// Bench source: `benches/newton_vs_mg.rs` head-to-head against
 /// [`crate::algos::mg_divide::div_wide_pow10_chain_with`] at the
-/// listed widths × representative SCALE bands. Larger widths (Int8192
-/// / Int12288 / Int16384 — used by the transcendental work integers)
+/// listed widths × representative SCALE bands. Larger widths (Int<128>
+/// / Int<192> / Int<256> — used by the transcendental work integers)
 /// have no bench data and fall through to MG.
 ///
 /// Scale `≤ 38` always returns `false`: the single-pass MG kernel
@@ -336,7 +336,7 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
 ///
 /// Three separate slots — one per cached width — because the
 /// `width_limbs` argument differs (16 / 24 / 32 u128 limbs for
-/// Int2048 / Int3072 / Int4096) and the `NewtonReciprocal` allocates
+/// Int<32> / Int<48> / Int<64>) and the `NewtonReciprocal` allocates
 /// limb-storage sized to that argument.
 #[cfg(feature = "std")]
 mod cache {
@@ -448,7 +448,7 @@ mod tests {
     use super::*;
     use crate::algos::mg_divide::div_wide_pow10_chain_with;
     use crate::support::rounding::RoundingMode;
-    use crate::wide_int::{I1024, I2048, I4096};
+    use crate::int::types::Int;
 
     #[test]
     fn newton_matches_mg_chain_d307_s150() {
@@ -459,12 +459,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[6] = 1u128 << 32;
         limbs[0] = 42;
-        let n = <I1024 as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let n = <Int<16> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain_with::<
-            I1024,
-            { <I1024 as crate::int::types::traits::BigInt>::U128_LIMBS },
+            Int<16>,
+            { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
         >(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
@@ -478,12 +478,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[14] = 1u128 << 16;
         limbs[3] = 0xdeadbeef;
-        let n = <I2048 as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let n = <Int<32> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain_with::<
-            I2048,
-            { <I2048 as crate::int::types::traits::BigInt>::U128_LIMBS },
+            Int<32>,
+            { <Int<32> as crate::int::types::traits::BigInt>::U128_LIMBS },
         >(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
     }
@@ -497,12 +497,12 @@ mod tests {
         let mut limbs = [0u128; 64];
         limbs[30] = 1u128 << 8;
         limbs[5] = 0xcafef00d;
-        let n = <I4096 as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let n = <Int<64> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain_with::<
-            I4096,
-            { <I4096 as crate::int::types::traits::BigInt>::U128_LIMBS },
+            Int<64>,
+            { <Int<64> as crate::int::types::traits::BigInt>::U128_LIMBS },
         >(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
     }

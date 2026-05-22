@@ -124,7 +124,7 @@ pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
 }
 
 /// π at working scale `w`, sourced from the crate-wide 75-digit
-/// `consts::PI_RAW` (Int256 holding `π × 10^75`).
+/// `consts::PI_RAW` (Int<4> holding `π × 10^75`).
 pub(crate) fn wide_pi(w: u32) -> Fixed {
     debug_assert!(
         w <= 75,
