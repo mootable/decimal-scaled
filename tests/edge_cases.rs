@@ -360,7 +360,7 @@ fn from_bits_to_bits_round_trips_at_extremes() {
 fn cross_width_widen_then_narrow_round_trips() {
     // Widening is lossless; narrowing back recovers the original when
     // the value is in range.
-    let v64 = D18s9::from_bits(i64::MIN + 1);
+    let v64 = D18s9::from_bits(decimal_scaled::Int::<1>::from_i64(i64::MIN + 1));
     let wide: D38s9 = v64.into();
     let back: D18s9 = wide.try_into().unwrap();
     assert_eq!(back, v64);

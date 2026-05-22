@@ -106,7 +106,7 @@ impl PrecisionSubject for DecimalScaledSubject {
         mode: RoundingMode,
     ) -> SubjectOutput {
         match width {
-            Width::D18 => eval_typed!(D18<9>, i64, method, input, mode),
+            Width::D18 => eval_typed!(D18<9>, decimal_scaled::Int<1>, method, input, mode),
             Width::D38 => eval_typed!(D38<19>, decimal_scaled::Int<2>, method, input, mode),
             Width::D57 => eval_typed!(D57<28>, Int192, method, input, mode),
             Width::D76 => eval_typed!(D76<35>, Int256, method, input, mode),

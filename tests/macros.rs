@@ -256,14 +256,14 @@ fn expression_value_at_runtime() {
 fn d18_literal_inferred_scale() {
     use decimal_scaled::{D18s4, d18};
     let v = d18!(1234.5678);
-    assert_eq!(v, D18s4::from_bits(12_345_678));
+    assert_eq!(v, D18s4::from_bits(decimal_scaled::Int::<1>::from_i64(12_345_678)));
 }
 
 #[test]
 fn d18_explicit_scale_pad() {
     use decimal_scaled::{D18s9, d18};
     let v = d18!(1.5, scale 9);
-    assert_eq!(v, D18s9::from_bits(1_500_000_000));
+    assert_eq!(v, D18s9::from_bits(decimal_scaled::Int::<1>::from_i64(1_500_000_000)));
 }
 
 #[test]
@@ -319,7 +319,7 @@ fn d307_literal_inferred() {
 fn d18_per_scale_wrapper_d18s12() {
     use decimal_scaled::{D18s12, d18s12};
     let v: D18s12 = d18s12!(1.5);
-    assert_eq!(v, D18s12::from_bits(1_500_000_000_000));
+    assert_eq!(v, D18s12::from_bits(decimal_scaled::Int::<1>::from_i64(1_500_000_000_000)));
 }
 
 #[test]

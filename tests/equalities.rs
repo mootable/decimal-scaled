@@ -129,10 +129,10 @@ fn eq_float_negative() {
 #[test]
 fn eq_d18_with_integer() {
     use decimal_scaled::D18s9;
-    let v = D18s9::from_bits(7_000_000_000); // 7.0
+    let v = D18s9::from_bits(decimal_scaled::Int::<1>::from_i64(7_000_000_000)); // 7.0
     assert!(v == 7_i64);
     assert!(v == 7_u64);
-    let neg = D18s9::from_bits(-7_000_000_000);
+    let neg = D18s9::from_bits(decimal_scaled::Int::<1>::from_i64(-7_000_000_000));
     assert!(neg == -7_i32);
     assert!(!(neg == 7_u32));
 }

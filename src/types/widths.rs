@@ -2620,14 +2620,14 @@ mod tests {
 
     #[test]
     fn d18_arithmetic() {
-        let a = super::D18s9::from_bits(1_500_000_000); // 1.5
-        let b = super::D18s9::from_bits(2_500_000_000); // 2.5
+        let a = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(1_500_000_000)); // 1.5
+        let b = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(2_500_000_000)); // 2.5
         assert_eq!((a + b).to_bits(), 4_000_000_000);
         assert_eq!((b - a).to_bits(), 1_000_000_000);
         assert_eq!((-a).to_bits(), -1_500_000_000);
 
-        let x = super::D18s9::from_bits(2_000_000_000); // 2.0
-        let y = super::D18s9::from_bits(3_000_000_000); // 3.0
+        let x = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(2_000_000_000)); // 2.0
+        let y = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(3_000_000_000)); // 3.0
         assert_eq!((x * y).to_bits(), 6_000_000_000);
         assert_eq!((y / x).to_bits(), 1_500_000_000);
         assert_eq!((y % x).to_bits(), 1_000_000_000);
@@ -2635,15 +2635,15 @@ mod tests {
 
     #[test]
     fn d18_display() {
-        let v: super::D18s9 = super::D18s9::from_bits(1_500_000_000); // 1.500000000
+        let v: super::D18s9 = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(1_500_000_000)); // 1.500000000
         assert_eq!(alloc::format!("{}", v), "1.500000000");
-        let neg: super::D18s9 = super::D18s9::from_bits(-1_500_000_000);
+        let neg: super::D18s9 = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(-1_500_000_000));
         assert_eq!(alloc::format!("{}", neg), "-1.500000000");
     }
 
     #[test]
     fn cross_width_widening_d18_to_d38() {
-        let mid: super::D18s9 = super::D18s9::from_bits(i64::MAX);
+        let mid: super::D18s9 = super::D18s9::from_bits(crate::int::types::Int::<1>::from_i64(i64::MAX));
         let wider: super::D38s9 = mid.into();
         assert_eq!(wider.to_bits(), i64::MAX as i128);
     }

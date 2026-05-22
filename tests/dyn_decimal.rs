@@ -319,13 +319,13 @@ fn d9_cross_scale_add() {
 #[test]
 fn d18_cross_scale_mul() {
     // 1.5 (D18<1>) * 2.00 (D18<2>) -> 3.00 at scale 2.
-    let a: Box<dyn DynDecimal> = Box::new(D18::<1>::from_bits(15));
-    let b: Box<dyn DynDecimal> = Box::new(D18::<2>::from_bits(200));
+    let a: Box<dyn DynDecimal> = Box::new(D18::<1>::from_bits(decimal_scaled::Int::<1>::from_i64(15)));
+    let b: Box<dyn DynDecimal> = Box::new(D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(200)));
     let prod = a.mul(&*b).unwrap();
     assert_eq!(prod.scale_dyn(), 2);
     assert_eq!(
         *prod.as_any().downcast_ref::<D18<2>>().unwrap(),
-        D18::<2>::from_bits(300)
+        D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(300))
     );
 }
 
