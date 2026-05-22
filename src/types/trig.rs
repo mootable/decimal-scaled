@@ -761,7 +761,7 @@ mod tests {
             6_283_185_307,
             12_000_000_000,
         ] {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("sin", raw, x.sin_strict().to_bits(), f64::sin);
             check!("cos", raw, x.cos_strict().to_bits(), f64::cos);
             check!("atan", raw, x.atan_strict().to_bits(), f64::atan);
@@ -779,12 +779,12 @@ mod tests {
             500_000_000,
             999_999_999,
         ] {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("asin", raw, x.asin_strict().to_bits(), f64::asin);
             check!("acos", raw, x.acos_strict().to_bits(), f64::acos);
         }
         for &raw in &[-900_000_000_i128, -300_000_000, 1, 300_000_000, 900_000_000] {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("atanh", raw, x.atanh_strict().to_bits(), f64::atanh);
         }
         for &raw in &[
@@ -793,7 +793,7 @@ mod tests {
             3_000_000_000,
             50_000_000_000,
         ] {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("acosh", raw, x.acosh_strict().to_bits(), f64::acosh);
         }
         for &raw in &[
@@ -803,7 +803,7 @@ mod tests {
             1_000_000_000,
             1_400_000_000,
         ] {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("tan", raw, x.tan_strict().to_bits(), f64::tan);
         }
     }
@@ -859,7 +859,7 @@ mod tests {
             -500_000_000_000_i128,
             4_567_891_234_567_i128,
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let s = x.sin();
             let c = x.cos();
             let sum = (s * s) + (c * c);
@@ -910,7 +910,7 @@ mod tests {
             1_234_567_890_123_i128,
             -1_234_567_890_123_i128,
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let recovered = x.sin().asin();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -1029,7 +1029,7 @@ mod tests {
             -1_234_567_890_123_i128,
             2_500_000_000_000_i128,
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let ch = x.cosh();
             let sh = x.sinh();
             let diff = (ch * ch) - (sh * sh);
@@ -1093,7 +1093,7 @@ mod tests {
             1_234_567_890_123_i128,
             -2_345_678_901_234_i128,
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let recovered = x.to_degrees().to_radians();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -1144,7 +1144,7 @@ mod tests {
             -1_000_000_000_000_i128,
             123_456_789_012_i128,
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let t = x.tan();
             let sc = x.sin() / x.cos();
             assert!(
@@ -1164,7 +1164,7 @@ mod tests {
             1_234_567_890_123_i128,
             -2_345_678_901_234_i128,
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let t = x.tanh();
             let sc = x.sinh() / x.cosh();
             assert!(

@@ -413,7 +413,7 @@ mod strict_tests {
     fn ln_strict_is_correctly_rounded_vs_f64() {
         use crate::types::widths::D38;
         fn check(raw: i128) {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.ln_strict().to_bits();
             let reference = {
                 let v = raw as f64 / 1e9;
@@ -446,7 +446,7 @@ mod strict_tests {
     fn strict_log_exp_family_matches_f64() {
         use crate::types::widths::D38;
         fn check_exp(raw: i128) {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.exp_strict().to_bits();
             let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
             assert!(
@@ -455,7 +455,7 @@ mod strict_tests {
             );
         }
         fn check_log2(raw: i128) {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.log2_strict().to_bits();
             let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
             assert!(
@@ -464,7 +464,7 @@ mod strict_tests {
             );
         }
         fn check_log10(raw: i128) {
-            let x = D38::<9>::from_bits(raw);
+            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.log10_strict().to_bits();
             let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
             assert!(
@@ -505,7 +505,7 @@ mod strict_tests {
     fn strict_exp2_at_integers() {
         use crate::types::widths::D38;
         for k in 0_i128..=12 {
-            let x = D38::<12>::from_bits(k * 10i128.pow(12));
+            let x = D38::<12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
             let got = x.exp2_strict().to_bits();
             let expected = (1i128 << k) * 10i128.pow(12);
             assert_eq!(got, expected, "2^{k}");
@@ -518,7 +518,7 @@ mod strict_tests {
         use crate::types::widths::D38;
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
-            let x = D38::<18>::from_bits((1i128 << k) * 10i128.pow(18));
+            let x = D38::<18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
             let got = x.ln_strict().to_bits();
             let expected = k * ln2_s18;
             let tol = k / 2 + 2;
@@ -532,7 +532,7 @@ mod strict_tests {
     /// ln(2) at scale 12 = 693_147_180_560 (canonical rounded to 12 places).
     #[test]
     fn ln_of_two_close_to_canonical() {
-        let two = D38s12::from_bits(2_000_000_000_000);
+        let two = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000_000_000));
         let result = two.ln();
         assert!(
             within(result, 693_147_180_560, STRICT_TOLERANCE_LSB),
@@ -544,7 +544,7 @@ mod strict_tests {
     /// ln(e) is approximately 1.
     #[test]
     fn ln_of_e_close_to_one() {
-        let e_at_s12 = D38s12::from_bits(2_718_281_828_459);
+        let e_at_s12 = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2_718_281_828_459));
         let result = e_at_s12.ln();
         assert!(
             within(result, 1_000_000_000_000, STRICT_TOLERANCE_LSB),
@@ -556,7 +556,7 @@ mod strict_tests {
     /// ln(10) at scale 12 = 2_302_585_092_994 (canonical).
     #[test]
     fn ln_of_ten_close_to_canonical() {
-        let ten = D38s12::from_bits(10_000_000_000_000);
+        let ten = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(10_000_000_000_000));
         let result = ten.ln();
         assert!(
             within(result, 2_302_585_092_994, STRICT_TOLERANCE_LSB),
@@ -568,7 +568,7 @@ mod strict_tests {
     /// ln of a value > 1 is positive.
     #[test]
     fn ln_above_one_is_positive() {
-        let v = D38s12::from_bits(1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         let result = v.ln();
         assert!(result.to_bits() > 0);
     }
@@ -576,7 +576,7 @@ mod strict_tests {
     /// ln of a value in (0, 1) is negative.
     #[test]
     fn ln_below_one_is_negative() {
-        let v = D38s12::from_bits(500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000));
         let result = v.ln();
         assert!(result.to_bits() < 0);
         assert!(
@@ -595,7 +595,7 @@ mod strict_tests {
     #[test]
     #[should_panic(expected = "argument must be positive")]
     fn ln_of_negative_panics() {
-        let neg = D38s12::from_bits(-1_000_000_000_000);
+        let neg = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1_000_000_000_000));
         let _ = neg.ln();
     }
 
@@ -606,7 +606,7 @@ mod strict_tests {
     /// log2(2) ~= 1.
     #[test]
     fn log2_of_two_is_one() {
-        let two = D38s12::from_bits(2_000_000_000_000);
+        let two = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000_000_000));
         let result = two.log2();
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -618,7 +618,7 @@ mod strict_tests {
     /// log2(8) ~= 3.
     #[test]
     fn log2_of_eight_is_three() {
-        let eight = D38s12::from_bits(8_000_000_000_000);
+        let eight = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(8_000_000_000_000));
         let result = eight.log2();
         assert!(
             within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -630,7 +630,7 @@ mod strict_tests {
     /// log10(10) ~= 1.
     #[test]
     fn log10_of_ten_is_one() {
-        let ten = D38s12::from_bits(10_000_000_000_000);
+        let ten = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(10_000_000_000_000));
         let result = ten.log10();
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -642,7 +642,7 @@ mod strict_tests {
     /// log10(100) ~= 2.
     #[test]
     fn log10_of_hundred_is_two() {
-        let hundred = D38s12::from_bits(100_000_000_000_000);
+        let hundred = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(100_000_000_000_000));
         let result = hundred.log10();
         assert!(
             within(result, 2_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -654,7 +654,7 @@ mod strict_tests {
     /// log_base_b(b) == 1 for any b > 0, b != 1.
     #[test]
     fn log_self_is_one() {
-        let base = D38s12::from_bits(5_000_000_000_000);
+        let base = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_000_000_000_000));
         let result = base.log(base);
         assert!(
             within(result, 1_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -666,8 +666,8 @@ mod strict_tests {
     /// log_2(8) == 3 via the generic log.
     #[test]
     fn log_with_base_two() {
-        let eight = D38s12::from_bits(8_000_000_000_000);
-        let two = D38s12::from_bits(2_000_000_000_000);
+        let eight = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(8_000_000_000_000));
+        let two = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000_000_000));
         let result = eight.log(two);
         assert!(
             within(result, 3_000_000_000_000, DERIVED_LOG_TOLERANCE_LSB),
@@ -679,7 +679,7 @@ mod strict_tests {
     #[test]
     #[should_panic(expected = "base must not equal 1")]
     fn log_base_one_panics() {
-        let x = D38s12::from_bits(5_000_000_000_000);
+        let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_000_000_000_000));
         let one = D38s12::ONE;
         let _ = x.log(one);
     }
@@ -708,7 +708,7 @@ mod strict_tests {
     /// exp(ln(2)) ~= 2.
     #[test]
     fn exp_of_ln_2_is_two() {
-        let ln_2 = D38s12::from_bits(693_147_180_560);
+        let ln_2 = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(693_147_180_560));
         let result = ln_2.exp();
         assert!(
             within(result, 2_000_000_000_000, EXP_TOLERANCE_LSB),
@@ -720,7 +720,7 @@ mod strict_tests {
     /// exp(-1) ~= 1/e ~= 0.367879441171.
     #[test]
     fn exp_of_negative_one_is_reciprocal_e() {
-        let neg_one = D38s12::from_bits(-1_000_000_000_000);
+        let neg_one = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1_000_000_000_000));
         let result = neg_one.exp();
         assert!(
             within(result, 367_879_441_171, EXP_TOLERANCE_LSB),
@@ -749,7 +749,7 @@ mod strict_tests {
     /// exp2(10) ~= 1024.
     #[test]
     fn exp2_of_ten_is_1024() {
-        let ten = D38s12::from_bits(10_000_000_000_000);
+        let ten = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(10_000_000_000_000));
         let result = ten.exp2();
         assert!(
             within(result, 1_024_000_000_000_000, EXP_TOLERANCE_LSB * 10),

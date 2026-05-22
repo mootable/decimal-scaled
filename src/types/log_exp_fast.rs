@@ -337,7 +337,7 @@ mod tests {
             45_678_912_345_679_i128, // ~45.678912
             78_901_234_567_890_i128, // ~78.901234
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let recovered = x.ln().exp();
             assert!(
                 within_lsb(recovered, x, ROUND_TRIP_TOLERANCE_LSB),
@@ -377,7 +377,7 @@ mod tests {
             1_234_567_890_123_i128,  // ~1.234567
             7_890_123_456_789_i128,  // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let recovered = x.exp().ln();
             assert!(
                 within_lsb(recovered, x, FOUR_LSB),
@@ -400,7 +400,7 @@ mod tests {
             4_567_891_234_567_i128, // ~4.567891
             7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let via_log = x.log(e);
             let via_ln = x.ln();
             assert!(
@@ -422,7 +422,7 @@ mod tests {
             4_567_891_234_567_i128, // ~4.567891
             7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let via_log = x.log(two);
             let via_log2 = x.log2();
             assert!(
@@ -444,7 +444,7 @@ mod tests {
             4_567_891_234_567_i128, // ~4.567891
             7_890_123_456_789_i128, // ~7.890123
         ] {
-            let x = D38s12::from_bits(raw);
+            let x = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let via_log = x.log(ten);
             let via_log10 = x.log10();
             assert!(

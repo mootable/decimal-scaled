@@ -99,10 +99,10 @@ impl<const SCALE: u32> fmt::LowerExp for D38<SCALE> {
     /// ```
     /// use decimal_scaled::D38s12;
     ///
-    /// let v = D38s12::from_bits(1_500_000_000_000);
+    /// let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
     /// assert_eq!(format!("{v:e}"), "1.5e0");
     ///
-    /// let sub = D38s12::from_bits(1_500_000_000);
+    /// let sub = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000));
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -124,7 +124,7 @@ impl<const SCALE: u32> fmt::UpperExp for D38<SCALE> {
     /// ```
     /// use decimal_scaled::D38s12;
     ///
-    /// let v = D38s12::from_bits(1_500_000_000_000);
+    /// let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -418,7 +418,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_one_point_five_renders() {
-        let v = D38s12::from_bits(1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         assert_eq!(v.to_string(), "1.500000000000");
     }
 
@@ -426,7 +426,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_negative_renders() {
-        let v = D38s12::from_bits(-1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1_500_000_000_000));
         assert_eq!(v.to_string(), "-1.500000000000");
     }
 
@@ -435,7 +435,7 @@ mod tests {
     #[test]
     fn display_subunit_keeps_leading_zeros() {
         // 0.001 = 1_000_000_000 at SCALE 12
-        let v = D38s12::from_bits(1_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_000_000_000));
         assert_eq!(v.to_string(), "0.001000000000");
     }
 
@@ -474,7 +474,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn debug_includes_scale_and_value() {
-        let v = D38s12::from_bits(1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         let debug_str = format!("{v:?}");
         assert_eq!(debug_str, "D38<12>(1.500000000000)");
     }
@@ -502,7 +502,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_one_point_five() {
-        let v = D38s12::from_bits(1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         assert_eq!(format!("{v:e}"), "1.5e0");
     }
 
@@ -510,7 +510,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_fifteen() {
-        let v = D38s12::from_bits(15_000_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(15_000_000_000_000));
         assert_eq!(format!("{v:e}"), "1.5e1");
     }
 
@@ -526,7 +526,7 @@ mod tests {
     #[test]
     fn lower_exp_subunit_negative_exponent() {
         // 0.0015 at SCALE 12 = 1_500_000_000
-        let v = D38s12::from_bits(1_500_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000));
         assert_eq!(format!("{v:e}"), "1.5e-3");
     }
 
@@ -534,7 +534,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn lower_exp_negative() {
-        let v = D38s12::from_bits(-1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1_500_000_000_000));
         assert_eq!(format!("{v:e}"), "-1.5e0");
     }
 
@@ -542,7 +542,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn upper_exp_uses_capital_e() {
-        let v = D38s12::from_bits(1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         assert_eq!(format!("{v:E}"), "1.5E0");
     }
 
@@ -780,7 +780,7 @@ mod tests {
             i128::MIN / 2,
         ];
         for &raw in cases {
-            let v = D38s12::from_bits(raw);
+            let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let s = v.to_string();
             let parsed: D38s12 = s.parse().unwrap_or_else(|e| {
                 panic!("round-trip parse failed for raw={raw}, s={s:?}, err={e:?}")

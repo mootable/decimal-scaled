@@ -2,7 +2,7 @@
 //!
 //! The constants are stored once as `i128` literals at `SCALE_REF = 37`
 //! in `src/consts.rs` (D38's path). For other widths the macro
-//! delegates rescaling to D38 (via `D38::<37>::from_bits(...)
+//! delegates rescaling to D38 (via `D38::<37>::from_bits(crate::int::types::Int::<2>::from_i128(...))
 //! .rescale::<SCALE>()`) and then narrows or widens the resulting
 //! `i128` to the target storage. Narrowing overflows silently in
 //! release builds and panics in debug; downstream callers

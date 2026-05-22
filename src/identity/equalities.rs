@@ -13,8 +13,8 @@
 //!
 //! Examples:
 //! - `D38s12::from_int(5) == 5_i32` -> `true`
-//! - `D38s12::from_bits(5_500_000_000_000) == 5_i32` -> `false` (5.5 != 5)
-//! - `D38s12::from_bits(-1) == 0_u32` -> `false` (negative value)
+//! - `D38s12::from_bits(crate::int::types::Int::<2>::from_i128(5_500_000_000_000)) == 5_i32` -> `false` (5.5 != 5)
+//! - `D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1)) == 0_u32` -> `false` (negative value)
 //!
 //! - **Floats** (`f32`, `f64`): equality holds iff `f` is finite and converts
 //! to and from `D38` losslessly relative to the f64 representation. NaN and
@@ -24,7 +24,7 @@
 //!
 //! Note that f64 cannot represent decimals like `1.1` exactly; the nearest
 //! f64 to `1.1` is `1.1000000000000000888...`. The implementation treats
-//! that nearest f64 as equal to `D38s12::from_bits(1_100_000_000_000)`
+//! that nearest f64 as equal to `D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_100_000_000_000))`
 //! because the round-trip through `from_f64`/`to_f64` agrees.
 //! Callers who need true rational equality should convert and compare
 //! explicitly.

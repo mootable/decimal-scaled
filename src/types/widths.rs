@@ -2647,7 +2647,7 @@ mod tests {
     #[test]
     fn from_bits_to_bits_round_trip() {
         let raw: i128 = 1_500_000_000_000;
-        let v: D38s12 = D38s12::from_bits(raw);
+        let v: D38s12 = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
         assert_eq!(v.to_bits(), raw);
     }
 
@@ -2661,17 +2661,17 @@ mod tests {
     #[test]
     fn equal_by_underlying_bits() {
         assert_eq!(
-            D38s12::from_bits(42_000_000_000_000),
-            D38s12::from_bits(42_000_000_000_000)
+            D38s12::from_bits(crate::int::types::Int::<2>::from_i128(42_000_000_000_000)),
+            D38s12::from_bits(crate::int::types::Int::<2>::from_i128(42_000_000_000_000))
         );
-        assert_ne!(D38s12::from_bits(42), D38s12::from_bits(43));
+        assert_ne!(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(42)), D38s12::from_bits(crate::int::types::Int::<2>::from_i128(43)));
     }
 
     /// Ord is derived from i128: smaller bits compare less.
     #[test]
     fn ord_by_underlying_bits() {
-        assert!(D38s12::from_bits(1) < D38s12::from_bits(2));
-        assert!(D38s12::from_bits(-1) < D38s12::from_bits(0));
+        assert!(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1)) < D38s12::from_bits(crate::int::types::Int::<2>::from_i128(2)));
+        assert!(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-1)) < D38s12::from_bits(crate::int::types::Int::<2>::from_i128(0)));
     }
 
     /// `multiplier()` returns 10^SCALE. At SCALE = 12 that is 10^12.
@@ -2694,8 +2694,8 @@ mod tests {
     fn scale_method_matches_type_parameter() {
         assert_eq!(D38s12::ZERO.scale(), 12);
         assert_eq!(D38s12::ONE.scale(), 12);
-        assert_eq!(D38s12::from_bits(i128::MAX).scale(), 12);
-        assert_eq!(D38s12::from_bits(-7).scale(), 12);
+        assert_eq!(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(i128::MAX)).scale(), 12);
+        assert_eq!(D38s12::from_bits(crate::int::types::Int::<2>::from_i128(-7)).scale(), 12);
     }
 
     /// Both forms agree at non-default scales.
@@ -2850,14 +2850,14 @@ mod tests {
 
     #[test]
     fn cross_width_narrowing_d38_to_d18_in_range() {
-        let wide: super::D38s9 = super::D38s9::from_bits(1_500_000_000);
+        let wide: super::D38s9 = super::D38s9::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000));
         let narrow: super::D18s9 = wide.try_into().unwrap();
         assert_eq!(narrow.to_bits(), 1_500_000_000);
     }
 
     #[test]
     fn cross_width_narrowing_d38_to_d18_out_of_range() {
-        let wide: super::D38s9 = super::D38s9::from_bits(i128::MAX);
+        let wide: super::D38s9 = super::D38s9::from_bits(crate::int::types::Int::<2>::from_i128(i128::MAX));
         let narrow: Result<super::D18s9, _> = wide.try_into();
         assert!(narrow.is_err());
     }
@@ -3168,7 +3168,7 @@ mod tests {
         assert_eq!(neg_two_and_half.to_int_with(RoundingMode::Floor), -3);
         assert_eq!(neg_two_and_half.to_int_with(RoundingMode::Trunc), -2);
         // cross-width widening D38 -> D76 (lossless)
-        let d38: super::D38s6 = super::D38s6::from_bits(-150);
+        let d38: super::D38s6 = super::D38s6::from_bits(crate::int::types::Int::<2>::from_i128(-150));
         let widened: super::D76<6> = d38.into();
         assert_eq!(widened.to_bits(), I256::from_str_radix("-150", 10).unwrap());
         // cross-width narrowing D76 -> D38 in range

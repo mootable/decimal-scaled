@@ -449,7 +449,7 @@ mod tests {
     #[test]
     fn json_string_matches_i128_to_string() {
         let raw: i128 = -123_456_789_012_345_678_901_234_567_890_i128;
-        let v = D38s12::from_bits(raw);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
         let json = serde_json::to_string(&v).unwrap();
         assert_eq!(json, format!("\"{}\"", raw));
     }
@@ -549,7 +549,7 @@ mod tests {
     /// the MSB.
     #[test]
     fn postcard_byte_order_matches_le() {
-        let v = D38s12::from_bits(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(0x0123_4567_89AB_CDEF_FEDC_BA98_7654_3210_i128));
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
         let raw = v.to_bits().to_le_bytes();
         let found = bytes.windows(16).position(|w| w == raw);
@@ -583,8 +583,8 @@ mod tests {
     #[test]
     fn cross_scale_wire_is_storage_only() {
         let raw: i128 = 1_500_000_000_000;
-        let v12 = D38::<12>::from_bits(raw);
-        let v6 = D38::<6>::from_bits(raw);
+        let v12 = D38::<12>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+        let v6 = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
         assert_eq!(serde_json::to_string(&v12).unwrap(), "\"1500000000000\"");
         assert_eq!(serde_json::to_string(&v6).unwrap(), "\"1500000000000\"");
     }

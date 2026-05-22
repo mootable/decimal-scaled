@@ -639,7 +639,7 @@ mod tests {
     #[test]
     fn pow_two_matches_mul_fractional() {
         // 1.5 in raw bits at SCALE = 12.
-        let v = D38s12::from_bits(1_500_000_000_000);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_500_000_000_000));
         assert_eq!(v.pow(2), v * v);
     }
 
@@ -734,7 +734,7 @@ mod tests {
     #[test]
     fn powf_half_matches_sqrt() {
         let v = D38s12::from_int(4);
-        let half = D38s12::from_bits(500_000_000_000); // 0.5 at SCALE=12
+        let half = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(500_000_000_000)); // 0.5 at SCALE=12
         let powf_result = v.powf(half);
         let sqrt_result = v.sqrt();
         assert!(
@@ -940,7 +940,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_of_square_recovers_abs() {
-        let v = D38s12::from_bits(1_234_567_890_123);
+        let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(1_234_567_890_123));
         let squared = v * v;
         let recovered = squared.sqrt();
         let abs_v = v.abs();
@@ -958,7 +958,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn sqrt_of_square_negative_recovers_abs() {
-        let v = -D38s12::from_bits(4_567_891_234_567);
+        let v = -D38s12::from_bits(crate::int::types::Int::<2>::from_i128(4_567_891_234_567));
         let squared = v * v;
         let recovered = squared.sqrt();
         let abs_v = v.abs();
@@ -1122,7 +1122,7 @@ mod tests {
             4_567_891_234_567_i128,
             7_890_123_456_789_i128,
         ] {
-            let v = D38s12::from_bits(raw);
+            let v = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             assert_eq!(v.pow(2), v * v, "raw bits {raw}");
         }
     }
@@ -1180,9 +1180,9 @@ mod tests {
                 9_012_345_678_912_i128,
             ),
         ] {
-            let a = D38s12::from_bits(a_raw);
-            let b = D38s12::from_bits(b_raw);
-            let c = D38s12::from_bits(c_raw);
+            let a = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(a_raw));
+            let b = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(b_raw));
+            let c = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(c_raw));
             assert_eq!(
                 a.mul_add(b, c),
                 a * b + c,
@@ -1284,7 +1284,7 @@ mod tests {
     #[cfg(feature = "std")]
     #[test]
     fn hypot_large_magnitudes_does_not_panic() {
-        let half_max = D38s12::from_bits(i128::MAX / 2);
+        let half_max = D38s12::from_bits(crate::int::types::Int::<2>::from_i128(i128::MAX / 2));
         let result = half_max.hypot(half_max);
         assert!(result > D38s12::ZERO);
         assert!(result >= half_max);

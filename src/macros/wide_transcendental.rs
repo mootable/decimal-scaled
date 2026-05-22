@@ -4806,7 +4806,7 @@ mod tests {
         }
 
         for raw in positives {
-            let n = D38::<6>::from_bits(raw as i128);
+            let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
             let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
                 raw as i128,
             ));
@@ -4830,7 +4830,7 @@ mod tests {
             );
         }
         for raw in all {
-            let n = D38::<6>::from_bits(raw as i128);
+            let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
             let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
                 raw as i128,
             ));
@@ -4878,7 +4878,7 @@ mod tests {
             );
         }
         for raw in unit_range {
-            let n = D38::<6>::from_bits(raw as i128);
+            let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
             let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::wide_int::I256>(
                 raw as i128,
             ));

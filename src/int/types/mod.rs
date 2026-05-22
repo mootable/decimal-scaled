@@ -1526,6 +1526,37 @@ impl<const N: usize> PartialOrd for Int<N> {
     }
 }
 
+// `i128` interop for the 128-bit storage `Int<2>` (D38's backend).
+// `Int<2>` *is* an `i128`, so the comparison is the direct `as_i128`
+// value — no widening round-trip. This lets `to_bits()` results compare
+// against `i128` literals without an explicit conversion at the call
+// site. Deliberately `Int<2>`-only: for wider tiers an `i128` comparison
+// would be a lossy narrowing and is not offered.
+impl PartialEq<i128> for Int<2> {
+    #[inline]
+    fn eq(&self, other: &i128) -> bool {
+        self.as_i128() == *other
+    }
+}
+impl PartialEq<Int<2>> for i128 {
+    #[inline]
+    fn eq(&self, other: &Int<2>) -> bool {
+        *self == other.as_i128()
+    }
+}
+impl PartialOrd<i128> for Int<2> {
+    #[inline]
+    fn partial_cmp(&self, other: &i128) -> Option<Ordering> {
+        self.as_i128().partial_cmp(other)
+    }
+}
+impl PartialOrd<Int<2>> for i128 {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<2>) -> Option<Ordering> {
+        self.partial_cmp(&other.as_i128())
+    }
+}
+
 impl<const N: usize> Ord for Int<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
