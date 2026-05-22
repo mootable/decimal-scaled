@@ -189,6 +189,10 @@ name = "karabench"
 required-features = ["bench-alt"]
 
 [[example]]
+name = "karabench_u64"
+required-features = ["bench-alt"]
+
+[[example]]
 name = "profile_atan_perfetto"
 required-features = ["perf-trace"]
 
