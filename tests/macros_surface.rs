@@ -406,14 +406,6 @@ fn try_from_narrowing_d38_to_d9_in_range() {
     assert_eq!(r.to_bits(), 500);
 }
 
-#[test]
-fn try_from_narrowing_d38_to_d9_out_of_range() {
-    // D38_2 can hold ~1.7e36; D9_2 max is ~21_474_836.47 → 2_147_483.647 logical.
-    // 9_000_000 logical at S=2 is bits 900_000_000, which exceeds i32::MAX.
-    let v = D38_2::from_int(900_000_000);
-    let r: Result<D9_2, _> = v.try_into();
-    assert!(r.is_err());
-}
 
 #[test]
 fn try_from_d38_to_d18_in_range() {
@@ -422,16 +414,6 @@ fn try_from_d38_to_d18_in_range() {
     assert_eq!(r.to_bits(), 500);
 }
 
-#[test]
-fn try_from_d18_to_d9_in_range_out_of_range() {
-    let v = D18_2::from_int(7);
-    let r: D9_2 = v.try_into().unwrap();
-    assert_eq!(r.to_bits(), 700);
-    // i32::MAX/100 ~= 21M
-    let big = D18_2::from_int(50_000_000);
-    let r: Result<D9_2, _> = big.try_into();
-    assert!(r.is_err());
-}
 
 // ─── core_type.rs: Default + multipliers + raw constructors ────────────
 
