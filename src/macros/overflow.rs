@@ -19,19 +19,16 @@
 //! `wrapping_*` / `saturating_*` / `overflowing_*` intrinsics, which
 //! the wide integers expose with the same names and `const`-ness as the
 //! primitive integers — so those families live in a shared `@common`
-//! arm. Mul / div widen to `$Wider` for the intermediate; only the
-//! widening *spelling* differs (native `as`-casts vs the `BigInt` cast),
-//! so they are written inline per front-end arm.
+//! arm. Mul / div widen to `$Wider` for the intermediate via the
+//! `BigInt` cast, so they are written inline per front-end arm.
 //!
 //! D38 is the exception: its overflow mul/div go through the
 //! hand-rolled `mg_divide` path and are not generated here.
 
 /// Emits overflow variants for a decimal type.
 ///
-/// - `decl_decimal_overflow_variants!(i32, i64)` — *native*
-/// storage; `$Wider` is a primitive integer.
-/// - `decl_decimal_overflow_variants!(wide D76, I256, I512)` — *wide*
-/// storage; `$Wider` is the next size up.
+/// - `decl_decimal_overflow_variants!(wide D76, Int<4>, Int<8>)` — the
+/// storage is an `Int<N>` and `$Wider` is the next size up.
 macro_rules! decl_decimal_overflow_variants {
     // Wide storage.
     (wide $Type:ident, $Storage:ty, $Wider:ty) => {

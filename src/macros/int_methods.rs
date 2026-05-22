@@ -11,8 +11,7 @@
 /// Emits `div_euclid`, `rem_euclid`, `div_floor`, `div_ceil`,
 /// `abs_diff`, `midpoint`, and `is_zero` for a decimal type.
 ///
-/// - `decl_decimal_int_methods!(D38, i128)` — *native* storage.
-/// - `decl_decimal_int_methods!(wide D76, I256)` — *wide* storage.
+/// - `decl_decimal_int_methods!(wide D76, Int<4>)` — `Int<N>` storage.
 macro_rules! decl_decimal_int_methods {
     // Wide storage.
     (wide $Type:ident, $Storage:ty) => {

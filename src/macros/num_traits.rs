@@ -197,14 +197,10 @@ pub(crate) use decl_decimal_num_traits_basics;
 /// Emits `num_traits::FromPrimitive`, `ToPrimitive`, and `NumCast` for
 /// a decimal type.
 ///
-/// - `decl_decimal_num_traits_conversions!(D38, i128)` — native
-/// storage. `from_i64` / `from_u64` scale via an `as`-cast and
-/// `checked_mul`; the `to_*` integer methods divide the raw storage
-/// by `10^SCALE` and narrow with `TryFrom`.
-/// - `decl_decimal_num_traits_conversions!(wide D76, I256)` — wide
-/// storage. `from_i64` / `from_u64` widen via the `BigInt` cast; the
-/// `to_*` methods divide the wide storage and narrow with the
-/// wide-to-primitive `TryFrom` impls.
+/// - `decl_decimal_num_traits_conversions!(wide D76, Int<4>)` — the
+/// storage is an `Int<N>`. `from_i64` / `from_u64` widen via the
+/// `BigInt` cast; the `to_*` methods divide the storage and narrow
+/// with the integer-to-primitive `TryFrom` impls.
 ///
 /// `from_i128` / `from_u128` / `from_f32` / `from_f64` delegate to the
 /// width's `TryFrom` impls in both arms, and `NumCast` is fully
