@@ -1,5 +1,5 @@
 //! Focused microbench for D924<460> — the mid-storage popular scale
-//! on the 3072-bit storage / Int12288 working-integer tier.
+//! on the 3072-bit storage / `Int<192>` working-integer tier.
 //!
 //! Mirrors `benches/d616_s308.rs` and `benches/d153_s76.rs`: one
 //! `*_strict` call per public path that is a candidate for the

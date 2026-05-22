@@ -14,7 +14,7 @@
 //! Run with:
 //!   `cargo bench --features wide,x-wide,xx-wide --bench int_to_string_base1e19`
 
-use decimal_scaled::{Int256, Int512, Int1024, Int4096};
+use decimal_scaled::Int;
 use std::hint::black_box;
 use std::time::Instant;
 
@@ -94,10 +94,10 @@ fn main() {
     let s1024 = "9".repeat(307);
     let s4096 = "9".repeat(1232);
 
-    let v256: Int256 = s256.parse().unwrap();
-    let v512: Int512 = s512.parse().unwrap();
-    let v1024: Int1024 = s1024.parse().unwrap();
-    let v4096: Int4096 = s4096.parse().unwrap();
+    let v256: Int<4> = s256.parse().unwrap();
+    let v512: Int<8> = s512.parse().unwrap();
+    let v1024: Int<16> = s1024.parse().unwrap();
+    let v4096: Int<64> = s4096.parse().unwrap();
 
     run!("Int256", v256, 200_000);
     run!("Int512", v512, 100_000);

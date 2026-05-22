@@ -1,5 +1,5 @@
 //! Per-width baseline microbenchmark for the in-tree wide signed
-//! integers (`Int256` … `Int4096`).
+//! integers (`Int<4>` … `Int<64>`).
 //!
 //! Captures a comparable snapshot of the core integer-operation cost
 //! at each storage width, so a later integer-algorithm refactor can be
@@ -18,7 +18,7 @@
 //! Run with: `cargo bench --features wide --bench int_ops_micro`.
 
 use criterion::{Criterion, criterion_group};
-use decimal_scaled::{Int256, Int512, Int1024, Int2048, Int4096};
+use decimal_scaled::Int;
 use std::hint::black_box;
 use std::time::Duration;
 
@@ -78,11 +78,11 @@ macro_rules! bench_width {
 }
 
 fn bench_int_ops(c: &mut Criterion) {
-    bench_width!(c, "Int256", Int256);
-    bench_width!(c, "Int512", Int512);
-    bench_width!(c, "Int1024", Int1024);
-    bench_width!(c, "Int2048", Int2048);
-    bench_width!(c, "Int4096", Int4096);
+    bench_width!(c, "Int256", Int<4>);
+    bench_width!(c, "Int512", Int<8>);
+    bench_width!(c, "Int1024", Int<16>);
+    bench_width!(c, "Int2048", Int<32>);
+    bench_width!(c, "Int4096", Int<64>);
 }
 
 /// Karatsuba-crossover sweep: schoolbook (`mul_slice`) vs the

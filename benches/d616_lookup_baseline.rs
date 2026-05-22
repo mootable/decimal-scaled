@@ -1,6 +1,6 @@
 //! Side-by-side: D616 ln/exp/sinh/cosh/tanh at SCALE 295 (outside the
 //! Tang-lookup band, wide_kernel path) vs SCALE 308 (centre of the
-//! Tang-lookup band). Both scales work on the same Int8192 working
+//! Tang-lookup band). Both scales work on the same `Int<128>` working
 //! integer so the per-op cost of the underlying primitives is matched;
 //! the speed delta isolates the lookup-vs-kernel routing.
 
