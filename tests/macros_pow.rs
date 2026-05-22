@@ -26,17 +26,9 @@ use decimal_scaled::{D18, D38};
 // SCALE = 0 keeps the storage equal to the integer value so the
 // assertions can be written in terms of plain integers.
 
-type D9_0 = D9<0>;
 type D18_0 = D18<0>;
+type D9_0 = D18<0>;
 type D38_0 = D38<0>;
-
-#[test]
-fn pow_exp_zero_returns_one_d9() {
-    for raw in [0i32, 1, -1, 5, -5, 12345, -12345] {
-        let v = D9_0::from_bits(raw);
-        assert_eq!(v.pow(0).to_bits(), 1, "0^0=1 contract: input raw {raw}");
-    }
-}
 
 #[test]
 fn pow_exp_zero_returns_one_d18() {
@@ -47,32 +39,11 @@ fn pow_exp_zero_returns_one_d18() {
 }
 
 #[test]
-fn pow_exp_one_returns_self_d9() {
-    for raw in [0i32, 1, -1, 5, -5, 12345] {
-        let v = D9_0::from_bits(raw);
-        assert_eq!(v.pow(1).to_bits(), raw, "x^1=x");
-    }
-}
-
-#[test]
 fn pow_exp_one_returns_self_d18() {
     for raw in [0i64, 1, -1, 5, -5, 12345] {
         let v = D18_0::from_bits(raw);
         assert_eq!(v.pow(1).to_bits(), raw, "x^1=x");
     }
-}
-
-#[test]
-fn pow_small_exponents_d9() {
-    let two = D9_0::from_int(2);
-    assert_eq!(two.pow(2).to_bits(), 4);
-    assert_eq!(two.pow(3).to_bits(), 8);
-    assert_eq!(two.pow(10).to_bits(), 1024);
-    let three = D9_0::from_int(3);
-    assert_eq!(three.pow(4).to_bits(), 81);
-    let neg_two = D9_0::from_int(-2);
-    assert_eq!(neg_two.pow(2).to_bits(), 4, "neg^even = positive");
-    assert_eq!(neg_two.pow(3).to_bits(), -8, "neg^odd = negative");
 }
 
 #[test]
@@ -112,7 +83,7 @@ fn powi_negative_exponent_d38_scale12() {
 #[test]
 fn powi_d9_d18_positive_negative_exp() {
     use decimal_scaled::{D18};
-    type D9_4 = D9<4>;
+    type D9_4 = D18<4>;
     type D18_8 = D18<8>;
     // D9<4>: 2^3 = 8 → 80_000
     let two = D9_4::from_int(2);
@@ -155,7 +126,7 @@ fn checked_pow_normal_succeeds_d9() {
 fn checked_pow_overflow_returns_none_d9() {
     // i32::MAX ≈ 2.1e9; D9<0>::MAX ≈ 9.99e8. 10^9 > MAX.
     let ten = D9_0::from_int(10);
-    assert!(ten.checked_pow(20).is_none(), "10^20 overflows D9<0>");
+    assert!(ten.checked_pow(20).is_none(), "10^20 overflows D18<0>");
 }
 
 #[test]
