@@ -19,7 +19,7 @@
 //! arithmetic applies to every tier listed.
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::{wide_cast, BigInt};
+use crate::wide_int::{BigInt, wide_cast};
 
 /// Generic cube-root kernel for the wide-integer family.
 ///
@@ -82,8 +82,8 @@ where
         let third = top_shift / 3;
         let residue = top_shift % 3; // 0, 1, or 2
         let factor: f64 = match residue {
-            1 => 1.2599210498948732,   // 2^(1/3)
-            2 => 1.5874010519681994,   // 2^(2/3)
+            1 => 1.2599210498948732, // 2^(1/3)
+            2 => 1.5874010519681994, // 2^(2/3)
             _ => 1.0,
         };
         let scaled_f64 = seed_f64 * factor;
@@ -97,11 +97,7 @@ where
         if third > 0 {
             seed_w = seed_w << third;
         }
-        if seed_w == zero {
-            one
-        } else {
-            seed_w
-        }
+        if seed_w == zero { one } else { seed_w }
     } else {
         one << sig_bits.div_ceil(3)
     };
@@ -121,7 +117,11 @@ where
     let halfway_gt = eight_n > cube;
     let tie = halfway_geq && !halfway_gt;
     let two_q = q + q;
-    let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
+    let eight_q_cubed = if q == zero {
+        zero
+    } else {
+        two_q * two_q * two_q
+    };
     let residual_nonzero = eight_n > eight_q_cubed;
     let q_is_odd = (q % (one + one)) != zero;
     let bump = match mode {
@@ -179,24 +179,44 @@ decl_cbrt_kernel_shim!(cbrt_d230, crate::wide_int::Int768, crate::wide_int::Int3
 // D307: `MAX_SCALE = 307`, work peaks near `10^921`; Int2048 (~10^616)
 // overflows, bump to Int4096 (~10^1233).
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d307, crate::wide_int::Int1024, crate::wide_int::Int4096);
+decl_cbrt_kernel_shim!(
+    cbrt_d307,
+    crate::wide_int::Int1024,
+    crate::wide_int::Int4096
+);
 
 // D462: `MAX_SCALE = 461`, work peaks near `10^1383`; Int3072 (~10^924)
 // overflows, bump to Int6144 (~10^1849).
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d462, crate::wide_int::Int1536, crate::wide_int::Int6144);
+decl_cbrt_kernel_shim!(
+    cbrt_d462,
+    crate::wide_int::Int1536,
+    crate::wide_int::Int6144
+);
 
 // D616: `MAX_SCALE = 615`, work peaks near `10^1845`; Int4096 (~10^1233)
 // overflows, bump to Int8192 (~10^2466).
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d616, crate::wide_int::Int2048, crate::wide_int::Int8192);
+decl_cbrt_kernel_shim!(
+    cbrt_d616,
+    crate::wide_int::Int2048,
+    crate::wide_int::Int8192
+);
 
 // D924: `MAX_SCALE = 923`, work peaks near `10^2769`; Int6144 (~10^1849)
 // overflows, bump to Int12288 (~10^3699).
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d924, crate::wide_int::Int3072, crate::wide_int::Int12288);
+decl_cbrt_kernel_shim!(
+    cbrt_d924,
+    crate::wide_int::Int3072,
+    crate::wide_int::Int12288
+);
 
 // D1232: `MAX_SCALE = 1231`, work peaks near `10^3693`; Int8192 (~10^2466)
 // overflows, bump to Int16384 (~10^4932).
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-decl_cbrt_kernel_shim!(cbrt_d1232, crate::wide_int::Int4096, crate::wide_int::Int16384);
+decl_cbrt_kernel_shim!(
+    cbrt_d1232,
+    crate::wide_int::Int4096,
+    crate::wide_int::Int16384
+);

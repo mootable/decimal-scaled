@@ -115,24 +115,62 @@ fn rescale_down_negative_half_to_even() {
 fn rescale_with_each_mode_at_exact_half() {
     let micros = D38s6::from_bits(1_235_000); // 1.235000
 
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::HalfToEven).to_bits(), 124);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::HalfAwayFromZero).to_bits(), 124);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::HalfTowardZero).to_bits(), 123);
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::HalfToEven).to_bits(),
+        124
+    );
+    assert_eq!(
+        micros
+            .rescale_with::<2>(RoundingMode::HalfAwayFromZero)
+            .to_bits(),
+        124
+    );
+    assert_eq!(
+        micros
+            .rescale_with::<2>(RoundingMode::HalfTowardZero)
+            .to_bits(),
+        123
+    );
     assert_eq!(micros.rescale_with::<2>(RoundingMode::Trunc).to_bits(), 123);
     assert_eq!(micros.rescale_with::<2>(RoundingMode::Floor).to_bits(), 123);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::Ceiling).to_bits(), 124);
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::Ceiling).to_bits(),
+        124
+    );
 }
 
 #[test]
 fn rescale_with_each_mode_at_exact_half_negative() {
     let micros = D38s6::from_bits(-1_235_000); // -1.235000
 
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::HalfToEven).to_bits(), -124);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::HalfAwayFromZero).to_bits(), -124);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::HalfTowardZero).to_bits(), -123);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::Trunc).to_bits(), -123);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::Floor).to_bits(), -124);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::Ceiling).to_bits(), -123);
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::HalfToEven).to_bits(),
+        -124
+    );
+    assert_eq!(
+        micros
+            .rescale_with::<2>(RoundingMode::HalfAwayFromZero)
+            .to_bits(),
+        -124
+    );
+    assert_eq!(
+        micros
+            .rescale_with::<2>(RoundingMode::HalfTowardZero)
+            .to_bits(),
+        -123
+    );
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::Trunc).to_bits(),
+        -123
+    );
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::Floor).to_bits(),
+        -124
+    );
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::Ceiling).to_bits(),
+        -123
+    );
 }
 
 #[test]
@@ -142,8 +180,14 @@ fn rescale_with_trunc_vs_floor_diverge_on_negative() {
     // Trunc rounds toward zero -> -1.23 (the half-tie isn't here; remainder is below half on this one)
     // Wait: divisor = 10^4 = 10000, abs_rem = 4500 which is < half (5000). So no rounding occurs.
     // Both Trunc and Floor return quotient = -123.
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::Trunc).to_bits(), -123);
-    assert_eq!(micros.rescale_with::<2>(RoundingMode::Floor).to_bits(), -124);
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::Trunc).to_bits(),
+        -123
+    );
+    assert_eq!(
+        micros.rescale_with::<2>(RoundingMode::Floor).to_bits(),
+        -124
+    );
 }
 
 // --- equal scale identity ------------------------------------------

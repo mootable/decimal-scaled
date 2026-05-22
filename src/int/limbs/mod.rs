@@ -441,12 +441,7 @@ const fn limbs_fit_one(a: &[u128]) -> bool {
 ///
 /// Otherwise it falls back to a binary shift-subtract loop bounded by
 /// the dividend's actual bit length.
-pub(crate) const fn limbs_divmod(
-    num: &[u128],
-    den: &[u128],
-    quot: &mut [u128],
-    rem: &mut [u128],
-) {
+pub(crate) const fn limbs_divmod(num: &[u128], den: &[u128], quot: &mut [u128], rem: &mut [u128]) {
     let mut z = 0;
     while z < quot.len() {
         quot[z] = 0;
@@ -735,12 +730,7 @@ const fn div_2_by_1(high: u128, low: u128, d: u128) -> (u128, u128) {
 /// scratch buffers and mutate them via overflowing arithmetic
 /// that the const evaluator doesn't yet permit. None of the
 /// crate's const-contexts depend on this routine.
-pub(crate) fn limbs_divmod_knuth(
-    num: &[u128],
-    den: &[u128],
-    quot: &mut [u128],
-    rem: &mut [u128],
-) {
+pub(crate) fn limbs_divmod_knuth(num: &[u128], den: &[u128], quot: &mut [u128], rem: &mut [u128]) {
     for q in quot.iter_mut() {
         *q = 0;
     }
@@ -937,12 +927,7 @@ pub(crate) fn limbs_divmod_knuth(
 /// Threshold: recurses only when both `num.len() ≥ 2·BZ_THRESHOLD`
 /// and `den.len() ≥ BZ_THRESHOLD`. Below that the cost of splitting
 /// dominates and Knuth wins outright.
-pub(crate) fn limbs_divmod_bz(
-    num: &[u128],
-    den: &[u128],
-    quot: &mut [u128],
-    rem: &mut [u128],
-) {
+pub(crate) fn limbs_divmod_bz(num: &[u128], den: &[u128], quot: &mut [u128], rem: &mut [u128]) {
     const BZ_THRESHOLD: usize = 8;
 
     let mut n = den.len();
@@ -1496,9 +1481,7 @@ pub(crate) const fn limbs_mul_u64_fixed<const L: usize, const D: usize>(
             let mut carry: u64 = 0;
             let mut j = 0;
             while j < L {
-                let v = (ai as u128) * (b[j] as u128)
-                    + (out[i + j] as u128)
-                    + (carry as u128);
+                let v = (ai as u128) * (b[j] as u128) + (out[i + j] as u128) + (carry as u128);
                 out[i + j] = v as u64;
                 carry = (v >> 64) as u64;
                 j += 1;
@@ -1549,9 +1532,7 @@ pub(crate) const fn limbs_mul_u64_into<const L: usize, const LP1: usize>(
         // p fits u128 with no overflow:
         //   (2^64 - 1)·(2^64 - 1) + (2^64 - 1) + (2^64 - 1)
         //   = 2^128 - 1
-        let p = (a[i] as u128) * (n as u128)
-            + (out[i] as u128)
-            + (carry as u128);
+        let p = (a[i] as u128) * (n as u128) + (out[i] as u128) + (carry as u128);
         out[i] = p as u64;
         carry = (p >> 64) as u64;
         i += 1;
@@ -1566,12 +1547,7 @@ pub(crate) const fn limbs_mul_u64_into<const L: usize, const LP1: usize>(
 /// - divisor fits a single u64 → native `u128 / u64` per dividend limb
 /// - otherwise → bit shift-subtract (only reached when divisor is
 ///   multi-limb; the dispatcher routes those to Knuth instead)
-pub(crate) const fn limbs_divmod_u64(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
-) {
+pub(crate) const fn limbs_divmod_u64(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     let mut z = 0;
     while z < quot.len() {
         quot[z] = 0;
@@ -1807,7 +1783,10 @@ const fn karatsuba_scratch_needed_th(n: usize, threshold: usize) -> usize {
 /// parameter only so the correctness test can force deeper recursion at
 /// small widths to exercise the split/recombine algebra.
 fn karatsuba_rec(a: &[u64], b: &[u64], out: &mut [u64], scratch: &mut [u64], threshold: usize) {
-    debug_assert!(threshold >= 4, "Karatsuba threshold must be >= 4 to terminate");
+    debug_assert!(
+        threshold >= 4,
+        "Karatsuba threshold must be >= 4 to terminate"
+    );
     let n = a.len();
     if n < threshold {
         // `out` window pre-zeroed by the caller.
@@ -2005,9 +1984,13 @@ impl MG2by1U64 {
     /// Divide `(u1·B + u0)` by `d`. Requires `u1 < d`.
     #[inline]
     pub(crate) const fn div_rem(&self, u1: u64, u0: u64) -> (u64, u64) {
-        debug_assert!(u1 < self.d, "MG2by1U64::div_rem: high word must be < divisor");
+        debug_assert!(
+            u1 < self.d,
+            "MG2by1U64::div_rem: high word must be < divisor"
+        );
         // (q1, q0) = v·u1 + ⟨u1, u0⟩ as u128
-        let q128 = (self.v as u128).wrapping_mul(u1 as u128)
+        let q128 = (self.v as u128)
+            .wrapping_mul(u1 as u128)
             .wrapping_add(((u1 as u128) << 64) | (u0 as u128));
         let mut q1 = (q128 >> 64) as u64;
         let q0 = q128 as u64;
@@ -2065,7 +2048,10 @@ impl MG3by2U64 {
     /// reciprocal refinement that accounts for `d0`).
     #[inline]
     pub(crate) const fn new(d1: u64, d0: u64) -> Self {
-        debug_assert!(d1 >> 63 == 1, "MG3by2U64::new: top divisor limb must be normalised");
+        debug_assert!(
+            d1 >> 63 == 1,
+            "MG3by2U64::new: top divisor limb must be normalised"
+        );
         // Step 1: 2-by-1 reciprocal of d1 alone.
         let num = ((!d1 as u128) << 64) | (u64::MAX as u128);
         let mut v = (num / (d1 as u128)) as u64;
@@ -2123,7 +2109,8 @@ impl MG3by2U64 {
         // (q_hi, q_lo) = n2 * dinv + (n2, n1) — overflow into a 257th
         // bit is fine, the mask-based correction (step 4a) recovers
         // from it without needing to materialise the lost bit.
-        let prod = (n2 as u128).wrapping_mul(self.dinv as u128)
+        let prod = (n2 as u128)
+            .wrapping_mul(self.dinv as u128)
             .wrapping_add(((n2 as u128) << 64) | (n1 as u128));
         let mut q = (prod >> 64) as u64;
         let q_lo = prod as u64;
@@ -2212,12 +2199,7 @@ pub(crate) fn limbs_divmod_dispatch_u64(
 /// and the q̂ estimator uses [`MG2by1U64`]. The multiply-subtract pass
 /// uses native `u64 × u64 → u128`, which collapses one carry-merge
 /// layer compared to the u128 version's `mul_128`.
-pub(crate) fn limbs_divmod_knuth_u64(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
-) {
+pub(crate) fn limbs_divmod_knuth_u64(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     for q in quot.iter_mut() {
         *q = 0;
     }
@@ -2394,12 +2376,7 @@ pub(crate) fn limbs_divmod_knuth_u64(
 }
 
 /// Burnikel–Ziegler outer chunking, u64 base.
-pub(crate) fn limbs_divmod_bz_u64(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
-) {
+pub(crate) fn limbs_divmod_bz_u64(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     const BZ_THRESHOLD_U64: usize = 16;
 
     let mut n = den.len();
@@ -2687,8 +2664,6 @@ pub(crate) const fn scmp_u64(a_neg: bool, a: &[u64], b_neg: bool, b: &[u64]) -> 
 // End of u64 primitives.
 // ─────────────────────────────────────────────────────────────────────
 
-
-
 /// Signed three-way comparison of two magnitude-limb slices given their
 /// signs. Returns `-1` / `0` / `1`.
 #[inline]
@@ -2700,8 +2675,7 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
     }
 }
 
-
-pub(crate) use crate::int::types::traits::{wide_cast, BigInt};
+pub(crate) use crate::int::types::traits::{BigInt, wide_cast};
 
 // The named wide-integer type family. Every width is now the
 // const-generic `Int<N>` / `Uint<N>`, re-exported here from
@@ -2714,12 +2688,10 @@ pub(crate) use crate::int::types::traits::{wide_cast, BigInt};
 // features), so the re-export carries `allow(unused_imports)`.
 #[allow(unused_imports)]
 pub use crate::int::types::{
-    Int64, Int128,
-    Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048,
-    Int3072, Int4096, Int6144, Int8192, Int12288, Int16384,
-    Uint64, Uint128,
-    Uint192, Uint256, Uint384, Uint512, Uint768, Uint1024, Uint1536, Uint2048,
-    Uint3072, Uint4096, Uint6144, Uint8192, Uint12288, Uint16384,
+    Int64, Int128, Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048, Int3072,
+    Int4096, Int6144, Int8192, Int12288, Int16384, Uint64, Uint128, Uint192, Uint256, Uint384,
+    Uint512, Uint768, Uint1024, Uint1536, Uint2048, Uint3072, Uint4096, Uint6144, Uint8192,
+    Uint12288, Uint16384,
 };
 
 // Short aliases used by the decimal-tier macros (replacing the former
@@ -2731,40 +2703,44 @@ pub use crate::int::types::{
 // backs storage or serves as a mul/div widening step for some tier,
 // and a matching `U*` (unsigned) when `Display`'s magnitude path
 // needs it.
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) use self::{Int192 as I192, Uint192 as U192};
 #[cfg(any(feature = "d57", feature = "d76", feature = "wide"))]
 pub(crate) use self::Int384 as I384;
-#[cfg(any(feature = "d115", feature = "wide"))]
-pub(crate) use self::Uint384 as U384;
-#[cfg(any(feature = "d76", feature = "wide"))]
-pub(crate) use self::{Int256 as I256, Uint256 as U256};
 #[cfg(any(feature = "d76", feature = "d115", feature = "d153", feature = "wide"))]
 pub(crate) use self::Int512 as I512;
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) use self::Uint512 as U512;
 #[cfg(any(feature = "d115", feature = "d153", feature = "d230", feature = "wide"))]
 pub(crate) use self::Int768 as I768;
-#[cfg(any(feature = "d230", feature = "wide"))]
-pub(crate) use self::Uint768 as U768;
-#[cfg(any(feature = "d153", feature = "d230", feature = "d307", feature = "wide", feature = "x-wide"))]
+#[cfg(any(
+    feature = "d153",
+    feature = "d230",
+    feature = "d307",
+    feature = "wide",
+    feature = "x-wide"
+))]
 pub(crate) use self::Int1024 as I1024;
-#[cfg(any(feature = "d230", feature = "d307", feature = "d462", feature = "wide", feature = "x-wide"))]
+#[cfg(any(
+    feature = "d230",
+    feature = "d307",
+    feature = "d462",
+    feature = "wide",
+    feature = "x-wide"
+))]
 pub(crate) use self::Int1536 as I1536;
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-pub(crate) use self::Uint1536 as U1536;
-#[cfg(any(feature = "d307", feature = "d462", feature = "d616", feature = "wide", feature = "x-wide"))]
-pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-pub(crate) use self::Uint2048 as U2048;
-#[cfg(any(feature = "d462", feature = "d616", feature = "d924", feature = "x-wide", feature = "xx-wide"))]
+#[cfg(any(
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "x-wide",
+    feature = "xx-wide"
+))]
 pub(crate) use self::Int3072 as I3072;
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-pub(crate) use self::Uint3072 as U3072;
-#[cfg(any(feature = "d616", feature = "d924", feature = "d1232", feature = "x-wide", feature = "xx-wide"))]
+#[cfg(any(
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
+    feature = "x-wide",
+    feature = "xx-wide"
+))]
 pub(crate) use self::Int4096 as I4096;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub(crate) use self::Uint4096 as U4096;
 #[cfg(any(feature = "d924", feature = "d1232", feature = "xx-wide"))]
 pub(crate) use self::Int6144 as I6144;
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
@@ -2775,6 +2751,32 @@ pub(crate) use self::Int12288 as I12288;
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 #[allow(unused_imports)]
 pub(crate) use self::Int16384 as I16384;
+#[cfg(any(feature = "d115", feature = "wide"))]
+pub(crate) use self::Uint384 as U384;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub(crate) use self::Uint512 as U512;
+#[cfg(any(feature = "d230", feature = "wide"))]
+pub(crate) use self::Uint768 as U768;
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+pub(crate) use self::Uint1536 as U1536;
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+pub(crate) use self::Uint2048 as U2048;
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+pub(crate) use self::Uint3072 as U3072;
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+pub(crate) use self::Uint4096 as U4096;
+#[cfg(any(feature = "d57", feature = "wide"))]
+pub(crate) use self::{Int192 as I192, Uint192 as U192};
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub(crate) use self::{Int256 as I256, Uint256 as U256};
+#[cfg(any(
+    feature = "d307",
+    feature = "d462",
+    feature = "d616",
+    feature = "wide",
+    feature = "x-wide"
+))]
+pub(crate) use self::{Int2048 as I2048, Uint1024 as U1024};
 
 #[cfg(test)]
 mod karatsuba_tests {
@@ -2838,8 +2840,14 @@ mod hint_tests {
         let three = Int512::from_i128(3);
         assert_eq!(six.wrapping_mul(three), Int512::from_i128(18));
         assert_eq!(six.wrapping_div(two), three);
-        assert_eq!(Int512::from_i128(7).wrapping_rem(three), Int512::from_i128(1));
-        assert_eq!(Int512::from_i128(-7).wrapping_rem(three), Int512::from_i128(-1));
+        assert_eq!(
+            Int512::from_i128(7).wrapping_rem(three),
+            Int512::from_i128(1)
+        );
+        assert_eq!(
+            Int512::from_i128(-7).wrapping_rem(three),
+            Int512::from_i128(-1)
+        );
         assert_eq!(six.negate().wrapping_mul(three), Int512::from_i128(-18));
     }
 
@@ -2860,13 +2868,13 @@ mod hint_tests {
         assert_eq!(ten, Int1024::from_i128(10));
         assert_eq!(ten.pow(3), Int1024::from_i128(1000));
         let big = Int1024::from_str_radix("10", 10).unwrap().pow(40);
-        let from_str = Int1024::from_str_radix(
-            "10000000000000000000000000000000000000000",
-            10,
-        )
-        .unwrap();
+        let from_str =
+            Int1024::from_str_radix("10000000000000000000000000000000000000000", 10).unwrap();
         assert_eq!(big, from_str);
-        assert_eq!(Int256::from_str_radix("-42", 10).unwrap(), Int256::from_i128(-42));
+        assert_eq!(
+            Int256::from_str_radix("-42", 10).unwrap(),
+            Int256::from_i128(-42)
+        );
     }
 
     #[test]
@@ -2931,12 +2939,12 @@ mod hint_tests {
         assert_eq!(six / two, three);
         assert_eq!(seven % three, Uint256::from_str_radix("1", 10).unwrap());
         // BitAnd / BitOr / BitXor
-        let five = Uint256::from_str_radix("5", 10).unwrap();  // 101
-        let four = Uint256::from_str_radix("4", 10).unwrap();  // 100
-        let one = Uint256::from_str_radix("1", 10).unwrap();   // 001
-        assert_eq!(five & four, four);                       // 100
-        assert_eq!(five | one, five);                        // 101
-        assert_eq!(five ^ four, one);                        // 001
+        let five = Uint256::from_str_radix("5", 10).unwrap(); // 101
+        let four = Uint256::from_str_radix("4", 10).unwrap(); // 100
+        let one = Uint256::from_str_radix("1", 10).unwrap(); // 001
+        assert_eq!(five & four, four); // 100
+        assert_eq!(five | one, five); // 101
+        assert_eq!(five ^ four, one); // 001
         // pow: 2^10 = 1024
         let p10 = two.pow(10);
         assert_eq!(p10, Uint256::from_str_radix("1024", 10).unwrap());
@@ -3278,7 +3286,10 @@ mod slice_tests {
         limbs_mul_u64(&a, &b, &mut oracle);
         // Production entry: real fixed stack scratch, production threshold.
         limbs_mul_karatsuba_u64(&a, &b, &mut got);
-        assert_eq!(got, oracle, "max-width Karatsuba mismatch via fixed scratch");
+        assert_eq!(
+            got, oracle,
+            "max-width Karatsuba mismatch via fixed scratch"
+        );
     }
 
     /// `limbs_mul_u64_fixed::<L, D>` matches `limbs_mul_u64` at
@@ -3367,11 +3378,15 @@ mod slice_tests {
                         &out_fixed[..$LP1],
                         "limbs_mul_u64_into::<{}, {}> low limbs mismatch \
                          (a={:?}, n={:#x})",
-                        $L, $LP1, a, n
+                        $L,
+                        $LP1,
+                        a,
+                        n
                     );
                     for (k, &limb) in out_fixed[$LP1..].iter().enumerate() {
                         assert_eq!(
-                            limb, 0,
+                            limb,
+                            0,
                             "limbs_mul_u64_fixed high limb {} not zero \
                              — single-multiplier product must fit L+1 limbs",
                             $LP1 + k
@@ -3454,7 +3469,13 @@ mod slice_tests {
             (u64::MAX - 1, u64::MAX, u64::MAX, u64::MAX, u64::MAX),
             (0, 0, 1, u64::MAX, 1),
             // Mid-range divisor; numerator just under (d1, d0).
-            (0xc0ffee, 0xdead_beef, 0xface_b00c, (1u64 << 63) | 0xc0ffee_u64, 0xdead_beef_face_b00c),
+            (
+                0xc0ffee,
+                0xdead_beef,
+                0xface_b00c,
+                (1u64 << 63) | 0xc0ffee_u64,
+                0xdead_beef_face_b00c,
+            ),
             // Small numerator vs large divisor (quotient = 0).
             (0, 1, 2, (1u64 << 63) | 1, 2),
             // Numerator = divisor (quotient = 1, remainder = 0). Need to
@@ -3480,9 +3501,18 @@ mod slice_tests {
             let mut r_ref = alloc::vec![0u64; 3];
             limbs_divmod_u64(&num, &den, &mut q_ref, &mut r_ref);
 
-            assert_eq!(q_ref[0], q, "MG3by2 q mismatch for n=({n2:#x},{n1:#x},{n0:#x}) d=({d1:#x},{d0:#x})");
-            assert_eq!(q_ref[1], 0, "MG3by2 q higher limb non-zero — precondition violated");
-            assert_eq!(q_ref[2], 0, "MG3by2 q higher limb non-zero — precondition violated");
+            assert_eq!(
+                q_ref[0], q,
+                "MG3by2 q mismatch for n=({n2:#x},{n1:#x},{n0:#x}) d=({d1:#x},{d0:#x})"
+            );
+            assert_eq!(
+                q_ref[1], 0,
+                "MG3by2 q higher limb non-zero — precondition violated"
+            );
+            assert_eq!(
+                q_ref[2], 0,
+                "MG3by2 q higher limb non-zero — precondition violated"
+            );
             assert_eq!(r_ref[0], r0, "MG3by2 r0 mismatch");
             assert_eq!(r_ref[1], r1, "MG3by2 r1 mismatch");
         }
@@ -3509,7 +3539,11 @@ mod slice_tests {
             let num = ((u1 as u128) << 64) | (u0 as u128);
             let exp_q = (num / (d as u128)) as u64;
             let exp_r = (num % (d as u128)) as u64;
-            assert_eq!((q, r), (exp_q, exp_r), "MG u64 mismatch for {u1:#x}, {u0:#x}, d={d:#x}");
+            assert_eq!(
+                (q, r),
+                (exp_q, exp_r),
+                "MG u64 mismatch for {u1:#x}, {u0:#x}, d={d:#x}"
+            );
         }
     }
 
@@ -3541,11 +3575,18 @@ mod slice_tests {
             // exercises the "q̂ = u128::MAX" path.
             (u128::MAX - 1, 0, u128::MAX),
             // Random spread.
-            (0x1234_5678_9abc_def0_u128 ^ 0xa5a5, 0xfedc_ba98_7654_3210_u128, (1u128 << 127) | 0xc0ffee_u128),
+            (
+                0x1234_5678_9abc_def0_u128 ^ 0xa5a5,
+                0xfedc_ba98_7654_3210_u128,
+                (1u128 << 127) | 0xc0ffee_u128,
+            ),
         ];
         for &(u1, u0, d) in cases {
             assert!(d >> 127 == 1, "test divisor not normalised: {d:#x}");
-            assert!(u1 < d, "test precondition u1 < d violated: {u1:#x} >= {d:#x}");
+            assert!(
+                u1 < d,
+                "test precondition u1 < d violated: {u1:#x} >= {d:#x}"
+            );
             let (q_ref, r_ref) = div_2_by_1(u1, u0, d);
             let mg = MG2by1::new(d);
             let (q_mg, r_mg) = mg.div_rem(u1, u0);
@@ -3576,10 +3617,7 @@ mod slice_tests {
             // Numerator < denominator — quotient zero, remainder = num.
             (&[100, 0, 0], &[200, 0, 1]),
             // Equal high limbs (forces the u_top ≥ v_top branch).
-            (
-                &[0, 0, u128::MAX, u128::MAX],
-                &[1, 2, u128::MAX],
-            ),
+            (&[0, 0, u128::MAX, u128::MAX], &[1, 2, u128::MAX]),
         ];
         for (num, den) in cases {
             let mut q_canon = [0u128; 8];
@@ -3588,8 +3626,16 @@ mod slice_tests {
             let mut q_knuth = [0u128; 8];
             let mut r_knuth = [0u128; 8];
             limbs_divmod_knuth(num, den, &mut q_knuth, &mut r_knuth);
-            assert_eq!(q_canon, q_knuth, "quotient mismatch on {:?} / {:?}", num, den);
-            assert_eq!(r_canon, r_knuth, "remainder mismatch on {:?} / {:?}", num, den);
+            assert_eq!(
+                q_canon, q_knuth,
+                "quotient mismatch on {:?} / {:?}",
+                num, den
+            );
+            assert_eq!(
+                r_canon, r_knuth,
+                "remainder mismatch on {:?} / {:?}",
+                num, den
+            );
         }
     }
 

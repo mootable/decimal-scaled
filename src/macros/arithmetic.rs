@@ -56,11 +56,7 @@ macro_rules! round_with_mode_native {
             let q_is_odd = (q & 1) != 0;
             let result_positive = (n < 0) == (m < 0);
             if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                if result_positive {
-                    q + 1
-                } else {
-                    q - 1
-                }
+                if result_positive { q + 1 } else { q - 1 }
             } else {
                 q
             }
@@ -135,7 +131,11 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
 
     if r_mag == 0 {
         // No remainder — exact. Restore sign.
-        return if n_neg { -(q_mag as i128) } else { q_mag as i128 };
+        return if n_neg {
+            -(q_mag as i128)
+        } else {
+            q_mag as i128
+        };
     }
 
     // `should_bump` needs the same three pre-computed inputs the macro
@@ -161,7 +161,13 @@ pub(crate) fn i128_divrem_by_u64_with_mode(
 /// adapted to a hand-rolled wide integer `$W`. Uses
 /// `<$W>::from_i128(0/1)` for the small constants and the type's
 /// operators throughout.
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
+#[cfg(any(
+    feature = "d76",
+    feature = "d153",
+    feature = "d307",
+    feature = "wide",
+    feature = "x-wide"
+))]
 macro_rules! round_with_mode_wide {
     ($n:expr, $m:expr, $W:ty, $mode:expr) => {{
         let n = $n;
@@ -185,18 +191,20 @@ macro_rules! round_with_mode_wide {
             };
             let result_positive = (n < zero) == (m < zero);
             if $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, result_positive) {
-                if result_positive {
-                    q + one
-                } else {
-                    q - one
-                }
+                if result_positive { q + one } else { q - one }
             } else {
                 q
             }
         }
     }};
 }
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
+#[cfg(any(
+    feature = "d76",
+    feature = "d153",
+    feature = "d307",
+    feature = "wide",
+    feature = "x-wide"
+))]
 pub(crate) use round_with_mode_wide;
 
 /// Generates the standard arithmetic operator overloads for a decimal

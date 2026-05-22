@@ -105,7 +105,11 @@ macro_rules! decl_decimal_pow {
                 match self.checked_pow(exp) {
                     ::core::option::Option::Some(v) => v,
                     ::core::option::Option::None => {
-                        if neg { Self::MIN } else { Self::MAX }
+                        if neg {
+                            Self::MIN
+                        } else {
+                            Self::MAX
+                        }
                     }
                 }
             }

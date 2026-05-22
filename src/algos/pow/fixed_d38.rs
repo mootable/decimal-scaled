@@ -17,8 +17,8 @@
 //! Returns the raw `i128` storage at the input's scale.
 
 use crate::algos::exp::fixed_d38::exp_fixed;
-use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::algos::fixed_d38::Fixed;
+use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::D38;
 
@@ -73,26 +73,21 @@ pub(crate) fn powf_with<const SCALE: u32>(
     }
     let w = SCALE + working_digits;
     let pow = 10u128.pow(working_digits);
-    let ln_x = ln_fixed(
-        Fixed::from_u128_mag(base as u128, false).mul_u128(pow),
-        w,
-    );
+    let ln_x = ln_fixed(Fixed::from_u128_mag(base as u128, false).mul_u128(pow), w);
     let y_neg = exp < 0;
     let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
     let y_w = if y_neg { y_w.neg() } else { y_w };
     exp_fixed(y_w.mul(ln_x, w), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
+        })
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(
-    base: i128,
-    exp: i128,
-    mode: RoundingMode,
-) -> i128 {
+pub(crate) fn powf_strict<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
     if base <= 0 {
         return 0;
     }
@@ -101,14 +96,13 @@ pub(crate) fn powf_strict<const SCALE: u32>(
     }
     let w = SCALE + STRICT_GUARD;
     let pow = 10u128.pow(STRICT_GUARD);
-    let ln_x = ln_fixed(
-        Fixed::from_u128_mag(base as u128, false).mul_u128(pow),
-        w,
-    );
+    let ln_x = ln_fixed(Fixed::from_u128_mag(base as u128, false).mul_u128(pow), w);
     let y_neg = exp < 0;
     let y_w = Fixed::from_u128_mag(exp.unsigned_abs(), false).mul_u128(pow);
     let y_w = if y_neg { y_w.neg() } else { y_w };
     exp_fixed(y_w.mul(ln_x, w), w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("powf kernel", SCALE)
+        })
 }

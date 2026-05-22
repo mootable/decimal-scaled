@@ -35,8 +35,8 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d57 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d57 as core;
 use crate::wide_int::Int192;
 
 /// Table size — number of `exp(j · ln(2) / M)` entries per working
@@ -119,10 +119,8 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
     // `j_idx = j_signed + M`, fold the factor-of-½ into the final
     // `2^k` shift as `k_adj = -1`. δ is always computed against the
     // *signed* offset `c_{j_signed}` so it stays in the tight band.
-    let j_signed = core::round_to_nearest_int(
-        core::div_cached(s * core::lit(M as u128), l2, pow10_w),
-        w,
-    );
+    let j_signed =
+        core::round_to_nearest_int(core::div_cached(s * core::lit(M as u128), l2, pow10_w), w);
     let cj_signed_w = if j_signed >= 0 {
         (l2 * core::lit(j_signed as u128)) / core::lit(M as u128)
     } else {
@@ -134,7 +132,10 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: Int192, mode: RoundingMode) -> I
     } else {
         ((j_signed + M as i128) as u32, -1i128)
     };
-    debug_assert!(j_idx < M, "exp_strict d57 s45..=56: table index out of range");
+    debug_assert!(
+        j_idx < M,
+        "exp_strict d57 s45..=56: table index out of range"
+    );
 
     // Taylor: exp(δ) = 1 + δ + δ²/2! + … on |δ| ≤ ln(2)/(2M) ≈ 6.8·10⁻⁴
     // for M = 512. Term n shrinks as δⁿ / n!: at n ≈ 15 the contribution

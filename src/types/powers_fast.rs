@@ -8,7 +8,6 @@
 use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
-
     /// Raises `self` to the power `exp` via the f64 bridge.
     ///
     /// Converts both operands to f64, calls `f64::powf`, then converts
@@ -97,7 +96,6 @@ impl<const SCALE: u32> D38<SCALE> {
 
     // Integer power variant family.
 
-
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.
     ///
     /// The naive form `(self * self + other * other).sqrt()` overflows
@@ -157,11 +155,27 @@ impl<const SCALE: u32> D38<SCALE> {
 #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
 impl<const SCALE: u32> D38<SCALE> {
     /// Plain dispatcher: forwards to [`Self::powf_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn powf(self, exp: D38<SCALE>) -> Self { self.powf_fast(exp) }
+    #[inline]
+    #[must_use]
+    pub fn powf(self, exp: D38<SCALE>) -> Self {
+        self.powf_fast(exp)
+    }
     /// Plain dispatcher: forwards to [`Self::sqrt_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn sqrt(self) -> Self { self.sqrt_fast() }
+    #[inline]
+    #[must_use]
+    pub fn sqrt(self) -> Self {
+        self.sqrt_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::cbrt_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn cbrt(self) -> Self { self.cbrt_fast() }
+    #[inline]
+    #[must_use]
+    pub fn cbrt(self) -> Self {
+        self.cbrt_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::hypot_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn hypot(self, other: Self) -> Self { self.hypot_fast(other) }
+    #[inline]
+    #[must_use]
+    pub fn hypot(self, other: Self) -> Self {
+        self.hypot_fast(other)
+    }
 }

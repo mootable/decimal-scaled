@@ -14,11 +14,11 @@ use decimal_scaled::{ConvertError, D38, D38s12};
 fn widen_narrow_one_tier_hop_narrow_arm() {
     use decimal_scaled::{D9s6, D18s6};
     let a = D9s6::from_int(123);
-    let b = a.widen();                         // D9 → D18
-    let c = b.widen();                         // D18 → D38
+    let b = a.widen(); // D9 → D18
+    let c = b.widen(); // D18 → D38
     assert_eq!(b.to_bits() as i128, c.to_bits());
-    let d18: D18s6 = c.narrow().unwrap();      // D38 → D18
-    let d9: D9s6 = d18.narrow().unwrap();      // D18 → D9
+    let d18: D18s6 = c.narrow().unwrap(); // D38 → D18
+    let d9: D9s6 = d18.narrow().unwrap(); // D18 → D9
     assert_eq!(d9.to_bits(), a.to_bits());
 }
 
@@ -85,8 +85,14 @@ fn from_i8_scales_correctly() {
 #[test]
 fn from_i64_scales_correctly() {
     assert_eq!(D38s12::from(0_i64).to_bits(), 0);
-    assert_eq!(D38s12::from(i64::MAX).to_bits(), (i64::MAX as i128) * 1_000_000_000_000);
-    assert_eq!(D38s12::from(i64::MIN).to_bits(), (i64::MIN as i128) * 1_000_000_000_000);
+    assert_eq!(
+        D38s12::from(i64::MAX).to_bits(),
+        (i64::MAX as i128) * 1_000_000_000_000
+    );
+    assert_eq!(
+        D38s12::from(i64::MIN).to_bits(),
+        (i64::MIN as i128) * 1_000_000_000_000
+    );
 }
 
 #[test]

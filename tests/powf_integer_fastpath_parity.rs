@@ -73,12 +73,7 @@ fn d38_powf_integer_fastpath_parity_s12() {
 #[test]
 fn d18_powf_integer_fastpath_parity_s6() {
     // 2.0, 3.0, 1.5 at SCALE = 6.
-    let bases: &[i64] = &[
-        2_000_000,
-        3_000_000,
-        1_500_000,
-        700_000,
-    ];
+    let bases: &[i64] = &[2_000_000, 3_000_000, 1_500_000, 700_000];
     for &b in bases {
         for n in -5_i32..=10 {
             d18_check::<6>(b, n);
@@ -92,11 +87,7 @@ fn d9_powf_integer_fastpath_parity_s4() {
     // |base|*10^4 must stay below i32::MAX ≈ 2.1e9 and the integer
     // power must not overflow at any step — small bases keep that
     // safe over n ∈ [-5, 10].
-    let bases: &[i32] = &[
-        2_0000,
-        3_0000,
-        1_5000,
-    ];
+    let bases: &[i32] = &[2_0000, 3_0000, 1_5000];
     for &b in bases {
         for n in -3_i32..=5 {
             d9_check::<4>(b, n);
@@ -111,7 +102,10 @@ fn d9_powf_integer_fastpath_parity_s4() {
 fn d38_powf_zero_exp_returns_one() {
     let base = D38::<12>::from_bits(2_000_000_000_000);
     let zero_exp = D38::<12>::from_i32(0);
-    assert_eq!(base.powf_strict(zero_exp).to_bits(), D38::<12>::ONE.to_bits());
+    assert_eq!(
+        base.powf_strict(zero_exp).to_bits(),
+        D38::<12>::ONE.to_bits()
+    );
 }
 
 /// Negative integer exponent: must agree with `powi(-n)`, which routes

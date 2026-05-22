@@ -4,12 +4,12 @@
 #[macro_use]
 mod lib_cmp_common;
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::D153;
 use bigdecimal::BigDecimal;
+use criterion::{Criterion, criterion_group, criterion_main};
 use dashu_float::DBig;
+use decimal_scaled::D153;
 use fastnum::dec512;
+use std::hint::black_box;
 
 fn bench(c: &mut Criterion) {
     for &scale in &[0_usize, 75, 153] {
@@ -18,40 +18,64 @@ fn bench(c: &mut Criterion) {
 
         match scale {
             0 => {
-                let a = D153::<0>::from_int(2); let b = D153::<0>::from_int(1);
+                let a = D153::<0>::from_int(2);
+                let b = D153::<0>::from_int(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             75 => {
-                let a = D153::<75>::from_int(2); let b = D153::<75>::from_int(1);
+                let a = D153::<75>::from_int(2);
+                let b = D153::<75>::from_int(1);
                 arith_copy!(g, "decimal-scaled", a, b);
-                g.bench_function("decimal-scaled/ln",   |bn| bn.iter(|| black_box(a).ln_strict()));
-                g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
-                g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
-                g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
-                g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
-                g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
-                g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
-                g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
-                g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
-                g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
+                g.bench_function("decimal-scaled/ln", |bn| {
+                    bn.iter(|| black_box(a).ln_strict())
+                });
+                g.bench_function("decimal-scaled/exp", |bn| {
+                    bn.iter(|| black_box(a).exp_strict())
+                });
+                g.bench_function("decimal-scaled/sin", |bn| {
+                    bn.iter(|| black_box(a).sin_strict())
+                });
+                g.bench_function("decimal-scaled/sqrt", |bn| {
+                    bn.iter(|| black_box(a).sqrt_strict())
+                });
+                g.bench_function("decimal-scaled/cos", |bn| {
+                    bn.iter(|| black_box(a).cos_strict())
+                });
+                g.bench_function("decimal-scaled/tan", |bn| {
+                    bn.iter(|| black_box(a).tan_strict())
+                });
+                g.bench_function("decimal-scaled/atan", |bn| {
+                    bn.iter(|| black_box(a).atan_strict())
+                });
+                g.bench_function("decimal-scaled/sinh", |bn| {
+                    bn.iter(|| black_box(a).sinh_strict())
+                });
+                g.bench_function("decimal-scaled/cosh", |bn| {
+                    bn.iter(|| black_box(a).cosh_strict())
+                });
+                g.bench_function("decimal-scaled/tanh", |bn| {
+                    bn.iter(|| black_box(a).tanh_strict())
+                });
             }
             153 => {
-                let a = D153::<153>::from_int(2); let b = D153::<153>::from_int(1);
+                let a = D153::<153>::from_int(2);
+                let b = D153::<153>::from_int(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             _ => unreachable!(),
         }
 
         {
-            let a = dec512!(2); let b = dec512!(1);
+            let a = dec512!(2);
+            let b = dec512!(1);
             arith_copy!(g, "fastnum", a, b);
             if scale == 75 {
-                g.bench_function("fastnum/ln",   |bn| bn.iter(|| black_box(a).ln()));
-                g.bench_function("fastnum/exp",  |bn| bn.iter(|| black_box(a).exp()));
-                g.bench_function("fastnum/sin",  |bn| bn.iter(|| black_box(a).sin()));
+                g.bench_function("fastnum/ln", |bn| bn.iter(|| black_box(a).ln()));
+                g.bench_function("fastnum/exp", |bn| bn.iter(|| black_box(a).exp()));
+                g.bench_function("fastnum/sin", |bn| bn.iter(|| black_box(a).sin()));
                 g.bench_function("fastnum/sqrt", |bn| bn.iter(|| black_box(a).sqrt()));
-                g.bench_function("fastnum/cos",  |bn| bn.iter(|| black_box(a).cos()));
-                g.bench_function("fastnum/tan",  |bn| bn.iter(|| black_box(a).tan()));
+                g.bench_function("fastnum/cos", |bn| bn.iter(|| black_box(a).cos()));
+                g.bench_function("fastnum/tan", |bn| bn.iter(|| black_box(a).tan()));
                 g.bench_function("fastnum/atan", |bn| bn.iter(|| black_box(a).atan()));
                 g.bench_function("fastnum/sinh", |bn| bn.iter(|| black_box(a).sinh()));
                 g.bench_function("fastnum/cosh", |bn| bn.iter(|| black_box(a).cosh()));
@@ -74,8 +98,12 @@ fn bench(c: &mut Criterion) {
             arith_clone!(g, "dashu-float", a, b);
             if scale == 75 {
                 let a2 = a.clone();
-                g.bench_function("dashu-float/ln",  |bn| bn.iter(|| black_box(a2.clone()).ln()));
-                g.bench_function("dashu-float/exp", |bn| bn.iter(|| black_box(a2.clone()).exp()));
+                g.bench_function("dashu-float/ln", |bn| {
+                    bn.iter(|| black_box(a2.clone()).ln())
+                });
+                g.bench_function("dashu-float/exp", |bn| {
+                    bn.iter(|| black_box(a2.clone()).exp())
+                });
             }
         }
 

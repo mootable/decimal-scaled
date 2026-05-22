@@ -21,9 +21,9 @@
 
 #![cfg(all(feature = "wide", feature = "x-wide"))]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::{D38, D76, D307};
+use std::hint::black_box;
 
 fn bench(c: &mut Criterion) {
     let mut g = c.benchmark_group("powf_integer");
@@ -33,11 +33,11 @@ fn bench(c: &mut Criterion) {
     // ── D38<19> ────────────────────────────────────────────────────
     {
         type D = D38<19>;
-        let base: D = D::from_int(2);   // 2.0
+        let base: D = D::from_int(2); // 2.0
         let exp_2: D = D::from_int(2);
         let exp_3: D = D::from_int(3);
-        let exp_05: D = D::from_int(1) / D::from_int(2);          // 0.5
-        let exp_25: D = D::from_int(5) / D::from_int(2);          // 2.5
+        let exp_05: D = D::from_int(1) / D::from_int(2); // 0.5
+        let exp_25: D = D::from_int(5) / D::from_int(2); // 2.5
 
         g.bench_function("D38_s19/powf_2", |bn| {
             bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))

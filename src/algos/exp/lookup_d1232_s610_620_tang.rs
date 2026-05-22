@@ -46,9 +46,9 @@
 
 #![cfg(any(feature = "d1232", feature = "xx-wide"))]
 
-use crate::types::widths::wide_trig_d1232 as core;
 #[cfg(test)]
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d1232 as core;
 #[cfg(test)]
 use crate::wide_int::Int4096;
 
@@ -93,10 +93,8 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     let s = v_w - k_l2;
 
     // Stage 2: s = j_signed · (ln 2 / M) + δ, |δ| ≤ ln 2 / (2M).
-    let j_signed = core::round_to_nearest_int(
-        core::div_cached(s * core::lit(M as u128), l2, pow10_w),
-        w,
-    );
+    let j_signed =
+        core::round_to_nearest_int(core::div_cached(s * core::lit(M as u128), l2, pow10_w), w);
     let cj_signed_w = if j_signed >= 0 {
         (l2 * core::lit(j_signed as u128)) / core::lit(M as u128)
     } else {
@@ -108,7 +106,10 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     } else {
         ((j_signed + M as i128) as u32, -1i128)
     };
-    debug_assert!(j_idx < M, "tang_exp_fixed d1232 s610..=620: table index out of range");
+    debug_assert!(
+        j_idx < M,
+        "tang_exp_fixed d1232 s610..=620: table index out of range"
+    );
 
     // Taylor on δ.
     let mut sum = one_w + delta;

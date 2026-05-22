@@ -97,11 +97,7 @@ impl<const SCALE: u32> D38<SCALE> {
     pub fn wrapping_mul(self, rhs: Self) -> Self {
         match crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
-            None => Self(
-                self.0
-                    .wrapping_mul(rhs.0)
-                    .wrapping_div(Self::multiplier()),
-            ),
+            None => Self(self.0.wrapping_mul(rhs.0).wrapping_div(Self::multiplier())),
         }
     }
 
@@ -127,7 +123,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn saturating_mul(self, rhs: Self) -> Self {
-        if let Some(q) = crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) { Self(q) } else {
+        if let Some(q) = crate::algos::mg_divide::mul_div_pow10::<SCALE>(self.0, rhs.0) {
+            Self(q)
+        } else {
             // Clamp direction: negative result iff exactly one operand
             // is negative (a zero operand cannot produce overflow).
             let neg = (self.0 < 0) ^ (rhs.0 < 0);
@@ -225,11 +223,7 @@ impl<const SCALE: u32> D38<SCALE> {
         assert!(rhs.0 != 0, "attempt to divide by zero");
         match crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
             Some(q) => Self(q),
-            None => Self(
-                self.0
-                    .wrapping_mul(Self::multiplier())
-                    .wrapping_div(rhs.0),
-            ),
+            None => Self(self.0.wrapping_mul(Self::multiplier()).wrapping_div(rhs.0)),
         }
     }
 
@@ -262,7 +256,9 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn saturating_div(self, rhs: Self) -> Self {
         assert!(rhs.0 != 0, "attempt to divide by zero");
-        if let Some(q) = crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) { Self(q) } else {
+        if let Some(q) = crate::algos::mg_divide::div_pow10_div::<SCALE>(self.0, rhs.0) {
+            Self(q)
+        } else {
             // Clamp direction: negative iff exactly one operand is negative.
             let neg = (self.0 < 0) ^ (rhs.0 < 0);
             if neg { Self::MIN } else { Self::MAX }
@@ -301,7 +297,6 @@ impl<const SCALE: u32> D38<SCALE> {
             None => (self.wrapping_div(rhs), true),
         }
     }
-
 }
 
 #[cfg(test)]
@@ -336,20 +331,14 @@ mod tests {
         // MAX + ONE overflows (MAX is i128::MAX raw; ONE is 10^SCALE raw).
         assert_eq!(D38s12::MAX.checked_add(D38s12::ONE), None);
         // Boundary: MAX + 1 LSB also overflows.
-        assert_eq!(
-            D38s12::MAX.checked_add(D38s12::from_bits(1)),
-            None
-        );
+        assert_eq!(D38s12::MAX.checked_add(D38s12::from_bits(1)), None);
     }
 
     #[test]
     fn checked_add_negative_overflow_returns_none() {
         assert_eq!(D38s12::MIN.checked_add(neg_one()), None);
         // Boundary: MIN + (-1 LSB) also overflows.
-        assert_eq!(
-            D38s12::MIN.checked_add(D38s12::from_bits(-1)),
-            None
-        );
+        assert_eq!(D38s12::MIN.checked_add(D38s12::from_bits(-1)), None);
     }
 
     #[test]
@@ -360,19 +349,13 @@ mod tests {
     #[test]
     fn wrapping_add_overflow_wraps_to_min() {
         // MAX + 1 LSB wraps to MIN under two's-complement.
-        assert_eq!(
-            D38s12::MAX.wrapping_add(D38s12::from_bits(1)),
-            D38s12::MIN
-        );
+        assert_eq!(D38s12::MAX.wrapping_add(D38s12::from_bits(1)), D38s12::MIN);
     }
 
     #[test]
     fn wrapping_add_negative_overflow_wraps_to_max() {
         // MIN + (-1 LSB) wraps to MAX.
-        assert_eq!(
-            D38s12::MIN.wrapping_add(D38s12::from_bits(-1)),
-            D38s12::MAX
-        );
+        assert_eq!(D38s12::MIN.wrapping_add(D38s12::from_bits(-1)), D38s12::MAX);
     }
 
     #[test]
@@ -392,10 +375,7 @@ mod tests {
 
     #[test]
     fn overflowing_add_normal_no_overflow() {
-        assert_eq!(
-            D38s12::ONE.overflowing_add(D38s12::ONE),
-            (two(), false)
-        );
+        assert_eq!(D38s12::ONE.overflowing_add(D38s12::ONE), (two(), false));
     }
 
     #[test]
@@ -442,10 +422,7 @@ mod tests {
     #[test]
     fn wrapping_sub_underflow_wraps_to_max() {
         // MIN - 1 LSB wraps exactly to MAX.
-        assert_eq!(
-            D38s12::MIN.wrapping_sub(D38s12::from_bits(1)),
-            D38s12::MAX
-        );
+        assert_eq!(D38s12::MIN.wrapping_sub(D38s12::from_bits(1)), D38s12::MAX);
     }
 
     #[test]
@@ -466,10 +443,7 @@ mod tests {
 
     #[test]
     fn overflowing_sub_normal() {
-        assert_eq!(
-            three().overflowing_sub(D38s12::ONE),
-            (two(), false)
-        );
+        assert_eq!(three().overflowing_sub(D38s12::ONE), (two(), false));
     }
 
     #[test]
@@ -527,22 +501,13 @@ mod tests {
 
     #[test]
     fn overflowing_neg_normal() {
-        assert_eq!(
-            D38s12::ONE.overflowing_neg(),
-            (neg_one(), false)
-        );
-        assert_eq!(
-            D38s12::ZERO.overflowing_neg(),
-            (D38s12::ZERO, false)
-        );
+        assert_eq!(D38s12::ONE.overflowing_neg(), (neg_one(), false));
+        assert_eq!(D38s12::ZERO.overflowing_neg(), (D38s12::ZERO, false));
     }
 
     #[test]
     fn overflowing_neg_min_flagged() {
-        assert_eq!(
-            D38s12::MIN.overflowing_neg(),
-            (D38s12::MIN, true)
-        );
+        assert_eq!(D38s12::MIN.overflowing_neg(), (D38s12::MIN, true));
     }
 
     // Mul variants
@@ -609,10 +574,7 @@ mod tests {
     #[test]
     fn saturating_mul_negative_overflow_clamps_to_min() {
         // MAX * (-2.0) (mixed sign) saturates to MIN.
-        assert_eq!(
-            D38s12::MAX.saturating_mul(-two()),
-            D38s12::MIN
-        );
+        assert_eq!(D38s12::MAX.saturating_mul(-two()), D38s12::MIN);
     }
 
     #[test]
@@ -709,10 +671,7 @@ mod tests {
     fn saturating_div_negative_overflow_clamps_to_min() {
         // MAX / -0.5 (mixed sign) saturates to MIN.
         let neg_half = D38s12::from_bits(-500_000_000_000);
-        assert_eq!(
-            D38s12::MAX.saturating_div(neg_half),
-            D38s12::MIN
-        );
+        assert_eq!(D38s12::MAX.saturating_div(neg_half), D38s12::MIN);
     }
 
     #[test]
@@ -775,10 +734,7 @@ mod tests {
     fn wrapping_rem_min_neg_one_lsb_returns_zero() {
         // i128::MIN % -1 wraps to 0 (the overflow case).
         let neg_one_lsb = D38s12::from_bits(-1);
-        assert_eq!(
-            D38s12::MIN.wrapping_rem(neg_one_lsb),
-            D38s12::ZERO
-        );
+        assert_eq!(D38s12::MIN.wrapping_rem(neg_one_lsb), D38s12::ZERO);
     }
 
     #[test]
@@ -812,10 +768,7 @@ mod tests {
         assert_eq!(D6::MAX.checked_add(one_lsb), None);
         assert_eq!(D6::MAX.saturating_add(one_lsb), D6::MAX);
         assert_eq!(D6::MAX.wrapping_add(one_lsb), D6::MIN);
-        assert_eq!(
-            D6::MAX.overflowing_add(one_lsb),
-            (D6::MIN, true)
-        );
+        assert_eq!(D6::MAX.overflowing_add(one_lsb), (D6::MIN, true));
 
         assert_eq!(D6::MIN.checked_neg(), None);
         assert_eq!(D6::MIN.wrapping_neg(), D6::MIN);
@@ -856,10 +809,7 @@ mod tests {
         // Rem: MIN % (-1 LSB) -- the raw i128::MIN % -1 case.
         let neg_one_lsb = D38s12::from_bits(-1);
         let (_, ovf) = D38s12::MIN.overflowing_rem(neg_one_lsb);
-        assert_eq!(
-            ovf,
-            D38s12::MIN.checked_rem(neg_one_lsb).is_none()
-        );
+        assert_eq!(ovf, D38s12::MIN.checked_rem(neg_one_lsb).is_none());
     }
 
     /// Verifies that `saturating_add`, `saturating_sub`, and `saturating_mul`

@@ -22,7 +22,7 @@
 //! Panics on `raw <= 0` (the typed method's contract).
 
 use crate::algos::fixed_d38::Fixed;
-use crate::support::rounding::{is_nearest_mode, RoundingMode};
+use crate::support::rounding::{RoundingMode, is_nearest_mode};
 
 /// Guard digits added below the storage scale for the D38 strict log
 /// family. The 256-bit `Fixed` intermediate runs at
@@ -46,19 +46,18 @@ pub(crate) const STRICT_GUARD: u32 = 30;
 
 /// `ln(2) × 10^75`, half-to-even rounded (76th frac digit is 4 — round
 /// down). Source: high-precision evaluation of the natural logarithm.
-const LN2_S75: &str =
-    "693147180559945309417232121458176568075500134360255254120680009493393621969";
+const LN2_S75: &str = "693147180559945309417232121458176568075500134360255254120680009493393621969";
 
 /// `ln(10) × 10^75`, half-to-even rounded (76th frac digit is 3 — round
 /// down). Source: high-precision evaluation of the natural logarithm.
 const LN10_S75: &str =
     "2302585092994045684017991454684364207601101488628772976033327900967572609677";
 
-const LN2_RAW: crate::wide_int::Int256 =
-    match crate::wide_int::Int256::from_str_radix(LN2_S75, 10) {
-        Ok(v) => v,
-        Err(_) => panic!("algos::ln::fixed_d38: LN2_S75 not parseable"),
-    };
+const LN2_RAW: crate::wide_int::Int256 = match crate::wide_int::Int256::from_str_radix(LN2_S75, 10)
+{
+    Ok(v) => v,
+    Err(_) => panic!("algos::ln::fixed_d38: LN2_S75 not parseable"),
+};
 
 const LN10_RAW: crate::wide_int::Int256 =
     match crate::wide_int::Int256::from_str_radix(LN10_S75, 10) {
@@ -88,9 +87,16 @@ fn fixed_from_int256(raw: crate::wide_int::Int256) -> Fixed {
 /// strict call site is comfortably inside the bound. A debug-assert
 /// documents the invariant for any future caller.
 pub(crate) fn wide_ln2(w: u32) -> Fixed {
-    debug_assert!(w <= 75, "wide_ln2: working scale {w} exceeds embedded 75-digit ln 2");
+    debug_assert!(
+        w <= 75,
+        "wide_ln2: working scale {w} exceeds embedded 75-digit ln 2"
+    );
     let ln2_at_75 = fixed_from_int256(LN2_RAW);
-    if w == 75 { ln2_at_75 } else { ln2_at_75.rescale_down(75, w) }
+    if w == 75 {
+        ln2_at_75
+    } else {
+        ln2_at_75.rescale_down(75, w)
+    }
 }
 
 /// `ln(10)` as a `Fixed` at working scale `w` (`w <= 75`). Sourced from
@@ -98,9 +104,16 @@ pub(crate) fn wide_ln2(w: u32) -> Fixed {
 ///
 /// Caller-side precondition: `w <= 75`. See [`wide_ln2`].
 pub(crate) fn wide_ln10(w: u32) -> Fixed {
-    debug_assert!(w <= 75, "wide_ln10: working scale {w} exceeds embedded 75-digit ln 10");
+    debug_assert!(
+        w <= 75,
+        "wide_ln10: working scale {w} exceeds embedded 75-digit ln 10"
+    );
     let ln10_at_75 = fixed_from_int256(LN10_RAW);
-    if w == 75 { ln10_at_75 } else { ln10_at_75.rescale_down(75, w) }
+    if w == 75 {
+        ln10_at_75
+    } else {
+        ln10_at_75.rescale_down(75, w)
+    }
 }
 
 /// Natural logarithm of a positive working-scale value `v_w`, returned
@@ -111,7 +124,10 @@ pub(crate) fn wide_ln10(w: u32) -> Fixed {
 /// `ln(m) = 2·artanh((m-1)/(m+1))` (`t ∈ [0,1/3]`, fast convergence)
 /// and returns `k·ln(2) + ln(m)`.
 pub(crate) fn ln_fixed(v_w: Fixed, w: u32) -> Fixed {
-    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let one_w = Fixed {
+        negative: false,
+        mag: Fixed::pow10(w),
+    };
     let two_w = one_w.double();
 
     // Range reduction: find k with v ∈ [2^k, 2^(k+1)); m_w = v_w / 2^k.
@@ -187,7 +203,9 @@ pub(crate) fn ln_with(raw: i128, scale: u32, working_digits: u32, mode: Rounding
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
     ln_fixed(v_w, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("ln kernel", scale))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("ln kernel", scale)
+        })
 }
 
 /// Strict variant — fixed to `STRICT_GUARD` working digits. Equivalent
@@ -214,7 +232,9 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(STRICT_GUARD));
     ln_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("ln kernel", SCALE))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("ln kernel", SCALE)
+        })
 }
 
 // ── log / log2 / log10 kernels (D38, Fixed fallback) ──────────────
@@ -292,13 +312,8 @@ fn log_exact_int_pin(value_raw: i128, base_int: i128, scale: u32, k: i128) -> Op
         }
         ok && cur == one_s
     };
-    if exact {
-        k.checked_mul(one_s)
-    } else {
-        None
-    }
+    if exact { k.checked_mul(one_s) } else { None }
 }
-
 
 /// `log_base(v) = ln(v) / ln(base)`, both carried in the `Fixed` wide.
 /// Used by `LnPolicy::log_impl` when the D57 borrow path is not
@@ -319,7 +334,10 @@ pub(crate) fn log_with(
     let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(pow);
     let b_w = Fixed::from_u128_mag(base_raw as u128, false).mul_u128(pow);
     let ln_b = ln_fixed(b_w, w);
-    assert!(!ln_b.is_zero(), "D38::log: base must not equal 1 (ln(1) is zero)");
+    assert!(
+        !ln_b.is_zero(),
+        "D38::log: base must not equal 1 (ln(1) is zero)"
+    );
     let ratio = ln_fixed(v_w, w).div(ln_b, w);
     // Exact-power pin: `value == base^k` ⇒ result is exactly `k`.
     // Reduce the storage `base_raw` to its integer base (`base_raw /
@@ -334,44 +352,34 @@ pub(crate) fn log_with(
     if let Some(pinned) = log_exact_int_pin(raw, base_int, scale, k) {
         return pinned;
     }
-    ratio
-        .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log", scale))
+    ratio.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("D38::log", scale)
+    })
 }
 
 /// Const-folded strict variant of [`log_with`].
 #[inline]
 #[must_use]
-pub(crate) fn log_strict<const SCALE: u32>(
-    raw: i128,
-    base_raw: i128,
-    mode: RoundingMode,
-) -> i128 {
+pub(crate) fn log_strict<const SCALE: u32>(raw: i128, base_raw: i128, mode: RoundingMode) -> i128 {
     log_with(raw, base_raw, SCALE, STRICT_GUARD, mode)
 }
 
 /// `log2(v) = ln(v) / ln(2)`, `Fixed`-wide fallback for D38.
 #[inline]
 #[must_use]
-pub(crate) fn log2_with(
-    raw: i128,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> i128 {
+pub(crate) fn log2_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     assert!(raw > 0, "D38::log2: argument must be positive");
     let w = scale + working_digits;
-    let v_w =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
+    let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
     let ratio = ln_fixed(v_w, w).div(wide_ln2(w), w);
     // Exact-power pin: `value == 2^k` ⇒ result is exactly `k`.
     let k = ratio.round_to_nearest_int(w);
     if let Some(pinned) = log_exact_int_pin(raw, 2, scale, k) {
         return pinned;
     }
-    ratio
-        .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log2", scale))
+    ratio.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("D38::log2", scale)
+    })
 }
 
 #[inline]
@@ -383,25 +391,19 @@ pub(crate) fn log2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 /// `log10(v) = ln(v) / ln(10)`, `Fixed`-wide fallback for D38.
 #[inline]
 #[must_use]
-pub(crate) fn log10_with(
-    raw: i128,
-    scale: u32,
-    working_digits: u32,
-    mode: RoundingMode,
-) -> i128 {
+pub(crate) fn log10_with(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
     assert!(raw > 0, "D38::log10: argument must be positive");
     let w = scale + working_digits;
-    let v_w =
-        Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
+    let v_w = Fixed::from_u128_mag(raw as u128, false).mul_u128(10u128.pow(working_digits));
     let ratio = ln_fixed(v_w, w).div(wide_ln10(w), w);
     // Exact-power pin: `value == 10^k` ⇒ result is exactly `k`.
     let k = ratio.round_to_nearest_int(w);
     if let Some(pinned) = log_exact_int_pin(raw, 10, scale, k) {
         return pinned;
     }
-    ratio
-        .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::log10", scale))
+    ratio.round_to_i128_with(w, scale, mode).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("D38::log10", scale)
+    })
 }
 
 #[inline]

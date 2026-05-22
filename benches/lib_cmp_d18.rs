@@ -4,7 +4,7 @@
 #[macro_use]
 mod lib_cmp_common;
 
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D18;
 use fastnum::dec64;
 use fixed::types::I32F32;
@@ -17,15 +17,18 @@ fn bench(c: &mut Criterion) {
 
         match scale {
             0 => {
-                let a = D18::<0>::from_int(2); let b = D18::<0>::from_int(1);
+                let a = D18::<0>::from_int(2);
+                let b = D18::<0>::from_int(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             9 => {
-                let a = D18::<9>::from_int(2); let b = D18::<9>::from_int(1);
+                let a = D18::<9>::from_int(2);
+                let b = D18::<9>::from_int(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             18 => {
-                let a = D18::<18>::from_int(2); let b = D18::<18>::from_int(1);
+                let a = D18::<18>::from_int(2);
+                let b = D18::<18>::from_int(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             _ => unreachable!(),
@@ -40,12 +43,14 @@ fn bench(c: &mut Criterion) {
         }
 
         {
-            let a = I32F32::from_num(2); let b = I32F32::from_num(1);
+            let a = I32F32::from_num(2);
+            let b = I32F32::from_num(1);
             arith_copy!(g, "fixed_i32f32", a, b);
         }
 
         {
-            let a = dec64!(2); let b = dec64!(1);
+            let a = dec64!(2);
+            let b = dec64!(1);
             arith_copy!(g, "fastnum", a, b);
         }
 

@@ -252,9 +252,18 @@ fn float_bridge_rounding_modes() {
     let _ = D9_2::from_f64_with(-1.005, RoundingMode::Ceiling);
 
     // Exact zero
-    assert_eq!(D38_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(), 0);
-    assert_eq!(D9_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(), 0);
-    assert_eq!(D18_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(), 0);
+    assert_eq!(
+        D38_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        0
+    );
+    assert_eq!(
+        D9_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        0
+    );
+    assert_eq!(
+        D18_2::from_f64_with(0.0, RoundingMode::HalfToEven).to_bits(),
+        0
+    );
 
     #[cfg(feature = "wide")]
     {

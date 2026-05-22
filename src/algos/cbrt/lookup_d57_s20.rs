@@ -38,7 +38,7 @@
 #![cfg(any(feature = "d57", feature = "wide"))]
 
 use crate::support::rounding::RoundingMode;
-use crate::wide_int::{Int192, Int384, BigInt};
+use crate::wide_int::{BigInt, Int192, Int384};
 
 const SCALE: u32 = 20;
 
@@ -73,7 +73,11 @@ pub(crate) fn cbrt(raw: Int192, mode: RoundingMode) -> Int192 {
     let halfway_gt = eight_n > cube;
     let tie = halfway_geq && !halfway_gt;
     let two_q = q + q;
-    let eight_q_cubed = if q == zero { zero } else { two_q * two_q * two_q };
+    let eight_q_cubed = if q == zero {
+        zero
+    } else {
+        two_q * two_q * two_q
+    };
     let residual_nonzero = eight_n > eight_q_cubed;
     let q_is_odd = (q % (one + one)) != zero;
     let bump = match mode {

@@ -3,9 +3,9 @@
 //! Gate: ln_approx(6) must show ≥ 1.5× over strict before promoting
 //! to the full *_approx family across all transcendentals.
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D38;
+use std::hint::black_box;
 use std::str::FromStr;
 
 fn at(s: &str) -> D38<19> {

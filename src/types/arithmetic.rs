@@ -428,8 +428,13 @@ mod tests {
     #[test]
     fn rem_multiple_is_zero() {
         let x = D38s12::from_bits(3_500_000_000_000); // 3.5
-        let seven = D38s12::ONE + D38s12::ONE + D38s12::ONE + D38s12::ONE
-            + D38s12::ONE + D38s12::ONE + D38s12::ONE; // 7
+        let seven = D38s12::ONE
+            + D38s12::ONE
+            + D38s12::ONE
+            + D38s12::ONE
+            + D38s12::ONE
+            + D38s12::ONE
+            + D38s12::ONE; // 7
         assert_eq!((x * seven) % x, D38s12::ZERO);
     }
 
@@ -822,13 +827,22 @@ mod tests {
 
         // Negative halves -- away from zero == toward neg infinity
         let neg_two_point_five = D38s12::from_bits(-2_500_000_000_000);
-        assert_eq!(neg_two_point_five.round(), D38s12::from_bits(-3_000_000_000_000));
+        assert_eq!(
+            neg_two_point_five.round(),
+            D38s12::from_bits(-3_000_000_000_000)
+        );
 
         let neg_two_point_four = D38s12::from_bits(-2_400_000_000_000);
-        assert_eq!(neg_two_point_four.round(), D38s12::from_bits(-2_000_000_000_000));
+        assert_eq!(
+            neg_two_point_four.round(),
+            D38s12::from_bits(-2_000_000_000_000)
+        );
 
         let neg_two_point_six = D38s12::from_bits(-2_600_000_000_000);
-        assert_eq!(neg_two_point_six.round(), D38s12::from_bits(-3_000_000_000_000));
+        assert_eq!(
+            neg_two_point_six.round(),
+            D38s12::from_bits(-3_000_000_000_000)
+        );
 
         // Zero
         assert_eq!(D38s12::ZERO.round(), D38s12::ZERO);
@@ -1054,8 +1068,13 @@ mod tests {
             let r = a.rem_euclid(b);
             assert_eq!(q * b + r, a, "failed for a={}, b={}", a_bits, b_bits);
             // Remainder must be non-negative (Euclidean property)
-            assert!(r.0 >= 0, "rem_euclid returned negative for a={}, b={}: {}",
-                    a_bits, b_bits, r.0);
+            assert!(
+                r.0 >= 0,
+                "rem_euclid returned negative for a={}, b={}: {}",
+                a_bits,
+                b_bits,
+                r.0
+            );
         }
     }
 
@@ -1167,8 +1186,11 @@ mod tests {
         // toward zero for signed integers (so MIN + MAX = -1 averages
         // to 0, not -1). Just assert it doesn't overflow / panic.
         let mid = D38s12::MIN.midpoint(D38s12::MAX);
-        assert!(mid.0 == 0 || mid.0 == -1,
-                "midpoint(MIN, MAX) should be 0 or -1, got {}", mid.0);
+        assert!(
+            mid.0 == 0 || mid.0 == -1,
+            "midpoint(MIN, MAX) should be 0 or -1, got {}",
+            mid.0
+        );
     }
 
     // ── Float-shape compat predicates ──

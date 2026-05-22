@@ -43,8 +43,8 @@
 
 #![cfg(any(feature = "d115", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d115 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d115 as core;
 use crate::wide_int::Int384;
 
 /// Narrow guard for the Tang-style ln slot at SCALE = 57.
@@ -128,7 +128,11 @@ fn ln_value(v_w: core::W, w: u32) -> core::W {
     // Stage 2: pick table index i ∈ [0, M).
     let i_raw = ((m_w - one_w) * core::lit(M as u128)) / one_w;
     let i_i128 = crate::wide_int::wide_cast::<core::W, i128>(i_raw);
-    let i_idx = if i_i128 >= M as i128 { (M - 1) as usize } else { i_i128 as usize };
+    let i_idx = if i_i128 >= M as i128 {
+        (M - 1) as usize
+    } else {
+        i_i128 as usize
+    };
 
     let f_i = one_w + (one_w * core::lit(i_idx as u128)) / core::lit(M as u128);
 

@@ -50,8 +50,11 @@ macro_rules! decl_ln_kernel {
         #[must_use]
         pub(crate) fn $name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
-            let zero = <$Storage>::from_str_radix("0", 10)
-                .expect(concat!("ln_strict_", $tier_label, ": invalid base-10 literal"));
+            let zero = <$Storage>::from_str_radix("0", 10).expect(concat!(
+                "ln_strict_",
+                $tier_label,
+                ": invalid base-10 literal"
+            ));
             if raw <= zero {
                 panic!(concat!($tier_label, "::ln: argument must be positive"));
             }

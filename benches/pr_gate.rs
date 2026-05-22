@@ -64,9 +64,15 @@ fn bench_arith(c: &mut Criterion) {
     g.bench_function("D57_mul", |bn| bn.iter(|| black_box(a56) * black_box(b56)));
     g.bench_function("D57_div", |bn| bn.iter(|| black_box(a56) / black_box(b56)));
 
-    g.bench_function("D307_add", |bn| bn.iter(|| black_box(a307) + black_box(b307)));
-    g.bench_function("D307_mul", |bn| bn.iter(|| black_box(a307) * black_box(b307)));
-    g.bench_function("D307_div", |bn| bn.iter(|| black_box(a307) / black_box(b307)));
+    g.bench_function("D307_add", |bn| {
+        bn.iter(|| black_box(a307) + black_box(b307))
+    });
+    g.bench_function("D307_mul", |bn| {
+        bn.iter(|| black_box(a307) * black_box(b307))
+    });
+    g.bench_function("D307_div", |bn| {
+        bn.iter(|| black_box(a307) / black_box(b307))
+    });
     g.finish();
 }
 

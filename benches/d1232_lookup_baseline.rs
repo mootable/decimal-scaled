@@ -8,9 +8,9 @@
 
 #![cfg(feature = "xx-wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D1232;
+use std::hint::black_box;
 
 fn bench(c: &mut Criterion) {
     let half_k = D1232::<600>::from_int(1) / D1232::<600>::from_int(2);
@@ -25,8 +25,12 @@ fn bench(c: &mut Criterion) {
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
 
-    g.bench_function("ln_kernel_s600", |b| b.iter(|| black_box(one_p_half_k).ln_strict()));
-    g.bench_function("ln_lookup_s615", |b| b.iter(|| black_box(one_p_half_l).ln_strict()));
+    g.bench_function("ln_kernel_s600", |b| {
+        b.iter(|| black_box(one_p_half_k).ln_strict())
+    });
+    g.bench_function("ln_lookup_s615", |b| {
+        b.iter(|| black_box(one_p_half_l).ln_strict())
+    });
 
     g.finish();
 }

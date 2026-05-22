@@ -22,8 +22,8 @@
 
 use crate::algos::ln;
 use crate::policy::triplet::{policy_triplet, wtag};
-use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
 
 /// Per-width policy for natural log and the log family. See module
 /// docs.
@@ -82,59 +82,89 @@ macro_rules! impl_log_widen {
                 let wide: D38<SCALE> = self.into();
                 let wbase: D38<SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide.log_strict_with(wbase, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::log"), SCALE,
-                    ))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::log"),
+                            SCALE,
+                        )
+                    })
             }
             #[inline]
             fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 let wbase: D38<SCALE> = base.into();
-                ::core::convert::TryInto::try_into(
-                    wide.log_approx_with(wbase, working_digits, mode),
-                )
-                .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                    concat!(stringify!($T), "::log"), SCALE,
+                ::core::convert::TryInto::try_into(wide.log_approx_with(
+                    wbase,
+                    working_digits,
+                    mode,
                 ))
+                .unwrap_or_else(|_| {
+                    crate::support::diagnostics::overflow_panic_with_scale(
+                        concat!(stringify!($T), "::log"),
+                        SCALE,
+                    )
+                })
             }
             #[inline]
             fn log2_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.log2_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::log2"), SCALE,
-                    ))
+                ::core::convert::TryInto::try_into(wide.log2_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::log2"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn log2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log2_approx_with(working_digits, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::log2"), SCALE,
-                    ))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::log2"),
+                            SCALE,
+                        )
+                    })
             }
             #[inline]
             fn log10_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.log10_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::log10"), SCALE,
-                    ))
+                ::core::convert::TryInto::try_into(wide.log10_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::log10"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn log10_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.log10_approx_with(working_digits, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::log10"), SCALE,
-                    ))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::log10"),
+                            SCALE,
+                        )
+                    })
             }
         }
     };
 }
 
-impl_log_widen!(D9, ln::widen_to_d38::ln_strict_d9, ln::widen_to_d38::ln_with_d9);
-impl_log_widen!(D18, ln::widen_to_d38::ln_strict_d18, ln::widen_to_d38::ln_with_d18);
+impl_log_widen!(
+    D9,
+    ln::widen_to_d38::ln_strict_d9,
+    ln::widen_to_d38::ln_with_d9
+);
+impl_log_widen!(
+    D18,
+    ln::widen_to_d38::ln_strict_d18,
+    ln::widen_to_d38::ln_with_d18
+);
 
 // ── D38 — width override ───────────────────────────────────────────
 //
@@ -166,7 +196,13 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     }
     #[inline]
     fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log_with(self.0, base.0, SCALE, working_digits, mode))
+        Self(ln::fixed_d38::log_with(
+            self.0,
+            base.0,
+            SCALE,
+            working_digits,
+            mode,
+        ))
     }
     #[inline]
     fn log2_impl(self, mode: RoundingMode) -> Self {
@@ -174,7 +210,12 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     }
     #[inline]
     fn log2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log2_with(self.0, SCALE, working_digits, mode))
+        Self(ln::fixed_d38::log2_with(
+            self.0,
+            SCALE,
+            working_digits,
+            mode,
+        ))
     }
     #[inline]
     fn log10_impl(self, mode: RoundingMode) -> Self {
@@ -182,7 +223,12 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     }
     #[inline]
     fn log10_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log10_with(self.0, SCALE, working_digits, mode))
+        Self(ln::fixed_d38::log10_with(
+            self.0,
+            SCALE,
+            working_digits,
+            mode,
+        ))
     }
 }
 

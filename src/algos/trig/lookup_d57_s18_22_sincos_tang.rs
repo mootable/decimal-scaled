@@ -32,8 +32,8 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d57 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d57 as core;
 use crate::wide_int::Int192;
 
 /// Narrow guard matches the non-Tang sin/cos kernel.
@@ -83,10 +83,7 @@ fn sin_cos_fixed_tang(v_w: core::W, w: u32) -> (core::W, core::W) {
 
     // Stage 2: r = c_j_signed·π/(4M) + δ, |δ| ≤ π/(8M).
     let four_m = core::lit((4 * M) as u128);
-    let j_signed = core::round_to_nearest_int(
-        core::div_cached(r * four_m, pi_w, pow10_w),
-        w,
-    );
+    let j_signed = core::round_to_nearest_int(core::div_cached(r * four_m, pi_w, pow10_w), w);
     let cj_signed_w = if j_signed >= 0 {
         (pi_w * core::lit(j_signed as u128)) / four_m
     } else {
@@ -95,9 +92,17 @@ fn sin_cos_fixed_tang(v_w: core::W, w: u32) -> (core::W, core::W) {
     let delta = r - cj_signed_w;
 
     let j_abs = j_signed.unsigned_abs() as u32;
-    let j_idx = if j_abs > M { M as usize } else { j_abs as usize };
+    let j_idx = if j_abs > M {
+        M as usize
+    } else {
+        j_abs as usize
+    };
     let (sin_cj_abs, cos_cj) = table_entry(w, j_idx);
-    let sin_cj = if j_signed < 0 { -sin_cj_abs } else { sin_cj_abs };
+    let sin_cj = if j_signed < 0 {
+        -sin_cj_abs
+    } else {
+        sin_cj_abs
+    };
 
     let delta2 = core::mul_cached(delta, delta, pow10_w);
 
@@ -149,10 +154,10 @@ fn sin_cos_fixed_tang(v_w: core::W, w: u32) -> (core::W, core::W) {
         sum
     };
 
-    let sin_r = core::mul_cached(sin_cj, cos_delta, pow10_w)
-        + core::mul_cached(cos_cj, sin_delta, pow10_w);
-    let cos_r = core::mul_cached(cos_cj, cos_delta, pow10_w)
-        - core::mul_cached(sin_cj, sin_delta, pow10_w);
+    let sin_r =
+        core::mul_cached(sin_cj, cos_delta, pow10_w) + core::mul_cached(cos_cj, sin_delta, pow10_w);
+    let cos_r =
+        core::mul_cached(cos_cj, cos_delta, pow10_w) - core::mul_cached(sin_cj, sin_delta, pow10_w);
 
     let quadrant = ((k % 4) + 4) % 4;
     match quadrant {

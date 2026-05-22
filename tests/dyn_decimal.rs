@@ -15,9 +15,7 @@
 
 #![cfg(feature = "dyn")]
 
-use decimal_scaled::{
-    D9, D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMode,
-};
+use decimal_scaled::{D9, D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMode};
 
 // ── Identity surface ──────────────────────────────────────────────────
 
@@ -136,17 +134,29 @@ fn sub_mul_div_rem_same_scale() {
     let b: Box<dyn DynDecimal> = Box::new(D38::<2>::from_i32(3));
 
     let diff = a.sub(&*b).unwrap();
-    assert_eq!(*diff.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>::from_i32(17));
+    assert_eq!(
+        *diff.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>::from_i32(17)
+    );
 
     let prod = a.mul(&*b).unwrap();
-    assert_eq!(*prod.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>::from_i32(60));
+    assert_eq!(
+        *prod.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>::from_i32(60)
+    );
 
     let quot = a.div(&*b).unwrap();
     // 20 / 3 at scale 2 = 6.67 (banker's rounding).
-    assert_eq!(*quot.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>(667));
+    assert_eq!(
+        *quot.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>(667)
+    );
 
     let rem = a.rem(&*b).unwrap();
-    assert_eq!(*rem.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>::from_i32(2));
+    assert_eq!(
+        *rem.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>::from_i32(2)
+    );
 }
 
 // ── Arithmetic: same width, different scale → auto-rescale to max ─────
@@ -204,10 +214,16 @@ fn rescale_to_within_range() {
     let v: Box<dyn DynDecimal> = Box::new(D38::<2>(150));
     let up = v.rescale_to(5).unwrap();
     assert_eq!(up.scale_dyn(), 5);
-    assert_eq!(*up.as_any().downcast_ref::<D38<5>>().unwrap(), D38::<5>(150_000));
+    assert_eq!(
+        *up.as_any().downcast_ref::<D38<5>>().unwrap(),
+        D38::<5>(150_000)
+    );
 
     let down = up.rescale_to(2).unwrap();
-    assert_eq!(*down.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>(150));
+    assert_eq!(
+        *down.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>(150)
+    );
 }
 
 #[test]
@@ -215,9 +231,15 @@ fn rescale_to_with_explicit_rounding_mode() {
     // 1.555 at scale 3 → scale 2 with Trunc → 1.55; with Ceiling → 1.56.
     let v: Box<dyn DynDecimal> = Box::new(D38::<3>(1555));
     let truncated = v.rescale_to_with(2, RoundingMode::Trunc).unwrap();
-    assert_eq!(*truncated.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>(155));
+    assert_eq!(
+        *truncated.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>(155)
+    );
     let ceiled = v.rescale_to_with(2, RoundingMode::Ceiling).unwrap();
-    assert_eq!(*ceiled.as_any().downcast_ref::<D38<2>>().unwrap(), D38::<2>(156));
+    assert_eq!(
+        *ceiled.as_any().downcast_ref::<D38<2>>().unwrap(),
+        D38::<2>(156)
+    );
 }
 
 #[test]
@@ -284,11 +306,14 @@ fn to_int_truncates() {
 
 #[test]
 fn d9_cross_scale_add() {
-    let a: Box<dyn DynDecimal> = Box::new(D9::<2>::from_bits(150));     // 1.50
-    let b: Box<dyn DynDecimal> = Box::new(D9::<4>::from_bits(7));       // 0.0007
+    let a: Box<dyn DynDecimal> = Box::new(D9::<2>::from_bits(150)); // 1.50
+    let b: Box<dyn DynDecimal> = Box::new(D9::<4>::from_bits(7)); // 0.0007
     let sum = a.add(&*b).unwrap();
     assert_eq!(sum.scale_dyn(), 4);
-    assert_eq!(*sum.as_any().downcast_ref::<D9<4>>().unwrap(), D9::<4>::from_bits(15_007));
+    assert_eq!(
+        *sum.as_any().downcast_ref::<D9<4>>().unwrap(),
+        D9::<4>::from_bits(15_007)
+    );
 }
 
 #[test]
@@ -298,7 +323,10 @@ fn d18_cross_scale_mul() {
     let b: Box<dyn DynDecimal> = Box::new(D18::<2>::from_bits(200));
     let prod = a.mul(&*b).unwrap();
     assert_eq!(prod.scale_dyn(), 2);
-    assert_eq!(*prod.as_any().downcast_ref::<D18<2>>().unwrap(), D18::<2>::from_bits(300));
+    assert_eq!(
+        *prod.as_any().downcast_ref::<D18<2>>().unwrap(),
+        D18::<2>::from_bits(300)
+    );
 }
 
 // ── Storing mixed values in a single container ────────────────────────
@@ -312,7 +340,10 @@ fn vec_of_mixed_widths() {
     ];
 
     let widths: Vec<DecimalWidth> = values.iter().map(|v| v.width()).collect();
-    assert_eq!(widths, vec![DecimalWidth::D9, DecimalWidth::D18, DecimalWidth::D38]);
+    assert_eq!(
+        widths,
+        vec![DecimalWidth::D9, DecimalWidth::D18, DecimalWidth::D38]
+    );
 
     let displays: Vec<String> = values.iter().map(|v| v.display()).collect();
     assert_eq!(displays, vec!["1.00", "2.000", "3.00000"]);

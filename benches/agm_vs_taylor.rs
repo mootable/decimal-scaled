@@ -10,9 +10,9 @@
 //!
 //! Run with `cargo bench --features wide --bench agm_vs_taylor`.
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D307;
+use std::hint::black_box;
 
 type D = D307<300>;
 

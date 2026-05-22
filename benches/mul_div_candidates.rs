@@ -46,9 +46,9 @@
 //! Note on Candidate A: at "wide" we DO NOT run the naive form
 //! (it would overflow / wrap and produce garbage). The "wide" row
 //! shows --- for naive.
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion, BenchmarkId};
+use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
 use decimal_scaled::D38;
+use std::hint::black_box;
 
 type D = D38<12>;
 const MULT: i128 = 1_000_000_000_000;
@@ -248,7 +248,11 @@ fn handrolled_div(a: i128, b: i128) -> i128 {
     };
     let (uq, r) = divrem256_by_u128(uhi, ulo, ud);
     let q_trunc = if neg_result {
-        if uq > i128::MAX as u128 { i128::MIN } else { -(uq as i128) }
+        if uq > i128::MAX as u128 {
+            i128::MIN
+        } else {
+            -(uq as i128)
+        }
     } else {
         uq as i128
     };
@@ -305,7 +309,10 @@ const MG_DIVISOR: u128 = 1_000_000_000_000;
 fn mg_div_by_pow10_12(n_high: u128, n_low: u128) -> u128 {
     // Algorithm: zn = n << zeros; q = (((magic * zn) >> 128) + zn) >> 128
     // (256-bit dividend variant of Moller-Granlund 2011, Alg. 4).
-    debug_assert!(n_high < MG_DIVISOR, "MG: dividend high half exceeds divisor");
+    debug_assert!(
+        n_high < MG_DIVISOR,
+        "MG: dividend high half exceeds divisor"
+    );
 
     // (z_high, z_low) := n << zeros
     let z_high = (n_high << MG_ZEROS) | (n_low >> (128 - MG_ZEROS));
@@ -326,11 +333,7 @@ fn mg_div_by_pow10_12(n_high: u128, n_low: u128) -> u128 {
     let (pp_high, pp_low) = mul_full_u128(q, MG_DIVISOR);
     let (r_low, borrow) = n_low.overflowing_sub(pp_low);
     let _ = pp_high; // n_high == pp_high + borrow, asserted by construction
-    if r_low < MG_DIVISOR {
-        q
-    } else {
-        q + 1
-    }
+    if r_low < MG_DIVISOR { q } else { q + 1 }
 }
 
 #[inline(always)]
@@ -357,11 +360,7 @@ fn mg_mul(a: i128, b: i128) -> i128 {
         (hi as u128, lo)
     };
     let q = mg_div_by_pow10_12(uhi, ulo);
-    if neg {
-        -(q as i128)
-    } else {
-        q as i128
-    }
+    if neg { -(q as i128) } else { q as i128 }
 }
 
 // MG-style divide for D38s12::div: numerator = a * MULT (256-bit),
@@ -446,28 +445,48 @@ fn sanity_check_consistency() {
     // i256 -- separate sanity below
     // mid
     let exp = naive_mul(MID.a, MID.b);
-    assert_eq!(handrolled_mul(MID.a, MID.b), exp, "handrolled mul mid mismatch");
+    assert_eq!(
+        handrolled_mul(MID.a, MID.b),
+        exp,
+        "handrolled mul mid mismatch"
+    );
     assert_eq!(mg_mul(MID.a, MID.b), exp, "mg mul mid mismatch");
     // bound
     let exp = naive_mul(BOUND.a, BOUND.b);
-    assert_eq!(handrolled_mul(BOUND.a, BOUND.b), exp, "handrolled mul bound mismatch");
+    assert_eq!(
+        handrolled_mul(BOUND.a, BOUND.b),
+        exp,
+        "handrolled mul bound mismatch"
+    );
     assert_eq!(mg_mul(BOUND.a, BOUND.b), exp, "mg mul bound mismatch");
     // wide -- naive overflows, so cross-check handrolled vs mg vs production only.
     let h = handrolled_mul(WIDE.a, WIDE.b);
     let m = mg_mul(WIDE.a, WIDE.b);
     let p = production_mul(WIDE.a, WIDE.b);
     assert_eq!(h, m, "handrolled vs mg wide mismatch ({} vs {})", h, m);
-    assert_eq!(h, p, "handrolled vs production wide mismatch ({} vs {})", h, p);
+    assert_eq!(
+        h, p,
+        "handrolled vs production wide mismatch ({} vs {})",
+        h, p
+    );
 
     // Cross-check production E against handrolled for the cases where naive
     // doesn't overflow.
     for inp in [SMALL, MID, BOUND] {
         let r_p = production_mul(inp.a, inp.b);
         let r_h = handrolled_mul(inp.a, inp.b);
-        assert_eq!(r_p, r_h, "production vs handrolled mul mismatch at {}", inp.label);
+        assert_eq!(
+            r_p, r_h,
+            "production vs handrolled mul mismatch at {}",
+            inp.label
+        );
         let r_p = production_div(inp.a, inp.b);
         let r_h = handrolled_div(inp.a, inp.b);
-        assert_eq!(r_p, r_h, "production vs handrolled div mismatch at {}", inp.label);
+        assert_eq!(
+            r_p, r_h,
+            "production vs handrolled div mismatch at {}",
+            inp.label
+        );
     }
 }
 
@@ -482,18 +501,34 @@ fn bench_mul(c: &mut Criterion) {
                 bn.iter(|| naive_mul(black_box(inp.a), black_box(inp.b)));
             });
         }
-        group.bench_with_input(BenchmarkId::new("B_handrolled", inp.label), &inp, |bn, inp| {
-            bn.iter(|| handrolled_mul(black_box(inp.a), black_box(inp.b)));
-        });
-        group.bench_with_input(BenchmarkId::new("C_i256_crate", inp.label), &inp, |bn, inp| {
-            bn.iter(|| i256_mul(black_box(inp.a), black_box(inp.b)));
-        });
-        group.bench_with_input(BenchmarkId::new("D_mg_magic", inp.label), &inp, |bn, inp| {
-            bn.iter(|| mg_mul(black_box(inp.a), black_box(inp.b)));
-        });
-        group.bench_with_input(BenchmarkId::new("E_production", inp.label), &inp, |bn, inp| {
-            bn.iter(|| production_mul(black_box(inp.a), black_box(inp.b)));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("B_handrolled", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| handrolled_mul(black_box(inp.a), black_box(inp.b)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("C_i256_crate", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| i256_mul(black_box(inp.a), black_box(inp.b)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("D_mg_magic", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| mg_mul(black_box(inp.a), black_box(inp.b)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("E_production", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| production_mul(black_box(inp.a), black_box(inp.b)));
+            },
+        );
     }
     group.finish();
 }
@@ -507,18 +542,34 @@ fn bench_div(c: &mut Criterion) {
                 bn.iter(|| naive_div(black_box(inp.a), black_box(inp.b)));
             });
         }
-        group.bench_with_input(BenchmarkId::new("B_handrolled", inp.label), &inp, |bn, inp| {
-            bn.iter(|| handrolled_div(black_box(inp.a), black_box(inp.b)));
-        });
-        group.bench_with_input(BenchmarkId::new("C_i256_crate", inp.label), &inp, |bn, inp| {
-            bn.iter(|| i256_div(black_box(inp.a), black_box(inp.b)));
-        });
-        group.bench_with_input(BenchmarkId::new("D_mg_magic", inp.label), &inp, |bn, inp| {
-            bn.iter(|| mg_div(black_box(inp.a), black_box(inp.b)));
-        });
-        group.bench_with_input(BenchmarkId::new("E_production", inp.label), &inp, |bn, inp| {
-            bn.iter(|| production_div(black_box(inp.a), black_box(inp.b)));
-        });
+        group.bench_with_input(
+            BenchmarkId::new("B_handrolled", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| handrolled_div(black_box(inp.a), black_box(inp.b)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("C_i256_crate", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| i256_div(black_box(inp.a), black_box(inp.b)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("D_mg_magic", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| mg_div(black_box(inp.a), black_box(inp.b)));
+            },
+        );
+        group.bench_with_input(
+            BenchmarkId::new("E_production", inp.label),
+            &inp,
+            |bn, inp| {
+                bn.iter(|| production_div(black_box(inp.a), black_box(inp.b)));
+            },
+        );
     }
     group.finish();
 }

@@ -16,9 +16,9 @@
 
 #![cfg(feature = "x-wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D616;
+use std::hint::black_box;
 
 fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
     let three: D616<SCALE> = D616::<SCALE>::from_int(3);
@@ -34,7 +34,9 @@ fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
     let mut g = c.benchmark_group(group_ln);
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(6));
-    g.bench_function("artanh (canonical)", |b| b.iter(|| black_box(three).ln_strict()));
+    g.bench_function("artanh (canonical)", |b| {
+        b.iter(|| black_box(three).ln_strict())
+    });
     g.bench_function("agm", |b| b.iter(|| black_box(three).ln_strict_agm()));
     g.finish();
 
@@ -42,8 +44,12 @@ fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
     let mut g = c.benchmark_group(group_exp);
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(6));
-    g.bench_function("taylor (canonical)", |b| b.iter(|| black_box(half).exp_strict()));
-    g.bench_function("newton-on-agm", |b| b.iter(|| black_box(half).exp_strict_agm()));
+    g.bench_function("taylor (canonical)", |b| {
+        b.iter(|| black_box(half).exp_strict())
+    });
+    g.bench_function("newton-on-agm", |b| {
+        b.iter(|| black_box(half).exp_strict_agm())
+    });
     g.finish();
 }
 

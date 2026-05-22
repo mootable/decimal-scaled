@@ -9,9 +9,9 @@
 //! Run with: `cargo bench --features wide --bench wide_int_backends`.
 
 use bnum::cast::As;
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::{Int256, Int512, Int1024};
+use std::hint::black_box;
 
 const A: i128 = 1_234_567_890_123_456_789;
 const B: i128 = 987_654_321_098_765;
@@ -70,11 +70,21 @@ fn bench_int256(c: &mut Criterion) {
 
     let a_r = ruint::aliases::U256::from(A as u128);
     let b_r = ruint::aliases::U256::from(B as u128);
-    g.bench_function("Int256/ruint/add", |bn| bn.iter(|| black_box(a_r) + black_box(b_r)));
-    g.bench_function("Int256/ruint/sub", |bn| bn.iter(|| black_box(a_r) - black_box(b_r)));
-    g.bench_function("Int256/ruint/mul", |bn| bn.iter(|| black_box(a_r) * black_box(b_r)));
-    g.bench_function("Int256/ruint/div", |bn| bn.iter(|| black_box(a_r) / black_box(b_r)));
-    g.bench_function("Int256/ruint/rem", |bn| bn.iter(|| black_box(a_r) % black_box(b_r)));
+    g.bench_function("Int256/ruint/add", |bn| {
+        bn.iter(|| black_box(a_r) + black_box(b_r))
+    });
+    g.bench_function("Int256/ruint/sub", |bn| {
+        bn.iter(|| black_box(a_r) - black_box(b_r))
+    });
+    g.bench_function("Int256/ruint/mul", |bn| {
+        bn.iter(|| black_box(a_r) * black_box(b_r))
+    });
+    g.bench_function("Int256/ruint/div", |bn| {
+        bn.iter(|| black_box(a_r) / black_box(b_r))
+    });
+    g.bench_function("Int256/ruint/rem", |bn| {
+        bn.iter(|| black_box(a_r) % black_box(b_r))
+    });
     // ruint U256 has no Neg (unsigned), skip neg.
 
     g.finish();

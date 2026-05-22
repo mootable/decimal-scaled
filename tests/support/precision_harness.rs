@@ -730,7 +730,11 @@ pub fn decimal_to_scaled_rounded(value: &str, scale: u32, mode: RoundingMode) ->
     let kept_digits = format!("{int_part}{kept_frac}");
     let kept = {
         let t = kept_digits.trim_start_matches('0');
-        if t.is_empty() { "0".to_string() } else { t.to_string() }
+        if t.is_empty() {
+            "0".to_string()
+        } else {
+            t.to_string()
+        }
     };
 
     // Decide whether to round the magnitude up by one based on the tail.
@@ -743,7 +747,7 @@ pub fn decimal_to_scaled_rounded(value: &str, scale: u32, mode: RoundingMode) ->
         let exact_half = first == 5 && !rest_nonzero;
         match mode {
             RoundingMode::Trunc => false,
-            RoundingMode::Floor => neg,    // toward -inf: negatives round away
+            RoundingMode::Floor => neg, // toward -inf: negatives round away
             RoundingMode::Ceiling => !neg, // toward +inf: positives round away
             RoundingMode::HalfAwayFromZero => first >= 5,
             RoundingMode::HalfTowardZero => half_or_more,
@@ -758,10 +762,18 @@ pub fn decimal_to_scaled_rounded(value: &str, scale: u32, mode: RoundingMode) ->
         }
     };
 
-    let mag = if round_up { dec_add_mag(&kept, "1") } else { kept };
+    let mag = if round_up {
+        dec_add_mag(&kept, "1")
+    } else {
+        kept
+    };
     let mag = {
         let t = mag.trim_start_matches('0');
-        if t.is_empty() { "0".to_string() } else { t.to_string() }
+        if t.is_empty() {
+            "0".to_string()
+        } else {
+            t.to_string()
+        }
     };
     if neg && mag != "0" {
         Some(format!("-{mag}"))

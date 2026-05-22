@@ -276,11 +276,7 @@ pub mod __bench_internals {
                         Storage(crate::algos::mg_divide::div_wide_pow10_chain_with::<
                             W,
                             { <W as crate::wide_int::BigInt>::U128_LIMBS },
-                        >(
-                            n.0,
-                            scale,
-                            RoundingMode::HalfToEven,
-                        ))
+                        >(n.0, scale, RoundingMode::HalfToEven))
                     }
 
                     #[inline(never)]
@@ -288,25 +284,19 @@ pub mod __bench_internals {
                         Storage(crate::algos::mg_divide::div_wide_pow10_with::<
                             W,
                             { <W as crate::wide_int::BigInt>::U128_LIMBS },
-                        >(
-                            n.0,
-                            scale,
-                            RoundingMode::HalfToEven,
-                        ))
+                        >(n.0, scale, RoundingMode::HalfToEven))
                     }
 
                     #[inline(never)]
-                    pub fn newton(
-                        n: Storage,
-                        scale: u32,
-                        table: &NewtonReciprocal,
-                    ) -> Storage {
-                        Storage(crate::algos::newton_reciprocal::div_wide_pow10_newton_with::<W>(
-                            n.0,
-                            scale,
-                            RoundingMode::HalfToEven,
-                            &table.0,
-                        ))
+                    pub fn newton(n: Storage, scale: u32, table: &NewtonReciprocal) -> Storage {
+                        Storage(
+                            crate::algos::newton_reciprocal::div_wide_pow10_newton_with::<W>(
+                                n.0,
+                                scale,
+                                RoundingMode::HalfToEven,
+                                &table.0,
+                            ),
+                        )
                     }
                 }
             };
@@ -359,16 +349,15 @@ mod policy;
 #[cfg(feature = "serde")]
 pub use crate::support::serde_helpers;
 
-
-pub use crate::types::consts::DecimalConstants;
-pub use crate::types::traits::DecimalArithmetic;
-pub use crate::types::traits::DecimalConvert;
-pub use crate::types::unified::D;
-pub use crate::types::traits::Decimal;
 pub use crate::support::error::{ConvertError, ParseError};
 pub use crate::support::rounding::RoundingMode;
+pub use crate::types::consts::DecimalConstants;
+pub use crate::types::traits::Decimal;
+pub use crate::types::traits::DecimalArithmetic;
+pub use crate::types::traits::DecimalConvert;
 pub use crate::types::traits::DecimalTranscendental;
 pub use crate::types::traits::WidthLE;
+pub use crate::types::unified::D;
 
 #[cfg(feature = "dyn")]
 pub use crate::types::traits::dyn_decimal::{DecimalWidth, DynDecimal, RawStorage};
@@ -376,16 +365,14 @@ pub use crate::types::traits::dyn_decimal::{DecimalWidth, DynDecimal, RawStorage
 // D38 — the 128-bit foundation, plus every scale alias D38s0..=D38s37
 // (v0.4.0 cap: MAX_SCALE = name - 1).
 pub use crate::types::widths::{
-    D38, D38s0, D38s1, D38s2, D38s3, D38s4, D38s5, D38s6, D38s7, D38s8, D38s9, D38s10,
-    D38s11, D38s12, D38s13, D38s14, D38s15, D38s16, D38s17, D38s18, D38s19, D38s20,
-    D38s21, D38s22, D38s23, D38s24, D38s25, D38s26, D38s27, D38s28, D38s29, D38s30,
-    D38s31, D38s32, D38s33, D38s34, D38s35, D38s36, D38s37,
+    D38, D38s0, D38s1, D38s2, D38s3, D38s4, D38s5, D38s6, D38s7, D38s8, D38s9, D38s10, D38s11,
+    D38s12, D38s13, D38s14, D38s15, D38s16, D38s17, D38s18, D38s19, D38s20, D38s21, D38s22, D38s23,
+    D38s24, D38s25, D38s26, D38s27, D38s28, D38s29, D38s30, D38s31, D38s32, D38s33, D38s34, D38s35,
+    D38s36, D38s37,
 };
 
 // D9 — 32-bit storage, scale 0..=9.
-pub use crate::types::widths::{
-    D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8,
-};
+pub use crate::types::widths::{D9, D9s0, D9s1, D9s2, D9s3, D9s4, D9s5, D9s6, D9s7, D9s8};
 
 // D18 — 64-bit storage, scale 0..=18.
 pub use crate::types::widths::{
@@ -396,10 +383,8 @@ pub use crate::types::widths::{
 // D76 — 256-bit storage, behind the `d76` / `wide` features.
 #[cfg(any(feature = "d76", feature = "wide"))]
 pub use crate::types::widths::{
-    D76,
-    D76s0, D76s1, D76s2, D76s3, D76s4, D76s6, D76s9, D76s12, D76s15,
-    D76s18, D76s20, D76s24, D76s28, D76s32, D76s35, D76s38, D76s42,
-    D76s48, D76s50, D76s56, D76s64, D76s70, D76s75,
+    D76, D76s0, D76s1, D76s2, D76s3, D76s4, D76s6, D76s9, D76s12, D76s15, D76s18, D76s20, D76s24,
+    D76s28, D76s32, D76s35, D76s38, D76s42, D76s48, D76s50, D76s56, D76s64, D76s70, D76s75,
 };
 
 // The hand-rolled wide-integer types — the storage backend for the
@@ -412,21 +397,17 @@ pub use wide_int::{
 // D153 — 512-bit storage, behind the `d153` / `wide` features.
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub use crate::types::widths::{
-    D153,
-    D153s0, D153s1, D153s2, D153s4, D153s6, D153s9, D153s12, D153s15,
-    D153s18, D153s20, D153s24, D153s28, D153s32, D153s35, D153s38,
-    D153s50, D153s57, D153s75, D153s76, D153s100, D153s115, D153s140,
-    D153s150, D153s152,
+    D153, D153s0, D153s1, D153s2, D153s4, D153s6, D153s9, D153s12, D153s15, D153s18, D153s20,
+    D153s24, D153s28, D153s32, D153s35, D153s38, D153s50, D153s57, D153s75, D153s76, D153s100,
+    D153s115, D153s140, D153s150, D153s152,
 };
 
 // D307 — 1024-bit storage, behind the `d307` / `wide` features.
 #[cfg(any(feature = "d307", feature = "wide"))]
 pub use crate::types::widths::{
-    D307,
-    D307s0, D307s1, D307s2, D307s4, D307s6, D307s9, D307s12, D307s15,
-    D307s18, D307s20, D307s24, D307s28, D307s32, D307s35, D307s38,
-    D307s50, D307s75, D307s100, D307s115, D307s150, D307s153,
-    D307s200, D307s230, D307s275, D307s300, D307s306,
+    D307, D307s0, D307s1, D307s2, D307s4, D307s6, D307s9, D307s12, D307s15, D307s18, D307s20,
+    D307s24, D307s28, D307s32, D307s35, D307s38, D307s50, D307s75, D307s100, D307s115, D307s150,
+    D307s153, D307s200, D307s230, D307s275, D307s300, D307s306,
 };
 
 // ─── New half-width and wider tiers ───────────────────────────────────
@@ -434,9 +415,8 @@ pub use crate::types::widths::{
 // D57 — 192-bit storage; half-width between D38 and D76.
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub use crate::types::widths::{
-    D57,
-    D57s0, D57s1, D57s2, D57s4, D57s6, D57s9, D57s12, D57s18, D57s20, D57s24,
-    D57s28, D57s32, D57s38, D57s42, D57s48, D57s52, D57s56,
+    D57, D57s0, D57s1, D57s2, D57s4, D57s6, D57s9, D57s12, D57s18, D57s20, D57s24, D57s28, D57s32,
+    D57s38, D57s42, D57s48, D57s52, D57s56,
 };
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub use wide_int::{Int192, Uint192};
@@ -444,9 +424,8 @@ pub use wide_int::{Int192, Uint192};
 // D115 — 384-bit; half-width between D76 and D153.
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub use crate::types::widths::{
-    D115,
-    D115s0, D115s1, D115s4, D115s8, D115s16, D115s24, D115s32, D115s38, D115s50,
-    D115s57, D115s64, D115s76, D115s90, D115s100, D115s110, D115s114,
+    D115, D115s0, D115s1, D115s4, D115s8, D115s16, D115s24, D115s32, D115s38, D115s50, D115s57,
+    D115s64, D115s76, D115s90, D115s100, D115s110, D115s114,
 };
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub use wide_int::{Int384, Uint384};
@@ -454,9 +433,8 @@ pub use wide_int::{Int384, Uint384};
 // D230 — 768-bit; half-width between D153 and D307.
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub use crate::types::widths::{
-    D230,
-    D230s0, D230s1, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115,
-    D230s140, D230s153, D230s175, D230s200, D230s215, D230s225, D230s229,
+    D230, D230s0, D230s1, D230s6, D230s18, D230s38, D230s57, D230s75, D230s100, D230s115, D230s140,
+    D230s153, D230s175, D230s200, D230s215, D230s225, D230s229,
 };
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub use wide_int::{Int768, Uint768};
@@ -464,8 +442,7 @@ pub use wide_int::{Int768, Uint768};
 // D462 — 1536-bit; half-width between D307 and D616.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub use crate::types::widths::{
-    D462,
-    D462s0, D462s1, D462s18, D462s38, D462s75, D462s115, D462s153, D462s200, D462s230,
+    D462, D462s0, D462s1, D462s18, D462s38, D462s75, D462s115, D462s153, D462s200, D462s230,
     D462s275, D462s307, D462s350, D462s400, D462s440, D462s460, D462s461,
 };
 #[cfg(any(feature = "d462", feature = "x-wide"))]
@@ -476,16 +453,14 @@ pub use wide_int::{Int1536, Uint1536};
 // here.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 pub use crate::types::widths::{
-    D616,
-    D616s0, D616s1, D616s38, D616s75, D616s115, D616s153, D616s200, D616s230, D616s275,
+    D616, D616s0, D616s1, D616s38, D616s75, D616s115, D616s153, D616s200, D616s230, D616s275,
     D616s308, D616s380, D616s462, D616s500, D616s555, D616s600, D616s615,
 };
 
 // D924 — 3072-bit; half-width between D616 and D1232.
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 pub use crate::types::widths::{
-    D924,
-    D924s0, D924s1, D924s75, D924s153, D924s230, D924s307, D924s400, D924s461, D924s462,
+    D924, D924s0, D924s1, D924s75, D924s153, D924s230, D924s307, D924s400, D924s461, D924s462,
     D924s500, D924s616, D924s700, D924s800, D924s860, D924s900, D924s920, D924s923,
 };
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
@@ -494,10 +469,9 @@ pub use wide_int::{Int3072, Int6144, Int12288, Uint3072, Uint6144, Uint12288};
 // D1232 — 4096-bit; widest tier shipped.
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub use crate::types::widths::{
-    D1232,
-    D1232s0, D1232s1, D1232s75, D1232s153, D1232s230, D1232s307, D1232s461, D1232s616,
-    D1232s700, D1232s800, D1232s900, D1232s924, D1232s1000, D1232s1100,
-    D1232s1180, D1232s1220, D1232s1230, D1232s1231,
+    D1232, D1232s0, D1232s1, D1232s75, D1232s153, D1232s230, D1232s307, D1232s461, D1232s616,
+    D1232s700, D1232s800, D1232s900, D1232s924, D1232s1000, D1232s1100, D1232s1180, D1232s1220,
+    D1232s1230, D1232s1231,
 };
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 pub use wide_int::{Int8192, Int16384, Uint8192, Uint16384};
@@ -516,7 +490,10 @@ pub use decimal_scaled_macros::d76;
 #[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))]
 pub use decimal_scaled_macros::d153;
 
-#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))]
+#[cfg(all(
+    feature = "macros",
+    any(feature = "d307", feature = "wide", feature = "x-wide")
+))]
 pub use decimal_scaled_macros::d307;
 
 #[cfg(all(feature = "macros", any(feature = "d57", feature = "wide")))]
@@ -553,120 +530,168 @@ pub use decimal_scaled_macros::d1232;
 
 // D9 curated scales.
 /// `d9s0!(value)` — equivalent to `d9!(value, scale 0)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d9s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 0  $(, $($rest)*)?) }; }
 /// `d9s2!(value)` — equivalent to `d9!(value, scale 2)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d9s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 2  $(, $($rest)*)?) }; }
 /// `d9s4!(value)` — equivalent to `d9!(value, scale 4)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d9s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 4  $(, $($rest)*)?) }; }
 /// `d9s6!(value)` — equivalent to `d9!(value, scale 6)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d9s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d9!($v, scale 6  $(, $($rest)*)?) }; }
 
 // D18 curated scales.
 /// `d18s0!(value)` — equivalent to `d18!(value, scale 0)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d18s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 0  $(, $($rest)*)?) }; }
 /// `d18s2!(value)` — equivalent to `d18!(value, scale 2)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d18s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 2  $(, $($rest)*)?) }; }
 /// `d18s4!(value)` — equivalent to `d18!(value, scale 4)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d18s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 4  $(, $($rest)*)?) }; }
 /// `d18s6!(value)` — equivalent to `d18!(value, scale 6)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d18s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 6  $(, $($rest)*)?) }; }
 /// `d18s9!(value)` — equivalent to `d18!(value, scale 9)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d18s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 9  $(, $($rest)*)?) }; }
 /// `d18s12!(value)` — equivalent to `d18!(value, scale 12)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d18s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d18!($v, scale 12 $(, $($rest)*)?) }; }
 
 // D38 curated scales.
 /// `d38s0!(value)` — equivalent to `d38!(value, scale 0)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 0  $(, $($rest)*)?) }; }
 /// `d38s2!(value)` — equivalent to `d38!(value, scale 2)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 2  $(, $($rest)*)?) }; }
 /// `d38s4!(value)` — equivalent to `d38!(value, scale 4)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s4  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 4  $(, $($rest)*)?) }; }
 /// `d38s6!(value)` — equivalent to `d38!(value, scale 6)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 6  $(, $($rest)*)?) }; }
 /// `d38s8!(value)` — equivalent to `d38!(value, scale 8)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s8  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 8  $(, $($rest)*)?) }; }
 /// `d38s9!(value)` — equivalent to `d38!(value, scale 9)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s9  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 9  $(, $($rest)*)?) }; }
 /// `d38s12!(value)` — equivalent to `d38!(value, scale 12)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 12 $(, $($rest)*)?) }; }
 /// `d38s15!(value)` — equivalent to `d38!(value, scale 15)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s15 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 15 $(, $($rest)*)?) }; }
 /// `d38s18!(value)` — equivalent to `d38!(value, scale 18)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s18 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 18 $(, $($rest)*)?) }; }
 /// `d38s24!(value)` — equivalent to `d38!(value, scale 24)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s24 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 24 $(, $($rest)*)?) }; }
 /// `d38s35!(value)` — equivalent to `d38!(value, scale 35)`.
-#[cfg(feature = "macros")] #[macro_export]
+#[cfg(feature = "macros")]
+#[macro_export]
 macro_rules! d38s35 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d38!($v, scale 35 $(, $($rest)*)?) }; }
 
 // D76 curated scales.
 /// `d76s0!(value)` — equivalent to `d76!(value, scale 0)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s0  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 0  $(, $($rest)*)?) }; }
 /// `d76s2!(value)` — equivalent to `d76!(value, scale 2)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s2  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 2  $(, $($rest)*)?) }; }
 /// `d76s6!(value)` — equivalent to `d76!(value, scale 6)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s6  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 6  $(, $($rest)*)?) }; }
 /// `d76s12!(value)` — equivalent to `d76!(value, scale 12)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s12 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 12 $(, $($rest)*)?) }; }
 /// `d76s18!(value)` — equivalent to `d76!(value, scale 18)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s18 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 18 $(, $($rest)*)?) }; }
 /// `d76s35!(value)` — equivalent to `d76!(value, scale 35)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s35 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 35 $(, $($rest)*)?) }; }
 /// `d76s50!(value)` — equivalent to `d76!(value, scale 50)`.
-#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d76", feature = "wide")))]
+#[macro_export]
 macro_rules! d76s50 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d76!($v, scale 50 $(, $($rest)*)?) }; }
 
 // D153 curated scales.
 /// `d153s0!(value)` — equivalent to `d153!(value, scale 0)`.
-#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))]
+#[macro_export]
 macro_rules! d153s0   { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 0   $(, $($rest)*)?) }; }
 /// `d153s35!(value)` — equivalent to `d153!(value, scale 35)`.
-#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))]
+#[macro_export]
 macro_rules! d153s35  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 35  $(, $($rest)*)?) }; }
 /// `d153s75!(value)` — equivalent to `d153!(value, scale 75)`.
-#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))]
+#[macro_export]
 macro_rules! d153s75  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 75  $(, $($rest)*)?) }; }
 /// `d153s150!(value)` — equivalent to `d153!(value, scale 150)`.
-#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))] #[macro_export]
+#[cfg(all(feature = "macros", any(feature = "d153", feature = "wide")))]
+#[macro_export]
 macro_rules! d153s150 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d153!($v, scale 150 $(, $($rest)*)?) }; }
 
 // D307 curated scales.
 /// `d307s0!(value)` — equivalent to `d307!(value, scale 0)`.
-#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+#[cfg(all(
+    feature = "macros",
+    any(feature = "d307", feature = "wide", feature = "x-wide")
+))]
+#[macro_export]
 macro_rules! d307s0   { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 0   $(, $($rest)*)?) }; }
 /// `d307s35!(value)` — equivalent to `d307!(value, scale 35)`.
-#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+#[cfg(all(
+    feature = "macros",
+    any(feature = "d307", feature = "wide", feature = "x-wide")
+))]
+#[macro_export]
 macro_rules! d307s35  { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 35  $(, $($rest)*)?) }; }
 /// `d307s150!(value)` — equivalent to `d307!(value, scale 150)`.
-#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+#[cfg(all(
+    feature = "macros",
+    any(feature = "d307", feature = "wide", feature = "x-wide")
+))]
+#[macro_export]
 macro_rules! d307s150 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 150 $(, $($rest)*)?) }; }
 /// `d307s300!(value)` — equivalent to `d307!(value, scale 300)`.
-#[cfg(all(feature = "macros", any(feature = "d307", feature = "wide", feature = "x-wide")))] #[macro_export]
+#[cfg(all(
+    feature = "macros",
+    any(feature = "d307", feature = "wide", feature = "x-wide")
+))]
+#[macro_export]
 macro_rules! d307s300 { ($v:tt $(, $($rest:tt)*)?) => { $crate::d307!($v, scale 300 $(, $($rest)*)?) }; }

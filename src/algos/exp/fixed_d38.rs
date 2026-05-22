@@ -10,8 +10,8 @@
 //! defaults (`exp_fixed`) so the typed-shell file has no
 //! `crate::algos::*` or `crate::algos::fixed_d38::*` references left.
 
-use crate::algos::ln::fixed_d38::{STRICT_GUARD, wide_ln2};
 use crate::algos::fixed_d38::Fixed;
+use crate::algos::ln::fixed_d38::{STRICT_GUARD, wide_ln2};
 use crate::support::rounding::RoundingMode;
 
 /// `e` raised to a working-scale value `v_w`, returned at the same
@@ -37,7 +37,10 @@ use crate::support::rounding::RoundingMode;
 /// Panics if `2^k · exp(s)` cannot fit a 256-bit working value — i.e.
 /// the caller's result would overflow its representable range.
 pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
-    let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+    let one_w = Fixed {
+        negative: false,
+        mag: Fixed::pow10(w),
+    };
     let ln2 = wide_ln2(w);
 
     // k = round(v / ln 2); s = v - k·ln(2), |s| <= ln(2)/2.
@@ -86,7 +89,10 @@ pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
     // exp(v) = 2^k · exp(s).
     if k >= 0 {
         let shift = k as u32;
-        assert!(sum.bit_length() + shift <= 256, "D38::exp: result overflows the representable range");
+        assert!(
+            sum.bit_length() + shift <= 256,
+            "D38::exp: result overflows the representable range"
+        );
         sum.shl(shift)
     } else {
         sum.shr((-k) as u32)
@@ -102,12 +108,13 @@ pub(crate) fn exp_with(raw: i128, scale: u32, working_digits: u32, mode: Roundin
     }
     let w = scale + working_digits;
     let negative_input = raw < 0;
-    let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false)
-        .mul_u128(10u128.pow(working_digits));
+    let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
     let v_w = if negative_input { v_w.neg() } else { v_w };
     exp_fixed(v_w, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp kernel", scale))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("exp kernel", scale)
+        })
 }
 
 /// Strict variant — const-folded `working_digits = STRICT_GUARD`.
@@ -119,12 +126,13 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
     }
     let w = SCALE + STRICT_GUARD;
     let negative_input = raw < 0;
-    let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false)
-        .mul_u128(10u128.pow(STRICT_GUARD));
+    let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(STRICT_GUARD));
     let v_w = if negative_input { v_w.neg() } else { v_w };
     exp_fixed(v_w, w)
         .round_to_i128_with(w, SCALE, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("exp kernel", SCALE))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("exp kernel", SCALE)
+        })
 }
 
 // ── exp2 kernel (D38, Fixed fallback) ─────────────────────────────
@@ -179,13 +187,14 @@ pub(crate) fn exp2_with(raw: i128, scale: u32, working_digits: u32, mode: Roundi
     }
     let w = scale + working_digits;
     let negative_input = raw < 0;
-    let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false)
-        .mul_u128(10u128.pow(working_digits));
+    let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
     let v_w = if negative_input { v_w.neg() } else { v_w };
     let arg_w = v_w.mul(wide_ln2(w), w);
     exp_fixed(arg_w, w)
         .round_to_i128_with(w, scale, mode)
-        .unwrap_or_else(|| crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale))
+        .unwrap_or_else(|| {
+            crate::support::diagnostics::overflow_panic_with_scale("D38::exp2", scale)
+        })
 }
 
 #[inline]

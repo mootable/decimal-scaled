@@ -38,8 +38,8 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d57 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d57 as core;
 use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 inverse-trig slot. Matches the
@@ -64,13 +64,14 @@ fn asin_fixed(v: core::W, w: u32) -> core::W {
     // Half-angle: asin(|x|) = π/2 − 2·asin(√((1−|x|)/2)).
     let inner = (one_w - abs_v) / core::lit(2);
     let inner_sqrt = core::sqrt_fixed(inner, w);
-    let inner_denom = core::sqrt_fixed(
-        one_w - core::mul(inner_sqrt, inner_sqrt, w),
-        w,
-    );
+    let inner_denom = core::sqrt_fixed(one_w - core::mul(inner_sqrt, inner_sqrt, w), w);
     let inner_asin = core::atan_fixed(core::div(inner_sqrt, inner_denom, w), w);
     let result_abs = core::half_pi(w) - inner_asin - inner_asin;
-    if v < core::zero() { -result_abs } else { result_abs }
+    if v < core::zero() {
+        -result_abs
+    } else {
+        result_abs
+    }
 }
 
 /// `asin_strict` for `D57<SCALE>` with `SCALE ∈ 18..=22`.

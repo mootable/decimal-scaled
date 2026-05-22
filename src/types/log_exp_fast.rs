@@ -8,7 +8,6 @@
 use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
-
     /// Returns the natural logarithm (base e) of `self`.
     ///
     /// # Precision
@@ -150,17 +149,41 @@ impl<const SCALE: u32> D38<SCALE> {
 #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
 impl<const SCALE: u32> D38<SCALE> {
     /// Plain dispatcher: forwards to [`Self::ln_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn ln(self) -> Self { self.ln_fast() }
+    #[inline]
+    #[must_use]
+    pub fn ln(self) -> Self {
+        self.ln_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::log_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn log(self, base: Self) -> Self { self.log_fast(base) }
+    #[inline]
+    #[must_use]
+    pub fn log(self, base: Self) -> Self {
+        self.log_fast(base)
+    }
     /// Plain dispatcher: forwards to [`Self::log2_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn log2(self) -> Self { self.log2_fast() }
+    #[inline]
+    #[must_use]
+    pub fn log2(self) -> Self {
+        self.log2_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::log10_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn log10(self) -> Self { self.log10_fast() }
+    #[inline]
+    #[must_use]
+    pub fn log10(self) -> Self {
+        self.log10_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::exp_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn exp(self) -> Self { self.exp_fast() }
+    #[inline]
+    #[must_use]
+    pub fn exp(self) -> Self {
+        self.exp_fast()
+    }
     /// Plain dispatcher: forwards to [`Self::exp2_fast`] in this feature mode.
-    #[inline] #[must_use] pub fn exp2(self) -> Self { self.exp2_fast() }
+    #[inline]
+    #[must_use]
+    pub fn exp2(self) -> Self {
+        self.exp2_fast()
+    }
 }
 
 #[cfg(all(test, any(not(feature = "strict"), feature = "fast")))]
@@ -343,7 +366,9 @@ mod tests {
     /// `ln(exp(x)) ~= x` for moderate `x` -- the inverse round-trip.
     #[test]
     fn ln_of_exp_round_trip() {
-        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
+            return;
+        }
         // Moderate inputs; large positive inputs approach D38s12 magnitude limit.
         for raw in [
             -2_345_678_901_234_i128, // ~-2.345678
@@ -370,10 +395,10 @@ mod tests {
     fn log_base_e_matches_ln() {
         let e = D38s12::e();
         for raw in [
-            500_000_000_000_i128,    // 0.5
-            1_234_567_890_123_i128,  // ~1.234567
-            4_567_891_234_567_i128,  // ~4.567891
-            7_890_123_456_789_i128,  // ~7.890123
+            500_000_000_000_i128,   // 0.5
+            1_234_567_890_123_i128, // ~1.234567
+            4_567_891_234_567_i128, // ~4.567891
+            7_890_123_456_789_i128, // ~7.890123
         ] {
             let x = D38s12::from_bits(raw);
             let via_log = x.log(e);
@@ -392,10 +417,10 @@ mod tests {
     fn log_base_two_matches_log2() {
         let two = D38s12::from_int(2);
         for raw in [
-            500_000_000_000_i128,    // 0.5
-            1_234_567_890_123_i128,  // ~1.234567
-            4_567_891_234_567_i128,  // ~4.567891
-            7_890_123_456_789_i128,  // ~7.890123
+            500_000_000_000_i128,   // 0.5
+            1_234_567_890_123_i128, // ~1.234567
+            4_567_891_234_567_i128, // ~4.567891
+            7_890_123_456_789_i128, // ~7.890123
         ] {
             let x = D38s12::from_bits(raw);
             let via_log = x.log(two);
@@ -414,10 +439,10 @@ mod tests {
     fn log_base_ten_matches_log10() {
         let ten = D38s12::from_int(10);
         for raw in [
-            500_000_000_000_i128,    // 0.5
-            1_234_567_890_123_i128,  // ~1.234567
-            4_567_891_234_567_i128,  // ~4.567891
-            7_890_123_456_789_i128,  // ~7.890123
+            500_000_000_000_i128,   // 0.5
+            1_234_567_890_123_i128, // ~1.234567
+            4_567_891_234_567_i128, // ~4.567891
+            7_890_123_456_789_i128, // ~7.890123
         ] {
             let x = D38s12::from_bits(raw);
             let via_log = x.log(ten);
@@ -448,4 +473,3 @@ mod tests {
         }
     }
 }
-

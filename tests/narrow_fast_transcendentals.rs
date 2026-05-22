@@ -30,12 +30,20 @@ const D18_TOL: i64 = 64;
 #[track_caller]
 fn close_d9(label: &str, actual: D9_4, expected_bits: i32) {
     let diff = (actual.to_bits() - expected_bits).abs();
-    assert!(diff <= D9_TOL, "{label}: bits {} vs expected {expected_bits} (diff {diff} > {D9_TOL})", actual.to_bits());
+    assert!(
+        diff <= D9_TOL,
+        "{label}: bits {} vs expected {expected_bits} (diff {diff} > {D9_TOL})",
+        actual.to_bits()
+    );
 }
 #[track_caller]
 fn close_d18(label: &str, actual: D18_8, expected_bits: i64) {
     let diff = (actual.to_bits() - expected_bits).abs();
-    assert!(diff <= D18_TOL, "{label}: bits {} vs expected {expected_bits} (diff {diff} > {D18_TOL})", actual.to_bits());
+    assert!(
+        diff <= D18_TOL,
+        "{label}: bits {} vs expected {expected_bits} (diff {diff} > {D18_TOL})",
+        actual.to_bits()
+    );
 }
 
 // ─── D9 fast ───────────────────────────────────────────────────────────
@@ -78,7 +86,11 @@ fn d9_roots_pow_fast() {
         10_240_000,
     );
     // hypot(3, 4) = 5
-    close_d9("hypot(3,4)", D9_4::from_int(3).hypot_fast(D9_4::from_int(4)), 50_000);
+    close_d9(
+        "hypot(3,4)",
+        D9_4::from_int(3).hypot_fast(D9_4::from_int(4)),
+        50_000,
+    );
 }
 
 #[test]
@@ -93,11 +105,7 @@ fn d9_trig_fast() {
     assert_eq!(D9_4::ONE.acos_fast().to_bits(), 0);
     assert_eq!(D9_4::ZERO.atan_fast().to_bits(), 0);
     close_d9("atan(1)", D9_4::ONE.atan_fast(), 7_854);
-    close_d9(
-        "atan2(1,1)",
-        D9_4::ONE.atan2_fast(D9_4::ONE),
-        7_854,
-    );
+    close_d9("atan2(1,1)", D9_4::ONE.atan2_fast(D9_4::ONE), 7_854);
 }
 
 #[test]
@@ -117,7 +125,11 @@ fn d9_hyperbolic_fast() {
 fn d9_angle_conversion_fast() {
     assert_eq!(D9_4::ZERO.to_degrees_fast().to_bits(), 0);
     assert_eq!(D9_4::ZERO.to_radians_fast().to_bits(), 0);
-    close_d9("to_radians(180)", D9_4::from_int(180).to_radians_fast(), 31_416);
+    close_d9(
+        "to_radians(180)",
+        D9_4::from_int(180).to_radians_fast(),
+        31_416,
+    );
 }
 
 // ─── D18 fast ──────────────────────────────────────────────────────────
@@ -160,11 +172,7 @@ fn d18_trig_inverse_hyperbolic_fast() {
     assert_eq!(D18_8::ZERO.cos_fast().to_bits(), 100_000_000);
     close_d18("sin(1)", D18_8::ONE.sin_fast(), 84_147_098);
     close_d18("atan(1)", D18_8::ONE.atan_fast(), 78_539_816);
-    close_d18(
-        "atan2(1,1)",
-        D18_8::ONE.atan2_fast(D18_8::ONE),
-        78_539_816,
-    );
+    close_d18("atan2(1,1)", D18_8::ONE.atan2_fast(D18_8::ONE), 78_539_816);
     assert_eq!(D18_8::ZERO.tan_fast().to_bits(), 0);
     assert_eq!(D18_8::ZERO.asin_fast().to_bits(), 0);
     assert_eq!(D18_8::ONE.acos_fast().to_bits(), 0);

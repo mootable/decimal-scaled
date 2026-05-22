@@ -32,7 +32,7 @@
 //! Each impl provides both directions (`D38<S> == T` and `T == D38<S>`) so
 //! comparisons are symmetric at the call site.
 
-use crate::types::widths::{D38, D9, D18};
+use crate::types::widths::{D9, D18, D38};
 
 // Cross-equality with primitive integer types is emitted by the
 // `decl_eq_all_integers!` macro family in `src/macros/equalities.rs`.
@@ -85,4 +85,3 @@ crate::macros::equalities::decl_eq_float!(D153, f64);
 crate::macros::equalities::decl_eq_float!(D307, f32);
 #[cfg(all(feature = "std", any(feature = "d307", feature = "wide")))]
 crate::macros::equalities::decl_eq_float!(D307, f64);
-

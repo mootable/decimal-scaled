@@ -46,17 +46,17 @@
 // `core_type.rs`). This file keeps only the test module.
 
 use decimal_scaled::{D38, D38s12};
-    // Zero / One / Num / Bounded / Signed / Checked* are emitted for
-    // D38 by `decl_decimal_num_traits_basics!`; FromPrimitive /
-    // ToPrimitive / NumCast stay hand-coded in this module. The tests
-    // exercise the whole surface, so the traits are imported directly.
+// Zero / One / Num / Bounded / Signed / Checked* are emitted for
+// D38 by `decl_decimal_num_traits_basics!`; FromPrimitive /
+// ToPrimitive / NumCast stay hand-coded in this module. The tests
+// exercise the whole surface, so the traits are imported directly.
 use num_traits::{
-    Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub,
-    FromPrimitive, Num, NumCast, One, Signed, ToPrimitive, Zero,
+    Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, FromPrimitive,
+    Num, NumCast, One, Signed, ToPrimitive, Zero,
 };
 
 // ---------------------------------------------------------------------------
-    // Zero / One
+// Zero / One
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -85,7 +85,7 @@ fn one_is_one_predicate() {
 }
 
 // ---------------------------------------------------------------------------
-    // Bounded
+// Bounded
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -95,7 +95,7 @@ fn bounded_min_max() {
 }
 
 // ---------------------------------------------------------------------------
-    // Signed
+// Signed
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -129,7 +129,7 @@ fn signed_is_positive_negative() {
     assert!(!<D38s12 as Signed>::is_negative(&D38s12::ZERO));
 }
 
-    /// `abs_sub(a, b)` clamps to zero when `a <= b`.
+/// `abs_sub(a, b)` clamps to zero when `a <= b`.
 #[test]
 fn signed_abs_sub_clamps_to_zero() {
     let two = D38s12::from_bits(2_000_000_000_000);
@@ -147,19 +147,13 @@ fn signed_abs_sub_clamps_to_zero() {
 }
 
 // ---------------------------------------------------------------------------
-    // FromPrimitive
+// FromPrimitive
 // ---------------------------------------------------------------------------
 
 #[test]
 fn from_primitive_i64_in_range() {
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_i64(0),
-        Some(D38s12::ZERO)
-    );
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_i64(1),
-        Some(D38s12::ONE)
-    );
+    assert_eq!(<D38s12 as FromPrimitive>::from_i64(0), Some(D38s12::ZERO));
+    assert_eq!(<D38s12 as FromPrimitive>::from_i64(1), Some(D38s12::ONE));
     assert_eq!(
         <D38s12 as FromPrimitive>::from_i64(42),
         Some(D38s12::from_bits(42_000_000_000_000))
@@ -172,10 +166,7 @@ fn from_primitive_i64_in_range() {
 
 #[test]
 fn from_primitive_u64_in_range() {
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_u64(0),
-        Some(D38s12::ZERO)
-    );
+    assert_eq!(<D38s12 as FromPrimitive>::from_u64(0), Some(D38s12::ZERO));
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u64(42),
         Some(D38s12::from_bits(42_000_000_000_000))
@@ -213,14 +204,8 @@ fn from_primitive_u128_overflow_returns_none() {
 
 #[test]
 fn from_primitive_f32_basic() {
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_f32(0.0),
-        Some(D38s12::ZERO)
-    );
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_f32(1.0),
-        Some(D38s12::ONE)
-    );
+    assert_eq!(<D38s12 as FromPrimitive>::from_f32(0.0), Some(D38s12::ZERO));
+    assert_eq!(<D38s12 as FromPrimitive>::from_f32(1.0), Some(D38s12::ONE));
     // Non-finite inputs return None.
     assert_eq!(<D38s12 as FromPrimitive>::from_f32(f32::NAN), None);
     assert_eq!(<D38s12 as FromPrimitive>::from_f32(f32::INFINITY), None);
@@ -229,14 +214,8 @@ fn from_primitive_f32_basic() {
 
 #[test]
 fn from_primitive_f64_basic() {
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_f64(0.0),
-        Some(D38s12::ZERO)
-    );
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_f64(1.0),
-        Some(D38s12::ONE)
-    );
+    assert_eq!(<D38s12 as FromPrimitive>::from_f64(0.0), Some(D38s12::ZERO));
+    assert_eq!(<D38s12 as FromPrimitive>::from_f64(1.0), Some(D38s12::ONE));
     // Use a value that is not close to any well-known math constant
     // so the approx_constant lint stays quiet.
     let v = <D38s12 as FromPrimitive>::from_f64(1.234567890123_f64);
@@ -250,8 +229,8 @@ fn from_primitive_f64_basic() {
     assert_eq!(<D38s12 as FromPrimitive>::from_f64(1e30), None);
 }
 
-    /// `FromPrimitive` provides default impls for `from_i32`, `from_u32`, etc.
-    /// via `from_i64` / `from_u64`. Verify the delegation chain works.
+/// `FromPrimitive` provides default impls for `from_i32`, `from_u32`, etc.
+/// via `from_i64` / `from_u64`. Verify the delegation chain works.
 #[test]
 fn from_primitive_smaller_int_types_via_default_impl() {
     assert_eq!(
@@ -262,10 +241,7 @@ fn from_primitive_smaller_int_types_via_default_impl() {
         <D38s12 as FromPrimitive>::from_i16(-3),
         Some(D38s12::from_bits(-3_000_000_000_000))
     );
-    assert_eq!(
-        <D38s12 as FromPrimitive>::from_i8(0),
-        Some(D38s12::ZERO)
-    );
+    assert_eq!(<D38s12 as FromPrimitive>::from_i8(0), Some(D38s12::ZERO));
     assert_eq!(
         <D38s12 as FromPrimitive>::from_u32(7),
         Some(D38s12::from_bits(7_000_000_000_000))
@@ -281,7 +257,7 @@ fn from_primitive_smaller_int_types_via_default_impl() {
 }
 
 // ---------------------------------------------------------------------------
-    // ToPrimitive
+// ToPrimitive
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -378,14 +354,11 @@ fn to_primitive_f64_round_trip_within_lsb() {
 #[test]
 fn to_primitive_f32_matches_to_f32_lossy() {
     let v = D38s12::from_bits(1_500_000_000_000);
-    assert_eq!(
-        <D38s12 as ToPrimitive>::to_f32(&v),
-        Some(v.to_f32())
-    );
+    assert_eq!(<D38s12 as ToPrimitive>::to_f32(&v), Some(v.to_f32()));
 }
 
-    /// `ToPrimitive` provides default impls for `to_i32`, `to_u32`, etc.
-    /// via `to_i64` / `to_u64`. Verify the delegation chain works.
+/// `ToPrimitive` provides default impls for `to_i32`, `to_u32`, etc.
+/// via `to_i64` / `to_u64`. Verify the delegation chain works.
 #[test]
 fn to_primitive_smaller_int_types_via_default_impl() {
     let v = D38s12::from_bits(42_000_000_000_000);
@@ -403,17 +376,14 @@ fn to_primitive_smaller_int_types_via_default_impl() {
 }
 
 // ---------------------------------------------------------------------------
-    // CheckedAdd / CheckedSub
+// CheckedAdd / CheckedSub
 // ---------------------------------------------------------------------------
 
 #[test]
 fn checked_add_basic() {
     let one = D38s12::ONE;
     let two = D38s12::from_bits(2_000_000_000_000);
-    assert_eq!(
-        <D38s12 as CheckedAdd>::checked_add(&one, &one),
-        Some(two)
-    );
+    assert_eq!(<D38s12 as CheckedAdd>::checked_add(&one, &one), Some(two));
 }
 
 #[test]
@@ -450,7 +420,7 @@ fn checked_sub_underflow_returns_none() {
 }
 
 // ---------------------------------------------------------------------------
-    // CheckedMul / CheckedDiv / CheckedRem
+// CheckedMul / CheckedDiv / CheckedRem
 // ---------------------------------------------------------------------------
 
 #[test]
@@ -514,10 +484,7 @@ fn checked_rem_basic() {
     let a = D38s12::from_bits(5_500_000_000_000); // 5.5
     let b = D38s12::from_bits(2_000_000_000_000); // 2.0
     let expected = D38s12::from_bits(1_500_000_000_000); // 1.5
-    assert_eq!(
-        <D38s12 as CheckedRem>::checked_rem(&a, &b),
-        Some(expected)
-    );
+    assert_eq!(<D38s12 as CheckedRem>::checked_rem(&a, &b), Some(expected));
 }
 
 #[test]
@@ -529,17 +496,14 @@ fn checked_rem_by_zero_returns_none() {
 }
 
 // ---------------------------------------------------------------------------
-    // CheckedNeg
+// CheckedNeg
 // ---------------------------------------------------------------------------
 
 #[test]
 fn checked_neg_basic() {
     let one = D38s12::ONE;
     let neg_one = -D38s12::ONE;
-    assert_eq!(
-        <D38s12 as CheckedNeg>::checked_neg(&one),
-        Some(neg_one)
-    );
+    assert_eq!(<D38s12 as CheckedNeg>::checked_neg(&one), Some(neg_one));
     assert_eq!(
         <D38s12 as CheckedNeg>::checked_neg(&D38s12::ZERO),
         Some(D38s12::ZERO)
@@ -549,22 +513,19 @@ fn checked_neg_basic() {
 #[test]
 fn checked_neg_min_returns_none() {
     // i128::MIN has no positive counterpart, so checked_neg returns None.
-    assert_eq!(
-        <D38s12 as CheckedNeg>::checked_neg(&D38s12::MIN),
-        None
-    );
+    assert_eq!(<D38s12 as CheckedNeg>::checked_neg(&D38s12::MIN), None);
 }
 
 // ---------------------------------------------------------------------------
-    // CheckedMul / CheckedDiv trait-vs-inherent alignment
+// CheckedMul / CheckedDiv trait-vs-inherent alignment
 // ---------------------------------------------------------------------------
-    //
-    // Assert that the num-traits trait impls and the inherent methods
-    // produce bit-identical results for 256 deterministic pairs plus
-    // boundary cases. A failure here means the two paths diverged.
+//
+// Assert that the num-traits trait impls and the inherent methods
+// produce bit-identical results for 256 deterministic pairs plus
+// boundary cases. A failure here means the two paths diverged.
 
-    /// Generates a deterministic sequence of `i128` values using a
-    /// linear congruential generator seeded from `seed`.
+/// Generates a deterministic sequence of `i128` values using a
+/// linear congruential generator seeded from `seed`.
 fn lcg_i128_seq(seed: i128, n: usize) -> Vec<i128> {
     // LCG constants from Knuth TAOCP Vol 2 (applied in i128 with wrapping).
     let mut state: i128 = seed;
@@ -578,8 +539,8 @@ fn lcg_i128_seq(seed: i128, n: usize) -> Vec<i128> {
     out
 }
 
-    /// For 256 deterministic pairs, `<D38 as CheckedMul>::checked_mul`
-    /// must equal `D38::checked_mul` (the inherent method).
+/// For 256 deterministic pairs, `<D38 as CheckedMul>::checked_mul`
+/// must equal `D38::checked_mul` (the inherent method).
 #[test]
 fn checked_mul_trait_matches_inherent_256_pairs() {
     let seeds = lcg_i128_seq(0x1234_5678_9ABC_DEF0, 512);
@@ -595,8 +556,8 @@ fn checked_mul_trait_matches_inherent_256_pairs() {
     }
 }
 
-    /// For 256 deterministic pairs, `<D38 as CheckedDiv>::checked_div`
-    /// must equal `D38::checked_div` (the inherent method).
+/// For 256 deterministic pairs, `<D38 as CheckedDiv>::checked_div`
+/// must equal `D38::checked_div` (the inherent method).
 #[test]
 fn checked_div_trait_matches_inherent_256_pairs() {
     let seeds = lcg_i128_seq(0xDEAD_BEEF_CAFE_0001, 512);
@@ -604,7 +565,11 @@ fn checked_div_trait_matches_inherent_256_pairs() {
         let a = D38s12::from_bits(pair[0]);
         // Avoid divide-by-zero: if the LCG lands on zero, substitute ONE.
         // The by-zero case is covered by a dedicated test.
-        let b_bits = if pair[1] == 0 { D38s12::multiplier() } else { pair[1] };
+        let b_bits = if pair[1] == 0 {
+            D38s12::multiplier()
+        } else {
+            pair[1]
+        };
         let b = D38s12::from_bits(b_bits);
         let trait_result = <D38s12 as CheckedDiv>::checked_div(&a, &b);
         let inherent_result = a.checked_div(b);
@@ -615,7 +580,7 @@ fn checked_div_trait_matches_inherent_256_pairs() {
     }
 }
 
-    /// Boundary cases for CheckedMul trait-vs-inherent alignment.
+/// Boundary cases for CheckedMul trait-vs-inherent alignment.
 #[test]
 fn checked_mul_trait_matches_inherent_boundary() {
     let cases: &[(D38s12, D38s12)] = &[
@@ -641,7 +606,7 @@ fn checked_mul_trait_matches_inherent_boundary() {
     }
 }
 
-    /// Boundary cases for CheckedDiv trait-vs-inherent alignment.
+/// Boundary cases for CheckedDiv trait-vs-inherent alignment.
 #[test]
 fn checked_div_trait_matches_inherent_boundary() {
     let neg_one = -D38s12::ONE;
@@ -673,10 +638,10 @@ fn checked_div_trait_matches_inherent_boundary() {
 }
 
 // ---------------------------------------------------------------------------
-    // Num::from_str_radix
+// Num::from_str_radix
 // ---------------------------------------------------------------------------
 
-    /// Non-base-10 radix is rejected without delegating to FromStr.
+/// Non-base-10 radix is rejected without delegating to FromStr.
 #[test]
 fn from_str_radix_non_ten_returns_invalid() {
     let result = <D38s12 as Num>::from_str_radix("1", 16);
@@ -686,7 +651,7 @@ fn from_str_radix_non_ten_returns_invalid() {
     assert!(result_2.is_err());
 }
 
-    /// Base-10 delegates to the FromStr implementation.
+/// Base-10 delegates to the FromStr implementation.
 #[test]
 fn from_str_radix_base_ten_delegates_to_from_str() {
     let parsed = <D38s12 as Num>::from_str_radix("1", 10).expect("parse 1");
@@ -694,10 +659,10 @@ fn from_str_radix_base_ten_delegates_to_from_str() {
 }
 
 // ---------------------------------------------------------------------------
-    // Cross-scale exercise — non-default SCALE
+// Cross-scale exercise — non-default SCALE
 // ---------------------------------------------------------------------------
 
-    /// At SCALE = 6 the trait surface works correctly.
+/// At SCALE = 6 the trait surface works correctly.
 #[test]
 fn traits_compile_at_scale_6() {
     type D6 = D38<6>;
@@ -711,38 +676,38 @@ fn traits_compile_at_scale_6() {
 }
 
 // ---------------------------------------------------------------------------
-    // NumCast
+// NumCast
 // ---------------------------------------------------------------------------
 
-    /// `NumCast::from` round-trips an in-range `i32` exactly.
+/// `NumCast::from` round-trips an in-range `i32` exactly.
 #[test]
 fn numcast_from_i32() {
     let v: D38s12 = <D38s12 as NumCast>::from(42_i32).expect("in-range");
     assert_eq!(v, <D38s12 as From<i32>>::from(42_i32));
 }
 
-    /// `NumCast::from` preserves the fractional part of an `f64` input
-    /// because the float path runs before the integer truncation path.
+/// `NumCast::from` preserves the fractional part of an `f64` input
+/// because the float path runs before the integer truncation path.
 #[test]
 fn numcast_from_f64_preserves_fractional() {
     let v: D38s12 = <D38s12 as NumCast>::from(1.5_f64).expect("in-range");
     assert_eq!(v, D38s12::from_f64(1.5_f64));
 }
 
-    /// `NumCast::from` returns `None` for `f64::NAN`.
+/// `NumCast::from` returns `None` for `f64::NAN`.
 #[test]
 fn numcast_from_f64_nan_returns_none() {
     assert!(<D38s12 as NumCast>::from(f64::NAN).is_none());
 }
 
-    /// `NumCast::from` returns `None` for finite out-of-range `f64`.
+/// `NumCast::from` returns `None` for finite out-of-range `f64`.
 #[test]
 fn numcast_from_f64_out_of_range_returns_none() {
     assert!(<D38s12 as NumCast>::from(1e30_f64).is_none());
 }
 
-    /// `NumCast::from` keeps integer inputs exact for `i64` values above
-    /// f64's 53-bit mantissa range, validating the integer fast path.
+/// `NumCast::from` keeps integer inputs exact for `i64` values above
+/// f64's 53-bit mantissa range, validating the integer fast path.
 #[test]
 fn numcast_from_i64_above_f64_mantissa_is_exact() {
     // 2^54 = 18_014_398_509_481_984 — above f64's exact-integer range.

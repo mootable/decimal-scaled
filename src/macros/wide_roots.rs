@@ -153,7 +153,11 @@ macro_rules! decl_wide_roots {
             /// to the inner sqrt step.
             #[inline]
             #[must_use]
-            pub fn hypot_strict_with(self, other: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn hypot_strict_with(
+                self,
+                other: Self,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 let a = self.abs();
                 let b = other.abs();
                 let (large, small) = if a >= b { (a, b) } else { (b, a) };
@@ -183,7 +187,10 @@ mod tests {
             D76::<6>::from_int(144).sqrt_strict(),
             D76::<6>::from_int(12)
         );
-        assert_eq!(D153::<6>::from_int(25).sqrt_strict(), D153::<6>::from_int(5));
+        assert_eq!(
+            D153::<6>::from_int(25).sqrt_strict(),
+            D153::<6>::from_int(5)
+        );
         assert_eq!(
             D307::<6>::from_int(81).sqrt_strict(),
             D307::<6>::from_int(9)
@@ -200,14 +207,8 @@ mod tests {
     #[test]
     fn cbrt_perfect_cubes_are_exact() {
         assert_eq!(D76::<6>::from_int(8).cbrt_strict(), D76::<6>::from_int(2));
-        assert_eq!(
-            D76::<6>::from_int(27).cbrt_strict(),
-            D76::<6>::from_int(3)
-        );
-        assert_eq!(
-            D76::<6>::from_int(-8).cbrt_strict(),
-            D76::<6>::from_int(-2)
-        );
+        assert_eq!(D76::<6>::from_int(27).cbrt_strict(), D76::<6>::from_int(3));
+        assert_eq!(D76::<6>::from_int(-8).cbrt_strict(), D76::<6>::from_int(-2));
         assert_eq!(
             D153::<6>::from_int(125).cbrt_strict(),
             D153::<6>::from_int(5)
@@ -245,14 +246,8 @@ mod tests {
     #[test]
     fn sqrt_cbrt_at_wide_only_scale() {
         // D76<50>: 4.0 -> 2.0, 8.0 -> 2.0.
-        assert_eq!(
-            D76::<50>::from_int(4).sqrt_strict(),
-            D76::<50>::from_int(2)
-        );
-        assert_eq!(
-            D76::<50>::from_int(8).cbrt_strict(),
-            D76::<50>::from_int(2)
-        );
+        assert_eq!(D76::<50>::from_int(4).sqrt_strict(), D76::<50>::from_int(2));
+        assert_eq!(D76::<50>::from_int(8).cbrt_strict(), D76::<50>::from_int(2));
         // D307<150>: well past any narrower tier.
         assert_eq!(
             D307::<150>::from_int(9).sqrt_strict(),

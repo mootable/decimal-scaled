@@ -84,8 +84,8 @@
 //! cause. `D38::ONE.powi(i32::MIN)` therefore evaluates correctly as
 //! `D38::ONE / D38::ONE.pow(2_147_483_648_u32)`.
 
-use crate::types::widths::D38;
 use crate::algos::mg_divide::mul_div_pow10;
+use crate::types::widths::D38;
 
 impl<const SCALE: u32> D38<SCALE> {
     /// Raises `self` to the power `exp`.
@@ -217,7 +217,11 @@ impl<const SCALE: u32> D38<SCALE> {
     /// `self^exp` under the supplied rounding mode.
     #[inline]
     #[must_use]
-    pub fn powf_strict_with(self, exp: D38<SCALE>, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn powf_strict_with(
+        self,
+        exp: D38<SCALE>,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         <Self as crate::policy::pow::PowPolicy>::powf_impl(self, exp, mode)
     }
 
@@ -225,13 +229,22 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn powf_approx(self, exp: D38<SCALE>, working_digits: u32) -> Self {
-        self.powf_approx_with(exp, working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.powf_approx_with(
+            exp,
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// `self^exp` with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn powf_approx_with(self, exp: D38<SCALE>, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn powf_approx_with(
+        self,
+        exp: D38<SCALE>,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == crate::types::log_exp::STRICT_GUARD {
             return self.powf_strict_with(exp, mode);
         }
@@ -368,7 +381,11 @@ impl<const SCALE: u32> D38<SCALE> {
     /// exact-or-truncating per the operator path's own contract.
     #[inline]
     #[must_use]
-    pub fn hypot_strict_with(self, other: Self, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn hypot_strict_with(
+        self,
+        other: Self,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         let a = self.abs();
         let b = other.abs();
         let (large, small) = if a >= b { (a, b) } else { (b, a) };
@@ -574,14 +591,18 @@ impl<const SCALE: u32> D38<SCALE> {
         let mult = Self::multiplier();
         while e > 0 {
             if e & 1 == 1 {
-                acc = if let Some(q) = mul_div_pow10::<SCALE>(acc, base) { q } else {
+                acc = if let Some(q) = mul_div_pow10::<SCALE>(acc, base) {
+                    q
+                } else {
                     overflowed = true;
                     acc.wrapping_mul(base).wrapping_div(mult)
                 };
             }
             e >>= 1;
             if e > 0 {
-                base = if let Some(q) = mul_div_pow10::<SCALE>(base, base) { q } else {
+                base = if let Some(q) = mul_div_pow10::<SCALE>(base, base) {
+                    q
+                } else {
                     overflowed = true;
                     base.wrapping_mul(base).wrapping_div(mult)
                 };
@@ -590,7 +611,6 @@ impl<const SCALE: u32> D38<SCALE> {
         (Self(acc), overflowed)
     }
 }
-
 
 #[cfg(test)]
 mod tests {
@@ -831,8 +851,7 @@ mod tests {
                     (n_hi + c as u128, lo)
                 };
                 // N + q > q^2 ?
-                let above_lower =
-                    nphi > qsq_hi || (nphi == qsq_hi && nplo > qsq_lo);
+                let above_lower = nphi > qsq_hi || (nphi == qsq_hi && nplo > qsq_lo);
                 assert!(above_lower, "sqrt({raw} @ s{S}) = {q}: N below (q-0.5)^2");
             }
         }
@@ -892,17 +911,34 @@ mod tests {
                 let t = two_q + U256::from(1u8);
                 t * t * t
             };
-            assert!(eight_n <= upper, "cbrt({raw} @ s{S}) = {q}: 8N exceeds (2q+1)^3");
+            assert!(
+                eight_n <= upper,
+                "cbrt({raw} @ s{S}) = {q}: 8N exceeds (2q+1)^3"
+            );
             if qa > 0 {
                 let t = two_q - U256::from(1u8);
                 let lower = t * t * t;
-                assert!(eight_n > lower, "cbrt({raw} @ s{S}) = {q}: 8N at/below (2q-1)^3");
+                assert!(
+                    eight_n > lower,
+                    "cbrt({raw} @ s{S}) = {q}: 8N at/below (2q-1)^3"
+                );
             }
         }
         for &raw in &[
-            1_i128, 2, 7, 8, 9, 26, 27, 28,
-            999_999_999_999, 1_000_000_000_000, 123_456_789_012_345,
-            -8, -27, -1_000_000_000_000,
+            1_i128,
+            2,
+            7,
+            8,
+            9,
+            26,
+            27,
+            28,
+            999_999_999_999,
+            1_000_000_000_000,
+            123_456_789_012_345,
+            -8,
+            -27,
+            -1_000_000_000_000,
         ] {
             check::<0>(raw);
             check::<6>(raw);
@@ -1143,9 +1179,21 @@ mod tests {
     #[test]
     fn mul_add_matches_mul_then_add_safe_values() {
         for (a_raw, b_raw, c_raw) in [
-            (1_234_567_890_123_i128, 2_345_678_901_234_i128, 3_456_789_012_345_i128),
-            (4_567_891_234_567_i128, 5_678_912_345_678_i128, 6_789_123_456_789_i128),
-            (7_890_123_456_789_i128, 8_901_234_567_891_i128, 9_012_345_678_912_i128),
+            (
+                1_234_567_890_123_i128,
+                2_345_678_901_234_i128,
+                3_456_789_012_345_i128,
+            ),
+            (
+                4_567_891_234_567_i128,
+                5_678_912_345_678_i128,
+                6_789_123_456_789_i128,
+            ),
+            (
+                7_890_123_456_789_i128,
+                8_901_234_567_891_i128,
+                9_012_345_678_912_i128,
+            ),
         ] {
             let a = D38s12::from_bits(a_raw);
             let b = D38s12::from_bits(b_raw);
@@ -1275,4 +1323,3 @@ mod tests {
         );
     }
 }
-

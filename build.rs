@@ -13,7 +13,7 @@
     clippy::missing_errors_doc,
     clippy::missing_panics_doc,
     clippy::must_use_candidate,
-    clippy::return_self_not_must_use,
+    clippy::return_self_not_must_use
 )]
 
 //! Build-time high-precision constant generator.
@@ -64,7 +64,11 @@ impl BigU {
         BigU { limbs: vec![1] }
     }
     fn from_u64(v: u64) -> Self {
-        if v == 0 { Self::zero() } else { BigU { limbs: vec![v] } }
+        if v == 0 {
+            Self::zero()
+        } else {
+            BigU { limbs: vec![v] }
+        }
     }
     fn is_zero(&self) -> bool {
         self.limbs.is_empty()
@@ -76,13 +80,17 @@ impl BigU {
     }
     /// In-place add of a single u64.
     fn add_u64(&mut self, v: u64) {
-        if v == 0 { return; }
+        if v == 0 {
+            return;
+        }
         let mut carry = u128::from(v);
         for limb in &mut self.limbs {
             let s = u128::from(*limb) + carry;
             *limb = s as u64;
             carry = s >> 64;
-            if carry == 0 { break; }
+            if carry == 0 {
+                break;
+            }
         }
         if carry != 0 {
             self.limbs.push(carry as u64);
@@ -95,7 +103,11 @@ impl BigU {
         }
         let mut carry: u128 = 0;
         for i in 0..self.limbs.len() {
-            let r = if i < rhs.limbs.len() { u128::from(rhs.limbs[i]) } else { 0 };
+            let r = if i < rhs.limbs.len() {
+                u128::from(rhs.limbs[i])
+            } else {
+                0
+            };
             let s = u128::from(self.limbs[i]) + r + carry;
             self.limbs[i] = s as u64;
             carry = s >> 64;
@@ -109,7 +121,11 @@ impl BigU {
     fn sub_assign(&mut self, rhs: &BigU) {
         let mut borrow: i128 = 0;
         for i in 0..self.limbs.len() {
-            let r = if i < rhs.limbs.len() { i128::from(rhs.limbs[i]) } else { 0 };
+            let r = if i < rhs.limbs.len() {
+                i128::from(rhs.limbs[i])
+            } else {
+                0
+            };
             let s = i128::from(self.limbs[i]) - r - borrow;
             if s < 0 {
                 self.limbs[i] = (s + (1i128 << 64)) as u64;
@@ -124,8 +140,13 @@ impl BigU {
     }
     /// In-place multiply by a single u64.
     fn mul_u64(&mut self, v: u64) {
-        if v == 0 { self.limbs.clear(); return; }
-        if v == 1 { return; }
+        if v == 0 {
+            self.limbs.clear();
+            return;
+        }
+        if v == 1 {
+            return;
+        }
         let mut carry: u128 = 0;
         for limb in &mut self.limbs {
             let p = u128::from(*limb) * u128::from(v) + carry;
@@ -225,7 +246,9 @@ fn fixed_mul(a: &BigU, b: &BigU, digits: u32) -> BigU {
     let mut acc = BigU::zero();
     // Schoolbook multiplication into acc.
     for i in 0..a.limbs.len() {
-        if a.limbs[i] == 0 { continue; }
+        if a.limbs[i] == 0 {
+            continue;
+        }
         let mut carry: u128 = 0;
         for j in 0..b.limbs.len() {
             let p = u128::from(a.limbs[i]) * u128::from(b.limbs[j]) + carry;
@@ -270,7 +293,9 @@ fn fixed_div(a: &BigU, b: &BigU, digits: u32) -> BigU {
 fn mul_full(a: &BigU, b: &BigU) -> BigU {
     let mut acc = BigU::zero();
     for i in 0..a.limbs.len() {
-        if a.limbs[i] == 0 { continue; }
+        if a.limbs[i] == 0 {
+            continue;
+        }
         let mut carry: u128 = 0;
         for j in 0..b.limbs.len() {
             let p = u128::from(a.limbs[i]) * u128::from(b.limbs[j]) + carry;
@@ -310,7 +335,9 @@ fn bigu_divmod(a: &BigU, b: &BigU) -> (BigU, BigU) {
     // Process bits from MSB to LSB.
     for i in (0..bits_a).rev() {
         shl1(&mut r);
-        if get_bit(a, i) { r.add_u64(1); }
+        if get_bit(a, i) {
+            r.add_u64(1);
+        }
         shl1(&mut q);
         if r.cmp(b) != std::cmp::Ordering::Less {
             r.sub_assign(b);
@@ -328,7 +355,9 @@ fn bigu_divmod(a: &BigU, b: &BigU) -> (BigU, BigU) {
 }
 
 fn bit_length(a: &BigU) -> u32 {
-    if a.is_zero() { return 0; }
+    if a.is_zero() {
+        return 0;
+    }
     let top = *a.limbs.last().unwrap();
     (a.limbs.len() as u32) * 64 - top.leading_zeros()
 }
@@ -402,7 +431,9 @@ fn atan_recip(n: u64, digits: u32) -> BigU {
 /// Rescale-down with half-to-even rounding. `value` carries
 /// `true * 10^from`; returns `true * 10^to` for `to <= from`.
 fn rescale_down_hte(value: BigU, from: u32, to: u32) -> BigU {
-    if to >= from { return value; }
+    if to >= from {
+        return value;
+    }
     let shift = from - to;
     // Divide by 10^shift, keeping the remainder for the round step.
     let divisor = pow10(shift);
@@ -456,7 +487,9 @@ fn e_const(digits: u32) -> BigU {
         sum.add_assign(&new_term);
         term = new_term;
         n += 1;
-        if n > 100_000 { break; }
+        if n > 100_000 {
+            break;
+        }
     }
     rescale_down_hte(sum, work, digits)
 }
@@ -511,7 +544,13 @@ fn format_at(v: &BigU, digits: u32, integer_digits: u32) -> String {
     }
 }
 
-fn emit_constant(out: &mut impl Write, name: &str, value: &BigU, digits: u32, integer_digits: u32) -> std::io::Result<()> {
+fn emit_constant(
+    out: &mut impl Write,
+    name: &str,
+    value: &BigU,
+    digits: u32,
+    integer_digits: u32,
+) -> std::io::Result<()> {
     let s = format_at(value, digits, integer_digits);
     writeln!(out, "pub(super) const {name}: &str = \"{s}\";")?;
     Ok(())
@@ -524,8 +563,14 @@ fn main() -> std::io::Result<()> {
 
     writeln!(&mut f, "// Auto-generated from build.rs. Do not edit.")?;
     writeln!(&mut f, "//")?;
-    writeln!(&mut f, "// Each value is a digit string of `true_value × 10^scale_ref` —")?;
-    writeln!(&mut f, "// the base-10 integer with no decimal point. Consumed by")?;
+    writeln!(
+        &mut f,
+        "// Each value is a digit string of `true_value × 10^scale_ref` —"
+    )?;
+    writeln!(
+        &mut f,
+        "// the base-10 integer with no decimal point. Consumed by"
+    )?;
     writeln!(&mut f, "// `Int*::from_str_radix` at compile time.")?;
     writeln!(&mut f)?;
 
@@ -608,12 +653,12 @@ fn main() -> std::io::Result<()> {
     //
     // Format: (tier_name_for_emit, SCALE_REF).
     for &(name, scale_ref) in &[
-        ("D57",   56u32),
-        ("D115",  114),
-        ("D230",  229),
-        ("D462",  461),
-        ("D616",  615),
-        ("D924",  923),
+        ("D57", 56u32),
+        ("D115", 114),
+        ("D230", 229),
+        ("D462", 461),
+        ("D616", 615),
+        ("D924", 923),
         ("D1232", 1231),
     ] {
         let p = pi(scale_ref);
@@ -625,12 +670,48 @@ fn main() -> std::io::Result<()> {
         qp.div_u64(4);
         let e = e_const(scale_ref);
         let phi = golden(scale_ref);
-        emit_constant(&mut f, &format!("PI_{}_S{}", name, scale_ref), &p, scale_ref, 1)?;
-        emit_constant(&mut f, &format!("TAU_{}_S{}", name, scale_ref), &t, scale_ref, 1)?;
-        emit_constant(&mut f, &format!("HALF_PI_{}_S{}", name, scale_ref), &hp, scale_ref, 1)?;
-        emit_constant(&mut f, &format!("QUARTER_PI_{}_S{}", name, scale_ref), &qp, scale_ref, 1)?;
-        emit_constant(&mut f, &format!("E_{}_S{}", name, scale_ref), &e, scale_ref, 1)?;
-        emit_constant(&mut f, &format!("GOLDEN_{}_S{}", name, scale_ref), &phi, scale_ref, 1)?;
+        emit_constant(
+            &mut f,
+            &format!("PI_{}_S{}", name, scale_ref),
+            &p,
+            scale_ref,
+            1,
+        )?;
+        emit_constant(
+            &mut f,
+            &format!("TAU_{}_S{}", name, scale_ref),
+            &t,
+            scale_ref,
+            1,
+        )?;
+        emit_constant(
+            &mut f,
+            &format!("HALF_PI_{}_S{}", name, scale_ref),
+            &hp,
+            scale_ref,
+            1,
+        )?;
+        emit_constant(
+            &mut f,
+            &format!("QUARTER_PI_{}_S{}", name, scale_ref),
+            &qp,
+            scale_ref,
+            1,
+        )?;
+        emit_constant(
+            &mut f,
+            &format!("E_{}_S{}", name, scale_ref),
+            &e,
+            scale_ref,
+            1,
+        )?;
+        emit_constant(
+            &mut f,
+            &format!("GOLDEN_{}_S{}", name, scale_ref),
+            &phi,
+            scale_ref,
+            1,
+        )?;
     }
 
     println!("cargo:rerun-if-changed=build.rs");

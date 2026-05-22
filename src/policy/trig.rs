@@ -17,8 +17,8 @@
 
 use crate::algos::trig;
 use crate::policy::triplet::{policy_triplet, wtag};
-use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
 
 pub(crate) trait TrigPolicy: Sized {
     fn sin_impl(self, mode: RoundingMode) -> Self;
@@ -73,133 +73,251 @@ macro_rules! impl_narrow_trig {
      $atan2_s:path, $atan2_w:path
     ) => {
         impl<const SCALE: u32> TrigPolicy for $T<SCALE> {
-            #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { $sin_s(self, mode) }
-            #[inline] fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { $sin_w(self, wd, mode) }
-            #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { $cos_s(self, mode) }
-            #[inline] fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self { $cos_w(self, wd, mode) }
-            #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { $tan_s(self, mode) }
-            #[inline] fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self { $tan_w(self, wd, mode) }
-            #[inline] fn atan_impl(self, mode: RoundingMode) -> Self { $atan_s(self, mode) }
-            #[inline] fn atan_with_impl(self, wd: u32, mode: RoundingMode) -> Self { $atan_w(self, wd, mode) }
-            #[inline] fn asin_impl(self, mode: RoundingMode) -> Self { $asin_s(self, mode) }
-            #[inline] fn asin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { $asin_w(self, wd, mode) }
-            #[inline] fn acos_impl(self, mode: RoundingMode) -> Self { $acos_s(self, mode) }
-            #[inline] fn acos_with_impl(self, wd: u32, mode: RoundingMode) -> Self { $acos_w(self, wd, mode) }
-            #[inline] fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { $atan2_s(self, other, mode) }
-            #[inline] fn atan2_with_impl(self, other: Self, wd: u32, mode: RoundingMode) -> Self { $atan2_w(self, other, wd, mode) }
+            #[inline]
+            fn sin_impl(self, mode: RoundingMode) -> Self {
+                $sin_s(self, mode)
+            }
+            #[inline]
+            fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+                $sin_w(self, wd, mode)
+            }
+            #[inline]
+            fn cos_impl(self, mode: RoundingMode) -> Self {
+                $cos_s(self, mode)
+            }
+            #[inline]
+            fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+                $cos_w(self, wd, mode)
+            }
+            #[inline]
+            fn tan_impl(self, mode: RoundingMode) -> Self {
+                $tan_s(self, mode)
+            }
+            #[inline]
+            fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+                $tan_w(self, wd, mode)
+            }
+            #[inline]
+            fn atan_impl(self, mode: RoundingMode) -> Self {
+                $atan_s(self, mode)
+            }
+            #[inline]
+            fn atan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+                $atan_w(self, wd, mode)
+            }
+            #[inline]
+            fn asin_impl(self, mode: RoundingMode) -> Self {
+                $asin_s(self, mode)
+            }
+            #[inline]
+            fn asin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+                $asin_w(self, wd, mode)
+            }
+            #[inline]
+            fn acos_impl(self, mode: RoundingMode) -> Self {
+                $acos_s(self, mode)
+            }
+            #[inline]
+            fn acos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+                $acos_w(self, wd, mode)
+            }
+            #[inline]
+            fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+                $atan2_s(self, other, mode)
+            }
+            #[inline]
+            fn atan2_with_impl(self, other: Self, wd: u32, mode: RoundingMode) -> Self {
+                $atan2_w(self, other, wd, mode)
+            }
 
             // Hyperbolics and angle conversions widen → D38 → narrow.
             #[inline]
             fn sinh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::sinh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::sinh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn sinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.sinh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::sinh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.sinh_approx_with(wd, mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::sinh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn cosh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::cosh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::cosh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn cosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.cosh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::cosh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.cosh_approx_with(wd, mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::cosh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn tanh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::tanh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::tanh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn tanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.tanh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::tanh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.tanh_approx_with(wd, mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::tanh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn asinh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::asinh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::asinh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn asinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.asinh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::asinh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.asinh_approx_with(wd, mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::asinh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn acosh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::acosh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::acosh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn acosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.acosh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::acosh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.acosh_approx_with(wd, mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::acosh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn atanh_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::atanh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::atanh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn atanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.atanh_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::atanh"), SCALE))
+                ::core::convert::TryInto::try_into(wide.atanh_approx_with(wd, mode)).unwrap_or_else(
+                    |_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::atanh"),
+                            SCALE,
+                        )
+                    },
+                )
             }
             #[inline]
             fn to_degrees_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::to_degrees"), SCALE))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::to_degrees"),
+                            SCALE,
+                        )
+                    })
             }
             #[inline]
             fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::to_degrees"), SCALE))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::to_degrees"),
+                            SCALE,
+                        )
+                    })
             }
             #[inline]
             fn to_radians_impl(self, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_strict_with(mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::to_radians"), SCALE))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::to_radians"),
+                            SCALE,
+                        )
+                    })
             }
             #[inline]
             fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
                 let wide: D38<SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_radians_approx_with(wd, mode))
-                    .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale(
-                        concat!(stringify!($T), "::to_radians"), SCALE))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            concat!(stringify!($T), "::to_radians"),
+                            SCALE,
+                        )
+                    })
             }
         }
     };
@@ -207,24 +325,38 @@ macro_rules! impl_narrow_trig {
 
 impl_narrow_trig!(
     D9,
-    trig::widen_to_d38::sin_strict_d9, trig::widen_to_d38::sin_with_d9,
-    trig::widen_to_d38::cos_strict_d9, trig::widen_to_d38::cos_with_d9,
-    trig::widen_to_d38::tan_strict_d9, trig::widen_to_d38::tan_with_d9,
-    trig::widen_to_d38::atan_strict_d9, trig::widen_to_d38::atan_with_d9,
-    trig::widen_to_d38::asin_strict_d9, trig::widen_to_d38::asin_with_d9,
-    trig::widen_to_d38::acos_strict_d9, trig::widen_to_d38::acos_with_d9,
-    trig::widen_to_d38::atan2_strict_d9, trig::widen_to_d38::atan2_with_d9
+    trig::widen_to_d38::sin_strict_d9,
+    trig::widen_to_d38::sin_with_d9,
+    trig::widen_to_d38::cos_strict_d9,
+    trig::widen_to_d38::cos_with_d9,
+    trig::widen_to_d38::tan_strict_d9,
+    trig::widen_to_d38::tan_with_d9,
+    trig::widen_to_d38::atan_strict_d9,
+    trig::widen_to_d38::atan_with_d9,
+    trig::widen_to_d38::asin_strict_d9,
+    trig::widen_to_d38::asin_with_d9,
+    trig::widen_to_d38::acos_strict_d9,
+    trig::widen_to_d38::acos_with_d9,
+    trig::widen_to_d38::atan2_strict_d9,
+    trig::widen_to_d38::atan2_with_d9
 );
 
 impl_narrow_trig!(
     D18,
-    trig::widen_to_d38::sin_strict_d18, trig::widen_to_d38::sin_with_d18,
-    trig::widen_to_d38::cos_strict_d18, trig::widen_to_d38::cos_with_d18,
-    trig::widen_to_d38::tan_strict_d18, trig::widen_to_d38::tan_with_d18,
-    trig::widen_to_d38::atan_strict_d18, trig::widen_to_d38::atan_with_d18,
-    trig::widen_to_d38::asin_strict_d18, trig::widen_to_d38::asin_with_d18,
-    trig::widen_to_d38::acos_strict_d18, trig::widen_to_d38::acos_with_d18,
-    trig::widen_to_d38::atan2_strict_d18, trig::widen_to_d38::atan2_with_d18
+    trig::widen_to_d38::sin_strict_d18,
+    trig::widen_to_d38::sin_with_d18,
+    trig::widen_to_d38::cos_strict_d18,
+    trig::widen_to_d38::cos_with_d18,
+    trig::widen_to_d38::tan_strict_d18,
+    trig::widen_to_d38::tan_with_d18,
+    trig::widen_to_d38::atan_strict_d18,
+    trig::widen_to_d38::atan_with_d18,
+    trig::widen_to_d38::asin_strict_d18,
+    trig::widen_to_d38::asin_with_d18,
+    trig::widen_to_d38::acos_strict_d18,
+    trig::widen_to_d38::acos_with_d18,
+    trig::widen_to_d38::atan2_strict_d18,
+    trig::widen_to_d38::atan2_with_d18
 );
 
 // D38 — see `crate::policy::ln` for the borrow-D57 rationale.
@@ -239,22 +371,70 @@ impl_narrow_trig!(
 /// `fixed_d38`. Emit them once so both cfg branches stay short.
 macro_rules! d38_hyperbolic_and_angle {
     () => {
-        #[inline] fn sinh_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sinh_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn sinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sinh_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn cosh_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cosh_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn cosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cosh_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn tanh_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tanh_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn tanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tanh_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn asinh_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::asinh_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn asinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::asinh_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn acosh_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::acosh_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn acosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::acosh_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn atanh_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::atanh_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn atanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::atanh_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn to_degrees_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::to_degrees_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::to_degrees_with(self.0, SCALE, wd, mode)) }
-        #[inline] fn to_radians_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::to_radians_strict::<SCALE>(self.0, mode)) }
-        #[inline] fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::to_radians_with(self.0, SCALE, wd, mode)) }
+        #[inline]
+        fn sinh_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::sinh_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn sinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::sinh_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn cosh_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::cosh_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn cosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::cosh_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn tanh_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::tanh_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn tanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::tanh_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn asinh_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::asinh_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn asinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::asinh_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn acosh_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::acosh_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn acosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::acosh_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn atanh_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::atanh_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn atanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::atanh_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn to_degrees_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::to_degrees_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::to_degrees_with(self.0, SCALE, wd, mode))
+        }
+        #[inline]
+        fn to_radians_impl(self, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::to_radians_strict::<SCALE>(self.0, mode))
+        }
+        #[inline]
+        fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            Self(trig::fixed_d38::to_radians_with(self.0, SCALE, wd, mode))
+        }
     };
 }
 
@@ -269,40 +449,132 @@ macro_rules! d38_hyperbolic_and_angle {
 // inherit that gap.
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
-    #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cos_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tan_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn atan_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn asin_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn acos_impl(self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)) }
-    #[inline] fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { Self(trig::borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)) }
+    #[inline]
+    fn sin_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn cos_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::cos_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::cos_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn tan_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::tan_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::tan_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn atan_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn asin_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn acos_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::atan2_strict::<SCALE>(
+            self.0, other.0, mode,
+        ))
+    }
+    #[inline]
+    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::borrow_d57::atan2_strict::<SCALE>(
+            self.0, other.0, mode,
+        ))
+    }
 
     d38_hyperbolic_and_angle!();
 }
 
 #[cfg(not(any(feature = "d57", feature = "wide")))]
 impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
-    #[inline] fn sin_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn cos_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::cos_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn tan_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::tan_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn atan_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::atan_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn atan_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::atan_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn asin_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::asin_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn asin_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::asin_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn acos_impl(self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::acos_strict::<SCALE>(self.0, mode)) }
-    #[inline] fn acos_with_impl(self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::acos_with::<SCALE>(self.0, wd, mode)) }
-    #[inline] fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { Self(trig::fixed_d38::atan2_strict::<SCALE>(self.0, other.0, mode)) }
-    #[inline] fn atan2_with_impl(self, other: Self, wd: u32, mode: RoundingMode) -> Self { Self(trig::fixed_d38::atan2_with::<SCALE>(self.0, other.0, wd, mode)) }
+    #[inline]
+    fn sin_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::sin_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn cos_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::cos_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::cos_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn tan_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::tan_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::tan_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn atan_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::atan_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn atan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::atan_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn asin_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::asin_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn asin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::asin_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn acos_impl(self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::acos_strict::<SCALE>(self.0, mode))
+    }
+    #[inline]
+    fn acos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::acos_with::<SCALE>(self.0, wd, mode))
+    }
+    #[inline]
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::atan2_strict::<SCALE>(
+            self.0, other.0, mode,
+        ))
+    }
+    #[inline]
+    fn atan2_with_impl(self, other: Self, wd: u32, mode: RoundingMode) -> Self {
+        Self(trig::fixed_d38::atan2_with::<SCALE>(
+            self.0, other.0, wd, mode,
+        ))
+    }
 
     d38_hyperbolic_and_angle!();
 }
@@ -333,51 +605,95 @@ impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
 macro_rules! wide_trig_delegating_tail {
     () => {
         #[inline]
-        fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+        fn asin_impl(self, mode: RoundingMode) -> Self {
+            self.asin_strict_with(mode)
+        }
         #[inline]
-        fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+        fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.asin_strict_with(mode)
+        }
         #[inline]
-        fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+        fn acos_impl(self, mode: RoundingMode) -> Self {
+            self.acos_strict_with(mode)
+        }
         #[inline]
-        fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+        fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.acos_strict_with(mode)
+        }
         #[inline]
-        fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+        fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+            self.atan2_strict_with(other, mode)
+        }
         #[inline]
-        fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+        fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+            self.atan2_strict_with(other, mode)
+        }
 
         #[inline]
-        fn sinh_impl(self, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+        fn sinh_impl(self, mode: RoundingMode) -> Self {
+            self.sinh_strict_with(mode)
+        }
         #[inline]
-        fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.sinh_strict_with(mode) }
+        fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.sinh_strict_with(mode)
+        }
         #[inline]
-        fn cosh_impl(self, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+        fn cosh_impl(self, mode: RoundingMode) -> Self {
+            self.cosh_strict_with(mode)
+        }
         #[inline]
-        fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.cosh_strict_with(mode) }
+        fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.cosh_strict_with(mode)
+        }
         #[inline]
-        fn tanh_impl(self, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+        fn tanh_impl(self, mode: RoundingMode) -> Self {
+            self.tanh_strict_with(mode)
+        }
         #[inline]
-        fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.tanh_strict_with(mode) }
+        fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.tanh_strict_with(mode)
+        }
         #[inline]
-        fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+        fn asinh_impl(self, mode: RoundingMode) -> Self {
+            self.asinh_strict_with(mode)
+        }
         #[inline]
-        fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+        fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.asinh_strict_with(mode)
+        }
         #[inline]
-        fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+        fn acosh_impl(self, mode: RoundingMode) -> Self {
+            self.acosh_strict_with(mode)
+        }
         #[inline]
-        fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+        fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.acosh_strict_with(mode)
+        }
         #[inline]
-        fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+        fn atanh_impl(self, mode: RoundingMode) -> Self {
+            self.atanh_strict_with(mode)
+        }
         #[inline]
-        fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+        fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.atanh_strict_with(mode)
+        }
 
         #[inline]
-        fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+        fn to_degrees_impl(self, mode: RoundingMode) -> Self {
+            self.to_degrees_strict_with(mode)
+        }
         #[inline]
-        fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+        fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.to_degrees_strict_with(mode)
+        }
         #[inline]
-        fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+        fn to_radians_impl(self, mode: RoundingMode) -> Self {
+            self.to_radians_strict_with(mode)
+        }
         #[inline]
-        fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+        fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+            self.to_radians_strict_with(mode)
+        }
     };
 }
 
@@ -395,58 +711,90 @@ macro_rules! wide_trig_forward_methods {
         #[inline]
         fn sin_impl(self, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($sin_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($sin_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($sin_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($sin_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($sin_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($sin_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($sin_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($sin_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn cos_impl(self, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($cos_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($cos_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($cos_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($cos_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($cos_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($cos_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($cos_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($cos_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn tan_impl(self, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($tan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($tan_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($tan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($tan_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($tan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($tan_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($tan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($tan_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn atan_impl(self, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($atan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($atan_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($atan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($atan_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
         #[inline]
         fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
             #[cfg(feature = "std")]
-            { Self($atan_std::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($atan_std::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
             #[cfg(not(feature = "std"))]
-            { Self($atan_no::<{ wtag::$T }, SCALE>(self.0, mode)) }
+            {
+                Self($atan_no::<{ wtag::$T }, SCALE>(self.0, mode))
+            }
         }
     };
 }
@@ -510,51 +858,67 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     wide_trig_forward_methods!(
         D57,
-        sin_d57_std, sin_d57_no_std,
-        cos_d57_std, cos_d57_no_std,
-        tan_d57_std, tan_d57_no_std,
-        atan_d57_std, atan_d57_no_std
+        sin_d57_std,
+        sin_d57_no_std,
+        cos_d57_std,
+        cos_d57_no_std,
+        tan_d57_std,
+        tan_d57_no_std,
+        atan_d57_std,
+        atan_d57_no_std
     );
 
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.asin_strict_with(mode),
         }
     }
     #[inline]
     fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.asin_strict_with(mode),
         }
     }
     #[inline]
     fn acos_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.acos_strict_with(mode),
         }
     }
     #[inline]
     fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.acos_strict_with(mode),
         }
     }
     #[inline]
     fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(self.0, other.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(
+                self.0, other.0, mode,
+            )),
             _ => self.atan2_strict_with(other, mode),
         }
     }
     #[inline]
     fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(self.0, other.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(
+                self.0, other.0, mode,
+            )),
             _ => self.atan2_strict_with(other, mode),
         }
     }
@@ -563,65 +927,97 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            18..=22 => Self(trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            18..=22 => Self(trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
-    fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_impl(self, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_impl(self, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_impl(self, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_impl(self, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_impl(self, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
 }
 
 // ── D76 — width default (no bands) ─────────────────────────────────
@@ -657,10 +1053,14 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
     wide_trig_forward_methods!(
         D76,
-        sin_d76_std, sin_d76_no_std,
-        cos_d76_std, cos_d76_no_std,
-        tan_d76_std, tan_d76_no_std,
-        atan_d76_std, atan_d76_no_std
+        sin_d76_std,
+        sin_d76_no_std,
+        cos_d76_std,
+        cos_d76_no_std,
+        tan_d76_std,
+        tan_d76_no_std,
+        atan_d76_std,
+        atan_d76_no_std
     );
     wide_trig_delegating_tail!();
 }
@@ -699,87 +1099,135 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
     wide_trig_forward_methods!(
         D115,
-        sin_d115_std, sin_d115_no_std,
-        cos_d115_std, cos_d115_no_std,
-        tan_d115_std, tan_d115_no_std,
-        atan_d115_std, atan_d115_no_std
+        sin_d115_std,
+        sin_d115_no_std,
+        cos_d115_std,
+        cos_d115_no_std,
+        tan_d115_std,
+        tan_d115_no_std,
+        atan_d115_std,
+        atan_d115_no_std
     );
 
     #[inline]
-    fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    fn asin_impl(self, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
     #[inline]
-    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
     #[inline]
-    fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    fn acos_impl(self, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
     #[inline]
-    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
     #[inline]
-    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
     #[inline]
-    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            50..=60 => Self(trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            50..=60 => Self(trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            50..=60 => Self(trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            50..=60 => Self(trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            50..=60 => Self(trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            50..=60 => Self(trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            50..=60 => Self(trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            50..=60 => Self(trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            50..=60 => Self(trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            50..=60 => Self(trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            50..=60 => Self(trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            50..=60 => Self(trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
-    fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_impl(self, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_impl(self, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_impl(self, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_impl(self, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_impl(self, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
 }
 
 // ── D153 — forward sin/cos/tan/atan divert SCALE 70..=82; sinh/cosh/
@@ -828,87 +1276,135 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     wide_trig_forward_methods!(
         D153,
-        sin_d153_std, sin_d153_no_std,
-        cos_d153_std, cos_d153_no_std,
-        tan_d153_std, tan_d153_no_std,
-        atan_d153_std, atan_d153_no_std
+        sin_d153_std,
+        sin_d153_no_std,
+        cos_d153_std,
+        cos_d153_no_std,
+        tan_d153_std,
+        tan_d153_no_std,
+        atan_d153_std,
+        atan_d153_no_std
     );
 
     #[inline]
-    fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    fn asin_impl(self, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
     #[inline]
-    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
     #[inline]
-    fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    fn acos_impl(self, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
     #[inline]
-    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
     #[inline]
-    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
     #[inline]
-    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            70..=82 => Self(trig::lookup_d153_s70_82_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            70..=82 => Self(trig::lookup_d153_s70_82_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            70..=82 => Self(trig::lookup_d153_s70_82_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            70..=82 => Self(trig::lookup_d153_s70_82_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            70..=82 => Self(trig::lookup_d153_s70_82_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            70..=82 => Self(trig::lookup_d153_s70_82_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            70..=82 => Self(trig::lookup_d153_s70_82_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            70..=82 => Self(trig::lookup_d153_s70_82_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            70..=82 => Self(trig::lookup_d153_s70_82_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            70..=82 => Self(trig::lookup_d153_s70_82_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            70..=82 => Self(trig::lookup_d153_s70_82_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            70..=82 => Self(trig::lookup_d153_s70_82_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
-    fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_impl(self, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_impl(self, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_impl(self, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_impl(self, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_impl(self, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
 }
 
 // ── D230 — width default (no bands) ────────────────────────────────
@@ -944,10 +1440,14 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D230<SCALE> {
     wide_trig_forward_methods!(
         D230,
-        sin_d230_std, sin_d230_no_std,
-        cos_d230_std, cos_d230_no_std,
-        tan_d230_std, tan_d230_no_std,
-        atan_d230_std, atan_d230_no_std
+        sin_d230_std,
+        sin_d230_no_std,
+        cos_d230_std,
+        cos_d230_no_std,
+        tan_d230_std,
+        tan_d230_no_std,
+        atan_d230_std,
+        atan_d230_no_std
     );
     wide_trig_delegating_tail!();
 }
@@ -998,87 +1498,135 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     wide_trig_forward_methods!(
         D307,
-        sin_d307_std, sin_d307_no_std,
-        cos_d307_std, cos_d307_no_std,
-        tan_d307_std, tan_d307_no_std,
-        atan_d307_std, atan_d307_no_std
+        sin_d307_std,
+        sin_d307_no_std,
+        cos_d307_std,
+        cos_d307_no_std,
+        tan_d307_std,
+        tan_d307_no_std,
+        atan_d307_std,
+        atan_d307_no_std
     );
 
     #[inline]
-    fn asin_impl(self, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    fn asin_impl(self, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
     #[inline]
-    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asin_strict_with(mode) }
+    fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asin_strict_with(mode)
+    }
     #[inline]
-    fn acos_impl(self, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    fn acos_impl(self, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
     #[inline]
-    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acos_strict_with(mode) }
+    fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acos_strict_with(mode)
+    }
     #[inline]
-    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
     #[inline]
-    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self { self.atan2_strict_with(other, mode) }
+    fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atan2_strict_with(other, mode)
+    }
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            140..=160 => Self(trig::lookup_d307_s140_160_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            140..=160 => Self(trig::lookup_d307_s140_160_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn sinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            140..=160 => Self(trig::lookup_d307_s140_160_hyper::sinh_strict::<SCALE>(self.0, mode)),
+            140..=160 => Self(trig::lookup_d307_s140_160_hyper::sinh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.sinh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            140..=160 => Self(trig::lookup_d307_s140_160_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            140..=160 => Self(trig::lookup_d307_s140_160_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn cosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            140..=160 => Self(trig::lookup_d307_s140_160_hyper::cosh_strict::<SCALE>(self.0, mode)),
+            140..=160 => Self(trig::lookup_d307_s140_160_hyper::cosh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.cosh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         match SCALE {
-            140..=160 => Self(trig::lookup_d307_s140_160_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            140..=160 => Self(trig::lookup_d307_s140_160_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
     fn tanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
         match SCALE {
-            140..=160 => Self(trig::lookup_d307_s140_160_hyper::tanh_strict::<SCALE>(self.0, mode)),
+            140..=160 => Self(trig::lookup_d307_s140_160_hyper::tanh_strict::<SCALE>(
+                self.0, mode,
+            )),
             _ => self.tanh_strict_with(mode),
         }
     }
     #[inline]
-    fn asinh_impl(self, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_impl(self, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.asinh_strict_with(mode) }
+    fn asinh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.asinh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_impl(self, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_impl(self, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.acosh_strict_with(mode) }
+    fn acosh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.acosh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_impl(self, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_impl(self, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.atanh_strict_with(mode) }
+    fn atanh_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.atanh_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_impl(self, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_impl(self, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_degrees_strict_with(mode) }
+    fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_degrees_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_impl(self, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_impl(self, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
     #[inline]
-    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self { self.to_radians_strict_with(mode) }
+    fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
+        self.to_radians_strict_with(mode)
+    }
 }
 
 // ── D462 — forward sin/cos/tan/atan divert SCALE 225..=235; the
@@ -1127,10 +1675,14 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
     wide_trig_forward_methods!(
         D462,
-        sin_d462_std, sin_d462_no_std,
-        cos_d462_std, cos_d462_no_std,
-        tan_d462_std, tan_d462_no_std,
-        atan_d462_std, atan_d462_no_std
+        sin_d462_std,
+        sin_d462_no_std,
+        cos_d462_std,
+        cos_d462_no_std,
+        tan_d462_std,
+        tan_d462_no_std,
+        atan_d462_std,
+        atan_d462_no_std
     );
     wide_trig_delegating_tail!();
 }
@@ -1168,10 +1720,14 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
     wide_trig_forward_methods!(
         D616,
-        sin_d616_std, sin_d616_no_std,
-        cos_d616_std, cos_d616_no_std,
-        tan_d616_std, tan_d616_no_std,
-        atan_d616_std, atan_d616_no_std
+        sin_d616_std,
+        sin_d616_no_std,
+        cos_d616_std,
+        cos_d616_no_std,
+        tan_d616_std,
+        tan_d616_no_std,
+        atan_d616_std,
+        atan_d616_no_std
     );
     wide_trig_delegating_tail!();
 }
@@ -1209,10 +1765,14 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
     wide_trig_forward_methods!(
         D924,
-        sin_d924_std, sin_d924_no_std,
-        cos_d924_std, cos_d924_no_std,
-        tan_d924_std, tan_d924_no_std,
-        atan_d924_std, atan_d924_no_std
+        sin_d924_std,
+        sin_d924_no_std,
+        cos_d924_std,
+        cos_d924_no_std,
+        tan_d924_std,
+        tan_d924_no_std,
+        atan_d924_std,
+        atan_d924_no_std
     );
     wide_trig_delegating_tail!();
 }
@@ -1250,10 +1810,14 @@ policy_triplet! {
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D1232<SCALE> {
     wide_trig_forward_methods!(
         D1232,
-        sin_d1232_std, sin_d1232_no_std,
-        cos_d1232_std, cos_d1232_no_std,
-        tan_d1232_std, tan_d1232_no_std,
-        atan_d1232_std, atan_d1232_no_std
+        sin_d1232_std,
+        sin_d1232_no_std,
+        cos_d1232_std,
+        cos_d1232_no_std,
+        tan_d1232_std,
+        tan_d1232_no_std,
+        atan_d1232_std,
+        atan_d1232_no_std
     );
     wide_trig_delegating_tail!();
 }

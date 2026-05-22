@@ -10,9 +10,9 @@
 
 #![cfg(feature = "wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D76;
+use std::hint::black_box;
 
 type D = D76<6>;
 
@@ -26,21 +26,47 @@ fn bench(c: &mut Criterion) {
     let two: D = D::from_int(2);
     let one: D = D::from_int(1);
 
-    g.bench_function("arith/mul", |bn| bn.iter(|| black_box(two) * black_box(one)));
-    g.bench_function("arith/div", |bn| bn.iter(|| black_box(two) / black_box(one)));
+    g.bench_function("arith/mul", |bn| {
+        bn.iter(|| black_box(two) * black_box(one))
+    });
+    g.bench_function("arith/div", |bn| {
+        bn.iter(|| black_box(two) / black_box(one))
+    });
 
-    g.bench_function("strict/sqrt", |bn| bn.iter(|| black_box(one_p_half).sqrt_strict()));
-    g.bench_function("strict/cbrt", |bn| bn.iter(|| black_box(one_p_half).cbrt_strict()));
-    g.bench_function("strict/ln",   |bn| bn.iter(|| black_box(one_p_half).ln_strict()));
-    g.bench_function("strict/exp",  |bn| bn.iter(|| black_box(half).exp_strict()));
-    g.bench_function("strict/sin",  |bn| bn.iter(|| black_box(one_p_half).sin_strict()));
-    g.bench_function("strict/cos",  |bn| bn.iter(|| black_box(one_p_half).cos_strict()));
-    g.bench_function("strict/tan",  |bn| bn.iter(|| black_box(one_p_half).tan_strict()));
-    g.bench_function("strict/atan", |bn| bn.iter(|| black_box(one_p_half).atan_strict()));
-    g.bench_function("strict/asin", |bn| bn.iter(|| black_box(half).asin_strict()));
-    g.bench_function("strict/acos", |bn| bn.iter(|| black_box(half).acos_strict()));
-    g.bench_function("strict/sinh", |bn| bn.iter(|| black_box(half).sinh_strict()));
-    g.bench_function("strict/cosh", |bn| bn.iter(|| black_box(half).cosh_strict()));
+    g.bench_function("strict/sqrt", |bn| {
+        bn.iter(|| black_box(one_p_half).sqrt_strict())
+    });
+    g.bench_function("strict/cbrt", |bn| {
+        bn.iter(|| black_box(one_p_half).cbrt_strict())
+    });
+    g.bench_function("strict/ln", |bn| {
+        bn.iter(|| black_box(one_p_half).ln_strict())
+    });
+    g.bench_function("strict/exp", |bn| bn.iter(|| black_box(half).exp_strict()));
+    g.bench_function("strict/sin", |bn| {
+        bn.iter(|| black_box(one_p_half).sin_strict())
+    });
+    g.bench_function("strict/cos", |bn| {
+        bn.iter(|| black_box(one_p_half).cos_strict())
+    });
+    g.bench_function("strict/tan", |bn| {
+        bn.iter(|| black_box(one_p_half).tan_strict())
+    });
+    g.bench_function("strict/atan", |bn| {
+        bn.iter(|| black_box(one_p_half).atan_strict())
+    });
+    g.bench_function("strict/asin", |bn| {
+        bn.iter(|| black_box(half).asin_strict())
+    });
+    g.bench_function("strict/acos", |bn| {
+        bn.iter(|| black_box(half).acos_strict())
+    });
+    g.bench_function("strict/sinh", |bn| {
+        bn.iter(|| black_box(half).sinh_strict())
+    });
+    g.bench_function("strict/cosh", |bn| {
+        bn.iter(|| black_box(half).cosh_strict())
+    });
 
     g.finish();
 }

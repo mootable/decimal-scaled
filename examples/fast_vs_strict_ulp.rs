@@ -37,7 +37,9 @@ fn digits_disagree<T: ToString>(strict_bits: T, fast_bits: T) -> usize {
     diff_digits.len().min(a.len().max(b.len()))
 }
 
-fn strip_sign(s: &str) -> &str { s.trim_start_matches('-') }
+fn strip_sign(s: &str) -> &str {
+    s.trim_start_matches('-')
+}
 
 /// Decimal-string absolute difference: returns the digit string of
 /// `|a − b|` without leading zeros. Both inputs are digit strings
@@ -55,10 +57,17 @@ fn subtract_abs(a: &str, b: &str) -> String {
     for i in 0..big.len() {
         let s = small.get(i).copied().unwrap_or(0) as i16;
         let mut d = big[i] as i16 - s - borrow;
-        if d < 0 { d += 10; borrow = 1; } else { borrow = 0; }
+        if d < 0 {
+            d += 10;
+            borrow = 1;
+        } else {
+            borrow = 0;
+        }
         out.push(d as u8 + b'0');
     }
-    while out.len() > 1 && *out.last().unwrap() == b'0' { out.pop(); }
+    while out.len() > 1 && *out.last().unwrap() == b'0' {
+        out.pop();
+    }
     out.reverse();
     String::from_utf8(out).unwrap()
 }
@@ -98,29 +107,93 @@ fn main() {
     println!("| type / s   | ln noise | exp noise | sin noise | sqrt noise |");
     println!("|------------|----------|-----------|-----------|------------|");
 
-    row!(D9<5>,   "D9<5>",   D9::<5>::from_int(1) + D9::<5>::from_int(1) / D9::<5>::from_int(2));
-    row!(D9<9>,   "D9<9>",   D9::<9>::from_int(1) + D9::<9>::from_int(1) / D9::<9>::from_int(2));
-    row!(D18<9>,  "D18<9>",  D18::<9>::from_int(1) + D18::<9>::from_int(1) / D18::<9>::from_int(2));
-    row!(D18<18>, "D18<18>", D18::<18>::from_int(1) + D18::<18>::from_int(1) / D18::<18>::from_int(2));
-    row!(D38<19>, "D38<19>", D38::<19>::from_int(1) + D38::<19>::from_int(1) / D38::<19>::from_int(2));
-    row!(D38<38>, "D38<38>", D38::<38>::from_bits(15_000_000_000_000_000_000_000_000_000_000_000_000_i128));
+    row!(
+        D9<5>,
+        "D9<5>",
+        D9::<5>::from_int(1) + D9::<5>::from_int(1) / D9::<5>::from_int(2)
+    );
+    row!(
+        D9<9>,
+        "D9<9>",
+        D9::<9>::from_int(1) + D9::<9>::from_int(1) / D9::<9>::from_int(2)
+    );
+    row!(
+        D18<9>,
+        "D18<9>",
+        D18::<9>::from_int(1) + D18::<9>::from_int(1) / D18::<9>::from_int(2)
+    );
+    row!(
+        D18<18>,
+        "D18<18>",
+        D18::<18>::from_int(1) + D18::<18>::from_int(1) / D18::<18>::from_int(2)
+    );
+    row!(
+        D38<19>,
+        "D38<19>",
+        D38::<19>::from_int(1) + D38::<19>::from_int(1) / D38::<19>::from_int(2)
+    );
+    row!(
+        D38<38>,
+        "D38<38>",
+        D38::<38>::from_bits(15_000_000_000_000_000_000_000_000_000_000_000_000_i128)
+    );
     #[cfg(feature = "wide")]
     {
-        row!(D57<28>,  "D57<28>",  D57::<28>::from_int(1) + D57::<28>::from_int(1) / D57::<28>::from_int(2));
-        row!(D76<35>,  "D76<35>",  D76::<35>::from_int(1) + D76::<35>::from_int(1) / D76::<35>::from_int(2));
-        row!(D115<57>, "D115<57>", D115::<57>::from_int(1) + D115::<57>::from_int(1) / D115::<57>::from_int(2));
-        row!(D153<75>, "D153<75>", D153::<75>::from_int(1) + D153::<75>::from_int(1) / D153::<75>::from_int(2));
-        row!(D230<115>,"D230<115>",D230::<115>::from_int(1) + D230::<115>::from_int(1) / D230::<115>::from_int(2));
-        row!(D307<150>,"D307<150>",D307::<150>::from_int(1) + D307::<150>::from_int(1) / D307::<150>::from_int(2));
+        row!(
+            D57<28>,
+            "D57<28>",
+            D57::<28>::from_int(1) + D57::<28>::from_int(1) / D57::<28>::from_int(2)
+        );
+        row!(
+            D76<35>,
+            "D76<35>",
+            D76::<35>::from_int(1) + D76::<35>::from_int(1) / D76::<35>::from_int(2)
+        );
+        row!(
+            D115<57>,
+            "D115<57>",
+            D115::<57>::from_int(1) + D115::<57>::from_int(1) / D115::<57>::from_int(2)
+        );
+        row!(
+            D153<75>,
+            "D153<75>",
+            D153::<75>::from_int(1) + D153::<75>::from_int(1) / D153::<75>::from_int(2)
+        );
+        row!(
+            D230<115>,
+            "D230<115>",
+            D230::<115>::from_int(1) + D230::<115>::from_int(1) / D230::<115>::from_int(2)
+        );
+        row!(
+            D307<150>,
+            "D307<150>",
+            D307::<150>::from_int(1) + D307::<150>::from_int(1) / D307::<150>::from_int(2)
+        );
     }
     #[cfg(feature = "x-wide")]
     {
-        row!(D462<230>,"D462<230>",D462::<230>::from_int(1) + D462::<230>::from_int(1) / D462::<230>::from_int(2));
-        row!(D616<308>,"D616<308>",D616::<308>::from_int(1) + D616::<308>::from_int(1) / D616::<308>::from_int(2));
+        row!(
+            D462<230>,
+            "D462<230>",
+            D462::<230>::from_int(1) + D462::<230>::from_int(1) / D462::<230>::from_int(2)
+        );
+        row!(
+            D616<308>,
+            "D616<308>",
+            D616::<308>::from_int(1) + D616::<308>::from_int(1) / D616::<308>::from_int(2)
+        );
     }
     #[cfg(feature = "xx-wide")]
     {
-        row!(D924<461>,"D924<461>",D924::<461>::from_int(1) + D924::<461>::from_int(1) / D924::<461>::from_int(2));
-        row!(D1232<616>,"D1232<616>",D1232::<616>::from_int(1) + D1232::<616>::from_int(1) / D1232::<616>::from_int(2));
+        row!(
+            D924<461>,
+            "D924<461>",
+            D924::<461>::from_int(1) + D924::<461>::from_int(1) / D924::<461>::from_int(2)
+        );
+        row!(
+            D1232<616>,
+            "D1232<616>",
+            D1232::<616>::from_int(1) + D1232::<616>::from_int(1) / D1232::<616>::from_int(2)
+        );
     }
 }

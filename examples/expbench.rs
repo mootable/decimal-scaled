@@ -7,7 +7,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use decimal_scaled::{D153, D18, D307, D38, D76, D9};
+use decimal_scaled::{D9, D18, D38, D76, D153, D307};
 
 const ITERS: u32 = 5_000;
 
@@ -28,11 +28,15 @@ fn main() {
     println!("== exp_strict (narrow-tier sanity) ==");
     {
         let a = D9::<5>::ONE / D9::<5>::from_int(2);
-        time("D9<5>::exp_strict(0.5)", || { black_box(black_box(a).exp_strict()); });
+        time("D9<5>::exp_strict(0.5)", || {
+            black_box(black_box(a).exp_strict());
+        });
     }
     {
         let a = D18::<9>::ONE / D18::<9>::from_int(2);
-        time("D18<9>::exp_strict(0.5)", || { black_box(black_box(a).exp_strict()); });
+        time("D18<9>::exp_strict(0.5)", || {
+            black_box(black_box(a).exp_strict());
+        });
     }
 
     println!();
@@ -93,34 +97,48 @@ fn main() {
     println!("== sin_strict (input = 1) ==");
     {
         let a = D38::<19>::ONE;
-        time("D38<19>::sin_strict(1)", || { black_box(black_box(a).sin_strict()); });
+        time("D38<19>::sin_strict(1)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
     {
         let a = D76::<35>::ONE;
-        time("D76<35>::sin_strict(1)", || { black_box(black_box(a).sin_strict()); });
+        time("D76<35>::sin_strict(1)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
     {
         let a = D153::<75>::ONE;
-        time("D153<75>::sin_strict(1)", || { black_box(black_box(a).sin_strict()); });
+        time("D153<75>::sin_strict(1)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
     {
         let a = D307::<150>::ONE;
-        time("D307<150>::sin_strict(1)", || { black_box(black_box(a).sin_strict()); });
+        time("D307<150>::sin_strict(1)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
 
     println!();
     println!("== sin_strict (input ≈ 1.5, near π/2) ==");
     {
         let a = D76::<35>::ONE + D76::<35>::ONE / D76::<35>::from_int(2);
-        time("D76<35>::sin_strict(1.5)", || { black_box(black_box(a).sin_strict()); });
+        time("D76<35>::sin_strict(1.5)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
     {
         let a = D153::<75>::ONE + D153::<75>::ONE / D153::<75>::from_int(2);
-        time("D153<75>::sin_strict(1.5)", || { black_box(black_box(a).sin_strict()); });
+        time("D153<75>::sin_strict(1.5)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
     {
         let a = D307::<150>::ONE + D307::<150>::ONE / D307::<150>::from_int(2);
-        time("D307<150>::sin_strict(1.5)", || { black_box(black_box(a).sin_strict()); });
+        time("D307<150>::sin_strict(1.5)", || {
+            black_box(black_box(a).sin_strict());
+        });
     }
 
     println!();
@@ -148,27 +166,41 @@ fn main() {
     println!("== cos_strict / tan_strict (post-Pythagorean) ==");
     {
         let a = D76::<35>::ONE;
-        time("D76<35>::cos_strict(1)", || { black_box(black_box(a).cos_strict()); });
-        time("D76<35>::tan_strict(1)", || { black_box(black_box(a).tan_strict()); });
+        time("D76<35>::cos_strict(1)", || {
+            black_box(black_box(a).cos_strict());
+        });
+        time("D76<35>::tan_strict(1)", || {
+            black_box(black_box(a).tan_strict());
+        });
     }
     {
         let a = D307::<150>::ONE;
-        time("D307<150>::cos_strict(1)", || { black_box(black_box(a).cos_strict()); });
-        time("D307<150>::tan_strict(1)", || { black_box(black_box(a).tan_strict()); });
+        time("D307<150>::cos_strict(1)", || {
+            black_box(black_box(a).cos_strict());
+        });
+        time("D307<150>::tan_strict(1)", || {
+            black_box(black_box(a).tan_strict());
+        });
     }
 
     println!();
     println!("== atan_strict (input = 1) ==");
     {
         let a = D76::<35>::ONE;
-        time("D76<35>::atan_strict(1)", || { black_box(black_box(a).atan_strict()); });
+        time("D76<35>::atan_strict(1)", || {
+            black_box(black_box(a).atan_strict());
+        });
     }
     {
         let a = D153::<75>::ONE;
-        time("D153<75>::atan_strict(1)", || { black_box(black_box(a).atan_strict()); });
+        time("D153<75>::atan_strict(1)", || {
+            black_box(black_box(a).atan_strict());
+        });
     }
     {
         let a = D307::<150>::ONE;
-        time("D307<150>::atan_strict(1)", || { black_box(black_box(a).atan_strict()); });
+        time("D307<150>::atan_strict(1)", || {
+            black_box(black_box(a).atan_strict());
+        });
     }
 }

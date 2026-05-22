@@ -264,11 +264,8 @@ pub trait DynDecimal: 'static {
     fn rescale_to(&self, target_scale: u32) -> Option<Box<dyn DynDecimal>>;
 
     /// Rescale with an explicit rounding mode. See [`Self::rescale_to`].
-    fn rescale_to_with(
-        &self,
-        target_scale: u32,
-        mode: RoundingMode,
-    ) -> Option<Box<dyn DynDecimal>>;
+    fn rescale_to_with(&self, target_scale: u32, mode: RoundingMode)
+    -> Option<Box<dyn DynDecimal>>;
 
     // ── Comparison ──────────────────────────────────────────────────
 

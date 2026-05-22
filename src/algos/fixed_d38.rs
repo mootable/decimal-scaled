@@ -359,13 +359,19 @@ pub(crate) struct Fixed {
 
 impl Fixed {
     /// The additive identity.
-    pub(crate) const ZERO: Fixed = Fixed { negative: false, mag: [0, 0] };
+    pub(crate) const ZERO: Fixed = Fixed {
+        negative: false,
+        mag: [0, 0],
+    };
 
     /// Constructs from a non-negative `u128` magnitude already scaled to
     /// the working scale.
     #[inline]
     pub(crate) fn from_u128_mag(mag: u128, negative: bool) -> Fixed {
-        Fixed { negative: negative && mag != 0, mag: [mag, 0] }
+        Fixed {
+            negative: negative && mag != 0,
+            mag: [mag, 0],
+        }
     }
 
     /// `10^exp` as a `Fixed` magnitude (for `exp <= 76`, which always
@@ -397,7 +403,10 @@ impl Fixed {
         let ten_pow_32 = 10u128.pow(32);
         let (carry, low) = mul_128(hi, ten_pow_32);
         let (mag, _c) = add_u256([low, carry], [lo, 0]);
-        Fixed { negative: false, mag }
+        Fixed {
+            negative: false,
+            mag,
+        }
     }
 
     /// Truncating change of working scale from `from_w` down to `to_w`
@@ -421,7 +430,10 @@ impl Fixed {
         }
         let shift = from_w - to_w;
         let (q, _r) = divmod_u256_by_pow10(self.mag, Fixed::pow10(shift), shift);
-        Fixed { negative: self.negative && !is_zero_u256(q), mag: q }
+        Fixed {
+            negative: self.negative && !is_zero_u256(q),
+            mag: q,
+        }
     }
 
     /// Multiplies the magnitude by a small unsigned integer `k`. The
@@ -432,7 +444,10 @@ impl Fixed {
         let (_hi_hi, hi_lo) = mul_128(self.mag[1], k);
         let (mag1, _c) = hi_lo.overflowing_add(lo_hi);
         let mag = [lo_lo, mag1];
-        Fixed { negative: self.negative && !is_zero_u256(mag), mag }
+        Fixed {
+            negative: self.negative && !is_zero_u256(mag),
+            mag,
+        }
     }
 
     /// `|self| >= |rhs|` — magnitude comparison.
@@ -444,14 +459,23 @@ impl Fixed {
     /// `self * 2` (magnitude doubled). Caller guarantees no overflow.
     #[inline]
     pub(crate) fn double(self) -> Fixed {
-        let mag = [(self.mag[0] << 1), (self.mag[1] << 1) | (self.mag[0] >> 127)];
-        Fixed { negative: self.negative, mag }
+        let mag = [
+            (self.mag[0] << 1),
+            (self.mag[1] << 1) | (self.mag[0] >> 127),
+        ];
+        Fixed {
+            negative: self.negative,
+            mag,
+        }
     }
 
     /// `self / 2`, truncating (magnitude halved).
     #[inline]
     pub(crate) fn halve(self) -> Fixed {
-        Fixed { negative: self.negative, mag: halve_u256(self.mag) }
+        Fixed {
+            negative: self.negative,
+            mag: halve_u256(self.mag),
+        }
     }
 
     /// Bit length of the magnitude (0 for zero, else `floor(log2)+1`).
@@ -473,9 +497,15 @@ impl Fixed {
         let mag = if n >= 128 {
             [0, self.mag[0] << (n - 128)]
         } else {
-            [self.mag[0] << n, (self.mag[1] << n) | (self.mag[0] >> (128 - n))]
+            [
+                self.mag[0] << n,
+                (self.mag[1] << n) | (self.mag[0] >> (128 - n)),
+            ]
         };
-        Fixed { negative: self.negative, mag }
+        Fixed {
+            negative: self.negative,
+            mag,
+        }
     }
 
     /// `self >> n` (magnitude shifted right, truncating).
@@ -486,9 +516,15 @@ impl Fixed {
         let mag = if n >= 128 {
             [self.mag[1] >> (n - 128), 0]
         } else {
-            [(self.mag[0] >> n) | (self.mag[1] << (128 - n)), self.mag[1] >> n]
+            [
+                (self.mag[0] >> n) | (self.mag[1] << (128 - n)),
+                self.mag[1] >> n,
+            ]
         };
-        Fixed { negative: self.negative && !is_zero_u256(mag), mag }
+        Fixed {
+            negative: self.negative && !is_zero_u256(mag),
+            mag,
+        }
     }
 
     /// Adds two values at the same working scale.
@@ -497,18 +533,30 @@ impl Fixed {
             let (sum, _carry) = add_u256(self.mag, rhs.mag);
             // The transcendental evaluators keep magnitudes well below
             // 2^256, so `_carry` is always false here.
-            Fixed { negative: self.negative, mag: sum }
+            Fixed {
+                negative: self.negative,
+                mag: sum,
+            }
         } else {
             // Opposite signs: subtract the smaller magnitude.
-            match (ge_u256(self.mag, rhs.mag), is_zero_u256(self.mag) && is_zero_u256(rhs.mag)) {
+            match (
+                ge_u256(self.mag, rhs.mag),
+                is_zero_u256(self.mag) && is_zero_u256(rhs.mag),
+            ) {
                 (_, true) => Fixed::ZERO,
                 (true, _) => {
                     let mag = sub_u256(self.mag, rhs.mag);
-                    Fixed { negative: self.negative && !is_zero_u256(mag), mag }
+                    Fixed {
+                        negative: self.negative && !is_zero_u256(mag),
+                        mag,
+                    }
                 }
                 (false, _) => {
                     let mag = sub_u256(rhs.mag, self.mag);
-                    Fixed { negative: rhs.negative && !is_zero_u256(mag), mag }
+                    Fixed {
+                        negative: rhs.negative && !is_zero_u256(mag),
+                        mag,
+                    }
                 }
             }
         }
@@ -517,7 +565,10 @@ impl Fixed {
     /// Negates the value.
     #[inline]
     pub(crate) fn neg(self) -> Fixed {
-        Fixed { negative: !self.negative && !self.is_zero(), mag: self.mag }
+        Fixed {
+            negative: !self.negative && !self.is_zero(),
+            mag: self.mag,
+        }
     }
 
     /// Subtracts `rhs` from `self` at the same working scale.
@@ -631,7 +682,10 @@ impl Fixed {
         } else {
             mul_u256(self.mag, Fixed::pow10(w))
         };
-        Fixed { negative: false, mag: isqrt_u512(radicand) }
+        Fixed {
+            negative: false,
+            mag: isqrt_u512(radicand),
+        }
     }
 
     /// Divides by another working-scale value: `(self * 10^w) / rhs`,
@@ -690,7 +744,11 @@ impl Fixed {
             }
             let m = self.mag[0];
             return if self.negative {
-                if m > 1u128 << 127 { None } else { Some((m as i128).wrapping_neg()) }
+                if m > 1u128 << 127 {
+                    None
+                } else {
+                    Some((m as i128).wrapping_neg())
+                }
             } else if m > i128::MAX as u128 {
                 None
             } else {
@@ -718,7 +776,11 @@ impl Fixed {
         }
         let m = rounded[0];
         if self.negative {
-            if m > 1u128 << 127 { None } else { Some((m as i128).wrapping_neg()) }
+            if m > 1u128 << 127 {
+                None
+            } else {
+                Some((m as i128).wrapping_neg())
+            }
         } else if m > i128::MAX as u128 {
             None
         } else {
@@ -741,11 +803,7 @@ impl Fixed {
             q
         };
         let m = int_mag[0] as i128;
-        if self.negative {
-            -m
-        } else {
-            m
-        }
+        if self.negative { -m } else { m }
     }
 }
 
@@ -939,18 +997,27 @@ mod tests {
     #[test]
     fn fixed_mul_div() {
         let w = 12;
-        let one = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let one = Fixed {
+            negative: false,
+            mag: Fixed::pow10(w),
+        };
         let two = Fixed::from_u128_mag(2 * 10u128.pow(w), false);
         let three = Fixed::from_u128_mag(3 * 10u128.pow(w), false);
         // 2 * 3 == 6
-        assert_eq!(two.mul(three, w), Fixed::from_u128_mag(6 * 10u128.pow(w), false));
+        assert_eq!(
+            two.mul(three, w),
+            Fixed::from_u128_mag(6 * 10u128.pow(w), false)
+        );
         // 6 / 2 == 3
         let six = Fixed::from_u128_mag(6 * 10u128.pow(w), false);
         assert_eq!(six.div(two, w), three);
         // x * 1 == x
         assert_eq!(three.mul(one, w), three);
         // x / 3 (small) — 6 / 3 == 2
-        assert_eq!(six.div_small(3), Fixed::from_u128_mag(2 * 10u128.pow(w), false));
+        assert_eq!(
+            six.div_small(3),
+            Fixed::from_u128_mag(2 * 10u128.pow(w), false)
+        );
         // sign of a negative product
         assert_eq!(two.neg().mul(three, w).negative, true);
         assert_eq!(two.neg().mul(three.neg(), w).negative, false);
@@ -970,7 +1037,10 @@ mod tests {
         assert_eq!(s2.mag[0], 1_414_213_562_373);
         assert_eq!(s2.mag[1], 0);
         // sqrt(1) == 1, sqrt(0) == 0
-        assert_eq!(Fixed::from_u128_mag(one, false).sqrt(w), Fixed::from_u128_mag(one, false));
+        assert_eq!(
+            Fixed::from_u128_mag(one, false).sqrt(w),
+            Fixed::from_u128_mag(one, false)
+        );
         assert!(Fixed::ZERO.sqrt(w).is_zero());
     }
 
@@ -995,11 +1065,17 @@ mod tests {
     fn fixed_shr_crosses_limb_boundary() {
         // A value with bits only in the high limb shifted right by 130
         // ends up in the low limb.
-        let v = Fixed { negative: false, mag: [0, 4] };
+        let v = Fixed {
+            negative: false,
+            mag: [0, 4],
+        };
         let shifted = v.shr(130);
         assert_eq!(shifted.mag, [1, 0]);
         // Negative magnitude shifted to zero loses its sign.
-        let neg = Fixed { negative: true, mag: [0, 1] };
+        let neg = Fixed {
+            negative: true,
+            mag: [0, 1],
+        };
         let shifted = neg.shr(200);
         assert!(shifted.is_zero());
         // shr(0) is identity.
@@ -1014,8 +1090,14 @@ mod tests {
 
     #[test]
     fn fixed_add_both_zero_opposite_signs() {
-        let pos_zero = Fixed { negative: false, mag: [0, 0] };
-        let neg_zero = Fixed { negative: true, mag: [0, 0] };
+        let pos_zero = Fixed {
+            negative: false,
+            mag: [0, 0],
+        };
+        let neg_zero = Fixed {
+            negative: true,
+            mag: [0, 0],
+        };
         let r = pos_zero.add(neg_zero);
         assert!(r.is_zero());
     }
@@ -1029,7 +1111,10 @@ mod tests {
     #[test]
     fn fixed_div_small_uses_full_256_bits() {
         // (2^130) / 4 = 2^128.
-        let big = Fixed { negative: false, mag: [0, 4] };
+        let big = Fixed {
+            negative: false,
+            mag: [0, 4],
+        };
         let r = big.div_small(4);
         assert_eq!(r.mag, [0, 1]);
         // (3 · 10^36) / 6 = 5 · 10^35 (fits one limb).
@@ -1037,7 +1122,10 @@ mod tests {
         let r = three_e36.div_small(6);
         assert_eq!(r.mag, [5 * 10u128.pow(35), 0]);
         // Negative magnitude carries sign correctly.
-        let neg = Fixed { negative: true, mag: [0, 4] };
+        let neg = Fixed {
+            negative: true,
+            mag: [0, 4],
+        };
         let r = neg.div_small(4);
         assert_eq!(r.mag, [0, 1]);
         assert!(r.negative);
@@ -1053,16 +1141,28 @@ mod tests {
         use crate::support::rounding::RoundingMode;
         let hte = RoundingMode::HalfToEven;
         // High limb non-zero — instant overflow.
-        let v = Fixed { negative: false, mag: [0, 1] };
+        let v = Fixed {
+            negative: false,
+            mag: [0, 1],
+        };
         assert_eq!(v.round_to_i128_with(0, 0, hte), None);
         // Low limb just above i128::MAX (positive).
-        let v = Fixed { negative: false, mag: [(i128::MAX as u128) + 1, 0] };
+        let v = Fixed {
+            negative: false,
+            mag: [(i128::MAX as u128) + 1, 0],
+        };
         assert_eq!(v.round_to_i128_with(0, 0, hte), None);
         // Negative magnitude just past i128::MIN's absolute value.
-        let v = Fixed { negative: true, mag: [(i128::MAX as u128) + 2, 0] };
+        let v = Fixed {
+            negative: true,
+            mag: [(i128::MAX as u128) + 2, 0],
+        };
         assert_eq!(v.round_to_i128_with(0, 0, hte), None);
         // i128::MIN itself round-trips exactly.
-        let v = Fixed { negative: true, mag: [1u128 << 127, 0] };
+        let v = Fixed {
+            negative: true,
+            mag: [1u128 << 127, 0],
+        };
         assert_eq!(v.round_to_i128_with(0, 0, hte), Some(i128::MIN));
     }
 
@@ -1077,17 +1177,26 @@ mod tests {
         use crate::support::rounding::RoundingMode;
         let hte = RoundingMode::HalfToEven;
         // 2^128 / 10 = ~3.4e37, fits low limb; not an overflow.
-        let two_to_128 = Fixed { negative: false, mag: [0, 1] };
+        let two_to_128 = Fixed {
+            negative: false,
+            mag: [0, 1],
+        };
         let r = two_to_128.round_to_i128_with(1, 0, hte);
         // 2^128 / 10 ≈ 3.4e37, still > i128::MAX (1.7e38? No, 1.7e38; 3.4e37 < 1.7e38).
         // So the result actually fits i128. Sanity:
         assert!(r.is_some(), "2^128 / 10 fits i128");
         // The full-MAX value definitely overflows after rounding.
-        let v = Fixed { negative: false, mag: [u128::MAX, u128::MAX] };
+        let v = Fixed {
+            negative: false,
+            mag: [u128::MAX, u128::MAX],
+        };
         assert_eq!(v.round_to_i128_with(0, 0, hte), None);
         // A value just above 10 · i128::MAX at working scale 1 overflows
         // after the /10 round.
-        let huge = Fixed { negative: false, mag: [u128::MAX, 9u128] };
+        let huge = Fixed {
+            negative: false,
+            mag: [u128::MAX, 9u128],
+        };
         assert_eq!(huge.round_to_i128_with(1, 0, hte), None);
     }
 
@@ -1103,10 +1212,16 @@ mod tests {
         // `10^60` which lives in the 512-bit value's third limb,
         // exercising the high-limb branch of `isqrt_u512`.
         let w = 30;
-        let one_w = Fixed { negative: false, mag: Fixed::pow10(w) };
+        let one_w = Fixed {
+            negative: false,
+            mag: Fixed::pow10(w),
+        };
         assert_eq!(one_w.sqrt(w), one_w);
         // sqrt(4 at w=30) ought to be 2 at w=30.
-        let four_w = Fixed { negative: false, mag: [4 * 10u128.pow(w), 0] };
+        let four_w = Fixed {
+            negative: false,
+            mag: [4 * 10u128.pow(w), 0],
+        };
         let r = four_w.sqrt(w);
         assert_eq!(r.mag, [2 * 10u128.pow(w), 0]);
     }

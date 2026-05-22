@@ -44,8 +44,8 @@ pub(crate) mod trig;
 // Moller-Granlund magic-number divide used by every multiplicative
 // path; `fixed_d38` is the 256-bit sign-magnitude `Fixed` type used
 // by the strict-transcendental fallback paths.
-pub(crate) mod mg_divide;
 pub(crate) mod fixed_d38;
+pub(crate) mod mg_divide;
 
 // Newton-Raphson reciprocal divide for `n / 10^SCALE` at the wide
 // tiers. Head-to-head benched against
@@ -59,9 +59,17 @@ pub(crate) mod fixed_d38;
 // matrix's 2048-bit slot, so D307's `mul` slow path also routes
 // through the dispatcher.
 #[cfg(any(
-    feature = "d76", feature = "d115", feature = "d153", feature = "d230",
-    feature = "d307", feature = "d462", feature = "d616",
-    feature = "d924", feature = "d1232",
-    feature = "wide", feature = "x-wide", feature = "xx-wide"
+    feature = "d76",
+    feature = "d115",
+    feature = "d153",
+    feature = "d230",
+    feature = "d307",
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
+    feature = "wide",
+    feature = "x-wide",
+    feature = "xx-wide"
 ))]
 pub mod newton_reciprocal;

@@ -48,51 +48,75 @@ macro_rules! decl_decimal_consts {
         impl<const SCALE: u32> $crate::types::consts::DecimalConstants for $Type<SCALE> {
             #[inline]
             fn pi() -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::pi_at_target::<SCALE>(),
+                ))
             }
             #[inline]
             fn tau() -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::tau_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::tau_at_target::<SCALE>(),
+                ))
             }
             #[inline]
             fn half_pi() -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::half_pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::half_pi_at_target::<SCALE>(),
+                ))
             }
             #[inline]
             fn quarter_pi() -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::quarter_pi_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::quarter_pi_at_target::<SCALE>(),
+                ))
             }
             #[inline]
             fn golden() -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::golden_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::golden_at_target::<SCALE>(),
+                ))
             }
             #[inline]
             fn e() -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::e_at_target::<SCALE>()))
+                Self(<$Storage>::from_i128($crate::types::consts::e_at_target::<
+                    SCALE,
+                >()))
             }
             #[inline]
             fn pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::pi_at_target_with::<SCALE>(mode)))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::pi_at_target_with::<SCALE>(mode),
+                ))
             }
             #[inline]
             fn tau_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::tau_at_target_with::<SCALE>(mode)))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::tau_at_target_with::<SCALE>(mode),
+                ))
             }
             #[inline]
             fn half_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::half_pi_at_target_with::<SCALE>(mode)))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::half_pi_at_target_with::<SCALE>(mode),
+                ))
             }
             #[inline]
             fn quarter_pi_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::quarter_pi_at_target_with::<SCALE>(mode)))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::quarter_pi_at_target_with::<SCALE>(mode),
+                ))
             }
             #[inline]
             fn golden_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::golden_at_target_with::<SCALE>(mode)))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::golden_at_target_with::<SCALE>(mode),
+                ))
             }
             #[inline]
             fn e_with(mode: $crate::support::rounding::RoundingMode) -> Self {
-                Self(<$Storage>::from_i128($crate::types::consts::e_at_target_with::<SCALE>(mode)))
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::e_at_target_with::<SCALE>(mode),
+                ))
             }
         }
     };

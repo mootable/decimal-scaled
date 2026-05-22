@@ -10,11 +10,11 @@
 //! Every assertion is exact (bit-level) unless a method is documented
 //! lossy, in which case the relevant rounding contract is asserted.
 
-use decimal_scaled::{
-    D38, D38s0, D38s12, D38s2, D38s37, D38s9, D9s0, D9s2, D9s4, D9s8, D18s0, D18s17,
-    D18s6, D18s9, RoundingMode,
-};
 use decimal_scaled::DecimalArithmetic;
+use decimal_scaled::{
+    D9s0, D9s2, D9s4, D9s8, D18s0, D18s6, D18s9, D18s17, D38, D38s0, D38s2, D38s9, D38s12, D38s37,
+    RoundingMode,
+};
 
 // ─────────────────────────────────────────────────────────────────────
 // Constants and storage boundaries
@@ -89,7 +89,10 @@ fn neg_of_min_overflows() {
     assert_eq!(D38s12::MIN.wrapping_neg(), D38s12::MIN);
     assert_eq!(D38s12::MIN.overflowing_neg(), (D38s12::MIN, true));
     // Neg of MAX is fine.
-    assert_eq!(D38s12::MAX.checked_neg(), Some(D38s12::from_bits(i128::MIN + 1)));
+    assert_eq!(
+        D38s12::MAX.checked_neg(),
+        Some(D38s12::from_bits(i128::MIN + 1))
+    );
 }
 
 #[test]
@@ -162,16 +165,34 @@ fn rescale_down_every_mode_at_exact_half() {
     }
     // 2.5 -> ties-to-even rounds down to 2 (2 is even).
     let other_tie = D38::<1>::from_bits(25);
-    assert_eq!(other_tie.rescale_with::<0>(RoundingMode::HalfToEven).to_bits(), 2);
+    assert_eq!(
+        other_tie
+            .rescale_with::<0>(RoundingMode::HalfToEven)
+            .to_bits(),
+        2
+    );
 }
 
 #[test]
 fn rescale_down_negative_tie_is_sign_symmetric() {
     let neg_tie = D38::<1>::from_bits(-15); // -1.5
-    assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::HalfAwayFromZero).to_bits(), -2);
-    assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::HalfTowardZero).to_bits(), -1);
+    assert_eq!(
+        neg_tie
+            .rescale_with::<0>(RoundingMode::HalfAwayFromZero)
+            .to_bits(),
+        -2
+    );
+    assert_eq!(
+        neg_tie
+            .rescale_with::<0>(RoundingMode::HalfTowardZero)
+            .to_bits(),
+        -1
+    );
     assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::Floor).to_bits(), -2);
-    assert_eq!(neg_tie.rescale_with::<0>(RoundingMode::Ceiling).to_bits(), -1);
+    assert_eq!(
+        neg_tie.rescale_with::<0>(RoundingMode::Ceiling).to_bits(),
+        -1
+    );
 }
 
 #[test]
@@ -241,7 +262,11 @@ fn is_positive_is_negative_is_zero_partition() {
         let p = v.is_positive() as u8;
         let n = v.is_negative() as u8;
         let z = v.is_zero() as u8;
-        assert_eq!(p + n + z, 1, "value {v:?} must be in exactly one sign class");
+        assert_eq!(
+            p + n + z,
+            1,
+            "value {v:?} must be in exactly one sign class"
+        );
     }
 }
 
@@ -317,7 +342,15 @@ fn additive_and_multiplicative_identities() {
 
 #[test]
 fn from_bits_to_bits_round_trips_at_extremes() {
-    for raw in [0_i128, 1, -1, i128::MAX, i128::MIN, i128::MAX - 1, i128::MIN + 1] {
+    for raw in [
+        0_i128,
+        1,
+        -1,
+        i128::MAX,
+        i128::MIN,
+        i128::MAX - 1,
+        i128::MIN + 1,
+    ] {
         assert_eq!(D38s12::from_bits(raw).to_bits(), raw);
     }
     for raw in [0_i32, 1, -1, i32::MAX, i32::MIN] {
@@ -464,7 +497,13 @@ fn bitwise_storage_semantics() {
 fn float_shape_predicates_are_total() {
     // is_nan / is_infinite are always false; is_finite always true; a
     // fixed-point decimal has no special values.
-    for v in [D38s12::ZERO, D38s12::ONE, D38s12::MAX, D38s12::MIN, -D38s12::ONE] {
+    for v in [
+        D38s12::ZERO,
+        D38s12::ONE,
+        D38s12::MAX,
+        D38s12::MIN,
+        -D38s12::ONE,
+    ] {
         assert!(!v.is_nan());
         assert!(!v.is_infinite());
         assert!(v.is_finite());

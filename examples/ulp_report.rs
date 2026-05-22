@@ -52,10 +52,16 @@ fn ulp(a: i128, b: i128) -> u128 {
 fn main() {
     println!("# Transcendental ULP errors at D38<19> (1 ULP = 10⁻¹⁹)");
     println!();
-    println!("Baseline: `D76<19>` integer-only `*_strict` (≥ 49 effective working digits, rounded back to 19).");
+    println!(
+        "Baseline: `D76<19>` integer-only `*_strict` (≥ 49 effective working digits, rounded back to 19)."
+    );
     println!();
-    println!("| op    | decimal-scaled | fastnum | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |");
-    println!("|-------|----------------|---------|--------------|-------------|------------|------------|--------|");
+    println!(
+        "| op    | decimal-scaled | fastnum | rust_decimal | dashu-float | decimal-rs | bigdecimal | g_math |"
+    );
+    println!(
+        "|-------|----------------|---------|--------------|-------------|------------|------------|--------|"
+    );
 
     // ── ln(2) ──────────────────────────────────────────────
     let base_ln = ref19_to_bits(Ref19::from_int(2).ln_strict());
@@ -67,7 +73,10 @@ fn main() {
     ));
     let db_ln = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
-        DBig::from_parts(2.into(), 0).with_precision(19).value().ln()
+        DBig::from_parts(2.into(), 0)
+            .with_precision(19)
+            .value()
+            .ln()
     ));
     let dr_ln = parse_decimal_string_to_d19_bits(&format!(
         "{}",
@@ -100,7 +109,10 @@ fn main() {
     ));
     let db_exp = parse_decimal_string_to_d19_bits(&format!(
         "{:.19}",
-        DBig::from_parts(1.into(), 0).with_precision(19).value().exp()
+        DBig::from_parts(1.into(), 0)
+            .with_precision(19)
+            .value()
+            .exp()
     ));
     let dr_exp = parse_decimal_string_to_d19_bits(&format!(
         "{}",

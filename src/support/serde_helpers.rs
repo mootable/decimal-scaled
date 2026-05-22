@@ -39,7 +39,7 @@
 
 use core::marker::PhantomData;
 
-use serde::{de::Visitor, Deserialize, Deserializer, Serialize, Serializer};
+use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
@@ -131,7 +131,7 @@ impl<'de, const SCALE: u32> Deserialize<'de> for D38<SCALE> {
 /// `#[serde(with = ...)]` on fields in generic containing types or in
 /// newtype wrappers where the trait impl may be shadowed.
 pub mod decimal_serde {
-    use super::{Serializer, D38, Serialize, Deserializer, Deserialize, PhantomData, Visitor};
+    use super::{D38, Deserialize, Deserializer, PhantomData, Serialize, Serializer, Visitor};
 
     /// Serialise `v` using the `D38` wire format.
     ///
@@ -212,13 +212,9 @@ pub mod decimal_serde {
                     "decimal-scaled: leading `+` is not part of the canonical wire format",
                 ));
             }
-            v.parse::<i128>()
-                .map(D38::<SCALE>::from_bits)
-                .map_err(|_| {
-                    serde::de::Error::custom(
-                        "decimal-scaled: expected a base-10 i128 integer string",
-                    )
-                })
+            v.parse::<i128>().map(D38::<SCALE>::from_bits).map_err(|_| {
+                serde::de::Error::custom("decimal-scaled: expected a base-10 i128 integer string")
+            })
         }
 
         fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
@@ -246,10 +242,7 @@ pub mod decimal_serde {
             Ok(D38::<SCALE>::from_bits(i128::from_le_bytes(arr)))
         }
 
-        fn visit_borrowed_bytes<E: serde::de::Error>(
-            self,
-            v: &'de [u8],
-        ) -> Result<Self::Value, E> {
+        fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
             self.visit_bytes(v)
         }
 
@@ -309,9 +302,7 @@ pub mod decimal_serde {
             // u128 values above i128::MAX cannot be represented; reject
             // explicitly rather than wrapping silently.
             i128::try_from(v).map(D38::<SCALE>::from_bits).map_err(|_| {
-                serde::de::Error::custom(
-                    "decimal-scaled: u128 value exceeds i128 storage range",
-                )
+                serde::de::Error::custom("decimal-scaled: u128 value exceeds i128 storage range")
             })
         }
 
@@ -332,9 +323,9 @@ pub mod decimal_serde {
 mod tests {
     use super::*;
     use crate::types::widths::{D38, D38s12};
-    use serde::de::value::{Error as DeError, StrDeserializer};
-    use serde::de::IntoDeserializer;
     use alloc::format;
+    use serde::de::IntoDeserializer;
+    use serde::de::value::{Error as DeError, StrDeserializer};
 
     // ── String wire form round-trips ──────────────────────────────────
 
@@ -351,8 +342,7 @@ mod tests {
     #[test]
     fn visitor_accepts_scaled_one_str() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: D38s12 =
-            <_ as Visitor>::visit_str::<DeError>(visitor, "1000000000000").unwrap();
+        let v: D38s12 = <_ as Visitor>::visit_str::<DeError>(visitor, "1000000000000").unwrap();
         assert_eq!(v, D38s12::ONE);
     }
 
@@ -361,8 +351,7 @@ mod tests {
     #[test]
     fn visitor_rejects_decimal_point_str() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let res: Result<D38s12, _> =
-            <_ as Visitor>::visit_str::<DeError>(visitor, "1.5");
+        let res: Result<D38s12, _> = <_ as Visitor>::visit_str::<DeError>(visitor, "1.5");
         assert!(res.is_err(), "expected reject; got Ok({:?})", res);
     }
 
@@ -381,8 +370,7 @@ mod tests {
     #[test]
     fn visitor_accepts_u64_max() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let v: D38s12 =
-            <_ as Visitor>::visit_u64::<DeError>(visitor, u64::MAX).unwrap();
+        let v: D38s12 = <_ as Visitor>::visit_u64::<DeError>(visitor, u64::MAX).unwrap();
         assert_eq!(v.to_bits(), u64::MAX as i128);
     }
 
@@ -391,10 +379,8 @@ mod tests {
     #[test]
     fn visitor_rejects_u128_above_i128_max() {
         let visitor = decimal_serde::DecimalVisitor::<12>(PhantomData);
-        let res: Result<D38s12, _> = <_ as Visitor>::visit_u128::<DeError>(
-            visitor,
-            (i128::MAX as u128) + 1,
-        );
+        let res: Result<D38s12, _> =
+            <_ as Visitor>::visit_u128::<DeError>(visitor, (i128::MAX as u128) + 1);
         assert!(res.is_err(), "expected overflow reject; got Ok({:?})", res);
     }
 
@@ -567,8 +553,12 @@ mod tests {
         let bytes: alloc::vec::Vec<u8> = postcard::to_allocvec(&v).unwrap();
         let raw = v.to_bits().to_le_bytes();
         let found = bytes.windows(16).position(|w| w == raw);
-        assert!(found.is_some(), "expected raw LE bytes embedded; got {:?}", bytes);
-        assert_eq!(raw[0], 0x10);  // LSB of the i128
+        assert!(
+            found.is_some(),
+            "expected raw LE bytes embedded; got {:?}",
+            bytes
+        );
+        assert_eq!(raw[0], 0x10); // LSB of the i128
         assert_eq!(raw[15], 0x01); // MSB of the i128
     }
 
@@ -633,7 +623,13 @@ mod tests {
 /// Emits `Serialize` / `Deserialize` for a wide-tier decimal type
 /// (D76 / D153 / D307). `$bytes_len` is `mem::size_of::<$Storage>()`
 /// (e.g. 32 for `Int256`).
-#[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide", feature = "x-wide"))]
+#[cfg(any(
+    feature = "d76",
+    feature = "d153",
+    feature = "d307",
+    feature = "wide",
+    feature = "x-wide"
+))]
 macro_rules! decl_wide_serde {
     ($Type:ident, $Storage:ty, $bytes_len:literal) => {
         impl<const SCALE: u32> Serialize for $crate::types::widths::$Type<SCALE> {
@@ -692,11 +688,17 @@ macro_rules! decl_wide_serde {
                         })?;
                         Ok(<$crate::types::widths::$Type<S>>::from_bits(parsed))
                     }
-                    fn visit_borrowed_str<E: serde::de::Error>(self, v: &'de str) -> Result<Self::Value, E> {
+                    fn visit_borrowed_str<E: serde::de::Error>(
+                        self,
+                        v: &'de str,
+                    ) -> Result<Self::Value, E> {
                         self.visit_str(v)
                     }
                     #[cfg(feature = "alloc")]
-                    fn visit_string<E: serde::de::Error>(self, v: alloc::string::String) -> Result<Self::Value, E> {
+                    fn visit_string<E: serde::de::Error>(
+                        self,
+                        v: alloc::string::String,
+                    ) -> Result<Self::Value, E> {
                         self.visit_str(&v)
                     }
                     fn visit_bytes<E: serde::de::Error>(self, v: &[u8]) -> Result<Self::Value, E> {
@@ -710,9 +712,14 @@ macro_rules! decl_wide_serde {
                             buf.copy_from_slice(&v[i * 8..(i + 1) * 8]);
                             *limb = u64::from_le_bytes(buf);
                         }
-                        Ok(<$crate::types::widths::$Type<S>>::from_bits(<$Storage>::from_limbs_le(limbs)))
+                        Ok(<$crate::types::widths::$Type<S>>::from_bits(
+                            <$Storage>::from_limbs_le(limbs),
+                        ))
                     }
-                    fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
+                    fn visit_borrowed_bytes<E: serde::de::Error>(
+                        self,
+                        v: &'de [u8],
+                    ) -> Result<Self::Value, E> {
                         self.visit_bytes(v)
                     }
                 }

@@ -1,7 +1,7 @@
 //! Narrow-tier sin / cos / tan via widen → D38 → narrow.
 
-use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
 
 macro_rules! delegate_via_d38 {
     ($d9_name:ident, $d18_name:ident, $kernel:ident, $err:literal) => {
@@ -114,17 +114,87 @@ macro_rules! delegate_via_d38_binary_with {
     };
 }
 
-delegate_via_d38!(sin_strict_d9, sin_strict_d18, sin_strict, "sin_strict: result out of range");
-delegate_via_d38_with!(sin_with_d9, sin_with_d18, sin_with, "sin_with: result out of range");
-delegate_via_d38!(cos_strict_d9, cos_strict_d18, cos_strict, "cos_strict: result out of range");
-delegate_via_d38_with!(cos_with_d9, cos_with_d18, cos_with, "cos_with: result out of range");
-delegate_via_d38!(tan_strict_d9, tan_strict_d18, tan_strict, "tan_strict: result out of range");
-delegate_via_d38_with!(tan_with_d9, tan_with_d18, tan_with, "tan_with: result out of range");
-delegate_via_d38!(atan_strict_d9, atan_strict_d18, atan_strict, "atan_strict: result out of range");
-delegate_via_d38_with!(atan_with_d9, atan_with_d18, atan_with, "atan_with: result out of range");
-delegate_via_d38!(asin_strict_d9, asin_strict_d18, asin_strict, "asin_strict: result out of range");
-delegate_via_d38_with!(asin_with_d9, asin_with_d18, asin_with, "asin_with: result out of range");
-delegate_via_d38!(acos_strict_d9, acos_strict_d18, acos_strict, "acos_strict: result out of range");
-delegate_via_d38_with!(acos_with_d9, acos_with_d18, acos_with, "acos_with: result out of range");
-delegate_via_d38_binary!(atan2_strict_d9, atan2_strict_d18, atan2_strict, "atan2_strict: result out of range");
-delegate_via_d38_binary_with!(atan2_with_d9, atan2_with_d18, atan2_with, "atan2_with: result out of range");
+delegate_via_d38!(
+    sin_strict_d9,
+    sin_strict_d18,
+    sin_strict,
+    "sin_strict: result out of range"
+);
+delegate_via_d38_with!(
+    sin_with_d9,
+    sin_with_d18,
+    sin_with,
+    "sin_with: result out of range"
+);
+delegate_via_d38!(
+    cos_strict_d9,
+    cos_strict_d18,
+    cos_strict,
+    "cos_strict: result out of range"
+);
+delegate_via_d38_with!(
+    cos_with_d9,
+    cos_with_d18,
+    cos_with,
+    "cos_with: result out of range"
+);
+delegate_via_d38!(
+    tan_strict_d9,
+    tan_strict_d18,
+    tan_strict,
+    "tan_strict: result out of range"
+);
+delegate_via_d38_with!(
+    tan_with_d9,
+    tan_with_d18,
+    tan_with,
+    "tan_with: result out of range"
+);
+delegate_via_d38!(
+    atan_strict_d9,
+    atan_strict_d18,
+    atan_strict,
+    "atan_strict: result out of range"
+);
+delegate_via_d38_with!(
+    atan_with_d9,
+    atan_with_d18,
+    atan_with,
+    "atan_with: result out of range"
+);
+delegate_via_d38!(
+    asin_strict_d9,
+    asin_strict_d18,
+    asin_strict,
+    "asin_strict: result out of range"
+);
+delegate_via_d38_with!(
+    asin_with_d9,
+    asin_with_d18,
+    asin_with,
+    "asin_with: result out of range"
+);
+delegate_via_d38!(
+    acos_strict_d9,
+    acos_strict_d18,
+    acos_strict,
+    "acos_strict: result out of range"
+);
+delegate_via_d38_with!(
+    acos_with_d9,
+    acos_with_d18,
+    acos_with,
+    "acos_with: result out of range"
+);
+delegate_via_d38_binary!(
+    atan2_strict_d9,
+    atan2_strict_d18,
+    atan2_strict,
+    "atan2_strict: result out of range"
+);
+delegate_via_d38_binary_with!(
+    atan2_with_d9,
+    atan2_with_d18,
+    atan2_with,
+    "atan2_with: result out of range"
+);

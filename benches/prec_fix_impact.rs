@@ -27,10 +27,10 @@ use std::hint::black_box;
 use std::str::FromStr;
 use std::time::Duration;
 
-use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{RoundingMode, D307, D38, D76};
+use criterion::{Criterion, criterion_group, criterion_main};
 #[cfg(feature = "xx-wide")]
 use decimal_scaled::D1232;
+use decimal_scaled::{D38, D76, D307, RoundingMode};
 
 /// Pin the benching thread to one core so the criterion timing is not
 /// smeared by the scheduler migrating us across cores mid-run.
@@ -60,9 +60,7 @@ macro_rules! bench_fn {
         for (mlabel, mode) in MODES {
             // The width tier is carried by the benchmark-group name.
             let id = format!(concat!($fname, "/", $class, "/{}"), mlabel);
-            $g.bench_function(id, |bn| {
-                bn.iter(|| black_box(x).$call(black_box(mode)))
-            });
+            $g.bench_function(id, |bn| bn.iter(|| black_box(x).$call(black_box(mode))));
         }
     }};
 }

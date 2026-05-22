@@ -13,9 +13,9 @@
 
 #![cfg(feature = "xx-wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D924;
+use std::hint::black_box;
 
 fn bench_pair<const S_KERNEL: u32, const S_LOOKUP: u32>(c: &mut Criterion, label: &str) {
     let half_k = D924::<S_KERNEL>::from_int(1) / D924::<S_KERNEL>::from_int(2);
@@ -31,8 +31,12 @@ fn bench_pair<const S_KERNEL: u32, const S_LOOKUP: u32>(c: &mut Criterion, label
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
 
-    g.bench_function("ln/kernel_s440",  |b| b.iter(|| black_box(one_p_half_k).ln_strict()));
-    g.bench_function("ln/lookup_s460",  |b| b.iter(|| black_box(one_p_half_l).ln_strict()));
+    g.bench_function("ln/kernel_s440", |b| {
+        b.iter(|| black_box(one_p_half_k).ln_strict())
+    });
+    g.bench_function("ln/lookup_s460", |b| {
+        b.iter(|| black_box(one_p_half_l).ln_strict())
+    });
 
     g.finish();
 }

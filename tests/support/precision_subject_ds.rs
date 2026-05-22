@@ -15,11 +15,9 @@ use super::harness::{
     Input, Method, PrecisionSubject, SubjectOutput, Width, raw_to_decimal_string,
 };
 use decimal_scaled::RoundingMode;
+use decimal_scaled::{D9, D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232};
 #[allow(unused_imports)]
 use decimal_scaled::{DecimalConvert, DecimalTranscendental};
-use decimal_scaled::{
-    D9, D18, D38, D57, D76, D115, D153, D230, D307, D462, D616, D924, D1232,
-};
 use decimal_scaled::{
     Int192, Int256, Int384, Int512, Int768, Int1024, Int1536, Int2048, Int3072, Int4096,
 };

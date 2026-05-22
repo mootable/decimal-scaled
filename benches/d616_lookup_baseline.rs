@@ -6,9 +6,9 @@
 
 #![cfg(feature = "x-wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D616;
+use std::hint::black_box;
 
 fn bench_pair<const S_KERNEL: u32, const S_LOOKUP: u32>(c: &mut Criterion, label: &str) {
     let half_k = D616::<S_KERNEL>::from_int(1) / D616::<S_KERNEL>::from_int(2);
@@ -27,20 +27,40 @@ fn bench_pair<const S_KERNEL: u32, const S_LOOKUP: u32>(c: &mut Criterion, label
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(5));
 
-    g.bench_function("ln/kernel_s295",  |b| b.iter(|| black_box(one_p_half_k).ln_strict()));
-    g.bench_function("ln/lookup_s308",  |b| b.iter(|| black_box(one_p_half_l).ln_strict()));
+    g.bench_function("ln/kernel_s295", |b| {
+        b.iter(|| black_box(one_p_half_k).ln_strict())
+    });
+    g.bench_function("ln/lookup_s308", |b| {
+        b.iter(|| black_box(one_p_half_l).ln_strict())
+    });
 
-    g.bench_function("exp/kernel_s295", |b| b.iter(|| black_box(half_k).exp_strict()));
-    g.bench_function("exp/lookup_s308", |b| b.iter(|| black_box(half_l).exp_strict()));
+    g.bench_function("exp/kernel_s295", |b| {
+        b.iter(|| black_box(half_k).exp_strict())
+    });
+    g.bench_function("exp/lookup_s308", |b| {
+        b.iter(|| black_box(half_l).exp_strict())
+    });
 
-    g.bench_function("sinh/kernel_s295", |b| b.iter(|| black_box(half_k).sinh_strict()));
-    g.bench_function("sinh/lookup_s308", |b| b.iter(|| black_box(half_l).sinh_strict()));
+    g.bench_function("sinh/kernel_s295", |b| {
+        b.iter(|| black_box(half_k).sinh_strict())
+    });
+    g.bench_function("sinh/lookup_s308", |b| {
+        b.iter(|| black_box(half_l).sinh_strict())
+    });
 
-    g.bench_function("cosh/kernel_s295", |b| b.iter(|| black_box(half_k).cosh_strict()));
-    g.bench_function("cosh/lookup_s308", |b| b.iter(|| black_box(half_l).cosh_strict()));
+    g.bench_function("cosh/kernel_s295", |b| {
+        b.iter(|| black_box(half_k).cosh_strict())
+    });
+    g.bench_function("cosh/lookup_s308", |b| {
+        b.iter(|| black_box(half_l).cosh_strict())
+    });
 
-    g.bench_function("tanh/kernel_s295", |b| b.iter(|| black_box(half_k).tanh_strict()));
-    g.bench_function("tanh/lookup_s308", |b| b.iter(|| black_box(half_l).tanh_strict()));
+    g.bench_function("tanh/kernel_s295", |b| {
+        b.iter(|| black_box(half_k).tanh_strict())
+    });
+    g.bench_function("tanh/lookup_s308", |b| {
+        b.iter(|| black_box(half_l).tanh_strict())
+    });
 
     g.finish();
 }

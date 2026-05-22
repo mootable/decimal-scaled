@@ -22,6 +22,9 @@ use crate::support::rounding::RoundingMode;
 #[inline]
 #[must_use]
 pub(crate) fn sqrt(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
-    debug_assert!(raw >= 0, "mg_divide_d38::sqrt: negative input — caller must saturate");
+    debug_assert!(
+        raw >= 0,
+        "mg_divide_d38::sqrt: negative input — caller must saturate"
+    );
     crate::algos::mg_divide::sqrt_raw_with(raw as u128, scale, mode) as i128
 }

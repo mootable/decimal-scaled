@@ -49,7 +49,10 @@ macro_rules! decl_cross_width_eq_ord {
         // Narrower<S> < Wider<S> etc.
         impl<const SCALE: u32> ::core::cmp::PartialOrd<$Wider<SCALE>> for $Narrower<SCALE> {
             #[inline]
-            fn partial_cmp(&self, other: &$Wider<SCALE>) -> ::core::option::Option<::core::cmp::Ordering> {
+            fn partial_cmp(
+                &self,
+                other: &$Wider<SCALE>,
+            ) -> ::core::option::Option<::core::cmp::Ordering> {
                 let widened: $BigInt =
                     <$NarrowStorage as $crate::WidthLE<$BigInt>>::widen_into(self.0);
                 ::core::cmp::PartialOrd::partial_cmp(&widened, &other.0)
@@ -58,7 +61,10 @@ macro_rules! decl_cross_width_eq_ord {
         // Wider<S> < Narrower<S> etc.
         impl<const SCALE: u32> ::core::cmp::PartialOrd<$Narrower<SCALE>> for $Wider<SCALE> {
             #[inline]
-            fn partial_cmp(&self, other: &$Narrower<SCALE>) -> ::core::option::Option<::core::cmp::Ordering> {
+            fn partial_cmp(
+                &self,
+                other: &$Narrower<SCALE>,
+            ) -> ::core::option::Option<::core::cmp::Ordering> {
                 let widened: $BigInt =
                     <$NarrowStorage as $crate::WidthLE<$BigInt>>::widen_into(other.0);
                 ::core::cmp::PartialOrd::partial_cmp(&self.0, &widened)

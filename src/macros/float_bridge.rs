@@ -41,7 +41,10 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_with(value: f64, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn from_f64_with(
+                value: f64,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
                 }
@@ -163,7 +166,10 @@ macro_rules! decl_decimal_float_bridge {
             #[cfg(feature = "std")]
             #[inline]
             #[must_use]
-            pub fn from_f64_with(value: f64, mode: $crate::support::rounding::RoundingMode) -> Self {
+            pub fn from_f64_with(
+                value: f64,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> Self {
                 if value.is_nan() {
                     return Self::ZERO;
                 }

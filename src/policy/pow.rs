@@ -3,8 +3,8 @@
 
 use crate::algos::pow;
 use crate::policy::triplet::{policy_triplet, wtag};
-use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
 
 pub(crate) trait PowPolicy: Sized {
     /// `self^exp` (strict, const-folded `SCALE + STRICT_GUARD`).
@@ -101,15 +101,33 @@ impl<const SCALE: u32> PowPolicy for D38<SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
         #[cfg(feature = "std")]
-        { Self(powf_d38_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode)) }
+        {
+            Self(powf_d38_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode))
+        }
         #[cfg(not(feature = "std"))]
-        { Self(powf_d38_no_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode)) }
+        {
+            Self(powf_d38_no_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode))
+        }
     }
     #[inline]
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
         #[cfg(feature = "std")]
-        { Self(powf_with_d38_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, working_digits, mode)) }
+        {
+            Self(powf_with_d38_std::<{ wtag::D38 }, SCALE>(
+                self.0,
+                exp.0,
+                working_digits,
+                mode,
+            ))
+        }
         #[cfg(not(feature = "std"))]
-        { Self(powf_with_d38_no_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, working_digits, mode)) }
+        {
+            Self(powf_with_d38_no_std::<{ wtag::D38 }, SCALE>(
+                self.0,
+                exp.0,
+                working_digits,
+                mode,
+            ))
+        }
     }
 }

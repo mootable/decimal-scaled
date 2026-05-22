@@ -15,22 +15,20 @@
 //! constant, the limb loops unroll and any `match LIMBS` arms const-fold
 //! per monomorphisation — no runtime dispatch.
 
-mod traits;
+pub(crate) mod traits;
 mod wide_compat;
 
-pub use traits::{BigInt, BigInt};
+pub use traits::BigInt;
 
+use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
+use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
     limbs_mul_fast_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
-use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
-use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use core::cmp::Ordering;
-use core::ops::{
-    Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub,
-};
+use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
@@ -62,7 +60,9 @@ impl<const N: usize> Uint<N> {
         Self { limbs }
     };
     /// Largest representable value (all limbs set).
-    pub const MAX: Self = Self { limbs: [u64::MAX; N] };
+    pub const MAX: Self = Self {
+        limbs: [u64::MAX; N],
+    };
 
     /// Constructs from raw little-endian limbs.
     #[inline]
@@ -173,7 +173,11 @@ impl<const N: usize> Uint<N> {
             }
             i += 1;
         }
-        if overflow { None } else { Some(Self { limbs: out }) }
+        if overflow {
+            None
+        } else {
+            Some(Self { limbs: out })
+        }
     }
 
     /// Wrapping division. Panics on a zero divisor, matching the
@@ -191,7 +195,10 @@ impl<const N: usize> Uint<N> {
     /// behaviour of the primitive unsigned integer types.
     #[inline]
     pub fn wrapping_rem(self, rhs: Self) -> Self {
-        assert!(!rhs.is_zero(), "attempt to calculate the remainder with a divisor of zero");
+        assert!(
+            !rhs.is_zero(),
+            "attempt to calculate the remainder with a divisor of zero"
+        );
         let mut quot = [0u64; N];
         let mut rem = [0u64; N];
         limbs_divmod_u64(&self.limbs, &rhs.limbs, &mut quot, &mut rem);
@@ -1160,7 +1167,11 @@ impl<const N: usize> Int<N> {
             i += 1;
         }
         if m >= 1.0 {
-            return if negative { Self::min_value() } else { Self::max_value() };
+            return if negative {
+                Self::min_value()
+            } else {
+                Self::max_value()
+            };
         }
         Self::from_mag_limbs(&limbs, negative)
     }
@@ -1173,12 +1184,11 @@ impl<const N: usize> Int<N> {
             return Err(());
         }
         let bytes = s.as_bytes();
-        let (negative, start): (bool, usize) =
-            if !bytes.is_empty() && bytes[0] == b'-' {
-                (true, 1)
-            } else {
-                (false, 0)
-            };
+        let (negative, start): (bool, usize) = if !bytes.is_empty() && bytes[0] == b'-' {
+            (true, 1)
+        } else {
+            (false, 0)
+        };
         if start >= bytes.len() {
             return Err(());
         }
@@ -1372,7 +1382,11 @@ impl<const N: usize> Int<N> {
         match self.checked_add(rhs) {
             Some(v) => v,
             None => {
-                if self.is_negative() { Self::MIN } else { Self::MAX }
+                if self.is_negative() {
+                    Self::MIN
+                } else {
+                    Self::MAX
+                }
             }
         }
     }
@@ -1383,7 +1397,11 @@ impl<const N: usize> Int<N> {
         match self.checked_sub(rhs) {
             Some(v) => v,
             None => {
-                if self.is_negative() { Self::MIN } else { Self::MAX }
+                if self.is_negative() {
+                    Self::MIN
+                } else {
+                    Self::MAX
+                }
             }
         }
     }
@@ -1763,7 +1781,9 @@ impl<const N: usize> Uint<N> {
     /// type API expects.
     #[inline]
     pub fn resize_n<const M: usize>(self) -> Uint<M> {
-        Uint::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { 0 }))
+        Uint::from_limbs(core::array::from_fn(
+            |i| if i < N { self.limbs[i] } else { 0 },
+        ))
     }
 
     /// Widens to a wider `Uint<M>` (`M >= N`), zero-extending the new
@@ -1802,7 +1822,9 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub fn resize_n<const M: usize>(self) -> Int<M> {
         let fill = if self.is_negative() { u64::MAX } else { 0 };
-        Int::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { fill }))
+        Int::from_limbs(core::array::from_fn(|i| {
+            if i < N { self.limbs[i] } else { fill }
+        }))
     }
 
     /// Widens to a wider `Int<M>` (`M >= N`), sign-extending. Lossless.
@@ -1819,7 +1841,11 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub fn narrow<const M: usize>(self) -> Option<Int<M>> {
         debug_assert!(M >= 1 && M <= N, "narrow requires 1 <= M <= N");
-        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 { u64::MAX } else { 0 };
+        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 {
+            u64::MAX
+        } else {
+            0
+        };
         let mut i = M;
         while i < N {
             if self.limbs[i] != sign_fill {
@@ -1872,8 +1898,8 @@ pub type Int16384 = Int<256>;
 
 #[cfg(test)]
 mod tests {
-    use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
     use super::*;
+    use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
 
     /// The `BigInt` / `BigInt` surface must compile and
     /// behave through a fully generic bound, for both signed and
@@ -1881,7 +1907,7 @@ mod tests {
     #[test]
     fn fixed_int_trait_surface() {
         fn exercises<T: BigInt>(seven: T, three: T) {
-            assert_eq!(T::LIMBS * 64, T::BITS);
+            assert_eq!(T::LIMBS as u32 * 64, T::BITS);
             assert!(T::ZERO.is_zero());
             assert!(T::ONE.is_one());
             assert!(!T::ZERO.is_one());
@@ -1911,10 +1937,7 @@ mod tests {
             // bit_length / leading_zeros consistency.
             assert_eq!(T::ONE.bit_length(), 1);
             assert_eq!(T::ZERO.bit_length(), 0);
-            assert_eq!(
-                T::ONE.leading_zeros(),
-                (T::BITS as u32) - 1
-            );
+            assert_eq!(T::ONE.leading_zeros(), (T::BITS as u32) - 1);
 
             // Reductions and the limb round-trip.
             let items = [T::ONE, T::ONE, T::ONE];
@@ -2059,7 +2082,20 @@ mod tests {
         }
 
         let samples: [u128; 14] = [
-            0, 1, 2, 7, 8, 9, 26, 27, 28, 1000, 1023, 1024, 1_000_000, u64::MAX as u128,
+            0,
+            1,
+            2,
+            7,
+            8,
+            9,
+            26,
+            27,
+            28,
+            1000,
+            1023,
+            1024,
+            1_000_000,
+            u64::MAX as u128,
         ];
         for &m in &samples {
             for k in [2u32, 3, 5] {
@@ -2240,15 +2276,15 @@ mod tests {
     fn uint_checked_mul_overflow() {
         // 2^64 * 2^64 = 2^128 fits in 256 bits.
         let a = Uint::<4>::from_limbs([0, 1, 0, 0]);
-        assert_eq!(
-            a.checked_mul(a),
-            Some(Uint::<4>::from_limbs([0, 0, 1, 0]))
-        );
+        assert_eq!(a.checked_mul(a), Some(Uint::<4>::from_limbs([0, 0, 1, 0])));
         // 2^192 * 2^192 overflows 256 bits.
         let hi = Uint::<4>::from_limbs([0, 0, 0, 1]);
         assert_eq!(hi.checked_mul(hi), None);
         // MAX * 2 overflows.
-        assert_eq!(Uint::<4>::MAX.checked_mul(Uint::<4>::from_limbs([2, 0, 0, 0])), None);
+        assert_eq!(
+            Uint::<4>::MAX.checked_mul(Uint::<4>::from_limbs([2, 0, 0, 0])),
+            None
+        );
     }
 
     #[test]
@@ -2387,8 +2423,18 @@ mod tests {
 
     #[test]
     fn int_from_i128_round_trips() {
-        for v in [0i128, 1, -1, 42, -42, i64::MAX as i128, i64::MIN as i128,
-                  i128::MAX, i128::MIN, 123_456_789_012_345_678] {
+        for v in [
+            0i128,
+            1,
+            -1,
+            42,
+            -42,
+            i64::MAX as i128,
+            i64::MIN as i128,
+            i128::MAX,
+            i128::MIN,
+            123_456_789_012_345_678,
+        ] {
             let a = Int::<4>::from_i128(v);
             assert_eq!(a.to_i128_checked(), Some(v), "round-trip i128 {v}");
             let b = Int::<8>::from_i128(v);
@@ -2404,8 +2450,15 @@ mod tests {
 
     #[test]
     fn int_from_str_radix_and_display_round_trip() {
-        let cases = ["0", "1", "-1", "42", "-42", "1000000000000000000000",
-                     "-340282366920938463463374607431768211455"];
+        let cases = [
+            "0",
+            "1",
+            "-1",
+            "42",
+            "-42",
+            "1000000000000000000000",
+            "-340282366920938463463374607431768211455",
+        ];
         for s in cases {
             let v = Int::<4>::from_str_radix(s, 10).unwrap();
             assert_eq!(format!("{v}"), s, "display round-trip {s}");
@@ -2425,7 +2478,12 @@ mod tests {
         // Truncating division: quotient truncates toward zero, remainder
         // carries the sign of the dividend.
         let cases: [(i128, i128); 6] = [
-            (1000, 7), (-1000, 7), (1000, -7), (-1000, -7), (7, 1000), (-7, 1000),
+            (1000, 7),
+            (-1000, 7),
+            (1000, -7),
+            (-1000, -7),
+            (7, 1000),
+            (-7, 1000),
         ];
         for (a, b) in cases {
             let (q, r) = Int::<4>::from_i128(a).div_rem(Int::<4>::from_i128(b));
@@ -2459,10 +2517,16 @@ mod tests {
     #[test]
     fn int_checked_mul_u64_matches_wide_mul() {
         let v = Int::<4>::from_i128(123_456_789);
-        assert_eq!(v.checked_mul_u64(1000), Int::<4>::from_i128(123_456_789_000));
+        assert_eq!(
+            v.checked_mul_u64(1000),
+            Int::<4>::from_i128(123_456_789_000)
+        );
         // Sign preserved.
         let n = Int::<4>::from_i128(-123_456_789);
-        assert_eq!(n.checked_mul_u64(1000), Int::<4>::from_i128(-123_456_789_000));
+        assert_eq!(
+            n.checked_mul_u64(1000),
+            Int::<4>::from_i128(-123_456_789_000)
+        );
         // Times zero / one.
         assert_eq!(v.checked_mul_u64(0), Int::<4>::ZERO);
         assert_eq!(v.checked_mul_u64(1), v);
@@ -2491,7 +2555,6 @@ mod tests {
     #[test]
     fn int_wide_storage_surface() {
         use crate::int::limbs::BigInt;
-        use crate::int::types::BigInt;
         fn exercises<T: BigInt>() {
             assert!(<T as BigInt>::ZERO == <T as BigInt>::from_i128(0));
             assert!(<T as BigInt>::ONE == <T as BigInt>::from_i128(1));
@@ -2501,21 +2564,18 @@ mod tests {
             let three = <T as BigInt>::from_i128(3);
             // pow / isqrt
             assert!(three.pow(3) == <T as BigInt>::from_i128(27));
-            assert!(<T as BigInt>::from_i128(144).isqrt()
-                == <T as BigInt>::from_i128(12));
+            assert!(<T as BigInt>::from_i128(144).isqrt() == <T as BigInt>::from_i128(12));
             // div_rem
             let (q, r) = twelve.div_rem(<T as BigInt>::from_i128(5));
             assert!(q == <T as BigInt>::from_i128(2));
             assert!(r == <T as BigInt>::from_i128(2));
             // bit / leading_zeros
             assert!(twelve.bit(2) && twelve.bit(3) && !twelve.bit(0));
-            assert!(<T as BigInt>::ONE.leading_zeros()
-                == <T as BigInt>::BITS - 1);
+            assert!(<T as BigInt>::ONE.leading_zeros() == <T as BigInt>::BITS - 1);
             // checked_mul_u64 / f64 round-trips
             assert!(twelve.checked_mul_u64(10) == <T as BigInt>::from_i128(120));
             assert!(twelve.to_f64() == 12.0);
-            assert!(<T as BigInt>::from_f64_val(7.9)
-                == <T as BigInt>::from_i128(7));
+            assert!(<T as BigInt>::from_f64_val(7.9) == <T as BigInt>::from_i128(7));
         }
         exercises::<Int<4>>();
         exercises::<Int<8>>();
@@ -2544,6 +2604,7 @@ mod tests {
     #[test]
     fn int_wideint_mag_sign_round_trips() {
         use crate::int::limbs::BigInt;
+        use crate::int::types::traits::MagSign;
         // to_mag_sign / from_mag_sign round-trip for signed values,
         // including the magnitude + sign split.
         for v in [0i128, 1, -1, 123_456_789_012_345_678, -987_654_321] {

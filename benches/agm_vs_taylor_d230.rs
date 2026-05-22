@@ -19,9 +19,9 @@
 
 #![cfg(feature = "wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D230;
+use std::hint::black_box;
 
 type D = D230<115>;
 

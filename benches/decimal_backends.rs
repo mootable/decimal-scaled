@@ -26,15 +26,15 @@
 mod bnum;
 
 use bnum::BnumD76;
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
-use decimal_scaled::{D38, D76, D9, D18};
+use criterion::{Criterion, criterion_group, criterion_main};
 #[cfg(feature = "d153")]
 use decimal_scaled::D153;
 #[cfg(feature = "d307")]
 use decimal_scaled::D307;
+use decimal_scaled::{D9, D18, D38, D76};
 use fixed::types::I64F64;
 use rust_decimal::{Decimal, MathematicalOps};
+use std::hint::black_box;
 
 const A: i64 = 1_234_567;
 const B: i64 = 89_543;
@@ -61,9 +61,7 @@ macro_rules! six_ops {
         $g.bench_function(concat!($label, "/rem"), |bn| {
             bn.iter(|| black_box(a) % black_box(b))
         });
-        $g.bench_function(concat!($label, "/neg"), |bn| {
-            bn.iter(|| -black_box(a))
-        });
+        $g.bench_function(concat!($label, "/neg"), |bn| bn.iter(|| -black_box(a)));
     }};
 }
 
@@ -72,18 +70,38 @@ fn bench_arithmetic(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal/arith");
 
     // Native-storage tier: i32, i64, i128.
-    six_ops!(g, "D9",  D9::<6>::from_int(A as i32),  D9::<6>::from_int(B as i32));
-    six_ops!(g, "D18",  D18::<12>::from_int(A),        D18::<12>::from_int(B));
-    six_ops!(g, "D38", D38::<12>::from_int(A),       D38::<12>::from_int(B));
+    six_ops!(
+        g,
+        "D9",
+        D9::<6>::from_int(A as i32),
+        D9::<6>::from_int(B as i32)
+    );
+    six_ops!(g, "D18", D18::<12>::from_int(A), D18::<12>::from_int(B));
+    six_ops!(g, "D38", D38::<12>::from_int(A), D38::<12>::from_int(B));
 
     // Wide tier (256-bit and up, hand-rolled wide integers). Only
     // the powers-of-two D types are exposed publicly so far; the
     // intermediate widths (D115, D230, D462, D924) are queued.
-    six_ops!(g, "D76", D76::<12>::from_int(A as i128), D76::<12>::from_int(B as i128));
+    six_ops!(
+        g,
+        "D76",
+        D76::<12>::from_int(A as i128),
+        D76::<12>::from_int(B as i128)
+    );
     #[cfg(feature = "d153")]
-    six_ops!(g, "D153", D153::<12>::from_int(A as i128), D153::<12>::from_int(B as i128));
+    six_ops!(
+        g,
+        "D153",
+        D153::<12>::from_int(A as i128),
+        D153::<12>::from_int(B as i128)
+    );
     #[cfg(feature = "d307")]
-    six_ops!(g, "D307", D307::<12>::from_int(A as i128), D307::<12>::from_int(B as i128));
+    six_ops!(
+        g,
+        "D307",
+        D307::<12>::from_int(A as i128),
+        D307::<12>::from_int(B as i128)
+    );
 
     // Baselines.
     six_ops!(
@@ -117,39 +135,93 @@ fn bench_transcendentals(c: &mut Criterion) {
         };
     }
 
-    one_arg!("ln",   black_box(ours128).ln_fast(),   black_box(ours128).ln_strict());
-    one_arg!("exp",  black_box(ours128).exp_fast(),  black_box(ours128).exp_strict());
-    one_arg!("sqrt", black_box(ours128).sqrt_fast(), black_box(ours128).sqrt_strict());
-    one_arg!("cbrt", black_box(ours128).cbrt_fast(), black_box(ours128).cbrt_strict());
-    one_arg!("sin",  black_box(ours128).sin_fast(),  black_box(ours128).sin_strict());
-    one_arg!("cos",  black_box(ours128).cos_fast(),  black_box(ours128).cos_strict());
-    one_arg!("tan",  black_box(ours128).tan_fast(),  black_box(ours128).tan_strict());
-    one_arg!("atan", black_box(ours128).atan_fast(), black_box(ours128).atan_strict());
+    one_arg!(
+        "ln",
+        black_box(ours128).ln_fast(),
+        black_box(ours128).ln_strict()
+    );
+    one_arg!(
+        "exp",
+        black_box(ours128).exp_fast(),
+        black_box(ours128).exp_strict()
+    );
+    one_arg!(
+        "sqrt",
+        black_box(ours128).sqrt_fast(),
+        black_box(ours128).sqrt_strict()
+    );
+    one_arg!(
+        "cbrt",
+        black_box(ours128).cbrt_fast(),
+        black_box(ours128).cbrt_strict()
+    );
+    one_arg!(
+        "sin",
+        black_box(ours128).sin_fast(),
+        black_box(ours128).sin_strict()
+    );
+    one_arg!(
+        "cos",
+        black_box(ours128).cos_fast(),
+        black_box(ours128).cos_strict()
+    );
+    one_arg!(
+        "tan",
+        black_box(ours128).tan_fast(),
+        black_box(ours128).tan_strict()
+    );
+    one_arg!(
+        "atan",
+        black_box(ours128).atan_fast(),
+        black_box(ours128).atan_strict()
+    );
 
-    g.bench_function("rust_decimal/ln",   |b| b.iter(|| black_box(rd).ln()));
-    g.bench_function("rust_decimal/exp",  |b| b.iter(|| black_box(rd).exp()));
+    g.bench_function("rust_decimal/ln", |b| b.iter(|| black_box(rd).ln()));
+    g.bench_function("rust_decimal/exp", |b| b.iter(|| black_box(rd).exp()));
     g.bench_function("rust_decimal/sqrt", |b| b.iter(|| black_box(rd).sqrt()));
-    g.bench_function("rust_decimal/sin",  |b| b.iter(|| black_box(rd).sin()));
-    g.bench_function("rust_decimal/cos",  |b| b.iter(|| black_box(rd).cos()));
-    g.bench_function("rust_decimal/tan",  |b| b.iter(|| black_box(rd).tan()));
+    g.bench_function("rust_decimal/sin", |b| b.iter(|| black_box(rd).sin()));
+    g.bench_function("rust_decimal/cos", |b| b.iter(|| black_box(rd).cos()));
+    g.bench_function("rust_decimal/tan", |b| b.iter(|| black_box(rd).tan()));
 
     // Wide tier: D76 transcendentals. Strict variants are
     // correctly-rounded; lossy paths route through f64.
-    g.bench_function("D256_lossy/ln",     |b| b.iter(|| black_box(ours256).ln_fast()));
-    g.bench_function("D256_strict/ln",    |b| b.iter(|| black_box(ours256).ln_strict()));
-    g.bench_function("D256_lossy/exp",    |b| b.iter(|| black_box(ours256).exp_fast()));
-    g.bench_function("D256_strict/exp",   |b| b.iter(|| black_box(ours256).exp_strict()));
-    g.bench_function("D256_lossy/sqrt",   |b| b.iter(|| black_box(ours256).sqrt_fast()));
-    g.bench_function("D256_strict/sqrt",  |b| b.iter(|| black_box(ours256).sqrt_strict()));
-    g.bench_function("D256_lossy/sin",    |b| b.iter(|| black_box(ours256).sin_fast()));
-    g.bench_function("D256_strict/sin",   |b| b.iter(|| black_box(ours256).sin_strict()));
+    g.bench_function("D256_lossy/ln", |b| b.iter(|| black_box(ours256).ln_fast()));
+    g.bench_function("D256_strict/ln", |b| {
+        b.iter(|| black_box(ours256).ln_strict())
+    });
+    g.bench_function("D256_lossy/exp", |b| {
+        b.iter(|| black_box(ours256).exp_fast())
+    });
+    g.bench_function("D256_strict/exp", |b| {
+        b.iter(|| black_box(ours256).exp_strict())
+    });
+    g.bench_function("D256_lossy/sqrt", |b| {
+        b.iter(|| black_box(ours256).sqrt_fast())
+    });
+    g.bench_function("D256_strict/sqrt", |b| {
+        b.iter(|| black_box(ours256).sqrt_strict())
+    });
+    g.bench_function("D256_lossy/sin", |b| {
+        b.iter(|| black_box(ours256).sin_fast())
+    });
+    g.bench_function("D256_strict/sin", |b| {
+        b.iter(|| black_box(ours256).sin_strict())
+    });
 
     // Two-arg ops: pow, atan2.
     let p = D38::<9>::from_bits(3_000_000_000); // 3.0
-    g.bench_function("D128_lossy/powf",  |b| b.iter(|| black_box(ours128).powf_fast(black_box(p))));
-    g.bench_function("D128_strict/powf", |b| b.iter(|| black_box(ours128).powf_strict(black_box(p))));
-    g.bench_function("D128_lossy/atan2", |b| b.iter(|| black_box(ours128).atan2_fast(black_box(p))));
-    g.bench_function("D128_strict/atan2",|b| b.iter(|| black_box(ours128).atan2_strict(black_box(p))));
+    g.bench_function("D128_lossy/powf", |b| {
+        b.iter(|| black_box(ours128).powf_fast(black_box(p)))
+    });
+    g.bench_function("D128_strict/powf", |b| {
+        b.iter(|| black_box(ours128).powf_strict(black_box(p)))
+    });
+    g.bench_function("D128_lossy/atan2", |b| {
+        b.iter(|| black_box(ours128).atan2_fast(black_box(p)))
+    });
+    g.bench_function("D128_strict/atan2", |b| {
+        b.iter(|| black_box(ours128).atan2_strict(black_box(p)))
+    });
 
     g.finish();
 }

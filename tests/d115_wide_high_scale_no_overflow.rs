@@ -18,7 +18,7 @@
 
 #![cfg(feature = "wide")]
 
-use decimal_scaled::{DecimalConvert, DecimalTranscendental, D115};
+use decimal_scaled::{D115, DecimalConvert, DecimalTranscendental};
 
 /// 1.5 at SCALE — the bench's `strict_block` ln/sin/sqrt input.
 fn x_15<const S: u32>() -> D115<S> {
@@ -56,32 +56,52 @@ fn ln_1_5_scale_57_matches_math() {
 #[test]
 fn ln_1_5_scale_114_no_overflow() {
     // The original overflow site (sqrt_fixed working-width overflow).
-    close("ln1.5 s114", x_15::<114>().ln_strict().to_f64(), 1.5f64.ln());
+    close(
+        "ln1.5 s114",
+        x_15::<114>().ln_strict().to_f64(),
+        1.5f64.ln(),
+    );
 }
 
 // ── exp(0.5) ≈ 1.6487212707... ─────────────────────────────────────
 
 #[test]
 fn exp_0_5_scale_57_matches_math() {
-    close("exp0.5 s57", xh_05::<57>().exp_strict().to_f64(), 0.5f64.exp());
+    close(
+        "exp0.5 s57",
+        xh_05::<57>().exp_strict().to_f64(),
+        0.5f64.exp(),
+    );
 }
 
 #[test]
 fn exp_0_5_scale_114_no_overflow() {
     // The original `Int1024: mul overflow` site (ln2_compute at w_ext).
-    close("exp0.5 s114", xh_05::<114>().exp_strict().to_f64(), 0.5f64.exp());
+    close(
+        "exp0.5 s114",
+        xh_05::<114>().exp_strict().to_f64(),
+        0.5f64.exp(),
+    );
 }
 
 // ── sin(1.5) ≈ 0.9974949866... and sqrt(1.5) ≈ 1.2247448714... ──────
 
 #[test]
 fn sin_1_5_scale_114_no_overflow() {
-    close("sin1.5 s114", x_15::<114>().sin_strict().to_f64(), 1.5f64.sin());
+    close(
+        "sin1.5 s114",
+        x_15::<114>().sin_strict().to_f64(),
+        1.5f64.sin(),
+    );
 }
 
 #[test]
 fn sqrt_1_5_scale_114_no_overflow() {
-    close("sqrt1.5 s114", x_15::<114>().sqrt_strict().to_f64(), 1.5f64.sqrt());
+    close(
+        "sqrt1.5 s114",
+        x_15::<114>().sqrt_strict().to_f64(),
+        1.5f64.sqrt(),
+    );
 }
 
 // ── SCALE 0 (integer) sanity: ln(1)=0, exp(0)=1 after truncation ────
@@ -92,7 +112,15 @@ fn sqrt_1_5_scale_114_no_overflow() {
 fn scale_0_dispatch_paths_are_exact() {
     assert_eq!(x_15::<0>().ln_strict().to_f64(), 1.0f64.ln(), "ln(1)=0");
     assert_eq!(xh_05::<0>().exp_strict().to_f64(), 0.0f64.exp(), "exp(0)=1");
-    assert_eq!(x_15::<0>().sqrt_strict().to_f64(), 1.0f64.sqrt(), "sqrt(1)=1");
+    assert_eq!(
+        x_15::<0>().sqrt_strict().to_f64(),
+        1.0f64.sqrt(),
+        "sqrt(1)=1"
+    );
     // sin(1) ≈ 0.8415 rounds to the nearest integer (1) at SCALE 0.
-    assert_eq!(x_15::<0>().sin_strict().to_f64(), 1.0, "sin(1) rounds to 1 at SCALE 0");
+    assert_eq!(
+        x_15::<0>().sin_strict().to_f64(),
+        1.0,
+        "sin(1) rounds to 1 at SCALE 0"
+    );
 }

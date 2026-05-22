@@ -4,8 +4,8 @@
 //! [`crate::algos::sqrt::widen_to_d38`]: lossless widen, call D38's
 //! ln kernel, narrow back.
 
-use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
 
 /// `D9` natural log via widen → D38 → narrow. Strict working-scale.
 #[inline]
@@ -13,9 +13,9 @@ use crate::support::rounding::RoundingMode;
 pub(crate) fn ln_strict_d9<const SCALE: u32>(v: D9<SCALE>, mode: RoundingMode) -> D9<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
-    D38::<SCALE>::from_bits(raw)
-        .try_into()
-        .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE))
+    D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
+    })
 }
 
 /// `D9` natural log with caller-chosen working digits.
@@ -28,9 +28,9 @@ pub(crate) fn ln_with_d9<const SCALE: u32>(
 ) -> D9<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
-    D38::<SCALE>::from_bits(raw)
-        .try_into()
-        .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE))
+    D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE)
+    })
 }
 
 /// `D18` natural log via widen → D38 → narrow. Strict working-scale.
@@ -39,9 +39,9 @@ pub(crate) fn ln_with_d9<const SCALE: u32>(
 pub(crate) fn ln_strict_d18<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
-    D38::<SCALE>::from_bits(raw)
-        .try_into()
-        .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE))
+    D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
+    })
 }
 
 /// `D18` natural log with caller-chosen working digits.
@@ -54,7 +54,7 @@ pub(crate) fn ln_with_d18<const SCALE: u32>(
 ) -> D18<SCALE> {
     let widened: D38<SCALE> = v.into();
     let raw = super::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
-    D38::<SCALE>::from_bits(raw)
-        .try_into()
-        .unwrap_or_else(|_| crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE))
+    D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE)
+    })
 }

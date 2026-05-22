@@ -18,7 +18,8 @@ pub(crate) fn cbrt(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
         return 0;
     }
     let negative = raw < 0;
-    let q = crate::algos::mg_divide::cbrt_raw_with_signed(raw.unsigned_abs(), scale, negative, mode);
+    let q =
+        crate::algos::mg_divide::cbrt_raw_with_signed(raw.unsigned_abs(), scale, negative, mode);
     let result = q as i128;
     if negative { -result } else { result }
 }

@@ -30,8 +30,8 @@
 
 #![cfg(any(feature = "d153", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d153 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d153 as core;
 use crate::wide_int::Int512;
 
 /// Narrow guard for the SCALE 70..=82 Tang-exp slot.
@@ -136,7 +136,10 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     } else {
         ((j_signed + M as i128) as u32, -1i128)
     };
-    debug_assert!(j_idx < M, "tang_exp_fixed d153 s70..=82: table index out of range");
+    debug_assert!(
+        j_idx < M,
+        "tang_exp_fixed d153 s70..=82: table index out of range"
+    );
 
     // Taylor on δ.
     let mut sum = one_w + delta;

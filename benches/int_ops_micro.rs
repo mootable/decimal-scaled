@@ -17,7 +17,7 @@
 //!
 //! Run with: `cargo bench --features wide --bench int_ops_micro`.
 
-use criterion::{criterion_group, Criterion};
+use criterion::{Criterion, criterion_group};
 use decimal_scaled::{Int256, Int512, Int1024, Int2048, Int4096};
 use std::hint::black_box;
 use std::time::Duration;

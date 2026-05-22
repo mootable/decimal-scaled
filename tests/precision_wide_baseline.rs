@@ -90,7 +90,11 @@ fn atan_d76_baseline() {
     for raw in [1_000_000i64, -1_500_000i64, 3_000_000i64] {
         let n = D38_6::from_bits(raw as i128);
         let w: D76<6> = n.into();
-        agree_within("atan", wide_bits(w.atan_strict()), n.atan_strict().to_bits());
+        agree_within(
+            "atan",
+            wide_bits(w.atan_strict()),
+            n.atan_strict().to_bits(),
+        );
     }
 }
 

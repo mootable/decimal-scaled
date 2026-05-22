@@ -11,28 +11,36 @@
 use core::marker::PhantomData;
 use decimal_scaled::serde_helpers::decimal_serde::DecimalVisitor;
 use decimal_scaled::{D38, D38s12};
-use serde::de::value::Error as DeError;
 use serde::de::Visitor;
+use serde::de::value::Error as DeError;
 
 // ─── D38 visitor: every native integer width ───────────────────────────
 
 #[test]
 fn visit_i8() {
-    let v = DecimalVisitor::<12>(PhantomData).visit_i8::<DeError>(7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_i8::<DeError>(7)
+        .unwrap();
     assert_eq!(v.to_bits(), 7);
-    let v = DecimalVisitor::<12>(PhantomData).visit_i8::<DeError>(-7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_i8::<DeError>(-7)
+        .unwrap();
     assert_eq!(v.to_bits(), -7);
 }
 
 #[test]
 fn visit_i16() {
-    let v = DecimalVisitor::<12>(PhantomData).visit_i16::<DeError>(7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_i16::<DeError>(7)
+        .unwrap();
     assert_eq!(v.to_bits(), 7);
 }
 
 #[test]
 fn visit_i32() {
-    let v = DecimalVisitor::<12>(PhantomData).visit_i32::<DeError>(7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_i32::<DeError>(7)
+        .unwrap();
     assert_eq!(v.to_bits(), 7);
 }
 
@@ -46,11 +54,17 @@ fn visit_i128() {
 
 #[test]
 fn visit_u8_u16_u32() {
-    let v = DecimalVisitor::<12>(PhantomData).visit_u8::<DeError>(7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_u8::<DeError>(7)
+        .unwrap();
     assert_eq!(v.to_bits(), 7);
-    let v = DecimalVisitor::<12>(PhantomData).visit_u16::<DeError>(7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_u16::<DeError>(7)
+        .unwrap();
     assert_eq!(v.to_bits(), 7);
-    let v = DecimalVisitor::<12>(PhantomData).visit_u32::<DeError>(7).unwrap();
+    let v = DecimalVisitor::<12>(PhantomData)
+        .visit_u32::<DeError>(7)
+        .unwrap();
     assert_eq!(v.to_bits(), 7);
 }
 
@@ -99,8 +113,7 @@ fn visit_bytes_valid_and_error() {
         .unwrap();
     assert_eq!(v.to_bits(), 123);
     // Wrong length
-    let r: Result<D38s12, _> =
-        DecimalVisitor::<12>(PhantomData).visit_bytes::<DeError>(&[0u8; 15]);
+    let r: Result<D38s12, _> = DecimalVisitor::<12>(PhantomData).visit_bytes::<DeError>(&[0u8; 15]);
     assert!(r.is_err());
 }
 
@@ -164,7 +177,7 @@ fn d76_serde_str_error() {
 #[cfg(feature = "x-wide")]
 #[test]
 fn d153_d307_serde_json_round_trip() {
-    use decimal_scaled::{D153, D307, D76};
+    use decimal_scaled::{D76, D153, D307};
     type D153_6 = D153<6>;
     type D307_6 = D307<6>;
     type D76_6 = D76<6>;

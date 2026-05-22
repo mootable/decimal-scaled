@@ -10,7 +10,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use decimal_scaled::{D153, D307, D38, D76};
+use decimal_scaled::{D38, D76, D153, D307};
 
 const ITERS: u32 = 1_000_000;
 
@@ -63,30 +63,46 @@ fn main() {
     {
         let a = D153::<75>::from_int(2);
         let b = D153::<75>::from_int(1);
-        time("D153::<75> a * b", || { black_box(black_box(a) * black_box(b)); });
-        time("D153::<75> a / b", || { black_box(black_box(a) / black_box(b)); });
+        time("D153::<75> a * b", || {
+            black_box(black_box(a) * black_box(b));
+        });
+        time("D153::<75> a / b", || {
+            black_box(black_box(a) / black_box(b));
+        });
     }
     println!();
     println!("== D153<153> mul + div ==");
     {
         let a = D153::<153>::from_int(2);
         let b = D153::<153>::from_int(1);
-        time("D153::<153> a * b", || { black_box(black_box(a) * black_box(b)); });
-        time("D153::<153> a / b", || { black_box(black_box(a) / black_box(b)); });
+        time("D153::<153> a * b", || {
+            black_box(black_box(a) * black_box(b));
+        });
+        time("D153::<153> a / b", || {
+            black_box(black_box(a) / black_box(b));
+        });
     }
     println!();
     println!("== D307<150> + D307<307> mul + div ==");
     {
         let a = D307::<150>::from_int(2);
         let b = D307::<150>::from_int(1);
-        time("D307::<150> a * b", || { black_box(black_box(a) * black_box(b)); });
-        time("D307::<150> a / b", || { black_box(black_box(a) / black_box(b)); });
+        time("D307::<150> a * b", || {
+            black_box(black_box(a) * black_box(b));
+        });
+        time("D307::<150> a / b", || {
+            black_box(black_box(a) / black_box(b));
+        });
     }
     {
         let a = D307::<307>::from_int(2);
         let b = D307::<307>::from_int(1);
-        time("D307::<307> a * b", || { black_box(black_box(a) * black_box(b)); });
-        time("D307::<307> a / b", || { black_box(black_box(a) / black_box(b)); });
+        time("D307::<307> a * b", || {
+            black_box(black_box(a) * black_box(b));
+        });
+        time("D307::<307> a / b", || {
+            black_box(black_box(a) / black_box(b));
+        });
     }
 
     println!();

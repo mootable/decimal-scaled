@@ -17,7 +17,12 @@
 //! kernel — not a useful cross-witness. The identity round trip is the
 //! correct probe.
 
-#![cfg(all(feature = "xx-wide", feature = "x-wide", feature = "wide", not(feature = "fast")))]
+#![cfg(all(
+    feature = "xx-wide",
+    feature = "x-wide",
+    feature = "wide",
+    not(feature = "fast")
+))]
 
 use decimal_scaled::D924;
 

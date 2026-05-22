@@ -172,9 +172,7 @@ pub(crate) fn should_bump(
 pub(crate) const fn is_nearest_mode(mode: RoundingMode) -> bool {
     matches!(
         mode,
-        RoundingMode::HalfToEven
-            | RoundingMode::HalfAwayFromZero
-            | RoundingMode::HalfTowardZero
+        RoundingMode::HalfToEven | RoundingMode::HalfAwayFromZero | RoundingMode::HalfTowardZero
     )
 }
 
@@ -203,17 +201,9 @@ pub(crate) const fn is_nearest_mode(mode: RoundingMode) -> bool {
 /// caller guarantees `0 < |raw| <= threshold`, the band where the cubic
 /// stays under one ULP.
 #[inline]
-pub(crate) fn tiny_odd_compressing_directed<T>(
-    raw: T,
-    zero: T,
-    one: T,
-    mode: RoundingMode,
-) -> T
+pub(crate) fn tiny_odd_compressing_directed<T>(raw: T, zero: T, one: T, mode: RoundingMode) -> T
 where
-    T: Copy
-        + PartialOrd
-        + ::core::ops::Add<Output = T>
-        + ::core::ops::Sub<Output = T>,
+    T: Copy + PartialOrd + ::core::ops::Add<Output = T> + ::core::ops::Sub<Output = T>,
 {
     if is_nearest_mode(mode) {
         return raw;
@@ -264,17 +254,9 @@ where
 /// - `Floor` (toward −∞): `raw` if positive, `raw − 1` if negative;
 /// - `Ceiling` (toward +∞): `raw + 1` if positive, `raw` if negative.
 #[inline]
-pub(crate) fn tiny_odd_expanding_directed<T>(
-    raw: T,
-    zero: T,
-    one: T,
-    mode: RoundingMode,
-) -> T
+pub(crate) fn tiny_odd_expanding_directed<T>(raw: T, zero: T, one: T, mode: RoundingMode) -> T
 where
-    T: Copy
-        + PartialOrd
-        + ::core::ops::Add<Output = T>
-        + ::core::ops::Sub<Output = T>,
+    T: Copy + PartialOrd + ::core::ops::Add<Output = T> + ::core::ops::Sub<Output = T>,
 {
     if is_nearest_mode(mode) {
         return raw;
@@ -329,7 +311,11 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
     let result_positive = (raw < 0) == (divisor < 0);
 
     if should_bump(mode, cmp_r, q_is_odd, result_positive) {
-        if result_positive { quotient + 1 } else { quotient - 1 }
+        if result_positive {
+            quotient + 1
+        } else {
+            quotient - 1
+        }
     } else {
         quotient
     }
@@ -341,10 +327,8 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
 /// default IEEE-754 rounding to short-circuit themselves under a
 /// non-default rounding feature build.
 #[cfg(test)]
-pub(crate) const DEFAULT_IS_HALF_TO_EVEN: bool = matches!(
-    DEFAULT_ROUNDING_MODE,
-    RoundingMode::HalfToEven
-);
+pub(crate) const DEFAULT_IS_HALF_TO_EVEN: bool =
+    matches!(DEFAULT_ROUNDING_MODE, RoundingMode::HalfToEven);
 
 #[cfg(test)]
 mod tests {
@@ -375,14 +359,14 @@ mod tests {
     #[test]
     fn half_to_even_ties() {
         let m = RoundingMode::HalfToEven;
-        assert_eq!(apply_rounding(5, 10, m), 0);     // 0.5 -> 0 (even)
-        assert_eq!(apply_rounding(15, 10, m), 2);    // 1.5 -> 2
-        assert_eq!(apply_rounding(25, 10, m), 2);    // 2.5 -> 2 (even)
-        assert_eq!(apply_rounding(35, 10, m), 4);    // 3.5 -> 4
-        assert_eq!(apply_rounding(-5, 10, m), 0);    // -0.5 -> 0
-        assert_eq!(apply_rounding(-15, 10, m), -2);  // -1.5 -> -2
-        assert_eq!(apply_rounding(-25, 10, m), -2);  // -2.5 -> -2
-        assert_eq!(apply_rounding(-35, 10, m), -4);  // -3.5 -> -4
+        assert_eq!(apply_rounding(5, 10, m), 0); // 0.5 -> 0 (even)
+        assert_eq!(apply_rounding(15, 10, m), 2); // 1.5 -> 2
+        assert_eq!(apply_rounding(25, 10, m), 2); // 2.5 -> 2 (even)
+        assert_eq!(apply_rounding(35, 10, m), 4); // 3.5 -> 4
+        assert_eq!(apply_rounding(-5, 10, m), 0); // -0.5 -> 0
+        assert_eq!(apply_rounding(-15, 10, m), -2); // -1.5 -> -2
+        assert_eq!(apply_rounding(-25, 10, m), -2); // -2.5 -> -2
+        assert_eq!(apply_rounding(-35, 10, m), -4); // -3.5 -> -4
     }
 
     /// Half-away-from-zero: ties go away from zero.
@@ -460,4 +444,3 @@ mod tests {
         }
     }
 }
-

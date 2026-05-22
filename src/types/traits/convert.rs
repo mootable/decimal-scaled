@@ -12,8 +12,8 @@
 //!
 //! See [`crate::types::traits::decimal`] for the full scope rationale.
 
-use crate::types::traits::arithmetic::DecimalArithmetic;
 use crate::support::rounding::RoundingMode;
+use crate::types::traits::arithmetic::DecimalArithmetic;
 
 /// Round-trip + conversion surface shared by every decimal width.
 ///

@@ -11,17 +11,15 @@
 //! - Comparator pairwise consistency (cmp_of vs eq_of/lt_of/etc.).
 
 use decimal_scaled::{
-    D9, D18, D38,
-    D9s4, D18s6, D18s9, D38s6, D38s9, D38s12, D38s18,
-    RoundingMode,
+    D9, D9s4, D18, D18s6, D18s9, D38, D38s6, D38s9, D38s12, D38s18, RoundingMode,
 };
 
 // ── Same-width, cross-scale: D38 arithmetic. ─────────────────────────
 
 #[test]
 fn d38_mul_of_same_width_cross_scale() {
-    let a = D38s6::from_int(2);   // 2.000000 (SCALE = 6)
-    let b = D38s12::from_int(3);  // 3.000000000000 (SCALE = 12)
+    let a = D38s6::from_int(2); // 2.000000 (SCALE = 6)
+    let b = D38s12::from_int(3); // 3.000000000000 (SCALE = 12)
     // mul_of at target SCALE = 9: 2 × 3 = 6.000000000
     let c: D38s9 = D38s9::mul_of(a, b);
     assert_eq!(c, D38s9::from_int(6));
@@ -84,8 +82,8 @@ fn cross_width_d18_d38_into_d38_via_add() {
 fn mul_of_with_rounding_modes() {
     // 1.5 (at SCALE=1) × 1 (at SCALE=0) into target SCALE = 0.
     // Rescaling the SCALE=1 operand down to SCALE=0 applies `mode`.
-    let a = D38::<1>::from_bits(15);  // 1.5
-    let b = D38::<0>::from_bits(1);   // 1
+    let a = D38::<1>::from_bits(15); // 1.5
+    let b = D38::<0>::from_bits(1); // 1
     let trunc: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Trunc);
     assert_eq!(trunc.to_bits(), 1); // 1.5 truncates to 1, then 1*1
     let away: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::HalfAwayFromZero);
@@ -112,8 +110,8 @@ fn add_of_overflow_panics_in_debug() {
 
 #[test]
 fn max_of_picks_larger_at_higher_scale() {
-    let a = D18s6::from_int(3);  // 3.0
-    let b = D18s9::from_int(2);  // 2.0
+    let a = D18s6::from_int(3); // 3.0
+    let b = D18s9::from_int(2); // 2.0
     let c: D38s12 = D38s12::max_of(a, b);
     assert_eq!(c, D38s12::from_int(3));
 }

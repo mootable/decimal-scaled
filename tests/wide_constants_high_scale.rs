@@ -35,7 +35,10 @@ fn d76_pi_at_scale_75_is_exact() {
     let pi75 = D76::<75>::pi();
     let s = pi75.to_bits().to_string();
     // First few significant digits of pi (no decimal point in raw).
-    assert!(s.starts_with("3141592653589793238462643383279502884"), "got {s}");
+    assert!(
+        s.starts_with("3141592653589793238462643383279502884"),
+        "got {s}"
+    );
 }
 
 #[test]
@@ -43,14 +46,20 @@ fn d153_pi_at_scale_152_works() {
     // v0.4.0 cap: MAX_SCALE for D153 is 152.
     let pi = D153::<152>::pi();
     let s = pi.to_bits().to_string();
-    assert!(s.starts_with("3141592653589793238462643383279502884"), "got {s}");
+    assert!(
+        s.starts_with("3141592653589793238462643383279502884"),
+        "got {s}"
+    );
 }
 
 #[test]
 fn d307_pi_at_scale_300_works() {
     let pi = D307::<300>::pi();
     let s = pi.to_bits().to_string();
-    assert!(s.starts_with("3141592653589793238462643383279502884"), "got {s}");
+    assert!(
+        s.starts_with("3141592653589793238462643383279502884"),
+        "got {s}"
+    );
 }
 
 /// Cross-tier check: D76<37> and D38<37>::pi() should produce the

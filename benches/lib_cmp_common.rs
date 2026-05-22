@@ -8,12 +8,24 @@
 #[macro_export]
 macro_rules! arith_copy {
     ($g:expr, $tag:literal, $a:expr, $b:expr) => {
-        $g.bench_function(concat!($tag, "/add"), |bn| bn.iter(|| ::std::hint::black_box($a) + ::std::hint::black_box($b)));
-        $g.bench_function(concat!($tag, "/sub"), |bn| bn.iter(|| ::std::hint::black_box($a) - ::std::hint::black_box($b)));
-        $g.bench_function(concat!($tag, "/mul"), |bn| bn.iter(|| ::std::hint::black_box($a) * ::std::hint::black_box($b)));
-        $g.bench_function(concat!($tag, "/div"), |bn| bn.iter(|| ::std::hint::black_box($a) / ::std::hint::black_box($b)));
-        $g.bench_function(concat!($tag, "/rem"), |bn| bn.iter(|| ::std::hint::black_box($a) % ::std::hint::black_box($b)));
-        $g.bench_function(concat!($tag, "/neg"), |bn| bn.iter(|| -::std::hint::black_box($a)));
+        $g.bench_function(concat!($tag, "/add"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a) + ::std::hint::black_box($b))
+        });
+        $g.bench_function(concat!($tag, "/sub"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a) - ::std::hint::black_box($b))
+        });
+        $g.bench_function(concat!($tag, "/mul"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a) * ::std::hint::black_box($b))
+        });
+        $g.bench_function(concat!($tag, "/div"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a) / ::std::hint::black_box($b))
+        });
+        $g.bench_function(concat!($tag, "/rem"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a) % ::std::hint::black_box($b))
+        });
+        $g.bench_function(concat!($tag, "/neg"), |bn| {
+            bn.iter(|| -::std::hint::black_box($a))
+        });
     };
 }
 
@@ -22,12 +34,24 @@ macro_rules! arith_copy {
 #[macro_export]
 macro_rules! arith_clone {
     ($g:expr, $tag:literal, $a:expr, $b:expr) => {
-        $g.bench_function(concat!($tag, "/add"), |bn| bn.iter(|| ::std::hint::black_box($a.clone()) + ::std::hint::black_box($b.clone())));
-        $g.bench_function(concat!($tag, "/sub"), |bn| bn.iter(|| ::std::hint::black_box($a.clone()) - ::std::hint::black_box($b.clone())));
-        $g.bench_function(concat!($tag, "/mul"), |bn| bn.iter(|| ::std::hint::black_box($a.clone()) * ::std::hint::black_box($b.clone())));
-        $g.bench_function(concat!($tag, "/div"), |bn| bn.iter(|| ::std::hint::black_box($a.clone()) / ::std::hint::black_box($b.clone())));
-        $g.bench_function(concat!($tag, "/rem"), |bn| bn.iter(|| ::std::hint::black_box($a.clone()) % ::std::hint::black_box($b.clone())));
-        $g.bench_function(concat!($tag, "/neg"), |bn| bn.iter(|| -::std::hint::black_box($a.clone())));
+        $g.bench_function(concat!($tag, "/add"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a.clone()) + ::std::hint::black_box($b.clone()))
+        });
+        $g.bench_function(concat!($tag, "/sub"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a.clone()) - ::std::hint::black_box($b.clone()))
+        });
+        $g.bench_function(concat!($tag, "/mul"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a.clone()) * ::std::hint::black_box($b.clone()))
+        });
+        $g.bench_function(concat!($tag, "/div"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a.clone()) / ::std::hint::black_box($b.clone()))
+        });
+        $g.bench_function(concat!($tag, "/rem"), |bn| {
+            bn.iter(|| ::std::hint::black_box($a.clone()) % ::std::hint::black_box($b.clone()))
+        });
+        $g.bench_function(concat!($tag, "/neg"), |bn| {
+            bn.iter(|| -::std::hint::black_box($a.clone()))
+        });
     };
 }
 
@@ -64,25 +88,48 @@ macro_rules! new_tier_body {
 
                 match scale {
                     0 => {
-                        let a = $T::<0>::from_int(2); let b = $T::<0>::from_int(1);
+                        let a = $T::<0>::from_int(2);
+                        let b = $T::<0>::from_int(1);
                         $crate::arith_copy!(g, "decimal-scaled", a, b);
                     }
                     s if s == $mid => {
-                        let a = $T::<$mid>::from_int(2); let b = $T::<$mid>::from_int(1);
+                        let a = $T::<$mid>::from_int(2);
+                        let b = $T::<$mid>::from_int(1);
                         $crate::arith_copy!(g, "decimal-scaled", a, b);
-                        g.bench_function("decimal-scaled/ln",   |bn| bn.iter(|| black_box(a).ln_strict()));
-                        g.bench_function("decimal-scaled/exp",  |bn| bn.iter(|| black_box(a).exp_strict()));
-                        g.bench_function("decimal-scaled/sin",  |bn| bn.iter(|| black_box(a).sin_strict()));
-                        g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
-                        g.bench_function("decimal-scaled/cos",  |bn| bn.iter(|| black_box(a).cos_strict()));
-                        g.bench_function("decimal-scaled/tan",  |bn| bn.iter(|| black_box(a).tan_strict()));
-                        g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
-                        g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
-                        g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
-                        g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
+                        g.bench_function("decimal-scaled/ln", |bn| {
+                            bn.iter(|| black_box(a).ln_strict())
+                        });
+                        g.bench_function("decimal-scaled/exp", |bn| {
+                            bn.iter(|| black_box(a).exp_strict())
+                        });
+                        g.bench_function("decimal-scaled/sin", |bn| {
+                            bn.iter(|| black_box(a).sin_strict())
+                        });
+                        g.bench_function("decimal-scaled/sqrt", |bn| {
+                            bn.iter(|| black_box(a).sqrt_strict())
+                        });
+                        g.bench_function("decimal-scaled/cos", |bn| {
+                            bn.iter(|| black_box(a).cos_strict())
+                        });
+                        g.bench_function("decimal-scaled/tan", |bn| {
+                            bn.iter(|| black_box(a).tan_strict())
+                        });
+                        g.bench_function("decimal-scaled/atan", |bn| {
+                            bn.iter(|| black_box(a).atan_strict())
+                        });
+                        g.bench_function("decimal-scaled/sinh", |bn| {
+                            bn.iter(|| black_box(a).sinh_strict())
+                        });
+                        g.bench_function("decimal-scaled/cosh", |bn| {
+                            bn.iter(|| black_box(a).cosh_strict())
+                        });
+                        g.bench_function("decimal-scaled/tanh", |bn| {
+                            bn.iter(|| black_box(a).tanh_strict())
+                        });
                     }
                     s if s == $max => {
-                        let a = $T::<$max>::from_int(2); let b = $T::<$max>::from_int(1);
+                        let a = $T::<$max>::from_int(2);
+                        let b = $T::<$max>::from_int(1);
                         $crate::arith_copy!(g, "decimal-scaled", a, b);
                     }
                     _ => unreachable!(),
@@ -102,8 +149,12 @@ macro_rules! new_tier_body {
                     $crate::arith_clone!(g, "dashu-float", a, b);
                     if scale == $mid {
                         let a2 = a.clone();
-                        g.bench_function("dashu-float/ln",  |bn| bn.iter(|| black_box(a2.clone()).ln()));
-                        g.bench_function("dashu-float/exp", |bn| bn.iter(|| black_box(a2.clone()).exp()));
+                        g.bench_function("dashu-float/ln", |bn| {
+                            bn.iter(|| black_box(a2.clone()).ln())
+                        });
+                        g.bench_function("dashu-float/exp", |bn| {
+                            bn.iter(|| black_box(a2.clone()).exp())
+                        });
                     }
                 }
 

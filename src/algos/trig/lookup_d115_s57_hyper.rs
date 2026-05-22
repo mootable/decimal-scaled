@@ -26,8 +26,8 @@
 
 #![cfg(any(feature = "d115", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d115 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d115 as core;
 use crate::wide_int::Int384;
 
 /// Narrow guard for the SCALE = 57 hyperbolic slot. Matches the Tang

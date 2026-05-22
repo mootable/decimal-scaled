@@ -397,9 +397,7 @@ mod wide_witness {
 // category does not weaken the existing contract.
 
 mod hard_inputs {
-    use super::{
-        CASES, ROUND_TRIP_FLOOR_LSB, RELATIVE_TOL_INV, SYMMETRY_LSB_TOL,
-    };
+    use super::{CASES, RELATIVE_TOL_INV, ROUND_TRIP_FLOOR_LSB, SYMMETRY_LSB_TOL};
     use decimal_scaled::{D38, DecimalConstants};
     use proptest::prelude::*;
 
@@ -520,11 +518,10 @@ mod hard_inputs {
         // Odd k for k·π/4 — these are the tan(45°)-style breakpoints
         // (and the safe_to_case helper rejects π/2 poles).
         let quarter_pi = D::quarter_pi().to_bits();
-        (prop::sample::select(vec![-7i64, -5, -3, -1, 1, 3, 5, 7]))
-            .prop_flat_map(move |k| {
-                let center = (k as i128) * quarter_pi;
-                (-50i128..=50i128).prop_map(move |d| center + d)
-            })
+        (prop::sample::select(vec![-7i64, -5, -3, -1, 1, 3, 5, 7])).prop_flat_map(move |k| {
+            let center = (k as i128) * quarter_pi;
+            (-50i128..=50i128).prop_map(move |d| center + d)
+        })
     }
 
     proptest! {
@@ -678,13 +675,11 @@ mod hard_inputs {
 
     fn perfect_cubes_jittered() -> impl Strategy<Value = Bits> {
         // n³ · ONE ± δ, for δ in [-3, 3], n in [-100, 100] excluding 0.
-        prop::sample::select(
-            (-100i64..=100i64).filter(|&n| n != 0).collect::<Vec<_>>(),
-        )
-        .prop_flat_map(|n| {
-            let center = (n as i128) * (n as i128) * (n as i128) * ONE;
-            (-3i128..=3i128).prop_map(move |d| center + d)
-        })
+        prop::sample::select((-100i64..=100i64).filter(|&n| n != 0).collect::<Vec<_>>())
+            .prop_flat_map(|n| {
+                let center = (n as i128) * (n as i128) * (n as i128) * ONE;
+                (-3i128..=3i128).prop_map(move |d| center + d)
+            })
     }
 
     proptest! {
@@ -781,16 +776,15 @@ mod hard_inputs {
         // need a deterministic roster that lives in the halving band.
         // tan(0.35) ≈ 0.3650; tan(0.175) ≈ 0.1771; tan(0.0875) ≈ 0.0877; …
         let anchors_pos: Vec<Bits> = vec![
-            3_650_817_511_434_127_092,  // tan(0.35)
-            1_771_239_555_181_148_572,  // tan(0.175)
-              877_022_257_637_478_437,  // tan(0.0875)
-              437_733_213_829_148_988,  // tan(0.04375)
-              218_770_525_637_316_891,  // tan(0.021875)
-              109_376_991_958_419_141,  // tan(0.0109375)
+            3_650_817_511_434_127_092, // tan(0.35)
+            1_771_239_555_181_148_572, // tan(0.175)
+            877_022_257_637_478_437,   // tan(0.0875)
+            437_733_213_829_148_988,   // tan(0.04375)
+            218_770_525_637_316_891,   // tan(0.021875)
+            109_376_991_958_419_141,   // tan(0.0109375)
         ];
         let anchors: Vec<Bits> = anchors_pos.iter().flat_map(|&v| [v, -v]).collect();
-        prop::sample::select(anchors)
-            .prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
+        prop::sample::select(anchors).prop_flat_map(|c| (-5i128..=5i128).prop_map(move |d| c + d))
     }
 
     proptest! {
@@ -879,4 +873,3 @@ mod hard_inputs {
         }
     }
 }
-

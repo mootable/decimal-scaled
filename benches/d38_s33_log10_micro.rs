@@ -2,9 +2,9 @@
 //! borrow-D57 migration. Kept tiny so a full run completes in well
 //! under a minute (per the project's "micro-bench first" rule).
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D38;
+use std::hint::black_box;
 
 fn bench_d38_s33_log10(c: &mut Criterion) {
     let mut g = c.benchmark_group("d38_s33_log10_micro");

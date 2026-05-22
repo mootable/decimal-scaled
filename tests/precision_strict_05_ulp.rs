@@ -73,12 +73,16 @@ fn assert_05_ulp(label: &str, actual: i128, expected_truth: i128) {
 ///   φ    = 1.618033988749894848204586834365638118...
 #[test]
 fn constants_at_scale_12() {
-    assert_05_ulp("pi",         D38s12::pi().to_bits(),         3_141_592_653_590);
-    assert_05_ulp("tau",        D38s12::tau().to_bits(),        6_283_185_307_180);
-    assert_05_ulp("half_pi",    D38s12::half_pi().to_bits(),    1_570_796_326_795);
-    assert_05_ulp("quarter_pi", D38s12::quarter_pi().to_bits(), 785_398_163_397);
-    assert_05_ulp("e",          D38s12::e().to_bits(),          2_718_281_828_459);
-    assert_05_ulp("golden",     D38s12::golden().to_bits(),     1_618_033_988_750);
+    assert_05_ulp("pi", D38s12::pi().to_bits(), 3_141_592_653_590);
+    assert_05_ulp("tau", D38s12::tau().to_bits(), 6_283_185_307_180);
+    assert_05_ulp("half_pi", D38s12::half_pi().to_bits(), 1_570_796_326_795);
+    assert_05_ulp(
+        "quarter_pi",
+        D38s12::quarter_pi().to_bits(),
+        785_398_163_397,
+    );
+    assert_05_ulp("e", D38s12::e().to_bits(), 2_718_281_828_459);
+    assert_05_ulp("golden", D38s12::golden().to_bits(), 1_618_033_988_750);
 }
 
 // ─── Multiplication ───────────────────────────────────────────────────
@@ -98,7 +102,7 @@ fn mul_strict_at_scale_12() {
     // Truth: 1.234567890123 * 7e-12 = 8.641975230861e-12.
     // Rounded to SCALE=12: 9 (the value is 8.64e-12, just under one LSB).
     let a = D38s12::from_bits(1_234_567_890_123); // 1.234567890123
-    let b = D38s12::from_bits(7);                 // 7e-12
+    let b = D38s12::from_bits(7); // 7e-12
     let r = a * b;
     // truth = 8.641... → at SCALE=12, the result is 9 LSBs (rounds 8.64 up).
     assert_05_ulp("1.234e0 * 7e-12", r.to_bits(), 9);
@@ -108,7 +112,7 @@ fn mul_strict_at_scale_12() {
     assert_05_ulp("(-1.234e0) * 7e-12", r.to_bits(), -9);
 
     // Exact-tie half: (5e-12) * (3) = 15e-12, rescale to SCALE=12 gives 15.
-    let a = D38s12::from_bits(5);                 // 5e-12
+    let a = D38s12::from_bits(5); // 5e-12
     let b = D38s12::from_int(3);
     let r = a * b;
     assert_05_ulp("5e-12 * 3", r.to_bits(), 15);
@@ -192,11 +196,19 @@ fn rescale_strict_at_scale_12() {
 #[test]
 fn ln_strict_at_scale_12() {
     assert_05_ulp("ln(1)", D38s12::ONE.ln_strict().to_bits(), 0);
-    assert_05_ulp("ln(2)", D38s12::from_int(2).ln_strict().to_bits(), 693_147_180_560);
+    assert_05_ulp(
+        "ln(2)",
+        D38s12::from_int(2).ln_strict().to_bits(),
+        693_147_180_560,
+    );
     let e = D38s12::e();
     let r = e.ln_strict();
     assert_05_ulp("ln(e)", r.to_bits(), 1_000_000_000_000);
-    assert_05_ulp("ln(10)", D38s12::from_int(10).ln_strict().to_bits(), 2_302_585_092_994);
+    assert_05_ulp(
+        "ln(10)",
+        D38s12::from_int(10).ln_strict().to_bits(),
+        2_302_585_092_994,
+    );
     // ln(0.5) = -ln(2)
     let half = D38s12::from_bits(500_000_000_000);
     assert_05_ulp("ln(0.5)", half.ln_strict().to_bits(), -693_147_180_560);
@@ -215,8 +227,16 @@ fn ln_strict_at_scale_12() {
 ///   exp(ln(10)) = 10
 #[test]
 fn exp_strict_at_scale_12() {
-    assert_05_ulp("exp(0)", D38s12::ZERO.exp_strict().to_bits(), 1_000_000_000_000);
-    assert_05_ulp("exp(1)", D38s12::ONE.exp_strict().to_bits(), 2_718_281_828_459);
+    assert_05_ulp(
+        "exp(0)",
+        D38s12::ZERO.exp_strict().to_bits(),
+        1_000_000_000_000,
+    );
+    assert_05_ulp(
+        "exp(1)",
+        D38s12::ONE.exp_strict().to_bits(),
+        2_718_281_828_459,
+    );
     assert_05_ulp(
         "exp(-1)",
         (-D38s12::ONE).exp_strict().to_bits(),
@@ -251,12 +271,20 @@ fn exp_strict_at_scale_12() {
 fn sin_strict_at_scale_12() {
     assert_05_ulp("sin(0)", D38s12::ZERO.sin_strict().to_bits(), 0);
     let half_pi = D38s12::half_pi();
-    assert_05_ulp("sin(π/2)", half_pi.sin_strict().to_bits(), 1_000_000_000_000);
+    assert_05_ulp(
+        "sin(π/2)",
+        half_pi.sin_strict().to_bits(),
+        1_000_000_000_000,
+    );
     let pi = D38s12::pi();
     // sin(π) ≈ 0 (subject to π's own 1 LSB rounding)
     let r = pi.sin_strict().to_bits();
     assert!(r.abs() <= 2, "sin(π) was {r}, expected ~0 (≤ 2 LSB)");
-    assert_05_ulp("sin(1)", D38s12::ONE.sin_strict().to_bits(), 841_470_984_808);
+    assert_05_ulp(
+        "sin(1)",
+        D38s12::ONE.sin_strict().to_bits(),
+        841_470_984_808,
+    );
     assert_05_ulp(
         "sin(-1)",
         (-D38s12::ONE).sin_strict().to_bits(),
@@ -266,13 +294,21 @@ fn sin_strict_at_scale_12() {
 
 #[test]
 fn cos_strict_at_scale_12() {
-    assert_05_ulp("cos(0)", D38s12::ZERO.cos_strict().to_bits(), 1_000_000_000_000);
+    assert_05_ulp(
+        "cos(0)",
+        D38s12::ZERO.cos_strict().to_bits(),
+        1_000_000_000_000,
+    );
     let pi = D38s12::pi();
     assert_05_ulp("cos(π)", pi.cos_strict().to_bits(), -1_000_000_000_000);
     let half_pi = D38s12::half_pi();
     let r = half_pi.cos_strict().to_bits();
     assert!(r.abs() <= 2, "cos(π/2) was {r}, expected ~0 (≤ 2 LSB)");
-    assert_05_ulp("cos(1)", D38s12::ONE.cos_strict().to_bits(), 540_302_305_868);
+    assert_05_ulp(
+        "cos(1)",
+        D38s12::ONE.cos_strict().to_bits(),
+        540_302_305_868,
+    );
 }
 
 #[test]
@@ -300,7 +336,11 @@ fn tan_strict_at_scale_12() {
 #[test]
 fn atan_strict_at_scale_12() {
     assert_05_ulp("atan(0)", D38s12::ZERO.atan_strict().to_bits(), 0);
-    assert_05_ulp("atan(1)", D38s12::ONE.atan_strict().to_bits(), 785_398_163_397);
+    assert_05_ulp(
+        "atan(1)",
+        D38s12::ONE.atan_strict().to_bits(),
+        785_398_163_397,
+    );
     assert_05_ulp(
         "atan(-1)",
         (-D38s12::ONE).atan_strict().to_bits(),
@@ -343,11 +383,19 @@ fn atan2_strict_at_scale_12() {
     let one = D38s12::ONE;
     let zero = D38s12::ZERO;
     // atan2(1, 1) = π/4
-    assert_05_ulp("atan2(1, 1)", one.atan2_strict(one).to_bits(), 785_398_163_397);
+    assert_05_ulp(
+        "atan2(1, 1)",
+        one.atan2_strict(one).to_bits(),
+        785_398_163_397,
+    );
     // atan2(0, 1) = 0
     assert_05_ulp("atan2(0, 1)", zero.atan2_strict(one).to_bits(), 0);
     // atan2(1, 0) = π/2
-    assert_05_ulp("atan2(1, 0)", one.atan2_strict(zero).to_bits(), 1_570_796_326_795);
+    assert_05_ulp(
+        "atan2(1, 0)",
+        one.atan2_strict(zero).to_bits(),
+        1_570_796_326_795,
+    );
     // atan2(-1, 0) = -π/2
     assert_05_ulp(
         "atan2(-1, 0)",
@@ -355,7 +403,11 @@ fn atan2_strict_at_scale_12() {
         -1_570_796_326_795,
     );
     // atan2(0, -1) = π
-    assert_05_ulp("atan2(0, -1)", zero.atan2_strict(-one).to_bits(), 3_141_592_653_590);
+    assert_05_ulp(
+        "atan2(0, -1)",
+        zero.atan2_strict(-one).to_bits(),
+        3_141_592_653_590,
+    );
 }
 
 // ─── sqrt / cbrt ──────────────────────────────────────────────────────
@@ -375,7 +427,11 @@ fn atan2_strict_at_scale_12() {
 #[test]
 fn sqrt_strict_at_scale_12() {
     assert_05_ulp("sqrt(0)", D38s12::ZERO.sqrt_strict().to_bits(), 0);
-    assert_05_ulp("sqrt(1)", D38s12::ONE.sqrt_strict().to_bits(), 1_000_000_000_000);
+    assert_05_ulp(
+        "sqrt(1)",
+        D38s12::ONE.sqrt_strict().to_bits(),
+        1_000_000_000_000,
+    );
     assert_05_ulp(
         "sqrt(2)",
         D38s12::from_int(2).sqrt_strict().to_bits(),
@@ -401,7 +457,11 @@ fn sqrt_strict_at_scale_12() {
 #[test]
 fn cbrt_strict_at_scale_12() {
     assert_05_ulp("cbrt(0)", D38s12::ZERO.cbrt_strict().to_bits(), 0);
-    assert_05_ulp("cbrt(1)", D38s12::ONE.cbrt_strict().to_bits(), 1_000_000_000_000);
+    assert_05_ulp(
+        "cbrt(1)",
+        D38s12::ONE.cbrt_strict().to_bits(),
+        1_000_000_000_000,
+    );
     assert_05_ulp(
         "cbrt(2)",
         D38s12::from_int(2).cbrt_strict().to_bits(),
@@ -544,11 +604,7 @@ fn angle_conversion_strict_at_scale_12() {
 ///     12 frac = 301029995663, 13th = 9 → round up to 664. So 301_029_995_664.
 #[test]
 fn log_strict_at_scale_12() {
-    assert_05_ulp(
-        "log2(1)",
-        D38s12::ONE.log2_strict().to_bits(),
-        0,
-    );
+    assert_05_ulp("log2(1)", D38s12::ONE.log2_strict().to_bits(), 0);
     assert_05_ulp(
         "log2(2)",
         D38s12::from_int(2).log2_strict().to_bits(),
@@ -559,11 +615,7 @@ fn log_strict_at_scale_12() {
         D38s12::from_int(4).log2_strict().to_bits(),
         2_000_000_000_000,
     );
-    assert_05_ulp(
-        "log10(1)",
-        D38s12::ONE.log10_strict().to_bits(),
-        0,
-    );
+    assert_05_ulp("log10(1)", D38s12::ONE.log10_strict().to_bits(), 0);
     assert_05_ulp(
         "log10(10)",
         D38s12::from_int(10).log10_strict().to_bits(),

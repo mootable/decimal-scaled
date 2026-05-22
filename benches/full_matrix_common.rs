@@ -17,12 +17,24 @@ macro_rules! arith_block {
     ($g:ident, $tag:literal, $T:ty) => {{
         let a: $T = <$T>::from_int(2);
         let b: $T = <$T>::from_int(1);
-        $g.bench_function(concat!($tag, "/add"), |bn| bn.iter(|| ::std::hint::black_box(a) + ::std::hint::black_box(b)));
-        $g.bench_function(concat!($tag, "/sub"), |bn| bn.iter(|| ::std::hint::black_box(a) - ::std::hint::black_box(b)));
-        $g.bench_function(concat!($tag, "/mul"), |bn| bn.iter(|| ::std::hint::black_box(a) * ::std::hint::black_box(b)));
-        $g.bench_function(concat!($tag, "/div"), |bn| bn.iter(|| ::std::hint::black_box(a) / ::std::hint::black_box(b)));
-        $g.bench_function(concat!($tag, "/rem"), |bn| bn.iter(|| ::std::hint::black_box(a) % ::std::hint::black_box(b)));
-        $g.bench_function(concat!($tag, "/neg"), |bn| bn.iter(|| -::std::hint::black_box(a)));
+        $g.bench_function(concat!($tag, "/add"), |bn| {
+            bn.iter(|| ::std::hint::black_box(a) + ::std::hint::black_box(b))
+        });
+        $g.bench_function(concat!($tag, "/sub"), |bn| {
+            bn.iter(|| ::std::hint::black_box(a) - ::std::hint::black_box(b))
+        });
+        $g.bench_function(concat!($tag, "/mul"), |bn| {
+            bn.iter(|| ::std::hint::black_box(a) * ::std::hint::black_box(b))
+        });
+        $g.bench_function(concat!($tag, "/div"), |bn| {
+            bn.iter(|| ::std::hint::black_box(a) / ::std::hint::black_box(b))
+        });
+        $g.bench_function(concat!($tag, "/rem"), |bn| {
+            bn.iter(|| ::std::hint::black_box(a) % ::std::hint::black_box(b))
+        });
+        $g.bench_function(concat!($tag, "/neg"), |bn| {
+            bn.iter(|| -::std::hint::black_box(a))
+        });
     }};
 }
 
@@ -34,10 +46,18 @@ macro_rules! fast_block {
         let half: $T = <$T>::from_int(1) / <$T>::from_int(2);
         let x: $T = <$T>::from_int(1) + half;
         let xh: $T = half;
-        $g.bench_function(concat!($tag, "/ln"),   |bn| bn.iter(|| ::std::hint::black_box(x).ln()));
-        $g.bench_function(concat!($tag, "/exp"),  |bn| bn.iter(|| ::std::hint::black_box(xh).exp()));
-        $g.bench_function(concat!($tag, "/sin"),  |bn| bn.iter(|| ::std::hint::black_box(x).sin()));
-        $g.bench_function(concat!($tag, "/sqrt"), |bn| bn.iter(|| ::std::hint::black_box(x).sqrt()));
+        $g.bench_function(concat!($tag, "/ln"), |bn| {
+            bn.iter(|| ::std::hint::black_box(x).ln())
+        });
+        $g.bench_function(concat!($tag, "/exp"), |bn| {
+            bn.iter(|| ::std::hint::black_box(xh).exp())
+        });
+        $g.bench_function(concat!($tag, "/sin"), |bn| {
+            bn.iter(|| ::std::hint::black_box(x).sin())
+        });
+        $g.bench_function(concat!($tag, "/sqrt"), |bn| {
+            bn.iter(|| ::std::hint::black_box(x).sqrt())
+        });
     }};
 }
 
@@ -49,9 +69,17 @@ macro_rules! strict_block {
         let half: $T = <$T>::from_int(1) / <$T>::from_int(2);
         let x: $T = <$T>::from_int(1) + half;
         let xh: $T = half;
-        $g.bench_function(concat!($tag, "/ln"),   |bn| bn.iter(|| ::std::hint::black_box(x).ln_strict()));
-        $g.bench_function(concat!($tag, "/exp"),  |bn| bn.iter(|| ::std::hint::black_box(xh).exp_strict()));
-        $g.bench_function(concat!($tag, "/sin"),  |bn| bn.iter(|| ::std::hint::black_box(x).sin_strict()));
-        $g.bench_function(concat!($tag, "/sqrt"), |bn| bn.iter(|| ::std::hint::black_box(x).sqrt_strict()));
+        $g.bench_function(concat!($tag, "/ln"), |bn| {
+            bn.iter(|| ::std::hint::black_box(x).ln_strict())
+        });
+        $g.bench_function(concat!($tag, "/exp"), |bn| {
+            bn.iter(|| ::std::hint::black_box(xh).exp_strict())
+        });
+        $g.bench_function(concat!($tag, "/sin"), |bn| {
+            bn.iter(|| ::std::hint::black_box(x).sin_strict())
+        });
+        $g.bench_function(concat!($tag, "/sqrt"), |bn| {
+            bn.iter(|| ::std::hint::black_box(x).sqrt_strict())
+        });
     }};
 }

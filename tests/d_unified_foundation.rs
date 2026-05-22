@@ -28,8 +28,8 @@ fn construct_and_access_raw() {
 #[test]
 fn copy_and_clone() {
     let a: D<i64, 2> = D(42);
-    let b = a;          // Copy
-    let c = a.clone();  // Clone
+    let b = a; // Copy
+    let c = a.clone(); // Clone
     assert_eq!(a.0, b.0);
     assert_eq!(a.0, c.0);
 }
@@ -72,9 +72,18 @@ fn hashable_consistent_with_eq() {
 
 #[test]
 fn repr_transparent_size_matches_storage() {
-    assert_eq!(core::mem::size_of::<D<i32, 0>>(), core::mem::size_of::<i32>());
-    assert_eq!(core::mem::size_of::<D<i64, 0>>(), core::mem::size_of::<i64>());
-    assert_eq!(core::mem::size_of::<D<i128, 0>>(), core::mem::size_of::<i128>());
+    assert_eq!(
+        core::mem::size_of::<D<i32, 0>>(),
+        core::mem::size_of::<i32>()
+    );
+    assert_eq!(
+        core::mem::size_of::<D<i64, 0>>(),
+        core::mem::size_of::<i64>()
+    );
+    assert_eq!(
+        core::mem::size_of::<D<i128, 0>>(),
+        core::mem::size_of::<i128>()
+    );
 }
 
 #[test]

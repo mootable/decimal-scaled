@@ -8,8 +8,14 @@ use decimal_scaled::D38;
 
 #[test]
 fn sign_only_input_is_rejected() {
-    assert!(D38::<2>::from_str("-").is_err(), "bare `-` should be SignOnly");
-    assert!(D38::<2>::from_str("+").is_err(), "bare `+` should be SignOnly");
+    assert!(
+        D38::<2>::from_str("-").is_err(),
+        "bare `-` should be SignOnly"
+    );
+    assert!(
+        D38::<2>::from_str("+").is_err(),
+        "bare `+` should be SignOnly"
+    );
 }
 
 #[test]
@@ -34,8 +40,10 @@ fn missing_integer_before_dot_is_rejected() {
 
 #[test]
 fn leading_zero_in_integer_part_is_rejected() {
-    assert!(D38::<2>::from_str("01").is_err(),
-        "leading-zero integer part is reserved for the literal `0`");
+    assert!(
+        D38::<2>::from_str("01").is_err(),
+        "leading-zero integer part is reserved for the literal `0`"
+    );
     assert!(D38::<2>::from_str("01.5").is_err());
 }
 

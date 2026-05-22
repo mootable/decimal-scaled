@@ -28,7 +28,10 @@ fn d76_hypot_strict_zero_x() {
     let five: D76_6 = D38::<6>::from_int(5).into();
     let r = D76_6::ZERO.hypot_strict(five);
     // |5| with possible 1 LSB rounding
-    let diff = (r.to_bits() - five.to_bits()).to_i128_checked().unwrap_or(99).abs();
+    let diff = (r.to_bits() - five.to_bits())
+        .to_i128_checked()
+        .unwrap_or(99)
+        .abs();
     assert!(diff <= 1);
 }
 
@@ -39,7 +42,10 @@ fn d76_hypot_strict_3_4_is_5() {
     let four: D76_6 = D38::<6>::from_int(4).into();
     let five: D76_6 = D38::<6>::from_int(5).into();
     let r = three.hypot_strict(four);
-    let diff = (r.to_bits() - five.to_bits()).to_i128_checked().unwrap_or(99).abs();
+    let diff = (r.to_bits() - five.to_bits())
+        .to_i128_checked()
+        .unwrap_or(99)
+        .abs();
     assert!(diff <= 1, "got {r:?} expected {five:?}");
 }
 

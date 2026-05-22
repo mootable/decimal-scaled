@@ -60,7 +60,11 @@ type D9_4 = D9<4>;
 fn d9_ln_strict() {
     assert_eq!(D9_4::ONE.ln_strict().to_bits(), 0, "ln(1)=0");
     // ln(2) = 0.69314718... → at S=4: 6_931
-    assert_le_1_lsb_i32("ln(2) D9<4>", D9_4::from_int(2).ln_strict().to_bits(), 6_931);
+    assert_le_1_lsb_i32(
+        "ln(2) D9<4>",
+        D9_4::from_int(2).ln_strict().to_bits(),
+        6_931,
+    );
     // ln(e) = 1 → 10_000
     assert_le_1_lsb_i32("ln(e) D9<4>", D9_4::e().ln_strict().to_bits(), 10_000);
 }
@@ -200,7 +204,10 @@ fn d9_dispatcher_matches_strict() {
     assert_eq!(D9_4::from_int(4).sqrt(), D9_4::from_int(4).sqrt_strict());
     assert_eq!(D9_4::from_int(8).cbrt(), D9_4::from_int(8).cbrt_strict());
     assert_eq!(D9_4::ONE.atan(), D9_4::ONE.atan_strict());
-    assert_eq!(D9_4::ONE.atan2(D9_4::ONE), D9_4::ONE.atan2_strict(D9_4::ONE));
+    assert_eq!(
+        D9_4::ONE.atan2(D9_4::ONE),
+        D9_4::ONE.atan2_strict(D9_4::ONE)
+    );
     assert_eq!(D9_4::ONE.sinh(), D9_4::ONE.sinh_strict());
     assert_eq!(D9_4::ONE.cosh(), D9_4::ONE.cosh_strict());
     assert_eq!(D9_4::ONE.tanh(), D9_4::ONE.tanh_strict());
@@ -235,7 +242,11 @@ type D18_8 = D18<8>;
 fn d18_ln_strict() {
     assert_eq!(D18_8::ONE.ln_strict().to_bits(), 0);
     // ln(2) = 0.69314718... → at S=8: 69_314_718
-    assert_le_1_lsb_i64("ln(2)", D18_8::from_int(2).ln_strict().to_bits(), 69_314_718);
+    assert_le_1_lsb_i64(
+        "ln(2)",
+        D18_8::from_int(2).ln_strict().to_bits(),
+        69_314_718,
+    );
 }
 
 #[test]
@@ -283,11 +294,7 @@ fn d18_inverse_trig_hyperbolic_strict() {
     assert_eq!(D18_8::ZERO.asin_strict().to_bits(), 0);
     assert_eq!(D18_8::ONE.acos_strict().to_bits(), 0);
     // sinh(1) ≈ 1.17520119
-    assert_le_1_lsb_i64(
-        "sinh(1)",
-        D18_8::ONE.sinh_strict().to_bits(),
-        117_520_119,
-    );
+    assert_le_1_lsb_i64("sinh(1)", D18_8::ONE.sinh_strict().to_bits(), 117_520_119);
     assert_eq!(D18_8::ZERO.asinh_strict().to_bits(), 0);
     assert_eq!(D18_8::ONE.acosh_strict().to_bits(), 0);
     assert_eq!(D18_8::ZERO.atanh_strict().to_bits(), 0);
@@ -299,7 +306,9 @@ fn d18_angle_powf_log_exp2_strict() {
     assert_eq!(D18_8::ZERO.to_radians_strict().to_bits(), 0);
     // 2^10 = 1024
     assert_eq!(
-        D18_8::from_int(2).powf_strict(D18_8::from_int(10)).to_bits(),
+        D18_8::from_int(2)
+            .powf_strict(D18_8::from_int(10))
+            .to_bits(),
         102_400_000_000,
     );
     // log_2(8) = 3
@@ -323,9 +332,15 @@ fn d18_dispatcher_matches_strict() {
     assert_eq!(D18_8::ONE.cosh(), D18_8::ONE.cosh_strict());
     assert_eq!(D18_8::ONE.tanh(), D18_8::ONE.tanh_strict());
     assert_eq!(D18_8::from_int(4).sqrt(), D18_8::from_int(4).sqrt_strict());
-    assert_eq!(D18_8::from_int(27).cbrt(), D18_8::from_int(27).cbrt_strict());
+    assert_eq!(
+        D18_8::from_int(27).cbrt(),
+        D18_8::from_int(27).cbrt_strict()
+    );
     assert_eq!(D18_8::ONE.atan(), D18_8::ONE.atan_strict());
-    assert_eq!(D18_8::ONE.atan2(D18_8::ONE), D18_8::ONE.atan2_strict(D18_8::ONE));
+    assert_eq!(
+        D18_8::ONE.atan2(D18_8::ONE),
+        D18_8::ONE.atan2_strict(D18_8::ONE)
+    );
     assert_eq!(D18_8::ZERO.asin(), D18_8::ZERO.asin_strict());
     assert_eq!(D18_8::ONE.acos(), D18_8::ONE.acos_strict());
     assert_eq!(D18_8::ZERO.asinh(), D18_8::ZERO.asinh_strict());

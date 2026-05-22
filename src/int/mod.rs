@@ -19,8 +19,8 @@
 //!   traits and the named-type re-exports, absorbed from the former
 //!   `src/wide_int/`.
 
-pub(crate) mod limbs;
 pub(crate) mod algos;
+pub(crate) mod limbs;
 pub(crate) mod policy;
 pub(crate) mod types;
 

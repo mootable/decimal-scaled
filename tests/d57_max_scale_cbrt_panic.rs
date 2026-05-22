@@ -37,11 +37,13 @@ fn d57_max_scale_cbrt_does_not_panic() {
 /// representable range exactly.
 #[test]
 fn d57_max_scale_cbrt_of_one() {
-    let one = D57::<57>::from_bits(decimal_scaled::Int192::from_str_radix(
-        "1000000000000000000000000000000000000000000000000000000000",
-        10,
-    )
-    .unwrap());
+    let one = D57::<57>::from_bits(
+        decimal_scaled::Int192::from_str_radix(
+            "1000000000000000000000000000000000000000000000000000000000",
+            10,
+        )
+        .unwrap(),
+    );
     let r = one.cbrt_strict();
     assert_eq!(r, one, "cbrt(1) at D57<57> should equal 1");
 }
@@ -74,4 +76,3 @@ fn d57_max_scale_cbrt_of_zero() {
     let r = zero.cbrt_strict();
     assert_eq!(r, zero, "cbrt(0) at D57<57> should equal 0");
 }
-

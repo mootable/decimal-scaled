@@ -24,8 +24,8 @@
 
 #![cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 
-use crate::types::widths::wide_trig_d307 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d307 as core;
 use crate::wide_int::Int1024;
 
 const GUARD_NARROW: u32 = 8;

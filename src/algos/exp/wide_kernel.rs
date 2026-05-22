@@ -36,13 +36,19 @@ macro_rules! decl_exp_kernel {
         #[must_use]
         pub(crate) fn $name(raw: $Storage, mode: RoundingMode, scale: u32) -> $Storage {
             use $core_path as core;
-            let zero = <$Storage>::from_str_radix("0", 10)
-                .expect(concat!("exp_strict_", $tier_label, ": invalid base-10 literal"));
+            let zero = <$Storage>::from_str_radix("0", 10).expect(concat!(
+                "exp_strict_",
+                $tier_label,
+                ": invalid base-10 literal"
+            ));
             if raw == zero {
                 // `Dxx<SCALE>::ONE` raw is `10^SCALE`; build it from
                 // the storage type via the same path the macro uses.
-                let ten = <$Storage>::from_str_radix("10", 10)
-                    .expect(concat!("exp_strict_", $tier_label, ": invalid base-10 literal"));
+                let ten = <$Storage>::from_str_radix("10", 10).expect(concat!(
+                    "exp_strict_",
+                    $tier_label,
+                    ": invalid base-10 literal"
+                ));
                 return ten.pow(scale);
             }
             core::round_to_storage_directed(core::GUARD, scale, mode, |guard| {

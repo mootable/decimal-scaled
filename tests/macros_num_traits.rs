@@ -4,8 +4,8 @@
 
 use decimal_scaled::{D9, D18, D38};
 use num_traits::{
-    Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub,
-    FromPrimitive, Num, NumCast, One, Signed, ToPrimitive, Zero,
+    Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, FromPrimitive,
+    Num, NumCast, One, Signed, ToPrimitive, Zero,
 };
 
 type D9_2 = D9<2>;
@@ -38,9 +38,18 @@ fn num_from_str_radix_non_10_returns_err() {
 fn checked_add_sub_mul_div_rem_neg_traits() {
     let a = D38_2::from_int(7);
     let b = D38_2::from_int(2);
-    assert_eq!(<D38_2 as CheckedAdd>::checked_add(&a, &b), Some(D38_2::from_int(9)));
-    assert_eq!(<D38_2 as CheckedSub>::checked_sub(&a, &b), Some(D38_2::from_int(5)));
-    assert_eq!(<D38_2 as CheckedMul>::checked_mul(&a, &b), Some(D38_2::from_int(14)));
+    assert_eq!(
+        <D38_2 as CheckedAdd>::checked_add(&a, &b),
+        Some(D38_2::from_int(9))
+    );
+    assert_eq!(
+        <D38_2 as CheckedSub>::checked_sub(&a, &b),
+        Some(D38_2::from_int(5))
+    );
+    assert_eq!(
+        <D38_2 as CheckedMul>::checked_mul(&a, &b),
+        Some(D38_2::from_int(14))
+    );
     let q = <D38_2 as CheckedDiv>::checked_div(&a, &b).unwrap();
     assert_eq!(q.to_bits(), 350);
     let _ = <D38_2 as CheckedRem>::checked_rem(&a, &b).unwrap();
@@ -112,35 +121,83 @@ fn from_primitive_all_widths() {
     // Trait methods are ambiguous with inherent ones (e.g. inherent
     // `from_f64` returns Self; trait `FromPrimitive::from_f64` returns
     // Option<Self>). Use fully-qualified syntax to pin the trait method.
-    assert_eq!(<D38_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(), 500);
+    assert_eq!(
+        <D38_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(),
+        500
+    );
     assert_eq!(<D9_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(), 500);
-    assert_eq!(<D18_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(), 500);
+    assert_eq!(
+        <D18_2 as FromPrimitive>::from_i64(5).unwrap().to_bits(),
+        500
+    );
     // u64 (in-range)
-    assert_eq!(<D38_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(), 500);
+    assert_eq!(
+        <D38_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(),
+        500
+    );
     assert_eq!(<D9_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(), 500);
-    assert_eq!(<D18_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(), 500);
+    assert_eq!(
+        <D18_2 as FromPrimitive>::from_u64(5).unwrap().to_bits(),
+        500
+    );
     // u64 overflow on D9 (D9<2> max ~21M; from_u64(u64::MAX) overflows)
     assert!(<D9_2 as FromPrimitive>::from_u64(u64::MAX).is_none());
     // i128 / u128
-    assert_eq!(<D38_2 as FromPrimitive>::from_i128(5).unwrap().to_bits(), 500);
-    assert_eq!(<D38_2 as FromPrimitive>::from_u128(5).unwrap().to_bits(), 500);
+    assert_eq!(
+        <D38_2 as FromPrimitive>::from_i128(5).unwrap().to_bits(),
+        500
+    );
+    assert_eq!(
+        <D38_2 as FromPrimitive>::from_u128(5).unwrap().to_bits(),
+        500
+    );
     // f32 / f64 — Option-returning trait variants
-    assert_eq!(<D38_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(), 150);
-    assert_eq!(<D38_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(), 150);
+    assert_eq!(
+        <D38_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(),
+        150
+    );
+    assert_eq!(
+        <D38_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(),
+        150
+    );
     assert!(<D38_2 as FromPrimitive>::from_f32(f32::NAN).is_none());
     assert!(<D38_2 as FromPrimitive>::from_f64(f64::INFINITY).is_none());
 
     // narrow widths f32/f64/i128/u128
-    assert_eq!(<D9_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(), 150);
-    assert_eq!(<D9_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(), 150);
-    assert_eq!(<D9_2 as FromPrimitive>::from_i128(3).unwrap().to_bits(), 300);
-    assert_eq!(<D9_2 as FromPrimitive>::from_u128(3).unwrap().to_bits(), 300);
+    assert_eq!(
+        <D9_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(),
+        150
+    );
+    assert_eq!(
+        <D9_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(),
+        150
+    );
+    assert_eq!(
+        <D9_2 as FromPrimitive>::from_i128(3).unwrap().to_bits(),
+        300
+    );
+    assert_eq!(
+        <D9_2 as FromPrimitive>::from_u128(3).unwrap().to_bits(),
+        300
+    );
     assert!(<D9_2 as FromPrimitive>::from_i128(i128::MAX).is_none());
     assert!(<D9_2 as FromPrimitive>::from_u128(u128::MAX).is_none());
-    assert_eq!(<D18_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(), 150);
-    assert_eq!(<D18_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(), 150);
-    assert_eq!(<D18_2 as FromPrimitive>::from_i128(3).unwrap().to_bits(), 300);
-    assert_eq!(<D18_2 as FromPrimitive>::from_u128(3).unwrap().to_bits(), 300);
+    assert_eq!(
+        <D18_2 as FromPrimitive>::from_f32(1.5).unwrap().to_bits(),
+        150
+    );
+    assert_eq!(
+        <D18_2 as FromPrimitive>::from_f64(1.5).unwrap().to_bits(),
+        150
+    );
+    assert_eq!(
+        <D18_2 as FromPrimitive>::from_i128(3).unwrap().to_bits(),
+        300
+    );
+    assert_eq!(
+        <D18_2 as FromPrimitive>::from_u128(3).unwrap().to_bits(),
+        300
+    );
 }
 
 // ─── ToPrimitive ───────────────────────────────────────────────────────
@@ -263,7 +320,7 @@ fn num_traits_wide_basics() {
 #[test]
 fn num_traits_wide_primitive_conversions() {
     use decimal_scaled::D76;
-    use num_traits::{FromPrimitive, ToPrimitive, NumCast};
+    use num_traits::{FromPrimitive, NumCast, ToPrimitive};
     type D76_2 = D76<2>;
     let exp: D76_2 = D38_2::from_int(5).into();
     assert_eq!(<D76_2 as FromPrimitive>::from_i64(5).unwrap(), exp);

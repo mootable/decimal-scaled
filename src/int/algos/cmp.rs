@@ -5,6 +5,6 @@
 
 #[allow(unused_imports)]
 pub(crate) use crate::int::limbs::{
-    limbs_bit_len_u64, limbs_bit_len_u64_fixed, limbs_cmp_u64, limbs_cmp_u64_fixed,
-    limbs_eq_u64, limbs_is_zero_u64, limbs_is_zero_u64_fixed,
+    limbs_bit_len_u64, limbs_bit_len_u64_fixed, limbs_cmp_u64, limbs_cmp_u64_fixed, limbs_eq_u64,
+    limbs_is_zero_u64, limbs_is_zero_u64_fixed,
 };

@@ -11,9 +11,7 @@
 //! reduction the wrapping operators want.
 
 #[allow(unused_imports)]
-pub(crate) use crate::int::limbs::{
-    limbs_mul_u64, limbs_mul_u64_fixed, limbs_mul_u64_into,
-};
+pub(crate) use crate::int::limbs::{limbs_mul_u64, limbs_mul_u64_fixed, limbs_mul_u64_into};
 
 /// `out = (a · b) mod 2^(64·N)` — the low `N` limbs of the schoolbook
 /// product, with the high half never formed.
@@ -38,9 +36,7 @@ pub(crate) const fn limbs_mul_low_u64_fixed<const N: usize>(
             // Stop once `i + j` reaches `N`: those partial products lie
             // entirely above `2^(64·N)` and drop out of the result.
             while j < N - i {
-                let v = (ai as u128) * (b[j] as u128)
-                    + (out[i + j] as u128)
-                    + (carry as u128);
+                let v = (ai as u128) * (b[j] as u128) + (out[i + j] as u128) + (carry as u128);
                 out[i + j] = v as u64;
                 carry = (v >> 64) as u64;
                 j += 1;
@@ -69,10 +65,7 @@ pub(crate) const fn limbs_mul_low_u64_fixed<const N: usize>(
 /// than a separate shift, which keeps the carry handling — the only
 /// fiddly part of squaring — identical to the diagonal path.
 #[inline]
-pub(crate) const fn limbs_sqr_low_u64_fixed<const N: usize>(
-    x: &[u64; N],
-    out: &mut [u64; N],
-) {
+pub(crate) const fn limbs_sqr_low_u64_fixed<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
     // Fold `value` (a u128 partial product) into the low limbs starting
     // at `col`, propagating carry until exhausted or past the width.
     #[inline(always)]

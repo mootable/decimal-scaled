@@ -34,8 +34,8 @@
 
 #![cfg(any(feature = "d616", feature = "x-wide"))]
 
-use crate::types::widths::wide_trig_d616 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d616 as core;
 use crate::wide_int::Int2048;
 
 /// Narrow guard for the SCALE 300..=315 hyperbolic slot — matches the

@@ -42,30 +42,42 @@ pub trait WidthLE<Target>: Copy {
 
 impl WidthLE<i32> for i32 {
     #[inline]
-    fn widen_into(self) -> i32 { self }
+    fn widen_into(self) -> i32 {
+        self
+    }
 }
 impl WidthLE<i64> for i64 {
     #[inline]
-    fn widen_into(self) -> i64 { self }
+    fn widen_into(self) -> i64 {
+        self
+    }
 }
 impl WidthLE<i128> for i128 {
     #[inline]
-    fn widen_into(self) -> i128 { self }
+    fn widen_into(self) -> i128 {
+        self
+    }
 }
 
 // ── Native widening (primitive → primitive). ─────────────────────────
 
 impl WidthLE<i64> for i32 {
     #[inline]
-    fn widen_into(self) -> i64 { self as i64 }
+    fn widen_into(self) -> i64 {
+        self as i64
+    }
 }
 impl WidthLE<i128> for i32 {
     #[inline]
-    fn widen_into(self) -> i128 { self as i128 }
+    fn widen_into(self) -> i128 {
+        self as i128
+    }
 }
 impl WidthLE<i128> for i64 {
     #[inline]
-    fn widen_into(self) -> i128 { self as i128 }
+    fn widen_into(self) -> i128 {
+        self as i128
+    }
 }
 
 // ── Wide-tier reflexive + cross impls. ───────────────────────────────
@@ -77,25 +89,45 @@ impl WidthLE<i128> for i64 {
 // widen into every wide storage via the `wide_cast` helper.
 
 #[cfg(any(
-    feature = "d57", feature = "d76", feature = "d115", feature = "d153",
-    feature = "d230", feature = "d307", feature = "d462", feature = "d616",
-    feature = "d924", feature = "d1232",
-    feature = "wide", feature = "x-wide", feature = "xx-wide",
+    feature = "d57",
+    feature = "d76",
+    feature = "d115",
+    feature = "d153",
+    feature = "d230",
+    feature = "d307",
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
+    feature = "wide",
+    feature = "x-wide",
+    feature = "xx-wide",
 ))]
 macro_rules! impl_width_le_wide_reflexive {
     ($Storage:ty) => {
         impl $crate::types::traits::width_le::WidthLE<$Storage> for $Storage {
             #[inline]
-            fn widen_into(self) -> $Storage { self }
+            fn widen_into(self) -> $Storage {
+                self
+            }
         }
     };
 }
 
 #[cfg(any(
-    feature = "d57", feature = "d76", feature = "d115", feature = "d153",
-    feature = "d230", feature = "d307", feature = "d462", feature = "d616",
-    feature = "d924", feature = "d1232",
-    feature = "wide", feature = "x-wide", feature = "xx-wide",
+    feature = "d57",
+    feature = "d76",
+    feature = "d115",
+    feature = "d153",
+    feature = "d230",
+    feature = "d307",
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
+    feature = "wide",
+    feature = "x-wide",
+    feature = "xx-wide",
 ))]
 macro_rules! impl_width_le_native_to_wide {
     ($Wide:ty, $Native:ty) => {
@@ -109,10 +141,19 @@ macro_rules! impl_width_le_native_to_wide {
 }
 
 #[cfg(any(
-    feature = "d57", feature = "d76", feature = "d115", feature = "d153",
-    feature = "d230", feature = "d307", feature = "d462", feature = "d616",
-    feature = "d924", feature = "d1232",
-    feature = "wide", feature = "x-wide", feature = "xx-wide",
+    feature = "d57",
+    feature = "d76",
+    feature = "d115",
+    feature = "d153",
+    feature = "d230",
+    feature = "d307",
+    feature = "d462",
+    feature = "d616",
+    feature = "d924",
+    feature = "d1232",
+    feature = "wide",
+    feature = "x-wide",
+    feature = "xx-wide",
 ))]
 macro_rules! impl_width_le_wide_pair {
     ($Wider:ty, $Narrower:ty) => {
@@ -190,65 +231,380 @@ macro_rules! wide_pair {
     ($Wider:ty, $Narrower:ty, $WiderFeat:literal, $NarrowerFeat:literal,
      $WiderUmbrella:literal, $NarrowerUmbrella:literal) => {
         #[cfg(all(
-            any(feature = $WiderFeat, feature = $WiderUmbrella),
-            any(feature = $NarrowerFeat, feature = $NarrowerUmbrella),
-        ))]
+                    any(feature = $WiderFeat, feature = $WiderUmbrella),
+                    any(feature = $NarrowerFeat, feature = $NarrowerUmbrella),
+                ))]
         impl_width_le_wide_pair!($Wider, $Narrower);
     };
 }
 
 // Int192 (D57) is widest of nothing narrower (D57 is the narrowest
 // wide). Pairs where Int192 is the wider:
-wide_pair!(crate::wide_int::Int256,  crate::wide_int::Int192, "d76",  "d57",  "wide", "wide");
-wide_pair!(crate::wide_int::Int384,  crate::wide_int::Int192, "d115", "d57",  "wide", "wide");
-wide_pair!(crate::wide_int::Int512,  crate::wide_int::Int192, "d153", "d57",  "wide", "wide");
-wide_pair!(crate::wide_int::Int768,  crate::wide_int::Int192, "d230", "d57",  "wide", "wide");
-wide_pair!(crate::wide_int::Int1024, crate::wide_int::Int192, "d307", "d57",  "wide", "wide");
-wide_pair!(crate::wide_int::Int1536, crate::wide_int::Int192, "d462", "d57",  "x-wide", "wide");
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int192, "d616", "d57",  "x-wide", "wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int192, "d924", "d57",  "xx-wide", "wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int192, "d1232","d57",  "xx-wide", "wide");
+wide_pair!(
+    crate::wide_int::Int256,
+    crate::wide_int::Int192,
+    "d76",
+    "d57",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int384,
+    crate::wide_int::Int192,
+    "d115",
+    "d57",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int512,
+    crate::wide_int::Int192,
+    "d153",
+    "d57",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int768,
+    crate::wide_int::Int192,
+    "d230",
+    "d57",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1024,
+    crate::wide_int::Int192,
+    "d307",
+    "d57",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1536,
+    crate::wide_int::Int192,
+    "d462",
+    "d57",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int192,
+    "d616",
+    "d57",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int192,
+    "d924",
+    "d57",
+    "xx-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int192,
+    "d1232",
+    "d57",
+    "xx-wide",
+    "wide"
+);
 
-wide_pair!(crate::wide_int::Int384,  crate::wide_int::Int256, "d115", "d76",  "wide", "wide");
-wide_pair!(crate::wide_int::Int512,  crate::wide_int::Int256, "d153", "d76",  "wide", "wide");
-wide_pair!(crate::wide_int::Int768,  crate::wide_int::Int256, "d230", "d76",  "wide", "wide");
-wide_pair!(crate::wide_int::Int1024, crate::wide_int::Int256, "d307", "d76",  "wide", "wide");
-wide_pair!(crate::wide_int::Int1536, crate::wide_int::Int256, "d462", "d76",  "x-wide", "wide");
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int256, "d616", "d76",  "x-wide", "wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int256, "d924", "d76",  "xx-wide", "wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int256, "d1232","d76",  "xx-wide", "wide");
+wide_pair!(
+    crate::wide_int::Int384,
+    crate::wide_int::Int256,
+    "d115",
+    "d76",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int512,
+    crate::wide_int::Int256,
+    "d153",
+    "d76",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int768,
+    crate::wide_int::Int256,
+    "d230",
+    "d76",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1024,
+    crate::wide_int::Int256,
+    "d307",
+    "d76",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1536,
+    crate::wide_int::Int256,
+    "d462",
+    "d76",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int256,
+    "d616",
+    "d76",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int256,
+    "d924",
+    "d76",
+    "xx-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int256,
+    "d1232",
+    "d76",
+    "xx-wide",
+    "wide"
+);
 
-wide_pair!(crate::wide_int::Int512,  crate::wide_int::Int384, "d153", "d115", "wide", "wide");
-wide_pair!(crate::wide_int::Int768,  crate::wide_int::Int384, "d230", "d115", "wide", "wide");
-wide_pair!(crate::wide_int::Int1024, crate::wide_int::Int384, "d307", "d115", "wide", "wide");
-wide_pair!(crate::wide_int::Int1536, crate::wide_int::Int384, "d462", "d115", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int384, "d616", "d115", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int384, "d924", "d115", "xx-wide", "wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int384, "d1232","d115", "xx-wide", "wide");
+wide_pair!(
+    crate::wide_int::Int512,
+    crate::wide_int::Int384,
+    "d153",
+    "d115",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int768,
+    crate::wide_int::Int384,
+    "d230",
+    "d115",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1024,
+    crate::wide_int::Int384,
+    "d307",
+    "d115",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1536,
+    crate::wide_int::Int384,
+    "d462",
+    "d115",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int384,
+    "d616",
+    "d115",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int384,
+    "d924",
+    "d115",
+    "xx-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int384,
+    "d1232",
+    "d115",
+    "xx-wide",
+    "wide"
+);
 
-wide_pair!(crate::wide_int::Int768,  crate::wide_int::Int512, "d230", "d153", "wide", "wide");
-wide_pair!(crate::wide_int::Int1024, crate::wide_int::Int512, "d307", "d153", "wide", "wide");
-wide_pair!(crate::wide_int::Int1536, crate::wide_int::Int512, "d462", "d153", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int512, "d616", "d153", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int512, "d924", "d153", "xx-wide", "wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int512, "d1232","d153", "xx-wide", "wide");
+wide_pair!(
+    crate::wide_int::Int768,
+    crate::wide_int::Int512,
+    "d230",
+    "d153",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1024,
+    crate::wide_int::Int512,
+    "d307",
+    "d153",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1536,
+    crate::wide_int::Int512,
+    "d462",
+    "d153",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int512,
+    "d616",
+    "d153",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int512,
+    "d924",
+    "d153",
+    "xx-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int512,
+    "d1232",
+    "d153",
+    "xx-wide",
+    "wide"
+);
 
-wide_pair!(crate::wide_int::Int1024, crate::wide_int::Int768, "d307", "d230", "wide", "wide");
-wide_pair!(crate::wide_int::Int1536, crate::wide_int::Int768, "d462", "d230", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int768, "d616", "d230", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int768, "d924", "d230", "xx-wide", "wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int768, "d1232","d230", "xx-wide", "wide");
+wide_pair!(
+    crate::wide_int::Int1024,
+    crate::wide_int::Int768,
+    "d307",
+    "d230",
+    "wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int1536,
+    crate::wide_int::Int768,
+    "d462",
+    "d230",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int768,
+    "d616",
+    "d230",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int768,
+    "d924",
+    "d230",
+    "xx-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int768,
+    "d1232",
+    "d230",
+    "xx-wide",
+    "wide"
+);
 
-wide_pair!(crate::wide_int::Int1536, crate::wide_int::Int1024, "d462", "d307", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int1024, "d616", "d307", "x-wide", "wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int1024, "d924", "d307", "xx-wide", "wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int1024, "d1232","d307", "xx-wide", "wide");
+wide_pair!(
+    crate::wide_int::Int1536,
+    crate::wide_int::Int1024,
+    "d462",
+    "d307",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int1024,
+    "d616",
+    "d307",
+    "x-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int1024,
+    "d924",
+    "d307",
+    "xx-wide",
+    "wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int1024,
+    "d1232",
+    "d307",
+    "xx-wide",
+    "wide"
+);
 
-wide_pair!(crate::wide_int::Int2048, crate::wide_int::Int1536, "d616", "d462", "x-wide", "x-wide");
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int1536, "d924", "d462", "xx-wide", "x-wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int1536, "d1232","d462", "xx-wide", "x-wide");
+wide_pair!(
+    crate::wide_int::Int2048,
+    crate::wide_int::Int1536,
+    "d616",
+    "d462",
+    "x-wide",
+    "x-wide"
+);
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int1536,
+    "d924",
+    "d462",
+    "xx-wide",
+    "x-wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int1536,
+    "d1232",
+    "d462",
+    "xx-wide",
+    "x-wide"
+);
 
-wide_pair!(crate::wide_int::Int3072, crate::wide_int::Int2048, "d924", "d616", "xx-wide", "x-wide");
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int2048, "d1232","d616", "xx-wide", "x-wide");
+wide_pair!(
+    crate::wide_int::Int3072,
+    crate::wide_int::Int2048,
+    "d924",
+    "d616",
+    "xx-wide",
+    "x-wide"
+);
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int2048,
+    "d1232",
+    "d616",
+    "xx-wide",
+    "x-wide"
+);
 
-wide_pair!(crate::wide_int::Int4096, crate::wide_int::Int3072, "d1232","d924", "xx-wide", "xx-wide");
+wide_pair!(
+    crate::wide_int::Int4096,
+    crate::wide_int::Int3072,
+    "d1232",
+    "d924",
+    "xx-wide",
+    "xx-wide"
+);

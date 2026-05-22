@@ -13,17 +13,19 @@
 
 pub(crate) mod arithmetic;
 pub(crate) mod basics;
-pub(crate) mod cross_scale_ops;
-pub(crate) mod cross_width_cmp;
 pub(crate) mod bitwise;
 pub(crate) mod consts;
 pub(crate) mod conversions;
+pub(crate) mod cross_scale_ops;
+pub(crate) mod cross_width_cmp;
 pub(crate) mod display;
 #[cfg(feature = "dyn")]
 pub(crate) mod dyn_bridge;
 pub(crate) mod equalities;
+pub(crate) mod fast_transcendentals;
 pub(crate) mod float_bridge;
 pub(crate) mod from_str;
+pub(crate) mod full;
 pub(crate) mod helpers;
 pub(crate) mod int_methods;
 pub(crate) mod num_traits;
@@ -34,9 +36,7 @@ pub(crate) mod rounding_methods;
 pub(crate) mod sign;
 pub(crate) mod storage_formatters;
 pub(crate) mod strict_transcendentals;
-pub(crate) mod fast_transcendentals;
 pub(crate) mod transcendental_trait;
-pub(crate) mod full;
 #[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]
 pub(crate) mod wide_roots;
 #[cfg(any(feature = "d76", feature = "d153", feature = "d307", feature = "wide"))]

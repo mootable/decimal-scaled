@@ -49,9 +49,7 @@ pub const fn max_const(a: u32, b: u32) -> u32 {
 /// let c = cross::mul(a, b); // D38<12>, value = 77
 /// ```
 #[inline]
-pub fn mul<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn mul<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -69,7 +67,9 @@ where
 /// crate; rescaling to `max_const(S1, S2)` is exact for both inputs.
 #[inline]
 pub fn mul_with<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>, _mode: RoundingMode,
+    a: D<W, S1>,
+    b: D<W, S2>,
+    _mode: RoundingMode,
 ) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
@@ -82,9 +82,7 @@ where
 
 /// Same-width cross-scale add.
 #[inline]
-pub fn add<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn add<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -98,9 +96,7 @@ where
 
 /// Same-width cross-scale subtract.
 #[inline]
-pub fn sub<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn sub<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -114,9 +110,7 @@ where
 
 /// Same-width cross-scale divide.
 #[inline]
-pub fn div<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn div<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,
@@ -130,9 +124,7 @@ where
 
 /// Same-width cross-scale remainder.
 #[inline]
-pub fn rem<W, const S1: u32, const S2: u32>(
-    a: D<W, S1>, b: D<W, S2>,
-) -> D<W, { max_const(S1, S2) }>
+pub fn rem<W, const S1: u32, const S2: u32>(a: D<W, S1>, b: D<W, S2>) -> D<W, { max_const(S1, S2) }>
 where
     W: Copy,
     D<W, S1>: WidenScale<W, S1, { max_const(S1, S2) }>,

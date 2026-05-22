@@ -18,9 +18,9 @@
 
 #![cfg(feature = "xx-wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D1232;
+use std::hint::black_box;
 
 fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
     let three: D1232<SCALE> = D1232::<SCALE>::from_int(3);
@@ -33,7 +33,9 @@ fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
     let mut g = c.benchmark_group(group_ln);
     g.sample_size(10);
     g.measurement_time(std::time::Duration::from_secs(8));
-    g.bench_function("artanh (canonical)", |b| b.iter(|| black_box(three).ln_strict()));
+    g.bench_function("artanh (canonical)", |b| {
+        b.iter(|| black_box(three).ln_strict())
+    });
     g.bench_function("agm", |b| b.iter(|| black_box(three).ln_strict_agm()));
     g.finish();
 }

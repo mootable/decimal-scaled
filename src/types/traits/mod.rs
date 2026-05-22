@@ -15,16 +15,16 @@
 //! Each lives in its own module; this `mod.rs` re-exports the names so
 //! `lib.rs` can surface them as `crate::Decimal` etc.
 
-pub(crate) mod decimal;
 pub(crate) mod arithmetic;
 pub(crate) mod convert;
-pub(crate) mod transcendental;
-pub(crate) mod width_le;
+pub(crate) mod decimal;
 #[cfg(feature = "dyn")]
 pub mod dyn_decimal;
+pub(crate) mod transcendental;
+pub(crate) mod width_le;
 
-pub use decimal::Decimal;
 pub use arithmetic::DecimalArithmetic;
 pub use convert::DecimalConvert;
+pub use decimal::Decimal;
 pub use transcendental::DecimalTranscendental;
 pub use width_le::WidthLE;

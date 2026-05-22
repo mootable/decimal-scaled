@@ -10,11 +10,11 @@
 //! the artefact visible and adds the in-range and special-input
 //! columns that actually exercise each library's algorithm.
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D38;
-use fastnum::{decimal::Context, D128};
+use fastnum::{D128, decimal::Context};
 use g_math::canonical::{evaluate, gmath};
+use std::hint::black_box;
 use std::str::FromStr;
 
 type Ours = D38<19>;
@@ -40,14 +40,14 @@ fn bench(c: &mut Criterion) {
 
     // (label, arg-as-string)
     let cases: &[(&str, &str)] = &[
-        ("zero",      "0"),
-        ("one",       "1"),
-        ("neg_one",   "-1"),
-        ("small_x",   "0.0000001"),       // 1e-7, hits our small-x fast path
-        ("milli",     "0.001"),
-        ("half",      "0.5"),
-        ("two",       "2"),               // > 1; fastnum NaNs here
-        ("large",     "100000000"),       // 1e8; reciprocal-reduce gives tiny inner arg
+        ("zero", "0"),
+        ("one", "1"),
+        ("neg_one", "-1"),
+        ("small_x", "0.0000001"), // 1e-7, hits our small-x fast path
+        ("milli", "0.001"),
+        ("half", "0.5"),
+        ("two", "2"),           // > 1; fastnum NaNs here
+        ("large", "100000000"), // 1e8; reciprocal-reduce gives tiny inner arg
     ];
 
     for (label, s) in cases {

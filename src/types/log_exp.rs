@@ -123,13 +123,20 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_approx(self, working_digits: u32) -> Self {
-        self.ln_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.ln_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// Natural log with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn ln_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn ln_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == STRICT_GUARD {
             return self.ln_strict_with(mode);
         }
@@ -162,13 +169,22 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log_approx(self, base: Self, working_digits: u32) -> Self {
-        self.log_approx_with(base, working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.log_approx_with(
+            base,
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// Logarithm with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn log_approx_with(self, base: Self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn log_approx_with(
+        self,
+        base: Self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == STRICT_GUARD {
             return self.log_strict_with(base, mode);
         }
@@ -201,13 +217,20 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log2_approx(self, working_digits: u32) -> Self {
-        self.log2_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.log2_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// Base-2 log with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn log2_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn log2_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == STRICT_GUARD {
             return self.log2_strict_with(mode);
         }
@@ -240,13 +263,20 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn log10_approx(self, working_digits: u32) -> Self {
-        self.log10_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.log10_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// Base-10 log with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn log10_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn log10_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == STRICT_GUARD {
             return self.log10_strict_with(mode);
         }
@@ -281,13 +311,20 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp_approx(self, working_digits: u32) -> Self {
-        self.exp_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.exp_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// Exponential with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn exp_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == STRICT_GUARD {
             return self.exp_strict_with(mode);
         }
@@ -320,13 +357,20 @@ impl<const SCALE: u32> D38<SCALE> {
     #[inline]
     #[must_use]
     pub fn exp2_approx(self, working_digits: u32) -> Self {
-        self.exp2_approx_with(working_digits, crate::support::rounding::DEFAULT_ROUNDING_MODE)
+        self.exp2_approx_with(
+            working_digits,
+            crate::support::rounding::DEFAULT_ROUNDING_MODE,
+        )
     }
 
     /// Base-2 exponential with caller-chosen guard digits AND rounding mode.
     #[inline]
     #[must_use]
-    pub fn exp2_approx_with(self, working_digits: u32, mode: crate::support::rounding::RoundingMode) -> Self {
+    pub fn exp2_approx_with(
+        self,
+        working_digits: u32,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Self {
         if working_digits == STRICT_GUARD {
             return self.exp2_strict_with(mode);
         }
@@ -429,14 +473,27 @@ mod strict_tests {
             );
         }
         for &raw in &[
-            -5_000_000_000, -1_000_000_000, -500_000_000, 1, 500_000_000,
-            1_000_000_000, 2_000_000_000, 5_000_000_000, 10_000_000_000,
+            -5_000_000_000,
+            -1_000_000_000,
+            -500_000_000,
+            1,
+            500_000_000,
+            1_000_000_000,
+            2_000_000_000,
+            5_000_000_000,
+            10_000_000_000,
         ] {
             check_exp(raw);
         }
         for &raw in &[
-            1, 500_000_000, 1_000_000_000, 2_000_000_000, 8_000_000_000,
-            10_000_000_000, 123_456_789_012_345, i64::MAX as i128,
+            1,
+            500_000_000,
+            1_000_000_000,
+            2_000_000_000,
+            8_000_000_000,
+            10_000_000_000,
+            123_456_789_012_345,
+            i64::MAX as i128,
         ] {
             check_log2(raw);
             check_log10(raw);

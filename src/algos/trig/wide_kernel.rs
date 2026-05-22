@@ -100,11 +100,9 @@ macro_rules! decl_trig_kernel {
                 ));
             }
             let probe = core::div(sin0, cos0, w0);
-            let extra = crate::algos::trig::near_pole_tan::tan_extra_digits(
-                core::bit_length(probe),
-                w0,
-            )
-            .saturating_sub(core::GUARD);
+            let extra =
+                crate::algos::trig::near_pole_tan::tan_extra_digits(core::bit_length(probe), w0)
+                    .saturating_sub(core::GUARD);
             if extra == 0 {
                 return core::round_to_storage_with(probe, w0, scale, mode);
             }

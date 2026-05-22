@@ -46,8 +46,8 @@
 
 use crate::algos::sqrt;
 use crate::policy::triplet::{policy_triplet, wtag};
-use crate::types::widths::{D9, D18, D38};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D9, D18, D38};
 
 /// Per-width policy: which kernel a `Dxx<SCALE>` uses for
 /// `sqrt_strict_with`. See module docs for the cascade structure.
@@ -120,9 +120,13 @@ macro_rules! sqrt_wide_default {
             #[inline]
             fn sqrt_impl(self, mode: RoundingMode) -> Self {
                 #[cfg(feature = "std")]
-                { Self($std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
+                {
+                    Self($std_fn::<{ wtag::$T }, SCALE>(self.0, mode))
+                }
                 #[cfg(not(feature = "std"))]
-                { Self($no_std_fn::<{ wtag::$T }, SCALE>(self.0, mode)) }
+                {
+                    Self($no_std_fn::<{ wtag::$T }, SCALE>(self.0, mode))
+                }
             }
         }
     };
@@ -153,35 +157,102 @@ impl<const SCALE: u32> SqrtPolicy for crate::types::widths::D57<SCALE> {
     #[inline]
     fn sqrt_impl(self, mode: RoundingMode) -> Self {
         #[cfg(feature = "std")]
-        { Self(sqrt_d57_std::<{ wtag::D57 }, SCALE>(self.0, mode)) }
+        {
+            Self(sqrt_d57_std::<{ wtag::D57 }, SCALE>(self.0, mode))
+        }
         #[cfg(not(feature = "std"))]
-        { Self(sqrt_d57_no_std::<{ wtag::D57 }, SCALE>(self.0, mode)) }
+        {
+            Self(sqrt_d57_no_std::<{ wtag::D57 }, SCALE>(self.0, mode))
+        }
     }
 }
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-sqrt_wide_default!(D76, crate::wide_int::Int256, sqrt_d76_base, sqrt_d76_std, sqrt_d76_no_std, sqrt::generic_wide::sqrt_d76);
+sqrt_wide_default!(
+    D76,
+    crate::wide_int::Int256,
+    sqrt_d76_base,
+    sqrt_d76_std,
+    sqrt_d76_no_std,
+    sqrt::generic_wide::sqrt_d76
+);
 
 #[cfg(any(feature = "d115", feature = "wide"))]
-sqrt_wide_default!(D115, crate::wide_int::Int384, sqrt_d115_base, sqrt_d115_std, sqrt_d115_no_std, sqrt::generic_wide::sqrt_d115);
+sqrt_wide_default!(
+    D115,
+    crate::wide_int::Int384,
+    sqrt_d115_base,
+    sqrt_d115_std,
+    sqrt_d115_no_std,
+    sqrt::generic_wide::sqrt_d115
+);
 
 #[cfg(any(feature = "d153", feature = "wide"))]
-sqrt_wide_default!(D153, crate::wide_int::Int512, sqrt_d153_base, sqrt_d153_std, sqrt_d153_no_std, sqrt::generic_wide::sqrt_d153);
+sqrt_wide_default!(
+    D153,
+    crate::wide_int::Int512,
+    sqrt_d153_base,
+    sqrt_d153_std,
+    sqrt_d153_no_std,
+    sqrt::generic_wide::sqrt_d153
+);
 
 #[cfg(any(feature = "d230", feature = "wide"))]
-sqrt_wide_default!(D230, crate::wide_int::Int768, sqrt_d230_base, sqrt_d230_std, sqrt_d230_no_std, sqrt::generic_wide::sqrt_d230);
+sqrt_wide_default!(
+    D230,
+    crate::wide_int::Int768,
+    sqrt_d230_base,
+    sqrt_d230_std,
+    sqrt_d230_no_std,
+    sqrt::generic_wide::sqrt_d230
+);
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-sqrt_wide_default!(D307, crate::wide_int::Int1024, sqrt_d307_base, sqrt_d307_std, sqrt_d307_no_std, sqrt::generic_wide::sqrt_d307);
+sqrt_wide_default!(
+    D307,
+    crate::wide_int::Int1024,
+    sqrt_d307_base,
+    sqrt_d307_std,
+    sqrt_d307_no_std,
+    sqrt::generic_wide::sqrt_d307
+);
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-sqrt_wide_default!(D462, crate::wide_int::Int1536, sqrt_d462_base, sqrt_d462_std, sqrt_d462_no_std, sqrt::generic_wide::sqrt_d462);
+sqrt_wide_default!(
+    D462,
+    crate::wide_int::Int1536,
+    sqrt_d462_base,
+    sqrt_d462_std,
+    sqrt_d462_no_std,
+    sqrt::generic_wide::sqrt_d462
+);
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-sqrt_wide_default!(D616, crate::wide_int::Int2048, sqrt_d616_base, sqrt_d616_std, sqrt_d616_no_std, sqrt::generic_wide::sqrt_d616);
+sqrt_wide_default!(
+    D616,
+    crate::wide_int::Int2048,
+    sqrt_d616_base,
+    sqrt_d616_std,
+    sqrt_d616_no_std,
+    sqrt::generic_wide::sqrt_d616
+);
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-sqrt_wide_default!(D924, crate::wide_int::Int3072, sqrt_d924_base, sqrt_d924_std, sqrt_d924_no_std, sqrt::generic_wide::sqrt_d924);
+sqrt_wide_default!(
+    D924,
+    crate::wide_int::Int3072,
+    sqrt_d924_base,
+    sqrt_d924_std,
+    sqrt_d924_no_std,
+    sqrt::generic_wide::sqrt_d924
+);
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-sqrt_wide_default!(D1232, crate::wide_int::Int4096, sqrt_d1232_base, sqrt_d1232_std, sqrt_d1232_no_std, sqrt::generic_wide::sqrt_d1232);
+sqrt_wide_default!(
+    D1232,
+    crate::wide_int::Int4096,
+    sqrt_d1232_base,
+    sqrt_d1232_std,
+    sqrt_d1232_no_std,
+    sqrt::generic_wide::sqrt_d1232
+);

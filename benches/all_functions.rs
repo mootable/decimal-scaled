@@ -36,9 +36,9 @@
 //! (raw ~1.5e15 scaled = 1500 model units at SCALE=12) -- not the
 //! near-overflow boundary. The boundary is the job of
 //! `mul_div_candidates.rs`.
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::{D38, D38s12, DecimalConstants};
+use std::hint::black_box;
 
 type D = D38<12>;
 
@@ -62,18 +62,10 @@ const UNIT_FRAC: D = D::from_bits(300_000_000_000); // == 0.3
 fn bench_core_type(c: &mut Criterion) {
     let mut g = c.benchmark_group("core_type");
 
-    g.bench_function("from_bits", |bn| {
-        bn.iter(|| D::from_bits(black_box(RAW_A)))
-    });
-    g.bench_function("to_bits", |bn| {
-        bn.iter(|| black_box(A).to_bits())
-    });
-    g.bench_function("multiplier", |bn| {
-        bn.iter(D::multiplier)
-    });
-    g.bench_function("Default::default", |bn| {
-        bn.iter(D::default)
-    });
+    g.bench_function("from_bits", |bn| bn.iter(|| D::from_bits(black_box(RAW_A))));
+    g.bench_function("to_bits", |bn| bn.iter(|| black_box(A).to_bits()));
+    g.bench_function("multiplier", |bn| bn.iter(D::multiplier));
+    g.bench_function("Default::default", |bn| bn.iter(D::default));
 
     g.finish();
 }
@@ -91,31 +83,41 @@ fn bench_arithmetic(c: &mut Criterion) {
     g.bench_function("Div", |bn| bn.iter(|| black_box(A) / black_box(B)));
     g.bench_function("Rem", |bn| bn.iter(|| black_box(A) % black_box(B)));
     g.bench_function("Neg", |bn| bn.iter(|| -black_box(A)));
-    g.bench_function("AddAssign", |bn| bn.iter(|| {
-        let mut a = black_box(A);
-        a += black_box(B);
-        a
-    }));
-    g.bench_function("SubAssign", |bn| bn.iter(|| {
-        let mut a = black_box(A);
-        a -= black_box(B);
-        a
-    }));
-    g.bench_function("MulAssign", |bn| bn.iter(|| {
-        let mut a = black_box(A);
-        a *= black_box(B);
-        a
-    }));
-    g.bench_function("DivAssign", |bn| bn.iter(|| {
-        let mut a = black_box(A);
-        a /= black_box(B);
-        a
-    }));
-    g.bench_function("RemAssign", |bn| bn.iter(|| {
-        let mut a = black_box(A);
-        a %= black_box(B);
-        a
-    }));
+    g.bench_function("AddAssign", |bn| {
+        bn.iter(|| {
+            let mut a = black_box(A);
+            a += black_box(B);
+            a
+        })
+    });
+    g.bench_function("SubAssign", |bn| {
+        bn.iter(|| {
+            let mut a = black_box(A);
+            a -= black_box(B);
+            a
+        })
+    });
+    g.bench_function("MulAssign", |bn| {
+        bn.iter(|| {
+            let mut a = black_box(A);
+            a *= black_box(B);
+            a
+        })
+    });
+    g.bench_function("DivAssign", |bn| {
+        bn.iter(|| {
+            let mut a = black_box(A);
+            a /= black_box(B);
+            a
+        })
+    });
+    g.bench_function("RemAssign", |bn| {
+        bn.iter(|| {
+            let mut a = black_box(A);
+            a %= black_box(B);
+            a
+        })
+    });
 
     // Math methods
     g.bench_function("abs", |bn| bn.iter(|| black_box(A).abs()));
@@ -133,13 +135,27 @@ fn bench_arithmetic(c: &mut Criterion) {
         bn.iter(|| black_box(A).clamp(black_box(lo), black_box(hi)))
     });
     g.bench_function("recip", |bn| bn.iter(|| black_box(A).recip()));
-    g.bench_function("copysign", |bn| bn.iter(|| black_box(A).copysign(black_box(B))));
-    g.bench_function("div_euclid", |bn| bn.iter(|| black_box(A).div_euclid(black_box(B))));
-    g.bench_function("rem_euclid", |bn| bn.iter(|| black_box(A).rem_euclid(black_box(B))));
-    g.bench_function("div_floor", |bn| bn.iter(|| black_box(A).div_floor(black_box(B))));
-    g.bench_function("div_ceil", |bn| bn.iter(|| black_box(A).div_ceil(black_box(B))));
-    g.bench_function("abs_diff", |bn| bn.iter(|| black_box(A).abs_diff(black_box(B))));
-    g.bench_function("midpoint", |bn| bn.iter(|| black_box(A).midpoint(black_box(B))));
+    g.bench_function("copysign", |bn| {
+        bn.iter(|| black_box(A).copysign(black_box(B)))
+    });
+    g.bench_function("div_euclid", |bn| {
+        bn.iter(|| black_box(A).div_euclid(black_box(B)))
+    });
+    g.bench_function("rem_euclid", |bn| {
+        bn.iter(|| black_box(A).rem_euclid(black_box(B)))
+    });
+    g.bench_function("div_floor", |bn| {
+        bn.iter(|| black_box(A).div_floor(black_box(B)))
+    });
+    g.bench_function("div_ceil", |bn| {
+        bn.iter(|| black_box(A).div_ceil(black_box(B)))
+    });
+    g.bench_function("abs_diff", |bn| {
+        bn.iter(|| black_box(A).abs_diff(black_box(B)))
+    });
+    g.bench_function("midpoint", |bn| {
+        bn.iter(|| black_box(A).midpoint(black_box(B)))
+    });
 
     // Predicates -- these should be ~free, included for completeness.
     g.bench_function("is_nan", |bn| bn.iter(|| black_box(A).is_nan()));
@@ -190,18 +206,10 @@ fn bench_conversions(c: &mut Criterion) {
     g.bench_function("from_i32", |bn| {
         bn.iter(|| D::from_i32(black_box(424_242_i32)))
     });
-    g.bench_function("from_f64", |bn| {
-        bn.iter(|| D::from_f64(black_box(1.5_f64)))
-    });
-    g.bench_function("to_int", |bn| {
-        bn.iter(|| black_box(A).to_int())
-    });
-    g.bench_function("to_f64", |bn| {
-        bn.iter(|| black_box(A).to_f64())
-    });
-    g.bench_function("to_f32", |bn| {
-        bn.iter(|| black_box(A).to_f32())
-    });
+    g.bench_function("from_f64", |bn| bn.iter(|| D::from_f64(black_box(1.5_f64))));
+    g.bench_function("to_int", |bn| bn.iter(|| black_box(A).to_int()));
+    g.bench_function("to_f64", |bn| bn.iter(|| black_box(A).to_f64()));
+    g.bench_function("to_f32", |bn| bn.iter(|| black_box(A).to_f32()));
 
     g.finish();
 }
@@ -245,9 +253,7 @@ fn bench_powers(c: &mut Criterion) {
     g.bench_function("mul_add", |bn| {
         bn.iter(|| black_box(A).mul_add(black_box(B), black_box(POS)))
     });
-    g.bench_function("hypot", |bn| {
-        bn.iter(|| black_box(A).hypot(black_box(B)))
-    });
+    g.bench_function("hypot", |bn| bn.iter(|| black_box(A).hypot(black_box(B))));
 
     // Overflow-variant `pow` family.
     g.bench_function("checked_pow_8", |bn| {
@@ -306,7 +312,9 @@ fn bench_trig(c: &mut Criterion) {
     g.bench_function("asinh", |bn| bn.iter(|| black_box(SMALL_ANGLE).asinh()));
     g.bench_function("acosh", |bn| bn.iter(|| black_box(POS).acosh()));
     g.bench_function("atanh", |bn| bn.iter(|| black_box(UNIT_FRAC).atanh()));
-    g.bench_function("to_degrees", |bn| bn.iter(|| black_box(SMALL_ANGLE).to_degrees()));
+    g.bench_function("to_degrees", |bn| {
+        bn.iter(|| black_box(SMALL_ANGLE).to_degrees())
+    });
     g.bench_function("to_radians", |bn| {
         let deg = D::from_bits(45_000_000_000_000); // == 45 degrees
         bn.iter(|| black_box(deg).to_radians())
@@ -339,12 +347,20 @@ fn bench_bitwise(c: &mut Criterion) {
     g.bench_function("rotate_right", |bn| {
         bn.iter(|| black_box(A).rotate_right(black_box(7_u32)))
     });
-    g.bench_function("leading_zeros", |bn| bn.iter(|| black_box(A).leading_zeros()));
-    g.bench_function("trailing_zeros", |bn| bn.iter(|| black_box(A).trailing_zeros()));
+    g.bench_function("leading_zeros", |bn| {
+        bn.iter(|| black_box(A).leading_zeros())
+    });
+    g.bench_function("trailing_zeros", |bn| {
+        bn.iter(|| black_box(A).trailing_zeros())
+    });
     g.bench_function("count_ones", |bn| bn.iter(|| black_box(A).count_ones()));
     g.bench_function("count_zeros", |bn| bn.iter(|| black_box(A).count_zeros()));
-    g.bench_function("is_power_of_two", |bn| bn.iter(|| black_box(A).is_power_of_two()));
-    g.bench_function("next_power_of_two", |bn| bn.iter(|| black_box(A).next_power_of_two()));
+    g.bench_function("is_power_of_two", |bn| {
+        bn.iter(|| black_box(A).is_power_of_two())
+    });
+    g.bench_function("next_power_of_two", |bn| {
+        bn.iter(|| black_box(A).next_power_of_two())
+    });
 
     g.finish();
 }
@@ -386,8 +402,12 @@ fn bench_overflow_variants(c: &mut Criterion) {
     // Neg family
     g.bench_function("checked_neg", |bn| bn.iter(|| black_box(A).checked_neg()));
     g.bench_function("wrapping_neg", |bn| bn.iter(|| black_box(A).wrapping_neg()));
-    g.bench_function("saturating_neg", |bn| bn.iter(|| black_box(A).saturating_neg()));
-    g.bench_function("overflowing_neg", |bn| bn.iter(|| black_box(A).overflowing_neg()));
+    g.bench_function("saturating_neg", |bn| {
+        bn.iter(|| black_box(A).saturating_neg())
+    });
+    g.bench_function("overflowing_neg", |bn| {
+        bn.iter(|| black_box(A).overflowing_neg())
+    });
 
     // Mul family
     g.bench_function("checked_mul", |bn| {
@@ -437,18 +457,10 @@ fn bench_overflow_variants(c: &mut Criterion) {
 fn bench_display(c: &mut Criterion) {
     let mut g = c.benchmark_group("display");
 
-    g.bench_function("Display", |bn| {
-        bn.iter(|| format!("{}", black_box(A)))
-    });
-    g.bench_function("Debug", |bn| {
-        bn.iter(|| format!("{:?}", black_box(A)))
-    });
-    g.bench_function("LowerHex", |bn| {
-        bn.iter(|| format!("{:x}", black_box(A)))
-    });
-    g.bench_function("Binary", |bn| {
-        bn.iter(|| format!("{:b}", black_box(A)))
-    });
+    g.bench_function("Display", |bn| bn.iter(|| format!("{}", black_box(A))));
+    g.bench_function("Debug", |bn| bn.iter(|| format!("{:?}", black_box(A))));
+    g.bench_function("LowerHex", |bn| bn.iter(|| format!("{:x}", black_box(A))));
+    g.bench_function("Binary", |bn| bn.iter(|| format!("{:b}", black_box(A))));
     g.bench_function("FromStr_parse", |bn| {
         let s = "1.5";
         bn.iter(|| black_box(s).parse::<D38s12>())
@@ -472,15 +484,9 @@ fn bench_compat(c: &mut Criterion) {
     g.bench_function("from_num_f64", |bn| {
         bn.iter(|| D::from_num(black_box(1.5_f64)))
     });
-    g.bench_function("to_num_i32", |bn| {
-        bn.iter(|| black_box(A).to_num::<i32>())
-    });
-    g.bench_function("to_num_i64", |bn| {
-        bn.iter(|| black_box(A).to_num::<i64>())
-    });
-    g.bench_function("to_num_f64", |bn| {
-        bn.iter(|| black_box(A).to_num::<f64>())
-    });
+    g.bench_function("to_num_i32", |bn| bn.iter(|| black_box(A).to_num::<i32>()));
+    g.bench_function("to_num_i64", |bn| bn.iter(|| black_box(A).to_num::<i64>()));
+    g.bench_function("to_num_f64", |bn| bn.iter(|| black_box(A).to_num::<f64>()));
 
     g.finish();
 }

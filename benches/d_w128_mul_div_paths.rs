@@ -16,9 +16,9 @@
 //!
 //! Run with: `cargo bench --features wide --bench d_w128_mul_div_paths`.
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::{D38, Int256};
+use std::hint::black_box;
 
 /// `(a · b) / 10^SCALE`, computed wide-arm style with `Int256` as the
 /// widening intermediate — mirroring `decl_decimal_arithmetic!(wide D,

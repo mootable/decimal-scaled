@@ -33,14 +33,12 @@ macro_rules! cbrt_of_one_test {
     ($fn_name:ident, $tier:ident, $scale:literal, $Storage:ident) => {
         #[test]
         fn $fn_name() {
-            let ten = decimal_scaled::$Storage::from_str_radix("10", 10)
-                .expect("10 literal");
+            let ten = decimal_scaled::$Storage::from_str_radix("10", 10).expect("10 literal");
             let raw = ten.pow($scale as u32);
             let one = decimal_scaled::$tier::<$scale>::from_bits(raw);
             let r = one.cbrt_strict();
             assert_eq!(
-                r,
-                one,
+                r, one,
                 concat!(
                     "cbrt(1) at ",
                     stringify!($tier),

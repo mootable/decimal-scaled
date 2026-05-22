@@ -12,7 +12,7 @@
 #![cfg(all(feature = "wide", feature = "x-wide", feature = "xx-wide"))]
 
 use core::str::FromStr;
-use decimal_scaled::{D1232, D307, D38, D76};
+use decimal_scaled::{D38, D76, D307, D1232};
 
 #[test]
 fn d76_deep_scale_parses_one_point_five() {

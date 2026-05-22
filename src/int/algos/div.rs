@@ -7,9 +7,7 @@
 //! for the multi-limb case.
 
 #[allow(unused_imports)]
-pub(crate) use crate::int::limbs::{
-    limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_isqrt_u64,
-};
+pub(crate) use crate::int::limbs::{limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_isqrt_u64};
 
 /// Const-`N` fast-arm divmod over little-endian u64 magnitude limbs.
 ///

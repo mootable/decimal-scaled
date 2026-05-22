@@ -45,5 +45,5 @@ pub(crate) mod ln;
 pub(crate) mod pow;
 pub(crate) mod sqrt;
 pub(crate) mod table_cache;
-pub(crate) mod triplet;
 pub(crate) mod trig;
+pub(crate) mod triplet;

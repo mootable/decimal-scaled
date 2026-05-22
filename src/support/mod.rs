@@ -5,11 +5,11 @@
 //! and the kernels in [`crate::algos`] without imposing a layering
 //! dependency in the other direction.
 
-pub(crate) mod rounding;
-pub(crate) mod error;
-pub(crate) mod diagnostics;
-pub(crate) mod display;
-#[cfg(feature = "serde")]
-pub mod serde_helpers;
 #[cfg(feature = "bench-alt")]
 pub(crate) mod bench_alt;
+pub(crate) mod diagnostics;
+pub(crate) mod display;
+pub(crate) mod error;
+pub(crate) mod rounding;
+#[cfg(feature = "serde")]
+pub mod serde_helpers;

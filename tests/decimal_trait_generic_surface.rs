@@ -76,7 +76,12 @@ fn surface_check_d76() {
 
 /// Width-generic `sum` and `product` over an iterator.
 fn fold_sum_product<D: Decimal>() -> (D, D) {
-    let vs: [D; 4] = [D::from_i32(1), D::from_i32(2), D::from_i32(3), D::from_i32(4)];
+    let vs: [D; 4] = [
+        D::from_i32(1),
+        D::from_i32(2),
+        D::from_i32(3),
+        D::from_i32(4),
+    ];
     (D::sum(vs.iter().copied()), D::product(vs.iter().copied()))
 }
 

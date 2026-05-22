@@ -6,8 +6,8 @@
 //! Each block targets a specific macro module so coverage gains map
 //! back to the source file directly.
 
-use decimal_scaled::{D9, D18, D38};
 use decimal_scaled::DecimalArithmetic;
+use decimal_scaled::{D9, D18, D38};
 
 type D9_2 = D9<2>;
 type D18_2 = D18<2>;
@@ -495,7 +495,6 @@ fn d38_add_sub_overflow() {
 
 #[test]
 fn decimal_trait_methods() {
-    
     let v = D38_2::from_int(7);
     // scale() takes self
     assert_eq!(v.scale(), 2);

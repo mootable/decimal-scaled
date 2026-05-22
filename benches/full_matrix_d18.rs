@@ -5,10 +5,10 @@
 #[macro_use]
 mod full_matrix_common;
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D18;
 use fixed::types::I64F64;
+use std::hint::black_box;
 
 fn bench_arith(c: &mut Criterion) {
     let mut g = c.benchmark_group("arith");
@@ -18,11 +18,21 @@ fn bench_arith(c: &mut Criterion) {
     arith_block!(g, "D18_s18", D18<18>);
     let a = I64F64::from_num(2);
     let b = I64F64::from_num(1);
-    g.bench_function("fixed_i64f64/add", |bn| bn.iter(|| black_box(a) + black_box(b)));
-    g.bench_function("fixed_i64f64/sub", |bn| bn.iter(|| black_box(a) - black_box(b)));
-    g.bench_function("fixed_i64f64/mul", |bn| bn.iter(|| black_box(a) * black_box(b)));
-    g.bench_function("fixed_i64f64/div", |bn| bn.iter(|| black_box(a) / black_box(b)));
-    g.bench_function("fixed_i64f64/rem", |bn| bn.iter(|| black_box(a) % black_box(b)));
+    g.bench_function("fixed_i64f64/add", |bn| {
+        bn.iter(|| black_box(a) + black_box(b))
+    });
+    g.bench_function("fixed_i64f64/sub", |bn| {
+        bn.iter(|| black_box(a) - black_box(b))
+    });
+    g.bench_function("fixed_i64f64/mul", |bn| {
+        bn.iter(|| black_box(a) * black_box(b))
+    });
+    g.bench_function("fixed_i64f64/div", |bn| {
+        bn.iter(|| black_box(a) / black_box(b))
+    });
+    g.bench_function("fixed_i64f64/rem", |bn| {
+        bn.iter(|| black_box(a) % black_box(b))
+    });
     g.bench_function("fixed_i64f64/neg", |bn| bn.iter(|| -black_box(a)));
     g.finish();
 }

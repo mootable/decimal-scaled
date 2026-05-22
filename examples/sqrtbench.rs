@@ -6,7 +6,7 @@
 use std::hint::black_box;
 use std::time::Instant;
 
-use decimal_scaled::{D153, D307, D38, D76};
+use decimal_scaled::{D38, D76, D153, D307};
 
 const ITERS: u32 = 200_000;
 

@@ -9,9 +9,9 @@
 
 #![cfg(feature = "xx-wide")]
 
-use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D924;
+use std::hint::black_box;
 
 type D = D924<460>;
 
@@ -30,22 +30,50 @@ fn bench(c: &mut Criterion) {
     // doesn't pay the one-shot M*ln_fixed seed cost.
     let _ = one_p_half.ln_strict();
 
-    g.bench_function("arith/mul", |bn| bn.iter(|| black_box(two) * black_box(one)));
-    g.bench_function("arith/div", |bn| bn.iter(|| black_box(two) / black_box(one)));
+    g.bench_function("arith/mul", |bn| {
+        bn.iter(|| black_box(two) * black_box(one))
+    });
+    g.bench_function("arith/div", |bn| {
+        bn.iter(|| black_box(two) / black_box(one))
+    });
 
-    g.bench_function("strict/sqrt", |bn| bn.iter(|| black_box(one_p_half).sqrt_strict()));
-    g.bench_function("strict/cbrt", |bn| bn.iter(|| black_box(one_p_half).cbrt_strict()));
-    g.bench_function("strict/ln",   |bn| bn.iter(|| black_box(one_p_half).ln_strict()));
-    g.bench_function("strict/exp",  |bn| bn.iter(|| black_box(half).exp_strict()));
-    g.bench_function("strict/sin",  |bn| bn.iter(|| black_box(one_p_half).sin_strict()));
-    g.bench_function("strict/cos",  |bn| bn.iter(|| black_box(one_p_half).cos_strict()));
-    g.bench_function("strict/tan",  |bn| bn.iter(|| black_box(one_p_half).tan_strict()));
-    g.bench_function("strict/atan", |bn| bn.iter(|| black_box(one_p_half).atan_strict()));
-    g.bench_function("strict/asin", |bn| bn.iter(|| black_box(half).asin_strict()));
-    g.bench_function("strict/acos", |bn| bn.iter(|| black_box(half).acos_strict()));
-    g.bench_function("strict/sinh", |bn| bn.iter(|| black_box(half).sinh_strict()));
-    g.bench_function("strict/cosh", |bn| bn.iter(|| black_box(half).cosh_strict()));
-    g.bench_function("strict/tanh", |bn| bn.iter(|| black_box(half).tanh_strict()));
+    g.bench_function("strict/sqrt", |bn| {
+        bn.iter(|| black_box(one_p_half).sqrt_strict())
+    });
+    g.bench_function("strict/cbrt", |bn| {
+        bn.iter(|| black_box(one_p_half).cbrt_strict())
+    });
+    g.bench_function("strict/ln", |bn| {
+        bn.iter(|| black_box(one_p_half).ln_strict())
+    });
+    g.bench_function("strict/exp", |bn| bn.iter(|| black_box(half).exp_strict()));
+    g.bench_function("strict/sin", |bn| {
+        bn.iter(|| black_box(one_p_half).sin_strict())
+    });
+    g.bench_function("strict/cos", |bn| {
+        bn.iter(|| black_box(one_p_half).cos_strict())
+    });
+    g.bench_function("strict/tan", |bn| {
+        bn.iter(|| black_box(one_p_half).tan_strict())
+    });
+    g.bench_function("strict/atan", |bn| {
+        bn.iter(|| black_box(one_p_half).atan_strict())
+    });
+    g.bench_function("strict/asin", |bn| {
+        bn.iter(|| black_box(half).asin_strict())
+    });
+    g.bench_function("strict/acos", |bn| {
+        bn.iter(|| black_box(half).acos_strict())
+    });
+    g.bench_function("strict/sinh", |bn| {
+        bn.iter(|| black_box(half).sinh_strict())
+    });
+    g.bench_function("strict/cosh", |bn| {
+        bn.iter(|| black_box(half).cosh_strict())
+    });
+    g.bench_function("strict/tanh", |bn| {
+        bn.iter(|| black_box(half).tanh_strict())
+    });
 
     // AGM probes — captures the AGM crossover question at the deepest
     // half-width tier shipped. `ln_strict_agm` and `exp_strict_agm` are
@@ -53,8 +81,12 @@ fn bench(c: &mut Criterion) {
     // NOTE: AGM accuracy degrades to ~p/2 bits beyond w ~ 30; this
     // measurement is pure throughput, the answer is not bit-equal to
     // the canonical paths.
-    g.bench_function("strict/ln_agm",  |bn| bn.iter(|| black_box(three).ln_strict_agm()));
-    g.bench_function("strict/exp_agm", |bn| bn.iter(|| black_box(half).exp_strict_agm()));
+    g.bench_function("strict/ln_agm", |bn| {
+        bn.iter(|| black_box(three).ln_strict_agm())
+    });
+    g.bench_function("strict/exp_agm", |bn| {
+        bn.iter(|| black_box(half).exp_strict_agm())
+    });
 
     g.finish();
 }

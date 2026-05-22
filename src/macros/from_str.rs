@@ -60,7 +60,7 @@ macro_rules! decl_decimal_from_str {
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
                                 $crate::types::widths::ParseError::OutOfRange,
-                            )
+                            );
                         }
                     };
                     int_value = if negative {
@@ -69,7 +69,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
-                                )
+                                );
                             }
                         }
                     } else {
@@ -78,7 +78,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
-                                )
+                                );
                             }
                         }
                     };
@@ -88,7 +88,7 @@ macro_rules! decl_decimal_from_str {
                     ::core::option::Option::None => {
                         return ::core::result::Result::Err(
                             $crate::types::widths::ParseError::OutOfRange,
-                        )
+                        );
                     }
                 };
 
@@ -102,7 +102,7 @@ macro_rules! decl_decimal_from_str {
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
                                 $crate::types::widths::ParseError::OutOfRange,
-                            )
+                            );
                         }
                     };
                     frac_value = if negative {
@@ -111,7 +111,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
-                                )
+                                );
                             }
                         }
                     } else {
@@ -120,7 +120,7 @@ macro_rules! decl_decimal_from_str {
                             ::core::option::Option::None => {
                                 return ::core::result::Result::Err(
                                     $crate::types::widths::ParseError::OutOfRange,
-                                )
+                                );
                             }
                         }
                     };
@@ -133,7 +133,7 @@ macro_rules! decl_decimal_from_str {
                         ::core::option::Option::None => {
                             return ::core::result::Result::Err(
                                 $crate::types::widths::ParseError::OutOfRange,
-                            )
+                            );
                         }
                     };
                 }
@@ -145,7 +145,7 @@ macro_rules! decl_decimal_from_str {
                     ::core::option::Option::None => {
                         return ::core::result::Result::Err(
                             $crate::types::widths::ParseError::OutOfRange,
-                        )
+                        );
                     }
                 };
                 ::core::result::Result::Ok(Self(combined))

@@ -18,19 +18,15 @@
 //! handled inside D57's `powf_strict_with` / `powf_approx_with`, so
 //! the wrapper does not need a separate fast path.
 
-use crate::types::widths::{D38, D57};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D38, D57};
 
 /// D38 `base^exp` via widen → D57 inherent `powf_strict_with` →
 /// narrow back. Strict working scale (`SCALE + GUARD` const-folded
 /// inside D57).
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(
-    base: i128,
-    exp: i128,
-    mode: RoundingMode,
-) -> i128 {
+pub(crate) fn powf_strict<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
     let base_w: D57<SCALE> = D38::<SCALE>::from_bits(base).into();
     let exp_w: D57<SCALE> = D38::<SCALE>::from_bits(exp).into();
     let result = base_w.powf_strict_with(exp_w, mode);

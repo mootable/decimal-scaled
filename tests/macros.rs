@@ -251,7 +251,7 @@ fn expression_const_context_works() {
 
 #[test]
 fn d9_literal_inferred_scale() {
-    use decimal_scaled::{d9, D9s2};
+    use decimal_scaled::{D9s2, d9};
     let v = d9!(1.23);
     assert_eq!(v, D9s2::from_bits(123));
 }
@@ -259,28 +259,28 @@ fn d9_literal_inferred_scale() {
 #[test]
 fn d9_max_scale_8() {
     // v0.4.0 cap: MAX_SCALE for D9 is 8.
-    use decimal_scaled::{d9, D9s8};
-    let v = d9!(0.000_000_01);  // raw 1 at scale 8
+    use decimal_scaled::{D9s8, d9};
+    let v = d9!(0.000_000_01); // raw 1 at scale 8
     assert_eq!(v, D9s8::from_bits(1));
 }
 
 #[test]
 fn d18_literal_inferred_scale() {
-    use decimal_scaled::{d18, D18s4};
+    use decimal_scaled::{D18s4, d18};
     let v = d18!(1234.5678);
     assert_eq!(v, D18s4::from_bits(12_345_678));
 }
 
 #[test]
 fn d18_explicit_scale_pad() {
-    use decimal_scaled::{d18, D18s9};
+    use decimal_scaled::{D18s9, d18};
     let v = d18!(1.5, scale 9);
     assert_eq!(v, D18s9::from_bits(1_500_000_000));
 }
 
 #[test]
 fn d18_expression_form() {
-    use decimal_scaled::{d18, D18s4};
+    use decimal_scaled::{D18s4, d18};
     let raw: i64 = 12345;
     let v = d18!(raw, scale 4);
     assert_eq!(v.to_bits(), 12345i64 * 10_000);
@@ -292,7 +292,7 @@ fn d18_expression_form() {
 #[cfg(feature = "wide")]
 #[test]
 fn d76_literal_inferred_scale() {
-    use decimal_scaled::{d76, D76s2};
+    use decimal_scaled::{D76s2, d76};
     let v: D76s2 = d76!(1.23);
     assert_eq!(v.to_string(), "1.23");
 }
@@ -300,15 +300,15 @@ fn d76_literal_inferred_scale() {
 #[cfg(feature = "wide")]
 #[test]
 fn d76_explicit_scale() {
-    use decimal_scaled::{d76, D76s12};
-    let v: D76s12 = d76!(0.000_000_000_001);  // scale 12 inferred and matched
+    use decimal_scaled::{D76s12, d76};
+    let v: D76s12 = d76!(0.000_000_000_001); // scale 12 inferred and matched
     assert_eq!(v.to_string(), "0.000000000001");
 }
 
 #[cfg(feature = "wide")]
 #[test]
 fn d153_literal_inferred() {
-    use decimal_scaled::{d153, D153s35};
+    use decimal_scaled::{D153s35, d153};
     // Use a value whose natural scale matches the alias.
     let v: D153s35 = d153!(2.71828182845904523536028747135266250);
     assert!(v.to_string().starts_with("2.71828182845904523536028747"));
@@ -317,37 +317,40 @@ fn d153_literal_inferred() {
 #[cfg(feature = "wide")]
 #[test]
 fn d307_literal_inferred() {
-    use decimal_scaled::{d307, D307s35};
+    use decimal_scaled::{D307s35, d307};
     let v: D307s35 = d307!(3.14159265358979323846264338327950288);
-    assert!(v.to_string().starts_with("3.14159265358979323846264338327950288"));
+    assert!(
+        v.to_string()
+            .starts_with("3.14159265358979323846264338327950288")
+    );
 }
 
 // ── Per-scale wrapper macros ──────────────────────────────────────────
 
 #[test]
 fn d9_per_scale_wrapper_d9s2() {
-    use decimal_scaled::{d9s2, D9s2};
+    use decimal_scaled::{D9s2, d9s2};
     let v: D9s2 = d9s2!(1.23);
     assert_eq!(v, D9s2::from_bits(123));
 }
 
 #[test]
 fn d18_per_scale_wrapper_d18s12() {
-    use decimal_scaled::{d18s12, D18s12};
+    use decimal_scaled::{D18s12, d18s12};
     let v: D18s12 = d18s12!(1.5);
     assert_eq!(v, D18s12::from_bits(1_500_000_000_000));
 }
 
 #[test]
 fn d38_per_scale_wrapper_d38s12() {
-    use decimal_scaled::{d38s12, D38s12};
+    use decimal_scaled::{D38s12, d38s12};
     let v: D38s12 = d38s12!(1.5);
     assert_eq!(v, D38s12::from_bits(1_500_000_000_000));
 }
 
 #[test]
 fn d38_per_scale_wrapper_forwards_qualifiers() {
-    use decimal_scaled::{d38s2, D38s2};
+    use decimal_scaled::{D38s2, d38s2};
     // Scale 2 is pre-baked; `rounded` is forwarded as a tail
     // qualifier.
     let v: D38s2 = d38s2!(1.234_567, rounded);
@@ -357,7 +360,7 @@ fn d38_per_scale_wrapper_forwards_qualifiers() {
 #[cfg(feature = "wide")]
 #[test]
 fn d76_per_scale_wrapper_d76s35() {
-    use decimal_scaled::{d76s35, D76s35};
+    use decimal_scaled::{D76s35, d76s35};
     let v: D76s35 = d76s35!(1.5);
     // 1.5 at scale 35 = 1.5 * 10^35.
     assert_eq!(v.to_string(), "1.50000000000000000000000000000000000");
@@ -367,7 +370,7 @@ fn d76_per_scale_wrapper_d76s35() {
 
 #[test]
 fn d38_hex_prefix_integer() {
-    use decimal_scaled::{d38, D38s0};
+    use decimal_scaled::{D38s0, d38};
     // 0xFF == 255 — scale defaults to 0 for radix-prefixed integers.
     let v: D38s0 = d38!(0xFF);
     assert_eq!(v.to_bits(), 255);
@@ -375,36 +378,36 @@ fn d38_hex_prefix_integer() {
 
 #[test]
 fn d38_oct_prefix_integer() {
-    use decimal_scaled::{d38, D38s0};
-    let v: D38s0 = d38!(0o755);  // == 493
+    use decimal_scaled::{D38s0, d38};
+    let v: D38s0 = d38!(0o755); // == 493
     assert_eq!(v.to_bits(), 493);
 }
 
 #[test]
 fn d38_bin_prefix_integer() {
-    use decimal_scaled::{d38, D38s0};
-    let v: D38s0 = d38!(0b1010_0110);  // == 166
+    use decimal_scaled::{D38s0, d38};
+    let v: D38s0 = d38!(0b1010_0110); // == 166
     assert_eq!(v.to_bits(), 166);
 }
 
 #[test]
 fn d38_hex_with_explicit_scale() {
-    use decimal_scaled::{d38, D38s2};
-    let v: D38s2 = d38!(0x7B, scale 2);  // 123 at scale 2 = 1.23
+    use decimal_scaled::{D38s2, d38};
+    let v: D38s2 = d38!(0x7B, scale 2); // 123 at scale 2 = 1.23
     assert_eq!(v.to_string(), "1.23");
 }
 
 #[test]
 fn d38_explicit_radix_qualifier() {
-    use decimal_scaled::{d38, D38s0};
-    let v: D38s0 = d38!(123, radix 8);  // octal: 1*64 + 2*8 + 3 = 83
+    use decimal_scaled::{D38s0, d38};
+    let v: D38s0 = d38!(123, radix 8); // octal: 1*64 + 2*8 + 3 = 83
     assert_eq!(v.to_bits(), 83);
 }
 
 #[cfg(feature = "wide")]
 #[test]
 fn d76_hex_prefix() {
-    use decimal_scaled::{d76, D76s0};
+    use decimal_scaled::{D76s0, d76};
     let v: D76s0 = d76!(0xDEAD_BEEF);
     assert_eq!(v.to_string(), "3735928559");
 }
@@ -413,7 +416,7 @@ fn d76_hex_prefix() {
 
 #[test]
 fn d38_hex_fractional_literal() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // 1.A3 in hex = 0x1A3 magnitude = 419. The decimal point split
     // gives 2 hex fractional digits. Scale must be supplied — the
     // bits ARE the parsed magnitude (no scale shift).
@@ -423,7 +426,7 @@ fn d38_hex_fractional_literal() {
 
 #[test]
 fn d38_bin_fractional_literal() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // 11.0110 in binary = 0b110110 = 54. Stored at scale 4 → 0.0054.
     let v: D38<4> = d38!(11.0110, radix 2, scale 4);
     assert_eq!(v.to_bits(), 54);
@@ -431,7 +434,7 @@ fn d38_bin_fractional_literal() {
 
 #[test]
 fn d38_oct_fractional_literal() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // 17.3 in octal: digits "173" in base 8 = 1*64 + 7*8 + 3 = 123.
     let v: D38<2> = d38!(17.3, radix 8, scale 2);
     assert_eq!(v.to_bits(), 123);
@@ -439,14 +442,14 @@ fn d38_oct_fractional_literal() {
 
 #[test]
 fn d38_negative_hex_fractional() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     let v: D38<2> = d38!(-1.A3, radix 16, scale 2);
     assert_eq!(v.to_bits(), -419);
 }
 
 #[test]
 fn d38_hex_fractional_ident_dot_ident() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // `FF.AA` in radix 16: Rust tokenises both halves as idents
     // (no leading digit on either side). Magnitude in base 16 is
     // 0xFFAA = 65450.
@@ -456,7 +459,7 @@ fn d38_hex_fractional_ident_dot_ident() {
 
 #[test]
 fn d38_hex_fractional_int_dot_ident() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // `7.AB` in radix 16: 7 is an Int literal, AB an Ident.
     // 0x7AB = 1963.
     let v: D38<3> = d38!(7.AB, radix 16, scale 3);
@@ -465,7 +468,7 @@ fn d38_hex_fractional_int_dot_ident() {
 
 #[test]
 fn d38_hex_fractional_ident_dot_int() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // `AB.7` in radix 16: AB is an Ident, 7 is an Int literal.
     // 0xAB7 = 2743.
     let v: D38<3> = d38!(AB.7, radix 16, scale 3);
@@ -474,7 +477,7 @@ fn d38_hex_fractional_ident_dot_int() {
 
 #[test]
 fn d38_hex_integer_only_radix() {
-    use decimal_scaled::{d38, D38};
+    use decimal_scaled::{D38, d38};
     // Bare IDENT (no prefix, no dot) under explicit `radix 16`.
     let v: D38<0> = d38!(BEEF, radix 16);
     assert_eq!(v.to_bits(), 0xBEEF);

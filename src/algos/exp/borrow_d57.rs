@@ -16,8 +16,8 @@
 // `RUSTDOCFLAGS=-D warnings` doc build (the docs.yml workflow uses
 // this flag to catch broken intra-doc links).
 
-use crate::types::widths::{D38, D57};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D38, D57};
 
 /// D38 exponential via widen → D57 wide_kernel → narrow back. Strict
 /// working scale.

@@ -19,7 +19,7 @@
     any(feature = "d76", feature = "wide"),
 ))]
 
-use decimal_scaled::{RoundingMode, D38, D76};
+use decimal_scaled::{D38, D76, RoundingMode};
 use std::str::FromStr;
 
 const STRICT_GUARD: u32 = 30;

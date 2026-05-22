@@ -14,8 +14,8 @@
 //! `wide_kernel::tan_strict_d57` (the same logical panic D38's
 //! `fixed_d38::tan_strict` produces).
 
-use crate::types::widths::{D38, D57};
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D38, D57};
 use crate::wide_int::I192;
 
 #[inline]

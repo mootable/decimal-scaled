@@ -89,7 +89,11 @@ macro_rules! decl_decimal_rescale {
                         if abs_rem < half {
                             quotient
                         } else if abs_rem > half {
-                            if non_negative { quotient + one } else { quotient - one }
+                            if non_negative {
+                                quotient + one
+                            } else {
+                                quotient - one
+                            }
                         } else if !quotient.bit(0) {
                             quotient
                         } else if non_negative {
@@ -109,17 +113,29 @@ macro_rules! decl_decimal_rescale {
                     }
                     $crate::support::rounding::RoundingMode::HalfTowardZero => {
                         if abs_rem > half {
-                            if non_negative { quotient + one } else { quotient - one }
+                            if non_negative {
+                                quotient + one
+                            } else {
+                                quotient - one
+                            }
                         } else {
                             quotient
                         }
                     }
                     $crate::support::rounding::RoundingMode::Trunc => quotient,
                     $crate::support::rounding::RoundingMode::Floor => {
-                        if non_negative { quotient } else { quotient - one }
+                        if non_negative {
+                            quotient
+                        } else {
+                            quotient - one
+                        }
                     }
                     $crate::support::rounding::RoundingMode::Ceiling => {
-                        if non_negative { quotient + one } else { quotient }
+                        if non_negative {
+                            quotient + one
+                        } else {
+                            quotient
+                        }
                     }
                 };
                 $Type::<TARGET_SCALE>::from_bits(bits)
@@ -223,10 +239,18 @@ macro_rules! decl_decimal_rescale {
                     }
                     $crate::support::rounding::RoundingMode::Trunc => quotient,
                     $crate::support::rounding::RoundingMode::Floor => {
-                        if raw >= 0 { quotient } else { quotient - 1 }
+                        if raw >= 0 {
+                            quotient
+                        } else {
+                            quotient - 1
+                        }
                     }
                     $crate::support::rounding::RoundingMode::Ceiling => {
-                        if raw >= 0 { quotient + 1 } else { quotient }
+                        if raw >= 0 {
+                            quotient + 1
+                        } else {
+                            quotient
+                        }
                     }
                 };
                 $Type::<TARGET_SCALE>::from_bits(bits)

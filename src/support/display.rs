@@ -69,7 +69,7 @@
 
 use core::fmt;
 
-use crate::types::widths::{ParseError, D38};
+use crate::types::widths::{D38, ParseError};
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -189,7 +189,6 @@ fn format_exp(raw: i128, scale: u32, upper: bool, f: &mut fmt::Formatter<'_>) ->
 
 // ──────────────────────────────────────────────────────────────────────
 // `ParseError`'s `Display` and `Error` impls live in `src/error.rs`.
-
 
 /// Outcome of the string-parsing front-end: sign and the integer / fractional
 /// digit slices. Both byte slices contain only ASCII digits.
@@ -393,7 +392,7 @@ fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::widths::{D38s12, D38};
+    use crate::types::widths::{D38, D38s12};
     #[cfg(feature = "alloc")]
     use alloc::format;
     #[cfg(feature = "alloc")]
@@ -586,10 +585,7 @@ mod tests {
     #[test]
     fn parse_error_display_messages() {
         assert_eq!(ParseError::Empty.to_string(), "empty input");
-        assert_eq!(
-            ParseError::SignOnly.to_string(),
-            "sign with no digits"
-        );
+        assert_eq!(ParseError::SignOnly.to_string(), "sign with no digits");
         assert_eq!(
             ParseError::LeadingZero.to_string(),
             "redundant leading zero in integer part"
@@ -602,10 +598,7 @@ mod tests {
             ParseError::ScientificNotation.to_string(),
             "scientific notation not accepted"
         );
-        assert_eq!(
-            ParseError::InvalidChar.to_string(),
-            "invalid character"
-        );
+        assert_eq!(ParseError::InvalidChar.to_string(), "invalid character");
         assert_eq!(
             ParseError::OutOfRange.to_string(),
             "value out of representable range"
@@ -683,10 +676,7 @@ mod tests {
     #[test]
     fn from_str_leading_zero_is_err() {
         assert_eq!("01".parse::<D38s12>(), Err(ParseError::LeadingZero));
-        assert_eq!(
-            "01.5".parse::<D38s12>(),
-            Err(ParseError::LeadingZero)
-        );
+        assert_eq!("01.5".parse::<D38s12>(), Err(ParseError::LeadingZero));
         assert_eq!("00".parse::<D38s12>(), Err(ParseError::LeadingZero));
     }
 
@@ -699,10 +689,7 @@ mod tests {
 
     #[test]
     fn from_str_scientific_notation_is_err() {
-        assert_eq!(
-            "1e3".parse::<D38s12>(),
-            Err(ParseError::ScientificNotation)
-        );
+        assert_eq!("1e3".parse::<D38s12>(), Err(ParseError::ScientificNotation));
         assert_eq!(
             "1.5E2".parse::<D38s12>(),
             Err(ParseError::ScientificNotation)
@@ -711,34 +698,16 @@ mod tests {
 
     #[test]
     fn from_str_invalid_char_is_err() {
-        assert_eq!(
-            "garbage".parse::<D38s12>(),
-            Err(ParseError::InvalidChar)
-        );
-        assert_eq!(
-            "1.2x".parse::<D38s12>(),
-            Err(ParseError::InvalidChar)
-        );
-        assert_eq!(
-            "1..2".parse::<D38s12>(),
-            Err(ParseError::InvalidChar)
-        );
+        assert_eq!("garbage".parse::<D38s12>(), Err(ParseError::InvalidChar));
+        assert_eq!("1.2x".parse::<D38s12>(), Err(ParseError::InvalidChar));
+        assert_eq!("1..2".parse::<D38s12>(), Err(ParseError::InvalidChar));
     }
 
     #[test]
     fn from_str_missing_digits_is_err() {
-        assert_eq!(
-            ".5".parse::<D38s12>(),
-            Err(ParseError::MissingDigits)
-        );
-        assert_eq!(
-            "5.".parse::<D38s12>(),
-            Err(ParseError::MissingDigits)
-        );
-        assert_eq!(
-            "-.5".parse::<D38s12>(),
-            Err(ParseError::MissingDigits)
-        );
+        assert_eq!(".5".parse::<D38s12>(), Err(ParseError::MissingDigits));
+        assert_eq!("5.".parse::<D38s12>(), Err(ParseError::MissingDigits));
+        assert_eq!("-.5".parse::<D38s12>(), Err(ParseError::MissingDigits));
     }
 
     #[test]

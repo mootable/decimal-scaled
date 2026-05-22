@@ -22,9 +22,7 @@ fn main() {
         .file("trace/atan_perfetto.json")
         .include_args(false)
         .build();
-    tracing_subscriber::registry()
-        .with(chrome_layer)
-        .init();
+    tracing_subscriber::registry().with(chrome_layer).init();
 
     let mut acc = Work::from_int(0);
     for i in 0..iters {

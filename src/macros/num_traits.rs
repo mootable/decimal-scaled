@@ -152,9 +152,10 @@ macro_rules! decl_decimal_num_traits_basics {
                     None
                 };
                 if let Some(f) = float_signal
-                    && f.is_nan() {
-                        return Self::ZERO;
-                    }
+                    && f.is_nan()
+                {
+                    return Self::ZERO;
+                }
                 if let Some(d) = <Self as ::num_traits::NumCast>::from(value) {
                     return d;
                 }

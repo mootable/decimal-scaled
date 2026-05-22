@@ -49,129 +49,303 @@ fn agree(label: &str, wide: i128, d38: i128) {
 type D76_6 = D76<6>;
 type D38_6 = D38<6>;
 
-fn lift(n: D38_6) -> D76_6 { n.into() }
+fn lift(n: D38_6) -> D76_6 {
+    n.into()
+}
 
-#[test] fn d76_ln() {
+#[test]
+fn d76_ln() {
     let n = D38_6::from_int(2);
-    agree("ln(2)", d76_bits_at_scale_6(lift(n).ln_strict()), n.ln_strict().to_bits());
+    agree(
+        "ln(2)",
+        d76_bits_at_scale_6(lift(n).ln_strict()),
+        n.ln_strict().to_bits(),
+    );
 }
-#[test] fn d76_log2() {
+#[test]
+fn d76_log2() {
     let n = D38_6::from_int(8);
-    agree("log2(8)", d76_bits_at_scale_6(lift(n).log2_strict()), n.log2_strict().to_bits());
+    agree(
+        "log2(8)",
+        d76_bits_at_scale_6(lift(n).log2_strict()),
+        n.log2_strict().to_bits(),
+    );
 }
-#[test] fn d76_log10() {
+#[test]
+fn d76_log10() {
     let n = D38_6::from_int(1000);
-    agree("log10(1000)", d76_bits_at_scale_6(lift(n).log10_strict()), n.log10_strict().to_bits());
+    agree(
+        "log10(1000)",
+        d76_bits_at_scale_6(lift(n).log10_strict()),
+        n.log10_strict().to_bits(),
+    );
 }
-#[test] fn d76_log() {
+#[test]
+fn d76_log() {
     let n = D38_6::from_int(8);
     let b = D38_6::from_int(2);
-    agree("log_2(8)", d76_bits_at_scale_6(lift(n).log_strict(lift(b))), n.log_strict(b).to_bits());
+    agree(
+        "log_2(8)",
+        d76_bits_at_scale_6(lift(n).log_strict(lift(b))),
+        n.log_strict(b).to_bits(),
+    );
 }
-#[test] fn d76_exp() {
+#[test]
+fn d76_exp() {
     let n = D38_6::ONE;
-    agree("exp(1)", d76_bits_at_scale_6(lift(n).exp_strict()), n.exp_strict().to_bits());
+    agree(
+        "exp(1)",
+        d76_bits_at_scale_6(lift(n).exp_strict()),
+        n.exp_strict().to_bits(),
+    );
     assert_eq!(D76_6::ZERO.exp_strict(), D76_6::ONE);
 }
-#[test] fn d76_exp2() {
+#[test]
+fn d76_exp2() {
     let n = D38_6::from_int(10);
-    agree("exp2(10)", d76_bits_at_scale_6(lift(n).exp2_strict()), n.exp2_strict().to_bits());
+    agree(
+        "exp2(10)",
+        d76_bits_at_scale_6(lift(n).exp2_strict()),
+        n.exp2_strict().to_bits(),
+    );
     assert_eq!(D76_6::ZERO.exp2_strict(), D76_6::ONE);
 }
-#[test] fn d76_sqrt() {
+#[test]
+fn d76_sqrt() {
     for v in [2_i64, 4, 5, 9] {
         let n = D38_6::from_int(v);
-        agree(&format!("sqrt({v})"), d76_bits_at_scale_6(lift(n).sqrt_strict()), n.sqrt_strict().to_bits());
+        agree(
+            &format!("sqrt({v})"),
+            d76_bits_at_scale_6(lift(n).sqrt_strict()),
+            n.sqrt_strict().to_bits(),
+        );
     }
 }
-#[test] fn d76_cbrt() {
+#[test]
+fn d76_cbrt() {
     for v in [2_i64, 8, 27, -8] {
         let n = D38_6::from_int(v);
-        agree(&format!("cbrt({v})"), d76_bits_at_scale_6(lift(n).cbrt_strict()), n.cbrt_strict().to_bits());
+        agree(
+            &format!("cbrt({v})"),
+            d76_bits_at_scale_6(lift(n).cbrt_strict()),
+            n.cbrt_strict().to_bits(),
+        );
     }
 }
-#[test] fn d76_powf() {
+#[test]
+fn d76_powf() {
     let two = D38_6::from_int(2);
     let ten = D38_6::from_int(10);
-    agree("2^10", d76_bits_at_scale_6(lift(two).powf_strict(lift(ten))), two.powf_strict(ten).to_bits());
+    agree(
+        "2^10",
+        d76_bits_at_scale_6(lift(two).powf_strict(lift(ten))),
+        two.powf_strict(ten).to_bits(),
+    );
     // Negative base → ZERO
-    assert_eq!(lift(D38_6::from_int(-2)).powf_strict(lift(two)), D76_6::ZERO);
+    assert_eq!(
+        lift(D38_6::from_int(-2)).powf_strict(lift(two)),
+        D76_6::ZERO
+    );
 }
-#[test] fn d76_sin_cos_tan() {
+#[test]
+fn d76_sin_cos_tan() {
     let n = D38_6::ONE;
-    agree("sin(1)", d76_bits_at_scale_6(lift(n).sin_strict()), n.sin_strict().to_bits());
-    agree("cos(1)", d76_bits_at_scale_6(lift(n).cos_strict()), n.cos_strict().to_bits());
-    agree("tan(1)", d76_bits_at_scale_6(lift(n).tan_strict()), n.tan_strict().to_bits());
+    agree(
+        "sin(1)",
+        d76_bits_at_scale_6(lift(n).sin_strict()),
+        n.sin_strict().to_bits(),
+    );
+    agree(
+        "cos(1)",
+        d76_bits_at_scale_6(lift(n).cos_strict()),
+        n.cos_strict().to_bits(),
+    );
+    agree(
+        "tan(1)",
+        d76_bits_at_scale_6(lift(n).tan_strict()),
+        n.tan_strict().to_bits(),
+    );
 }
-#[test] fn d76_atan_asin_acos() {
+#[test]
+fn d76_atan_asin_acos() {
     let one = D38_6::ONE;
     let half = D38_6::from_bits(500_000);
-    agree("atan(1)", d76_bits_at_scale_6(lift(one).atan_strict()), one.atan_strict().to_bits());
-    agree("asin(0.5)", d76_bits_at_scale_6(lift(half).asin_strict()), half.asin_strict().to_bits());
-    agree("acos(0.5)", d76_bits_at_scale_6(lift(half).acos_strict()), half.acos_strict().to_bits());
+    agree(
+        "atan(1)",
+        d76_bits_at_scale_6(lift(one).atan_strict()),
+        one.atan_strict().to_bits(),
+    );
+    agree(
+        "asin(0.5)",
+        d76_bits_at_scale_6(lift(half).asin_strict()),
+        half.asin_strict().to_bits(),
+    );
+    agree(
+        "acos(0.5)",
+        d76_bits_at_scale_6(lift(half).acos_strict()),
+        half.acos_strict().to_bits(),
+    );
     // boundary |x|=1
-    agree("asin(1)", d76_bits_at_scale_6(lift(one).asin_strict()), one.asin_strict().to_bits());
-    agree("asin(-1)", d76_bits_at_scale_6(lift(-one).asin_strict()), (-one).asin_strict().to_bits());
-    agree("acos(-1)", d76_bits_at_scale_6(lift(-one).acos_strict()), (-one).acos_strict().to_bits());
+    agree(
+        "asin(1)",
+        d76_bits_at_scale_6(lift(one).asin_strict()),
+        one.asin_strict().to_bits(),
+    );
+    agree(
+        "asin(-1)",
+        d76_bits_at_scale_6(lift(-one).asin_strict()),
+        (-one).asin_strict().to_bits(),
+    );
+    agree(
+        "acos(-1)",
+        d76_bits_at_scale_6(lift(-one).acos_strict()),
+        (-one).acos_strict().to_bits(),
+    );
 }
-#[test] fn d76_atan2_quadrants() {
+#[test]
+fn d76_atan2_quadrants() {
     let one = D38_6::ONE;
     let zero = D38_6::ZERO;
     // four-quadrant + axis cases
-    agree("atan2(1,1)", d76_bits_at_scale_6(lift(one).atan2_strict(lift(one))), one.atan2_strict(one).to_bits());
-    agree("atan2(1,0)", d76_bits_at_scale_6(lift(one).atan2_strict(lift(zero))), one.atan2_strict(zero).to_bits());
-    agree("atan2(-1,0)", d76_bits_at_scale_6(lift(-one).atan2_strict(lift(zero))), (-one).atan2_strict(zero).to_bits());
-    agree("atan2(0,0)", d76_bits_at_scale_6(lift(zero).atan2_strict(lift(zero))), zero.atan2_strict(zero).to_bits());
-    agree("atan2(0,-1)", d76_bits_at_scale_6(lift(zero).atan2_strict(lift(-one))), zero.atan2_strict(-one).to_bits());
-    agree("atan2(-1,-1)", d76_bits_at_scale_6(lift(-one).atan2_strict(lift(-one))), (-one).atan2_strict(-one).to_bits());
+    agree(
+        "atan2(1,1)",
+        d76_bits_at_scale_6(lift(one).atan2_strict(lift(one))),
+        one.atan2_strict(one).to_bits(),
+    );
+    agree(
+        "atan2(1,0)",
+        d76_bits_at_scale_6(lift(one).atan2_strict(lift(zero))),
+        one.atan2_strict(zero).to_bits(),
+    );
+    agree(
+        "atan2(-1,0)",
+        d76_bits_at_scale_6(lift(-one).atan2_strict(lift(zero))),
+        (-one).atan2_strict(zero).to_bits(),
+    );
+    agree(
+        "atan2(0,0)",
+        d76_bits_at_scale_6(lift(zero).atan2_strict(lift(zero))),
+        zero.atan2_strict(zero).to_bits(),
+    );
+    agree(
+        "atan2(0,-1)",
+        d76_bits_at_scale_6(lift(zero).atan2_strict(lift(-one))),
+        zero.atan2_strict(-one).to_bits(),
+    );
+    agree(
+        "atan2(-1,-1)",
+        d76_bits_at_scale_6(lift(-one).atan2_strict(lift(-one))),
+        (-one).atan2_strict(-one).to_bits(),
+    );
 }
-#[test] fn d76_hyperbolic() {
+#[test]
+fn d76_hyperbolic() {
     let n = D38_6::ONE;
-    agree("sinh(1)", d76_bits_at_scale_6(lift(n).sinh_strict()), n.sinh_strict().to_bits());
-    agree("cosh(1)", d76_bits_at_scale_6(lift(n).cosh_strict()), n.cosh_strict().to_bits());
-    agree("tanh(1)", d76_bits_at_scale_6(lift(n).tanh_strict()), n.tanh_strict().to_bits());
-    agree("sinh(-1)", d76_bits_at_scale_6(lift(-n).sinh_strict()), (-n).sinh_strict().to_bits());
+    agree(
+        "sinh(1)",
+        d76_bits_at_scale_6(lift(n).sinh_strict()),
+        n.sinh_strict().to_bits(),
+    );
+    agree(
+        "cosh(1)",
+        d76_bits_at_scale_6(lift(n).cosh_strict()),
+        n.cosh_strict().to_bits(),
+    );
+    agree(
+        "tanh(1)",
+        d76_bits_at_scale_6(lift(n).tanh_strict()),
+        n.tanh_strict().to_bits(),
+    );
+    agree(
+        "sinh(-1)",
+        d76_bits_at_scale_6(lift(-n).sinh_strict()),
+        (-n).sinh_strict().to_bits(),
+    );
 }
-#[test] fn d76_inverse_hyperbolic() {
+#[test]
+fn d76_inverse_hyperbolic() {
     let one = D38_6::ONE;
     let two = D38_6::from_int(2);
     let half = D38_6::from_bits(500_000);
-    agree("asinh(1)", d76_bits_at_scale_6(lift(one).asinh_strict()), one.asinh_strict().to_bits());
-    agree("asinh(-1)", d76_bits_at_scale_6(lift(-one).asinh_strict()), (-one).asinh_strict().to_bits());
-    agree("acosh(2)", d76_bits_at_scale_6(lift(two).acosh_strict()), two.acosh_strict().to_bits());
-    agree("atanh(0.5)", d76_bits_at_scale_6(lift(half).atanh_strict()), half.atanh_strict().to_bits());
+    agree(
+        "asinh(1)",
+        d76_bits_at_scale_6(lift(one).asinh_strict()),
+        one.asinh_strict().to_bits(),
+    );
+    agree(
+        "asinh(-1)",
+        d76_bits_at_scale_6(lift(-one).asinh_strict()),
+        (-one).asinh_strict().to_bits(),
+    );
+    agree(
+        "acosh(2)",
+        d76_bits_at_scale_6(lift(two).acosh_strict()),
+        two.acosh_strict().to_bits(),
+    );
+    agree(
+        "atanh(0.5)",
+        d76_bits_at_scale_6(lift(half).atanh_strict()),
+        half.atanh_strict().to_bits(),
+    );
     // asinh of ZERO → ZERO short-circuit
     assert_eq!(D76_6::ZERO.asinh_strict(), D76_6::ZERO);
     // Stress |x|>=1 branch of asinh:
-    agree("asinh(2)", d76_bits_at_scale_6(lift(two).asinh_strict()), two.asinh_strict().to_bits());
+    agree(
+        "asinh(2)",
+        d76_bits_at_scale_6(lift(two).asinh_strict()),
+        two.asinh_strict().to_bits(),
+    );
     // Stress |x|>=2 branch of acosh:
     let three = D38_6::from_int(3);
-    agree("acosh(3)", d76_bits_at_scale_6(lift(three).acosh_strict()), three.acosh_strict().to_bits());
+    agree(
+        "acosh(3)",
+        d76_bits_at_scale_6(lift(three).acosh_strict()),
+        three.acosh_strict().to_bits(),
+    );
 }
-#[test] fn d76_angle_conversion() {
+#[test]
+fn d76_angle_conversion() {
     let n = D38_6::ONE;
-    agree("to_degrees(1)", d76_bits_at_scale_6(lift(n).to_degrees_strict()), n.to_degrees_strict().to_bits());
+    agree(
+        "to_degrees(1)",
+        d76_bits_at_scale_6(lift(n).to_degrees_strict()),
+        n.to_degrees_strict().to_bits(),
+    );
     let d180 = D38_6::from_int(180);
-    agree("to_radians(180)", d76_bits_at_scale_6(lift(d180).to_radians_strict()), d180.to_radians_strict().to_bits());
+    agree(
+        "to_radians(180)",
+        d76_bits_at_scale_6(lift(d180).to_radians_strict()),
+        d180.to_radians_strict().to_bits(),
+    );
 }
 
 // ─── AGM alternates ────────────────────────────────────────────────────
 
-#[test] fn d76_ln_agm() {
+#[test]
+fn d76_ln_agm() {
     for v in [2_i64, 7, 100] {
         let n = D38_6::from_int(v);
         let agm = lift(n).ln_strict_agm();
         let canonical = lift(n).ln_strict();
         // AGM must agree with canonical within 1 LSB.
-        agree(&format!("ln_agm({v}) vs ln({v})"), d76_bits_at_scale_6(agm), d76_bits_at_scale_6(canonical));
+        agree(
+            &format!("ln_agm({v}) vs ln({v})"),
+            d76_bits_at_scale_6(agm),
+            d76_bits_at_scale_6(canonical),
+        );
     }
 }
 
-#[test] fn d76_exp_agm() {
+#[test]
+fn d76_exp_agm() {
     let n = D38_6::ONE;
     let agm = lift(n).exp_strict_agm();
     let canonical = lift(n).exp_strict();
-    agree("exp_agm(1) vs exp(1)", d76_bits_at_scale_6(agm), d76_bits_at_scale_6(canonical));
+    agree(
+        "exp_agm(1) vs exp(1)",
+        d76_bits_at_scale_6(agm),
+        d76_bits_at_scale_6(canonical),
+    );
     // ZERO short-circuit
     assert_eq!(D76_6::ZERO.exp_strict_agm(), D76_6::ONE);
 }
@@ -192,44 +366,140 @@ fn d76_strict_with_modes() {
     let half = lift(D38_6::from_bits(500_000));
 
     // HalfToEven matches the plain *_strict form bit-exactly.
-    assert_eq!(two.ln_strict_with(RoundingMode::HalfToEven), two.ln_strict());
-    assert_eq!(two.log_strict_with(ten, RoundingMode::HalfToEven), two.log_strict(ten));
-    assert_eq!(two.log2_strict_with(RoundingMode::HalfToEven), two.log2_strict());
-    assert_eq!(ten.log10_strict_with(RoundingMode::HalfToEven), ten.log10_strict());
-    assert_eq!(one.exp_strict_with(RoundingMode::HalfToEven), one.exp_strict());
-    assert_eq!(ten.exp2_strict_with(RoundingMode::HalfToEven), ten.exp2_strict());
-    assert_eq!(two.powf_strict_with(ten, RoundingMode::HalfToEven), two.powf_strict(ten));
-    assert_eq!(one.sin_strict_with(RoundingMode::HalfToEven), one.sin_strict());
-    assert_eq!(one.cos_strict_with(RoundingMode::HalfToEven), one.cos_strict());
-    assert_eq!(one.tan_strict_with(RoundingMode::HalfToEven), one.tan_strict());
-    assert_eq!(one.atan_strict_with(RoundingMode::HalfToEven), one.atan_strict());
-    assert_eq!(half.asin_strict_with(RoundingMode::HalfToEven), half.asin_strict());
-    assert_eq!(half.acos_strict_with(RoundingMode::HalfToEven), half.acos_strict());
+    assert_eq!(
+        two.ln_strict_with(RoundingMode::HalfToEven),
+        two.ln_strict()
+    );
+    assert_eq!(
+        two.log_strict_with(ten, RoundingMode::HalfToEven),
+        two.log_strict(ten)
+    );
+    assert_eq!(
+        two.log2_strict_with(RoundingMode::HalfToEven),
+        two.log2_strict()
+    );
+    assert_eq!(
+        ten.log10_strict_with(RoundingMode::HalfToEven),
+        ten.log10_strict()
+    );
+    assert_eq!(
+        one.exp_strict_with(RoundingMode::HalfToEven),
+        one.exp_strict()
+    );
+    assert_eq!(
+        ten.exp2_strict_with(RoundingMode::HalfToEven),
+        ten.exp2_strict()
+    );
+    assert_eq!(
+        two.powf_strict_with(ten, RoundingMode::HalfToEven),
+        two.powf_strict(ten)
+    );
+    assert_eq!(
+        one.sin_strict_with(RoundingMode::HalfToEven),
+        one.sin_strict()
+    );
+    assert_eq!(
+        one.cos_strict_with(RoundingMode::HalfToEven),
+        one.cos_strict()
+    );
+    assert_eq!(
+        one.tan_strict_with(RoundingMode::HalfToEven),
+        one.tan_strict()
+    );
+    assert_eq!(
+        one.atan_strict_with(RoundingMode::HalfToEven),
+        one.atan_strict()
+    );
+    assert_eq!(
+        half.asin_strict_with(RoundingMode::HalfToEven),
+        half.asin_strict()
+    );
+    assert_eq!(
+        half.acos_strict_with(RoundingMode::HalfToEven),
+        half.acos_strict()
+    );
     // asin/acos boundary in the _with form:
-    assert_eq!(one.asin_strict_with(RoundingMode::HalfToEven), one.asin_strict());
-    assert_eq!(one.acos_strict_with(RoundingMode::HalfToEven), one.acos_strict());
-    assert_eq!(one.atan2_strict_with(one, RoundingMode::HalfToEven), one.atan2_strict(one));
+    assert_eq!(
+        one.asin_strict_with(RoundingMode::HalfToEven),
+        one.asin_strict()
+    );
+    assert_eq!(
+        one.acos_strict_with(RoundingMode::HalfToEven),
+        one.acos_strict()
+    );
+    assert_eq!(
+        one.atan2_strict_with(one, RoundingMode::HalfToEven),
+        one.atan2_strict(one)
+    );
     // atan2 axis branches in the _with form:
-    assert_eq!(D76_6::ZERO.atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven), D76_6::ZERO.atan2_strict(D76_6::ZERO));
-    assert_eq!(one.atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven), one.atan2_strict(D76_6::ZERO));
-    assert_eq!((-one).atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven), (-one).atan2_strict(D76_6::ZERO));
-    assert_eq!(D76_6::ZERO.atan2_strict_with(-one, RoundingMode::HalfToEven), D76_6::ZERO.atan2_strict(-one));
-    assert_eq!(one.sinh_strict_with(RoundingMode::HalfToEven), one.sinh_strict());
-    assert_eq!(one.cosh_strict_with(RoundingMode::HalfToEven), one.cosh_strict());
-    assert_eq!(one.tanh_strict_with(RoundingMode::HalfToEven), one.tanh_strict());
-    assert_eq!(one.asinh_strict_with(RoundingMode::HalfToEven), one.asinh_strict());
-    assert_eq!(D76_6::ZERO.asinh_strict_with(RoundingMode::HalfToEven), D76_6::ZERO);
+    assert_eq!(
+        D76_6::ZERO.atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven),
+        D76_6::ZERO.atan2_strict(D76_6::ZERO)
+    );
+    assert_eq!(
+        one.atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven),
+        one.atan2_strict(D76_6::ZERO)
+    );
+    assert_eq!(
+        (-one).atan2_strict_with(D76_6::ZERO, RoundingMode::HalfToEven),
+        (-one).atan2_strict(D76_6::ZERO)
+    );
+    assert_eq!(
+        D76_6::ZERO.atan2_strict_with(-one, RoundingMode::HalfToEven),
+        D76_6::ZERO.atan2_strict(-one)
+    );
+    assert_eq!(
+        one.sinh_strict_with(RoundingMode::HalfToEven),
+        one.sinh_strict()
+    );
+    assert_eq!(
+        one.cosh_strict_with(RoundingMode::HalfToEven),
+        one.cosh_strict()
+    );
+    assert_eq!(
+        one.tanh_strict_with(RoundingMode::HalfToEven),
+        one.tanh_strict()
+    );
+    assert_eq!(
+        one.asinh_strict_with(RoundingMode::HalfToEven),
+        one.asinh_strict()
+    );
+    assert_eq!(
+        D76_6::ZERO.asinh_strict_with(RoundingMode::HalfToEven),
+        D76_6::ZERO
+    );
     let two_val = lift(D38_6::from_int(2));
-    assert_eq!(two_val.acosh_strict_with(RoundingMode::HalfToEven), two_val.acosh_strict());
-    assert_eq!(half.atanh_strict_with(RoundingMode::HalfToEven), half.atanh_strict());
-    assert_eq!(one.to_degrees_strict_with(RoundingMode::HalfToEven), one.to_degrees_strict());
-    assert_eq!(one.to_radians_strict_with(RoundingMode::HalfToEven), one.to_radians_strict());
+    assert_eq!(
+        two_val.acosh_strict_with(RoundingMode::HalfToEven),
+        two_val.acosh_strict()
+    );
+    assert_eq!(
+        half.atanh_strict_with(RoundingMode::HalfToEven),
+        half.atanh_strict()
+    );
+    assert_eq!(
+        one.to_degrees_strict_with(RoundingMode::HalfToEven),
+        one.to_degrees_strict()
+    );
+    assert_eq!(
+        one.to_radians_strict_with(RoundingMode::HalfToEven),
+        one.to_radians_strict()
+    );
 
     // AGM _with siblings
-    assert_eq!(two.ln_strict_agm_with(RoundingMode::HalfToEven), two.ln_strict_agm());
-    assert_eq!(one.exp_strict_agm_with(RoundingMode::HalfToEven), one.exp_strict_agm());
+    assert_eq!(
+        two.ln_strict_agm_with(RoundingMode::HalfToEven),
+        two.ln_strict_agm()
+    );
+    assert_eq!(
+        one.exp_strict_agm_with(RoundingMode::HalfToEven),
+        one.exp_strict_agm()
+    );
     // exp_strict_agm_with ZERO short-circuit
-    assert_eq!(D76_6::ZERO.exp_strict_agm_with(RoundingMode::HalfToEven), D76_6::ONE);
+    assert_eq!(
+        D76_6::ZERO.exp_strict_agm_with(RoundingMode::HalfToEven),
+        D76_6::ONE
+    );
 
     // Non-HalfToEven modes — just call each variant to exercise the
     // mode-dispatch code path. We don't assert on the exact value because
@@ -470,7 +740,7 @@ fn d76_strict_result_out_of_range_panics() {
 
 #[cfg(feature = "x-wide")]
 mod x_wide {
-    use decimal_scaled::{D153, D307, D38};
+    use decimal_scaled::{D38, D153, D307};
 
     #[test]
     fn d153_d307_strict_surface_callable() {
@@ -759,8 +1029,10 @@ fn d57_s18_sin_cos_matches_d76_baseline() {
     let sin_56 = n_56.sin_strict();
     let sin_76 = n_76.sin_strict();
     let sin_76_as_56: D57_18 = sin_76.try_into().expect("sin(1) fits D57<18>");
-    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
-        .expect("sin diff fits i128").abs();
+    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits())
+        .to_i128_checked()
+        .expect("sin diff fits i128")
+        .abs();
     assert!(
         sin_diff <= 1,
         "D57<18>::sin(1) narrow-GUARD kernel deviates from D76<18> by {sin_diff} LSB",
@@ -769,8 +1041,10 @@ fn d57_s18_sin_cos_matches_d76_baseline() {
     let cos_56 = n_56.cos_strict();
     let cos_76 = n_76.cos_strict();
     let cos_76_as_56: D57_18 = cos_76.try_into().expect("cos(1) fits D57<18>");
-    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
-        .expect("cos diff fits i128").abs();
+    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits())
+        .to_i128_checked()
+        .expect("cos diff fits i128")
+        .abs();
     assert!(
         cos_diff <= 1,
         "D57<18>::cos(1) narrow-GUARD kernel deviates from D76<18> by {cos_diff} LSB",
@@ -792,8 +1066,10 @@ fn d57_s20_sin_cos_matches_d76_baseline() {
     let sin_56 = n_56.sin_strict();
     let sin_76 = n_76.sin_strict();
     let sin_76_as_56: D57_20 = sin_76.try_into().expect("sin(2) fits D57<20>");
-    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
-        .expect("sin diff fits i128").abs();
+    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits())
+        .to_i128_checked()
+        .expect("sin diff fits i128")
+        .abs();
     assert!(
         sin_diff <= 1,
         "D57<20>::sin(2) narrow-GUARD kernel deviates from D76<20> by {sin_diff} LSB",
@@ -802,8 +1078,10 @@ fn d57_s20_sin_cos_matches_d76_baseline() {
     let cos_56 = n_56.cos_strict();
     let cos_76 = n_76.cos_strict();
     let cos_76_as_56: D57_20 = cos_76.try_into().expect("cos(2) fits D57<20>");
-    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
-        .expect("cos diff fits i128").abs();
+    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits())
+        .to_i128_checked()
+        .expect("cos diff fits i128")
+        .abs();
     assert!(
         cos_diff <= 1,
         "D57<20>::cos(2) narrow-GUARD kernel deviates from D76<20> by {cos_diff} LSB",
@@ -825,8 +1103,10 @@ fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
     let sin_56 = third_56.sin_strict();
     let sin_76 = third_76.sin_strict();
     let sin_76_as_56: D57_22 = sin_76.try_into().expect("sin(1/3) fits D57<22>");
-    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits()).to_i128_checked()
-        .expect("sin diff fits i128").abs();
+    let sin_diff = (sin_56.to_bits() - sin_76_as_56.to_bits())
+        .to_i128_checked()
+        .expect("sin diff fits i128")
+        .abs();
     assert!(
         sin_diff <= 1,
         "D57<22>::sin(1/3) narrow-GUARD kernel deviates from D76<22> by {sin_diff} LSB",
@@ -835,8 +1115,10 @@ fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
     let cos_56 = third_56.cos_strict();
     let cos_76 = third_76.cos_strict();
     let cos_76_as_56: D57_22 = cos_76.try_into().expect("cos(1/3) fits D57<22>");
-    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits()).to_i128_checked()
-        .expect("cos diff fits i128").abs();
+    let cos_diff = (cos_56.to_bits() - cos_76_as_56.to_bits())
+        .to_i128_checked()
+        .expect("cos diff fits i128")
+        .abs();
     assert!(
         cos_diff <= 1,
         "D57<22>::cos(1/3) narrow-GUARD kernel deviates from D76<22> by {cos_diff} LSB",

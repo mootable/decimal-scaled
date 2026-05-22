@@ -28,8 +28,8 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d57 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d57 as core;
 use crate::wide_int::Int192;
 
 /// Narrow guard for the SCALE 18..=22 atan slot. Slightly larger than

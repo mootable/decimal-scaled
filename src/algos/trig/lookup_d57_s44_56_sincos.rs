@@ -62,8 +62,8 @@
 
 #![cfg(any(feature = "d57", feature = "wide"))]
 
-use crate::types::widths::wide_trig_d57 as core;
 use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d57 as core;
 use crate::wide_int::Int192;
 
 /// Table size — number of `(sin(c_j), cos(c_j))` entries per working
@@ -176,10 +176,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     // Stage 2: r = c_j_signed · π/(4M) + δ, |δ| ≤ π/(8M).
     // j_signed = round(r · 4M / π).
     let four_m = core::lit((4 * M) as u128);
-    let j_signed = core::round_to_nearest_int(
-        core::div_cached(r * four_m, pi_w, pow10_w),
-        w,
-    );
+    let j_signed = core::round_to_nearest_int(core::div_cached(r * four_m, pi_w, pow10_w), w);
     // c_j_signed at working scale.
     let cj_signed_w = if j_signed >= 0 {
         (pi_w * core::lit(j_signed as u128)) / four_m
@@ -195,9 +192,17 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
         j_abs <= M,
         "sin_cos_strict d57 s44..=56: table index {j_abs} > M={M}"
     );
-    let j_idx = if j_abs > M { M as usize } else { j_abs as usize };
+    let j_idx = if j_abs > M {
+        M as usize
+    } else {
+        j_abs as usize
+    };
     let (sin_cj_abs, cos_cj) = table_entry(w, j_idx);
-    let sin_cj = if j_signed < 0 { -sin_cj_abs } else { sin_cj_abs };
+    let sin_cj = if j_signed < 0 {
+        -sin_cj_abs
+    } else {
+        sin_cj_abs
+    };
 
     // Stage 3: small-residual Taylor for sin(δ) and cos(δ).
     //
@@ -261,10 +266,10 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     // Stage 4: addition formula to lift (sin δ, cos δ) onto r.
     //   sin(r) = sin(c_j)·cos(δ) + cos(c_j)·sin(δ)
     //   cos(r) = cos(c_j)·cos(δ) − sin(c_j)·sin(δ)
-    let sin_r = core::mul_cached(sin_cj, cos_delta, pow10_w)
-        + core::mul_cached(cos_cj, sin_delta, pow10_w);
-    let cos_r = core::mul_cached(cos_cj, cos_delta, pow10_w)
-        - core::mul_cached(sin_cj, sin_delta, pow10_w);
+    let sin_r =
+        core::mul_cached(sin_cj, cos_delta, pow10_w) + core::mul_cached(cos_cj, sin_delta, pow10_w);
+    let cos_r =
+        core::mul_cached(cos_cj, cos_delta, pow10_w) - core::mul_cached(sin_cj, sin_delta, pow10_w);
 
     // Stage 5: quadrant permutation. `k mod 4` selects which signed
     // permutation of (sin(r), cos(r)) becomes (sin(x), cos(x)).

@@ -24,7 +24,7 @@
 //! Overflow on the scale-up direction is detected via `checked_mul`
 //! and panics with a clear message in both debug and release builds.
 
-use crate::types::widths::{D38, D9, D18};
+use crate::types::widths::{D9, D18, D38};
 
 // The rescale / rescale_with methods are emitted by
 // `crate::macros::rescale::decl_decimal_rescale!` — same macro for

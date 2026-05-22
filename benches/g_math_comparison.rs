@@ -14,7 +14,7 @@
 //! working width) and reports `|x − baseline|` in ULPs at the 19-digit
 //! storage scale.
 
-use criterion::{black_box, criterion_group, criterion_main, Criterion};
+use criterion::{Criterion, black_box, criterion_group, criterion_main};
 
 use decimal_scaled::{D38, D76};
 
@@ -45,9 +45,7 @@ fn gmath_to_d19_bits(s: &str) -> i128 {
     } else {
         (1_i128, s)
     };
-    let (int_part, frac_part) = body
-        .split_once('.')
-        .unwrap_or((body, ""));
+    let (int_part, frac_part) = body.split_once('.').unwrap_or((body, ""));
     let int_value: i128 = int_part.parse().unwrap_or(0);
     let mut frac_buf = String::from(frac_part);
     while frac_buf.len() < 19 {

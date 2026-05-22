@@ -3,13 +3,15 @@
 //! constants so LLVM can unroll. Times against the slice variant
 //! `limbs_mul_u64` at every wide-tier operand size.
 
+use criterion::{Criterion, criterion_group, criterion_main};
 use std::hint::black_box;
-use criterion::{criterion_group, criterion_main, Criterion};
 
 fn synthetic<const N: usize>(seed: u64) -> [u64; N] {
     let mut a = [0u64; N];
     for i in 0..N {
-        a[i] = seed.wrapping_mul(0x9E37_79B9_7F4A_7C15u64).wrapping_add(i as u64 * 0x1357_9BDFu64);
+        a[i] = seed
+            .wrapping_mul(0x9E37_79B9_7F4A_7C15u64)
+            .wrapping_add(i as u64 * 0x1357_9BDFu64);
     }
     a
 }
@@ -23,7 +25,9 @@ macro_rules! pair {
 
         $g.bench_function(concat!($label, "/slice"), |bn| {
             bn.iter(|| {
-                for slot in out_slice.iter_mut() { *slot = 0; }
+                for slot in out_slice.iter_mut() {
+                    *slot = 0;
+                }
                 decimal_scaled::__bench_internals::mul_slice(
                     black_box(&a),
                     black_box(&b),
@@ -33,7 +37,9 @@ macro_rules! pair {
         });
         $g.bench_function(concat!($label, "/fixed"), |bn| {
             bn.iter(|| {
-                for slot in out_fixed.iter_mut() { *slot = 0; }
+                for slot in out_fixed.iter_mut() {
+                    *slot = 0;
+                }
                 decimal_scaled::__bench_internals::mul_fixed::<$L, $D>(
                     black_box(&a),
                     black_box(&b),
@@ -49,13 +55,13 @@ fn bench(c: &mut Criterion) {
     g.sample_size(50);
     g.measurement_time(std::time::Duration::from_secs(3));
 
-    pair!(g, "L4",   4,  8);   // D76 storage
-    pair!(g, "L8",   8,  16);  // D153 storage
-    pair!(g, "L16",  16, 32);  // D307 storage
-    pair!(g, "L24",  24, 48);  // D462 storage
-    pair!(g, "L32",  32, 64);  // D616 storage
-    pair!(g, "L48",  48, 96);  // D924 storage
-    pair!(g, "L64",  64, 128); // D1232 storage
+    pair!(g, "L4", 4, 8); // D76 storage
+    pair!(g, "L8", 8, 16); // D153 storage
+    pair!(g, "L16", 16, 32); // D307 storage
+    pair!(g, "L24", 24, 48); // D462 storage
+    pair!(g, "L32", 32, 64); // D616 storage
+    pair!(g, "L48", 48, 96); // D924 storage
+    pair!(g, "L64", 64, 128); // D1232 storage
 
     g.finish();
 }

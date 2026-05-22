@@ -81,7 +81,7 @@ fn cross_width_narrowing_d76_to_d18_d9() {
     // Cross-tier TryFrom skips multiple rungs in one hop; this isn't
     // the `.narrow()` chain (which steps once) — it's the From /
     // TryFrom matrix that's been comprehensive since 0.2.5.
-    use decimal_scaled::{D18, D9};
+    use decimal_scaled::{D9, D18};
     let w: D76<2> = D38::<2>::from_int(7).into();
     let n18: D18<2> = w.try_into().unwrap();
     assert_eq!(n18.to_bits(), 700);

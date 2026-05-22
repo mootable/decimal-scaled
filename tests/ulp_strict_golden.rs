@@ -133,7 +133,9 @@ fn check(func: &str, width: Width, table: &str) {
                     );
                     failures += 1;
                 }
-                PrecisionResult::Executed { lsbe, ulp, value, .. } => {
+                PrecisionResult::Executed {
+                    lsbe, ulp, value, ..
+                } => {
                     if lsbe != 0 {
                         // Print every failure: an audit run needs every
                         // still-failing (input, mode) surfaced.

@@ -28,7 +28,11 @@ fn d76_all_six_constants_at_scale_12() {
     let tau = D::tau();
     // Cross-witness: compute the difference via the wide arithmetic. The
     // two paths share the same reference, so the diff should be small.
-    let diff = if tau > tau_via_pi { tau - tau_via_pi } else { tau_via_pi - tau };
+    let diff = if tau > tau_via_pi {
+        tau - tau_via_pi
+    } else {
+        tau_via_pi - tau
+    };
     // Allow up to 1 LSB slack to absorb the independent rounding paths.
     let one: D = decimal_scaled::D38::<12>::from_bits(1).into();
     assert!(diff <= one, "tau vs 2*pi diff = {diff:?}");

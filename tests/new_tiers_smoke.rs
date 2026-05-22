@@ -79,8 +79,7 @@ macro_rules! tier_smoke {
                 // √4 = 2 exactly.
                 let four = <$Tsmid>::from_int(4);
                 let r = four.sqrt_strict();
-                assert_eq!(r, <$Tsmid>::from_int(2),
-                    "sqrt(4) should be 2 exactly");
+                assert_eq!(r, <$Tsmid>::from_int(2), "sqrt(4) should be 2 exactly");
             }
 
             #[test]
@@ -117,12 +116,15 @@ macro_rules! tier_smoke {
                 // can disagree. Check the relation up to a small
                 // fraction of π rather than bit-exact.
                 let tau = <$T>::tau();
-                let pi  = <$T>::pi();
+                let pi = <$T>::pi();
                 let two_pi = pi + pi;
-                let diff = if tau > two_pi { tau - two_pi } else { two_pi - tau };
+                let diff = if tau > two_pi {
+                    tau - two_pi
+                } else {
+                    two_pi - tau
+                };
                 let bound = pi / <$T>::from_int(1000);
-                assert!(diff < bound,
-                    "tau and 2·pi should agree to 3 decimals");
+                assert!(diff < bound, "tau and 2·pi should agree to 3 decimals");
             }
 
             #[test]
@@ -172,8 +174,11 @@ macro_rules! tier_smoke {
                 // and at_scale=Tsmid stays in range on either side.
                 let v: $Tsmid = <$Tsmid>::from_int(42);
                 let n = v.narrow().expect("narrow into previous tier");
-                assert_eq!(n.to_bits().to_string(), v.to_bits().to_string(),
-                    "narrow should bit-preserve when value fits the smaller storage");
+                assert_eq!(
+                    n.to_bits().to_string(),
+                    v.to_bits().to_string(),
+                    "narrow should bit-preserve when value fits the smaller storage"
+                );
             }
 
             #[test]
@@ -200,22 +205,64 @@ macro_rules! tier_smoke {
 }
 
 #[cfg(feature = "d57")]
-tier_smoke!(d57, decimal_scaled::D57<5>, decimal_scaled::D57s0, decimal_scaled::D57<5>, decimal_scaled::D57s56);
+tier_smoke!(
+    d57,
+    decimal_scaled::D57<5>,
+    decimal_scaled::D57s0,
+    decimal_scaled::D57<5>,
+    decimal_scaled::D57s56
+);
 
 #[cfg(feature = "d115")]
-tier_smoke!(d115, decimal_scaled::D115<10>, decimal_scaled::D115s0, decimal_scaled::D115<10>, decimal_scaled::D115s114);
+tier_smoke!(
+    d115,
+    decimal_scaled::D115<10>,
+    decimal_scaled::D115s0,
+    decimal_scaled::D115<10>,
+    decimal_scaled::D115s114
+);
 
 #[cfg(feature = "d230")]
-tier_smoke!(d230, decimal_scaled::D230<10>, decimal_scaled::D230s0, decimal_scaled::D230<10>, decimal_scaled::D230s229);
+tier_smoke!(
+    d230,
+    decimal_scaled::D230<10>,
+    decimal_scaled::D230s0,
+    decimal_scaled::D230<10>,
+    decimal_scaled::D230s229
+);
 
 #[cfg(feature = "d462")]
-tier_smoke!(d462, decimal_scaled::D462<10>, decimal_scaled::D462s0, decimal_scaled::D462<10>, decimal_scaled::D462s461);
+tier_smoke!(
+    d462,
+    decimal_scaled::D462<10>,
+    decimal_scaled::D462s0,
+    decimal_scaled::D462<10>,
+    decimal_scaled::D462s461
+);
 
 #[cfg(feature = "d616")]
-tier_smoke!(d616, decimal_scaled::D616<10>, decimal_scaled::D616s0, decimal_scaled::D616<10>, decimal_scaled::D616s615);
+tier_smoke!(
+    d616,
+    decimal_scaled::D616<10>,
+    decimal_scaled::D616s0,
+    decimal_scaled::D616<10>,
+    decimal_scaled::D616s615
+);
 
 #[cfg(feature = "d924")]
-tier_smoke!(d924, decimal_scaled::D924<10>, decimal_scaled::D924s0, decimal_scaled::D924<10>, decimal_scaled::D924s923);
+tier_smoke!(
+    d924,
+    decimal_scaled::D924<10>,
+    decimal_scaled::D924s0,
+    decimal_scaled::D924<10>,
+    decimal_scaled::D924s923
+);
 
 #[cfg(feature = "d1232")]
-tier_smoke!(d1232, decimal_scaled::D1232<10>, decimal_scaled::D1232s0, decimal_scaled::D1232<10>, decimal_scaled::D1232s1231);
+tier_smoke!(
+    d1232,
+    decimal_scaled::D1232<10>,
+    decimal_scaled::D1232s0,
+    decimal_scaled::D1232<10>,
+    decimal_scaled::D1232s1231
+);

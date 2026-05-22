@@ -14,7 +14,7 @@
 //! Run with:
 //!   `cargo bench --features wide,x-wide,xx-wide --bench int_to_string_base1e19`
 
-use decimal_scaled::{Int1024, Int256, Int4096, Int512};
+use decimal_scaled::{Int256, Int512, Int1024, Int4096};
 use std::hint::black_box;
 use std::time::Instant;
 

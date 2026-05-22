@@ -847,38 +847,61 @@ impl<const SCALE: u32> D76<SCALE> {
 }
 
 /// Scale alias: `D76<0>`. 1 LSB = 1 (256-bit integer ledger).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s0  = D76<0>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s0 = D76<0>;
 /// Scale alias: `D76<1>`. 1 LSB = 10^-1 (tenths).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s1  = D76<1>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s1 = D76<1>;
 /// Scale alias: `D76<2>`. 1 LSB = 10^-2 (cents).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s2  = D76<2>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s3  = D76<3>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s4  = D76<4>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s2 = D76<2>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s3 = D76<3>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s4 = D76<4>;
 /// Scale alias: `D76<6>`. 1 LSB = 10^-6 (ppm).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s6  = D76<6>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s9  = D76<9>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s6 = D76<6>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s9 = D76<9>;
 /// Scale alias: `D76<12>`. 1 LSB = 10^-12 (pico; financial standard).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s12 = D76<12>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s15 = D76<15>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s12 = D76<12>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s15 = D76<15>;
 /// Scale alias: `D76<18>`. 1 LSB = 10^-18 (atto).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s18 = D76<18>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s20 = D76<20>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s24 = D76<24>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s28 = D76<28>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s32 = D76<32>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s18 = D76<18>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s20 = D76<20>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s24 = D76<24>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s28 = D76<28>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s32 = D76<32>;
 /// Scale alias: `D76<35>`. 1 LSB = 10^-35 (matches `SCALE_REF`).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s35 = D76<35>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s38 = D76<38>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s42 = D76<42>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s48 = D76<48>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s35 = D76<35>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s38 = D76<38>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s42 = D76<42>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s48 = D76<48>;
 /// Scale alias: `D76<50>`. 1 LSB = 10^-50 (deep scientific precision).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s50 = D76<50>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s56 = D76<56>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s64 = D76<64>;
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s70 = D76<70>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s50 = D76<50>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s56 = D76<56>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s64 = D76<64>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s70 = D76<70>;
 /// Scale alias: `D76<75>`. 1 LSB = 10^-75. Maximum supported scale
 /// (v0.4.0 cap: `MAX_SCALE = name - 1`).
-#[cfg(any(feature = "d76", feature = "wide"))] pub type D76s75 = D76<75>;
+#[cfg(any(feature = "d76", feature = "wide"))]
+pub type D76s75 = D76<75>;
 
 // ---------------------------------------------------------------------
 // D153 — 512-bit storage (`Int512`), scale 0..=153. Wide-scientific
@@ -930,17 +953,26 @@ crate::macros::full::decl_decimal_full!(
 // Cross-width widening into D153 (lossless): D38 / D76 -> D153.
 #[cfg(any(feature = "d153", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_widening!(wide D153, crate::wide_int::I512, D38, i128);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D153, crate::wide_int::I512, D76, crate::wide_int::I256);
 // Cross-width narrowing from D153 (fallible): D153 -> D76 / D38.
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D153, crate::wide_int::I512);
 #[cfg(any(feature = "d153", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D153, crate::wide_int::I512);
 
 // ─── D76::widen / D153 hop methods ────────────────────────────────────
 
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d115", feature = "wide")
+))]
 impl<const SCALE: u32> D76<SCALE> {
     /// Promote to the next storage tier ([`D115`]) at the same
     /// `SCALE`. Lossless.
@@ -964,35 +996,59 @@ impl<const SCALE: u32> D153<SCALE> {
 }
 
 /// Scale alias: `D153<0>`. 1 LSB = 1 (512-bit integer ledger).
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s0   = D153<0>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s1   = D153<1>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s2   = D153<2>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s4   = D153<4>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s6   = D153<6>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s9   = D153<9>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s12  = D153<12>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s15  = D153<15>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s18  = D153<18>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s20  = D153<20>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s24  = D153<24>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s28  = D153<28>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s32  = D153<32>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s0 = D153<0>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s1 = D153<1>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s2 = D153<2>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s4 = D153<4>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s6 = D153<6>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s9 = D153<9>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s12 = D153<12>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s15 = D153<15>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s18 = D153<18>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s20 = D153<20>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s24 = D153<24>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s28 = D153<28>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s32 = D153<32>;
 /// Scale alias: `D153<35>`. 1 LSB = 10^-35 (matches D38 `SCALE_REF`).
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s35  = D153<35>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s38  = D153<38>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s50  = D153<50>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s57  = D153<57>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s35 = D153<35>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s38 = D153<38>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s50 = D153<50>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s57 = D153<57>;
 /// Scale alias: `D153<75>`. 1 LSB = 10^-75 (wide-scientific midpoint).
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s75  = D153<75>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s76  = D153<76>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s100 = D153<100>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s115 = D153<115>;
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s140 = D153<140>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s75 = D153<75>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s76 = D153<76>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s100 = D153<100>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s115 = D153<115>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s140 = D153<140>;
 /// Scale alias: `D153<150>`. 1 LSB = 10^-150.
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s150 = D153<150>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s150 = D153<150>;
 /// Scale alias: `D153<152>`. 1 LSB = 10^-152. Maximum supported scale
 /// (v0.4.0 cap: `MAX_SCALE = name - 1`).
-#[cfg(any(feature = "d153", feature = "wide"))] pub type D153s152 = D153<152>;
+#[cfg(any(feature = "d153", feature = "wide"))]
+pub type D153s152 = D153<152>;
 
 // ---------------------------------------------------------------------
 // D307 — 1024-bit storage (`Int1024`), scale 0..=307. Deep
@@ -1042,19 +1098,34 @@ crate::macros::full::decl_decimal_full!(
     306
 );
 // Cross-width widening into D307 (lossless): D76 / D153 -> D307.
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D307, crate::wide_int::I1024, D76, crate::wide_int::I256);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d153", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D307, crate::wide_int::I1024, D153, crate::wide_int::I512);
 // Cross-width narrowing from D307 (fallible): D307 -> D153 / D76.
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d153", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D153, crate::wide_int::I512, D307, crate::wide_int::I1024);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D307, crate::wide_int::I1024);
 
 // ─── D153::widen / D307 hop methods ───────────────────────────────────
 
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
 impl<const SCALE: u32> D153<SCALE> {
     /// Promote to the next storage tier ([`D230`]) at the same
     /// `SCALE`. Lossless.
@@ -1087,37 +1158,63 @@ impl<const SCALE: u32> D307<SCALE> {
 }
 
 /// Scale alias: `D307<0>`. 1 LSB = 1 (1024-bit integer ledger).
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s0   = D307<0>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s1   = D307<1>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s2   = D307<2>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s4   = D307<4>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s6   = D307<6>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s9   = D307<9>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s12  = D307<12>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s15  = D307<15>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s18  = D307<18>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s20  = D307<20>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s24  = D307<24>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s28  = D307<28>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s32  = D307<32>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s0 = D307<0>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s1 = D307<1>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s2 = D307<2>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s4 = D307<4>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s6 = D307<6>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s9 = D307<9>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s12 = D307<12>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s15 = D307<15>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s18 = D307<18>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s20 = D307<20>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s24 = D307<24>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s28 = D307<28>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s32 = D307<32>;
 /// Scale alias: `D307<35>`. 1 LSB = 10^-35 (matches D38 `SCALE_REF`).
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s35  = D307<35>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s38  = D307<38>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s50  = D307<50>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s75  = D307<75>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s100 = D307<100>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s115 = D307<115>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s35 = D307<35>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s38 = D307<38>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s50 = D307<50>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s75 = D307<75>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s100 = D307<100>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s115 = D307<115>;
 /// Scale alias: `D307<150>`. 1 LSB = 10^-150.
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s150 = D307<150>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s153 = D307<153>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s200 = D307<200>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s230 = D307<230>;
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s275 = D307<275>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s150 = D307<150>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s153 = D307<153>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s200 = D307<200>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s230 = D307<230>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s275 = D307<275>;
 /// Scale alias: `D307<300>`. 1 LSB = 10^-300.
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s300 = D307<300>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s300 = D307<300>;
 /// Scale alias: `D307<306>`. 1 LSB = 10^-306. Maximum supported scale
 /// (v0.4.0 cap: `MAX_SCALE = name - 1`).
-#[cfg(any(feature = "d307", feature = "wide"))] pub type D307s306 = D307<306>;
+#[cfg(any(feature = "d307", feature = "wide"))]
+pub type D307s306 = D307<306>;
 
 // ─── Half-width and wider tiers (D57 / D115 / D230 / D462 / D616 / D924 / D1232) ───
 //
@@ -1157,7 +1254,9 @@ pub type D57<const SCALE: u32> = crate::D<crate::wide_int::Int192, SCALE>;
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int192, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d57", feature = "wide"))]
@@ -1234,7 +1333,9 @@ pub type D115<const SCALE: u32> = crate::D<crate::wide_int::Int384, SCALE>;
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int384, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d115", feature = "wide"))]
@@ -1309,7 +1410,9 @@ pub type D230<const SCALE: u32> = crate::D<crate::wide_int::Int768, SCALE>;
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int768, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d230", feature = "wide"))]
@@ -1384,7 +1487,9 @@ pub type D462<const SCALE: u32> = crate::D<crate::wide_int::Int1536, SCALE>;
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int1536, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
@@ -1460,7 +1565,9 @@ pub type D616<const SCALE: u32> = crate::D<crate::wide_int::Int2048, SCALE>;
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int2048, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
@@ -1535,7 +1642,9 @@ pub type D924<const SCALE: u32> = crate::D<crate::wide_int::Int3072, SCALE>;
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int3072, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
@@ -1616,7 +1725,9 @@ pub type D1232<const SCALE: u32> = crate::D<crate::wide_int::Int4096, SCALE>;
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl<const SCALE: u32> Default for crate::D<crate::wide_int::Int4096, SCALE> {
     #[inline]
-    fn default() -> Self { Self::ZERO }
+    fn default() -> Self {
+        Self::ZERO
+    }
 }
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
@@ -1704,57 +1815,111 @@ crate::macros::conversions::decl_cross_width_widening!(wide D57, crate::wide_int
 crate::macros::conversions::decl_cross_width_narrowing!(wide D38, i128, D57, crate::wide_int::I192);
 
 // D57 ↔ D76
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D57, crate::wide_int::I192);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d76", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D57, crate::wide_int::I192, D76, crate::wide_int::I256);
 
 // D76 ↔ D115
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d115", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D115, crate::wide_int::I384, D76, crate::wide_int::I256);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d115", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D76, crate::wide_int::I256, D115, crate::wide_int::I384);
 
 // D115 ↔ D153
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d153", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D153, crate::wide_int::I512, D115, crate::wide_int::I384);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d153", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D115, crate::wide_int::I384, D153, crate::wide_int::I512);
 
 // D153 ↔ D230
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D230, crate::wide_int::I768, D153, crate::wide_int::I512);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D153, crate::wide_int::I512, D230, crate::wide_int::I768);
 
 // D230 ↔ D307
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D307, crate::wide_int::I1024, D230, crate::wide_int::I768);
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D230, crate::wide_int::I768, D307, crate::wide_int::I1024);
 
 // D307 ↔ D462
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D462, crate::wide_int::I1536, D307, crate::wide_int::I1024);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D307, crate::wide_int::I1024, D462, crate::wide_int::I1536);
 
 // D462 ↔ D616
-#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d616", feature = "x-wide")))]
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D616, crate::wide_int::I2048, D462, crate::wide_int::I1536);
-#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d616", feature = "x-wide")))]
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D462, crate::wide_int::I1536, D616, crate::wide_int::I2048);
 
 // D616 ↔ D924
-#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
+#[cfg(all(
+    any(feature = "d616", feature = "x-wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D924, crate::wide_int::I3072, D616, crate::wide_int::I2048);
-#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
+#[cfg(all(
+    any(feature = "d616", feature = "x-wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D616, crate::wide_int::I2048, D924, crate::wide_int::I3072);
 
 // D924 ↔ D1232
-#[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
+#[cfg(all(
+    any(feature = "d924", feature = "xx-wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
 crate::macros::conversions::decl_cross_width_widening!(wide D1232, crate::wide_int::I4096, D924, crate::wide_int::I3072);
-#[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
+#[cfg(all(
+    any(feature = "d924", feature = "xx-wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D924, crate::wide_int::I3072, D1232, crate::wide_int::I4096);
 
 // .widen() / .narrow() methods on the new tiers — each points at the
@@ -1769,47 +1934,69 @@ impl<const SCALE: u32> D57<SCALE> {
     /// Demote to the immediate previous tier ([`D38`]) at the same `SCALE`.
     /// Returns `Err(ConvertError::Overflow)` if the value exceeds `i128` range.
     #[inline]
-    pub fn narrow(self) -> Result<D38<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D38<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
     /// Promote to the next storage tier ([`D76`]) at the same `SCALE`. Lossless.
-    #[inline] #[must_use]
-    pub fn widen(self) -> D76<SCALE> { self.into() }
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D76<SCALE> {
+        self.into()
+    }
 }
 
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> D115<SCALE> {
     /// Demote to the immediate previous tier ([`D76`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D76<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D76<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
     /// Promote to the next storage tier ([`D153`]) at the same `SCALE`. Lossless.
-    #[inline] #[must_use]
-    pub fn widen(self) -> D153<SCALE> { self.into() }
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D153<SCALE> {
+        self.into()
+    }
 }
 
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl<const SCALE: u32> D230<SCALE> {
     /// Demote to the immediate previous tier ([`D153`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D153<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D153<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
     /// Promote to the next storage tier ([`D307`]) at the same `SCALE`. Lossless.
-    #[inline] #[must_use]
-    pub fn widen(self) -> D307<SCALE> { self.into() }
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D307<SCALE> {
+        self.into()
+    }
 }
 
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 impl<const SCALE: u32> D462<SCALE> {
     /// Demote to the immediate previous tier ([`D307`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D307<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D307<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
     /// Promote to the next storage tier ([`D616`]) at the same `SCALE`. Lossless.
-    #[inline] #[must_use]
-    pub fn widen(self) -> D616<SCALE> { self.into() }
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D616<SCALE> {
+        self.into()
+    }
 }
 
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl<const SCALE: u32> D616<SCALE> {
     /// Demote to the immediate previous tier ([`D462`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D462<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D462<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
 }
 
 // `widen` lives in a second impl gated on D924's feature — D616 can
@@ -1822,18 +2009,26 @@ impl<const SCALE: u32> D616<SCALE> {
 ))]
 impl<const SCALE: u32> D616<SCALE> {
     /// Promote to the next storage tier ([`D924`]) at the same `SCALE`. Lossless.
-    #[inline] #[must_use]
-    pub fn widen(self) -> D924<SCALE> { self.into() }
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D924<SCALE> {
+        self.into()
+    }
 }
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> D924<SCALE> {
     /// Demote to the immediate previous tier ([`D616`]) at the same `SCALE`.
     #[inline]
-    pub fn narrow(self) -> Result<D616<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D616<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
     /// Promote to the next storage tier ([`D1232`]) at the same `SCALE`. Lossless.
-    #[inline] #[must_use]
-    pub fn widen(self) -> D1232<SCALE> { self.into() }
+    #[inline]
+    #[must_use]
+    pub fn widen(self) -> D1232<SCALE> {
+        self.into()
+    }
 }
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
@@ -1841,7 +2036,9 @@ impl<const SCALE: u32> D1232<SCALE> {
     /// Demote to the immediate previous tier ([`D924`]) at the same `SCALE`.
     /// D1232 is the widest shipped tier, so there is no `.widen()` method.
     #[inline]
-    pub fn narrow(self) -> Result<D924<SCALE>, crate::support::error::ConvertError> { self.try_into() }
+    pub fn narrow(self) -> Result<D924<SCALE>, crate::support::error::ConvertError> {
+        self.try_into()
+    }
 }
 
 // ─── Cross-scale-op constructors + comparators ─────────────────────────
@@ -1967,115 +2164,480 @@ crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D38, i128, D616, crate:
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D38, i128, D924, crate::wide_int::Int3072);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D38, i128, D1232, crate::wide_int::Int4096);
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D38,
+    i128,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D57 row.
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d76", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D76, crate::wide_int::Int256);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d115", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D115, crate::wide_int::Int384);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d153", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D153, crate::wide_int::Int512);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d230", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D230, crate::wide_int::Int768);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d307", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D307, crate::wide_int::Int1024);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D462, crate::wide_int::Int1536);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d57", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D57, crate::wide_int::Int192, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d76", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D76,
+    crate::wide_int::Int256
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d115", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D115,
+    crate::wide_int::Int384
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D153,
+    crate::wide_int::Int512
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D230,
+    crate::wide_int::Int768
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D307,
+    crate::wide_int::Int1024
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D462,
+    crate::wide_int::Int1536
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D57,
+    crate::wide_int::Int192,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D76 row.
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d115", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D115, crate::wide_int::Int384);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d153", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D153, crate::wide_int::Int512);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d230", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D230, crate::wide_int::Int768);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d307", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D307, crate::wide_int::Int1024);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D462, crate::wide_int::Int1536);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d76", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D76, crate::wide_int::Int256, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d115", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D115,
+    crate::wide_int::Int384
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D153,
+    crate::wide_int::Int512
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D230,
+    crate::wide_int::Int768
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D307,
+    crate::wide_int::Int1024
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D462,
+    crate::wide_int::Int1536
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D76,
+    crate::wide_int::Int256,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D115 row.
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d153", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D153, crate::wide_int::Int512);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d230", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D230, crate::wide_int::Int768);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d307", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D307, crate::wide_int::Int1024);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D462, crate::wide_int::Int1536);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d115", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D115, crate::wide_int::Int384, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d153", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D153,
+    crate::wide_int::Int512
+);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D230,
+    crate::wide_int::Int768
+);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D307,
+    crate::wide_int::Int1024
+);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D462,
+    crate::wide_int::Int1536
+);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D115,
+    crate::wide_int::Int384,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D153 row.
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d230", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D153, crate::wide_int::Int512, D230, crate::wide_int::Int768);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d307", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D153, crate::wide_int::Int512, D307, crate::wide_int::Int1024);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D153, crate::wide_int::Int512, D462, crate::wide_int::Int1536);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D153, crate::wide_int::Int512, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D153, crate::wide_int::Int512, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d153", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D153, crate::wide_int::Int512, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d230", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D153,
+    crate::wide_int::Int512,
+    D230,
+    crate::wide_int::Int768
+);
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D153,
+    crate::wide_int::Int512,
+    D307,
+    crate::wide_int::Int1024
+);
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D153,
+    crate::wide_int::Int512,
+    D462,
+    crate::wide_int::Int1536
+);
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D153,
+    crate::wide_int::Int512,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D153,
+    crate::wide_int::Int512,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d153", feature = "wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D153,
+    crate::wide_int::Int512,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D230 row.
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d307", feature = "wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D230, crate::wide_int::Int768, D307, crate::wide_int::Int1024);
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D230, crate::wide_int::Int768, D462, crate::wide_int::Int1536);
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D230, crate::wide_int::Int768, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D230, crate::wide_int::Int768, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d230", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D230, crate::wide_int::Int768, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d307", feature = "wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D230,
+    crate::wide_int::Int768,
+    D307,
+    crate::wide_int::Int1024
+);
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D230,
+    crate::wide_int::Int768,
+    D462,
+    crate::wide_int::Int1536
+);
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D230,
+    crate::wide_int::Int768,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D230,
+    crate::wide_int::Int768,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D230,
+    crate::wide_int::Int768,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D307 row.
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d462", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D307, crate::wide_int::Int1024, D462, crate::wide_int::Int1536);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D307, crate::wide_int::Int1024, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D307, crate::wide_int::Int1024, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d307", feature = "wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D307, crate::wide_int::Int1024, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d462", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D307,
+    crate::wide_int::Int1024,
+    D462,
+    crate::wide_int::Int1536
+);
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D307,
+    crate::wide_int::Int1024,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D307,
+    crate::wide_int::Int1024,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d307", feature = "wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D307,
+    crate::wide_int::Int1024,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D462 row.
-#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d616", feature = "x-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D462, crate::wide_int::Int1536, D616, crate::wide_int::Int2048);
-#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D462, crate::wide_int::Int1536, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d462", feature = "x-wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D462, crate::wide_int::Int1536, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d616", feature = "x-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D462,
+    crate::wide_int::Int1536,
+    D616,
+    crate::wide_int::Int2048
+);
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D462,
+    crate::wide_int::Int1536,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D462,
+    crate::wide_int::Int1536,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D616 row.
-#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d924", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D616, crate::wide_int::Int2048, D924, crate::wide_int::Int3072);
-#[cfg(all(any(feature = "d616", feature = "x-wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D616, crate::wide_int::Int2048, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d616", feature = "x-wide"),
+    any(feature = "d924", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D616,
+    crate::wide_int::Int2048,
+    D924,
+    crate::wide_int::Int3072
+);
+#[cfg(all(
+    any(feature = "d616", feature = "x-wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D616,
+    crate::wide_int::Int2048,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 // D924 row.
-#[cfg(all(any(feature = "d924", feature = "xx-wide"), any(feature = "d1232", feature = "xx-wide")))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D924, crate::wide_int::Int3072, D1232, crate::wide_int::Int4096);
+#[cfg(all(
+    any(feature = "d924", feature = "xx-wide"),
+    any(feature = "d1232", feature = "xx-wide")
+))]
+crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(
+    D924,
+    crate::wide_int::Int3072,
+    D1232,
+    crate::wide_int::Int4096
+);
 
 #[cfg(test)]
 mod tests {
@@ -2316,7 +2878,9 @@ mod tests {
 
     #[test]
     fn d9_consts() {
-        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
+            return;
+        }
         use crate::types::consts::DecimalConstants;
         type D9s4 = super::D9<4>;
         // pi at scale 4 = 3.1416 -> bits = 31416.
@@ -2347,7 +2911,9 @@ mod tests {
 
     #[test]
     fn d18_consts() {
-        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN { return; }
+        if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
+            return;
+        }
         use crate::types::consts::DecimalConstants;
         type D18s12 = super::D18<12>;
         // pi at scale 12 = 3.141592653590 (matches D38s12).
@@ -2359,21 +2925,33 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     #[test]
     fn d76_basics() {
-        
         use crate::types::traits::arithmetic::DecimalArithmetic;
         use crate::wide_int::I256;
-        assert_eq!(super::D76s2::ZERO.to_bits(), I256::from_str_radix("0", 10).unwrap());
-        assert_eq!(super::D76s2::ONE.to_bits(), I256::from_str_radix("100", 10).unwrap());
+        assert_eq!(
+            super::D76s2::ZERO.to_bits(),
+            I256::from_str_radix("0", 10).unwrap()
+        );
+        assert_eq!(
+            super::D76s2::ONE.to_bits(),
+            I256::from_str_radix("100", 10).unwrap()
+        );
         assert_eq!(super::D76s2::MAX.to_bits(), I256::MAX);
         assert_eq!(super::D76s2::MIN.to_bits(), I256::MIN);
-        assert_eq!(super::D76s2::multiplier(), I256::from_str_radix("100", 10).unwrap());
+        assert_eq!(
+            super::D76s2::multiplier(),
+            I256::from_str_radix("100", 10).unwrap()
+        );
         assert_eq!(super::D76s2::SCALE, 2);
         assert_eq!(super::D76s2::ZERO.scale(), 2);
         // SCALE = 75 (new MAX_SCALE) multiplier is 10^75, well within 256-bit range.
         let m75 = super::D76s75::multiplier();
         assert_eq!(
             m75,
-            I256::from_str_radix("1000000000000000000000000000000000000000000000000000000000000000000000000000", 10).unwrap()
+            I256::from_str_radix(
+                "1000000000000000000000000000000000000000000000000000000000000000000000000000",
+                10
+            )
+            .unwrap()
         );
         assert_eq!(<super::D76s12 as DecimalArithmetic>::MAX_SCALE, 75);
         // round-trip
@@ -2387,13 +2965,15 @@ mod tests {
         type D = super::D76<12>;
         let one = D::ONE;
         let two = D::from_bits(D::multiplier() + D::multiplier());
-        let three = D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("3", 10).unwrap());
+        let three =
+            D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("3", 10).unwrap());
         // add / sub / neg
         assert_eq!((one + two), three);
         assert_eq!((three - one), two);
         assert_eq!((-one).to_bits(), -D::multiplier());
         // mul: 2 * 3 == 6
-        let six = D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("6", 10).unwrap());
+        let six =
+            D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("6", 10).unwrap());
         assert_eq!((two * three), six);
         // div: 6 / 2 == 3
         assert_eq!((six / two), three);
@@ -2412,7 +2992,8 @@ mod tests {
         v %= two;
         assert_eq!(v, D::ZERO);
         // fractional: 1.5 * 1.5 == 2.25 at scale 12
-        let half = D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
+        let half =
+            D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
         let one_and_half = one + half;
         let product = one_and_half * one_and_half;
         let expected = D::from_bits(
@@ -2430,7 +3011,8 @@ mod tests {
         assert_eq!(alloc::format!("{}", one), "1.000000000000");
         assert_eq!(alloc::format!("{}", -one), "-1.000000000000");
         assert_eq!(alloc::format!("{}", D::ZERO), "0.000000000000");
-        let half = D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
+        let half =
+            D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
         assert_eq!(alloc::format!("{}", half), "0.500000000000");
         assert_eq!(alloc::format!("{:?}", one), "D76<12>(1.000000000000)");
         // scale 0 prints no fractional part
@@ -2464,7 +3046,8 @@ mod tests {
         assert_eq!(D::ONE.copysign(neg), neg);
         assert_eq!(neg.copysign(D::ONE), D::ONE);
         // recip: 1/2 at scale 6
-        let half = D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
+        let half =
+            D::from_bits(D::multiplier() / crate::wide_int::I256::from_str_radix("2", 10).unwrap());
         assert_eq!(two.recip(), half);
     }
 
@@ -2484,7 +3067,12 @@ mod tests {
         // checked_mul / checked_div
         let two = D::ONE + D::ONE;
         let three = two + D::ONE;
-        assert_eq!(two.checked_mul(three), Some(D::from_bits(D::multiplier() * crate::wide_int::I256::from_str_radix("6", 10).unwrap())));
+        assert_eq!(
+            two.checked_mul(three),
+            Some(D::from_bits(
+                D::multiplier() * crate::wide_int::I256::from_str_radix("6", 10).unwrap()
+            ))
+        );
         assert_eq!(D::ONE.checked_div(D::ZERO), None);
         assert_eq!((three).checked_div(D::ONE), Some(three));
         // wrapping_add of one storage LSB at MAX wraps around to MIN.
@@ -2511,9 +3099,15 @@ mod tests {
         );
         // FromStr within i128 range
         let v = super::D76::<2>::from_str("1.50").unwrap();
-        assert_eq!(v.to_bits(), crate::wide_int::I256::from_str_radix("150", 10).unwrap());
+        assert_eq!(
+            v.to_bits(),
+            crate::wide_int::I256::from_str_radix("150", 10).unwrap()
+        );
         let neg = super::D76::<2>::from_str("-20.50").unwrap();
-        assert_eq!(neg.to_bits(), crate::wide_int::I256::from_str_radix("-2050", 10).unwrap());
+        assert_eq!(
+            neg.to_bits(),
+            crate::wide_int::I256::from_str_radix("-2050", 10).unwrap()
+        );
         // num_traits Zero / One
         use ::num_traits::{One, Zero};
         assert!(super::D76::<6>::zero().is_zero());
@@ -2527,14 +3121,26 @@ mod tests {
         type D = super::D76<6>;
         // From<primitive int>
         let from_i32: D = 5i32.into();
-        assert_eq!(from_i32.to_bits(), I256::from_str_radix("5000000", 10).unwrap());
+        assert_eq!(
+            from_i32.to_bits(),
+            I256::from_str_radix("5000000", 10).unwrap()
+        );
         let from_u64: D = 7u64.into();
-        assert_eq!(from_u64.to_bits(), I256::from_str_radix("7000000", 10).unwrap());
+        assert_eq!(
+            from_u64.to_bits(),
+            I256::from_str_radix("7000000", 10).unwrap()
+        );
         let from_neg: D = (-3i16).into();
-        assert_eq!(from_neg.to_bits(), I256::from_str_radix("-3000000", 10).unwrap());
+        assert_eq!(
+            from_neg.to_bits(),
+            I256::from_str_radix("-3000000", 10).unwrap()
+        );
         // TryFrom<i128> / TryFrom<u128>
         let from_i128 = D::try_from(123i128).unwrap();
-        assert_eq!(from_i128.to_bits(), I256::from_str_radix("123000000", 10).unwrap());
+        assert_eq!(
+            from_i128.to_bits(),
+            I256::from_str_radix("123000000", 10).unwrap()
+        );
         let from_u128 = D::try_from(u128::MAX).unwrap();
         assert_eq!(
             from_u128.to_bits(),
@@ -2543,7 +3149,10 @@ mod tests {
         );
         // TryFrom<f64>
         let from_f64 = D::try_from(2.5f64).unwrap();
-        assert_eq!(from_f64.to_bits(), I256::from_str_radix("2500000", 10).unwrap());
+        assert_eq!(
+            from_f64.to_bits(),
+            I256::from_str_radix("2500000", 10).unwrap()
+        );
         assert!(D::try_from(f64::NAN).is_err());
         // from_int / from_i32
         assert_eq!(D::from_int(9i128), D::from(9i32));
@@ -2563,7 +3172,8 @@ mod tests {
         let widened: super::D76<6> = d38.into();
         assert_eq!(widened.to_bits(), I256::from_str_radix("-150", 10).unwrap());
         // cross-width narrowing D76 -> D38 in range
-        let in_range: super::D76<6> = super::D76::<6>::from_bits(I256::from_str_radix("999", 10).unwrap());
+        let in_range: super::D76<6> =
+            super::D76::<6>::from_bits(I256::from_str_radix("999", 10).unwrap());
         let narrowed: super::D38s6 = in_range.try_into().unwrap();
         assert_eq!(narrowed.to_bits(), 999i128);
         // cross-width narrowing D76 -> D38 out of range
@@ -2581,7 +3191,10 @@ mod tests {
         // rescale up (lossless): scale 6 -> scale 9
         let v = D6::from_bits(I256::from_str_radix("1500000", 10).unwrap()); // 1.5
         let up: super::D76<9> = v.rescale::<9>();
-        assert_eq!(up.to_bits(), I256::from_str_radix("1500000000", 10).unwrap());
+        assert_eq!(
+            up.to_bits(),
+            I256::from_str_radix("1500000000", 10).unwrap()
+        );
         // rescale down (lossy, HalfToEven): scale 6 -> scale 2
         let down: super::D76<2> = v.rescale::<2>();
         assert_eq!(down.to_bits(), I256::from_str_radix("150", 10).unwrap());
@@ -2596,7 +3209,10 @@ mod tests {
         assert_eq!(v.ceil(), D6::ONE + D6::ONE);
         assert_eq!(v.round(), D6::ONE + D6::ONE); // half away from zero
         assert_eq!(v.trunc(), D6::ONE);
-        assert_eq!(v.fract(), D6::from_bits(I256::from_str_radix("500000", 10).unwrap()));
+        assert_eq!(
+            v.fract(),
+            D6::from_bits(I256::from_str_radix("500000", 10).unwrap())
+        );
         // negative: -1.5
         let neg = -v;
         assert_eq!(neg.floor(), -(D6::ONE + D6::ONE));
@@ -2604,7 +3220,10 @@ mod tests {
         assert_eq!(neg.round(), -(D6::ONE + D6::ONE));
         // float bridge
         let from_f = D6::from_f64(2.5);
-        assert_eq!(from_f.to_bits(), I256::from_str_radix("2500000", 10).unwrap());
+        assert_eq!(
+            from_f.to_bits(),
+            I256::from_str_radix("2500000", 10).unwrap()
+        );
         assert_eq!(D6::from_f64(f64::NAN), D6::ZERO);
         assert_eq!(D6::from_f64(f64::INFINITY), D6::MAX);
         let round_trip = D6::ONE.to_f64();
@@ -2614,7 +3233,6 @@ mod tests {
     #[cfg(any(feature = "d153", feature = "wide"))]
     #[test]
     fn d153_smoke() {
-        
         use crate::types::traits::arithmetic::DecimalArithmetic;
         use crate::wide_int::I512;
         type D = super::D153<35>;
@@ -2637,7 +3255,6 @@ mod tests {
     #[cfg(any(feature = "d307", feature = "wide"))]
     #[test]
     fn d307_smoke() {
-        
         use crate::types::traits::arithmetic::DecimalArithmetic;
         use crate::wide_int::I1024;
         type D = super::D307<35>;

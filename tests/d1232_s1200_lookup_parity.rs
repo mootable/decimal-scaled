@@ -8,7 +8,12 @@
 //! The composed `exp(ln(x)) ≈ x` identity therefore mixes both paths
 //! and is a strong end-to-end correctness probe.
 
-#![cfg(all(feature = "xx-wide", feature = "x-wide", feature = "wide", not(feature = "fast")))]
+#![cfg(all(
+    feature = "xx-wide",
+    feature = "x-wide",
+    feature = "wide",
+    not(feature = "fast")
+))]
 
 use decimal_scaled::D1232;
 
