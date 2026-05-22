@@ -4,4 +4,4 @@
 # even though `cargo build` is clean. (Do NOT use "all features" — some
 # `rounding-*` features are mutually exclusive.)
 [cargo]
-features = ["wide", "x-wide", "xx-wide", "macros"]
+features = ["wide", "x-wide", "xx-wide", "macros", "bench-alt"]
