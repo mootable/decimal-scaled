@@ -144,34 +144,34 @@ pub enum RawStorage {
     I128(i128),
     /// 192-bit signed integer — D57. Gated by `d57` / `wide`.
     #[cfg(any(feature = "d57", feature = "wide"))]
-    Int192(crate::wide_int::Int192),
+    Int192(crate::int::types::Int<3>),
     /// 256-bit signed integer — D76. Gated by `d76` / `wide`.
     #[cfg(any(feature = "d76", feature = "wide"))]
-    Int256(crate::wide_int::Int256),
+    Int256(crate::int::types::Int<4>),
     /// 384-bit signed integer — D115. Gated by `d115` / `wide`.
     #[cfg(any(feature = "d115", feature = "wide"))]
-    Int384(crate::wide_int::Int384),
+    Int384(crate::int::types::Int<6>),
     /// 512-bit signed integer — D153. Gated by `d153` / `wide`.
     #[cfg(any(feature = "d153", feature = "wide"))]
-    Int512(crate::wide_int::Int512),
+    Int512(crate::int::types::Int<8>),
     /// 768-bit signed integer — D230. Gated by `d230` / `wide`.
     #[cfg(any(feature = "d230", feature = "wide"))]
-    Int768(crate::wide_int::Int768),
+    Int768(crate::int::types::Int<12>),
     /// 1024-bit signed integer — D307. Gated by `d307` / `wide` / `x-wide`.
     #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-    Int1024(crate::wide_int::Int1024),
+    Int1024(crate::int::types::Int<16>),
     /// 1536-bit signed integer — D462. Gated by `d462` / `x-wide`.
     #[cfg(any(feature = "d462", feature = "x-wide"))]
-    Int1536(crate::wide_int::Int1536),
+    Int1536(crate::int::types::Int<24>),
     /// 2048-bit signed integer — D616. Gated by `d616` / `x-wide`.
     #[cfg(any(feature = "d616", feature = "x-wide"))]
-    Int2048(crate::wide_int::Int2048),
+    Int2048(crate::int::types::Int<32>),
     /// 3072-bit signed integer — D924. Gated by `d924` / `xx-wide`.
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
-    Int3072(crate::wide_int::Int3072),
+    Int3072(crate::int::types::Int<48>),
     /// 4096-bit signed integer — D1232. Gated by `d1232` / `xx-wide`.
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    Int4096(crate::wide_int::Int4096),
+    Int4096(crate::int::types::Int<64>),
 }
 
 /// Object-safe, width-erased view of a decimal value.
