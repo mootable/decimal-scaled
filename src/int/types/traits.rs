@@ -18,7 +18,7 @@ use super::Int;
 
 /// 288 u64 limbs = 18432 bits — the shared `to_mag_sign` staging width
 /// (covers `Int<256>` plus `isqrt` scratch slack).
-const MAG_LIMBS: u32 = 288;
+const MAG_LIMBS: usize = 288;
 
 /// The unified big-integer trait — the single common surface for every
 /// fixed-width integer type. Static dispatch only.
@@ -47,7 +47,7 @@ pub trait BigInt:
     type Limbs: Copy;
 
     /// Number of 64-bit limbs.
-    const LIMBS: u32;
+    const LIMBS: usize;
     /// Bit width (`LIMBS * 64`), as `u32` for the kernels' bit-length math.
     const BITS: u32;
     /// The additive identity.
@@ -59,7 +59,7 @@ pub trait BigInt:
     /// Number of u128 limbs needed to hold this type's full magnitude
     /// (`(L + 1) / 2`). Hot-path divide / rescale callers pass this as a
     /// `const N` to size their magnitude stack buffer to the exact width.
-    const U128_LIMBS: u32 = 1;
+    const U128_LIMBS: usize = 1;
 
     // ── Predicates ────────────────────────────────────────────────────
 
@@ -262,12 +262,12 @@ pub(crate) fn wide_cast<S: MagSign, T: MagSign>(src: S) -> T {
 impl<const N: u32> BigInt for Int<N> {
     type Limbs = [u64; N];
 
-    const LIMBS: u32 = N;
+    const LIMBS: usize = N;
     const BITS: u32 = (N * 64) as u32;
     const ZERO: Self = Int::<N>::ZERO;
     const ONE: Self = Int::<N>::ONE;
     const TEN: Self = Int::<N>::TEN;
-    const U128_LIMBS: u32 = (N + 1) / 2;
+    const U128_LIMBS: usize = (N + 1) / 2;
 
     #[inline]
     fn is_zero(self) -> bool {

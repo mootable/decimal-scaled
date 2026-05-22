@@ -1,6 +1,6 @@
 //! Const-generic fixed-width integers.
 //!
-//! A single `Uint<const LIMBS: u32>` / `Int<const LIMBS: u32>` pair
+//! A single `Uint<const LIMBS: usize>` / `Int<const LIMBS: usize>` pair
 //! parameterised by the number of 64-bit little-endian limbs, replacing
 //! the family of named `IntXXXX` / `UintXXXX` types. Bit width is
 //! derived (`BITS = LIMBS * 64`); every width this crate uses
@@ -15,10 +15,10 @@
 //! constant, the limb loops unroll and any `match LIMBS` arms const-fold
 //! per monomorphisation — no runtime dispatch.
 
-pub(crate) mod traits;
+mod traits;
 mod wide_compat;
 
-pub use traits::BigInt;
+pub use traits::{BigInt, BigInt};
 
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
@@ -34,20 +34,20 @@ use core::ops::{
 
 /// Unsigned fixed-width integer of `N` little-endian 64-bit limbs.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Uint<const N: u32> {
+pub struct Uint<const N: usize> {
     limbs: [u64; N],
 }
 
 /// Signed (two's-complement) fixed-width integer of `N` little-endian
 /// 64-bit limbs.
 #[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
-pub struct Int<const N: u32> {
+pub struct Int<const N: usize> {
     limbs: [u64; N],
 }
 
-impl<const N: u32> Uint<N> {
+impl<const N: usize> Uint<N> {
     /// Number of 64-bit limbs.
-    pub const LIMBS: u32 = N;
+    pub const LIMBS: usize = N;
     /// Bit width (`LIMBS * 64`). `u32` so it composes directly with the
     /// `leading_zeros` / `count_ones` `u32` surface and matches the
     /// historic named-type `BITS` constant.
@@ -488,8 +488,8 @@ impl<const N: u32> Uint<N> {
         }
         let bits = self.bit_length();
         let mut out = [0u64; N];
-        if (bits as u32) < N * 64 {
-            out[(bits / 64) as u32] = 1u64 << (bits % 64);
+        if (bits as usize) < N * 64 {
+            out[(bits / 64) as usize] = 1u64 << (bits % 64);
         }
         Self { limbs: out }
     }
@@ -525,7 +525,7 @@ impl<const N: u32> Uint<N> {
     }
 }
 
-impl<const N: u32> Add for Uint<N> {
+impl<const N: usize> Add for Uint<N> {
     type Output = Self;
     #[inline]
     fn add(self, rhs: Self) -> Self {
@@ -533,7 +533,7 @@ impl<const N: u32> Add for Uint<N> {
     }
 }
 
-impl<const N: u32> Sub for Uint<N> {
+impl<const N: usize> Sub for Uint<N> {
     type Output = Self;
     #[inline]
     fn sub(self, rhs: Self) -> Self {
@@ -541,7 +541,7 @@ impl<const N: u32> Sub for Uint<N> {
     }
 }
 
-impl<const N: u32> Mul for Uint<N> {
+impl<const N: usize> Mul for Uint<N> {
     type Output = Self;
     #[inline]
     fn mul(self, rhs: Self) -> Self {
@@ -549,7 +549,7 @@ impl<const N: u32> Mul for Uint<N> {
     }
 }
 
-impl<const N: u32> BitAnd for Uint<N> {
+impl<const N: usize> BitAnd for Uint<N> {
     type Output = Self;
     #[inline]
     fn bitand(self, rhs: Self) -> Self {
@@ -557,7 +557,7 @@ impl<const N: u32> BitAnd for Uint<N> {
     }
 }
 
-impl<const N: u32> BitOr for Uint<N> {
+impl<const N: usize> BitOr for Uint<N> {
     type Output = Self;
     #[inline]
     fn bitor(self, rhs: Self) -> Self {
@@ -565,7 +565,7 @@ impl<const N: u32> BitOr for Uint<N> {
     }
 }
 
-impl<const N: u32> BitXor for Uint<N> {
+impl<const N: usize> BitXor for Uint<N> {
     type Output = Self;
     #[inline]
     fn bitxor(self, rhs: Self) -> Self {
@@ -573,7 +573,7 @@ impl<const N: u32> BitXor for Uint<N> {
     }
 }
 
-impl<const N: u32> Not for Uint<N> {
+impl<const N: usize> Not for Uint<N> {
     type Output = Self;
     #[inline]
     fn not(self) -> Self {
@@ -581,7 +581,7 @@ impl<const N: u32> Not for Uint<N> {
     }
 }
 
-impl<const N: u32> Shl<u32> for Uint<N> {
+impl<const N: usize> Shl<u32> for Uint<N> {
     type Output = Self;
     #[inline]
     fn shl(self, shift: u32) -> Self {
@@ -589,7 +589,7 @@ impl<const N: u32> Shl<u32> for Uint<N> {
     }
 }
 
-impl<const N: u32> Shr<u32> for Uint<N> {
+impl<const N: usize> Shr<u32> for Uint<N> {
     type Output = Self;
     #[inline]
     fn shr(self, shift: u32) -> Self {
@@ -601,7 +601,7 @@ impl<const N: u32> Shr<u32> for Uint<N> {
 // (Knuth / Burnikel–Ziegler), matching the macro `$U` operators so the
 // const-generic and named unsigned types share one divide algorithm.
 
-impl<const N: u32> Div for Uint<N> {
+impl<const N: usize> Div for Uint<N> {
     type Output = Self;
     #[inline]
     fn div(self, rhs: Self) -> Self {
@@ -612,7 +612,7 @@ impl<const N: u32> Div for Uint<N> {
     }
 }
 
-impl<const N: u32> Rem for Uint<N> {
+impl<const N: usize> Rem for Uint<N> {
     type Output = Self;
     #[inline]
     fn rem(self, rhs: Self) -> Self {
@@ -623,14 +623,14 @@ impl<const N: u32> Rem for Uint<N> {
     }
 }
 
-impl<const N: u32> PartialOrd for Uint<N> {
+impl<const N: usize> PartialOrd for Uint<N> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<const N: u32> Ord for Uint<N> {
+impl<const N: usize> Ord for Uint<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         match limbs_cmp_u64_fixed(&self.limbs, &other.limbs) {
@@ -641,9 +641,9 @@ impl<const N: u32> Ord for Uint<N> {
     }
 }
 
-impl<const N: u32> Int<N> {
+impl<const N: usize> Int<N> {
     /// Number of 64-bit limbs.
-    pub const LIMBS: u32 = N;
+    pub const LIMBS: usize = N;
     /// Bit width (`LIMBS * 64`). `u32` so it composes directly with the
     /// `leading_zeros` / `count_ones` `u32` surface and matches the
     /// historic named-type `BITS` constant.
@@ -1018,7 +1018,7 @@ impl<const N: u32> Int<N> {
     /// `true` if bit `idx` of the two's-complement representation is set.
     #[inline]
     pub const fn bit(self, idx: u32) -> bool {
-        let limb = (idx / 64) as u32;
+        let limb = (idx / 64) as usize;
         if limb >= N {
             return self.is_negative();
         }
@@ -1173,7 +1173,7 @@ impl<const N: u32> Int<N> {
             return Err(());
         }
         let bytes = s.as_bytes();
-        let (negative, start): (bool, u32) =
+        let (negative, start): (bool, usize) =
             if !bytes.is_empty() && bytes[0] == b'-' {
                 (true, 1)
             } else {
@@ -1501,14 +1501,14 @@ impl<const N: u32> Int<N> {
     }
 }
 
-impl<const N: u32> PartialOrd for Int<N> {
+impl<const N: usize> PartialOrd for Int<N> {
     #[inline]
     fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
         Some(self.cmp(other))
     }
 }
 
-impl<const N: u32> Ord for Int<N> {
+impl<const N: usize> Ord for Int<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
         // Signed compare: a negative value is always less than a
@@ -1527,7 +1527,7 @@ impl<const N: u32> Ord for Int<N> {
     }
 }
 
-impl<const N: u32> Add for Int<N> {
+impl<const N: usize> Add for Int<N> {
     type Output = Self;
     #[inline]
     fn add(self, rhs: Self) -> Self {
@@ -1535,7 +1535,7 @@ impl<const N: u32> Add for Int<N> {
     }
 }
 
-impl<const N: u32> Sub for Int<N> {
+impl<const N: usize> Sub for Int<N> {
     type Output = Self;
     #[inline]
     fn sub(self, rhs: Self) -> Self {
@@ -1543,7 +1543,7 @@ impl<const N: u32> Sub for Int<N> {
     }
 }
 
-impl<const N: u32> Mul for Int<N> {
+impl<const N: usize> Mul for Int<N> {
     type Output = Self;
     #[inline]
     fn mul(self, rhs: Self) -> Self {
@@ -1551,7 +1551,7 @@ impl<const N: u32> Mul for Int<N> {
     }
 }
 
-impl<const N: u32> BitAnd for Int<N> {
+impl<const N: usize> BitAnd for Int<N> {
     type Output = Self;
     #[inline]
     fn bitand(self, rhs: Self) -> Self {
@@ -1565,7 +1565,7 @@ impl<const N: u32> BitAnd for Int<N> {
     }
 }
 
-impl<const N: u32> BitOr for Int<N> {
+impl<const N: usize> BitOr for Int<N> {
     type Output = Self;
     #[inline]
     fn bitor(self, rhs: Self) -> Self {
@@ -1579,7 +1579,7 @@ impl<const N: u32> BitOr for Int<N> {
     }
 }
 
-impl<const N: u32> BitXor for Int<N> {
+impl<const N: usize> BitXor for Int<N> {
     type Output = Self;
     #[inline]
     fn bitxor(self, rhs: Self) -> Self {
@@ -1593,7 +1593,7 @@ impl<const N: u32> BitXor for Int<N> {
     }
 }
 
-impl<const N: u32> Not for Int<N> {
+impl<const N: usize> Not for Int<N> {
     type Output = Self;
     #[inline]
     fn not(self) -> Self {
@@ -1607,7 +1607,7 @@ impl<const N: u32> Not for Int<N> {
     }
 }
 
-impl<const N: u32> Shl<u32> for Int<N> {
+impl<const N: usize> Shl<u32> for Int<N> {
     type Output = Self;
     #[inline]
     fn shl(self, shift: u32) -> Self {
@@ -1617,7 +1617,7 @@ impl<const N: u32> Shl<u32> for Int<N> {
     }
 }
 
-impl<const N: u32> Shr<u32> for Int<N> {
+impl<const N: usize> Shr<u32> for Int<N> {
     type Output = Self;
     #[inline]
     fn shr(self, shift: u32) -> Self {
@@ -1633,7 +1633,7 @@ impl<const N: u32> Shr<u32> for Int<N> {
     }
 }
 
-impl<const N: u32> Neg for Int<N> {
+impl<const N: usize> Neg for Int<N> {
     type Output = Self;
     #[inline]
     fn neg(self) -> Self {
@@ -1648,7 +1648,7 @@ impl<const N: u32> Neg for Int<N> {
 // (`limbs_divmod_dispatch_u64`: Knuth / Burnikel–Ziegler for multi-limb
 // divisors). These supertraits are what `BigInt` requires.
 
-impl<const N: u32> Div for Int<N> {
+impl<const N: usize> Div for Int<N> {
     type Output = Self;
     #[inline]
     fn div(self, rhs: Self) -> Self {
@@ -1656,7 +1656,7 @@ impl<const N: u32> Div for Int<N> {
     }
 }
 
-impl<const N: u32> Rem for Int<N> {
+impl<const N: usize> Rem for Int<N> {
     type Output = Self;
     #[inline]
     fn rem(self, rhs: Self) -> Self {
@@ -1669,7 +1669,7 @@ impl<const N: u32> Rem for Int<N> {
 // Delegate to the same limb fmt / parse path the `decl_wide_int!` macro
 // types use, so the const-generic surface round-trips identically.
 
-impl<const N: u32> core::fmt::Display for Uint<N> {
+impl<const N: usize> core::fmt::Display for Uint<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         // Stack scratch sized to the widest tier (256 limbs = Uint16384),
         // matching the `Int<N>` Display impl below.
@@ -1679,7 +1679,7 @@ impl<const N: u32> core::fmt::Display for Uint<N> {
     }
 }
 
-impl<const N: u32> core::fmt::Display for Int<N> {
+impl<const N: usize> core::fmt::Display for Int<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mag = *self.unsigned_abs().as_limbs();
         // Decimal needs <= BITS bytes (`BITS * log10(2) < BITS`); the
@@ -1688,14 +1688,14 @@ impl<const N: u32> core::fmt::Display for Int<N> {
         // const-generic body `core`-clean — no `[u8; N*64]` const
         // expression and no `alloc` dependency, matching the macro's
         // per-width `[u8; $L * 64]` buffer.
-        const MAX_DIGITS: u32 = 256 * 64;
+        const MAX_DIGITS: usize = 256 * 64;
         let mut buf = [0u8; MAX_DIGITS];
         let s = limbs_fmt_into_u64(&mag, 10, true, &mut buf);
         f.pad_integral(!self.is_negative() || self.is_zero(), "", s)
     }
 }
 
-impl<const N: u32> core::str::FromStr for Int<N> {
+impl<const N: usize> core::str::FromStr for Int<N> {
     type Err = ();
     #[inline]
     fn from_str(s: &str) -> Result<Self, ()> {
@@ -1710,7 +1710,7 @@ impl<const N: u32> core::str::FromStr for Int<N> {
 // Stack scratch sized to the widest tier (256 limbs = Int16384), as in
 // the `Display` impl above.
 
-impl<const N: u32> core::fmt::LowerHex for Int<N> {
+impl<const N: usize> core::fmt::LowerHex for Int<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
         let s = limbs_fmt_into_u64(&self.limbs, 16, true, &mut buf);
@@ -1718,7 +1718,7 @@ impl<const N: u32> core::fmt::LowerHex for Int<N> {
     }
 }
 
-impl<const N: u32> core::fmt::UpperHex for Int<N> {
+impl<const N: usize> core::fmt::UpperHex for Int<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
         let s = limbs_fmt_into_u64(&self.limbs, 16, false, &mut buf);
@@ -1726,7 +1726,7 @@ impl<const N: u32> core::fmt::UpperHex for Int<N> {
     }
 }
 
-impl<const N: u32> core::fmt::Octal for Int<N> {
+impl<const N: usize> core::fmt::Octal for Int<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
         let s = limbs_fmt_into_u64(&self.limbs, 8, true, &mut buf);
@@ -1734,7 +1734,7 @@ impl<const N: u32> core::fmt::Octal for Int<N> {
     }
 }
 
-impl<const N: u32> core::fmt::Binary for Int<N> {
+impl<const N: usize> core::fmt::Binary for Int<N> {
     fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
         let mut buf = [0u8; 256 * 64];
         let s = limbs_fmt_into_u64(&self.limbs, 2, true, &mut buf);
@@ -1754,7 +1754,7 @@ impl<const N: u32> core::fmt::Binary for Int<N> {
 // direction is enforced by `debug_assert!` plus, for `narrow`, the
 // `Option` return.
 
-impl<const N: u32> Uint<N> {
+impl<const N: usize> Uint<N> {
     /// Resizes to `M` limbs: zero-extends when widening, drops the high
     /// limbs when narrowing. Direction-agnostic and infallible.
     ///
@@ -1762,14 +1762,14 @@ impl<const N: u32> Uint<N> {
     /// does not collide with the type-generic [`Int::resize`] the named-
     /// type API expects.
     #[inline]
-    pub fn resize_n<const M: u32>(self) -> Uint<M> {
+    pub fn resize_n<const M: usize>(self) -> Uint<M> {
         Uint::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { 0 }))
     }
 
     /// Widens to a wider `Uint<M>` (`M >= N`), zero-extending the new
     /// high limbs. Lossless.
     #[inline]
-    pub fn widen<const M: u32>(self) -> Uint<M> {
+    pub fn widen<const M: usize>(self) -> Uint<M> {
         debug_assert!(M >= N, "widen requires M >= N");
         self.resize_n::<M>()
     }
@@ -1777,7 +1777,7 @@ impl<const N: u32> Uint<N> {
     /// Narrows to a narrower `Uint<M>` (`M <= N`). Returns `None` if any
     /// discarded high limb is non-zero (the value does not fit `M`).
     #[inline]
-    pub fn narrow<const M: u32>(self) -> Option<Uint<M>> {
+    pub fn narrow<const M: usize>(self) -> Option<Uint<M>> {
         debug_assert!(M <= N, "narrow requires M <= N");
         let keep = if M < N { M } else { N };
         let mut i = keep;
@@ -1791,7 +1791,7 @@ impl<const N: u32> Uint<N> {
     }
 }
 
-impl<const N: u32> Int<N> {
+impl<const N: usize> Int<N> {
     /// Resizes to `M` limbs: sign-extends when widening, drops the high
     /// limbs when narrowing. Direction-agnostic and infallible
     /// (narrowing may change the represented value).
@@ -1800,14 +1800,14 @@ impl<const N: u32> Int<N> {
     /// does not collide with the type-generic [`Int::resize`] the named-
     /// type API expects (the magnitude-bridge cast over any `BigInt`).
     #[inline]
-    pub fn resize_n<const M: u32>(self) -> Int<M> {
+    pub fn resize_n<const M: usize>(self) -> Int<M> {
         let fill = if self.is_negative() { u64::MAX } else { 0 };
         Int::from_limbs(core::array::from_fn(|i| if i < N { self.limbs[i] } else { fill }))
     }
 
     /// Widens to a wider `Int<M>` (`M >= N`), sign-extending. Lossless.
     #[inline]
-    pub fn widen<const M: u32>(self) -> Int<M> {
+    pub fn widen<const M: usize>(self) -> Int<M> {
         debug_assert!(M >= N, "widen requires M >= N");
         self.resize_n::<M>()
     }
@@ -1817,7 +1817,7 @@ impl<const N: u32> Int<N> {
     /// narrowed value's top bit — i.e. the value fits `M` limbs as
     /// two's complement.
     #[inline]
-    pub fn narrow<const M: u32>(self) -> Option<Int<M>> {
+    pub fn narrow<const M: usize>(self) -> Option<Int<M>> {
         debug_assert!(M >= 1 && M <= N, "narrow requires 1 <= M <= N");
         let sign_fill = if (self.limbs[M - 1] >> 63) == 1 { u64::MAX } else { 0 };
         let mut i = M;
@@ -1875,7 +1875,7 @@ mod tests {
     use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
     use super::*;
 
-    /// The `BigInt` surface must compile and
+    /// The `BigInt` / `BigInt` surface must compile and
     /// behave through a fully generic bound, for both signed and
     /// unsigned fixed-width integers.
     #[test]
@@ -1931,7 +1931,7 @@ mod tests {
     /// the full `2N`-limb schoolbook product, across widths and edges.
     #[test]
     fn limbs_mul_low_matches_full_product_low_half() {
-        fn check<const N: u32, const D: u32>(a: [u64; N], b: [u64; N]) {
+        fn check<const N: usize, const D: usize>(a: [u64; N], b: [u64; N]) {
             debug_assert!(D == 2 * N);
             let mut full = [0u64; D];
             limbs_mul_u64_fixed::<N, D>(&a, &b, &mut full);
@@ -1960,7 +1960,7 @@ mod tests {
     /// general truncated product `x · x` at every width and edge case.
     #[test]
     fn dedicated_sqr_matches_general_mul() {
-        fn check<const N: u32>(x: [u64; N]) {
+        fn check<const N: usize>(x: [u64; N]) {
             let a = Uint::<N>::from_limbs(x);
             assert_eq!(
                 a.wrapping_sqr(),
@@ -2031,7 +2031,7 @@ mod tests {
             (r, r.pow(k) == m)
         }
 
-        fn check<const N: u32>(m: u128, k: u32) {
+        fn check<const N: usize>(m: u128, k: u32) {
             let lo = (m & 0xFFFF_FFFF_FFFF_FFFF) as u64;
             let hi = (m >> 64) as u64;
             let mut limbs = [0u64; N];
@@ -2626,7 +2626,7 @@ mod unified_mg_feasibility {
     /// because a `<Int<M> as BigInt>::U128_LIMBS` expression cannot
     /// appear in a const-generic argument over a generic `M`. Returns the
     /// scaled wider-width quotient.
-    fn scaled<const N: u32, const M: u32, const LW: u32>(
+    fn scaled<const N: usize, const M: usize, const LW: usize>(
         a: Int<N>,
         b: Int<N>,
         scale: u32,
