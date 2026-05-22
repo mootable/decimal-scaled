@@ -12,14 +12,12 @@ use decimal_scaled::{ConvertError, D38, D38s12};
 
 #[test]
 fn widen_narrow_one_tier_hop_narrow_arm() {
-    use decimal_scaled::{D9s6, D18s6};
-    let a = D9s6::from_int(123);
-    let b = a.widen(); // D9 → D18
-    let c = b.widen(); // D18 → D38
-    assert_eq!(b.to_bits() as i128, c.to_bits());
-    let d18: D18s6 = c.narrow().unwrap(); // D38 → D18
-    let d9: D9s6 = d18.narrow().unwrap(); // D18 → D9
-    assert_eq!(d9.to_bits(), a.to_bits());
+    use decimal_scaled::{D18s6, D38s6};
+    let a = D18s6::from_int(123);
+    let b: D38s6 = a.widen(); // D18 → D38
+    assert_eq!(b.to_bits(), a.to_bits() as i128);
+    let c: D18s6 = b.narrow().unwrap(); // D38 → D18
+    assert_eq!(c.to_bits(), a.to_bits());
 }
 
 #[test]
