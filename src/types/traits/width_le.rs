@@ -224,6 +224,52 @@ impls_native_to_one_wide!(crate::wide_int::Int3072);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impls_native_to_one_wide!(crate::wide_int::Int4096);
 
+// ── D38 storage (`Int<2>`) WidthLE web. ──────────────────────────────
+//
+// D38 is a base type (no feature gate), so the reflexive impl and the
+// narrow-source widenings (`i32`/`i64` → `Int<2>`, i.e. D9 / D18 → D38)
+// are unconditional. Widening `Int<2>` up into the wider tiers (D38 vs
+// D57+ cross-width comparisons) is gated on each wider tier's feature.
+impl WidthLE<crate::int::types::Int<2>> for crate::int::types::Int<2> {
+    #[inline]
+    fn widen_into(self) -> crate::int::types::Int<2> {
+        self
+    }
+}
+impl WidthLE<crate::int::types::Int<2>> for i32 {
+    #[inline]
+    fn widen_into(self) -> crate::int::types::Int<2> {
+        crate::int::types::traits::wide_cast(self as i128)
+    }
+}
+impl WidthLE<crate::int::types::Int<2>> for i64 {
+    #[inline]
+    fn widen_into(self) -> crate::int::types::Int<2> {
+        crate::int::types::traits::wide_cast(self as i128)
+    }
+}
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int192, crate::int::types::Int<2>);
+#[cfg(any(feature = "d76", feature = "wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int256, crate::int::types::Int<2>);
+#[cfg(any(feature = "d115", feature = "wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int384, crate::int::types::Int<2>);
+#[cfg(any(feature = "d153", feature = "wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int512, crate::int::types::Int<2>);
+#[cfg(any(feature = "d230", feature = "wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int768, crate::int::types::Int<2>);
+#[cfg(any(feature = "d307", feature = "wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int1024, crate::int::types::Int<2>);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int1536, crate::int::types::Int<2>);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int2048, crate::int::types::Int<2>);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int3072, crate::int::types::Int<2>);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+impl_width_le_wide_pair!(crate::wide_int::Int4096, crate::int::types::Int<2>);
+
 // Wide → wide cross impls. For every ordered pair (narrower, wider).
 // Each impl is independently gated on BOTH storages being available.
 

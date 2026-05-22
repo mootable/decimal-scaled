@@ -37,6 +37,7 @@
 //! which are used when the underlying format yields a native integer.
 //! The integer is interpreted directly as the scaled `i128` storage.
 
+use crate::int::types::Int;
 use core::marker::PhantomData;
 
 use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
@@ -78,7 +79,7 @@ impl<const SCALE: u32> Serialize for D38<SCALE> {
             }
         } else {
             // Binary path: emit the raw i128 as 16 little-endian bytes.
-            serializer.serialize_bytes(&self.0.to_le_bytes())
+            serializer.serialize_bytes(&self.0.as_i128().to_le_bytes())
         }
     }
 }
@@ -212,7 +213,7 @@ pub mod decimal_serde {
                     "decimal-scaled: leading `+` is not part of the canonical wire format",
                 ));
             }
-            v.parse::<i128>().map(D38::<SCALE>::from_bits).map_err(|_| {
+            v.parse::<i128>().map(|n| D38::<SCALE>::from_bits(Int::<2>::from_i128(n))).map_err(|_| {
                 serde::de::Error::custom("decimal-scaled: expected a base-10 i128 integer string")
             })
         }
@@ -239,7 +240,7 @@ pub mod decimal_serde {
                     &"exactly 16 little-endian bytes for an i128",
                 )
             })?;
-            Ok(D38::<SCALE>::from_bits(i128::from_le_bytes(arr)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from_le_bytes(arr))))
         }
 
         fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
@@ -263,45 +264,45 @@ pub mod decimal_serde {
         // serialise path.
 
         fn visit_i8<E: serde::de::Error>(self, v: i8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i16<E: serde::de::Error>(self, v: i16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(v))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(v)))
         }
 
         fn visit_u8<E: serde::de::Error>(self, v: u8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u16<E: serde::de::Error>(self, v: u16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(i128::from(v)))
+            Ok(D38::<SCALE>::from_bits(Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Self::Value, E> {
             // u128 values above i128::MAX cannot be represented; reject
             // explicitly rather than wrapping silently.
-            i128::try_from(v).map(D38::<SCALE>::from_bits).map_err(|_| {
+            i128::try_from(v).map(|n| D38::<SCALE>::from_bits(Int::<2>::from_i128(n))).map_err(|_| {
                 serde::de::Error::custom("decimal-scaled: u128 value exceeds i128 storage range")
             })
         }
