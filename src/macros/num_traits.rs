@@ -220,8 +220,10 @@ macro_rules! decl_decimal_num_traits_conversions {
             }
             #[inline]
             fn from_u64(n: u64) -> ::core::option::Option<Self> {
-                let widened: $Storage = <$Storage>::from_u128(n as u128);
-                widened.checked_mul(Self::multiplier()).map(Self)
+                // `u64` can exceed a narrow wide-storage's positive range
+                // (e.g. `Int<1>` / D18), so route through the range-checking
+                // `TryFrom<u128>` rather than an unchecked widen.
+                <Self as ::core::convert::TryFrom<u128>>::try_from(n as u128).ok()
             }
             #[inline]
             fn from_i128(n: i128) -> ::core::option::Option<Self> {

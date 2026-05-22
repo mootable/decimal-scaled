@@ -221,7 +221,18 @@ macro_rules! decl_try_from_u128 {
                 // 128-bit `Int<2>` (D38) a `u128` above `i128::MAX` lands in
                 // the sign bit, so a negative result means the input did not
                 // fit the signed storage's positive range — reject as overflow.
+                // (This also catches the 64-bit `Int<1>` (D18) case where the
+                // low word's high bit was set.)
                 if widened.is_negative() {
+                    return ::core::result::Result::Err(
+                        $crate::support::error::ConvertError::Overflow,
+                    );
+                }
+                // The `is_negative` test misses truncations that land on a
+                // small non-negative value (e.g. `2^64` → 0 in `Int<1>`), so a
+                // round-trip back to `u128` confirms nothing was dropped. No-op
+                // for storage wide enough to hold every `u128`.
+                if $crate::int::types::traits::wide_cast::<$Storage, u128>(widened) != value {
                     return ::core::result::Result::Err(
                         $crate::support::error::ConvertError::Overflow,
                     );
