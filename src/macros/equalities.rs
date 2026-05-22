@@ -9,22 +9,6 @@
 /// Emits `PartialEq<$Src> for $Type<SCALE>` and the reciprocal direction
 /// for any signed integer source type that fits in `i128`.
 macro_rules! decl_eq_signed_int {
-    ($Type:ident, $Src:ty) => {
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$Src) -> bool {
-                let m = Self::multiplier() as i128;
-                let self_bits = self.to_bits() as i128;
-                self_bits % m == 0 && self_bits / m == *other as i128
-            }
-        }
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {
-            #[inline]
-            fn eq(&self, other: &$Type<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
     // Wide storage: arithmetic stays in the wide integer; the quotient
     // narrows to `i128` for the primitive comparison.
     (wide $Type:ident, $Src:ty) => {
@@ -56,22 +40,6 @@ macro_rules! decl_eq_signed_int {
 /// own definition because the destination integer math is already
 /// i128 — no widening cast on the source.
 macro_rules! decl_eq_i128 {
-    ($Type:ident) => {
-        impl<const SCALE: u32> ::core::cmp::PartialEq<i128> for $Type<SCALE> {
-            #[inline]
-            fn eq(&self, other: &i128) -> bool {
-                let m = Self::multiplier() as i128;
-                let self_bits = self.to_bits() as i128;
-                self_bits % m == 0 && self_bits / m == *other
-            }
-        }
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for i128 {
-            #[inline]
-            fn eq(&self, other: &$Type<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
     (wide $Type:ident) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<i128> for $Type<SCALE> {
             #[inline]
@@ -101,25 +69,6 @@ macro_rules! decl_eq_i128 {
 /// fit in `i128` (`u8` through `u64`, `usize`). A negative decimal
 /// value is never equal to an unsigned primitive.
 macro_rules! decl_eq_unsigned_int {
-    ($Type:ident, $Src:ty) => {
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
-            #[inline]
-            fn eq(&self, other: &$Src) -> bool {
-                if self.to_bits() < 0 {
-                    return false;
-                }
-                let m = Self::multiplier() as i128;
-                let self_bits = self.to_bits() as i128;
-                self_bits % m == 0 && self_bits / m == *other as i128
-            }
-        }
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {
-            #[inline]
-            fn eq(&self, other: &$Type<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
     (wide $Type:ident, $Src:ty) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
             #[inline]
@@ -152,28 +101,6 @@ macro_rules! decl_eq_unsigned_int {
 /// exceeds the i128 range, so we cast the storage's quotient to u128
 /// after a sign-check.
 macro_rules! decl_eq_u128 {
-    ($Type:ident) => {
-        impl<const SCALE: u32> ::core::cmp::PartialEq<u128> for $Type<SCALE> {
-            #[inline]
-            fn eq(&self, other: &u128) -> bool {
-                if self.to_bits() < 0 {
-                    return false;
-                }
-                let m = Self::multiplier() as i128;
-                let self_bits = self.to_bits() as i128;
-                if self_bits % m != 0 {
-                    return false;
-                }
-                (self_bits / m) as u128 == *other
-            }
-        }
-        impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for u128 {
-            #[inline]
-            fn eq(&self, other: &$Type<SCALE>) -> bool {
-                other == self
-            }
-        }
-    };
     (wide $Type:ident) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<u128> for $Type<SCALE> {
             #[inline]
@@ -232,23 +159,10 @@ macro_rules! decl_eq_float {
     };
 }
 
+
 /// One-line invoker: emits the full signed/unsigned/i128/u128 cross-
 /// equality surface for a decimal type.
 macro_rules! decl_eq_all_integers {
-    ($Type:ident) => {
-        $crate::macros::equalities::decl_eq_signed_int!($Type, i8);
-        $crate::macros::equalities::decl_eq_signed_int!($Type, i16);
-        $crate::macros::equalities::decl_eq_signed_int!($Type, i32);
-        $crate::macros::equalities::decl_eq_signed_int!($Type, i64);
-        $crate::macros::equalities::decl_eq_signed_int!($Type, isize);
-        $crate::macros::equalities::decl_eq_i128!($Type);
-        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u8);
-        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u16);
-        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u32);
-        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u64);
-        $crate::macros::equalities::decl_eq_unsigned_int!($Type, usize);
-        $crate::macros::equalities::decl_eq_u128!($Type);
-    };
     (wide $Type:ident) => {
         $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i8);
         $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i16);
