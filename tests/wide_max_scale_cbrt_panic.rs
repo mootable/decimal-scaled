@@ -30,10 +30,10 @@
 /// `pow` on the storage type so the literal can't drift away from the
 /// SCALE.
 macro_rules! cbrt_of_one_test {
-    ($fn_name:ident, $tier:ident, $scale:literal, $Storage:ident) => {
+    ($fn_name:ident, $tier:ident, $scale:literal, $Storage:ty) => {
         #[test]
         fn $fn_name() {
-            let ten = decimal_scaled::$Storage::from_str_radix("10", 10).expect("10 literal");
+            let ten = <$Storage>::from_str_radix("10", 10).expect("10 literal");
             let raw = ten.pow($scale as u32);
             let one = decimal_scaled::$tier::<$scale>::from_bits(raw);
             let r = one.cbrt_strict();
@@ -52,28 +52,28 @@ macro_rules! cbrt_of_one_test {
 }
 
 #[cfg(feature = "wide")]
-cbrt_of_one_test!(d76_max_scale_cbrt_of_one, D76, 76, Int256);
+cbrt_of_one_test!(d76_max_scale_cbrt_of_one, D76, 76, decimal_scaled::Int<4>);
 
 #[cfg(feature = "wide")]
-cbrt_of_one_test!(d115_max_scale_cbrt_of_one, D115, 115, Int384);
+cbrt_of_one_test!(d115_max_scale_cbrt_of_one, D115, 115, decimal_scaled::Int<6>);
 
 #[cfg(feature = "wide")]
-cbrt_of_one_test!(d153_max_scale_cbrt_of_one, D153, 153, Int512);
+cbrt_of_one_test!(d153_max_scale_cbrt_of_one, D153, 153, decimal_scaled::Int<8>);
 
 #[cfg(feature = "wide")]
-cbrt_of_one_test!(d230_max_scale_cbrt_of_one, D230, 230, Int768);
+cbrt_of_one_test!(d230_max_scale_cbrt_of_one, D230, 230, decimal_scaled::Int<12>);
 
 #[cfg(any(feature = "wide", feature = "x-wide"))]
-cbrt_of_one_test!(d307_max_scale_cbrt_of_one, D307, 307, Int1024);
+cbrt_of_one_test!(d307_max_scale_cbrt_of_one, D307, 307, decimal_scaled::Int<16>);
 
 #[cfg(feature = "x-wide")]
-cbrt_of_one_test!(d462_max_scale_cbrt_of_one, D462, 461, Int1536);
+cbrt_of_one_test!(d462_max_scale_cbrt_of_one, D462, 461, decimal_scaled::Int<24>);
 
 #[cfg(feature = "x-wide")]
-cbrt_of_one_test!(d616_max_scale_cbrt_of_one, D616, 615, Int2048);
+cbrt_of_one_test!(d616_max_scale_cbrt_of_one, D616, 615, decimal_scaled::Int<32>);
 
 #[cfg(feature = "xx-wide")]
-cbrt_of_one_test!(d924_max_scale_cbrt_of_one, D924, 923, Int3072);
+cbrt_of_one_test!(d924_max_scale_cbrt_of_one, D924, 923, decimal_scaled::Int<48>);
 
 #[cfg(feature = "xx-wide")]
-cbrt_of_one_test!(d1232_max_scale_cbrt_of_one, D1232, 1231, Int4096);
+cbrt_of_one_test!(d1232_max_scale_cbrt_of_one, D1232, 1231, decimal_scaled::Int<64>);
