@@ -155,15 +155,23 @@ pub(crate) use decl_cross_width_narrowing;
 /// `Result<Self, ConvertError::Overflow>` after `checked_mul` by the
 /// multiplier and a narrowing range-check against `$Storage`.
 macro_rules! decl_try_from_i128 {
-    // Wide storage. `i128` always widens losslessly into
-    // the storage; the only failure mode is the `checked_mul` by the
-    // multiplier overflowing the (still finite) wide storage.
+    // Wide storage. For storage ≥ 128-bit (`Int<2>`+) `i128` widens
+    // losslessly, so the only failure mode is the `checked_mul` by the
+    // multiplier overflowing the (still finite) wide storage. For the
+    // 64-bit `Int<1>` (D18) storage the cast can truncate, so the
+    // round-trip check below rejects out-of-range `i128` inputs (it is a
+    // no-op for the wider tiers, where `as_i128()` always recovers `value`).
     (wide $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::convert::TryFrom<i128> for $Type<SCALE> {
             type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: i128) -> ::core::result::Result<Self, Self::Error> {
                 let widened: $Storage = $crate::int::types::traits::wide_cast(value);
+                if $crate::int::types::traits::wide_cast::<$Storage, i128>(widened) != value {
+                    return ::core::result::Result::Err(
+                        $crate::support::error::ConvertError::Overflow,
+                    );
+                }
                 let scaled = widened
                     .checked_mul(Self::multiplier())
                     .ok_or($crate::support::error::ConvertError::Overflow)?;
