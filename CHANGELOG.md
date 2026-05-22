@@ -65,9 +65,12 @@ land alongside.
 - **`Int<N>` / `Uint<N>` are now the public storage types.** All
   shipped widths (D18 through D1232) expose `Int<N>` as their
   `Storage` type. `Int<N>` / `Uint<N>` are re-exported from the
-  crate root. The named-width aliases (`Int192`, `Int384`, …,
-  `Int16384`) are now type aliases over `Int<N>`, and
-  `decl_wide_int!` is removed.
+  crate root, and `decl_wide_int!` is removed.
+- **BREAKING: the named-width integer aliases are removed.** The
+  crate-root `decimal_scaled::{Int64, Int128, Int192, …, Int16384}`
+  (and the matching `Uint*`) re-exports are gone — name the storage
+  as the const-generic `Int<N>` / `Uint<N>` instead (e.g. `Int<4>`
+  for the former `Int256`).
 
 ### Fixed
 
