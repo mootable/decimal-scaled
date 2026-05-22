@@ -423,14 +423,10 @@ crate::macros::conversions::decl_try_from_i128!(wide D38, crate::int::types::Int
 crate::macros::conversions::decl_try_from_u128!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_i128!(D18, i64);
 crate::macros::conversions::decl_try_from_u128!(D18, i64);
-crate::macros::conversions::decl_try_from_i128!(D9, i32);
-crate::macros::conversions::decl_try_from_u128!(D9, i32);
 crate::macros::conversions::decl_try_from_f64!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f32!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f64!(D18, i64);
 crate::macros::conversions::decl_try_from_f32!(D18, i64);
-crate::macros::conversions::decl_try_from_f64!(D9, i32);
-crate::macros::conversions::decl_try_from_f32!(D9, i32);
 crate::macros::conversions::decl_decimal_int_conversion_methods!(wide D38, crate::int::types::Int<2>, i64);
 // abs / signum / is_positive / is_negative, min / max / clamp / recip /
 // copysign, and floor / ceil / round / trunc / fract are emitted by the
@@ -482,7 +478,6 @@ crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D38);
 // reserved for the chosen-winner implementation.
 
 crate::macros::conversions::decl_decimal_int_conversion_methods!(D18, i64, i64);
-crate::macros::conversions::decl_decimal_int_conversion_methods!(D9, i32, i32);
 
 // ─── D38 narrow ───────────────────────────────────────────────────────
 // D38::widen is wide-tier-only and is emitted further down in the
@@ -504,82 +499,6 @@ impl<const SCALE: u32> D38<SCALE> {
         self.try_into()
     }
 }
-
-// ---------------------------------------------------------------------
-// D9 — 32-bit storage, scale 0..=9. Embedded / register-sized ledger
-// type. SCALE = 9 fits ~21.5 with 9 decimal digits of precision; SCALE
-// = 0 covers ±2.1 × 10⁹ unscaled. Only the basics emitted in this
-// sub-phase; arithmetic / display / num_traits land incrementally.
-// ---------------------------------------------------------------------
-
-/// Scaled fixed-point decimal with 32-bit storage. See [`D38`] for the
-/// shape documentation; D9 has the same surface scaled to `i32` and
-/// `MAX_SCALE = 8` (the v0.4.0 cap: `MAX_SCALE = name - 1`).
-///
-/// Now a type alias of the unified [`crate::D`] generic decimal type:
-/// `D9<S>` is `D<i32, S>`. Both spellings are interchangeable. The
-/// `#[repr(transparent)]` layout over `i32` is preserved through the
-/// alias because the underlying [`crate::D`] is itself
-/// `#[repr(transparent)]` over its storage parameter.
-pub type D9<const SCALE: u32> = crate::D<i32, SCALE>;
-
-/// `Default` returns `ZERO`, matching `i32::default() == 0`.
-///
-/// Implemented on the underlying `crate::D<i32, SCALE>` because
-/// `D9<SCALE>` is now an alias of that type. `ZERO` is emitted by
-/// the basics macro further down in this file.
-impl<const SCALE: u32> Default for crate::D<i32, SCALE> {
-    #[inline]
-    fn default() -> Self {
-        Self::ZERO
-    }
-}
-
-crate::macros::basics::decl_decimal_basics!(D9, i32, 8);
-crate::macros::arithmetic::decl_decimal_arithmetic!(D9, i32, i64);
-crate::macros::conversions::decl_from_primitive!(D9, i32, i8);
-crate::macros::conversions::decl_from_primitive!(D9, i32, i16);
-crate::macros::conversions::decl_from_primitive!(D9, i32, u8);
-crate::macros::conversions::decl_from_primitive!(D9, i32, u16);
-crate::macros::display::decl_decimal_display!(D9);
-crate::macros::overflow::decl_decimal_overflow_variants!(D9, i32, i64);
-crate::macros::num_traits::decl_decimal_num_traits_basics!(D9);
-crate::macros::sign::decl_decimal_sign_methods!(D9, i32);
-crate::macros::consts::decl_decimal_consts!(D9, i32);
-crate::macros::from_str::decl_decimal_from_str!(D9, i32);
-crate::macros::float_bridge::decl_decimal_float_bridge!(D9, i32);
-crate::macros::storage_formatters::decl_decimal_storage_formatters!(D9);
-crate::macros::strict_transcendentals::decl_strict_transcendentals_via_d38!(D9);
-crate::macros::transcendental_trait::decl_decimal_transcendental_impl!(D9);
-crate::macros::fast_transcendentals::decl_fast_transcendentals_via_f64!(D9);
-crate::macros::pow::decl_decimal_pow!(D9);
-crate::macros::rounding_methods::decl_decimal_rounding_methods!(D9);
-crate::macros::helpers::decl_decimal_helpers!(D9);
-crate::macros::bitwise::decl_decimal_bitwise!(D9, i32);
-crate::macros::int_methods::decl_decimal_int_methods!(D9, i32);
-crate::macros::num_traits::decl_decimal_num_traits_conversions!(D9, i32);
-
-/// Scale alias: `D9<0>`. 1 LSB = 1 (thin `i32` wrapper). Range ±2.1 × 10⁹.
-pub type D9s0 = D9<0>;
-/// Scale alias: `D9<1>`. 1 LSB = 10^-1. Range ±2.1 × 10⁸.
-pub type D9s1 = D9<1>;
-/// Scale alias: `D9<2>`. 1 LSB = 10^-2 (cents). Range ±2.1 × 10⁷.
-pub type D9s2 = D9<2>;
-/// Scale alias: `D9<3>`. 1 LSB = 10^-3 (mills). Range ±2.1 × 10⁶.
-pub type D9s3 = D9<3>;
-/// Scale alias: `D9<4>`. 1 LSB = 10^-4 (basis points). Range ±2.1 × 10⁵.
-pub type D9s4 = D9<4>;
-/// Scale alias: `D9<5>`. 1 LSB = 10^-5. Range ±2.1 × 10⁴.
-pub type D9s5 = D9<5>;
-/// Scale alias: `D9<6>`. 1 LSB = 10^-6 (ppm). Range ±2.1 × 10³.
-pub type D9s6 = D9<6>;
-/// Scale alias: `D9<7>`. 1 LSB = 10^-7. Range ±214.
-pub type D9s7 = D9<7>;
-/// Scale alias: `D9<8>`. 1 LSB = 10^-8 (satoshi). Range ±21.4.
-///
-/// Maximum supported scale (v0.4.0 cap: `MAX_SCALE = name - 1` guarantees
-/// at least one integer digit at every legal SCALE).
-pub type D9s8 = D9<8>;
 
 // ---------------------------------------------------------------------
 // D18 — 64-bit storage, scale 0..=18. Interchange size; fits a GPR on
@@ -635,43 +554,18 @@ crate::macros::bitwise::decl_decimal_bitwise!(D18, i64);
 crate::macros::int_methods::decl_decimal_int_methods!(D18, i64);
 crate::macros::num_traits::decl_decimal_num_traits_conversions!(D18, i64);
 
-// Cross-width widening (lossless). D9 -> D18, D9 -> D38, D18 -> D38.
-crate::macros::conversions::decl_cross_width_widening!(D18, i64, D9, i32);
-crate::macros::conversions::decl_cross_width_widening!(wide D38, crate::int::types::Int<2>, D9, i32);
+// Cross-width widening (lossless). D18 -> D38.
 crate::macros::conversions::decl_cross_width_widening!(wide D38, crate::int::types::Int<2>, D18, i64);
 
-// Cross-width narrowing (fallible). D38 -> D18, D38 -> D9, D18 -> D9.
+// Cross-width narrowing (fallible). D38 -> D18.
 crate::macros::conversions::decl_cross_width_narrowing!(wide D18, i64, D38, crate::int::types::Int<2>);
-crate::macros::conversions::decl_cross_width_narrowing!(wide D9, i32, D38, crate::int::types::Int<2>);
-crate::macros::conversions::decl_cross_width_narrowing!(D9, i32, D18, i64);
 
-// ─── `widen` / `narrow` — hop one storage tier at a time ──────────────
+// ─── `widen` — hop one storage tier up ────────────────────────────────
 //
-// `widen` always succeeds (the next-larger storage strictly covers
-// every value the smaller one can hold). `narrow` returns
-// `Result<NarrowerType<SCALE>, ConvertError>` because the value may
-// not fit. Both keep the scale unchanged; combine with `rescale` if
-// you need to change scale and width together.
-
-impl<const SCALE: u32> D9<SCALE> {
-    /// Promote to the next storage tier ([`D18`]) at the same `SCALE`.
-    ///
-    /// Lossless — every `D9<SCALE>` value fits `D18<SCALE>` by
-    /// construction (`i32::MAX` < `i64::MAX`). Chains via further
-    /// `widen` calls if you need to climb to D38 / D76 / etc.
-    ///
-    /// ```
-    /// use decimal_scaled::D9s6;
-    /// let a = D9s6::from_int(123);
-    /// let b = a.widen();              // D18<6>
-    /// assert_eq!(b.to_bits(), a.to_bits() as i64);
-    /// ```
-    #[inline]
-    #[must_use]
-    pub fn widen(self) -> D18<SCALE> {
-        self.into()
-    }
-}
+// `widen` always succeeds (the next-larger storage strictly covers every
+// value the smaller one can hold). It keeps the scale unchanged; combine
+// with `rescale` if you need to change scale and width together. D18 is
+// the narrowest tier, so it has no `narrow`.
 
 impl<const SCALE: u32> D18<SCALE> {
     /// Promote to the next storage tier ([`D38`]) at the same `SCALE`.
@@ -687,25 +581,6 @@ impl<const SCALE: u32> D18<SCALE> {
     #[must_use]
     pub fn widen(self) -> D38<SCALE> {
         self.into()
-    }
-
-    /// Demote to the previous storage tier ([`D9`]) at the same
-    /// `SCALE`.
-    ///
-    /// # Errors
-    ///
-    /// Returns `Err(ConvertError::OutOfRange)` if the value doesn't
-    /// fit `i32`'s range at the given scale.
-    ///
-    /// ```
-    /// use decimal_scaled::D18s5;
-    /// let a = D18s5::from_int(7);
-    /// let b = a.narrow().unwrap();    // D9<5>
-    /// assert_eq!(b.to_bits() as i64, a.to_bits());
-    /// ```
-    #[inline]
-    pub fn narrow(self) -> Result<D9<SCALE>, crate::support::error::ConvertError> {
-        self.try_into()
     }
 }
 
@@ -800,7 +675,6 @@ crate::macros::full::decl_decimal_full!(
 );
 // Cross-width widening into D76 (lossless): D9 / D18 / D38 -> D76.
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D9, i32);
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::wide_int::I256, D18, i64);
 #[cfg(any(feature = "d76", feature = "wide"))]
@@ -811,7 +685,6 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D38, crate::int::ty
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D18, i64, D76, crate::wide_int::I256);
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D9, i32, D76, crate::wide_int::I256);
 
 // ─── D38::widen / D76 hop methods ─────────────────────────────────────
 
@@ -2053,7 +1926,6 @@ impl<const SCALE: u32> D1232<SCALE> {
 // `crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops` for
 // the body.
 
-crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D9, i32);
 crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D18, i64);
 crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D38, crate::int::types::Int<2>);
 
@@ -2098,28 +1970,16 @@ crate::macros::cross_scale_ops::decl_decimal_cross_scale_ops!(D1232, crate::wide
 // impl is only emitted when both types in the pair exist in the build.
 
 // D9 row.
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D18, i64);
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D38, crate::int::types::Int<2>);
 #[cfg(any(feature = "d57", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D57, crate::wide_int::Int192);
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D76, crate::wide_int::Int256);
 #[cfg(any(feature = "d115", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D115, crate::wide_int::Int384);
 #[cfg(any(feature = "d153", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D153, crate::wide_int::Int512);
 #[cfg(any(feature = "d230", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D230, crate::wide_int::Int768);
 #[cfg(any(feature = "d307", feature = "wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D307, crate::wide_int::Int1024);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D462, crate::wide_int::Int1536);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D616, crate::wide_int::Int2048);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D924, crate::wide_int::Int3072);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D9, i32, D1232, crate::wide_int::Int4096);
 
 // D18 row.
 crate::macros::cross_width_cmp::decl_cross_width_eq_ord!(D18, i64, D38, crate::int::types::Int<2>);
