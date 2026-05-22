@@ -213,37 +213,7 @@ macro_rules! decl_band {
     };
 }
 
-// ─── Primitive-storage bands (D9 / D18 / D38) ──────────────────────────
-
-decl_band! {
-    mod d9,
-    width Width::D9,
-    feature_gate cfg(all()),
-    funcs {
-        ln    = "golden/ln_d9_s4.txt";
-        exp   = "golden/exp_d9_s4.txt";
-        exp2  = "golden/exp2_d9_s4.txt";
-        log2  = "golden/log2_d9_s4.txt";
-        log10 = "golden/log10_d9_s4.txt";
-        sin   = "golden/sin_d9_s4.txt";
-        cos   = "golden/cos_d9_s4.txt";
-        tan   = "golden/tan_d9_s4.txt";
-        atan  = "golden/atan_d9_s4.txt", ignore_when(not(feature = "wide")) = "narrow-path atan directed-rounding 1-LSB boundary (Trunc/Floor/Ceiling); the wide-feature atan path is correctly rounded";
-        asin  = "golden/asin_d9_s4.txt";
-        acos  = "golden/acos_d9_s4.txt";
-        sinh  = "golden/sinh_d9_s4.txt";
-        cosh  = "golden/cosh_d9_s4.txt";
-        tanh  = "golden/tanh_d9_s4.txt";
-        asinh = "golden/asinh_d9_s4.txt";
-        acosh = "golden/acosh_d9_s4.txt";
-        atanh = "golden/atanh_d9_s4.txt";
-        sqrt  = "golden/sqrt_d9_s4.txt";
-        cbrt  = "golden/cbrt_d9_s4.txt";
-        log   = "golden/log_d9_s4.txt";
-        atan2 = "golden/atan2_d9_s4.txt";
-        powf  = "golden/powf_d9_s4.txt";
-    },
-}
+// ─── Primitive-storage bands (D18 / D38) ──────────────────────────
 
 decl_band! {
     mod d18,

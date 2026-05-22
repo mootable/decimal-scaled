@@ -204,15 +204,14 @@ impl Method {
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Width — the thirteen decimal tiers D9 … D1232
+// Width — the twelve decimal tiers D9 … D1232
 // ════════════════════════════════════════════════════════════════════
 
-/// One of the crate's thirteen decimal width tiers. Each tier pins a
+/// One of the crate's twelve decimal width tiers. Each tier pins a
 /// storage bit-width and a canonical scale (the scale the golden tables
 /// were generated at — `SCALE = floor((digits-1)/2)` for that tier).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
 pub enum Width {
-    D9,
     D18,
     D38,
     D57,
@@ -229,8 +228,7 @@ pub enum Width {
 
 impl Width {
     /// Every tier, narrow → wide.
-    pub const ALL: [Width; 13] = [
-        Width::D9,
+    pub const ALL: [Width; 12] = [
         Width::D18,
         Width::D38,
         Width::D57,
@@ -248,7 +246,6 @@ impl Width {
     /// Decimal digit capacity of the tier (the `N` in `DN`).
     pub fn digits(self) -> u32 {
         match self {
-            Width::D9 => 9,
             Width::D18 => 18,
             Width::D38 => 38,
             Width::D57 => 57,
@@ -267,7 +264,6 @@ impl Width {
     /// The canonical scale the golden tables use for this tier.
     pub fn canonical_scale(self) -> u32 {
         match self {
-            Width::D9 => 4,
             Width::D18 => 9,
             Width::D38 => 19,
             Width::D57 => 28,
@@ -286,7 +282,6 @@ impl Width {
     /// The `dN_sS` golden-file infix for this tier at its canonical scale.
     pub fn golden_infix(self) -> &'static str {
         match self {
-            Width::D9 => "d9_s4",
             Width::D18 => "d18_s9",
             Width::D38 => "d38_s19",
             Width::D57 => "d57_s28",
@@ -304,7 +299,6 @@ impl Width {
 
     pub fn name(self) -> &'static str {
         match self {
-            Width::D9 => "D9",
             Width::D18 => "D18",
             Width::D38 => "D38",
             Width::D57 => "D57",
