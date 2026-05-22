@@ -245,9 +245,9 @@ fn overflow_variants_div_rem_d9_d18() {
     let q = a.checked_div(b).unwrap();
     // 7.00 / 2.00 = 3.50 → 350 at S=2.
     assert_eq!(q.to_bits(), 350);
-    // div by zero — checked_div returns None (matches i32::checked_div)
+    // div by zero — checked_div returns None (matches i32::checked_div);
+    // saturating_div by zero panics (covered by saturating_div_by_zero_panics).
     assert!(D9_2::from_int(7).checked_div(D9_2::ZERO).is_none());
-    assert_eq!(D9_2::from_int(7).saturating_div(D9_2::ZERO), D9_2::MAX);
     // overflowing_div(0) / wrapping_div(0) / wrapping_rem(0) on most
     // integer storage types panic (matches i32::overflowing_div), so we
     // don't exercise those paths here — they're well-known and the

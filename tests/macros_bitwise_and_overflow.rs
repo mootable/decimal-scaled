@@ -141,10 +141,9 @@ fn wide_overflow_variants_success_cases() {
     // overflowing_div success path
     let (_, ov) = a.overflowing_div(b);
     assert!(!ov);
-    // saturating_div with non-overflow + div-by-zero
-    let z = D76_2::ZERO;
-    let r = a.saturating_div(z);
-    assert!(r == D76_2::MAX || r == D76_2::MIN);
+    // saturating_div by zero panics (matches the primitive contract);
+    // that path is covered by `saturating_div_by_zero_panics`, so this
+    // success-cases test does not exercise it.
     // overflowing_div with non-zero rhs (success)
     let (q, ov) = a.overflowing_div(b);
     assert!(!ov);
