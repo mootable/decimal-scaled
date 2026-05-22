@@ -18,6 +18,7 @@
 //! handled inside D57's `powf_strict_with` / `powf_approx_with`, so
 //! the wrapper does not need a separate fast path.
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D38, D57};
 
@@ -26,7 +27,7 @@ use crate::types::widths::{D38, D57};
 /// inside D57).
 #[inline]
 #[must_use]
-pub(crate) fn powf_strict<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn powf_strict<const SCALE: u32>(base: Int<2>, exp: Int<2>, mode: RoundingMode) -> Int<2> {
     let base_w: D57<SCALE> = D38::<SCALE>::from_bits(base).into();
     let exp_w: D57<SCALE> = D38::<SCALE>::from_bits(exp).into();
     let result = base_w.powf_strict_with(exp_w, mode);
@@ -42,11 +43,11 @@ pub(crate) fn powf_strict<const SCALE: u32>(base: i128, exp: i128, mode: Roundin
 #[inline]
 #[must_use]
 pub(crate) fn powf_with<const SCALE: u32>(
-    base: i128,
-    exp: i128,
+    base: Int<2>,
+    exp: Int<2>,
     working_digits: u32,
     mode: RoundingMode,
-) -> i128 {
+) -> Int<2> {
     let base_w: D57<SCALE> = D38::<SCALE>::from_bits(base).into();
     let exp_w: D57<SCALE> = D38::<SCALE>::from_bits(exp).into();
     let result = base_w.powf_approx_with(exp_w, working_digits, mode);

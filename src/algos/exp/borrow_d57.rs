@@ -16,6 +16,7 @@
 // `RUSTDOCFLAGS=-D warnings` doc build (the docs.yml workflow uses
 // this flag to catch broken intra-doc links).
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D38, D57};
 
@@ -27,7 +28,7 @@ use crate::types::widths::{D38, D57};
 /// the same ~22% reclaim the D57<20> direct path measures.
 #[inline]
 #[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_tang::exp_strict::<SCALE>(widened.0, mode)
@@ -48,7 +49,7 @@ pub(crate) fn exp_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 /// uses, so this picks up the same speedup.
 #[inline]
 #[must_use]
-pub(crate) fn exp2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.exp2_strict_with(mode);
     let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(

@@ -16,6 +16,7 @@
 //! by the narrowing `TryFrom` returning `Err` and the wrapping
 //! `expect` re-raising it.
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D38, D57};
 
@@ -27,7 +28,7 @@ use crate::types::widths::{D38, D57};
 /// the same ~30% reclaim the D57<20> direct path measures.
 #[inline]
 #[must_use]
-pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn ln_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_tang::ln_strict::<SCALE>(widened.0, mode)
@@ -48,7 +49,7 @@ pub(crate) fn ln_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128
 /// this picks up the same 2-4× speedup the v2 survey measured.
 #[inline]
 #[must_use]
-pub(crate) fn log2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn log2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.log2_strict_with(mode);
     let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
@@ -62,7 +63,7 @@ pub(crate) fn log2_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 /// narrow back. See [`log2_strict`] for the rationale.
 #[inline]
 #[must_use]
-pub(crate) fn log10_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn log10_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result = widened.log10_strict_with(mode);
     let narrowed: D38<SCALE> = result.try_into().unwrap_or_else(|_| panic!(
@@ -78,7 +79,7 @@ pub(crate) fn log10_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i
 /// (`base.ln == 0` is detected before division).
 #[inline]
 #[must_use]
-pub(crate) fn log_strict<const SCALE: u32>(raw: i128, base_raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn log_strict<const SCALE: u32>(raw: Int<2>, base_raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let base_wide: D57<SCALE> = D38::<SCALE>::from_bits(base_raw).into();
     let result = widened.log_strict_with(base_wide, mode);

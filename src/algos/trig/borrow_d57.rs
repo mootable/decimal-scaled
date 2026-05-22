@@ -14,12 +14,13 @@
 //! `wide_kernel::tan_strict_d57` (the same logical panic D38's
 //! `fixed_d38::tan_strict` produces).
 
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D38, D57};
 use crate::wide_int::I192;
 
 #[inline]
-fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> i128 {
+fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> Int<2> {
     let wide = D57::<SCALE>::from_bits(raw_wide);
     let r: D38<SCALE> = wide.try_into().unwrap_or_else(|_| panic!(
         "{op}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
@@ -32,7 +33,7 @@ fn narrow<const SCALE: u32>(raw_wide: I192, op: &'static str) -> i128 {
 
 #[inline]
 #[must_use]
-pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn sin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(widened.0, mode)
@@ -44,7 +45,7 @@ pub(crate) fn sin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 #[inline]
 #[must_use]
-pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn cos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(widened.0, mode)
@@ -56,7 +57,7 @@ pub(crate) fn cos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 #[inline]
 #[must_use]
-pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(widened.0, mode)
@@ -68,7 +69,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i12
 
 #[inline]
 #[must_use]
-pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_atan::atan_strict::<SCALE>(widened.0, mode)
@@ -82,7 +83,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 
 #[inline]
 #[must_use]
-pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result_raw = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(widened.0, mode)
@@ -94,7 +95,7 @@ pub(crate) fn asin_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 
 #[inline]
 #[must_use]
-pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let result_raw = if matches!(SCALE, 18..=22) {
         super::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(widened.0, mode)
@@ -106,7 +107,7 @@ pub(crate) fn acos_strict<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i1
 
 #[inline]
 #[must_use]
-pub(crate) fn atan2_strict<const SCALE: u32>(y_raw: i128, x_raw: i128, mode: RoundingMode) -> i128 {
+pub(crate) fn atan2_strict<const SCALE: u32>(y_raw: Int<2>, x_raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let y_wide: D57<SCALE> = D38::<SCALE>::from_bits(y_raw).into();
     let x_wide: D57<SCALE> = D38::<SCALE>::from_bits(x_raw).into();
     let result_raw = if matches!(SCALE, 18..=22) {
