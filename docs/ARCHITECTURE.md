@@ -154,15 +154,30 @@ branch, no table, no vtable. Every other candidate kernel is pruned out
 of that type's machine code. This is what makes the rich policy table
 **zero runtime cost**.
 
-**This compile-away is the entire purpose of the `const` machinery.**
-`select` is `const` and keyed only on the const generics, so the inline
+**What the `const` buys is compile-away, specifically.** `select` is
+`const` and keyed only on the const generics, so the inline
 `const { select::<…>() }` block evaluates at compile time and the
 dispatcher *disappears* — the caller shortcuts straight to the chosen
-algorithm. `const` here buys nothing else: it is **not** about exposing a
+algorithm. That is all `const` is for here; it is **not** about exposing a
 `const fn` public API (a method keeps or loses its own `const`-ness on its
-own merits). **Every function fits this shape — there is no op that
-cannot.** A single-algorithm op is just a pure `ByAlgorithm` policy that
-folds to one direct kernel call.
+own merits).
+
+**The policy/seam itself has more purposes than compile-away**, and they
+are why **every function fits this shape — there is no op that cannot**,
+even a single-algorithm one:
+
+- **zero-cost dispatch** — the compile-away above;
+- **one obvious place to choose and swap the algorithm** per
+  `(width, scale)` cell — the algorithm choice lives in `select`, not
+  scattered through the call sites, so swapping or adding a kernel is a
+  one-file edit;
+- **an isolated, testable dispatch** — the seam is a clean unit to test
+  and to **microbenchmark**, so comparing algorithm choices for a cell is
+  easy.
+
+A single-algorithm op is therefore still worth a policy: it is a pure
+`ByAlgorithm` matcher that folds to one direct kernel call today, and it
+gives that op a ready seam to add/swap/bench an algorithm later.
 
 **The property holds through `ByValue` too — it is a residue, not an
 exception.** Where the algorithm depends on the runtime *value*, the const
