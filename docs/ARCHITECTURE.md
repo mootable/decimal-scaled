@@ -318,9 +318,9 @@ nearest-mode path paying nothing extra.
 ```
 src/
   int/        const-generic integer layer
-    types/    Int<N>/Uint<N>; the BigInt trait
+    types/    Int<N>/Uint<N> — the [u64; N] limb integers; the BigInt trait
     policy/   per-function `select` dispatch (keyed on limb count N)
-    algos/    reusable width-matched algorithms (incl. limb primitives)
+    algos/    the algorithms — limb-slice arithmetic (add/mul/divmod/…) + width-matched kernels
   types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
   policy/     per-function `select` dispatch (keyed on width N, SCALE)
   algos/      the algorithms (sqrt cbrt exp ln trig pow …)
