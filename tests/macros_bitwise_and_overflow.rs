@@ -7,40 +7,40 @@ use decimal_scaled::{D18, D38};
 
 #[test]
 fn bitwise_methods_d18() {
-    let v = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
+    let v = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0b1010) as i64));
     assert_eq!(v.count_ones(), 2);
     assert_eq!(v.count_zeros(), 64 - 2);
     assert_eq!(v.trailing_zeros(), 1);
     assert_eq!(v.leading_zeros(), 64 - 4);
-    let neg = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(-1));
+    let neg = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((-1) as i64));
     let logical = neg.unsigned_shr(63);
     assert_eq!(logical.to_bits(), 1);
-    let r = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(1)).rotate_left(2);
+    let r = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((1) as i64)).rotate_left(2);
     assert_eq!(r.to_bits(), 4);
-    let r = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(4)).rotate_right(2);
+    let r = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((4) as i64)).rotate_right(2);
     assert_eq!(r.to_bits(), 1);
-    assert!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(8)).is_power_of_two());
-    assert!(!D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(7)).is_power_of_two());
-    assert_eq!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(5)).next_power_of_two().to_bits(), 8);
+    assert!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from((8) as i64)).is_power_of_two());
+    assert!(!D18::<2>::from_bits(decimal_scaled::Int::<1>::from((7) as i64)).is_power_of_two());
+    assert_eq!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from((5) as i64)).next_power_of_two().to_bits(), 8);
 }
 
 #[test]
 fn bitwise_methods_d38() {
-    let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1010));
+    let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((0b1010) as i128).unwrap());
     assert_eq!(v.count_ones(), 2);
     assert_eq!(v.count_zeros(), 128 - 2);
     assert_eq!(v.trailing_zeros(), 1);
     assert_eq!(v.leading_zeros(), 128 - 4);
-    let neg = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(-1));
+    let neg = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-1) as i128).unwrap());
     let logical = neg.unsigned_shr(127);
     assert_eq!(logical.to_bits(), 1);
-    let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(1)).rotate_left(2);
+    let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()).rotate_left(2);
     assert_eq!(r.to_bits(), 4);
-    let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4)).rotate_right(2);
+    let r = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4) as i128).unwrap()).rotate_right(2);
     assert_eq!(r.to_bits(), 1);
-    assert!(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(8)).is_power_of_two());
-    assert!(!D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(7)).is_power_of_two());
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(5)).next_power_of_two().to_bits(), 8);
+    assert!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((8) as i128).unwrap()).is_power_of_two());
+    assert!(!D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((7) as i128).unwrap()).is_power_of_two());
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((5) as i128).unwrap()).next_power_of_two().to_bits(), 8);
 }
 
 #[cfg(feature = "wide")]
@@ -48,7 +48,7 @@ fn bitwise_methods_d38() {
 fn bitwise_methods_wide() {
     use decimal_scaled::D76;
 
-    let one: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(1)).into();
+    let one: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()).into();
     let zero = D76::<2>::ZERO;
     assert_eq!(zero.count_ones(), 0);
     assert!(one.count_ones() >= 1);
@@ -63,8 +63,8 @@ fn bitwise_methods_wide() {
     let _ = one.next_power_of_two();
 
     // Bitwise operators on wide
-    let a: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1100)).into();
-    let b: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(0b1010)).into();
+    let a: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((0b1100) as i128).unwrap()).into();
+    let b: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((0b1010) as i128).unwrap()).into();
     let _ = a & b;
     let _ = a | b;
     let _ = a ^ b;
@@ -116,7 +116,7 @@ fn wrapping_div_rem_non_zero() {
         let a: D76<2> = D38::<2>::from_int(7).into();
         let b: D76<2> = D38::<2>::from_int(2).into();
         let q = a.wrapping_div(b);
-        let expected: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(350)).into();
+        let expected: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((350) as i128).unwrap()).into();
         assert_eq!(q, expected);
         let _ = a.wrapping_rem(b);
     }
@@ -158,7 +158,7 @@ fn wide_checked_div_quotient_overflow() {
     let a = D::MAX;
     // 1.0 at S=74 is 10^74 — make rhs = 1 LSB so q = a * 10^74 / 1 → way past storage.
     // Build a 1-LSB tiny value by lifting D38<74> from_bits(1).
-    let tiny: D = D38::<74>::from_bits(decimal_scaled::Int::<2>::from_i128(1)).into();
+    let tiny: D = D38::<74>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()).into();
     let r = a.checked_div(tiny);
     assert!(r.is_none(), "tiny divisor on huge dividend should overflow");
 }
@@ -270,6 +270,6 @@ fn eq_wide_float() {
     assert_ne!(v, f64::INFINITY);
     assert_ne!(v, f32::NAN);
     // Fractional
-    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)).into();
+    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap()).into();
     assert_ne!(frac, 42.0_f64);
 }

@@ -169,7 +169,7 @@ fn d76_sin_cos_tan() {
 #[test]
 fn d76_atan_asin_acos() {
     let one = D38::<6>::ONE;
-    let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000));
+    let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap());
     agree(
         "atan(1)",
         d76_bits_at_scale_6(lift(one).atan_strict()),
@@ -266,7 +266,7 @@ fn d76_hyperbolic() {
 fn d76_inverse_hyperbolic() {
     let one = D38::<6>::ONE;
     let two = D38::<6>::from_int(2);
-    let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000));
+    let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap());
     agree(
         "asinh(1)",
         d76_bits_at_scale_6(lift(one).asinh_strict()),
@@ -363,7 +363,7 @@ fn d76_strict_with_modes() {
     let two = lift(D38::<6>::from_int(2));
     let ten = lift(D38::<6>::from_int(10));
     let one = lift(D38::<6>::ONE);
-    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)));
+    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()));
 
     // HalfToEven matches the plain *_strict form bit-exactly.
     assert_eq!(
@@ -522,7 +522,7 @@ fn d76_plain_dispatcher_matches_strict() {
     let two = lift(D38::<6>::from_int(2));
     let ten = lift(D38::<6>::from_int(10));
     let four = lift(D38::<6>::from_int(4));
-    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)));
+    let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()));
     let twenty_seven = lift(D38::<6>::from_int(27));
 
     assert_eq!(two.ln(), two.ln_strict());
@@ -748,7 +748,7 @@ mod x_wide {
 
         let one_a: D153<6> = D38::<6>::ONE.into();
         let two_a: D153<6> = D38::<6>::from_int(2).into();
-        let half_a: D153<6> = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)).into();
+        let half_a: D153<6> = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()).into();
 
         let _ = two_a.ln_strict();
         let _ = two_a.log2_strict();
@@ -782,7 +782,7 @@ mod x_wide {
 
         let one_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::ONE.into());
         let two_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_int(2).into());
-        let half_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(500_000)).into());
+        let half_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()).into());
         let _ = two_b.ln_strict();
         let _ = two_b.log2_strict();
         let _ = two_b.log10_strict();

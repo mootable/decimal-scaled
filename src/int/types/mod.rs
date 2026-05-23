@@ -425,7 +425,7 @@ impl<const N: usize> Uint<N> {
 
     /// Constructs from a `u64`, zero-extending into the high limbs.
     #[inline]
-    pub fn from_u64(value: u64) -> Self {
+    pub(crate) fn from_u64(value: u64) -> Self {
         let mut limbs = [0u64; N];
         if N > 0 {
             limbs[0] = value;
@@ -438,7 +438,7 @@ impl<const N: usize> Uint<N> {
     /// discarded); use the checked `TryFrom` conversion when `v` may
     /// not fit.
     #[inline]
-    pub const fn from_u128(v: u128) -> Self {
+    pub(crate) const fn from_u128(v: u128) -> Self {
         let mut limbs = [0u64; N];
         if N > 0 {
             limbs[0] = v as u64;
@@ -791,7 +791,7 @@ impl<const N: usize> Int<N> {
 
     /// Constructs from an `i64`, sign-extending into the high limbs.
     #[inline]
-    pub const fn from_i64(value: i64) -> Self {
+    pub(crate) const fn from_i64(value: i64) -> Self {
         // Negative values fill the upper limbs with all-ones so the
         // two's-complement representation matches at every width.
         let fill = if value < 0 { u64::MAX } else { 0 };
@@ -1212,14 +1212,14 @@ impl<const N: usize> Int<N> {
     /// (the high 64 bits of `v` are discarded); use the checked `TryFrom`
     /// conversion when `v` may not fit.
     #[inline]
-    pub const fn from_i128(v: i128) -> Self {
+    pub(crate) const fn from_i128(v: i128) -> Self {
         let mag = v.unsigned_abs();
         Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
     }
 
     /// Builds from an unsigned 128-bit value.
     #[inline]
-    pub const fn from_u128(v: u128) -> Self {
+    pub(crate) const fn from_u128(v: u128) -> Self {
         Self::from_mag_limbs(&[v as u64, (v >> 64) as u64], false)
     }
 
@@ -1757,7 +1757,7 @@ impl<const N: usize> Int<N> {
     /// loses its high limbs; use [`Self::to_i128_checked`] (or `TryFrom`)
     /// when the value may not fit.
     #[inline]
-    pub const fn as_i128(self) -> i128 {
+    pub(crate) const fn as_i128(self) -> i128 {
         let mag = *self.unsigned_abs().as_limbs();
         let lo = if N > 0 { mag[0] as u128 } else { 0 };
         let hi = if N > 1 { mag[1] as u128 } else { 0 };

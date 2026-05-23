@@ -41,9 +41,9 @@ const C: i128 = 0x0000_0000_0000_0000_0000_0007_FEDC_BA98;
 /// `$Int` is the concrete wide signed type; `$w` is the group label.
 macro_rules! bench_width {
     ($c:expr, $w:literal, $Int:ty) => {{
-        let a = <$Int>::from_i128(A);
-        let b = <$Int>::from_i128(B);
-        let c = <$Int>::from_i128(C);
+        let a = <$Int>::try_from(A).unwrap();
+        let b = <$Int>::try_from(B).unwrap();
+        let c = <$Int>::try_from(C).unwrap();
 
         let mut g = $c.benchmark_group(concat!("int_ops/", $w));
 

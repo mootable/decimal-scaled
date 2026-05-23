@@ -124,7 +124,7 @@ fn main() {
     row!(
         D38<38>,
         "D38<38>",
-        D38::<38>::from_bits(decimal_scaled::Int::<2>::from_i128(15_000_000_000_000_000_000_000_000_000_000_000_000_i128))
+        D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from(15_000_000_000_000_000_000_000_000_000_000_000_000_i128).unwrap())
     );
     #[cfg(feature = "wide")]
     {

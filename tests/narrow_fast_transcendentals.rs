@@ -25,11 +25,11 @@ const D18_TOL: i64 = 64;
 
 #[track_caller]
 fn close_d18(label: &str, actual: D18<8>, expected_bits: i64) {
-    let diff = (actual.to_bits().as_i128() - i128::from(expected_bits)).abs();
+    let diff = (i128::from(actual.to_bits()) - i128::from(expected_bits)).abs();
     assert!(
         diff <= i128::from(D18_TOL),
         "{label}: bits {} vs expected {expected_bits} (diff {diff} > {D18_TOL})",
-        actual.to_bits().as_i128()
+        i128::from(actual.to_bits())
     );
 }
 

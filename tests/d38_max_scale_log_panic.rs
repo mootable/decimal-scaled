@@ -20,7 +20,7 @@ fn log10_strict_on_saturated_d38_scale38() {
     let v = D38::<38>::from_f64(2.0);
     let r = v.log10_strict();
     // log10(1.7014…) ≈ 0.23099…  -> at scale 38, bits ≈ 2.31e37
-    let bits = r.to_bits().as_i128();
+    let bits = i128::from(r.to_bits());
     assert!(bits > 0, "log10(MAX) must be positive, got {bits}");
     assert!(
         bits < 3 * 10_i128.pow(37),
@@ -32,6 +32,6 @@ fn log10_strict_on_saturated_d38_scale38() {
 /// failure to the kernel rather than `from_f64`'s saturation policy.
 #[test]
 fn log10_strict_on_near_max_d38_scale38() {
-    let v = D38::<38>::from_bits(decimal_scaled::Int::<2>::from_i128(i128::MAX));
+    let v = D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from((i128::MAX) as i128).unwrap());
     let _ = v.log10_strict();
 }

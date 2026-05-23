@@ -108,8 +108,8 @@ fn main() {
     println!();
     println!("== D38<38> / D38<38> single-limb-too-wide-for-u64 ==");
     {
-        let a = D38::<38>::from_bits(decimal_scaled::Int::<2>::from_i128(170_000_000_000_000_000_000_000_000_000_000_000_000_i128 / 2));
-        let b = D38::<38>::from_bits(decimal_scaled::Int::<2>::from_i128(100_000_000_000_000_000_000_000_000_000_000_000_i128));
+        let a = D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from(170_000_000_000_000_000_000_000_000_000_000_000_000_i128 / 2).unwrap());
+        let b = D38::<38>::from_bits(decimal_scaled::Int::<2>::try_from(100_000_000_000_000_000_000_000_000_000_000_000_i128).unwrap());
         time("D38::<38> a / b (overall)", || {
             black_box(black_box(a) / black_box(b));
         });

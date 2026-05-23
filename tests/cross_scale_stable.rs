@@ -82,16 +82,16 @@ fn cross_width_d18_d38_into_d38_via_add() {
 fn mul_of_with_rounding_modes() {
     // 1.5 (at SCALE=1) × 1 (at SCALE=0) into target SCALE = 0.
     // Rescaling the SCALE=1 operand down to SCALE=0 applies `mode`.
-    let a = D38::<1>::from_bits(decimal_scaled::Int::<2>::from_i128(15)); // 1.5
-    let b = D38::<0>::from_bits(decimal_scaled::Int::<2>::from_i128(1)); // 1
+    let a = D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from((15) as i128).unwrap()); // 1.5
+    let b = D38::<0>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()); // 1
     let trunc: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Trunc);
-    assert_eq!(trunc.to_bits().as_i128(), 1); // 1.5 truncates to 1, then 1*1
+    assert_eq!(i128::from(trunc.to_bits()), 1); // 1.5 truncates to 1, then 1*1
     let away: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::HalfAwayFromZero);
-    assert_eq!(away.to_bits().as_i128(), 2); // 1.5 rounds away to 2, then 2*1
+    assert_eq!(i128::from(away.to_bits()), 2); // 1.5 rounds away to 2, then 2*1
     let floor: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Floor);
-    assert_eq!(floor.to_bits().as_i128(), 1);
+    assert_eq!(i128::from(floor.to_bits()), 1);
     let ceil: D38<0> = D38::<0>::mul_of_with(a, b, RoundingMode::Ceiling);
-    assert_eq!(ceil.to_bits().as_i128(), 2);
+    assert_eq!(i128::from(ceil.to_bits()), 2);
 }
 
 // ── Overflow panic on mul. ───────────────────────────────────────────
@@ -168,7 +168,7 @@ fn cmp_of_picks_higher_scale_for_exact_compare() {
 #[test]
 fn cmp_of_distinguishes_small_difference() {
     // 1.000000000001 vs 1.000000
-    let a = D38::<12>::from_bits(decimal_scaled::Int::<2>::from_i128(1_000_000_000_001));
+    let a = D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from((1_000_000_000_001) as i128).unwrap());
     let b = D38::<6>::from_int(1);
     assert!(a.gt_of(b));
     assert!(b.lt_of(a));

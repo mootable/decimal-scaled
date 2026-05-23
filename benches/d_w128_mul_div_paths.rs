@@ -25,8 +25,8 @@ use std::hint::black_box;
 /// I, Int<4>)`.
 #[inline]
 fn mul_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> {
-    let a256 = Int::<4>::from_i128(a.to_bits());
-    let b256 = Int::<4>::from_i128(b.to_bits());
+    let a256 = a.to_bits().widen::<4>();
+    let b256 = b.to_bits().widen::<4>();
     let m = Int::<4>::from_str_radix("10", 10)
         .expect("base-10 literal")
         .pow(SCALE);
@@ -37,8 +37,8 @@ fn mul_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> 
 /// `(a · 10^SCALE) / b`, wide-arm style.
 #[inline]
 fn div_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> {
-    let a256 = Int::<4>::from_i128(a.to_bits());
-    let b256 = Int::<4>::from_i128(b.to_bits());
+    let a256 = a.to_bits().widen::<4>();
+    let b256 = b.to_bits().widen::<4>();
     let m = Int::<4>::from_str_radix("10", 10)
         .expect("base-10 literal")
         .pow(SCALE);
