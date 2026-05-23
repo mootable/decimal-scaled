@@ -1,30 +1,40 @@
 //! Macro-generated `PartialEq` impls between a decimal type and the
 //! primitive integer / float types.
 //!
-//! Each macro takes a target `$Type` (e.g. `D18`, `D38`) and
-//! emits a pair of `PartialEq` impls (both directions). Comparisons
-//! against primitives go through `i128` arithmetic to keep one path
-//! per source type regardless of the target's storage width.
+//! Each macro takes a target `$Type` (e.g. `D18`, `D38`) and emits a
+//! pair of `PartialEq` impls (both directions).
+//!
+//! # Semantics — exact value equality, via the shared 1.3 comparator
+//!
+//! Both the integer and the float surface compute EXACT mathematical
+//! value equality, riding the same const cross-scale comparator the
+//! `D == D` impls use (`Int::cmp_cross_scaled` / `Int::cmp_f64_exact`).
+//!
+//! - **Integers**: a primitive `n` is the scale-0 value `n`, so `d == n`
+//! compares the decimal's storage (scale `SCALE`) against `n` (scale 0)
+//! with [`Int::cmp_cross_scaled`]. `n` is widened into an `Int<2>` (two
+//! limbs hold any `i128` / `u128`); the comparator scales the decimal
+//! *down* with remainder, so the result is exact and overflow-free.
+//!
+//! - **Floats**: `d == f` is EXACT value equality between `d`'s rational
+//! value `bits / 10^SCALE` and `f`'s exact dyadic value `m · 2^e`,
+//! cross-multiplied to integers by [`Int::cmp_f64_exact`]. This is
+//! distinct from the lossy `TryFrom<f64>` / `to_f64` round-trip: e.g.
+//! `D::from_str("1.1") == 1.1_f64` is `false`, because `1.1_f64` is not
+//! exactly `1.1`. `NaN` and `±inf` always compare unequal.
 
 /// Emits `PartialEq<$Src> for $Type<SCALE>` and the reciprocal direction
 /// for any signed integer source type that fits in `i128`.
 macro_rules! decl_eq_signed_int {
-    // Wide storage: arithmetic stays in the wide integer; the quotient
-    // narrows to `i128` for the primitive comparison.
+    // The storage tier is irrelevant: the comparator is cross-width, so a
+    // single body serves every `$Type`. (`wide` kept for call-site
+    // symmetry with the rest of the equality surface.)
     (wide $Type:ident, $Src:ty) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &$Src) -> bool {
-                let m = Self::multiplier();
-                let bits = self.to_bits();
-                let r = bits % m;
-                if !r.is_zero() {
-                    return false;
-                }
-                match (bits / m).to_i128_checked() {
-                    ::core::option::Option::Some(v) => v == *other as i128,
-                    ::core::option::Option::None => false,
-                }
+                let rhs = $crate::int::types::Int::<2>::from_i128(*other as i128);
+                self.to_bits().cmp_cross_scaled(rhs, SCALE) == ::core::cmp::Ordering::Equal
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {
@@ -36,24 +46,14 @@ macro_rules! decl_eq_signed_int {
     };
 }
 
-/// Emits `PartialEq<i128> for $Type<SCALE>` and the reciprocal. Has its
-/// own definition because the destination integer math is already
-/// i128 — no widening cast on the source.
+/// Emits `PartialEq<i128> for $Type<SCALE>` and the reciprocal.
 macro_rules! decl_eq_i128 {
     (wide $Type:ident) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<i128> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &i128) -> bool {
-                let m = Self::multiplier();
-                let bits = self.to_bits();
-                let r = bits % m;
-                if !r.is_zero() {
-                    return false;
-                }
-                match (bits / m).to_i128_checked() {
-                    ::core::option::Option::Some(v) => v == *other,
-                    ::core::option::Option::None => false,
-                }
+                let rhs = $crate::int::types::Int::<2>::from_i128(*other);
+                self.to_bits().cmp_cross_scaled(rhs, SCALE) == ::core::cmp::Ordering::Equal
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for i128 {
@@ -66,26 +66,14 @@ macro_rules! decl_eq_i128 {
 }
 
 /// Emits `PartialEq<$Src> for $Type<SCALE>` for unsigned sources that
-/// fit in `i128` (`u8` through `u64`, `usize`). A negative decimal
-/// value is never equal to an unsigned primitive.
+/// fit in `u128` (`u8` through `u64`, `usize`).
 macro_rules! decl_eq_unsigned_int {
     (wide $Type:ident, $Src:ty) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &$Src) -> bool {
-                let bits = self.to_bits();
-                if bits.is_negative() {
-                    return false;
-                }
-                let m = Self::multiplier();
-                let r = bits % m;
-                if !r.is_zero() {
-                    return false;
-                }
-                match (bits / m).to_u128_checked() {
-                    ::core::option::Option::Some(v) => v == *other as u128,
-                    ::core::option::Option::None => false,
-                }
+                let rhs = $crate::int::types::Int::<2>::from_u128(*other as u128);
+                self.to_bits().cmp_cross_scaled(rhs, SCALE) == ::core::cmp::Ordering::Equal
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {
@@ -97,27 +85,14 @@ macro_rules! decl_eq_unsigned_int {
     };
 }
 
-/// Emits `PartialEq<u128> for $Type<SCALE>` and the reciprocal. u128
-/// exceeds the i128 range, so we cast the storage's quotient to u128
-/// after a sign-check.
+/// Emits `PartialEq<u128> for $Type<SCALE>` and the reciprocal.
 macro_rules! decl_eq_u128 {
     (wide $Type:ident) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<u128> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &u128) -> bool {
-                let bits = self.to_bits();
-                if bits.is_negative() {
-                    return false;
-                }
-                let m = Self::multiplier();
-                let r = bits % m;
-                if !r.is_zero() {
-                    return false;
-                }
-                match (bits / m).to_u128_checked() {
-                    ::core::option::Option::Some(v) => v == *other,
-                    ::core::option::Option::None => false,
-                }
+                let rhs = $crate::int::types::Int::<2>::from_u128(*other);
+                self.to_bits().cmp_cross_scaled(rhs, SCALE) == ::core::cmp::Ordering::Equal
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for u128 {
