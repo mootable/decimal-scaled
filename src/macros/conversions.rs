@@ -347,14 +347,14 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// Constructs from an integer source, scaling by `10^SCALE`.
             /// Overflow follows the wide integer's default arithmetic semantics.
             #[inline]
-            pub fn from_int(value: $IntSrc) -> Self {
+            pub(crate) fn from_int(value: $IntSrc) -> Self {
                 let widened: $Storage = <$Storage>::from_i128(value as i128);
                 Self(widened * Self::multiplier())
             }
 
             /// Constructs from an `i32`, scaling by `10^SCALE`.
             #[inline]
-            pub fn from_i32(value: i32) -> Self {
+            pub(crate) fn from_i32(value: i32) -> Self {
                 let widened: $Storage = <$Storage>::from_i128(value as i128);
                 Self(widened * Self::multiplier())
             }

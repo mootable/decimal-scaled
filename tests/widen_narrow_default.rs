@@ -10,7 +10,7 @@ use decimal_scaled::{D18, D38, D57, D76, D115};
 
 #[test]
 fn d38_widen_to_d57() {
-    let a = D38::<12>::from_int(7);
+    let a = D38::<12>::try_from(7).unwrap();
     let w: D57<12> = a.widen();
     let expected: D57<12> = a.into();
     assert_eq!(w, expected);
@@ -20,7 +20,7 @@ fn d38_widen_to_d57() {
 fn d76_narrow_to_d57_in_range() {
     // D38 -> D57 -> D76 widens losslessly, then D76.narrow() back to
     // D57 should recover the value.
-    let small: D57<12> = D38::<12>::from_int(7).into();
+    let small: D57<12> = D38::<12>::try_from(7).unwrap().into();
     let w: D76<12> = small.widen();
     let n: D57<12> = w.narrow().unwrap();
     assert_eq!(n.to_bits().to_string(), small.to_bits().to_string());
@@ -36,7 +36,7 @@ fn d76_narrow_to_d57_out_of_range_errors() {
 
 #[test]
 fn d76_widen_to_d115() {
-    let a: D76<6> = D38::<6>::from_int(7).into();
+    let a: D76<6> = D38::<6>::try_from(7).unwrap().into();
     let b: D115<6> = a.widen();
     let n: D76<6> = b.narrow().unwrap();
     assert_eq!(n, a);
@@ -57,7 +57,7 @@ fn defaults_per_tier() {
 #[test]
 fn d153_widen_to_d230_then_d307() {
     use decimal_scaled::{D153, D230, D307};
-    let a: D153<6> = D76::<6>::from_int(7).widen().widen(); // D76 -> D115 -> D153
+    let a: D153<6> = D76::<6>::try_from(7).unwrap().widen().widen(); // D76 -> D115 -> D153
     let b: D230<6> = a.widen();
     let n: D153<6> = b.narrow().unwrap();
     assert_eq!(n, a);
@@ -80,7 +80,7 @@ fn d153_widen_to_d230_then_d307() {
 #[test]
 fn widen_n_d18_to_d38_lossless() {
     // D18 (Int<1>) → D38 (Int<2>), same scale, exact.
-    let a = D18::<9>::from_int(7);
+    let a = D18::<9>::try_from(7).unwrap();
     let w: D38<9> = a.widen_n::<2>();
     // Same logical value: widening sign-extends, scale unchanged.
     assert_eq!(i128::from(w.to_bits()), i128::from(a.to_bits()));
@@ -98,7 +98,7 @@ fn widen_n_is_const() {
 #[test]
 fn narrow_n_d38_to_d18_in_range_and_out() {
     // In range: D38 value that fits Int<1> narrows back exactly.
-    let a = D38::<2>::from_int(7);
+    let a = D38::<2>::try_from(7).unwrap();
     let n: Option<D18<2>> = a.narrow_n::<1>();
     assert!(n.is_some());
     assert_eq!(n.unwrap().to_bits(), 700);
@@ -122,7 +122,7 @@ fn narrow_n_const_is_const() {
 // below, if uncommented, must fail to compile (no such method) — this
 // pins the "nothing narrower than Int<1>" contract.
 //
-//   let _ = D18::<2>::from_int(1).narrow();   // E0599: no method `narrow`
+//   let _ = D18::<2>::try_from(1).unwrap().narrow();   // E0599: no method `narrow`
 //
 // The const-generic `narrow_n::<0>()` likewise has no meaning: the int
 // base's `try_narrow` debug-asserts `1 <= M`, so a width-0 storage is
@@ -134,7 +134,7 @@ fn cross_width_narrowing_d76_to_d18_d9() {
     // Cross-tier TryFrom skips multiple rungs in one hop; this isn't
     // the `.narrow()` chain (which steps once) — it's the From /
     // TryFrom matrix that's been comprehensive since 0.2.5.
-    let w: D76<2> = D38::<2>::from_int(7).into();
+    let w: D76<2> = D38::<2>::try_from(7).unwrap().into();
     let n18: D18<2> = w.try_into().unwrap();
     assert_eq!(n18.to_bits(), 700);
 

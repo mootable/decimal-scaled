@@ -10,8 +10,8 @@ fn bench_d38_s33_log10(c: &mut Criterion) {
     let mut g = c.benchmark_group("d38_s33_log10_micro");
     g.sample_size(50);
 
-    let seven: D38<33> = D38::<33>::from_i32(7);
-    let two: D38<33> = D38::<33>::from_i32(2);
+    let seven: D38<33> = D38::<33>::try_from(7).unwrap();
+    let two: D38<33> = D38::<33>::try_from(2).unwrap();
 
     g.bench_function("D38_s33_ln_strict_of_7", |bn| {
         bn.iter(|| black_box(seven).ln_strict())

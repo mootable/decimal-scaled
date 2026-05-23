@@ -78,7 +78,7 @@ macro_rules! row {
         // ln / sin / sqrt all take 1.5; exp uses x - 1 = 0.5 to
         // keep e^x in the storage range of every tier (D9<9>'s
         // max is ~2.1, so e^1 ≈ 2.71 already overflows).
-        let half = x - <$T>::from_int(1);
+        let half = x - <$T>::try_from(1).unwrap();
         let s_ln = x.ln_strict().to_bits();
         let f_ln = x.ln_fast().to_bits();
         let s_exp = half.exp_strict().to_bits();
@@ -109,17 +109,17 @@ fn main() {
     row!(
         D18<9>,
         "D18<9>",
-        D18::<9>::from_int(1) + D18::<9>::from_int(1) / D18::<9>::from_int(2)
+        D18::<9>::try_from(1).unwrap() + D18::<9>::try_from(1).unwrap() / D18::<9>::try_from(2).unwrap()
     );
     row!(
         D18<18>,
         "D18<18>",
-        D18::<18>::from_int(1) + D18::<18>::from_int(1) / D18::<18>::from_int(2)
+        D18::<18>::try_from(1).unwrap() + D18::<18>::try_from(1).unwrap() / D18::<18>::try_from(2).unwrap()
     );
     row!(
         D38<19>,
         "D38<19>",
-        D38::<19>::from_int(1) + D38::<19>::from_int(1) / D38::<19>::from_int(2)
+        D38::<19>::try_from(1).unwrap() + D38::<19>::try_from(1).unwrap() / D38::<19>::try_from(2).unwrap()
     );
     row!(
         D38<38>,
@@ -131,32 +131,32 @@ fn main() {
         row!(
             D57<28>,
             "D57<28>",
-            D57::<28>::from_int(1) + D57::<28>::from_int(1) / D57::<28>::from_int(2)
+            D57::<28>::try_from(1).unwrap() + D57::<28>::try_from(1).unwrap() / D57::<28>::try_from(2).unwrap()
         );
         row!(
             D76<35>,
             "D76<35>",
-            D76::<35>::from_int(1) + D76::<35>::from_int(1) / D76::<35>::from_int(2)
+            D76::<35>::try_from(1).unwrap() + D76::<35>::try_from(1).unwrap() / D76::<35>::try_from(2).unwrap()
         );
         row!(
             D115<57>,
             "D115<57>",
-            D115::<57>::from_int(1) + D115::<57>::from_int(1) / D115::<57>::from_int(2)
+            D115::<57>::try_from(1).unwrap() + D115::<57>::try_from(1).unwrap() / D115::<57>::try_from(2).unwrap()
         );
         row!(
             D153<75>,
             "D153<75>",
-            D153::<75>::from_int(1) + D153::<75>::from_int(1) / D153::<75>::from_int(2)
+            D153::<75>::try_from(1).unwrap() + D153::<75>::try_from(1).unwrap() / D153::<75>::try_from(2).unwrap()
         );
         row!(
             D230<115>,
             "D230<115>",
-            D230::<115>::from_int(1) + D230::<115>::from_int(1) / D230::<115>::from_int(2)
+            D230::<115>::try_from(1).unwrap() + D230::<115>::try_from(1).unwrap() / D230::<115>::try_from(2).unwrap()
         );
         row!(
             D307<150>,
             "D307<150>",
-            D307::<150>::from_int(1) + D307::<150>::from_int(1) / D307::<150>::from_int(2)
+            D307::<150>::try_from(1).unwrap() + D307::<150>::try_from(1).unwrap() / D307::<150>::try_from(2).unwrap()
         );
     }
     #[cfg(feature = "x-wide")]
@@ -164,12 +164,12 @@ fn main() {
         row!(
             D462<230>,
             "D462<230>",
-            D462::<230>::from_int(1) + D462::<230>::from_int(1) / D462::<230>::from_int(2)
+            D462::<230>::try_from(1).unwrap() + D462::<230>::try_from(1).unwrap() / D462::<230>::try_from(2).unwrap()
         );
         row!(
             D616<308>,
             "D616<308>",
-            D616::<308>::from_int(1) + D616::<308>::from_int(1) / D616::<308>::from_int(2)
+            D616::<308>::try_from(1).unwrap() + D616::<308>::try_from(1).unwrap() / D616::<308>::try_from(2).unwrap()
         );
     }
     #[cfg(feature = "xx-wide")]
@@ -177,12 +177,12 @@ fn main() {
         row!(
             D924<461>,
             "D924<461>",
-            D924::<461>::from_int(1) + D924::<461>::from_int(1) / D924::<461>::from_int(2)
+            D924::<461>::try_from(1).unwrap() + D924::<461>::try_from(1).unwrap() / D924::<461>::try_from(2).unwrap()
         );
         row!(
             D1232<616>,
             "D1232<616>",
-            D1232::<616>::from_int(1) + D1232::<616>::from_int(1) / D1232::<616>::from_int(2)
+            D1232::<616>::try_from(1).unwrap() + D1232::<616>::try_from(1).unwrap() / D1232::<616>::try_from(2).unwrap()
         );
     }
 }

@@ -31,8 +31,8 @@ fn time<F: FnMut()>(label: &str, mut f: F) {
 fn main() {
     println!("== D38<19> / D38<19> baseline ==");
     {
-        let a = D38::<19>::from_int(2);
-        let b = D38::<19>::from_int(1);
+        let a = D38::<19>::try_from(2).unwrap();
+        let b = D38::<19>::try_from(1).unwrap();
         time("D38::<19> a / b", || {
             black_box(black_box(a) / black_box(b));
         });
@@ -41,8 +41,8 @@ fn main() {
     println!();
     println!("== D76<35> / D76<35> headline ==");
     {
-        let a = D76::<35>::from_int(2);
-        let b = D76::<35>::from_int(1);
+        let a = D76::<35>::try_from(2).unwrap();
+        let b = D76::<35>::try_from(1).unwrap();
         time("D76::<35> a / b (overall)", || {
             black_box(black_box(a) / black_box(b));
         });
@@ -51,8 +51,8 @@ fn main() {
     println!();
     println!("== D76<76> / D76<76> wide divisor ==");
     {
-        let a = D76::<76>::from_int(2);
-        let b = D76::<76>::from_int(1);
+        let a = D76::<76>::try_from(2).unwrap();
+        let b = D76::<76>::try_from(1).unwrap();
         time("D76::<76> a / b (overall)", || {
             black_box(black_box(a) / black_box(b));
         });
@@ -61,8 +61,8 @@ fn main() {
     println!();
     println!("== D153<75> mul + div ==");
     {
-        let a = D153::<75>::from_int(2);
-        let b = D153::<75>::from_int(1);
+        let a = D153::<75>::try_from(2).unwrap();
+        let b = D153::<75>::try_from(1).unwrap();
         time("D153::<75> a * b", || {
             black_box(black_box(a) * black_box(b));
         });
@@ -73,8 +73,8 @@ fn main() {
     println!();
     println!("== D153<153> mul + div ==");
     {
-        let a = D153::<153>::from_int(2);
-        let b = D153::<153>::from_int(1);
+        let a = D153::<153>::try_from(2).unwrap();
+        let b = D153::<153>::try_from(1).unwrap();
         time("D153::<153> a * b", || {
             black_box(black_box(a) * black_box(b));
         });
@@ -85,8 +85,8 @@ fn main() {
     println!();
     println!("== D307<150> + D307<307> mul + div ==");
     {
-        let a = D307::<150>::from_int(2);
-        let b = D307::<150>::from_int(1);
+        let a = D307::<150>::try_from(2).unwrap();
+        let b = D307::<150>::try_from(1).unwrap();
         time("D307::<150> a * b", || {
             black_box(black_box(a) * black_box(b));
         });
@@ -95,8 +95,8 @@ fn main() {
         });
     }
     {
-        let a = D307::<307>::from_int(2);
-        let b = D307::<307>::from_int(1);
+        let a = D307::<307>::try_from(2).unwrap();
+        let b = D307::<307>::try_from(1).unwrap();
         time("D307::<307> a * b", || {
             black_box(black_box(a) * black_box(b));
         });

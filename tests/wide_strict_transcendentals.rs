@@ -55,7 +55,7 @@ fn lift(n: D38<6>) -> D76<6> {
 
 #[test]
 fn d76_ln() {
-    let n = D38::<6>::from_int(2);
+    let n = D38::<6>::try_from(2).unwrap();
     agree(
         "ln(2)",
         d76_bits_at_scale_6(lift(n).ln_strict()),
@@ -64,7 +64,7 @@ fn d76_ln() {
 }
 #[test]
 fn d76_log2() {
-    let n = D38::<6>::from_int(8);
+    let n = D38::<6>::try_from(8).unwrap();
     agree(
         "log2(8)",
         d76_bits_at_scale_6(lift(n).log2_strict()),
@@ -73,7 +73,7 @@ fn d76_log2() {
 }
 #[test]
 fn d76_log10() {
-    let n = D38::<6>::from_int(1000);
+    let n = D38::<6>::try_from(1000).unwrap();
     agree(
         "log10(1000)",
         d76_bits_at_scale_6(lift(n).log10_strict()),
@@ -82,8 +82,8 @@ fn d76_log10() {
 }
 #[test]
 fn d76_log() {
-    let n = D38::<6>::from_int(8);
-    let b = D38::<6>::from_int(2);
+    let n = D38::<6>::try_from(8).unwrap();
+    let b = D38::<6>::try_from(2).unwrap();
     agree(
         "log_2(8)",
         d76_bits_at_scale_6(lift(n).log_strict(lift(b))),
@@ -102,7 +102,7 @@ fn d76_exp() {
 }
 #[test]
 fn d76_exp2() {
-    let n = D38::<6>::from_int(10);
+    let n = D38::<6>::try_from(10).unwrap();
     agree(
         "exp2(10)",
         d76_bits_at_scale_6(lift(n).exp2_strict()),
@@ -113,7 +113,7 @@ fn d76_exp2() {
 #[test]
 fn d76_sqrt() {
     for v in [2_i64, 4, 5, 9] {
-        let n = D38::<6>::from_int(v);
+        let n = D38::<6>::try_from(v).unwrap();
         agree(
             &format!("sqrt({v})"),
             d76_bits_at_scale_6(lift(n).sqrt_strict()),
@@ -124,7 +124,7 @@ fn d76_sqrt() {
 #[test]
 fn d76_cbrt() {
     for v in [2_i64, 8, 27, -8] {
-        let n = D38::<6>::from_int(v);
+        let n = D38::<6>::try_from(v).unwrap();
         agree(
             &format!("cbrt({v})"),
             d76_bits_at_scale_6(lift(n).cbrt_strict()),
@@ -134,8 +134,8 @@ fn d76_cbrt() {
 }
 #[test]
 fn d76_powf() {
-    let two = D38::<6>::from_int(2);
-    let ten = D38::<6>::from_int(10);
+    let two = D38::<6>::try_from(2).unwrap();
+    let ten = D38::<6>::try_from(10).unwrap();
     agree(
         "2^10",
         d76_bits_at_scale_6(lift(two).powf_strict(lift(ten))),
@@ -143,7 +143,7 @@ fn d76_powf() {
     );
     // Negative base → ZERO
     assert_eq!(
-        lift(D38::<6>::from_int(-2)).powf_strict(lift(two)),
+        lift(D38::<6>::try_from(-2).unwrap()).powf_strict(lift(two)),
         D76::<6>::ZERO
     );
 }
@@ -265,7 +265,7 @@ fn d76_hyperbolic() {
 #[test]
 fn d76_inverse_hyperbolic() {
     let one = D38::<6>::ONE;
-    let two = D38::<6>::from_int(2);
+    let two = D38::<6>::try_from(2).unwrap();
     let half = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap());
     agree(
         "asinh(1)",
@@ -296,7 +296,7 @@ fn d76_inverse_hyperbolic() {
         two.asinh_strict().to_bits(),
     );
     // Stress |x|>=2 branch of acosh:
-    let three = D38::<6>::from_int(3);
+    let three = D38::<6>::try_from(3).unwrap();
     agree(
         "acosh(3)",
         d76_bits_at_scale_6(lift(three).acosh_strict()),
@@ -311,7 +311,7 @@ fn d76_angle_conversion() {
         d76_bits_at_scale_6(lift(n).to_degrees_strict()),
         n.to_degrees_strict().to_bits(),
     );
-    let d180 = D38::<6>::from_int(180);
+    let d180 = D38::<6>::try_from(180).unwrap();
     agree(
         "to_radians(180)",
         d76_bits_at_scale_6(lift(d180).to_radians_strict()),
@@ -324,7 +324,7 @@ fn d76_angle_conversion() {
 #[test]
 fn d76_ln_agm() {
     for v in [2_i64, 7, 100] {
-        let n = D38::<6>::from_int(v);
+        let n = D38::<6>::try_from(v).unwrap();
         let agm = lift(n).ln_strict_agm();
         let canonical = lift(n).ln_strict();
         // AGM must agree with canonical within 1 LSB.
@@ -360,8 +360,8 @@ use decimal_scaled::RoundingMode;
 
 #[test]
 fn d76_strict_with_modes() {
-    let two = lift(D38::<6>::from_int(2));
-    let ten = lift(D38::<6>::from_int(10));
+    let two = lift(D38::<6>::try_from(2).unwrap());
+    let ten = lift(D38::<6>::try_from(10).unwrap());
     let one = lift(D38::<6>::ONE);
     let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()));
 
@@ -468,7 +468,7 @@ fn d76_strict_with_modes() {
         D76::<6>::ZERO.asinh_strict_with(RoundingMode::HalfToEven),
         D76::<6>::ZERO
     );
-    let two_val = lift(D38::<6>::from_int(2));
+    let two_val = lift(D38::<6>::try_from(2).unwrap());
     assert_eq!(
         two_val.acosh_strict_with(RoundingMode::HalfToEven),
         two_val.acosh_strict()
@@ -519,11 +519,11 @@ fn d76_strict_with_modes() {
 #[test]
 fn d76_plain_dispatcher_matches_strict() {
     let one = lift(D38::<6>::ONE);
-    let two = lift(D38::<6>::from_int(2));
-    let ten = lift(D38::<6>::from_int(10));
-    let four = lift(D38::<6>::from_int(4));
+    let two = lift(D38::<6>::try_from(2).unwrap());
+    let ten = lift(D38::<6>::try_from(10).unwrap());
+    let four = lift(D38::<6>::try_from(4).unwrap());
     let half = lift(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()));
-    let twenty_seven = lift(D38::<6>::from_int(27));
+    let twenty_seven = lift(D38::<6>::try_from(27).unwrap());
 
     assert_eq!(two.ln(), two.ln_strict());
     assert_eq!(two.log(ten), two.log_strict(ten));
@@ -571,7 +571,7 @@ fn d76_ln_negative_panics() {
 #[test]
 #[should_panic(expected = "log: argument must be positive")]
 fn d76_log_zero_panics() {
-    let _ = D76::<6>::ZERO.log_strict(D76::<6>::from_int(2).into());
+    let _ = D76::<6>::ZERO.log_strict(D76::<6>::try_from(2).unwrap().into());
 }
 
 #[test]
@@ -591,13 +591,13 @@ fn d76_log_base_one_panics() {
 #[test]
 #[should_panic(expected = "asin: argument out of domain")]
 fn d76_asin_out_of_domain_panics() {
-    let _ = lift(D38::<6>::from_int(2)).asin_strict();
+    let _ = lift(D38::<6>::try_from(2).unwrap()).asin_strict();
 }
 
 #[test]
 #[should_panic(expected = "acos: argument out of domain")]
 fn d76_acos_out_of_domain_panics() {
-    let _ = lift(D38::<6>::from_int(2)).acos_strict();
+    let _ = lift(D38::<6>::try_from(2).unwrap()).acos_strict();
 }
 
 #[test]
@@ -627,13 +627,13 @@ fn d76_ln_with_zero_panics() {
 #[test]
 #[should_panic(expected = "asin: argument out of domain")]
 fn d76_asin_with_oob_panics() {
-    let _ = lift(D38::<6>::from_int(2)).asin_strict_with(RoundingMode::HalfToEven);
+    let _ = lift(D38::<6>::try_from(2).unwrap()).asin_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
 #[should_panic(expected = "log: argument must be positive")]
 fn d76_log_strict_with_zero_panics() {
-    let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::from_int(2)), RoundingMode::HalfToEven);
+    let _ = D76::<6>::ZERO.log_strict_with(lift(D38::<6>::try_from(2).unwrap()), RoundingMode::HalfToEven);
 }
 
 #[test]
@@ -671,7 +671,7 @@ fn d76_ln_agm_with_zero_panics() {
 #[test]
 #[should_panic(expected = "acos: argument out of domain")]
 fn d76_acos_strict_with_oob_panics() {
-    let _ = lift(D38::<6>::from_int(2)).acos_strict_with(RoundingMode::HalfToEven);
+    let _ = lift(D38::<6>::try_from(2).unwrap()).acos_strict_with(RoundingMode::HalfToEven);
 }
 
 #[test]
@@ -694,9 +694,9 @@ fn d76_atanh_strict_with_boundary_panics() {
 
 #[test]
 fn d76_asinh_strict_with_abs_ge_one_branch() {
-    let two = lift(D38::<6>::from_int(2));
+    let two = lift(D38::<6>::try_from(2).unwrap());
     let _ = two.asinh_strict_with(RoundingMode::HalfToEven);
-    let neg_two = lift(D38::<6>::from_int(-2));
+    let neg_two = lift(D38::<6>::try_from(-2).unwrap());
     let _ = neg_two.asinh_strict_with(RoundingMode::HalfToEven);
     // Canonical body too
     let _ = two.asinh_strict();
@@ -705,7 +705,7 @@ fn d76_asinh_strict_with_abs_ge_one_branch() {
 
 #[test]
 fn d76_acosh_strict_with_v_ge_two_branch() {
-    let three = lift(D38::<6>::from_int(3));
+    let three = lift(D38::<6>::try_from(3).unwrap());
     let _ = three.acosh_strict_with(RoundingMode::HalfToEven);
 }
 
@@ -727,7 +727,7 @@ fn d76_acosh_strict_with_v_ge_two_branch() {
 #[ignore = "setup from_int(70) at SCALE 74 overflows Int<2>; wide from_int multiply wraps instead of debug-panicking — Decision 3 (debug-overflow-panic) family"]
 #[should_panic]
 fn d76_strict_result_out_of_range_panics() {
-    let v: D76<74> = D38::<74>::from_int(70).into();
+    let v: D76<74> = D38::<74>::try_from(70).unwrap().into();
     let _ = v.exp_strict();
 }
 
@@ -747,7 +747,7 @@ mod x_wide {
     fn d153_d307_strict_surface_callable() {
 
         let one_a: D153<6> = D38::<6>::ONE.into();
-        let two_a: D153<6> = D38::<6>::from_int(2).into();
+        let two_a: D153<6> = D38::<6>::try_from(2).unwrap().into();
         let half_a: D153<6> = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()).into();
 
         let _ = two_a.ln_strict();
@@ -781,7 +781,7 @@ mod x_wide {
         use decimal_scaled::D76;
 
         let one_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::ONE.into());
-        let two_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_int(2).into());
+        let two_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::try_from(2).unwrap().into());
         let half_b: D307<6> = <D76<6> as Into<D307<6>>>::into(D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((500_000) as i128).unwrap()).into());
         let _ = two_b.ln_strict();
         let _ = two_b.log2_strict();
@@ -832,7 +832,7 @@ fn d57_s50_exp_matches_d76_baseline() {
 
     // exp(2) is representable at SCALE=50 (e² ≈ 7.389; storage ≤ 8·10⁵⁰
     // fits Int192 max ≈ 3.14·10⁵⁷ comfortably).
-    let n_56 = D57::<50>::from_int(2);
+    let n_56 = D57::<50>::try_from(2).unwrap();
     let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.exp_strict();
@@ -871,7 +871,7 @@ fn d57_s50_atan_matches_d76_baseline() {
     // atan(2) ≈ 1.107 rad. The reciprocal-fold branch runs because
     // |2| > 1, then a non-trivial table entry is picked (j ≈ M/2)
     // and the Taylor residual is small.
-    let n_56 = D57::<50>::from_int(2);
+    let n_56 = D57::<50>::try_from(2).unwrap();
     let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.atan_strict();
@@ -897,7 +897,7 @@ fn d57_s44_atan_small_arg_matches_d76_baseline() {
     use decimal_scaled::D57;
 
     // 1/3 at SCALE=44 — round to nearest.
-    let one_third_56 = D57::<44>::from_int(1) / D57::<44>::from_int(3);
+    let one_third_56 = D57::<44>::try_from(1).unwrap() / D57::<44>::try_from(3).unwrap();
     let one_third_76: D76<44> = one_third_56.into();
 
     let r_56 = one_third_56.atan_strict();
@@ -926,7 +926,7 @@ fn d57_s50_sin_matches_d76_baseline() {
 
     // sin(2) ≈ 0.909. k = round(2 / (π/2)) = 1, so the quadrant
     // permutation picks the cos(r) branch — exercises the k ≠ 0 path.
-    let n_56 = D57::<50>::from_int(2);
+    let n_56 = D57::<50>::try_from(2).unwrap();
     let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.sin_strict();
@@ -945,7 +945,7 @@ fn d57_s50_cos_matches_d76_baseline() {
 
     // cos(2) ≈ −0.416. Same quadrant as sin(2) — sin and cos share
     // the reduction table, so this exercises the cos selector arm.
-    let n_56 = D57::<50>::from_int(2);
+    let n_56 = D57::<50>::try_from(2).unwrap();
     let n_76: D76<50> = n_56.into();
 
     let r_56 = n_56.cos_strict();
@@ -965,7 +965,7 @@ fn d57_s50_cos_matches_d76_baseline() {
 fn d57_s44_sin_cos_small_arg_matches_d76_baseline() {
     use decimal_scaled::D57;
 
-    let one_third_56 = D57::<44>::from_int(1) / D57::<44>::from_int(3);
+    let one_third_56 = D57::<44>::try_from(1).unwrap() / D57::<44>::try_from(3).unwrap();
     let one_third_76: D76<44> = one_third_56.into();
 
     let sin_56 = one_third_56.sin_strict();
@@ -1000,7 +1000,7 @@ fn d57_s18_sin_cos_matches_d76_baseline() {
     use decimal_scaled::D57;
 
     // arg = 1 — small enough that k = 0 (the canonical Taylor path).
-    let n_56 = D57::<18>::from_int(1);
+    let n_56 = D57::<18>::try_from(1).unwrap();
     let n_76: D76<18> = n_56.into();
 
     let sin_56 = n_56.sin_strict();
@@ -1034,7 +1034,7 @@ fn d57_s20_sin_cos_matches_d76_baseline() {
 
     // arg = 2 — exercises the quadrant-shift branch (k = 1) of the
     // shared sin_fixed reduction.
-    let n_56 = D57::<20>::from_int(2);
+    let n_56 = D57::<20>::try_from(2).unwrap();
     let n_76: D76<20> = n_56.into();
 
     let sin_56 = n_56.sin_strict();
@@ -1068,7 +1068,7 @@ fn d57_s22_sin_cos_small_arg_matches_d76_baseline() {
 
     // Small non-integer argument — stresses the Taylor residual at the
     // top end of the slot.
-    let third_56 = D57::<22>::from_int(1) / D57::<22>::from_int(3);
+    let third_56 = D57::<22>::try_from(1).unwrap() / D57::<22>::try_from(3).unwrap();
     let third_76: D76<22> = third_56.into();
 
     let sin_56 = third_56.sin_strict();
@@ -1112,19 +1112,19 @@ fn d57_s20_sqrt_matches_d76_baseline() {
     use decimal_scaled::D57;
 
     let inputs: &[D57<20>] = &[
-        D57::<20>::from_int(1),
-        D57::<20>::from_int(2),
-        D57::<20>::from_int(3),
-        D57::<20>::from_int(4),
-        D57::<20>::from_int(9),
-        D57::<20>::from_int(16),
-        D57::<20>::from_int(100),
-        D57::<20>::from_int(1_000_000),
-        D57::<20>::from_int(1) / D57::<20>::from_int(4),
-        D57::<20>::from_int(1) / D57::<20>::from_int(3),
-        D57::<20>::from_int(3) / D57::<20>::from_int(2),
-        D57::<20>::from_int(7) / D57::<20>::from_int(11),
-        D57::<20>::from_int(123_456_789),
+        D57::<20>::try_from(1).unwrap(),
+        D57::<20>::try_from(2).unwrap(),
+        D57::<20>::try_from(3).unwrap(),
+        D57::<20>::try_from(4).unwrap(),
+        D57::<20>::try_from(9).unwrap(),
+        D57::<20>::try_from(16).unwrap(),
+        D57::<20>::try_from(100).unwrap(),
+        D57::<20>::try_from(1_000_000).unwrap(),
+        D57::<20>::try_from(1).unwrap() / D57::<20>::try_from(4).unwrap(),
+        D57::<20>::try_from(1).unwrap() / D57::<20>::try_from(3).unwrap(),
+        D57::<20>::try_from(3).unwrap() / D57::<20>::try_from(2).unwrap(),
+        D57::<20>::try_from(7).unwrap() / D57::<20>::try_from(11).unwrap(),
+        D57::<20>::try_from(123_456_789).unwrap(),
     ];
 
     for &n in inputs {
@@ -1157,19 +1157,19 @@ fn d57_s20_cbrt_matches_d76_baseline() {
     use decimal_scaled::D57;
 
     let inputs: &[D57<20>] = &[
-        D57::<20>::from_int(1),
-        D57::<20>::from_int(2),
-        D57::<20>::from_int(3),
-        D57::<20>::from_int(8),
-        D57::<20>::from_int(27),
-        D57::<20>::from_int(64),
-        D57::<20>::from_int(125),
-        D57::<20>::from_int(1_000),
-        D57::<20>::from_int(1_000_000),
-        D57::<20>::from_int(1) / D57::<20>::from_int(8),
-        D57::<20>::from_int(1) / D57::<20>::from_int(3),
-        D57::<20>::from_int(7) / D57::<20>::from_int(11),
-        D57::<20>::from_int(123_456_789),
+        D57::<20>::try_from(1).unwrap(),
+        D57::<20>::try_from(2).unwrap(),
+        D57::<20>::try_from(3).unwrap(),
+        D57::<20>::try_from(8).unwrap(),
+        D57::<20>::try_from(27).unwrap(),
+        D57::<20>::try_from(64).unwrap(),
+        D57::<20>::try_from(125).unwrap(),
+        D57::<20>::try_from(1_000).unwrap(),
+        D57::<20>::try_from(1_000_000).unwrap(),
+        D57::<20>::try_from(1).unwrap() / D57::<20>::try_from(8).unwrap(),
+        D57::<20>::try_from(1).unwrap() / D57::<20>::try_from(3).unwrap(),
+        D57::<20>::try_from(7).unwrap() / D57::<20>::try_from(11).unwrap(),
+        D57::<20>::try_from(123_456_789).unwrap(),
     ];
 
     for &n in inputs {
@@ -1206,7 +1206,7 @@ fn d307_s150_ln_matches_d462_baseline() {
     // ln(1.5) — exercises the non-trivial table-index branch (Tang's
     // i = 64 for f_i = 1.5 at M = 128). ln(2) hits a short-circuit so
     // is a weak stress.
-    let arg_307 = D307::<150>::from_int(3) / D307::<150>::from_int(2);
+    let arg_307 = D307::<150>::try_from(3).unwrap() / D307::<150>::try_from(2).unwrap();
     let arg_462: D462<150> = arg_307.into();
 
     let r_307 = arg_307.ln_strict();
@@ -1228,7 +1228,7 @@ fn d307_s150_exp_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
     // exp(2) — well-conditioned and lands inside D307<150> storage.
-    let arg_307 = D307::<150>::from_int(2);
+    let arg_307 = D307::<150>::try_from(2).unwrap();
     let arg_462: D462<150> = arg_307.into();
 
     let r_307 = arg_307.exp_strict();
@@ -1250,7 +1250,7 @@ fn d307_s150_sin_cos_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
     // arg = 1 — small enough that k = 0 (canonical Taylor path).
-    let n_307 = D307::<150>::from_int(1);
+    let n_307 = D307::<150>::try_from(1).unwrap();
     let n_462: D462<150> = n_307.into();
 
     let sin_307 = n_307.sin_strict();
@@ -1283,7 +1283,7 @@ fn d307_s150_sin_cos_matches_d462_baseline() {
 fn d307_s150_tan_atan_matches_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    let n_307 = D307::<150>::from_int(1) / D307::<150>::from_int(3);
+    let n_307 = D307::<150>::try_from(1).unwrap() / D307::<150>::try_from(3).unwrap();
     let n_462: D462<150> = n_307.into();
 
     let tan_307 = n_307.tan_strict();
@@ -1316,7 +1316,7 @@ fn d307_s150_tan_atan_matches_d462_baseline() {
 fn d307_s150_hyperbolics_match_d462_baseline() {
     use decimal_scaled::{D307, D462};
 
-    let n_307 = D307::<150>::from_int(1);
+    let n_307 = D307::<150>::try_from(1).unwrap();
     let n_462: D462<150> = n_307.into();
 
     let sinh_307 = n_307.sinh_strict();

@@ -5,9 +5,9 @@
 //! ecosystem, dispatching to the width's [`num_traits::FromPrimitive`] /
 //! [`num_traits::ToPrimitive`] impls.
 //!
-//! Idiomatic call sites should prefer the direct surface — `From<T>`,
-//! `TryFrom<T>`, the named integer constructors, `from_f64` / `to_f64` —
-//! for readability and stricter overflow handling. The `from_num` /
+//! Idiomatic call sites should prefer the direct surface — `From<T>` /
+//! `TryFrom<T>` for construction, `from_f64` / `to_f64` for the float
+//! bridge — for readability and stricter overflow handling. The `from_num` /
 //! `to_num` pair is provided for code that needs a single saturating
 //! `NumCast`-style entry point regardless of input type.
 //!

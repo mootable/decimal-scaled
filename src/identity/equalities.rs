@@ -15,7 +15,7 @@
 //! via the cross-scale comparator. Exact and overflow-free.
 //!
 //! Examples:
-//! - `D38s12::from_int(5) == 5_i32` -> `true`
+//! - `D38s12::from(5) == 5_i32` -> `true`
 //! - `5.5` stored in `D38s12` `== 5_i32` -> `false` (`5.5 != 5`)
 //! - a negative `D38s12` `== 0_u32` -> `false`
 //!

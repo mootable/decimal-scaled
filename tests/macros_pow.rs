@@ -44,17 +44,17 @@ fn pow_exp_one_returns_self_d18() {
 
 #[test]
 fn pow_small_exponents_d18() {
-    let two = D18::<0>::from_int(2);
+    let two = D18::<0>::try_from(2).unwrap();
     assert_eq!(two.pow(20).to_bits(), 1 << 20);
-    let ten = D18::<0>::from_int(10);
+    let ten = D18::<0>::try_from(10).unwrap();
     assert_eq!(ten.pow(9).to_bits(), 1_000_000_000);
 }
 
 #[test]
 fn pow_small_exponents_d38() {
-    let two = D38::<0>::from_int(2);
+    let two = D38::<0>::try_from(2).unwrap();
     assert_eq!(two.pow(30).to_bits(), 1i128 << 30);
-    let ten = D38::<0>::from_int(10);
+    let ten = D38::<0>::try_from(10).unwrap();
     assert_eq!(ten.pow(18).to_bits(), 1_000_000_000_000_000_000i128);
 }
 
@@ -67,7 +67,7 @@ fn pow_small_exponents_d38() {
 #[test]
 fn powi_negative_exponent_d38_scale12() {
     use decimal_scaled::D38s12;
-    let two = D38s12::from_int(2);
+    let two = D38s12::try_from(2).unwrap();
     // 2^-3 = 0.125 → raw 125_000_000_000
     assert_eq!(two.powi(-3).to_bits(), 125_000_000_000);
     // 2^3 == 8 (positive exp path)
@@ -81,14 +81,14 @@ fn powi_d9_d18_positive_negative_exp() {
     use decimal_scaled::{D18};
 
     // D18<4>: 2^3 = 8 → 80_000
-    let two = D18::<4>::from_int(2);
+    let two = D18::<4>::try_from(2).unwrap();
     assert_eq!(two.powi(3).to_bits(), 80_000);
     assert_eq!(two.powi(0).to_bits(), 10_000);
     // 2^-3 = 0.125 → 1_250
     assert_eq!(two.powi(-3).to_bits(), 1_250);
 
     // D18
-    let two18 = D18::<8>::from_int(2);
+    let two18 = D18::<8>::try_from(2).unwrap();
     assert_eq!(two18.powi(3).to_bits(), 800_000_000);
     assert_eq!(two18.powi(0).to_bits(), 100_000_000);
     assert_eq!(two18.powi(-3).to_bits(), 12_500_000);
@@ -112,20 +112,20 @@ fn powi_handles_i32_min_without_signed_negation_overflow_d38() {
 
 #[test]
 fn checked_pow_normal_succeeds_d18() {
-    let two = D18::<0>::from_int(2);
-    assert_eq!(two.checked_pow(10), Some(D18::<0>::from_int(1024)));
+    let two = D18::<0>::try_from(2).unwrap();
+    assert_eq!(two.checked_pow(10), Some(D18::<0>::try_from(1024).unwrap()));
     assert_eq!(two.checked_pow(0), Some(D18::<0>::ONE));
 }
 
 #[test]
 fn checked_pow_overflow_returns_none_d18() {
-    let ten = D18::<0>::from_int(10);
+    let ten = D18::<0>::try_from(10).unwrap();
     assert!(ten.checked_pow(40).is_none(), "10^40 overflows D18<0>");
 }
 
 #[test]
 fn checked_pow_overflow_returns_none_d38() {
-    let ten = D38::<0>::from_int(10);
+    let ten = D38::<0>::try_from(10).unwrap();
     assert!(ten.checked_pow(80).is_none(), "10^80 overflows D38<0>");
 }
 
@@ -133,7 +133,7 @@ fn checked_pow_overflow_returns_none_d38() {
 
 #[test]
 fn wrapping_pow_matches_arithmetic_d18() {
-    let two = D18::<0>::from_int(2);
+    let two = D18::<0>::try_from(2).unwrap();
     // 2^10 == 1024, well within range.
     assert_eq!(two.wrapping_pow(10).to_bits(), 1024);
     // 2^63 wraps in i64: (2 as i64).wrapping_pow(63) == i64::MIN.
@@ -144,7 +144,7 @@ fn wrapping_pow_matches_arithmetic_d18() {
 
 #[test]
 fn wrapping_pow_exp_zero_returns_one() {
-    let v = D38::<0>::from_int(123);
+    let v = D38::<0>::try_from(123).unwrap();
     assert_eq!(v.wrapping_pow(0), D38::<0>::ONE);
 }
 
@@ -152,17 +152,17 @@ fn wrapping_pow_exp_zero_returns_one() {
 
 #[test]
 fn saturating_pow_positive_overflow_saturates_to_max() {
-    let ten = D18::<0>::from_int(10);
+    let ten = D18::<0>::try_from(10).unwrap();
     assert_eq!(ten.saturating_pow(40), D18::<0>::MAX);
-    let ten = D38::<0>::from_int(10);
+    let ten = D38::<0>::try_from(10).unwrap();
     assert_eq!(ten.saturating_pow(80), D38::<0>::MAX);
 }
 
 #[test]
 fn saturating_pow_negative_odd_saturates_to_min() {
-    let neg_ten = D18::<0>::from_int(-10);
+    let neg_ten = D18::<0>::try_from(-10).unwrap();
     assert_eq!(neg_ten.saturating_pow(41), D18::<0>::MIN);
-    let neg_ten = D38::<0>::from_int(-10);
+    let neg_ten = D38::<0>::try_from(-10).unwrap();
     assert_eq!(neg_ten.saturating_pow(81), D38::<0>::MIN);
 }
 
@@ -170,13 +170,13 @@ fn saturating_pow_negative_odd_saturates_to_min() {
 fn saturating_pow_negative_even_saturates_to_max() {
     // negative base raised to an even power is positive, so the
     // saturation direction is MAX, not MIN.
-    let neg_ten = D18::<0>::from_int(-10);
+    let neg_ten = D18::<0>::try_from(-10).unwrap();
     assert_eq!(neg_ten.saturating_pow(20), D18::<0>::MAX);
 }
 
 #[test]
 fn saturating_pow_exp_zero_returns_one() {
-    let v = D38::<0>::from_int(123);
+    let v = D38::<0>::try_from(123).unwrap();
     assert_eq!(v.saturating_pow(0), D38::<0>::ONE);
 }
 
@@ -184,7 +184,7 @@ fn saturating_pow_exp_zero_returns_one() {
 
 #[test]
 fn overflowing_pow_no_overflow_returns_false() {
-    let two = D18::<0>::from_int(2);
+    let two = D18::<0>::try_from(2).unwrap();
     let (v, ov) = two.overflowing_pow(10);
     assert_eq!(v.to_bits(), 1024);
     assert!(!ov);
@@ -192,12 +192,12 @@ fn overflowing_pow_no_overflow_returns_false() {
 
 #[test]
 fn overflowing_pow_detects_overflow_d18_d38() {
-    let ten18 = D18::<0>::from_int(10);
+    let ten18 = D18::<0>::try_from(10).unwrap();
     let (v18, ov18) = ten18.overflowing_pow(40);
     assert!(ov18);
     assert_eq!(v18, ten18.wrapping_pow(40));
 
-    let ten38 = D38::<0>::from_int(10);
+    let ten38 = D38::<0>::try_from(10).unwrap();
     let (v38, ov38) = ten38.overflowing_pow(80);
     assert!(ov38);
     assert_eq!(v38, ten38.wrapping_pow(80));
@@ -205,7 +205,7 @@ fn overflowing_pow_detects_overflow_d18_d38() {
 
 #[test]
 fn overflowing_pow_exp_zero_returns_one_no_overflow() {
-    let v = D38::<0>::from_int(123);
+    let v = D38::<0>::try_from(123).unwrap();
     assert_eq!(v.overflowing_pow(0), (D38::<0>::ONE, false));
 }
 
@@ -216,9 +216,9 @@ fn overflowing_pow_exp_zero_returns_one_no_overflow() {
 fn pow_d76() {
     use decimal_scaled::D76;
 
-    let two: D76<0> = D38::<0>::from_int(2).into();
+    let two: D76<0> = D38::<0>::try_from(2).unwrap().into();
     let r = two.pow(10);
-    let expected: D76<0> = D38::<0>::from_int(1024).into();
+    let expected: D76<0> = D38::<0>::try_from(1024).unwrap().into();
     assert_eq!(r, expected);
 
     // exp=0 → ONE
@@ -232,9 +232,9 @@ fn pow_d76() {
 fn pow_d76_negative_base_odd_even() {
     use decimal_scaled::D76;
 
-    let neg_two: D76<0> = D38::<0>::from_int(-2).into();
-    let expected_pos: D76<0> = D38::<0>::from_int(16).into();
-    let expected_neg: D76<0> = D38::<0>::from_int(-8).into();
+    let neg_two: D76<0> = D38::<0>::try_from(-2).unwrap().into();
+    let expected_pos: D76<0> = D38::<0>::try_from(16).unwrap().into();
+    let expected_neg: D76<0> = D38::<0>::try_from(-8).unwrap().into();
     assert_eq!(neg_two.pow(4), expected_pos);
     assert_eq!(neg_two.pow(3), expected_neg);
 }
@@ -244,7 +244,7 @@ fn pow_d76_negative_base_odd_even() {
 fn checked_pow_overflow_d76() {
     use decimal_scaled::D76;
 
-    let ten: D76<0> = D38::<0>::from_int(10).into();
+    let ten: D76<0> = D38::<0>::try_from(10).unwrap().into();
     // D76<0> max ≈ 10^76. 10^80 overflows.
     assert!(ten.checked_pow(80).is_none());
     // 10^20 fits comfortably.
@@ -256,11 +256,11 @@ fn checked_pow_overflow_d76() {
 fn saturating_overflowing_pow_d76() {
     use decimal_scaled::D76;
 
-    let ten: D76<0> = D38::<0>::from_int(10).into();
+    let ten: D76<0> = D38::<0>::try_from(10).unwrap().into();
     assert_eq!(ten.saturating_pow(80), D76::<0>::MAX);
     let (_, ov) = ten.overflowing_pow(80);
     assert!(ov);
-    let neg_ten: D76<0> = D38::<0>::from_int(-10).into();
+    let neg_ten: D76<0> = D38::<0>::try_from(-10).unwrap().into();
     assert_eq!(neg_ten.saturating_pow(81), D76::<0>::MIN);
 }
 
@@ -269,12 +269,12 @@ fn saturating_overflowing_pow_d76() {
 fn pow_d153_d307() {
     use decimal_scaled::{D153, D307};
 
-    let two_a: D153<0> = D38::<0>::from_int(2).into();
+    let two_a: D153<0> = D38::<0>::try_from(2).unwrap().into();
     assert_eq!(two_a.pow(0), D153::<0>::ONE);
-    let two_b: D307<0> = D307::<0>::from_int(2);
+    let two_b: D307<0> = D307::<0>::try_from(2).unwrap();
     assert_eq!(two_b.pow(0), D307::<0>::ONE);
     // small exponent
     let r_a = two_a.pow(8);
-    let expected_a: D153<0> = D38::<0>::from_int(256).into();
+    let expected_a: D153<0> = D38::<0>::try_from(256).unwrap().into();
     assert_eq!(r_a, expected_a);
 }

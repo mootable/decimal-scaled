@@ -11,12 +11,12 @@
 
 #![allow(unused_macros)]
 
-/// Six arithmetic ops on a `from_int`-constructible decimal type.
+/// Six arithmetic ops on a `TryFrom<i64>`-constructible decimal type.
 #[macro_export]
 macro_rules! arith_block {
     ($g:ident, $tag:literal, $T:ty) => {{
-        let a: $T = <$T>::from_int(2);
-        let b: $T = <$T>::from_int(1);
+        let a: $T = <$T>::try_from(2).unwrap();
+        let b: $T = <$T>::try_from(1).unwrap();
         $g.bench_function(concat!($tag, "/add"), |bn| {
             bn.iter(|| ::std::hint::black_box(a) + ::std::hint::black_box(b))
         });
@@ -43,8 +43,8 @@ macro_rules! arith_block {
 #[macro_export]
 macro_rules! fast_block {
     ($g:ident, $tag:literal, $T:ty) => {{
-        let half: $T = <$T>::from_int(1) / <$T>::from_int(2);
-        let x: $T = <$T>::from_int(1) + half;
+        let half: $T = <$T>::try_from(1).unwrap() / <$T>::try_from(2).unwrap();
+        let x: $T = <$T>::try_from(1).unwrap() + half;
         let xh: $T = half;
         $g.bench_function(concat!($tag, "/ln"), |bn| {
             bn.iter(|| ::std::hint::black_box(x).ln())
@@ -66,8 +66,8 @@ macro_rules! fast_block {
 #[macro_export]
 macro_rules! strict_block {
     ($g:ident, $tag:literal, $T:ty) => {{
-        let half: $T = <$T>::from_int(1) / <$T>::from_int(2);
-        let x: $T = <$T>::from_int(1) + half;
+        let half: $T = <$T>::try_from(1).unwrap() / <$T>::try_from(2).unwrap();
+        let x: $T = <$T>::try_from(1).unwrap() + half;
         let xh: $T = half;
         $g.bench_function(concat!($tag, "/ln"), |bn| {
             bn.iter(|| ::std::hint::black_box(x).ln_strict())

@@ -17,18 +17,18 @@ fn bench(c: &mut Criterion) {
 
         match scale {
             0 => {
-                let a = D18::<0>::from_int(2);
-                let b = D18::<0>::from_int(1);
+                let a = D18::<0>::try_from(2).unwrap();
+                let b = D18::<0>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             9 => {
-                let a = D18::<9>::from_int(2);
-                let b = D18::<9>::from_int(1);
+                let a = D18::<9>::try_from(2).unwrap();
+                let b = D18::<9>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             18 => {
-                let a = D18::<18>::from_int(2);
-                let b = D18::<18>::from_int(1);
+                let a = D18::<18>::try_from(2).unwrap();
+                let b = D18::<18>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             _ => unreachable!(),

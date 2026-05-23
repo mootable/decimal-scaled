@@ -18,13 +18,13 @@ fn bench(c: &mut Criterion) {
 
         match scale {
             0 => {
-                let a = D153::<0>::from_int(2);
-                let b = D153::<0>::from_int(1);
+                let a = D153::<0>::try_from(2).unwrap();
+                let b = D153::<0>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             75 => {
-                let a = D153::<75>::from_int(2);
-                let b = D153::<75>::from_int(1);
+                let a = D153::<75>::try_from(2).unwrap();
+                let b = D153::<75>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
                 g.bench_function("decimal-scaled/ln", |bn| {
                     bn.iter(|| black_box(a).ln_strict())
@@ -58,8 +58,8 @@ fn bench(c: &mut Criterion) {
                 });
             }
             153 => {
-                let a = D153::<153>::from_int(2);
-                let b = D153::<153>::from_int(1);
+                let a = D153::<153>::try_from(2).unwrap();
+                let b = D153::<153>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             _ => unreachable!(),

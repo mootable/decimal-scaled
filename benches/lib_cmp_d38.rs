@@ -26,8 +26,8 @@ fn bench(c: &mut Criterion) {
 
         match scale {
             0 => {
-                let a = D38::<0>::from_int(2);
-                let b = D38::<0>::from_int(1);
+                let a = D38::<0>::try_from(2).unwrap();
+                let b = D38::<0>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
                 g.bench_function("decimal-scaled/ln", |bn| {
                     bn.iter(|| black_box(a).ln_strict())
@@ -61,8 +61,8 @@ fn bench(c: &mut Criterion) {
                 });
             }
             19 => {
-                let a = D38::<19>::from_int(2);
-                let b = D38::<19>::from_int(1);
+                let a = D38::<19>::try_from(2).unwrap();
+                let b = D38::<19>::try_from(1).unwrap();
                 arith_copy!(g, "decimal-scaled", a, b);
                 g.bench_function("decimal-scaled/ln", |bn| {
                     bn.iter(|| black_box(a).ln_strict())

@@ -13,17 +13,17 @@ use decimal_scaled::D38s12;
 #[cfg(feature = "std")]
 #[test]
 fn d38_fast_surface_callable_in_any_mode() {
-    let x = D38s12::from_int(2);
+    let x = D38s12::try_from(2).unwrap();
     let _ = x.ln_fast();
     let _ = x.log2_fast();
     let _ = x.log10_fast();
-    let _ = x.log_fast(D38s12::from_int(10));
+    let _ = x.log_fast(D38s12::try_from(10).unwrap());
     let _ = x.exp_fast();
     let _ = x.exp2_fast();
     let _ = x.sqrt_fast();
     let _ = x.cbrt_fast();
     let _ = x.powf_fast(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()));
-    let _ = x.hypot_fast(D38s12::from_int(3));
+    let _ = x.hypot_fast(D38s12::try_from(3).unwrap());
     let _ = x.sin_fast();
     let _ = x.cos_fast();
     let _ = x.tan_fast();
@@ -43,11 +43,11 @@ fn d38_fast_surface_callable_in_any_mode() {
 
 #[test]
 fn d38_strict_surface_callable_in_any_mode() {
-    let x = D38s12::from_int(2);
+    let x = D38s12::try_from(2).unwrap();
     let _ = x.ln_strict();
     let _ = x.log2_strict();
     let _ = x.log10_strict();
-    let _ = x.log_strict(D38s12::from_int(10));
+    let _ = x.log_strict(D38s12::try_from(10).unwrap());
     let _ = x.exp_strict();
     let _ = x.exp2_strict();
     let _ = x.sqrt_strict();
@@ -76,7 +76,7 @@ fn d38_strict_surface_callable_in_any_mode() {
 fn wide_fast_surface_callable() {
     use decimal_scaled::D76;
     type W = D76<12>;
-    let x: W = D38s12::from_int(2).into();
+    let x: W = D38s12::try_from(2).unwrap().into();
     let _ = x.ln_fast();
     let _ = x.exp_fast();
     let _ = x.sqrt_fast();
@@ -89,7 +89,7 @@ fn wide_fast_surface_callable() {
 fn wide_strict_surface_callable() {
     use decimal_scaled::D76;
     type W = D76<12>;
-    let x: W = D38s12::from_int(2).into();
+    let x: W = D38s12::try_from(2).unwrap().into();
     let _ = x.ln_strict();
     let _ = x.exp_strict();
     let _ = x.sqrt_strict();
@@ -101,7 +101,7 @@ fn wide_strict_surface_callable() {
 fn narrow_strict_surface_callable() {
     use decimal_scaled::{D18};
 
-    let x18 = D18::<8>::from_int(2);
+    let x18 = D18::<8>::try_from(2).unwrap();
     let _ = x18.ln_strict();
     let _ = x18.sin_strict();
     let _ = x18.sqrt_strict();
@@ -113,7 +113,7 @@ fn narrow_strict_surface_callable() {
 fn narrow_fast_surface_callable() {
     use decimal_scaled::{D18};
 
-    let x18 = D18::<8>::from_int(2);
+    let x18 = D18::<8>::try_from(2).unwrap();
     let _ = x18.ln_fast();
     let _ = x18.sin_fast();
     let _ = x18.sqrt_fast();

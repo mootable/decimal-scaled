@@ -29,19 +29,19 @@ fn num_from_str_radix_non_10_returns_err() {
 
 #[test]
 fn checked_add_sub_mul_div_rem_neg_traits() {
-    let a = D38::<2>::from_int(7);
-    let b = D38::<2>::from_int(2);
+    let a = D38::<2>::try_from(7).unwrap();
+    let b = D38::<2>::try_from(2).unwrap();
     assert_eq!(
         <D38<2> as CheckedAdd>::checked_add(&a, &b),
-        Some(D38::<2>::from_int(9))
+        Some(D38::<2>::try_from(9).unwrap())
     );
     assert_eq!(
         <D38<2> as CheckedSub>::checked_sub(&a, &b),
-        Some(D38::<2>::from_int(5))
+        Some(D38::<2>::try_from(5).unwrap())
     );
     assert_eq!(
         <D38<2> as CheckedMul>::checked_mul(&a, &b),
-        Some(D38::<2>::from_int(14))
+        Some(D38::<2>::try_from(14).unwrap())
     );
     let q = <D38<2> as CheckedDiv>::checked_div(&a, &b).unwrap();
     assert_eq!(q.to_bits(), 350);
@@ -53,8 +53,8 @@ fn checked_add_sub_mul_div_rem_neg_traits() {
     assert!(<D38<2> as CheckedNeg>::checked_neg(&D38::<2>::MIN).is_none());
 
     // narrow width:
-    let a = D18::<2>::from_int(3);
-    let b = D18::<2>::from_int(2);
+    let a = D18::<2>::try_from(3).unwrap();
+    let b = D18::<2>::try_from(2).unwrap();
     let _ = <D18<2> as CheckedAdd>::checked_add(&a, &b).unwrap();
     let _ = <D18<2> as CheckedSub>::checked_sub(&a, &b).unwrap();
     let _ = <D18<2> as CheckedMul>::checked_mul(&a, &b).unwrap();
@@ -67,8 +67,8 @@ fn checked_add_sub_mul_div_rem_neg_traits() {
 
 #[test]
 fn signed_traits() {
-    let pos = D38::<2>::from_int(7);
-    let neg = D38::<2>::from_int(-7);
+    let pos = D38::<2>::try_from(7).unwrap();
+    let neg = D38::<2>::try_from(-7).unwrap();
     assert_eq!(pos.abs(), pos);
     assert_eq!(neg.abs(), pos);
     assert_eq!(pos.signum(), D38::<2>::ONE);
@@ -79,16 +79,16 @@ fn signed_traits() {
     assert!(<D38<2> as Signed>::is_negative(&neg));
     assert!(!<D38<2> as Signed>::is_negative(&pos));
     // abs_sub: 7-2=5; 2-7=0 (saturates)
-    assert_eq!(pos.abs_sub(&D38::<2>::from_int(2)), D38::<2>::from_int(5));
-    assert_eq!(D38::<2>::from_int(2).abs_sub(&pos), D38::<2>::ZERO);
+    assert_eq!(pos.abs_sub(&D38::<2>::try_from(2).unwrap()), D38::<2>::try_from(5).unwrap());
+    assert_eq!(D38::<2>::try_from(2).unwrap().abs_sub(&pos), D38::<2>::ZERO);
 
     // narrow
-    let pos18 = D18::<2>::from_int(3);
-    let neg18 = D18::<2>::from_int(-3);
+    let pos18 = D18::<2>::try_from(3).unwrap();
+    let neg18 = D18::<2>::try_from(-3).unwrap();
     let _ = <D18<2> as Signed>::abs(&pos18);
     let _ = <D18<2> as Signed>::signum(&neg18);
     assert!(<D18<2> as Signed>::is_positive(&pos18));
-    let _ = pos18.abs_sub(&D18::<2>::from_int(1));
+    let _ = pos18.abs_sub(&D18::<2>::try_from(1).unwrap());
 }
 
 // ─── FromPrimitive ─────────────────────────────────────────────────────
@@ -163,7 +163,7 @@ fn from_primitive_all_widths() {
 
 #[test]
 fn to_primitive_all_widths() {
-    let v = D38::<2>::from_int(7);
+    let v = D38::<2>::try_from(7).unwrap();
     assert_eq!(<D38<2> as ToPrimitive>::to_i64(&v), Some(7));
     assert_eq!(<D38<2> as ToPrimitive>::to_u64(&v), Some(7));
     assert_eq!(<D38<2> as ToPrimitive>::to_i128(&v), Some(7));
@@ -171,18 +171,18 @@ fn to_primitive_all_widths() {
     assert_eq!(<D38<2> as ToPrimitive>::to_f32(&v), Some(7.0_f32));
     assert_eq!(<D38<2> as ToPrimitive>::to_f64(&v), Some(7.0));
     // Negative → u64 is None
-    let neg = D38::<2>::from_int(-7);
+    let neg = D38::<2>::try_from(-7).unwrap();
     assert_eq!(<D38<2> as ToPrimitive>::to_u64(&neg), None);
     assert_eq!(<D38<2> as ToPrimitive>::to_u128(&neg), None);
     assert_eq!(<D38<2> as ToPrimitive>::to_i64(&neg), Some(-7));
 
-    let v18 = D18::<2>::from_int(7);
+    let v18 = D18::<2>::try_from(7).unwrap();
     assert_eq!(<D18<2> as ToPrimitive>::to_i64(&v18), Some(7));
     assert_eq!(<D18<2> as ToPrimitive>::to_u64(&v18), Some(7));
     assert_eq!(<D18<2> as ToPrimitive>::to_i128(&v18), Some(7));
     assert_eq!(<D18<2> as ToPrimitive>::to_u128(&v18), Some(7));
     assert_eq!(<D18<2> as ToPrimitive>::to_f32(&v18), Some(7.0_f32));
-    let neg18 = D18::<2>::from_int(-7);
+    let neg18 = D18::<2>::try_from(-7).unwrap();
     assert_eq!(<D18<2> as ToPrimitive>::to_u128(&neg18), None);
 }
 
@@ -235,7 +235,7 @@ fn num_traits_wide_basics() {
     use decimal_scaled::D76;
 
     let one: D76<2> = D38::<2>::ONE.into();
-    let two: D76<2> = D38::<2>::from_int(2).into();
+    let two: D76<2> = D38::<2>::try_from(2).unwrap().into();
     let _ = <D76<2> as CheckedAdd>::checked_add(&one, &two);
     let _ = <D76<2> as CheckedSub>::checked_sub(&two, &one);
     let _ = <D76<2> as CheckedMul>::checked_mul(&one, &two);
@@ -249,8 +249,8 @@ fn num_traits_wide_basics() {
     assert_eq!(v, exp);
     assert!(<D76<2> as Num>::from_str_radix("FF", 16).is_err());
     // Signed
-    let neg: D76<2> = D38::<2>::from_int(-3).into();
-    let pos: D76<2> = D38::<2>::from_int(3).into();
+    let neg: D76<2> = D38::<2>::try_from(-3).unwrap().into();
+    let pos: D76<2> = D38::<2>::try_from(3).unwrap().into();
     let _ = <D76<2> as Signed>::abs(&neg);
     let _ = <D76<2> as Signed>::signum(&neg);
     assert!(<D76<2> as Signed>::is_negative(&neg));
@@ -264,7 +264,7 @@ fn num_traits_wide_primitive_conversions() {
     use decimal_scaled::D76;
     use num_traits::{FromPrimitive, NumCast, ToPrimitive};
 
-    let exp: D76<2> = D38::<2>::from_int(5).into();
+    let exp: D76<2> = D38::<2>::try_from(5).unwrap().into();
     assert_eq!(<D76<2> as FromPrimitive>::from_i64(5).unwrap(), exp);
     assert_eq!(<D76<2> as FromPrimitive>::from_u64(5).unwrap(), exp);
     assert_eq!(<D76<2> as FromPrimitive>::from_i128(5).unwrap(), exp);
@@ -274,7 +274,7 @@ fn num_traits_wide_primitive_conversions() {
     assert_eq!(<D76<2> as FromPrimitive>::from_f64(1.5).unwrap(), exp_f);
 
     // ToPrimitive on wide — disambiguate trait method (inherent to_f32 returns f32 not Option<f32>).
-    let v: D76<2> = D38::<2>::from_int(7).into();
+    let v: D76<2> = D38::<2>::try_from(7).unwrap().into();
     assert_eq!(<D76<2> as ToPrimitive>::to_i64(&v), Some(7));
     assert_eq!(<D76<2> as ToPrimitive>::to_u64(&v), Some(7));
     assert_eq!(<D76<2> as ToPrimitive>::to_i128(&v), Some(7));
@@ -282,14 +282,14 @@ fn num_traits_wide_primitive_conversions() {
     assert_eq!(<D76<2> as ToPrimitive>::to_f64(&v), Some(7.0));
     assert_eq!(<D76<2> as ToPrimitive>::to_f32(&v), Some(7.0_f32));
     // Negative → u64/u128 None
-    let neg: D76<2> = D38::<2>::from_int(-7).into();
+    let neg: D76<2> = D38::<2>::try_from(-7).unwrap().into();
     assert_eq!(<D76<2> as ToPrimitive>::to_u64(&neg), None);
     assert_eq!(<D76<2> as ToPrimitive>::to_u128(&neg), None);
     assert_eq!(<D76<2> as ToPrimitive>::to_i64(&neg), Some(-7));
 
     // NumCast
     let v: D76<2> = <D76<2> as NumCast>::from(5i32).unwrap();
-    let exp5: D76<2> = D38::<2>::from_int(5).into();
+    let exp5: D76<2> = D38::<2>::try_from(5).unwrap().into();
     assert_eq!(v, exp5);
     let v: D76<2> = <D76<2> as NumCast>::from(1.5_f64).unwrap();
     let exp_15: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();

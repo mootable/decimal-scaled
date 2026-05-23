@@ -1,4 +1,4 @@
-//! Parity test: `powf_strict(D::from_i32(n))` must agree with `powi(n)`
+//! Parity test: `powf_strict(D::try_from(n).unwrap())` must agree with `powi(n)`
 //! to within storage ULP for every supported width.
 //!
 //! Integer-valued exponents (with `|n|` within the fast-path threshold)
@@ -19,7 +19,7 @@ use decimal_scaled::{D18, D38};
 /// must hit the fast path.
 fn d38_check<const S: u32>(base_raw: i128, n: i32) {
     let base = D38::<S>::from_bits(decimal_scaled::Int::<2>::try_from((base_raw) as i128).unwrap());
-    let exp_d = D38::<S>::from_i32(n);
+    let exp_d = D38::<S>::try_from(n).unwrap();
     let from_powf = base.powf_strict(exp_d);
     let from_powi = base.powi(n);
     assert_eq!(
@@ -31,7 +31,7 @@ fn d38_check<const S: u32>(base_raw: i128, n: i32) {
 
 fn d18_check<const S: u32>(base_raw: i64, n: i32) {
     let base = D18::<S>::from_bits(decimal_scaled::Int::<1>::from((base_raw) as i64));
-    let exp_d = D18::<S>::from_i32(n);
+    let exp_d = D18::<S>::try_from(n).unwrap();
     let from_powf = base.powf_strict(exp_d);
     let from_powi = base.powi(n);
     assert_eq!(
@@ -76,7 +76,7 @@ fn d18_powf_integer_fastpath_parity_s6() {
 #[test]
 fn d38_powf_zero_exp_returns_one() {
     let base = D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap());
-    let zero_exp = D38::<12>::from_i32(0);
+    let zero_exp = D38::<12>::try_from(0).unwrap();
     assert_eq!(
         base.powf_strict(zero_exp).to_bits(),
         D38::<12>::ONE.to_bits()
@@ -89,7 +89,7 @@ fn d38_powf_zero_exp_returns_one() {
 fn d38_powf_negative_integer_exp_parity() {
     let base = D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap()); // 2.0
     for n in [-1_i32, -2, -3, -5, -10] {
-        let exp_d = D38::<12>::from_i32(n);
+        let exp_d = D38::<12>::try_from(n).unwrap();
         assert_eq!(
             base.powf_strict(exp_d).to_bits(),
             base.powi(n).to_bits(),
@@ -103,9 +103,9 @@ fn d38_powf_negative_integer_exp_parity() {
 fn d57_powf_integer_fastpath_parity() {
     use decimal_scaled::D57;
     // 2.0 at SCALE = 20 (a primary target scale for D57).
-    let two = D57::<20>::from_int(2);
+    let two = D57::<20>::try_from(2).unwrap();
     for n in -5_i32..=10 {
-        let exp_d = D57::<20>::from_i32(n);
+        let exp_d = D57::<20>::try_from(n).unwrap();
         let from_powf = two.powf_strict(exp_d);
         let from_powi = two.powi(n);
         assert_eq!(
@@ -121,9 +121,9 @@ fn d57_powf_integer_fastpath_parity() {
 fn d76_powf_integer_fastpath_parity() {
     use decimal_scaled::D76;
     // 2.0 at SCALE = 35.
-    let two = D76::<35>::from_int(2);
+    let two = D76::<35>::try_from(2).unwrap();
     for n in -3_i32..=8 {
-        let exp_d = D76::<35>::from_i32(n);
+        let exp_d = D76::<35>::try_from(n).unwrap();
         let from_powf = two.powf_strict(exp_d);
         let from_powi = two.powi(n);
         assert_eq!(
@@ -139,9 +139,9 @@ fn d76_powf_integer_fastpath_parity() {
 fn d307_powf_integer_fastpath_parity() {
     use decimal_scaled::D307;
     // 2.0 at SCALE = 150 (matches the bench's xx-wide cell).
-    let two = D307::<150>::from_int(2);
+    let two = D307::<150>::try_from(2).unwrap();
     for n in -3_i32..=8 {
-        let exp_d = D307::<150>::from_i32(n);
+        let exp_d = D307::<150>::try_from(n).unwrap();
         let from_powf = two.powf_strict(exp_d);
         let from_powi = two.powi(n);
         assert_eq!(

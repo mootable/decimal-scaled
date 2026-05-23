@@ -31,9 +31,9 @@ fn main() {
         .build();
     tracing_subscriber::registry().with(chrome_layer).init();
 
-    let mut acc = Work::from_int(0);
+    let mut acc = Work::try_from(0).unwrap();
     for i in 0..iters {
-        let x = Work::from_int(2) + Work::from_int(i as i128) / Work::from_int(1_000_000);
+        let x = Work::try_from(2).unwrap() + Work::try_from(i as i128).unwrap() / Work::try_from(1_000_000).unwrap();
         acc = acc + x.exp_strict();
     }
     println!("{} iters; acc = {}", iters, black_box(acc));

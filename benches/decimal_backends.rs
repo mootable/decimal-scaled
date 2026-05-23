@@ -73,11 +73,11 @@ fn bench_arithmetic(c: &mut Criterion) {
     six_ops!(
         g,
         "D9",
-        D9::<6>::from_int(A as i32),
-        D9::<6>::from_int(B as i32)
+        D9::<6>::try_from(A as i32).unwrap(),
+        D9::<6>::try_from(B as i32).unwrap()
     );
-    six_ops!(g, "D18", D18::<12>::from_int(A), D18::<12>::from_int(B));
-    six_ops!(g, "D38", D38::<12>::from_int(A), D38::<12>::from_int(B));
+    six_ops!(g, "D18", D18::<12>::try_from(A).unwrap(), D18::<12>::try_from(B).unwrap());
+    six_ops!(g, "D38", D38::<12>::try_from(A).unwrap(), D38::<12>::try_from(B).unwrap());
 
     // Wide tier (256-bit and up, hand-rolled wide integers). Only
     // the powers-of-two D types are exposed publicly so far; the
@@ -85,22 +85,22 @@ fn bench_arithmetic(c: &mut Criterion) {
     six_ops!(
         g,
         "D76",
-        D76::<12>::from_int(A as i128),
-        D76::<12>::from_int(B as i128)
+        D76::<12>::try_from(A as i128).unwrap(),
+        D76::<12>::try_from(B as i128).unwrap()
     );
     #[cfg(feature = "d153")]
     six_ops!(
         g,
         "D153",
-        D153::<12>::from_int(A as i128),
-        D153::<12>::from_int(B as i128)
+        D153::<12>::try_from(A as i128).unwrap(),
+        D153::<12>::try_from(B as i128).unwrap()
     );
     #[cfg(feature = "d307")]
     six_ops!(
         g,
         "D307",
-        D307::<12>::from_int(A as i128),
-        D307::<12>::from_int(B as i128)
+        D307::<12>::try_from(A as i128).unwrap(),
+        D307::<12>::try_from(B as i128).unwrap()
     );
 
     // Baselines.
@@ -125,7 +125,7 @@ fn bench_transcendentals(c: &mut Criterion) {
 
     // `≈ 2.345678901` in each representation.
     let ours128 = D38::<9>::from_bits(2_345_678_901);
-    let ours256 = D76::<9>::from_int(2);
+    let ours256 = D76::<9>::try_from(2).unwrap();
     let rd = Decimal::new(2_345_678_901, 9);
 
     macro_rules! one_arg {

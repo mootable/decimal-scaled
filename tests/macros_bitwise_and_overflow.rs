@@ -95,16 +95,16 @@ fn bitwise_methods_wide() {
 #[test]
 fn wrapping_div_rem_non_zero() {
     // narrow widths
-    let a = D18::<2>::from_int(7);
-    let b = D18::<2>::from_int(2);
+    let a = D18::<2>::try_from(7).unwrap();
+    let b = D18::<2>::try_from(2).unwrap();
     let q = a.wrapping_div(b);
     // 7.00 / 2.00 = 3.50 → 350 at S=2
     assert_eq!(q.to_bits(), 350);
     let r = a.wrapping_rem(b);
     let _ = r;
 
-    let a = D18::<2>::from_int(7);
-    let b = D18::<2>::from_int(2);
+    let a = D18::<2>::try_from(7).unwrap();
+    let b = D18::<2>::try_from(2).unwrap();
     let _ = a.wrapping_div(b);
     let _ = a.wrapping_rem(b);
 
@@ -113,8 +113,8 @@ fn wrapping_div_rem_non_zero() {
     {
         use decimal_scaled::D76;
 
-        let a: D76<2> = D38::<2>::from_int(7).into();
-        let b: D76<2> = D38::<2>::from_int(2).into();
+        let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
+        let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
         let q = a.wrapping_div(b);
         let expected: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((350) as i128).unwrap()).into();
         assert_eq!(q, expected);
@@ -129,8 +129,8 @@ fn wrapping_div_rem_non_zero() {
 fn wide_overflow_variants_success_cases() {
     use decimal_scaled::D76;
 
-    let a: D76<2> = D38::<2>::from_int(7).into();
-    let b: D76<2> = D38::<2>::from_int(2).into();
+    let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
+    let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
     // saturating_mul success path
     let _ = a.saturating_mul(b);
     // saturating_div success path
@@ -177,12 +177,12 @@ fn saturating_div_overflow_signs() {
 
 #[test]
 fn overflowing_rem_non_zero_no_overflow() {
-    let a = D18::<2>::from_int(7);
-    let b = D18::<2>::from_int(2);
+    let a = D18::<2>::try_from(7).unwrap();
+    let b = D18::<2>::try_from(2).unwrap();
     let (_, ov) = a.overflowing_rem(b);
     assert!(!ov);
-    let a = D18::<2>::from_int(7);
-    let b = D18::<2>::from_int(2);
+    let a = D18::<2>::try_from(7).unwrap();
+    let b = D18::<2>::try_from(2).unwrap();
     let (_, ov) = a.overflowing_rem(b);
     assert!(!ov);
 
@@ -190,8 +190,8 @@ fn overflowing_rem_non_zero_no_overflow() {
     {
         use decimal_scaled::D76;
 
-        let a: D76<2> = D38::<2>::from_int(7).into();
-        let b: D76<2> = D38::<2>::from_int(2).into();
+        let a: D76<2> = D38::<2>::try_from(7).unwrap().into();
+        let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
         let (_, ov) = a.overflowing_rem(b);
         assert!(!ov);
     }
@@ -262,7 +262,7 @@ fn float_bridge_rounding_modes() {
 fn eq_wide_float() {
     use decimal_scaled::D76;
 
-    let v: D76<2> = D38::<2>::from_int(42).into();
+    let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
     assert_eq!(v, 42.0_f64);
     assert_eq!(42.0_f64, v);
     assert_eq!(v, 42.0_f32);

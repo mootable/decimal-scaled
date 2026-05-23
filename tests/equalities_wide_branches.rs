@@ -8,7 +8,7 @@ use decimal_scaled::{D38, D76};
 
 #[test]
 fn reciprocal_signed_int_eq() {
-    let v: D76<2> = D38::<2>::from_int(42).into();
+    let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
     assert!(42_i32 == v);
     assert!(42_i64 == v);
     assert!(42_i128 == v);
@@ -20,14 +20,14 @@ fn reciprocal_signed_int_eq() {
 
 #[test]
 fn reciprocal_unsigned_int_eq() {
-    let v: D76<2> = D38::<2>::from_int(42).into();
+    let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
     assert!(42_u8 == v);
     assert!(42_u16 == v);
     assert!(42_u32 == v);
     assert!(42_u64 == v);
     assert!(42_u128 == v);
     // Negative D76 vs unsigned — false from primitive side.
-    let neg: D76<2> = D38::<2>::from_int(-1).into();
+    let neg: D76<2> = D38::<2>::try_from(-1).unwrap().into();
     assert!(!(0_u32 == neg));
 }
 

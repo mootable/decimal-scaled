@@ -15,14 +15,14 @@ use decimal_scaled::D616;
 type D = D616<590>;
 
 fn from_int(n: i128) -> D {
-    D::from_int(n)
+    D::try_from(n).unwrap()
 }
 
 #[track_caller]
 fn agree_within_n_storage_lsb(label: &str, a: D, b: D, n_lsb: u128) {
     let diff = if a >= b { a - b } else { b - a };
     let lsb = D::EPSILON;
-    let limit = D::from_int(n_lsb as i128) * lsb;
+    let limit = D::try_from(n_lsb as i128).unwrap() * lsb;
     assert!(
         diff <= limit,
         "{label}: |a - b| = {diff:?}, limit = {limit:?}, a = {a:?}, b = {b:?}",
@@ -59,16 +59,16 @@ fn ln_lookup_at_one_is_zero_at_s590() {
 
 #[test]
 fn ln_lookup_band_lower_bound_s585() {
-    let x = D616::<585>::from_int(3) / D616::<585>::from_int(2);
+    let x = D616::<585>::try_from(3).unwrap() / D616::<585>::try_from(2).unwrap();
     let y = x.ln_strict();
-    assert!(y < D616::<585>::from_int(1));
+    assert!(y < D616::<585>::try_from(1).unwrap());
     assert!(y > D616::<585>::ZERO);
 }
 
 #[test]
 fn ln_lookup_band_upper_bound_s595() {
-    let x = D616::<595>::from_int(3) / D616::<595>::from_int(2);
+    let x = D616::<595>::try_from(3).unwrap() / D616::<595>::try_from(2).unwrap();
     let y = x.ln_strict();
-    assert!(y < D616::<595>::from_int(1));
+    assert!(y < D616::<595>::try_from(1).unwrap());
     assert!(y > D616::<595>::ZERO);
 }

@@ -97,7 +97,7 @@ fn checked_div_by_zero_is_none() {
 
 #[test]
 fn checked_mul_overflow_at_max() {
-    let two = D38s12::from_int(2);
+    let two = D38s12::try_from(2).unwrap();
     assert_eq!(D38s12::MAX.checked_mul(two), None);
     // Saturating picks the sign-correct extreme.
     assert_eq!(D38s12::MAX.saturating_mul(two), D38s12::MAX);
@@ -400,10 +400,10 @@ fn rounding_methods_on_every_width() {
             // 2.5: floor 2, ceil 3, round 3 (half away), trunc 2. Compared
             // as decimal values (storage-agnostic) rather than raw-bits
             // arithmetic, since `multiplier()` differs in type per width.
-            assert_eq!(v.floor(), <$t>::from_int(2));
-            assert_eq!(v.ceil(), <$t>::from_int(3));
-            assert_eq!(v.round(), <$t>::from_int(3));
-            assert_eq!(v.trunc(), <$t>::from_int(2));
+            assert_eq!(v.floor(), <$t>::try_from(2).unwrap());
+            assert_eq!(v.ceil(), <$t>::try_from(3).unwrap());
+            assert_eq!(v.round(), <$t>::try_from(3).unwrap());
+            assert_eq!(v.trunc(), <$t>::try_from(2).unwrap());
             // fract keeps the sign and is self - trunc.
             assert_eq!(v.fract(), v - v.trunc());
             let n = -v;
@@ -509,7 +509,7 @@ fn wide_tier_boundaries() {
     let one = D76s0::ONE;
     assert_eq!(D76::<0>::from_bits(one.to_bits()), one);
     // Arithmetic identities hold on the wide tier.
-    let v = D76s0::from_int(7i128);
+    let v = D76s0::try_from(7i128).unwrap();
     assert_eq!(v + D76s0::ZERO, v);
     assert_eq!(v * D76s0::ONE, v);
     assert_eq!(v - v, D76s0::ZERO);

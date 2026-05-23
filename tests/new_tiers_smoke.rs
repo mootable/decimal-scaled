@@ -29,19 +29,19 @@ macro_rules! tier_smoke {
 
             #[test]
             fn from_int_round_trip() {
-                let a = <$Tsmid>::from_int(40);
-                let b = <$Tsmid>::from_int(8);
+                let a = <$Tsmid>::try_from(40).unwrap();
+                let b = <$Tsmid>::try_from(8).unwrap();
                 // Use even-dividing operands so the divide is exact
                 // at every scale (no rounding-mode dependence).
-                assert_eq!(a + b, <$Tsmid>::from_int(48));
-                assert_eq!(a - b, <$Tsmid>::from_int(32));
-                assert_eq!(a * b, <$Tsmid>::from_int(320));
-                assert_eq!(a / b, <$Tsmid>::from_int(5));
+                assert_eq!(a + b, <$Tsmid>::try_from(48).unwrap());
+                assert_eq!(a - b, <$Tsmid>::try_from(32).unwrap());
+                assert_eq!(a * b, <$Tsmid>::try_from(320).unwrap());
+                assert_eq!(a / b, <$Tsmid>::try_from(5).unwrap());
             }
 
             #[test]
             fn from_bits_round_trip() {
-                let v = <$Ts0>::from_int(12345);
+                let v = <$Ts0>::try_from(12345).unwrap();
                 let raw = v.to_bits();
                 let back = <$Ts0>::from_bits(raw);
                 assert_eq!(v, back);
@@ -58,8 +58,8 @@ macro_rules! tier_smoke {
             fn pi_close_to_canonical() {
                 // π ≈ 3.14159265358979323846... — at scale 5, expect 3.14159
                 let pi = <$T>::pi();
-                let three = <$T>::from_int(3);
-                let four = <$T>::from_int(4);
+                let three = <$T>::try_from(3).unwrap();
+                let four = <$T>::try_from(4).unwrap();
                 assert!(pi > three, "pi should exceed 3");
                 assert!(pi < four, "pi should be below 4");
             }
@@ -68,8 +68,8 @@ macro_rules! tier_smoke {
             fn e_close_to_canonical() {
                 // e ≈ 2.71828... — at any scale > 0, e ∈ (2, 3).
                 let e = <$T>::e();
-                let two = <$T>::from_int(2);
-                let three = <$T>::from_int(3);
+                let two = <$T>::try_from(2).unwrap();
+                let three = <$T>::try_from(3).unwrap();
                 assert!(e > two);
                 assert!(e < three);
             }
@@ -77,9 +77,9 @@ macro_rules! tier_smoke {
             #[test]
             fn sqrt_perfect_square() {
                 // √4 = 2 exactly.
-                let four = <$Tsmid>::from_int(4);
+                let four = <$Tsmid>::try_from(4).unwrap();
                 let r = four.sqrt_strict();
-                assert_eq!(r, <$Tsmid>::from_int(2), "sqrt(4) should be 2 exactly");
+                assert_eq!(r, <$Tsmid>::try_from(2).unwrap(), "sqrt(4) should be 2 exactly");
             }
 
             #[test]
@@ -123,7 +123,7 @@ macro_rules! tier_smoke {
                 } else {
                     two_pi - tau
                 };
-                let bound = pi / <$T>::from_int(1000);
+                let bound = pi / <$T>::try_from(1000).unwrap();
                 assert!(diff < bound, "tau and 2·pi should agree to 3 decimals");
             }
 
@@ -150,8 +150,8 @@ macro_rules! tier_smoke {
             fn golden_in_expected_range() {
                 // φ = (1 + √5) / 2 ≈ 1.61803... — bracket between 1 and 2.
                 let g = <$T>::golden();
-                let one = <$T>::from_int(1);
-                let two = <$T>::from_int(2);
+                let one = <$T>::try_from(1).unwrap();
+                let two = <$T>::try_from(2).unwrap();
                 assert!(g > one);
                 assert!(g < two);
             }
@@ -172,7 +172,7 @@ macro_rules! tier_smoke {
                 // the previous tier. Round-trip should preserve the
                 // value because the next-up tier is strictly larger
                 // and at_scale=Tsmid stays in range on either side.
-                let v: $Tsmid = <$Tsmid>::from_int(42);
+                let v: $Tsmid = <$Tsmid>::try_from(42).unwrap();
                 let n = v.narrow().expect("narrow into previous tier");
                 assert_eq!(
                     n.to_bits().to_string(),
@@ -193,8 +193,8 @@ macro_rules! tier_smoke {
                 // at `Tsmid` (an interior, non-trivial scale where
                 // the series actually runs); `1 + 1/2` is in range
                 // at every interior scale.
-                let half = <$Tsmid>::from_int(1) / <$Tsmid>::from_int(2);
-                let one_and_a_half = <$Tsmid>::from_int(1) + half;
+                let half = <$Tsmid>::try_from(1).unwrap() / <$Tsmid>::try_from(2).unwrap();
+                let one_and_a_half = <$Tsmid>::try_from(1).unwrap() + half;
                 let _ = one_and_a_half.ln_strict();
                 let _ = half.exp_strict();
                 let _ = one_and_a_half.sin_strict();

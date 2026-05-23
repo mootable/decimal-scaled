@@ -88,13 +88,13 @@ macro_rules! new_tier_body {
 
                 match scale {
                     0 => {
-                        let a = $T::<0>::from_int(2);
-                        let b = $T::<0>::from_int(1);
+                        let a = $T::<0>::try_from(2).unwrap();
+                        let b = $T::<0>::try_from(1).unwrap();
                         $crate::arith_copy!(g, "decimal-scaled", a, b);
                     }
                     s if s == $mid => {
-                        let a = $T::<$mid>::from_int(2);
-                        let b = $T::<$mid>::from_int(1);
+                        let a = $T::<$mid>::try_from(2).unwrap();
+                        let b = $T::<$mid>::try_from(1).unwrap();
                         $crate::arith_copy!(g, "decimal-scaled", a, b);
                         g.bench_function("decimal-scaled/ln", |bn| {
                             bn.iter(|| black_box(a).ln_strict())
@@ -128,8 +128,8 @@ macro_rules! new_tier_body {
                         });
                     }
                     s if s == $max => {
-                        let a = $T::<$max>::from_int(2);
-                        let b = $T::<$max>::from_int(1);
+                        let a = $T::<$max>::try_from(2).unwrap();
+                        let b = $T::<$max>::try_from(1).unwrap();
                         $crate::arith_copy!(g, "decimal-scaled", a, b);
                     }
                     _ => unreachable!(),

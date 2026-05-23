@@ -45,8 +45,8 @@ impl<const SCALE: u32> D38<SCALE> {
     /// ```ignore
     /// use decimal_scaled::D38s12;
     /// // log_2(8) is approximately 3 within f64 precision.
-    /// let eight = D38s12::from_int(8);
-    /// let two = D38s12::from_int(2);
+    /// let eight = D38s12::from(8);
+    /// let two = D38s12::from(2);
     /// let result = eight.log(two);
     /// ```
     #[cfg(feature = "std")]

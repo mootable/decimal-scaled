@@ -22,8 +22,8 @@
 //! same-type (`N == M`) case, so no per-pair widening macro is needed.
 //!
 //! ```ignore
-//! let a: D38<12> = D38::<12>::from_int(5);
-//! let b: D18<12> = D18::<12>::from_int(5);
+//! let a: D38<12> = D38::<12>::from(5);
+//! let b: D18<12> = D18::<12>::from(5);
 //! assert!(a == b);   // cross-width, same SCALE
-//! assert!(b < D38::<12>::from_int(6));
+//! assert!(b < D38::<12>::from(6));
 //! ```

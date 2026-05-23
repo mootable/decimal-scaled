@@ -13,10 +13,10 @@ use decimal_scaled::D1232;
 use std::hint::black_box;
 
 fn bench(c: &mut Criterion) {
-    let half_k = D1232::<600>::from_int(1) / D1232::<600>::from_int(2);
-    let one_p_half_k = D1232::<600>::from_int(1) + half_k;
-    let half_l = D1232::<615>::from_int(1) / D1232::<615>::from_int(2);
-    let one_p_half_l = D1232::<615>::from_int(1) + half_l;
+    let half_k = D1232::<600>::try_from(1).unwrap() / D1232::<600>::try_from(2).unwrap();
+    let one_p_half_k = D1232::<600>::try_from(1).unwrap() + half_k;
+    let half_l = D1232::<615>::try_from(1).unwrap() / D1232::<615>::try_from(2).unwrap();
+    let one_p_half_l = D1232::<615>::try_from(1).unwrap() + half_l;
 
     // Warm the per-thread Tang ln table seed at w = 623.
     let _ = one_p_half_l.ln_strict();

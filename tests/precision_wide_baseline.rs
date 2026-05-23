@@ -50,7 +50,7 @@ fn wide_bits(d: D76<6>) -> i128 {
 fn ln_d76_baseline() {
     use decimal_scaled::D38;
 
-    let n = D38::<6>::from_int(2);
+    let n = D38::<6>::try_from(2).unwrap();
     let w: D76<6> = n.into();
     agree_within(
         "D76<6>::ln(2)",

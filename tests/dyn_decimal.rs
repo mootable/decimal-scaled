@@ -21,8 +21,8 @@ use decimal_scaled::{D18, D38, DecimalWidth, DynDecimal, RawStorage, RoundingMod
 
 #[test]
 fn width_and_scale_round_trip() {
-    let d18: Box<dyn DynDecimal> = Box::new(D18::<5>::from_i32(7));
-    let d38: Box<dyn DynDecimal> = Box::new(D38::<12>::from_i32(7));
+    let d18: Box<dyn DynDecimal> = Box::new(D18::<5>::try_from(7).unwrap());
+    let d38: Box<dyn DynDecimal> = Box::new(D38::<12>::try_from(7).unwrap());
 
     assert_eq!(d18.width(), DecimalWidth::D18);
     assert_eq!(d38.width(), DecimalWidth::D38);
@@ -36,8 +36,8 @@ fn width_and_scale_round_trip() {
 
 #[test]
 fn raw_storage_tagged_correctly() {
-    let d18: Box<dyn DynDecimal> = Box::new(D18::<5>::from_i32(7));
-    let d38: Box<dyn DynDecimal> = Box::new(D38::<12>::from_i32(7));
+    let d18: Box<dyn DynDecimal> = Box::new(D18::<5>::try_from(7).unwrap());
+    let d38: Box<dyn DynDecimal> = Box::new(D38::<12>::try_from(7).unwrap());
 
     match d18.raw_storage() {
         RawStorage::I64(v) => assert_eq!(v, 7 * 10_i64.pow(5)),
@@ -51,9 +51,9 @@ fn raw_storage_tagged_correctly() {
 
 #[test]
 fn as_any_downcasts_to_concrete_type() {
-    let d: Box<dyn DynDecimal> = Box::new(D38::<7>::from_i32(42));
+    let d: Box<dyn DynDecimal> = Box::new(D38::<7>::try_from(42).unwrap());
     let typed: &D38<7> = d.as_any().downcast_ref::<D38<7>>().unwrap();
-    assert_eq!(*typed, D38::<7>::from_i32(42));
+    assert_eq!(*typed, D38::<7>::try_from(42).unwrap());
 
     // Wrong scale downcast fails.
     assert!(d.as_any().downcast_ref::<D38<6>>().is_none());
@@ -63,7 +63,7 @@ fn as_any_downcasts_to_concrete_type() {
 
 #[test]
 fn clone_box_yields_independent_handle() {
-    let original: Box<dyn DynDecimal> = Box::new(D18::<4>::from_i32(99));
+    let original: Box<dyn DynDecimal> = Box::new(D18::<4>::try_from(99).unwrap());
     let cloned = original.clone_box();
     assert!(original.eq_dyn(&*cloned));
     assert_eq!(original.scale_dyn(), cloned.scale_dyn());
@@ -76,7 +76,7 @@ fn clone_box_yields_independent_handle() {
 fn zero_and_one_predicates() {
     let z: Box<dyn DynDecimal> = Box::new(D38::<5>::ZERO);
     let o: Box<dyn DynDecimal> = Box::new(D38::<5>::ONE);
-    let v: Box<dyn DynDecimal> = Box::new(D38::<5>::from_i32(7));
+    let v: Box<dyn DynDecimal> = Box::new(D38::<5>::try_from(7).unwrap());
 
     assert!(z.is_zero());
     assert!(!o.is_zero());
@@ -87,8 +87,8 @@ fn zero_and_one_predicates() {
 
 #[test]
 fn sign_predicates_and_unary_ops() {
-    let pos: Box<dyn DynDecimal> = Box::new(D18::<2>::from_i32(5));
-    let neg: Box<dyn DynDecimal> = Box::new(D18::<2>::from_i32(-5));
+    let pos: Box<dyn DynDecimal> = Box::new(D18::<2>::try_from(5).unwrap());
+    let neg: Box<dyn DynDecimal> = Box::new(D18::<2>::try_from(-5).unwrap());
     let z: Box<dyn DynDecimal> = Box::new(D18::<2>::ZERO);
 
     assert!(pos.is_positive());
@@ -112,28 +112,28 @@ fn sign_predicates_and_unary_ops() {
 
 #[test]
 fn add_same_width_same_scale() {
-    let a: Box<dyn DynDecimal> = Box::new(D38::<3>::from_i32(2));
-    let b: Box<dyn DynDecimal> = Box::new(D38::<3>::from_i32(5));
+    let a: Box<dyn DynDecimal> = Box::new(D38::<3>::try_from(2).unwrap());
+    let b: Box<dyn DynDecimal> = Box::new(D38::<3>::try_from(5).unwrap());
     let sum = a.add(&*b).unwrap();
     let typed = sum.as_any().downcast_ref::<D38<3>>().unwrap();
-    assert_eq!(*typed, D38::<3>::from_i32(7));
+    assert_eq!(*typed, D38::<3>::try_from(7).unwrap());
 }
 
 #[test]
 fn sub_mul_div_rem_same_scale() {
-    let a: Box<dyn DynDecimal> = Box::new(D38::<2>::from_i32(20));
-    let b: Box<dyn DynDecimal> = Box::new(D38::<2>::from_i32(3));
+    let a: Box<dyn DynDecimal> = Box::new(D38::<2>::try_from(20).unwrap());
+    let b: Box<dyn DynDecimal> = Box::new(D38::<2>::try_from(3).unwrap());
 
     let diff = a.sub(&*b).unwrap();
     assert_eq!(
         *diff.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>::from_i32(17)
+        D38::<2>::try_from(17).unwrap()
     );
 
     let prod = a.mul(&*b).unwrap();
     assert_eq!(
         *prod.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>::from_i32(60)
+        D38::<2>::try_from(60).unwrap()
     );
 
     let quot = a.div(&*b).unwrap();
@@ -147,7 +147,7 @@ fn sub_mul_div_rem_same_scale() {
     let rem = a.rem(&*b).unwrap();
     assert_eq!(
         *rem.as_any().downcast_ref::<D38<2>>().unwrap(),
-        D38::<2>::from_i32(2)
+        D38::<2>::try_from(2).unwrap()
     );
 }
 
@@ -197,8 +197,8 @@ fn cmp_dyn_distinguishes_unequal_finer_scale() {
 
 #[test]
 fn cross_width_arithmetic_returns_none() {
-    let a: Box<dyn DynDecimal> = Box::new(D38::<3>::from_i32(2));
-    let b: Box<dyn DynDecimal> = Box::new(D18::<3>::from_i32(5));
+    let a: Box<dyn DynDecimal> = Box::new(D38::<3>::try_from(2).unwrap());
+    let b: Box<dyn DynDecimal> = Box::new(D18::<3>::try_from(5).unwrap());
     assert!(a.add(&*b).is_none());
     assert!(a.sub(&*b).is_none());
     assert!(a.mul(&*b).is_none());
@@ -247,9 +247,9 @@ fn rescale_to_with_explicit_rounding_mode() {
 
 #[test]
 fn rescale_to_above_max_returns_none() {
-    let v18: Box<dyn DynDecimal> = Box::new(D18::<3>::from_i32(5));
+    let v18: Box<dyn DynDecimal> = Box::new(D18::<3>::try_from(5).unwrap());
     assert!(v18.rescale_to(19).is_none()); // max_scale = 18
-    let v38: Box<dyn DynDecimal> = Box::new(D38::<3>::from_i32(5));
+    let v38: Box<dyn DynDecimal> = Box::new(D38::<3>::try_from(5).unwrap());
     assert!(v38.rescale_to(39).is_none()); // max_scale = 38
 }
 
@@ -271,7 +271,7 @@ fn add_overflow_returns_none() {
 
 #[test]
 fn div_by_zero_returns_none() {
-    let a: Box<dyn DynDecimal> = Box::new(D38::<3>::from_i32(7));
+    let a: Box<dyn DynDecimal> = Box::new(D38::<3>::try_from(7).unwrap());
     let z: Box<dyn DynDecimal> = Box::new(D38::<3>::ZERO);
     assert!(a.div(&*z).is_none());
     assert!(a.rem(&*z).is_none());
@@ -326,8 +326,8 @@ fn d18_cross_scale_mul() {
 #[test]
 fn vec_of_mixed_widths() {
     let values: Vec<Box<dyn DynDecimal>> = vec![
-        Box::new(D18::<3>::from_i32(2)),
-        Box::new(D38::<5>::from_i32(3)),
+        Box::new(D18::<3>::try_from(2).unwrap()),
+        Box::new(D38::<5>::try_from(3).unwrap()),
     ];
 
     let widths: Vec<DecimalWidth> = values.iter().map(|v| v.width()).collect();

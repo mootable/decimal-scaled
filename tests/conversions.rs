@@ -1,7 +1,6 @@
 //! Integration tests for the conversion surface
-//! (From<integer> / TryFrom<i128|u128|f32|f64> / from_int /
-//! from_i32 / to_int / from_f64 / to_f64 /
-//! to_f32).
+//! (From<integer> / TryFrom<i128|u128|f32|f64> / to_int /
+//! from_f64 / to_f64 / to_f32).
 //!
 //! Bodies live in src/macros/conversions.rs and float_bridge.rs;
 //! these tests exercise the resulting public API for D38 specifically.
@@ -13,7 +12,7 @@ use decimal_scaled::{ConvertError, D38, D38s12};
 #[test]
 fn widen_narrow_one_tier_hop_narrow_arm() {
     use decimal_scaled::{D18s6, D38s6};
-    let a = D18s6::from_int(123);
+    let a = D18s6::try_from(123).unwrap();
     let b: D38s6 = a.widen(); // D18 → D38
     assert_eq!(b.to_bits(), i128::from(a.to_bits()));
     let c: D18s6 = b.narrow().unwrap(); // D38 → D18
@@ -27,38 +26,38 @@ fn widen_narrow_into_wide_tier() {
     // After the 0.3 widen-chain rework, D38.widen() steps to D57
     // (the immediate next tier in the ladder) instead of jumping
     // straight to D76. The .narrow() symmetric is D57 -> D38.
-    let a = D38s12::from_int(1_000_000);
+    let a = D38s12::try_from(1_000_000).unwrap();
     let b: D57<12> = a.widen();
     let back = b.narrow().unwrap();
     assert_eq!(back, a);
 }
 
-// from_int / from_i32 -- foundation wrappers around From<iN>
+// Integer construction via the public From / TryFrom surface
 
 #[test]
 fn from_int_zero_is_zero() {
-    assert_eq!(D38s12::from_int(0), D38s12::ZERO);
+    assert_eq!(D38s12::try_from(0).unwrap(), D38s12::ZERO);
 }
 
 #[test]
 fn from_i32_zero_is_zero() {
-    assert_eq!(D38s12::from_i32(0), D38s12::ZERO);
+    assert_eq!(D38s12::try_from(0).unwrap(), D38s12::ZERO);
 }
 
 #[test]
 fn from_int_one_is_one() {
-    assert_eq!(D38s12::from_int(1), D38s12::ONE);
+    assert_eq!(D38s12::try_from(1).unwrap(), D38s12::ONE);
 }
 
 #[test]
 fn from_i32_one_is_one() {
-    assert_eq!(D38s12::from_i32(1), D38s12::ONE);
+    assert_eq!(D38s12::try_from(1).unwrap(), D38s12::ONE);
 }
 
 #[test]
 fn from_int_negative() {
-    assert_eq!(D38s12::from_int(-1), -D38s12::ONE);
-    assert_eq!(D38s12::from_int(-42).to_bits(), -42_000_000_000_000_i128);
+    assert_eq!(D38s12::try_from(-1).unwrap(), -D38s12::ONE);
+    assert_eq!(D38s12::try_from(-42).unwrap().to_bits(), -42_000_000_000_000_i128);
 }
 
 // Lossless From<iN> / From<uN> -- bit-exact scaling

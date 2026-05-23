@@ -33,11 +33,11 @@ fn bench(c: &mut Criterion) {
     // ── D38<19> ────────────────────────────────────────────────────
     {
         type D = D38<19>;
-        let base: D = D::from_int(2); // 2.0
-        let exp_2: D = D::from_int(2);
-        let exp_3: D = D::from_int(3);
-        let exp_05: D = D::from_int(1) / D::from_int(2); // 0.5
-        let exp_25: D = D::from_int(5) / D::from_int(2); // 2.5
+        let base: D = D::try_from(2).unwrap(); // 2.0
+        let exp_2: D = D::try_from(2).unwrap();
+        let exp_3: D = D::try_from(3).unwrap();
+        let exp_05: D = D::try_from(1).unwrap() / D::try_from(2).unwrap(); // 0.5
+        let exp_25: D = D::try_from(5).unwrap() / D::try_from(2).unwrap(); // 2.5
 
         g.bench_function("D38_s19/powf_2", |bn| {
             bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))
@@ -56,11 +56,11 @@ fn bench(c: &mut Criterion) {
     // ── D76<35> ────────────────────────────────────────────────────
     {
         type D = D76<35>;
-        let base: D = D::from_int(2);
-        let exp_2: D = D::from_int(2);
-        let exp_3: D = D::from_int(3);
-        let exp_05: D = D::from_int(1) / D::from_int(2);
-        let exp_25: D = D::from_int(5) / D::from_int(2);
+        let base: D = D::try_from(2).unwrap();
+        let exp_2: D = D::try_from(2).unwrap();
+        let exp_3: D = D::try_from(3).unwrap();
+        let exp_05: D = D::try_from(1).unwrap() / D::try_from(2).unwrap();
+        let exp_25: D = D::try_from(5).unwrap() / D::try_from(2).unwrap();
 
         g.bench_function("D76_s35/powf_2", |bn| {
             bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))
@@ -79,11 +79,11 @@ fn bench(c: &mut Criterion) {
     // ── D307<150> ──────────────────────────────────────────────────
     {
         type D = D307<150>;
-        let base: D = D::from_int(2);
-        let exp_2: D = D::from_int(2);
-        let exp_3: D = D::from_int(3);
-        let exp_05: D = D::from_int(1) / D::from_int(2);
-        let exp_25: D = D::from_int(5) / D::from_int(2);
+        let base: D = D::try_from(2).unwrap();
+        let exp_2: D = D::try_from(2).unwrap();
+        let exp_3: D = D::try_from(3).unwrap();
+        let exp_05: D = D::try_from(1).unwrap() / D::try_from(2).unwrap();
+        let exp_25: D = D::try_from(5).unwrap() / D::try_from(2).unwrap();
 
         g.bench_function("D307_s150/powf_2", |bn| {
             bn.iter(|| black_box(base).powf_strict(black_box(exp_2)))

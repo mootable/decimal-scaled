@@ -29,15 +29,15 @@ use decimal_scaled::D924;
 type D = D924<460>;
 
 fn from_int(n: i128) -> D {
-    D::from_int(n)
+    D::try_from(n).unwrap()
 }
 
 #[track_caller]
 fn agree_within_n_storage_lsb(label: &str, a: D, b: D, n_lsb: u128) {
     let diff = if a >= b { a - b } else { b - a };
-    let one = D::from_int(1);
-    let lsb = one / D::from_int(10).pow(460);
-    let limit = D::from_int(n_lsb as i128) * lsb;
+    let one = D::try_from(1).unwrap();
+    let lsb = one / D::try_from(10).unwrap().pow(460);
+    let limit = D::try_from(n_lsb as i128).unwrap() * lsb;
     assert!(
         diff <= limit,
         "{label}: |a - b| = {diff:?}, limit = {limit:?}, a = {a:?}, b = {b:?}",
@@ -76,17 +76,17 @@ fn ln_lookup_at_one_is_zero_at_s460() {
 #[test]
 fn ln_lookup_band_lower_bound_s455() {
     // Confirms SCALE = 455 enters the lookup band (no panic / no overflow).
-    let x = D924::<455>::from_int(3) / D924::<455>::from_int(2);
+    let x = D924::<455>::try_from(3).unwrap() / D924::<455>::try_from(2).unwrap();
     let y = x.ln_strict();
-    assert!(y < D924::<455>::from_int(1));
+    assert!(y < D924::<455>::try_from(1).unwrap());
     assert!(y > D924::<455>::ZERO);
 }
 
 #[test]
 fn ln_lookup_band_upper_bound_s465() {
     // Confirms SCALE = 465 enters the lookup band (no panic / no overflow).
-    let x = D924::<465>::from_int(3) / D924::<465>::from_int(2);
+    let x = D924::<465>::try_from(3).unwrap() / D924::<465>::try_from(2).unwrap();
     let y = x.ln_strict();
-    assert!(y < D924::<465>::from_int(1));
+    assert!(y < D924::<465>::try_from(1).unwrap());
     assert!(y > D924::<465>::ZERO);
 }

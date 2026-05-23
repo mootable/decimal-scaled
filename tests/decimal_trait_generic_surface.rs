@@ -58,8 +58,8 @@ fn surface_check_d76() {
     use decimal_scaled::D76;
 
     let (v, _, squared, _) = surface_check::<D76<6>>(5);
-    let expected_v: D76<6> = D38::<6>::from_int(5).into();
-    let expected_squared: D76<6> = D38::<6>::from_int(25).into();
+    let expected_v: D76<6> = D38::<6>::try_from(5).unwrap().into();
+    let expected_squared: D76<6> = D38::<6>::try_from(25).unwrap().into();
     assert_eq!(v, expected_v);
     assert_eq!(squared, expected_squared);
 }
@@ -79,8 +79,8 @@ fn fold_sum_product<D: Decimal>() -> (D, D) {
 fn sum_product_d38() {
 
     let (s, p) = fold_sum_product::<D38<2>>();
-    assert_eq!(s, D38::<2>::from_i32(10));
-    assert_eq!(p, D38::<2>::from_i32(24));
+    assert_eq!(s, D38::<2>::try_from(10).unwrap());
+    assert_eq!(p, D38::<2>::try_from(24).unwrap());
 }
 
 /// `to_int_with` exercised via trait dispatch under each rounding mode.

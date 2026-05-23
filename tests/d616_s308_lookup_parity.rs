@@ -21,7 +21,7 @@ use decimal_scaled::D616;
 type D = D616<308>;
 
 fn from_int(n: i128) -> D {
-    D::from_int(n)
+    D::try_from(n).unwrap()
 }
 
 #[track_caller]
@@ -31,8 +31,8 @@ fn agree_within_1_storage_lsb(label: &str, a: D, b: D) {
     // disagree by at most 1 ULP at half-ULP-tie boundaries (one rounds
     // up, the other rounds down). Tighter than 1 LSB would false-positive
     // on those legitimate cases.
-    let one = D::from_int(1);
-    let lsb = one / D::from_int(10).pow(308);
+    let one = D::try_from(1).unwrap();
+    let lsb = one / D::try_from(10).unwrap().pow(308);
     let limit = lsb;
     assert!(
         diff <= limit,

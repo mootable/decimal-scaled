@@ -14,7 +14,7 @@ use decimal_scaled::{D18s9, D38, D38s12, Int, D};
 
 #[test]
 fn widen_then_narrow_is_identity_positive() {
-    let x: D18s9 = D18s9::from_int(7);
+    let x: D18s9 = D18s9::try_from(7).unwrap();
     // Widen the storage Int<1> -> Int<2>, then narrow back.
     let wide: D<Int<2>, 9> = x.widen_n::<2>();
     let back: D<Int<1>, 9> = wide.narrow_n::<1>().expect("value fits Int<1>");
@@ -23,7 +23,7 @@ fn widen_then_narrow_is_identity_positive() {
 
 #[test]
 fn widen_then_narrow_is_identity_negative() {
-    let x: D18s9 = D18s9::from_int(-12);
+    let x: D18s9 = D18s9::try_from(-12).unwrap();
     let wide: D<Int<2>, 9> = x.widen_n::<2>();
     let back: D<Int<1>, 9> = wide.narrow_n::<1>().expect("value fits Int<1>");
     assert_eq!(back, x);
@@ -42,7 +42,7 @@ fn narrow_n_rejects_out_of_range() {
     // A value that only fits the wider tier must NOT narrow back.
     // from_int(10^17) at scale 2 stores 10^19 > i64::MAX, so it cannot
     // round-trip into the Int<1>-backed tier.
-    let huge: D38<2> = D38::<2>::from_int(100_000_000_000_000_000_i64);
+    let huge: D38<2> = D38::<2>::try_from(100_000_000_000_000_000_i64).unwrap();
     assert!(huge.narrow_n::<1>().is_none());
 }
 
@@ -50,8 +50,8 @@ fn narrow_n_rejects_out_of_range() {
 
 #[test]
 fn cross_width_same_scale_value_equal() {
-    let narrow: D18s9 = D18s9::from_int(5);
-    let wide: D<Int<2>, 9> = D::<Int<2>, 9>::from_int(5);
+    let narrow: D18s9 = D18s9::try_from(5).unwrap();
+    let wide: D<Int<2>, 9> = D::<Int<2>, 9>::try_from(5).unwrap();
     assert_eq!(narrow, wide);
     assert_eq!(wide, narrow);
 }
@@ -59,8 +59,8 @@ fn cross_width_same_scale_value_equal() {
 #[test]
 fn cross_scale_value_equal() {
     // 5 at scale 9 and 5 at scale 12 are the same logical value.
-    let a: D18s9 = D18s9::from_int(5);
-    let b: D38s12 = D38s12::from_int(5);
+    let a: D18s9 = D18s9::try_from(5).unwrap();
+    let b: D38s12 = D38s12::try_from(5).unwrap();
     assert_eq!(a, b);
     assert_eq!(b, a);
 }
@@ -69,7 +69,7 @@ fn cross_scale_value_equal() {
 fn cross_scale_unequal_when_fraction_differs() {
     // 5.000000001 (scale 9) vs 5.000000000000 (scale 12): not equal.
     let frac: D18s9 = D18s9::from_bits(Int::<1>::from(5_000_000_001_i64));
-    let whole: D38s12 = D38s12::from_int(5);
+    let whole: D38s12 = D38s12::try_from(5).unwrap();
     assert_ne!(frac, whole);
     assert!(frac > whole);
     assert!(whole < frac);
@@ -77,8 +77,8 @@ fn cross_scale_unequal_when_fraction_differs() {
 
 #[test]
 fn d_eq_primitive_int_exact() {
-    assert!(D38s12::from_int(42) == 42_i32);
-    assert!(42_i64 == D38s12::from_int(42));
+    assert!(D38s12::try_from(42).unwrap() == 42_i32);
+    assert!(42_i64 == D38s12::try_from(42).unwrap());
     // A fractional decimal is never equal to an integer.
     let half: D38s12 = D38s12::from_bits(Int::<2>::from(5_500_000_000_000_i64));
     assert!(!(half == 5_i32));
@@ -90,7 +90,7 @@ fn d_eq_primitive_int_exact() {
 #[test]
 fn from_int_to_int_round_trip() {
     for n in [-9_i64, -1, 0, 1, 7, 1234, 9_999_999] {
-        let d: D38s12 = D38s12::from_int(n);
+        let d: D38s12 = D38s12::try_from(n).unwrap();
         assert_eq!(d.to_int(), n);
     }
 }

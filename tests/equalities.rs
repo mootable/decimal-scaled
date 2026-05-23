@@ -8,9 +8,9 @@ use decimal_scaled::D38s12;
 
 #[test]
 fn eq_signed_exact_match() {
-    assert!(D38s12::from_int(5) == 5_i32);
-    assert!(5_i32 == D38s12::from_int(5));
-    assert!(D38s12::from_int(-7) == -7_i64);
+    assert!(D38s12::try_from(5).unwrap() == 5_i32);
+    assert!(5_i32 == D38s12::try_from(5).unwrap());
+    assert!(D38s12::try_from(-7).unwrap() == -7_i64);
     assert!(D38s12::ZERO == 0_i8);
 }
 
@@ -45,14 +45,14 @@ fn eq_i128_negative() {
 
 #[test]
 fn eq_unsigned_exact_match() {
-    assert!(D38s12::from_int(5) == 5_u32);
-    assert!(5_u64 == D38s12::from_int(5));
+    assert!(D38s12::try_from(5).unwrap() == 5_u32);
+    assert!(5_u64 == D38s12::try_from(5).unwrap());
     assert!(D38s12::ZERO == 0_u8);
 }
 
 #[test]
 fn eq_unsigned_negative_is_false() {
-    let neg = D38s12::from_int(-1);
+    let neg = D38s12::try_from(-1).unwrap();
     assert!(!(neg == 0_u32));
     assert!(!(neg == 1_u32));
 }

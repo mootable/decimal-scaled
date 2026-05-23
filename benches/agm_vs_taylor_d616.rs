@@ -21,8 +21,8 @@ use decimal_scaled::D616;
 use std::hint::black_box;
 
 fn bench_at<const SCALE: u32>(c: &mut Criterion, label: &str) {
-    let three: D616<SCALE> = D616::<SCALE>::from_int(3);
-    let half: D616<SCALE> = D616::<SCALE>::from_int(1) / D616::<SCALE>::from_int(2);
+    let three: D616<SCALE> = D616::<SCALE>::try_from(3).unwrap();
+    let half: D616<SCALE> = D616::<SCALE>::try_from(1).unwrap() / D616::<SCALE>::try_from(2).unwrap();
 
     // Warm both code paths (table seeds, etc.).
     let _ = three.ln_strict();

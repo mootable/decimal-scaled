@@ -497,7 +497,7 @@ impl<const SCALE: u32> D38<SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D38s9;
-    /// let a = D38s9::from_int(1_000_000);
+    /// let a = D38s9::from(1_000_000);
     /// let b = a.narrow().unwrap();
     /// assert_eq!(i128::from(b.to_bits()), i128::from(a.to_bits()));
     /// ```
@@ -580,7 +580,7 @@ impl<const SCALE: u32> D18<SCALE> {
     ///
     /// ```
     /// use decimal_scaled::D18s9;
-    /// let a = D18s9::from_int(7);
+    /// let a = D18s9::from(7);
     /// let b = a.widen();              // D38<9>
     /// assert_eq!(i128::from(b.to_bits()), i128::from(a.to_bits()));
     /// ```
@@ -704,7 +704,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// ```
     /// # #[cfg(feature = "wide")] {
     /// use decimal_scaled::D38s12;
-    /// let a = D38s12::from_int(1_000_000);
+    /// let a = D38s12::from(1_000_000);
     /// let _wider = a.widen();  // D57<12>
     /// # }
     /// ```
