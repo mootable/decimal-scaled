@@ -17,6 +17,14 @@
 pub(crate) mod fixed_d38;
 pub(crate) mod mg_divide;
 
+// Tier-generic surface over the per-tier wide guard-digit cores. The
+// `WideTrigCore` trait + six `*_series` functions collapse the 60
+// per-tier `*_strict_<tier>` wrappers in `algos::{exp,ln,trig}::wide_kernel`
+// to one generic function per transcendental. Always compiled; the
+// per-tier `impl WideTrigCore` blocks are emitted by
+// `decl_wide_transcendental!`.
+pub(crate) mod wide_trig_core;
+
 // Newton-Raphson reciprocal divide for `n / 10^SCALE` at the wide tiers.
 // Always compiled: the unified `decl_decimal_arithmetic!` mul/div path
 // used by D18/D38 (default features) references the dispatcher in a

@@ -2346,6 +2346,95 @@ macro_rules! decl_wide_transcendental {
                 }
                 if sign { -result } else { result }
             }
+
+            /// Zero-sized per-tier marker implementing
+            /// [`crate::algos::support::wide_trig_core::WideTrigCore`].
+            /// Binds this tier's work integer [`W`] / [`Wexp`] and the
+            /// storage integer as the trait's associated types so the
+            /// generic `*_series` functions can drive the tier through
+            /// the trait. The methods forward to the per-tier free
+            /// functions emitted above; collapsing those bodies to one
+            /// `BigInt`-generic core (the `exp_generic` precedent) is a
+            /// later, local change behind this surface.
+            pub(crate) struct Core;
+
+            impl $crate::algos::support::wide_trig_core::WideTrigCore for Core {
+                type W = W;
+                type Wexp = Wexp;
+                type Storage = $Storage;
+                const GUARD: u32 = GUARD;
+
+                #[inline]
+                fn storage_zero() -> $Storage {
+                    <$Storage as $crate::int::types::traits::BigInt>::ZERO
+                }
+                #[inline]
+                fn storage_one(scale: u32) -> $Storage {
+                    <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(scale)
+                }
+                #[inline]
+                fn zero() -> W {
+                    zero()
+                }
+                #[inline]
+                fn to_work_w(raw: $Storage, working_digits: u32) -> W {
+                    to_work_w(raw, working_digits)
+                }
+                #[inline]
+                fn to_work(raw: $Storage) -> W {
+                    to_work(raw)
+                }
+                #[inline]
+                fn round_to_storage_with(
+                    v: W,
+                    w: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                ) -> $Storage {
+                    round_to_storage_with(v, w, target, mode)
+                }
+                #[inline]
+                fn round_to_storage_directed(
+                    base_guard: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                    recompute: &mut dyn FnMut(u32) -> W,
+                ) -> $Storage {
+                    round_to_storage_directed(base_guard, target, mode, recompute)
+                }
+                #[inline]
+                fn exp_fixed(v_w: W, w: u32) -> W {
+                    exp_fixed(v_w, w)
+                }
+                #[inline]
+                fn ln_fixed(v_w: W, w: u32) -> W {
+                    ln_fixed(v_w, w)
+                }
+                #[inline]
+                fn sin_fixed(v_w: W, w: u32) -> W {
+                    sin_fixed(v_w, w)
+                }
+                #[inline]
+                fn cos_fixed(v_w: W, w: u32) -> W {
+                    cos_fixed(v_w, w)
+                }
+                #[inline]
+                fn sin_cos_fixed(v_w: W, w: u32) -> (W, W) {
+                    sin_cos_fixed(v_w, w)
+                }
+                #[inline]
+                fn atan_fixed(v_w: W, w: u32) -> W {
+                    atan_fixed(v_w, w)
+                }
+                #[inline]
+                fn div(a: W, b: W, w: u32) -> W {
+                    div(a, b, w)
+                }
+                #[inline]
+                fn bit_length(v: W) -> u32 {
+                    bit_length(v)
+                }
+            }
         }
 
         impl<const SCALE: u32> $Type<SCALE> {

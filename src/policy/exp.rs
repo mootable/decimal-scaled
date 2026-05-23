@@ -236,22 +236,38 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
 /// so the `match` stays exhaustive and dead-arm-eliminated.
 #[allow(unused_macros)]
 macro_rules! exp_policy_wide_series {
-    ($T:ident, $N:literal, $series:path) => {
+    ($T:ident, $N:literal, $Core:ty) => {
         impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn exp_impl(self, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
-                    Algorithm::Series => $series(self.0, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                     #[cfg(feature = "_wide-support")]
-                    Algorithm::Tang => $series(self.0, mode, SCALE),
+                    Algorithm::Tang => {
+                        crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
             fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
-                    Algorithm::Series => $series(self.0, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                     #[cfg(feature = "_wide-support")]
-                    Algorithm::Tang => $series(self.0, mode, SCALE),
+                    Algorithm::Tang => {
+                        crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
@@ -275,13 +291,15 @@ macro_rules! exp_policy_wide_series {
 #[cfg(feature = "_wide-support")]
 #[allow(unused_macros)]
 macro_rules! exp_policy_wide_tang {
-    ($T:ident, $N:literal, $series:path, $tang:expr) => {
+    ($T:ident, $N:literal, $Core:ty, $tang:expr) => {
         impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn exp_impl(self, mode: RoundingMode) -> Self {
                 let raw = self.0;
                 Self(match resolve::<$N, SCALE>(&raw) {
-                    Algorithm::Series => $series(raw, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(raw, mode)
+                    }
                     Algorithm::Tang => ($tang)(raw, mode),
                 })
             }
@@ -289,7 +307,9 @@ macro_rules! exp_policy_wide_tang {
             fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
                 let raw = self.0;
                 Self(match resolve::<$N, SCALE>(&raw) {
-                    Algorithm::Series => $series(raw, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(raw, mode)
+                    }
                     Algorithm::Tang => ($tang)(raw, mode),
                 })
             }
@@ -307,7 +327,7 @@ macro_rules! exp_policy_wide_tang {
 
 // D57 — Tang bands at SCALE 18..=22 (M=128) and 45..=56 (M=512).
 #[cfg(any(feature = "d57", feature = "wide"))]
-exp_policy_wide_tang!(D57, 3, exp::wide_kernel::exp_strict_d57, |raw: Int<3>,
+exp_policy_wide_tang!(D57, 3, crate::types::widths::wide_trig_d57::Core, |raw: Int<3>,
                                                                  mode|
  -> Int<3> {
     match SCALE {
@@ -318,11 +338,11 @@ exp_policy_wide_tang!(D57, 3, exp::wide_kernel::exp_strict_d57, |raw: Int<3>,
 });
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-exp_policy_wide_series!(D76, 4, exp::wide_kernel::exp_strict_d76);
+exp_policy_wide_series!(D76, 4, crate::types::widths::wide_trig_d76::Core);
 
 // D115 — Tang band at SCALE 50..=60.
 #[cfg(any(feature = "d115", feature = "wide"))]
-exp_policy_wide_tang!(D115, 6, exp::wide_kernel::exp_strict_d115, |raw: Int<6>,
+exp_policy_wide_tang!(D115, 6, crate::types::widths::wide_trig_d115::Core, |raw: Int<6>,
                                                                    mode|
  -> Int<6> {
     match SCALE {
@@ -333,7 +353,7 @@ exp_policy_wide_tang!(D115, 6, exp::wide_kernel::exp_strict_d115, |raw: Int<6>,
 
 // D153 — Tang band at SCALE 70..=82.
 #[cfg(any(feature = "d153", feature = "wide"))]
-exp_policy_wide_tang!(D153, 8, exp::wide_kernel::exp_strict_d153, |raw: Int<8>,
+exp_policy_wide_tang!(D153, 8, crate::types::widths::wide_trig_d153::Core, |raw: Int<8>,
                                                                    mode|
  -> Int<8> {
     match SCALE {
@@ -343,7 +363,7 @@ exp_policy_wide_tang!(D153, 8, exp::wide_kernel::exp_strict_d153, |raw: Int<8>,
 });
 
 #[cfg(any(feature = "d230", feature = "wide"))]
-exp_policy_wide_series!(D230, 12, exp::wide_kernel::exp_strict_d230);
+exp_policy_wide_series!(D230, 12, crate::types::widths::wide_trig_d230::Core);
 
 // D307 — Tang exp probed at SCALE 150 and showed a ~5% regression vs the
 // canonical `wide_kernel::exp_strict_d307`; D307's Int<16> work integer
@@ -351,24 +371,24 @@ exp_policy_wide_series!(D230, 12, exp::wide_kernel::exp_strict_d230);
 // `tang_exp_fixed` machinery in the lookup module stays for the trig
 // hyperbolics, not wired here.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-exp_policy_wide_series!(D307, 16, exp::wide_kernel::exp_strict_d307);
+exp_policy_wide_series!(D307, 16, crate::types::widths::wide_trig_d307::Core);
 
 // D462 — Tang exp probed at SCALE 225..=235 and LOST (~75% regression):
 // at Int<48> the Tang post-reduction Taylor needs ~95 wide mults vs the
 // Smith r/2^n path's ~28 wide squarings. Series stays the default; the
 // lookup kernel is retained behind `cfg(test)` as the lab probe.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-exp_policy_wide_series!(D462, 24, exp::wide_kernel::exp_strict_d462);
+exp_policy_wide_series!(D462, 24, crate::types::widths::wide_trig_d462::Core);
 
 // D616 — Tang lookup exp at SCALE 300..=315 was break-even at best
 // (~250 µs Tang vs ~230 µs wide_kernel); the table multiply on a 1024-bit
 // work integer matches the Smith squaring tail it elides. Series default;
 // the lookup module stays for `tang_exp_fixed` only.
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-exp_policy_wide_series!(D616, 32, exp::wide_kernel::exp_strict_d616);
+exp_policy_wide_series!(D616, 32, crate::types::widths::wide_trig_d616::Core);
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-exp_policy_wide_series!(D924, 48, exp::wide_kernel::exp_strict_d924);
+exp_policy_wide_series!(D924, 48, crate::types::widths::wide_trig_d924::Core);
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-exp_policy_wide_series!(D1232, 64, exp::wide_kernel::exp_strict_d1232);
+exp_policy_wide_series!(D1232, 64, crate::types::widths::wide_trig_d1232::Core);

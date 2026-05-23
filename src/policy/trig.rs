@@ -965,54 +965,70 @@ macro_rules! wide_trig_hyper_inherent {
 /// series kernel so the `match` stays exhaustive and dead-arm-eliminated.
 #[allow(unused_macros)]
 macro_rules! wide_trig_forward_series {
-    ($N:literal, $sin:path, $cos:path, $tan:path, $atan:path) => {
+    ($N:literal, $Core:ty) => {
         #[inline]
         fn sin_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
-                forward::Algorithm::Series => $sin(self.0, mode, SCALE),
+                forward::Algorithm::Series => {
+                    crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode)
+                }
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => $sin(self.0, mode, SCALE),
+                forward::Algorithm::Tang => {
+                    crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode)
+                }
             })
         }
         #[inline]
         fn sin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self($sin(self.0, mode, SCALE))
+            Self(crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         fn cos_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
-                forward::Algorithm::Series => $cos(self.0, mode, SCALE),
+                forward::Algorithm::Series => {
+                    crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode)
+                }
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => $cos(self.0, mode, SCALE),
+                forward::Algorithm::Tang => {
+                    crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode)
+                }
             })
         }
         #[inline]
         fn cos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self($cos(self.0, mode, SCALE))
+            Self(crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         fn tan_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<$N, SCALE>(&self.0) {
-                forward::Algorithm::Series => $tan(self.0, mode, SCALE),
+                forward::Algorithm::Series => {
+                    crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode)
+                }
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => $tan(self.0, mode, SCALE),
+                forward::Algorithm::Tang => {
+                    crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode)
+                }
             })
         }
         #[inline]
         fn tan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self($tan(self.0, mode, SCALE))
+            Self(crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode))
         }
         #[inline]
         fn atan_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
-                forward::Algorithm::Series => $atan(self.0, mode, SCALE),
+                forward::Algorithm::Series => {
+                    crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode)
+                }
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => $atan(self.0, mode, SCALE),
+                forward::Algorithm::Tang => {
+                    crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode)
+                }
             })
         }
         #[inline]
         fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-            Self($atan(self.0, mode, SCALE))
+            Self(crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode))
         }
     };
 }
@@ -1030,7 +1046,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 18..=22 => trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(self.0, mode),
-                _ => trig::wide_kernel::sin_strict_d57(self.0, mode, SCALE),
+                _ => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(self.0, mode)
@@ -1046,7 +1062,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 18..=22 => trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(self.0, mode),
-                _ => trig::wide_kernel::cos_strict_d57(self.0, mode, SCALE),
+                _ => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(self.0, mode)
@@ -1062,11 +1078,11 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
         Self(match forward::resolve_tan::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 18..=22 => trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode),
-                _ => trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE),
+                _ => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             // tan has no D57 Tang band; the arm is dead-arm-eliminated
             // (forwards to the generic kernel for exhaustiveness).
-            forward::Algorithm::Tang => trig::wide_kernel::tan_strict_d57(self.0, mode, SCALE),
+            forward::Algorithm::Tang => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1078,7 +1094,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
                 18..=22 => trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(self.0, mode),
-                _ => trig::wide_kernel::atan_strict_d57(self.0, mode, SCALE),
+                _ => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
                 trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(self.0, mode)
@@ -1182,13 +1198,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
 // ── D76 — width default (no bands) ─────────────────────────────────────
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
-    wide_trig_forward_series!(
-        4,
-        trig::wide_kernel::sin_strict_d76,
-        trig::wide_kernel::cos_strict_d76,
-        trig::wide_kernel::tan_strict_d76,
-        trig::wide_kernel::atan_strict_d76
-    );
+    wide_trig_forward_series!(4, crate::types::widths::wide_trig_d76::Core);
     wide_trig_inverse_inherent!(4);
     wide_trig_hyper_inherent!(4);
     wide_trig_extra_inherent!();
@@ -1198,13 +1208,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
 // 50..=60 to the Tang-style hyper lookup. ──────────────────────────────
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
-    wide_trig_forward_series!(
-        6,
-        trig::wide_kernel::sin_strict_d115,
-        trig::wide_kernel::cos_strict_d115,
-        trig::wide_kernel::tan_strict_d115,
-        trig::wide_kernel::atan_strict_d115
-    );
+    wide_trig_forward_series!(6, crate::types::widths::wide_trig_d115::Core);
     wide_trig_inverse_inherent!(6);
 
     #[inline]
@@ -1257,7 +1261,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::sin_strict_d153(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d153_s70_82_sincos::sin_strict::<SCALE>(self.0, mode)
             }
@@ -1270,7 +1274,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     #[inline]
     fn cos_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::cos_strict_d153(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d153_s70_82_sincos::cos_strict::<SCALE>(self.0, mode)
             }
@@ -1283,7 +1287,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     #[inline]
     fn tan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::tan_strict_d153(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d153_s70_82_sincos::tan_strict::<SCALE>(self.0, mode)
             }
@@ -1296,7 +1300,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     #[inline]
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::atan_strict_d153(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d153_s70_82_atan::atan_strict::<SCALE>(self.0, mode)
             }
@@ -1355,13 +1359,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
 // ── D230 — width default (no bands) ────────────────────────────────────
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D230<SCALE> {
-    wide_trig_forward_series!(
-        12,
-        trig::wide_kernel::sin_strict_d230,
-        trig::wide_kernel::cos_strict_d230,
-        trig::wide_kernel::tan_strict_d230,
-        trig::wide_kernel::atan_strict_d230
-    );
+    wide_trig_forward_series!(12, crate::types::widths::wide_trig_d230::Core);
     wide_trig_inverse_inherent!(12);
     wide_trig_hyper_inherent!(12);
     wide_trig_extra_inherent!();
@@ -1374,7 +1372,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::sin_strict_d307(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d307_s140_160_sincos::sin_strict::<SCALE>(self.0, mode)
             }
@@ -1387,7 +1385,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     #[inline]
     fn cos_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::cos_strict_d307(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d307_s140_160_sincos::cos_strict::<SCALE>(self.0, mode)
             }
@@ -1400,7 +1398,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     #[inline]
     fn tan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::tan_strict_d307(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d307_s140_160_sincos::tan_strict::<SCALE>(self.0, mode)
             }
@@ -1413,7 +1411,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     #[inline]
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::atan_strict_d307(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d307_s140_160_atan::atan_strict::<SCALE>(self.0, mode)
             }
@@ -1476,7 +1474,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::sin_strict_d462(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(self.0, mode)
             }
@@ -1489,7 +1487,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
     #[inline]
     fn cos_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::cos_strict_d462(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(self.0, mode)
             }
@@ -1502,7 +1500,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
     #[inline]
     fn tan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::tan_strict_d462(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(self.0, mode)
             }
@@ -1515,7 +1513,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
     #[inline]
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
-            forward::Algorithm::Series => trig::wide_kernel::atan_strict_d462(self.0, mode, SCALE),
+            forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
                 trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(self.0, mode)
             }
@@ -1534,13 +1532,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
 // ── D616 — width default (no bands) ────────────────────────────────────
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
-    wide_trig_forward_series!(
-        32,
-        trig::wide_kernel::sin_strict_d616,
-        trig::wide_kernel::cos_strict_d616,
-        trig::wide_kernel::tan_strict_d616,
-        trig::wide_kernel::atan_strict_d616
-    );
+    wide_trig_forward_series!(32, crate::types::widths::wide_trig_d616::Core);
     wide_trig_inverse_inherent!(32);
     wide_trig_hyper_inherent!(32);
     wide_trig_extra_inherent!();
@@ -1549,13 +1541,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
 // ── D924 — width default (no bands) ────────────────────────────────────
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
-    wide_trig_forward_series!(
-        48,
-        trig::wide_kernel::sin_strict_d924,
-        trig::wide_kernel::cos_strict_d924,
-        trig::wide_kernel::tan_strict_d924,
-        trig::wide_kernel::atan_strict_d924
-    );
+    wide_trig_forward_series!(48, crate::types::widths::wide_trig_d924::Core);
     wide_trig_inverse_inherent!(48);
     wide_trig_hyper_inherent!(48);
     wide_trig_extra_inherent!();
@@ -1564,13 +1550,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
 // ── D1232 — width default (no bands) ───────────────────────────────────
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::types::widths::D1232<SCALE> {
-    wide_trig_forward_series!(
-        64,
-        trig::wide_kernel::sin_strict_d1232,
-        trig::wide_kernel::cos_strict_d1232,
-        trig::wide_kernel::tan_strict_d1232,
-        trig::wide_kernel::atan_strict_d1232
-    );
+    wide_trig_forward_series!(64, crate::types::widths::wide_trig_d1232::Core);
     wide_trig_inverse_inherent!(64);
     wide_trig_hyper_inherent!(64);
     wide_trig_extra_inherent!();

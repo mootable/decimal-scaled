@@ -274,22 +274,38 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
 /// Tang band: every cell is `Series`.
 #[allow(unused_macros)]
 macro_rules! ln_policy_wide_series {
-    ($T:ident, $N:literal, $series:path) => {
+    ($T:ident, $N:literal, $Core:ty) => {
         impl<const SCALE: u32> LnPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn ln_impl(self, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
-                    Algorithm::Series => $series(self.0, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                     #[cfg(feature = "_wide-support")]
-                    Algorithm::Tang => $series(self.0, mode, SCALE),
+                    Algorithm::Tang => {
+                        crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
             fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
-                    Algorithm::Series => $series(self.0, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                     #[cfg(feature = "_wide-support")]
-                    Algorithm::Tang => $series(self.0, mode, SCALE),
+                    Algorithm::Tang => {
+                        crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             ln_policy_log_family!();
@@ -303,13 +319,15 @@ macro_rules! ln_policy_wide_series {
 #[cfg(feature = "_wide-support")]
 #[allow(unused_macros)]
 macro_rules! ln_policy_wide_tang {
-    ($T:ident, $N:literal, $series:path, $tang:expr) => {
+    ($T:ident, $N:literal, $Core:ty, $tang:expr) => {
         impl<const SCALE: u32> LnPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn ln_impl(self, mode: RoundingMode) -> Self {
                 let raw = self.0;
                 Self(match resolve::<$N, SCALE>(&raw) {
-                    Algorithm::Series => $series(raw, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(raw, mode)
+                    }
                     Algorithm::Tang => ($tang)(raw, mode),
                 })
             }
@@ -317,7 +335,9 @@ macro_rules! ln_policy_wide_tang {
             fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
                 let raw = self.0;
                 Self(match resolve::<$N, SCALE>(&raw) {
-                    Algorithm::Series => $series(raw, mode, SCALE),
+                    Algorithm::Series => {
+                        crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(raw, mode)
+                    }
                     Algorithm::Tang => ($tang)(raw, mode),
                 })
             }
@@ -363,7 +383,7 @@ macro_rules! ln_policy_log_family {
 }
 // D57 — Tang band at SCALE 18..=22.
 #[cfg(any(feature = "d57", feature = "wide"))]
-ln_policy_wide_tang!(D57, 3, ln::wide_kernel::ln_strict_d57, |raw: Int<3>, mode| -> Int<3> {
+ln_policy_wide_tang!(D57, 3, crate::types::widths::wide_trig_d57::Core, |raw: Int<3>, mode| -> Int<3> {
     match SCALE {
         18..=22 => ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(raw, mode),
         _ => unreachable!(),
@@ -371,11 +391,11 @@ ln_policy_wide_tang!(D57, 3, ln::wide_kernel::ln_strict_d57, |raw: Int<3>, mode|
 });
 
 #[cfg(any(feature = "d76", feature = "wide"))]
-ln_policy_wide_series!(D76, 4, ln::wide_kernel::ln_strict_d76);
+ln_policy_wide_series!(D76, 4, crate::types::widths::wide_trig_d76::Core);
 
 // D115 — Tang band at SCALE 50..=60.
 #[cfg(any(feature = "d115", feature = "wide"))]
-ln_policy_wide_tang!(D115, 6, ln::wide_kernel::ln_strict_d115, |raw: Int<6>, mode| -> Int<6> {
+ln_policy_wide_tang!(D115, 6, crate::types::widths::wide_trig_d115::Core, |raw: Int<6>, mode| -> Int<6> {
     match SCALE {
         50..=60 => ln::lookup_d115_s57_tang::ln_strict::<SCALE>(raw, mode),
         _ => unreachable!(),
@@ -384,7 +404,7 @@ ln_policy_wide_tang!(D115, 6, ln::wide_kernel::ln_strict_d115, |raw: Int<6>, mod
 
 // D153 — Tang band at SCALE 70..=82.
 #[cfg(any(feature = "d153", feature = "wide"))]
-ln_policy_wide_tang!(D153, 8, ln::wide_kernel::ln_strict_d153, |raw: Int<8>, mode| -> Int<8> {
+ln_policy_wide_tang!(D153, 8, crate::types::widths::wide_trig_d153::Core, |raw: Int<8>, mode| -> Int<8> {
     match SCALE {
         70..=82 => ln::lookup_d153_s70_82_tang::ln_strict::<SCALE>(raw, mode),
         _ => unreachable!(),
@@ -393,7 +413,7 @@ ln_policy_wide_tang!(D153, 8, ln::wide_kernel::ln_strict_d153, |raw: Int<8>, mod
 
 // D230 — Tang band at SCALE 110..=120.
 #[cfg(any(feature = "d230", feature = "wide"))]
-ln_policy_wide_tang!(D230, 12, ln::wide_kernel::ln_strict_d230, |raw: Int<12>, mode| -> Int<12> {
+ln_policy_wide_tang!(D230, 12, crate::types::widths::wide_trig_d230::Core, |raw: Int<12>, mode| -> Int<12> {
     match SCALE {
         110..=120 => ln::lookup_d230_s110_120_tang::ln_strict::<SCALE>(raw, mode),
         _ => unreachable!(),
@@ -402,7 +422,7 @@ ln_policy_wide_tang!(D230, 12, ln::wide_kernel::ln_strict_d230, |raw: Int<12>, m
 
 // D307 — Tang bands at SCALE 140..=160 (mid) and 285..=295 (deep).
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-ln_policy_wide_tang!(D307, 16, ln::wide_kernel::ln_strict_d307, |raw: Int<16>, mode| -> Int<16> {
+ln_policy_wide_tang!(D307, 16, crate::types::widths::wide_trig_d307::Core, |raw: Int<16>, mode| -> Int<16> {
     match SCALE {
         140..=160 => ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(raw, mode),
         285..=295 => ln::lookup_d307_s285_295_tang::ln_strict::<SCALE>(raw, mode),
@@ -412,7 +432,7 @@ ln_policy_wide_tang!(D307, 16, ln::wide_kernel::ln_strict_d307, |raw: Int<16>, m
 
 // D462 — Tang band at SCALE 225..=235.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-ln_policy_wide_tang!(D462, 24, ln::wide_kernel::ln_strict_d462, |raw: Int<24>, mode| -> Int<24> {
+ln_policy_wide_tang!(D462, 24, crate::types::widths::wide_trig_d462::Core, |raw: Int<24>, mode| -> Int<24> {
     match SCALE {
         225..=235 => ln::lookup_d462_s225_235_tang::ln_strict::<SCALE>(raw, mode),
         _ => unreachable!(),
@@ -421,7 +441,7 @@ ln_policy_wide_tang!(D462, 24, ln::wide_kernel::ln_strict_d462, |raw: Int<24>, m
 
 // D616 — Tang bands at SCALE 300..=315 (mid) and 585..=595 (deep).
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-ln_policy_wide_tang!(D616, 32, ln::wide_kernel::ln_strict_d616, |raw: Int<32>, mode| -> Int<32> {
+ln_policy_wide_tang!(D616, 32, crate::types::widths::wide_trig_d616::Core, |raw: Int<32>, mode| -> Int<32> {
     match SCALE {
         300..=315 => ln::lookup_d616_s300_315_tang::ln_strict::<SCALE>(raw, mode),
         585..=595 => ln::lookup_d616_s585_595_tang::ln_strict::<SCALE>(raw, mode),
@@ -431,7 +451,7 @@ ln_policy_wide_tang!(D616, 32, ln::wide_kernel::ln_strict_d616, |raw: Int<32>, m
 
 // D924 — Tang bands at SCALE 455..=465 (mid) and 895..=905 (deep).
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-ln_policy_wide_tang!(D924, 48, ln::wide_kernel::ln_strict_d924, |raw: Int<48>, mode| -> Int<48> {
+ln_policy_wide_tang!(D924, 48, crate::types::widths::wide_trig_d924::Core, |raw: Int<48>, mode| -> Int<48> {
     match SCALE {
         455..=465 => ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(raw, mode),
         895..=905 => ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(raw, mode),
@@ -441,7 +461,7 @@ ln_policy_wide_tang!(D924, 48, ln::wide_kernel::ln_strict_d924, |raw: Int<48>, m
 
 // D1232 — Tang bands at SCALE 610..=620 (mid) and 1195..=1205 (deep).
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-ln_policy_wide_tang!(D1232, 64, ln::wide_kernel::ln_strict_d1232, |raw: Int<64>, mode| -> Int<64> {
+ln_policy_wide_tang!(D1232, 64, crate::types::widths::wide_trig_d1232::Core, |raw: Int<64>, mode| -> Int<64> {
     match SCALE {
         610..=620 => ln::lookup_d1232_s610_620_tang::ln_strict::<SCALE>(raw, mode),
         1195..=1205 => ln::lookup_d1232_s1195_1205_tang::ln_strict::<SCALE>(raw, mode),
