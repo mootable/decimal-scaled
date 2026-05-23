@@ -25,6 +25,7 @@ use crate::int::algos::limbs::{
     add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, mul_low_fixed,
     mul_schoolbook, shl, shl_fixed, shr_fixed, sqr_low_fixed, sub_assign_fixed,
 };
+use crate::int::policy::add::dispatch as add_dispatch;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::policy::mul::dispatch as mul_fast;
 use crate::support::int_fmt::fmt_into;
@@ -757,9 +758,8 @@ impl<const N: usize> Int<N> {
     /// unsigned add — two's-complement makes signed and unsigned
     /// addition the same operation.
     #[inline]
-    pub const fn wrapping_add(mut self, rhs: Self) -> Self {
-        add_assign_fixed(&mut self.limbs, &rhs.limbs);
-        self
+    pub const fn wrapping_add(self, rhs: Self) -> Self {
+        add_dispatch(self, rhs)
     }
 
     /// Wrapping subtraction (modulo `2^BITS`).
@@ -2283,7 +2283,7 @@ impl<const N: usize> Add for Int<N> {
     type Output = Self;
     #[inline]
     fn add(self, rhs: Self) -> Self {
-        self.wrapping_add(rhs)
+        add_dispatch(self, rhs)
     }
 }
 

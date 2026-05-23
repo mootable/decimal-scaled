@@ -15,10 +15,11 @@
 //!
 //! The per-family dispatch as it actually ships today:
 //!
-//! - **add / sub / neg** — width-keyed only. One limb loop over the
-//!   const `N` limbs ([`crate::int::algos::limbs::add_assign_fixed`] /
-//!   [`crate::int::algos::limbs::sub_assign_fixed`] and `wrapping_neg`); no
-//!   algorithm choice, the loop unrolls per monomorphisation.
+//! - **add** — width-keyed only, one algorithm at every `N`. Routes
+//!   through [`add::dispatch`] (a `const fn` policy so the block folds
+//!   per monomorphisation) to [`crate::int::algos::limbs::add_assign_fixed`]
+//!   (the ripple-carry kernel). Sub / neg still call the limb kernels
+//!   directly; they will gain policy files in a later pass.
 //! - **mul** — schoolbook at every width. The fixed-width types use the
 //!   truncated low-`N` schoolbook product
 //!   ([`crate::int::algos::limbs::mul_low_fixed`] /
@@ -49,17 +50,20 @@
 //!   `root_int` ([`crate::int::algos::roots::isqrt_newton`] and
 //!   `Uint::root_int`).
 //!
-//! Both dispatchers follow the canonical [`Select`] / `select` /
+//! All dispatchers follow the canonical [`Select`] / `select` /
 //! exhaustive-`match algo` policy shape (see `docs/ARCHITECTURE.md` →
-//! "Policy file structure"). Because the integer-layer choice keys on the
-//! operands' *runtime* shape (effective limb count / operand length) and
-//! not on a const generic, each is a `Select::ByValue`-style value
-//! matcher: the const layer settles on "the shape decides", the matcher
-//! classifies, and the dispatcher does an exhaustive `match algo` to the
-//! pure engines / kernels in [`crate::int::algos::div`] /
-//! [`crate::int::algos::limbs`]. The benched crossover thresholds
-//! ([`div_rem::BZ_THRESHOLD`], [`mul::KARATSUBA_THRESHOLD`]) are policy DATA
-//! in those files, not magic numbers in the kernels.
+//! "Policy file structure"). The add dispatcher is a pure `ByAlgorithm`
+//! `const fn` (the const block folds, no runtime branch). The divmod and
+//! mul dispatchers key on the operands' *runtime* shape (effective limb
+//! count / operand length) and are `Select::ByValue`-style value matchers:
+//! the const layer settles on "the shape decides", the matcher classifies,
+//! and the dispatcher does an exhaustive `match algo` to the pure engines /
+//! kernels in [`crate::int::algos::div`] / [`crate::int::algos::limbs`].
+//! The benched crossover thresholds ([`div_rem::BZ_THRESHOLD`],
+//! [`mul::KARATSUBA_THRESHOLD`]) are policy DATA in those files, not magic
+//! numbers in the kernels.
 
+/// Addition policy: default-delegating ripple-carry matcher for `Int<N>`.
+pub(crate) mod add;
 pub(crate) mod div_rem;
 pub(crate) mod mul;
