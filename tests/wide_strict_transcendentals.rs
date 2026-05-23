@@ -716,15 +716,18 @@ fn d76_acosh_strict_with_v_ge_two_branch() {
 // panics with a result-out-of-range message when the rounded result
 // can't fit `$Storage`.
 
-// Debug-only — the overflow panic this asserts comes from i128::pow
-// overflow inside `D38::<74>::multiplier()`, which only panics under
-// debug_assertions. In release builds the multiplier wraps silently
-// and exp_strict completes without panicking. The wide-tier exp
-// kernel proper has separate `result out of range` panics for
-// representable-range overflow, which are exercised elsewhere.
+// Verified parked: `D38::<74>::try_from(70)` does not panic and does
+// not error — the SCALE-74 multiplier (10^74) overflows the i128
+// magnitude inside `multiplier()` on the conversion path and wraps
+// silently to a tiny in-range value, so nothing out-of-range ever
+// reaches `exp_strict` and no panic fires (even under debug_assertions).
+// The Decision-3 restoration (task 1.4) covers the decimal *operators*,
+// not this `from_int`/`multiplier` conversion path, so the test still
+// cannot run. The wide-tier exp kernel's own `result out of range`
+// panics for representable-range overflow are exercised elsewhere.
 #[cfg(debug_assertions)]
 #[test]
-#[ignore = "setup from_int(70) at SCALE 74 overflows Int<2>; wide from_int multiply wraps instead of debug-panicking — Decision 3 (debug-overflow-panic) family"]
+#[ignore = "setup D38::<74>::try_from(70) wraps silently (10^74 multiplier overflows i128 on the from_int path, no debug panic) so no out-of-range value reaches exp_strict — not the Decision-3 operator contract restored in 1.4"]
 #[should_panic]
 fn d76_strict_result_out_of_range_panics() {
     let v: D76<74> = D38::<74>::try_from(70).unwrap().into();
