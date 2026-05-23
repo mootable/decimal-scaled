@@ -1,11 +1,23 @@
-//! Tang-style table-driven `exp_strict` kernel for `D616<SCALE>` with
-//! `SCALE ∈ 300..=315` — the mid-storage popular band centred on
-//! `SCALE = 308`.
+//! Tang-style table-driven `exp_strict` kernel for `D1232<SCALE>` with
+//! `SCALE ∈ 610..=620` — the mid-storage popular band centred on
+//! `SCALE = 615`.
 //!
-//! Sibling to the D153 mid-storage Tang exp at
-//! [`crate::algos::exp::lookup_d153_s70_82_tang`]. See Tang 1989,
+//! Deepest sibling of the per-width Tang exp stack. See Tang 1989,
 //! "Table-driven implementation of the exponential function in IEEE
 //! floating-point arithmetic" (ACM TOMS 16(4)).
+//!
+//! ## Routing status
+//!
+//! The Tang exp surface was **rejected** at D462 (Int3072, ~75%
+//! regression) and at D616 (Int8192, break-even). At D1232's Int16384
+//! working width the wide-kernel `exp_fixed` (adaptive Smith r/2^n
+//! already applied) and the Tang table-multiply are even more matched:
+//! the table multiply costs the same as the Smith squaring tail it is
+//! meant to elide. Surface `exp_impl` therefore keeps the canonical
+//! `wide_kernel::exp_strict_d1232`. This module is retained in the lab
+//! as a reference probe for future re-evaluation.
+//!
+//! ## Algorithm
 //!
 //! ```text
 //! e^v = 2^k · e^s,            s = v − k·ln 2,           |s| ≤ ln 2 / 2
@@ -14,29 +26,31 @@
 //! ```
 //!
 //! With `M = 128` the residual `|δ| ≤ ln(2)/256 ≈ 2.7·10⁻³`, so the
-//! Taylor on δ converges in `~p / log₁₀(1/|δ|) ≈ 318/2.57 ≈ 124` terms
-//! at `w = SCALE + 10 ≤ 325`. The wide-tier macro `exp_fixed` already
+//! Taylor on δ converges in `~p / log₁₀(1/|δ|) ≈ 630/2.57 ≈ 245` terms
+//! at `w = SCALE + 8 ≤ 628`. The wide-tier macro `exp_fixed` already
 //! runs adaptive Smith r/2^n with `n ≈ √p_bits`; the Tang lookup
 //! replaces both the `k·ln 2` Stage 1 reduction *and* most of the
 //! Smith squaring loop with a single table multiply.
 //!
 //! ## Tuning
 //!
-//! - `GUARD_NARROW = 10` matches the sibling
-//!   [`lookup_d616_s300_315_tang`] ln so the per-thread `pow10_w`
-//!   cache slot is shared across neighbouring exp/ln/sinh/cosh/tanh
-//!   calls.
-//! - `M = 128` mirrors the D57 / D115 / D153 mid-storage Tang slots.
-//!   Per-thread memory cost: `M · sizeof(W) = 128 · 1024 B ≈ 128 KB`
-//!   for D616's Int8192 working integer. Larger than L1d (32 KB
-//!   typical) but well inside L2 (256 KB-1 MB on modern x86).
+//! - `GUARD_NARROW = 8` matches the sibling
+//!   [`crate::algos::ln::lookup_d1232_s610_620_tang`] ln kernel so the
+//!   per-thread `pow10_w` cache slot is shared.
+//! - `M = 128` matches the lower Tang slots. Per-thread memory cost:
+//!   `M · sizeof(W) = 128 · 2048 B ≈ 256 KB` for D1232's Int16384
+//!   working integer.
 
-#![cfg(any(feature = "d616", feature = "x-wide"))]
+#![cfg(any(feature = "d1232", feature = "xx-wide"))]
 
-use crate::types::widths::wide_trig_d616 as core;
+#[cfg(test)]
+use crate::int::types::Int;
+#[cfg(test)]
+use crate::support::rounding::RoundingMode;
+use crate::types::widths::wide_trig_d1232 as core;
 
-/// Narrow guard for the SCALE 300..=315 Tang-exp slot.
-const GUARD_NARROW: u32 = 10;
+/// Narrow guard for the SCALE 610..=620 Tang-exp slot.
+const GUARD_NARROW: u32 = 8;
 
 /// Table size — power of two so the index quantisation step
 /// `ln(2) / M` keeps the cheap integer-division path.
@@ -55,9 +69,9 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     out
 }
 
-/// Tang-style `e^v_w` kernel on an already-lifted working value. Used by
-/// [`exp_strict`] and exposed for hyperbolic kernels that need a shared
-/// `(exp(v), exp(-v))` pair without paying the `to_work_w` lift twice.
+/// Tang-style `e^v_w` kernel on an already-lifted working value.
+/// Exposed for hyperbolic kernels that need a shared `(exp(v), exp(-v))`
+/// pair without paying the `to_work_w` lift twice.
 #[must_use]
 pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     let one_w = core::one(w);
@@ -89,7 +103,7 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     };
     debug_assert!(
         j_idx < M,
-        "tang_exp_fixed d616 s300..=315: table index out of range"
+        "tang_exp_fixed d1232 s610..=620: table index out of range"
     );
 
     // Taylor on δ.
@@ -116,7 +130,7 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
         let shift = k_total as u32;
         debug_assert!(
             core::bit_length(exp_s) + shift < core::W::BITS,
-            "tang_exp_fixed d616 s300..=315: result overflows the representable range",
+            "tang_exp_fixed d1232 s610..=620: result overflows the representable range",
         );
         exp_s << shift
     } else {
@@ -129,9 +143,23 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     }
 }
 
-// The `exp_strict` Tang kernel for D616 was dropped in the Phase-4
-// migration (surface `exp` at D616 routes through `wide_kernel` —
-// `Series`). `tang_exp_fixed` stays for the trig hyperbolic consumer.
+/// Tang-style `e^x` strict kernel for `D1232<SCALE>` with
+/// `SCALE ∈ 610..=620`. Wired only behind `cfg(test)` so the kernel can
+/// be probed without committing it to dispatch — see module docs for
+/// the rejection rationale.
+#[cfg(test)]
+#[inline]
+#[must_use]
+pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<64>, mode: RoundingMode) -> Int<64> {
+    if raw == Int::<64>::ZERO {
+        let ten: Int<64> = Int::<64>::from_u128(10);
+        return ten.pow(SCALE);
+    }
+    let w = SCALE + GUARD_NARROW;
+    let v_w = core::to_work_w(raw, GUARD_NARROW);
+    let result = tang_exp_fixed(v_w, w);
+    core::round_to_storage_with(result, w, SCALE, mode)
+}
 
 /// Narrow guard used by the Tang exp kernel — exposed so the
 /// hyperbolic kernels can lift their argument to the same working

@@ -62,7 +62,7 @@ use crate::int::types::Int;
 /// representation that fits an `Int<4>` (`4 · 64` bits). Every D38
 /// scale (0..=38) is at most 38 digits, so we always rescale **down**
 /// from 75 → SCALE, never up. The half-to-even rescale-down step is
-/// performed by [`Fixed::round_to_i128`] (`Fixed` is the same 256-bit
+/// performed by [`Fixed::round_to_i128_with`] (`Fixed` is the same 256-bit
 /// guard-digit type the strict transcendentals use), giving 0.5 ULP at
 /// the caller's `SCALE` for every value that fits `i128` at that
 /// scale.

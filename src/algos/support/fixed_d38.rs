@@ -709,26 +709,20 @@ impl Fixed {
     }
 
     /// Rounds the working-scale magnitude to a narrower decimal scale
-    /// `target` (`target <= w`) using the crate-default
-    /// [`RoundingMode`] and returns the result as a signed `i128`
-    /// raw storage value. Used to land a guard-digit computation back
-    /// on the caller's `D38<SCALE>`.
+    /// `target` (`target <= w`) using the supplied [`RoundingMode`] and
+    /// returns the result as a signed `i128` raw storage value. Used to
+    /// land a guard-digit computation back on the caller's `D38<SCALE>`.
+    ///
+    /// For the crate-default rounding mode, pass
+    /// [`crate::support::rounding::DEFAULT_ROUNDING_MODE`].
     ///
     /// Returns `None` if the rounded magnitude does not fit `i128`.
     ///
-    /// [`RoundingMode`]: crate::support::rounding::RoundingMode
-    #[inline]
-    pub(crate) fn round_to_i128(self, w: u32, target: u32) -> Option<i128> {
-        self.round_to_i128_with(w, target, crate::support::rounding::DEFAULT_ROUNDING_MODE)
-    }
-
-    /// Mode-aware variant of [`Self::round_to_i128`]. Mode dispatch
-    /// runs through [`crate::support::rounding::should_bump`], matching the
-    /// rest of the crate's rounding sites.
-    ///
     /// `#[inline]` so callers that thread a const mode (the strict
-    /// path's `DEFAULT_ROUNDING_MODE`) get the should_bump match
+    /// path's `DEFAULT_ROUNDING_MODE`) get the `should_bump` match
     /// folded at the call site rather than dispatching at runtime.
+    ///
+    /// [`RoundingMode`]: crate::support::rounding::RoundingMode
     #[inline]
     pub(crate) fn round_to_i128_with(
         self,
