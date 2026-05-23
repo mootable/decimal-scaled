@@ -72,26 +72,38 @@ impl<S: Copy, const SCALE: u32> Copy for D<S, SCALE> {}
 // `D<S, SCALE>` would collide with those macro-emitted impls once
 // the per-width types are aliases of `D<…, SCALE>`.
 
-impl<S: PartialEq, const SCALE: u32> PartialEq for D<S, SCALE> {
+// Equality / ordering. The `D` type is always `Int<N>`-backed, so these
+// impls are bound to `Int` storage and delegate to the int-layer
+// cross-width comparator (`Int::cmp_cross`) on the storages at the same
+// `SCALE`. One generic `PartialEq` / `PartialOrd` pair covers every
+// `(width, width)` combination — the same-type case (`N == M`) is one
+// instantiation, so no separate same-type impl is needed (a derived or
+// hand-written same-type comparison would collide — E0119).
+use crate::int::types::Int;
+
+impl<const N: usize, const M: usize, const S: u32> PartialEq<D<Int<M>, S>> for D<Int<N>, S> {
     #[inline]
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
+    fn eq(&self, other: &D<Int<M>, S>) -> bool {
+        self.0.cmp_cross(other.0) == core::cmp::Ordering::Equal
     }
 }
 
-impl<S: Eq, const SCALE: u32> Eq for D<S, SCALE> {}
+// `Eq` requires only `PartialEq<Self>`, provided by the generic above
+// (the `N == M`, `S == S` instantiation).
+impl<const N: usize, const S: u32> Eq for D<Int<N>, S> {}
 
-impl<S: PartialOrd, const SCALE: u32> PartialOrd for D<S, SCALE> {
+impl<const N: usize, const M: usize, const S: u32> PartialOrd<D<Int<M>, S>> for D<Int<N>, S> {
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<core::cmp::Ordering> {
-        self.0.partial_cmp(&other.0)
+    fn partial_cmp(&self, other: &D<Int<M>, S>) -> Option<core::cmp::Ordering> {
+        Some(self.0.cmp_cross(other.0))
     }
 }
 
-impl<S: Ord, const SCALE: u32> Ord for D<S, SCALE> {
+// Same-type total order via the same comparator path.
+impl<const N: usize, const S: u32> Ord for D<Int<N>, S> {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp(&other.0)
+        self.0.cmp_cross(other.0)
     }
 }
 
@@ -99,5 +111,78 @@ impl<S: core::hash::Hash, const SCALE: u32> core::hash::Hash for D<S, SCALE> {
     #[inline]
     fn hash<H: core::hash::Hasher>(&self, state: &mut H) {
         self.0.hash(state);
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::types::widths::{D18, D38};
+
+    /// Equal logical values compare equal across decimal widths at the
+    /// same SCALE.
+    #[test]
+    fn cross_width_equal_values() {
+        let narrow: D18<2> = D18::<2>::from_int(5_i64);
+        let wide: D38<2> = D38::<2>::from_int(5_i64);
+        assert!(narrow == wide);
+        assert!(wide == narrow);
+    }
+
+    /// Ordering holds across widths at the same SCALE, both directions.
+    #[test]
+    fn cross_width_ordering() {
+        let narrow: D18<2> = D18::<2>::from_int(5_i64);
+        let wide_bigger: D38<2> = D38::<2>::from_int(6_i64);
+        assert!(narrow < wide_bigger);
+        assert!(wide_bigger > narrow);
+        assert_ne!(narrow, wide_bigger);
+    }
+
+    /// A value that fits only in the wider tier still compares correctly
+    /// against a narrow value (no overflow, no wraparound).
+    #[test]
+    fn cross_width_value_only_in_wider_tier() {
+        // D38<2> scales by 10^2, so from_int(10^16) stores 10^18 in the
+        // i128 backend — beyond the i64-backed D18 storage range, so the
+        // value only fits the wider tier. The comparison must not wrap.
+        let huge: D38<2> = D38::<2>::from_int(10_000_000_000_000_000_i64);
+        let small: D18<2> = D18::<2>::from_int(1_i64);
+        assert!(small < huge);
+        assert!(huge > small);
+    }
+
+    /// Negative values compare correctly across widths.
+    #[test]
+    fn cross_width_negatives() {
+        let narrow_neg: D18<2> = D18::<2>::from_int(-3_i64);
+        let wide_neg: D38<2> = D38::<2>::from_int(-3_i64);
+        let wide_more_neg: D38<2> = D38::<2>::from_int(-4_i64);
+        assert_eq!(narrow_neg, wide_neg);
+        assert!(wide_more_neg < narrow_neg);
+        assert!(narrow_neg > wide_more_neg);
+        // Sign boundary: negative narrow < non-negative wide.
+        let wide_pos: D38<2> = D38::<2>::from_int(1_i64);
+        assert!(narrow_neg < wide_pos);
+    }
+
+    /// Same-type values sort via the generic `Ord` path.
+    #[test]
+    fn same_type_sort() {
+        let mut v = [
+            D38::<2>::from_int(3_i64),
+            D38::<2>::from_int(-1_i64),
+            D38::<2>::from_int(2_i64),
+            D38::<2>::from_int(0_i64),
+        ];
+        v.sort();
+        assert_eq!(
+            v,
+            [
+                D38::<2>::from_int(-1_i64),
+                D38::<2>::from_int(0_i64),
+                D38::<2>::from_int(2_i64),
+                D38::<2>::from_int(3_i64),
+            ]
+        );
     }
 }
