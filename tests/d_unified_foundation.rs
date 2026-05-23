@@ -49,8 +49,11 @@ fn equality_by_raw_storage() {
 
 #[test]
 fn ordering_by_raw_storage() {
-    let a: D<i64, 4> = D(10);
-    let b: D<i64, 4> = D(20);
+    // `i64` is no longer a decimal storage (D18 backs onto `Int<1>`); ordering
+    // operators live only on `Int<N>`-backed `D`, so use `Int<1>` here (mirrors
+    // `equality_by_raw_storage`).
+    let a: D<decimal_scaled::Int<1>, 4> = D(decimal_scaled::Int::<1>::from(10i64));
+    let b: D<decimal_scaled::Int<1>, 4> = D(decimal_scaled::Int::<1>::from(20i64));
     assert!(a < b);
     assert_eq!(a.cmp(&b), Ordering::Less);
     assert_eq!(b.cmp(&a), Ordering::Greater);

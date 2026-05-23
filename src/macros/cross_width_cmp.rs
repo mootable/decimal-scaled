@@ -11,9 +11,9 @@
 //!
 //! ```ignore
 //! impl<const N: usize, const M: usize, const S: u32>
-//!     PartialEq<D<Int<M>, S>> for D<Int<N>, S> { … }
+//!     PartialEq<D<Int<M>, S>> for D<Int<N>, S> { /* .. */ }
 //! impl<const N: usize, const M: usize, const S: u32>
-//!     PartialOrd<D<Int<M>, S>> for D<Int<N>, S> { … }
+//!     PartialOrd<D<Int<M>, S>> for D<Int<N>, S> { /* .. */ }
 //! ```
 //!
 //! which delegates to the int-layer cross-width comparator
