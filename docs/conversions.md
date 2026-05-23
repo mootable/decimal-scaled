@@ -7,8 +7,8 @@
 ```rust
 # use decimal_scaled::D38s2;
 let a: D38s2 = 7i32.into();          // 7.00
-let b = D38s2::from_int(7i64);       // 7.00 - widest integer source
-let c = D38s2::from_i32(-3);         // -3.00
+let b: D38s2 = 7i64.into();          // 7.00 - widest infallible integer source
+let c: D38s2 = (-3i32).into();       // -3.00
 ```
 
 `From` is provided for the integer types narrower than the storage.
@@ -30,7 +30,7 @@ method, so it comes as a `_with` pair:
 ```rust
 use decimal_scaled::{D38s2, RoundingMode};
 
-let v = D38s2::from_bits(250);   // 2.50
+let v: D38s2 = "2.50".parse().unwrap();   // 2.50
 assert_eq!(v.to_int(), 2);                                  // HalfToEven
 assert_eq!(v.to_int_with(RoundingMode::HalfAwayFromZero), 3);
 assert_eq!(v.to_int_with(RoundingMode::Ceiling), 3);
@@ -68,10 +68,9 @@ entry points (`from_f16`, `to_f128`, …) are also available.
 Widening (to a larger storage) is lossless and infallible - `From`:
 
 ```rust
-# use decimal_scaled::{D9s2, D18s2, D38s2};
-let small: D9s2  = D9s2::from_bits(150);
-let mid:   D18s2  = small.into();
-let wide:  D38s2 = small.into();      // skip-widening works too
+# use decimal_scaled::{D18s2, D38s2};
+let small: D18s2 = "1.50".parse().unwrap();
+let wide:  D38s2 = small.into();      // lossless widen to a larger storage
 ```
 
 Narrowing (to a smaller storage) is fallible - `TryFrom` - because the
@@ -79,7 +78,7 @@ value may not fit:
 
 ```rust
 # use decimal_scaled::{D18s2, D38s2};
-let wide = D38s2::from_bits(150);
+let wide: D38s2 = "1.50".parse().unwrap();
 let ok:  D18s2 = wide.try_into().unwrap();
 
 let huge = D38s2::MAX;

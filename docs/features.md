@@ -2,7 +2,7 @@
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", default-features = false, features = ["alloc"] }
+decimal-scaled = { version = "0.5", default-features = false, features = ["alloc"] }
 ```
 
 ## Core features
@@ -87,30 +87,30 @@ across every wider tier pair. Every adjacent pair in the ladder has
 ```toml
 # Default — std, serde, and the integer-only ≤ 0.5 ULP `*_strict`
 # transcendentals dispatched by plain `sin` / `ln` / `sqrt`.
-decimal-scaled = "0.4"
+decimal-scaled = "0.5"
 
 # `no_std`, still with serde and the deterministic strict path.
-decimal-scaled = { version = "0.4", default-features = false,
+decimal-scaled = { version = "0.5", default-features = false,
                    features = ["serde", "alloc", "strict"] }
 
 # Add the half-width and wider tiers (D57–D307).
-decimal-scaled = { version = "0.4", features = ["wide", "macros"] }
+decimal-scaled = { version = "0.5", features = ["wide", "macros"] }
 
 # Add the extra-wide tiers (D462 / D616) on top of wide.
-decimal-scaled = { version = "0.4", features = ["x-wide", "macros"] }
+decimal-scaled = { version = "0.5", features = ["x-wide", "macros"] }
 
 # Add the xx-wide tiers (D924 / D1232) — research-grade precision.
-decimal-scaled = { version = "0.4", features = ["xx-wide", "macros"] }
+decimal-scaled = { version = "0.5", features = ["xx-wide", "macros"] }
 
 # Bank-statement rounding: HalfAwayFromZero as the crate-wide default.
-decimal-scaled = { version = "0.4",
+decimal-scaled = { version = "0.5",
                    features = ["wide", "rounding-half-away-from-zero"] }
 
 # Speed over determinism — plain transcendentals dispatch to the f64
 # bridge (~16 decimal digits of platform-libm precision). The
 # `*_strict` named methods remain available for the parts of your
 # code that need them.
-decimal-scaled = { version = "0.4", default-features = false,
+decimal-scaled = { version = "0.5", default-features = false,
                    features = ["std", "fast"] }
 ```
 
@@ -129,8 +129,8 @@ The `dyn` feature adds a deliberately small, object-safe trait
 use decimal_scaled::{D38, DynDecimal, DecimalWidth};
 
 let values: Vec<Box<dyn DynDecimal>> = vec![
-    Box::new(D38::<2>::from_i32(150)),  // 1.50
-    Box::new(D38::<5>::from_i32(2)),    // 2.00000
+    Box::new(D38::<2>::from(150i32)),   // 150.00
+    Box::new(D38::<5>::from(2i32)),     // 2.00000
 ];
 let sum = values[0].add(&*values[1]).unwrap();
 assert_eq!(sum.width(), DecimalWidth::D38);

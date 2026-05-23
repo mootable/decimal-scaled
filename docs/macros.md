@@ -18,7 +18,7 @@ Enable the macros with the `macros` feature (off by default):
 
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", features = ["macros"] }
+decimal-scaled = { version = "0.5", features = ["macros"] }
 ```
 
 ```rust
@@ -40,8 +40,8 @@ let d = d38!(1.230);         // D38<3>  - trailing zero preserved
 let e = d38!(0.001);         // D38<3>
 let f = d38!(-1.23);         // D38<2>
 let g = d38!(1_234.567_89);  // D38<5>  - underscores allowed
-# assert_eq!(a, D38s2::from_bits(123));
-# assert_eq!(b, D38s0::from_bits(123));
+# assert_eq!(a.to_bits(), 123i128);
+# assert_eq!(b.to_bits(), 123i128);
 ```
 
 ## Scientific notation
@@ -56,7 +56,7 @@ let a = d38!(1.5e3);    // 1500    -> D38<0>
 let b = d38!(1.5e-3);   // 0.0015  -> D38<4>
 let c = d38!(1e6);      // 1000000 -> D38<0>
 let d = d38!(-2.5e-2);  // -0.025  -> D38<3>
-# assert_eq!(a, D38s0::from_bits(1500));
+# assert_eq!(a.to_bits(), 1500i128);
 ```
 
 ## The `scale N` qualifier
@@ -86,7 +86,7 @@ let a = d38!(1.234999, scale 2, rounded);   // 1.23
 let b = d38!(1.235001, scale 2, rounded);   // 1.24
 let c = d38!(1.235,    scale 2, rounded);   // 1.24  (tie -> even)
 let d = d38!(1.225,    scale 2, rounded);   // 1.22  (tie -> even)
-# assert_eq!(a, D38s2::from_bits(123));
+# assert_eq!(a.to_bits(), 123i128);
 ```
 
 ## Inline expressions
@@ -99,7 +99,7 @@ The first argument can be an integer expression; combine with
 # use decimal_scaled::{D38, D38s0};
 let a = d38!(10 * 12 + 3, scale 0);   // D38<0>, raw 123
 let b = d38!(5, scale 4);             // D38<4>, raw 50_000
-# assert_eq!(a, D38s0::from_bits(123));
+# assert_eq!(a.to_bits(), 123i128);
 ```
 
 ---

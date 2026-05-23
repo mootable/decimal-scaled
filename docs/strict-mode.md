@@ -22,7 +22,7 @@ resolves to.
 ```rust
 use decimal_scaled::D38s12;
 
-let x = D38s12::from_int(2);
+let x: D38s12 = 2i64.into();
 
 // Always available - the integer-only path, explicitly:
 let r1 = x.sqrt_strict();
@@ -69,7 +69,7 @@ widen-compute-narrow delegation):
 ## The `strict` feature
 
 ```toml
-decimal-scaled = { version = "0.4", features = ["strict"] }
+decimal-scaled = { version = "0.5", features = ["strict"] }
 ```
 
 With `strict` enabled, the plain methods (`sqrt`, `ln`, `sin`, …)
@@ -82,7 +82,7 @@ transcendental operations.
 ## The `fast` feature
 
 ```toml
-decimal-scaled = { version = "0.4", default-features = false, features = ["std", "fast"] }
+decimal-scaled = { version = "0.5", default-features = false, features = ["std", "fast"] }
 ```
 
 `fast` makes the plain methods (`sqrt`, `ln`, `sin`, …) dispatch

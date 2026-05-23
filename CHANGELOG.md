@@ -48,8 +48,10 @@ land alongside.
 - **`D38` storage changed from `i128` to `Int<2>`.** The 128-bit
   tier is now backed by `Int<2>` (two 64-bit limbs). `to_bits` and
   `from_bits` now use `Int<2>` instead of `i128`. Existing call
-  sites that bridged through `i128` should call `as_i128()` /
-  `Int::from_i128()` at the boundary. This is a breaking type change.
+  sites that bridged through `i128` should construct via
+  `Int::<2>::from(v)` / `Int::<2>::try_from(v)?` and read back with
+  `i128::from(int2)` (the `From` / `TryFrom` trait surface). This is
+  a breaking type change.
 - **`D18` narrowing conversions tightened.** `TryFrom<i128>` and
   `TryFrom<u128>` for `D18` now reject values outside the `i64`
   storage range (previously the wide arms assumed ≥ 128-bit storage
@@ -71,6 +73,13 @@ land alongside.
   (and the matching `Uint*`) re-exports are gone — name the storage
   as the const-generic `Int<N>` / `Uint<N>` instead (e.g. `Int<4>`
   for the former `Int256`).
+- **BREAKING: `from_int` / `from_i32` on the decimal types are now
+  `pub(crate)`.** The integer-construction surface is the idiomatic
+  `From` / `TryFrom` traits instead: `let d: D38<2> = 20i64.into();`
+  (infallible, scaled by `10^SCALE`) or `D38::<2>::try_from(20i128)?`
+  (fallible from `i128` / `u128`). The inherent `from_int` /
+  `from_i32` constructors are retained internally but are no longer
+  part of the public API.
 
 ### Fixed
 
@@ -91,7 +100,7 @@ land alongside.
 - **`Int<N>` arithmetic sign-preserving right-shift restored.**
   `Shr` was not sign-extending correctly for negative values,
   corrupting wide-tier transcendental range-reduction. Fixed;
-  confirmed against the 286-cell golden suite.
+  confirmed against the 264-cell golden suite.
 - **`Int<N>::leading_zeros` is two's-complement-faithful.** Negative
   values now correctly return `0` (all bits set under negation),
   matching `iN::leading_zeros` parity. The wide `Mul` / `Div`
@@ -121,19 +130,22 @@ land alongside.
   providing the full method coverage (`LIMBS`, `BITS`, `ZERO`, `ONE`,
   `MAX`, `MIN`, `leading_zeros`, `wrapping_add`, `wrapping_sub`,
   `wrapping_mul`, `div_rem`, `isqrt`, `widen`, `narrow`, …).
-- **`Int<N>` checked primitive conversions (std-aligned).** Fills the
-  gap left by the silently-truncating `from_i128` / `as_i128`:
-  - `Int<N>::from_i128_checked` — value conversion, returns
-    `Option<Int<N>>`, rejects out-of-range.
-  - `Int<N>::from_i128_bits` — bit-reinterpretation (truncating),
-    analogous to `i64::from_ne_bytes`.
-  - `Int<N>::as_i128_bits` — bit-reinterpretation to `i128`.
-  - `Uint<N>::from_u128_checked`, `Uint<N>::from_u128_bits` —
-    same pattern for the unsigned half.
-  - `From<i8..i64>` for `Int<N>`, `From<u8..u64>` for `Uint<N>`
-    — infallible widening from narrow primitives.
-  - `TryFrom<i128>` for `Int<N>`, `TryFrom<u128>` for `Uint<N>`
-    — fallible narrowing (returns `ConvertError::Overflow`).
+- **`Int<N>` / `Uint<N>` std-aligned primitive conversion surface.**
+  The crate-internal `from_i128` / `as_i128` helpers are now
+  `pub(crate)`; the public conversions go through the idiomatic
+  `From` / `TryFrom` traits:
+  - `From<i8>` / `From<i16>` / `From<i32>` / `From<i64>` for `Int<N>`
+    — infallible widening from a narrow signed primitive.
+  - `From<u8>` / `From<u16>` / `From<u32>` for `Int<N>`, and
+    `From<u8>` / `From<u16>` / `From<u32>` / `From<u64>` for `Uint<N>`
+    — infallible widening from a narrow unsigned primitive.
+  - `TryFrom<u64>` for `Int<N>` (a `u64` can overflow `Int<1>`),
+    `TryFrom<i128>` for `Int<N>`, and `TryFrom<u128>` for both
+    `Int<N>` and `Uint<N>` — fallible narrowing, returning
+    `ConvertError::Overflow` when the value is out of range.
+  - `From<Int<1>>` / `From<Int<2>>` for `i64` / `i128` and the
+    matching `PartialEq` / `PartialOrd` bridges, so the one- and
+    two-limb tiers interoperate with the corresponding primitive.
 - **Non-allocating stack-scratch Karatsuba multiply** in
   `wide_int::widen_mul`. The non-alloc Karatsuba dispatcher is wired
   into `widen_mul`; the schoolbook path remains optimal at all
@@ -169,6 +181,25 @@ land alongside.
   the decimal six-bucket layout. The former `FixedInt` / `WideStorage` /
   `WideInt` traits are unified into the single `BigInt` trait, rooted in
   `src/int/types/traits/`.
+- **`(N, SCALE)` policy-matcher dispatch layer.** Every
+  transcendental family (`sqrt` / `cbrt` / `exp` / `ln` / `pow` /
+  `trig`) routes its typed `Dxx<S>` method shell through a
+  per-family policy trait whose body is a `const fn select::<N,
+  SCALE>()` returning an `Algorithm` enum, dispatched via an inline
+  `const { select::<N, SCALE>() }` match. Because `N` and `SCALE`
+  are `const` at every monomorphisation, the selector const-folds to
+  its single live arm — each concrete type compiles to a direct call
+  to one kernel with zero runtime dispatch cost. The integer layer
+  carries its own parallel matcher families (`mul`, `div_rem`) under
+  `src/int/policy/`. This replaces the previous scattered per-method
+  `cfg` / width-branch dispatch.
+- **Stable cross-width-and-scale conversion: `convert_from` /
+  `convert_from_with`.** A new method on every width converts from
+  any other width *and* scale in one step (e.g.
+  `D76::<40>::convert_from(some_d38_s12)`), rescaling and resizing
+  together, with a `_with(mode)` sibling for the rounding choice.
+  Complements the existing same-scale `From` / `TryFrom` widening /
+  narrowing and the cross-scale `_of` operator surface.
 - **Precision harness unified.** `tests/ulp_strict_golden.rs` and the
   comparative precision suite share a single `PrecisionSubject`
   harness with committable result TSV files under

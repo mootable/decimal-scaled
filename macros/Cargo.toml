@@ -1,10 +1,10 @@
 [package]
 name = "decimal_scaled_macros"
-version = "0.4.4"
+version = "0.5.0"
 edition = "2024"
 rust-version = "1.85"
 license = "MIT OR Apache-2.0"
-description = "Compile-time decimal literal proc-macros (`d9!`, `d18!`, `d38!`, `d76!`, `d153!`, `d307!`) for the decimal-scaled crate."
+description = "Compile-time decimal literal proc-macros (`d18!`, `d38!`, `d76!`, `d153!`, `d307!`) for the decimal-scaled crate."
 repository = "https://github.com/mootable/decimal-scaled"
 homepage = "https://github.com/mootable/decimal-scaled"
 documentation = "https://mootable.github.io/decimal-scaled/"

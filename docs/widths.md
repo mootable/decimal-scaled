@@ -15,18 +15,18 @@ overall scaffold:
 <!-- BEGIN GENERATED:widths:table -->
 | Type | Constructor macro | Underlying signed integer | `MAX_SCALE` | Max value at SCALE 0 | Required feature |
 |---|---|---|---|---|---|
-| `D18<S>` | `d18!` | `i64` (64 bits) | 17 | ±9.2 × 10¹⁸ | always available |
-| `D38<S>` | `d38!` | `i128` (128 bits) | 37 | ±1.7 × 10³⁸ | always available |
-| `D57<S>` | `d57!` | `Int192` (192 bits) | 56 | ±3.1 × 10⁵⁷ | `d57` / `wide` |
-| `D76<S>` | `d76!` | `Int256` (256 bits) | 75 | ±5.8 × 10⁷⁶ | `d76` / `wide` |
-| `D115<S>` | `d115!` | `Int384` (384 bits) | 114 | ±2.0 × 10¹¹⁵ | `d115` / `wide` |
-| `D153<S>` | `d153!` | `Int512` (512 bits) | 152 | ±6.7 × 10¹⁵³ | `d153` / `wide` |
-| `D230<S>` | `d230!` | `Int768` (768 bits) | 229 | ±7.7 × 10²³⁰ | `d230` / `wide` |
-| `D307<S>` | `d307!` | `Int1024` (1024 bits) | 306 | ±9.0 × 10³⁰⁷ | `d307` / `wide` |
-| `D462<S>` | `d462!` | `Int1536` (1536 bits) | 461 | ±1.0 × 10⁴⁶² | `d462` / `x-wide` |
-| `D616<S>` | `d616!` | `Int2048` (2048 bits) | 615 | ±1.6 × 10⁶¹⁶ | `d616` / `x-wide` |
-| `D924<S>` | `d924!` | `Int3072` (3072 bits) | 923 | ±2.3 × 10⁹²⁴ | `d924` / `xx-wide` |
-| `D1232<S>` | `d1232!` | `Int4096` (4096 bits) | 1231 | ±2.7 × 10¹²³² | `d1232` / `xx-wide` |
+| `D18<S>` | `d18!` | `Int<1>` (64 bits) | 17 | ±9.2 × 10¹⁸ | always available |
+| `D38<S>` | `d38!` | `Int<2>` (128 bits) | 37 | ±1.7 × 10³⁸ | always available |
+| `D57<S>` | `d57!` | `Int<3>` (192 bits) | 56 | ±3.1 × 10⁵⁷ | `d57` / `wide` |
+| `D76<S>` | `d76!` | `Int<4>` (256 bits) | 75 | ±5.8 × 10⁷⁶ | `d76` / `wide` |
+| `D115<S>` | `d115!` | `Int<6>` (384 bits) | 114 | ±2.0 × 10¹¹⁵ | `d115` / `wide` |
+| `D153<S>` | `d153!` | `Int<8>` (512 bits) | 152 | ±6.7 × 10¹⁵³ | `d153` / `wide` |
+| `D230<S>` | `d230!` | `Int<12>` (768 bits) | 229 | ±7.7 × 10²³⁰ | `d230` / `wide` |
+| `D307<S>` | `d307!` | `Int<16>` (1024 bits) | 306 | ±9.0 × 10³⁰⁷ | `d307` / `wide` |
+| `D462<S>` | `d462!` | `Int<24>` (1536 bits) | 461 | ±1.0 × 10⁴⁶² | `d462` / `x-wide` |
+| `D616<S>` | `d616!` | `Int<32>` (2048 bits) | 615 | ±1.6 × 10⁶¹⁶ | `d616` / `x-wide` |
+| `D924<S>` | `d924!` | `Int<48>` (3072 bits) | 923 | ±2.3 × 10⁹²⁴ | `d924` / `xx-wide` |
+| `D1232<S>` | `d1232!` | `Int<64>` (4096 bits) | 1231 | ±2.7 × 10¹²³² | `d1232` / `xx-wide` |
 <!-- END GENERATED:widths:table -->
 
 The half-width tiers (`D57`, `D115`, `D230`, `D462`, `D924`) fill in
@@ -122,8 +122,9 @@ A few methods are deliberately not on the trait because their
 signature varies per width or the trait can't represent them — see
 the [trait reference](https://docs.rs/decimal-scaled/latest/decimal_scaled/trait.Decimal.html)
 for the full out-of-scope list (`rescale<TARGET>` needs a
-const-generic method param; `from_int` takes a per-width source
-integer; transcendentals are feature-gated).
+const-generic method param; the per-width infallible `From<iN>`
+integer conversions live on the concrete types; transcendentals
+are feature-gated).
 
 Reach for `Decimal` when writing code that must work across widths;
 otherwise the concrete type is the canonical surface.
@@ -140,7 +141,7 @@ Widening is lossless and infallible (`From`); narrowing is fallible
 
 ```rust
 # use decimal_scaled::{D18s2, D38s2};
-let small: D18s2  = D18s2::from_bits(150);
+let small: D18s2  = "1.50".parse().unwrap();
 let wide:  D38s2 = small.into();              // lossless widen
 let back:  D18s2  = wide.try_into().unwrap();  // fallible narrow
 ```
@@ -156,7 +157,7 @@ narrower or wider tier.
 ```rust
 # #[cfg(feature = "wide")] {
 use decimal_scaled::{D38, D57, D115};
-let a: D38<6> = D38::<6>::from_int(7);
+let a: D38<6> = D38::<6>::from(7i64);
 let b: D57<6> = a.widen();          // one rung up
 let c: D115<6> = b.widen().widen(); // two more rungs: D57 → D76 → D115
 let _: D38<6> = c.try_into().unwrap();   // skip-jump back via TryFrom

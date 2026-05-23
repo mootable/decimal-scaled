@@ -17,7 +17,7 @@ deterministic on every platform, `no_std`-friendly.
 <!-- BEGIN GENERATED:install:dependency -->
 ```toml
 [dependencies]
-decimal-scaled = { version = "0.4", features = ["macros"] }
+decimal-scaled = { version = "0.5", features = ["macros"] }
 ```
 <!-- END GENERATED:install:dependency -->
 
@@ -32,7 +32,7 @@ let x = d38!(1.564232);                        // D38<6>
 assert_eq!(x.to_string(), "1.564232");
 
 let price: D38s12 = "19.99".parse().unwrap();
-let qty   = D38s12::from_int(3);
+let qty: D38s12   = 3i64.into();               // integer, scaled by 10^SCALE
 let total = price * qty;                       // 59.97 exactly
 
 assert_eq!(total.to_string(), "59.97");

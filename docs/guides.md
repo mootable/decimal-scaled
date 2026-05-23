@@ -33,7 +33,7 @@ use decimal_scaled::{D38s2, d38};
 
 // Compile-time literal - scale inferred from the written digits.
 let price = d38!(19.99);              // D38s2, exactly 19.99
-let qty   = D38s2::from_int(3);       // 3.00
+let qty: D38s2 = 3i64.into();         // 3.00
 
 let total = price * qty;               // 59.97, exact - no binary rounding
 assert_eq!(total, d38!(59.97));
