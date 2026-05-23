@@ -106,7 +106,6 @@ fn checked_mul_overflow_at_max() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[ignore = "D38 debug-overflow-panic regressed under Int<2>: wide decimal add wraps (Int<N> modular for kernels). Owner decision pending."]
 #[should_panic]
 fn add_overflow_panics_in_debug() {
     // Debug builds panic on operator overflow (release wraps).
@@ -236,7 +235,6 @@ fn signum_abs_at_extremes() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[ignore = "D38 debug-overflow-panic regressed under Int<2>: abs(MIN) wraps. Owner decision pending."]
 #[should_panic]
 fn abs_of_min_panics_in_debug() {
     let _ = D38s12::MIN.abs();
