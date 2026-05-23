@@ -154,6 +154,26 @@ branch, no table, no vtable. Every other candidate kernel is pruned out
 of that type's machine code. This is what makes the rich policy table
 **zero runtime cost**.
 
+**This compile-away is the entire purpose of the `const` machinery.**
+`select` is `const` and keyed only on the const generics, so the inline
+`const { select::<…>() }` block evaluates at compile time and the
+dispatcher *disappears* — the caller shortcuts straight to the chosen
+algorithm. `const` here buys nothing else: it is **not** about exposing a
+`const fn` public API (a method keeps or loses its own `const`-ness on its
+own merits). **Every function fits this shape — there is no op that
+cannot.** A single-algorithm op is just a pure `ByAlgorithm` policy that
+folds to one direct kernel call.
+
+**The property holds through `ByValue` too — it is a residue, not an
+exception.** Where the algorithm depends on the runtime *value*, the const
+`select` has *already* pruned every other arm and folded the cell down to
+the one value-matcher it picked **before** any value is examined. So the
+only thing surviving into the binary is the irreducible value check
+itself: one non-capturing `fn(&…) -> Algorithm` returning a tag, then the
+`match` on that tag — about as cheap as a plain function call. The
+selection was const; only the value-dependent choice (which genuinely
+*needs* the value) remains.
+
 ### Feature-flagging a variation
 
 A feature- or platform-specific variation lives in the policy file, gated where
@@ -253,8 +273,9 @@ Rules that make this work:
 - **`select` is `const`, called via an inline `const { … }` block, keyed only on
   the const generics.** Per monomorphisation `const { select::<N>() }` evaluates
   to a constant `Select`, so the matches fold and every unchosen arm is
-  dead-arm-eliminated (the pruning above). The policy is zero runtime cost —
-  *except* a `ByValue` arm, which keeps exactly one runtime comparison. _(Use the
+  dead-arm-eliminated (the pruning above). The policy is zero runtime cost; a
+  `ByValue` arm leaves only the irreducible value check (the const selection of
+  *which* matcher still folds away — see "Pruning" above). _(Use the
   inline `const { }` block, not a `const SEL: Select<N>` item — a `const` item may
   not reference the function's generic `N`; the inline block can.)_
 - **Value matcher** (`ByValue`) — for the rare case where the best algorithm
