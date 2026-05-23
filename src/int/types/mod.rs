@@ -20,18 +20,23 @@ mod wide_compat;
 
 pub use traits::BigInt;
 
-use crate::int::algos::div::{div_rem, div_rem_mag_fixed, isqrt_mag_fixed};
+use crate::int::algos::div::{div_rem, div_rem_mag_fixed};
 use crate::int::algos::limbs::{
     add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, mul_low_fixed,
     mul_schoolbook, shl, shl_fixed, shr_fixed, sqr_low_fixed, sub_assign_fixed,
 };
 use crate::int::policy::add::dispatch as add_dispatch;
 use crate::int::policy::cmp::dispatch as cmp_dispatch;
+use crate::int::policy::cube::dispatch as cube_dispatch;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::policy::eq::dispatch as eq_dispatch;
+use crate::int::policy::icbrt::dispatch as icbrt_dispatch;
+use crate::int::policy::isqrt::dispatch as isqrt_dispatch;
 use crate::int::policy::mul::dispatch as mul_fast;
 use crate::int::policy::neg::dispatch as neg_dispatch;
+use crate::int::policy::pow::dispatch as pow_dispatch;
 use crate::int::policy::rem::dispatch as rem_dispatch;
+use crate::int::policy::sqr::dispatch as sqr_dispatch;
 use crate::int::policy::sub::dispatch as sub_dispatch;
 use crate::support::int_fmt::fmt_into;
 use core::cmp::Ordering;
@@ -361,23 +366,44 @@ impl<const N: usize> Uint<N> {
         Some(acc)
     }
 
-    /// Exponentiation by squaring. Alias of [`Self::wrapping_pow`] for
-    /// the common case where the caller has already bounded the result.
+    /// Exponentiation by squaring. Routes through the pow policy
+    /// ([`pow_dispatch`]): binary square-and-multiply at every `N`.
+    /// Result is `self^exp` modulo `2^BITS`; `self^0 == 1`.
     #[inline]
     pub fn pow(self, exp: u32) -> Self {
-        self.wrapping_pow(exp)
+        pow_dispatch(self, exp)
     }
 
     /// Integer square root: the largest `r` with `r² <= self`.
-    /// Delegates to the const-`N` fast-arm (`isqrt_mag_fixed`): native
-    /// `u64::isqrt` at `N == 1`, `u128::isqrt` at `N == 2`, and the shared
-    /// limb isqrt (Newton with a hardware-sqrt seed) for wider `N`. All
-    /// arms return the identical floor root.
+    /// Routes through the isqrt policy ([`isqrt_dispatch`]):
+    /// `N ∈ {1, 2}` takes the hardware native path; `N >= 3` takes
+    /// the Newton limb kernel.
     #[inline]
     pub fn isqrt(self) -> Self {
-        let mut out = [0u64; N];
-        isqrt_mag_fixed::<N>(&self.limbs, &mut out);
-        Self { limbs: out }
+        isqrt_dispatch(self)
+    }
+
+    /// Integer square: `self²` modulo `2^BITS`. Routes through the sqr
+    /// policy ([`sqr_dispatch`]): half-product squaring kernel at every `N`.
+    #[inline]
+    pub fn sqr(self) -> Self {
+        sqr_dispatch(self)
+    }
+
+    /// Integer cube: `self³` modulo `2^BITS`. Routes through the cube
+    /// policy ([`cube_dispatch`]): sqr-then-multiply at every `N`.
+    #[inline]
+    pub fn cube(self) -> Self {
+        cube_dispatch(self)
+    }
+
+    /// Integer cube root: `floor(self^(1/3))`. Routes through the icbrt
+    /// policy ([`icbrt_dispatch`]):
+    /// `N ∈ {1, 2}` takes the narrow path; `N >= 3` takes the Newton
+    /// limb kernel with an `f64::cbrt` seed.
+    #[inline]
+    pub fn icbrt(self) -> Self {
+        icbrt_dispatch(self)
     }
 
     /// Integer `k`th root: returns `(root, exact)` where
@@ -1554,10 +1580,35 @@ impl<const N: usize> Int<N> {
     }
 
     /// Integer square root of the magnitude (`floor(sqrt(|self|))`),
-    /// returned non-negative. Matches the macro's signed `isqrt`.
+    /// returned non-negative. Delegates to the unsigned sibling which
+    /// routes through [`isqrt_dispatch`].
     #[inline]
     pub fn isqrt(self) -> Self {
         Self::from_limbs(*self.unsigned_abs().isqrt().as_limbs())
+    }
+
+    /// Integer square: `self²` modulo `2^BITS`. Routes through the sqr
+    /// policy ([`sqr_dispatch`]) on the unsigned reinterpretation, then
+    /// reinterprets back as signed. Equivalent to `wrapping_sqr`.
+    #[inline]
+    pub fn sqr(self) -> Self {
+        self.wrapping_sqr()
+    }
+
+    /// Integer cube: `self³` modulo `2^BITS`. Routes through the cube
+    /// policy ([`cube_dispatch`]) on the unsigned reinterpretation, then
+    /// reinterprets back as signed. Equivalent to `wrapping_cube`.
+    #[inline]
+    pub fn cube(self) -> Self {
+        self.wrapping_cube()
+    }
+
+    /// Integer cube root of the magnitude (`floor(cbrt(|self|))`),
+    /// returned non-negative. Delegates to the unsigned sibling which
+    /// routes through [`icbrt_dispatch`].
+    #[inline]
+    pub fn icbrt(self) -> Self {
+        Self::from_limbs(*self.unsigned_abs().icbrt().as_limbs())
     }
 
     /// Reinterprets the bit pattern as the unsigned sibling.
@@ -3697,6 +3748,187 @@ mod tests {
         let big = Int::<8>::from_i128(987_654_321);
         let sq = big.checked_mul(big).unwrap();
         assert_eq!(BigInt::isqrt(sq), big);
+    }
+
+    /// `Uint<N>::sqr` must equal `x * x` at every tested width; the policy
+    /// dispatcher must agree with `wrapping_sqr`.
+    #[test]
+    fn uint_sqr_policy_matches_wrapping_sqr() {
+        fn check<const N: usize>(limbs: [u64; N]) {
+            let x = Uint::<N>::from_limbs(limbs);
+            assert_eq!(x.sqr(), x.wrapping_sqr(), "sqr mismatch at {limbs:?}");
+            assert_eq!(x.sqr(), x.wrapping_mul(x), "sqr != x*x at {limbs:?}");
+        }
+        // Width 1
+        check::<1>([0]);
+        check::<1>([1]);
+        check::<1>([u64::MAX]);
+        check::<1>([12345]);
+        // Width 2
+        check::<2>([0, 0]);
+        check::<2>([1, 0]);
+        check::<2>([u64::MAX, u64::MAX]);
+        check::<2>([0xDEAD_BEEF, 0x1234]);
+        // Width 4
+        check::<4>([u64::MAX, u64::MAX, u64::MAX, u64::MAX]);
+        check::<4>([0x1234_5678_9ABC_DEF0, 0xFEDC_BA98, 0, 0]);
+        // Width 6
+        check::<6>([7, 8, 9, 10, 11, 12]);
+    }
+
+    /// `Uint<N>::cube` must equal `x * x * x` at every tested width.
+    #[test]
+    fn uint_cube_policy_matches_wrapping_cube() {
+        fn check<const N: usize>(limbs: [u64; N]) {
+            let x = Uint::<N>::from_limbs(limbs);
+            assert_eq!(x.cube(), x.wrapping_cube(), "cube mismatch at {limbs:?}");
+            assert_eq!(
+                x.cube(),
+                x.wrapping_mul(x).wrapping_mul(x),
+                "cube != x*x*x at {limbs:?}"
+            );
+        }
+        check::<1>([0]);
+        check::<1>([1]);
+        check::<1>([3]);
+        check::<1>([u64::MAX]);
+        check::<2>([0, 0]);
+        check::<2>([1, 0]);
+        check::<2>([100, 0]);
+        check::<2>([u64::MAX, u64::MAX]);
+        check::<4>([5, 0, 0, 0]);
+        check::<4>([0x1234, 0x5678, 0, 0]);
+    }
+
+    /// `Int<N>::sqr` and `Int<N>::cube` must match their wrapping siblings.
+    #[test]
+    fn int_sqr_cube_match_wrapping() {
+        fn check<const N: usize>(v: i128) {
+            let x = Int::<N>::from_i128(v);
+            assert_eq!(x.sqr(), x.wrapping_sqr(), "int sqr mismatch v={v}");
+            assert_eq!(x.cube(), x.wrapping_cube(), "int cube mismatch v={v}");
+        }
+        for v in [0i128, 1, -1, 12, -12, 100, -100, 1_000_000, -1_000_000] {
+            check::<4>(v);
+            check::<8>(v);
+        }
+    }
+
+    /// `Uint<N>::icbrt` must return `floor(x^(1/3))` for a range of
+    /// values: perfect cubes, non-cubes, 0, 1, and large values.
+    #[test]
+    fn uint_icbrt_floor_correctness() {
+        // Brute-force floor cube-root of a u64, used as oracle for small inputs.
+        fn brute_cbrt(n: u64) -> u64 {
+            if n == 0 {
+                return 0;
+            }
+            let mut r: u64 = 0;
+            while (r + 1).checked_mul((r + 1) * (r + 1) + r + 1)
+                .is_some_and(|p| p <= n)
+                || (r + 1).checked_pow(3).is_some_and(|p| p <= n)
+            {
+                r += 1;
+            }
+            r
+        }
+
+        fn check<const N: usize>(n: u64) {
+            let x = Uint::<N>::from_u64(n);
+            let root = x.icbrt();
+            let root_u64 = root.as_limbs()[0];
+            let expected = brute_cbrt(n);
+            assert_eq!(root_u64, expected, "icbrt({n}) = {root_u64}, expected {expected}");
+            // Higher limbs of root must be zero for a u64 input.
+            for i in 1..N {
+                assert_eq!(root.as_limbs()[i], 0, "icbrt({n}) high limb {i} nonzero");
+            }
+        }
+
+        // Perfect cubes.
+        for n in [0u64, 1, 8, 27, 64, 125, 216, 343, 512, 729, 1000,
+                  1_000_000_000u64, 8_000_000_000u64] {
+            check::<1>(n);
+            check::<2>(n);
+            check::<4>(n);
+        }
+
+        // Non-cubes (floor must be correct).
+        for n in [2u64, 3, 4, 5, 6, 7, 9, 10, 26, 28, 63, 65, 999,
+                  1_000_000_001u64] {
+            check::<1>(n);
+            check::<2>(n);
+            check::<4>(n);
+        }
+
+        // Boundary cases: 0 and 1.
+        check::<1>(0);
+        check::<1>(1);
+        check::<4>(0);
+        check::<4>(1);
+
+        // Large 64-bit values.
+        for n in [u64::MAX, u64::MAX - 1, u64::MAX - 100, 1 << 60, 1 << 48] {
+            check::<2>(n);
+            check::<4>(n);
+        }
+    }
+
+    /// `Uint<N>::icbrt` for values spanning multiple limbs (N >= 3 path).
+    /// The cube root of a 2-limb value still fits in a single u64; we
+    /// verify the floor identity `r³ <= x < (r+1)³`.
+    #[test]
+    fn uint_icbrt_wide_floor_identity() {
+        fn check_wide<const N: usize>(limbs: [u64; N]) {
+            let x = Uint::<N>::from_limbs(limbs);
+            let r = x.icbrt();
+            // Verify r³ <= x.
+            let r3 = r.wrapping_pow(3);
+            assert!(
+                r3 <= x,
+                "icbrt violated: r³ > x for {limbs:?}"
+            );
+            // Verify (r+1)³ > x (i.e. r is the floor).
+            let r1 = r.wrapping_add(Uint::<N>::ONE);
+            let r1_3 = r1.wrapping_pow(3);
+            // (r+1)³ wraps to 0 only if r+1 itself wraps (i.e. r == MAX),
+            // which for a cube root of a representable value cannot happen.
+            assert!(
+                r1_3 > x || r1 == Uint::<N>::ZERO,
+                "icbrt not floor: (r+1)³ <= x for {limbs:?}"
+            );
+        }
+
+        // Perfect cubes in 2 limbs (root fits one limb).
+        // 10^18 cubed = 10^54 — too large; use modest values.
+        // 1_000_000^3 = 10^18, which fits 2 limbs (u64 goes to ~1.8 * 10^19).
+        let m = 1_000_000u64;
+        let m3 = m * m * m; // 10^18, fits u64
+        check_wide::<4>([m3, 0, 0, 0]);
+        check_wide::<4>([m3 + 1, 0, 0, 0]);
+        check_wide::<4>([m3 - 1, 0, 0, 0]);
+
+        // A 2-limb value: combine two u64 halves.
+        let hi = 1u64;
+        let lo = 0u64;
+        check_wide::<4>([lo, hi, 0, 0]); // 2^64
+
+        check_wide::<4>([u64::MAX, u64::MAX, 0, 0]); // near 2^128
+
+        // Width 6 (N >= 3, Newton path for sure).
+        check_wide::<6>([m3, 0, 0, 0, 0, 0]);
+        check_wide::<6>([u64::MAX, u64::MAX, u64::MAX, 0, 0, 0]); // near 2^192
+    }
+
+    /// `Int<N>::icbrt` must return the unsigned cube root of the magnitude.
+    #[test]
+    fn int_icbrt_magnitude() {
+        for v in [0i128, 1, -1, 8, -8, 27, -27, 1000, -1000] {
+            let x = Int::<4>::from_i128(v);
+            let expected = Int::<4>::from_i128((v.unsigned_abs() as f64).cbrt() as i128);
+            let got = x.icbrt();
+            assert_eq!(got, expected, "int icbrt({v}) mismatch");
+        }
     }
 
     #[test]

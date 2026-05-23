@@ -60,11 +60,20 @@
 //!   everything else takes Knuth Algorithm D. The const-evaluable
 //!   `wrapping_div` / `wrapping_rem` stay on the `const fn`
 //!   [`div_rem::div_rem`] so they can run at compile time.
-//! - **isqrt / icbrt** — D38 has bespoke 256/384-bit kernels in
-//!   `crate::algos::sqrt` / `crate::algos::cbrt`; the generic fixed-width
-//!   types fall through to the shared limb isqrt / Brent–Zimmermann
-//!   `root_int` ([`crate::int::algos::roots::isqrt_newton`] and
-//!   `Uint::root_int`).
+//! - **isqrt** — `N ∈ {1, 2}` takes the hardware native path (`u64::isqrt`/
+//!   `u128::isqrt`); `N >= 3` takes the Newton limb kernel
+//!   ([`crate::int::algos::roots::isqrt_newton`]). Routes through
+//!   [`isqrt::dispatch`] (const `N`-keyed; not `const fn`).
+//! - **icbrt** — same shape as isqrt: `N ∈ {1, 2}` routes through the
+//!   Newton kernel at small width; `N >= 3` takes the full Newton limb
+//!   iteration ([`crate::int::algos::roots::icbrt_newton`]). Routes through
+//!   [`icbrt::dispatch`] (not `const fn`).
+//! - **pow** — binary square-and-multiply at every `N`. Routes through
+//!   [`pow::dispatch`] (`const fn`).
+//! - **sqr** — half-product squaring kernel at every `N`. Routes through
+//!   [`sqr::dispatch`] (`const fn`).
+//! - **cube** — sqr-then-multiply at every `N`. Routes through
+//!   [`cube::dispatch`] (`const fn`).
 //!
 //! All dispatchers follow the canonical [`Select`] / `select` /
 //! exhaustive-`match algo` policy shape (see `docs/ARCHITECTURE.md` →
@@ -85,15 +94,25 @@
 pub(crate) mod add;
 /// Signed comparison policy: default-delegating limbwise matcher for `Int<N>`.
 pub(crate) mod cmp;
+/// Integer cube policy: sqr-then-multiply matcher for `Uint<N>`.
+pub(crate) mod cube;
 /// Division/remainder policy: divisor-shape algorithm matcher for `Int<N>`.
 pub(crate) mod div_rem;
 /// Equality policy: default-delegating limbwise matcher for `Int<N>`.
 pub(crate) mod eq;
+/// Integer cube-root policy: native-vs-Newton matcher for `Uint<N>`.
+pub(crate) mod icbrt;
+/// Integer square-root policy: native-vs-Newton matcher for `Uint<N>`.
+pub(crate) mod isqrt;
 /// Multiply policy: schoolbook-vs-Karatsuba algorithm matcher.
 pub(crate) mod mul;
 /// Negate policy: default-delegating two's-complement matcher for `Int<N>`.
 pub(crate) mod neg;
+/// Integer exponentiation policy: square-and-multiply matcher for `Uint<N>`.
+pub(crate) mod pow;
 /// Remainder policy: default-delegating via-div_rem matcher for `Int<N>`.
 pub(crate) mod rem;
+/// Integer squaring policy: half-product via-mul matcher for `Uint<N>`.
+pub(crate) mod sqr;
 /// Subtract policy: default-delegating ripple-borrow matcher for `Int<N>`.
 pub(crate) mod sub;
