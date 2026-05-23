@@ -8,12 +8,17 @@
 //! input by `multiplier()` (= `10^SCALE`); overflow follows Rust's
 //! default integer arithmetic (debug-mode panic, release-mode wrap).
 //! - **Fallible `TryFrom<$Src>`** — emitted by [`decl_try_from_i128!`],
-//! [`decl_try_from_u128!`], [`decl_try_from_f64!`], and
+//! [`decl_try_from_u128!`], [`decl_try_from_i64!`],
+//! [`decl_try_from_u64!`], [`decl_try_from_f64!`], and
 //! [`decl_try_from_f32!`] for sources where the scaled magnitude may
 //! exceed the destination's range, or where the input may be
 //! non-finite (`f32` / `f64`). Returns
 //! [`ConvertError::Overflow`] / [`ConvertError::NotFinite`] instead of
-//! panicking.
+//! panicking. The `i64` / `u64` `TryFrom` macros serve the 64-bit
+//! storage tier ([`D18`]), where `value * 10^SCALE` need not fit `i64`;
+//! wider tiers get an infallible `From<i64>` / `From<u64>` instead. The
+//! `f64` / `f32` path rounds to the type's scale via the crate-default
+//! `RoundingMode`.
 //!
 //! Plus [`decl_decimal_int_conversion_methods!`] which emits
 //! `from_int` / `from_i32` / `to_int` / `to_int_with` on each width.
@@ -183,11 +188,77 @@ macro_rules! decl_try_from_u128 {
 
 pub(crate) use decl_try_from_u128;
 
+/// Emits `TryFrom<i64> for $Type<SCALE>`, delegating to the width's
+/// `TryFrom<i128>` path via the lossless `i64 -> i128` widen.
+///
+/// This is the standard fallible integer surface for the 64-bit-storage
+/// tier ([`D18`]): `i64 * 10^SCALE` overflows `i64` storage for every
+/// `SCALE >= 1`, so an infallible `From<i64>` would be wrong for the
+/// general `(i64, Int<1>, SCALE)` cell. Wider tiers (D38+) already get a
+/// `From<i64>` from [`decl_from_primitive!`] because their storage holds
+/// the scaled magnitude; this macro is only wired up for D18.
+macro_rules! decl_try_from_i64 {
+    // Storage-agnostic: forwards `i64` through the width's `TryFrom<i128>`.
+    // `$Storage` is matched for call-site symmetry but unused.
+    (wide $Type:ident, $Storage:ty) => {
+        impl<const SCALE: u32> ::core::convert::TryFrom<i64> for $Type<SCALE> {
+            type Error = $crate::support::error::ConvertError;
+            /// Constructs from an `i64` by scaling to `value * 10^SCALE`.
+            /// Returns `Err(ConvertError::Overflow)` when the scaled
+            /// magnitude exceeds the storage range.
+            #[inline]
+            fn try_from(value: i64) -> ::core::result::Result<Self, Self::Error> {
+                <Self as ::core::convert::TryFrom<i128>>::try_from(value as i128)
+            }
+        }
+    };
+}
+
+pub(crate) use decl_try_from_i64;
+
+/// Emits `TryFrom<u64> for $Type<SCALE>`, delegating to the width's
+/// `TryFrom<u128>` path via the lossless `u64 -> u128` widen.
+///
+/// `u64::MAX` exceeds `i64::MAX`, so even at `SCALE == 0` a `u64` need
+/// not fit the signed 64-bit storage of [`D18`]; the conversion is
+/// fallible for every `(u64, Int<1>, SCALE)` cell, hence `TryFrom`
+/// rather than `From`. Only wired up for D18 (wider tiers get
+/// `From<u64>` from [`decl_from_primitive!`]).
+macro_rules! decl_try_from_u64 {
+    // Storage-agnostic: forwards `u64` through the width's `TryFrom<u128>`.
+    // `$Storage` is matched for call-site symmetry but unused.
+    (wide $Type:ident, $Storage:ty) => {
+        impl<const SCALE: u32> ::core::convert::TryFrom<u64> for $Type<SCALE> {
+            type Error = $crate::support::error::ConvertError;
+            /// Constructs from a `u64` by scaling to `value * 10^SCALE`.
+            /// Returns `Err(ConvertError::Overflow)` when the value or its
+            /// scaled magnitude exceeds the signed storage range.
+            #[inline]
+            fn try_from(value: u64) -> ::core::result::Result<Self, Self::Error> {
+                <Self as ::core::convert::TryFrom<u128>>::try_from(value as u128)
+            }
+        }
+    };
+}
+
+pub(crate) use decl_try_from_u64;
+
 /// Emits `TryFrom<f64> for $Type<SCALE>`. NaN / ±inf return
 /// `NotFinite`; finite values whose scaled magnitude exceeds the
-/// storage range return `Overflow`. Truncates toward zero (matches the
-/// historical D38 behaviour). For rounding-mode-aware float
-/// construction, use `from_f64_with`.
+/// storage range return `Overflow`.
+///
+/// The in-range value is **rounded to the type's scale using the
+/// crate-default [`RoundingMode`]** (the compile-time `rounding-*`
+/// feature selection; `HalfToEven` by default). This is the standard
+/// fallible `f64 -> D` surface and is lossy, unlike the int
+/// `TryFrom<i128>` path which is exact-or-`Overflow`. For an explicit
+/// rounding mode use the inherent `from_f64_with(value, mode)`, which
+/// saturates on overflow rather than erroring.
+///
+/// Under `no_std` (no float-rounding intrinsics) the value is truncated
+/// toward zero; the rounding-aware path is `std`-only.
+///
+/// [`RoundingMode`]: $crate::support::rounding::RoundingMode
 macro_rules! decl_try_from_f64 {
     // Wide storage. The multiplier and storage bounds
     // round-trip through `f64` via the `BigInt` cast; the final
@@ -211,7 +282,27 @@ macro_rules! decl_try_from_f64 {
                         $crate::support::error::ConvertError::Overflow,
                     );
                 }
-                ::core::result::Result::Ok(Self(<$Storage>::from_f64(scaled)))
+                // Round the scaled value to the nearest integer using the
+                // crate-default rounding mode, then store. `no_std` lacks
+                // the float-rounding intrinsics, so it truncates.
+                #[cfg(feature = "std")]
+                let rounded = match $crate::support::rounding::DEFAULT_ROUNDING_MODE {
+                    $crate::support::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
+                        if scaled >= 0.0 {
+                            (scaled - 0.5).ceil()
+                        } else {
+                            (scaled + 0.5).floor()
+                        }
+                    }
+                    $crate::support::rounding::RoundingMode::Trunc => scaled.trunc(),
+                    $crate::support::rounding::RoundingMode::Floor => scaled.floor(),
+                    $crate::support::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                };
+                #[cfg(not(feature = "std"))]
+                let rounded = scaled;
+                ::core::result::Result::Ok(Self(<$Storage>::from_f64(rounded)))
             }
         }
     };

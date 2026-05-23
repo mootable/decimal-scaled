@@ -422,6 +422,14 @@ crate::macros::conversions::decl_try_from_i128!(wide D38, crate::int::types::Int
 crate::macros::conversions::decl_try_from_u128!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_i128!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_u128!(wide D18, crate::int::types::Int<1>);
+// D18 (i64 storage): `i64` / `u64` cannot be infallible `From` because
+// `value * 10^SCALE` overflows the 64-bit storage for SCALE >= 1 (and a
+// `u64` above `i64::MAX` overflows even at SCALE 0), so the standard
+// surface for these source types on the 64-bit tier is `TryFrom`.
+// Wider tiers (D38+) get `From<i64>` / `From<u64>` from
+// `decl_from_primitive!` because their storage holds the scaled value.
+crate::macros::conversions::decl_try_from_i64!(wide D18, crate::int::types::Int<1>);
+crate::macros::conversions::decl_try_from_u64!(wide D18, crate::int::types::Int<1>);
 crate::macros::conversions::decl_try_from_f64!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f32!(wide D38, crate::int::types::Int<2>);
 crate::macros::conversions::decl_try_from_f64!(wide D18, crate::int::types::Int<1>);

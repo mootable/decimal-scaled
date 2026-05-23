@@ -213,3 +213,72 @@ fn from_int_works_at_scale_0() {
     assert_eq!(v.to_bits(), 42);
     assert_eq!(v.to_int(), 42);
 }
+
+// TryFrom<i64> / TryFrom<u64> for D18 (64-bit storage tier).
+//
+// D18 cannot offer an infallible `From<i64>` / `From<u64>` because
+// `value * 10^SCALE` may overflow the i64 storage (and `u64` above
+// `i64::MAX` overflows even at SCALE 0), so the standard surface is
+// `TryFrom`. Wider tiers (D38+) keep their infallible `From<i64>`.
+
+#[test]
+fn try_from_i64_d18_in_range() {
+    use decimal_scaled::D18;
+    let v: D18<2> = 100_i64.try_into().unwrap();
+    assert_eq!(v.to_bits(), 10_000);
+    // SCALE 0: identity-ish, the i64 stores directly.
+    let v: D18<0> = (-7_i64).try_into().unwrap();
+    assert_eq!(v.to_bits(), -7);
+}
+
+#[test]
+fn try_from_i64_d18_overflow_returns_err() {
+    use decimal_scaled::D18;
+    // i64::MAX scaled by 10^2 overflows the i64 storage.
+    let result: Result<D18<2>, _> = i64::MAX.try_into();
+    assert_eq!(result, Err(ConvertError::Overflow));
+}
+
+#[test]
+fn try_from_u64_d18_in_range() {
+    use decimal_scaled::D18;
+    let v: D18<2> = 100_u64.try_into().unwrap();
+    assert_eq!(v.to_bits(), 10_000);
+}
+
+#[test]
+fn try_from_u64_d18_above_i64_max_returns_err() {
+    use decimal_scaled::D18;
+    // A u64 above i64::MAX cannot fit signed storage even at SCALE 0.
+    let result: Result<D18<0>, _> = u64::MAX.try_into();
+    assert_eq!(result, Err(ConvertError::Overflow));
+}
+
+// TryFrom<f64> rounds to scale via the crate-default RoundingMode
+// (HalfToEven unless a `rounding-*` feature overrides it). Under the
+// default build, a value whose scaled form lands on a .5 boundary
+// rounds to even.
+
+#[cfg(feature = "std")]
+#[cfg(not(any(
+    feature = "rounding-half-away-from-zero",
+    feature = "rounding-half-toward-zero",
+    feature = "rounding-trunc",
+    feature = "rounding-floor",
+    feature = "rounding-ceiling",
+)))]
+#[test]
+fn try_from_f64_rounds_half_to_even_default() {
+    // 0.125 at SCALE 2 = 12.5 scaled units; HalfToEven -> 12.
+    let v: D38<2> = 0.125_f64.try_into().unwrap();
+    assert_eq!(v.to_bits(), 12);
+    // 0.135 at SCALE 2 = 13.5 scaled units; HalfToEven -> 14.
+    // (0.135 is not exactly representable in f64; it is slightly above
+    // 0.135, so this also confirms the value is rounded, not truncated.)
+    let v: D38<2> = 0.135_f64.try_into().unwrap();
+    assert_eq!(v.to_bits(), 14);
+    // A clearly-fractional value rounds rather than truncating: 1.6 at
+    // SCALE 0 = 1.6 scaled units -> 2 (truncation would give 1).
+    let v: D38<0> = 1.6_f64.try_into().unwrap();
+    assert_eq!(v.to_bits(), 2);
+}
