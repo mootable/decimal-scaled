@@ -165,6 +165,24 @@ it belongs:
 - a cfg-gated `Algorithm` variant (plus its dispatch arm) — an algorithm that
   only exists under the flag.
 
+```rust
+// a `std`-only algorithm — variant, chosen kernel, and dispatch arm are gated
+// together, so the policy stays exhaustive in BOTH configs.
+enum Algorithm { Newton, Zimmermann, #[cfg(feature = "std")] StdSeeded }
+
+#[cfg(feature = "std")]      const fn small() -> Algorithm { Algorithm::StdSeeded }  // with `std`
+#[cfg(not(feature = "std"))] const fn small() -> Algorithm { Algorithm::Newton }     // core default
+
+const fn select<const N: usize>() -> Select<N> {
+    match N {
+        0..=2 => Select::ByAlgorithm(small()),                 // std-swapped via the gated fn
+        _     => Select::ByAlgorithm(Algorithm::Zimmermann),
+    }
+}
+// in the dispatch, the std arm is gated to match the variant:
+//   #[cfg(feature = "std")] Algorithm::StdSeeded => isqrt_std_seeded::<N>(x),
+```
+
 The unflagged policy is the default; the flag adds or overrides arms beside it,
 in the same file. If a flagged variation uses `f64`, it is only ever a **seed**
 to a self-correcting integer iteration — the exact integer termination pins the
@@ -202,8 +220,7 @@ const fn select<const N: usize>() -> Select<N> {
 
 // 4. the public function: resolve the verdict, then dispatch — exhaustively, no panic.
 pub fn isqrt<const N: usize>(x: Int<N>) -> Int<N> {
-    const SEL: Select<N> = select::<N>();               // compile-time constant ⇒ folds
-    let algo = match SEL {
+    let algo = match const { select::<N>() } {          // inline const block: folds at compile time, can see `N`
         Select::ByAlgorithm(a) => a,
         Select::ByValue(f)     => f(&x),                // the ONE place a runtime value enters
     };
@@ -220,17 +237,24 @@ Rules that make this work:
   is structural: `select` is total over the key, and `match algo` is exhaustive
   over `Algorithm` (both compiler-enforced). The "default" for unspecialised
   widths is simply the real algorithm named in `select`'s `_` arm.
-- **`select` is `const`, keyed only on the const generics.** Per
-  monomorphisation `SEL` is a constant, so the matches fold and every unchosen
-  arm is dead-arm-eliminated (the pruning above). The policy is zero runtime
-  cost — *except* a `ByValue` arm, which keeps exactly one runtime comparison.
+- **`select` is `const`, called via an inline `const { … }` block, keyed only on
+  the const generics.** Per monomorphisation `const { select::<N>() }` evaluates
+  to a constant `Select`, so the matches fold and every unchosen arm is
+  dead-arm-eliminated (the pruning above). The policy is zero runtime cost —
+  *except* a `ByValue` arm, which keeps exactly one runtime comparison. _(Use the
+  inline `const { }` block, not a `const SEL: Select<N>` item — a `const` item may
+  not reference the function's generic `N`; the inline block can.)_
 - **Value matcher** (`ByValue`) — for the rare case where the best algorithm
-  depends on the operand's *value* (e.g. actual magnitude), not just its width.
-  It is **non-capturing**, takes the value, and **returns an `Algorithm` tag**
-  (never a function pointer — the tag keeps dispatch a direct call). Placement by
-  size: **≤2 outcomes → inline closure `if`/`else`; 3–10 → inline closure
-  `match`; >10 (or shared / unit-tested) → a named `#[inline]` fn called
-  `<fn>_N<lo>_to_N<hi>`** (e.g. `sqrt_N5_to_N10`) encoding the width-band it serves.
+  depends on the operand's *value* (e.g. actual magnitude), not just its width:
+  - **non-capturing**, takes the value, and **returns an `Algorithm` tag** (never
+    a function pointer — the tag keeps dispatch a direct call);
+  - **placement by size:** ≤2 outcomes → inline closure `if`/`else`; 3–10 →
+    inline closure `match`; >10 (or shared / unit-tested) → a named `#[inline]`
+    fn `<function_name>_<applicable_preconditions>`;
+  - **the suffix names the arm's applicable preconditions — its count/shape
+    varies with the matcher:** a single int width is `sqrt_N5`, an int width-range
+    is `sqrt_N5_to_N10`, a decimal arm adds scale (e.g. `sqrt_N2_S0_to_S9`). Encode
+    exactly the preconditions that apply.
 - **`core`-only.** One policy per function, compiling on every platform;
   feature- or platform-specific variations are gated inside it (see
   *Feature-flagging a variation* above).
@@ -296,8 +320,7 @@ src/
   int/        const-generic integer layer
     types/    Int<N>/Uint<N>; the BigInt trait
     policy/   per-function `select` dispatch (keyed on limb count N)
-    algos/    reusable width-matched algorithms
-    limbs/    raw slice limb primitives
+    algos/    reusable width-matched algorithms (incl. limb primitives)
   types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
   policy/     per-function `select` dispatch (keyed on width N, SCALE)
   algos/      the algorithms (sqrt cbrt exp ln trig pow …)
