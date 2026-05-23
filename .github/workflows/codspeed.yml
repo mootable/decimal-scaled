@@ -19,10 +19,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Setup Rust toolchain, cache and cargo-codspeed
-        uses: moonrepo/setup-rust@v0
+        uses: moonrepo/setup-rust@cafffba5d5c8bc38a5120e6e60f3561d541a47cd # v0
         with:
           channel: stable
           cache-target: release
@@ -40,7 +40,7 @@ jobs:
         run: cargo codspeed build --features wide,x-wide,xx-wide,macros --bench all_functions --bench pr_gate --bench mul_div_candidates
 
       - name: Run the benchmarks
-        uses: CodSpeedHQ/action@v4
+        uses: CodSpeedHQ/action@3194d9a39c4d46684cb44bf7207fc56626aad8fd # v4
         with:
           mode: simulation
           run: cargo codspeed run
