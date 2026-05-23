@@ -179,6 +179,17 @@ A single-algorithm op is therefore still worth a policy: it is a pure
 `ByAlgorithm` matcher that folds to one direct kernel call today, and it
 gives that op a ready seam to add/swap/bench an algorithm later.
 
+**Layering direction.** The call graph only ever points *down*: a type
+method delegates to its `policy::<fn>::dispatch`, the dispatch selects an
+**algorithm fn**, and the algorithm computes via **kernels** (or another
+tier's policy/method surface). An algorithm fn must **never** call a method
+back on its own type (`x.cube()` from inside the cube algorithm is the
+inversion — the method and the algorithm have swapped roles). The impl
+lives in the algorithm/kernel; methods are thin delegators down. Each
+algorithm — even a trivial schoolbook — is a named `<function>_<method>`
+in its own file under `algos/<function>/` (int: `int/algos/<function>/`),
+not inlined in the policy and not dismissed for being simple.
+
 **The property holds through `ByValue` too — it is a residue, not an
 exception.** Where the algorithm depends on the runtime *value*, the const
 `select` has *already* pruned every other arm and folded the cell down to
