@@ -8,17 +8,10 @@
 //! [`crate::int::policy::icbrt`] (`N >= 3`). Pure kernel — it takes the
 //! operand and writes `floor(cbrt(n))`; no algorithm choice.
 
-use crate::int::algos::limbs::{add_assign, bit_len, cmp, is_zero};
+use crate::algo_x_support::seed::cbrt_seed;
+use crate::int::algos::limbs::{add_assign, bit_len, cmp};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
-
-// On `no_std` the f64 inherent method (`cbrt`) used by the seed path is
-// unavailable; pull it in via `num_traits::Float` (libm-backed). Under
-// `std` the inherent method wins, so this import is gated out to avoid an
-// unused-import warning and to keep the std float path bit-for-bit
-// unchanged.
-#[cfg(not(feature = "std"))]
-use num_traits::Float as _;
 
 /// Scratch capacity for the Newton icbrt kernel — 288 u64 limbs
 /// (18432 bits), covering the widest work integer in the crate
@@ -37,10 +30,12 @@ const SCRATCH_LIMBS: usize = 288;
 /// is quadratic once the error is small, so the total iteration count is
 /// `O(log₂(bits))`.
 ///
-/// The seed is derived from the hardware `f64::cbrt` of the top 64 bits of
-/// `n`, scaled back to the correct magnitude, then rounded up to guarantee
-/// a safe over-estimate. On `no_std` the `f64` inherent method is
-/// unavailable; `num_traits::Float` provides a libm-backed fallback.
+/// The seed is delegated to the cross-algorithm seed leaf
+/// ([`crate::algo_x_support::seed::cbrt_seed`]): under `std` it is derived
+/// from the hardware `f64::cbrt` of the top 64 bits of `n`, scaled back and
+/// rounded up to a safe over-estimate; under `no_std` it is the classical
+/// pure-integer 1-bit seed `2^ceil(bits/3)`. No `libm` / `num_traits::Float`
+/// is reached either way.
 ///
 /// All arithmetic uses fixed-size `SCRATCH_LIMBS` scratch buffers —
 /// no heap allocation, `core`/no_std-safe.
@@ -69,66 +64,16 @@ pub(crate) fn icbrt_newton(n: &[u64], out: &mut [u64]) {
     debug_assert!(work <= SCRATCH_LIMBS, "icbrt scratch overflow");
 
     // ── seed ──────────────────────────────────────────────────────────
-    // Extract the top 64 bits of `n` and call f64::cbrt on them, then
-    // shift the result back to the correct magnitude.  Round up to keep
-    // the seed a strict over-estimate.
+    // Delegated to the cross-algorithm seed leaf
+    // (`algo_x_support::seed::cbrt_seed`): under `std` it is the hardware
+    // `f64::cbrt` of the top 64 bits of `n` scaled back and rounded up to a
+    // strict over-estimate; under `no_std` it is the classical pure-integer
+    // 1-bit seed `2^ceil(bits/3)`. Both over-estimate, so the
+    // monotone-downward Newton loop below converges to the same floor root.
+    // The leaf calls nothing in-crate — `num_traits::Float`/libm is never
+    // reached.
     let mut x = [0u64; SCRATCH_LIMBS];
-    if bits >= 9 {
-        // Shift so the leading bit of `n` sits at bit 63 of top_u64.
-        let shift = bits - 64.min(bits);
-        let limb_idx = (shift / 64) as usize;
-        let bit_off = shift % 64;
-        let top_u64: u64 = if bit_off == 0 {
-            n[limb_idx]
-        } else {
-            let lo = n[limb_idx] >> bit_off;
-            let hi = if limb_idx + 1 < n.len() {
-                n[limb_idx + 1].checked_shl(64 - bit_off).unwrap_or(0)
-            } else {
-                0
-            };
-            lo | hi
-        };
-        // cbrt(top_u64 · 2^shift) = cbrt(top_u64) · 2^(shift/3).
-        // Handle the fractional-third-power by splitting mod 3.
-        let rem3 = shift % 3;
-        // Scale factor: 2^(rem3/3) approximation using exact multipliers.
-        // rem3 == 0: no extra factor.
-        // rem3 == 1: multiply by 2^(1/3) ≈ 1.2599  (round up → 2).
-        // rem3 == 2: multiply by 2^(2/3) ≈ 1.5874  (round up → 2).
-        let seed_f64 = {
-            let raw = (top_u64 as f64).cbrt();
-            // Apply any residual power-of-2 factor.
-            if rem3 == 0 { raw } else { raw * (1u64 << rem3) as f64 }
-        };
-        // half_shift = shift / 3 (integer, rounded down — the fractional
-        // part was absorbed into the f64 multiplier above).
-        let half_shift = shift / 3;
-        let truncated = seed_f64 as u128;
-        let frac_nonzero = (truncated as f64) != seed_f64;
-        // Add 2 to guarantee over-estimate (one for truncation, one for
-        // the f64 cbrt rounding, one spare → add 2 is conservative enough
-        // without over-widening).
-        let seed_int: u128 = truncated.saturating_add(if frac_nonzero { 2 } else { 1 });
-        let seed_limb_idx = (half_shift / 64) as usize;
-        let seed_bit_off = half_shift % 64;
-        let shifted: u128 = seed_int << seed_bit_off;
-        let seed_lo = shifted as u64;
-        let seed_hi = (shifted >> 64) as u64;
-        if seed_limb_idx < work {
-            x[seed_limb_idx] |= seed_lo;
-        }
-        if seed_limb_idx + 1 < work {
-            x[seed_limb_idx + 1] |= seed_hi;
-        }
-        if is_zero(&x[..work]) {
-            x[0] = 1;
-        }
-    } else {
-        // Tiny n: use the classical 1-bit seed 2^ceil(bits/3).
-        let e = bits.div_ceil(3);
-        x[(e / 64) as usize] |= 1u64 << (e % 64);
-    }
+    cbrt_seed(n, bits, &mut x[..work]);
 
     // ── Newton loop ───────────────────────────────────────────────────
     // Invariant: x ≥ floor(cbrt(n)) at entry of each iteration.

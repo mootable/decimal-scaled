@@ -9,16 +9,9 @@
 //! and by the decimal `sqrt` work-width path. Pure kernel — it takes the
 //! operand and writes `floor(sqrt(n))`; no algorithm choice.
 
-use crate::int::algos::limbs::{add_assign, bit_len, cmp, is_zero, shr};
+use crate::algo_x_support::seed::sqrt_seed;
+use crate::int::algos::limbs::{add_assign, bit_len, cmp, shr};
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
-
-// On `no_std` the f64 inherent method (`sqrt`) used by the seed path is
-// unavailable; pull it in via `num_traits::Float` (libm-backed). Under
-// `std` the inherent method wins, so this import is gated out to avoid an
-// unused-import warning and to keep the std float path bit-for-bit
-// unchanged.
-#[cfg(not(feature = "std"))]
-use num_traits::Float as _;
 
 /// Scratch capacity for the Newton isqrt kernel — 288 u64 limbs
 /// (18432 bits), covering the widest work integer in the crate
@@ -51,69 +44,15 @@ pub(crate) fn isqrt_newton(n: &[u64], out: &mut [u64]) {
     debug_assert!(work <= SCRATCH_LIMBS, "isqrt scratch overflow");
     let mut x = [0u64; SCRATCH_LIMBS];
 
-    // Initial guess. The classical seed is a single bit at position
-    // `ceil(bits/2)` — one bit of accuracy, costing one Newton step per
-    // doubling of accuracy (≈ `log2(bits/2)` iterations at any width).
-    //
-    // The hardware-`f64::sqrt` seed below lifts that to ~53 correct bits
-    // in one go: extract the top 64 bits of `n` (which fits the f64
-    // mantissa with 11 bits of headroom), take the hardware sqrt, and
-    // shift the result back to the correct magnitude. For Int<8> (D76
-    // sqrt input) this drops the Newton iteration count from ~8 to ~3,
-    // with each saved iteration eliminating one full [`div_rem_dispatch`]
-    // call (the dominant cost).
-    //
-    // Hasselgren's trick — see Crandall & Pomerance 2005, "Prime Numbers:
-    // A Computational Perspective" §9.2.1 — credits the f64-bootstrap idea
-    // to T. Hasselgren in the GMP mailing list archives; the
-    // implementation here is a from-first-principles limb-array variant.
-    if bits >= 8 {
-        // Extract top 64 bits of `n` as a u64, aligned so the leading 1
-        // sits at position 63 (or as close as `n` allows).
-        let shift = bits - 64.min(bits);
-        let limb_idx = (shift / 64) as usize;
-        let bit_off = shift % 64;
-        let top_u64: u64 = if bit_off == 0 {
-            n[limb_idx]
-        } else {
-            let lo = n[limb_idx] >> bit_off;
-            let hi = if limb_idx + 1 < n.len() {
-                n[limb_idx + 1].checked_shl(64 - bit_off).unwrap_or(0)
-            } else {
-                0
-            };
-            lo | hi
-        };
-        let seed_f64 = (top_u64 as f64).sqrt();
-        let (seed_f64, half_shift) = if (shift & 1) == 1 {
-            (seed_f64 * core::f64::consts::SQRT_2, (shift - 1) / 2)
-        } else {
-            (seed_f64, shift / 2)
-        };
-        let truncated = seed_f64 as u128;
-        let frac_nonzero = (truncated as f64) != seed_f64;
-        let seed_int: u128 = truncated
-            .saturating_add(if frac_nonzero { 1 } else { 0 })
-            .saturating_add(1);
-        let seed_limb_idx = (half_shift / 64) as usize;
-        let seed_bit_off = half_shift % 64;
-        let shifted: u128 = seed_int << seed_bit_off;
-        let seed_lo = shifted as u64;
-        let seed_hi = (shifted >> 64) as u64;
-        if seed_limb_idx < work {
-            x[seed_limb_idx] |= seed_lo;
-        }
-        if seed_limb_idx + 1 < work {
-            x[seed_limb_idx + 1] |= seed_hi;
-        }
-        if is_zero(&x[..work]) {
-            x[0] = 1;
-        }
-    } else {
-        // Tiny n: fall back to the classical 1-bit seed.
-        let e = bits.div_ceil(2);
-        x[(e / 64) as usize] |= 1u64 << (e % 64);
-    }
+    // Initial guess — delegated to the cross-algorithm seed leaf
+    // (`algo_x_support::seed`). Under `std` it bootstraps from the hardware
+    // `f64::sqrt` of the top 64 bits of `n` (~53 correct bits in one shot,
+    // dropping the Newton iteration count by ~half); under `no_std` it uses
+    // the classical pure-integer 1-bit seed `2^ceil(bits/2)`. Both are safe
+    // over-estimates, so this monotone-downward loop converges to the same
+    // floor root either way. The leaf calls nothing in-crate (primitives +
+    // std-gated inherent f64) — `num_traits::Float`/libm is never reached.
+    sqrt_seed(n, bits, &mut x[..work]);
 
     loop {
         let mut q = [0u64; SCRATCH_LIMBS];

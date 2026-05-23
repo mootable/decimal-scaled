@@ -188,6 +188,7 @@ extern crate alloc;
 #[doc(hidden)]
 pub use ::tracing;
 
+mod algo_x_support;
 mod algos;
 mod identity;
 mod support;
