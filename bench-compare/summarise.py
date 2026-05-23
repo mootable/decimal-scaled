@@ -15,25 +15,32 @@ the narrower widths the way a plain lexical sort would.
 import glob
 import json
 import os
+import re
 
 ROOT = "target/criterion"
 
 # width-label (e.g. "D18") -> { op (e.g. "add") -> {"branch": ns, "prod": ns} }
-# The criterion group name is `<op>/<width>` and the function name is the
-# `<side>` (branch|prod), so the path segments below `target/criterion` are
-# [op, width, side].
+#
+# The harness names each Criterion group `<op>/<W>` (e.g. `add/D18`) with the
+# `<side>` (branch|prod) as the function. Criterion SANITISES the `/` in a
+# group id to `_` on disk, so the actual report dir is `<op>_<W>` (e.g.
+# `add_D18`, `to_degrees_D115`) — NOT a nested `<op>/<W>`. Hence the path
+# segments below `target/criterion` are [<op>_<W>, side]. Parse the group
+# segment by stripping its trailing `_D<n>` width suffix (ops like
+# `to_degrees`/`to_radians` themselves contain `_`, so match the suffix, not
+# the first `_`).
+_GROUP = re.compile(r"^(?P<op>.+)_(?P<width>D\d+)$")
 data: dict[str, dict[str, dict[str, float]]] = {}
 for est in glob.glob(os.path.join(ROOT, "**", "new", "estimates.json"), recursive=True):
     rel = os.path.relpath(est, ROOT).replace(os.sep, "/").split("/")[:-2]  # drop new/estimates.json
     side = next((s for s in ("branch", "prod") if s in rel), None)
     if side is None:
         continue
-    rest = [p for p in rel if p != side]
-    # The width label is the `D<n>` segment; everything else is the op key.
-    width = next((p for p in rest if p.startswith("D") and p[1:2].isdigit()), None)
-    if width is None:
+    group = "/".join(p for p in rel if p != side)  # the `<op>_<W>` dir
+    m = _GROUP.match(group)
+    if m is None:
         continue
-    op = "/".join(p for p in rest if p != width)
+    op, width = m.group("op"), m.group("width")
     with open(est) as f:
         med = json.load(f)["median"]["point_estimate"]
     data.setdefault(width, {}).setdefault(op, {})[side] = med
