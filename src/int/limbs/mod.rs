@@ -1208,7 +1208,11 @@ pub(crate) const fn limbs_cmp_u64_cross(a: &[u64], b: &[u64]) -> i32 {
     0
 }
 
-/// Bit length (`0` for zero, else `floor(log2)+1`).
+/// Bit length of the UNSIGNED value the limbs represent (`0` for zero,
+/// else `floor(log2)+1`). The limbs are read as a non-negative
+/// little-endian magnitude; signed callers pass the magnitude limbs of
+/// `|value|` (see `Int::bit_length`), so the result is the count of
+/// significant bits, not a two's-complement bit count.
 #[inline]
 pub(crate) const fn limbs_bit_len_u64(a: &[u64]) -> u32 {
     let mut i = a.len();
@@ -1221,7 +1225,8 @@ pub(crate) const fn limbs_bit_len_u64(a: &[u64]) -> u32 {
     0
 }
 
-/// Fixed-width specialisation of [`limbs_bit_len_u64`].
+/// Fixed-width specialisation of [`limbs_bit_len_u64`]: significant bits
+/// of the non-negative magnitude held in `a` (`0` for zero).
 #[inline]
 pub(crate) const fn limbs_bit_len_u64_fixed<const L: usize>(a: &[u64; L]) -> u32 {
     let mut i = L;

@@ -280,14 +280,20 @@ impl<const N: usize> Uint<N> {
         limbs_is_zero_u64_fixed(&self.limbs)
     }
 
-    /// Bit length: `0` for zero, else `floor(log2(self)) + 1`
-    /// (equivalently `BITS - leading_zeros`).
+    /// Bit length (significant bits): `0` for zero, else
+    /// `floor(log2(self)) + 1`, equivalently `BITS - leading_zeros`.
+    ///
+    /// For an unsigned value there is no sign, so magnitude and stored
+    /// representation coincide — `bit_length` and the `uN`-contract
+    /// bit-count methods below agree by construction.
     #[inline]
     pub const fn bit_length(&self) -> u32 {
         limbs_bit_len_u64_fixed(&self.limbs)
     }
 
-    /// Number of leading zero bits in the `BITS`-wide representation.
+    /// Number of leading zero bits in the `BITS`-wide representation,
+    /// matching the primitive `uN::leading_zeros` contract:
+    /// `BITS - bit_length`, and `BITS` for zero.
     #[inline]
     pub const fn leading_zeros(&self) -> u32 {
         (Self::BITS as u32) - self.bit_length()
@@ -484,7 +490,8 @@ impl<const N: usize> Uint<N> {
         acc
     }
 
-    /// Set-bit count across all limbs.
+    /// Set-bit count across all limbs, matching the primitive
+    /// `uN::count_ones` contract.
     #[inline]
     pub const fn count_ones(self) -> u32 {
         let mut total = 0;
@@ -1106,8 +1113,19 @@ impl<const N: usize> Int<N> {
         self.wrapping_sqr().wrapping_mul(self)
     }
 
-    /// Bit length of the magnitude: `0` for zero, else
-    /// `floor(log2|self|) + 1`.
+    /// MAGNITUDE bit length: `0` for zero, else `floor(log2|self|) + 1`
+    /// — the number of significant bits of the absolute value `|self|`.
+    ///
+    /// This is a *distinct concept* from the primitive bit-count methods
+    /// ([`Self::leading_zeros`], [`Self::trailing_zeros`],
+    /// [`Self::count_ones`], [`Self::count_zeros`]), which read the
+    /// two's-complement representation. `bit_length` ignores the sign:
+    /// `(-5).bit_length() == 5.bit_length() == 3`. It is kept public for
+    /// internal normalisation use (root/reciprocal seeds, shift amounts).
+    ///
+    /// At `MIN` the magnitude is `2^(BITS-1)`, so
+    /// `MIN.bit_length() == BITS` (one more than `MAX.bit_length()`,
+    /// which is `BITS - 1`).
     #[inline]
     pub const fn bit_length(&self) -> u32 {
         limbs_bit_len_u64_fixed(self.abs().as_limbs())
@@ -1117,6 +1135,11 @@ impl<const N: usize> Int<N> {
     /// the primitive `iN::leading_zeros` contract. A negative value has its
     /// sign bit (the MSB) set, so it has zero leading zeros; a non-negative
     /// value's leading-zero count is `BITS - bit_length` (`BITS` for zero).
+    ///
+    /// `MIN` is negative, so `MIN.leading_zeros() == 0`. `MAX` is the
+    /// largest non-negative value (`0b0111…1`), so `MAX.leading_zeros()
+    /// == 1`. Note this is the two's-complement count, NOT a magnitude
+    /// count — contrast [`Self::bit_length`].
     #[inline]
     pub const fn leading_zeros(&self) -> u32 {
         if self.is_negative() {
@@ -1557,7 +1580,12 @@ impl<const N: usize> Int<N> {
         self.to_f64()
     }
 
-    /// Count of set bits across the two's-complement representation.
+    /// Count of set bits across the two's-complement representation,
+    /// matching the primitive `iN::count_ones` contract — the limbs are
+    /// read as stored, so negative values count their sign-extended
+    /// one-bits. `(-1).count_ones() == BITS` (all-ones), and
+    /// `MIN.count_ones() == 1` (only the sign bit). This is a
+    /// two's-complement count, not a magnitude count.
     #[inline]
     pub const fn count_ones(self) -> u32 {
         let mut total = 0;
@@ -1569,13 +1597,20 @@ impl<const N: usize> Int<N> {
         total
     }
 
-    /// Count of clear bits across the two's-complement representation.
+    /// Count of clear bits across the two's-complement representation,
+    /// matching the primitive `iN::count_zeros` contract
+    /// (`BITS - count_ones`). `(-1).count_zeros() == 0` and
+    /// `MIN.count_zeros() == BITS - 1`.
     #[inline]
     pub const fn count_zeros(self) -> u32 {
         Self::BITS - self.count_ones()
     }
 
-    /// Number of trailing zero bits; `BITS` for zero.
+    /// Number of trailing zero bits of the two's-complement
+    /// representation, matching the primitive `iN::trailing_zeros`
+    /// contract; `BITS` for zero. `MIN` has only its sign bit set, so
+    /// `MIN.trailing_zeros() == BITS - 1`. This reads the stored limbs,
+    /// not the magnitude — contrast [`Self::bit_length`].
     #[inline]
     pub const fn trailing_zeros(self) -> u32 {
         let mut i = 0;
