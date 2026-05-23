@@ -20,6 +20,7 @@ doc has everything it needs. **Read `docs/ARCHITECTURE.md` → "Algorithm choosi
 - **Golden-gate every behaviour-affecting change.** The transcendental precision contract (0 ULP / correctly-rounded) must not regress.
 - **Run `cargo test --no-run` (all targets compile) before declaring done** — `--lib`-only misses integration breakage.
 - **Never weaken the overflow / rounding / determinism contracts.** Integer-only results.
+- **PRESERVE THE EXISTING ROUTING — do not lose the researched/benched algorithm choices.** The Phase-4 work is a STRUCTURAL refactor (policy-file shape, naming, consolidation); it must NOT change *which* algorithm runs for any `(width, scale)` cell, drop a bespoke cell, or move a crossover. The current dispatch (the per-`Dxx` `impl …Policy` / `(W,SCALE)` match) + the migration doc's current-kernel inventory are the **source of truth** — translate every cell faithfully into the new `select` arms. Collapse per-tier shims into one generic algorithm ONLY when they did the *identical* computation (the sqrt pilot's 10 `sqrt_dNN` shims → one generic `sqrt_newton`); a genuinely different/bespoke cell **stays** (D38 `sqrt_mg_divide`, `(D57,20)` `sqrt_newton_with_table_seed`). Golden guards precision; the final consistency pass audits **routing-parity** (new `select` arms ↔ old dispatch).
 
 ## 1. The target shape (per function) — the policy file
 Implement exactly the shape in `docs/ARCHITECTURE.md` "Policy file structure":
