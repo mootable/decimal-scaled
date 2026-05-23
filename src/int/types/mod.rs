@@ -1916,6 +1916,113 @@ impl<const N: usize> Int<N> {
     }
 }
 
+impl<const N: usize> Int<N> {
+    /// Const cross-width, cross-*scale* signed comparison: compares
+    /// `self` against `other · 10^scale_diff`, returning
+    /// [`core::cmp::Ordering`]. Used by the decimal layer to compare two
+    /// `D<Int<_>, S>` values at *different* `SCALE`s without materialising
+    /// a widened product (no `generic_const_exprs`, no computed type).
+    ///
+    /// # Approach (scale-down-with-remainder, overflow-free)
+    ///
+    /// Rather than scale `other` *up* by `10^scale_diff` (which can
+    /// overflow `M`'s width), this scales `self` *down* by the same
+    /// factor — division can never overflow. With magnitudes
+    /// `|self| = q · 10^scale_diff + r` (`0 ≤ r < 10^scale_diff`):
+    ///
+    /// * compare the quotient `q` against `|other|`;
+    /// * on a magnitude tie, a nonzero remainder `r` means `|self|` is the
+    ///   larger magnitude (it carries extra low digits `other` lacks).
+    ///
+    /// Signs are resolved first (a negative is always less than a
+    /// non-negative); for two negatives the larger magnitude is the
+    /// smaller value, so the magnitude order is flipped. `scale_diff == 0`
+    /// degenerates to a plain cross-width magnitude compare.
+    ///
+    /// `const`, `core`-only, no allocation: the `10^scale_diff` divisor and
+    /// the quotient/remainder are built in fixed staging buffers (the same
+    /// 288-limb width the wide tiers stage products through), and the
+    /// division reuses [`limbs_divmod_u64`].
+    pub(crate) const fn cmp_cross_scaled<const M: usize>(
+        self,
+        other: Int<M>,
+        scale_diff: u32,
+    ) -> Ordering {
+        let sn = self.is_negative();
+        let so = other.is_negative();
+        if sn && !so {
+            return Ordering::Less;
+        }
+        if !sn && so {
+            return Ordering::Greater;
+        }
+
+        // Same sign (or one/both zero): compare magnitudes. `mag_cmp` is
+        // the i32 sign of `|self|` − `|other| · 10^scale_diff`.
+        let a = self.unsigned_abs();
+        let b = other.unsigned_abs();
+
+        let mag_cmp = if scale_diff == 0 {
+            limbs_cmp_u64_cross(a.as_limbs(), b.as_limbs())
+        } else {
+            // Build the divisor 10^scale_diff in a fixed staging buffer
+            // (288 limbs covers every shipped width / scale).
+            let mut pow = [0u64; 288];
+            pow[0] = 1;
+            let mut e = 0;
+            while e < scale_diff {
+                // pow *= 10, propagating carry across limbs.
+                let mut carry: u128 = 0;
+                let mut i = 0;
+                while i < pow.len() {
+                    let prod = (pow[i] as u128) * 10u128 + carry;
+                    pow[i] = prod as u64;
+                    carry = prod >> 64;
+                    i += 1;
+                }
+                e += 1;
+            }
+
+            // |self| = q · 10^scale_diff + r.
+            let mut q = [0u64; 288];
+            let mut r = [0u64; 288];
+            limbs_divmod_u64(a.as_limbs(), &pow, &mut q, &mut r);
+
+            // Compare quotient against |other|; tie-break on remainder.
+            let c = limbs_cmp_u64_cross(&q, b.as_limbs());
+            if c != 0 {
+                c
+            } else {
+                // Quotients equal: a nonzero remainder makes |self| larger.
+                let mut rk = 0;
+                let mut nz = false;
+                while rk < r.len() {
+                    if r[rk] != 0 {
+                        nz = true;
+                        break;
+                    }
+                    rk += 1;
+                }
+                if nz {
+                    1
+                } else {
+                    0
+                }
+            }
+        };
+
+        // For two negatives, the larger magnitude is the smaller value.
+        let c = if sn { -mag_cmp } else { mag_cmp };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
 // One generic comparison surface across widths. The `N == M` case is
 // covered here too, so `Int<N>` carries no separate same-width
 // `PartialEq` / `PartialOrd` / `Ord` impl (a derived or hand-written
