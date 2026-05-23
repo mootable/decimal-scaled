@@ -69,7 +69,12 @@ dyn = []
 # both are present, strict wins. Both `*_strict` and `*_fast`
 # named methods are emitted regardless of which feature is on; this
 # feature only chooses what plain `*` resolves to.
-fast = []
+#
+# Implies `std`: the f64 bridge uses the inherent `f64` transcendental
+# intrinsics (`sin`/`cos`/`exp`/…), which are std-only under the crate's
+# float policy (std owns floats; no_std is integer-only, never libm). So
+# `fast` is a std-build convenience and cannot combine with `no_std`.
+fast = ["std"]
 # Compiles BOTH the macro-default and the per-type override
 # implementations for every method that has them. Default builds compile
 # only the chosen winner (see OVERRIDE_POLICY.md). With `bench-alt` on
@@ -151,7 +156,12 @@ perf-trace = ["dep:tracing"]
 
 [dependencies]
 serde = { version = "1", features = ["derive"], optional = true }
-num-traits = { version = "0.2", default-features = false, features = ["libm"] }
+# No `libm`: the crate's float policy is std-owns-floats / no_std-is-
+# integer-only, so we never use `num_traits::Float` (which is the only
+# part needing libm under no_std). num-traits is kept solely for the
+# `FromPrimitive`/`ToPrimitive`/`NumCast` bridge used by `from_num`/
+# `to_num`, none of which require libm.
+num-traits = { version = "0.2", default-features = false }
 decimal_scaled_macros = { path = "macros", version = "0.5.0", default-features = false, optional = true }
 tracing = { version = "0.1", default-features = false, features = ["std"], optional = true }
 
