@@ -623,13 +623,7 @@ mod tests {
 /// Emits `Serialize` / `Deserialize` for a wide-tier decimal type
 /// (D76 / D153 / D307). `$bytes_len` is `mem::size_of::<$Storage>()`
 /// (e.g. 32 for `Int256`).
-#[cfg(any(
-    feature = "d76",
-    feature = "d153",
-    feature = "d307",
-    feature = "wide",
-    feature = "x-wide"
-))]
+#[cfg(feature = "_wide-support")]
 macro_rules! decl_wide_serde {
     ($Type:ident, $Storage:ty, $bytes_len:literal) => {
         impl<const SCALE: u32> Serialize for $crate::types::widths::$Type<SCALE> {

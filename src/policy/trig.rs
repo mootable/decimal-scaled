@@ -130,7 +130,7 @@ pub(crate) mod forward {
         /// Every cell that selects `Tang` lives at N ≥ 3, so the variant,
         /// its `select` arms, and its dispatch arms are gated with the
         /// wide tiers (the policy stays exhaustive in both configs).
-        #[cfg(any(feature = "d57", feature = "wide"))]
+        #[cfg(feature = "_wide-support")]
         Tang,
     }
 
@@ -698,7 +698,7 @@ macro_rules! d38_forward_fixed {
         fn sin_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<2, SCALE>(&self.0) {
                 forward::Algorithm::Series => trig::fixed_d38::sin_strict::<SCALE>(self.0, mode),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::fixed_d38::sin_strict::<SCALE>(self.0, mode),
             })
         }
@@ -710,7 +710,7 @@ macro_rules! d38_forward_fixed {
         fn cos_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<2, SCALE>(&self.0) {
                 forward::Algorithm::Series => trig::fixed_d38::cos_strict::<SCALE>(self.0, mode),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::fixed_d38::cos_strict::<SCALE>(self.0, mode),
             })
         }
@@ -722,7 +722,7 @@ macro_rules! d38_forward_fixed {
         fn tan_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<2, SCALE>(&self.0) {
                 forward::Algorithm::Series => trig::fixed_d38::tan_strict::<SCALE>(self.0, mode),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::fixed_d38::tan_strict::<SCALE>(self.0, mode),
             })
         }
@@ -982,7 +982,7 @@ macro_rules! wide_trig_forward_series {
         fn sin_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => $sin(self.0, mode, SCALE),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => $sin(self.0, mode, SCALE),
             })
         }
@@ -994,7 +994,7 @@ macro_rules! wide_trig_forward_series {
         fn cos_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => $cos(self.0, mode, SCALE),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => $cos(self.0, mode, SCALE),
             })
         }
@@ -1006,7 +1006,7 @@ macro_rules! wide_trig_forward_series {
         fn tan_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => $tan(self.0, mode, SCALE),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => $tan(self.0, mode, SCALE),
             })
         }
@@ -1018,7 +1018,7 @@ macro_rules! wide_trig_forward_series {
         fn atan_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<$N, SCALE>(&self.0) {
                 forward::Algorithm::Series => $atan(self.0, mode, SCALE),
-                #[cfg(any(feature = "d57", feature = "wide"))]
+                #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => $atan(self.0, mode, SCALE),
             })
         }

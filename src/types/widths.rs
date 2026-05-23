@@ -695,7 +695,7 @@ crate::macros::conversions::decl_cross_width_narrowing!(wide D18, crate::int::ty
 
 // ─── D38::widen / D76 hop methods ─────────────────────────────────────
 
-#[cfg(any(feature = "d76", feature = "wide"))]
+#[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> D38<SCALE> {
     /// Promote to the next storage tier ([`D57`]) at the same `SCALE`.
     /// Lossless. Available with the `d57` (or umbrella `wide`) Cargo
@@ -715,7 +715,10 @@ impl<const SCALE: u32> D38<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d76", feature = "wide"))]
+#[cfg(all(
+    any(feature = "d76", feature = "wide"),
+    any(feature = "d57", feature = "wide"),
+))]
 impl<const SCALE: u32> D76<SCALE> {
     /// Demote to the previous storage tier ([`D57`]) at the same
     /// `SCALE`. Returns `Err(ConvertError::Overflow)` if the value
@@ -1817,6 +1820,16 @@ impl<const SCALE: u32> D57<SCALE> {
     pub fn narrow(self) -> Result<D38<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
+}
+
+// `widen` lives in a neighbour-gated impl: D57 can be enabled without
+// D76 (e.g. `--features d57`), in which case D76 doesn't exist as a
+// type and an unconditional `widen` would not compile.
+#[cfg(all(
+    any(feature = "d57", feature = "wide"),
+    any(feature = "d76", feature = "wide"),
+))]
+impl<const SCALE: u32> D57<SCALE> {
     /// Promote to the next storage tier ([`D76`]) at the same `SCALE`. Lossless.
     #[inline]
     #[must_use]
@@ -1825,13 +1838,28 @@ impl<const SCALE: u32> D57<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d115", feature = "wide"))]
+// Each gap tier's `narrow` / `widen` lives in a neighbour-gated impl:
+// a single-tier build (e.g. `--features d115`) enables neither the
+// lower nor the upper neighbour, so referencing those types from an
+// unconditional method would not compile. (Same pattern as the
+// D616 → D924 split below.)
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d76", feature = "wide"),
+))]
 impl<const SCALE: u32> D115<SCALE> {
     /// Demote to the immediate previous tier ([`D76`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D76<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
+}
+
+#[cfg(all(
+    any(feature = "d115", feature = "wide"),
+    any(feature = "d153", feature = "wide"),
+))]
+impl<const SCALE: u32> D115<SCALE> {
     /// Promote to the next storage tier ([`D153`]) at the same `SCALE`. Lossless.
     #[inline]
     #[must_use]
@@ -1840,13 +1868,23 @@ impl<const SCALE: u32> D115<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d230", feature = "wide"))]
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d153", feature = "wide"),
+))]
 impl<const SCALE: u32> D230<SCALE> {
     /// Demote to the immediate previous tier ([`D153`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D153<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
+}
+
+#[cfg(all(
+    any(feature = "d230", feature = "wide"),
+    any(feature = "d307", feature = "wide"),
+))]
+impl<const SCALE: u32> D230<SCALE> {
     /// Promote to the next storage tier ([`D307`]) at the same `SCALE`. Lossless.
     #[inline]
     #[must_use]
@@ -1855,13 +1893,23 @@ impl<const SCALE: u32> D230<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d462", feature = "x-wide"))]
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d307", feature = "wide"),
+))]
 impl<const SCALE: u32> D462<SCALE> {
     /// Demote to the immediate previous tier ([`D307`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D307<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
+}
+
+#[cfg(all(
+    any(feature = "d462", feature = "x-wide"),
+    any(feature = "d616", feature = "x-wide"),
+))]
+impl<const SCALE: u32> D462<SCALE> {
     /// Promote to the next storage tier ([`D616`]) at the same `SCALE`. Lossless.
     #[inline]
     #[must_use]
@@ -1870,7 +1918,10 @@ impl<const SCALE: u32> D462<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d616", feature = "x-wide"))]
+#[cfg(all(
+    any(feature = "d616", feature = "x-wide"),
+    any(feature = "d462", feature = "x-wide"),
+))]
 impl<const SCALE: u32> D616<SCALE> {
     /// Demote to the immediate previous tier ([`D462`]) at the same `SCALE`.
     #[inline]
@@ -1896,13 +1947,23 @@ impl<const SCALE: u32> D616<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
+#[cfg(all(
+    any(feature = "d924", feature = "xx-wide"),
+    any(feature = "d616", feature = "x-wide"),
+))]
 impl<const SCALE: u32> D924<SCALE> {
     /// Demote to the immediate previous tier ([`D616`]) at the same `SCALE`.
     #[inline]
     pub fn narrow(self) -> Result<D616<SCALE>, crate::support::error::ConvertError> {
         self.try_into()
     }
+}
+
+#[cfg(all(
+    any(feature = "d924", feature = "xx-wide"),
+    any(feature = "d1232", feature = "xx-wide"),
+))]
+impl<const SCALE: u32> D924<SCALE> {
     /// Promote to the next storage tier ([`D1232`]) at the same `SCALE`. Lossless.
     #[inline]
     #[must_use]
@@ -1911,7 +1972,10 @@ impl<const SCALE: u32> D924<SCALE> {
     }
 }
 
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+#[cfg(all(
+    any(feature = "d1232", feature = "xx-wide"),
+    any(feature = "d924", feature = "xx-wide"),
+))]
 impl<const SCALE: u32> D1232<SCALE> {
     /// Demote to the immediate previous tier ([`D924`]) at the same `SCALE`.
     /// D1232 is the widest shipped tier, so there is no `.widen()` method.

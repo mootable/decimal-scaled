@@ -83,7 +83,7 @@ enum Algorithm {
     /// at N ≥ 3, so the variant, its `select` arms, and its dispatch
     /// arms are gated together (the policy stays exhaustive in both
     /// configs).
-    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[cfg(feature = "_wide-support")]
     Tang,
 }
 
@@ -197,7 +197,7 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
             // and dead-arm-eliminated (it forwards to Series so the
             // `match` stays exhaustive without a synthetic default).
             Algorithm::Series => exp::fixed_d38::exp_strict::<SCALE>(self.0, mode),
-            #[cfg(any(feature = "d57", feature = "wide"))]
+            #[cfg(feature = "_wide-support")]
             Algorithm::Tang => exp::fixed_d38::exp_strict::<SCALE>(self.0, mode),
         })
     }
@@ -205,7 +205,7 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {
             Algorithm::Series => exp::fixed_d38::exp_with(self.0, SCALE, working_digits, mode),
-            #[cfg(any(feature = "d57", feature = "wide"))]
+            #[cfg(feature = "_wide-support")]
             Algorithm::Tang => exp::fixed_d38::exp_with(self.0, SCALE, working_digits, mode),
         })
     }
@@ -241,7 +241,7 @@ macro_rules! exp_policy_wide_series {
             fn exp_impl(self, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
                     Algorithm::Series => $series(self.0, mode, SCALE),
-                    #[cfg(any(feature = "d57", feature = "wide"))]
+                    #[cfg(feature = "_wide-support")]
                     Algorithm::Tang => $series(self.0, mode, SCALE),
                 })
             }
@@ -249,7 +249,7 @@ macro_rules! exp_policy_wide_series {
             fn exp_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
                     Algorithm::Series => $series(self.0, mode, SCALE),
-                    #[cfg(any(feature = "d57", feature = "wide"))]
+                    #[cfg(feature = "_wide-support")]
                     Algorithm::Tang => $series(self.0, mode, SCALE),
                 })
             }
@@ -271,7 +271,7 @@ macro_rules! exp_policy_wide_series {
 /// `Algorithm::Tang`. `select` only yields `Tang` for the band scales, so
 /// the `$tang` arm is exhaustive over the reachable scales; the
 /// `unreachable!()` covers the const-eliminated rest.
-#[cfg(any(feature = "d57", feature = "wide"))]
+#[cfg(feature = "_wide-support")]
 macro_rules! exp_policy_wide_tang {
     ($T:ident, $N:literal, $series:path, $tang:expr) => {
         impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {

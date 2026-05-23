@@ -85,7 +85,7 @@ enum Algorithm {
     /// `ln_tang` — Tang table-driven range reduction. Selected on the
     /// benched SCALE bands; realised by the `ln::lookup_*` kernels.
     /// Gated with the wide tiers (every `Tang` cell is at N ≥ 3).
-    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[cfg(feature = "_wide-support")]
     Tang,
 }
 
@@ -234,7 +234,7 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
             // N==2 only selects Series; the gated Tang arm is
             // dead-arm-eliminated and forwards to Series for exhaustiveness.
             Algorithm::Series => ln::fixed_d38::ln_strict::<SCALE>(self.0, mode),
-            #[cfg(any(feature = "d57", feature = "wide"))]
+            #[cfg(feature = "_wide-support")]
             Algorithm::Tang => ln::fixed_d38::ln_strict::<SCALE>(self.0, mode),
         })
     }
@@ -290,7 +290,7 @@ macro_rules! ln_policy_wide_series {
             fn ln_impl(self, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
                     Algorithm::Series => $series(self.0, mode, SCALE),
-                    #[cfg(any(feature = "d57", feature = "wide"))]
+                    #[cfg(feature = "_wide-support")]
                     Algorithm::Tang => $series(self.0, mode, SCALE),
                 })
             }
@@ -298,7 +298,7 @@ macro_rules! ln_policy_wide_series {
             fn ln_with_impl(self, _working_digits: u32, mode: RoundingMode) -> Self {
                 Self(match resolve::<$N, SCALE>(&self.0) {
                     Algorithm::Series => $series(self.0, mode, SCALE),
-                    #[cfg(any(feature = "d57", feature = "wide"))]
+                    #[cfg(feature = "_wide-support")]
                     Algorithm::Tang => $series(self.0, mode, SCALE),
                 })
             }
@@ -310,7 +310,7 @@ macro_rules! ln_policy_wide_series {
 /// Emit `impl LnPolicy for D<Int<$N>, SCALE>` for a wide tier carrying a
 /// Tang band. `$series` realises `Series`; the `$tang` block (a
 /// `match SCALE` over the band(s)) realises `Tang`.
-#[cfg(any(feature = "d57", feature = "wide"))]
+#[cfg(feature = "_wide-support")]
 macro_rules! ln_policy_wide_tang {
     ($T:ident, $N:literal, $series:path, $tang:expr) => {
         impl<const SCALE: u32> LnPolicy for crate::types::widths::$T<SCALE> {

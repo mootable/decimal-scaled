@@ -107,24 +107,34 @@ cross-scale-ops = []
 # hand-rolled wide-integer types in `crate::wide_int` — no external
 # big-integer dependency. D9 / D18 / D38 use primitive storage and
 # need none of this.
+# Internal marker: enabled by EVERY wide-family tier (d57 … d1232) so
+# the shared wide-tier support code (the `wide_roots` /
+# `wide_transcendental` macro modules, the `decl_wide_serde` macro, the
+# `DecimalConstants` / `Int` imports in `consts/wide.rs`, etc.) is
+# compiled in whenever any single wide tier is on. Not meant to be set
+# directly by downstreams — turn on a concrete tier (or an umbrella)
+# instead. Without this marker each shared-support `cfg` would have to
+# enumerate all twelve tier features by hand and a single-tier build
+# (`--features d57`) would miss the support it depends on.
+_wide-support = []
 wide = ["d57", "d76", "d115", "d153", "d230"]
-d57 = []
-d76 = []
-d115 = []
-d153 = []
-d230 = []
+d57 = ["_wide-support"]
+d76 = ["_wide-support"]
+d115 = ["_wide-support"]
+d153 = ["_wide-support"]
+d230 = ["_wide-support"]
 # Very-wide tier (D307+). Gated separately because its strict-
 # transcendental work integers run into thousands of bits and inflate
 # build time vs the narrower wide tiers.
 x-wide = ["d307", "d462", "d616"]
-d307 = []
-d462 = []
-d616 = []
+d307 = ["_wide-support"]
+d462 = ["_wide-support"]
+d616 = ["_wide-support"]
 # Extra-wide tier (D924+). Pulls in the Int12288 / Int16384 work
 # integers — multi-second compile-time cost for the macro emission.
 xx-wide = ["d924", "d1232"]
-d924 = []
-d1232 = []
+d924 = ["_wide-support"]
+d1232 = ["_wide-support"]
 # Internal perf-investigation feature: emits `tracing::info_span!`
 # blocks at the section boundaries of the wide-tier strict
 # transcendental cores (`exp_fixed`, `ln_fixed`, …). With

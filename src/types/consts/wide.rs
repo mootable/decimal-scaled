@@ -16,21 +16,9 @@
 // feature is enabled — every item in this module is per-tier
 // `#[cfg]`-gated below. Narrow-only builds compile the module
 // empty.
-#[cfg(any(
-    feature = "d76",
-    feature = "d153",
-    feature = "d307",
-    feature = "wide",
-    feature = "x-wide"
-))]
+#[cfg(feature = "_wide-support")]
 use crate::types::consts::DecimalConstants;
-#[cfg(any(
-    feature = "d76",
-    feature = "d153",
-    feature = "d307",
-    feature = "wide",
-    feature = "x-wide"
-))]
+#[cfg(feature = "_wide-support")]
 use crate::int::types::Int;
 
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
