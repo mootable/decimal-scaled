@@ -11,7 +11,7 @@ doc has everything it needs. **Read `docs/ARCHITECTURE.md` → "Algorithm choosi
 "Policy file structure" first** — this doc operationalises it and adds the hard rules.
 
 ## Guiding principle — WRITE OPTIMALLY, OPTIMISE LAST
-Get each consolidated algorithm **correct, clean, well-structured, and routed to the right (benched) algorithm choice FIRST**. We are at the *"write it well"* stage now, NOT the perf-tuning stage. Do **not** prematurely micro-optimise, hand-roll arithmetic, or preserve bespoke perf-code — favour the clear generic-over-`N` implementation. Perf-tuning (re-bespoke a cell, micro-opt) is a deliberate **later, reactive** pass, driven by benches, only where a real regression shows. Correctness (golden) and the algorithm choice are the hard constraints; raw speed is optimised last.
+**The explicit GOAL of Phases 3–4 is CLEAN, WELL-STRUCTURED code** (owner) — not raw performance. Get each consolidated algorithm **correct, clean, well-structured, and routed to the right (benched) algorithm choice FIRST**. We are at the *"write it well"* stage now, NOT the perf-tuning stage. Do **not** prematurely micro-optimise, hand-roll arithmetic, or preserve bespoke perf-code — favour the clear generic-over-`N` implementation. Perf-tuning (re-bespoke a cell, micro-opt) is a deliberate **later, reactive** pass, driven by benches, only where a real regression shows. Correctness (golden) and the algorithm choice are the hard constraints; raw speed is optimised last.
 
 ## 0. Hard rules (non-negotiable)
 - **NO AI attribution** anywhere — commits, comments, code, docs. Plain `git commit -m`.
