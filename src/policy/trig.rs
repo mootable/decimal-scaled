@@ -854,6 +854,7 @@ impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
 /// The inverse + asinh/acosh/atanh + angle-conversion methods that
 /// delegate to the inherent `*_strict_with` shells with no per-band
 /// override (the wide-tier default tail).
+#[allow(unused_macros)]
 macro_rules! wide_trig_inverse_inherent {
     ($N:literal) => {
         #[inline]
@@ -890,6 +891,7 @@ macro_rules! wide_trig_inverse_inherent {
 }
 
 /// asinh / acosh / atanh + angle conversions — inherent shells, no bands.
+#[allow(unused_macros)]
 macro_rules! wide_trig_extra_inherent {
     () => {
         #[inline]
@@ -937,6 +939,7 @@ macro_rules! wide_trig_extra_inherent {
 
 /// Hyperbolics — inherent `*_strict_with` shells with no per-band
 /// override (`ExpIdentity` realised by the inherent composition).
+#[allow(unused_macros)]
 macro_rules! wide_trig_hyper_inherent {
     ($N:literal) => {
         #[inline]
@@ -976,6 +979,7 @@ macro_rules! wide_trig_hyper_inherent {
 /// cell is `Series` on the tier `wide_kernel`. The `Tang` arm is
 /// unreachable (no `select` arm yields it at this `N`) and forwards to the
 /// series kernel so the `match` stays exhaustive and dead-arm-eliminated.
+#[allow(unused_macros)]
 macro_rules! wide_trig_forward_series {
     ($N:literal, $sin:path, $cos:path, $tan:path, $atan:path) => {
         #[inline]

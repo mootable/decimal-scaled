@@ -25,10 +25,12 @@
 //! (either the macro itself or a new `WideTrigCore` trait) for no
 //! shape-saving in the 3-line wrapper body.
 
+#[allow(unused_imports)]
 use crate::support::rounding::RoundingMode;
 
 /// Emits an `exp_strict_<tier>(raw, mode, scale)` free function for
 /// one wide tier. See module docs.
+#[allow(unused_macros)]
 macro_rules! decl_exp_kernel {
     ($name:ident, $Storage:ty, $core_path:path, $tier_label:literal) => {
         /// Wide-tier `exp_strict` kernel. See module docs.

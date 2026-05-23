@@ -49,6 +49,7 @@
 /// The slot is a `Vec<(u32, Vec<Entry>)>` linear-scanned on `w`; the
 /// live `w` count is one to a few per build (one per distinct `SCALE`
 /// choice routed to this kernel), so the scan is trivially short.
+#[allow(unused_macros)]
 macro_rules! decl_table_cache {
     (entry = $Entry:ty, compute = $compute:path $(,)?) => {
         #[cfg(feature = "std")]
@@ -100,4 +101,5 @@ macro_rules! decl_table_cache {
     };
 }
 
+#[allow(unused_imports)]
 pub(crate) use decl_table_cache;

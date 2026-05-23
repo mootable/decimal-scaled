@@ -283,6 +283,7 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
 
 /// Emit `impl LnPolicy for D<Int<$N>, SCALE>` for a wide tier with **no**
 /// Tang band: every cell is `Series`.
+#[allow(unused_macros)]
 macro_rules! ln_policy_wide_series {
     ($T:ident, $N:literal, $series:path) => {
         impl<const SCALE: u32> LnPolicy for crate::types::widths::$T<SCALE> {
@@ -311,6 +312,7 @@ macro_rules! ln_policy_wide_series {
 /// Tang band. `$series` realises `Series`; the `$tang` block (a
 /// `match SCALE` over the band(s)) realises `Tang`.
 #[cfg(feature = "_wide-support")]
+#[allow(unused_macros)]
 macro_rules! ln_policy_wide_tang {
     ($T:ident, $N:literal, $series:path, $tang:expr) => {
         impl<const SCALE: u32> LnPolicy for crate::types::widths::$T<SCALE> {
@@ -338,6 +340,7 @@ macro_rules! ln_policy_wide_tang {
 /// The shared `log` / `log2` / `log10` method bodies for the wide tiers —
 /// each delegates to the inherent `*_strict_with` shell (the derived
 /// functions compose `ln` with a constant; no raw free-fn today).
+#[allow(unused_macros)]
 macro_rules! ln_policy_log_family {
     () => {
         #[inline]

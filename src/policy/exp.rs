@@ -234,6 +234,7 @@ impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
 /// Tang band: every cell is `Series`. The `Tang` arm is unreachable (no
 /// `select` arm yields it at this `N`) and forwards to the series kernel
 /// so the `match` stays exhaustive and dead-arm-eliminated.
+#[allow(unused_macros)]
 macro_rules! exp_policy_wide_series {
     ($T:ident, $N:literal, $series:path) => {
         impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {
@@ -272,6 +273,7 @@ macro_rules! exp_policy_wide_series {
 /// the `$tang` arm is exhaustive over the reachable scales; the
 /// `unreachable!()` covers the const-eliminated rest.
 #[cfg(feature = "_wide-support")]
+#[allow(unused_macros)]
 macro_rules! exp_policy_wide_tang {
     ($T:ident, $N:literal, $series:path, $tang:expr) => {
         impl<const SCALE: u32> ExpPolicy for crate::types::widths::$T<SCALE> {

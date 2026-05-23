@@ -179,6 +179,7 @@ impl_width_le_wide_reflexive!(crate::int::types::Int<64>);
 // integer storages. `from_i128` accepts `i128` sources, so the i32 /
 // i64 inputs are upcast to i128 first (always lossless).
 
+#[allow(unused_macros)]
 macro_rules! impls_native_to_one_wide {
     ($Wide:ty) => {
         impl_width_le_native_to_wide!($Wide, i32);

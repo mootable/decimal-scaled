@@ -116,7 +116,12 @@ cross-scale-ops = []
 # instead. Without this marker each shared-support `cfg` would have to
 # enumerate all twelve tier features by hand and a single-tier build
 # (`--features d57`) would miss the support it depends on.
-_wide-support = []
+#
+# Implies `alloc`: every wide tier's transcendental lookup tables are
+# heap-cached (`decl_table_cache!` → `alloc::vec::Vec`), so a no-default
+# single-tier build (`--no-default-features --features d57`) must pull in
+# `extern crate alloc`, which is itself gated on the `alloc` feature.
+_wide-support = ["alloc"]
 wide = ["d57", "d76", "d115", "d153", "d230"]
 d57 = ["_wide-support"]
 d76 = ["_wide-support"]

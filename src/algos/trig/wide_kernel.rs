@@ -38,10 +38,12 @@
 //! per tier while forcing either a macro refactor or a new
 //! `WideTrigCore` trait. The wrappers stay per-tier on purpose.
 
+#[allow(unused_imports)]
 use crate::support::rounding::RoundingMode;
 
 /// Emits four `<fn>_strict_<tier>(raw, mode, scale)` free functions
 /// (sin / cos / tan / atan) for one wide tier. See module docs.
+#[allow(unused_macros)]
 macro_rules! decl_trig_kernel {
     (
         $sin_name:ident,

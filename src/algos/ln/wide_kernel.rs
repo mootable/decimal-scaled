@@ -37,12 +37,14 @@
 //! module is already the natural carrier for those bindings; the
 //! wrappers below stay thin and per-tier on purpose.
 
+#[allow(unused_imports)]
 use crate::support::rounding::RoundingMode;
 
 /// Emits a `ln_strict_<tier>(raw, mode)` free function for one wide
 /// tier. `$Storage` is the type's raw storage integer; `$core_path` is
 /// the per-tier transcendental core module path (e.g.
 /// `crate::types::widths::wide_trig_d57`).
+#[allow(unused_macros)]
 macro_rules! decl_ln_kernel {
     ($name:ident, $Storage:ty, $core_path:path, $tier_label:literal) => {
         /// Wide-tier `ln_strict` kernel. See module docs.
