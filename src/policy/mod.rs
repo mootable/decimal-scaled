@@ -23,11 +23,17 @@
 
 // Unconditional — D18/D38 impls live here too. Wide-tier impls
 // inside each family are individually feature-gated.
+pub(crate) mod add;
 pub(crate) mod cbrt;
+pub(crate) mod div;
 pub(crate) mod exp;
 pub(crate) mod float_seed;
 pub(crate) mod ln;
+pub(crate) mod mul;
+pub(crate) mod neg;
 pub(crate) mod pow;
+pub(crate) mod rem;
 pub(crate) mod sqrt;
+pub(crate) mod sub;
 pub(crate) mod table_cache;
 pub(crate) mod trig;

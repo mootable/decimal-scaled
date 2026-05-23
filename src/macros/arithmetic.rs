@@ -257,73 +257,12 @@ macro_rules! decl_decimal_arithmetic {
             /// with D38 — avoiding the generic schoolbook divide for
             /// the common case. Larger scales fall through to the
             /// slower `n / (10^SCALE)` path.
+            ///
+            /// Routes through [`crate::policy::mul::MulPolicy`].
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                // Fast path: if the product fits `$Storage` exactly,
-                // skip the widen → mg_divide-in-`$Wider` → narrow
-                // chain. The check is one `leading_zeros` per operand
-                // on the storage type's `[u64; L]` limbs (4 ops for
-                // Int<4>, 6 for Int<6>, …); negligible vs the
-                // 4 × L² limb mul that follows. When the path is
-                // taken we save (a) one set of `$Storage → $Wider`
-                // resizes, (b) one `$Wider → $Storage` resize at
-                // exit, and (c) the wider half of the MG divide's
-                // entry / exit `mag_into_u128` / `from_mag_sign_u128`
-                // limb copy.
-                //
-                // The condition `lz_a + lz_b > $Storage::BITS` is
-                // sufficient for the unsigned magnitude product to
-                // fit in `$Storage::BITS - 1` bits (i.e. the signed
-                // sign-bit slot stays clear). `leading_zeros` on the
-                // signed `$Storage` is computed over
-                // `unsigned_abs(self).leading_zeros()` so it already
-                // accounts for the sign-bit asymmetry; `.MIN` is the
-                // only value with magnitude `2^(BITS - 1)`, and at
-                // `lz = 0` the test fails so MIN takes the slow
-                // path.
-                // Magnitude headroom: `leading_zeros` is now two's-complement
-                // (negatives → 0), so take it over `unsigned_abs()` to keep the
-                // fast-path estimate on the operand magnitude.
-                let lz_a = self.0.unsigned_abs().leading_zeros();
-                let lz_b = rhs.0.unsigned_abs().leading_zeros();
-                if lz_a + lz_b > <$Storage>::BITS {
-                    let n: $Storage = self.0.wrapping_mul(rhs.0);
-                    let scaled = if SCALE == 0 {
-                        n
-                    } else if SCALE <= 38 {
-                        $crate::algos::support::mg_divide::div_wide_pow10_with::<$Storage, { <$Storage as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
-                    } else {
-                        // Newton vs MG chain dispatch: cells in the
-                        // bench-validated matrix (Int<32> ≥ s200,
-                        // Int<48> ≥ s200, Int<64> ≥ s400) route to
-                        // Newton; everything else stays on MG. See
-                        // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`].
-                        $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<$Storage, { <$Storage as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
-                    };
-                    return Self(scaled);
-                }
-
-                // `widen_mul` does the `$Storage × $Storage → $Wider`
-                // product in one step — no Int{2W} wrapping mul with
-                // half-empty operands, and no double trip through a
-                // magnitude staging buffer.
-                let n: $Wider = self.0.widen_mul::<$Wider>(rhs.0);
-                let scaled = if SCALE == 0 {
-                    n
-                } else if SCALE <= 38 {
-                    $crate::algos::support::mg_divide::div_wide_pow10_with::<$Wider, { <$Wider as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
-                } else {
-                    // Width-dispatch as above; the slow path's `$Wider`
-                    // numerator hits the same matrix (e.g. D307's
-                    // `$Wider = Int<32>` routes Newton at SCALE ≥ 200).
-                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
-                };
-                // Overflow contract (runtime path): the fast path above
-                // is only taken when the product provably fits `$Storage`,
-                // so overflow can occur solely on this narrowing step.
-                // Debug panics; release resizes (wraps) — historical bits.
-                Self($crate::macros::arithmetic::narrow_or_panic!(
-                    scaled, $Storage, $Wider, "attempt to multiply with overflow"))
+                use $crate::policy::mul::MulPolicy as _;
+                self.mul_impl(rhs, mode)
             }
 
             /// Divide two values of the same scale, rounding the
@@ -338,48 +277,12 @@ macro_rules! decl_decimal_arithmetic {
             /// type's `multiplier()` const (already evaluated at the
             /// `$Storage` width) widened to `$Wider`, avoiding the
             /// per-call `pow(SCALE)` on the wider type.
+            ///
+            /// Routes through [`crate::policy::div::DivPolicy`].
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                // Fast path: when `self * 10^SCALE` fits `$Storage`
-                // exactly (`leading_zeros(self) + leading_zeros(10^SCALE) >
-                // $Storage::BITS`), skip the widen-to-$Wider chain
-                // and divide in $Storage. The divisor `rhs` already
-                // fits $Storage by construction. Saves one
-                // $Storage→$Wider resize on `rhs`, one $Wider→$Storage
-                // resize on the result, and shrinks the Knuth divmod
-                // from $Wider-limbs to $Storage-limbs.
-                //
-                // `$Type::<SCALE>::multiplier()` is a `const` -- its
-                // `leading_zeros()` collapses at compile time when
-                // SCALE is a const, so the branch's predicate is one
-                // `leading_zeros` call on `self.0`.
-                let mult: $Storage = $Type::<SCALE>::multiplier();
-                // `mult` (the scale multiplier) is positive, so its
-                // two's-complement `leading_zeros` already equals the magnitude
-                // count; `self.0` may be negative, so take its magnitude.
-                let lz_n = self.0.unsigned_abs().leading_zeros();
-                let lz_m = mult.leading_zeros();
-                if lz_n + lz_m > <$Storage>::BITS {
-                    let n: $Storage = self.0.wrapping_mul(mult);
-                    let result =
-                        $crate::macros::arithmetic::round_with_mode_wide!(n, rhs.0, $Storage, mode);
-                    return Self(result);
-                }
-
-                let b: $Wider = rhs.0.resize::<$Wider>();
-                // `self.0 * multiplier()` both fit `$Storage` for any
-                // representable `SCALE`, so the full product fits
-                // `$Wider` exactly; `widen_mul` avoids the
-                // resize-to-`$Wider` round trip on both operands.
-                let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
-                let result =
-                    $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
-                // Overflow contract (runtime path): the only out-of-range
-                // case reaching this width-narrowing is `MIN / -ONE`
-                // (the fast path provably keeps the quotient in
-                // `$Storage`). Debug panics; release resizes (wraps).
-                Self($crate::macros::arithmetic::narrow_or_panic!(
-                    result, $Storage, $Wider, "attempt to divide with overflow"))
+                use $crate::policy::div::DivPolicy as _;
+                self.div_impl(rhs, mode)
             }
         }
 
@@ -394,6 +297,12 @@ macro_rules! decl_decimal_arithmetic {
     // Add / Sub / Neg / Rem and their assign forms — identical across the
     // `Int<N>` storage widths (the `core::ops` impls on the wide integers
     // match the primitive integer surface).
+    //
+    // Each operator routes through the corresponding policy trait method
+    // (`AddPolicy::add_impl`, etc.) defined in `src/policy/`. The policy's
+    // `const { select }` block folds per monomorphisation so the dispatch is
+    // zero-cost in release. See `docs/ARCHITECTURE.md` → "Policy file
+    // structure".
     (@common $Type:ident, $Storage:ty) => {
         impl<const SCALE: u32> ::core::ops::Add for $Type<SCALE> {
             type Output = Self;
@@ -401,16 +310,11 @@ macro_rules! decl_decimal_arithmetic {
             ///
             /// Follows Rust's standard integer-overflow contract: panics
             /// in debug builds, wraps (two's-complement) in release.
+            /// Routes through [`crate::policy::add::AddPolicy`].
             #[inline]
             fn add(self, rhs: Self) -> Self {
-                // `Int<N>`'s own `+` is modular; the contract is applied
-                // here at the decimal layer via its `checked_*` /
-                // `wrapping_*` methods.
-                if cfg!(debug_assertions) {
-                    Self(self.0.checked_add(rhs.0).expect("attempt to add with overflow"))
-                } else {
-                    Self(self.0.wrapping_add(rhs.0))
-                }
+                use $crate::policy::add::AddPolicy as _;
+                self.add_impl(rhs)
             }
         }
 
@@ -426,13 +330,11 @@ macro_rules! decl_decimal_arithmetic {
             /// Subtract two values of the same scale.
             ///
             /// Panics on overflow in debug builds, wraps in release.
+            /// Routes through [`crate::policy::sub::SubPolicy`].
             #[inline]
             fn sub(self, rhs: Self) -> Self {
-                if cfg!(debug_assertions) {
-                    Self(self.0.checked_sub(rhs.0).expect("attempt to subtract with overflow"))
-                } else {
-                    Self(self.0.wrapping_sub(rhs.0))
-                }
+                use $crate::policy::sub::SubPolicy as _;
+                self.sub_impl(rhs)
             }
         }
 
@@ -448,13 +350,11 @@ macro_rules! decl_decimal_arithmetic {
             /// Negate a value. Panics on overflow in debug builds
             /// (`-MIN` is unrepresentable in two's-complement), wraps in
             /// release (`-MIN == MIN`).
+            /// Routes through [`crate::policy::neg::NegPolicy`].
             #[inline]
             fn neg(self) -> Self {
-                if cfg!(debug_assertions) {
-                    Self(self.0.checked_neg().expect("attempt to negate with overflow"))
-                } else {
-                    Self(self.0.wrapping_neg())
-                }
+                use $crate::policy::neg::NegPolicy as _;
+                self.neg_impl()
             }
         }
 
@@ -467,28 +367,11 @@ macro_rules! decl_decimal_arithmetic {
             /// Panics on the `MIN % -ONE` overflow boundary in debug
             /// builds, wraps in release (matching `i128::wrapping_rem`).
             /// Division by zero always panics.
+            /// Routes through [`crate::policy::rem::RemPolicy`].
             #[inline]
             fn rem(self, rhs: Self) -> Self {
-                if cfg!(debug_assertions) {
-                    // `wrapping_rem` keeps the divide-by-zero panic
-                    // (its own message); `checked_rem` distinguishes the
-                    // `MIN % -ONE` overflow case, which we surface as an
-                    // overflow panic to match the std contract.
-                    match self.0.checked_rem(rhs.0) {
-                        Some(v) => Self(v),
-                        // `None` is either a zero divisor or the
-                        // `MIN % -ONE` overflow. `wrapping_rem` panics
-                        // with the zero-divisor message for the former;
-                        // for the latter it returns the wrapped value, so
-                        // a non-panicking return here means overflow.
-                        None => {
-                            let _ = self.0.wrapping_rem(rhs.0);
-                            panic!("attempt to calculate the remainder with overflow");
-                        }
-                    }
-                } else {
-                    Self(self.0.wrapping_rem(rhs.0))
-                }
+                use $crate::policy::rem::RemPolicy as _;
+                self.rem_impl(rhs)
             }
         }
 
