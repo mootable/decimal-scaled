@@ -54,7 +54,7 @@ sequenceDiagram
   participant L as limb primitives
   U->>FE: sqrt_strict()
   FE->>DP: dispatch (width 192, SCALE 20)
-  DP->>DK: const-folded → lookup_d57_s20
+  DP->>DK: const select → matched algorithm
   DK->>IP: root_int / isqrt on Int<3> (BigInt)
   IP->>IK: const-folded → width-matched isqrt
   IK->>L: limb ops on [u64; 3]
@@ -121,25 +121,28 @@ by macros in `src/macros/` and immediately hand off to the dispatch layer.
 
 ## Algorithm choosing — and pruning
 
-A single function (say `sqrt`) has many possible kernels: a narrow tier
-widens to D38; D38 uses a hand-tuned 256-bit isqrt; D57 at SCALE 20 has a
-bespoke lookup; everything else uses the generic wide isqrt. The choice
-is made by a **per-family policy** that matches on the compile-time
-`(width, SCALE)`:
+A single function (say `sqrt`) has several possible algorithms — a
+small-width kernel, a wide generic kernel, a bespoke kernel for one scale
+band, and so on. The choice is made by a **per-function policy**: a
+`const fn select`, keyed on the compile-time width(s) and scale(s), that
+returns which **`Algorithm`** to run. The exact file shape is in
+*Policy file structure* below; the gist:
 
 ```rust
-match (W, SCALE) {
-    (W_D38, _)  => algos::sqrt::mg_divide_d38::sqrt(x, SCALE, mode),
-    (W_D57, 20) => algos::sqrt::lookup_d57_s20::sqrt(x, mode),
-    (W_D57, _)  => algos::sqrt::generic_wide::sqrt_d57(x, SCALE, mode),
-    // … one arm per cell
+const fn select<const N: usize>() -> Select<N> {
+    match N {
+        0..=2 => Select::ByAlgorithm(Algorithm::Newton),     // small-width kernel
+        3..=8 => Select::ByValue(/* the value decides */),   // value-dependent band
+        _     => Select::ByAlgorithm(Algorithm::Zimmermann), // the chosen default
+    }
 }
 ```
 
-Three levels of choice live in that table: a **global default** (the
-generic kernel), a **width override** (a whole tier picks a different
-kernel), and a **scale-range override** (a bespoke kernel for one band of
-scales). Top arm wins.
+The arms express the levels of choice: a **default** (the algorithm in the
+`_` arm), **width/scale-range overrides** (a band picks a different
+algorithm), and — where the best algorithm depends on the operand's
+*value* rather than its width — a **value matcher** (`ByValue`). Top
+matching arm wins.
 
 ### Pruning = dead-arm elimination
 
@@ -151,26 +154,18 @@ branch, no table, no vtable. Every other candidate kernel is pruned out
 of that type's machine code. This is what makes the rich policy table
 **zero runtime cost**.
 
-### `base` / `std` / `no_std`
+### Single `core` tier
 
-> **0.5.0:** this three-layer split is collapsed to a **single `core` tier** — see
-> *Policy file structure* below. The triplet described here is the pre-0.5.0 form.
+There is **one `core`-only policy per function** — no `base`/`std`/`no_std`
+split. The policy (`select` + any value-matcher) is the single source of the
+choice, and it compiles on every platform. A platform-specific override, if one
+is ever justified, rides the **same** mechanism rather than a parallel tier: a
+`#[cfg(feature = "std")]` arm inside `select`, a cfg-gated value-matcher, or a
+cfg-gated `Algorithm` variant — so the override sits beside the portable choice,
+not in a separate layer.
 
-Each function is organised as three thin layers so the distinction
-between portable and platform-assisted code is structural, not scattered
-through the math:
-
-- **`base`** — the real algorithm, the `(width, SCALE)` match.
-- **`no_std`** — a direct pointer to `base` (the always-correct,
-  pure-integer path).
-- **`std`** — defaults to `base` and carries *only* the overrides (e.g. an
-  `f64`-seeded fast path). Opening the `std` body shows exactly what
-  differs and nothing else.
-
-An `std` override is included for a cell **only if it is benchmarked
-faster** than the `no_std` path; otherwise the cell stays on `base`.
-Where `std` uses `f64`, it is only ever a **seed** to a self-correcting
-integer iteration whose exact integer termination pins the unique
+If such an override ever uses `f64`, it is only ever a **seed** to a
+self-correcting integer iteration whose exact integer termination pins the unique
 result — so determinism is preserved regardless of the platform's `f64`.
 
 ### Policy file structure (the per-function matcher)
@@ -234,11 +229,10 @@ Rules that make this work:
   size: **≤2 outcomes → inline closure `if`/`else`; 3–10 → inline closure
   `match`; >10 (or shared / unit-tested) → a named `#[inline]` fn called
   `<fn>_N<lo>_to_N<hi>`** (e.g. `sqrt_N5_to_N10`) encoding the width-band it serves.
-- **Single tier.** There is one `core`-only policy per function — no
-  `base`/`std`/`no_std` split (it superseded the triplet described above). A
-  platform-specific override, if ever justified, rides the *same* mechanism: a
-  `#[cfg(feature = "std")]` arm inside `select`, a cfg-gated value-matcher, or a
-  cfg-gated `Algorithm` variant — never a parallel tier.
+- **Single tier** (see *Single `core` tier* above). One `core`-only policy per
+  function; a platform-specific override, if ever justified, rides the *same*
+  mechanism — a `#[cfg(feature = "std")]` arm inside `select`, a cfg-gated
+  value-matcher, or a cfg-gated `Algorithm` variant — never a parallel tier.
 - **Acceptance gate:** the zero-runtime-branch property is a *release* property;
   it is proven per function by inspecting the release IR/asm (one direct call, no
   branch/table/vtable on the const path).
@@ -300,12 +294,12 @@ nearest-mode path paying nothing extra.
 src/
   int/        const-generic integer layer
     types/    Int<N>/Uint<N>; the BigInt trait
-    policy/   per-width / limb-count algorithm-selection dispatch
+    policy/   per-function `select` dispatch (keyed on limb count N)
     algos/    reusable width-matched algorithms
     limbs/    raw slice limb primitives
   types/      Dxx<SCALE> typed shells, the Decimal trait family, consts
-  policy/     per-family (width, SCALE) dispatch → kernels
-  algos/      the kernels (sqrt cbrt exp ln trig pow …)
+  policy/     per-function `select` dispatch (keyed on width N, SCALE)
+  algos/      the algorithms (sqrt cbrt exp ln trig pow …)
   macros/     code generation for the per-type method shells
   support/    rounding modes, errors, display, serde helpers
 ```
