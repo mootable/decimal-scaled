@@ -305,8 +305,8 @@ macro_rules! decl_decimal_arithmetic {
 
                 // `widen_mul` does the `$Storage × $Storage → $Wider`
                 // product in one step — no Int{2W} wrapping mul with
-                // half-empty operands, and no double trip through the
-                // 64-limb `BigInt::to_mag_sign` buffer.
+                // half-empty operands, and no double trip through a
+                // magnitude staging buffer.
                 let n: $Wider = self.0.widen_mul::<$Wider>(rhs.0);
                 let scaled = if SCALE == 0 {
                     n

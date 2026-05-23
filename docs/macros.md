@@ -128,7 +128,8 @@ Most macros have two front-end arms:
   `i128`), which uses `as`-casts and integer literals;
 - a **`wide`** arm for the in-tree wide-integer storage (`D76` /
   `D153` / `D307`), which has no `as`-casts from literals - it builds
-  constants via `from_str_radix` and widens via `crate::wide_int::wide_cast`.
+  constants via `from_str_radix` and widens via the `Int` conversion
+  surface (`from_i128` / `resize` / `BigInt::resize_to`).
 
 Both arms forward to a shared `@impl` / `@common` arm wherever the logic
 is genuinely identical, so each operation is written once.

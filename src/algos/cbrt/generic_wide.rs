@@ -19,7 +19,7 @@
 //! arithmetic applies to every tier listed.
 
 use crate::support::rounding::RoundingMode;
-use crate::int::types::traits::{BigInt, wide_cast};
+use crate::int::types::traits::BigInt;
 
 /// Generic cube-root kernel for the wide-integer family.
 ///
@@ -98,7 +98,7 @@ where
         let seed_int: u128 = truncated
             .saturating_add(if frac_nonzero { 1 } else { 0 })
             .saturating_add(1);
-        let mut seed_w: W = wide_cast::<u128, W>(seed_int);
+        let mut seed_w: W = W::from_mag_sign_u128(&[seed_int], false);
         if third > 0 {
             seed_w = seed_w << third;
         }

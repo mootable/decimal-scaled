@@ -690,7 +690,7 @@ crate::macros::conversions::decl_cross_width_widening!(wide D76, crate::int::typ
 #[cfg(any(feature = "d76", feature = "wide"))]
 crate::macros::conversions::decl_cross_width_narrowing!(wide D38, crate::int::types::Int<2>, D76, crate::int::types::Int<4>);
 #[cfg(any(feature = "d76", feature = "wide"))]
-crate::macros::conversions::decl_cross_width_narrowing!(wide D18, i64, D76, crate::int::types::Int<4>);
+crate::macros::conversions::decl_cross_width_narrowing!(wide D18, crate::int::types::Int<1>, D76, crate::int::types::Int<4>);
 #[cfg(any(feature = "d76", feature = "wide"))]
 
 // ─── D38::widen / D76 hop methods ─────────────────────────────────────

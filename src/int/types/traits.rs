@@ -16,10 +16,6 @@
 
 use super::Int;
 
-/// 288 u64 limbs = 18432 bits — the shared `to_mag_sign` staging width
-/// (covers `Int<256>` plus `isqrt` scratch slack).
-const MAG_LIMBS: usize = 288;
-
 /// The unified big-integer trait — the single common surface for every
 /// fixed-width integer type. Static dispatch only.
 pub trait BigInt:
@@ -41,7 +37,6 @@ pub trait BigInt:
     + core::ops::Not<Output = Self>
     + core::ops::Shl<u32, Output = Self>
     + core::ops::Shr<u32, Output = Self>
-    + MagSign
 {
     /// Raw little-endian limb array type (`[u64; LIMBS]`).
     type Limbs: Copy;
@@ -125,42 +120,16 @@ pub trait BigInt:
     /// Returns the raw little-endian limbs by value.
     fn to_limbs(self) -> Self::Limbs;
 
-    // ── Magnitude / sign bridge (`to_mag_sign` / `from_mag_sign` come ──
-    //    from the `MagSign` supertrait) ──────────────────────────────
+    // ── Magnitude / sign bridge ──────────────────────────────────────
 
     /// Writes the magnitude into a caller-supplied u128 limb buffer
-    /// (little-endian) and returns the sign; zero-pads `dst`. Default
-    /// wraps `to_mag_sign`; concrete types override with a direct copy.
-    #[inline]
-    fn mag_into_u128(self, dst: &mut [u128]) -> bool {
-        let (mag, neg) = self.to_mag_sign();
-        let n_pairs = (MAG_LIMBS / 2).min(dst.len());
-        let mut i = 0;
-        while i < n_pairs {
-            dst[i] = (mag[2 * i] as u128) | ((mag[2 * i + 1] as u128) << 64);
-            i += 1;
-        }
-        while i < dst.len() {
-            dst[i] = 0;
-            i += 1;
-        }
-        neg
-    }
-    /// Rebuilds `Self` from a u128-limb magnitude and a sign. Default
-    /// unpacks each u128 into a u64 pair and routes through
-    /// `from_mag_sign`; concrete types override with a direct copy.
-    #[inline]
-    fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self {
-        let mut out = [0u64; MAG_LIMBS];
-        let n_pairs = mag.len().min(MAG_LIMBS / 2);
-        let mut i = 0;
-        while i < n_pairs {
-            out[2 * i] = mag[i] as u64;
-            out[2 * i + 1] = (mag[i] >> 64) as u64;
-            i += 1;
-        }
-        Self::from_mag_sign(&out, negative)
-    }
+    /// (little-endian) and returns the sign; zero-pads `dst`. The
+    /// inverse of [`BigInt::from_mag_sign_u128`].
+    fn mag_into_u128(self, dst: &mut [u128]) -> bool;
+
+    /// Rebuilds `Self` from a u128-limb magnitude and a sign. The
+    /// inverse of [`BigInt::mag_into_u128`].
+    fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self;
 
     // ── Reductions (defaults) ────────────────────────────────────────
 
@@ -179,82 +148,6 @@ pub trait BigInt:
     {
         iter.into_iter().fold(Self::ONE, |acc, x| acc * x)
     }
-}
-
-/// Minimal magnitude/sign bridge used only by [`wide_cast`] — lets a
-/// primitive (`u128` / `i128` / …) be a cast endpoint without
-/// implementing the full [`BigInt`] surface. Temporary scaffolding:
-/// retired together with `wide_cast` in the upcoming `resize`
-/// simplification (direct two's-complement sign-extend).
-pub(crate) trait MagSign: Copy {
-    fn to_mag_sign(self) -> ([u64; MAG_LIMBS], bool);
-    fn from_mag_sign(mag: &[u64], negative: bool) -> Self;
-}
-
-/// `MagSign` for a signed primitive — magnitude split into low/high u64
-/// limbs (the high limb is zero for widths ≤ 64 bits).
-macro_rules! impl_magsign_signed_prim {
-    ($($t:ty),*) => {$(
-        impl MagSign for $t {
-            #[inline]
-            fn to_mag_sign(self) -> ([u64; MAG_LIMBS], bool) {
-                let mut out = [0u64; MAG_LIMBS];
-                let mag = self.unsigned_abs() as u128;
-                out[0] = mag as u64;
-                out[1] = (mag >> 64) as u64;
-                (out, self < 0)
-            }
-            #[inline]
-            fn from_mag_sign(mag: &[u64], negative: bool) -> $t {
-                let lo = mag.first().copied().unwrap_or(0) as u128;
-                let hi = mag.get(1).copied().unwrap_or(0) as u128;
-                let combined = lo | (hi << 64);
-                let m = combined as $t;
-                if negative { m.wrapping_neg() } else { m }
-            }
-        }
-    )*};
-}
-impl_magsign_signed_prim!(i8, i16, i32, i64, i128);
-
-impl MagSign for u128 {
-    #[inline]
-    fn to_mag_sign(self) -> ([u64; MAG_LIMBS], bool) {
-        let mut out = [0u64; MAG_LIMBS];
-        out[0] = self as u64;
-        out[1] = (self >> 64) as u64;
-        (out, false)
-    }
-    #[inline]
-    fn from_mag_sign(mag: &[u64], _negative: bool) -> u128 {
-        let lo = mag.first().copied().unwrap_or(0) as u128;
-        let hi = mag.get(1).copied().unwrap_or(0) as u128;
-        lo | (hi << 64)
-    }
-}
-
-/// `Int<N>` bridges through its full `BigInt` magnitude/sign impl.
-impl<const N: usize> MagSign for Int<N> {
-    #[inline]
-    fn to_mag_sign(self) -> ([u64; MAG_LIMBS], bool) {
-        let mut out = [0u64; MAG_LIMBS];
-        let mag = *self.unsigned_abs().as_limbs();
-        // N never exceeds MAG_LIMBS for any width the crate instantiates.
-        out[..N].copy_from_slice(&mag);
-        (out, self.is_negative())
-    }
-    #[inline]
-    fn from_mag_sign(mag: &[u64], negative: bool) -> Self {
-        Self::from_mag_limbs(mag, negative)
-    }
-}
-
-/// Widening / narrowing cast between any two `MagSign` types via the
-/// shared magnitude + sign representation.
-#[inline]
-pub(crate) fn wide_cast<S: MagSign, T: MagSign>(src: S) -> T {
-    let (mag, negative) = src.to_mag_sign();
-    T::from_mag_sign(&mag, negative)
 }
 
 // ── BigInt for Int<N> ───────────────────────────────────────────────
@@ -342,11 +235,16 @@ impl<const N: usize> BigInt for Int<N> {
 
     #[inline]
     fn resize_to<T: BigInt>(self) -> T {
-        // Hands this type's own N-limb magnitude straight to
-        // `T::from_mag_sign`, skipping the 288-u64 staging buffer.
+        // Packs this type's own N-limb magnitude into u128 limbs and
+        // hands it to `T::from_mag_sign_u128`, the kept magnitude/sign
+        // bridge on the `BigInt` surface.
         let negative = self.is_negative();
-        let mag = *self.unsigned_abs().as_limbs();
-        T::from_mag_sign(&mag, negative)
+        // Reuse the direct u64→u128 pack the concrete `mag_into_u128`
+        // override performs, then rebuild `T` from the magnitude/sign.
+        let mut u128_mag = [0u128; 144];
+        let u128_len = (N + 1) / 2;
+        self.mag_into_u128(&mut u128_mag[..u128_len]);
+        T::from_mag_sign_u128(&u128_mag[..u128_len], negative)
     }
 
     #[inline]

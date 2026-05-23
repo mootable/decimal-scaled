@@ -40,7 +40,7 @@ macro_rules! decl_from_primitive {
             /// (debug-mode panic, release-mode wrap).
             #[inline]
             fn from(value: $Src) -> Self {
-                let widened: $Storage = $crate::int::types::traits::wide_cast(value as i128);
+                let widened: $Storage = <$Storage>::from_i128(value as i128);
                 Self(widened * Self::multiplier())
             }
         }
@@ -65,7 +65,7 @@ macro_rules! decl_cross_width_widening {
             /// a subset of the destination).
             #[inline]
             fn from(value: $Src<SCALE>) -> Self {
-                Self($crate::int::types::traits::wide_cast(value.to_bits()))
+                Self(value.to_bits().resize::<$DestStorage>())
             }
         }
     };
@@ -93,14 +93,14 @@ macro_rules! decl_cross_width_narrowing {
             #[inline]
             fn try_from(value: $Src<SCALE>) -> ::core::result::Result<Self, Self::Error> {
                 let bits = value.to_bits();
-                let dest_max: $SrcStorage = $crate::int::types::traits::wide_cast(<$DestStorage>::MAX);
-                let dest_min: $SrcStorage = $crate::int::types::traits::wide_cast(<$DestStorage>::MIN);
+                let dest_max: $SrcStorage = <$DestStorage>::MAX.resize::<$SrcStorage>();
+                let dest_min: $SrcStorage = <$DestStorage>::MIN.resize::<$SrcStorage>();
                 if bits > dest_max || bits < dest_min {
                     return ::core::result::Result::Err(
                         $crate::support::error::ConvertError::Overflow,
                     );
                 }
-                ::core::result::Result::Ok(Self($crate::int::types::traits::wide_cast(bits)))
+                ::core::result::Result::Ok(Self(bits.resize::<$DestStorage>()))
             }
         }
     };
@@ -124,8 +124,8 @@ macro_rules! decl_try_from_i128 {
             type Error = $crate::support::error::ConvertError;
             #[inline]
             fn try_from(value: i128) -> ::core::result::Result<Self, Self::Error> {
-                let widened: $Storage = $crate::int::types::traits::wide_cast(value);
-                if $crate::int::types::traits::wide_cast::<$Storage, i128>(widened) != value {
+                let widened: $Storage = <$Storage>::from_i128(value);
+                if widened.as_i128() != value {
                     return ::core::result::Result::Err(
                         $crate::support::error::ConvertError::Overflow,
                     );
@@ -171,7 +171,7 @@ macro_rules! decl_try_from_u128 {
                 // small non-negative value (e.g. `2^64` → 0 in `Int<1>`), so a
                 // round-trip back to `u128` confirms nothing was dropped. No-op
                 // for storage wide enough to hold every `u128`.
-                if $crate::int::types::traits::wide_cast::<$Storage, u128>(widened) != value {
+                if widened.as_u128() != value {
                     return ::core::result::Result::Err(
                         $crate::support::error::ConvertError::Overflow,
                     );
@@ -348,14 +348,14 @@ macro_rules! decl_decimal_int_conversion_methods {
             /// Overflow follows the wide integer's default arithmetic semantics.
             #[inline]
             pub fn from_int(value: $IntSrc) -> Self {
-                let widened: $Storage = $crate::int::types::traits::wide_cast(value as i128);
+                let widened: $Storage = <$Storage>::from_i128(value as i128);
                 Self(widened * Self::multiplier())
             }
 
             /// Constructs from an `i32`, scaling by `10^SCALE`.
             #[inline]
             pub fn from_i32(value: i32) -> Self {
-                let widened: $Storage = $crate::int::types::traits::wide_cast(value as i128);
+                let widened: $Storage = <$Storage>::from_i128(value as i128);
                 Self(widened * Self::multiplier())
             }
 
@@ -444,14 +444,14 @@ macro_rules! decl_decimal_int_conversion_methods {
                         }
                     }
                 };
-                let i64_max: $Storage = $crate::int::types::traits::wide_cast(i64::MAX);
-                let i64_min: $Storage = $crate::int::types::traits::wide_cast(i64::MIN);
+                let i64_max: $Storage = <$Storage>::from_i128(i64::MAX as i128);
+                let i64_min: $Storage = <$Storage>::from_i128(i64::MIN as i128);
                 if int_rounded > i64_max {
                     i64::MAX
                 } else if int_rounded < i64_min {
                     i64::MIN
                 } else {
-                    $crate::int::types::traits::wide_cast::<_, i64>(int_rounded)
+                    int_rounded.as_i128() as i64
                 }
             }
         }

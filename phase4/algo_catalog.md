@@ -40,4 +40,4 @@ Dispatch model: `*_strict` methods on each `DXX` are emitted by `transcendental_
 - **`fixed_d38.rs`:** the whole D38 256-bit "Fixed" kernel (`U256`/`U512`, `mul_u256`, `div_u512_*`, `isqrt_u512`, `round_to_i128_with`) — tier-named, heavily live for the narrow tier.
 
 ### (c) tier-named items 4.1/#79 rename/relocate
-- All `*_dNN`/`*_dNNN` kernels + policy `_dNN_no_std`/`_std` triplets; `policy_triplet!` tables; `policy/triplet.rs` consts; `consts/wide.rs` `D{57..1232}_SCALE_REF`; the `MagSign`/`wide_cast` shim (already 3.2).
+- All `*_dNN`/`*_dNNN` kernels + policy `_dNN_no_std`/`_std` triplets; `policy_triplet!` tables; `policy/triplet.rs` consts; `consts/wide.rs` `D{57..1232}_SCALE_REF`. (The `MagSign`/`wide_cast` shim was removed in 3.2.)

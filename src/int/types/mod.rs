@@ -1793,6 +1793,18 @@ impl<const N: usize> Int<N> {
         self.rotate_left(Self::BITS - (n % Self::BITS))
     }
 
+    /// Truncating cast to `u128` (low 128 magnitude bits, sign ignored).
+    /// **Truncating** — discards any higher limbs and the sign; use
+    /// [`Self::to_u128_checked`] (or `TryFrom`) when the value may not
+    /// fit or may be negative.
+    #[inline]
+    pub(crate) const fn as_u128(self) -> u128 {
+        let mag = *self.unsigned_abs().as_limbs();
+        let lo = if N > 0 { mag[0] as u128 } else { 0 };
+        let hi = if N > 1 { mag[1] as u128 } else { 0 };
+        lo | (hi << 64)
+    }
+
     /// Truncating cast to `i128` (low 128 bits, sign-applied).
     /// **Truncating** — for `Int<3+>` any value outside the `i128` range
     /// loses its high limbs; use [`Self::to_i128_checked`] (or `TryFrom`)
@@ -1816,9 +1828,8 @@ impl<const N: usize> Int<N> {
     /// `storage.resize::<$Wider>()` resolves against `Int<N>`.
     #[inline]
     pub(crate) fn resize<T: crate::int::types::traits::BigInt>(self) -> T {
-        let negative = self.is_negative();
-        let mag = *self.unsigned_abs().as_limbs();
-        T::from_mag_sign(&mag, negative)
+        use crate::int::types::traits::BigInt as _;
+        self.resize_to::<T>()
     }
 
     /// Truncating division toward zero. Panics on a zero divisor.
@@ -1878,7 +1889,16 @@ impl<const N: usize> Int<N> {
         // so one call lifts every width that crosses the threshold.
         let mut prod = [0u64; 288];
         limbs_mul_fast_u64(&a, &b, &mut prod[..2 * N]);
-        W::from_mag_sign(&prod, negative)
+        // Pack the 2·N-limb u64 product into u128 limbs for the kept
+        // `BigInt::from_mag_sign_u128` magnitude/sign bridge.
+        let mut u128_prod = [0u128; 144];
+        let pairs = N;
+        let mut i = 0;
+        while i < pairs {
+            u128_prod[i] = (prod[2 * i] as u128) | ((prod[2 * i + 1] as u128) << 64);
+            i += 1;
+        }
+        W::from_mag_sign_u128(&u128_prod[..pairs], negative)
     }
 }
 
@@ -3689,14 +3709,14 @@ mod tests {
     #[test]
     fn int_wideint_mag_sign_round_trips() {
         use crate::int::types::traits::BigInt;
-        use crate::int::types::traits::MagSign;
-        // to_mag_sign / from_mag_sign round-trip for signed values,
-        // including the magnitude + sign split.
+        // mag_into_u128 / from_mag_sign_u128 round-trip for signed
+        // values, including the magnitude + sign split.
         for v in [0i128, 1, -1, 123_456_789_012_345_678, -987_654_321] {
             let a = Int::<4>::from_i128(v);
-            let (mag, neg) = a.to_mag_sign();
+            let mut mag = [0u128; 2];
+            let neg = a.mag_into_u128(&mut mag);
             assert_eq!(neg, a.is_negative());
-            assert_eq!(Int::<4>::from_mag_sign(&mag, neg), a, "mag/sign {v}");
+            assert_eq!(Int::<4>::from_mag_sign_u128(&mag, neg), a, "mag/sign {v}");
         }
         // U128_LIMBS = ceil(N/2): even and odd N.
         assert_eq!(<Int<4> as BigInt>::U128_LIMBS, 2);

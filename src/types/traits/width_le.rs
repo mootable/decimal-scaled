@@ -8,9 +8,8 @@
 //!
 //! The trait is implemented for the reflexive case (`W: WidthLE<W>`)
 //! and for every (narrower, wider) storage pair the crate ships. The
-//! widening is performed by the existing
-//! [`crate::int::types::traits::wide_cast`] helper for the wide tier and a
-//! plain `as` cast for the narrow primitive tier.
+//! widening is performed by `Int::resize` / `Int::from_i128` for the
+//! wide tier and a plain `as` cast for the narrow primitive tier.
 //!
 //! `WidthLE` is intentionally not exposed as a public trait method on
 //! the decimal types — it is a *bound* used inside the per-width
@@ -86,7 +85,7 @@ impl WidthLE<i128> for i64 {
 // (source storage, target storage) ordering. The wide storages are
 // `Int<3> < Int<4> < Int<6> < Int<8> < Int<12> < Int<16> < Int<24> <
 //  Int<32> < Int<48> < Int<64>`. Primitive sources (`i32`/`i64`/`i128`)
-// widen into every wide storage via the `wide_cast` helper.
+// widen into every wide storage via `Int::from_i128`.
 
 #[cfg(any(
     feature = "d57",
@@ -134,7 +133,7 @@ macro_rules! impl_width_le_native_to_wide {
         impl $crate::types::traits::width_le::WidthLE<$Wide> for $Native {
             #[inline]
             fn widen_into(self) -> $Wide {
-                $crate::int::types::traits::wide_cast(self as i128)
+                <$Wide>::from_i128(self as i128)
             }
         }
     };
@@ -145,7 +144,7 @@ macro_rules! impl_width_le_wide_pair {
         impl $crate::types::traits::width_le::WidthLE<$Wider> for $Narrower {
             #[inline]
             fn widen_into(self) -> $Wider {
-                $crate::int::types::traits::wide_cast(self)
+                self.resize::<$Wider>()
             }
         }
     };
@@ -177,7 +176,7 @@ impl_width_le_wide_reflexive!(crate::int::types::Int<64>);
 // Native (i32/i64/i128) → wide impls.
 //
 // For every wide storage, allow widening from the three primitive
-// integer storages. `wide_cast` accepts `i128` sources, so the i32 /
+// integer storages. `from_i128` accepts `i128` sources, so the i32 /
 // i64 inputs are upcast to i128 first (always lossless).
 
 macro_rules! impls_native_to_one_wide {
@@ -224,13 +223,13 @@ impl WidthLE<crate::int::types::Int<2>> for crate::int::types::Int<2> {
 impl WidthLE<crate::int::types::Int<2>> for i32 {
     #[inline]
     fn widen_into(self) -> crate::int::types::Int<2> {
-        crate::int::types::traits::wide_cast(self as i128)
+        crate::int::types::Int::<2>::from_i128(self as i128)
     }
 }
 impl WidthLE<crate::int::types::Int<2>> for i64 {
     #[inline]
     fn widen_into(self) -> crate::int::types::Int<2> {
-        crate::int::types::traits::wide_cast(self as i128)
+        crate::int::types::Int::<2>::from_i128(self as i128)
     }
 }
 

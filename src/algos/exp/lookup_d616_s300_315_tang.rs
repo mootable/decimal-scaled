@@ -139,7 +139,7 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
 #[must_use]
 pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<32>, mode: RoundingMode) -> Int<32> {
     if raw == Int::<32>::ZERO {
-        let ten: Int<32> = crate::int::types::traits::wide_cast::<u128, Int<32>>(10);
+        let ten: Int<32> = Int::<32>::from_u128(10);
         return ten.pow(SCALE);
     }
     let w = SCALE + GUARD_NARROW;

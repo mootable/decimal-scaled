@@ -77,7 +77,7 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
             Which::Sin => Int::<3>::ZERO,
             // D57::<SCALE>::ONE raw is 10^SCALE in storage units.
             Which::Cos => {
-                let ten: Int<3> = crate::int::types::traits::wide_cast::<u128, Int<3>>(10);
+                let ten: Int<3> = Int::<3>::from_u128(10);
                 ten.pow(SCALE)
             }
         };

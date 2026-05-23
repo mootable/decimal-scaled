@@ -221,7 +221,7 @@ pub(crate) mod exp_generic {
         } else {
             q
         };
-        crate::int::types::traits::wide_cast::<S, i128>(qi)
+        crate::int::types::traits::BigInt::to_i128(qi)
     }
 
     /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
@@ -628,7 +628,7 @@ macro_rules! decl_wide_transcendental {
 
             #[inline]
             pub(crate) fn lit(n: u128) -> W {
-                $crate::int::types::traits::wide_cast(n)
+                <W as $crate::int::types::traits::BigInt>::from_mag_sign_u128(&[n], false)
             }
             #[inline]
             pub(crate) fn zero() -> W {
@@ -847,13 +847,11 @@ macro_rules! decl_wide_transcendental {
             /// `raw · 10^GUARD` (raw is `value · 10^SCALE`, the result
             /// is `value · 10^(SCALE+GUARD)`).
             ///
-            /// Uses [`wide_cast`] instead of `.resize::<W>()` so the
-            /// macro accepts both wide-int and primitive `$Storage`
-            /// (`i128` for D38).
-            ///
-            /// [`wide_cast`]: $crate::int::types::traits::wide_cast
+            /// Widens `$Storage` into the work integer `W` via the
+            /// `BigInt::resize_to` magnitude/sign bridge, then scales by
+            /// `10^GUARD`.
             pub(crate) fn to_work(raw: $Storage) -> W {
-                $crate::int::types::traits::wide_cast::<$Storage, W>(raw) * pow10_cached(GUARD)
+                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_cached(GUARD)
             }
 
             /// Runtime-guard variant of [`to_work`]: scales raw by
@@ -861,7 +859,7 @@ macro_rules! decl_wide_transcendental {
             /// the `_approx` family where the guard width is chosen at
             /// call time.
             pub(crate) fn to_work_w(raw: $Storage, working_digits: u32) -> W {
-                $crate::int::types::traits::wide_cast::<$Storage, W>(raw) * pow10_cached(working_digits)
+                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_cached(working_digits)
             }
 
             /// Rounds a working-scale value down to scale `target` using
@@ -913,15 +911,15 @@ macro_rules! decl_wide_transcendental {
                         { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(v, shift, mode)
                 };
-                let max_w = $crate::int::types::traits::wide_cast::<$Storage, W>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
+                let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);
                 if rounded > max_w || rounded < min_w {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
                     ));
                 }
-                $crate::int::types::traits::wide_cast::<W, $Storage>(rounded)
+                $crate::int::types::traits::BigInt::resize_to::<$Storage>(rounded)
             }
 
             /// Directed-rounding narrowing with Ziv escalation.
@@ -1020,7 +1018,7 @@ macro_rules! decl_wide_transcendental {
                     };
                     let lo = nearest_narrow(base_guard);
                     let int_digits = {
-                        let n = $crate::int::types::traits::wide_cast::<$Storage, W>(lo);
+                        let n = $crate::int::types::traits::BigInt::resize_to::<W>(lo);
                         let m = if n < lit(0) { -n } else { n };
                         let bl = bit_length(m);
                         let storage_digits = (bl as u64 * 30103 / 100_000) as u32 + 1;
@@ -1149,15 +1147,15 @@ macro_rules! decl_wide_transcendental {
                     }
                 };
 
-                let max_w = $crate::int::types::traits::wide_cast::<$Storage, W>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
+                let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);
                 if signed > max_w || signed < min_w {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
                     ));
                 }
-                $crate::int::types::traits::wide_cast::<W, $Storage>(signed)
+                $crate::int::types::traits::BigInt::resize_to::<$Storage>(signed)
             }
 
             /// Rounds a working-scale value to the nearest integer (ties
@@ -1171,7 +1169,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     q
                 };
-                $crate::int::types::traits::wide_cast::<W, i128>(qi)
+                $crate::int::types::traits::BigInt::to_i128(qi)
             }
 
             /// Exact-integer logarithm witness for `log_base(value)`.
@@ -1263,15 +1261,15 @@ macro_rules! decl_wide_transcendental {
             /// type's `$Storage`. Panics if out of range, matching
             /// `round_to_storage_with`.
             pub(crate) fn narrow_to_storage(v: W) -> $Storage {
-                let max_w = $crate::int::types::traits::wide_cast::<$Storage, W>(<$Storage>::MAX);
-                let min_w = $crate::int::types::traits::wide_cast::<$Storage, W>(<$Storage>::MIN);
+                let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
+                let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);
                 if v > max_w || v < min_w {
                     panic!(concat!(
                         stringify!($Type),
                         " strict transcendental: result out of range"
                     ));
                 }
-                $crate::int::types::traits::wide_cast::<W, $Storage>(v)
+                $crate::int::types::traits::BigInt::resize_to::<$Storage>(v)
             }
 
             /// Exact-power pin for `exp2`: if the storage raw `raw`
@@ -1282,19 +1280,19 @@ macro_rules! decl_wide_transcendental {
                 raw: $Storage,
                 scale: u32,
             ) -> ::core::option::Option<$Storage> {
-                let raw_w = wide_cast_storage(raw);
+                let raw_w = widen_storage(raw);
                 let one_s = pow10_cached(scale);
                 let (kq, kr) = raw_w.div_rem(one_s);
                 if kr != lit(0) {
                     return ::core::option::Option::None;
                 }
-                let k = $crate::int::types::traits::wide_cast::<W, i128>(kq);
+                let k = $crate::int::types::traits::BigInt::to_i128(kq);
                 exp2_exact_pow(k, scale).map(narrow_to_storage)
             }
 
             #[inline]
-            fn wide_cast_storage(raw: $Storage) -> W {
-                $crate::int::types::traits::wide_cast::<$Storage, W>(raw)
+            fn widen_storage(raw: $Storage) -> W {
+                $crate::int::types::traits::BigInt::resize_to::<W>(raw)
             }
 
             /// Integer-digit count of the `exp2` result `2^x` for the
@@ -1346,7 +1344,7 @@ macro_rules! decl_wide_transcendental {
             /// [`exp_lift_cap`] for use as the large-result lift.
             pub(crate) fn exp2_result_int_digits(raw: $Storage, scale: u32) -> u32 {
                 exp_lift_cap(
-                    pow_result_digits(abs(wide_cast_storage(raw)), scale, 30103),
+                    pow_result_digits(abs(widen_storage(raw)), scale, 30103),
                     scale,
                 )
             }
@@ -1950,10 +1948,10 @@ macro_rules! decl_wide_transcendental {
             /// -edge `sinh`/`cosh`/`exp2`/`tanh` cells; the normal /
             /// small regime keeps the fast `exp_fixed` path on `W`.
             pub(crate) fn exp_fixed_wide(v_w: W, w: u32) -> W {
-                let v_wide = $crate::int::types::traits::wide_cast::<W, Wexp>(v_w);
+                let v_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(v_w);
                 let r_wide =
                     $crate::macros::wide_transcendental::exp_generic::exp_fixed::<Wexp>(v_wide, w);
-                $crate::int::types::traits::wide_cast::<Wexp, W>(r_wide)
+                $crate::int::types::traits::BigInt::resize_to::<W>(r_wide)
             }
 
             /// `sinh(|x|)` at working scale `w`, composed entirely in the
@@ -1965,29 +1963,29 @@ macro_rules! decl_wide_transcendental {
             /// lossless. The caller reapplies the input sign (sinh is
             /// odd).
             pub(crate) fn sinh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::int::types::traits::wide_cast::<W, Wexp>(av_w);
+                let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
                 let r =
                     $crate::macros::wide_transcendental::exp_generic::sinh_pos::<Wexp>(av_wide, w);
-                $crate::int::types::traits::wide_cast::<Wexp, W>(r)
+                $crate::int::types::traits::BigInt::resize_to::<W>(r)
             }
 
             /// `cosh(|x|)` at working scale `w`, composed in [`Wexp`].
             /// See [`sinh_pos_wide`].
             pub(crate) fn cosh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::int::types::traits::wide_cast::<W, Wexp>(av_w);
+                let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
                 let r =
                     $crate::macros::wide_transcendental::exp_generic::cosh_pos::<Wexp>(av_wide, w);
-                $crate::int::types::traits::wide_cast::<Wexp, W>(r)
+                $crate::int::types::traits::BigInt::resize_to::<W>(r)
             }
 
             /// `tanh(|x|)` at working scale `w`, composed in [`Wexp`].
             /// See [`sinh_pos_wide`]. The caller reapplies the input
             /// sign (tanh is odd).
             pub(crate) fn tanh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::int::types::traits::wide_cast::<W, Wexp>(av_w);
+                let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
                 let r =
                     $crate::macros::wide_transcendental::exp_generic::tanh_pos::<Wexp>(av_wide, w);
-                $crate::int::types::traits::wide_cast::<Wexp, W>(r)
+                $crate::int::types::traits::BigInt::resize_to::<W>(r)
             }
 
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
@@ -2597,7 +2595,7 @@ macro_rules! decl_wide_transcendental {
                 if q < lo || q > hi {
                     return ::core::option::Option::None;
                 }
-                let q_i128: i128 = $crate::int::types::traits::wide_cast::<$Storage, i128>(q);
+                let q_i128: i128 = $crate::int::types::traits::BigInt::to_i128(q);
                 ::core::option::Option::Some(q_i128 as i32)
             }
 
@@ -4807,7 +4805,7 @@ mod tests {
 
         for raw in positives {
             let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
+            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -4831,7 +4829,7 @@ mod tests {
         }
         for raw in all {
             let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
+            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -4879,7 +4877,7 @@ mod tests {
         }
         for raw in unit_range {
             let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
+            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -4938,7 +4936,7 @@ mod tests {
         }
 
         for raw in positives {
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
+            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -4949,7 +4947,7 @@ mod tests {
             );
         }
         for raw in all {
-            let w = D76::<6>::from_bits(crate::int::types::traits::wide_cast::<i128, crate::int::types::Int<4>>(
+            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(

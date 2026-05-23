@@ -1910,9 +1910,9 @@ mod tests {
     fn round_div_reference_int256(n: crate::int::types::Int<4>, w: u32) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
         let d_u128 = POW10_U128[w as usize];
-        let d: Int<4> = crate::int::types::traits::wide_cast(d_u128);
-        let zero: Int<4> = crate::int::types::traits::wide_cast(0u128);
-        let one: Int<4> = crate::int::types::traits::wide_cast(1u128);
+        let d: Int<4> = Int::from_u128(d_u128);
+        let zero: Int<4> = Int::from_u128(0u128);
+        let one: Int<4> = Int::from_u128(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -1957,9 +1957,9 @@ mod tests {
     ) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
         let d_u128 = POW10_U128[w as usize];
-        let d: Int<4> = crate::int::types::traits::wide_cast(d_u128);
-        let zero: Int<4> = crate::int::types::traits::wide_cast(0u128);
-        let one: Int<4> = crate::int::types::traits::wide_cast(1u128);
+        let d: Int<4> = Int::from_u128(d_u128);
+        let zero: Int<4> = Int::from_u128(0u128);
+        let one: Int<4> = Int::from_u128(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -1997,8 +1997,8 @@ mod tests {
                 };
                 let mag_low = rng.next_u128();
                 let pos: Int<4> = {
-                    let lo: Int<4> = crate::int::types::traits::wide_cast(mag_low);
-                    let hi: Int<4> = crate::int::types::traits::wide_cast(mag_high);
+                    let lo: Int<4> = Int::from_u128(mag_low);
+                    let hi: Int<4> = Int::from_u128(mag_high);
                     (hi << 128_u32) + lo
                 };
                 let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
@@ -2037,8 +2037,8 @@ mod tests {
                     };
                     let mag_low = rng.next_u128();
                     let pos: Int<4> = {
-                        let lo: Int<4> = crate::int::types::traits::wide_cast(mag_low);
-                        let hi: Int<4> = crate::int::types::traits::wide_cast(mag_high);
+                        let lo: Int<4> = Int::from_u128(mag_low);
+                        let hi: Int<4> = Int::from_u128(mag_high);
                         (hi << 128_u32) + lo
                     };
                     let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
@@ -2064,19 +2064,19 @@ mod tests {
     #[test]
     fn round_div_audit_mg_matches_div_rem_int1024() {
         use crate::int::types::Int;
-        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
-        let one: Int<16> = crate::int::types::traits::wide_cast(1u128);
+        let zero: Int<16> = Int::from_u128(0u128);
+        let one: Int<16> = Int::from_u128(1u128);
         const ITERS: usize = 5_000;
         for w in 1u32..=38 {
             let mut rng = SplitMix64(0xB02ED2_u64.wrapping_add(w as u64));
-            let d: Int<16> = crate::int::types::traits::wide_cast(POW10_U128[w as usize]);
+            let d: Int<16> = Int::from_u128(POW10_U128[w as usize]);
             for _ in 0..ITERS {
                 // Fill up to 6 u128 limbs (768 bits) of magnitude — well
                 // past one MG kernel pass.
                 let limbs = (rng.next() % 7) as usize;
                 let mut n: Int<16> = zero;
                 for k in 0..limbs {
-                    let chunk: Int<16> = crate::int::types::traits::wide_cast(rng.next_u128());
+                    let chunk: Int<16> = Int::from_u128(rng.next_u128());
                     n = n + (chunk << ((k * 128) as u32));
                 }
                 if rng.next() & 1 == 1 {
@@ -2139,12 +2139,12 @@ mod tests {
     #[cfg(any(feature = "d76", feature = "wide"))]
     fn pow10_int256(w: u32) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
-        let mut d: Int<4> = crate::int::types::traits::wide_cast(1u128);
+        let mut d: Int<4> = Int::from_u128(1u128);
         // 10^38 fits in u128, so we can build with chunks of up to 38.
         let mut remaining = w;
         while remaining > 0 {
             let chunk = remaining.min(38);
-            let factor: Int<4> = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
+            let factor: Int<4> = Int::from_u128(POW10_U128[chunk as usize]);
             d = d * factor;
             remaining -= chunk;
         }
@@ -2154,11 +2154,11 @@ mod tests {
     #[cfg(any(feature = "d307", feature = "wide"))]
     fn pow10_int1024(w: u32) -> crate::int::types::Int<16> {
         use crate::int::types::Int;
-        let mut d: Int<16> = crate::int::types::traits::wide_cast(1u128);
+        let mut d: Int<16> = Int::from_u128(1u128);
         let mut remaining = w;
         while remaining > 0 {
             let chunk = remaining.min(38);
-            let factor: Int<16> = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
+            let factor: Int<16> = Int::from_u128(POW10_U128[chunk as usize]);
             d = d * factor;
             remaining -= chunk;
         }
@@ -2177,8 +2177,8 @@ mod tests {
     ) -> crate::int::types::Int<4> {
         use crate::int::types::Int;
         let d = pow10_int256(w);
-        let zero: Int<4> = crate::int::types::traits::wide_cast(0u128);
-        let one: Int<4> = crate::int::types::traits::wide_cast(1u128);
+        let zero: Int<4> = Int::from_u128(0u128);
+        let one: Int<4> = Int::from_u128(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -2204,8 +2204,8 @@ mod tests {
     ) -> crate::int::types::Int<16> {
         use crate::int::types::Int;
         let d = pow10_int1024(w);
-        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
-        let one: Int<16> = crate::int::types::traits::wide_cast(1u128);
+        let zero: Int<16> = Int::from_u128(0u128);
+        let one: Int<16> = Int::from_u128(1u128);
         let (q, r) = n.div_rem(d);
         if r == zero {
             return q;
@@ -2250,8 +2250,8 @@ mod tests {
                     };
                     let mag_low = rng.next_u128();
                     let pos: Int<4> = {
-                        let lo: Int<4> = crate::int::types::traits::wide_cast(mag_low);
-                        let hi: Int<4> = crate::int::types::traits::wide_cast(mag_high);
+                        let lo: Int<4> = Int::from_u128(mag_low);
+                        let hi: Int<4> = Int::from_u128(mag_high);
                         (hi << 128_u32) + lo
                     };
                     let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
@@ -2278,7 +2278,7 @@ mod tests {
     #[test]
     fn round_div_chain_audit_int1024_w39_100() {
         use crate::int::types::Int;
-        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
+        let zero: Int<16> = Int::from_u128(0u128);
         const ITERS_HTE: usize = 3_000;
         for w in 39u32..=100 {
             let mut rng = SplitMix64(0x5C5C_u64.wrapping_add(w as u64));
@@ -2286,7 +2286,7 @@ mod tests {
                 let limbs = (rng.next() % 7) as usize;
                 let mut n: Int<16> = zero;
                 for k in 0..limbs {
-                    let chunk: Int<16> = crate::int::types::traits::wide_cast(rng.next_u128());
+                    let chunk: Int<16> = Int::from_u128(rng.next_u128());
                     n = n + (chunk << ((k * 128) as u32));
                 }
                 if rng.next() & 1 == 1 {
@@ -2317,7 +2317,7 @@ mod tests {
     #[test]
     fn round_div_chain_audit_int1024_all_modes_sample_w() {
         use crate::int::types::Int;
-        let zero: Int<16> = crate::int::types::traits::wide_cast(0u128);
+        let zero: Int<16> = Int::from_u128(0u128);
         const ITERS: usize = 1_000;
         let ws: &[u32] = &[39, 50, 57, 76, 77, 88, 100];
         for &w in ws {
@@ -2327,7 +2327,7 @@ mod tests {
                     let limbs = (rng.next() % 7) as usize;
                     let mut n: Int<16> = zero;
                     for k in 0..limbs {
-                        let chunk: Int<16> = crate::int::types::traits::wide_cast(rng.next_u128());
+                        let chunk: Int<16> = Int::from_u128(rng.next_u128());
                         n = n + (chunk << ((k * 128) as u32));
                     }
                     if rng.next() & 1 == 1 {
@@ -2357,21 +2357,21 @@ mod tests {
     #[test]
     fn round_div_chain_audit_int1024_constructed_half_ties() {
         use crate::int::types::Int;
-        let two: Int<16> = crate::int::types::traits::wide_cast(2u128);
+        let two: Int<16> = Int::from_u128(2u128);
         let ws: &[u32] = &[39, 50, 57, 76, 77, 100];
         for &w in ws {
             let pow_w = pow10_int1024(w);
             let half = pow_w / two;
             // Three q values: 0, 1, large.
             let qs: [Int<16>; 3] = [
-                crate::int::types::traits::wide_cast::<u128, Int<16>>(0u128),
-                crate::int::types::traits::wide_cast::<u128, Int<16>>(1u128),
-                crate::int::types::traits::wide_cast::<u128, Int<16>>(7u128) << 200_u32,
+                Int::<16>::from_u128(0u128),
+                Int::<16>::from_u128(1u128),
+                Int::<16>::from_u128(7u128) << 200_u32,
             ];
             let deltas: [Int<16>; 3] = [
-                crate::int::types::traits::wide_cast::<u128, Int<16>>(0u128),
-                -crate::int::types::traits::wide_cast::<u128, Int<16>>(1u128),
-                crate::int::types::traits::wide_cast::<u128, Int<16>>(1u128),
+                Int::<16>::from_u128(0u128),
+                -Int::<16>::from_u128(1u128),
+                Int::<16>::from_u128(1u128),
             ];
             for q in qs {
                 for delta in deltas {
@@ -2400,11 +2400,11 @@ mod tests {
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
     fn pow10_int16384(w: u32) -> crate::int::types::Int<256> {
         use crate::int::types::Int;
-        let mut d: Int<256> = crate::int::types::traits::wide_cast(1u128);
+        let mut d: Int<256> = Int::from_u128(1u128);
         let mut remaining = w;
         while remaining > 0 {
             let chunk = remaining.min(38);
-            let factor: Int<256> = crate::int::types::traits::wide_cast(POW10_U128[chunk as usize]);
+            let factor: Int<256> = Int::from_u128(POW10_U128[chunk as usize]);
             d = d * factor;
             remaining -= chunk;
         }
@@ -2429,8 +2429,8 @@ mod tests {
     #[test]
     fn round_div_chain_int16384_above_8192_bits_not_truncated() {
         use crate::int::types::Int;
-        let zero: Int<256> = crate::int::types::traits::wide_cast(0u128);
-        let one: Int<256> = crate::int::types::traits::wide_cast(1u128);
+        let zero: Int<256> = Int::from_u128(0u128);
+        let one: Int<256> = Int::from_u128(1u128);
 
         // Numerators with magnitude bits set well past the old
         // 8192-bit (64-u128-limb) buffer ceiling: a high bit near the
@@ -2442,9 +2442,9 @@ mod tests {
             // n = (1 << bit) | low-entropy limbs.
             let mut n: Int<256> = one << bit;
             n = n
-                + (crate::int::types::traits::wide_cast::<u128, Int<256>>(0xdead_beef_cafe_f00d_u128)
+                + (Int::<256>::from_u128(0xdead_beef_cafe_f00d_u128)
                     << 64_u32);
-            n = n + crate::int::types::traits::wide_cast::<u128, Int<256>>(0x1234_5678_9abc_def0_u128);
+            n = n + Int::<256>::from_u128(0x1234_5678_9abc_def0_u128);
 
             for &w in scales {
                 for &sign_neg in &[false, true] {

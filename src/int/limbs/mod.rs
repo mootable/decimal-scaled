@@ -3684,17 +3684,15 @@ mod slice_tests {
         assert_eq!(out, [0, 0]);
     }
 
-    /// `BigInt::from_mag_sign` for `u128` reads the first limb and
-    /// ignores the sign flag. Exercised through a chained `wide_cast`
-    /// `Int<4> → u128`.
+    /// `Int::<4>::as_u128` returns the low 128 magnitude bits — the
+    /// truncating `Int<4> → u128` cast.
     #[test]
-    fn wide_cast_into_u128_returns_first_limb() {
-        use crate::int::types::traits::wide_cast;
+    fn as_u128_returns_low_magnitude_bits() {
         let src = Int::<4>::from_i128(123_456_789);
-        let dst: u128 = wide_cast(src);
+        let dst: u128 = src.as_u128();
         assert_eq!(dst, 123_456_789);
         // Casting ZERO yields 0.
-        let dst: u128 = wide_cast(Int::<4>::ZERO);
+        let dst: u128 = Int::<4>::ZERO.as_u128();
         assert_eq!(dst, 0);
     }
 
