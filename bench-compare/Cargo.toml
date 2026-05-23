@@ -10,8 +10,11 @@ publish = false
 #                          (whatever branch this sub-crate is checked out on).
 #   * `prod`             — the latest published release ("production"),
 #                          consumed as a plain external library (renamed package).
-# The harness (benches/lib_compare.rs) is identical for both — it just runs
-# each version's types through the same arithmetic ops across every width.
+# The harness (benches/compare_common.rs + the per-width compare_d{N}.rs
+# targets) is identical for both — it just runs each version's types through
+# the same arithmetic ops. It is split one bench target per width so each
+# width runs as its own parallel CI job (wall time ≈ the slowest single
+# width, not one >90 min sweep over every width).
 # No third-party decimal crates: this is a pure self-vs-self comparison
 # (the branch vs the most recent published tag).
 
@@ -26,8 +29,54 @@ prod = { package = "decimal-scaled", version = "0.4.4", default-features = false
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
 
+# One bench target per width — matrixed across parallel CI jobs. Each
+# instantiates the shared surface (branch + prod rows) for its one width.
 [[bench]]
-name = "lib_compare"
+name = "compare_d18"
+harness = false
+
+[[bench]]
+name = "compare_d38"
+harness = false
+
+[[bench]]
+name = "compare_d57"
+harness = false
+
+[[bench]]
+name = "compare_d76"
+harness = false
+
+[[bench]]
+name = "compare_d115"
+harness = false
+
+[[bench]]
+name = "compare_d153"
+harness = false
+
+[[bench]]
+name = "compare_d230"
+harness = false
+
+[[bench]]
+name = "compare_d307"
+harness = false
+
+[[bench]]
+name = "compare_d462"
+harness = false
+
+[[bench]]
+name = "compare_d616"
+harness = false
+
+[[bench]]
+name = "compare_d924"
+harness = false
+
+[[bench]]
+name = "compare_d1232"
 harness = false
 
 # Empty [workspace] table keeps this project OUT of the parent crate's

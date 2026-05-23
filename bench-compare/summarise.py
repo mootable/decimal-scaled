@@ -1,10 +1,16 @@
 #!/usr/bin/env python3
-"""Render the branch-vs-prod Criterion results as a markdown table.
+"""Render the branch-vs-prod Criterion results as markdown tables.
 
-Walks `target/criterion`, pairs each `branch/<fn>` benchmark with its
-`prod/<fn>` counterpart by median time, and prints a GitHub-flavoured
-markdown table (branch | prod | Δ%) to stdout — the workflow appends it to
-`$GITHUB_STEP_SUMMARY` so the comparison is visible directly in the run.
+Walks `target/criterion` (which the collator job populates by merging every
+per-width bench artifact into one tree), pairs each `branch/<fn>` benchmark
+with its `prod/<fn>` counterpart by median time, and prints ONE GitHub-
+flavoured markdown table PER WIDTH (branch | prod | Δ%) to stdout — the
+workflow appends them to `$GITHUB_STEP_SUMMARY` so the comparison is visible
+directly in the run.
+
+Tables are ordered by NUMERIC width ascending (D18, D38, … D1232), and rows
+within a table by numeric-aware function key, so D1232 never sorts ahead of
+the narrower widths the way a plain lexical sort would.
 """
 import glob
 import json
@@ -12,16 +18,25 @@ import os
 
 ROOT = "target/criterion"
 
-# key (op/width, side-token removed) -> {"branch": ns, "prod": ns}
-data: dict[str, dict[str, float]] = {}
+# width-label (e.g. "D18") -> { op (e.g. "add") -> {"branch": ns, "prod": ns} }
+# The criterion group name is `<op>/<width>` and the function name is the
+# `<side>` (branch|prod), so the path segments below `target/criterion` are
+# [op, width, side].
+data: dict[str, dict[str, dict[str, float]]] = {}
 for est in glob.glob(os.path.join(ROOT, "**", "new", "estimates.json"), recursive=True):
     rel = os.path.relpath(est, ROOT).replace(os.sep, "/").split("/")[:-2]  # drop new/estimates.json
     side = next((s for s in ("branch", "prod") if s in rel), None)
     if side is None:
         continue
-    key = "/".join(p for p in rel if p != side)
+    rest = [p for p in rel if p != side]
+    # The width label is the `D<n>` segment; everything else is the op key.
+    width = next((p for p in rest if p.startswith("D") and p[1:2].isdigit()), None)
+    if width is None:
+        continue
+    op = "/".join(p for p in rest if p != width)
     with open(est) as f:
-        data.setdefault(key, {})[side] = json.load(f)["median"]["point_estimate"]
+        med = json.load(f)["median"]["point_estimate"]
+    data.setdefault(width, {}).setdefault(op, {})[side] = med
 
 
 def fmt(ns):
@@ -34,19 +49,34 @@ def fmt(ns):
     return f"{ns / 1e6:.2f} ms"
 
 
+def width_num(label: str) -> int:
+    """Integer parsed from a `D<n>` label so widths sort numerically
+    (D1232 last), never lexically (which would float D1232 ahead of D153)."""
+    return int(label.lstrip("D").split("_")[0])
+
+
 ref = os.environ.get("BENCH_REF", "branch")
 prod = os.environ.get("PROD_VERSION", "?")
 
 lines = [
-    f"### bench-branch-compare: `{ref}` (branch) vs prod `{prod}` (latest published tag)",
+    f"## bench-branch-compare: `{ref}` (branch) vs prod `{prod}` (latest published tag)",
     "",
-    "| op / width | branch | prod | Δ (branch vs prod) |",
-    "|---|---:|---:|---:|",
+    "_One table per width, narrowest first. Negative Δ = the branch is faster than prod._",
 ]
-for key in sorted(data):
-    b = data[key].get("branch")
-    p = data[key].get("prod")
-    delta = f"{(b / p - 1) * 100:+.1f}%" if (b and p) else "—"
-    lines.append(f"| {key} | {fmt(b)} | {fmt(p)} | {delta} |")
-lines += ["", "_Negative Δ = the branch is faster than prod._"]
+
+for width in sorted(data, key=width_num):
+    ops = data[width]
+    lines += [
+        "",
+        f"### {width}",
+        "",
+        "| op | branch | prod | Δ (branch vs prod) |",
+        "|---|---:|---:|---:|",
+    ]
+    for op in sorted(ops):
+        b = ops[op].get("branch")
+        p = ops[op].get("prod")
+        delta = f"{(b / p - 1) * 100:+.1f}%" if (b and p) else "—"
+        lines.append(f"| {op} | {fmt(b)} | {fmt(p)} | {delta} |")
+
 print("\n".join(lines))

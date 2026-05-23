@@ -2,17 +2,23 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 
 # Side-by-side Criterion comparison of the latest published release ("prod",
 # the baseline) against the branch under test, using the shared
-# `bench-compare/benches/lib_compare.rs` harness. Both versions are linked into
-# ONE binary (prod via the renamed `prod` dep pinned to the newest published
-# version, the branch via the `path = ".."` dep) and run through the shared
-# public-function surface across every shared width (D18 .. D1232). No
-# third-party crates — pure self-vs-self.
+# `bench-compare/benches/compare_common.rs` harness. Both versions are linked
+# into each per-width bench binary (prod via the renamed `prod` dep pinned to
+# the newest published version, the branch via the `path = ".."` dep) and run
+# through the shared public-function surface.
+#
+# The harness is split ONE bench target per width (compare_d18 .. compare_d1232)
+# and fanned out as a matrix of parallel jobs — each job benches a single width
+# (branch + prod rows) in ~30 min instead of one >90 min sweep over every width.
+# Wall time ≈ the slowest single width. No third-party crates — pure self-vs-self.
 #
 # Purpose: dispatch on a release branch to see the performance changes that
 # branch introduces vs the last release.
 #
-# One run produces both columns: pair `<group>/branch/<fn>` (the branch under
-# test) against `<group>/prod/<fn>` (the latest published tag).
+# Each per-width run produces both columns: pair `<group>/<W>/branch` (the
+# branch under test) against `<group>/<W>/prod` (the latest published tag).
+# A final collator job downloads every width's Criterion artifacts and renders
+# ONE combined branch-vs-prod Δ% table into the run summary.
 #
 # Triggers: (1) push to a release branch — a commit listener that benches the
 # branch automatically (queue-of-1 via the concurrency block); (2) manual
@@ -21,7 +27,6 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 
 on:
   # Commit listener: every push to a release branch benches it vs prod.
-  # cancel-in-progress (below) means a newer commit supersedes an older run.
   push:
     branches:
       - 'release/**'
@@ -47,12 +52,32 @@ permissions:
 
 jobs:
   compare:
-    name: "\U0001FA83 prod vs ${{ inputs.ref || github.ref_name }}"
+    name: "\U0001FA83 prod vs ${{ inputs.ref || github.ref_name }} (${{ matrix.width }})"
     runs-on: ubuntu-latest
-    # The full public-surface sweep (24 functions × every width × branch+prod)
-    # runs >90 min, so the old 90 cap killed runs mid-sweep before they could
-    # emit the comparison table. 240 gives the sweep ample headroom to finish.
-    timeout-minutes: 240
+    # One width per job. A single width's branch+prod surface runs in well
+    # under 30 min, so this fits comfortably where the old single-job sweep
+    # over every width needed 240. Per-width cells are independently valuable.
+    timeout-minutes: 30
+
+    strategy:
+      fail-fast: false
+      # Parallel fanout — every width is its own runner. fail-fast: false so
+      # one width's failure doesn't cancel the rest, and the collator still
+      # renders every width that did finish.
+      matrix:
+        width:
+          - D18
+          - D38
+          - D57
+          - D76
+          - D115
+          - D153
+          - D230
+          - D307
+          - D462
+          - D616
+          - D924
+          - D1232
 
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
@@ -72,8 +97,9 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-branch-compare-${{ runner.os }}-${{ hashFiles('bench-compare/benches/lib_compare.rs') }}
+          key: cargo-branch-compare-${{ runner.os }}-${{ matrix.width }}-${{ hashFiles('bench-compare/benches/compare_common.rs') }}
           restore-keys: |
+            cargo-branch-compare-${{ runner.os }}-${{ matrix.width }}-
             cargo-branch-compare-${{ runner.os }}-
 
       - name: Pin prod to the latest published release
@@ -85,33 +111,90 @@ jobs:
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
           sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [\"std\", \"strict\", \"wide\", \"x-wide\", \"xx-wide\"] }|" Cargo.toml
 
-      - name: Run side-by-side bench
+      - name: Run side-by-side bench (${{ matrix.width }})
         working-directory: bench-compare
         run: |
           set -euo pipefail
           echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod)' Cargo.toml
-          cargo bench --bench lib_compare | tee bench.out
+          WIDTH_LC=$(echo "${{ matrix.width }}" | tr '[:upper:]' '[:lower:]')
+          cargo bench --bench "compare_${WIDTH_LC}" | tee "bench-${{ matrix.width }}.out"
 
-      - name: Summarise (branch vs prod table)
+      - name: Upload criterion data + raw output (${{ matrix.width }})
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: bench-branch-compare-${{ matrix.width }}
+          path: |
+            bench-compare/bench-${{ matrix.width }}.out
+            bench-compare/target/criterion/
+          if-no-files-found: warn
+          retention-days: 30
+
+  # ------------------------------------------------------------------
+  # Collator: once every per-width job has finished (or failed), download
+  # all per-width Criterion artifacts into one merged `target/criterion`
+  # tree and run summarise.py to render ONE combined branch-vs-prod Δ%
+  # table — covering every width — into the run's step summary.
+  collate:
+    name: "\U0001FA83 combined branch-vs-prod table"
+    needs: [compare]
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout (for summarise.py)
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Re-derive prod version for the table header
+        run: |
+          set -euo pipefail
+          LATEST=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; print(c.get('max_stable_version') or c['newest_version'])")
+          echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
+
+      - name: Download every per-width artifact
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          # No `name` -> pulls every artifact this run uploaded, each into a
+          # subdir named after the artifact (bench-branch-compare-D18/, ...).
+          # Each holds that width's target/criterion subtree + raw .out.
+          path: bench-artifacts
+
+      - name: Merge per-width criterion dirs
+        run: |
+          set -euo pipefail
+          mkdir -p bench-compare/target/criterion
+          # Each artifact dir contains a `target/criterion/<group>/...` tree.
+          # The group names embed the width (`<fn>/<W>`), so merging every
+          # width's subtree into one criterion root yields no collisions.
+          shopt -s nullglob
+          for d in bench-artifacts/bench-branch-compare-*/target/criterion; do
+            echo "merging $d"
+            cp -a "$d/." bench-compare/target/criterion/
+          done
+          echo "--- merged groups ---"
+          ls bench-compare/target/criterion | head -50
+
+      - name: Summarise (one combined branch-vs-prod table)
         if: always()
         working-directory: bench-compare
         env:
           BENCH_REF: ${{ inputs.ref || github.ref_name }}
         run: |
           python3 summarise.py >> "$GITHUB_STEP_SUMMARY" || {
-            echo "### bench-branch-compare — summary parse failed; raw output:" >> "$GITHUB_STEP_SUMMARY"
+            echo "### bench-branch-compare — summary parse failed; raw per-width output:" >> "$GITHUB_STEP_SUMMARY"
             echo '```' >> "$GITHUB_STEP_SUMMARY"
-            tail -100 bench.out >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+            find ../bench-artifacts -name 'bench-*.out' -exec tail -40 {} \; >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
             echo '```' >> "$GITHUB_STEP_SUMMARY"
           }
 
-      - name: Upload criterion data + raw output
+      - name: Upload merged criterion data
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
-          name: bench-branch-compare
-          path: |
-            bench-compare/bench.out
-            bench-compare/target/criterion/
+          name: bench-branch-compare-merged
+          path: bench-compare/target/criterion/
           if-no-files-found: warn
           retention-days: 30
