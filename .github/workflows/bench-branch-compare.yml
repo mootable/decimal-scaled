@@ -14,9 +14,10 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # One run produces both columns: pair `<group>/branch/<fn>` (the branch under
 # test) against `<group>/prod/<fn>` (the latest published tag).
 #
-# Trigger: workflow_dispatch only. Default head = the branch the run is
-# launched from. (The workflow lives on the default branch so it is
-# dispatchable; every run targets the `ref` branch, not the default.)
+# Triggers: (1) push to a release branch — a commit listener that benches the
+# branch automatically (queue-of-1 via the concurrency block); (2) manual
+# workflow_dispatch for on-demand runs against any ref. Push runs from the
+# branch itself, so this does NOT need to live on the default branch.
 
 on:
   # Commit listener: every push to a release branch benches it vs prod.
