@@ -14,10 +14,12 @@ doc has everything it needs. **Read `docs/ARCHITECTURE.md` → "Algorithm choosi
 - **NO AI attribution** anywhere — commits, comments, code, docs. Plain `git commit -m`.
 - **Do NOT push, do NOT touch `main`, do NOT publish.** The coordinator merges, golden-gates, and pushes. You commit in your worktree only.
 - **base-reset FIRST:** `git fetch origin && git reset --hard origin/release/0.5.0`. Report the tip.
-- **`core`-only / `no_std`-safe.** No `std`/`alloc` in the algorithms unless explicitly behind a `#[cfg(feature = "std"/"alloc")]` gate. No `Vec`/heap in kernels — use fixed-size limb buffers.
+- **`core`-only / `no_std`-safe by default.** No `std`/`alloc` in the algorithms unless explicitly behind a `#[cfg(feature = "std"/"alloc")]` gate. No `Vec`/heap in kernels — use fixed-size limb buffers.
+- **CHECK every algorithm's `std` requirement.** A float (`f64`) **seed** computed via a **std-only intrinsic** (`f64::sqrt`/`exp`/`ln`/`cbrt`/…; these live in `std::f64`, NOT `core`) makes that algorithm std-only. Handle it with the **policy feature-flagging strategy** (`docs/ARCHITECTURE.md` → "Feature-flagging a variation"; this doc §1 cfg-in-the-policy): the std fp-seed kernel is a `#[cfg(feature = "std")]` `select` arm (or cfg-gated `Algorithm` variant); the **`core` integer-seed kernel is the default/non-std arm**. The default `no_std` build runs the core path and MUST still be correct — verify `cargo check --no-default-features` (+ `--features alloc` if needed). `f64` is only ever a *seed* to a self-correcting integer iteration whose exact integer termination pins the result.
+- **`nightly` is NEVER required.** The crate must compile + work fully on stable. Where a nightly feature (`generic_const_exprs`) would help, ship a **stable workaround** (slower) and let `nightly`, if enabled, swap in the fast path. Never gate correctness/availability behind nightly. (See §2.)
 - **Golden-gate every behaviour-affecting change.** The transcendental precision contract (0 ULP / correctly-rounded) must not regress.
 - **Run `cargo test --no-run` (all targets compile) before declaring done** — `--lib`-only misses integration breakage.
-- **Never weaken the overflow / rounding / determinism contracts.** Integer-only results; `f64` only ever a *seed* to a self-correcting integer iteration.
+- **Never weaken the overflow / rounding / determinism contracts.** Integer-only results.
 
 ## 1. The target shape (per function) — the policy file
 Implement exactly the shape in `docs/ARCHITECTURE.md` "Policy file structure":
@@ -45,7 +47,7 @@ pub fn f<const N: usize>(x: Int<N>) -> Int<N> {
 ## 2. Compile-away (the cardinal rule)
 - `select` is `const`, keyed ONLY on const generics ⇒ `const { select::<N>() }` folds per monomorphisation; unchosen arms are dead-arm-eliminated in release. Zero runtime branch on the const path.
 - The zero-branch property is a **release** property — proven per function by **inspecting the release IR/asm** (one direct call, no branch/table/vtable on the const path). This is the **acceptance gate** for a migrated function. Debug keeping arms is fine.
-- Computed-width (`Int<{max(N,M)}>`, `[u64; max(N,M)]`) needs `generic_const_exprs` (nightly) — **forbidden on stable**; get the wider type from an operand (the swap), pass MIN/MAX as const VALUE args.
+- Computed-width (`Int<{max(N,M)}>`, `[u64; max(N,M)]`) needs `generic_const_exprs` (nightly). It is **NOT a precondition** — the stable build MUST work: prefer getting the wider type from an operand (the commutative swap) and passing MIN/MAX as const VALUE args; where a genuinely wider intermediate is unavoidable, use a **fixed-max-width buffer** (over-allocate to the widest enabled tier — `core`/no_std-safe, slower). A `nightly` feature, if present, only swaps in the exact computed-width fast path. **Never gate a function's correctness/availability behind nightly.**
 
 ## 3. Value matcher (only where the best algorithm depends on the runtime VALUE)
 - `Select::ByValue` carries a **non-capturing** `fn(&Int<N>) -> Algorithm` (closure or fn item) that **returns an `Algorithm` tag** (never a fn-pointer to the algo — the tag keeps dispatch a direct call). Closures must capture nothing.
