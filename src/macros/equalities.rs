@@ -27,9 +27,8 @@
 /// for any signed integer source type that fits in `i128`.
 macro_rules! decl_eq_signed_int {
     // The storage tier is irrelevant: the comparator is cross-width, so a
-    // single body serves every `$Type`. (`wide` kept for call-site
-    // symmetry with the rest of the equality surface.)
-    (wide $Type:ident, $Src:ty) => {
+    // single body serves every `$Type`.
+    ($Type:ident, $Src:ty) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &$Src) -> bool {
@@ -48,7 +47,7 @@ macro_rules! decl_eq_signed_int {
 
 /// Emits `PartialEq<i128> for $Type<SCALE>` and the reciprocal.
 macro_rules! decl_eq_i128 {
-    (wide $Type:ident) => {
+    ($Type:ident) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<i128> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &i128) -> bool {
@@ -68,7 +67,7 @@ macro_rules! decl_eq_i128 {
 /// Emits `PartialEq<$Src> for $Type<SCALE>` for unsigned sources that
 /// fit in `u128` (`u8` through `u64`, `usize`).
 macro_rules! decl_eq_unsigned_int {
-    (wide $Type:ident, $Src:ty) => {
+    ($Type:ident, $Src:ty) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Src> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &$Src) -> bool {
@@ -87,7 +86,7 @@ macro_rules! decl_eq_unsigned_int {
 
 /// Emits `PartialEq<u128> for $Type<SCALE>` and the reciprocal.
 macro_rules! decl_eq_u128 {
-    (wide $Type:ident) => {
+    ($Type:ident) => {
         impl<const SCALE: u32> ::core::cmp::PartialEq<u128> for $Type<SCALE> {
             #[inline]
             fn eq(&self, other: &u128) -> bool {
@@ -137,19 +136,19 @@ macro_rules! decl_eq_float {
 /// One-line invoker: emits the full signed/unsigned/i128/u128 cross-
 /// equality surface for a decimal type.
 macro_rules! decl_eq_all_integers {
-    (wide $Type:ident) => {
-        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i8);
-        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i16);
-        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i32);
-        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, i64);
-        $crate::macros::equalities::decl_eq_signed_int!(wide $Type, isize);
-        $crate::macros::equalities::decl_eq_i128!(wide $Type);
-        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u8);
-        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u16);
-        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u32);
-        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, u64);
-        $crate::macros::equalities::decl_eq_unsigned_int!(wide $Type, usize);
-        $crate::macros::equalities::decl_eq_u128!(wide $Type);
+    ($Type:ident) => {
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i8);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i16);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i32);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, i64);
+        $crate::macros::equalities::decl_eq_signed_int!($Type, isize);
+        $crate::macros::equalities::decl_eq_i128!($Type);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u8);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u16);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u32);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, u64);
+        $crate::macros::equalities::decl_eq_unsigned_int!($Type, usize);
+        $crate::macros::equalities::decl_eq_u128!($Type);
     };
 }
 
