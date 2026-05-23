@@ -3619,3 +3619,154 @@ mod unified_mg_feasibility {
         assert_eq!(got2, expect2);
     }
 }
+
+#[cfg(test)]
+mod bit_count_contract_tests {
+    use super::{Int, Uint};
+
+    /// `Int<N>`'s four bit-count methods must match the `iN`
+    /// two's-complement contract at every edge, and `bit_length` must
+    /// stay magnitude-based. Where the value fits a primitive we assert
+    /// against `i64`/`i128`; otherwise against the known answer.
+    #[test]
+    fn int_bit_counts_match_signed_contract_at_edges() {
+        // ── Int<1> (64-bit): cross-check directly against i64. ──
+        for v in [0_i64, 1, -1, i64::MAX, i64::MIN, 42, -42, 1 << 40, -(1 << 40)] {
+            let x = Int::<1>::from_i64(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "i64 lz {v}");
+            assert_eq!(x.trailing_zeros(), v.trailing_zeros(), "i64 tz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "i64 popcount {v}");
+            assert_eq!(x.count_zeros(), v.count_zeros(), "i64 cz {v}");
+            // bit_length is magnitude-based: significant bits of |v|.
+            let mag_bits = 64 - v.unsigned_abs().leading_zeros();
+            assert_eq!(x.bit_length(), mag_bits, "i64 bit_length {v}");
+        }
+
+        // ── Int<2> (128-bit): cross-check directly against i128. ──
+        for v in [
+            0_i128,
+            1,
+            -1,
+            i128::MAX,
+            i128::MIN,
+            (1_i128 << 64),       // 2^64 — limb boundary
+            (1_i128 << 64) - 1,   // 2^64 - 1 — fills the low limb
+            -(1_i128 << 64),
+            i64::MAX as i128,
+            i64::MIN as i128,
+        ] {
+            let x = Int::<2>::from_i128(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "i128 lz {v}");
+            assert_eq!(x.trailing_zeros(), v.trailing_zeros(), "i128 tz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "i128 popcount {v}");
+            assert_eq!(x.count_zeros(), v.count_zeros(), "i128 cz {v}");
+            let mag_bits = 128 - v.unsigned_abs().leading_zeros();
+            assert_eq!(x.bit_length(), mag_bits, "i128 bit_length {v}");
+        }
+
+        // ── Int<4> (256-bit): values beyond i128 — assert the known
+        //    two's-complement answer directly. ──
+        const B: u32 = Int::<4>::BITS; // 256
+
+        // Zero: BITS leading zeros, BITS trailing zeros, no ones,
+        // BITS clear bits, zero magnitude bits.
+        let z = Int::<4>::ZERO;
+        assert_eq!(z.leading_zeros(), B);
+        assert_eq!(z.trailing_zeros(), B);
+        assert_eq!(z.count_ones(), 0);
+        assert_eq!(z.count_zeros(), B);
+        assert_eq!(z.bit_length(), 0);
+
+        // One.
+        let one = Int::<4>::ONE;
+        assert_eq!(one.leading_zeros(), B - 1);
+        assert_eq!(one.trailing_zeros(), 0);
+        assert_eq!(one.count_ones(), 1);
+        assert_eq!(one.count_zeros(), B - 1);
+        assert_eq!(one.bit_length(), 1);
+
+        // -1 == all ones in two's complement: sign bit set so zero
+        // leading zeros, every bit a one, zero trailing zeros.
+        // Magnitude is 1, so bit_length is 1.
+        let neg_one = Int::<4>::from_i64(-1);
+        assert_eq!(*neg_one.as_limbs(), [u64::MAX; 4]);
+        assert_eq!(neg_one.leading_zeros(), 0);
+        assert_eq!(neg_one.trailing_zeros(), 0);
+        assert_eq!(neg_one.count_ones(), B);
+        assert_eq!(neg_one.count_zeros(), 0);
+        assert_eq!(neg_one.bit_length(), 1);
+
+        // MAX == 0b0111…1: top bit clear, the rest set.
+        let max = Int::<4>::MAX;
+        assert_eq!(max.leading_zeros(), 1);
+        assert_eq!(max.trailing_zeros(), 0);
+        assert_eq!(max.count_ones(), B - 1);
+        assert_eq!(max.count_zeros(), 1);
+        assert_eq!(max.bit_length(), B - 1); // magnitude is 2^(B-1) - 1
+
+        // MIN == 0b1000…0: only the sign bit set. Negative → zero
+        // leading zeros; the single set bit is the top one, so
+        // trailing_zeros == BITS-1; magnitude |MIN| == 2^(B-1).
+        let min = Int::<4>::MIN;
+        assert_eq!(min.leading_zeros(), 0);
+        assert_eq!(min.trailing_zeros(), B - 1);
+        assert_eq!(min.count_ones(), 1);
+        assert_eq!(min.count_zeros(), B - 1);
+        assert_eq!(min.bit_length(), B); // |MIN| = 2^(B-1) ⇒ B significant bits
+
+        // Limb-boundary magnitudes: 2^64 and 2^64 - 1 in Int<4>.
+        let two_64 = Int::<4>::from_u128(1u128 << 64);
+        assert_eq!(two_64.trailing_zeros(), 64);
+        assert_eq!(two_64.count_ones(), 1);
+        assert_eq!(two_64.leading_zeros(), B - 65);
+        assert_eq!(two_64.bit_length(), 65);
+
+        let two_64_m1 = Int::<4>::from_u128((1u128 << 64) - 1);
+        assert_eq!(two_64_m1.trailing_zeros(), 0);
+        assert_eq!(two_64_m1.count_ones(), 64);
+        assert_eq!(two_64_m1.leading_zeros(), B - 64);
+        assert_eq!(two_64_m1.bit_length(), 64);
+    }
+
+    /// `Uint<N>`'s bit-count surface (`leading_zeros`, `count_ones`,
+    /// `bit_length`) must match the `uN` contract at the edges.
+    #[test]
+    fn uint_bit_counts_match_unsigned_contract_at_edges() {
+        // ── Uint<1> (64-bit): cross-check against u64. ──
+        for v in [0_u64, 1, u64::MAX, 42, 1 << 40] {
+            let x = Uint::<1>::from_u64(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "u64 lz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "u64 popcount {v}");
+            // For unsigned, bit_length == BITS - leading_zeros.
+            assert_eq!(x.bit_length(), 64 - v.leading_zeros(), "u64 bit_length {v}");
+        }
+
+        // ── Uint<2> (128-bit): cross-check against u128, incl. limb
+        //    boundary 2^64 / 2^64 - 1. ──
+        for v in [0_u128, 1, u128::MAX, 1u128 << 64, (1u128 << 64) - 1] {
+            let x = Uint::<2>::from_u128(v);
+            assert_eq!(x.leading_zeros(), v.leading_zeros(), "u128 lz {v}");
+            assert_eq!(x.count_ones(), v.count_ones(), "u128 popcount {v}");
+            assert_eq!(x.bit_length(), 128 - v.leading_zeros(), "u128 bit_length {v}");
+        }
+
+        // ── Uint<4> (256-bit): values beyond u128 — known answers. ──
+        const B: u32 = Uint::<4>::BITS; // 256
+        let zero = Uint::<4>::ZERO;
+        assert_eq!(zero.leading_zeros(), B);
+        assert_eq!(zero.count_ones(), 0);
+        assert_eq!(zero.bit_length(), 0);
+
+        // All-ones (Uint MAX): no leading zeros, every bit set.
+        let umax = Uint::<4>::from_limbs([u64::MAX; 4]);
+        assert_eq!(umax.leading_zeros(), 0);
+        assert_eq!(umax.count_ones(), B);
+        assert_eq!(umax.bit_length(), B);
+
+        // 2^64 across the low limb boundary.
+        let two_64 = Uint::<4>::from_u128(1u128 << 64);
+        assert_eq!(two_64.count_ones(), 1);
+        assert_eq!(two_64.leading_zeros(), B - 65);
+        assert_eq!(two_64.bit_length(), 65);
+    }
+}
