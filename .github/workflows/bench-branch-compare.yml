@@ -1,30 +1,23 @@
-name: "\U0001FA83 bench-branch-compare (A vs B)"
+name: "\U0001FA83 bench-branch-compare (vs 0.4.4)"
 
-# Head-to-head Criterion comparison of two branches / refs (e.g. `main` vs a
-# release branch), using the shared `bench-history/benches/comparison.rs`
-# harness — same input distributions and operations as bench-history:
-#   * widths: D38, D76, D307
-#   * functions: add, mul, div, sqrt_strict, ln_strict, sin_strict
+# Side-by-side Criterion comparison of the published 0.4.4 baseline against
+# the branch under test, using the shared `bench-compare/benches/lib_compare.rs`
+# harness. Both versions are linked into ONE binary (0.4.4 via the renamed
+# `dec-sec-0-4-4` dep, the branch via the `path = ".."` dep) and run through
+# the same six operators (add/sub/mul/div/rem/neg) across every shared width
+# (D18 .. D1232). No third-party crates — pure self-vs-self.
 #
-# Each ref builds its OWN `decimal-scaled` via the path dep and runs its own
-# copy of the harness; both Criterion baselines accumulate in one shared
-# target dir, and `critcmp` prints the per-cell delta table (also written to
-# the run summary). Like-for-like — the only thing changing between the two
-# columns is the crate code at each ref.
+# One run produces both columns: pair `arith/<W>/new/<op>` (the branch) against
+# `arith/<W>/old/<op>` (0.4.4).
 #
-# Trigger: workflow_dispatch only. Defaults: base = `main`, head = the branch
-# the run is launched from.
+# Trigger: workflow_dispatch only. Default head = the branch the run is
+# launched from.
 
 on:
   workflow_dispatch:
     inputs:
-      base:
-        description: "Baseline branch / tag / SHA."
-        required: false
-        type: string
-        default: "main"
-      head:
-        description: "Head branch / tag / SHA to compare (defaults to the branch the run is launched from)."
+      ref:
+        description: "Branch / tag / SHA to benchmark against the 0.4.4 baseline (defaults to the branch the run is launched from)."
         required: false
         type: string
         default: ""
@@ -32,25 +25,23 @@ on:
 permissions:
   contents: read
 
-env:
-  # Shared so the `base` and `head` Criterion baselines land in one place
-  # and critcmp can pair them.
-  CARGO_TARGET_DIR: ${{ github.workspace }}/shared-target
-
 jobs:
   compare:
-    name: "\U0001FA83 ${{ inputs.base }} vs ${{ inputs.head || github.ref_name }}"
+    name: "\U0001FA83 0.4.4 vs ${{ inputs.ref || github.ref_name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
     steps:
+      - name: Checkout (${{ inputs.ref || github.ref_name }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
 
-      - name: Install system libs + critcmp
-        run: |
-          sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
-          cargo install critcmp --locked
+      - name: Install system libs
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
         uses: actions/cache@v5
@@ -58,60 +49,38 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-branch-compare-${{ runner.os }}-${{ hashFiles('bench-history/benches/comparison.rs') }}
+          key: cargo-branch-compare-${{ runner.os }}-${{ hashFiles('bench-compare/benches/lib_compare.rs') }}
           restore-keys: |
             cargo-branch-compare-${{ runner.os }}-
 
-      # ── base ─────────────────────────────────────────────────────────
-      - name: Checkout base (${{ inputs.base }})
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.base }}
-          path: base
-
-      - name: Bench base
-        working-directory: base/bench-history
+      - name: Run side-by-side bench
+        working-directory: bench-compare
         run: |
           set -euo pipefail
-          sed -i 's|^decimal-scaled = .*|decimal-scaled = { path = "..", default-features = false, features = ["std", "strict", "wide", "x-wide"] }|' Cargo.toml
-          echo "--- base dep line ---"; grep '^decimal-scaled' Cargo.toml
-          cargo bench --bench comparison -- --save-baseline base
+          echo "--- dep lines ---"; grep -E '^(decimal-scaled|dec-sec-0-4-4)' Cargo.toml
+          cargo bench --bench lib_compare | tee bench.out
 
-      # ── head ─────────────────────────────────────────────────────────
-      - name: Checkout head (${{ inputs.head || github.ref_name }})
-        uses: actions/checkout@v4
-        with:
-          ref: ${{ inputs.head || github.ref_name }}
-          path: head
-
-      - name: Bench head
-        working-directory: head/bench-history
+      - name: Summarise (new = branch, old = 0.4.4)
+        if: always()
+        working-directory: bench-compare
         run: |
-          set -euo pipefail
-          sed -i 's|^decimal-scaled = .*|decimal-scaled = { path = "..", default-features = false, features = ["std", "strict", "wide", "x-wide"] }|' Cargo.toml
-          echo "--- head dep line ---"; grep '^decimal-scaled' Cargo.toml
-          cargo bench --bench comparison -- --save-baseline head
-
-      # ── compare ──────────────────────────────────────────────────────
-      - name: Compare (critcmp base head)
-        run: |
-          set -euo pipefail
-          critcmp base head | tee compare.txt
           {
-            echo "### bench-branch-compare: \`${{ inputs.base }}\` (base) vs \`${{ inputs.head || github.ref_name }}\` (head)"
+            echo "### bench-branch-compare: \`0.4.4\` (old) vs \`${{ inputs.ref || github.ref_name }}\` (new)"
+            echo ''
+            echo '`new/*` = the branch under test, `old/*` = the 0.4.4 baseline. Criterion timing lines:'
             echo ''
             echo '```'
-            cat compare.txt
+            grep -E 'arith/|time:' bench.out || echo "(no timing lines captured — see artifact)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 
-      - name: Upload comparison + criterion data
+      - name: Upload criterion data + raw output
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: bench-branch-compare
           path: |
-            compare.txt
-            shared-target/criterion/
+            bench-compare/bench.out
+            bench-compare/target/criterion/
           if-no-files-found: warn
           retention-days: 30
