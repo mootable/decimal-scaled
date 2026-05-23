@@ -6,7 +6,7 @@
 
 #![cfg(feature = "wide")]
 
-use decimal_scaled::{D38, D57, D76, D115};
+use decimal_scaled::{D18, D38, D57, D76, D115};
 
 #[test]
 fn d38_widen_to_d57() {
@@ -75,13 +75,65 @@ fn d153_widen_to_d230_then_d307() {
     assert!(r.is_err());
 }
 
+// ─── Const-generic `widen_n` / `narrow_n` sugar (story 1.2.2) ──────────
+
+#[test]
+fn widen_n_d18_to_d38_lossless() {
+    // D18 (Int<1>) → D38 (Int<2>), same scale, exact.
+    let a = D18::<9>::from_int(7);
+    let w: D38<9> = a.widen_n::<2>();
+    // Same logical value: widening sign-extends, scale unchanged.
+    assert_eq!(i128::from(w.to_bits()), i128::from(a.to_bits()));
+}
+
+#[test]
+fn widen_n_is_const() {
+    // The const-generic sugar must be usable in const context — this is
+    // the property that distinguishes it from the trait `From` widen.
+    const A: D18<2> = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_limbs([700]));
+    const W: D38<2> = A.widen_n::<2>();
+    assert_eq!(i128::from(W.to_bits()), 700);
+}
+
+#[test]
+fn narrow_n_d38_to_d18_in_range_and_out() {
+    // In range: D38 value that fits Int<1> narrows back exactly.
+    let a = D38::<2>::from_int(7);
+    let n: Option<D18<2>> = a.narrow_n::<1>();
+    assert!(n.is_some());
+    assert_eq!(n.unwrap().to_bits(), 700);
+
+    // Out of range: D38::MAX cannot fit Int<1> → None.
+    let big = D38::<0>::MAX;
+    let n: Option<D18<0>> = big.narrow_n::<1>();
+    assert!(n.is_none());
+}
+
+#[test]
+fn narrow_n_const_is_const() {
+    const A: D38<0> = D38::<0>::from_bits(decimal_scaled::Int::<2>::from_limbs([5, 0]));
+    const N: Option<D18<0>> = A.narrow_n::<1>();
+    assert!(N.is_some());
+    assert_eq!(N.unwrap().to_bits(), 5);
+}
+
+// COMPILE-TIME LOCK — D18 (`Int<1>`) is the narrowest decimal storage,
+// so it has no neighbour `narrow()` method (only `widen()`). The line
+// below, if uncommented, must fail to compile (no such method) — this
+// pins the "nothing narrower than Int<1>" contract.
+//
+//   let _ = D18::<2>::from_int(1).narrow();   // E0599: no method `narrow`
+//
+// The const-generic `narrow_n::<0>()` likewise has no meaning: the int
+// base's `try_narrow` debug-asserts `1 <= M`, so a width-0 storage is
+// rejected rather than silently produced.
+
 #[cfg(feature = "x-wide")]
 #[test]
 fn cross_width_narrowing_d76_to_d18_d9() {
     // Cross-tier TryFrom skips multiple rungs in one hop; this isn't
     // the `.narrow()` chain (which steps once) — it's the From /
     // TryFrom matrix that's been comprehensive since 0.2.5.
-    use decimal_scaled::{D18};
     let w: D76<2> = D38::<2>::from_int(7).into();
     let n18: D18<2> = w.try_into().unwrap();
     assert_eq!(n18.to_bits(), 700);

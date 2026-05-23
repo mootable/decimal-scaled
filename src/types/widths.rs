@@ -1913,6 +1913,57 @@ impl<const SCALE: u32> D1232<SCALE> {
     }
 }
 
+// ─── Const-generic width sugar: `widen_n` / `narrow_n` ─────────────────
+//
+// Direct decimal-level mirror of the int-layer const base
+// (`Int::resize_n` / `Int::try_narrow`, story 1.2.1): one const-generic
+// pair on `D<Int<N>, SCALE>` that hops to ANY target width `M` in a
+// single call, at the SAME scale (a pure width conversion — exact, no
+// `RoundingMode`). Both delegate straight to the int const base, so they
+// are usable in `const` context.
+//
+// Named with the `_n` suffix — NOT plain `widen` / `narrow` — for the
+// same reason `Int::resize_n` carries it: the per-width tiers above
+// already define inherent `widen(self)` / `narrow(self)` (no turbofish,
+// single-tier hops kept for source compatibility), and a second inherent
+// method of the same name on the aliased `D<Int<N>, SCALE>` would be a
+// duplicate definition (E0592). The `_n` const-generic methods compose
+// freely with those: `widen()` is `widen_n::<NEIGHBOUR>()`.
+impl<const N: usize, const SCALE: u32> crate::D<crate::int::types::Int<N>, SCALE> {
+    /// Widen to a wider storage `Int<M>` (`M >= N`) at the same `SCALE`.
+    /// Sign-extends; always lossless. `const`.
+    ///
+    /// Mirror of [`crate::int::types::Int::widen`] lifted to the decimal
+    /// wrapper: the logical value is unchanged, only the storage width
+    /// grows. Use [`Self::narrow_n`] for the fallible reverse hop and the
+    /// existing per-tier [`D38::widen`]-style methods for single-tier
+    /// neighbour hops.
+    #[inline]
+    #[must_use]
+    pub const fn widen_n<const M: usize>(self) -> crate::D<crate::int::types::Int<M>, SCALE> {
+        debug_assert!(M >= N, "widen_n requires M >= N");
+        crate::D(self.0.resize_n::<M>())
+    }
+
+    /// Narrow to a narrower storage `Int<M>` (`1 <= M <= N`) at the same
+    /// `SCALE`. Returns `None` when the value does not fit `Int<M>` as
+    /// two's complement. `const`.
+    ///
+    /// Mirror of [`crate::int::types::Int::narrow`] lifted to the decimal
+    /// wrapper. The narrowest decimal storage is `Int<1>` (D18), so a
+    /// `narrow_n::<0>()` is meaningless and is rejected by the int base's
+    /// `1 <= M` debug-assert.
+    #[inline]
+    pub const fn narrow_n<const M: usize>(
+        self,
+    ) -> Option<crate::D<crate::int::types::Int<M>, SCALE>> {
+        match self.0.try_narrow::<M>() {
+            Some(raw) => Some(crate::D(raw)),
+            None => None,
+        }
+    }
+}
+
 // ─── Cross-scale-op constructors + comparators ─────────────────────────
 //
 // One invocation per width emits `mul_of`, `add_of`, `sub_of`, `div_of`,
