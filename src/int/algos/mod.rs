@@ -1,18 +1,19 @@
 //! Reusable width-matched integer algorithms.
 //!
-//! The integer layer's algorithm bucket: the width-matched routines
-//! that `Int<N>` / `Uint<N>` (and future width-generic kernels) compose
-//! on. Most surface the live u64-base limb routines defined in
-//! [`crate::int::limbs`] under one roof; the named `IntXXXX` types keep
-//! calling them at their definition site, so re-exporting (rather than
-//! moving) leaves those call sites untouched. Routines the named types
-//! do not need — currently the truncated low-`N` product
-//! [`mul::limbs_mul_low_u64_fixed`] and the half-product squaring
-//! [`mul::limbs_sqr_low_u64_fixed`] — are defined directly in the
-//! relevant submodule.
+//! The integer layer's algorithm bucket: the width-matched routines that
+//! `Int<N>` / `Uint<N>` compose on.
+//!
+//! - [`limbs`] — generic little-endian `u64` limb arithmetic
+//!   (is_zero/cmp/add_assign/sub_assign/shift/bit_len, the schoolbook and
+//!   Karatsuba multiply kernels, the truncated low-`N` product / squaring,
+//!   signed compare).
+//! - [`div`] — the pure division engines (`div_rem`, `div_knuth`,
+//!   `div_burnikel_ziegler_with_knuth`, the `Mg2By1` / `Mg3By2`
+//!   Möller–Granlund reciprocal engines) plus the const-`N` fast-arm
+//!   wrappers `div_rem_mag_fixed` / `isqrt_mag_fixed`. The divisor-shape
+//!   *choice* between the engines lives in [`crate::int::policy::div`].
+//! - [`roots`] — the Newton integer square root `isqrt_newton`.
 
-pub(crate) mod add_sub;
-pub(crate) mod cmp;
 pub(crate) mod div;
-pub(crate) mod mul;
-pub(crate) mod shift;
+pub(crate) mod limbs;
+pub(crate) mod roots;

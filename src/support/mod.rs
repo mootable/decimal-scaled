@@ -10,6 +10,7 @@ pub(crate) mod bench_alt;
 pub(crate) mod diagnostics;
 pub(crate) mod display;
 pub(crate) mod error;
+pub(crate) mod int_fmt;
 pub(crate) mod rounding;
 #[cfg(feature = "serde")]
 pub mod serde_helpers;

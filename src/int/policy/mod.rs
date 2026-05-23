@@ -47,26 +47,17 @@
 //!   types fall through to the shared limb isqrt / Brent–Zimmermann
 //!   `root_int` ([`limbs::limbs_isqrt_u64`] and `Uint::root_int`).
 //!
-//! Both dispatchers are currently written inline in the divide/multiply
-//! kernels in [`crate::int::limbs`], threaded through the same `const`
-//! evaluation and scratch-buffer machinery as the kernels they choose
-//! between. Lifting them out cleanly means separating the threshold
-//! constants and the shape-classification (`strip leading zeros →
-//! effective limb count`) from the buffer setup they share with the
-//! kernels — a non-trivial split that risks the correctness invariant.
-//!
-//! This module is therefore the named home for that dispatch; the
-//! thresholds and selection logic remain re-exported from where they
-//! are defined until the extraction can be done without churning the
-//! hot paths.
-//!
-//! TODO(0.5.0): finish policy extraction — move `KARATSUBA_THRESHOLD_U64`,
-//! the `BZ_THRESHOLD_U64` divide selection, and the shape-classification
-//! helper out of `limbs` into this module, leaving the kernels to take an
-//! already-chosen algorithm.
+//! Both dispatchers follow the canonical [`Select`] / `select` /
+//! exhaustive-`match algo` policy shape (see `docs/ARCHITECTURE.md` →
+//! "Policy file structure"). Because the integer-layer choice keys on the
+//! operands' *runtime* shape (effective limb count / operand length) and
+//! not on a const generic, each is a `Select::ByValue`-style value
+//! matcher: the const layer settles on "the shape decides", the matcher
+//! classifies, and the dispatcher does an exhaustive `match algo` to the
+//! pure engines / kernels in [`crate::int::algos::div`] /
+//! [`crate::int::algos::limbs`]. The benched crossover thresholds
+//! ([`div::BZ_THRESHOLD`], [`mul::KARATSUBA_THRESHOLD`]) are policy DATA
+//! in those files, not magic numbers in the kernels.
 
-// Re-export the dispatch entry points under the policy bucket so
-// callers can reach them by intent rather than by their current
-// physical home in `limbs`.
-#[allow(unused_imports)]
-pub(crate) use crate::int::limbs::limbs_divmod_dispatch_u64;
+pub(crate) mod div;
+pub(crate) mod mul;

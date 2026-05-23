@@ -30,7 +30,7 @@
 //! # Setup
 //!
 //! `R` is computed once per `(SCALE, width)` pair via the u64 limb
-//! division dispatcher [`crate::int::limbs::limbs_divmod_dispatch_u64`].
+//! division dispatcher [`crate::int::policy::div::div_rem_dispatch`].
 //! Setup cost is one wide divide; per-call cost is one wide multiply +
 //! one narrow multiply + one comparison + one optional subtract.
 //!
@@ -49,7 +49,8 @@
 //! The Newton-iteration view of the same reciprocal is
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
-use crate::int::limbs::{limbs_cmp_u64, limbs_divmod_dispatch_u64, limbs_mul_u64, limbs_sub_assign_u64};
+use crate::int::algos::limbs::{cmp as limbs_cmp_u64, mul_schoolbook as limbs_mul_u64, sub_assign as limbs_sub_assign_u64};
+use crate::int::policy::div::div_rem_dispatch as limbs_divmod_dispatch_u64;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────
 //

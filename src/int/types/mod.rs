@@ -21,12 +21,11 @@ mod wide_compat;
 pub use traits::BigInt;
 
 use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
-use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_cross, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
-    limbs_mul_fast_u64, limbs_mul_u64, limbs_shl_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
-    limbs_sub_assign_u64_fixed,
+    limbs_mul_fast_u64, limbs_mul_low_u64_fixed, limbs_mul_u64, limbs_shl_u64, limbs_shl_u64_fixed,
+    limbs_shr_u64_fixed, limbs_sqr_low_u64_fixed, limbs_sub_assign_u64_fixed,
 };
 use core::cmp::Ordering;
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
@@ -2757,7 +2756,7 @@ impl<const N: usize> TryFrom<f32> for Int<N> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
+    use crate::int::limbs::{limbs_mul_low_u64_fixed, limbs_mul_u64_fixed};
 
     #[test]
     fn try_from_i128_detects_narrow_overflow() {

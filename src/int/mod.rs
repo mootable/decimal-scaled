@@ -7,17 +7,19 @@
 //!   definitions, their `BigInt` / `BigInt` traits, and the
 //!   named `IntXXXX` / `UintXXXX` `pub type` aliases preserved for the
 //!   existing call sites.
-//! - [`policy`] — per-width / limb-count algorithm-selection dispatch
-//!   (the schoolbook-vs-Karatsuba threshold, the Knuth vs
-//!   Burnikel–Ziegler divide selection). See its module docs for what
-//!   currently lives inline in the kernels.
-//! - [`algos`] — the reusable width-matched algorithms the integer
-//!   types compose on (truncated mul / sqr, isqrt, root_int, the
-//!   re-exported full-width products and divide entry points).
-//! - [`limbs`] — the raw `&[u64]` / `&[u128]` slice limb primitives
-//!   (add/sub/cmp/shift/mul/divmod) plus the `BigInt` / `BigInt`
-//!   traits and the named-type re-exports, absorbed from the former
-//!   `src/wide_int/`.
+//! - [`policy`] — per-function algorithm-selection matchers: the
+//!   schoolbook-vs-Karatsuba mul picker ([`policy::mul`]) and the
+//!   divisor-shape divide picker ([`policy::div`]), each in the canonical
+//!   `Select` / `select` / exhaustive-`match algo` shape with the benched
+//!   crossover thresholds held as policy data.
+//! - [`algos`] — the reusable algorithms the integer types compose on:
+//!   the generic `u64` limb arithmetic ([`algos::limbs`]), the pure
+//!   division engines ([`algos::div`]), and the Newton integer square
+//!   root ([`algos::roots`]).
+//! - [`limbs`] — a thin re-export shim mapping the historic
+//!   `limbs_*_u64` names onto the dissolved buckets above, kept so the
+//!   `crate::wide_int::limbs_*` paths and existing call sites keep
+//!   resolving (#79).
 
 pub(crate) mod algos;
 pub(crate) mod limbs;
