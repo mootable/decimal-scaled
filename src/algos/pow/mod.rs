@@ -14,7 +14,5 @@
 //!   carrying the four-variant matrix entry shape (strict + approx, each
 //!   with an explicit-rounding sibling). The D38 realisation of the
 //!   `powf_exp_with_ln` (`ExpWithLn`) algorithm.
-//! - [`widen_to_d38`] — D18 widen → `fixed_d38::powf` → narrow.
 
 pub(crate) mod fixed_d38;
-pub(crate) mod widen_to_d38;

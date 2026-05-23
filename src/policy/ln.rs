@@ -22,11 +22,9 @@
 //! Same reasoning as [`crate::policy::exp`]: the two surviving algorithms
 //! — `ln_series` (Brent argument-reduced artanh series) and `ln_tang`
 //! (Tang table-driven reduction) — have SCALE-/width-specific kernel
-//! realisations today (narrow `Fixed`-256 in `ln::fixed_d38`, wide
-//! per-tier `wide_trig_<tier>` cores in `ln::wide_kernel`, Tang bands in
-//! the `ln::lookup_*` kernels). Collapsing the kernel *bodies* to one
-//! generic-over-`W` `ln_series` / `ln_tang` is the **4.1 genericisation
-//! prerequisite** (`phase4/migration_explog.md`), not a matcher concern.
+//! realisations today (narrow `Fixed`-256 in `ln::fixed_d38`, wide tiers
+//! on the tier-generic `ln_series` / `ln_tang` kernels over
+//! `WideTrigCore`, Tang bands in the `ln::lookup_*` kernels).
 //! The matcher expresses the algorithm *choice* per cell canonically and
 //! each per-tier impl binds the concrete kernel.
 //!
@@ -80,7 +78,7 @@ pub(crate) trait LnPolicy: Sized {
 enum Algorithm {
     /// `ln_series` — Brent argument-reduced `2·artanh((m−1)/(m+1))`
     /// fixed-point series. The generic default; realised by
-    /// `ln::fixed_d38` (narrow) and `ln::wide_kernel` (wide).
+    /// `ln::fixed_d38` (narrow) and the generic `ln_series` (wide).
     Series,
     /// `ln_tang` — Tang table-driven range reduction. Selected on the
     /// benched SCALE bands; realised by the `ln::lookup_*` kernels.
@@ -167,11 +165,21 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 impl<const SCALE: u32> LnPolicy for D18<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
-        ln::widen_to_d38::ln_strict_d18(self, mode)
+        // Widen → `fixed_d38::ln` → narrow (the `widen_to_work`
+        // dispatch strategy, a policy concern).
+        let widened: D38<SCALE> = self.into();
+        let raw = ln::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
+        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
+        })
     }
     #[inline]
     fn ln_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        ln::widen_to_d38::ln_with_d18(self, working_digits, mode)
+        let widened: D38<SCALE> = self.into();
+        let raw = ln::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
+        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE)
+        })
     }
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {

@@ -105,14 +105,59 @@ fn resolve<const N: usize, const SCALE: u32>(base: &Int<N>) -> Algorithm {
 //
 // D18 widens base and exponent into the D38 `Fixed` work width (the
 // `widen_to_work` strategy) and runs `powf_exp_with_ln` there.
+/// `Some(n)` if `exp_raw` (at `SCALE`) represents an exact integer
+/// `n` with `|n| <= INT_FAST_PATH_THRESHOLD`. Identical contract to
+/// [`pow::fixed_d38::exp_as_small_int`], specialised here for the narrow
+/// D18 storage where the divisor is `i128`.
+#[inline]
+fn exp_as_small_int_i128<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
+    use pow::fixed_d38::INT_FAST_PATH_THRESHOLD;
+    let mult = 10_i128.pow(SCALE);
+    if exp_raw % mult != 0 {
+        return None;
+    }
+    let q = exp_raw / mult;
+    if !(i32::MIN as i128..=i32::MAX as i128).contains(&q) {
+        return None;
+    }
+    let n = q as i32;
+    if n.unsigned_abs() <= INT_FAST_PATH_THRESHOLD as u32 {
+        Some(n)
+    } else {
+        None
+    }
+}
+
 impl<const SCALE: u32> PowPolicy for D18<SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
-        pow::widen_to_d38::powf_strict_d18(self, exp, mode)
+        // Integer-exponent fast path, then widen → `fixed_d38::powf` →
+        // narrow (the `widen_to_work` dispatch strategy, a policy concern).
+        if self.to_bits() > 0 {
+            if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits().as_i128()) {
+                return self.powi(n);
+            }
+        }
+        let base_w: D38<SCALE> = self.into();
+        let exp_w: D38<SCALE> = exp.into();
+        let raw = pow::fixed_d38::powf_strict::<SCALE>(base_w.0, exp_w.0, mode);
+        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
+        })
     }
     #[inline]
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        pow::widen_to_d38::powf_with_d18(self, exp, working_digits, mode)
+        if self.to_bits() > 0 {
+            if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits().as_i128()) {
+                return self.powi(n);
+            }
+        }
+        let base_w: D38<SCALE> = self.into();
+        let exp_w: D38<SCALE> = exp.into();
+        let raw = pow::fixed_d38::powf_with::<SCALE>(base_w.0, exp_w.0, working_digits, mode);
+        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("powf_with", SCALE)
+        })
     }
 }
 

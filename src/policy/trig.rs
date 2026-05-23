@@ -312,10 +312,92 @@ pub(crate) mod hyper {
 //
 // The narrow tier has no wide storage of its own; it widens into the D38
 // `Fixed` work width and runs there (the `widen_to_work` strategy — a
-// policy concern, not an algorithm). The forward family uses dedicated
-// `widen_to_d38` kernels; the hyperbolics, inverse hyperbolics, and angle
-// conversions widen via the `TryInto` shape the inherent shells use.
+// policy concern, not an algorithm). The forward family uses the
+// `narrow_widen_*` helpers below; the hyperbolics, inverse hyperbolics,
+// and angle conversions widen via the `TryInto` shape the inherent
+// shells use.
 // ══════════════════════════════════════════════════════════════════════
+
+// ── widen → D38 → narrow dispatch helpers ───────────────────────────
+//
+// These are the `widen_to_work` dispatch strategy for the forward / inverse
+// trig family: widen D18 → D38, run the hand-tuned `fixed_d38` kernel, narrow
+// back. Per the layering rule they live in the policy layer, not `algos/`.
+
+macro_rules! narrow_widen {
+    ($name:ident, $kernel:ident, $err:literal) => {
+        #[inline]
+        #[must_use]
+        fn $name<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
+            let widened: D38<SCALE> = v.into();
+            let raw = trig::fixed_d38::$kernel::<SCALE>(widened.0, mode);
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+        }
+    };
+}
+
+macro_rules! narrow_widen_with {
+    ($name:ident, $kernel:ident, $err:literal) => {
+        #[inline]
+        #[must_use]
+        fn $name<const SCALE: u32>(
+            v: D18<SCALE>,
+            working_digits: u32,
+            mode: RoundingMode,
+        ) -> D18<SCALE> {
+            let widened: D38<SCALE> = v.into();
+            let raw = trig::fixed_d38::$kernel::<SCALE>(widened.0, working_digits, mode);
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+        }
+    };
+}
+
+// `atan2` takes both `y` and `x`, widening each to D38 before delegating.
+macro_rules! narrow_widen_binary {
+    ($name:ident, $kernel:ident, $err:literal) => {
+        #[inline]
+        #[must_use]
+        fn $name<const SCALE: u32>(y: D18<SCALE>, x: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
+            let y_wide: D38<SCALE> = y.into();
+            let x_wide: D38<SCALE> = x.into();
+            let raw = trig::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+        }
+    };
+}
+
+macro_rules! narrow_widen_binary_with {
+    ($name:ident, $kernel:ident, $err:literal) => {
+        #[inline]
+        #[must_use]
+        fn $name<const SCALE: u32>(
+            y: D18<SCALE>,
+            x: D18<SCALE>,
+            working_digits: u32,
+            mode: RoundingMode,
+        ) -> D18<SCALE> {
+            let y_wide: D38<SCALE> = y.into();
+            let x_wide: D38<SCALE> = x.into();
+            let raw = trig::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, working_digits, mode);
+            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+        }
+    };
+}
+
+narrow_widen!(sin_strict_d18, sin_strict, "sin_strict: result out of range");
+narrow_widen_with!(sin_with_d18, sin_with, "sin_with: result out of range");
+narrow_widen!(cos_strict_d18, cos_strict, "cos_strict: result out of range");
+narrow_widen_with!(cos_with_d18, cos_with, "cos_with: result out of range");
+narrow_widen!(tan_strict_d18, tan_strict, "tan_strict: result out of range");
+narrow_widen_with!(tan_with_d18, tan_with, "tan_with: result out of range");
+narrow_widen!(atan_strict_d18, atan_strict, "atan_strict: result out of range");
+narrow_widen_with!(atan_with_d18, atan_with, "atan_with: result out of range");
+narrow_widen!(asin_strict_d18, asin_strict, "asin_strict: result out of range");
+narrow_widen_with!(asin_with_d18, asin_with, "asin_with: result out of range");
+narrow_widen!(acos_strict_d18, acos_strict, "acos_strict: result out of range");
+narrow_widen_with!(acos_with_d18, acos_with, "acos_with: result out of range");
+narrow_widen_binary!(atan2_strict_d18, atan2_strict, "atan2_strict: result out of range");
+narrow_widen_binary_with!(atan2_with_d18, atan2_with, "atan2_with: result out of range");
 
 /// Emits the narrow-tier `TrigPolicy` impl that widens to D38, calls the
 /// D38 method, then narrows back.
@@ -558,20 +640,20 @@ macro_rules! impl_narrow_trig {
 
 impl_narrow_trig!(
     D18,
-    trig::widen_to_d38::sin_strict_d18,
-    trig::widen_to_d38::sin_with_d18,
-    trig::widen_to_d38::cos_strict_d18,
-    trig::widen_to_d38::cos_with_d18,
-    trig::widen_to_d38::tan_strict_d18,
-    trig::widen_to_d38::tan_with_d18,
-    trig::widen_to_d38::atan_strict_d18,
-    trig::widen_to_d38::atan_with_d18,
-    trig::widen_to_d38::asin_strict_d18,
-    trig::widen_to_d38::asin_with_d18,
-    trig::widen_to_d38::acos_strict_d18,
-    trig::widen_to_d38::acos_with_d18,
-    trig::widen_to_d38::atan2_strict_d18,
-    trig::widen_to_d38::atan2_with_d18
+    sin_strict_d18,
+    sin_with_d18,
+    cos_strict_d18,
+    cos_with_d18,
+    tan_strict_d18,
+    tan_with_d18,
+    atan_strict_d18,
+    atan_with_d18,
+    asin_strict_d18,
+    asin_with_d18,
+    acos_strict_d18,
+    acos_with_d18,
+    atan2_strict_d18,
+    atan2_with_d18
 );
 
 // ══════════════════════════════════════════════════════════════════════

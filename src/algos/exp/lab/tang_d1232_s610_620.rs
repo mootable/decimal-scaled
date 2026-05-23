@@ -14,7 +14,7 @@
 //! already applied) and the Tang table-multiply are even more matched:
 //! the table multiply costs the same as the Smith squaring tail it is
 //! meant to elide. Surface `exp_impl` therefore keeps the canonical
-//! `wide_kernel::exp_strict_d1232`. This module is retained in the lab
+//! `exp_series` kernel. This module is retained in the lab
 //! as a reference probe for future re-evaluation.
 //!
 //! ## Algorithm

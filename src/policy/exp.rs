@@ -24,14 +24,9 @@
 //! Taylor with the Smith `r/2^n` halving-and-squaring) and `exp_tang`
 //! (Tang two-stage table-driven range reduction) — each have a SCALE-/
 //! width-specific realisation today: the narrow tiers run on the 256-bit
-//! `Fixed` intermediate (`exp::fixed_d38`), the wide tiers on per-tier
-//! macro-emitted `wide_trig_<tier>` cores (`exp::wide_kernel`), and the
-//! Tang bands on the `lookup_*` kernels. Collapsing those per-tier kernel
-//! *bodies* to one generic-over-work-width `exp_series` / `exp_tang`
-//! needs the macro-emitted core to lift to a generic `W` (or a
-//! `WideTrigCore` trait) — the **4.1 genericisation prerequisite**
-//! recorded in `phase4/migration_explog.md` and `exp::wide_kernel`'s
-//! module docs, not a matcher concern. The matcher here is canonical: the
+//! `Fixed` intermediate (`exp::fixed_d38`), the wide tiers on the
+//! tier-generic `exp_series` / `exp_tang` kernels over `WideTrigCore`,
+//! and the Tang bands on the `lookup_*` kernels. The matcher here is canonical: the
 //! algorithm *choice* per cell is expressed once via `Algorithm`/`select`,
 //! and each per-tier impl binds the concrete kernel that realises the
 //! chosen algorithm at that width — the same "thread the work-specifics
@@ -159,12 +154,21 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 impl<const SCALE: u32> ExpPolicy for D18<SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        // N==1 always selects Series.
-        exp::widen_to_d38::exp_strict_d18(self, mode)
+        // N==1 always selects Series. Widen → `fixed_d38::exp` → narrow
+        // (the `widen_to_work` dispatch strategy, a policy concern).
+        let widened: D38<SCALE> = self.into();
+        let raw = exp::fixed_d38::exp_strict::<SCALE>(widened.0, mode);
+        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("exp_strict", SCALE)
+        })
     }
     #[inline]
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        exp::widen_to_d38::exp_with_d18(self, working_digits, mode)
+        let widened: D38<SCALE> = self.into();
+        let raw = exp::fixed_d38::exp_with(widened.0, SCALE, working_digits, mode);
+        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+            crate::support::diagnostics::overflow_panic_with_scale("exp_with", SCALE)
+        })
     }
     #[inline]
     fn exp2_impl(self, mode: RoundingMode) -> Self {
@@ -366,7 +370,7 @@ exp_policy_wide_tang!(D153, 8, crate::types::widths::wide_trig_d153::Core, |raw:
 exp_policy_wide_series!(D230, 12, crate::types::widths::wide_trig_d230::Core);
 
 // D307 — Tang exp probed at SCALE 150 and showed a ~5% regression vs the
-// canonical `wide_kernel::exp_strict_d307`; D307's Int<16> work integer
+// canonical `exp_series` kernel; D307's Int<16> work integer
 // is at the Tang-exp crossover. Surface `exp` keeps Series; the
 // `tang_exp_fixed` machinery in the lookup module stays for the trig
 // hyperbolics, not wired here.

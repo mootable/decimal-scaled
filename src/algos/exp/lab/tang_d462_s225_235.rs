@@ -16,7 +16,7 @@
 //! With `M = 128` the residual `|δ| ≤ ln(2)/256 ≈ 2.7·10⁻³`. The
 //! Taylor on δ converges in ~`log₁₀(10⁻ᵂ) / log₁₀(2.7·10⁻³)` ≈ `w/2.6`
 //! terms; at `w = SCALE + 10 = 235..245` that's ~95 terms — still a
-//! large win over the canonical `wide_kernel::exp_strict_d462` whose
+//! large win over the canonical `exp_series` kernel whose
 //! Smith r/2^n reduction runs `~√p_bits ≈ 28` squarings of an
 //! `Int3072` working value plus a full Taylor.
 //!
@@ -29,7 +29,7 @@
 //!   Int1536 working integer — fits a typical 32 KB L1d.
 
 #![cfg(any(feature = "d462", feature = "x-wide"))]
-// Probed against `wide_kernel::exp_strict_d462` at SCALE 225..=235 and
+// Probed against the canonical `exp_series` kernel at SCALE 225..=235 and
 // LOST (~75% regression). Dispatch in `crate::policy::exp` keeps the
 // canonical kernel; this module is left in tree as an algorithm-lab
 // artefact so a future re-probe (e.g. once Karatsuba lands or W is

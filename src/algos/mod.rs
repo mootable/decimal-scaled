@@ -30,9 +30,9 @@
 //! it; one variant may serve many cells.
 
 // `sqrt` / `cbrt` are unconditional — the narrow tier (D18/D38)
-// kernels in `<family>::mg_divide_d38` and `<family>::widen_to_d38`
-// are always built; each wide-tier kernel inside
-// `<family>::generic_wide` is independently feature-gated.
+// kernels in `<family>::<family>_mg_divide` are always built; each
+// wide-tier kernel inside `<family>::generic_wide` is independently
+// feature-gated.
 pub(crate) mod cbrt;
 pub(crate) mod exp;
 pub(crate) mod hypot;
