@@ -16,14 +16,15 @@
 //! The per-family dispatch as it actually ships today:
 //!
 //! - **add / sub / neg** — width-keyed only. One limb loop over the
-//!   const `N` limbs ([`limbs::limbs_add_assign_u64_fixed`] /
-//!   [`limbs::limbs_sub_assign_u64_fixed`] and `wrapping_neg`); no
+//!   const `N` limbs ([`crate::int::algos::limbs::add_assign_fixed`] /
+//!   [`crate::int::algos::limbs::sub_assign_fixed`] and `wrapping_neg`); no
 //!   algorithm choice, the loop unrolls per monomorphisation.
 //! - **mul** — schoolbook at every width. The fixed-width types use the
 //!   truncated low-`N` schoolbook product
-//!   ([`limbs::limbs_mul_low_u64_fixed`] / `limbs_sqr_low_u64_fixed`);
-//!   the slice primitive [`limbs::limbs_mul_fast_u64`] additionally
-//!   crosses over to Karatsuba at `KARATSUBA_THRESHOLD_U64` limbs, but
+//!   ([`crate::int::algos::limbs::mul_low_fixed`] /
+//!   [`crate::int::algos::limbs::sqr_low_fixed`]);
+//!   the slice dispatcher [`mul::mul_fast`] additionally
+//!   crosses over to Karatsuba at [`mul::KARATSUBA_THRESHOLD`] limbs, but
 //!   the named integer widths in this crate stay in the schoolbook
 //!   range.
 //! - **÷ 10^SCALE** (decimal scale-narrowing) — this `(W, SCALE)`-keyed
@@ -36,16 +37,17 @@
 //!   `crate::macros::arithmetic`; the integer layer exposes only the raw
 //!   divmod the wide path builds on.
 //! - **divmod** — divisor-shape keyed at run time
-//!   ([`limbs_divmod_dispatch_u64`]): single-limb divisor (incl. every
+//!   ([`div::div_rem_dispatch`]): single-limb divisor (incl. every
 //!   `10^scale`, `scale ≤ 19`) takes the hardware fast path; a divisor of
 //!   `n ≥ 16` limbs whose numerator top ≥ `2·n` takes Burnikel–Ziegler;
 //!   everything else takes Knuth Algorithm D. The const-evaluable
 //!   `wrapping_div` / `wrapping_rem` stay on the `const fn`
-//!   `limbs_divmod_u64` so they can run at compile time.
+//!   [`div::div_rem`] so they can run at compile time.
 //! - **isqrt / icbrt** — D38 has bespoke 256/384-bit kernels in
 //!   `crate::algos::sqrt` / `crate::algos::cbrt`; the generic fixed-width
 //!   types fall through to the shared limb isqrt / Brent–Zimmermann
-//!   `root_int` ([`limbs::limbs_isqrt_u64`] and `Uint::root_int`).
+//!   `root_int` ([`crate::int::algos::roots::isqrt_newton`] and
+//!   `Uint::root_int`).
 //!
 //! Both dispatchers follow the canonical [`Select`] / `select` /
 //! exhaustive-`match algo` policy shape (see `docs/ARCHITECTURE.md` →
