@@ -248,7 +248,8 @@ Rules that make this work:
   the algorithm genuinely cannot be generic *and* the method / `_with_` / variant
   names can't disambiguate; then suffix the **limb count** as `<N>_limb` (e.g.
   `mul_karatsuba_4_limb` for `Int<4>`), never `_int2`, bit-width, or `dXX`. The `Algorithm` *enum variant*
-  stays the short, function-scoped method name (`Newton`, `Knuth`).
+  = **CamelCase of the fn name minus its function prefix** (`sqrt_newton`→`Newton`,
+  `sqrt_newton_with_table_seed`→`NewtonWithTableSeed`) — a strict 1:1 variant↔fn mapping.
 - **`select` is `const`, called via an inline `const { … }` block, keyed only on
   the const generics.** Per monomorphisation `const { select::<N>() }` evaluates
   to a constant `Select`, so the matches fold and every unchosen arm is
