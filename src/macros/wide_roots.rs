@@ -151,6 +151,11 @@ macro_rules! decl_wide_roots {
 
             /// Hypot under the supplied rounding mode. The mode applies
             /// to the inner sqrt step.
+            ///
+            /// Body delegates *down* to
+            /// `policy::hypot::HypotPolicy::hypot_impl`, which routes to
+            /// the `algos::hypot::hypot_scale_trick` algorithm. The impl
+            /// lives in the algorithm, not in this method.
             #[inline]
             #[must_use]
             pub fn hypot_strict_with(
@@ -158,16 +163,7 @@ macro_rules! decl_wide_roots {
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let a = self.abs();
-                let b = other.abs();
-                let (large, small) = if a >= b { (a, b) } else { (b, a) };
-                if large == Self::ZERO {
-                    Self::ZERO
-                } else {
-                    let ratio = small / large;
-                    let one_plus_sq = Self::ONE + ratio * ratio;
-                    large * one_plus_sq.sqrt_strict_with(mode)
-                }
+                <Self as $crate::policy::hypot::HypotPolicy>::hypot_impl(self, other, mode)
             }
         }
     };

@@ -23,12 +23,12 @@
 //!
 //! `log(self, base) = ln(self) / ln(base)`. Every tier and scale uses the
 //! same ratio-of-natural-logs computation: the narrow tier runs through the
-//! `ln::fixed_d38::log_strict` kernel; the wide tiers delegate to the
-//! inherent `log_strict_with` shell (which composes the tier's `ln_impl`
-//! with a division). There is no crossover threshold that selects a
-//! different algorithm at the policy level — `LnDivide` is the one
-//! algorithm serving all cells. `ByValue` is present for canonical-shape
-//! uniformity; `select` never returns it.
+//! `ln::fixed_d38::log_strict` kernel; the wide tiers run through the
+//! per-tier `$core::log_strict_with_kernel` / `log_approx_with_kernel` free
+//! functions (emitted by `decl_wide_transcendental!`). There is no
+//! crossover threshold that selects a different algorithm at the policy
+//! level — `LnDivide` is the one algorithm serving all cells. `ByValue` is
+//! present for canonical-shape uniformity; `select` never returns it.
 //!
 //! # Relationship to `ln.rs`
 //!
@@ -50,11 +50,11 @@ use crate::types::widths::{D18, D38};
 /// computation (`log_ln_divide` → `LnDivide`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// `log_ln_divide` — `log(self, base) = ln(self) / ln(base)`, computed
-    /// via the `LnPolicy` surface for the tier. The narrow tier routes
-    /// through `ln::fixed_d38::log_strict`; the wide tiers delegate to the
-    /// inherent `log_strict_with` shell. No separate kernel: this is the
-    /// only formula used everywhere.
+    /// `log_ln_divide` — `log(self, base) = ln(self) / ln(base)`. The
+    /// narrow tier routes through `ln::fixed_d38::log_strict`; the wide
+    /// tiers route through the per-tier `$core::log_strict_with_kernel` /
+    /// `log_approx_with_kernel` free functions. This is the only formula
+    /// used everywhere.
     LnDivide,
 }
 
@@ -171,19 +171,24 @@ impl<const SCALE: u32> LogPolicy for D38<SCALE> {
     }
 }
 
-// ── Wide tiers — delegate to the inherent `log_strict_with` shell ─────
+// ── Wide tiers — call the `LnDivide` algorithm kernel directly ────────
 //
-// The wide tiers compose `ln_impl` with a constant-divide in their inherent
-// `log_strict_with`/`log_approx_with` shells (in `src/macros/` /
-// `src/types/log_exp.rs`). Those shells are the tier's `LnDivide` realisation;
-// there is no raw free-fn equivalent. The `log` policy here delegates to
-// those inherent shells — the canonical "call the existing surface" approach.
+// The `LnDivide` realisation for each wide tier is a pair of free
+// kernels emitted into the tier's per-tier `$core` module by
+// `decl_wide_transcendental!` (`log_strict_with_kernel` /
+// `log_approx_with_kernel`). They hold the real computation — exact-power
+// pin + directed-rounding Ziv escalation. The policy calls them *down*;
+// the inherent `log_strict_with` / `log_approx_with` methods delegate
+// *down* to this policy. No inversion, no loop: the impl lives in the
+// algorithm, the method is a thin delegator.
 
-/// Emit `impl LogPolicy for D<Int<$N>, SCALE>` for a wide tier that
-/// delegates to the inherent `log_strict_with` / `log_approx_with` shells.
+/// Emit `impl LogPolicy for D<Int<$N>, SCALE>` for a wide tier.
+/// `$core_mod` is the leaf ident of the tier's per-tier
+/// transcendental-core module (e.g. `wide_trig_d57`); it lives at
+/// `crate::types::widths::$core_mod` and carries the `LnDivide` kernels.
 #[allow(unused_macros)]
 macro_rules! log_policy_wide {
-    ($T:ident, $N:literal) => {
+    ($T:ident, $N:literal, $core_mod:ident) => {
         impl<const SCALE: u32> LogPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
@@ -192,7 +197,13 @@ macro_rules! log_policy_wide {
                     Select::ByValue(_) => Algorithm::LnDivide,
                 };
                 match algo {
-                    Algorithm::LnDivide => self.log_strict_with(base, mode),
+                    Algorithm::LnDivide => Self::from_bits(
+                        crate::types::widths::$core_mod::log_strict_with_kernel::<SCALE>(
+                            self.to_bits(),
+                            base.to_bits(),
+                            mode,
+                        ),
+                    ),
                 }
             }
 
@@ -203,7 +214,28 @@ macro_rules! log_policy_wide {
                     Select::ByValue(_) => Algorithm::LnDivide,
                 };
                 match algo {
-                    Algorithm::LnDivide => self.log_approx_with(base, working_digits, mode),
+                    Algorithm::LnDivide => {
+                        // `working_digits == GUARD` reproduces the strict
+                        // path exactly (the prior `_approx_with` short-circuit).
+                        if working_digits == crate::types::widths::$core_mod::GUARD {
+                            Self::from_bits(
+                                crate::types::widths::$core_mod::log_strict_with_kernel::<SCALE>(
+                                    self.to_bits(),
+                                    base.to_bits(),
+                                    mode,
+                                ),
+                            )
+                        } else {
+                            Self::from_bits(
+                                crate::types::widths::$core_mod::log_approx_with_kernel::<SCALE>(
+                                    self.to_bits(),
+                                    base.to_bits(),
+                                    working_digits,
+                                    mode,
+                                ),
+                            )
+                        }
+                    }
                 }
             }
         }
@@ -211,22 +243,22 @@ macro_rules! log_policy_wide {
 }
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-log_policy_wide!(D57, 3);
+log_policy_wide!(D57, 3, wide_trig_d57);
 #[cfg(any(feature = "d76", feature = "wide"))]
-log_policy_wide!(D76, 4);
+log_policy_wide!(D76, 4, wide_trig_d76);
 #[cfg(any(feature = "d115", feature = "wide"))]
-log_policy_wide!(D115, 6);
+log_policy_wide!(D115, 6, wide_trig_d115);
 #[cfg(any(feature = "d153", feature = "wide"))]
-log_policy_wide!(D153, 8);
+log_policy_wide!(D153, 8, wide_trig_d153);
 #[cfg(any(feature = "d230", feature = "wide"))]
-log_policy_wide!(D230, 12);
+log_policy_wide!(D230, 12, wide_trig_d230);
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-log_policy_wide!(D307, 16);
+log_policy_wide!(D307, 16, wide_trig_d307);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-log_policy_wide!(D462, 24);
+log_policy_wide!(D462, 24, wide_trig_d462);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-log_policy_wide!(D616, 32);
+log_policy_wide!(D616, 32, wide_trig_d616);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-log_policy_wide!(D924, 48);
+log_policy_wide!(D924, 48, wide_trig_d924);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-log_policy_wide!(D1232, 64);
+log_policy_wide!(D1232, 64, wide_trig_d1232);

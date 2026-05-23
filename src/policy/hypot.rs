@@ -114,11 +114,12 @@ impl<const SCALE: u32> HypotPolicy for D18<SCALE> {
 
 // ── D38 ── scale-trick via the decimal operator surface ───────────────
 //
-// The `ScaleTrick` kernel is implemented directly here (not via
-// `hypot_strict_with`, which would be circular since `hypot_strict_with`
-// delegates here). The computation uses only the tier's decimal operators
-// (`abs`, `>=`, `/`, `*`) and `sqrt_strict_with` — the canonical §1a
-// "use Int<N> / BigInt methods" approach at the decimal layer.
+// The `ScaleTrick` algorithm lives in `algos::hypot::hypot_scale_trick`
+// (a generic decimal-level fn). The policy calls *down* into it; the
+// inherent `hypot_strict_with` delegates *down* to this policy — no
+// inversion, no loop. The algorithm uses only the tier's decimal
+// operators (`abs`, `>=`, `/`, `*`) and the `sqrt` surface — the
+// canonical §1a "use the tier's methods" approach at the decimal layer.
 impl<const SCALE: u32> HypotPolicy for D38<SCALE> {
     #[inline]
     fn hypot_impl(self, other: Self, mode: RoundingMode) -> Self {
@@ -127,38 +128,21 @@ impl<const SCALE: u32> HypotPolicy for D38<SCALE> {
             Select::ByValue(_) => Algorithm::ScaleTrick,
         };
         match algo {
-            Algorithm::ScaleTrick => hypot_scale_trick_d38(self, other, mode),
+            Algorithm::ScaleTrick => {
+                crate::algos::hypot::hypot_scale_trick::hypot_scale_trick(self, other, mode)
+            }
         }
     }
 }
 
-/// The scale-trick hypot computation for D38: `max·sqrt(1+(min/max)²)`.
-/// Uses the decimal operator surface (abs, >=, /, *, sqrt_strict_with) and
-/// the SqrtPolicy surface — no raw integer arithmetic, no cross-tier reach.
-#[inline]
-fn hypot_scale_trick_d38<const SCALE: u32>(
-    a: D38<SCALE>,
-    b: D38<SCALE>,
-    mode: RoundingMode,
-) -> D38<SCALE> {
-    let a = a.abs();
-    let b = b.abs();
-    let (large, small) = if a >= b { (a, b) } else { (b, a) };
-    if large == D38::<SCALE>::ZERO {
-        D38::<SCALE>::ZERO
-    } else {
-        let ratio = small / large;
-        let one_plus_sq = D38::<SCALE>::ONE + ratio * ratio;
-        large * one_plus_sq.sqrt_strict_with(mode)
-    }
-}
-
-// ── Wide tiers — scale-trick via the inherent `hypot_strict_with` shell ─
+// ── Wide tiers — scale-trick via the shared `algos::hypot` algorithm ──
 //
-// Every wide tier emits `hypot_strict_with` via `decl_wide_roots!` in
-// `src/macros/wide_roots.rs`. That method IS the `ScaleTrick` realisation
-// for the tier — it uses the same ratio-sqrt composition as D38 but on the
-// wider operators. The policy delegates to it without duplicating the body.
+// The wide tiers use the SAME generic `hypot_scale_trick` algorithm fn
+// as D38 (the ratio-sqrt composition over the tier's wider operators).
+// The policy calls *down* into the algorithm; the inherent
+// `hypot_strict_with` (emitted by `decl_wide_roots!`) delegates *down*
+// to this policy. No inversion, no loop — the body lives in the
+// algorithm, not in the inherent method.
 
 /// Emit `impl HypotPolicy for D<Int<$N>, SCALE>` for a wide tier.
 #[allow(unused_macros)]
@@ -172,7 +156,11 @@ macro_rules! hypot_policy_wide {
                     Select::ByValue(_) => Algorithm::ScaleTrick,
                 };
                 match algo {
-                    Algorithm::ScaleTrick => self.hypot_strict_with(other, mode),
+                    Algorithm::ScaleTrick => {
+                        crate::algos::hypot::hypot_scale_trick::hypot_scale_trick(
+                            self, other, mode,
+                        )
+                    }
                 }
             }
         }

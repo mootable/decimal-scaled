@@ -2435,6 +2435,92 @@ macro_rules! decl_wide_transcendental {
                     bit_length(v)
                 }
             }
+
+            // ── log-base algorithm kernels (LnDivide) ──────────────────
+            //
+            // The arbitrary-base logarithm `log(x, b) = ln(x)/ln(b)` for
+            // the wide tiers. These hold the real computation (exact-power
+            // pin + directed-rounding Ziv escalation) so the impl lives in
+            // the algorithm, NOT in the inherent `log_*_with` method. The
+            // `log` policy (`policy::log`) calls these *down*; the inherent
+            // `log_strict_with` / `log_approx_with` methods delegate *down*
+            // to that policy. They take and return the tier's raw `$Storage`
+            // integer (the typed shell wraps with `from_bits`).
+
+            /// Strict-guard `log(x, base)` under `mode`, on raw storage.
+            /// Mirrors the prior inherent `log_strict_with` body verbatim.
+            #[inline]
+            pub(crate) fn log_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                braw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= z {
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::log: argument must be positive"
+                    ));
+                }
+                if braw <= z {
+                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
+                }
+                // Probe at the base guard to reject base == 1.
+                let w0 = SCALE + GUARD;
+                let ln_b0 = ln_fixed(to_work(braw), w0);
+                if ln_b0 == zero() {
+                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
+                }
+                // Exact-power pin: `self == base^k` ⇒ result is exactly
+                // the integer `k` (see `log10_strict_with`).
+                {
+                    let r0 = div(ln_fixed(to_work(raw), w0), ln_b0, w0);
+                    let k = round_to_nearest_int(r0, w0);
+                    if log_is_exact_int(to_work_w(raw, 0), to_work_w(braw, 0), SCALE, k) {
+                        return exact_int_at_scale(k, SCALE);
+                    }
+                }
+                // Route the final narrowing through the directed-rounding
+                // Ziv escalation: recompute `ln(self)/ln(base)` at the
+                // requested guard so Trunc/Floor/Ceiling decide on the
+                // true residual sign, not the base-guard approximation.
+                round_to_storage_directed(GUARD, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    let ln_b = ln_fixed(to_work_w(braw, guard), w);
+                    div(ln_fixed(to_work_w(raw, guard), w), ln_b, w)
+                })
+            }
+
+            /// Approx-guard `log(x, base)` with caller-chosen
+            /// `working_digits` and `mode`, on raw storage. Mirrors the
+            /// prior inherent `log_approx_with` body (the
+            /// `working_digits == GUARD` short-circuit to the strict path
+            /// is handled by the caller's typed shell).
+            #[inline]
+            pub(crate) fn log_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                braw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
+                if raw <= z {
+                    panic!(concat!(
+                        stringify!($Type),
+                        "::log: argument must be positive"
+                    ));
+                }
+                if braw <= z {
+                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let ln_b = ln_fixed(to_work_w(braw, working_digits), w);
+                if ln_b == zero() {
+                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
+                }
+                let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln_b, w);
+                round_to_storage_with(r, w, SCALE, mode)
+            }
         }
 
         impl<const SCALE: u32> $Type<SCALE> {
@@ -3080,6 +3166,11 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Mode-aware sibling of [`Self::log_strict`].
+            ///
+            /// Body delegates *down* to
+            /// `policy::log::LogPolicy::log_impl`, which routes to the
+            /// `LnDivide` algorithm kernel (`$core::log_strict_with_kernel`).
+            /// The impl lives in the algorithm, not in this method.
             #[inline]
             #[must_use]
             pub fn log_strict_with(
@@ -3087,52 +3178,7 @@ macro_rules! decl_wide_transcendental {
                 base: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                let raw = self.to_bits();
-                let braw = base.to_bits();
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= z {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log: argument must be positive"
-                    ));
-                }
-                if braw <= z {
-                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
-                }
-                // Probe at the base guard to reject base == 1.
-                let w0 = SCALE + $core::GUARD;
-                let ln_b0 = $core::ln_fixed($core::to_work(braw), w0);
-                if ln_b0 == $core::zero() {
-                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
-                }
-                // Exact-power pin: `self == base^k` ⇒ result is exactly
-                // the integer `k` (see `log10_strict_with`).
-                {
-                    let r0 = $core::div($core::ln_fixed($core::to_work(raw), w0), ln_b0, w0);
-                    let k = $core::round_to_nearest_int(r0, w0);
-                    if $core::log_is_exact_int(
-                        $core::to_work_w(raw, 0),
-                        $core::to_work_w(braw, 0),
-                        SCALE,
-                        k,
-                    ) {
-                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
-                    }
-                }
-                // Route the final narrowing through the directed-rounding
-                // Ziv escalation: recompute `ln(self)/ln(base)` at the
-                // requested guard so Trunc/Floor/Ceiling decide on the
-                // true residual sign, not the base-guard approximation.
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let ln_b = $core::ln_fixed($core::to_work_w(braw, guard), w);
-                        $core::div($core::ln_fixed($core::to_work_w(raw, guard), w), ln_b, w)
-                    },
-                ))
+                <Self as $crate::policy::log::LogPolicy>::log_impl(self, base, mode)
             }
 
             /// Mode-aware sibling of [`Self::log2_strict`].
@@ -3898,6 +3944,12 @@ macro_rules! decl_wide_transcendental {
             }
 
             /// Log to chosen base with caller-chosen guard digits AND rounding mode.
+            ///
+            /// Body delegates *down* to
+            /// `policy::log::LogPolicy::log_with_impl`, which routes to the
+            /// `LnDivide` algorithm kernel (`$core::log_approx_with_kernel`,
+            /// or the strict kernel when `working_digits == GUARD`). The
+            /// impl lives in the algorithm, not in this method.
             #[inline]
             #[must_use]
             pub fn log_approx_with(
@@ -3906,32 +3958,12 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.log_strict_with(base, mode);
-                }
-                let raw = self.to_bits();
-                let braw = base.to_bits();
-                let z = $crate::macros::wide_roots::wide_lit!($Storage, "0");
-                if raw <= z {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log: argument must be positive"
-                    ));
-                }
-                if braw <= z {
-                    panic!(concat!(stringify!($Type), "::log: base must be positive"));
-                }
-                let w = SCALE + working_digits;
-                let ln_b = $core::ln_fixed($core::to_work_w(braw, working_digits), w);
-                if ln_b == $core::zero() {
-                    panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
-                }
-                let r = $core::div(
-                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
-                    ln_b,
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                <Self as $crate::policy::log::LogPolicy>::log_with_impl(
+                    self,
+                    base,
+                    working_digits,
+                    mode,
+                )
             }
 
             /// Log base 2 with caller-chosen guard digits.
