@@ -14,11 +14,12 @@
 //!
 //! # `f64`-bridge Newton seed
 //!
-//! The seed (the only `std`/`no_std` divergence) lives in
-//! [`crate::policy::float_seed::icbrt`]: an `f64::cbrt(n.as_f64())` seed
-//! (~53-bit) with one unconditional AM-GM pre-step under `std`, the
-//! classical 1-bit seed under `no_std`. Both return the exact `⌊∛n⌋`, so
-//! this body is cfg-free.
+//! The floor cube root is taken via [`Int::icbrt`] (the int `icbrt`
+//! policy's seeded Newton limb kernel). The seed — the only
+//! `std`/`no_std` divergence — is encapsulated in the cross-algorithm
+//! seed leaf that kernel calls: an `f64::cbrt`-derived ~53-bit
+//! over-estimate under `std`, the classical 1-bit seed under `no_std`.
+//! Both return the exact `⌊∛n⌋`, so this body is cfg-free.
 //!
 //! Result is bit-for-bit identical to [`crate::algos::cbrt::cbrt_newton`]
 //! under all six [`RoundingMode`] values; only the work-integer width
@@ -34,10 +35,10 @@ use crate::support::rounding::RoundingMode;
 
 const SCALE: u32 = 20;
 
-/// `D57<20>` cube-root kernel. The Newton-on-`Int<6>` floor-root is
-/// seeded via the `f64::cbrt` bridge when `std` is available and via the
-/// classical 1-bit seed otherwise — that std/no_std choice lives in
-/// [`crate::policy::float_seed::icbrt`], so this body is cfg-free. The
+/// `D57<20>` cube-root kernel. The floor cube root is taken via the
+/// integer wide-kernel surface ([`Int::icbrt`] → the int `icbrt` policy);
+/// the `f64::cbrt`-vs-classical seed std/no_std choice is encapsulated in
+/// the seed leaf the kernel calls, so this body is cfg-free. The
 /// half-step rounding mirrors [`crate::algos::cbrt::cbrt_newton`]
 /// exactly; the result is bit-identical to the generic path under all
 /// six [`RoundingMode`] values, only the iteration count differs.
@@ -54,7 +55,7 @@ pub(crate) fn cbrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
     let mag = if negative { -widened } else { widened };
     let n: Int<6> = mag * Int::<6>::TEN.pow(2 * SCALE);
 
-    let q: Int<6> = crate::policy::float_seed::icbrt::<Int<6>>(n);
+    let q: Int<6> = n.icbrt();
 
     // ── single half-step round (same logic as cbrt_newton). ──────────
     let eight_n = n << 3u32;

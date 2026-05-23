@@ -42,10 +42,10 @@ use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// `D57<20>` square-root kernel. The Newton-on-`Int<4>` floor-root is
-/// seeded via the `f64::sqrt` bridge when `std` is available and via the
-/// classical 1-bit seed otherwise — that std/no_std choice lives in
-/// [`crate::policy::float_seed::isqrt`], so this body is cfg-free. The
+/// `D57<20>` square-root kernel. The floor square root is taken via the
+/// integer wide-kernel surface ([`Int::isqrt`] → the int `isqrt` policy);
+/// the `f64::sqrt`-vs-classical seed std/no_std choice is encapsulated in
+/// the seed leaf the kernel calls, so this body is cfg-free. The
 /// result `⌊√(raw·10^20)⌋` is bit-identical either way; only the
 /// iteration count differs.
 #[inline]
@@ -58,7 +58,7 @@ pub(crate) fn sqrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
     // so `raw · 10^20` ≤ ~10^77 which fits Int<4> (~10^77).
     const SCALE: u32 = 20;
     let n: Int<4> = raw.resize_to::<Int<4>>() * Int::<4>::TEN.pow(SCALE);
-    let q: Int<4> = crate::policy::float_seed::isqrt::<Int<4>>(n);
+    let q: Int<4> = n.isqrt();
     let diff: Int<4> = n - q * q;
     let halfway_round_up = diff > q;
     let diff_nonzero = diff != Int::<4>::ZERO;

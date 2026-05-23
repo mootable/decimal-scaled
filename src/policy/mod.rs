@@ -29,7 +29,6 @@ pub(crate) mod dcmp;
 pub(crate) mod deq;
 pub(crate) mod div;
 pub(crate) mod exp;
-pub(crate) mod float_seed;
 pub(crate) mod hypot;
 pub(crate) mod ln;
 pub(crate) mod log;

@@ -92,8 +92,10 @@ pub trait BigInt:
 
     // ── Wide-kernel surface ──────────────────────────────────────────
 
-    /// Exact integer square root.
+    /// Exact integer square root of the magnitude (`floor(sqrt(|self|))`).
     fn isqrt(self) -> Self;
+    /// Exact integer cube root of the magnitude (`floor(cbrt(|self|))`).
+    fn icbrt(self) -> Self;
     /// Widening / narrowing cast to a sibling integer type.
     fn resize_to<T: BigInt>(self) -> T;
     /// Truncating quotient and remainder `(self / rhs, self % rhs)`.
@@ -231,6 +233,14 @@ impl<const N: usize> BigInt for Int<N> {
     fn isqrt(self) -> Self {
         // Magnitude isqrt, matching the macro's signed `isqrt`.
         Self::from_limbs(*self.unsigned_abs().isqrt().as_limbs())
+    }
+
+    #[inline]
+    fn icbrt(self) -> Self {
+        // Magnitude icbrt — routes through the unsigned sibling's
+        // `icbrt_dispatch` (the seeded Newton limb kernel), matching the
+        // inherent signed `icbrt`.
+        Self::from_limbs(*self.unsigned_abs().icbrt().as_limbs())
     }
 
     #[inline]

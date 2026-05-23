@@ -5,9 +5,10 @@
 //! value is `r / 10^SCALE`, so the square-root raw storage is
 //! `round(sqrt(r · 10^SCALE))`. The radicand is formed exactly in a
 //! wider work integer `W` (so the multiply by `10^SCALE` cannot
-//! overflow), the exact integer square root is taken with `isqrt`
-//! (Newton with an `f64` seed when `std` is available — see
-//! [`crate::policy::float_seed::isqrt`]), and a single round-to-nearest
+//! overflow), the exact integer square root is taken via the integer
+//! wide-kernel surface ([`crate::int::types::traits::BigInt::isqrt`] —
+//! the int `isqrt` policy's Newton limb kernel, with an `f64` seed when
+//! `std` is available), and a single round-to-nearest
 //! step lands the result on the type's last representable place. The
 //! result is within 0.5 ULP under any of the six
 //! [`crate::support::rounding::RoundingMode`] values.

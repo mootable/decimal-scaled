@@ -826,7 +826,8 @@ macro_rules! decl_wide_transcendental {
                 }
                 // Newton seed delegated to the cross-algorithm seed leaf
                 // (`algo_x_support::seed::sqrt_seed`, via the generic
-                // `W ↔ &[u64]` bridge in `policy::float_seed`): under
+                // `W ↔ &[u64]` bridge in `algos::support::seed_bridge`):
+                // under
                 // `std` it bootstraps from `f64::sqrt` of the top 64
                 // bits of `n` (~53 correct bits in one shot); under
                 // `no_std` it is the classical pure-integer 1-bit seed.
@@ -834,7 +835,7 @@ macro_rules! decl_wide_transcendental {
                 // pre-step (`(x + n/x)/2 ≥ ⌈√n⌉`) and the
                 // monotone-downward loop below converge to the same
                 // floor root regardless of which seed body ran.
-                let seed = $crate::policy::float_seed::sqrt_seed_w::<W>(n);
+                let seed = $crate::algos::support::seed_bridge::sqrt_seed_w::<W>(n);
                 let x0 = if seed <= zero() { lit(1) } else { seed };
                 let mut x = (x0 + n / x0) >> 1;
                 loop {

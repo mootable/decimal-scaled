@@ -5,10 +5,11 @@
 //! value is `r / 10^SCALE`, so the cube-root raw storage is
 //! `round(cbrt(r) · 10^SCALE) = round(cbrt(r · 10^(3·SCALE)) / 10^SCALE)`.
 //! Working with `n = |r| · 10^(2·SCALE)` keeps the radicand exact in a
-//! wider work integer `W`, takes the exact integer cube root with the
-//! seeded Newton loop ([`crate::policy::float_seed::icbrt`]: an `f64`
-//! `cbrt` seed when `std` is available, the classical 1-bit seed
-//! otherwise), and a single half-step lands the result on the type's
+//! wider work integer `W`, takes the exact integer cube root via the
+//! integer wide-kernel surface ([`crate::int::types::traits::BigInt::icbrt`]
+//! — the int `icbrt` policy's seeded Newton limb kernel; an `f64` `cbrt`
+//! seed when `std` is available, the classical 1-bit seed otherwise),
+//! and a single half-step lands the result on the type's
 //! last representable place. The result is within 0.5 ULP under any of
 //! the six [`crate::support::rounding::RoundingMode`] values.
 //!
@@ -23,8 +24,9 @@
 //! per-tier shims: the policy layer binds the concrete `W` for each
 //! storage width when it dispatches here.
 //!
-//! The Newton seed (the only `std`/`no_std` divergence) lives in
-//! [`crate::policy::float_seed::icbrt`], so this body is cfg-free.
+//! The Newton seed (the only `std`/`no_std` divergence) is encapsulated
+//! in the cross-algorithm seed leaf the integer `icbrt` kernel calls, so
+//! this body is cfg-free.
 //!
 //! Returns `S::ZERO` for `raw == 0`; the sign of a non-zero input is
 //! preserved (`cbrt(-x) = -cbrt(x)`), with the rounding mode resolving
@@ -56,9 +58,11 @@ where
     let mag = if negative { -widened } else { widened };
     let n: W = mag * W::TEN.pow(2 * scale);
 
-    // Floor cube root, seeded via `f64::cbrt` under `std` and the
-    // classical seed under `no_std` — both return the exact `⌊∛n⌋`.
-    let q: W = crate::policy::float_seed::icbrt::<W>(n);
+    // Floor cube root via the integer wide-kernel surface
+    // ([`BigInt::icbrt`] → the int `icbrt` policy / seeded Newton limb
+    // kernel). The std/no_std seed divergence is encapsulated in the seed
+    // leaf the kernel calls, so this returns the exact `⌊∛n⌋` either way.
+    let q: W = n.icbrt();
 
     // ── single half-step round (all six modes) ───────────────────────
     let eight_n = n << 3u32;

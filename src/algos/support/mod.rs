@@ -17,6 +17,13 @@
 pub(crate) mod fixed_d38;
 pub(crate) mod mg_divide;
 
+// Typed-`W` Newton-root seed bridge over the cross-algorithm seed leaf
+// (`algo_x_support::seed`). Used by the wide fixed-point `sqrt` kernel,
+// which needs the over-estimate seed (not the final floor root) to start
+// its own scaled Newton loop. The floor-root surface itself is
+// `W::isqrt` / `W::icbrt`.
+pub(crate) mod seed_bridge;
+
 // Tier-generic surface over the per-tier wide guard-digit cores. The
 // `WideTrigCore` trait + six `*_series` functions collapse the 60
 // per-tier `*_strict_<tier>` wrappers in `algos::{exp,ln,trig}::wide_kernel`
