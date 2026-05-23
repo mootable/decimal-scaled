@@ -1,18 +1,23 @@
-//! D38 trig (forward + inverse + atan2) via widen → D57 → narrow back.
+//! D38 inverse trig (atan / asin / acos / atan2) via widen → D57 →
+//! narrow back.
 //!
 //! See [`crate::algos::ln::borrow_d57`] for the broader rationale.
 //!
-//! - `sin` / `cos` / `tan` / `atan` route through
-//!   [`crate::algos::trig::wide_kernel`]'s D57 free functions.
+//! - `atan` routes through [`crate::algos::trig::wide_kernel`]'s D57 free
+//!   function.
 //! - `asin` / `acos` / `atan2` route through D57's inherent
 //!   `*_strict_with` methods (no separate algos kernel today; this
 //!   mirrors how the wide-tier `TrigPolicy` impls invoke them).
 //!
-//! Correctness: all of these have outputs bounded within
-//! `[-π, π]` (atan2) or smaller, so the narrowing `TryFrom` cannot fail
-//! on a representable input. `tan(±π/2)` panics on the D57 side via
-//! `wide_kernel::tan_strict_d57` (the same logical panic D38's
-//! `fixed_d38::tan_strict` produces).
+//! The D57 wide_kernel atan algorithm is qualitatively faster than D38's
+//! `fixed_d38` adaptive-halvings path (~2× at SCALE 19), and asin / acos /
+//! atan2 compose atan internally, so they inherit that gap — which is why
+//! the D38 inverse family borrows D57 while the forward family stays on
+//! the bespoke `fixed_d38` kernel.
+//!
+//! Correctness: all of these have outputs bounded within `[-π, π]`
+//! (atan2) or smaller, so the narrowing `TryFrom` cannot fail on a
+//! representable input.
 
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
@@ -28,43 +33,7 @@ fn narrow<const SCALE: u32>(raw_wide: Int<3>, op: &'static str) -> Int<2> {
     r.0
 }
 
-// ── forward (sin / cos / tan / atan) — via wide_kernel free fns ─────
-
-#[inline]
-#[must_use]
-pub(crate) fn sin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(widened.0, mode)
-    } else {
-        super::wide_kernel::sin_strict_d57(widened.0, mode, SCALE)
-    };
-    narrow::<SCALE>(raw_wide, "sin_strict")
-}
-
-#[inline]
-#[must_use]
-pub(crate) fn cos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(widened.0, mode)
-    } else {
-        super::wide_kernel::cos_strict_d57(widened.0, mode, SCALE)
-    };
-    narrow::<SCALE>(raw_wide, "cos_strict")
-}
-
-#[inline]
-#[must_use]
-pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-    let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
-    let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(widened.0, mode)
-    } else {
-        super::wide_kernel::tan_strict_d57(widened.0, mode, SCALE)
-    };
-    narrow::<SCALE>(raw_wide, "tan_strict")
-}
+// ── inverse (atan / asin / acos / atan2) ────────────────────────────
 
 #[inline]
 #[must_use]

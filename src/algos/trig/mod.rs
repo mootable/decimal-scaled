@@ -24,8 +24,6 @@ pub(crate) mod borrow_d57;
 pub(crate) mod fixed_d38;
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub(crate) mod lookup_d115_s57_hyper;
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-pub(crate) mod lookup_d1232_s610_620_hyper;
 #[cfg(any(feature = "d153", feature = "wide"))]
 pub(crate) mod lookup_d153_s70_82_atan;
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -53,13 +51,9 @@ pub(crate) mod lookup_d57_s18_22_inverse;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s18_22_sincos;
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s18_22_sincos_tang;
-#[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s44_56_atan;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s44_56_sincos;
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-pub(crate) mod lookup_d616_s300_315_hyper;
 pub(crate) mod near_pole_tan;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;
