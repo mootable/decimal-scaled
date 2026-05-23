@@ -2,7 +2,7 @@
 //!
 //! `D<Int<N>, SCALE>::cbrt_strict_with(mode)` delegates to
 //! [`CbrtPolicy::cbrt_impl`], which forwards to the one shared
-//! [`cbrt_dispatch`] generic function. `cbrt_dispatch` follows the
+//! [`dispatch`] generic function. `dispatch` follows the
 //! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
 //! structure"), mirroring [`crate::policy::sqrt`]:
 //!
@@ -117,7 +117,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// and dead-arm-eliminated at every other `N`.
 #[inline]
 #[must_use]
-fn cbrt_dispatch<const N: usize, const SCALE: u32, W>(raw: Int<N>, mode: RoundingMode) -> Int<N>
+fn dispatch<const N: usize, const SCALE: u32, W>(raw: Int<N>, mode: RoundingMode) -> Int<N>
 where
     W: BigInt,
 {
@@ -150,13 +150,13 @@ where
 
 // ── per-tier `CbrtPolicy` impls — each binds its concrete work width ──
 //
-// Every impl forwards to the one `cbrt_dispatch`; the only per-tier datum
+// Every impl forwards to the one `dispatch`; the only per-tier datum
 // is the Newton work width `W = Int<4N>` (double-bumped — see module
 // docs). The dispatch's `const { select }` block folds away the
 // unreachable arms for each tier.
 
 /// Emit `impl CbrtPolicy for D<Int<$N>, SCALE>` forwarding to
-/// [`cbrt_dispatch`] with the tier's Newton work width `Int<$W>`.
+/// [`dispatch`] with the tier's Newton work width `Int<$W>`.
 macro_rules! cbrt_policy_tier {
     ($N:literal, $W:literal) => {
         impl<const SCALE: u32> CbrtPolicy
@@ -164,7 +164,7 @@ macro_rules! cbrt_policy_tier {
         {
             #[inline]
             fn cbrt_impl(self, mode: RoundingMode) -> Self {
-                Self(cbrt_dispatch::<$N, SCALE, Int<$W>>(self.0, mode))
+                Self(dispatch::<$N, SCALE, Int<$W>>(self.0, mode))
             }
         }
     };

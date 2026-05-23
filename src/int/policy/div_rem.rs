@@ -91,12 +91,12 @@ const fn select() -> Select {
 ///
 /// `quot` / `rem` are written by the chosen engine; the divisor must be
 /// non-zero.
-pub(crate) fn div_rem_dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     let mut n = den.len();
     while n > 0 && den[n - 1] == 0 {
         n -= 1;
     }
-    assert!(n > 0, "div_rem_dispatch: divide by zero");
+    assert!(n > 0, "dispatch: divide by zero");
 
     let mut top = num.len();
     while top > 0 && num[top - 1] == 0 {

@@ -2,7 +2,7 @@
 //!
 //! `D<Int<N>, SCALE>::sqrt_strict_with(mode)` delegates to
 //! [`SqrtPolicy::sqrt_impl`], which forwards to the one shared
-//! [`sqrt_dispatch`] generic function. `sqrt_dispatch` follows the
+//! [`dispatch`] generic function. `dispatch` follows the
 //! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
 //! structure"):
 //!
@@ -116,7 +116,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// at every other `N`.
 #[inline]
 #[must_use]
-fn sqrt_dispatch<const N: usize, const SCALE: u32, W>(raw: Int<N>, mode: RoundingMode) -> Int<N>
+fn dispatch<const N: usize, const SCALE: u32, W>(raw: Int<N>, mode: RoundingMode) -> Int<N>
 where
     W: BigInt,
 {
@@ -149,12 +149,12 @@ where
 
 // ── per-tier `SqrtPolicy` impls — each binds its concrete work width ──
 //
-// Every impl forwards to the one `sqrt_dispatch`; the only per-tier datum
+// Every impl forwards to the one `dispatch`; the only per-tier datum
 // is the Newton work width `W = Int<2N>`. The dispatch's `const { select }`
 // block folds away the unreachable arms for each tier.
 
 /// Emit `impl SqrtPolicy for D<Int<$N>, SCALE>` forwarding to
-/// [`sqrt_dispatch`] with the tier's Newton work width `Int<$W>`.
+/// [`dispatch`] with the tier's Newton work width `Int<$W>`.
 macro_rules! sqrt_policy_tier {
     ($N:literal, $W:literal) => {
         impl<const SCALE: u32> SqrtPolicy
@@ -162,7 +162,7 @@ macro_rules! sqrt_policy_tier {
         {
             #[inline]
             fn sqrt_impl(self, mode: RoundingMode) -> Self {
-                Self(sqrt_dispatch::<$N, SCALE, Int<$W>>(self.0, mode))
+                Self(dispatch::<$N, SCALE, Int<$W>>(self.0, mode))
             }
         }
     };

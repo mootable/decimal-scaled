@@ -21,7 +21,7 @@
 //! wrappers the fixed-width `Int<N>` types call.
 
 use super::limbs::{bit_len, cmp, fit_one, shl1, sub_assign};
-use crate::int::policy::div_rem::div_rem_dispatch;
+use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::algos::roots::isqrt_newton;
 
 /// Scratch capacity for the runtime u64-limb division engines — 288 u64
@@ -587,7 +587,7 @@ pub(crate) fn isqrt_mag_fixed<const N: usize>(n: &[u64; N], out: &mut [u64; N]) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::int::policy::div_rem::div_rem_dispatch;
+    use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
     fn pack(limbs: &[u128]) -> alloc::vec::Vec<u64> {

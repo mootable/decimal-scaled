@@ -23,7 +23,7 @@
 //!   truncated low-`N` schoolbook product
 //!   ([`crate::int::algos::limbs::mul_low_fixed`] /
 //!   [`crate::int::algos::limbs::sqr_low_fixed`]);
-//!   the slice dispatcher [`mul::mul_fast`] additionally
+//!   the slice dispatcher [`mul::dispatch`] additionally
 //!   crosses over to Karatsuba at [`mul::KARATSUBA_THRESHOLD`] limbs, but
 //!   the named integer widths in this crate stay in the schoolbook
 //!   range.
@@ -37,7 +37,7 @@
 //!   `crate::macros::arithmetic`; the integer layer exposes only the raw
 //!   divmod the wide path builds on.
 //! - **divmod** — divisor-shape keyed at run time
-//!   ([`div_rem::div_rem_dispatch`]): single-limb divisor (incl. every
+//!   ([`div_rem::dispatch`]): single-limb divisor (incl. every
 //!   `10^scale`, `scale ≤ 19`) takes the hardware fast path; a divisor of
 //!   `n ≥ 16` limbs whose numerator top ≥ `2·n` takes Burnikel–Ziegler;
 //!   everything else takes Knuth Algorithm D. The const-evaluable

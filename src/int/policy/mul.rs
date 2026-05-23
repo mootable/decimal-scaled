@@ -48,10 +48,10 @@ enum Select {
 // ── policy data: the benched crossover threshold ──────────────────────
 
 /// Karatsuba threshold for the u64-base multiplier: the (equal) operand
-/// limb-count at or above which [`mul_fast`] routes through the
+/// limb-count at or above which [`dispatch`] routes through the
 /// non-allocating Karatsuba kernel instead of schoolbook.
 ///
-/// [`mul_fast`] is the single site every equal-length wide multiply flows
+/// [`dispatch`] is the single site every equal-length wide multiply flows
 /// through (via the `Int<N>` widening product), so one threshold governs
 /// the crossover for every tier from one place. Set at **256 u64 limbs** —
 /// above the widest equal-length multiply the crate emits (D1232 storage
@@ -105,7 +105,7 @@ const fn select() -> Select {
 /// `out` must be sized `>= a.len() + b.len()`. The Karatsuba arm zeroes
 /// `out` itself; the schoolbook arm requires the caller to have zeroed it
 /// (matching the historic contract).
-pub(crate) fn mul_fast(a: &[u64], b: &[u64], out: &mut [u64]) {
+pub(crate) fn dispatch(a: &[u64], b: &[u64], out: &mut [u64]) {
     let algo = match const { select() } {
         Select::ByAlgorithm(a) => a,
         Select::ByShape(f) => f(a.len(), b.len()),
