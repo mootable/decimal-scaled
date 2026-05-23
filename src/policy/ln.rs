@@ -162,8 +162,8 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 // ── Narrow tier (D18) — widen-to-D38 work width, then Series ──────────
 //
 // D18 widens into the D38 `Fixed` work width for every log-family method
-// (the `widen_to_work` strategy). `log`/`log2`/`log10` widen, call D38's
-// method, narrow back via `TryInto`.
+// (the `widen_to_work` strategy). `log` delegates to `LogPolicy::log_impl`
+// (the `log` seam); `log2`/`log10` widen, call D38's method, narrow back.
 impl<const SCALE: u32> LnPolicy for D18<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
@@ -175,20 +175,13 @@ impl<const SCALE: u32> LnPolicy for D18<SCALE> {
     }
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
-        let wbase: D38<SCALE> = base.into();
-        ::core::convert::TryInto::try_into(wide.log_strict_with(wbase, mode)).unwrap_or_else(|_| {
-            crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
-        })
+        use crate::policy::log::LogPolicy;
+        LogPolicy::log_impl(self, base, mode)
     }
     #[inline]
     fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
-        let wbase: D38<SCALE> = base.into();
-        ::core::convert::TryInto::try_into(wide.log_approx_with(wbase, working_digits, mode))
-            .unwrap_or_else(|_| {
-                crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
-            })
+        use crate::policy::log::LogPolicy;
+        LogPolicy::log_with_impl(self, base, working_digits, mode)
     }
     #[inline]
     fn log2_impl(self, mode: RoundingMode) -> Self {
@@ -226,7 +219,7 @@ impl<const SCALE: u32> LnPolicy for D18<SCALE> {
 //
 // The borrow_d57 round trip was retired once the 0.4.2 MG-routed `Fixed`
 // primitives made the D38-native kernel beat the widen-and-back path.
-// N==2 always selects Series.
+// N==2 always selects Series. `log` delegates to `LogPolicy::log_impl`.
 impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
@@ -244,17 +237,13 @@ impl<const SCALE: u32> LnPolicy for D38<SCALE> {
     }
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log_strict::<SCALE>(self.0, base.0, mode))
+        use crate::policy::log::LogPolicy;
+        LogPolicy::log_impl(self, base, mode)
     }
     #[inline]
     fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log_with(
-            self.0,
-            base.0,
-            SCALE,
-            working_digits,
-            mode,
-        ))
+        use crate::policy::log::LogPolicy;
+        LogPolicy::log_with_impl(self, base, working_digits, mode)
     }
     #[inline]
     fn log2_impl(self, mode: RoundingMode) -> Self {
@@ -337,19 +326,22 @@ macro_rules! ln_policy_wide_tang {
     };
 }
 
-/// The shared `log` / `log2` / `log10` method bodies for the wide tiers —
-/// each delegates to the inherent `*_strict_with` shell (the derived
-/// functions compose `ln` with a constant; no raw free-fn today).
+/// The shared `log` / `log2` / `log10` method bodies for the wide tiers.
+/// `log` delegates to `LogPolicy::log_impl` (the `log` seam);
+/// `log2` / `log10` delegate to the inherent `*_strict_with` shells
+/// (the derived functions compose `ln` with a constant; no raw free-fn today).
 #[allow(unused_macros)]
 macro_rules! ln_policy_log_family {
     () => {
         #[inline]
         fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-            self.log_strict_with(base, mode)
+            use crate::policy::log::LogPolicy;
+            LogPolicy::log_impl(self, base, mode)
         }
         #[inline]
-        fn log_with_impl(self, base: Self, _working_digits: u32, mode: RoundingMode) -> Self {
-            self.log_strict_with(base, mode)
+        fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
+            use crate::policy::log::LogPolicy;
+            LogPolicy::log_with_impl(self, base, working_digits, mode)
         }
         #[inline]
         fn log2_impl(self, mode: RoundingMode) -> Self {

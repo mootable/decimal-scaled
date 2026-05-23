@@ -534,47 +534,23 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn to_degrees_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($T), "::to_degrees"),
-                            SCALE,
-                        )
-                    })
+                use crate::policy::to_degrees::ToDegreesPolicy;
+                ToDegreesPolicy::to_degrees_impl(self, mode)
             }
             #[inline]
             fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_degrees_approx_with(wd, mode))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($T), "::to_degrees"),
-                            SCALE,
-                        )
-                    })
+                use crate::policy::to_degrees::ToDegreesPolicy;
+                ToDegreesPolicy::to_degrees_with_impl(self, wd, mode)
             }
             #[inline]
             fn to_radians_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_radians_strict_with(mode))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($T), "::to_radians"),
-                            SCALE,
-                        )
-                    })
+                use crate::policy::to_radians::ToRadiansPolicy;
+                ToRadiansPolicy::to_radians_impl(self, mode)
             }
             #[inline]
             fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
-                ::core::convert::TryInto::try_into(wide.to_radians_approx_with(wd, mode))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale(
-                            concat!(stringify!($T), "::to_radians"),
-                            SCALE,
-                        )
-                    })
+                use crate::policy::to_radians::ToRadiansPolicy;
+                ToRadiansPolicy::to_radians_with_impl(self, wd, mode)
             }
         }
     };
@@ -672,19 +648,23 @@ macro_rules! d38_hyperbolic_and_angle {
         }
         #[inline]
         fn to_degrees_impl(self, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::to_degrees_strict::<SCALE>(self.0, mode))
+            use crate::policy::to_degrees::ToDegreesPolicy;
+            ToDegreesPolicy::to_degrees_impl(self, mode)
         }
         #[inline]
         fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::to_degrees_with(self.0, SCALE, wd, mode))
+            use crate::policy::to_degrees::ToDegreesPolicy;
+            ToDegreesPolicy::to_degrees_with_impl(self, wd, mode)
         }
         #[inline]
         fn to_radians_impl(self, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::to_radians_strict::<SCALE>(self.0, mode))
+            use crate::policy::to_radians::ToRadiansPolicy;
+            ToRadiansPolicy::to_radians_impl(self, mode)
         }
         #[inline]
         fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::to_radians_with(self.0, SCALE, wd, mode))
+            use crate::policy::to_radians::ToRadiansPolicy;
+            ToRadiansPolicy::to_radians_with_impl(self, wd, mode)
         }
     };
 }
@@ -920,19 +900,23 @@ macro_rules! wide_trig_extra_inherent {
         }
         #[inline]
         fn to_degrees_impl(self, mode: RoundingMode) -> Self {
-            self.to_degrees_strict_with(mode)
+            use crate::policy::to_degrees::ToDegreesPolicy;
+            ToDegreesPolicy::to_degrees_impl(self, mode)
         }
         #[inline]
-        fn to_degrees_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-            self.to_degrees_strict_with(mode)
+        fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            use crate::policy::to_degrees::ToDegreesPolicy;
+            ToDegreesPolicy::to_degrees_with_impl(self, wd, mode)
         }
         #[inline]
         fn to_radians_impl(self, mode: RoundingMode) -> Self {
-            self.to_radians_strict_with(mode)
+            use crate::policy::to_radians::ToRadiansPolicy;
+            ToRadiansPolicy::to_radians_impl(self, mode)
         }
         #[inline]
-        fn to_radians_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-            self.to_radians_strict_with(mode)
+        fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
+            use crate::policy::to_radians::ToRadiansPolicy;
+            ToRadiansPolicy::to_radians_with_impl(self, wd, mode)
         }
     };
 }

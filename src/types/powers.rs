@@ -378,6 +378,8 @@ impl<const SCALE: u32> D38<SCALE> {
     /// Hypot under the supplied rounding mode. The mode applies to the
     /// inner square root; the surrounding adds and multiplies are
     /// exact-or-truncating per the operator path's own contract.
+    ///
+    /// Body delegates to `policy::hypot::HypotPolicy::hypot_impl`.
     #[inline]
     #[must_use]
     pub fn hypot_strict_with(
@@ -385,16 +387,7 @@ impl<const SCALE: u32> D38<SCALE> {
         other: Self,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
-        let a = self.abs();
-        let b = other.abs();
-        let (large, small) = if a >= b { (a, b) } else { (b, a) };
-        if large == Self::ZERO {
-            Self::ZERO
-        } else {
-            let ratio = small / large;
-            let one_plus_sq = Self::ONE + ratio * ratio;
-            large * one_plus_sq.sqrt_strict_with(mode)
-        }
+        <Self as crate::policy::hypot::HypotPolicy>::hypot_impl(self, other, mode)
     }
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.

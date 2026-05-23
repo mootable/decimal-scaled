@@ -73,20 +73,21 @@ impl<S: Copy, const SCALE: u32> Copy for D<S, SCALE> {}
 // the per-width types are aliases of `D<…, SCALE>`.
 
 // Equality / ordering. The `D` type is always `Int<N>`-backed, so these
-// impls are bound to `Int` storage and delegate to the int-layer
-// comparators. ONE generic `PartialEq` / `PartialOrd` pair, parameterised
-// over both widths (`N`, `M`) AND both scales (`S1`, `S2`), covers every
-// `(width, scale) × (width, scale)` combination — the same-type case
-// (`N == M`, `S1 == S2`) is just one instantiation, so no separate
-// same-type impl is needed (a derived or hand-written same-type comparison
-// would collide — E0119). This 4-param impl subsumes (and replaces) the
-// earlier 3-param same-scale impl for the same coherence reason.
+// impls are bound to `Int` storage and delegate to the policy dispatchers
+// in `policy::dcmp` / `policy::deq`. ONE generic `PartialEq` / `PartialOrd`
+// pair, parameterised over both widths (`N`, `M`) AND both scales (`S1`,
+// `S2`), covers every `(width, scale) × (width, scale)` combination — the
+// same-type case (`N == M`, `S1 == S2`) is just one instantiation, so no
+// separate same-type impl is needed (a derived or hand-written same-type
+// comparison would collide — E0119). This 4-param impl subsumes (and
+// replaces) the earlier 3-param same-scale impl for the same coherence
+// reason.
 //
-// The `S1 == S2` branch is const-foldable, so the common same-scale path
-// monomorphises to a plain cross-width compare (`Int::cmp_cross`, no
-// multiply); only `S1 != S2` reaches the cross-scale comparator
-// (`Int::cmp_cross_scaled`), oriented so the higher-scale (more decimal
-// digits) operand is the one scaled down by `10^|S1−S2|`.
+// The `S1 == S2` branch const-folds in the policy dispatcher, so the
+// common same-scale path monomorphises to a plain cross-width compare
+// (`Int::cmp_cross`, no multiply); only `S1 != S2` reaches the cross-scale
+// comparator (`Int::cmp_cross_scaled`), oriented so the higher-scale (more
+// decimal digits) operand is the one scaled down by `10^|S1−S2|`.
 use crate::int::types::Int;
 
 impl<const N: usize, const M: usize, const S1: u32, const S2: u32> PartialEq<D<Int<M>, S2>>
@@ -94,7 +95,7 @@ impl<const N: usize, const M: usize, const S1: u32, const S2: u32> PartialEq<D<I
 {
     #[inline]
     fn eq(&self, other: &D<Int<M>, S2>) -> bool {
-        d_cross_scale_cmp(self.0, other.0, S1, S2) == core::cmp::Ordering::Equal
+        crate::policy::deq::deq_dispatch::<N, M, S1, S2>(self.0, other.0)
     }
 }
 
@@ -107,42 +108,15 @@ impl<const N: usize, const M: usize, const S1: u32, const S2: u32> PartialOrd<D<
 {
     #[inline]
     fn partial_cmp(&self, other: &D<Int<M>, S2>) -> Option<core::cmp::Ordering> {
-        Some(d_cross_scale_cmp(self.0, other.0, S1, S2))
+        Some(crate::policy::dcmp::dcmp_dispatch::<N, M, S1, S2>(self.0, other.0))
     }
 }
 
-/// Scale-aware comparison of two decimal storages. `a` has scale `s1`,
-/// `b` has scale `s2`; the logical values are `a / 10^s1` and `b / 10^s2`.
-/// Branches on `s1 == s2` first (const-foldable ⇒ zero dispatch in the
-/// common same-scale case) and otherwise routes to the int-layer
-/// cross-scale comparator, scaling the LOWER-scale operand's counterpart
-/// down so the comparison stays overflow-free.
-#[inline]
-const fn d_cross_scale_cmp<const N: usize, const M: usize>(
-    a: Int<N>,
-    b: Int<M>,
-    s1: u32,
-    s2: u32,
-) -> core::cmp::Ordering {
-    if s1 == s2 {
-        return a.cmp_cross(b);
-    }
-    // Logical: a/10^s1 vs b/10^s2. Multiply both by 10^max(s1,s2):
-    //   s1 > s2 ⇒ compare  a       vs b·10^(s1−s2)  → cmp_cross_scaled(a, b, d)
-    //   s2 > s1 ⇒ compare  a·10^(s2−s1) vs b        → reverse of
-    //                       cmp_cross_scaled(b, a, d)
-    if s1 > s2 {
-        a.cmp_cross_scaled(b, s1 - s2)
-    } else {
-        b.cmp_cross_scaled(a, s2 - s1).reverse()
-    }
-}
-
-// Same-type total order via the same comparator path.
+// Same-type total order via the policy dispatcher (same-scale fast path).
 impl<const N: usize, const S: u32> Ord for D<Int<N>, S> {
     #[inline]
     fn cmp(&self, other: &Self) -> core::cmp::Ordering {
-        self.0.cmp_cross(other.0)
+        crate::policy::dcmp::dcmp_dispatch::<N, N, S, S>(self.0, other.0)
     }
 }
 

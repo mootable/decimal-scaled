@@ -1,0 +1,232 @@
+//! Log-base policy — the per-`(N, SCALE)` algorithm matcher for the
+//! arbitrary-base decimal logarithm `log(self, base)`.
+//!
+//! See `docs/ARCHITECTURE.md` → "Policy file structure".
+//!
+//! `D<Int<N>, SCALE>::log_strict_with(base, mode)` delegates to
+//! [`LogPolicy::log_impl`], which forwards to the canonical policy shape:
+//!
+//! 1. an [`Algorithm`] enum — the real log-base algorithms, no `Default`
+//!    variant;
+//! 2. a [`Select`] verdict — a settled algorithm or "the value decides"
+//!    (`log` has no value split, so `ByValue` is never returned);
+//! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
+//! 4. dispatch via an inline `const { select::<N, SCALE>() }` block, then
+//!    an **exhaustive** `match algo` — no `_`, no panic.
+//!
+//! Because `select` is `const` and keyed only on the const generics, the
+//! `const { … }` block folds per monomorphisation and every unchosen arm
+//! is dead-arm-eliminated in release: each concrete `D<Int<N>, SCALE>`
+//! compiles to a direct call to one kernel, no runtime branch.
+//!
+//! # Why one algorithm
+//!
+//! `log(self, base) = ln(self) / ln(base)`. Every tier and scale uses the
+//! same ratio-of-natural-logs computation: the narrow tier runs through the
+//! `ln::fixed_d38::log_strict` kernel; the wide tiers delegate to the
+//! inherent `log_strict_with` shell (which composes the tier's `ln_impl`
+//! with a division). There is no crossover threshold that selects a
+//! different algorithm at the policy level — `LnDivide` is the one
+//! algorithm serving all cells. `ByValue` is present for canonical-shape
+//! uniformity; `select` never returns it.
+//!
+//! # Relationship to `ln.rs`
+//!
+//! `log` is derived from `ln` (§1a: a decimal algorithm calling another
+//! decimal algorithm's surface). The `log` policy is the structural seam
+//! for the `log` operation; it delegates to the `LnPolicy` surface (`ln`
+//! kernel + divide) rather than re-implementing `ln`. Do NOT touch
+//! `src/algos/{exp,ln,trig,pow}` kernels — this policy calls the existing
+//! `ln` SURFACE.
+
+use crate::int::types::Int;
+use crate::support::rounding::RoundingMode;
+use crate::types::widths::{D18, D38};
+
+// ── 1. the real log-base algorithm — NAMED, no `Default` ─────────────
+
+/// The log-base algorithms this policy chooses between. The single variant
+/// is the CamelCase of the kernel's conceptual name — strict 1:1 with the
+/// computation (`log_ln_divide` → `LnDivide`).
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Algorithm {
+    /// `log_ln_divide` — `log(self, base) = ln(self) / ln(base)`, computed
+    /// via the `LnPolicy` surface for the tier. The narrow tier routes
+    /// through `ln::fixed_d38::log_strict`; the wide tiers delegate to the
+    /// inherent `log_strict_with` shell. No separate kernel: this is the
+    /// only formula used everywhere.
+    LnDivide,
+}
+
+// ── 2. the const verdict ──────────────────────────────────────────────
+
+/// A settled algorithm, or "the value decides". The log picker always
+/// returns `ByAlgorithm`. `ByValue` is part of the canonical shape for
+/// uniformity; `select` never returns it.
+#[derive(Clone, Copy)]
+enum Select<const N: usize> {
+    ByAlgorithm(Algorithm),
+    #[allow(dead_code)]
+    ByValue(fn(&Int<N>) -> Algorithm),
+}
+
+// ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
+
+/// Pick the log-base algorithm for storage limb count `N` and decimal
+/// `SCALE`. Total over the key; `LnDivide` wins at every `(N, SCALE)`.
+const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+    let _ = (N, SCALE); // keys accepted for uniformity; one algorithm
+    Select::ByAlgorithm(Algorithm::LnDivide)
+}
+
+// ── per-type `LogPolicy` trait ────────────────────────────────────────
+
+/// Per-type policy: which kernel a `D<Int<N>, SCALE>` uses for `log`.
+pub(crate) trait LogPolicy: Sized {
+    /// `log(self, base)` under the supplied rounding mode (strict guard).
+    fn log_impl(self, base: Self, mode: RoundingMode) -> Self;
+
+    /// `log(self, base)` with caller-chosen guard digits and rounding mode.
+    fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self;
+}
+
+// ── D18 ── widen-to-D38, call D38's log, narrow back ─────────────────
+//
+// D18 has no native log kernel. It widens to the D38 `Fixed` work width,
+// delegates to D38's `LnPolicy::log_impl`, then narrows the result back.
+impl<const SCALE: u32> LogPolicy for D18<SCALE> {
+    #[inline]
+    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
+        let algo = match const { select::<1, SCALE>() } {
+            Select::ByAlgorithm(a) => a,
+            Select::ByValue(_) => Algorithm::LnDivide,
+        };
+        match algo {
+            Algorithm::LnDivide => {
+                let wide: D38<SCALE> = self.into();
+                let wbase: D38<SCALE> = base.into();
+                ::core::convert::TryInto::try_into(wide.log_strict_with(wbase, mode))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            "D18::log",
+                            SCALE,
+                        )
+                    })
+            }
+        }
+    }
+
+    #[inline]
+    fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
+        let algo = match const { select::<1, SCALE>() } {
+            Select::ByAlgorithm(a) => a,
+            Select::ByValue(_) => Algorithm::LnDivide,
+        };
+        match algo {
+            Algorithm::LnDivide => {
+                let wide: D38<SCALE> = self.into();
+                let wbase: D38<SCALE> = base.into();
+                ::core::convert::TryInto::try_into(wide.log_approx_with(wbase, working_digits, mode))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            "D18::log",
+                            SCALE,
+                        )
+                    })
+            }
+        }
+    }
+}
+
+// ── D38 ── native `Fixed`-256 kernel via `ln::fixed_d38::log_strict` ─
+impl<const SCALE: u32> LogPolicy for D38<SCALE> {
+    #[inline]
+    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
+        let algo = match const { select::<2, SCALE>() } {
+            Select::ByAlgorithm(a) => a,
+            Select::ByValue(_) => Algorithm::LnDivide,
+        };
+        match algo {
+            Algorithm::LnDivide => {
+                Self(crate::algos::ln::fixed_d38::log_strict::<SCALE>(self.0, base.0, mode))
+            }
+        }
+    }
+
+    #[inline]
+    fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
+        let algo = match const { select::<2, SCALE>() } {
+            Select::ByAlgorithm(a) => a,
+            Select::ByValue(_) => Algorithm::LnDivide,
+        };
+        match algo {
+            Algorithm::LnDivide => Self(crate::algos::ln::fixed_d38::log_with(
+                self.0,
+                base.0,
+                SCALE,
+                working_digits,
+                mode,
+            )),
+        }
+    }
+}
+
+// ── Wide tiers — delegate to the inherent `log_strict_with` shell ─────
+//
+// The wide tiers compose `ln_impl` with a constant-divide in their inherent
+// `log_strict_with`/`log_approx_with` shells (in `src/macros/` /
+// `src/types/log_exp.rs`). Those shells are the tier's `LnDivide` realisation;
+// there is no raw free-fn equivalent. The `log` policy here delegates to
+// those inherent shells — the canonical "call the existing surface" approach.
+
+/// Emit `impl LogPolicy for D<Int<$N>, SCALE>` for a wide tier that
+/// delegates to the inherent `log_strict_with` / `log_approx_with` shells.
+#[allow(unused_macros)]
+macro_rules! log_policy_wide {
+    ($T:ident, $N:literal) => {
+        impl<const SCALE: u32> LogPolicy for crate::types::widths::$T<SCALE> {
+            #[inline]
+            fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
+                let algo = match const { select::<$N, SCALE>() } {
+                    Select::ByAlgorithm(a) => a,
+                    Select::ByValue(_) => Algorithm::LnDivide,
+                };
+                match algo {
+                    Algorithm::LnDivide => self.log_strict_with(base, mode),
+                }
+            }
+
+            #[inline]
+            fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
+                let algo = match const { select::<$N, SCALE>() } {
+                    Select::ByAlgorithm(a) => a,
+                    Select::ByValue(_) => Algorithm::LnDivide,
+                };
+                match algo {
+                    Algorithm::LnDivide => self.log_approx_with(base, working_digits, mode),
+                }
+            }
+        }
+    };
+}
+
+#[cfg(any(feature = "d57", feature = "wide"))]
+log_policy_wide!(D57, 3);
+#[cfg(any(feature = "d76", feature = "wide"))]
+log_policy_wide!(D76, 4);
+#[cfg(any(feature = "d115", feature = "wide"))]
+log_policy_wide!(D115, 6);
+#[cfg(any(feature = "d153", feature = "wide"))]
+log_policy_wide!(D153, 8);
+#[cfg(any(feature = "d230", feature = "wide"))]
+log_policy_wide!(D230, 12);
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+log_policy_wide!(D307, 16);
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+log_policy_wide!(D462, 24);
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+log_policy_wide!(D616, 32);
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+log_policy_wide!(D924, 48);
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+log_policy_wide!(D1232, 64);
