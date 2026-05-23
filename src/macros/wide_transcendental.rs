@@ -820,27 +820,30 @@ macro_rules! decl_wide_transcendental {
                     "sqrt_fixed: |v| * 10^w overflows the working width"
                 );
                 let n = av * pow10_cached(w);
-                #[cfg(feature = "std")]
-                {
-                    // `f64::MAX` exponent is 1024; cap a few bits below
-                    // to keep the squared seed comfortably inside.
-                    if bit_length(n) < 1000 && n > zero() {
-                        let seed_f64 = n.as_f64().sqrt();
-                        let seed = W::from_f64(seed_f64);
-                        let x0 = if seed <= zero() { lit(1) } else { seed };
-                        // Unconditional first Newton step. AM-GM
-                        // ⇒ result ≥ ⌈√n⌉ regardless of f64 rounding.
-                        let mut x = (x0 + n / x0) >> 1;
-                        loop {
-                            let y = (x + n / x) >> 1;
-                            if y >= x {
-                                return x;
-                            }
-                            x = y;
-                        }
-                    }
+                if n <= zero() {
+                    // √0 = 0; also guards the Newton loop's n / x divide.
+                    return zero();
                 }
-                n.isqrt()
+                // Newton seed delegated to the cross-algorithm seed leaf
+                // (`algo_x_support::seed::sqrt_seed`, via the generic
+                // `W ↔ &[u64]` bridge in `policy::float_seed`): under
+                // `std` it bootstraps from `f64::sqrt` of the top 64
+                // bits of `n` (~53 correct bits in one shot); under
+                // `no_std` it is the classical pure-integer 1-bit seed.
+                // Both over-estimate, so the unconditional AM-GM
+                // pre-step (`(x + n/x)/2 ≥ ⌈√n⌉`) and the
+                // monotone-downward loop below converge to the same
+                // floor root regardless of which seed body ran.
+                let seed = $crate::policy::float_seed::sqrt_seed_w::<W>(n);
+                let x0 = if seed <= zero() { lit(1) } else { seed };
+                let mut x = (x0 + n / x0) >> 1;
+                loop {
+                    let y = (x + n / x) >> 1;
+                    if y >= x {
+                        return x;
+                    }
+                    x = y;
+                }
             }
 
             /// Builds a working-scale value from the type's raw storage:
