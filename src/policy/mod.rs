@@ -38,7 +38,6 @@ pub(crate) mod pow;
 pub(crate) mod rem;
 pub(crate) mod sqrt;
 pub(crate) mod sub;
-pub(crate) mod table_cache;
 pub(crate) mod to_degrees;
 pub(crate) mod to_radians;
 pub(crate) mod trig;

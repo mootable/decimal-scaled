@@ -70,7 +70,7 @@ use crate::int::types::Int;
 /// `Int<16>` wide-tier trig core, so ~64 KB at M = 512.
 const M: u32 = 512;
 
-crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
+crate::algos::support::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
 
 /// Build the `atan(j / M)` table at working scale `w` using the
 /// canonical `atan_fixed` kernel (one call per slot, paid once per

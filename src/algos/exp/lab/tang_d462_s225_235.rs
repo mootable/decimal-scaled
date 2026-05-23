@@ -47,7 +47,7 @@ const GUARD_NARROW: u32 = 10;
 /// integer-division index step.
 const M: u32 = 128;
 
-crate::policy::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
+crate::algos::support::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
 
 fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     let mut out = alloc::vec::Vec::with_capacity(M as usize);
