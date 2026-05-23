@@ -2,7 +2,7 @@
 //! `mag · 10^(2·SCALE)` over a wide work integer wide enough to cover
 //! it.
 //!
-//! See [`crate::algos::sqrt::generic_wide`] for the parallel sqrt
+//! See `crate::algos::sqrt::sqrt_newton` for the parallel sqrt
 //! kernel — same parameterisation shape. The kernel is parameterised
 //! over `(Storage, CbrtWide)` via the [`crate::int::types::traits::BigInt`]
 //! trait; a small per-tier shim macro forwards each tier to the

@@ -1,6 +1,6 @@
 //! Narrow-tier cube-root kernel — widen to D38, cbrt, narrow back.
 //!
-//! Same pattern as [`crate::algos::sqrt::widen_to_d38`]: the narrow
+//! Same pattern the sqrt policy now folds into its dispatch layer: the narrow
 //! tiers don't carry their own cube-root path; they widen losslessly
 //! to D38, call D38's cbrt, and narrow back.
 

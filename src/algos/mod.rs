@@ -24,8 +24,8 @@
 //!
 //! # Layout
 //!
-//! `algos::<family>::<variant>` — `algos::sqrt::generic_wide`,
-//! `algos::sqrt::lookup_d57_s20`, `algos::ln::taylor`, etc. The
+//! `algos::<family>::<variant>` — `algos::sqrt::sqrt_newton`,
+//! `algos::sqrt::sqrt_mg_divide`, `algos::ln::taylor`, etc. The
 //! `<variant>` name describes the algorithm, not the type that uses
 //! it; one variant may serve many cells.
 

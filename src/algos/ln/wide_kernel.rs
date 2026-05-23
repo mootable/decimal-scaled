@@ -22,7 +22,7 @@
 //!
 //! # Why this file stays per-tier (no `BigInt` collapse)
 //!
-//! Unlike [`crate::algos::sqrt::generic_wide`] and
+//! Unlike `crate::algos::sqrt::sqrt_newton` and
 //! [`crate::algos::cbrt::generic_wide`], the per-tier wrappers here do
 //! *not* collapse to a single generic function over `BigInt`.
 //! Each wrapper calls `core::ln_fixed`, `core::to_work`,

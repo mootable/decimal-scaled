@@ -1,31 +1,35 @@
 //! Per-family policy traits — which algorithm each `Dxx<S>` calls.
 //!
-//! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::sqrt_strict`)
-//! delegates to a policy trait method (`SqrtPolicy::sqrt_impl`). The
-//! policy trait is implemented once per width, generic over `SCALE`,
-//! routing through a `match (W, SCALE)` table that picks the right
-//! kernel from [`crate::algos`] for each cell. The table is emitted by
-//! [`triplet::policy_triplet`] as `base`/`std`/`no_std` free fns keyed on
-//! a const `match (W, SCALE)`, with inclusive range patterns keeping the
-//! arm count down and a per-family catch-all:
+//! The typed method shell on each `Dxx<S>` (e.g. `D57::<SCALE>::exp_strict`)
+//! delegates to a policy trait method (`ExpPolicy::exp_impl`). Two policy
+//! shapes coexist during the Phase-4 migration:
+//!
+//! - **The `(N, SCALE)` matcher (migrated; `sqrt` is the exemplar).** A
+//!   per-function `Algorithm` enum + a `const fn select<N, SCALE>()` +
+//!   an exhaustive `match algo`, dispatched via an inline
+//!   `const { select::<N, SCALE>() }` block. See [`sqrt`] and
+//!   `docs/ARCHITECTURE.md` → "Policy file structure".
+//! - **The legacy `match (W, SCALE)` triplet (not yet migrated).** The
+//!   policy trait is implemented once per width, generic over `SCALE`,
+//!   routing through a `match (W, SCALE)` table that picks the right
+//!   kernel from [`crate::algos`] for each cell. The table is emitted by
+//!   [`triplet::policy_triplet`] as `base`/`std`/`no_std` free fns keyed
+//!   on a const `match (W, SCALE)`:
 //!
 //! ```ignore
 //! policy_triplet! {
 //!     storage = crate::int::types::Int<3>,
-//!     base_fn = sqrt_d57_base, std_fn = sqrt_d57_std, no_std_fn = sqrt_d57_no_std,
+//!     base_fn = exp_d57_base, std_fn = exp_d57_std, no_std_fn = exp_d57_no_std,
 //!     recv = raw, mode = mode, params = {},
-//!     base = {
-//!         (wtag::D57, 20) => sqrt::lookup_d57_s20::sqrt(raw, mode),
-//!         (wtag::D57, _)  => sqrt::generic_wide::sqrt_d57(raw, SCALE, mode),
-//!     },
-//!     std = { (wtag::D57, 20) => sqrt::lookup_d57_s20::sqrt(raw, mode) },
+//!     base = { (wtag::D57, _) => exp::wide_kernel::exp_strict_d57(raw, SCALE, mode) },
+//!     std  = {},
 //! }
 //! ```
 //!
-//! Because both `W` and `SCALE` are `const` at every monomorphisation,
-//! the `match` const-folds to its single live arm — every concrete
-//! `D57<S>` compiles to a direct call to one kernel only. Zero runtime
-//! dispatch cost.
+//! In both shapes the keys (`N`/`W` and `SCALE`) are `const` at every
+//! monomorphisation, so the selection const-folds to its single live arm
+//! — every concrete `Dxx<S>` compiles to a direct call to one kernel.
+//! Zero runtime dispatch cost.
 //!
 //! Stable Rust does not allow trait-impl specialisation on
 //! const-generic types, so per-(width, scale) overrides live as

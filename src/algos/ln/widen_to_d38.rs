@@ -1,7 +1,6 @@
 //! Narrow-tier natural-log kernel — widen to D38, ln, narrow back.
 //!
-//! Width-level specialisation for D18. Same pattern as
-//! [`crate::algos::sqrt::widen_to_d38`]: lossless widen, call D38's
+//! Width-level specialisation for D18. Lossless widen, call D38's
 //! ln kernel, narrow back.
 
 use crate::support::rounding::RoundingMode;

@@ -89,9 +89,9 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             /// correctly-rounded** at storage scale. Panics if the
             /// result doesn't fit `Self`'s range.
             ///
-            /// For the narrow tier this resolves to
-            /// `algos::sqrt::widen_to_d38` (widen → D38 sqrt
-            /// → narrow); see `policy::sqrt` for the cascade.
+            /// For the narrow tier this widens to the `Int<2>` storage
+            /// and resolves to `algos::sqrt::sqrt_mg_divide`; see
+            /// `policy::sqrt` for the `(N, SCALE)` matcher.
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {

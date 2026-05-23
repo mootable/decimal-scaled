@@ -2,28 +2,28 @@
 //!
 //! Each variant in this module is a kernel — a free function taking the
 //! raw storage integer plus the runtime scale and rounding mode, and
-//! returning the raw storage integer of the square root.
+//! returning the raw storage integer of the square root. The per-`(N,
+//! SCALE)` choice between them lives in [`crate::policy::sqrt`].
 //!
-//! Variants:
+//! Surviving algorithms (Phase-4 consolidation):
 //!
-//! - [`generic_wide`] — `isqrt` over a wide work integer that strictly
-//!   covers `raw · 10^SCALE`. Width-level default for the wide tiers
-//!   (D57 / D76 / D115 / D153 / D230 / D307 / D462 / D616 / D924 /
-//!   D1232). The result is exact to the last representable place
-//!   (within 0.5 ULP) under any of the six [`RoundingMode`]s.
-//! - [`mg_divide_d38`] — hand-tuned `mul_u128_to_u256` + 256-bit `isqrt_256`
-//!   tailored to D38's `i128` storage. **Width specialisation for
-//!   D38** — captures the kernel that has shipped with D38 since
-//!   before the algorithm library existed.
-//! - [`widen_to_d38`] — widen → `mg_divide_d38::sqrt` → narrow.
-//!   **Width specialisation for D18**; captures the existing
-//!   delegation pattern from `decl_strict_transcendentals_via_d38!`.
-//! - [`lookup_d57_s20`] — stub kernel slot for `D57<20>` tuning;
-//!   currently delegates to `generic_wide` byte-for-byte.
+//! - [`sqrt_newton`] — Newton integer `isqrt` over a work integer `W`
+//!   that strictly covers `raw · 10^SCALE`. Generic over the storage and
+//!   work widths `(S, W)`; the default for every wide tier (D57 … D1232)
+//!   and, via the policy's widen-to-`Int<2>` strategy, the narrow tiers.
+//!   The result is exact to the last representable place (within 0.5 ULP)
+//!   under any of the six [`RoundingMode`]s.
+//! - [`sqrt_mg_divide`] — hand-tuned `mul_u128_to_u256` + 256-bit
+//!   `isqrt_256` tailored to D38's `Int<2>` storage. **Width-bespoke for
+//!   `N == 2`.**
+//! - [`sqrt_newton_with_table_seed`] — `f64`-seeded narrow-work Newton
+//!   bespoke for the `(D57, 20)` cell.
 //!
+//! [`sqrt_newton`]: crate::algos::sqrt::sqrt_newton::sqrt_newton
+//! [`sqrt_mg_divide`]: crate::algos::sqrt::sqrt_mg_divide::sqrt_mg_divide
+//! [`sqrt_newton_with_table_seed`]: crate::algos::sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
-pub(crate) mod generic_wide;
-pub(crate) mod lookup_d57_s20;
-pub(crate) mod mg_divide_d38;
-pub(crate) mod widen_to_d38;
+pub(crate) mod sqrt_mg_divide;
+pub(crate) mod sqrt_newton;
+pub(crate) mod sqrt_newton_with_table_seed;
