@@ -16,7 +16,6 @@
 //! per monomorphisation — no runtime dispatch.
 
 pub(crate) mod traits;
-mod wide_compat;
 
 pub use traits::BigInt;
 
