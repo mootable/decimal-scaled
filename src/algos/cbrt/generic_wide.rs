@@ -48,6 +48,11 @@ where
     let mag = if negative { -widened } else { widened };
     let n: W = mag * ten.pow(2 * scale);
 
+    // `n` is built from `mag` (the non-negative magnitude, line above) ×
+    // a positive power of ten, so it is always >= 0. `leading_zeros`
+    // therefore follows its two's-complement contract on a non-negative
+    // value — equivalently `BITS - sig_bits` — and never the negative /
+    // MIN branch.
     let sig_bits = <W as BigInt>::BITS - n.leading_zeros();
     // Seed Newton with an f64-cbrt bootstrap. The classical
     // `1 << ceil(sig_bits/3)` seed has 1 bit of accuracy; an
