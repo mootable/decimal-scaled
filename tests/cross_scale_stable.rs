@@ -98,10 +98,9 @@ fn mul_of_with_rounding_modes() {
 
 #[cfg(debug_assertions)]
 #[test]
-#[ignore = "debug-overflow-panic regressed under Int<N>/wide arithmetic; Decision 3 pending"]
 #[should_panic]
 fn add_of_overflow_panics_in_debug() {
-    // D9 has i32 storage; D18<0>::MAX + 1 overflows i32.
+    // D18<0>::MAX + 1 overflows the storage range.
     let a = D18::<0>::MAX;
     let b = D18::<0>::from_int(1);
     let _c: D18<0> = D18::<0>::add_of(a, b);

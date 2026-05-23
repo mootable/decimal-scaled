@@ -21,6 +21,28 @@
 //! debug-mode panic on overflow, release-mode wrap. Explicit-overflow
 //! variants (`checked_*`, `saturating_*`, `wrapping_*`) live in a
 //! companion module.
+//!
+//! ## Overflow contract (how it is implemented)
+//!
+//! The decimal operators layer Rust's standard integer-overflow contract
+//! on top of the `Int<N>` storage, whose own operators and kernels are
+//! deliberately *modular* (wrapping) so the bignum algorithms stay
+//! composable. The contract lives only here, at the decimal-operator
+//! layer:
+//!
+//! * **Runtime (non-`const`) operators** — `Add` / `Sub` / `Neg` / `Rem`
+//!   and the `Mul` / `Div` value paths — use the profile switch
+//!   `if cfg!(debug_assertions) { checked … .expect("…overflow") } else {
+//!   wrapping … }`: debug panics, release wraps. Built entirely from
+//!   `Int<N>`'s existing `checked_*` / `wrapping_*` methods plus `core`
+//!   `panic!` — no `std` dependency, so `no_std` still builds.
+//! * **`const fn` paths** — any decimal-arith helper that is `const`
+//!   (e.g. `abs`) cannot branch on `cfg!(debug_assertions)` and still be
+//!   profile-correct, so it takes the stricter rule: an *unconditional*
+//!   `checked_* … .expect(…)`. In a `const` context that lowers to a
+//!   compile-time evaluation error on overflow (profile-independent),
+//!   exactly matching `std`'s `const` integer arithmetic; at runtime it
+//!   panics in both profiles.
 
 
 /// Divides a signed `i128` magnitude-bearing numerator by an unsigned
@@ -152,6 +174,29 @@ macro_rules! round_with_mode_wide {
 }
 pub(crate) use round_with_mode_wide;
 
+/// Narrows a `$Wider`-typed result down to `$Storage`, applying the
+/// runtime decimal-operator overflow contract: debug panics with
+/// `$msg`, release wraps via `resize` (two's-complement truncation —
+/// the historical behaviour, so release bit-patterns are unchanged).
+///
+/// The range test mirrors `checked_mul` / `checked_div`: out of range
+/// iff `value > $Storage::MAX` or `value < $Storage::MIN` (compared in
+/// `$Wider`).
+macro_rules! narrow_or_panic {
+    ($value:expr, $Storage:ty, $Wider:ty, $msg:expr) => {{
+        let value: $Wider = $value;
+        if cfg!(debug_assertions) {
+            let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
+            let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
+            if value > storage_max || value < storage_min {
+                panic!($msg);
+            }
+        }
+        value.resize::<$Storage>()
+    }};
+}
+pub(crate) use narrow_or_panic;
+
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
@@ -273,7 +318,12 @@ macro_rules! decl_decimal_arithmetic {
                     // `$Wider = Int<32>` routes Newton at SCALE ≥ 200).
                     $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<$Wider, { <$Wider as $crate::int::types::traits::BigInt>::U128_LIMBS }>(n, SCALE, mode)
                 };
-                Self(scaled.resize::<$Storage>())
+                // Overflow contract (runtime path): the fast path above
+                // is only taken when the product provably fits `$Storage`,
+                // so overflow can occur solely on this narrowing step.
+                // Debug panics; release resizes (wraps) — historical bits.
+                Self($crate::macros::arithmetic::narrow_or_panic!(
+                    scaled, $Storage, $Wider, "attempt to multiply with overflow"))
             }
 
             /// Divide two values of the same scale, rounding the
@@ -324,7 +374,12 @@ macro_rules! decl_decimal_arithmetic {
                 let n: $Wider = self.0.widen_mul::<$Wider>($Type::<SCALE>::multiplier());
                 let result =
                     $crate::macros::arithmetic::round_with_mode_wide!(n, b, $Wider, mode);
-                Self(result.resize::<$Storage>())
+                // Overflow contract (runtime path): the only out-of-range
+                // case reaching this width-narrowing is `MIN / -ONE`
+                // (the fast path provably keeps the quotient in
+                // `$Storage`). Debug panics; release resizes (wraps).
+                Self($crate::macros::arithmetic::narrow_or_panic!(
+                    result, $Storage, $Wider, "attempt to divide with overflow"))
             }
         }
 
@@ -343,39 +398,63 @@ macro_rules! decl_decimal_arithmetic {
         impl<const SCALE: u32> ::core::ops::Add for $Type<SCALE> {
             type Output = Self;
             /// Add two values of the same scale.
+            ///
+            /// Follows Rust's standard integer-overflow contract: panics
+            /// in debug builds, wraps (two's-complement) in release.
             #[inline]
             fn add(self, rhs: Self) -> Self {
-                Self(self.0 + rhs.0)
+                // `Int<N>`'s own `+` is modular; the contract is applied
+                // here at the decimal layer via its `checked_*` /
+                // `wrapping_*` methods.
+                if cfg!(debug_assertions) {
+                    Self(self.0.checked_add(rhs.0).expect("attempt to add with overflow"))
+                } else {
+                    Self(self.0.wrapping_add(rhs.0))
+                }
             }
         }
 
         impl<const SCALE: u32> ::core::ops::AddAssign for $Type<SCALE> {
             #[inline]
             fn add_assign(&mut self, rhs: Self) {
-                self.0 = self.0 + rhs.0;
+                *self = *self + rhs;
             }
         }
 
         impl<const SCALE: u32> ::core::ops::Sub for $Type<SCALE> {
             type Output = Self;
+            /// Subtract two values of the same scale.
+            ///
+            /// Panics on overflow in debug builds, wraps in release.
             #[inline]
             fn sub(self, rhs: Self) -> Self {
-                Self(self.0 - rhs.0)
+                if cfg!(debug_assertions) {
+                    Self(self.0.checked_sub(rhs.0).expect("attempt to subtract with overflow"))
+                } else {
+                    Self(self.0.wrapping_sub(rhs.0))
+                }
             }
         }
 
         impl<const SCALE: u32> ::core::ops::SubAssign for $Type<SCALE> {
             #[inline]
             fn sub_assign(&mut self, rhs: Self) {
-                self.0 = self.0 - rhs.0;
+                *self = *self - rhs;
             }
         }
 
         impl<const SCALE: u32> ::core::ops::Neg for $Type<SCALE> {
             type Output = Self;
+            /// Negate a value. Panics on overflow in debug builds
+            /// (`-MIN` is unrepresentable in two's-complement), wraps in
+            /// release (`-MIN == MIN`).
             #[inline]
             fn neg(self) -> Self {
-                Self(-self.0)
+                if cfg!(debug_assertions) {
+                    Self(self.0.checked_neg().expect("attempt to negate with overflow"))
+                } else {
+                    Self(self.0.wrapping_neg())
+                }
             }
         }
 
@@ -384,16 +463,39 @@ macro_rules! decl_decimal_arithmetic {
             /// Remainder of two values at the same scale. Because both
             /// operands share the scale factor, the storage-level
             /// remainder is the answer with no rescaling.
+            ///
+            /// Panics on the `MIN % -ONE` overflow boundary in debug
+            /// builds, wraps in release (matching `i128::wrapping_rem`).
+            /// Division by zero always panics.
             #[inline]
             fn rem(self, rhs: Self) -> Self {
-                Self(self.0 % rhs.0)
+                if cfg!(debug_assertions) {
+                    // `wrapping_rem` keeps the divide-by-zero panic
+                    // (its own message); `checked_rem` distinguishes the
+                    // `MIN % -ONE` overflow case, which we surface as an
+                    // overflow panic to match the std contract.
+                    match self.0.checked_rem(rhs.0) {
+                        Some(v) => Self(v),
+                        // `None` is either a zero divisor or the
+                        // `MIN % -ONE` overflow. `wrapping_rem` panics
+                        // with the zero-divisor message for the former;
+                        // for the latter it returns the wrapped value, so
+                        // a non-panicking return here means overflow.
+                        None => {
+                            let _ = self.0.wrapping_rem(rhs.0);
+                            panic!("attempt to calculate the remainder with overflow");
+                        }
+                    }
+                } else {
+                    Self(self.0.wrapping_rem(rhs.0))
+                }
             }
         }
 
         impl<const SCALE: u32> ::core::ops::RemAssign for $Type<SCALE> {
             #[inline]
             fn rem_assign(&mut self, rhs: Self) {
-                self.0 = self.0 % rhs.0;
+                *self = *self % rhs;
             }
         }
     };
