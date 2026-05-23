@@ -2,7 +2,7 @@
 //! (D76 / D153 / D307).
 //!
 //! D38 and the narrow tiers run their strict transcendentals on the
-//! 256-bit `algos::fixed_d38::Fixed` guard-digit intermediate; D18
+//! 256-bit `algos::support::fixed_d38::Fixed` guard-digit intermediate; D18
 //! delegate into D38. The wide tiers cannot widen into D38 — their
 //! scale range exceeds it — so they need their own guard-digit core.
 //!
@@ -690,7 +690,7 @@ macro_rules! decl_wide_transcendental {
             /// inner loop — ~5 ops per u128 numerator limb — which
             /// dominates the generic Knuth Algorithm D path on
             /// pipelined CPUs. Audit `round_div_audit_mg_matches_*`
-            /// in `algos::mg_divide::tests` shows bit-exact agreement
+            /// in `algos::support::mg_divide::tests` shows bit-exact agreement
             /// with the generic `div_rem` reference across
             /// 380 000 + 190 000 random inputs.
             ///
@@ -702,7 +702,7 @@ macro_rules! decl_wide_transcendental {
             /// each one a base-`2^128` MG long-divide, with
             /// combined-remainder bookkeeping that yields bit-exact
             /// half-to-even. The chain audit
-            /// (`round_div_chain_audit_*` in `algos::mg_divide::tests`)
+            /// (`round_div_chain_audit_*` in `algos::support::mg_divide::tests`)
             /// confirms agreement with the schoolbook `div_rem`
             /// reference on 380K + 190K random inputs across every
             /// `RoundingMode` and `w ∈ 39..=100`.
@@ -712,20 +712,20 @@ macro_rules! decl_wide_transcendental {
                     return n;
                 }
                 if w <= 38 {
-                    return $crate::algos::mg_divide::div_wide_pow10_with::<
+                    return $crate::algos::support::mg_divide::div_wide_pow10_with::<
                         W,
                         { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, $crate::support::rounding::RoundingMode::HalfToEven);
                 }
                 // Newton vs MG chain dispatch (see the matrix in
-                // [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`]).
+                // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`]).
                 // For most wide-tier `$Work` integers `W::BITS` lands
                 // outside the bench-validated cells (Int<128> /
                 // Int<192> / Int<256>) and the dispatcher forwards to
                 // MG; the routing is here so a future bench at the
                 // larger widths can promote without touching this
                 // site.
-                $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<
+                $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
                     W,
                     { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
                 >(n, w, $crate::support::rounding::RoundingMode::HalfToEven)
@@ -888,7 +888,7 @@ macro_rules! decl_wide_transcendental {
             /// kernel `div_wide_pow10_chain_with` does the same via
             /// repeated `÷ 10^38` with combined-remainder bookkeeping
             /// (bit-exact for every `RoundingMode`; see
-            /// `round_div_chain_audit_*` in `algos::mg_divide::tests`).
+            /// `round_div_chain_audit_*` in `algos::support::mg_divide::tests`).
             pub(crate) fn round_to_storage_with(
                 v: W,
                 w: u32,
@@ -899,14 +899,14 @@ macro_rules! decl_wide_transcendental {
                 let rounded = if shift == 0 {
                     v
                 } else if shift <= 38 {
-                    $crate::algos::mg_divide::div_wide_pow10_with::<
+                    $crate::algos::support::mg_divide::div_wide_pow10_with::<
                         W,
                         { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(v, shift, mode)
                 } else {
                     // Newton vs MG chain dispatch — see the matrix
-                    // in [`crate::algos::newton_reciprocal::dispatch_wide_pow10_with`].
-                    $crate::algos::newton_reciprocal::dispatch_wide_pow10_with::<
+                    // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`].
+                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
                         W,
                         { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(v, shift, mode)

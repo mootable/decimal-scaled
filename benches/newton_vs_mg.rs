@@ -50,31 +50,31 @@ macro_rules! bench_cell {
 
 fn bench(c: &mut Criterion) {
     // D307 SCALE 150 (design) and 307 (max) — 1024-bit storage.
-    bench_cell!(c, d307, "D307_s38", 38, 8, 6);
-    bench_cell!(c, d307, "D307_s150", 150, 8, 6);
-    bench_cell!(c, d307, "D307_s307", 307, 8, 6);
+    bench_cell!(c, d307, "D307_s38", 38, 16, 6);
+    bench_cell!(c, d307, "D307_s150", 150, 16, 6);
+    bench_cell!(c, d307, "D307_s307", 307, 16, 6);
 
     // D616 SCALE 308 (design) and 616 (max) — 2048-bit storage.
-    bench_cell!(c, d616, "D616_s38", 38, 16, 14);
-    bench_cell!(c, d616, "D616_s100", 100, 16, 14);
-    bench_cell!(c, d616, "D616_s200", 200, 16, 14);
-    bench_cell!(c, d616, "D616_s308", 308, 16, 14);
-    bench_cell!(c, d616, "D616_s460", 460, 16, 14);
-    bench_cell!(c, d616, "D616_s616", 616, 16, 14);
+    bench_cell!(c, d616, "D616_s38", 38, 32, 14);
+    bench_cell!(c, d616, "D616_s100", 100, 32, 14);
+    bench_cell!(c, d616, "D616_s200", 200, 32, 14);
+    bench_cell!(c, d616, "D616_s308", 308, 32, 14);
+    bench_cell!(c, d616, "D616_s460", 460, 32, 14);
+    bench_cell!(c, d616, "D616_s616", 616, 32, 14);
 
     // D924 SCALE 460 (design) and 924 (max) — 3072-bit storage.
-    bench_cell!(c, d924, "D924_s38", 38, 24, 22);
-    bench_cell!(c, d924, "D924_s200", 200, 24, 22);
-    bench_cell!(c, d924, "D924_s460", 460, 24, 22);
-    bench_cell!(c, d924, "D924_s924", 924, 24, 22);
+    bench_cell!(c, d924, "D924_s38", 38, 48, 22);
+    bench_cell!(c, d924, "D924_s200", 200, 48, 22);
+    bench_cell!(c, d924, "D924_s460", 460, 48, 22);
+    bench_cell!(c, d924, "D924_s924", 924, 48, 22);
 
     // D1232 SCALE 615 (design) and 1231 (max) — 4096-bit storage.
-    bench_cell!(c, d1232, "D1232_s38", 38, 32, 30);
-    bench_cell!(c, d1232, "D1232_s200", 200, 32, 30);
-    bench_cell!(c, d1232, "D1232_s400", 400, 32, 30);
-    bench_cell!(c, d1232, "D1232_s615", 615, 32, 30);
-    bench_cell!(c, d1232, "D1232_s900", 900, 32, 30);
-    bench_cell!(c, d1232, "D1232_s1231", 1231, 32, 30);
+    bench_cell!(c, d1232, "D1232_s38", 38, 64, 30);
+    bench_cell!(c, d1232, "D1232_s200", 200, 64, 30);
+    bench_cell!(c, d1232, "D1232_s400", 400, 64, 30);
+    bench_cell!(c, d1232, "D1232_s615", 615, 64, 30);
+    bench_cell!(c, d1232, "D1232_s900", 900, 64, 30);
+    bench_cell!(c, d1232, "D1232_s1231", 1231, 64, 30);
 }
 
 criterion_group!(benches, bench);

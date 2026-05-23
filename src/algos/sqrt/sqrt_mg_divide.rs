@@ -20,7 +20,7 @@
 //!
 //! Negative-input saturation (`raw < 0 → 0`) is handled by the policy
 //! caller, not here, mirroring the contract of
-//! [`crate::algos::mg_divide::sqrt_raw_with`] which only accepts
+//! [`crate::algos::support::mg_divide::sqrt_raw_with`] which only accepts
 //! non-negative input.
 
 use crate::int::types::Int;
@@ -46,5 +46,5 @@ fn sqrt_mg_divide_raw(raw: i128, scale: u32, mode: RoundingMode) -> i128 {
         raw >= 0,
         "sqrt_mg_divide: negative input — caller must saturate"
     );
-    crate::algos::mg_divide::sqrt_raw_with(raw as u128, scale, mode) as i128
+    crate::algos::support::mg_divide::sqrt_raw_with(raw as u128, scale, mode) as i128
 }

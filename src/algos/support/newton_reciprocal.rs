@@ -2,7 +2,7 @@
 //!
 //! Research kernel — **not wired into the dispatcher**. Built behind a
 //! `pub(crate)` API so micro-benches can compare it head-to-head against
-//! [`crate::algos::mg_divide::div_wide_pow10_chain_with`].
+//! [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`].
 //!
 //! # Algorithm
 //!
@@ -29,17 +29,32 @@
 //!
 //! # Setup
 //!
-//! `R` is computed once per `(SCALE, width)` pair via the u64 limb
-//! division dispatcher [`crate::int::policy::div::div_rem_dispatch`].
+//! `R` is computed once per `(SCALE, width)` pair via the int-algos-layer
+//! variable-length divmod [`crate::int::algos::div::div_rem_mag_slice`].
 //! Setup cost is one wide divide; per-call cost is one wide multiply +
 //! one narrow multiply + one comparison + one optional subtract.
 //!
-//! # Storage
+//! # Storage — raw `u64` limb slices, below the `Int<N>` abstraction
 //!
 //! All scratch is held in fixed-size `u64` limb buffers (little-endian),
 //! `core`-only — no heap, no `alloc`. The `BigInt` magnitude/sign bridge
 //! still moves through the `u128`-limb buffer (`mag_into_u128` /
 //! `from_mag_sign_u128`), but every arithmetic step runs on `u64` limbs.
+//!
+//! This kernel deliberately does **not** route through the `Int<N>` type
+//! methods (`Int::<N>::div_rem`, `*`, …). The reciprocal `R` and the
+//! `10^SCALE` divisor have a **runtime live limb count** (`k_u64 + 1` and
+//! `pow_len`, both functions of the runtime `scale` / `width` arguments)
+//! that no const-generic `Int<N>` width can express: a single
+//! `precompute` call can produce an `R` anywhere from ~18 to 144 u64
+//! limbs. `Int::<N>::div_rem` fixes `N` at monomorphisation, so the
+//! variable-width reciprocal divide cannot be expressed through it. The
+//! per-call multiplies are likewise schoolbook over variable-length live
+//! slices. The kernel therefore stays on raw `u64` slices — but it
+//! reaches the dispatching divmod through the int-**algos** layer
+//! ([`crate::int::algos::div::div_rem_mag_slice`], which fronts the
+//! divisor-shape policy and picks the optimal engine), never the
+//! `int::policy` layer directly, keeping the decimal→int layering intact.
 //!
 //! # Reference
 //!
@@ -49,8 +64,8 @@
 //! The Newton-iteration view of the same reciprocal is
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
+use crate::int::algos::div::div_rem_mag_slice;
 use crate::int::algos::limbs::{cmp, mul_schoolbook, sub_assign};
-use crate::int::policy::div::div_rem_dispatch;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────
 //
@@ -104,13 +119,11 @@ impl NewtonReciprocal {
     /// Compute reciprocal table for `D = 10^scale` at the given
     /// magnitude width.
     ///
-    /// `width_u128_limbs` is the upper bound on the numerator
-    /// magnitude's limb count **expressed in u128 limbs** (the historical
-    /// API unit, kept for the bench shim). Internally everything runs on
-    /// u64 limbs.
-    pub fn precompute(scale: u32, width_u128_limbs: usize) -> Self {
-        // Width in u64 limbs: two u64 per u128 limb.
-        let width_limbs = width_u128_limbs * 2;
+    /// `width_u64_limbs` is the upper bound on the numerator magnitude's
+    /// limb count, expressed in **u64 limbs** — the unit the kernel's
+    /// arithmetic actually runs in.
+    pub fn precompute(scale: u32, width_u64_limbs: usize) -> Self {
+        let width_limbs = width_u64_limbs;
 
         // pow_scale = 10^scale via repeated *10 on a wide u64 buffer.
         // 10^scale needs about scale * log2(10) ≈ scale * 3.322 bits.
@@ -146,7 +159,7 @@ impl NewtonReciprocal {
         // r = num / pow_scale.
         let mut r = [0u64; MAX_R_U64];
         let mut rem = [0u64; MAX_POW_U64];
-        div_rem_dispatch(
+        div_rem_mag_slice(
             &num[..k_u64 + 1],
             &pow_scale[..pow_len],
             &mut r[..k_u64 + 1],
@@ -243,7 +256,7 @@ fn div_newton(
 
 /// Full `n / 10^SCALE` with rounding for a `BigInt`-backed value.
 ///
-/// Direct analogue of [`crate::algos::mg_divide::div_wide_pow10_chain_with`]
+/// Direct analogue of [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`]
 /// — same signature, same semantics, different inner algorithm.
 pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     n: W,
@@ -332,7 +345,7 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
 /// | Int<64>    | 4096 |  ≥ 400           |
 ///
 /// Bench source: `benches/newton_vs_mg.rs` head-to-head against
-/// [`crate::algos::mg_divide::div_wide_pow10_chain_with`] at the
+/// [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`] at the
 /// listed widths × representative SCALE bands. Larger widths (Int<128>
 /// / Int<192> / Int<256> — used by the transcendental work integers)
 /// have no bench data and fall through to MG.
@@ -363,7 +376,7 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
 /// table for the rest of the thread's lifetime.
 ///
 /// Three separate slots — one per cached width — because the
-/// `width_limbs` argument differs (16 / 24 / 32 u128 limbs for
+/// `width_limbs` argument differs (32 / 48 / 64 u64 limbs for
 /// Int<32> / Int<48> / Int<64>) and the `NewtonReciprocal` allocates
 /// limb-storage sized to that argument.
 #[cfg(feature = "std")]
@@ -450,13 +463,13 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, con
     );
     let bits = <W as crate::int::types::traits::BigInt>::BITS;
     if !newton_wins(bits, scale) {
-        return crate::algos::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode);
+        return crate::algos::support::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode);
     }
 
     #[cfg(feature = "std")]
     {
-        // `width_limbs` in u128 limbs — the historical `precompute` unit.
-        let width_limbs = (bits as usize) / 128;
+        // `width_limbs` in u64 limbs — the `precompute` unit.
+        let width_limbs = (bits as usize) / 64;
         return cache::with_table(bits, scale, width_limbs, |table| {
             div_wide_pow10_newton_with::<W>(n, scale, mode, table)
         });
@@ -468,21 +481,21 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, con
         // precompute is too costly for the wide tier (one Knuth divide
         // at storage width). Forward to MG instead — Newton wins
         // depend on amortising the table across many calls.
-        crate::algos::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode)
+        crate::algos::support::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode)
     }
 }
 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algos::mg_divide::div_wide_pow10_chain_with;
+    use crate::algos::support::mg_divide::div_wide_pow10_chain_with;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
     #[test]
     fn newton_matches_mg_chain_d307_s150() {
         let scale = 150u32;
-        let width_limbs = 8;
+        let width_limbs = 16; // Int<16> = 8 u128 = 16 u64 limbs
         let table = NewtonReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
@@ -501,7 +514,7 @@ mod tests {
     #[test]
     fn newton_matches_mg_chain_d616_s308() {
         let scale = 308u32;
-        let width_limbs = 16;
+        let width_limbs = 32; // Int<32> = 16 u128 = 32 u64 limbs
         let table = NewtonReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];
@@ -520,7 +533,7 @@ mod tests {
     #[test]
     fn newton_matches_mg_chain_d1232_s615() {
         let scale = 615u32;
-        let width_limbs = 32;
+        let width_limbs = 64; // Int<64> = 32 u128 = 64 u64 limbs
         let table = NewtonReciprocal::precompute(scale, width_limbs);
 
         let mut limbs = [0u128; 64];

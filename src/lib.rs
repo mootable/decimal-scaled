@@ -227,11 +227,11 @@ pub mod __bench_internals {
 
     // Newton-reciprocal divide research kernel — wrapped via concrete
     // shims so the bench harness gets head-to-head comparisons against
-    // [`crate::algos::mg_divide::div_wide_pow10_chain_with`] without
+    // [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`] without
     // exposing trait machinery.
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     pub mod newton_vs_mg {
-        use crate::algos::newton_reciprocal::NewtonReciprocal as NR;
+        use crate::algos::support::newton_reciprocal::NewtonReciprocal as NR;
         pub struct NewtonReciprocal(pub(crate) NR);
         impl NewtonReciprocal {
             #[inline(never)]
@@ -264,7 +264,7 @@ pub mod __bench_internals {
 
                     #[inline(never)]
                     pub fn mg_chain(n: Storage, scale: u32) -> Storage {
-                        Storage(crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                        Storage(crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
                             W,
                             { <W as crate::int::types::traits::BigInt>::U128_LIMBS },
                         >(n.0, scale, RoundingMode::HalfToEven))
@@ -272,7 +272,7 @@ pub mod __bench_internals {
 
                     #[inline(never)]
                     pub fn mg_single(n: Storage, scale: u32) -> Storage {
-                        Storage(crate::algos::mg_divide::div_wide_pow10_with::<
+                        Storage(crate::algos::support::mg_divide::div_wide_pow10_with::<
                             W,
                             { <W as crate::int::types::traits::BigInt>::U128_LIMBS },
                         >(n.0, scale, RoundingMode::HalfToEven))
@@ -281,7 +281,7 @@ pub mod __bench_internals {
                     #[inline(never)]
                     pub fn newton(n: Storage, scale: u32, table: &NewtonReciprocal) -> Storage {
                         Storage(
-                            crate::algos::newton_reciprocal::div_wide_pow10_newton_with::<W>(
+                            crate::algos::support::newton_reciprocal::div_wide_pow10_newton_with::<W>(
                                 n.0,
                                 scale,
                                 RoundingMode::HalfToEven,
@@ -316,7 +316,7 @@ pub use crate::cross_scale as cross;
 //
 // The integer layer is unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
-// `algos::fixed_d38::Fixed` 256-bit sign-magnitude type), so the wide-
+// `algos::support::fixed_d38::Fixed` 256-bit sign-magnitude type), so the wide-
 // integer family must be available in every feature configuration —
 // not just `feature = "wide"` builds. Compile-time impact is modest:
 // ~2k LOC of self-contained limb arithmetic plus the const-generic

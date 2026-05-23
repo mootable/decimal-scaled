@@ -2004,7 +2004,7 @@ mod tests {
                 let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
                 let got =
-                    crate::algos::mg_divide::div_wide_pow10_with::<
+                    crate::algos::support::mg_divide::div_wide_pow10_with::<
                         Int<4>,
                         { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
@@ -2042,7 +2042,7 @@ mod tests {
                         (hi << 128_u32) + lo
                     };
                     let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
-                    let got = crate::algos::mg_divide::div_wide_pow10_with::<
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_with::<
                         Int<4>,
                         { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, mode);
@@ -2084,7 +2084,7 @@ mod tests {
                 }
 
                 let got =
-                    crate::algos::mg_divide::div_wide_pow10_with::<
+                    crate::algos::support::mg_divide::div_wide_pow10_with::<
                         Int<16>,
                         { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
@@ -2256,7 +2256,7 @@ mod tests {
                     };
                     let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
-                    let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
                         Int<4>,
                         { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, mode);
@@ -2294,7 +2294,7 @@ mod tests {
                 }
 
                 let got =
-                    crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                    crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
                         Int<16>,
                         { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
@@ -2333,7 +2333,7 @@ mod tests {
                     if rng.next() & 1 == 1 {
                         n = -n;
                     }
-                    let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
                         Int<16>,
                         { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                     >(n, w, mode);
@@ -2379,7 +2379,7 @@ mod tests {
                         let pos_n = q * pow_w + half + delta;
                         let n = if sign_neg { -pos_n } else { pos_n };
                         for mode in all_modes() {
-                            let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                            let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
                                 Int<16>,
                                 { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
                             >(n, w, mode);
@@ -2450,7 +2450,7 @@ mod tests {
                 for &sign_neg in &[false, true] {
                     let nn = if sign_neg { -n } else { n };
                     for mode in all_modes() {
-                        let got = crate::algos::mg_divide::div_wide_pow10_chain_with::<
+                        let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
                             Int<256>,
                             { <Int<256> as crate::int::types::traits::BigInt>::U128_LIMBS },
                         >(nn, w, mode);

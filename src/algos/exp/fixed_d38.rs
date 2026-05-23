@@ -8,9 +8,9 @@
 //!
 //! Hosts the shared `Fixed` exp primitive used by the `ExpPolicy`
 //! defaults (`exp_fixed`) so the typed-shell file has no
-//! `crate::algos::*` or `crate::algos::fixed_d38::*` references left.
+//! `crate::algos::*` or `crate::algos::support::fixed_d38::*` references left.
 
-use crate::algos::fixed_d38::Fixed;
+use crate::algos::support::fixed_d38::Fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, wide_ln2};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;

@@ -33,7 +33,7 @@
 //! radicand and take its exact integer root, then apply the rounding
 //! mode (no ties exist for integer-sqrt so the three half-modes
 //! coincide; `Floor`/`Ceiling` divert for the directed cases);
-//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `algos::fixed_d38`
+//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `algos::support::fixed_d38`
 //! guard-digit intermediate;
 //! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
 //!
@@ -816,8 +816,8 @@ mod tests {
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
             let mult = 10u128.pow(S);
-            let (n_hi, n_lo) = crate::algos::mg_divide::mul_u128_to_u256(raw as u128, mult);
-            let (qsq_hi, qsq_lo) = crate::algos::mg_divide::mul_u128_to_u256(q as u128, q as u128);
+            let (n_hi, n_lo) = crate::algos::support::mg_divide::mul_u128_to_u256(raw as u128, mult);
+            let (qsq_hi, qsq_lo) = crate::algos::support::mg_divide::mul_u128_to_u256(q as u128, q as u128);
             // lower: N > q^2 - q ⇔   N + q > q^2   (q ≥ 0)
             // upper: N ≤ q^2 + q
             let q_u = q as u128;

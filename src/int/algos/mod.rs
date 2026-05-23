@@ -11,7 +11,7 @@
 //!   `div_burnikel_ziegler_with_knuth`, the `Mg2By1` / `Mg3By2`
 //!   Möller–Granlund reciprocal engines) plus the const-`N` fast-arm
 //!   wrappers `div_rem_mag_fixed` / `isqrt_mag_fixed`. The divisor-shape
-//!   *choice* between the engines lives in [`crate::int::policy::div`].
+//!   *choice* between the engines lives in [`crate::int::policy::div_rem`].
 //! - [`roots`] — the Newton integer square root `isqrt_newton`.
 
 pub(crate) mod div;

@@ -2,7 +2,7 @@
 //!
 //! The pure division *engines* — each performs one named algorithm on an
 //! already-chosen basis; the divisor-shape *choice* between them lives in
-//! [`crate::int::policy::div`]:
+//! [`crate::int::policy::div_rem`]:
 //!
 //! - [`div_rem`] — `const fn` single-/double-limb hardware divide (and the
 //!   shift-subtract fallback for the rare const multi-limb case). The
@@ -21,7 +21,7 @@
 //! wrappers the fixed-width `Int<N>` types call.
 
 use super::limbs::{bit_len, cmp, fit_one, shl1, sub_assign};
-use crate::int::policy::div::div_rem_dispatch;
+use crate::int::policy::div_rem::div_rem_dispatch;
 use crate::int::algos::roots::isqrt_newton;
 
 /// Scratch capacity for the runtime u64-limb division engines — 288 u64
@@ -459,7 +459,7 @@ pub(crate) fn div_burnikel_ziegler_with_knuth(
         top -= 1;
     }
 
-    if n < crate::int::policy::div::BZ_THRESHOLD || top < 2 * n {
+    if n < crate::int::policy::div_rem::BZ_THRESHOLD || top < 2 * n {
         div_knuth(num, den, quot, rem);
         return;
     }
@@ -548,6 +548,21 @@ pub(crate) fn div_rem_mag_fixed<const N: usize>(
     }
 }
 
+/// Variable-length divmod over little-endian `u64` magnitude slices,
+/// routed through the divisor-shape policy so the optimal engine
+/// (hardware single-limb / Knuth / Burnikel–Ziegler) is selected at run
+/// time. The int-algos-layer entry for callers whose operands have a
+/// **runtime live length** that no const-`N` `Int<N>` width can express
+/// (the reciprocal-table buffers in
+/// [`crate::algos::support::newton_reciprocal`] are the one such caller):
+/// it lets them reach the dispatching divmod without importing the
+/// `int::policy` layer directly. Fixed-width `Int<N>` callers take
+/// [`div_rem_mag_fixed`] instead. The divisor must be non-zero.
+#[inline]
+pub(crate) fn div_rem_mag_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+    div_rem_dispatch(num, den, quot, rem);
+}
+
 /// Const-`N` fast-arm integer square root over little-endian u64
 /// magnitude limbs. Writes `floor(sqrt(n))` into `out`.
 ///
@@ -572,7 +587,7 @@ pub(crate) fn isqrt_mag_fixed<const N: usize>(n: &[u64; N], out: &mut [u64; N]) 
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::int::policy::div::div_rem_dispatch;
+    use crate::int::policy::div_rem::div_rem_dispatch;
 
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
     fn pack(limbs: &[u128]) -> alloc::vec::Vec<u64> {

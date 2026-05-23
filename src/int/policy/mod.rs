@@ -33,16 +33,16 @@
 //!   (`i128_divrem_by_u64_with_mode`), D38 takes the 2-word MG path, and
 //!   the wide tiers route `mg_divide::div_wide_pow10_with`, which selects
 //!   MG-single (`SCALE ≤ 19`, divisor fits one word) vs MG-lifted
-//!   (wider) internally. It lives in `crate::algos::mg_divide` /
+//!   (wider) internally. It lives in `crate::algos::support::mg_divide` /
 //!   `crate::macros::arithmetic`; the integer layer exposes only the raw
 //!   divmod the wide path builds on.
 //! - **divmod** — divisor-shape keyed at run time
-//!   ([`div::div_rem_dispatch`]): single-limb divisor (incl. every
+//!   ([`div_rem::div_rem_dispatch`]): single-limb divisor (incl. every
 //!   `10^scale`, `scale ≤ 19`) takes the hardware fast path; a divisor of
 //!   `n ≥ 16` limbs whose numerator top ≥ `2·n` takes Burnikel–Ziegler;
 //!   everything else takes Knuth Algorithm D. The const-evaluable
 //!   `wrapping_div` / `wrapping_rem` stay on the `const fn`
-//!   [`div::div_rem`] so they can run at compile time.
+//!   [`div_rem::div_rem`] so they can run at compile time.
 //! - **isqrt / icbrt** — D38 has bespoke 256/384-bit kernels in
 //!   `crate::algos::sqrt` / `crate::algos::cbrt`; the generic fixed-width
 //!   types fall through to the shared limb isqrt / Brent–Zimmermann
@@ -58,8 +58,8 @@
 //! classifies, and the dispatcher does an exhaustive `match algo` to the
 //! pure engines / kernels in [`crate::int::algos::div`] /
 //! [`crate::int::algos::limbs`]. The benched crossover thresholds
-//! ([`div::BZ_THRESHOLD`], [`mul::KARATSUBA_THRESHOLD`]) are policy DATA
+//! ([`div_rem::BZ_THRESHOLD`], [`mul::KARATSUBA_THRESHOLD`]) are policy DATA
 //! in those files, not magic numbers in the kernels.
 
-pub(crate) mod div;
+pub(crate) mod div_rem;
 pub(crate) mod mul;

@@ -39,7 +39,7 @@
 //! atanh / to_degrees / to_radians) live in
 //! [`crate::algos::trig::fixed_d38`]. This file is a typed-shell
 //! surface; there are zero `crate::algos::*` or
-//! `crate::algos::fixed_d38::*` references in it.
+//! `crate::algos::support::fixed_d38::*` references in it.
 //!
 //! [`RoundingMode::HalfToEven`]: crate::RoundingMode::HalfToEven
 //!

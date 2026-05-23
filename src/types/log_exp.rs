@@ -49,7 +49,7 @@
 //! [`crate::algos::ln::fixed_d38`] and
 //! [`crate::algos::exp::fixed_d38`]. This file is a typed-shell
 //! surface; there are zero `crate::algos::*` or
-//! `crate::algos::fixed_d38::*` references in it.
+//! `crate::algos::support::fixed_d38::*` references in it.
 //!
 //! # Precision
 //!
@@ -57,7 +57,7 @@
 //! `f64`. Every `_strict` / `_strict_with` / `_approx` /
 //! `_approx_with` form is **correctly rounded** under the selected
 //! [`RoundingMode`]: the result is within 0.5 ULP of the exact
-//! value. They evaluate the series in the `algos::fixed_d38::Fixed`
+//! value. They evaluate the series in the `algos::support::fixed_d38::Fixed`
 //! guard-digit intermediate and round once at the end.
 //!
 //! [`RoundingMode`]: crate::RoundingMode

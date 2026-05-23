@@ -9,7 +9,7 @@
 //!   existing call sites.
 //! - [`policy`] — per-function algorithm-selection matchers: the
 //!   schoolbook-vs-Karatsuba mul picker ([`policy::mul`]) and the
-//!   divisor-shape divide picker ([`policy::div`]), each in the canonical
+//!   divisor-shape divide picker ([`policy::div_rem`]), each in the canonical
 //!   `Select` / `select` / exhaustive-`match algo` shape with the benched
 //!   crossover thresholds held as policy data.
 //! - [`algos`] — the reusable algorithms the integer types compose on:

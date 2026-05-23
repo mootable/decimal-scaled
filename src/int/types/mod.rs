@@ -25,7 +25,7 @@ use crate::int::algos::limbs::{
     add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, mul_low_fixed,
     mul_schoolbook, shl, shl_fixed, shr_fixed, sqr_low_fixed, sub_assign_fixed,
 };
-use crate::int::policy::div::div_rem_dispatch;
+use crate::int::policy::div_rem::div_rem_dispatch;
 use crate::int::policy::mul::mul_fast;
 use crate::support::int_fmt::fmt_into;
 use core::cmp::Ordering;
@@ -3781,7 +3781,7 @@ mod tests {
 #[cfg(all(test, feature = "wide"))]
 mod unified_mg_feasibility {
     use super::Int;
-    use crate::algos::mg_divide::div_wide_pow10_with;
+    use crate::algos::support::mg_divide::div_wide_pow10_with;
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 

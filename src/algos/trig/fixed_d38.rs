@@ -7,7 +7,7 @@
 //! `wide_pi`, `wide_half_pi`, `small_x_linear_threshold`) plus every
 //! D38 strict-trig + hyperbolic kernel. The typed-shell file in
 //! `src/types/trig.rs` has no `crate::algos::*` or
-//! `crate::algos::fixed_d38::*` references left — each public method
+//! `crate::algos::support::fixed_d38::*` references left — each public method
 //! delegates one line through `policy::trig::TrigPolicy::*_impl`,
 //! whose default body lives here.
 //!
@@ -17,7 +17,7 @@
 //!   (linear band where the result is exact at storage precision).
 
 use crate::algos::exp::fixed_d38::exp_fixed;
-use crate::algos::fixed_d38::Fixed;
+use crate::algos::support::fixed_d38::Fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};

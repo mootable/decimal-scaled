@@ -6,7 +6,7 @@
 //! takes the operand and writes `floor(sqrt(n))`; no algorithm choice.
 
 use super::limbs::{add_assign, bit_len, cmp, is_zero, shr};
-use crate::int::policy::div::div_rem_dispatch;
+use crate::int::policy::div_rem::div_rem_dispatch;
 
 // On `no_std` the f64 inherent method (`sqrt`) used by the seed path is
 // unavailable; pull it in via `num_traits::Float` (libm-backed). Under

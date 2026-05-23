@@ -10,7 +10,7 @@
 //! Hosts the shared `Fixed` ln primitives used by every D38 strict-
 //! ln callsite plus the `LnPolicy` defaults — `STRICT_GUARD`,
 //! `ln_fixed`, `wide_ln2`, `wide_ln10` — so the typed-shell file
-//! has no `crate::algos::*` or `crate::algos::fixed_d38::*` references
+//! has no `crate::algos::*` or `crate::algos::support::fixed_d38::*` references
 //! left.
 //!
 //! Fast paths preserved verbatim from the typed surface:
@@ -21,7 +21,7 @@
 //!
 //! Panics on `raw <= 0` (the typed method's contract).
 
-use crate::algos::fixed_d38::Fixed;
+use crate::algos::support::fixed_d38::Fixed;
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 

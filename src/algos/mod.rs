@@ -40,26 +40,9 @@ pub(crate) mod pow;
 pub(crate) mod sqrt;
 pub(crate) mod trig;
 
-// Shared kernels consumed by multiple families. `mg_divide` is the
-// Moller-Granlund magic-number divide used by every multiplicative
-// path; `fixed_d38` is the 256-bit sign-magnitude `Fixed` type used
-// by the strict-transcendental fallback paths.
-pub(crate) mod fixed_d38;
-pub(crate) mod mg_divide;
-
-// Newton-Raphson reciprocal divide for `n / 10^SCALE` at the wide
-// tiers. Head-to-head benched against
-// [`mg_divide::div_wide_pow10_chain_with`] in `benches/newton_vs_mg.rs`;
-// wired into the `mul` and transcendental-rounding call sites by
-// [`dispatch_wide_pow10_with`] at the cells where the bench matrix
-// shows Newton wins. Other cells fall through to MG inside the
-// dispatcher.
-//
-// Gated on every wide tier — D307's `$Wider = Int2048` is in the
-// matrix's 2048-bit slot, so D307's `mul` slow path also routes
-// through the dispatcher.
-// Always compiled: the unified `decl_decimal_arithmetic!` mul/div path used by
-// D18/D38 (default features) references the dispatcher in a const-folded
-// `SCALE > 38` branch — dead for the narrow tiers but still type-checked. The
-// kernels are generic over `Int<N>`, so this adds compile time, not a feature.
-pub mod newton_reciprocal;
+// Cross-cutting support kernels consumed by multiple families and the
+// arithmetic layer: the Moller-Granlund magic-number divide
+// (`support::mg_divide`), the 256-bit sign-magnitude `Fixed` work
+// integer (`support::fixed_d38`), and the Newton-Raphson reciprocal
+// divide (`support::newton_reciprocal`).
+pub(crate) mod support;
