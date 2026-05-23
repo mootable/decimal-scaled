@@ -2391,6 +2391,25 @@ macro_rules! decl_wide_transcendental {
                 out
             }
 
+            /// Build the sincos Tang table `(sin(c_j), cos(c_j))` at
+            /// working scale `w` for table size `m`, with
+            /// `c_j = j · π / (4·m)` and `j ∈ [0, m]` (the `j = m` slot
+            /// is `(sin π/4, cos π/4)`, kept because rounding can lift a
+            /// residual to exactly the table boundary).
+            fn sincos_tang_compute(w: u32, m: u32) -> alloc::vec::Vec<(W, W)> {
+                let mut out = alloc::vec::Vec::with_capacity((m + 1) as usize);
+                let pi_w = pi(w);
+                let step_denom = lit((4 * m) as u128);
+                out.push((zero(), one(w))); // j = 0: sin 0 = 0, cos 0 = 1.
+                let mut j = 1u32;
+                while j <= m {
+                    let cj_w = (pi_w * lit(j as u128)) / step_denom;
+                    out.push(sin_cos_fixed(cj_w, w));
+                    j += 1;
+                }
+                out
+            }
+
             #[cfg(feature = "std")]
             mod tang_table_cache {
                 use super::*;
@@ -2401,6 +2420,9 @@ macro_rules! decl_wide_transcendental {
                         const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
                     static EXP_CACHE:
                         ::core::cell::RefCell<alloc::vec::Vec<((u32, u32), alloc::vec::Vec<W>)>> =
+                        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
+                    static SINCOS_CACHE:
+                        ::core::cell::RefCell<alloc::vec::Vec<((u32, u32), alloc::vec::Vec<(W, W)>)>> =
                         const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
                 }
 
@@ -2439,6 +2461,24 @@ macro_rules! decl_wide_transcendental {
                         entry
                     })
                 }
+
+                #[inline]
+                pub(super) fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (W, W) {
+                    SINCOS_CACHE.with(|c| {
+                        {
+                            let cache = c.borrow();
+                            for (key, tbl) in cache.iter() {
+                                if *key == (w, m) {
+                                    return tbl[idx];
+                                }
+                            }
+                        }
+                        let tbl = sincos_tang_compute(w, m);
+                        let entry = tbl[idx];
+                        c.borrow_mut().push(((w, m), tbl));
+                        entry
+                    })
+                }
             }
 
             #[cfg(not(feature = "std"))]
@@ -2453,6 +2493,11 @@ macro_rules! decl_wide_transcendental {
                 #[inline]
                 pub(super) fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
                     exp_tang_compute(w, m)[idx]
+                }
+
+                #[inline]
+                pub(super) fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (W, W) {
+                    sincos_tang_compute(w, m)[idx]
                 }
             }
 
@@ -2582,6 +2627,18 @@ macro_rules! decl_wide_transcendental {
                 #[inline]
                 fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
                     tang_table_cache::exp_table_entry(w, idx, m)
+                }
+                #[inline]
+                fn pi(w: u32) -> W {
+                    pi(w)
+                }
+                #[inline]
+                fn half_pi(w: u32) -> W {
+                    half_pi(w)
+                }
+                #[inline]
+                fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (W, W) {
+                    tang_table_cache::sincos_table_entry(w, idx, m)
                 }
             }
 

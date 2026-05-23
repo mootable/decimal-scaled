@@ -156,6 +156,20 @@ pub(crate) trait WideTrigCore {
     /// for table size `M`. Memoised per thread per `(w, M)` by the
     /// tier's `Core`.
     fn exp_table_entry(w: u32, idx: usize, m: u32) -> Self::W;
+
+    // ── π constants + the sincos Tang table (the sincos Tang kernel) ───
+
+    /// `π` at working scale `w`, cached.
+    fn pi(w: u32) -> Self::W;
+    /// `π/2` at working scale `w`, cached.
+    fn half_pi(w: u32) -> Self::W;
+
+    /// The sincos Tang table slot `(sin(c_j), cos(c_j))` at working
+    /// scale `w` for table size `m`, where `c_j = j · π / (4·m)` and
+    /// `j ∈ [0, m]` (the `j = m` slot is `(sin π/4, cos π/4)`, needed
+    /// because rounding can lift a residual to the table boundary).
+    /// Memoised per thread per `(w, m)` by the tier's `Core`.
+    fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (Self::W, Self::W);
 }
 
 /// `exp_strict` for a wide tier — generic over the tier `C`.
@@ -258,4 +272,23 @@ pub(crate) fn atan_series<C: WideTrigCore, const SCALE: u32>(
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
         C::atan_fixed(C::to_work_w(raw, guard), SCALE + guard)
     })
+}
+
+/// Narrow-`GUARD` single-shot `atan_strict` for a wide tier — generic
+/// over the tier `C`, the decimal `SCALE`, and the band's narrow guard
+/// `GUARD`. Routes the canonical [`WideTrigCore::atan_fixed`] kernel
+/// through `w = SCALE + GUARD` and narrows once with
+/// [`WideTrigCore::round_to_storage_with`] (no Ziv escalation — the band
+/// guards leave the working error many orders of magnitude below half a
+/// storage ULP). Replaces the per-tier `lookup_d*_atan` narrow wrappers.
+#[inline]
+#[must_use]
+pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    let w = SCALE + GUARD;
+    let v_w = C::to_work_w(raw, GUARD);
+    let r = C::atan_fixed(v_w, w);
+    C::round_to_storage_with(r, w, SCALE, mode)
 }

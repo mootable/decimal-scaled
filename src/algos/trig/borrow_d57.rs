@@ -40,7 +40,7 @@ fn narrow<const SCALE: u32>(raw_wide: Int<3>, op: &'static str) -> Int<2> {
 pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
     let raw_wide = if matches!(SCALE, 18..=22) {
-        super::lookup_d57_s18_22_atan::atan_strict::<SCALE>(widened.0, mode)
+        crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d57::Core, SCALE, 10>(widened.0, mode)
     } else {
         super::wide_kernel::atan_strict_d57(widened.0, mode, SCALE)
     };

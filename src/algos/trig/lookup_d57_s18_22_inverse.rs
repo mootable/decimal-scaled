@@ -1,7 +1,8 @@
 //! Bespoke narrow-`GUARD` `asin_strict` / `acos_strict` /
 //! `atan2_strict` kernel slot for `D57<SCALE>` with `SCALE ∈ 18..=22`.
 //!
-//! Companion to [`super::lookup_d57_s18_22_atan`] — the inverse-trig
+//! Companion to the narrow-`GUARD` atan slot (now the generic
+//! `wide_trig_core::atan_narrow`) — the inverse-trig
 //! family routes through `atan_fixed` plus `sqrt_fixed` and a small
 //! amount of `mul` / `div`. At `SCALE ∈ 18..=22` the same narrow-GUARD
 //! trick applies: `GUARD_NARROW = 14` (matching atan, slightly larger
@@ -43,7 +44,7 @@ use crate::types::widths::wide_trig_d57 as core;
 use crate::int::types::Int;
 
 /// Narrow guard for the SCALE 18..=22 inverse-trig slot. Matches the
-/// `lookup_d57_s18_22_atan` guard.
+/// narrow-`GUARD` atan slot guard (`wide_trig_core::atan_narrow`).
 const GUARD_NARROW: u32 = 10;
 
 fn asin_fixed(v: core::W, w: u32) -> core::W {

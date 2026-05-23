@@ -9,8 +9,8 @@
 //! width is over-provisioned. Halving the working width roughly halves
 //! the per-iteration `Int<3>` `mul` / `div` cost.
 //!
-//! Unlike the SCALE 44..=56 sibling
-//! ([`super::lookup_d57_s44_56_sincos`]), this slot does NOT carry an
+//! Unlike the SCALE 44..=56 sibling (the generic Tang sincos kernel
+//! `super::sincos_tang`), this slot does NOT carry an
 //! argument-reduction table. The reduction-table win only pays back
 //! when the unreduced Taylor series exceeds ~30 terms (which happens
 //! above ~SCALE 30 with the default `GUARD`); at SCALE 18..=22 the

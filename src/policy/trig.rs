@@ -1049,7 +1049,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
                 _ => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
-                trig::lookup_d57_s44_56_sincos::sin_strict::<SCALE>(self.0, mode)
+                trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
             }
         })
     }
@@ -1065,7 +1065,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
                 _ => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
-                trig::lookup_d57_s44_56_sincos::cos_strict::<SCALE>(self.0, mode)
+                trig::sincos_tang::cos_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
             }
         })
     }
@@ -1093,7 +1093,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_atan::atan_strict::<SCALE>(self.0, mode),
+                18..=22 => crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d57::Core, SCALE, 10>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
@@ -1156,7 +1156,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_hyper::sinh_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d57::Core, 128, false>),
                 _ => return self.sinh_strict_with(mode),
             },
         })
@@ -1169,7 +1169,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_hyper::cosh_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d57::Core, 128, false>),
                 _ => return self.cosh_strict_with(mode),
             },
         })
@@ -1182,7 +1182,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<3, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_hyper::tanh_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d57::Core, 128, false>),
                 _ => return self.tanh_strict_with(mode),
             },
         })
@@ -1215,7 +1215,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                50..=60 => trig::lookup_d115_s57_hyper::sinh_strict::<SCALE>(self.0, mode),
+                50..=60 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d115::Core, 128, false>),
                 _ => return self.sinh_strict_with(mode),
             },
         })
@@ -1228,7 +1228,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                50..=60 => trig::lookup_d115_s57_hyper::cosh_strict::<SCALE>(self.0, mode),
+                50..=60 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d115::Core, 128, false>),
                 _ => return self.cosh_strict_with(mode),
             },
         })
@@ -1241,7 +1241,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<6, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                50..=60 => trig::lookup_d115_s57_hyper::tanh_strict::<SCALE>(self.0, mode),
+                50..=60 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d115::Core, 128, false>),
                 _ => return self.tanh_strict_with(mode),
             },
         })
@@ -1263,7 +1263,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d153_s70_82_sincos::sin_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
         })
     }
@@ -1276,7 +1276,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d153_s70_82_sincos::cos_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
         })
     }
@@ -1289,7 +1289,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
         Self(match forward::resolve_tan::<8, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d153_s70_82_sincos::tan_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, true>(self.0, mode)
             }
         })
     }
@@ -1302,7 +1302,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d153_s70_82_atan::atan_strict::<SCALE>(self.0, mode)
+                crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d153::Core, SCALE, 12>(self.0, mode)
             }
         })
     }
@@ -1317,7 +1317,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                70..=82 => trig::lookup_d153_s70_82_hyper::sinh_strict::<SCALE>(self.0, mode),
+                70..=82 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d153::Core, 128, true>),
                 _ => return self.sinh_strict_with(mode),
             },
         })
@@ -1330,7 +1330,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                70..=82 => trig::lookup_d153_s70_82_hyper::cosh_strict::<SCALE>(self.0, mode),
+                70..=82 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d153::Core, 128, true>),
                 _ => return self.cosh_strict_with(mode),
             },
         })
@@ -1343,7 +1343,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<8, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                70..=82 => trig::lookup_d153_s70_82_hyper::tanh_strict::<SCALE>(self.0, mode),
+                70..=82 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d153::Core, 128, true>),
                 _ => return self.tanh_strict_with(mode),
             },
         })
@@ -1374,7 +1374,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d307_s140_160_sincos::sin_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
         })
     }
@@ -1387,7 +1387,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d307_s140_160_sincos::cos_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
         })
     }
@@ -1400,7 +1400,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
         Self(match forward::resolve_tan::<16, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d307_s140_160_sincos::tan_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, true>(self.0, mode)
             }
         })
     }
@@ -1413,7 +1413,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d307_s140_160_atan::atan_strict::<SCALE>(self.0, mode)
+                crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d307::Core, SCALE, 10>(self.0, mode)
             }
         })
     }
@@ -1428,7 +1428,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::lookup_d307_s140_160_hyper::sinh_strict::<SCALE>(self.0, mode),
+                140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::lookup_d307_s140_160_tang::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::lookup_d307_s140_160_tang::tang_exp_fixed),
                 _ => return self.sinh_strict_with(mode),
             },
         })
@@ -1441,7 +1441,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::lookup_d307_s140_160_hyper::cosh_strict::<SCALE>(self.0, mode),
+                140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::lookup_d307_s140_160_tang::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::lookup_d307_s140_160_tang::tang_exp_fixed),
                 _ => return self.cosh_strict_with(mode),
             },
         })
@@ -1454,7 +1454,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::lookup_d307_s140_160_hyper::tanh_strict::<SCALE>(self.0, mode),
+                140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::lookup_d307_s140_160_tang::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::lookup_d307_s140_160_tang::tang_exp_fixed),
                 _ => return self.tanh_strict_with(mode),
             },
         })
@@ -1476,7 +1476,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d462_s225_235_sincos::sin_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
         })
     }
@@ -1489,7 +1489,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d462_s225_235_sincos::cos_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
         })
     }
@@ -1502,7 +1502,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
         Self(match forward::resolve_tan::<24, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d462_s225_235_sincos::tan_strict::<SCALE>(self.0, mode)
+                trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, false>(self.0, mode)
             }
         })
     }
@@ -1515,7 +1515,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
             forward::Algorithm::Series => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
             forward::Algorithm::Tang => {
-                trig::lookup_d462_s225_235_atan::atan_strict::<SCALE>(self.0, mode)
+                crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d462::Core, SCALE, 12>(self.0, mode)
             }
         })
     }
