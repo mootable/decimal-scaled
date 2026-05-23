@@ -8,7 +8,7 @@
 #[cfg(test)]
 #[allow(clippy::arithmetic_side_effects)]
 mod tests {
-    use crate::types::widths::{D38, D38s12};
+    use crate::types::widths::D38s12;
 
     /// Returns `-ONE` as a convenience value.
     fn neg_one() -> D38s12 {

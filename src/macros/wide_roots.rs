@@ -173,7 +173,6 @@ pub(crate) use {decl_wide_roots, wide_lit};
 
 #[cfg(all(test, not(feature = "fast")))]
 mod tests {
-    use crate::{D38, D76, D153, D307};
 
     #[test]
     fn sqrt_perfect_squares_are_exact() {

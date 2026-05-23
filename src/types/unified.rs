@@ -129,7 +129,6 @@ impl<S: core::hash::Hash, const SCALE: u32> core::hash::Hash for D<S, SCALE> {
 
 #[cfg(test)]
 mod tests {
-    use crate::types::widths::{D18, D38};
 
     /// Equal logical values compare equal across decimal widths at the
     /// same SCALE.

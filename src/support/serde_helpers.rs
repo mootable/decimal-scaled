@@ -748,7 +748,6 @@ decl_wide_serde!(D1232, crate::int::types::Int<64>, 512);
 
 #[cfg(all(test, feature = "wide"))]
 mod wide_serde_tests {
-    use crate::D76;
 
     #[test]
     fn d76_human_readable_round_trip() {

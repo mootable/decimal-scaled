@@ -5110,7 +5110,6 @@ pub(crate) use decl_wide_transcendental;
 
 #[cfg(all(test, not(feature = "fast")))]
 mod tests {
-    use crate::{D38, D76, D153, D307};
 
     /// The wide-tier strict transcendentals are correctly rounded, so
     /// at any scale they must agree with the D38 strict path — itself
