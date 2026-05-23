@@ -23,7 +23,7 @@ pub use traits::BigInt;
 use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use crate::int::limbs::{
-    limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
+    limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_cross, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
     limbs_mul_fast_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
@@ -38,7 +38,12 @@ pub struct Uint<const N: usize> {
 
 /// Signed (two's-complement) fixed-width integer of `N` little-endian
 /// 64-bit limbs.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+//
+// `PartialEq` / `PartialOrd` / `Ord` are NOT derived: a single generic
+// `impl<N, M>` cross-width surface (below) covers same-width comparison
+// too, so a derived same-width impl would collide. `Eq` is still derived
+// (it only needs the `PartialEq<Self>` the generic impl provides).
+#[derive(Clone, Copy, Eq, Hash, Debug)]
 pub struct Int<const N: usize> {
     limbs: [u64; N],
 }
@@ -278,13 +283,13 @@ impl<const N: usize> Uint<N> {
     /// Bit length: `0` for zero, else `floor(log2(self)) + 1`
     /// (equivalently `BITS - leading_zeros`).
     #[inline]
-    pub fn bit_length(&self) -> u32 {
+    pub const fn bit_length(&self) -> u32 {
         limbs_bit_len_u64_fixed(&self.limbs)
     }
 
     /// Number of leading zero bits in the `BITS`-wide representation.
     #[inline]
-    pub fn leading_zeros(&self) -> u32 {
+    pub const fn leading_zeros(&self) -> u32 {
         (Self::BITS as u32) - self.bit_length()
     }
 
@@ -1104,7 +1109,7 @@ impl<const N: usize> Int<N> {
     /// Bit length of the magnitude: `0` for zero, else
     /// `floor(log2|self|) + 1`.
     #[inline]
-    pub fn bit_length(&self) -> u32 {
+    pub const fn bit_length(&self) -> u32 {
         limbs_bit_len_u64_fixed(self.abs().as_limbs())
     }
 
@@ -1113,7 +1118,7 @@ impl<const N: usize> Int<N> {
     /// sign bit (the MSB) set, so it has zero leading zeros; a non-negative
     /// value's leading-zero count is `BITS - bit_length` (`BITS` for zero).
     #[inline]
-    pub fn leading_zeros(&self) -> u32 {
+    pub const fn leading_zeros(&self) -> u32 {
         if self.is_negative() {
             0
         } else {
@@ -1841,10 +1846,57 @@ impl<const N: usize> Int<N> {
     }
 }
 
-impl<const N: usize> PartialOrd for Int<N> {
+impl<const N: usize> Int<N> {
+    /// Const cross-width signed comparison `Int<N>` vs `Int<M>`, returning
+    /// `core::cmp::Ordering`. No widening copy is made: the sign is
+    /// compared first (a negative value is always less than a non-negative
+    /// one); when the signs agree the magnitudes are compared
+    /// length-aware via [`limbs_cmp_u64_cross`] over the `unsigned_abs`
+    /// limbs (the longer magnitude's surplus high limbs must be zero for
+    /// equality, else it is the larger). For two negatives the larger
+    /// magnitude is the smaller value, so the magnitude order is flipped.
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    pub(crate) const fn cmp_cross<const M: usize>(self, other: Int<M>) -> Ordering {
+        let sn = self.is_negative();
+        let so = other.is_negative();
+        if sn && !so {
+            return Ordering::Less;
+        }
+        if !sn && so {
+            return Ordering::Greater;
+        }
+        // Same sign: compare magnitudes length-aware.
+        let a = self.unsigned_abs();
+        let b = other.unsigned_abs();
+        let c = limbs_cmp_u64_cross(a.as_limbs(), b.as_limbs());
+        // For two negatives the larger magnitude is the smaller value.
+        let c = if sn { -c } else { c };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+// One generic comparison surface across widths. The `N == M` case is
+// covered here too, so `Int<N>` carries no separate same-width
+// `PartialEq` / `PartialOrd` / `Ord` impl (a derived or hand-written
+// same-width comparison would collide — E0119). `Eq` is still derived:
+// it only requires the `PartialEq<Self>` this generic impl provides.
+impl<const N: usize, const M: usize> PartialEq<Int<M>> for Int<N> {
+    #[inline]
+    fn eq(&self, other: &Int<M>) -> bool {
+        self.cmp_cross(*other) == Ordering::Equal
+    }
+}
+
+impl<const N: usize, const M: usize> PartialOrd<Int<M>> for Int<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<M>) -> Option<Ordering> {
+        Some(self.cmp_cross(*other))
     }
 }
 
@@ -1933,19 +1985,9 @@ impl PartialOrd<Int<1>> for i64 {
 impl<const N: usize> Ord for Int<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        // Signed compare: a negative value is always less than a
-        // non-negative one. When the signs agree the two's-complement
-        // bit patterns order the same way as the unsigned magnitude
-        // comparison of the limbs.
-        match (self.is_negative(), other.is_negative()) {
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-            _ => match limbs_cmp_u64_fixed(&self.limbs, &other.limbs) {
-                -1 => Ordering::Less,
-                1 => Ordering::Greater,
-                _ => Ordering::Equal,
-            },
-        }
+        // Same-width total order, delegating to the generic cross-width
+        // comparator core (the `N == M` case).
+        self.cmp_cross(*other)
     }
 }
 
@@ -2184,10 +2226,16 @@ impl<const N: usize> Uint<N> {
     /// does not collide with the type-generic `Int::resize` the named-
     /// type API expects.
     #[inline]
-    pub fn resize_n<const M: usize>(self) -> Uint<M> {
-        Uint::from_limbs(core::array::from_fn(
-            |i| if i < N { self.limbs[i] } else { 0 },
-        ))
+    pub const fn resize_n<const M: usize>(self) -> Uint<M> {
+        let mut out = [0u64; M];
+        let mut i = 0;
+        while i < M {
+            if i < N {
+                out[i] = self.limbs[i];
+            }
+            i += 1;
+        }
+        Uint::from_limbs(out)
     }
 
     /// Widens to a wider `Uint<M>` (`M >= N`), zero-extending the new
@@ -2223,12 +2271,47 @@ impl<const N: usize> Int<N> {
     /// Named `resize_n` (not `resize`) so the const-generic width bridge
     /// does not collide with the type-generic `Int::resize` the named-
     /// type API expects (the magnitude-bridge cast over any `BigInt`).
+    ///
+    /// Infallible two's-complement width conversion `Int<N> -> Int<M>`,
+    /// const and direction-agnostic. Copies the overlapping limbs; when
+    /// widening, fills the new high limbs with the sign (all-ones if the
+    /// source is negative, else zero); when narrowing, drops the surplus
+    /// high limbs (which may change the represented value). This is the
+    /// canonical internal resize that the const fallible `try_narrow` and
+    /// the `Int<->Int` magnitude bridge build on.
     #[inline]
-    pub fn resize_n<const M: usize>(self) -> Int<M> {
+    pub(crate) const fn resize_n<const M: usize>(self) -> Int<M> {
         let fill = if self.is_negative() { u64::MAX } else { 0 };
-        Int::from_limbs(core::array::from_fn(|i| {
-            if i < N { self.limbs[i] } else { fill }
-        }))
+        let mut out = [0u64; M];
+        let mut i = 0;
+        while i < M {
+            out[i] = if i < N { self.limbs[i] } else { fill };
+            i += 1;
+        }
+        Int::from_limbs(out)
+    }
+
+    /// Const fallible narrow `Int<N> -> Int<M>` (`1 <= M <= N`). Returns
+    /// `Some` only when every discarded high limb is a pure sign-extension
+    /// of the narrowed value's top bit — i.e. the value fits `M` limbs as
+    /// two's complement — and `None` otherwise. The const base for the
+    /// future public fallible narrow.
+    #[inline]
+    pub(crate) const fn try_narrow<const M: usize>(self) -> Option<Int<M>> {
+        debug_assert!(M >= 1 && M <= N, "try_narrow requires 1 <= M <= N");
+        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 {
+            u64::MAX
+        } else {
+            0
+        };
+        let mut i = M;
+        while i < N {
+            if self.limbs[i] != sign_fill {
+                return None;
+            }
+            i += 1;
+        }
+        Some(self.resize_n::<M>())
     }
 
     /// Widens to a wider `Int<M>` (`M >= N`), sign-extending. Lossless.
@@ -2244,20 +2327,7 @@ impl<const N: usize> Int<N> {
     /// two's complement.
     #[inline]
     pub fn narrow<const M: usize>(self) -> Option<Int<M>> {
-        debug_assert!(M >= 1 && M <= N, "narrow requires 1 <= M <= N");
-        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 {
-            u64::MAX
-        } else {
-            0
-        };
-        let mut i = M;
-        while i < N {
-            if self.limbs[i] != sign_fill {
-                return None;
-            }
-            i += 1;
-        }
-        Some(self.resize_n::<M>())
+        self.try_narrow::<M>()
     }
 }
 
@@ -2806,6 +2876,114 @@ mod tests {
         // Small value round-trips.
         let p = Int::<2>::from_i64(42);
         assert_eq!(p.widen::<4>().narrow::<2>().unwrap(), p);
+    }
+
+    #[test]
+    fn int_resize_const_two_complement() {
+        // Widen round-trips: positive zero-extends, value preserved.
+        let pos = Int::<2>::from_i64(123);
+        let wide: Int<4> = pos.resize_n::<4>();
+        assert_eq!(*wide.as_limbs(), [123, 0, 0, 0]);
+        assert_eq!(wide.resize_n::<2>(), pos);
+
+        // Sign-extend of negatives: high limbs all-ones, value preserved.
+        let neg = Int::<2>::from_i64(-7);
+        let wneg: Int<4> = neg.resize_n::<4>();
+        assert_eq!(*wneg.as_limbs(), [(-7i64) as u64, u64::MAX, u64::MAX, u64::MAX]);
+        assert_eq!(wneg, Int::<4>::from_i64(-7));
+
+        // Truncate drops the surplus high limbs.
+        let v = Int::<4>::from_limbs([1, 2, 3, 4]);
+        assert_eq!(*v.resize_n::<2>().as_limbs(), [1, 2]);
+
+        // try_narrow Some/None at the signed boundary.
+        // -1 narrows: dropped limbs are the sign fill.
+        assert_eq!(Int::<4>::from_i64(-1).try_narrow::<2>().unwrap(), Int::<2>::from_i64(-1));
+        // A positive value with a set high limb does not fit.
+        assert!(Int::<4>::from_limbs([0, 0, 1, 0]).try_narrow::<2>().is_none());
+        // 2^63 is positive and fits Int<2> but NOT Int<1>: narrowing to
+        // one limb would set the top bit, flipping it negative, and the
+        // dropped high limb (0) is not the negative sign fill — so None.
+        let too_big = Int::<2>::from_limbs([0x8000_0000_0000_0000, 0]);
+        assert!(too_big.try_narrow::<1>().is_none());
+        // i64::MIN genuinely fits Int<1>: try_narrow returns Some.
+        let min2 = Int::<2>::from_i64(i64::MIN);
+        assert_eq!(min2.try_narrow::<1>().unwrap(), Int::<1>::from_i64(i64::MIN));
+        // Its widening then narrowing round-trips.
+        assert_eq!(min2.resize_n::<4>().try_narrow::<2>().unwrap(), min2);
+
+        // Const evaluation smoke: resize_n is usable in const context.
+        const W: Int<4> = Int::<2>::from_i64(-7).resize_n::<4>();
+        assert_eq!(W, Int::<4>::from_i64(-7));
+    }
+
+    #[test]
+    fn bit_count_is_const() {
+        // const-smoke: these compile only if the inherent methods are
+        // `const fn`. Called fully-qualified so the inherent `&self` impl
+        // is selected over the (non-const) `BigInt` trait method of the
+        // same name, which takes `self` by value and would otherwise win
+        // value-receiver method resolution.
+        const Z: u32 = Int::<2>::leading_zeros(&Int::<2>::MAX);
+        const BL: u32 = Int::<2>::bit_length(&Int::<2>::MAX);
+        const UZ: u32 = Uint::<2>::leading_zeros(&Uint::<2>::MAX);
+        const UBL: u32 = Uint::<2>::bit_length(&Uint::<2>::MAX);
+        // Int<2>::MAX is positive with the sign bit clear: 1 leading zero,
+        // bit_length = 127.
+        assert_eq!(Z, 1);
+        assert_eq!(BL, 127);
+        // Uint<2>::MAX is all-ones: 0 leading zeros, full 128-bit length.
+        assert_eq!(UZ, 0);
+        assert_eq!(UBL, 128);
+    }
+
+    #[test]
+    fn int_cross_width_comparison() {
+        // Equal values across widths compare ==.
+        let a = Int::<1>::from_i64(5);
+        let b = Int::<2>::from_i64(5);
+        assert!(a == b);
+        assert!(b == a);
+        assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
+
+        // Ordering across widths.
+        let small = Int::<1>::from_i64(3);
+        let big = Int::<2>::from_i64(100);
+        assert!(small < big);
+        assert!(big > small);
+
+        // A value only fitting the wider type still orders right: 2^70
+        // lives in Int<2> (and up) but exceeds Int<1>; it must compare
+        // greater than any Int<1>.
+        let huge = Int::<2>::from_limbs([0, 64]); // 64 * 2^64 = 2^70
+        assert!(huge > Int::<1>::MAX);
+        assert!(Int::<1>::from_i64(-1) < huge);
+
+        // Negatives: -1 (Int<1>) vs 1 (Int<2>) — neg < pos.
+        assert!(Int::<1>::from_i64(-1) < Int::<2>::from_i64(1));
+        // Two negatives across widths: larger magnitude is the smaller.
+        assert!(Int::<1>::from_i64(-100) < Int::<2>::from_i64(-3));
+        assert!(Int::<2>::from_i64(-3) > Int::<1>::from_i64(-100));
+        // Equal negatives across widths.
+        assert!(Int::<1>::from_i64(-7) == Int::<2>::from_i64(-7));
+
+        // Same-type Ord still sorts a Vec.
+        let mut v = vec![
+            Int::<2>::from_i64(3),
+            Int::<2>::from_i64(-10),
+            Int::<2>::from_i64(0),
+            Int::<2>::from_i64(7),
+        ];
+        v.sort();
+        assert_eq!(
+            v,
+            vec![
+                Int::<2>::from_i64(-10),
+                Int::<2>::from_i64(0),
+                Int::<2>::from_i64(3),
+                Int::<2>::from_i64(7),
+            ]
+        );
     }
 
     #[test]

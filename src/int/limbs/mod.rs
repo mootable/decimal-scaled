@@ -1182,6 +1182,32 @@ pub(crate) const fn limbs_cmp_u64_fixed<const L: usize>(a: &[u64; L], b: &[u64; 
     0
 }
 
+/// Cross-width unsigned magnitude comparison of two little-endian limb
+/// slices of possibly different lengths. Returns `-1` / `0` / `1` for
+/// `a < b` / `a == b` / `a > b`. The surplus high limbs of the longer
+/// slice must all be zero for the magnitudes to be equal there; any
+/// non-zero surplus limb makes that side the larger. No widening copy is
+/// made — the slices are compared in place. Const.
+#[inline]
+pub(crate) const fn limbs_cmp_u64_cross(a: &[u64], b: &[u64]) -> i32 {
+    let la = a.len();
+    let lb = b.len();
+    let max = if la > lb { la } else { lb };
+    let mut i = max;
+    while i > 0 {
+        i -= 1;
+        let av = if i < la { a[i] } else { 0 };
+        let bv = if i < lb { b[i] } else { 0 };
+        if av < bv {
+            return -1;
+        }
+        if av > bv {
+            return 1;
+        }
+    }
+    0
+}
+
 /// Bit length (`0` for zero, else `floor(log2)+1`).
 #[inline]
 pub(crate) const fn limbs_bit_len_u64(a: &[u64]) -> u32 {
