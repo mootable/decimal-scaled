@@ -26,8 +26,13 @@ use crate::int::algos::limbs::{
     mul_schoolbook, shl, shl_fixed, shr_fixed, sqr_low_fixed, sub_assign_fixed,
 };
 use crate::int::policy::add::dispatch as add_dispatch;
+use crate::int::policy::cmp::dispatch as cmp_dispatch;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
+use crate::int::policy::eq::dispatch as eq_dispatch;
 use crate::int::policy::mul::dispatch as mul_fast;
+use crate::int::policy::neg::dispatch as neg_dispatch;
+use crate::int::policy::rem::dispatch as rem_dispatch;
+use crate::int::policy::sub::dispatch as sub_dispatch;
 use crate::support::int_fmt::fmt_into;
 use core::cmp::Ordering;
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
@@ -739,19 +744,7 @@ impl<const N: usize> Int<N> {
     /// to itself, as with the primitive signed integers.
     #[inline]
     pub const fn wrapping_neg(self) -> Self {
-        let mut out = [0u64; N];
-        let mut i = 0;
-        while i < N {
-            out[i] = !self.limbs[i];
-            i += 1;
-        }
-        let mut result = Self { limbs: out };
-        let mut one = [0u64; N];
-        if N > 0 {
-            one[0] = 1;
-        }
-        add_assign_fixed(&mut result.limbs, &one);
-        result
+        neg_dispatch(self)
     }
 
     /// Wrapping addition (modulo `2^BITS`). Identical bit pattern to the
@@ -764,9 +757,8 @@ impl<const N: usize> Int<N> {
 
     /// Wrapping subtraction (modulo `2^BITS`).
     #[inline]
-    pub const fn wrapping_sub(mut self, rhs: Self) -> Self {
-        sub_assign_fixed(&mut self.limbs, &rhs.limbs);
-        self
+    pub const fn wrapping_sub(self, rhs: Self) -> Self {
+        sub_dispatch(self, rhs)
     }
 
     /// Wrapping multiplication (modulo `2^BITS`). The low `N` limbs of a
@@ -1628,7 +1620,7 @@ impl<const N: usize> Int<N> {
     /// overflows the signed range).
     #[inline]
     pub const fn checked_neg(self) -> Option<Self> {
-        if cmp_fixed(&self.limbs, &Self::MIN.limbs) == 0 {
+        if eq_dispatch(self, Self::MIN) {
             None
         } else {
             Some(self.wrapping_neg())
@@ -2273,9 +2265,10 @@ impl PartialOrd<Int<1>> for i64 {
 impl<const N: usize> Ord for Int<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        // Same-width total order, delegating to the generic cross-width
-        // comparator core (the `N == M` case).
-        self.cmp_cross(*other)
+        // Same-width total order, routing through the cmp policy dispatcher
+        // so the algorithm seam exists at a single point and the `const {
+        // select::<N>() }` block folds the choice per monomorphisation.
+        cmp_dispatch(*self, *other)
     }
 }
 
@@ -2412,7 +2405,7 @@ impl<const N: usize> Rem for Int<N> {
     type Output = Self;
     #[inline]
     fn rem(self, rhs: Self) -> Self {
-        self.div_rem(rhs).1
+        rem_dispatch(self, rhs)
     }
 }
 
