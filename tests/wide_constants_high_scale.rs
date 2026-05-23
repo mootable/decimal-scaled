@@ -68,7 +68,7 @@ fn d307_pi_at_scale_300_works() {
 #[test]
 fn d76_pi_at_scale_37_matches_d38() {
     use decimal_scaled::D38;
-    let n = D38::<37>::pi().to_bits().as_i128();
+    let n = i128::from(D38::<37>::pi().to_bits());
     let w = D76::<37>::pi().to_bits();
     let w_as_i128 = w.to_i128_checked().expect("fits");
     let diff = (w_as_i128 - n).abs();

@@ -245,7 +245,7 @@ fn num_traits_wide_basics() {
     assert!(<D76<2> as CheckedDiv>::checked_div(&one, &D76::<2>::ZERO).is_none());
     // num_traits::Num
     let v = <D76<2> as Num>::from_str_radix("1.50", 10).unwrap();
-    let exp: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)).into();
+    let exp: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
     assert_eq!(v, exp);
     assert!(<D76<2> as Num>::from_str_radix("FF", 16).is_err());
     // Signed
@@ -269,7 +269,7 @@ fn num_traits_wide_primitive_conversions() {
     assert_eq!(<D76<2> as FromPrimitive>::from_u64(5).unwrap(), exp);
     assert_eq!(<D76<2> as FromPrimitive>::from_i128(5).unwrap(), exp);
     assert_eq!(<D76<2> as FromPrimitive>::from_u128(5).unwrap(), exp);
-    let exp_f: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)).into();
+    let exp_f: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
     assert_eq!(<D76<2> as FromPrimitive>::from_f32(1.5).unwrap(), exp_f);
     assert_eq!(<D76<2> as FromPrimitive>::from_f64(1.5).unwrap(), exp_f);
 
@@ -292,7 +292,7 @@ fn num_traits_wide_primitive_conversions() {
     let exp5: D76<2> = D38::<2>::from_int(5).into();
     assert_eq!(v, exp5);
     let v: D76<2> = <D76<2> as NumCast>::from(1.5_f64).unwrap();
-    let exp_15: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(150)).into();
+    let exp_15: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
     assert_eq!(v, exp_15);
     assert!(<D76<2> as NumCast>::from(f64::NAN).is_none());
 }

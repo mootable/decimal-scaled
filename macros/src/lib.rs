@@ -962,9 +962,9 @@ fn expand_expression(width: Width, expr: Expr, scale: u32, scale_span: Span) -> 
         // when these stored `i128` / `i64`). Bridge it to the storage type so
         // callers keep the ergonomic `dNN!(some_int_expr, scale N)` form.
         let bridged = if width.storage_path == "Int::<1>" {
-            quote! { <#sp>::from_i64((#expr) as i64) }
+            quote! { <#sp as ::core::convert::From<i64>>::from((#expr) as i64) }
         } else {
-            quote! { <#sp>::from_i128((#expr) as i128) }
+            quote! { <#sp as ::core::convert::TryFrom<i128>>::try_from((#expr) as i128).unwrap() }
         };
         quote! {
             #tp :: <#scale> :: from_bits({

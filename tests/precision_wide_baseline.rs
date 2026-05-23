@@ -55,7 +55,7 @@ fn ln_d76_baseline() {
     agree_within(
         "D76<6>::ln(2)",
         wide_bits(w.ln_strict()),
-        n.ln_strict().to_bits().as_i128(),
+        i128::from(n.ln_strict().to_bits()),
     );
 }
 
@@ -68,7 +68,7 @@ fn exp_d76_baseline() {
     agree_within(
         "D76<6>::exp(1)",
         wide_bits(w.exp_strict()),
-        n.exp_strict().to_bits().as_i128(),
+        i128::from(n.exp_strict().to_bits()),
     );
 }
 
@@ -77,9 +77,9 @@ fn sin_d76_baseline() {
     use decimal_scaled::D38;
 
     for raw in [1_000_000i64, 2_345_678i64, 7_500_000i64] {
-        let n = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(raw as i128));
+        let n = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((raw as i128) as i128).unwrap());
         let w: D76<6> = n.into();
-        agree_within("sin", wide_bits(w.sin_strict()), n.sin_strict().to_bits().as_i128());
+        agree_within("sin", wide_bits(w.sin_strict()), i128::from(n.sin_strict().to_bits()));
     }
 }
 
@@ -88,12 +88,12 @@ fn atan_d76_baseline() {
     use decimal_scaled::D38;
 
     for raw in [1_000_000i64, -1_500_000i64, 3_000_000i64] {
-        let n = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(raw as i128));
+        let n = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((raw as i128) as i128).unwrap());
         let w: D76<6> = n.into();
         agree_within(
             "atan",
             wide_bits(w.atan_strict()),
-            n.atan_strict().to_bits().as_i128(),
+            i128::from(n.atan_strict().to_bits()),
         );
     }
 }
@@ -104,10 +104,10 @@ fn sqrt_d76_tight() {
     use decimal_scaled::D38;
 
     for raw in [4_000_000i64, 9_000_000i64, 16_000_000i64, 25_000_000i64] {
-        let n = D38::<6>::from_bits(decimal_scaled::Int::<2>::from_i128(raw as i128));
+        let n = D38::<6>::from_bits(decimal_scaled::Int::<2>::try_from((raw as i128) as i128).unwrap());
         let w: D76<6> = n.into();
         let wide = wide_bits(w.sqrt_strict());
-        let narrow = n.sqrt_strict().to_bits().as_i128();
+        let narrow = i128::from(n.sqrt_strict().to_bits());
         let diff = (wide - narrow).abs();
         assert!(
             diff <= 1,

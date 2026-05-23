@@ -32,7 +32,7 @@ fn eq_d38_all_signed_ints() {
     assert_eq!(42i128, v);
 
     // Fractional values are NEVER equal to any integer.
-    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)); // 42.01
+    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap()); // 42.01
     assert_ne!(frac, 42i32);
     assert_ne!(frac, 42i64);
     assert_ne!(frac, 42i128);
@@ -69,7 +69,7 @@ fn eq_d38_all_unsigned_ints_and_sign_rejection() {
     assert_ne!(neg, 5u32);
 
     // Fractional vs unsigned.
-    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4_201));
+    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap());
     assert_ne!(frac, 42u32);
     assert_ne!(frac, 42u128);
 }
@@ -98,7 +98,7 @@ fn eq_wide_int() {
     assert_eq!(v, 42i128);
     assert_eq!(v, 42u128);
     // Fractional
-    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::from_i128(4_201)).into();
+    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap()).into();
     assert_ne!(frac, 42i32);
     assert_ne!(frac, 42u32);
     // Negative vs unsigned
@@ -293,8 +293,8 @@ fn num_traits_wide() {
 #[test]
 fn bitwise_ops_d18() {
     use core::ops::*;
-    let a = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(0b1100));
-    let b = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(0b1010));
+    let a = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0b1100) as i64));
+    let b = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0b1010) as i64));
     assert_eq!((a & b).to_bits(), 0b1000);
     assert_eq!((a | b).to_bits(), 0b1110);
     assert_eq!((a ^ b).to_bits(), 0b0110);
@@ -308,11 +308,11 @@ fn bitwise_ops_d18() {
     c ^= b;
     assert_eq!(c.to_bits(), 0b0110);
     // Not
-    assert_eq!((!D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(0))).to_bits(), !0i64);
+    assert_eq!((!D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0) as i64))).to_bits(), !0i64);
     // Shifts
-    let s = D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(1));
+    let s = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((1) as i64));
     assert_eq!((s.shl(3_u32)).to_bits(), 8);
-    assert_eq!((D18::<2>::from_bits(decimal_scaled::Int::<1>::from_i64(16)).shr(2_u32)).to_bits(), 4);
+    assert_eq!((D18::<2>::from_bits(decimal_scaled::Int::<1>::from((16) as i64)).shr(2_u32)).to_bits(), 4);
 }
 
 // ─── macros/float_bridge.rs: from_f32 / to_f32 / from_f64 / to_f64 ─────

@@ -99,10 +99,10 @@ impl<const SCALE: u32> fmt::LowerExp for D38<SCALE> {
     /// ```
     /// use decimal_scaled::D38s12;
     ///
-    /// let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
+    /// let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
     /// assert_eq!(format!("{v:e}"), "1.5e0");
     ///
-    /// let sub = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000));
+    /// let sub = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_i128).unwrap());
     /// assert_eq!(format!("{sub:e}"), "1.5e-3");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -124,7 +124,7 @@ impl<const SCALE: u32> fmt::UpperExp for D38<SCALE> {
     /// ```
     /// use decimal_scaled::D38s12;
     ///
-    /// let v = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(1_500_000_000_000));
+    /// let v = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
     /// assert_eq!(format!("{v:E}"), "1.5E0");
     /// ```
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {

@@ -18,7 +18,7 @@ use decimal_scaled::{D18, D38};
 /// `exp_raw % multiplier == 0` directly on the storage. Both shapes
 /// must hit the fast path.
 fn d38_check<const S: u32>(base_raw: i128, n: i32) {
-    let base = D38::<S>::from_bits(decimal_scaled::Int::<2>::from_i128(base_raw));
+    let base = D38::<S>::from_bits(decimal_scaled::Int::<2>::try_from((base_raw) as i128).unwrap());
     let exp_d = D38::<S>::from_i32(n);
     let from_powf = base.powf_strict(exp_d);
     let from_powi = base.powi(n);
@@ -30,7 +30,7 @@ fn d38_check<const S: u32>(base_raw: i128, n: i32) {
 }
 
 fn d18_check<const S: u32>(base_raw: i64, n: i32) {
-    let base = D18::<S>::from_bits(decimal_scaled::Int::<1>::from_i64(base_raw));
+    let base = D18::<S>::from_bits(decimal_scaled::Int::<1>::from((base_raw) as i64));
     let exp_d = D18::<S>::from_i32(n);
     let from_powf = base.powf_strict(exp_d);
     let from_powi = base.powi(n);
@@ -75,7 +75,7 @@ fn d18_powf_integer_fastpath_parity_s6() {
 /// fast-path bounds check.
 #[test]
 fn d38_powf_zero_exp_returns_one() {
-    let base = D38::<12>::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000));
+    let base = D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap());
     let zero_exp = D38::<12>::from_i32(0);
     assert_eq!(
         base.powf_strict(zero_exp).to_bits(),
@@ -87,7 +87,7 @@ fn d38_powf_zero_exp_returns_one() {
 /// through `ONE / pow(|n|)`. Exercises the sign branch.
 #[test]
 fn d38_powf_negative_integer_exp_parity() {
-    let base = D38::<12>::from_bits(decimal_scaled::Int::<2>::from_i128(2_000_000_000_000)); // 2.0
+    let base = D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from((2_000_000_000_000) as i128).unwrap()); // 2.0
     for n in [-1_i32, -2, -3, -5, -10] {
         let exp_d = D38::<12>::from_i32(n);
         assert_eq!(

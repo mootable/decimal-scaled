@@ -22,13 +22,13 @@ fn d38_fast_surface_callable_in_any_mode() {
     let _ = x.exp2_fast();
     let _ = x.sqrt_fast();
     let _ = x.cbrt_fast();
-    let _ = x.powf_fast(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)));
+    let _ = x.powf_fast(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()));
     let _ = x.hypot_fast(D38s12::from_int(3));
     let _ = x.sin_fast();
     let _ = x.cos_fast();
     let _ = x.tan_fast();
-    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)).asin_fast();
-    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)).acos_fast();
+    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()).asin_fast();
+    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()).acos_fast();
     let _ = x.atan_fast();
     let _ = x.atan2_fast(D38s12::ONE);
     let _ = x.sinh_fast();
@@ -36,7 +36,7 @@ fn d38_fast_surface_callable_in_any_mode() {
     let _ = x.tanh_fast();
     let _ = x.asinh_fast();
     let _ = x.acosh_fast();
-    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)).atanh_fast();
+    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()).atanh_fast();
     let _ = x.to_degrees_fast();
     let _ = x.to_radians_fast();
 }
@@ -52,12 +52,12 @@ fn d38_strict_surface_callable_in_any_mode() {
     let _ = x.exp2_strict();
     let _ = x.sqrt_strict();
     let _ = x.cbrt_strict();
-    let _ = x.powf_strict(D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)));
+    let _ = x.powf_strict(D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()));
     let _ = x.sin_strict();
     let _ = x.cos_strict();
     let _ = x.tan_strict();
-    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)).asin_strict();
-    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)).acos_strict();
+    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()).asin_strict();
+    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()).acos_strict();
     let _ = x.atan_strict();
     let _ = x.atan2_strict(D38s12::ONE);
     let _ = x.sinh_strict();
@@ -65,7 +65,7 @@ fn d38_strict_surface_callable_in_any_mode() {
     let _ = x.tanh_strict();
     let _ = x.asinh_strict();
     let _ = x.acosh_strict();
-    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::from_i128(500_000_000_000)).atanh_strict();
+    let _ = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap()).atanh_strict();
     let _ = x.to_degrees_strict();
     let _ = x.to_radians_strict();
 }
