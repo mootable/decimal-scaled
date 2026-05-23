@@ -1,30 +1,26 @@
 //! Raw limb primitives and the named-type re-exports.
 //!
 //! The integer layer's primitive bucket (absorbed from the former
-//! `src/wide_int/`): the raw `&[u64]` / `&[u128]` slice arithmetic that
-//! the const-generic `Int<N>` / `Uint<N>` types and the width-matched
-//! [`crate::int::algos`] compose on, plus the `BigInt` trait that
-//! casts losslessly between any two widths (or a primitive `i128` /
-//! `i64` / `u128`) and the kernel-facing `BigInt` trait. The named
-//! signed `Int*` / unsigned `Uint*` two's-complement integers from 192
-//! to 16384 bits are now `pub type` aliases over `Int<N>` / `Uint<N>`
-//! (defined in [`crate::int::types`]) and re-exported here so the
-//! historic `crate::wide_int::IntXXXX` paths keep resolving. The module
-//! depends on nothing else in the crate and is structured so it can
-//! later be lifted into a standalone crate.
+//! `src/wide_int/`): the raw `&[u64]` slice arithmetic that the
+//! const-generic `Int<N>` / `Uint<N>` types and the width-matched
+//! [`crate::int::algos`] compose on. The named signed `Int*` / unsigned
+//! `Uint*` two's-complement integers from 192 to 16384 bits are now
+//! `pub type` aliases over `Int<N>` / `Uint<N>` (defined in
+//! [`crate::int::types`]) and re-exported here so the historic
+//! `crate::wide_int::IntXXXX` paths keep resolving. The module depends
+//! on nothing else in the crate and is structured so it can later be
+//! lifted into a standalone crate.
 //!
 //! # Structure
 //!
-//! - **Slice primitives** — the actual arithmetic, written once over
-//!   `&[u128]` limb slices (little-endian, `limbs[0]` least
-//!   significant). Operating on slices sidesteps the const-generic
-//!   return-type problem a widening multiply would otherwise hit. The
-//!   core routines are `const fn` so the integer types built on them
-//!   can expose `const` constructors and constants.
-//! - **`BigInt` / `BigInt` traits** — the magnitude/sign cast
-//!   bridge and the kernel-facing storage surface; implemented for
-//!   `Int<N>` / `Uint<N>` in [`crate::int::types`] and for the
-//!   primitive `i128` / `i64` / `u128` here.
+//! - **Slice primitives** — the actual arithmetic, written over `&[u64]`
+//!   limb slices (little-endian, `limbs[0]` least significant).
+//!   Operating on slices sidesteps the const-generic return-type problem
+//!   a widening multiply would otherwise hit; hardware's native
+//!   `u64 × u64 → u128` widening multiply and `u128 / u64` divide map
+//!   directly onto these kernels. The core routines are `const fn` so
+//!   the integer types built on them can expose `const` constructors and
+//!   constants.
 //! - The named `Uint* / Int*` aliases over the const-generic types.
 
 // On `no_std` the f64 inherent methods (`floor` / `sqrt`) used by the
@@ -36,1074 +32,20 @@
 use num_traits::Float as _;
 
 // ─────────────────────────────────────────────────────────────────────
-// Slice primitives — unsigned limb-array arithmetic.
+// u64 limb primitives — unsigned limb-array arithmetic.
 //
-// Every routine treats its slices as little-endian unsigned integers.
-// Lengths are taken from the slices; callers size output buffers.
+// Every routine treats its `&[u64]` slices as little-endian unsigned
+// integers (`limbs[0]` least significant); lengths are taken from the
+// slices and callers size the output buffers. The core routines are
+// `const fn` so the integer types built on them can expose `const`
+// constructors and constants.
+//
+// Hardware has a native `u64 × u64 → u128` widening multiply and a
+// native `u128 / u64` divide, so these limb kernels map directly onto
+// machine instructions.
 // ─────────────────────────────────────────────────────────────────────
-
-/// Full 128×128 → 256 unsigned product, `(high, low)`.
-#[inline]
-const fn mul_128(a: u128, b: u128) -> (u128, u128) {
-    let (a_hi, a_lo) = (a >> 64, a & u64::MAX as u128);
-    let (b_hi, b_lo) = (b >> 64, b & u64::MAX as u128);
-    let (mid, carry1) = (a_lo * b_hi).overflowing_add(a_hi * b_lo);
-    let (low, carry2) = (a_lo * b_lo).overflowing_add(mid << 64);
-    let high = a_hi * b_hi + (mid >> 64) + ((carry1 as u128) << 64) + carry2 as u128;
-    (high, low)
-}
 
 /// `a == 0`.
-#[inline]
-pub(crate) const fn limbs_is_zero(a: &[u128]) -> bool {
-    let mut i = 0;
-    while i < a.len() {
-        if a[i] != 0 {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
-
-/// `a == b` for two limb slices of possibly different lengths.
-#[inline]
-pub(crate) const fn limbs_eq(a: &[u128], b: &[u128]) -> bool {
-    let n = if a.len() > b.len() { a.len() } else { b.len() };
-    let mut i = 0;
-    while i < n {
-        let av = if i < a.len() { a[i] } else { 0 };
-        let bv = if i < b.len() { b[i] } else { 0 };
-        if av != bv {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
-
-/// Three-way comparison of two limb slices of possibly different
-/// lengths. Returns `-1`, `0`, or `1` for less / equal / greater.
-#[inline]
-pub(crate) const fn limbs_cmp(a: &[u128], b: &[u128]) -> i32 {
-    let n = if a.len() > b.len() { a.len() } else { b.len() };
-    let mut i = n;
-    while i > 0 {
-        i -= 1;
-        let av = if i < a.len() { a[i] } else { 0 };
-        let bv = if i < b.len() { b[i] } else { 0 };
-        if av < bv {
-            return -1;
-        }
-        if av > bv {
-            return 1;
-        }
-    }
-    0
-}
-
-/// Bit length (`0` for zero, else `floor(log2)+1`).
-#[inline]
-pub(crate) const fn limbs_bit_len(a: &[u128]) -> u32 {
-    let mut i = a.len();
-    while i > 0 {
-        i -= 1;
-        if a[i] != 0 {
-            return (i as u32) * 128 + (128 - a[i].leading_zeros());
-        }
-    }
-    0
-}
-
-/// `a += b`, returning the carry out. `a.len() >= b.len()`.
-#[inline]
-pub(crate) const fn limbs_add_assign(a: &mut [u128], b: &[u128]) -> bool {
-    let mut carry = 0u128;
-    let mut i = 0;
-    while i < a.len() {
-        let bv = if i < b.len() { b[i] } else { 0 };
-        let (s1, c1) = a[i].overflowing_add(bv);
-        let (s2, c2) = s1.overflowing_add(carry);
-        a[i] = s2;
-        carry = (c1 as u128) + (c2 as u128);
-        i += 1;
-    }
-    carry != 0
-}
-
-/// `a -= b`, returning the borrow out. `a.len() >= b.len()`.
-#[inline]
-pub(crate) const fn limbs_sub_assign(a: &mut [u128], b: &[u128]) -> bool {
-    let mut borrow = 0u128;
-    let mut i = 0;
-    while i < a.len() {
-        let bv = if i < b.len() { b[i] } else { 0 };
-        let (d1, b1) = a[i].overflowing_sub(bv);
-        let (d2, b2) = d1.overflowing_sub(borrow);
-        a[i] = d2;
-        borrow = (b1 as u128) + (b2 as u128);
-        i += 1;
-    }
-    borrow != 0
-}
-
-/// `out = a << shift`. `out` is zeroed then filled; bits shifted past
-/// `out`'s width are dropped.
-pub(crate) const fn limbs_shl(a: &[u128], shift: u32, out: &mut [u128]) {
-    let mut z = 0;
-    while z < out.len() {
-        out[z] = 0;
-        z += 1;
-    }
-    let limb_shift = (shift / 128) as usize;
-    let bit = shift % 128;
-    let mut i = 0;
-    while i < a.len() {
-        let dst = i + limb_shift;
-        if dst < out.len() {
-            if bit == 0 {
-                out[dst] |= a[i];
-            } else {
-                out[dst] |= a[i] << bit;
-                if dst + 1 < out.len() {
-                    out[dst + 1] |= a[i] >> (128 - bit);
-                }
-            }
-        }
-        i += 1;
-    }
-}
-
-/// `out = a >> shift`. `out` is zeroed then filled.
-pub(crate) const fn limbs_shr(a: &[u128], shift: u32, out: &mut [u128]) {
-    let mut z = 0;
-    while z < out.len() {
-        out[z] = 0;
-        z += 1;
-    }
-    let limb_shift = (shift / 128) as usize;
-    let bit = shift % 128;
-    let mut i = limb_shift;
-    while i < a.len() {
-        let dst = i - limb_shift;
-        if dst < out.len() {
-            if bit == 0 {
-                out[dst] |= a[i];
-            } else {
-                out[dst] |= a[i] >> bit;
-                if dst >= 1 {
-                    out[dst - 1] |= a[i] << (128 - bit);
-                }
-            }
-        }
-        i += 1;
-    }
-}
-
-/// `out = a · b` (schoolbook). `out.len() >= a.len() + b.len()` and
-/// `out` must be zeroed by the caller.
-pub(crate) const fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
-    // Fast path for the 2-limb × 2-limb → 4-limb shape used by
-    // `Int::<4>::wrapping_mul` (the densest wide-int call site). Hand
-    // unrolled so the compiler sees four independent `mul_128`
-    // sub-products that can issue in parallel; the inner loop variant
-    // can't express that.
-    if a.len() == 2 && b.len() == 2 && out.len() >= 4 {
-        let (a0, a1) = (a[0], a[1]);
-        let (b0, b1) = (b[0], b[1]);
-        // (a1·2^128 + a0)·(b1·2^128 + b0) = h3·2^384 + (h1+h2+l3)·2^256
-        // + (h0+l1+l2)·2^128 + l0
-        let (h0, l0) = mul_128(a0, b0);
-        let (h1, l1) = mul_128(a0, b1);
-        let (h2, l2) = mul_128(a1, b0);
-        let (h3, l3) = mul_128(a1, b1);
-
-        out[0] = l0;
-
-        let (s1, c1a) = h0.overflowing_add(l1);
-        let (s1, c1b) = s1.overflowing_add(l2);
-        out[1] = s1;
-        let mid_carry = (c1a as u128) + (c1b as u128);
-
-        let (s2, c2a) = h1.overflowing_add(h2);
-        let (s2, c2b) = s2.overflowing_add(l3);
-        let (s2, c2c) = s2.overflowing_add(mid_carry);
-        out[2] = s2;
-        let top_carry = (c2a as u128) + (c2b as u128) + (c2c as u128);
-
-        out[3] = h3.wrapping_add(top_carry);
-        return;
-    }
-
-    let mut i = 0;
-    while i < a.len() {
-        if a[i] != 0 {
-            let mut carry = 0u128;
-            let mut j = 0;
-            while j < b.len() {
-                // Skip zero-limb contributions: every `*` for `b[j] = 0`
-                // produces (0, 0) and the only effect is propagating the
-                // carry. Adds a hot fast path for widened-from-narrower
-                // operands (their upper limbs are zero) and for
-                // small-magnitude multipliers like `10^SCALE` at modest
-                // scales (one nonzero limb in `b`).
-                if b[j] != 0 || carry != 0 {
-                    let (hi, lo) = mul_128(a[i], b[j]);
-                    let idx = i + j;
-                    let (s1, c1) = out[idx].overflowing_add(lo);
-                    let (s2, c2) = s1.overflowing_add(carry);
-                    out[idx] = s2;
-                    carry = hi + (c1 as u128) + (c2 as u128);
-                }
-                j += 1;
-            }
-            let mut idx = i + b.len();
-            while carry != 0 && idx < out.len() {
-                let (s, c) = out[idx].overflowing_add(carry);
-                out[idx] = s;
-                carry = c as u128;
-                idx += 1;
-            }
-        }
-        i += 1;
-    }
-}
-
-/// Karatsuba multiplication threshold. For `a.len() < KARATSUBA_MIN`
-/// the schoolbook kernel wins because Karatsuba's recursive split
-/// allocates six `Vec`s of scratch per level (`z0`, `z1`, `z2`,
-/// `sum_a`, `sum_b`, plus the merge buffer). On `[u128]` limbs the
-/// `mul_128` savings (3·(n/2)² vs n² calls per level) only outpay
-/// that heap-alloc tax at n ≥ 32 limbs. Below that, the alloc + carry
-/// merges cost more than the limb-mul work they save — verified by
-/// `examples/karabench.rs`: at n=16 the schoolbook beats single-level
-/// Karatsuba ~800 ns vs ~880 ns; at n=32 Karatsuba wins back ~15%
-/// (~2.6 µs vs ~3.0 µs). Below 32 limbs the dispatcher therefore
-/// short-circuits straight to schoolbook.
-const KARATSUBA_MIN: usize = 32;
-
-/// `out = a · b` for equal-length inputs, dispatching to Karatsuba
-/// when the operand size warrants it.
-///
-/// Not `const fn` — Karatsuba's half-sum scratch needs heap allocation.
-/// Callers in `const` context (parsing string-literal constants, etc.)
-/// keep using [`limbs_mul`].
-///
-/// `out.len() >= 2 · a.len()`. `a.len() == b.len()` required for the
-/// Karatsuba path; mismatched lengths fall through to schoolbook.
-#[cfg(feature = "alloc")]
-pub(crate) fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
-    if a.len() == b.len() && a.len() >= KARATSUBA_MIN {
-        limbs_mul_karatsuba(a, b, out);
-    } else {
-        limbs_mul(a, b, out);
-    }
-}
-
-#[cfg(not(feature = "alloc"))]
-pub(crate) fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
-    limbs_mul(a, b, out);
-}
-
-/// Karatsuba multiplication, equal-length inputs.
-///
-/// Split `a = a_hi·B^h + a_lo`, `b = b_hi·B^h + b_lo` with
-/// `B = 2^128` and `h = a.len() / 2`. Compute three sub-products:
-///
-/// - `z0 = a_lo · b_lo`
-/// - `z2 = a_hi · b_hi`
-/// - `z1 = (a_lo + a_hi)·(b_lo + b_hi) − z0 − z2`
-///
-/// Then `a·b = z2·B^(2h) + z1·B^h + z0`.
-///
-/// Reference: Karatsuba, A. and Ofman, Yu. (1962). "Multiplication of
-/// Multidigit Numbers on Automata." *Doklady Akad. Nauk SSSR* 145,
-/// 293–294.
-#[cfg(feature = "alloc")]
-fn limbs_mul_karatsuba(a: &[u128], b: &[u128], out: &mut [u128]) {
-    debug_assert_eq!(a.len(), b.len());
-    debug_assert!(out.len() >= 2 * a.len());
-    let n = a.len();
-    if n < KARATSUBA_MIN {
-        // Zero out and run schoolbook.
-        for o in out.iter_mut().take(2 * n) {
-            *o = 0;
-        }
-        limbs_mul(a, b, out);
-        return;
-    }
-    let h = n / 2;
-    let (a_lo, a_hi_full) = a.split_at(h);
-    let (b_lo, b_hi_full) = b.split_at(h);
-    let a_hi = a_hi_full;
-    let b_hi = b_hi_full;
-
-    // z0 = a_lo · b_lo (length 2h)
-    let mut z0 = alloc::vec![0u128; 2 * h];
-    limbs_mul_karatsuba_padded(a_lo, b_lo, &mut z0);
-
-    // z2 = a_hi · b_hi (length 2*(n-h))
-    let hi_len = n - h;
-    let mut z2 = alloc::vec![0u128; 2 * hi_len];
-    limbs_mul_karatsuba_padded(a_hi, b_hi, &mut z2);
-
-    // sum_a = a_lo + a_hi (length max(h, hi_len) + 1)
-    let sum_len = core::cmp::max(h, hi_len) + 1;
-    let mut sum_a = alloc::vec![0u128; sum_len];
-    let mut sum_b = alloc::vec![0u128; sum_len];
-    sum_a[..h].copy_from_slice(a_lo);
-    sum_b[..h].copy_from_slice(b_lo);
-    limbs_add_assign(&mut sum_a[..], a_hi);
-    limbs_add_assign(&mut sum_b[..], b_hi);
-
-    // z1 = sum_a · sum_b (length 2 * sum_len)
-    let mut z1 = alloc::vec![0u128; 2 * sum_len];
-    limbs_mul_karatsuba_padded(&sum_a, &sum_b, &mut z1);
-
-    // z1 -= z0
-    limbs_sub_assign(&mut z1[..], &z0);
-    // z1 -= z2
-    limbs_sub_assign(&mut z1[..], &z2);
-
-    // Combine: out[..2h] = z0; out[2h..] = z2 shifted up by 2h;
-    // then add z1 shifted up by h.
-    for o in out.iter_mut().take(2 * n) {
-        *o = 0;
-    }
-    let z0_take = core::cmp::min(z0.len(), out.len());
-    out[..z0_take].copy_from_slice(&z0[..z0_take]);
-    let z2_take = core::cmp::min(z2.len(), out.len().saturating_sub(2 * h));
-    if z2_take > 0 {
-        out[2 * h..2 * h + z2_take].copy_from_slice(&z2[..z2_take]);
-    }
-    // Add z1 << h.
-    let z1_take = core::cmp::min(z1.len(), out.len().saturating_sub(h));
-    if z1_take > 0 {
-        limbs_add_assign(&mut out[h..h + z1_take], &z1[..z1_take]);
-    }
-}
-
-/// Karatsuba helper that pads to equal lengths if the caller passes
-/// uneven slices (happens at the recursion boundary when `n` is odd
-/// and `n_hi = n - h > h`).
-#[cfg(feature = "alloc")]
-fn limbs_mul_karatsuba_padded(a: &[u128], b: &[u128], out: &mut [u128]) {
-    if a.len() == b.len() && a.len() >= KARATSUBA_MIN {
-        limbs_mul_karatsuba(a, b, out);
-    } else {
-        for o in out.iter_mut() {
-            *o = 0;
-        }
-        limbs_mul(a, b, out);
-    }
-}
-
-/// Single-bit left shift in place; returns the bit shifted out of the
-/// top.
-#[inline]
-const fn limbs_shl1(a: &mut [u128]) -> u128 {
-    let mut carry = 0u128;
-    let mut i = 0;
-    while i < a.len() {
-        let new_carry = a[i] >> 127;
-        a[i] = (a[i] << 1) | carry;
-        carry = new_carry;
-        i += 1;
-    }
-    carry
-}
-
-/// `true` if every limb above index 0 is zero — the value fits a
-/// single 128-bit word.
-#[inline]
-const fn limbs_fit_one(a: &[u128]) -> bool {
-    let mut i = 1;
-    while i < a.len() {
-        if a[i] != 0 {
-            return false;
-        }
-        i += 1;
-    }
-    true
-}
-
-/// `quot = num / den`, `rem = num % den`. `quot.len() >= num.len()`,
-/// `rem.len() >= num.len()`; both are zeroed by this routine. `den`
-/// must be non-zero.
-///
-/// Two hardware fast paths short-circuit the binary long-division
-/// loop — they cover the dominant decimal cases (moderate magnitudes,
-/// divisor `10^scale` for `scale <= 19`):
-///
-/// - both operands fit a single 128-bit word → one hardware divide;
-/// - the divisor fits a 64-bit word → schoolbook base-2^64 division,
-///   one hardware divide per limb-half.
-///
-/// Otherwise it falls back to a binary shift-subtract loop bounded by
-/// the dividend's actual bit length.
-pub(crate) const fn limbs_divmod(num: &[u128], den: &[u128], quot: &mut [u128], rem: &mut [u128]) {
-    let mut z = 0;
-    while z < quot.len() {
-        quot[z] = 0;
-        z += 1;
-    }
-    z = 0;
-    while z < rem.len() {
-        rem[z] = 0;
-        z += 1;
-    }
-
-    let den_one_limb = limbs_fit_one(den);
-
-    // Fast path A: both dividend and divisor fit one 128-bit word.
-    if den_one_limb && limbs_fit_one(num) {
-        if !quot.is_empty() {
-            quot[0] = num[0] / den[0];
-        }
-        if !rem.is_empty() {
-            rem[0] = num[0] % den[0];
-        }
-        return;
-    }
-
-    // Fast path B: divisor fits a 64-bit word — schoolbook base-2^64
-    // long division, one hardware divide per 64-bit half of the
-    // dividend. Every `10^scale` for `scale <= 19` lands here.
-    if den_one_limb && den[0] <= u64::MAX as u128 {
-        let d = den[0];
-        let mut r: u128 = 0;
-        // Skip leading zero limbs of the numerator — every wide-tier
-        // call widens narrower operands into a `2 × $L`-limb buffer,
-        // so the top limbs are zero by construction. Each skipped
-        // limb saves two hardware divides.
-        let mut top = num.len();
-        while top > 0 && num[top - 1] == 0 {
-            top -= 1;
-        }
-        let mut i = top;
-        while i > 0 {
-            i -= 1;
-            let hi = num[i] >> 64;
-            let acc_hi = (r << 64) | hi;
-            let q_hi = acc_hi / d;
-            r = acc_hi % d;
-            let lo = num[i] & u64::MAX as u128;
-            let acc_lo = (r << 64) | lo;
-            let q_lo = acc_lo / d;
-            r = acc_lo % d;
-            if i < quot.len() {
-                quot[i] = (q_hi << 64) | q_lo;
-            }
-        }
-        if !rem.is_empty() {
-            rem[0] = r;
-        }
-        return;
-    }
-
-    // General path: binary shift-subtract, bounded by the dividend's
-    // actual bit length.
-    let bits = limbs_bit_len(num);
-    let mut i = bits;
-    while i > 0 {
-        i -= 1;
-        limbs_shl1(rem);
-        let bit = (num[(i / 128) as usize] >> (i % 128)) & 1;
-        rem[0] |= bit;
-        limbs_shl1(quot);
-        if limbs_cmp(rem, den) >= 0 {
-            limbs_sub_assign(rem, den);
-            quot[0] |= 1;
-        }
-    }
-}
-
-/// Capacity of the internal scratch buffers — 72 limbs (9216 bits),
-/// comfortably above the widest work integer in the crate (4096-bit →
-/// 32 limbs, with isqrt scratch ≤ 33).
-const SCRATCH_LIMBS: usize = 72;
-
-/// Runtime divide dispatcher. Picks the cheapest correct algorithm
-/// for the operand shape:
-///
-/// * **Single-limb divisor** — defer to the existing `const fn`
-///   [`limbs_divmod`] which carries hardware-divide fast paths for
-///   `1 / 1` and `n / u64` (every `10^scale` with `scale ≤ 19`).
-/// * **Multi-limb divisor below `BZ_THRESHOLD`** — [`limbs_divmod_knuth`].
-///   Algorithm D in base 2^128: `O(m·n)` multi-limb ops, vs the
-///   const path's `O((m+n)·n·128)` shift-subtract fallback. Net win
-///   on every wide-tier divide (D76 and above) with `SCALE > 19`.
-/// * **Very-wide divisor (`n ≥ BZ_THRESHOLD` and `top ≥ 2·n`)** —
-///   [`limbs_divmod_bz`]. Burnikel–Ziegler chunked schoolbook over
-///   Knuth. Wins at D307 deep scales where the divisor exceeds 8
-///   limbs.
-///
-/// Not `const fn` (the kernels aren't either). The wide-int
-/// `Div` / `Rem` operator impls take this path; the const-fn
-/// `wrapping_div` / `wrapping_rem` siblings stay on
-/// [`limbs_divmod`] for compile-time evaluation.
-pub(crate) fn limbs_divmod_dispatch(
-    num: &[u128],
-    den: &[u128],
-    quot: &mut [u128],
-    rem: &mut [u128],
-) {
-    const BZ_THRESHOLD: usize = 8;
-
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
-        n -= 1;
-    }
-    assert!(n > 0, "limbs_divmod_dispatch: divide by zero");
-
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
-    }
-
-    // Fast path A: both operands fit one 128-bit word.
-    if n == 1 && top <= 1 {
-        limbs_divmod(num, den, quot, rem);
-        return;
-    }
-
-    // Fast path B (covered by const limbs_divmod): single-limb
-    // divisor that also fits a u64. Every `10^scale` with
-    // `scale ≤ 19` lands here. Larger single-limb divisors
-    // (10^20 ≤ den ≤ 10^38) fall through to Knuth — the const
-    // path's only remaining option for those is the O(bits)
-    // shift-subtract, which is the bottleneck we're closing.
-    if n == 1 && den[0] <= u64::MAX as u128 {
-        limbs_divmod(num, den, quot, rem);
-        return;
-    }
-
-    // Multi-limb arithmetic OR oversized single-limb divisor —
-    // Knuth handles both efficiently; BZ wraps Knuth for very
-    // wide divisors.
-    if n >= BZ_THRESHOLD && top >= 2 * n {
-        limbs_divmod_bz(num, den, quot, rem);
-    } else {
-        limbs_divmod_knuth(num, den, quot, rem);
-    }
-}
-
-/// Möller–Granlund 2-by-1 invariant divisor.
-///
-/// Precomputes the reciprocal `v = ⌊(B² − 1) / d⌋ − B` (where
-/// `B = 2¹²⁸`) so each subsequent `(u₁·B + u₀) / d` reduces to two
-/// `mul_128`s plus a constant fix-up — vs the 128-iteration
-/// shift-subtract of [`div_2_by_1`].
-///
-/// Reference: Möller, N. and Granlund, T. (2011). *Improved Division
-/// by Invariant Integers*, IEEE Trans. Computers 60(2), 165–175,
-/// Algorithm 4 (div) and Algorithm 6 (reciprocal). PDF:
-/// <https://gmplib.org/~tege/division-paper.pdf>.
-///
-/// Setup amortises one bit-recovery `div_2_by_1` across every
-/// quotient limb of a [`limbs_divmod_knuth`] call, which is the
-/// difference between the wide-tier divide being ~50× a 2-by-1 step
-/// per limb (today) and ~2 multiplies per limb (with this struct).
-#[derive(Clone, Copy)]
-pub(crate) struct MG2by1 {
-    /// Normalised divisor (top bit set).
-    d: u128,
-    /// Reciprocal `v = ⌊(B² − 1) / d⌋ − B`.
-    v: u128,
-}
-
-impl MG2by1 {
-    /// Setup. `d` must be normalised (`d >> 127 == 1`).
-    ///
-    /// Computes `v` as `⌊(B² − 1 − d·B) / d⌋`, using the algebraic
-    /// rewrite `(B² − 1)/d − B = (B² − 1 − d·B)/d`. The numerator
-    /// `B² − 1 − d·B = (B − d − 1)·B + (B − 1)`, a u256 with
-    /// `high = !d` (since `!d = (B − 1) − d`) and `low = u128::MAX`.
-    /// `high < d` for any normalised `d`, so the existing
-    /// bit-recovery [`div_2_by_1`] handles it without precondition
-    /// violation.
-    #[inline]
-    pub(crate) const fn new(d: u128) -> Self {
-        debug_assert!(d >> 127 == 1, "MG2by1::new: divisor must be normalised");
-        let (v, _r) = div_2_by_1(!d, u128::MAX, d);
-        Self { d, v }
-    }
-
-    /// Divide `(u1·B + u0)` by the stored divisor. `u1 < d` is
-    /// required (else the quotient wouldn't fit `u128`).
-    ///
-    /// Per MG Algorithm 4:
-    /// 1. `(q1, q0) = v·u1 + ⟨u1, u0⟩` (u257; high word may wrap u128)
-    /// 2. `q1 += 1`
-    /// 3. `r = u0 − q1·d  (mod B)`
-    /// 4. if `r > q0`: `q1 -= 1`; `r += d` (wraps mod B)
-    /// 5. if `r >= d`: `q1 += 1`; `r -= d`
-    ///
-    /// Wrap-around in step 1/2/4 is fine: step 3 only depends on
-    /// `q1 mod B` (since `q1·d mod B == (q1 mod B)·d mod B`), and the
-    /// `r > q0` / `r >= d` corrections recover the true quotient
-    /// modulo `B`. The final `q1` always fits `u128` because the true
-    /// quotient is `< B` (per the `u1 < d` precondition).
-    #[inline]
-    pub(crate) const fn div_rem(&self, u1: u128, u0: u128) -> (u128, u128) {
-        debug_assert!(u1 < self.d, "MG2by1::div_rem: high word must be < divisor");
-        // Step 1.
-        let (vu1_hi, vu1_lo) = mul_128(self.v, u1);
-        let (q0, c_lo) = vu1_lo.overflowing_add(u0);
-        let (q1, _c_hi_a) = vu1_hi.overflowing_add(u1);
-        let (q1, _c_hi_b) = q1.overflowing_add(c_lo as u128);
-        // Step 2.
-        let q1 = q1.wrapping_add(1);
-        // Step 3.
-        let r = u0.wrapping_sub(q1.wrapping_mul(self.d));
-        // Step 4.
-        let (q1, r) = if r > q0 {
-            (q1.wrapping_sub(1), r.wrapping_add(self.d))
-        } else {
-            (q1, r)
-        };
-        // Step 5.
-        if r >= self.d {
-            (q1.wrapping_add(1), r.wrapping_sub(self.d))
-        } else {
-            (q1, r)
-        }
-    }
-}
-
-/// 2-by-1 unsigned divide: `(high · 2^128 + low) / d` and the matching
-/// remainder. Requires `high < d` so the quotient fits a single
-/// `u128`.
-///
-/// Implementation: bit-by-bit recovery (128 iterations, constant work
-/// per iter). Kept as the const-context fallback and as the setup
-/// path for [`MG2by1::new`]. Runtime callers that need many divides
-/// against the same divisor should use [`MG2by1`] instead — it cuts
-/// each subsequent divide from 128 iterations down to ~2 multiplies.
-#[inline]
-const fn div_2_by_1(high: u128, low: u128, d: u128) -> (u128, u128) {
-    // The classical recovery loop: at each step shift `r` left by 1,
-    // pull the next bit of `low` in, then conditionally subtract `d`
-    // and set the matching quotient bit. The catch is that `r` can
-    // grow past `2^128 − 1` between the shift and the subtract; we
-    // track that as the `r_top` carry-out bit so the comparison stays
-    // correct.
-    let mut q: u128 = 0;
-    let mut r = high;
-    let mut i = 128;
-    while i > 0 {
-        i -= 1;
-        let r_top = r >> 127;
-        r = (r << 1) | ((low >> i) & 1);
-        q <<= 1;
-        // r real = r_top·2^128 + r. Subtract if r_real ≥ d, i.e.
-        // r_top == 1 OR r ≥ d.
-        if r_top != 0 || r >= d {
-            r = r.wrapping_sub(d);
-            q |= 1;
-        }
-    }
-    (q, r)
-}
-
-/// Knuth Algorithm D — base-2^128 multi-limb long division. The
-/// algorithm-of-record base case for `limbs_divmod_bz` below.
-///
-/// Computes `quot = num / den`, `rem = num % den`. Requires
-/// `den` non-zero. `quot` and `rem` are zeroed by this routine.
-///
-/// This is the textbook Knuth Algorithm D (TAOCP Vol. 2, §4.3.1)
-/// adapted to base `2^128`: normalise the divisor so its top bit
-/// is set, then for each quotient limb estimate `q̂` from the top
-/// two limbs of the running dividend divided by the top limb of
-/// the divisor, refine `q̂` once if necessary against the second-
-/// from-top divisor limb, multiply-and-subtract, and add-back-and-
-/// decrement on the rare miss.
-///
-/// Complexity is `O(m·n)` multi-limb ops on `m+n / n`-limb inputs,
-/// versus the binary shift-subtract path's `O((m+n)·n·128)`. For
-/// `n = 32` limbs (Int<64>) the difference is ~14×. For `n ≤ 2`
-/// limbs there's no win and the caller should keep using the
-/// existing single-limb fast paths in `limbs_divmod`.
-///
-/// Not `const fn`: the inner loops use `[u128; SCRATCH_LIMBS]`
-/// scratch buffers and mutate them via overflowing arithmetic
-/// that the const evaluator doesn't yet permit. None of the
-/// crate's const-contexts depend on this routine.
-pub(crate) fn limbs_divmod_knuth(num: &[u128], den: &[u128], quot: &mut [u128], rem: &mut [u128]) {
-    for q in quot.iter_mut() {
-        *q = 0;
-    }
-    for r in rem.iter_mut() {
-        *r = 0;
-    }
-
-    // Effective lengths after stripping leading zeros.
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
-        n -= 1;
-    }
-    assert!(n > 0, "limbs_divmod_knuth: divide by zero");
-
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
-    }
-    if top < n {
-        // quotient is zero, remainder is num.
-        let copy_n = num.len().min(rem.len());
-        let mut i = 0;
-        while i < copy_n {
-            rem[i] = num[i];
-            i += 1;
-        }
-        return;
-    }
-
-    // D1. Normalise: shift divisor (and dividend) left by `shift` bits
-    // so the divisor's top limb has its high bit set. Knuth's q̂
-    // refinement guarantee only holds in that regime.
-    let shift = den[n - 1].leading_zeros();
-
-    let mut u = [0u128; SCRATCH_LIMBS];
-    let mut v = [0u128; SCRATCH_LIMBS];
-    debug_assert!(top < SCRATCH_LIMBS && n <= SCRATCH_LIMBS);
-
-    if shift == 0 {
-        u[..top].copy_from_slice(&num[..top]);
-        u[top] = 0;
-        v[..n].copy_from_slice(&den[..n]);
-    } else {
-        let mut carry: u128 = 0;
-        for i in 0..top {
-            let val = num[i];
-            u[i] = (val << shift) | carry;
-            carry = val >> (128 - shift);
-        }
-        u[top] = carry;
-        carry = 0;
-        for i in 0..n {
-            let val = den[i];
-            v[i] = (val << shift) | carry;
-            carry = val >> (128 - shift);
-        }
-    }
-
-    let m_plus_n = if u[top] != 0 { top + 1 } else { top };
-    debug_assert!(m_plus_n >= n);
-    let m = m_plus_n - n;
-
-    // Precompute the Möller–Granlund 2-by-1 reciprocal of the top
-    // divisor limb. After D1 the top limb has its high bit set
-    // (`v[n-1] >> 127 == 1` by construction), so the MG normalisation
-    // precondition is satisfied. One amortised setup cost spread
-    // across `m + 1` quotient-limb estimations.
-    let mg_top = MG2by1::new(v[n - 1]);
-
-    // D2. For j from m down to 0.
-    let mut j_plus_one = m + 1;
-    while j_plus_one > 0 {
-        j_plus_one -= 1;
-        let j = j_plus_one;
-
-        // D3. Estimate q̂.
-        let u_top = u[j + n];
-        let u_next = u[j + n - 1];
-        let v_top = v[n - 1];
-
-        let (mut q_hat, mut r_hat) = if u_top >= v_top {
-            // q̂ would exceed 2^128 − 1. Cap at the max and let the
-            // refinement / add-back step correct any over-estimate.
-            // r̂ = u_top·2^128 + u_next − q̂·v_top, computed mod 2^128
-            // with q̂ = 2^128 − 1: r̂ = u_top·2^128 + u_next − (2^128
-            // − 1)·v_top = (u_top − v_top)·2^128 + u_next + v_top.
-            // We only need r̂ ≤ 2^128 − 1 for the refinement step; if
-            // (u_top − v_top) ≥ 1, r̂ overflows and we skip the
-            // refinement (the multiply-subtract handles it).
-            let q = u128::MAX;
-            let (r, of) = u_next.overflowing_add(v_top);
-            // If overflow OR (u_top − v_top) ≥ 1 we treat r̂ as
-            // "above 2^128"; signal by returning r_overflow == true.
-            if of || u_top > v_top {
-                (q, u128::MAX) // sentinel; refinement loop will see r̂ "large" and not subtract.
-            } else {
-                (q, r)
-            }
-        } else {
-            mg_top.div_rem(u_top, u_next)
-        };
-
-        // Refinement: while q̂·v[n−2] > r̂·2^128 + u[j+n−2], decrement.
-        if n >= 2 {
-            let v_below = v[n - 2];
-            loop {
-                let (hi, lo) = mul_128(q_hat, v_below);
-                let rhs_lo = u[j + n - 2];
-                let rhs_hi = r_hat;
-                // Compare (hi, lo) vs (rhs_hi, rhs_lo).
-                if hi < rhs_hi || (hi == rhs_hi && lo <= rhs_lo) {
-                    break;
-                }
-                q_hat = q_hat.wrapping_sub(1);
-                let (new_r, of) = r_hat.overflowing_add(v_top);
-                if of {
-                    break;
-                }
-                r_hat = new_r;
-            }
-        }
-
-        // D4. Multiply-and-subtract: u[j..=j+n] -= q̂ · v[0..n].
-        let mut mul_carry: u128 = 0;
-        let mut borrow: u128 = 0;
-        for i in 0..n {
-            let (hi, lo) = mul_128(q_hat, v[i]);
-            let (prod_lo, c1) = lo.overflowing_add(mul_carry);
-            let new_mul_carry = hi + u128::from(c1);
-            let (s1, b1) = u[j + i].overflowing_sub(prod_lo);
-            let (s2, b2) = s1.overflowing_sub(borrow);
-            u[j + i] = s2;
-            borrow = u128::from(b1) + u128::from(b2);
-            mul_carry = new_mul_carry;
-        }
-        let (s1, b1) = u[j + n].overflowing_sub(mul_carry);
-        let (s2, b2) = s1.overflowing_sub(borrow);
-        u[j + n] = s2;
-        let final_borrow = u128::from(b1) + u128::from(b2);
-
-        // D5/D6. If multiply-subtract went negative, decrement q̂ and
-        // add v back.
-        if final_borrow != 0 {
-            q_hat = q_hat.wrapping_sub(1);
-            let mut carry: u128 = 0;
-            for i in 0..n {
-                let (s1, c1) = u[j + i].overflowing_add(v[i]);
-                let (s2, c2) = s1.overflowing_add(carry);
-                u[j + i] = s2;
-                carry = u128::from(c1) + u128::from(c2);
-            }
-            // Final carry cancels with the earlier borrow.
-            u[j + n] = u[j + n].wrapping_add(carry);
-        }
-
-        if j < quot.len() {
-            quot[j] = q_hat;
-        }
-    }
-
-    // D8. Denormalise the remainder: u[0..n] >> shift → rem.
-    if shift == 0 {
-        let copy_n = n.min(rem.len());
-        rem[..copy_n].copy_from_slice(&u[..copy_n]);
-    } else {
-        for i in 0..n {
-            if i < rem.len() {
-                let lo = u[i] >> shift;
-                let hi_into_lo = if i + 1 < n {
-                    u[i + 1] << (128 - shift)
-                } else {
-                    0
-                };
-                rem[i] = lo | hi_into_lo;
-            }
-        }
-    }
-}
-
-/// Burnikel–Ziegler recursive divide (MPI-I-98-1-022, 1998).
-///
-/// Splits an unbalanced `m+n / n` divide into a chain of balanced
-/// `2n / n` sub-divides, each of which recursively halves. The base
-/// case is [`limbs_divmod_knuth`] for divisors below `BZ_THRESHOLD`.
-/// On Karatsuba-multiplied operands BZ runs in `O(n^{1.58} · log n)`
-/// time vs Knuth's `O(n²)`.
-///
-/// For the widths this crate actually uses (Int<4> … Int<64>, ≤ 32
-/// limbs) the recursion only saves a constant factor over Knuth and
-/// the canonical `limbs_divmod` path stays untouched. BZ is exposed
-/// here so a bench-driven follow-up can promote it once a clear win
-/// shows up on the wide-tier divides.
-///
-/// Threshold: recurses only when both `num.len() ≥ 2·BZ_THRESHOLD`
-/// and `den.len() ≥ BZ_THRESHOLD`. Below that the cost of splitting
-/// dominates and Knuth wins outright.
-pub(crate) fn limbs_divmod_bz(num: &[u128], den: &[u128], quot: &mut [u128], rem: &mut [u128]) {
-    const BZ_THRESHOLD: usize = 8;
-
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
-        n -= 1;
-    }
-    assert!(n > 0, "limbs_divmod_bz: divide by zero");
-
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
-    }
-
-    if n < BZ_THRESHOLD || top < 2 * n {
-        // Base case — Knuth handles every shape efficiently.
-        limbs_divmod_knuth(num, den, quot, rem);
-        return;
-    }
-
-    // BZ recursion: split the dividend into chunks of size `n` from
-    // the top, process each chunk with a `2n / n` sub-divide, carry
-    // the remainder forward. Each `2n / n` sub-divide itself does
-    // two `(3n/2) / n` calls via the recursive structure that — at
-    // these widths — Knuth handles inside its own quotient loop, so
-    // for now BZ here is essentially the chunked schoolbook outer
-    // loop with Knuth as the kernel. The full §3 two-by-one /
-    // three-by-two recursion is recorded in ALGORITHMS.md as the
-    // next layer to add once a bench shows it winning.
-    for q in quot.iter_mut() {
-        *q = 0;
-    }
-    for r in rem.iter_mut() {
-        *r = 0;
-    }
-
-    // Number of `n`-limb chunks in the dividend, rounded up so the
-    // top chunk may be short.
-    let chunks = top.div_ceil(n);
-    let mut carry = [0u128; SCRATCH_LIMBS];
-    let mut buf = [0u128; SCRATCH_LIMBS];
-    let mut q_chunk = [0u128; SCRATCH_LIMBS];
-    let mut r_chunk = [0u128; SCRATCH_LIMBS];
-
-    let mut idx = chunks;
-    while idx > 0 {
-        idx -= 1;
-        let lo = idx * n;
-        let hi = ((idx + 1) * n).min(top);
-        // buf = carry · 2^(n·128) + num[lo..hi]. carry holds the
-        // running remainder from the previous step (≤ n limbs).
-        buf.fill(0);
-        let chunk_len = hi - lo;
-        buf[..chunk_len].copy_from_slice(&num[lo..lo + chunk_len]);
-        buf[chunk_len..chunk_len + n].copy_from_slice(&carry[..n]);
-        let buf_len = chunk_len + n;
-        // Divide.
-        limbs_divmod_knuth(
-            &buf[..buf_len],
-            &den[..n],
-            &mut q_chunk[..buf_len],
-            &mut r_chunk[..n],
-        );
-        // Store quotient chunk.
-        let store_end = (lo + n).min(quot.len());
-        let store_len = store_end.saturating_sub(lo);
-        quot[lo..lo + store_len].copy_from_slice(&q_chunk[..store_len]);
-        // Carry the remainder.
-        carry[..n].copy_from_slice(&r_chunk[..n]);
-    }
-    let rem_n = n.min(rem.len());
-    rem[..rem_n].copy_from_slice(&carry[..rem_n]);
-}
-
-/// `out = floor(sqrt(n))` via Newton's method. `out` is zeroed then
-/// filled.
-pub(crate) fn limbs_isqrt(n: &[u128], out: &mut [u128]) {
-    for o in out.iter_mut() {
-        *o = 0;
-    }
-    let bits = limbs_bit_len(n);
-    if bits == 0 {
-        return;
-    }
-    if bits <= 1 {
-        out[0] = 1;
-        return;
-    }
-    let work = n.len() + 1;
-    debug_assert!(work <= SCRATCH_LIMBS, "wide-int isqrt scratch overflow");
-    let mut x = [0u128; SCRATCH_LIMBS];
-    let e = bits.div_ceil(2);
-    x[(e / 128) as usize] |= 1u128 << (e % 128);
-    loop {
-        let mut q = [0u128; SCRATCH_LIMBS];
-        let mut r = [0u128; SCRATCH_LIMBS];
-        limbs_divmod(n, &x[..work], &mut q[..work], &mut r[..work]);
-        limbs_add_assign(&mut q[..work], &x[..work]);
-        let mut y = [0u128; SCRATCH_LIMBS];
-        limbs_shr(&q[..work], 1, &mut y[..work]);
-        if limbs_cmp(&y[..work], &x[..work]) >= 0 {
-            break;
-        }
-        x = y;
-    }
-    let copy_len = if out.len() < work { out.len() } else { work };
-    out[..copy_len].copy_from_slice(&x[..copy_len]);
-}
-
-/// `limbs /= radix` in place, returning the remainder. `radix` must fit
-/// a `u64` so the per-limb division stays within `u128`.
-fn limbs_div_small(limbs: &mut [u128], radix: u128) -> u128 {
-    let mut rem = 0u128;
-    for limb in limbs.iter_mut().rev() {
-        let hi = (*limb) >> 64;
-        let lo = (*limb) & u128::from(u64::MAX);
-        let acc_hi = (rem << 64) | hi;
-        let q_hi = acc_hi / radix;
-        let r1 = acc_hi % radix;
-        let acc_lo = (r1 << 64) | lo;
-        let q_lo = acc_lo / radix;
-        rem = acc_lo % radix;
-        *limb = (q_hi << 64) | q_lo;
-    }
-    rem
-}
-
-/// Formats a limb slice into `buf` in the given radix (`2..=16`),
-/// returning the written digit subslice. The slice is treated as an
-/// unsigned magnitude.
-pub(crate) fn limbs_fmt_into<'a>(
-    limbs: &[u128],
-    radix: u128,
-    lower: bool,
-    buf: &'a mut [u8],
-) -> &'a str {
-    let digits: &[u8] = if lower {
-        b"0123456789abcdef"
-    } else {
-        b"0123456789ABCDEF"
-    };
-    if limbs_is_zero(limbs) {
-        let last = buf.len() - 1;
-        buf[last] = b'0';
-        return core::str::from_utf8(&buf[last..]).unwrap();
-    }
-    let mut work = [0u128; SCRATCH_LIMBS];
-    work[..limbs.len()].copy_from_slice(limbs);
-    let wl = limbs.len();
-    let mut pos = buf.len();
-    while !limbs_is_zero(&work[..wl]) {
-        let r = limbs_div_small(&mut work[..wl], radix);
-        pos -= 1;
-        buf[pos] = digits[r as usize];
-    }
-    core::str::from_utf8(&buf[pos..]).unwrap()
-}
-
-// ─────────────────────────────────────────────────────────────────────
-// u64 limb primitives.
-//
-// Drop-in shape replacements for the `[u128]`-based primitives above,
-// but operating on `&[u64]` slices instead. The point: hardware has a
-// native `u64 × u64 → u128` widening multiply and a native `u128 / u64`
-// hardware divide, neither of which exists for `u128 × u128 → u256` or
-// `u256 / u128`. The u128 primitives above are forced to soft-emulate
-// both via the `mul_128` four-mul decomposition and the 128-iteration
-// `div_2_by_1` bit-recovery loop. The u64 versions get the hardware
-// instructions directly.
-//
-// During the in-progress storage migration these live alongside the
-// u128 versions; the wrapper types (`$U` / `$S` in `decl_wide_int!`)
-// continue to call the u128 entry points. A follow-up commit flips
-// the storage to `[u64; 2 * $L]` and rewires every call site.
-// ─────────────────────────────────────────────────────────────────────
-
-/// `a == 0`. u64-limb counterpart of [`limbs_is_zero`].
 #[inline]
 pub(crate) const fn limbs_is_zero_u64(a: &[u64]) -> bool {
     let mut i = 0;
@@ -1986,12 +928,11 @@ fn limbs_mul_karatsuba_padded_u64_alloc(a: &[u64], b: &[u64], out: &mut [u64]) {
 
 /// Möller–Granlund 2-by-1 invariant divisor at u64 base.
 ///
-/// Reference: same as [`MG2by1`] (Möller & Granlund 2011, Algorithm 4).
+/// Reference: Möller & Granlund (2011), Algorithm 4.
 ///
-/// The u64 base implementation is materially simpler than its u128
-/// sibling because the doubled type (u128) is *native* — every step
-/// that the u128 path does via `mul_128` + carry-merge is just one
-/// `u128` op here.
+/// The u64 base implementation is compact because the doubled type
+/// (u128) is *native* — each q̂ step is a single `u128` op rather than
+/// a software 256-bit decomposition.
 #[derive(Clone, Copy)]
 pub(crate) struct MG2by1U64 {
     d: u64,
@@ -2226,10 +1167,9 @@ pub(crate) fn limbs_divmod_dispatch_u64(
 
 /// Knuth Algorithm D at base 2^64.
 ///
-/// Same structure as [`limbs_divmod_knuth`] but every limb is a u64
-/// and the q̂ estimator uses [`MG2by1U64`]. The multiply-subtract pass
-/// uses native `u64 × u64 → u128`, which collapses one carry-merge
-/// layer compared to the u128 version's `mul_128`.
+/// Every limb is a u64 and the q̂ estimator uses [`MG2by1U64`]. The
+/// multiply-subtract pass uses native `u64 × u64 → u128`, which keeps
+/// the carry-merge to a single layer.
 pub(crate) fn limbs_divmod_knuth_u64(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     for q in quot.iter_mut() {
         *q = 0;
@@ -2695,16 +1635,6 @@ pub(crate) const fn scmp_u64(a_neg: bool, a: &[u64], b_neg: bool, b: &[u64]) -> 
 // End of u64 primitives.
 // ─────────────────────────────────────────────────────────────────────
 
-/// Signed three-way comparison of two magnitude-limb slices given their
-/// signs. Returns `-1` / `0` / `1`.
-#[inline]
-pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i32 {
-    match (a_neg, b_neg) {
-        (true, false) => -1,
-        (false, true) => 1,
-        _ => limbs_cmp(a, b),
-    }
-}
 
 
 // The named wide-integer type family. Every width is now the
@@ -2726,47 +1656,6 @@ pub(crate) const fn scmp(a_neg: bool, a: &[u128], b_neg: bool, b: &[u128]) -> i3
 // backs storage or serves as a mul/div widening step for some tier,
 // and a matching `U*` (unsigned) when `Display`'s magnitude path
 // needs it.
-
-#[cfg(test)]
-mod karatsuba_tests {
-    use super::*;
-    use crate::int::types::{Int, Uint};
-
-    /// Karatsuba and schoolbook must agree bit-for-bit on every
-    /// equal-length input that meets the threshold.
-    #[test]
-    fn karatsuba_matches_schoolbook_at_n16() {
-        let a: [u128; 16] = core::array::from_fn(|i| (i as u128) * 0xdead_beef + 1);
-        let b: [u128; 16] = core::array::from_fn(|i| 0xcafe_babe ^ ((i as u128) << 5));
-        let mut s = [0u128; 32];
-        let mut k = [0u128; 32];
-        limbs_mul(&a, &b, &mut s);
-        limbs_mul_karatsuba(&a, &b, &mut k);
-        assert_eq!(s, k);
-    }
-
-    #[test]
-    fn karatsuba_matches_schoolbook_at_n32() {
-        let a: [u128; 32] = core::array::from_fn(|i| (i as u128).wrapping_mul(0x1234_5678_9abc));
-        let b: [u128; 32] = core::array::from_fn(|i| (i as u128 + 1).wrapping_mul(0xfedc_ba98));
-        let mut s = [0u128; 64];
-        let mut k = [0u128; 64];
-        limbs_mul(&a, &b, &mut s);
-        limbs_mul_karatsuba(&a, &b, &mut k);
-        assert_eq!(s, k);
-    }
-
-    #[test]
-    fn karatsuba_handles_zero_inputs() {
-        let a = [0u128; 16];
-        let b: [u128; 16] = core::array::from_fn(|i| (i as u128) + 1);
-        let mut k = [0u128; 32];
-        limbs_mul_karatsuba(&a, &b, &mut k);
-        for o in &k {
-            assert_eq!(*o, 0);
-        }
-    }
-}
 
 #[cfg(test)]
 mod hint_tests {
@@ -2929,81 +1818,7 @@ mod slice_tests {
     use super::*;
     use crate::int::types::{Int, Uint};
 
-    #[test]
-    fn mul_and_divmod_round_trip() {
-        let a = [123u128, 7, 0, 0];
-        let b = [456u128, 0, 0, 0];
-        let mut prod = [0u128; 8];
-        limbs_mul(&a, &b, &mut prod);
-        let mut q = [0u128; 8];
-        let mut r = [0u128; 8];
-        limbs_divmod(&prod, &b, &mut q, &mut r);
-        assert_eq!(&q[..4], &a, "quotient");
-        assert!(limbs_is_zero(&r), "remainder");
-    }
-
-    #[test]
-    fn shifts() {
-        let a = [1u128, 0];
-        let mut out = [0u128; 2];
-        limbs_shl(&a, 130, &mut out);
-        assert_eq!(out, [0, 4]);
-        let mut back = [0u128; 2];
-        limbs_shr(&out, 130, &mut back);
-        assert_eq!(back, [1, 0]);
-    }
-
-    #[test]
-    fn isqrt_basic() {
-        let n = [0u128, 0, 1, 0];
-        let mut out = [0u128; 4];
-        limbs_isqrt(&n, &mut out);
-        assert_eq!(out, [0, 1, 0, 0]);
-        let n = [144u128, 0];
-        let mut out = [0u128; 2];
-        limbs_isqrt(&n, &mut out);
-        assert_eq!(out, [12, 0]);
-        let n = [2u128, 0];
-        let mut out = [0u128; 2];
-        limbs_isqrt(&n, &mut out);
-        assert_eq!(out, [1, 0]);
-    }
-
-    #[test]
-    fn add_sub_carry() {
-        let mut a = [u128::MAX, 0];
-        let carry = limbs_add_assign(&mut a, &[1, 0]);
-        assert!(!carry);
-        assert_eq!(a, [0, 1]);
-        let borrow = limbs_sub_assign(&mut a, &[1, 0]);
-        assert!(!borrow);
-        assert_eq!(a, [u128::MAX, 0]);
-    }
-
-    /// `div_2_by_1` matches the obvious `(high·2^128 + low) / d`
-    /// formula on representative inputs.
-    #[test]
-    fn div_2_by_1_basics() {
-        // 1 / 1 = 1 r 0.
-        assert_eq!(div_2_by_1(0, 1, 1), (1, 0));
-        // 5 / 2 = 2 r 1.
-        assert_eq!(div_2_by_1(0, 5, 2), (2, 1));
-        // (3·2^128) / 4 = 3·2^126 r 0.
-        assert_eq!(div_2_by_1(3, 0, 4), (3 << 126, 0));
-        // High limb just under divisor — exercises the r_top overflow
-        // recovery in the inner loop.
-        let d = u128::MAX - 7;
-        let (q, r) = div_2_by_1(d - 1, u128::MAX, d);
-        // q · d + r == (d−1)·2^128 + (2^128 − 1)
-        let (mul_hi, mul_lo) = mul_128(q, d);
-        let (sum_lo, c) = mul_lo.overflowing_add(r);
-        let sum_hi = mul_hi + c as u128;
-        assert_eq!(sum_hi, d - 1);
-        assert_eq!(sum_lo, u128::MAX);
-        assert!(r < d);
-    }
-
-    // ── u64-primitive equivalence: u64 versions vs u128 oracle ──────
+    // ── u64-primitive equivalence + self-consistency ──────
 
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
     fn pack(limbs: &[u128]) -> alloc::vec::Vec<u64> {
@@ -3011,16 +1826,6 @@ mod slice_tests {
         for (i, &l) in limbs.iter().enumerate() {
             out[2 * i] = l as u64;
             out[2 * i + 1] = (l >> 64) as u64;
-        }
-        out
-    }
-
-    /// Unpack a `[u64; 2*N]` slice into a `[u128; N]` vec.
-    fn unpack(words: &[u64]) -> alloc::vec::Vec<u128> {
-        assert!(words.len() % 2 == 0);
-        let mut out = alloc::vec![0u128; words.len() / 2];
-        for i in 0..out.len() {
-            out[i] = (words[2 * i] as u128) | ((words[2 * i + 1] as u128) << 64);
         }
         out
     }
@@ -3042,21 +1847,28 @@ mod slice_tests {
         ]
     }
 
-    /// `limbs_mul_u64` matches `limbs_mul` after pack/unpack on the
-    /// shared corpus.
+    /// `limbs_mul_u64` is self-consistent with the divide engine across
+    /// the carry-stressing corpus: `(a·b) / b == a` and `(a·b) % b == 0`
+    /// whenever `b != 0`. Together with the Karatsuba and Knuth/BZ
+    /// cross-checks below this pins the schoolbook multiply.
     #[test]
-    fn limbs_mul_u64_matches_u128() {
+    fn limbs_mul_u64_round_trips_through_divide() {
         for a in corpus() {
             for b in corpus() {
-                let mut out128 = alloc::vec![0u128; a.len() + b.len()];
-                limbs_mul(&a, &b, &mut out128);
-
                 let a64 = pack(&a);
                 let b64 = pack(&b);
-                let mut out64 = alloc::vec![0u64; a64.len() + b64.len()];
-                limbs_mul_u64(&a64, &b64, &mut out64);
+                if limbs_is_zero_u64(&b64) {
+                    continue;
+                }
+                let mut prod = alloc::vec![0u64; a64.len() + b64.len()];
+                limbs_mul_u64(&a64, &b64, &mut prod);
 
-                assert_eq!(unpack(&out64), out128, "limbs_mul mismatch");
+                let mut q = alloc::vec![0u64; prod.len()];
+                let mut r = alloc::vec![0u64; b64.len() + 1];
+                limbs_divmod_dispatch_u64(&prod, &b64, &mut q, &mut r);
+
+                assert!(limbs_is_zero_u64(&r), "remainder non-zero");
+                assert_eq!(&q[..a64.len()], &a64[..], "quotient != a");
             }
         }
     }
@@ -3355,50 +2167,59 @@ mod slice_tests {
         check_into!(16, 17, 32);
     }
 
-    /// `limbs_divmod_u64` matches `limbs_divmod`.
+    /// Verify the Euclidean identity `num == q·den + r` with
+    /// `0 <= r < den` reconstructs across the corpus, where `q`/`r`
+    /// come from `limbs_divmod_u64`.
     #[test]
-    fn limbs_divmod_u64_matches_u128() {
+    fn limbs_divmod_u64_satisfies_identity() {
         for num in corpus() {
             for den in corpus() {
-                if den.iter().all(|&x| x == 0) {
-                    continue;
-                }
-                let mut q128 = alloc::vec![0u128; num.len()];
-                let mut r128 = alloc::vec![0u128; num.len()];
-                limbs_divmod(&num, &den, &mut q128, &mut r128);
-
                 let n64 = pack(&num);
                 let d64 = pack(&den);
+                if limbs_is_zero_u64(&d64) {
+                    continue;
+                }
                 let mut q64 = alloc::vec![0u64; n64.len()];
                 let mut r64 = alloc::vec![0u64; n64.len()];
                 limbs_divmod_u64(&n64, &d64, &mut q64, &mut r64);
 
-                assert_eq!(unpack(&q64), q128, "divmod q mismatch");
-                assert_eq!(unpack(&r64), r128, "divmod r mismatch");
+                // recon = q·den + r, then compare to num.
+                let mut recon = alloc::vec![0u64; q64.len() + d64.len() + 1];
+                limbs_mul_u64(&q64, &d64, &mut recon);
+                let _ = limbs_add_assign_u64(&mut recon, &r64);
+                assert_eq!(&recon[..n64.len()], &n64[..], "q·den + r != num");
+                assert!(recon[n64.len()..].iter().all(|&x| x == 0), "recon overflow");
+                assert!(limbs_cmp_u64(&r64, &d64) < 0, "remainder >= divisor");
             }
         }
     }
 
-    /// `limbs_divmod_knuth_u64` matches `limbs_divmod_knuth`.
+    /// `limbs_divmod_knuth_u64` agrees with the dispatch path
+    /// (`limbs_divmod_u64` / `limbs_divmod_dispatch_u64`) on the corpus.
     #[test]
-    fn limbs_divmod_knuth_u64_matches_u128() {
+    fn limbs_divmod_knuth_u64_matches_dispatch() {
         for num in corpus() {
             for den in corpus() {
-                if den.iter().all(|&x| x == 0) {
-                    continue;
-                }
-                let mut q128 = alloc::vec![0u128; num.len()];
-                let mut r128 = alloc::vec![0u128; num.len()];
-                limbs_divmod_knuth(&num, &den, &mut q128, &mut r128);
-
                 let n64 = pack(&num);
                 let d64 = pack(&den);
-                let mut q64 = alloc::vec![0u64; n64.len()];
-                let mut r64 = alloc::vec![0u64; n64.len()];
-                limbs_divmod_knuth_u64(&n64, &d64, &mut q64, &mut r64);
+                // Knuth requires a genuinely multi-limb normalised divisor.
+                let mut dn = d64.len();
+                while dn > 0 && d64[dn - 1] == 0 {
+                    dn -= 1;
+                }
+                if dn < 2 {
+                    continue;
+                }
+                let mut q_ref = alloc::vec![0u64; n64.len()];
+                let mut r_ref = alloc::vec![0u64; n64.len()];
+                limbs_divmod_dispatch_u64(&n64, &d64, &mut q_ref, &mut r_ref);
 
-                assert_eq!(unpack(&q64), q128, "knuth q mismatch");
-                assert_eq!(unpack(&r64), r128, "knuth r mismatch");
+                let mut q_knuth = alloc::vec![0u64; n64.len()];
+                let mut r_knuth = alloc::vec![0u64; n64.len()];
+                limbs_divmod_knuth_u64(&n64, &d64, &mut q_knuth, &mut r_knuth);
+
+                assert_eq!(q_knuth, q_ref, "knuth q mismatch");
+                assert_eq!(r_knuth, r_ref, "knuth r mismatch");
             }
         }
     }
@@ -3499,85 +2320,34 @@ mod slice_tests {
         }
     }
 
-    /// `MG2by1::div_rem` bit-exact matches `div_2_by_1` on a
-    /// battery of corner cases that historically broke 2-by-1 MG
-    /// implementations: maximal numerator with minimal-normalised
-    /// divisor (forces the +1 step's u128 overflow), boundary
-    /// q̂ = u128::MAX, exact divides, and the smallest divisor that
-    /// satisfies the normalisation requirement (`d` with top bit
-    /// set and otherwise zero, i.e. `B/2`).
-    #[test]
-    fn mg2by1_matches_div_2_by_1() {
-        // For each (u1, u0, d), the precondition is `u1 < d` and
-        // `d >> 127 == 1` (normalised).
-        let cases: &[(u128, u128, u128)] = &[
-            // Minimal normalised divisor (d = B/2).
-            (0, 1, 1u128 << 127),
-            (0, u128::MAX, 1u128 << 127),
-            ((1u128 << 127) - 1, u128::MAX, 1u128 << 127),
-            // Maximal divisor (d = u128::MAX = B-1).
-            (0, 1, u128::MAX),
-            (u128::MAX - 1, u128::MAX, u128::MAX),
-            // The exact corner case worked through in the docs:
-            // u1 = B-2, u0 = B-1, d = B-1 → (q, r) = (B-1, B-2).
-            (u128::MAX - 1, u128::MAX, u128::MAX),
-            // Mid-range with mid-range divisor.
-            (12345, 67890, (1u128 << 127) | 0xdead_beefu128),
-            // Numerator equals divisor minus one in the high limb —
-            // exercises the "q̂ = u128::MAX" path.
-            (u128::MAX - 1, 0, u128::MAX),
-            // Random spread.
-            (
-                0x1234_5678_9abc_def0_u128 ^ 0xa5a5,
-                0xfedc_ba98_7654_3210_u128,
-                (1u128 << 127) | 0xc0ffee_u128,
-            ),
-        ];
-        for &(u1, u0, d) in cases {
-            assert!(d >> 127 == 1, "test divisor not normalised: {d:#x}");
-            assert!(
-                u1 < d,
-                "test precondition u1 < d violated: {u1:#x} >= {d:#x}"
-            );
-            let (q_ref, r_ref) = div_2_by_1(u1, u0, d);
-            let mg = MG2by1::new(d);
-            let (q_mg, r_mg) = mg.div_rem(u1, u0);
-            assert_eq!(
-                (q_mg, r_mg),
-                (q_ref, r_ref),
-                "MG2by1 disagrees with div_2_by_1 for (u1={u1:#x}, u0={u0:#x}, d={d:#x})"
-            );
-        }
-    }
-
-    /// `limbs_divmod_knuth` agrees with the canonical `limbs_divmod`
-    /// on a battery of representative shapes — single-limb divisors,
-    /// multi-limb divisors, zero remainders, partial overflows in the
-    /// q̂ refinement step.
+    /// `limbs_divmod_knuth_u64` agrees with the dispatch path
+    /// (`limbs_divmod_dispatch_u64`) on a battery of representative
+    /// shapes — single-limb divisors, multi-limb divisors, zero
+    /// remainders, partial overflows in the q̂ refinement step.
     #[test]
     fn knuth_matches_canonical_divmod() {
-        let cases: &[(&[u128], &[u128])] = &[
+        let cases: &[(&[u64], &[u64])] = &[
             // Simple
             (&[42], &[7]),
-            (&[u128::MAX, 0], &[2]),
+            (&[u64::MAX, 0], &[2]),
             // Multi-limb numerator, single-limb denominator.
             (&[1, 1, 0, 0], &[3]),
             // Multi-limb both — three-limb numerator by two-limb den.
-            (&[u128::MAX, u128::MAX, 1, 0], &[5, 9]),
+            (&[u64::MAX, u64::MAX, 1, 0], &[5, 9]),
             // Three-limb both.
-            (&[u128::MAX, u128::MAX, u128::MAX, 0], &[1, 2, 3]),
+            (&[u64::MAX, u64::MAX, u64::MAX, 0], &[1, 2, 3]),
             // Numerator < denominator — quotient zero, remainder = num.
             (&[100, 0, 0], &[200, 0, 1]),
             // Equal high limbs (forces the u_top ≥ v_top branch).
-            (&[0, 0, u128::MAX, u128::MAX], &[1, 2, u128::MAX]),
+            (&[0, 0, u64::MAX, u64::MAX], &[1, 2, u64::MAX]),
         ];
         for (num, den) in cases {
-            let mut q_canon = [0u128; 8];
-            let mut r_canon = [0u128; 8];
-            limbs_divmod(num, den, &mut q_canon, &mut r_canon);
-            let mut q_knuth = [0u128; 8];
-            let mut r_knuth = [0u128; 8];
-            limbs_divmod_knuth(num, den, &mut q_knuth, &mut r_knuth);
+            let mut q_canon = [0u64; 8];
+            let mut r_canon = [0u64; 8];
+            limbs_divmod_dispatch_u64(num, den, &mut q_canon, &mut r_canon);
+            let mut q_knuth = [0u64; 8];
+            let mut r_knuth = [0u64; 8];
+            limbs_divmod_knuth_u64(num, den, &mut q_knuth, &mut r_knuth);
             assert_eq!(
                 q_canon, q_knuth,
                 "quotient mismatch on {:?} / {:?}",
@@ -3591,97 +2361,31 @@ mod slice_tests {
         }
     }
 
-    /// `limbs_divmod_bz` agrees with the canonical path on
+    /// `limbs_divmod_bz_u64` agrees with the dispatch path on
     /// medium-and-large operands. Recursion engages only above the
-    /// `BZ_THRESHOLD = 8` limb cutoff.
+    /// `BZ_THRESHOLD_U64` limb cutoff.
     #[test]
     fn bz_matches_canonical_divmod() {
-        // Builds a 16-limb dividend with a 10-limb divisor — well
-        // above BZ_THRESHOLD so the recursive path is exercised.
-        let mut num = [0u128; 16];
+        // Builds a 40-limb dividend with a 20-limb divisor — well above
+        // BZ_THRESHOLD_U64 so the recursive path is exercised.
+        let mut num = [0u64; 40];
         for (i, slot) in num.iter_mut().enumerate() {
-            *slot = (i as u128)
+            *slot = (i as u64)
                 .wrapping_mul(0x9E37_79B9_7F4A_7C15)
-                .wrapping_add(i as u128);
+                .wrapping_add(i as u64);
         }
-        let mut den = [0u128; 10];
+        let mut den = [0u64; 20];
         for (i, slot) in den.iter_mut().enumerate() {
-            *slot = ((i + 1) as u128).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            *slot = ((i + 1) as u64).wrapping_mul(0xBF58_476D_1CE4_E5B9);
         }
-        let mut q_canon = [0u128; 16];
-        let mut r_canon = [0u128; 16];
-        limbs_divmod(&num, &den, &mut q_canon, &mut r_canon);
-        let mut q_bz = [0u128; 16];
-        let mut r_bz = [0u128; 16];
-        limbs_divmod_bz(&num, &den, &mut q_bz, &mut r_bz);
+        let mut q_canon = [0u64; 40];
+        let mut r_canon = [0u64; 40];
+        limbs_divmod_knuth_u64(&num, &den, &mut q_canon, &mut r_canon);
+        let mut q_bz = [0u64; 40];
+        let mut r_bz = [0u64; 40];
+        limbs_divmod_bz_u64(&num, &den, &mut q_bz, &mut r_bz);
         assert_eq!(q_canon, q_bz, "BZ quotient mismatch");
         assert_eq!(r_canon, r_bz, "BZ remainder mismatch");
-    }
-
-    /// `limbs_mul_fast` dispatches to Karatsuba when both operands are
-    /// equal-length ≥ `KARATSUBA_MIN`. Verify by comparing the result
-    /// against schoolbook (`limbs_mul`) on a 16-limb pair.
-    #[cfg(feature = "alloc")]
-    #[test]
-    fn fast_mul_dispatches_to_karatsuba_at_threshold() {
-        let a: [u128; 16] = core::array::from_fn(|i| (i as u128).wrapping_mul(0xABCD) + 1);
-        let b: [u128; 16] = core::array::from_fn(|i| (i as u128).wrapping_mul(0xBEEF) + 7);
-        let mut fast = [0u128; 32];
-        let mut school = [0u128; 32];
-        limbs_mul_fast(&a, &b, &mut fast);
-        limbs_mul(&a, &b, &mut school);
-        assert_eq!(fast, school, "fast (Karatsuba) and schoolbook disagree");
-    }
-
-    /// `limbs_mul_fast` falls through to schoolbook for unequal lengths
-    /// or below the threshold. The 8-limb pair below skips Karatsuba.
-    #[cfg(feature = "alloc")]
-    #[test]
-    fn fast_mul_falls_through_to_schoolbook_below_threshold() {
-        let a: [u128; 8] = core::array::from_fn(|i| (i as u128).wrapping_mul(0x1234) + 1);
-        let b: [u128; 8] = core::array::from_fn(|i| (i as u128).wrapping_mul(0x5678) + 3);
-        let mut fast = [0u128; 16];
-        let mut school = [0u128; 16];
-        limbs_mul_fast(&a, &b, &mut fast);
-        limbs_mul(&a, &b, &mut school);
-        assert_eq!(fast, school);
-    }
-
-    /// Karatsuba called directly below the threshold should still
-    /// produce the correct product via its internal schoolbook
-    /// fall-through. This exercises the safety branch in
-    /// `limbs_mul_karatsuba` that zeros out and delegates back to
-    /// schoolbook when `n < KARATSUBA_MIN`.
-    #[cfg(feature = "alloc")]
-    #[test]
-    fn karatsuba_safety_fallback_below_threshold() {
-        let a: [u128; 4] = [123, 456, 789, 0];
-        let b: [u128; 4] = [987, 654, 321, 0];
-        let mut karatsuba_out = [0u128; 8];
-        let mut school_out = [0u128; 8];
-        limbs_mul_karatsuba(&a, &b, &mut karatsuba_out);
-        limbs_mul(&a, &b, &mut school_out);
-        assert_eq!(karatsuba_out, school_out);
-    }
-
-    /// `limbs_isqrt` of `1` returns `1` via the `bits <= 1` short-
-    /// circuit.
-    #[test]
-    fn isqrt_one_short_circuit() {
-        let n = [1u128, 0];
-        let mut out = [0u128; 2];
-        limbs_isqrt(&n, &mut out);
-        assert_eq!(out, [1, 0]);
-    }
-
-    /// `limbs_isqrt` of `0` returns `0` via the `bits == 0` short-
-    /// circuit.
-    #[test]
-    fn isqrt_zero_short_circuit() {
-        let n = [0u128, 0];
-        let mut out = [0u128; 2];
-        limbs_isqrt(&n, &mut out);
-        assert_eq!(out, [0, 0]);
     }
 
     /// `Int::<4>::as_u128` returns the low 128 magnitude bits — the
@@ -3699,45 +2403,45 @@ mod slice_tests {
     /// Knuth's q̂-cap path fires when `u_top >= v_top` in the
     /// per-quotient-limb loop. We engineer a dividend whose normalised
     /// top limb equals the normalised divisor top so the cap (`q̂ =
-    /// u128::MAX`, plus the subsequent multiply-subtract correction)
-    /// runs, then verify the resulting quotient matches the canonical
-    /// `limbs_divmod`.
+    /// u64::MAX`, plus the subsequent multiply-subtract correction)
+    /// runs, then verify the resulting quotient matches the dispatch
+    /// path (`limbs_divmod_dispatch_u64`).
     #[test]
     fn knuth_q_hat_cap_branch_matches_canonical() {
         // num top limb == den top limb; div quotient's first chunk hits
-        // the cap. Picking the divisor's top close to u128::MAX
-        // tightens the normalisation shift.
-        let num: [u128; 4] = [0, 0, u128::MAX, u128::MAX >> 1];
-        let den: [u128; 3] = [1, 2, u128::MAX >> 1];
-        let mut q_canon = [0u128; 4];
-        let mut r_canon = [0u128; 4];
-        limbs_divmod(&num, &den, &mut q_canon, &mut r_canon);
-        let mut q_knuth = [0u128; 4];
-        let mut r_knuth = [0u128; 4];
-        limbs_divmod_knuth(&num, &den, &mut q_knuth, &mut r_knuth);
+        // the cap. Picking the divisor's top close to u64::MAX tightens
+        // the normalisation shift.
+        let num: [u64; 4] = [0, 0, u64::MAX, u64::MAX >> 1];
+        let den: [u64; 3] = [1, 2, u64::MAX >> 1];
+        let mut q_canon = [0u64; 4];
+        let mut r_canon = [0u64; 4];
+        limbs_divmod_dispatch_u64(&num, &den, &mut q_canon, &mut r_canon);
+        let mut q_knuth = [0u64; 4];
+        let mut r_knuth = [0u64; 4];
+        limbs_divmod_knuth_u64(&num, &den, &mut q_knuth, &mut r_knuth);
         assert_eq!(q_canon, q_knuth);
         assert_eq!(r_canon, r_knuth);
     }
 
-    /// `limbs_divmod_bz` with a numerator that has trailing zero limbs
-    /// strips them off in its top-non-zero scan before deciding whether
-    /// to recurse.
+    /// `limbs_divmod_bz_u64` with a numerator that has trailing zero
+    /// limbs strips them off in its top-non-zero scan before deciding
+    /// whether to recurse.
     #[test]
     fn bz_strips_numerator_trailing_zeros() {
-        // 16-limb buffer but only the low half is non-zero; den is 10 limbs.
-        // BZ should recognise top < 2*n and fall back to Knuth.
-        let mut num = [0u128; 16];
-        for slot in &mut num[..8] {
+        // 32-limb buffer but only the low half is non-zero; den is 20
+        // limbs. BZ should recognise top < 2*n and fall back to Knuth.
+        let mut num = [0u64; 32];
+        for slot in &mut num[..16] {
             *slot = 0xCAFE_F00D;
         }
-        let mut den = [0u128; 10];
+        let mut den = [0u64; 20];
         den[0] = 7;
-        let mut q_canon = [0u128; 16];
-        let mut r_canon = [0u128; 16];
-        limbs_divmod(&num, &den, &mut q_canon, &mut r_canon);
-        let mut q_bz = [0u128; 16];
-        let mut r_bz = [0u128; 16];
-        limbs_divmod_bz(&num, &den, &mut q_bz, &mut r_bz);
+        let mut q_canon = [0u64; 32];
+        let mut r_canon = [0u64; 32];
+        limbs_divmod_knuth_u64(&num, &den, &mut q_canon, &mut r_canon);
+        let mut q_bz = [0u64; 32];
+        let mut r_bz = [0u64; 32];
+        limbs_divmod_bz_u64(&num, &den, &mut q_bz, &mut r_bz);
         assert_eq!(q_canon, q_bz);
         assert_eq!(r_canon, r_bz);
     }

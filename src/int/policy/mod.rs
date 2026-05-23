@@ -22,9 +22,10 @@
 //! - **mul** — schoolbook at every width. The fixed-width types use the
 //!   truncated low-`N` schoolbook product
 //!   ([`limbs::limbs_mul_low_u64_fixed`] / `limbs_sqr_low_u64_fixed`);
-//!   the slice primitive [`limbs::limbs_mul_fast`] additionally crosses
-//!   over to Karatsuba at `KARATSUBA_MIN` limbs, but the named integer
-//!   widths in this crate stay in the schoolbook range.
+//!   the slice primitive [`limbs::limbs_mul_fast_u64`] additionally
+//!   crosses over to Karatsuba at `KARATSUBA_THRESHOLD_U64` limbs, but
+//!   the named integer widths in this crate stay in the schoolbook
+//!   range.
 //! - **÷ 10^SCALE** (decimal scale-narrowing) — this `(W, SCALE)`-keyed
 //!   path is part of the **decimal** storage boundary, not the integer
 //!   layer: D18 narrow tiers divide on hardware
@@ -35,12 +36,12 @@
 //!   `crate::macros::arithmetic`; the integer layer exposes only the raw
 //!   divmod the wide path builds on.
 //! - **divmod** — divisor-shape keyed at run time
-//!   ([`limbs_divmod_dispatch`]): single-limb divisor (incl. every
+//!   ([`limbs_divmod_dispatch_u64`]): single-limb divisor (incl. every
 //!   `10^scale`, `scale ≤ 19`) takes the hardware fast path; a divisor of
-//!   `n ≥ 8` limbs whose numerator top ≥ `2·n` takes Burnikel–Ziegler;
+//!   `n ≥ 16` limbs whose numerator top ≥ `2·n` takes Burnikel–Ziegler;
 //!   everything else takes Knuth Algorithm D. The const-evaluable
 //!   `wrapping_div` / `wrapping_rem` stay on the `const fn`
-//!   `limbs_divmod` so they can run at compile time.
+//!   `limbs_divmod_u64` so they can run at compile time.
 //! - **isqrt / icbrt** — D38 has bespoke 256/384-bit kernels in
 //!   `crate::algos::sqrt` / `crate::algos::cbrt`; the generic fixed-width
 //!   types fall through to the shared limb isqrt / Brent–Zimmermann
@@ -59,13 +60,13 @@
 //! are defined until the extraction can be done without churning the
 //! hot paths.
 //!
-//! TODO(0.5.0): finish policy extraction — move `KARATSUBA_MIN`, the
-//! `BZ_THRESHOLD` divide selection, and the shape-classification helper
-//! out of `limbs` into this module, leaving the kernels to take an
+//! TODO(0.5.0): finish policy extraction — move `KARATSUBA_THRESHOLD_U64`,
+//! the `BZ_THRESHOLD_U64` divide selection, and the shape-classification
+//! helper out of `limbs` into this module, leaving the kernels to take an
 //! already-chosen algorithm.
 
 // Re-export the dispatch entry points under the policy bucket so
 // callers can reach them by intent rather than by their current
 // physical home in `limbs`.
 #[allow(unused_imports)]
-pub(crate) use crate::int::limbs::{limbs_divmod_dispatch, limbs_divmod_dispatch_u64};
+pub(crate) use crate::int::limbs::limbs_divmod_dispatch_u64;

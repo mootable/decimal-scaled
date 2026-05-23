@@ -196,14 +196,6 @@ mod types;
 #[doc(hidden)]
 pub mod __bench_internals {
     #[inline(never)]
-    pub fn limbs_mul(a: &[u128], b: &[u128], out: &mut [u128]) {
-        crate::wide_int::limbs_mul(a, b, out)
-    }
-    #[inline(never)]
-    pub fn limbs_mul_fast(a: &[u128], b: &[u128], out: &mut [u128]) {
-        crate::wide_int::limbs_mul_fast(a, b, out)
-    }
-    #[inline(never)]
     pub fn mul_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
         crate::wide_int::limbs_mul_u64(a, b, out)
     }
@@ -341,7 +333,10 @@ mod int;
 // types moved from `src/wide_int/` into `src/int/limbs/`. The named
 // types are now `pub type` aliases over `Int<N>` / `Uint<N>`; the ~90
 // call sites that reach them via `crate::wide_int::…` keep resolving
-// through this alias — no churn at the use sites.
+// through this alias — no churn at the use sites. The alias is only
+// reached from feature-gated code in low-feature builds, so the unused
+// path is allowed.
+#[allow(unused_imports)]
 pub(crate) use crate::int::limbs as wide_int;
 mod policy;
 
