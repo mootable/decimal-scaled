@@ -154,19 +154,21 @@ branch, no table, no vtable. Every other candidate kernel is pruned out
 of that type's machine code. This is what makes the rich policy table
 **zero runtime cost**.
 
-### Single `core` tier
+### Feature-flagging a variation
 
-There is **one `core`-only policy per function** — no `base`/`std`/`no_std`
-split. The policy (`select` + any value-matcher) is the single source of the
-choice, and it compiles on every platform. A platform-specific override, if one
-is ever justified, rides the **same** mechanism rather than a parallel tier: a
-`#[cfg(feature = "std")]` arm inside `select`, a cfg-gated value-matcher, or a
-cfg-gated `Algorithm` variant — so the override sits beside the portable choice,
-not in a separate layer.
+A feature- or platform-specific variation lives in the policy file, gated where
+it belongs:
 
-If such an override ever uses `f64`, it is only ever a **seed** to a
-self-correcting integer iteration whose exact integer termination pins the unique
-result — so determinism is preserved regardless of the platform's `f64`.
+- a `#[cfg(feature = "…")]` arm inside `select` — pick a different `Algorithm`
+  for some widths when the flag is on;
+- a cfg-gated value-matcher — a different runtime split under the flag;
+- a cfg-gated `Algorithm` variant (plus its dispatch arm) — an algorithm that
+  only exists under the flag.
+
+The unflagged policy is the default; the flag adds or overrides arms beside it,
+in the same file. If a flagged variation uses `f64`, it is only ever a **seed**
+to a self-correcting integer iteration — the exact integer termination pins the
+unique result, so determinism holds regardless of the platform's `f64`.
 
 ### Policy file structure (the per-function matcher)
 
@@ -229,10 +231,9 @@ Rules that make this work:
   size: **≤2 outcomes → inline closure `if`/`else`; 3–10 → inline closure
   `match`; >10 (or shared / unit-tested) → a named `#[inline]` fn called
   `<fn>_N<lo>_to_N<hi>`** (e.g. `sqrt_N5_to_N10`) encoding the width-band it serves.
-- **Single tier** (see *Single `core` tier* above). One `core`-only policy per
-  function; a platform-specific override, if ever justified, rides the *same*
-  mechanism — a `#[cfg(feature = "std")]` arm inside `select`, a cfg-gated
-  value-matcher, or a cfg-gated `Algorithm` variant — never a parallel tier.
+- **`core`-only.** One policy per function, compiling on every platform;
+  feature- or platform-specific variations are gated inside it (see
+  *Feature-flagging a variation* above).
 - **Acceptance gate:** the zero-runtime-branch property is a *release* property;
   it is proven per function by inspecting the release IR/asm (one direct call, no
   branch/table/vtable on the const path).
