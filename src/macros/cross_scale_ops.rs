@@ -366,6 +366,78 @@ macro_rules! decl_decimal_cross_scale_ops {
                 Self::min_of_with(v_after_lo, hi, mode)
             }
 
+            // ── convert (cross-width + cross-scale, fallible) ────────
+
+            /// Converts a source decimal of any storage width `W1` and
+            /// any `SCALE` `S1` to `Self` (the target tier at the target
+            /// `SCALE`), using the crate's default rounding mode for any
+            /// scale-down step.
+            ///
+            /// Unlike the [`Self::mul_of`] family, the source width may be
+            /// **wider** than `Self`'s — the conversion is fallible and
+            /// returns [`ConvertError`] rather than requiring
+            /// [`WidthLE`](crate::WidthLE).
+            ///
+            /// See [`Self::convert_from_with`] for the explicit-mode form,
+            /// the value-preserving width/scale ordering, and the full
+            /// list of error conditions.
+            ///
+            /// [`ConvertError`]: crate::support::error::ConvertError
+            #[inline]
+            pub fn convert_from<W1, const S1: u32>(
+                src: $crate::D<W1, S1>,
+            ) -> ::core::result::Result<Self, $crate::support::error::ConvertError>
+            where
+                W1: $crate::int::types::BigInt,
+            {
+                Self::convert_from_with(src, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+
+            /// Converts a source decimal of any storage width `W1` and
+            /// any `SCALE` `S1` to `Self`, using `mode` for any
+            /// scale-down rounding.
+            ///
+            /// The conversion composes a cross-width and a cross-scale
+            /// step on the stored magnitude, ordered to be
+            /// value-preserving: when `Self`'s storage is at least as
+            /// wide as the source's, the magnitude is widened first and
+            /// the scale change happens at the target width; when `Self`'s
+            /// storage is narrower, the scale change happens at the source
+            /// width first (so a value that is too large at `S1` but fits
+            /// after a scale-down is not spuriously rejected) and the
+            /// magnitude is narrowed afterwards. The branch is chosen by a
+            /// compile-time limb-count comparison, so no nightly
+            /// `generic_const_exprs` is required.
+            ///
+            /// # Rounding
+            ///
+            /// A scale-up (`S1 < SCALE`) is exact. A scale-down
+            /// (`S1 > SCALE`) discards low fractional digits and rounds
+            /// them per `mode`; this is **not** an error.
+            ///
+            /// # Errors
+            ///
+            /// Returns [`ConvertError::Overflow`] when the scaled
+            /// magnitude does not fit `Self`'s storage — either a
+            /// scale-up overflows the working width, or the
+            /// (correctly-ordered) rescaled magnitude does not fit the
+            /// narrower target storage.
+            ///
+            /// [`ConvertError::Overflow`]: crate::support::error::ConvertError::Overflow
+            #[inline]
+            pub fn convert_from_with<W1, const S1: u32>(
+                src: $crate::D<W1, S1>,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> ::core::result::Result<Self, $crate::support::error::ConvertError>
+            where
+                W1: $crate::int::types::BigInt,
+            {
+                let mag: $Storage = $crate::int::convert::convert_magnitude::<W1, $Storage>(
+                    src.0, S1, SCALE, mode,
+                )?;
+                ::core::result::Result::Ok(Self::from_bits(mag))
+            }
+
             // ── Comparators (cmp_of / eq_of / ne_of / lt_of / le_of / gt_of / ge_of) ─
 
             /// Compares `self` against `other` of any width ≤ `Self`'s

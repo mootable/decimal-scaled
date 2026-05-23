@@ -22,6 +22,7 @@
 //!   resolving (#79).
 
 pub(crate) mod algos;
+pub(crate) mod convert;
 pub(crate) mod limbs;
 pub(crate) mod policy;
 pub(crate) mod types;
