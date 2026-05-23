@@ -2184,10 +2184,16 @@ impl<const N: usize> Uint<N> {
     /// does not collide with the type-generic `Int::resize` the named-
     /// type API expects.
     #[inline]
-    pub fn resize_n<const M: usize>(self) -> Uint<M> {
-        Uint::from_limbs(core::array::from_fn(
-            |i| if i < N { self.limbs[i] } else { 0 },
-        ))
+    pub const fn resize_n<const M: usize>(self) -> Uint<M> {
+        let mut out = [0u64; M];
+        let mut i = 0;
+        while i < M {
+            if i < N {
+                out[i] = self.limbs[i];
+            }
+            i += 1;
+        }
+        Uint::from_limbs(out)
     }
 
     /// Widens to a wider `Uint<M>` (`M >= N`), zero-extending the new
@@ -2223,12 +2229,47 @@ impl<const N: usize> Int<N> {
     /// Named `resize_n` (not `resize`) so the const-generic width bridge
     /// does not collide with the type-generic `Int::resize` the named-
     /// type API expects (the magnitude-bridge cast over any `BigInt`).
+    ///
+    /// Infallible two's-complement width conversion `Int<N> -> Int<M>`,
+    /// const and direction-agnostic. Copies the overlapping limbs; when
+    /// widening, fills the new high limbs with the sign (all-ones if the
+    /// source is negative, else zero); when narrowing, drops the surplus
+    /// high limbs (which may change the represented value). This is the
+    /// canonical internal resize that the const fallible `try_narrow` and
+    /// the `Int<->Int` magnitude bridge build on.
     #[inline]
-    pub fn resize_n<const M: usize>(self) -> Int<M> {
+    pub(crate) const fn resize_n<const M: usize>(self) -> Int<M> {
         let fill = if self.is_negative() { u64::MAX } else { 0 };
-        Int::from_limbs(core::array::from_fn(|i| {
-            if i < N { self.limbs[i] } else { fill }
-        }))
+        let mut out = [0u64; M];
+        let mut i = 0;
+        while i < M {
+            out[i] = if i < N { self.limbs[i] } else { fill };
+            i += 1;
+        }
+        Int::from_limbs(out)
+    }
+
+    /// Const fallible narrow `Int<N> -> Int<M>` (`1 <= M <= N`). Returns
+    /// `Some` only when every discarded high limb is a pure sign-extension
+    /// of the narrowed value's top bit — i.e. the value fits `M` limbs as
+    /// two's complement — and `None` otherwise. The const base for the
+    /// future public fallible narrow.
+    #[inline]
+    pub(crate) const fn try_narrow<const M: usize>(self) -> Option<Int<M>> {
+        debug_assert!(M >= 1 && M <= N, "try_narrow requires 1 <= M <= N");
+        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 {
+            u64::MAX
+        } else {
+            0
+        };
+        let mut i = M;
+        while i < N {
+            if self.limbs[i] != sign_fill {
+                return None;
+            }
+            i += 1;
+        }
+        Some(self.resize_n::<M>())
     }
 
     /// Widens to a wider `Int<M>` (`M >= N`), sign-extending. Lossless.
@@ -2244,20 +2285,7 @@ impl<const N: usize> Int<N> {
     /// two's complement.
     #[inline]
     pub fn narrow<const M: usize>(self) -> Option<Int<M>> {
-        debug_assert!(M >= 1 && M <= N, "narrow requires 1 <= M <= N");
-        let sign_fill = if (self.limbs[M - 1] >> 63) == 1 {
-            u64::MAX
-        } else {
-            0
-        };
-        let mut i = M;
-        while i < N {
-            if self.limbs[i] != sign_fill {
-                return None;
-            }
-            i += 1;
-        }
-        Some(self.resize_n::<M>())
+        self.try_narrow::<M>()
     }
 }
 
@@ -2806,6 +2834,45 @@ mod tests {
         // Small value round-trips.
         let p = Int::<2>::from_i64(42);
         assert_eq!(p.widen::<4>().narrow::<2>().unwrap(), p);
+    }
+
+    #[test]
+    fn int_resize_const_two_complement() {
+        // Widen round-trips: positive zero-extends, value preserved.
+        let pos = Int::<2>::from_i64(123);
+        let wide: Int<4> = pos.resize_n::<4>();
+        assert_eq!(*wide.as_limbs(), [123, 0, 0, 0]);
+        assert_eq!(wide.resize_n::<2>(), pos);
+
+        // Sign-extend of negatives: high limbs all-ones, value preserved.
+        let neg = Int::<2>::from_i64(-7);
+        let wneg: Int<4> = neg.resize_n::<4>();
+        assert_eq!(*wneg.as_limbs(), [(-7i64) as u64, u64::MAX, u64::MAX, u64::MAX]);
+        assert_eq!(wneg, Int::<4>::from_i64(-7));
+
+        // Truncate drops the surplus high limbs.
+        let v = Int::<4>::from_limbs([1, 2, 3, 4]);
+        assert_eq!(*v.resize_n::<2>().as_limbs(), [1, 2]);
+
+        // try_narrow Some/None at the signed boundary.
+        // -1 narrows: dropped limbs are the sign fill.
+        assert_eq!(Int::<4>::from_i64(-1).try_narrow::<2>().unwrap(), Int::<2>::from_i64(-1));
+        // A positive value with a set high limb does not fit.
+        assert!(Int::<4>::from_limbs([0, 0, 1, 0]).try_narrow::<2>().is_none());
+        // 2^63 is positive and fits Int<2> but NOT Int<1>: narrowing to
+        // one limb would set the top bit, flipping it negative, and the
+        // dropped high limb (0) is not the negative sign fill — so None.
+        let too_big = Int::<2>::from_limbs([0x8000_0000_0000_0000, 0]);
+        assert!(too_big.try_narrow::<1>().is_none());
+        // i64::MIN genuinely fits Int<1>: try_narrow returns Some.
+        let min2 = Int::<2>::from_i64(i64::MIN);
+        assert_eq!(min2.try_narrow::<1>().unwrap(), Int::<1>::from_i64(i64::MIN));
+        // Its widening then narrowing round-trips.
+        assert_eq!(min2.resize_n::<4>().try_narrow::<2>().unwrap(), min2);
+
+        // Const evaluation smoke: resize_n is usable in const context.
+        const W: Int<4> = Int::<2>::from_i64(-7).resize_n::<4>();
+        assert_eq!(W, Int::<4>::from_i64(-7));
     }
 
     #[test]
