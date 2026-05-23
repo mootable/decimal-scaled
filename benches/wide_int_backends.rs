@@ -18,8 +18,8 @@ const B: i128 = 987_654_321_098_765;
 
 macro_rules! four_ops_native_vs_bnum {
     ($g:expr, $width:literal, $Native:ty, $Bnum:ty) => {{
-        let a_n = <$Native>::from_i128(A);
-        let b_n = <$Native>::from_i128(B);
+        let a_n = <$Native>::try_from(A).unwrap();
+        let b_n = <$Native>::try_from(B).unwrap();
         let a_b: $Bnum = A.as_();
         let b_b: $Bnum = B.as_();
 
