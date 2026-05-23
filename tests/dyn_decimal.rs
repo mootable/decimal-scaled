@@ -336,3 +336,63 @@ fn vec_of_mixed_widths() {
     let displays: Vec<String> = values.iter().map(|v| v.display()).collect();
     assert_eq!(displays, vec!["2.000", "3.00000"]);
 }
+
+// ── 0.5.0 tier-table audit: dyn round-trip + widen-scale ──────────────
+
+/// After the 0.5.0 rewrite (D9 removed, `Int<N>` storage, native backend
+/// gone) the dyn tier tables must still: box each shipped narrow tier as
+/// `dyn DynDecimal`, recover the value bit-exact through `as_any`, and
+/// widen the scale via `rescale_to` to land on the SAME tier at the new
+/// scale with the storage scaled by exactly `10^(target - source)`.
+#[test]
+fn dyn_round_trip_and_widen_scale_across_tiers() {
+    // D18 (Int<1> / I64): box, recover bit-exact, then widen 2 -> 6.
+    let d18_src = D18::<2>::try_from(7).unwrap();
+    let d18_box: Box<dyn DynDecimal> = Box::new(d18_src);
+    assert_eq!(d18_box.width(), DecimalWidth::D18);
+    // Bit-exact recovery through the dyn boundary.
+    assert_eq!(*d18_box.as_any().downcast_ref::<D18<2>>().unwrap(), d18_src);
+    // Widen-scale: same tier, new scale, storage scaled by 10^4 (exact).
+    let d18_wide = d18_box.rescale_to(6).unwrap();
+    assert_eq!(d18_wide.width(), DecimalWidth::D18);
+    assert_eq!(d18_wide.scale_dyn(), 6);
+    assert_eq!(
+        *d18_wide.as_any().downcast_ref::<D18<6>>().unwrap(),
+        D18::<6>::try_from(7).unwrap()
+    );
+    match d18_wide.raw_storage() {
+        RawStorage::I64(v) => assert_eq!(v, 7 * 10_i64.pow(6)),
+        _ => panic!("D18 must tag as RawStorage::I64"),
+    }
+
+    // D38 (Int<2> / I128): box, recover bit-exact, then widen 5 -> 20.
+    let d38_src = D38::<5>::try_from(7).unwrap();
+    let d38_box: Box<dyn DynDecimal> = Box::new(d38_src);
+    assert_eq!(d38_box.width(), DecimalWidth::D38);
+    assert_eq!(*d38_box.as_any().downcast_ref::<D38<5>>().unwrap(), d38_src);
+    let d38_wide = d38_box.rescale_to(20).unwrap();
+    assert_eq!(d38_wide.width(), DecimalWidth::D38);
+    assert_eq!(d38_wide.scale_dyn(), 20);
+    assert_eq!(
+        *d38_wide.as_any().downcast_ref::<D38<20>>().unwrap(),
+        D38::<20>::try_from(7).unwrap()
+    );
+    match d38_wide.raw_storage() {
+        RawStorage::I128(v) => assert_eq!(v, 7 * 10_i128.pow(20)),
+        _ => panic!("D38 must tag as RawStorage::I128"),
+    }
+
+    // Rescale above the tier's MAX_SCALE returns None (no panic).
+    assert!(d18_box.rescale_to(d18_box.max_scale() + 1).is_none());
+    assert!(d38_box.rescale_to(d38_box.max_scale() + 1).is_none());
+
+    // Widened operands round-trip the wider-scale rule through `add`:
+    // D38<5> + D38<20> = D38<20>, value 14.
+    let sum = d38_box.add(&*d38_wide).unwrap();
+    assert_eq!(sum.width(), DecimalWidth::D38);
+    assert_eq!(sum.scale_dyn(), 20);
+    assert_eq!(
+        *sum.as_any().downcast_ref::<D38<20>>().unwrap(),
+        D38::<20>::try_from(14).unwrap()
+    );
+}

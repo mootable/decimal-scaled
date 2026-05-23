@@ -112,8 +112,8 @@ pub enum DecimalWidth {
     /// 768-bit storage; corresponds to [`crate::D230`]. Gated by `d230` / `wide`.
     #[cfg(any(feature = "d230", feature = "wide"))]
     D230,
-    /// 1024-bit storage; corresponds to [`crate::D307`]. Gated by `d307` / `wide` / `x-wide`.
-    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    /// 1024-bit storage; corresponds to [`crate::D307`]. Gated by `d307` / `wide`.
+    #[cfg(any(feature = "d307", feature = "wide"))]
     D307,
     /// 1536-bit storage; corresponds to [`crate::D462`]. Gated by `d462` / `x-wide`.
     #[cfg(any(feature = "d462", feature = "x-wide"))]
@@ -157,8 +157,8 @@ pub enum RawStorage {
     /// 768-bit signed integer — D230. Gated by `d230` / `wide`.
     #[cfg(any(feature = "d230", feature = "wide"))]
     Int768(crate::int::types::Int<12>),
-    /// 1024-bit signed integer — D307. Gated by `d307` / `wide` / `x-wide`.
-    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    /// 1024-bit signed integer — D307. Gated by `d307` / `wide`.
+    #[cfg(any(feature = "d307", feature = "wide"))]
     Int1024(crate::int::types::Int<16>),
     /// 1536-bit signed integer — D462. Gated by `d462` / `x-wide`.
     #[cfg(any(feature = "d462", feature = "x-wide"))]
