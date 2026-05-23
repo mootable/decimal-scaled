@@ -23,7 +23,7 @@ pub use traits::BigInt;
 use crate::int::algos::div::{div_rem_mag_fixed, isqrt_mag_fixed};
 use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use crate::int::limbs::{
-    limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_fixed,
+    limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_cross, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
     limbs_mul_fast_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
 };
@@ -38,7 +38,12 @@ pub struct Uint<const N: usize> {
 
 /// Signed (two's-complement) fixed-width integer of `N` little-endian
 /// 64-bit limbs.
-#[derive(Clone, Copy, PartialEq, Eq, Hash, Debug)]
+//
+// `PartialEq` / `PartialOrd` / `Ord` are NOT derived: a single generic
+// `impl<N, M>` cross-width surface (below) covers same-width comparison
+// too, so a derived same-width impl would collide. `Eq` is still derived
+// (it only needs the `PartialEq<Self>` the generic impl provides).
+#[derive(Clone, Copy, Eq, Hash, Debug)]
 pub struct Int<const N: usize> {
     limbs: [u64; N],
 }
@@ -1841,10 +1846,57 @@ impl<const N: usize> Int<N> {
     }
 }
 
-impl<const N: usize> PartialOrd for Int<N> {
+impl<const N: usize> Int<N> {
+    /// Const cross-width signed comparison `Int<N>` vs `Int<M>`, returning
+    /// `core::cmp::Ordering`. No widening copy is made: the sign is
+    /// compared first (a negative value is always less than a non-negative
+    /// one); when the signs agree the magnitudes are compared
+    /// length-aware via [`limbs_cmp_u64_cross`] over the `unsigned_abs`
+    /// limbs (the longer magnitude's surplus high limbs must be zero for
+    /// equality, else it is the larger). For two negatives the larger
+    /// magnitude is the smaller value, so the magnitude order is flipped.
     #[inline]
-    fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
-        Some(self.cmp(other))
+    pub(crate) const fn cmp_cross<const M: usize>(self, other: Int<M>) -> Ordering {
+        let sn = self.is_negative();
+        let so = other.is_negative();
+        if sn && !so {
+            return Ordering::Less;
+        }
+        if !sn && so {
+            return Ordering::Greater;
+        }
+        // Same sign: compare magnitudes length-aware.
+        let a = self.unsigned_abs();
+        let b = other.unsigned_abs();
+        let c = limbs_cmp_u64_cross(a.as_limbs(), b.as_limbs());
+        // For two negatives the larger magnitude is the smaller value.
+        let c = if sn { -c } else { c };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+// One generic comparison surface across widths. The `N == M` case is
+// covered here too, so `Int<N>` carries no separate same-width
+// `PartialEq` / `PartialOrd` / `Ord` impl (a derived or hand-written
+// same-width comparison would collide — E0119). `Eq` is still derived:
+// it only requires the `PartialEq<Self>` this generic impl provides.
+impl<const N: usize, const M: usize> PartialEq<Int<M>> for Int<N> {
+    #[inline]
+    fn eq(&self, other: &Int<M>) -> bool {
+        self.cmp_cross(*other) == Ordering::Equal
+    }
+}
+
+impl<const N: usize, const M: usize> PartialOrd<Int<M>> for Int<N> {
+    #[inline]
+    fn partial_cmp(&self, other: &Int<M>) -> Option<Ordering> {
+        Some(self.cmp_cross(*other))
     }
 }
 
@@ -1933,19 +1985,9 @@ impl PartialOrd<Int<1>> for i64 {
 impl<const N: usize> Ord for Int<N> {
     #[inline]
     fn cmp(&self, other: &Self) -> Ordering {
-        // Signed compare: a negative value is always less than a
-        // non-negative one. When the signs agree the two's-complement
-        // bit patterns order the same way as the unsigned magnitude
-        // comparison of the limbs.
-        match (self.is_negative(), other.is_negative()) {
-            (true, false) => Ordering::Less,
-            (false, true) => Ordering::Greater,
-            _ => match limbs_cmp_u64_fixed(&self.limbs, &other.limbs) {
-                -1 => Ordering::Less,
-                1 => Ordering::Greater,
-                _ => Ordering::Equal,
-            },
-        }
+        // Same-width total order, delegating to the generic cross-width
+        // comparator core (the `N == M` case).
+        self.cmp_cross(*other)
     }
 }
 
@@ -2873,6 +2915,55 @@ mod tests {
         // Const evaluation smoke: resize_n is usable in const context.
         const W: Int<4> = Int::<2>::from_i64(-7).resize_n::<4>();
         assert_eq!(W, Int::<4>::from_i64(-7));
+    }
+
+    #[test]
+    fn int_cross_width_comparison() {
+        // Equal values across widths compare ==.
+        let a = Int::<1>::from_i64(5);
+        let b = Int::<2>::from_i64(5);
+        assert!(a == b);
+        assert!(b == a);
+        assert_eq!(a.partial_cmp(&b), Some(Ordering::Equal));
+
+        // Ordering across widths.
+        let small = Int::<1>::from_i64(3);
+        let big = Int::<2>::from_i64(100);
+        assert!(small < big);
+        assert!(big > small);
+
+        // A value only fitting the wider type still orders right: 2^70
+        // lives in Int<2> (and up) but exceeds Int<1>; it must compare
+        // greater than any Int<1>.
+        let huge = Int::<2>::from_limbs([0, 64]); // 64 * 2^64 = 2^70
+        assert!(huge > Int::<1>::MAX);
+        assert!(Int::<1>::from_i64(-1) < huge);
+
+        // Negatives: -1 (Int<1>) vs 1 (Int<2>) — neg < pos.
+        assert!(Int::<1>::from_i64(-1) < Int::<2>::from_i64(1));
+        // Two negatives across widths: larger magnitude is the smaller.
+        assert!(Int::<1>::from_i64(-100) < Int::<2>::from_i64(-3));
+        assert!(Int::<2>::from_i64(-3) > Int::<1>::from_i64(-100));
+        // Equal negatives across widths.
+        assert!(Int::<1>::from_i64(-7) == Int::<2>::from_i64(-7));
+
+        // Same-type Ord still sorts a Vec.
+        let mut v = vec![
+            Int::<2>::from_i64(3),
+            Int::<2>::from_i64(-10),
+            Int::<2>::from_i64(0),
+            Int::<2>::from_i64(7),
+        ];
+        v.sort();
+        assert_eq!(
+            v,
+            vec![
+                Int::<2>::from_i64(-10),
+                Int::<2>::from_i64(0),
+                Int::<2>::from_i64(3),
+                Int::<2>::from_i64(7),
+            ]
+        );
     }
 
     #[test]
