@@ -153,6 +153,9 @@ of that type's machine code. This is what makes the rich policy table
 
 ### `base` / `std` / `no_std`
 
+> **0.5.0:** this three-layer split is collapsed to a **single `core` tier** — see
+> *Policy file structure* below. The triplet described here is the pre-0.5.0 form.
+
 Each function is organised as three thin layers so the distinction
 between portable and platform-assisted code is structural, not scattered
 through the math:
@@ -169,6 +172,76 @@ faster** than the `no_std` path; otherwise the cell stays on `base`.
 Where `std` uses `f64`, it is only ever a **seed** to a self-correcting
 integer iteration whose exact integer termination pins the unique
 result — so determinism is preserved regardless of the platform's `f64`.
+
+### Policy file structure (the per-function matcher)
+
+Each dispatched function (`sqrt`, `mul`, `exp`, …) has **one policy file** with a
+fixed shape. Agents implementing or extending a policy follow this template
+exactly. The dispatch key is the compile-time width(s) and scale(s) —
+`N` (int unary), `(N, M)` (int binary), `(N, SCALE)` (decimal unary), or
+`(N, M, S1, S2)` (decimal binary).
+
+```rust
+// 1. the real algorithms for this function — NAMED, paper-based, no `Default`.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Algorithm { Newton, Zimmermann }
+
+// 2. the const verdict: a settled algorithm, or "the value decides".
+#[derive(Clone, Copy)]
+enum Select<const N: usize> {
+    ByAlgorithm(Algorithm),                // width/scale settled it
+    ByValue(fn(&Int<N>) -> Algorithm),     // value-dependent (non-capturing fn / closure)
+}
+
+// 3. the matcher: a `const fn`, keyed ONLY on the const generics, total over the key.
+const fn select<const N: usize>() -> Select<N> {
+    match N {
+        0..=2 => Select::ByAlgorithm(Algorithm::Newton),
+        3..=8 => Select::ByValue(|v: &Int<N>|           // value-matcher (see placement rule)
+            if v.bit_length() <= 128 { Algorithm::Newton } else { Algorithm::Zimmermann }),
+        _     => Select::ByAlgorithm(Algorithm::Zimmermann),   // the chosen default (a real algorithm)
+    }
+}
+
+// 4. the public function: resolve the verdict, then dispatch — exhaustively, no panic.
+pub fn isqrt<const N: usize>(x: Int<N>) -> Int<N> {
+    const SEL: Select<N> = select::<N>();               // compile-time constant ⇒ folds
+    let algo = match SEL {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f)     => f(&x),                // the ONE place a runtime value enters
+    };
+    match algo {                                        // exhaustive over `Algorithm` — no `_`, no `unreachable!()`
+        Algorithm::Newton     => isqrt_newton::<N>(x),
+        Algorithm::Zimmermann => isqrt_zimmermann::<N>(x),
+    }
+}
+```
+
+Rules that make this work:
+
+- **`Algorithm` lists real algorithms only — no `Default` variant.** Completeness
+  is structural: `select` is total over the key, and `match algo` is exhaustive
+  over `Algorithm` (both compiler-enforced). The "default" for unspecialised
+  widths is simply the real algorithm named in `select`'s `_` arm.
+- **`select` is `const`, keyed only on the const generics.** Per
+  monomorphisation `SEL` is a constant, so the matches fold and every unchosen
+  arm is dead-arm-eliminated (the pruning above). The policy is zero runtime
+  cost — *except* a `ByValue` arm, which keeps exactly one runtime comparison.
+- **Value matcher** (`ByValue`) — for the rare case where the best algorithm
+  depends on the operand's *value* (e.g. actual magnitude), not just its width.
+  It is **non-capturing**, takes the value, and **returns an `Algorithm` tag**
+  (never a function pointer — the tag keeps dispatch a direct call). Placement by
+  size: **≤2 outcomes → inline closure `if`/`else`; 3–10 → inline closure
+  `match`; >10 (or shared / unit-tested) → a named `#[inline]` fn called
+  `<fn>_N<lo>_to_N<hi>`** (e.g. `sqrt_N5_to_N10`) encoding the width-band it serves.
+- **Single tier.** There is one `core`-only policy per function — no
+  `base`/`std`/`no_std` split (it superseded the triplet described above). A
+  platform-specific override, if ever justified, rides the *same* mechanism: a
+  `#[cfg(feature = "std")]` arm inside `select`, a cfg-gated value-matcher, or a
+  cfg-gated `Algorithm` variant — never a parallel tier.
+- **Acceptance gate:** the zero-runtime-branch property is a *release* property;
+  it is proven per function by inspecting the release IR/asm (one direct call, no
+  branch/table/vtable on the const path).
 
 ### Keeping the alternatives
 
