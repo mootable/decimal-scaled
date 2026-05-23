@@ -6,7 +6,7 @@
 //! bucket alongside the other formatters, not in the integer algorithm
 //! layer.
 
-use crate::int::algos::limbs::is_zero;
+use crate::int::algos::support::limbs::is_zero;
 
 /// Scratch capacity for the formatter's working buffer — 288 u64 limbs
 /// (18432 bits), covering the widest integer the crate formats.

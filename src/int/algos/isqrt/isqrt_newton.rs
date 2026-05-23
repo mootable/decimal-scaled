@@ -10,7 +10,7 @@
 //! operand and writes `floor(sqrt(n))`; no algorithm choice.
 
 use crate::algo_x_support::seed::sqrt_seed;
-use crate::int::algos::limbs::{add_assign, bit_len, cmp, shr};
+use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, shr};
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 
 /// Scratch capacity for the Newton isqrt kernel — 288 u64 limbs

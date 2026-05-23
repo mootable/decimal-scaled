@@ -21,7 +21,7 @@ pub use traits::BigInt;
 
 use crate::int::algos::div::div_fixed::div_rem_mag_fixed;
 use crate::int::algos::div::div_rem::div_rem;
-use crate::int::algos::limbs::{
+use crate::int::algos::support::limbs::{
     add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, shl, shl_fixed,
     shr_fixed, sub_assign_fixed,
 };

@@ -9,7 +9,7 @@
 //! operand and writes `floor(cbrt(n))`; no algorithm choice.
 
 use crate::algo_x_support::seed::cbrt_seed;
-use crate::int::algos::limbs::{add_assign, bit_len, cmp};
+use crate::int::algos::support::limbs::{add_assign, bit_len, cmp};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 

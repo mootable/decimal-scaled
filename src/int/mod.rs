@@ -13,7 +13,7 @@
 //!   `Select` / `select` / exhaustive-`match algo` shape with the benched
 //!   crossover thresholds held as policy data.
 //! - [`algos`] — the reusable algorithms the integer types compose on:
-//!   the generic `u64` limb arithmetic ([`algos::limbs`]), the pure
+//!   the generic `u64` limb arithmetic ([`algos::support::limbs`]), the pure
 //!   division engines ([`algos::div`]), and the Newton integer square
 //!   root ([`algos::roots`]).
 

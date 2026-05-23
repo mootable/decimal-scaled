@@ -327,7 +327,7 @@ pub use crate::cross_scale as cross;
 // `int::types` (the `Int<N>`/`Uint<N>` types + named `IntXXXX`
 // aliases), `int::policy` (algorithm-selection dispatch), and
 // `int::algos` (width-matched algorithms, including the raw slice limb
-// primitives in `int::algos::limbs`).
+// primitives in `int::algos::support::limbs`).
 mod int;
 mod policy;
 

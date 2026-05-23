@@ -7,7 +7,7 @@
 //! settles on "the value decides", the value-matcher classifies the
 //! operand lengths and returns an [`Algorithm`] tag, and the dispatcher
 //! does an **exhaustive** `match algo` to a pure kernel in
-//! [`crate::int::algos::limbs`].
+//! [`crate::int::algos::support::limbs`].
 //!
 //! The kernels ([`mul_schoolbook`] / [`mul_karatsuba`]) stay pure; this
 //! file owns the *choice* — the benched crossover threshold
@@ -23,7 +23,7 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 /// are the CamelCase of each kernel fn's name minus the `mul_` function
 /// prefix (`mul_schoolbook` → `Schoolbook`, `mul_karatsuba` →
 /// `Karatsuba`) — strict 1:1 with the kernels in
-/// [`crate::int::algos::limbs`].
+/// [`crate::int::algos::support::limbs`].
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// [`mul_schoolbook`] — base-2⁶⁴ schoolbook outer product.

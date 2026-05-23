@@ -46,7 +46,7 @@
 //! the algorithm choice is recorded in one place and the dispatch is
 //! separately microbenchable. `PartialEq` observable behaviour is unchanged.
 
-use crate::int::algos::limbs::cmp_fixed;
+use crate::int::algos::support::limbs::cmp_fixed;
 use crate::int::types::Int;
 
 // ── 1. the real equality algorithm — NAMED, no `Default` ─────────────

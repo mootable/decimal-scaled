@@ -11,7 +11,7 @@
 //! base-cases to the schoolbook kernel
 //! [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`].
 
-use crate::int::algos::limbs::{add_assign, sub_assign};
+use crate::int::algos::support::limbs::{add_assign, sub_assign};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 
 /// Stack scratch for the non-allocating Karatsuba kernel, in u64 limbs.

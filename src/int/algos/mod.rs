@@ -28,14 +28,14 @@
 //! Shared low-level limb PRIMITIVES that are not a single function's
 //! headline algorithm — comparison, equality, bit-length, ripple add/sub,
 //! shifts, single-limb fit test, signed compare — stay in the shared
-//! [`limbs`] bucket, since they are composed by several families (the
+//! [`support::limbs`] bucket, since they are composed by several families (the
 //! divide engines, Karatsuba, the roots, and the type layer itself).
 
 pub(crate) mod cube;
 pub(crate) mod div;
 pub(crate) mod icbrt;
 pub(crate) mod isqrt;
-pub(crate) mod limbs;
 pub(crate) mod mul;
 pub(crate) mod pow;
 pub(crate) mod sqr;
+pub(crate) mod support;

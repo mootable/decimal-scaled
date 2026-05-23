@@ -17,11 +17,11 @@
 //!
 //! - **add** — width-keyed only, one algorithm at every `N`. Routes
 //!   through [`add::dispatch`] (a `const fn` policy so the block folds
-//!   per monomorphisation) to [`crate::int::algos::limbs::add_assign_fixed`]
+//!   per monomorphisation) to [`crate::int::algos::support::limbs::add_assign_fixed`]
 //!   (the ripple-carry kernel).
 //! - **sub** — width-keyed only, one algorithm at every `N`. Routes
 //!   through [`sub::dispatch`] (`const fn`) to
-//!   [`crate::int::algos::limbs::sub_assign_fixed`] (the ripple-borrow kernel).
+//!   [`crate::int::algos::support::limbs::sub_assign_fixed`] (the ripple-borrow kernel).
 //! - **neg** — unary, one algorithm at every `N`. Routes through
 //!   [`neg::dispatch`] (`const fn`) to the two's-complement bitwise-NOT-
 //!   plus-one kernel.
@@ -84,7 +84,7 @@
 //! `Select::ByValue`-style value matchers: the const layer settles on
 //! "the shape decides", the matcher classifies, and the dispatcher does an
 //! exhaustive `match algo` to the pure engines / kernels in
-//! [`crate::int::algos::div`] / [`crate::int::algos::limbs`]. The rem
+//! [`crate::int::algos::div`] / [`crate::int::algos::support::limbs`]. The rem
 //! dispatcher is non-const and delegates to the divmod dispatcher.
 //! The benched crossover thresholds ([`div_rem::BZ_THRESHOLD`],
 //! [`mul::KARATSUBA_THRESHOLD`]) are policy DATA in those files, not magic

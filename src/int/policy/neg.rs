@@ -40,7 +40,7 @@
 //! (calling a fn pointer is not permitted in `const fn`; merely matching
 //! the variant is fine).
 
-use crate::int::algos::limbs::add_assign_fixed;
+use crate::int::algos::support::limbs::add_assign_fixed;
 use crate::int::types::Int;
 
 // ── 1. the real negation algorithm — NAMED, no `Default` ─────────────

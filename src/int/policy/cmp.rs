@@ -49,7 +49,7 @@
 //! same-width path so the algorithm seam exists for future crossover work
 //! (e.g. a SIMD limbwise path) and mirrors every other int policy file.
 
-use crate::int::algos::limbs::{cmp_cross, cmp_fixed};
+use crate::int::algos::support::limbs::{cmp_cross, cmp_fixed};
 use crate::int::types::Int;
 use core::cmp::Ordering;
 
@@ -98,7 +98,7 @@ const fn select<const N: usize>() -> Select<N> {
 /// same-width case and flipped for two negatives (the larger magnitude is
 /// the smaller value). Returns [`core::cmp::Ordering`].
 ///
-/// Reuses the `cmp_fixed` kernel from [`crate::int::algos::limbs`] so
+/// Reuses the `cmp_fixed` kernel from [`crate::int::algos::support::limbs`] so
 /// the comparison loop is not duplicated here.
 #[inline]
 pub(crate) const fn cmp_limbwise<const N: usize>(a: Int<N>, b: Int<N>) -> Ordering {

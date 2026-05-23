@@ -65,7 +65,7 @@
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
 use crate::int::algos::div::div_fixed::div_rem_mag_slice;
-use crate::int::algos::limbs::{cmp, sub_assign};
+use crate::int::algos::support::limbs::{cmp, sub_assign};
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────

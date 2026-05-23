@@ -23,7 +23,7 @@
 //! # Why there is only one algorithm
 //!
 //! Integer subtraction is width-independent: the ripple-borrow accumulator in
-//! [`crate::int::algos::limbs::sub_assign_fixed`] is the unique correct
+//! [`crate::int::algos::support::limbs::sub_assign_fixed`] is the unique correct
 //! choice at every limb count `N`. There is no crossover threshold, no
 //! value-dependent split, and no work-width widening (work width ==
 //! storage width). The `ByValue` arm of [`Select`] is present for
@@ -39,7 +39,7 @@
 //! (calling a fn pointer is not permitted in `const fn`; merely matching
 //! the variant is fine).
 
-use crate::int::algos::limbs::sub_assign_fixed;
+use crate::int::algos::support::limbs::sub_assign_fixed;
 use crate::int::types::Int;
 
 // ── 1. the real subtraction algorithm — NAMED, no `Default` ──────────
@@ -51,7 +51,7 @@ use crate::int::types::Int;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// [`sub_ripple_borrow`] — ripple-borrow accumulator over the `N` limbs,
-    /// delegating to [`crate::int::algos::limbs::sub_assign_fixed`].
+    /// delegating to [`crate::int::algos::support::limbs::sub_assign_fixed`].
     RippleBorrow,
 }
 

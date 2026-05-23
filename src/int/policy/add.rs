@@ -19,7 +19,7 @@
 //! # Why there is only one algorithm
 //!
 //! Integer addition is width-independent: the ripple-carry accumulator in
-//! [`crate::int::algos::limbs::add_assign_fixed`] is the unique correct
+//! [`crate::int::algos::support::limbs::add_assign_fixed`] is the unique correct
 //! choice at every limb count `N`. There is no crossover threshold, no
 //! value-dependent split, and no work-width widening (work width ==
 //! storage width). The `ByValue` arm of [`Select`] is present for
@@ -34,7 +34,7 @@
 //! without invoking the fn pointer (calling a fn pointer is not permitted in
 //! `const fn`; merely matching the variant is fine).
 
-use crate::int::algos::limbs::add_assign_fixed;
+use crate::int::algos::support::limbs::add_assign_fixed;
 use crate::int::types::Int;
 
 // ── 1. the real addition algorithm — NAMED, no `Default` ─────────────
@@ -46,7 +46,7 @@ use crate::int::types::Int;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// [`add_ripple_carry`] — ripple-carry accumulator over the `N` limbs,
-    /// delegating to [`crate::int::algos::limbs::add_assign_fixed`].
+    /// delegating to [`crate::int::algos::support::limbs::add_assign_fixed`].
     RippleCarry,
 }
 

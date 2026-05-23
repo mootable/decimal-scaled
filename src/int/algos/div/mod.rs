@@ -80,7 +80,7 @@ mod tests {
     /// `0 <= r < den` reconstructs across the corpus.
     #[test]
     fn div_rem_satisfies_identity() {
-        use crate::int::algos::limbs::{add_assign, cmp, is_zero};
+        use crate::int::algos::support::limbs::{add_assign, cmp, is_zero};
         use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
         for num in corpus() {
             for den in corpus() {

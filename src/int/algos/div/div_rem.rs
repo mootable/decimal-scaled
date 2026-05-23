@@ -9,7 +9,7 @@
 //! divisor-shape *choice* between the runtime engines lives in
 //! [`crate::int::policy::div_rem`].
 
-use crate::int::algos::limbs::{bit_len, cmp, fit_one, shl1, sub_assign};
+use crate::int::algos::support::limbs::{bit_len, cmp, fit_one, shl1, sub_assign};
 
 /// `quot = num / den`, `rem = num % den`, u64 limbs. `const fn`.
 ///
