@@ -1,0 +1,46 @@
+# SPDX-FileCopyrightText: 2026 John Moxley
+# SPDX-License-Identifier: MIT OR Apache-2.0
+
+name: "CodeQL"
+
+# Advanced CodeQL setup (replaces the repo's default code-scanning setup) so
+# the analysis is a committed, SHA-pinned workflow — which also exposes the
+# `codeql.yml/badge.svg` badge for the README. Rust uses `build-mode: none`:
+# the CodeQL Rust extractor works from source, so no `cargo build` (and no
+# feature-flag juggling across the wide tiers) is needed in CI.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  schedule:
+    # Weekly drift scan (Monday 07:00 UTC), independent of pushes.
+    - cron: "0 7 * * 1"
+
+permissions:
+  contents: read
+
+jobs:
+  analyze:
+    name: Analyze (Rust)
+    runs-on: ubuntu-latest
+    permissions:
+      security-events: write   # upload results to the Security tab
+      actions: read
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
+        with:
+          languages: rust
+          build-mode: none
+
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4
+        with:
+          category: "/language:rust"
