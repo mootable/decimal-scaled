@@ -49,7 +49,10 @@ jobs:
   compare:
     name: "\U0001FA83 prod vs ${{ inputs.ref || github.ref_name }}"
     runs-on: ubuntu-latest
-    timeout-minutes: 90
+    # The full public-surface sweep (24 functions × every width × branch+prod)
+    # runs >90 min, so the old 90 cap killed runs mid-sweep before they could
+    # emit the comparison table. 240 gives the sweep ample headroom to finish.
+    timeout-minutes: 240
 
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
