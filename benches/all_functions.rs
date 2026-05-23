@@ -37,24 +37,31 @@
 //! near-overflow boundary. The boundary is the job of
 //! `mul_div_candidates.rs`.
 use criterion::{Criterion, criterion_group, criterion_main};
-use decimal_scaled::{D38, D38s12, DecimalConstants};
+use decimal_scaled::{D38, D38s12, DecimalConstants, Int};
 use std::hint::black_box;
 
 type D = D38<12>;
+
+/// `D38`'s storage (`Int<2>`) from a raw two's-complement `i128` bit
+/// pattern, usable in `const` context. The low/high limbs are the
+/// little-endian halves of the i128.
+const fn raw(v: i128) -> Int<2> {
+    Int::<2>::from_limbs([v as u64, (v >> 64) as u64])
+}
 
 // Representative inputs. RAW_A and RAW_B are mid-magnitude (well within
 // i128 range, above i64 boundary) so the production fast paths stay
 // representative of typical CAD use.
 const RAW_A: i128 = 1_500_000_000_000; // == 1.5
 const RAW_B: i128 = 2_300_000_000_000; // == 2.3
-const A: D = D::from_bits(RAW_A);
-const B: D = D::from_bits(RAW_B);
+const A: D = D::from_bits(raw(RAW_A));
+const B: D = D::from_bits(raw(RAW_B));
 // Small positive value safe for log/sqrt/etc.
-const POS: D = D::from_bits(2_000_000_000_000); // == 2.0
+const POS: D = D::from_bits(raw(2_000_000_000_000)); // == 2.0
 // Small angle in radians, ~0.5 (~28.6 degrees).
-const SMALL_ANGLE: D = D::from_bits(500_000_000_000); // == 0.5
+const SMALL_ANGLE: D = D::from_bits(raw(500_000_000_000)); // == 0.5
 // Small unit value safe for asin/acos/atanh (<1).
-const UNIT_FRAC: D = D::from_bits(300_000_000_000); // == 0.3
+const UNIT_FRAC: D = D::from_bits(raw(300_000_000_000)); // == 0.3
 
 // =============================================================================
 // core_type
@@ -62,7 +69,7 @@ const UNIT_FRAC: D = D::from_bits(300_000_000_000); // == 0.3
 fn bench_core_type(c: &mut Criterion) {
     let mut g = c.benchmark_group("core_type");
 
-    g.bench_function("from_bits", |bn| bn.iter(|| D::from_bits(black_box(RAW_A))));
+    g.bench_function("from_bits", |bn| bn.iter(|| D::from_bits(raw(black_box(RAW_A)))));
     g.bench_function("to_bits", |bn| bn.iter(|| black_box(A).to_bits()));
     g.bench_function("multiplier", |bn| bn.iter(D::multiplier));
     g.bench_function("Default::default", |bn| bn.iter(D::default));
@@ -130,8 +137,8 @@ fn bench_arithmetic(c: &mut Criterion) {
     g.bench_function("min", |bn| bn.iter(|| black_box(A).min(black_box(B))));
     g.bench_function("max", |bn| bn.iter(|| black_box(A).max(black_box(B))));
     g.bench_function("clamp", |bn| {
-        let lo = D::from_bits(0);
-        let hi = D::from_bits(5_000_000_000_000);
+        let lo = D::from_bits(raw(0));
+        let hi = D::from_bits(raw(5_000_000_000_000));
         bn.iter(|| black_box(A).clamp(black_box(lo), black_box(hi)))
     });
     g.bench_function("recip", |bn| bn.iter(|| black_box(A).recip()));
@@ -240,7 +247,7 @@ fn bench_powers(c: &mut Criterion) {
         bn.iter(|| black_box(POS).powi(black_box(-3_i32)))
     });
     g.bench_function("powf", |bn| {
-        let exp = D::from_bits(2_500_000_000_000); // == 2.5
+        let exp = D::from_bits(raw(2_500_000_000_000)); // == 2.5
         bn.iter(|| black_box(POS).powf(black_box(exp)))
     });
     g.bench_function("sqrt", |bn| bn.iter(|| black_box(POS).sqrt()));
@@ -275,7 +282,7 @@ fn bench_log_exp(c: &mut Criterion) {
 
     g.bench_function("ln", |bn| bn.iter(|| black_box(POS).ln()));
     g.bench_function("log", |bn| {
-        let base = D::from_bits(10_000_000_000_000); // == 10
+        let base = D::from_bits(raw(10_000_000_000_000)); // == 10
         bn.iter(|| black_box(POS).log(black_box(base)))
     });
     g.bench_function("log2", |bn| bn.iter(|| black_box(POS).log2()));
@@ -311,7 +318,7 @@ fn bench_trig(c: &mut Criterion) {
         bn.iter(|| black_box(SMALL_ANGLE).to_degrees())
     });
     g.bench_function("to_radians", |bn| {
-        let deg = D::from_bits(45_000_000_000_000); // == 45 degrees
+        let deg = D::from_bits(raw(45_000_000_000_000)); // == 45 degrees
         bn.iter(|| black_box(deg).to_radians())
     });
 

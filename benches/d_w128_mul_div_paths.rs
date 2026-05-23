@@ -31,7 +31,7 @@ fn mul_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> 
         .expect("base-10 literal")
         .pow(SCALE);
     let r = (a256 * b256) / m;
-    D38::<SCALE>::from_bits(r.to_i128_checked().expect("fits i128"))
+    D38::<SCALE>::from_bits(Int::<2>::try_from(r.to_i128_checked().expect("fits i128")).unwrap())
 }
 
 /// `(a · 10^SCALE) / b`, wide-arm style.
@@ -43,7 +43,7 @@ fn div_wide_style<const SCALE: u32>(a: D38<SCALE>, b: D38<SCALE>) -> D38<SCALE> 
         .expect("base-10 literal")
         .pow(SCALE);
     let r = (a256 * m) / b256;
-    D38::<SCALE>::from_bits(r.to_i128_checked().expect("fits i128"))
+    D38::<SCALE>::from_bits(Int::<2>::try_from(r.to_i128_checked().expect("fits i128")).unwrap())
 }
 
 /// Mid-range operands at SCALE = 12: comfortably above the i64
@@ -54,8 +54,8 @@ const B_BITS: i128 = 9_876_543_210_987;
 
 fn bench_d38_mul(c: &mut Criterion) {
     let mut g = c.benchmark_group("d38/mul");
-    let a = D38::<12>::from_bits(A_BITS);
-    let b = D38::<12>::from_bits(B_BITS);
+    let a = D38::<12>::from_bits(Int::<2>::try_from(A_BITS).unwrap());
+    let b = D38::<12>::from_bits(Int::<2>::try_from(B_BITS).unwrap());
 
     g.bench_function("native_mg_divide", |bn| {
         bn.iter(|| black_box(a) * black_box(b))
@@ -69,8 +69,8 @@ fn bench_d38_mul(c: &mut Criterion) {
 
 fn bench_d38_div(c: &mut Criterion) {
     let mut g = c.benchmark_group("d38/div");
-    let a = D38::<12>::from_bits(A_BITS);
-    let b = D38::<12>::from_bits(B_BITS);
+    let a = D38::<12>::from_bits(Int::<2>::try_from(A_BITS).unwrap());
+    let b = D38::<12>::from_bits(Int::<2>::try_from(B_BITS).unwrap());
 
     g.bench_function("native_mg_divide", |bn| {
         bn.iter(|| black_box(a) / black_box(b))

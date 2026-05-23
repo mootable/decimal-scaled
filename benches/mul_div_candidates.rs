@@ -47,11 +47,19 @@
 //! (it would overflow / wrap and produce garbage). The "wide" row
 //! shows --- for naive.
 use criterion::{BenchmarkId, Criterion, criterion_group, criterion_main};
-use decimal_scaled::D38;
+use decimal_scaled::{D38, Int};
 use std::hint::black_box;
 
 type D = D38<12>;
 const MULT: i128 = 1_000_000_000_000;
+
+/// `D38`'s storage (`Int<2>`) from a raw two's-complement `i128` bit
+/// pattern, without range checks — these candidate benches probe the
+/// near-overflow boundary, where wrapping is the intended behaviour.
+#[inline(always)]
+fn raw(v: i128) -> Int<2> {
+    Int::<2>::from_limbs([v as u64, (v >> 64) as u64])
+}
 
 // -----------------------------------------------------------------------------
 // Candidate A: naive baseline (the current shipping form).
@@ -384,12 +392,12 @@ fn mg_div(a: i128, b: i128) -> i128 {
 // -----------------------------------------------------------------------------
 #[inline(always)]
 fn production_mul(a: i128, b: i128) -> i128 {
-    (D::from_bits(a) * D::from_bits(b)).0
+    (D::from_bits(raw(a)) * D::from_bits(raw(b))).to_bits().into()
 }
 
 #[inline(always)]
 fn production_div(a: i128, b: i128) -> i128 {
-    (D::from_bits(a) / D::from_bits(b)).0
+    (D::from_bits(raw(a)) / D::from_bits(raw(b))).to_bits().into()
 }
 
 // -----------------------------------------------------------------------------

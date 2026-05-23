@@ -67,7 +67,7 @@ fn accuracy_report() {
     // ── sin(1) ────────────────────────────────────────────────────
     let baseline_sin_bits = d76_19_bits(D76_19::try_from(1).unwrap().sin_strict());
 
-    let ds_sin = D38_19::try_from(1).unwrap().sin_strict().to_bits();
+    let ds_sin = D38_19::try_from(1).unwrap().sin_strict().to_bits().into();
     let gm_sin = {
         let r = evaluate(&gmath("1.0").sin()).expect("g_math sin(1)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -81,7 +81,7 @@ fn accuracy_report() {
     // ── ln(2) ─────────────────────────────────────────────────────
     let baseline_ln_bits = d76_19_bits(D76_19::try_from(2).unwrap().ln_strict());
 
-    let ds_ln = D38_19::try_from(2).unwrap().ln_strict().to_bits();
+    let ds_ln = D38_19::try_from(2).unwrap().ln_strict().to_bits().into();
     let gm_ln = {
         let r = evaluate(&gmath("2.0").ln()).expect("g_math ln(2)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -95,7 +95,7 @@ fn accuracy_report() {
     // ── exp(1) — i.e. e ──────────────────────────────────────────
     let baseline_exp_bits = d76_19_bits(D76_19::try_from(1).unwrap().exp_strict());
 
-    let ds_exp = D38_19::try_from(1).unwrap().exp_strict().to_bits();
+    let ds_exp = D38_19::try_from(1).unwrap().exp_strict().to_bits().into();
     let gm_exp = {
         let r = evaluate(&gmath("1.0").exp()).expect("g_math exp(1)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -109,7 +109,7 @@ fn accuracy_report() {
     // ── sqrt(2) ──────────────────────────────────────────────────
     let baseline_sqrt_bits = d76_19_bits(D76_19::try_from(2).unwrap().sqrt_strict());
 
-    let ds_sqrt = D38_19::try_from(2).unwrap().sqrt_strict().to_bits();
+    let ds_sqrt = D38_19::try_from(2).unwrap().sqrt_strict().to_bits().into();
     let gm_sqrt = {
         let r = evaluate(&gmath("2.0").sqrt()).expect("g_math sqrt(2)");
         gmath_to_d19_bits(&r.to_decimal_string(25))

@@ -30,7 +30,10 @@ fn bench_d38_s33_log10(c: &mut Criterion) {
     });
     // exp2 of a small fraction (0.3) exercises the full Taylor series,
     // not just the integer power-of-two shortcut path.
-    let frac: D38<33> = D38::<33>::from_bits(300_000_000_000_000_000_000_000_000_000_000_i128);
+    let frac: D38<33> = D38::<33>::from_bits(
+        decimal_scaled::Int::<2>::try_from(300_000_000_000_000_000_000_000_000_000_000_i128)
+            .unwrap(),
+    );
     g.bench_function("D38_s33_exp2_strict_of_0p3", |bn| {
         bn.iter(|| black_box(frac).exp2_strict())
     });

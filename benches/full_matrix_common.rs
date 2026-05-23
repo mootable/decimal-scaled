@@ -38,8 +38,8 @@ macro_rules! arith_block {
     }};
 }
 
-/// f64-bridge `ln` / `exp` / `sin` / `sqrt`. Only used in the D9 /
-/// D18 / D38 per-width benches; the wide tiers have no fast path.
+/// f64-bridge `ln` / `exp` / `sin` / `sqrt`. Only used in the D18 /
+/// D38 per-width benches; the wide tiers have no fast path.
 #[macro_export]
 macro_rules! fast_block {
     ($g:ident, $tag:literal, $T:ty) => {{

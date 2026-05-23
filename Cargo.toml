@@ -217,6 +217,7 @@ required-features = ["wide", "x-wide", "xx-wide"]
 [[bench]]
 name = "pr_gate"
 harness = false
+required-features = ["wide"]
 
 [[bench]]
 name = "all_functions"
@@ -319,10 +320,6 @@ required-features = ["wide"]
 # D18). Splitting per-width keeps a power-loss / lid-close near the
 # end of a sweep from wiping out completed widths' criterion data.
 [[bench]]
-name = "full_matrix_d9"
-harness = false
-
-[[bench]]
 name = "full_matrix_d18"
 harness = false
 
@@ -338,6 +335,7 @@ required-features = ["wide"]
 [[bench]]
 name = "full_matrix_d76"
 harness = false
+required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d115"
@@ -347,6 +345,7 @@ required-features = ["wide"]
 [[bench]]
 name = "full_matrix_d153"
 harness = false
+required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d230"
@@ -356,6 +355,7 @@ required-features = ["wide"]
 [[bench]]
 name = "full_matrix_d307"
 harness = false
+required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d462"
@@ -504,10 +504,6 @@ required-features = ["wide"]
 # Per-width library_comparison benches. Each runs ONE tier's full
 # peer comparison so `cargo bench --bench lib_cmp_d307` iterates
 # in minutes. Run them all sequentially for a full matrix sweep.
-[[bench]]
-name = "lib_cmp_d9"
-harness = false
-
 [[bench]]
 name = "lib_cmp_d18"
 harness = false

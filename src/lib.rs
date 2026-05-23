@@ -246,7 +246,7 @@ pub mod __bench_internals {
                 pub mod $pub_name {
                     use super::NewtonReciprocal;
                     use crate::RoundingMode;
-                    use $width as W;
+                    type W = $width;
 
                     /// Storage type for this tier — opaque to the bench.
                     #[derive(Clone, Copy)]

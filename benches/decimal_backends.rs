@@ -1,7 +1,7 @@
 //! Decimal / fixed-point backend comparison across every width and
 //! every comparable operation.
 //!
-//! The crate ships twelve decimal widths (D9, D18, D38 plus the
+//! The crate ships eleven decimal widths (D18, D38 plus the
 //! wide tier D76/D115/D153/D230/D307 and the x-wide tier
 //! D462/D616/D924/D1232). This bench fans the add / sub / mul /
 //! div / rem / neg primitives across every available width and pits
@@ -31,7 +31,7 @@ use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::D153;
 #[cfg(feature = "d307")]
 use decimal_scaled::D307;
-use decimal_scaled::{D9, D18, D38, D76};
+use decimal_scaled::{D18, D38, D76};
 use fixed::types::I64F64;
 use rust_decimal::{Decimal, MathematicalOps};
 use std::hint::black_box;
@@ -69,13 +69,7 @@ macro_rules! six_ops {
 fn bench_arithmetic(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal/arith");
 
-    // Native-storage tier: i32, i64, i128.
-    six_ops!(
-        g,
-        "D9",
-        D9::<6>::try_from(A as i32).unwrap(),
-        D9::<6>::try_from(B as i32).unwrap()
-    );
+    // Native-storage tier: i64, i128.
     six_ops!(g, "D18", D18::<12>::try_from(A).unwrap(), D18::<12>::try_from(B).unwrap());
     six_ops!(g, "D38", D38::<12>::try_from(A).unwrap(), D38::<12>::try_from(B).unwrap());
 
@@ -124,7 +118,9 @@ fn bench_transcendentals(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal/transc");
 
     // `≈ 2.345678901` in each representation.
-    let ours128 = D38::<9>::from_bits(2_345_678_901);
+    let ours128 = D38::<9>::from_bits(
+        decimal_scaled::Int::<2>::try_from(2_345_678_901_i128).unwrap(),
+    );
     let ours256 = D76::<9>::try_from(2).unwrap();
     let rd = Decimal::new(2_345_678_901, 9);
 
@@ -209,7 +205,7 @@ fn bench_transcendentals(c: &mut Criterion) {
     });
 
     // Two-arg ops: pow, atan2.
-    let p = D38::<9>::from_bits(3_000_000_000); // 3.0
+    let p = D38::<9>::from_bits(decimal_scaled::Int::<2>::try_from(3_000_000_000_i128).unwrap()); // 3.0
     g.bench_function("D128_lossy/powf", |b| {
         b.iter(|| black_box(ours128).powf_fast(black_box(p)))
     });

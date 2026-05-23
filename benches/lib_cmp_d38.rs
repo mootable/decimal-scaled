@@ -97,9 +97,17 @@ fn bench(c: &mut Criterion) {
             }
             38 => {
                 let a = D38::<38>::from_bits(
-                    170_000_000_000_000_000_000_000_000_000_000_000_000_i128 / 2,
+                    decimal_scaled::Int::<2>::try_from(
+                        170_000_000_000_000_000_000_000_000_000_000_000_000_i128 / 2,
+                    )
+                    .unwrap(),
                 );
-                let b = D38::<38>::from_bits(100_000_000_000_000_000_000_000_000_000_000_000_i128);
+                let b = D38::<38>::from_bits(
+                    decimal_scaled::Int::<2>::try_from(
+                        100_000_000_000_000_000_000_000_000_000_000_000_i128,
+                    )
+                    .unwrap(),
+                );
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             _ => unreachable!(),
