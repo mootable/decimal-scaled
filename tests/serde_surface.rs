@@ -190,3 +190,95 @@ fn d153_d307_serde_json_round_trip() {
     let back: D307<6> = serde_json::from_str(&s).unwrap();
     assert_eq!(back, v);
 }
+
+// ─── Full-surface round-trip across every width ────────────────────────
+//
+// The 0.5.0 storage rewrite moved every decimal type onto `Int<N>` and
+// re-pointed `to_bits`/`from_bits` at `Int<N>` rather than `i128`. These
+// tests pin that the on-disk serde format still round-trips bit-exactly
+// for both the human-readable (decimal-string) and binary (LE limb-byte)
+// wire forms, across signs, zero, `MIN`/`MAX`, and a high-scale value —
+// for D38 and every wide tier. They also confirm the format is
+// internally consistent: serialize → deserialize → serialize is stable.
+
+use decimal_scaled::Int;
+
+/// Asserts JSON and postcard each round-trip `$value` bit-exactly, and
+/// that re-serialising the deserialised value reproduces the original
+/// wire bytes (format stability).
+fn assert_serde_stable<T>(value: T)
+where
+    T: serde::Serialize + serde::de::DeserializeOwned + PartialEq + core::fmt::Debug + Copy,
+{
+    // Human-readable (JSON): serialize → deserialize → serialize.
+    let json1 = serde_json::to_string(&value).unwrap();
+    let back_json: T = serde_json::from_str(&json1).unwrap();
+    assert_eq!(back_json, value, "JSON round-trip changed the value");
+    let json2 = serde_json::to_string(&back_json).unwrap();
+    assert_eq!(json1, json2, "JSON wire form is not stable on re-serialise");
+
+    // Binary (postcard): serialize → deserialize → serialize.
+    let bin1 = postcard::to_allocvec(&value).unwrap();
+    let back_bin: T = postcard::from_bytes(&bin1).unwrap();
+    assert_eq!(back_bin, value, "postcard round-trip changed the value");
+    let bin2 = postcard::to_allocvec(&back_bin).unwrap();
+    assert_eq!(bin1, bin2, "postcard wire form is not stable on re-serialise");
+}
+
+/// Generates a round-trip test for one decimal width `$ty` whose storage
+/// is `Int<$n>`. Covers zero, a small positive/negative pair, a
+/// high-scale fractional value, and `MIN`/`MAX` via raw `from_bits`.
+macro_rules! width_round_trip_test {
+    ($name:ident, $ty:ident, $n:literal, $scale:literal) => {
+        #[test]
+        fn $name() {
+            use decimal_scaled::$ty;
+
+            let bits = |n: i128| Int::<$n>::try_from(n).unwrap();
+            // Zero.
+            assert_serde_stable($ty::<$scale>::ZERO);
+            // Small positive and negative logical values.
+            assert_serde_stable($ty::<$scale>::from_bits(bits(7)));
+            assert_serde_stable($ty::<$scale>::from_bits(bits(-7)));
+            // A high-scale fractional value: 1 ULP and a few scaled units.
+            assert_serde_stable($ty::<$scale>::from_bits(bits(1)));
+            assert_serde_stable($ty::<$scale>::from_bits(bits(
+                -123_456_789_012_345_678_901_234_567_890_i128,
+            )));
+            // Full-width extremes — the classic two's-complement asymmetry.
+            assert_serde_stable($ty::<$scale>::MAX);
+            assert_serde_stable($ty::<$scale>::MIN);
+        }
+    };
+}
+
+// D38 (Int<2>) is always available under the serde feature.
+width_round_trip_test!(d38_full_surface_round_trip, D38, 2, 12);
+
+#[cfg(feature = "wide")]
+mod wide_full_surface {
+    use super::{assert_serde_stable, Int};
+
+    width_round_trip_test!(d57_full_surface_round_trip, D57, 3, 18);
+    width_round_trip_test!(d76_full_surface_round_trip, D76, 4, 24);
+    width_round_trip_test!(d115_full_surface_round_trip, D115, 6, 32);
+    width_round_trip_test!(d153_full_surface_round_trip, D153, 8, 48);
+    width_round_trip_test!(d230_full_surface_round_trip, D230, 12, 64);
+}
+
+#[cfg(feature = "x-wide")]
+mod x_wide_full_surface {
+    use super::{assert_serde_stable, Int};
+
+    width_round_trip_test!(d307_full_surface_round_trip, D307, 16, 96);
+    width_round_trip_test!(d462_full_surface_round_trip, D462, 24, 153);
+    width_round_trip_test!(d616_full_surface_round_trip, D616, 32, 200);
+}
+
+#[cfg(feature = "xx-wide")]
+mod xx_wide_full_surface {
+    use super::{assert_serde_stable, Int};
+
+    width_round_trip_test!(d924_full_surface_round_trip, D924, 48, 461);
+    width_round_trip_test!(d1232_full_surface_round_trip, D1232, 64, 615);
+}
