@@ -37,7 +37,11 @@ const GUARD_NARROW: u32 = 8;
 /// Joint `(ex, enx)` pair via one Tang exp + one reciprocal divide.
 #[inline]
 fn ex_enx(v: core::W, w: u32) -> (core::W, core::W) {
-    let ex = crate::algos::exp::lookup_d115_s57_tang::tang_exp_fixed(v, w);
+    let ex = crate::algos::exp::exp_tang::tang_exp_fixed::<
+        crate::types::widths::wide_trig_d115::Core,
+        128,
+        false,
+    >(v, w);
     let one_w = core::one(w);
     let enx = core::div(one_w, ex, w);
     (ex, enx)

@@ -34,8 +34,8 @@
 //!
 //! ## Tuning
 //!
-//! - `GUARD_NARROW = 8` matches the sibling
-//!   [`crate::algos::ln::lookup_d1232_s610_620_tang`] ln kernel so the
+//! - `GUARD_NARROW = 8` matches the sibling D1232 band of the
+//!   tier-generic [`crate::algos::ln::ln_tang`] ln kernel so the
 //!   per-thread `pow10_w` cache slot is shared.
 //! - `M = 128` matches the lower Tang slots. Per-thread memory cost:
 //!   `M · sizeof(W) = 128 · 2048 B ≈ 256 KB` for D1232's Int16384

@@ -385,7 +385,7 @@ macro_rules! ln_policy_log_family {
 #[cfg(any(feature = "d57", feature = "wide"))]
 ln_policy_wide_tang!(D57, 3, crate::types::widths::wide_trig_d57::Core, |raw: Int<3>, mode| -> Int<3> {
     match SCALE {
-        18..=22 => ln::lookup_d57_s18_22_tang::ln_strict::<SCALE>(raw, mode),
+        18..=22 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, false>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -397,7 +397,7 @@ ln_policy_wide_series!(D76, 4, crate::types::widths::wide_trig_d76::Core);
 #[cfg(any(feature = "d115", feature = "wide"))]
 ln_policy_wide_tang!(D115, 6, crate::types::widths::wide_trig_d115::Core, |raw: Int<6>, mode| -> Int<6> {
     match SCALE {
-        50..=60 => ln::lookup_d115_s57_tang::ln_strict::<SCALE>(raw, mode),
+        50..=60 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -406,7 +406,7 @@ ln_policy_wide_tang!(D115, 6, crate::types::widths::wide_trig_d115::Core, |raw: 
 #[cfg(any(feature = "d153", feature = "wide"))]
 ln_policy_wide_tang!(D153, 8, crate::types::widths::wide_trig_d153::Core, |raw: Int<8>, mode| -> Int<8> {
     match SCALE {
-        70..=82 => ln::lookup_d153_s70_82_tang::ln_strict::<SCALE>(raw, mode),
+        70..=82 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -415,7 +415,7 @@ ln_policy_wide_tang!(D153, 8, crate::types::widths::wide_trig_d153::Core, |raw: 
 #[cfg(any(feature = "d230", feature = "wide"))]
 ln_policy_wide_tang!(D230, 12, crate::types::widths::wide_trig_d230::Core, |raw: Int<12>, mode| -> Int<12> {
     match SCALE {
-        110..=120 => ln::lookup_d230_s110_120_tang::ln_strict::<SCALE>(raw, mode),
+        110..=120 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 10, 200, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -424,8 +424,8 @@ ln_policy_wide_tang!(D230, 12, crate::types::widths::wide_trig_d230::Core, |raw:
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 ln_policy_wide_tang!(D307, 16, crate::types::widths::wide_trig_d307::Core, |raw: Int<16>, mode| -> Int<16> {
     match SCALE {
-        140..=160 => ln::lookup_d307_s140_160_tang::ln_strict::<SCALE>(raw, mode),
-        285..=295 => ln::lookup_d307_s285_295_tang::ln_strict::<SCALE>(raw, mode),
+        140..=160 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 400, true>(raw, mode),
+        285..=295 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, 400, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -434,7 +434,7 @@ ln_policy_wide_tang!(D307, 16, crate::types::widths::wide_trig_d307::Core, |raw:
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 ln_policy_wide_tang!(D462, 24, crate::types::widths::wide_trig_d462::Core, |raw: Int<24>, mode| -> Int<24> {
     match SCALE {
-        225..=235 => ln::lookup_d462_s225_235_tang::ln_strict::<SCALE>(raw, mode),
+        225..=235 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 8, 400, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -443,8 +443,8 @@ ln_policy_wide_tang!(D462, 24, crate::types::widths::wide_trig_d462::Core, |raw:
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 ln_policy_wide_tang!(D616, 32, crate::types::widths::wide_trig_d616::Core, |raw: Int<32>, mode| -> Int<32> {
     match SCALE {
-        300..=315 => ln::lookup_d616_s300_315_tang::ln_strict::<SCALE>(raw, mode),
-        585..=595 => ln::lookup_d616_s585_595_tang::ln_strict::<SCALE>(raw, mode),
+        300..=315 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true>(raw, mode),
+        585..=595 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -453,8 +453,8 @@ ln_policy_wide_tang!(D616, 32, crate::types::widths::wide_trig_d616::Core, |raw:
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 ln_policy_wide_tang!(D924, 48, crate::types::widths::wide_trig_d924::Core, |raw: Int<48>, mode| -> Int<48> {
     match SCALE {
-        455..=465 => ln::lookup_d924_s455_465_tang::ln_strict::<SCALE>(raw, mode),
-        895..=905 => ln::lookup_d924_s895_905_tang::ln_strict::<SCALE>(raw, mode),
+        455..=465 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 8, 400, true>(raw, mode),
+        895..=905 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 10, 400, true>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -463,8 +463,8 @@ ln_policy_wide_tang!(D924, 48, crate::types::widths::wide_trig_d924::Core, |raw:
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 ln_policy_wide_tang!(D1232, 64, crate::types::widths::wide_trig_d1232::Core, |raw: Int<64>, mode| -> Int<64> {
     match SCALE {
-        610..=620 => ln::lookup_d1232_s610_620_tang::ln_strict::<SCALE>(raw, mode),
-        1195..=1205 => ln::lookup_d1232_s1195_1205_tang::ln_strict::<SCALE>(raw, mode),
+        610..=620 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 8, 400, true>(raw, mode),
+        1195..=1205 => ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 10, 400, true>(raw, mode),
         _ => unreachable!(),
     }
 });

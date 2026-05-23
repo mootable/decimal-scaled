@@ -19,15 +19,18 @@
 
 pub(crate) mod fixed_d38;
 pub(crate) mod lab;
-#[cfg(any(feature = "d115", feature = "wide"))]
-pub(crate) mod lookup_d115_s57_tang;
-#[cfg(any(feature = "d153", feature = "wide"))]
-pub(crate) mod lookup_d153_s70_82_tang;
+/// Tier-generic Tang-style table-driven `exp_strict` kernel, generic over
+/// `WideTrigCore`. Collapses the per-tier D57 (18..=22 / 45..=56), D115
+/// and D153 Tang exp kernels into one. The `policy::exp` Tang arms call
+/// it with the tier's `Core`, `SCALE`, table size, narrow guard and the
+/// per-band reduction/narrowing flags; the trig hyperbolic kernels reuse
+/// [`exp_tang::tang_exp_fixed`] for their `(e^v, e^-v)` pair.
+#[cfg(feature = "_wide-support")]
+pub(crate) mod exp_tang;
+// Tang exp slot for D307 SCALE 140..=160: NOT wired to `exp` dispatch
+// (lost on perf at Int<16>), retained only for its `tang_exp_fixed` /
+// `GUARD_FOR_HYPER` surface consumed by the D307 trig hyperbolic kernel.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 pub(crate) mod lookup_d307_s140_160_tang;
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s18_22_tang;
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s45_56;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;

@@ -123,6 +123,39 @@ pub(crate) trait WideTrigCore {
     fn div(a: Self::W, b: Self::W, w: u32) -> Self::W;
     /// Bit length of `|v|` (0 for zero).
     fn bit_length(v: Self::W) -> u32;
+
+    // ── working-scale helpers the Tang lookup kernels need ─────────────
+
+    /// The work-integer `1` at working scale `w` (`10^w`), cached.
+    fn one(w: u32) -> Self::W;
+    /// The work-integer literal `n` (small unsigned).
+    fn lit(n: u128) -> Self::W;
+    /// `ln 2` at working scale `w`, cached.
+    fn ln2(w: u32) -> Self::W;
+    /// `(a · b) / 10^w`, rounded half-to-even, with a precomputed
+    /// `10^w` divisor (loop-friendly).
+    fn mul_cached(a: Self::W, b: Self::W, pow10_w: Self::W) -> Self::W;
+    /// `(a · 10^w) / b`, rounded half-to-even, with a precomputed
+    /// `10^w` numerator factor (loop-friendly).
+    fn div_cached(a: Self::W, b: Self::W, pow10_w: Self::W) -> Self::W;
+    /// Rounds a working-scale value to the nearest integer (ties away
+    /// from zero); the range-reduction quotient for the Tang exp kernel.
+    fn round_to_nearest_int(v: Self::W, w: u32) -> i128;
+    /// `10^n` in the work integer (the un-cached power; used to widen by
+    /// `extra` digits in the Tang exp reassembly).
+    fn pow10(n: u32) -> Self::W;
+    /// `Self::W::BITS` — the work integer's bit width.
+    fn w_bits() -> u32;
+
+    /// The `ln(1 + i/M)` Tang table slot at working scale `w` (table
+    /// size `M = 128`; the `i = 0` slot is `0`, the `i = M` slot is
+    /// `ln 2`). Memoised per thread per `w` by the tier's `Core`.
+    fn ln_table_entry(w: u32, idx: usize) -> Self::W;
+
+    /// The Tang exp table slot `exp(j · ln2 / M)` at working scale `w`
+    /// for table size `M`. Memoised per thread per `(w, M)` by the
+    /// tier's `Core`.
+    fn exp_table_entry(w: u32, idx: usize, m: u32) -> Self::W;
 }
 
 /// `exp_strict` for a wide tier — generic over the tier `C`.

@@ -331,8 +331,8 @@ exp_policy_wide_tang!(D57, 3, crate::types::widths::wide_trig_d57::Core, |raw: I
                                                                  mode|
  -> Int<3> {
     match SCALE {
-        18..=22 => exp::lookup_d57_s18_22_tang::exp_strict::<SCALE>(raw, mode),
-        45..=56 => exp::lookup_d57_s45_56::exp_strict::<SCALE>(raw, mode),
+        18..=22 => exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, false, false, false>(raw, mode),
+        45..=56 => exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, false, false, false>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -346,7 +346,7 @@ exp_policy_wide_tang!(D115, 6, crate::types::widths::wide_trig_d115::Core, |raw:
                                                                    mode|
  -> Int<6> {
     match SCALE {
-        50..=60 => exp::lookup_d115_s57_tang::exp_strict::<SCALE>(raw, mode),
+        50..=60 => exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 128, 8, true, true, false>(raw, mode),
         _ => unreachable!(),
     }
 });
@@ -357,7 +357,7 @@ exp_policy_wide_tang!(D153, 8, crate::types::widths::wide_trig_d153::Core, |raw:
                                                                    mode|
  -> Int<8> {
     match SCALE {
-        70..=82 => exp::lookup_d153_s70_82_tang::exp_strict::<SCALE>(raw, mode),
+        70..=82 => exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 128, 10, true, false, true>(raw, mode),
         _ => unreachable!(),
     }
 });

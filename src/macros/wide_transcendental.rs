@@ -2347,6 +2347,115 @@ macro_rules! decl_wide_transcendental {
                 if sign { -result } else { result }
             }
 
+            // ── Tang lookup tables (ln / exp) ──────────────────────────
+            //
+            // The tier-generic `ln_tang` / `exp_tang` kernels
+            // (`algos::ln::ln_tang`, `algos::exp::exp_tang`) drive the
+            // table through the `WideTrigCore::{ln,exp}_table_entry`
+            // trait methods, which forward here. The table-build cost
+            // (one `*_fixed` kernel per slot) is memoised per thread —
+            // ln keyed on `w`, exp keyed on `(w, M)` since the exp
+            // table size varies per band (128 / 512). On `no_std` the
+            // table is rebuilt per call (no thread-local storage).
+
+            /// Tang ln table size — `ln(1 + i/M)`, `i ∈ [0, M]`.
+            const LN_TANG_M: u32 = 128;
+
+            /// Build the `ln(1 + i/M)` table at working scale `w`.
+            fn ln_tang_compute(w: u32) -> alloc::vec::Vec<W> {
+                let mut out = alloc::vec::Vec::with_capacity((LN_TANG_M + 1) as usize);
+                let one_w = one(w);
+                out.push(zero()); // ln(1) = 0.
+                let mut i = 1u32;
+                while i <= LN_TANG_M {
+                    let scaled = (one_w * lit(i as u128)) / lit(LN_TANG_M as u128);
+                    let f_i = one_w + scaled;
+                    out.push(ln_fixed(f_i, w));
+                    i += 1;
+                }
+                out
+            }
+
+            /// Build the `exp(j · ln2 / M)` table at working scale `w`
+            /// for table size `m`. `j ∈ [0, m)`.
+            fn exp_tang_compute(w: u32, m: u32) -> alloc::vec::Vec<W> {
+                let mut out = alloc::vec::Vec::with_capacity(m as usize);
+                let l2 = ln2(w);
+                out.push(one(w)); // j = 0: exp(0) = 1.
+                let mut j = 1u32;
+                while j < m {
+                    let cj_w = (l2 * lit(j as u128)) / lit(m as u128);
+                    out.push(exp_fixed(cj_w, w));
+                    j += 1;
+                }
+                out
+            }
+
+            #[cfg(feature = "std")]
+            mod tang_table_cache {
+                use super::*;
+
+                ::std::thread_local! {
+                    static LN_CACHE:
+                        ::core::cell::RefCell<alloc::vec::Vec<(u32, alloc::vec::Vec<W>)>> =
+                        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
+                    static EXP_CACHE:
+                        ::core::cell::RefCell<alloc::vec::Vec<((u32, u32), alloc::vec::Vec<W>)>> =
+                        const { ::core::cell::RefCell::new(alloc::vec::Vec::new()) };
+                }
+
+                #[inline]
+                pub(super) fn ln_table_entry(w: u32, idx: usize) -> W {
+                    LN_CACHE.with(|c| {
+                        {
+                            let cache = c.borrow();
+                            for (cw, tbl) in cache.iter() {
+                                if *cw == w {
+                                    return tbl[idx];
+                                }
+                            }
+                        }
+                        let tbl = ln_tang_compute(w);
+                        let entry = tbl[idx];
+                        c.borrow_mut().push((w, tbl));
+                        entry
+                    })
+                }
+
+                #[inline]
+                pub(super) fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
+                    EXP_CACHE.with(|c| {
+                        {
+                            let cache = c.borrow();
+                            for (key, tbl) in cache.iter() {
+                                if *key == (w, m) {
+                                    return tbl[idx];
+                                }
+                            }
+                        }
+                        let tbl = exp_tang_compute(w, m);
+                        let entry = tbl[idx];
+                        c.borrow_mut().push(((w, m), tbl));
+                        entry
+                    })
+                }
+            }
+
+            #[cfg(not(feature = "std"))]
+            mod tang_table_cache {
+                use super::*;
+
+                #[inline]
+                pub(super) fn ln_table_entry(w: u32, idx: usize) -> W {
+                    ln_tang_compute(w)[idx]
+                }
+
+                #[inline]
+                pub(super) fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
+                    exp_tang_compute(w, m)[idx]
+                }
+            }
+
             /// Zero-sized per-tier marker implementing
             /// [`crate::algos::support::wide_trig_core::WideTrigCore`].
             /// Binds this tier's work integer [`W`] / [`Wexp`] and the
@@ -2433,6 +2542,46 @@ macro_rules! decl_wide_transcendental {
                 #[inline]
                 fn bit_length(v: W) -> u32 {
                     bit_length(v)
+                }
+                #[inline]
+                fn one(w: u32) -> W {
+                    one(w)
+                }
+                #[inline]
+                fn lit(n: u128) -> W {
+                    lit(n)
+                }
+                #[inline]
+                fn ln2(w: u32) -> W {
+                    ln2(w)
+                }
+                #[inline]
+                fn mul_cached(a: W, b: W, pow10_w: W) -> W {
+                    mul_cached(a, b, pow10_w)
+                }
+                #[inline]
+                fn div_cached(a: W, b: W, pow10_w: W) -> W {
+                    div_cached(a, b, pow10_w)
+                }
+                #[inline]
+                fn round_to_nearest_int(v: W, w: u32) -> i128 {
+                    round_to_nearest_int(v, w)
+                }
+                #[inline]
+                fn pow10(n: u32) -> W {
+                    pow10(n)
+                }
+                #[inline]
+                fn w_bits() -> u32 {
+                    <W as $crate::int::types::traits::BigInt>::BITS
+                }
+                #[inline]
+                fn ln_table_entry(w: u32, idx: usize) -> W {
+                    tang_table_cache::ln_table_entry(w, idx)
+                }
+                #[inline]
+                fn exp_table_entry(w: u32, idx: usize, m: u32) -> W {
+                    tang_table_cache::exp_table_entry(w, idx, m)
                 }
             }
 

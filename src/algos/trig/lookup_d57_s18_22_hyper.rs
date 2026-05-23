@@ -59,7 +59,11 @@ const GUARD_NARROW: u32 = 8;
 /// more expensive.
 #[inline]
 fn ex_enx(v: core::W, w: u32) -> (core::W, core::W) {
-    let ex = crate::algos::exp::lookup_d57_s18_22_tang::tang_exp_fixed(v, w);
+    let ex = crate::algos::exp::exp_tang::tang_exp_fixed::<
+        crate::types::widths::wide_trig_d57::Core,
+        128,
+        false,
+    >(v, w);
     let one_w = core::one(w);
     let enx = core::div(one_w, ex, w);
     (ex, enx)

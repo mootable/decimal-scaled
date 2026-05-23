@@ -40,12 +40,16 @@ use crate::int::types::Int;
 /// Narrow guard for the SCALE 70..=82 hyperbolic slot — matches the
 /// sibling Tang exp/ln guard so the per-thread `pow10_w` cache slot
 /// is shared.
-const GUARD_NARROW: u32 = crate::algos::exp::lookup_d153_s70_82_tang::GUARD_FOR_HYPER;
+const GUARD_NARROW: u32 = 10;
 
 /// Joint `(ex, enx)` pair shared by sinh / cosh / tanh.
 #[inline]
 fn ex_enx(v: core::W, w: u32) -> (core::W, core::W) {
-    let ex = crate::algos::exp::lookup_d153_s70_82_tang::tang_exp_fixed(v, w);
+    let ex = crate::algos::exp::exp_tang::tang_exp_fixed::<
+        crate::types::widths::wide_trig_d153::Core,
+        128,
+        true,
+    >(v, w);
     let one_w = core::one(w);
     let enx = core::div(one_w, ex, w);
     (ex, enx)
