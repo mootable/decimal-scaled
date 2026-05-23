@@ -237,6 +237,15 @@ Rules that make this work:
   is structural: `select` is total over the key, and `match algo` is exhaustive
   over `Algorithm` (both compiler-enforced). The "default" for unspecialised
   widths is simply the real algorithm named in `select`'s `_` arm.
+- **Algorithm fn/module naming = `<function>_<method>[_with_<method2>][_variant]`.**
+  Prepend the function it performs (`sqrt_`, `cbrt_`, `div_`, `mul_`, `exp_`, …),
+  then the literature/paper method (`newton`, `knuth`, `karatsuba`, `mg_divide`,
+  `burnikel_ziegler`, `tang`, `series`, …). Hybrids keep the other method's **full
+  name**: `div_tang_with_mg_divide`, `div_newton_with_mg_divide`. Append a sensible
+  `_variant` only to disambiguate. **Widths are const-generic params, NEVER
+  name-encoded** — only a genuinely width-bespoke kernel may suffix, and then with
+  the **limb count** as `<N>_limb` (e.g. `mul_karatsuba_4_limb` for `Int<4>`), never `_int2`, bit-width, or `dXX`. The `Algorithm` *enum variant*
+  stays the short, function-scoped method name (`Newton`, `Knuth`).
 - **`select` is `const`, called via an inline `const { … }` block, keyed only on
   the const generics.** Per monomorphisation `const { select::<N>() }` evaluates
   to a constant `Select`, so the matches fold and every unchosen arm is
