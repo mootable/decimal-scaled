@@ -19,6 +19,12 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # dispatchable; every run targets the `ref` branch, not the default.)
 
 on:
+  # Commit listener: every push to a release branch benches it vs prod.
+  # cancel-in-progress (below) means a newer commit supersedes an older run.
+  push:
+    branches:
+      - 'release/**'
+  # Asymmetric on-demand: run against any ref whenever you choose.
   workflow_dispatch:
     inputs:
       ref:
@@ -26,6 +32,14 @@ on:
         required: false
         type: string
         default: ""
+
+# One run per ref with a queue depth of 1: the in-progress bench finishes, and
+# if commits landed during it, GitHub keeps only the LATEST as pending and runs
+# that next (older pending runs are superseded). So every commit either gets its
+# own bench or is rolled into the next run on the latest commit — none stranded.
+concurrency:
+  group: bench-branch-compare-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -74,19 +88,18 @@ jobs:
           echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod)' Cargo.toml
           cargo bench --bench lib_compare | tee bench.out
 
-      - name: Summarise (branch vs prod)
+      - name: Summarise (branch vs prod table)
         if: always()
         working-directory: bench-compare
+        env:
+          BENCH_REF: ${{ inputs.ref || github.ref_name }}
         run: |
-          {
-            echo "### bench-branch-compare: \`${{ inputs.ref || github.ref_name }}\` (branch) vs prod \`${PROD_VERSION:-?}\` (latest published tag)"
-            echo ''
-            echo '`branch/*` = the branch under test, `prod/*` = the latest published tag. Criterion timing lines:'
-            echo ''
-            echo '```'
-            grep -E '(branch|prod)/|time:' bench.out || echo "(no timing lines captured — see artifact)"
-            echo '```'
-          } >> "$GITHUB_STEP_SUMMARY"
+          python3 summarise.py >> "$GITHUB_STEP_SUMMARY" || {
+            echo "### bench-branch-compare — summary parse failed; raw output:" >> "$GITHUB_STEP_SUMMARY"
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+            tail -100 bench.out >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
+            echo '```' >> "$GITHUB_STEP_SUMMARY"
+          }
 
       - name: Upload criterion data + raw output
         if: always()
