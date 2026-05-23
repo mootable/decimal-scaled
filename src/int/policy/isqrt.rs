@@ -21,7 +21,7 @@
 //! # Algorithm selection
 //!
 //! The two algorithms correspond directly to the arms of the existing
-//! const-`N` ladder in [`crate::int::algos::div::isqrt_mag_fixed`], which
+//! const-`N` ladder in [`crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed`], which
 //! this policy formalises:
 //!
 //! - **`N ∈ {1, 2}`** → [`isqrt_native`]: single hardware instruction via
@@ -42,7 +42,7 @@
 //! because the policy must accommodate both arms a single `const fn` is not
 //! possible. `Uint<N>::isqrt` is therefore not `const fn`.
 
-use crate::int::algos::div::isqrt_mag_fixed;
+use crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed;
 use crate::int::types::Uint;
 
 // ── 1. the real isqrt algorithms — NAMED, no `Default` ───────────────
@@ -106,7 +106,7 @@ pub(crate) fn isqrt_native<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// Newton integer square root for `Uint<N>` where `N >= 3`.
 ///
 /// Delegates to [`isqrt_mag_fixed`] which routes to
-/// [`crate::int::algos::roots::isqrt_newton`] for `N >= 3`: Newton
+/// [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`] for `N >= 3`: Newton
 /// iteration with a hardware-`f64::sqrt` seed over the u64 limbs.
 #[inline]
 pub(crate) fn isqrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
@@ -124,7 +124,7 @@ pub(crate) fn isqrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// eliminated in release) then dispatches exhaustively over [`Algorithm`].
 ///
 /// Not `const fn`: the `Newton` arm delegates to
-/// [`crate::int::algos::roots::isqrt_newton`] (Newton iteration, not
+/// [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`] (Newton iteration, not
 /// const-evaluable).
 #[inline]
 pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {

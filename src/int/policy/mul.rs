@@ -14,7 +14,8 @@
 //! ([`KARATSUBA_THRESHOLD`]) is policy DATA here, not a magic number in a
 //! kernel.
 
-use crate::int::algos::limbs::{mul_karatsuba, mul_schoolbook};
+use crate::int::algos::mul::mul_karatsuba::mul_karatsuba;
+use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 
 // ── 1. the real multiply algorithms — NAMED, no `Default` ─────────────
 

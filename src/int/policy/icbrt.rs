@@ -31,7 +31,7 @@
 //! - **`N >= 3`** → [`icbrt_newton`]: width-agnostic Newton iteration with a
 //!   hardware-`f64::cbrt` seed over u64 limbs — one algorithm for all
 //!   wider integers. Implemented in
-//!   [`crate::int::algos::roots::icbrt_newton`].
+//!   [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
@@ -39,10 +39,10 @@
 //! # Const-ness
 //!
 //! `dispatch` is **not** `const fn`. The `Newton` arm calls
-//! [`crate::int::algos::roots::icbrt_newton`] which performs Newton
+//! [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`] which performs Newton
 //! iteration and is not const-evaluable.
 
-use crate::int::algos::roots::icbrt_newton as icbrt_newton_kernel;
+use crate::int::algos::icbrt::icbrt_newton::icbrt_newton as icbrt_newton_kernel;
 use crate::int::types::Uint;
 
 // ── 1. the real icbrt algorithms — NAMED, no `Default` ───────────────
@@ -61,7 +61,7 @@ enum Algorithm {
     Native,
     /// [`icbrt_newton`] — width-agnostic Newton iteration with a
     /// hardware-`f64::cbrt` seed over u64 limbs. Serves every `N >= 3`.
-    /// Delegates to [`crate::int::algos::roots::icbrt_newton`].
+    /// Delegates to [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].
     Newton,
 }
 
@@ -130,7 +130,7 @@ pub(crate) fn icbrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// eliminated in release) then dispatches exhaustively over [`Algorithm`].
 ///
 /// Not `const fn`: the `Newton` arm delegates to
-/// [`crate::int::algos::roots::icbrt_newton`] (Newton iteration, not
+/// [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`] (Newton iteration, not
 /// const-evaluable).
 #[inline]
 pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {

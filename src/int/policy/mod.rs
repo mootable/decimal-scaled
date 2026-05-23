@@ -38,8 +38,8 @@
 //!   [`crate::int::algos::div::div_rem`] algo directly.
 //! - **mul** — schoolbook at every width. The fixed-width types use the
 //!   truncated low-`N` schoolbook product
-//!   ([`crate::int::algos::limbs::mul_low_fixed`] /
-//!   [`crate::int::algos::limbs::sqr_low_fixed`]);
+//!   ([`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] /
+//!   [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`]);
 //!   the slice dispatcher [`mul::dispatch`] additionally
 //!   crosses over to Karatsuba at [`mul::KARATSUBA_THRESHOLD`] limbs, but
 //!   the named integer widths in this crate stay in the schoolbook
@@ -62,11 +62,11 @@
 //!   [`div_rem::div_rem`] so they can run at compile time.
 //! - **isqrt** — `N ∈ {1, 2}` takes the hardware native path (`u64::isqrt`/
 //!   `u128::isqrt`); `N >= 3` takes the Newton limb kernel
-//!   ([`crate::int::algos::roots::isqrt_newton`]). Routes through
+//!   ([`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]). Routes through
 //!   [`isqrt::dispatch`] (const `N`-keyed; not `const fn`).
 //! - **icbrt** — same shape as isqrt: `N ∈ {1, 2}` routes through the
 //!   Newton kernel at small width; `N >= 3` takes the full Newton limb
-//!   iteration ([`crate::int::algos::roots::icbrt_newton`]). Routes through
+//!   iteration ([`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`]). Routes through
 //!   [`icbrt::dispatch`] (not `const fn`).
 //! - **pow** — binary square-and-multiply at every `N`. Routes through
 //!   [`pow::dispatch`] (`const fn`).

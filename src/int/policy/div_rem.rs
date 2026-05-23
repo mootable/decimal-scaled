@@ -16,7 +16,9 @@
 //! ([`BZ_THRESHOLD`]) are policy DATA here, not magic numbers buried in a
 //! kernel.
 
-use crate::int::algos::div::{div_burnikel_ziegler_with_knuth, div_knuth, div_rem};
+use crate::int::algos::div::div_burnikel_ziegler_with_knuth::div_burnikel_ziegler_with_knuth;
+use crate::int::algos::div::div_knuth::div_knuth;
+use crate::int::algos::div::div_rem::div_rem;
 
 // ── 1. the real division engines — NAMED, no `Default` ────────────────
 

@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integer cubing policy — the sqr-then-mul algorithm matcher.
+//! Integer cubing policy — the sqr-then-multiply algorithm matcher.
 //!
-//! `Uint<N>::cube` and `Int<N>::cube` delegate to [`dispatch`], which follows
-//! the canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
-//! structure"):
+//! `Uint<N>::cube` / `Uint<N>::wrapping_cube` and the `Int<N>` siblings
+//! delegate to [`dispatch`], which follows the canonical policy shape (see
+//! `docs/ARCHITECTURE.md` → "Policy file structure"):
 //!
 //! 1. an [`Algorithm`] enum — the real cubing algorithm(s), no `Default`
 //!    variant;
@@ -21,36 +21,43 @@
 //!
 //! # Algorithm
 //!
-//! The optimal form of `x³` is `sqr(x) · x` — two limb operations rather
-//! than three sequential multiplies. The squaring step uses the half-product
-//! kernel (see [`crate::int::policy::sqr`]), so the total limb-multiply count
-//! is `N(N+1)/2 + N²`. No cheaper form exists below two multiplications.
-//! `cube_via_mul` routes through `wrapping_cube` which already implements
-//! this two-step form.
+//! The optimal form of `x³` is `x²·x` — two limb operations rather than
+//! three sequential multiplies; no cheaper form exists below two
+//! multiplications. The algorithm fn
+//! [`crate::int::algos::cube::cube_schoolbook::cube_schoolbook`] computes
+//! the square with the const half-product kernel
+//! [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] and the final multiply with
+//! the const truncated kernel [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`],
+//! so the total limb-multiply count is `N(N+1)/2 + N²`. The layering points
+//! DOWN — the algorithm calls the kernels, never a cube/sqr/mul method on
+//! `Uint<N>`.
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
 //!
 //! # Const-ness
 //!
-//! `dispatch` is **not** `const fn`. `Uint<N>::wrapping_cube` is not `const fn`.
-//! `Int<N>::cube` delegates to `Int<N>::wrapping_cube` (which IS `const fn`)
-//! directly rather than through this dispatcher. The `ByValue` arm returns
-//! the default algorithm tag without invoking the fn pointer.
+//! `dispatch` IS `const fn`: the algorithm fn computes via const kernels,
+//! so the type's `const fn` `wrapping_cube` can delegate through it. The
+//! `ByValue` arm returns the default algorithm tag without invoking the fn
+//! pointer (calling a fn pointer is not permitted in `const fn`; merely
+//! matching the variant is fine).
 
+use crate::int::algos::cube::cube_schoolbook::cube_schoolbook;
 use crate::int::types::Uint;
 
 // ── 1. the real cubing algorithm — NAMED, no `Default` ───────────────
 
 /// The cubing algorithms this policy chooses between. The single variant
-/// is the CamelCase of the kernel fn's name minus the `cube_` function
-/// prefix (`cube_via_mul` → `ViaMul`) — strict 1:1 with the kernel fn.
+/// is the CamelCase of the algorithm fn's name minus the `cube_` function
+/// prefix (`cube_schoolbook` → `Schoolbook`) — strict 1:1 with the fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`cube_via_mul`] — sqr-then-multiply sequence routed through
-    /// [`Uint::wrapping_cube`]: `x² · x`. Uses the half-product squaring
-    /// kernel for the first step. Result is `x³` modulo `2^BITS`.
-    ViaMul,
+    /// [`cube_schoolbook`] — sqr-then-multiply sequence `x²·x` via the
+    /// const [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] and
+    /// [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernels. Result is `x³`
+    /// modulo `2^BITS`.
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -70,21 +77,9 @@ enum Select<const N: usize> {
 // ── 3. the matcher: const, keyed on `N`, total over the key ──────────
 
 /// Pick the cubing algorithm for storage limb count `N`. Total over the key;
-/// sqr-then-multiply is width-independent so `ViaMul` wins at every `N`.
+/// sqr-then-multiply is width-independent so `Schoolbook` wins at every `N`.
 const fn select<const N: usize>() -> Select<N> {
-    Select::ByAlgorithm(Algorithm::ViaMul)
-}
-
-// ── algorithm fn: thin delegation to wrapping_cube ───────────────────
-
-/// Sqr-then-multiply integer cube for `Uint<N>`.
-///
-/// Delegates to [`Uint::wrapping_cube`] which implements `x² · x` via
-/// `wrapping_sqr` (half-product squaring kernel) then `wrapping_mul`.
-/// Result is `x³` modulo `2^BITS`.
-#[inline]
-pub(crate) fn cube_via_mul<const N: usize>(x: Uint<N>) -> Uint<N> {
-    x.wrapping_cube()
+    Select::ByAlgorithm(Algorithm::Schoolbook)
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
@@ -95,16 +90,18 @@ pub(crate) fn cube_via_mul<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// `const { select::<N>() }` (folds per monomorphisation; dead arms are
 /// eliminated in release) then dispatches exhaustively over [`Algorithm`].
 ///
-/// Not `const fn`: `Uint<N>::wrapping_cube` is not `const fn`. `Int<N>::cube`
-/// delegates to `Int<N>::wrapping_cube` (which IS `const fn`) directly rather
-/// than through this dispatcher.
+/// Must be `const fn`: `Int<N>::wrapping_cube` is itself `const fn`. The
+/// `ByValue` arm returns the default algorithm tag without invoking the fn
+/// pointer, satisfying the `const fn` constraint.
 #[inline]
-pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) const fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
     let algo = match const { select::<N>() } {
         Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&x),
+        // cube is always ByAlgorithm; fall through to the default if the
+        // arm is reached (fn pointer calls are not allowed in const fn).
+        Select::ByValue(_) => Algorithm::Schoolbook,
     };
     match algo {
-        Algorithm::ViaMul => cube_via_mul(x),
+        Algorithm::Schoolbook => cube_schoolbook(x),
     }
 }

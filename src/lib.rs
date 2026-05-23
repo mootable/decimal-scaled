@@ -197,7 +197,7 @@ mod types;
 pub mod __bench_internals {
     #[inline(never)]
     pub fn mul_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
-        crate::int::algos::limbs::mul_schoolbook(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_schoolbook(a, b, out)
     }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
@@ -205,7 +205,7 @@ pub mod __bench_internals {
         b: &[u64; L],
         out: &mut [u64; D],
     ) {
-        crate::int::algos::limbs::mul_schoolbook_fixed::<L, D>(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_schoolbook_fixed::<L, D>(a, b, out)
     }
     /// Non-allocating Karatsuba multiply forced to recurse at the given
     /// `threshold` (rather than the parked production
@@ -214,7 +214,7 @@ pub mod __bench_internals {
     /// termination floor). `out` is zeroed by the callee.
     #[inline(never)]
     pub fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
-        crate::int::algos::limbs::mul_karatsuba_forced(a, b, out, threshold)
+        crate::int::algos::mul::mul_karatsuba::mul_karatsuba_forced(a, b, out, threshold)
     }
     #[inline(never)]
     pub fn mul_u64_into<const L: usize, const LP1: usize>(
@@ -222,7 +222,7 @@ pub mod __bench_internals {
         n: u64,
         out: &mut [u64; LP1],
     ) {
-        crate::int::algos::limbs::mul_schoolbook_into::<L, LP1>(a, n, out)
+        crate::int::algos::mul::mul_schoolbook::mul_schoolbook_into::<L, LP1>(a, n, out)
     }
 
     // Newton-reciprocal divide research kernel — wrapped via concrete

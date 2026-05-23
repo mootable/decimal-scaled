@@ -3,9 +3,9 @@
 
 //! Integer exponentiation policy — the square-and-multiply algorithm matcher.
 //!
-//! `Uint<N>::pow` and `Int<N>::pow` delegate to [`dispatch`], which follows
-//! the canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
-//! structure"):
+//! `Uint<N>::pow` / `Uint<N>::wrapping_pow` and the `Int<N>` siblings
+//! delegate to [`dispatch`], which follows the canonical policy shape (see
+//! `docs/ARCHITECTURE.md` → "Policy file structure"):
 //!
 //! 1. an [`Algorithm`] enum — the real pow algorithm(s), no `Default`
 //!    variant;
@@ -19,36 +19,44 @@
 //! is dead-arm-eliminated in release: each concrete `Uint<N>` compiles to a
 //! direct call to the square-and-multiply kernel, no runtime branch.
 //!
-//! # Why there is only one algorithm
+//! # Algorithm
 //!
-//! Binary square-and-multiply (exponentiation by squaring) is optimal for
-//! the small fixed exponents `pow` is used with in this crate (root
-//! iterations: `k-1`, `k` ≤ ~10). There is no width-specific crossover
-//! and no value-split. The `ByValue` arm of [`Select`] is present for
-//! canonical-shape uniformity; `select` never returns it.
+//! The algorithm fn
+//! [`crate::int::algos::pow::pow_square_and_multiply::pow_square_and_multiply`]
+//! is the binary square-and-multiply loop computing via the const
+//! [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] (square step) and
+//! [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] (multiply step) kernels.
+//! Binary exponentiation by squaring is optimal for the small fixed
+//! exponents `pow` is used with in this crate (root iterations: `k-1`,
+//! `k` ≤ ~10). There is no width-specific crossover and no value-split. The
+//! layering points DOWN — the algorithm calls the kernels, never a
+//! pow/sqr/mul method on `Uint<N>`. The `ByValue` arm of [`Select`] is
+//! present for canonical-shape uniformity; `select` never returns it.
 //!
 //! # Const-ness
 //!
-//! `dispatch` is **not** `const fn`. `Uint<N>::wrapping_pow` is not `const fn`
-//! (it mutates a local `base` via non-const squaring). `Int<N>::pow` IS
-//! `const fn` and continues to delegate to `Int<N>::wrapping_pow` directly
-//! rather than through this dispatcher. The `ByValue` arm returns the default
-//! algorithm tag without invoking the fn pointer.
+//! `dispatch` IS `const fn`: the algorithm fn computes via const kernels,
+//! so the type's `const fn` `wrapping_pow` can delegate through it. The
+//! `ByValue` arm returns the default algorithm tag without invoking the fn
+//! pointer (calling a fn pointer is not permitted in `const fn`; merely
+//! matching the variant is fine).
 
+use crate::int::algos::pow::pow_square_and_multiply::pow_square_and_multiply;
 use crate::int::types::Uint;
 
 // ── 1. the real pow algorithm — NAMED, no `Default` ──────────────────
 
 /// The exponentiation algorithms this policy chooses between. The single
-/// variant is the CamelCase of the kernel fn's name minus the `pow_`
+/// variant is the CamelCase of the algorithm fn's name minus the `pow_`
 /// function prefix (`pow_square_and_multiply` → `SquareAndMultiply`) —
-/// strict 1:1 with the kernel fn.
+/// strict 1:1 with the fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`pow_square_and_multiply`] — binary exponentiation by squaring using
-    /// the dedicated squaring kernel for the square step and a truncating
-    /// multiply for the multiply step. `self^0 == 1`; result wraps modulo
-    /// `2^BITS`.
+    /// [`pow_square_and_multiply`] — binary exponentiation by squaring
+    /// using the const [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] kernel
+    /// for the square step and the const truncated
+    /// [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernel for the multiply
+    /// step. `self^0 == 1`; result wraps modulo `2^BITS`.
     SquareAndMultiply,
 }
 
@@ -75,18 +83,6 @@ const fn select<const N: usize>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::SquareAndMultiply)
 }
 
-// ── algorithm fn: thin delegation to the wrapping_pow kernel ─────────
-
-/// Binary exponentiation by squaring for `Uint<N>`.
-///
-/// Delegates to [`Uint::wrapping_pow`], which uses `wrapping_sqr` for the
-/// square step and `wrapping_mul` for the multiply step. Result is
-/// `self^exp` modulo `2^BITS`; `self^0 == 1`.
-#[inline]
-pub(crate) fn pow_square_and_multiply<const N: usize>(base: Uint<N>, exp: u32) -> Uint<N> {
-    base.wrapping_pow(exp)
-}
-
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Integer exponentiation dispatcher for `Uint<N>`.
@@ -95,15 +91,16 @@ pub(crate) fn pow_square_and_multiply<const N: usize>(base: Uint<N>, exp: u32) -
 /// `const { select::<N>() }` (folds per monomorphisation; dead arms are
 /// eliminated in release) then dispatches exhaustively over [`Algorithm`].
 ///
-/// Not `const fn`: `Uint<N>::wrapping_pow` is not `const fn`. `Int<N>::pow`
-/// (which IS `const fn`) delegates directly to `Int<N>::wrapping_pow`
-/// rather than through this dispatcher. The `ByValue` arm returns the
-/// default algorithm tag without invoking the fn pointer.
+/// Must be `const fn`: `Int<N>::wrapping_pow` is itself `const fn`. The
+/// `ByValue` arm returns the default algorithm tag without invoking the fn
+/// pointer, satisfying the `const fn` constraint.
 #[inline]
-pub(crate) fn dispatch<const N: usize>(base: Uint<N>, exp: u32) -> Uint<N> {
+pub(crate) const fn dispatch<const N: usize>(base: Uint<N>, exp: u32) -> Uint<N> {
     let algo = match const { select::<N>() } {
         Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&base, exp),
+        // pow is always ByAlgorithm; fall through to the default if the
+        // arm is reached (fn pointer calls are not allowed in const fn).
+        Select::ByValue(_) => Algorithm::SquareAndMultiply,
     };
     match algo {
         Algorithm::SquareAndMultiply => pow_square_and_multiply(base, exp),

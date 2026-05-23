@@ -20,11 +20,13 @@ mod wide_compat;
 
 pub use traits::BigInt;
 
-use crate::int::algos::div::{div_rem, div_rem_mag_fixed};
+use crate::int::algos::div::div_fixed::div_rem_mag_fixed;
+use crate::int::algos::div::div_rem::div_rem;
 use crate::int::algos::limbs::{
-    add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, mul_low_fixed,
-    mul_schoolbook, shl, shl_fixed, shr_fixed, sqr_low_fixed, sub_assign_fixed,
+    add_assign_fixed, bit_len_fixed, cmp_cross, cmp_fixed, is_zero_fixed, shl, shl_fixed,
+    shr_fixed, sub_assign_fixed,
 };
+use crate::int::algos::mul::mul_schoolbook::{mul_low_fixed, mul_schoolbook};
 use crate::int::policy::add::dispatch as add_dispatch;
 use crate::int::policy::cmp::dispatch as cmp_dispatch;
 use crate::int::policy::cube::dispatch as cube_dispatch;
@@ -123,23 +125,23 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Wrapping square (`self²` modulo `2^BITS`). Named entry point for
-    /// the open-coded `x * x` pattern. Uses the dedicated half-product
-    /// squaring kernel (`sqr_low_fixed`): each cross term is
-    /// formed once and doubled, so the limb-multiply count is
-    /// `N(N+1)/2` rather than the `N²` of a general multiply.
+    /// the open-coded `x * x` pattern. Thin delegator DOWN to the sqr
+    /// policy ([`sqr_dispatch`]): half-product squaring via the
+    /// `sqr_low_fixed` kernel — each cross term is formed once and doubled,
+    /// so the limb-multiply count is `N(N+1)/2` rather than the `N²` of a
+    /// general multiply.
     #[inline]
-    pub fn wrapping_sqr(self) -> Self {
-        let mut out = [0u64; N];
-        sqr_low_fixed(&self.limbs, &mut out);
-        Self { limbs: out }
+    pub const fn wrapping_sqr(self) -> Self {
+        sqr_dispatch(self)
     }
 
     /// Wrapping cube (`self³` modulo `2^BITS`). Named entry point for the
-    /// open-coded `x * x * x` pattern; computed as `sqr` then one
-    /// multiply — no cheaper form exists below two multiplies.
+    /// open-coded `x * x * x` pattern. Thin delegator DOWN to the cube
+    /// policy ([`cube_dispatch`]): `sqr` then one multiply via the const
+    /// kernels — no cheaper form exists below two multiplies.
     #[inline]
-    pub fn wrapping_cube(self) -> Self {
-        self.wrapping_sqr().wrapping_mul(self)
+    pub const fn wrapping_cube(self) -> Self {
+        cube_dispatch(self)
     }
 
     /// Checked addition: `None` on overflow past `2^BITS`.
@@ -328,23 +330,13 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
-    /// `self^0 == 1`. Binary square-and-multiply using the dedicated
-    /// squaring kernel; optimal for the small fixed exponents the root
-    /// iteration needs (`k-1`, `k`).
+    /// `self^0 == 1`. Thin delegator DOWN to the pow policy
+    /// ([`pow_dispatch`]): binary square-and-multiply over the const
+    /// kernels; optimal for the small fixed exponents the root iteration
+    /// needs (`k-1`, `k`).
     #[inline]
-    pub fn wrapping_pow(self, mut exp: u32) -> Self {
-        let mut acc = Self::ONE;
-        let mut base = self;
-        while exp > 0 {
-            if exp & 1 == 1 {
-                acc = acc.wrapping_mul(base);
-            }
-            exp >>= 1;
-            if exp > 0 {
-                base = base.wrapping_sqr();
-            }
-        }
-        acc
+    pub const fn wrapping_pow(self, exp: u32) -> Self {
+        pow_dispatch(self, exp)
     }
 
     /// Exponentiation by squaring, returning `None` if the true power
@@ -1081,21 +1073,14 @@ impl<const N: usize> Int<N> {
     }
 
     /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
-    /// `self^0 == 1`. Uses the dedicated squaring kernel.
+    /// `self^0 == 1`. Thin delegator DOWN to the pow policy
+    /// ([`pow_dispatch`]) on the unsigned reinterpretation: binary
+    /// square-and-multiply over the const kernels. The low `N` limbs of a
+    /// power are sign-independent, so reinterpreting as `Uint<N>` and back
+    /// preserves the two's-complement result.
     #[inline]
-    pub const fn wrapping_pow(self, mut exp: u32) -> Self {
-        let mut acc = Self::ONE;
-        let mut base = self;
-        while exp > 0 {
-            if exp & 1 == 1 {
-                acc = acc.wrapping_mul(base);
-            }
-            exp >>= 1;
-            if exp > 0 {
-                base = base.wrapping_sqr();
-            }
-        }
-        acc
+    pub const fn wrapping_pow(self, exp: u32) -> Self {
+        Self::from_limbs(*pow_dispatch(self.cast_unsigned(), exp).as_limbs())
     }
 
     /// Exponentiation by squaring, returning `None` on signed overflow.
@@ -1116,20 +1101,24 @@ impl<const N: usize> Int<N> {
         Some(acc)
     }
 
-    /// Wrapping square (`self²` modulo `2^BITS`) via the dedicated
-    /// half-product squaring kernel. The low `N` limbs of a square are
-    /// sign-independent, so the unsigned kernel applies directly.
+    /// Wrapping square (`self²` modulo `2^BITS`). Thin delegator DOWN to
+    /// the sqr policy ([`sqr_dispatch`]) on the unsigned reinterpretation:
+    /// half-product squaring via the const kernel. The low `N` limbs of a
+    /// square are sign-independent, so reinterpreting as `Uint<N>` and back
+    /// preserves the two's-complement result.
     #[inline]
     pub const fn wrapping_sqr(self) -> Self {
-        let mut out = [0u64; N];
-        sqr_low_fixed(&self.limbs, &mut out);
-        Self { limbs: out }
+        Self::from_limbs(*sqr_dispatch(self.cast_unsigned()).as_limbs())
     }
 
-    /// Wrapping cube (`self³` modulo `2^BITS`): `sqr` then one multiply.
+    /// Wrapping cube (`self³` modulo `2^BITS`). Thin delegator DOWN to the
+    /// cube policy ([`cube_dispatch`]) on the unsigned reinterpretation:
+    /// `sqr` then one multiply via the const kernels. The low `N` limbs are
+    /// sign-independent, so reinterpreting as `Uint<N>` and back preserves
+    /// the two's-complement result.
     #[inline]
     pub const fn wrapping_cube(self) -> Self {
-        self.wrapping_sqr().wrapping_mul(self)
+        Self::from_limbs(*cube_dispatch(self.cast_unsigned()).as_limbs())
     }
 
     /// MAGNITUDE bit length: `0` for zero, else `floor(log2|self|) + 1`
@@ -2801,7 +2790,7 @@ impl<const N: usize> TryFrom<f32> for Int<N> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::int::algos::limbs::{mul_low_fixed, mul_schoolbook_fixed};
+    use crate::int::algos::mul::mul_schoolbook::{mul_low_fixed, mul_schoolbook_fixed};
 
     #[test]
     fn try_from_i128_detects_narrow_overflow() {

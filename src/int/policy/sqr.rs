@@ -1,11 +1,11 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integer squaring policy — the via-mul algorithm matcher.
+//! Integer squaring policy — the half-product algorithm matcher.
 //!
-//! `Uint<N>::sqr` and `Int<N>::sqr` delegate to [`dispatch`], which follows
-//! the canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
-//! structure"):
+//! `Uint<N>::sqr` / `Uint<N>::wrapping_sqr` and the `Int<N>` siblings
+//! delegate to [`dispatch`], which follows the canonical policy shape (see
+//! `docs/ARCHITECTURE.md` → "Policy file structure"):
 //!
 //! 1. an [`Algorithm`] enum — the real squaring algorithm(s), no `Default`
 //!    variant;
@@ -21,37 +21,40 @@
 //!
 //! # Algorithm
 //!
-//! The dedicated squaring kernel [`crate::int::algos::limbs::sqr_low_fixed`]
-//! already exists: it exploits symmetry to form each cross term once and
-//! double it, halving the limb-multiply count relative to a general
-//! `N×N` multiply. `sqr_via_mul` is a thin wrapper that routes through
-//! `wrapping_sqr` so the seam is one consistent place.
+//! The algorithm fn [`crate::int::algos::sqr::sqr_half_product::sqr_half_product`]
+//! computes `x²` via the const half-product kernel
+//! [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`]: it exploits symmetry to
+//! form each cross term once and double it, halving the limb-multiply count
+//! relative to a general `N×N` multiply. The layering points DOWN — the
+//! algorithm calls the kernel, never a squaring method on `Uint<N>`.
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
 //!
 //! # Const-ness
 //!
-//! `dispatch` is **not** `const fn`. `Uint<N>::wrapping_sqr` is not `const fn`.
-//! `Int<N>::wrapping_sqr` IS `const fn` and `Int<N>::sqr` delegates there
-//! directly rather than through this dispatcher. The `ByValue` arm returns
-//! the default algorithm tag without invoking the fn pointer.
+//! `dispatch` IS `const fn`: the algorithm fn computes via the const
+//! [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] kernel, so the type's
+//! `const fn` `wrapping_sqr` can delegate through it. The `ByValue` arm
+//! returns the default algorithm tag without invoking the fn pointer
+//! (calling a fn pointer is not permitted in `const fn`; merely matching
+//! the variant is fine).
 
+use crate::int::algos::sqr::sqr_half_product::sqr_half_product;
 use crate::int::types::Uint;
 
 // ── 1. the real squaring algorithm — NAMED, no `Default` ─────────────
 
 /// The squaring algorithms this policy chooses between. The single variant
-/// is the CamelCase of the kernel fn's name minus the `sqr_` function
-/// prefix (`sqr_via_mul` → `ViaMul`) — strict 1:1 with the kernel fn.
+/// is the CamelCase of the algorithm fn's name minus the `sqr_` function
+/// prefix (`sqr_half_product` → `HalfProduct`) — strict 1:1 with the fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`sqr_via_mul`] — half-product squaring via
-    /// [`crate::int::algos::limbs::sqr_low_fixed`], routed through
-    /// [`Uint::wrapping_sqr`]. Forms each cross term once and doubles it:
-    /// `N(N+1)/2` limb-multiplies rather than `N²`. Result is `self²`
-    /// modulo `2^BITS`.
-    ViaMul,
+    /// [`sqr_half_product`] — half-product squaring via the const
+    /// [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] kernel. Forms each cross
+    /// term once and doubles it: `N(N+1)/2` limb-multiplies rather than
+    /// `N²`. Result is `x²` modulo `2^BITS`.
+    HalfProduct,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -71,23 +74,10 @@ enum Select<const N: usize> {
 // ── 3. the matcher: const, keyed on `N`, total over the key ──────────
 
 /// Pick the squaring algorithm for storage limb count `N`. Total over the
-/// key; the half-product squaring kernel is width-independent so `ViaMul`
-/// wins at every `N`.
+/// key; the half-product squaring kernel is width-independent so
+/// `HalfProduct` wins at every `N`.
 const fn select<const N: usize>() -> Select<N> {
-    Select::ByAlgorithm(Algorithm::ViaMul)
-}
-
-// ── algorithm fn: thin delegation to wrapping_sqr ────────────────────
-
-/// Half-product integer square for `Uint<N>`.
-///
-/// Delegates to [`Uint::wrapping_sqr`] which routes to
-/// [`crate::int::algos::limbs::sqr_low_fixed`]: each cross term is formed
-/// once and doubled, so the limb-multiply count is `N(N+1)/2` rather than
-/// the `N²` of a general multiply. Result is `x²` modulo `2^BITS`.
-#[inline]
-pub(crate) fn sqr_via_mul<const N: usize>(x: Uint<N>) -> Uint<N> {
-    x.wrapping_sqr()
+    Select::ByAlgorithm(Algorithm::HalfProduct)
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
@@ -98,16 +88,19 @@ pub(crate) fn sqr_via_mul<const N: usize>(x: Uint<N>) -> Uint<N> {
 /// `const { select::<N>() }` (folds per monomorphisation; dead arms are
 /// eliminated in release) then dispatches exhaustively over [`Algorithm`].
 ///
-/// Not `const fn`: `Uint<N>::wrapping_sqr` is not `const fn`. `Int<N>::sqr`
-/// delegates to `Int<N>::wrapping_sqr` (which IS `const fn`) directly rather
-/// than through this dispatcher.
+/// Must be `const fn`: `Int<N>::wrapping_sqr` is itself `const fn` and is
+/// called from `const` contexts (and from `pow`/`cube`). The `ByValue` arm
+/// returns the default algorithm tag without invoking the fn pointer,
+/// satisfying the `const fn` constraint.
 #[inline]
-pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
+pub(crate) const fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
     let algo = match const { select::<N>() } {
         Select::ByAlgorithm(a) => a,
-        Select::ByValue(f) => f(&x),
+        // sqr is always ByAlgorithm; fall through to the default if the
+        // arm is reached (fn pointer calls are not allowed in const fn).
+        Select::ByValue(_) => Algorithm::HalfProduct,
     };
     match algo {
-        Algorithm::ViaMul => sqr_via_mul(x),
+        Algorithm::HalfProduct => sqr_half_product(x),
     }
 }
