@@ -283,13 +283,13 @@ impl<const N: usize> Uint<N> {
     /// Bit length: `0` for zero, else `floor(log2(self)) + 1`
     /// (equivalently `BITS - leading_zeros`).
     #[inline]
-    pub fn bit_length(&self) -> u32 {
+    pub const fn bit_length(&self) -> u32 {
         limbs_bit_len_u64_fixed(&self.limbs)
     }
 
     /// Number of leading zero bits in the `BITS`-wide representation.
     #[inline]
-    pub fn leading_zeros(&self) -> u32 {
+    pub const fn leading_zeros(&self) -> u32 {
         (Self::BITS as u32) - self.bit_length()
     }
 
@@ -1109,7 +1109,7 @@ impl<const N: usize> Int<N> {
     /// Bit length of the magnitude: `0` for zero, else
     /// `floor(log2|self|) + 1`.
     #[inline]
-    pub fn bit_length(&self) -> u32 {
+    pub const fn bit_length(&self) -> u32 {
         limbs_bit_len_u64_fixed(self.abs().as_limbs())
     }
 
@@ -1118,7 +1118,7 @@ impl<const N: usize> Int<N> {
     /// sign bit (the MSB) set, so it has zero leading zeros; a non-negative
     /// value's leading-zero count is `BITS - bit_length` (`BITS` for zero).
     #[inline]
-    pub fn leading_zeros(&self) -> u32 {
+    pub const fn leading_zeros(&self) -> u32 {
         if self.is_negative() {
             0
         } else {
@@ -2915,6 +2915,26 @@ mod tests {
         // Const evaluation smoke: resize_n is usable in const context.
         const W: Int<4> = Int::<2>::from_i64(-7).resize_n::<4>();
         assert_eq!(W, Int::<4>::from_i64(-7));
+    }
+
+    #[test]
+    fn bit_count_is_const() {
+        // const-smoke: these compile only if the inherent methods are
+        // `const fn`. Called fully-qualified so the inherent `&self` impl
+        // is selected over the (non-const) `BigInt` trait method of the
+        // same name, which takes `self` by value and would otherwise win
+        // value-receiver method resolution.
+        const Z: u32 = Int::<2>::leading_zeros(&Int::<2>::MAX);
+        const BL: u32 = Int::<2>::bit_length(&Int::<2>::MAX);
+        const UZ: u32 = Uint::<2>::leading_zeros(&Uint::<2>::MAX);
+        const UBL: u32 = Uint::<2>::bit_length(&Uint::<2>::MAX);
+        // Int<2>::MAX is positive with the sign bit clear: 1 leading zero,
+        // bit_length = 127.
+        assert_eq!(Z, 1);
+        assert_eq!(BL, 127);
+        // Uint<2>::MAX is all-ones: 0 leading zeros, full 128-bit length.
+        assert_eq!(UZ, 0);
+        assert_eq!(UBL, 128);
     }
 
     #[test]
