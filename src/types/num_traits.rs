@@ -188,7 +188,7 @@ mod tests {
     /// Compat surface works at non-default SCALE.
     #[test]
     fn from_num_to_num_at_scale_6() {
-        type D6 = D38<6>;
+        type D6 = crate::D<crate::int::types::Int<2>, 6>;
         let d = D6::from_num(7_i32);
         assert_eq!(d, D6::from(7_i32));
         assert_eq!(d.to_num::<i32>(), 7_i32);

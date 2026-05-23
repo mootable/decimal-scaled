@@ -50,9 +50,8 @@
 //! calling `y.atan2(x)` works with `T = D38`.
 
 use crate::types::log_exp::STRICT_GUARD;
-use crate::types::widths::D38;
 
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Plain dispatchers (strict-feature) ────────────────────────
 
     #[cfg(all(feature = "strict", not(feature = "fast")))]
@@ -734,7 +733,6 @@ mod tests {
     #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[test]
     fn strict_trig_family_matches_f64() {
-        use crate::types::widths::D38;
         macro_rules! check {
             ($name:literal, $raw:expr, $strict:expr, $f64expr:expr) => {{
                 let strict: i128 = $strict;
@@ -761,7 +759,7 @@ mod tests {
             6_283_185_307,
             12_000_000_000,
         ] {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("sin", raw, x.sin_strict().to_bits().as_i128(), f64::sin);
             check!("cos", raw, x.cos_strict().to_bits().as_i128(), f64::cos);
             check!("atan", raw, x.atan_strict().to_bits().as_i128(), f64::atan);
@@ -779,12 +777,12 @@ mod tests {
             500_000_000,
             999_999_999,
         ] {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("asin", raw, x.asin_strict().to_bits().as_i128(), f64::asin);
             check!("acos", raw, x.acos_strict().to_bits().as_i128(), f64::acos);
         }
         for &raw in &[-900_000_000_i128, -300_000_000, 1, 300_000_000, 900_000_000] {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("atanh", raw, x.atanh_strict().to_bits().as_i128(), f64::atanh);
         }
         for &raw in &[
@@ -793,7 +791,7 @@ mod tests {
             3_000_000_000,
             50_000_000_000,
         ] {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("acosh", raw, x.acosh_strict().to_bits().as_i128(), f64::acosh);
         }
         for &raw in &[
@@ -803,7 +801,7 @@ mod tests {
             1_000_000_000,
             1_400_000_000,
         ] {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             check!("tan", raw, x.tan_strict().to_bits().as_i128(), f64::tan);
         }
     }
@@ -820,17 +818,16 @@ mod tests {
     #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[test]
     fn sin_one_correct_past_63_digit_pi_window() {
-        use crate::types::widths::D38;
         let expected_35: i128 = 84_147_098_480_789_650_665_250_232_163_029_900;
         let expected_37: i128 = 8_414_709_848_078_965_066_525_023_216_302_989_996;
 
-        let got_35 = D38::<35>::ONE.sin_strict().to_bits().as_i128();
+        let got_35 = crate::D::<crate::int::types::Int<2>, 35>::ONE.sin_strict().to_bits().as_i128();
         assert!(
             (got_35 - expected_35).abs() <= 1,
             "sin(1) @ D38<35>: got {got_35}, expected {expected_35}"
         );
 
-        let got_37 = D38::<37>::ONE.sin_strict().to_bits().as_i128();
+        let got_37 = crate::D::<crate::int::types::Int<2>, 37>::ONE.sin_strict().to_bits().as_i128();
         assert!(
             (got_37 - expected_37).abs() <= 1,
             "sin(1) @ D38<37>: got {got_37}, expected {expected_37}"

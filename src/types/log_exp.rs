@@ -69,7 +69,6 @@
 //! `D38::ZERO` and saturates infinities to `D38::MAX` or `D38::MIN`.
 //! The `*_strict` forms panic on out-of-domain inputs (`self <= 0`).
 
-use crate::types::widths::D38;
 
 /// Re-export of the D38 strict-mode guard-digit constant for in-crate
 /// callers that branch on the strict-vs-approx working-scale match.
@@ -77,7 +76,7 @@ use crate::types::widths::D38;
 /// [`crate::algos::ln::fixed_d38::STRICT_GUARD`].
 pub(crate) use crate::algos::ln::fixed_d38::STRICT_GUARD;
 
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Logarithms ────────────────────────────────────────────────
 
     /// Returns the natural logarithm (base e) of `self`.
@@ -411,9 +410,8 @@ mod strict_tests {
     /// correctly-rounded integer result must agree to within 1 ULP.
     #[test]
     fn ln_strict_is_correctly_rounded_vs_f64() {
-        use crate::types::widths::D38;
         fn check(raw: i128) {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.ln_strict().to_bits().as_i128();
             let reference = {
                 let v = raw as f64 / 1e9;
@@ -444,9 +442,8 @@ mod strict_tests {
     /// bridge to within 1 ULP at D38<9>.
     #[test]
     fn strict_log_exp_family_matches_f64() {
-        use crate::types::widths::D38;
         fn check_exp(raw: i128) {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.exp_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).exp() * 1e9).round() as i128;
             assert!(
@@ -455,7 +452,7 @@ mod strict_tests {
             );
         }
         fn check_log2(raw: i128) {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.log2_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log2() * 1e9).round() as i128;
             assert!(
@@ -464,7 +461,7 @@ mod strict_tests {
             );
         }
         fn check_log10(raw: i128) {
-            let x = D38::<9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, 9>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let strict = x.log10_strict().to_bits().as_i128();
             let reference = ((raw as f64 / 1e9).log10() * 1e9).round() as i128;
             assert!(
@@ -503,9 +500,8 @@ mod strict_tests {
     /// `exp2_strict` is exact at integer arguments: `2^10` is `1024`.
     #[test]
     fn strict_exp2_at_integers() {
-        use crate::types::widths::D38;
         for k in 0_i128..=12 {
-            let x = D38::<12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
+            let x = crate::D::<crate::int::types::Int<2>, 12>::from_bits(crate::int::types::Int::<2>::from_i128(k * 10i128.pow(12)));
             let got = x.exp2_strict().to_bits().as_i128();
             let expected = (1i128 << k) * 10i128.pow(12);
             assert_eq!(got, expected, "2^{k}");
@@ -515,10 +511,9 @@ mod strict_tests {
     /// `ln_strict` is exact at the powers of two it can represent.
     #[test]
     fn ln_strict_of_powers_of_two() {
-        use crate::types::widths::D38;
         let ln2_s18: i128 = 693_147_180_559_945_309;
         for k in 1_i128..=20 {
-            let x = D38::<18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
+            let x = crate::D::<crate::int::types::Int<2>, 18>::from_bits(crate::int::types::Int::<2>::from_i128((1i128 << k) * 10i128.pow(18)));
             let got = x.ln_strict().to_bits().as_i128();
             let expected = k * ln2_s18;
             let tol = k / 2 + 2;

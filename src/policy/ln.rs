@@ -36,7 +36,6 @@
 use crate::algos::ln;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D18, D38};
 
 /// Per-width policy for natural log and the log family. See module docs.
 pub(crate) trait LnPolicy: Sized {
@@ -162,22 +161,22 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 // D18 widens into the D38 `Fixed` work width for every log-family method
 // (the `widen_to_work` strategy). `log` delegates to `LogPolicy::log_impl`
 // (the `log` seam); `log2`/`log10` widen, call D38's method, narrow back.
-impl<const SCALE: u32> LnPolicy for D18<SCALE> {
+impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
         // Widen → `fixed_d38::ln` → narrow (the `widen_to_work`
         // dispatch strategy, a policy concern).
-        let widened: D38<SCALE> = self.into();
+        let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         let raw = ln::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
-        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
         })
     }
     #[inline]
     fn ln_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        let widened: D38<SCALE> = self.into();
+        let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         let raw = ln::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
-        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE)
         })
     }
@@ -193,14 +192,14 @@ impl<const SCALE: u32> LnPolicy for D18<SCALE> {
     }
     #[inline]
     fn log2_impl(self, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
+        let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         ::core::convert::TryInto::try_into(wide.log2_strict_with(mode)).unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("D18::log2", SCALE)
         })
     }
     #[inline]
     fn log2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
+        let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         ::core::convert::TryInto::try_into(wide.log2_approx_with(working_digits, mode))
             .unwrap_or_else(|_| {
                 crate::support::diagnostics::overflow_panic_with_scale("D18::log2", SCALE)
@@ -208,14 +207,14 @@ impl<const SCALE: u32> LnPolicy for D18<SCALE> {
     }
     #[inline]
     fn log10_impl(self, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
+        let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         ::core::convert::TryInto::try_into(wide.log10_strict_with(mode)).unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("D18::log10", SCALE)
         })
     }
     #[inline]
     fn log10_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
+        let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         ::core::convert::TryInto::try_into(wide.log10_approx_with(working_digits, mode))
             .unwrap_or_else(|_| {
                 crate::support::diagnostics::overflow_panic_with_scale("D18::log10", SCALE)
@@ -228,7 +227,7 @@ impl<const SCALE: u32> LnPolicy for D18<SCALE> {
 // The borrow_d57 round trip was retired once the 0.4.2 MG-routed `Fixed`
 // primitives made the D38-native kernel beat the widen-and-back path.
 // N==2 always selects Series. `log` delegates to `LogPolicy::log_impl`.
-impl<const SCALE: u32> LnPolicy for D38<SCALE> {
+impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {

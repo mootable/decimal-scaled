@@ -39,7 +39,6 @@
 
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D18, D38};
 
 // ── 1. the real to-degrees algorithm — NAMED, no `Default` ───────────
 
@@ -91,7 +90,7 @@ pub(crate) trait ToDegreesPolicy: Sized {
 }
 
 // ── D18 ── widen-to-D38, call D38's to_degrees shell, narrow back ─────
-impl<const SCALE: u32> ToDegreesPolicy for D18<SCALE> {
+impl<const SCALE: u32> ToDegreesPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn to_degrees_impl(self, mode: RoundingMode) -> Self {
         let algo = match const { select::<1, SCALE>() } {
@@ -100,7 +99,7 @@ impl<const SCALE: u32> ToDegreesPolicy for D18<SCALE> {
         };
         match algo {
             Algorithm::MulPiRatio => {
-                let wide: D38<SCALE> = self.into();
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_strict_with(mode))
                     .unwrap_or_else(|_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -120,7 +119,7 @@ impl<const SCALE: u32> ToDegreesPolicy for D18<SCALE> {
         };
         match algo {
             Algorithm::MulPiRatio => {
-                let wide: D38<SCALE> = self.into();
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.to_degrees_approx_with(working_digits, mode))
                     .unwrap_or_else(|_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -134,7 +133,7 @@ impl<const SCALE: u32> ToDegreesPolicy for D18<SCALE> {
 }
 
 // ── D38 ── native `fixed_d38` kernel ─────────────────────────────────
-impl<const SCALE: u32> ToDegreesPolicy for D38<SCALE> {
+impl<const SCALE: u32> ToDegreesPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn to_degrees_impl(self, mode: RoundingMode) -> Self {
         let algo = match const { select::<2, SCALE>() } {

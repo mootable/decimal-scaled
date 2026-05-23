@@ -398,7 +398,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        type D0 = crate::types::widths::D38<0>;
+        type D0 = crate::D<crate::int::types::Int<2>, 0>;
         let a = D0::from_bits(crate::int::types::Int::<2>::from_i128(15));
         let b = D0::from_bits(crate::int::types::Int::<2>::from_i128(4));
         // 15 / 4 = 3.75 -> 4 under HalfToEven (no tie at .75).
@@ -412,7 +412,7 @@ mod tests {
     /// Mul at SCALE = 0: reduces to plain `i128 *`.
     #[test]
     fn mul_scale_zero_matches_i128_mul() {
-        type D0 = crate::types::widths::D38<0>;
+        type D0 = crate::D<crate::int::types::Int<2>, 0>;
         let a = D0::from_bits(crate::int::types::Int::<2>::from_i128(7));
         let b = D0::from_bits(crate::int::types::Int::<2>::from_i128(11));
         assert_eq!(a * b, D0::from_bits(crate::int::types::Int::<2>::from_i128(77)));

@@ -41,7 +41,6 @@
 
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D18, D38};
 
 // ── 1. the real log-base algorithm — NAMED, no `Default` ─────────────
 
@@ -94,7 +93,7 @@ pub(crate) trait LogPolicy: Sized {
 //
 // D18 has no native log kernel. It widens to the D38 `Fixed` work width,
 // delegates to D38's `LnPolicy::log_impl`, then narrows the result back.
-impl<const SCALE: u32> LogPolicy for D18<SCALE> {
+impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
         let algo = match const { select::<1, SCALE>() } {
@@ -103,8 +102,8 @@ impl<const SCALE: u32> LogPolicy for D18<SCALE> {
         };
         match algo {
             Algorithm::LnDivide => {
-                let wide: D38<SCALE> = self.into();
-                let wbase: D38<SCALE> = base.into();
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let wbase: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide.log_strict_with(wbase, mode))
                     .unwrap_or_else(|_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -124,8 +123,8 @@ impl<const SCALE: u32> LogPolicy for D18<SCALE> {
         };
         match algo {
             Algorithm::LnDivide => {
-                let wide: D38<SCALE> = self.into();
-                let wbase: D38<SCALE> = base.into();
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let wbase: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
                 ::core::convert::TryInto::try_into(wide.log_approx_with(wbase, working_digits, mode))
                     .unwrap_or_else(|_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -139,7 +138,7 @@ impl<const SCALE: u32> LogPolicy for D18<SCALE> {
 }
 
 // ── D38 ── native `Fixed`-256 kernel via `ln::fixed_d38::log_strict` ─
-impl<const SCALE: u32> LogPolicy for D38<SCALE> {
+impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
         let algo = match const { select::<2, SCALE>() } {

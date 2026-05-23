@@ -39,7 +39,6 @@
 use crate::algos::exp;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D18, D38};
 
 /// Per-width policy: which kernel a `D<Int<N>, SCALE>` uses for the
 /// exponential family.
@@ -151,35 +150,35 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 // strategy — a policy concern, not an algorithm). `exp2` widens to D38
 // and runs its base-2 `Series` reduction.
 
-impl<const SCALE: u32> ExpPolicy for D18<SCALE> {
+impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
         // N==1 always selects Series. Widen → `fixed_d38::exp` → narrow
         // (the `widen_to_work` dispatch strategy, a policy concern).
-        let widened: D38<SCALE> = self.into();
+        let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         let raw = exp::fixed_d38::exp_strict::<SCALE>(widened.0, mode);
-        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("exp_strict", SCALE)
         })
     }
     #[inline]
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        let widened: D38<SCALE> = self.into();
+        let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         let raw = exp::fixed_d38::exp_with(widened.0, SCALE, working_digits, mode);
-        D38::<SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
+        crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("exp_with", SCALE)
         })
     }
     #[inline]
     fn exp2_impl(self, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
+        let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         ::core::convert::TryInto::try_into(wide.exp2_strict_with(mode)).unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("D18::exp2", SCALE)
         })
     }
     #[inline]
     fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        let wide: D38<SCALE> = self.into();
+        let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         ::core::convert::TryInto::try_into(wide.exp2_approx_with(working_digits, mode))
             .unwrap_or_else(|_| {
                 crate::support::diagnostics::overflow_panic_with_scale("D18::exp2", SCALE)
@@ -193,7 +192,7 @@ impl<const SCALE: u32> ExpPolicy for D18<SCALE> {
 // `Fixed::mul` / `div_small` / `divmod_u256_by_pow10` fast paths made the
 // D38-native kernel beat the widen-and-back path (~2× faster at SCALE 19
 // on the GHA shared-runner pool). N==2 always selects Series.
-impl<const SCALE: u32> ExpPolicy for D38<SCALE> {
+impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {

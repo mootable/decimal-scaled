@@ -35,7 +35,6 @@
 
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D18, D38};
 
 // ── 1. the real hypot algorithm — NAMED, no `Default` ────────────────
 
@@ -89,7 +88,7 @@ pub(crate) trait HypotPolicy: Sized {
 // D18 has no native sqrt kernel above the D38 `Fixed` work width.
 // Widening to D38 and calling D38's `HypotPolicy::hypot_impl` is the
 // narrower-tier strategy (the same approach as D18's `LnPolicy`, etc.).
-impl<const SCALE: u32> HypotPolicy for D18<SCALE> {
+impl<const SCALE: u32> HypotPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn hypot_impl(self, other: Self, mode: RoundingMode) -> Self {
         let algo = match const { select::<1, SCALE>() } {
@@ -98,8 +97,8 @@ impl<const SCALE: u32> HypotPolicy for D18<SCALE> {
         };
         match algo {
             Algorithm::ScaleTrick => {
-                let wide: D38<SCALE> = self.into();
-                let wide_other: D38<SCALE> = other.into();
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let wide_other: crate::D<crate::int::types::Int<2>, SCALE> = other.into();
                 ::core::convert::TryInto::try_into(wide.hypot_strict_with(wide_other, mode))
                     .unwrap_or_else(|_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -120,7 +119,7 @@ impl<const SCALE: u32> HypotPolicy for D18<SCALE> {
 // inversion, no loop. The algorithm uses only the tier's decimal
 // operators (`abs`, `>=`, `/`, `*`) and the `sqrt` surface — the
 // canonical §1a "use the tier's methods" approach at the decimal layer.
-impl<const SCALE: u32> HypotPolicy for D38<SCALE> {
+impl<const SCALE: u32> HypotPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn hypot_impl(self, other: Self, mode: RoundingMode) -> Self {
         let algo = match const { select::<2, SCALE>() } {

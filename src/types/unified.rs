@@ -135,8 +135,8 @@ mod tests {
     /// same SCALE.
     #[test]
     fn cross_width_equal_values() {
-        let narrow: D18<2> = D18::<2>::from_int(5_i64);
-        let wide: D38<2> = D38::<2>::from_int(5_i64);
+        let narrow: crate::D<crate::int::types::Int<1>, 2> = crate::D::<crate::int::types::Int<1>, 2>::from_int(5_i64);
+        let wide: crate::D<crate::int::types::Int<2>, 2> = crate::D::<crate::int::types::Int<2>, 2>::from_int(5_i64);
         assert!(narrow == wide);
         assert!(wide == narrow);
     }
@@ -144,8 +144,8 @@ mod tests {
     /// Ordering holds across widths at the same SCALE, both directions.
     #[test]
     fn cross_width_ordering() {
-        let narrow: D18<2> = D18::<2>::from_int(5_i64);
-        let wide_bigger: D38<2> = D38::<2>::from_int(6_i64);
+        let narrow: crate::D<crate::int::types::Int<1>, 2> = crate::D::<crate::int::types::Int<1>, 2>::from_int(5_i64);
+        let wide_bigger: crate::D<crate::int::types::Int<2>, 2> = crate::D::<crate::int::types::Int<2>, 2>::from_int(6_i64);
         assert!(narrow < wide_bigger);
         assert!(wide_bigger > narrow);
         assert_ne!(narrow, wide_bigger);
@@ -158,8 +158,8 @@ mod tests {
         // D38<2> scales by 10^2, so from_int(10^16) stores 10^18 in the
         // i128 backend — beyond the i64-backed D18 storage range, so the
         // value only fits the wider tier. The comparison must not wrap.
-        let huge: D38<2> = D38::<2>::from_int(10_000_000_000_000_000_i64);
-        let small: D18<2> = D18::<2>::from_int(1_i64);
+        let huge: crate::D<crate::int::types::Int<2>, 2> = crate::D::<crate::int::types::Int<2>, 2>::from_int(10_000_000_000_000_000_i64);
+        let small: crate::D<crate::int::types::Int<1>, 2> = crate::D::<crate::int::types::Int<1>, 2>::from_int(1_i64);
         assert!(small < huge);
         assert!(huge > small);
     }
@@ -167,14 +167,14 @@ mod tests {
     /// Negative values compare correctly across widths.
     #[test]
     fn cross_width_negatives() {
-        let narrow_neg: D18<2> = D18::<2>::from_int(-3_i64);
-        let wide_neg: D38<2> = D38::<2>::from_int(-3_i64);
-        let wide_more_neg: D38<2> = D38::<2>::from_int(-4_i64);
+        let narrow_neg: crate::D<crate::int::types::Int<1>, 2> = crate::D::<crate::int::types::Int<1>, 2>::from_int(-3_i64);
+        let wide_neg: crate::D<crate::int::types::Int<2>, 2> = crate::D::<crate::int::types::Int<2>, 2>::from_int(-3_i64);
+        let wide_more_neg: crate::D<crate::int::types::Int<2>, 2> = crate::D::<crate::int::types::Int<2>, 2>::from_int(-4_i64);
         assert_eq!(narrow_neg, wide_neg);
         assert!(wide_more_neg < narrow_neg);
         assert!(narrow_neg > wide_more_neg);
         // Sign boundary: negative narrow < non-negative wide.
-        let wide_pos: D38<2> = D38::<2>::from_int(1_i64);
+        let wide_pos: crate::D<crate::int::types::Int<2>, 2> = crate::D::<crate::int::types::Int<2>, 2>::from_int(1_i64);
         assert!(narrow_neg < wide_pos);
     }
 
@@ -182,19 +182,19 @@ mod tests {
     #[test]
     fn same_type_sort() {
         let mut v = [
-            D38::<2>::from_int(3_i64),
-            D38::<2>::from_int(-1_i64),
-            D38::<2>::from_int(2_i64),
-            D38::<2>::from_int(0_i64),
+            crate::D::<crate::int::types::Int<2>, 2>::from_int(3_i64),
+            crate::D::<crate::int::types::Int<2>, 2>::from_int(-1_i64),
+            crate::D::<crate::int::types::Int<2>, 2>::from_int(2_i64),
+            crate::D::<crate::int::types::Int<2>, 2>::from_int(0_i64),
         ];
         v.sort();
         assert_eq!(
             v,
             [
-                D38::<2>::from_int(-1_i64),
-                D38::<2>::from_int(0_i64),
-                D38::<2>::from_int(2_i64),
-                D38::<2>::from_int(3_i64),
+                crate::D::<crate::int::types::Int<2>, 2>::from_int(-1_i64),
+                crate::D::<crate::int::types::Int<2>, 2>::from_int(0_i64),
+                crate::D::<crate::int::types::Int<2>, 2>::from_int(2_i64),
+                crate::D::<crate::int::types::Int<2>, 2>::from_int(3_i64),
             ]
         );
     }
@@ -205,19 +205,19 @@ mod tests {
 
     /// `D38<S>` raw constructor: `raw` is the stored integer (logical
     /// value `raw / 10^S`).
-    fn d38_raw<const S: u32>(raw: i128) -> D38<S> {
-        D38::<S>::from_bits(Int::<2>::from_i128(raw))
+    fn d38_raw<const S: u32>(raw: i128) -> crate::D<crate::int::types::Int<2>, S> {
+        crate::D::<crate::int::types::Int<2>, S>::from_bits(Int::<2>::from_i128(raw))
     }
-    fn d18_raw<const S: u32>(raw: i64) -> D18<S> {
-        D18::<S>::from_bits(Int::<1>::from_i128(raw as i128))
+    fn d18_raw<const S: u32>(raw: i64) -> crate::D<crate::int::types::Int<1>, S> {
+        crate::D::<crate::int::types::Int<1>, S>::from_bits(Int::<1>::from_i128(raw as i128))
     }
 
     /// Cross-scale EQUAL value: 1.50 (raw 150 @ S=2) == 1.5000
     /// (raw 15000 @ S=4).
     #[test]
     fn cross_scale_equal_value() {
-        let a: D38<2> = d38_raw::<2>(150); // 1.50
-        let b: D38<4> = d38_raw::<4>(15_000); // 1.5000
+        let a: crate::D<crate::int::types::Int<2>, 2> = d38_raw::<2>(150); // 1.50
+        let b: crate::D<crate::int::types::Int<2>, 4> = d38_raw::<4>(15_000); // 1.5000
         assert!(a == b);
         assert!(b == a);
         assert_eq!(a.partial_cmp(&b), Some(core::cmp::Ordering::Equal));
@@ -226,8 +226,8 @@ mod tests {
     /// Cross-scale ORDER: 1.51 > 1.50 across scales.
     #[test]
     fn cross_scale_order_greater() {
-        let a: D38<4> = d38_raw::<4>(15_100); // 1.51
-        let b: D38<2> = d38_raw::<2>(150); // 1.50
+        let a: crate::D<crate::int::types::Int<2>, 4> = d38_raw::<4>(15_100); // 1.51
+        let b: crate::D<crate::int::types::Int<2>, 2> = d38_raw::<2>(150); // 1.50
         assert!(a > b);
         assert!(b < a);
         assert_ne!(a, b);
@@ -236,8 +236,8 @@ mod tests {
     /// Small magnitudes: 0.001 < 0.01 across scales.
     #[test]
     fn cross_scale_order_small() {
-        let a: D38<3> = d38_raw::<3>(1); // 0.001
-        let b: D38<2> = d38_raw::<2>(1); // 0.01
+        let a: crate::D<crate::int::types::Int<2>, 3> = d38_raw::<3>(1); // 0.001
+        let b: crate::D<crate::int::types::Int<2>, 2> = d38_raw::<2>(1); // 0.01
         assert!(a < b);
         assert!(b > a);
     }
@@ -245,24 +245,24 @@ mod tests {
     /// Negatives compare correctly across scales: -1.50 > -1.51.
     #[test]
     fn cross_scale_negatives() {
-        let a: D38<2> = d38_raw::<2>(-150); // -1.50
-        let b: D38<4> = d38_raw::<4>(-15_100); // -1.51
+        let a: crate::D<crate::int::types::Int<2>, 2> = d38_raw::<2>(-150); // -1.50
+        let b: crate::D<crate::int::types::Int<2>, 4> = d38_raw::<4>(-15_100); // -1.51
         assert!(a > b);
         assert!(b < a);
         // Equal negative across scales.
-        let c: D38<4> = d38_raw::<4>(-15_000); // -1.50
+        let c: crate::D<crate::int::types::Int<2>, 4> = d38_raw::<4>(-15_000); // -1.50
         assert_eq!(a, c);
     }
 
     /// Combined cross-WIDTH and cross-SCALE: D18<2> vs D38<4>.
     #[test]
     fn cross_width_and_scale() {
-        let narrow: D18<2> = d18_raw::<2>(150); // 1.50, i64 backend
-        let wide_eq: D38<4> = d38_raw::<4>(15_000); // 1.5000, i128 backend
+        let narrow: crate::D<crate::int::types::Int<1>, 2> = d18_raw::<2>(150); // 1.50, i64 backend
+        let wide_eq: crate::D<crate::int::types::Int<2>, 4> = d38_raw::<4>(15_000); // 1.5000, i128 backend
         assert!(narrow == wide_eq);
         assert!(wide_eq == narrow);
 
-        let wide_bigger: D38<4> = d38_raw::<4>(15_001); // 1.5001
+        let wide_bigger: crate::D<crate::int::types::Int<2>, 4> = d38_raw::<4>(15_001); // 1.5001
         assert!(narrow < wide_bigger);
         assert!(wide_bigger > narrow);
     }
@@ -273,13 +273,13 @@ mod tests {
     fn cross_scale_remainder_tiebreak() {
         // 1.5 @ S=1 (raw 15) vs 1.50001 @ S=5 (raw 150_001).
         // Scale-down of 150_001 by 10^4 → quotient 15, remainder 1.
-        let a: D38<1> = d38_raw::<1>(15); // 1.5
-        let b: D38<5> = d38_raw::<5>(150_001); // 1.50001
+        let a: crate::D<crate::int::types::Int<2>, 1> = d38_raw::<1>(15); // 1.5
+        let b: crate::D<crate::int::types::Int<2>, 5> = d38_raw::<5>(150_001); // 1.50001
         assert!(a < b);
         assert!(b > a);
         assert_ne!(a, b);
         // Exact tie: 1.5 vs 1.50000 → equal (remainder zero).
-        let c: D38<5> = d38_raw::<5>(150_000);
+        let c: crate::D<crate::int::types::Int<2>, 5> = d38_raw::<5>(150_000);
         assert_eq!(a, c);
     }
 }

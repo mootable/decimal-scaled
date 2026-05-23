@@ -62,7 +62,7 @@
 
 use core::fmt;
 
-use crate::types::widths::{D38, ParseError};
+use crate::types::widths::ParseError;
 
 #[cfg(feature = "alloc")]
 extern crate alloc;
@@ -77,7 +77,7 @@ extern crate alloc;
 // LowerExp / UpperExp -- scientific notation
 // ──────────────────────────────────────────────────────────────────────
 
-impl<const SCALE: u32> fmt::LowerExp for D38<SCALE> {
+impl<const SCALE: u32> fmt::LowerExp for crate::D<crate::int::types::Int<2>, SCALE> {
     /// Formats the value in scientific notation with a lowercase `e`.
     ///
     /// Trailing zeros in the mantissa are stripped, so `1.500000000000`
@@ -103,7 +103,7 @@ impl<const SCALE: u32> fmt::LowerExp for D38<SCALE> {
     }
 }
 
-impl<const SCALE: u32> fmt::UpperExp for D38<SCALE> {
+impl<const SCALE: u32> fmt::UpperExp for crate::D<crate::int::types::Int<2>, SCALE> {
     /// Formats the value in scientific notation with an uppercase `E`.
     ///
     /// Identical to [`fmt::LowerExp`] except the exponent separator is `E`.
@@ -293,7 +293,7 @@ pub(crate) fn parse_components<const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::types::widths::{D38, D38s12};
+    use crate::types::widths::D38s12;
     #[cfg(feature = "alloc")]
     use alloc::format;
     #[cfg(feature = "alloc")]
@@ -363,7 +363,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn display_scale_zero_no_dot() {
-        type D0 = D38<0>;
+        type D0 = crate::D<crate::int::types::Int<2>, 0>;
         assert_eq!(D0::ONE.to_string(), "1");
         assert_eq!(D0::ZERO.to_string(), "0");
         assert_eq!(D0::from_bits(crate::int::types::Int::<2>::from_i128(-42)).to_string(), "-42");
@@ -384,7 +384,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn debug_other_scale() {
-        type D6 = D38<6>;
+        type D6 = crate::D<crate::int::types::Int<2>, 6>;
         let v = D6::ZERO;
         assert_eq!(format!("{v:?}"), "D38<6>(0.000000)");
     }
@@ -700,7 +700,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn round_trip_other_scale() {
-        type D6 = D38<6>;
+        type D6 = crate::D<crate::int::types::Int<2>, 6>;
         let cases: &[i128] = &[
             0,
             1,
@@ -728,7 +728,7 @@ mod tests {
     #[cfg(feature = "alloc")]
     #[test]
     fn round_trip_scale_zero() {
-        type D0 = D38<0>;
+        type D0 = crate::D<crate::int::types::Int<2>, 0>;
         let cases: &[i128] = &[0, 1, -1, 42, -42, i128::MAX, i128::MIN];
         for &raw in cases {
             let v = D0::from_bits(crate::int::types::Int::<2>::from_i128(raw));

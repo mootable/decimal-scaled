@@ -27,7 +27,7 @@ use crate::types::widths::D38;
 // override. With `bench-alt` a separate invocation could add the
 // `_default` aliases — recorded as a follow-up so the macro can
 // emit suffix-renamed methods.
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     pub fn ln_strict_override(self) -> Self {
         self.ln_strict()

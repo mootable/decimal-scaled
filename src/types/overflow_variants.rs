@@ -478,7 +478,7 @@ mod tests {
     /// Verifies that the variant family compiles and functions correctly at SCALE = 6.
     #[test]
     fn variants_at_scale_6() {
-        type D6 = D38<6>;
+        type D6 = crate::D<crate::int::types::Int<2>, 6>;
         let one = D6::ONE;
         let two_d6 = D6::from_bits(crate::int::types::Int::<2>::from_i128(2_000_000)); // 2.0 at SCALE=6
         let one_lsb = D6::from_bits(crate::int::types::Int::<2>::from_i128(1));

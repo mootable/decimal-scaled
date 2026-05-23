@@ -84,9 +84,8 @@
 //! cause. `D38::ONE.powi(i32::MIN)` therefore evaluates correctly as
 //! `D38::ONE / D38::ONE.pow(2_147_483_648_u32)`.
 
-use crate::types::widths::D38;
 
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Raises `self` to the power `exp`.
     ///
     /// Uses square-and-multiply: walks the bits of `exp` from low to
@@ -209,7 +208,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// matching the f64-bridge NaN-to-ZERO policy.
     #[inline]
     #[must_use]
-    pub fn powf_strict(self, exp: D38<SCALE>) -> Self {
+    pub fn powf_strict(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
         self.powf_strict_with(exp, crate::support::rounding::DEFAULT_ROUNDING_MODE)
     }
 
@@ -218,7 +217,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn powf_strict_with(
         self,
-        exp: D38<SCALE>,
+        exp: crate::D<crate::int::types::Int<2>, SCALE>,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
         <Self as crate::policy::pow::PowPolicy>::powf_impl(self, exp, mode)
@@ -227,7 +226,7 @@ impl<const SCALE: u32> D38<SCALE> {
     /// `self^exp` with caller-chosen guard digits.
     #[inline]
     #[must_use]
-    pub fn powf_approx(self, exp: D38<SCALE>, working_digits: u32) -> Self {
+    pub fn powf_approx(self, exp: crate::D<crate::int::types::Int<2>, SCALE>, working_digits: u32) -> Self {
         self.powf_approx_with(
             exp,
             working_digits,
@@ -240,7 +239,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[must_use]
     pub fn powf_approx_with(
         self,
-        exp: D38<SCALE>,
+        exp: crate::D<crate::int::types::Int<2>, SCALE>,
         working_digits: u32,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
@@ -257,7 +256,7 @@ impl<const SCALE: u32> D38<SCALE> {
     #[cfg(all(feature = "strict", not(feature = "fast")))]
     #[inline]
     #[must_use]
-    pub fn powf(self, exp: D38<SCALE>) -> Self {
+    pub fn powf(self, exp: crate::D<crate::int::types::Int<2>, SCALE>) -> Self {
         self.powf_strict(exp)
     }
 
@@ -804,7 +803,7 @@ mod tests {
         // So a correctly-rounded q satisfies q^2 - q < N ≤ q^2 + q  (q>0),
         // or N == 0 when q == 0.
         fn check<const S: u32>(raw: i128) {
-            let x = crate::types::widths::D38::<S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let q = x.sqrt_strict().to_bits().as_i128();
             assert!(q >= 0, "sqrt result must be non-negative");
             // N = raw · 10^S as 256-bit; q is small enough that q^2 fits 256-bit.
@@ -870,7 +869,7 @@ mod tests {
         // hold the 384-bit cubes (i256 is already a dev-dependency).
         use i256::U256;
         fn check<const S: u32>(raw: i128) {
-            let x = crate::types::widths::D38::<S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+            let x = crate::D::<crate::int::types::Int<2>, S>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
             let q = x.cbrt_strict().to_bits().as_i128();
             // Sign must match the input.
             assert_eq!(q.signum(), raw.signum(), "cbrt sign mismatch");

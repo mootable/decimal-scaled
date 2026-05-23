@@ -44,11 +44,9 @@ use serde::{Deserialize, Deserializer, Serialize, Serializer, de::Visitor};
 #[cfg(feature = "alloc")]
 use alloc::string::ToString;
 
-use crate::types::widths::D38;
-
 // ── Serialize ─────────────────────────────────────────────────────────
 
-impl<const SCALE: u32> Serialize for D38<SCALE> {
+impl<const SCALE: u32> Serialize for crate::D<crate::int::types::Int<2>, SCALE> {
     /// Serialise `self` as a base-10 integer string for human-readable
     /// formats, or as 16 little-endian bytes for binary formats.
     ///
@@ -85,7 +83,7 @@ impl<const SCALE: u32> Serialize for D38<SCALE> {
 
 // ── Deserialize ───────────────────────────────────────────────────────
 
-impl<'de, const SCALE: u32> Deserialize<'de> for D38<SCALE> {
+impl<'de, const SCALE: u32> Deserialize<'de> for crate::D<crate::int::types::Int<2>, SCALE> {
     /// Deserialise from a base-10 integer string (human-readable
     /// formats), 16 little-endian bytes (binary formats), or a native
     /// integer (self-describing binary formats such as CBOR).
@@ -131,7 +129,7 @@ impl<'de, const SCALE: u32> Deserialize<'de> for D38<SCALE> {
 /// `#[serde(with = ...)]` on fields in generic containing types or in
 /// newtype wrappers where the trait impl may be shadowed.
 pub mod decimal_serde {
-    use super::{D38, Deserialize, Deserializer, PhantomData, Serialize, Serializer, Visitor};
+    use super::{Deserialize, Deserializer, PhantomData, Serialize, Serializer, Visitor};
 
     /// Serialise `v` using the `D38` wire format.
     ///
@@ -143,7 +141,7 @@ pub mod decimal_serde {
     /// Strict: all arithmetic is integer-only; result is bit-exact.
     #[inline]
     pub fn serialize<const SCALE: u32, S: Serializer>(
-        v: &D38<SCALE>,
+        v: &crate::D<crate::int::types::Int<2>, SCALE>,
         s: S,
     ) -> Result<S::Ok, S::Error> {
         v.serialize(s)
@@ -160,8 +158,8 @@ pub mod decimal_serde {
     #[inline]
     pub fn deserialize<'de, const SCALE: u32, D: Deserializer<'de>>(
         d: D,
-    ) -> Result<D38<SCALE>, D::Error> {
-        D38::<SCALE>::deserialize(d)
+    ) -> Result<crate::D<crate::int::types::Int<2>, SCALE>, D::Error> {
+        crate::D::<crate::int::types::Int<2>, SCALE>::deserialize(d)
     }
 
     /// Visitor that backs [`deserialize`]. Public so external helper
@@ -180,7 +178,7 @@ pub mod decimal_serde {
     pub struct DecimalVisitor<const SCALE: u32>(pub PhantomData<()>);
 
     impl<'de, const SCALE: u32> Visitor<'de> for DecimalVisitor<SCALE> {
-        type Value = D38<SCALE>;
+        type Value = crate::D<crate::int::types::Int<2>, SCALE>;
 
         fn expecting(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
             f.write_str(
@@ -212,7 +210,7 @@ pub mod decimal_serde {
                     "decimal-scaled: leading `+` is not part of the canonical wire format",
                 ));
             }
-            v.parse::<i128>().map(|n| D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(n))).map_err(|_| {
+            v.parse::<i128>().map(|n| crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(n))).map_err(|_| {
                 serde::de::Error::custom("decimal-scaled: expected a base-10 i128 integer string")
             })
         }
@@ -239,7 +237,7 @@ pub mod decimal_serde {
                     &"exactly 16 little-endian bytes for an i128",
                 )
             })?;
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from_le_bytes(arr))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from_le_bytes(arr))))
         }
 
         fn visit_borrowed_bytes<E: serde::de::Error>(self, v: &'de [u8]) -> Result<Self::Value, E> {
@@ -263,45 +261,45 @@ pub mod decimal_serde {
         // serialise path.
 
         fn visit_i8<E: serde::de::Error>(self, v: i8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i16<E: serde::de::Error>(self, v: i16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i32<E: serde::de::Error>(self, v: i32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i64<E: serde::de::Error>(self, v: i64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_i128<E: serde::de::Error>(self, v: i128) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(v)))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(v)))
         }
 
         fn visit_u8<E: serde::de::Error>(self, v: u8) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u16<E: serde::de::Error>(self, v: u16) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u32<E: serde::de::Error>(self, v: u32) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u64<E: serde::de::Error>(self, v: u64) -> Result<Self::Value, E> {
-            Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
+            Ok(crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(i128::from(v))))
         }
 
         fn visit_u128<E: serde::de::Error>(self, v: u128) -> Result<Self::Value, E> {
             // u128 values above i128::MAX cannot be represented; reject
             // explicitly rather than wrapping silently.
-            i128::try_from(v).map(|n| D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(n))).map_err(|_| {
+            i128::try_from(v).map(|n| crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(n))).map_err(|_| {
                 serde::de::Error::custom("decimal-scaled: u128 value exceeds i128 storage range")
             })
         }
@@ -322,7 +320,7 @@ pub mod decimal_serde {
 #[cfg(all(test, feature = "alloc", feature = "serde"))]
 mod tests {
     use super::*;
-    use crate::types::widths::{D38, D38s12};
+    use crate::types::widths::D38s12;
     use alloc::format;
     use serde::de::IntoDeserializer;
     use serde::de::value::{Error as DeError, StrDeserializer};
@@ -583,8 +581,8 @@ mod tests {
     #[test]
     fn cross_scale_wire_is_storage_only() {
         let raw: i128 = 1_500_000_000_000;
-        let v12 = D38::<12>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
-        let v6 = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+        let v12 = crate::D::<crate::int::types::Int<2>, 12>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
+        let v6 = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw));
         assert_eq!(serde_json::to_string(&v12).unwrap(), "\"1500000000000\"");
         assert_eq!(serde_json::to_string(&v6).unwrap(), "\"1500000000000\"");
     }
@@ -598,7 +596,7 @@ mod tests {
         #[derive(serde::Serialize, serde::Deserialize, Debug, PartialEq)]
         struct Holder {
             #[serde(with = "crate::serde_helpers::decimal_serde")]
-            length: D38<12>,
+            length: crate::D<crate::int::types::Int<2>, 12>,
         }
 
         let h = Holder {
@@ -754,26 +752,26 @@ mod wide_serde_tests {
 
     #[test]
     fn d76_human_readable_round_trip() {
-        let v = D76::<12>::from_int(1_234_567_i128);
+        let v = crate::D::<crate::int::types::Int<4>, 12>::from_int(1_234_567_i128);
         let json = serde_json::to_string(&v).unwrap();
-        let back: D76<12> = serde_json::from_str(&json).unwrap();
+        let back: crate::D<crate::int::types::Int<4>, 12> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
     }
 
     #[test]
     fn d76_negative_human_readable_round_trip() {
-        let v = -D76::<12>::from_int(987_654_321_i128);
+        let v = -crate::D::<crate::int::types::Int<4>, 12>::from_int(987_654_321_i128);
         let json = serde_json::to_string(&v).unwrap();
-        let back: D76<12> = serde_json::from_str(&json).unwrap();
+        let back: crate::D<crate::int::types::Int<4>, 12> = serde_json::from_str(&json).unwrap();
         assert_eq!(back, v);
     }
 
     #[test]
     fn d76_binary_round_trip() {
         // postcard is a binary, non-self-describing format.
-        let v = D76::<12>::from_int(42_i128);
+        let v = crate::D::<crate::int::types::Int<4>, 12>::from_int(42_i128);
         let bytes = postcard::to_allocvec(&v).unwrap();
-        let back: D76<12> = postcard::from_bytes(&bytes).unwrap();
+        let back: crate::D<crate::int::types::Int<4>, 12> = postcard::from_bytes(&bytes).unwrap();
         assert_eq!(back, v);
     }
 }

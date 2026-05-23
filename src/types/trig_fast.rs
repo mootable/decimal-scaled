@@ -5,9 +5,8 @@
 //! fast set). When strict is on, the dispatcher in the
 //! _strict file shadows these.
 
-use crate::types::widths::D38;
 
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Forward trig (radians input) ──────────────────────────────────
 
     /// Sine of `self`, where `self` is in radians.
@@ -407,7 +406,7 @@ impl<const SCALE: u32> D38<SCALE> {
 }
 
 #[cfg(all(feature = "std", any(not(feature = "strict"), feature = "fast")))]
-impl<const SCALE: u32> D38<SCALE> {
+impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     /// Plain dispatcher: forwards to [`Self::sin_fast`] in this feature mode.
     #[inline]
     #[must_use]

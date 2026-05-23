@@ -494,7 +494,7 @@ mod tests {
     /// At SCALE = 6 the LSB is 10^-6; EPSILON is still raw 1.
     #[test]
     fn epsilon_at_scale_6_is_one_ulp() {
-        type D6 = D38<6>;
+        type D6 = crate::D<crate::int::types::Int<2>, 6>;
         assert_eq!(D6::EPSILON.to_bits().as_i128(), 1_i128);
         assert_eq!(D6::MIN_POSITIVE.to_bits().as_i128(), 1_i128);
     }
@@ -508,7 +508,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        type D6 = D38<6>;
+        type D6 = crate::D<crate::int::types::Int<2>, 6>;
         assert_eq!(D6::pi().to_bits().as_i128(), 3_141_593_i128);
     }
 
@@ -519,7 +519,7 @@ mod tests {
         if !crate::support::rounding::DEFAULT_IS_HALF_TO_EVEN {
             return;
         }
-        type D0 = D38<0>;
+        type D0 = crate::D<crate::int::types::Int<2>, 0>;
         assert_eq!(D0::pi().to_bits().as_i128(), 3_i128);
     }
 
@@ -529,7 +529,7 @@ mod tests {
     /// hand-tabulated constant.
     #[test]
     fn pi_at_scale_37_matches_canonical_37_digit_rounding() {
-        type D37 = D38<37>;
+        type D37 = crate::D<crate::int::types::Int<2>, 37>;
         // pi to 38 digits: 3.14159265358979323846264338327950288420
         //                   ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
         //                   keep 37 frac digits; the 38th digit is 0
@@ -555,19 +555,19 @@ mod tests {
     #[test]
     #[should_panic(expected = "out of storage range")]
     fn pi_at_scale_38_panics_storage_range() {
-        let _ = D38::<38>::pi();
+        let _ = crate::D::<crate::int::types::Int<2>, 38>::pi();
     }
 
     #[test]
     #[should_panic(expected = "out of storage range")]
     fn tau_at_scale_38_panics_storage_range() {
-        let _ = D38::<38>::tau();
+        let _ = crate::D::<crate::int::types::Int<2>, 38>::tau();
     }
 
     #[test]
     #[should_panic(expected = "out of storage range")]
     fn e_at_scale_38_panics_storage_range() {
-        let _ = D38::<38>::e();
+        let _ = crate::D::<crate::int::types::Int<2>, 38>::e();
     }
 
     /// `half_pi` / `quarter_pi` / `golden` at `D38<38>` must not panic
@@ -577,7 +577,7 @@ mod tests {
     fn fitting_constants_at_scale_38_are_correctly_rounded() {
         // half_pi to 38 digits: 1.57079632679489661923132169163975144210
         let expected_half_pi: i128 = 157_079_632_679_489_661_923_132_169_163_975_144_210;
-        let got = D38::<38>::half_pi().to_bits().as_i128();
+        let got = crate::D::<crate::int::types::Int<2>, 38>::half_pi().to_bits().as_i128();
         let diff = (got - expected_half_pi).abs();
         assert!(
             diff <= 1,
@@ -586,7 +586,7 @@ mod tests {
 
         // quarter_pi to 38 digits: 0.78539816339744830961566084581987572105
         let expected_quarter_pi: i128 = 78_539_816_339_744_830_961_566_084_581_987_572_105;
-        let got = D38::<38>::quarter_pi().to_bits().as_i128();
+        let got = crate::D::<crate::int::types::Int<2>, 38>::quarter_pi().to_bits().as_i128();
         let diff = (got - expected_quarter_pi).abs();
         assert!(
             diff <= 1,
@@ -595,7 +595,7 @@ mod tests {
 
         // golden to 38 digits: 1.61803398874989484820458683436563811772
         let expected_golden: i128 = 161_803_398_874_989_484_820_458_683_436_563_811_772;
-        let got = D38::<38>::golden().to_bits().as_i128();
+        let got = crate::D::<crate::int::types::Int<2>, 38>::golden().to_bits().as_i128();
         let diff = (got - expected_golden).abs();
         assert!(
             diff <= 1,

@@ -5131,8 +5131,8 @@ mod tests {
         }
 
         for raw in positives {
-            let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
+            let n = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -5155,8 +5155,8 @@ mod tests {
             );
         }
         for raw in all {
-            let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
+            let n = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -5203,8 +5203,8 @@ mod tests {
             );
         }
         for raw in unit_range {
-            let n = D38::<6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
-            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
+            let n = crate::D::<crate::int::types::Int<2>, 6>::from_bits(crate::int::types::Int::<2>::from_i128(raw as i128));
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -5231,19 +5231,19 @@ mod tests {
     /// Bit-exact identity points hold across all three wide tiers.
     #[test]
     fn wide_transcendental_identities() {
-        assert_eq!(D76::<6>::ONE.ln_strict(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.exp_strict(), D76::<6>::ONE);
-        assert_eq!(D76::<6>::ZERO.sin_strict(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.sinh_strict(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.atan_strict(), D76::<6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sin_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.sinh_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.atan_strict(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
 
-        assert_eq!(D153::<6>::ONE.ln_strict(), D153::<6>::ZERO);
-        assert_eq!(D153::<6>::ZERO.exp_strict(), D153::<6>::ONE);
-        assert_eq!(D153::<6>::ZERO.cos_strict(), D153::<6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.cos_strict(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
 
-        assert_eq!(D307::<6>::ONE.ln_strict(), D307::<6>::ZERO);
-        assert_eq!(D307::<6>::ZERO.exp_strict(), D307::<6>::ONE);
-        assert_eq!(D307::<6>::ZERO.cosh_strict(), D307::<6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.cosh_strict(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
     /// AGM-based `ln_strict_agm` and `exp_strict_agm` (Brent–Salamin
@@ -5263,7 +5263,7 @@ mod tests {
         }
 
         for raw in positives {
-            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -5274,7 +5274,7 @@ mod tests {
             );
         }
         for raw in all {
-            let w = D76::<6>::from_bits(crate::int::types::Int::<4>::from_i128(
+            let w = crate::D::<crate::int::types::Int<4>, 6>::from_bits(crate::int::types::Int::<4>::from_i128(
                 raw as i128,
             ));
             agree(
@@ -5289,12 +5289,12 @@ mod tests {
     /// Identity points: AGM `ln(1) = 0`, AGM `exp(0) = 1`.
     #[test]
     fn wide_agm_identity_points() {
-        assert_eq!(D76::<6>::ONE.ln_strict_agm(), D76::<6>::ZERO);
-        assert_eq!(D76::<6>::ZERO.exp_strict_agm(), D76::<6>::ONE);
-        assert_eq!(D153::<6>::ONE.ln_strict_agm(), D153::<6>::ZERO);
-        assert_eq!(D153::<6>::ZERO.exp_strict_agm(), D153::<6>::ONE);
-        assert_eq!(D307::<6>::ONE.ln_strict_agm(), D307::<6>::ZERO);
-        assert_eq!(D307::<6>::ZERO.exp_strict_agm(), D307::<6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<4>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<4>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<8>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<8>, 6>::ONE);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ONE.ln_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ZERO);
+        assert_eq!(crate::D::<crate::int::types::Int<16>, 6>::ZERO.exp_strict_agm(), crate::D::<crate::int::types::Int<16>, 6>::ONE);
     }
 
     /// `*_strict_with(mode)` siblings honour the explicit rounding
@@ -5316,7 +5316,7 @@ mod tests {
         // A clean way: positive number with HTE rounding up. exp(1) =
         // 2.7182818... at SCALE=6: 2.718281 cut, fractional 0.8 →
         // HTE rounds up to 2.718282, Trunc keeps 2.718281.
-        let n = D76::<6>::ONE;
+        let n = crate::D::<crate::int::types::Int<4>, 6>::ONE;
         let hte = n.exp_strict_with(RoundingMode::HalfToEven);
         let trunc = n.exp_strict_with(RoundingMode::Trunc);
         assert!(
@@ -5344,12 +5344,12 @@ mod tests {
     /// historic D76<20> / D153<20> coverage as a smoke gate.
     #[test]
     fn wide_agm_moderate_scale_round_trip() {
-        let x = D76::<20>::from_int(3);
+        let x = crate::D::<crate::int::types::Int<4>, 20>::from_int(3);
         let back = x.ln_strict_agm().exp_strict_agm();
         let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
         assert!(delta <= 8, "AGM exp(ln(3)) at D76<20> delta {delta}");
 
-        let y = D153::<20>::from_int(2);
+        let y = crate::D::<crate::int::types::Int<8>, 20>::from_int(2);
         let back = y.exp_strict_agm().ln_strict_agm();
         let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
         assert!(delta <= 8, "AGM ln(exp(2)) at D153<20> delta {delta}");
@@ -5362,13 +5362,13 @@ mod tests {
     fn wide_only_scale_round_trips() {
         // D76<50>: well past D38's max scale of 38. The round-trip
         // result fits i128 comfortably, so compare there.
-        let x = D76::<50>::from_int(3);
+        let x = crate::D::<crate::int::types::Int<4>, 50>::from_int(3);
         let back = x.ln_strict().exp_strict();
         let delta = (back.to_bits().as_i128() - x.to_bits().as_i128()).abs();
         assert!(delta <= 8, "exp(ln(3)) at D76<50> delta {delta}");
 
         // D307<150>: deep scale, only the wide core can serve it.
-        let y = D307::<150>::from_int(2);
+        let y = crate::D::<crate::int::types::Int<16>, 150>::from_int(2);
         let back = y.exp_strict().ln_strict();
         let delta = (back.to_bits().as_i128() - y.to_bits().as_i128()).abs();
         assert!(delta <= 8, "ln(exp(2)) at D307<150> delta {delta}");

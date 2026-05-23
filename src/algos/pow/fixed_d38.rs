@@ -21,7 +21,6 @@ use crate::algos::support::fixed_d38::Fixed;
 use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::D38;
 
 /// Integer-exponent fast-path threshold for `powf_strict`.
 ///
@@ -86,7 +85,7 @@ fn powf_with_raw<const SCALE: u32>(
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return D38::<SCALE>::from_bits(Int::<2>::from_i128(base))
+        return crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(Int::<2>::from_i128(base))
             .powi(n)
             .to_bits()
             .as_i128();
@@ -118,7 +117,7 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return D38::<SCALE>::from_bits(Int::<2>::from_i128(base))
+        return crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(Int::<2>::from_i128(base))
             .powi(n)
             .to_bits()
             .as_i128();

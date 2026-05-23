@@ -22,7 +22,6 @@ use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 use crate::types::consts::DecimalConstants;
-use crate::types::widths::D38;
 
 // ── Int<2> entry points ─────────────────────────────────────────────
 //
@@ -586,10 +585,10 @@ pub(crate) fn atan_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return <D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw == -one_bits {
-        return -<D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
@@ -612,10 +611,10 @@ pub(crate) fn atan_with_raw<const SCALE: u32>(
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
-        return <D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw == -one_bits {
-        return -<D38<SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
+        return -<crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::quarter_pi().0.as_i128();
     }
     if raw.abs() <= small_x_linear_threshold::<SCALE>() && is_nearest_mode(mode) {
         return raw;
@@ -740,14 +739,14 @@ pub(crate) fn asin_with_raw<const SCALE: u32>(
 #[must_use]
 pub(crate) fn acos_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
     if raw == 0 {
-        return <D38<SCALE> as DecimalConstants>::half_pi().0.as_i128();
+        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
     if raw == -one_bits {
-        return <D38<SCALE> as DecimalConstants>::pi().0.as_i128();
+        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + STRICT_GUARD;
     let one_w = Fixed {
@@ -796,14 +795,14 @@ pub(crate) fn acos_with_raw<const SCALE: u32>(
     mode: RoundingMode,
 ) -> i128 {
     if raw == 0 {
-        return <D38<SCALE> as DecimalConstants>::half_pi().0.as_i128();
+        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::half_pi().0.as_i128();
     }
     let one_bits: i128 = 10_i128.pow(SCALE);
     if raw == one_bits {
         return 0;
     }
     if raw == -one_bits {
-        return <D38<SCALE> as DecimalConstants>::pi().0.as_i128();
+        return <crate::D<crate::int::types::Int<2>, SCALE> as DecimalConstants>::pi().0.as_i128();
     }
     let w = SCALE + working_digits;
     let one_w = Fixed {

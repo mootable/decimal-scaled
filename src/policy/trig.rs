@@ -56,7 +56,7 @@
 
 use crate::algos::trig;
 use crate::support::rounding::RoundingMode;
-use crate::types::widths::{D18, D38};
+use crate::types::widths::D18;
 
 pub(crate) trait TrigPolicy: Sized {
     fn sin_impl(self, mode: RoundingMode) -> Self;
@@ -331,12 +331,12 @@ mod borrow_d57 {
     use crate::algos::trig;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
-    use crate::types::widths::{wide_trig_d57, D38, D57};
+    use crate::types::widths::wide_trig_d57;
 
     #[inline]
     fn narrow<const SCALE: u32>(raw_wide: Int<3>, op: &'static str) -> Int<2> {
-        let wide = D57::<SCALE>::from_bits(raw_wide);
-        let r: D38<SCALE> = wide.try_into().unwrap_or_else(|_| {
+        let wide = crate::D::<crate::int::types::Int<3>, SCALE>::from_bits(raw_wide);
+        let r: crate::D<crate::int::types::Int<2>, SCALE> = wide.try_into().unwrap_or_else(|_| {
             panic!(
                 "{op}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
                 38_i32 - SCALE as i32,
@@ -348,7 +348,7 @@ mod borrow_d57 {
     #[inline]
     #[must_use]
     pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-        let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
+        let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let raw_wide = if matches!(SCALE, 18..=22) {
             wide_trig_core::atan_narrow::<wide_trig_d57::Core, SCALE, 10>(widened.0, mode)
         } else {
@@ -360,7 +360,7 @@ mod borrow_d57 {
     #[inline]
     #[must_use]
     pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-        let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
+        let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(widened.0, mode)
         } else {
@@ -372,7 +372,7 @@ mod borrow_d57 {
     #[inline]
     #[must_use]
     pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
-        let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
+        let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(widened.0, mode)
         } else {
@@ -388,8 +388,8 @@ mod borrow_d57 {
         x_raw: Int<2>,
         mode: RoundingMode,
     ) -> Int<2> {
-        let y_wide: D57<SCALE> = D38::<SCALE>::from_bits(y_raw).into();
-        let x_wide: D57<SCALE> = D38::<SCALE>::from_bits(x_raw).into();
+        let y_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(y_raw).into();
+        let x_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(x_raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
             trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(y_wide.0, x_wide.0, mode)
         } else {
@@ -420,10 +420,10 @@ macro_rules! narrow_widen {
     ($name:ident, $kernel:ident, $err:literal) => {
         #[inline]
         #[must_use]
-        fn $name<const SCALE: u32>(v: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
-            let widened: D38<SCALE> = v.into();
+        fn $name<const SCALE: u32>(v: $crate::D<$crate::int::types::Int<1>, SCALE>, mode: RoundingMode) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
+            let widened: $crate::D<$crate::int::types::Int<2>, SCALE> = v.into();
             let raw = trig::fixed_d38::$kernel::<SCALE>(widened.0, mode);
-            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+            $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -433,13 +433,13 @@ macro_rules! narrow_widen_with {
         #[inline]
         #[must_use]
         fn $name<const SCALE: u32>(
-            v: D18<SCALE>,
+            v: $crate::D<$crate::int::types::Int<1>, SCALE>,
             working_digits: u32,
             mode: RoundingMode,
-        ) -> D18<SCALE> {
-            let widened: D38<SCALE> = v.into();
+        ) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
+            let widened: $crate::D<$crate::int::types::Int<2>, SCALE> = v.into();
             let raw = trig::fixed_d38::$kernel::<SCALE>(widened.0, working_digits, mode);
-            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+            $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -449,11 +449,11 @@ macro_rules! narrow_widen_binary {
     ($name:ident, $kernel:ident, $err:literal) => {
         #[inline]
         #[must_use]
-        fn $name<const SCALE: u32>(y: D18<SCALE>, x: D18<SCALE>, mode: RoundingMode) -> D18<SCALE> {
-            let y_wide: D38<SCALE> = y.into();
-            let x_wide: D38<SCALE> = x.into();
+        fn $name<const SCALE: u32>(y: $crate::D<$crate::int::types::Int<1>, SCALE>, x: $crate::D<$crate::int::types::Int<1>, SCALE>, mode: RoundingMode) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
+            let y_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = y.into();
+            let x_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = x.into();
             let raw = trig::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
-            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+            $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -463,15 +463,15 @@ macro_rules! narrow_widen_binary_with {
         #[inline]
         #[must_use]
         fn $name<const SCALE: u32>(
-            y: D18<SCALE>,
-            x: D18<SCALE>,
+            y: $crate::D<$crate::int::types::Int<1>, SCALE>,
+            x: $crate::D<$crate::int::types::Int<1>, SCALE>,
             working_digits: u32,
             mode: RoundingMode,
-        ) -> D18<SCALE> {
-            let y_wide: D38<SCALE> = y.into();
-            let x_wide: D38<SCALE> = x.into();
+        ) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
+            let y_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = y.into();
+            let x_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = x.into();
             let raw = trig::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, working_digits, mode);
-            D38::<SCALE>::from_bits(raw).try_into().expect($err)
+            $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
 }
@@ -564,7 +564,7 @@ macro_rules! impl_narrow_trig {
             // Hyperbolics and angle conversions widen → D38 → narrow.
             #[inline]
             fn sinh_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_strict_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -576,7 +576,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn sinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.sinh_approx_with(wd, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -588,7 +588,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn cosh_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_strict_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -600,7 +600,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn cosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.cosh_approx_with(wd, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -612,7 +612,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn tanh_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_strict_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -624,7 +624,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn tanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.tanh_approx_with(wd, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -636,7 +636,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn asinh_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_strict_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -648,7 +648,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn asinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.asinh_approx_with(wd, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -660,7 +660,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn acosh_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_strict_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -672,7 +672,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn acosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.acosh_approx_with(wd, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -684,7 +684,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn atanh_impl(self, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_strict_with(mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -696,7 +696,7 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn atanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                let wide: D38<SCALE> = self.into();
+                let wide: $crate::D<$crate::int::types::Int<2>, SCALE> = self.into();
                 ::core::convert::TryInto::try_into(wide.atanh_approx_with(wd, mode)).unwrap_or_else(
                     |_| {
                         crate::support::diagnostics::overflow_panic_with_scale(
@@ -889,7 +889,7 @@ macro_rules! d38_forward_fixed {
 
 // D38 with D57 present — forward via `fixed_d38`, inverse borrows D57.
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     d38_forward_fixed!();
 
     #[inline]
@@ -940,7 +940,7 @@ impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
 
 // D38 without D57 — forward + inverse both on `fixed_d38`.
 #[cfg(not(any(feature = "d57", feature = "wide")))]
-impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     d38_forward_fixed!();
 
     #[inline]
@@ -1211,7 +1211,7 @@ macro_rules! wide_trig_forward_series {
 // Series band at 18..=22 (sin/cos/tan/atan); inverse + hyper divert
 // 18..=22 to their lookup kernels. ─────────────────────────────────────
 #[cfg(any(feature = "d57", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE> {
     // Forward family — `Series` runs the 18..=22 narrow-GUARD lookup or
     // the generic `wide_kernel`; `Tang` runs the 44..=56 band kernel
     // (sin/cos/atan only — tan has no 44..=56 Tang band).
@@ -1371,7 +1371,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D57<SCALE> {
 
 // ── D76 — width default (no bands) ─────────────────────────────────────
 #[cfg(any(feature = "d76", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<4>, SCALE> {
     wide_trig_forward_series!(4, crate::types::widths::wide_trig_d76::Core);
     wide_trig_inverse_inherent!(4);
     wide_trig_hyper_inherent!(4);
@@ -1381,7 +1381,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D76<SCALE> {
 // ── D115 — forward via wide_kernel; sinh/cosh/tanh divert SCALE
 // 50..=60 to the Tang-style hyper lookup. ──────────────────────────────
 #[cfg(any(feature = "d115", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<6>, SCALE> {
     wide_trig_forward_series!(6, crate::types::widths::wide_trig_d115::Core);
     wide_trig_inverse_inherent!(6);
 
@@ -1431,7 +1431,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D115<SCALE> {
 // ── D153 — forward sin/cos/tan/atan divert SCALE 70..=82 (Tang);
 // sinh/cosh/tanh divert the same band. ─────────────────────────────────
 #[cfg(any(feature = "d153", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<8, SCALE>(&self.0) {
@@ -1532,7 +1532,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D153<SCALE> {
 
 // ── D230 — width default (no bands) ────────────────────────────────────
 #[cfg(any(feature = "d230", feature = "wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D230<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<12>, SCALE> {
     wide_trig_forward_series!(12, crate::types::widths::wide_trig_d230::Core);
     wide_trig_inverse_inherent!(12);
     wide_trig_hyper_inherent!(12);
@@ -1542,7 +1542,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D230<SCALE> {
 // ── D307 — forward sin/cos/tan/atan divert SCALE 140..=160 (Tang);
 // sinh/cosh/tanh divert the same band. ─────────────────────────────────
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<16, SCALE>(&self.0) {
@@ -1644,7 +1644,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D307<SCALE> {
 // ── D462 — forward sin/cos/tan/atan divert SCALE 225..=235 (Tang);
 // the hyperbolics keep the inherent shells (Tang hyper slot lost here). ─
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE> {
     #[inline]
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<24, SCALE>(&self.0) {
@@ -1705,7 +1705,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D462<SCALE> {
 
 // ── D616 — width default (no bands) ────────────────────────────────────
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<32>, SCALE> {
     wide_trig_forward_series!(32, crate::types::widths::wide_trig_d616::Core);
     wide_trig_inverse_inherent!(32);
     wide_trig_hyper_inherent!(32);
@@ -1714,7 +1714,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D616<SCALE> {
 
 // ── D924 — width default (no bands) ────────────────────────────────────
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<48>, SCALE> {
     wide_trig_forward_series!(48, crate::types::widths::wide_trig_d924::Core);
     wide_trig_inverse_inherent!(48);
     wide_trig_hyper_inherent!(48);
@@ -1723,7 +1723,7 @@ impl<const SCALE: u32> TrigPolicy for crate::types::widths::D924<SCALE> {
 
 // ── D1232 — width default (no bands) ───────────────────────────────────
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-impl<const SCALE: u32> TrigPolicy for crate::types::widths::D1232<SCALE> {
+impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<64>, SCALE> {
     wide_trig_forward_series!(64, crate::types::widths::wide_trig_d1232::Core);
     wide_trig_inverse_inherent!(64);
     wide_trig_hyper_inherent!(64);
