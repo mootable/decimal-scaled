@@ -42,9 +42,9 @@
 //!
 //! Same reasoning as [`crate::policy::exp`] / [`crate::policy::ln`]: each
 //! algorithm has SCALE-/width-specific kernel realisations today (narrow
-//! `Fixed`-256 in `trig::fixed_d38`, wide per-tier `wide_trig_<tier>`
-//! cores in `trig::wide_kernel`, Tang/narrow-GUARD bands in the
-//! `trig::lookup_*` kernels). Collapsing those kernel *bodies* to one
+//! `Fixed`-256 in `trig::fixed_d38`, the tier-generic `*_series` kernels
+//! over `WideTrigCore` in `algos::support::wide_trig_core`, Tang/narrow-GUARD
+//! bands in the `trig::lookup_*` kernels). Collapsing those kernel *bodies* to one
 //! generic-over-work-width core needs the macro-emitted core to lift to a
 //! generic `W` — the **4.1 genericisation prerequisite** recorded in
 //! `phase4/migration_trig.md`, not a matcher concern. The matcher here is
@@ -119,7 +119,8 @@ pub(crate) mod forward {
     #[derive(Clone, Copy, PartialEq, Eq)]
     pub(crate) enum Algorithm {
         /// `*_series` — the macro-emitted Taylor-on-reduced-residue core.
-        /// The generic default; realised by `trig::wide_kernel` (wide),
+        /// The generic default; realised by the tier-generic `*_series`
+        /// kernels in `algos::support::wide_trig_core` (wide),
         /// `trig::fixed_d38` (narrow), and the narrow-GUARD `lookup_*`
         /// slots at the low bands (a smaller `GUARD` over the same core).
         Series,
@@ -304,6 +305,97 @@ pub(crate) mod hyper {
             Select::ByAlgorithm(a) => a,
             Select::ByValue(f) => f(raw),
         }
+    }
+}
+
+// ══════════════════════════════════════════════════════════════════════
+// D38 inverse-trig "borrow D57" dispatch strategy
+//
+// The D38 inverse-trig family (atan / asin / acos / atan2) is qualitatively
+// faster routed through D57 than through D38's own `fixed_d38`
+// adaptive-halvings path (~2× at SCALE 19; asin / acos / atan2 compose atan
+// and inherit the gap). The strategy: widen D38 → D57, run the D57 kernel
+// outside the SCALE 18..=22 lookup window (the lookup kernels cover that
+// band), then narrow back to D38.
+//
+// Per the layering rule this is a dispatch *strategy* (`borrow_*`), not an
+// algorithm — it carries no function prefix and lives in the policy layer,
+// not `algos/`. It is consumed only by the D38-with-D57 `TrigPolicy` impl
+// below.
+//
+// Correctness: every output here is bounded within `[-π, π]` (atan2) or
+// smaller, so the narrowing `TryFrom` cannot fail on a representable input.
+#[cfg(any(feature = "d57", feature = "wide"))]
+mod borrow_d57 {
+    use crate::algos::support::wide_trig_core;
+    use crate::algos::trig;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+    use crate::types::widths::{wide_trig_d57, D38, D57};
+
+    #[inline]
+    fn narrow<const SCALE: u32>(raw_wide: Int<3>, op: &'static str) -> Int<2> {
+        let wide = D57::<SCALE>::from_bits(raw_wide);
+        let r: D38<SCALE> = wide.try_into().unwrap_or_else(|_| {
+            panic!(
+                "{op}: result out of range — produced {wide}, D38<{SCALE}> represents only |x| < 1.7e{}",
+                38_i32 - SCALE as i32,
+            )
+        });
+        r.0
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+        let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
+        let raw_wide = if matches!(SCALE, 18..=22) {
+            wide_trig_core::atan_narrow::<wide_trig_d57::Core, SCALE, 10>(widened.0, mode)
+        } else {
+            wide_trig_core::atan_series::<wide_trig_d57::Core, SCALE>(widened.0, mode)
+        };
+        narrow::<SCALE>(raw_wide, "atan_strict")
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+        let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
+        let result_raw = if matches!(SCALE, 18..=22) {
+            trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(widened.0, mode)
+        } else {
+            widened.asin_strict_with(mode).0
+        };
+        narrow::<SCALE>(result_raw, "asin_strict")
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
+        let widened: D57<SCALE> = D38::<SCALE>::from_bits(raw).into();
+        let result_raw = if matches!(SCALE, 18..=22) {
+            trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(widened.0, mode)
+        } else {
+            widened.acos_strict_with(mode).0
+        };
+        narrow::<SCALE>(result_raw, "acos_strict")
+    }
+
+    #[inline]
+    #[must_use]
+    pub(crate) fn atan2_strict<const SCALE: u32>(
+        y_raw: Int<2>,
+        x_raw: Int<2>,
+        mode: RoundingMode,
+    ) -> Int<2> {
+        let y_wide: D57<SCALE> = D38::<SCALE>::from_bits(y_raw).into();
+        let x_wide: D57<SCALE> = D38::<SCALE>::from_bits(x_raw).into();
+        let result_raw = if matches!(SCALE, 18..=22) {
+            trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(y_wide.0, x_wide.0, mode)
+        } else {
+            y_wide.atan2_strict_with(x_wide, mode).0
+        };
+        narrow::<SCALE>(result_raw, "atan2_strict")
     }
 }
 
@@ -803,44 +895,44 @@ impl<const SCALE: u32> TrigPolicy for D38<SCALE> {
     #[inline]
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::borrow_d57::atan_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => borrow_d57::atan_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn atan_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::borrow_d57::atan_strict::<SCALE>(self.0, mode))
+        Self(borrow_d57::atan_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::borrow_d57::asin_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => borrow_d57::asin_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn asin_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::borrow_d57::asin_strict::<SCALE>(self.0, mode))
+        Self(borrow_d57::asin_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn acos_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::borrow_d57::acos_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => borrow_d57::acos_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn acos_with_impl(self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::borrow_d57::acos_strict::<SCALE>(self.0, mode))
+        Self(borrow_d57::acos_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => {
-                trig::borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)
+                borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)
             }
         })
     }
     #[inline]
     fn atan2_with_impl(self, other: Self, _wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode))
+        Self(borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode))
     }
 
     d38_hyperbolic_and_angle!();

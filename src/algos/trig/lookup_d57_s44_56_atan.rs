@@ -26,8 +26,8 @@
 //!
 //! The slot is exposed through [`crate::policy::trig::TrigPolicy`]
 //! only for `SCALE ∈ 44..=56`; lower scales keep using the generic
-//! [`super::wide_kernel::atan_strict_d57`] which is already cheaper
-//! there (fewer halvings, faster Knuth dispatch).
+//! [`crate::algos::support::wide_trig_core::atan_series`] which is
+//! already cheaper there (fewer halvings, faster Knuth dispatch).
 //!
 //! ## Correctness
 //!

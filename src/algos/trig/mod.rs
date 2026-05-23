@@ -5,7 +5,9 @@
 //! tier-generic `*_series` kernels via `crate::policy::trig::TrigPolicy`;
 //! the inverse family (asin / acos / atan2) for the wide tiers remains
 //! macro-emitted on inherent methods. Both tiers route through
-//! `crate::policy::trig::TrigPolicy`.
+//! `crate::policy::trig::TrigPolicy`. The D38 inverse family borrows D57
+//! via the `borrow_d57` dispatch strategy in `crate::policy::trig` (a
+//! policy-layer strategy, not an algorithm).
 //!
 //! Variants:
 //!
@@ -13,11 +15,7 @@
 //!   intermediate via the shared `sin_fixed`, `atan_fixed`, and
 //!   `atan2_kernel` cores. The fast paths (`x == 0`, the ±1 endpoints
 //!   for atan / acos, and the small-x linear band) are preserved.
-//! - [`wide_kernel`] — the D57 `atan_strict_d57` free function the D38
-//!   inverse family borrows (see [`borrow_d57`]).
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod borrow_d57;
 pub(crate) mod fixed_d38;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_exp_identity;
@@ -32,4 +30,3 @@ pub(crate) mod near_pole_tan;
 pub(crate) mod sincos_narrow;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_tang;
-pub(crate) mod wide_kernel;
