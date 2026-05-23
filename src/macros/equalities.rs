@@ -105,12 +105,12 @@ macro_rules! decl_eq_u128 {
 }
 
 /// Emits `PartialEq<$Src> for $Type<SCALE>` for float sources `f32`
-/// and `f64`. Equality holds when the float is finite and round-trips
-/// through `from_f64`/`to_f64` exactly. NaN and ±inf are
-/// always unequal.
+/// and `f64`. EXACT value equality: the decimal's rational value is
+/// compared against the float's exact dyadic value via
+/// [`Int::cmp_f64_exact`]. `NaN` and `±inf` are always unequal. This is
+/// NOT a lossy round-trip — see the module docs.
 ///
-/// Only available when the lossy f64 bridge is present (i.e. not
-/// in `--features strict` mode).
+/// Only available with the `std` float bridge present.
 #[cfg(feature = "std")]
 macro_rules! decl_eq_float {
     ($Type:ident, $Src:ty) => {
@@ -121,8 +121,7 @@ macro_rules! decl_eq_float {
                     return false;
                 }
                 let f = *other as f64;
-                let from_f = $Type::<SCALE>::from_f64(f);
-                from_f.to_bits() == self.to_bits() && self.to_f64() == f
+                self.to_bits().cmp_f64_exact(SCALE, f) == ::core::cmp::Ordering::Equal
             }
         }
         impl<const SCALE: u32> ::core::cmp::PartialEq<$Type<SCALE>> for $Src {

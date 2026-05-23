@@ -118,6 +118,20 @@ fn eq_float_infinity_is_false() {
 
 #[cfg(feature = "std")]
 #[test]
+fn eq_float_exact_not_round_trip() {
+    // `==` is EXACT value equality, not a `from_f64`/`to_f64` round-trip.
+    // `1.1_f64` is the dyadic 1.1000000000000000888..., which is NOT the
+    // decimal 1.1, so it must compare unequal to the decimal storing 1.1.
+    let one_point_one: D38s12 = "1.1".parse().unwrap();
+    assert!(!(one_point_one == 1.1_f64));
+    assert!(!(1.1_f64 == one_point_one));
+    // The exact dyadic value 1.5 still matches the decimal 1.5.
+    let one_point_five: D38s12 = "1.5".parse().unwrap();
+    assert!(one_point_five == 1.5_f64);
+}
+
+#[cfg(feature = "std")]
+#[test]
 fn eq_float_negative() {
     let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-2_500_000_000_000) as i128).unwrap());
     assert!(d == -2.5_f64);

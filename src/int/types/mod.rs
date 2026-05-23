@@ -25,7 +25,8 @@ use crate::int::algos::mul::{limbs_mul_low_u64_fixed, limbs_sqr_low_u64_fixed};
 use crate::int::limbs::{
     limbs_add_assign_u64_fixed, limbs_bit_len_u64_fixed, limbs_cmp_u64_cross, limbs_cmp_u64_fixed,
     limbs_divmod_dispatch_u64, limbs_divmod_u64, limbs_fmt_into_u64, limbs_is_zero_u64_fixed,
-    limbs_mul_fast_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed, limbs_sub_assign_u64_fixed,
+    limbs_mul_fast_u64, limbs_mul_u64, limbs_shl_u64, limbs_shl_u64_fixed, limbs_shr_u64_fixed,
+    limbs_sub_assign_u64_fixed,
 };
 use core::cmp::Ordering;
 use core::ops::{Add, BitAnd, BitOr, BitXor, Div, Mul, Neg, Not, Rem, Shl, Shr, Sub};
@@ -2012,6 +2013,131 @@ impl<const N: usize> Int<N> {
         };
 
         // For two negatives, the larger magnitude is the smaller value.
+        let c = if sn { -mag_cmp } else { mag_cmp };
+        if c < 0 {
+            Ordering::Less
+        } else if c > 0 {
+            Ordering::Greater
+        } else {
+            Ordering::Equal
+        }
+    }
+}
+
+impl<const N: usize> Int<N> {
+    /// Const EXACT comparison of the decimal value `self / 10^scale`
+    /// against the exact dyadic value of an `f64`, returning
+    /// [`core::cmp::Ordering`]. This is *value* equality, NOT a lossy
+    /// round-trip: an `f64` has an exact rational value `m · 2^e`, and
+    /// this compares `self / 10^scale` against it by cross-multiplying to
+    /// integers (overflow-free in fixed staging buffers, riding
+    /// [`limbs_cmp_u64_cross`]).
+    ///
+    /// `value` MUST be finite — the caller rejects `NaN` / `±inf` before
+    /// calling (those compare unequal to every decimal).
+    ///
+    /// # Approach
+    ///
+    /// Decompose `value = (-1)^sign · m · 2^e` from its IEEE-754 bits
+    /// (`m` the 53-bit-or-subnormal integer mantissa, `e` the unbiased
+    /// power-of-two exponent). The magnitudes satisfy
+    /// `|self| / 10^scale  ==  m · 2^e` iff:
+    ///
+    /// * `e ≥ 0`:  `|self|          ==  m · 2^e · 10^scale`
+    /// * `e < 0`:  `|self| · 2^(−e)  ==  m · 10^scale`
+    ///
+    /// both sides being non-negative integers. Signs are resolved first
+    /// (a negative is always less than a non-negative; for two negatives
+    /// the magnitude order is flipped). `m == 0` is the float zero.
+    pub(crate) const fn cmp_f64_exact(self, scale: u32, value: f64) -> Ordering {
+        let bits = value.to_bits();
+        let fsign = (bits >> 63) != 0;
+        let exp_field = ((bits >> 52) & 0x7ff) as i32;
+        let frac = bits & 0x000f_ffff_ffff_ffff;
+        // Mantissa `m` and unbiased power-of-two exponent `e`.
+        let (m, e): (u64, i32) = if exp_field == 0 {
+            // Subnormal (or zero): no implicit leading bit.
+            (frac, -1074)
+        } else {
+            (frac | 0x0010_0000_0000_0000, exp_field - 1075)
+        };
+
+        let sn = self.is_negative();
+        let fzero = m == 0;
+        // Resolve signs. The float's zero has no sign for ordering.
+        if fzero {
+            // value == 0: compare against self's sign / zeroness.
+            let self_limbs = self.as_limbs();
+            let mut nz = false;
+            let mut k = 0;
+            while k < self_limbs.len() {
+                if self_limbs[k] != 0 {
+                    nz = true;
+                    break;
+                }
+                k += 1;
+            }
+            if !nz {
+                return Ordering::Equal;
+            }
+            return if sn { Ordering::Less } else { Ordering::Greater };
+        }
+        if sn && !fsign {
+            return Ordering::Less;
+        }
+        if !sn && fsign {
+            return Ordering::Greater;
+        }
+
+        // Same sign, both nonzero: compare magnitudes.
+        // Build the two non-negative integer sides in fixed staging
+        // buffers (288 u64 limbs covers every shipped width / scale /
+        // f64 exponent: D307 magnitude ≤ 16 limbs, 10^scale ≤ 16 limbs,
+        // 2^1074 ≤ 17 limbs — products stay well under 288).
+        let a = self.unsigned_abs();
+        let a_limbs = a.as_limbs();
+
+        // 10^scale in a buffer.
+        let mut pow10 = [0u64; 288];
+        pow10[0] = 1;
+        let mut pe = 0;
+        while pe < scale {
+            let mut carry: u128 = 0;
+            let mut i = 0;
+            while i < pow10.len() {
+                let prod = (pow10[i] as u128) * 10u128 + carry;
+                pow10[i] = prod as u64;
+                carry = prod >> 64;
+                i += 1;
+            }
+            pe += 1;
+        }
+
+        let m_limbs = [m];
+
+        let mut lhs = [0u64; 288];
+        let mut rhs = [0u64; 288];
+
+        if e >= 0 {
+            // lhs = |self|; rhs = m · 2^e · 10^scale.
+            let mut i = 0;
+            while i < a_limbs.len() {
+                lhs[i] = a_limbs[i];
+                i += 1;
+            }
+            // tmp = m · 10^scale
+            let mut tmp = [0u64; 288];
+            limbs_mul_u64(&m_limbs, &pow10, &mut tmp);
+            // rhs = tmp << e
+            limbs_shl_u64(&tmp, e as u32, &mut rhs);
+        } else {
+            // lhs = |self| · 2^(−e); rhs = m · 10^scale.
+            limbs_shl_u64(a_limbs, (-e) as u32, &mut lhs);
+            limbs_mul_u64(&m_limbs, &pow10, &mut rhs);
+        }
+
+        let mag_cmp = limbs_cmp_u64_cross(&lhs, &rhs);
+        // For two negatives the larger magnitude is the smaller value.
         let c = if sn { -mag_cmp } else { mag_cmp };
         if c < 0 {
             Ordering::Less
