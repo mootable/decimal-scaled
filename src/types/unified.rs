@@ -16,7 +16,7 @@
 //!
 //! `S` is the storage integer. For the narrow primitive tiers
 //! `S` is `i64` (D18), `i128` (D38). For the wide tiers
-//! `S` is one of the `crate::wide_int::Int{192,256,384,…,4096}`
+//! `S` is one of the `crate::int::types::Int{192,256,384,…,4096}`
 //! types.
 //!
 //! Methods on `D<S, SCALE>` are added per-`S` in the macros / impl

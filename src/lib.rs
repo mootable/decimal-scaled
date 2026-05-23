@@ -197,7 +197,7 @@ mod types;
 pub mod __bench_internals {
     #[inline(never)]
     pub fn mul_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
-        crate::wide_int::limbs_mul_u64(a, b, out)
+        crate::int::algos::limbs::mul_schoolbook(a, b, out)
     }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
@@ -205,7 +205,7 @@ pub mod __bench_internals {
         b: &[u64; L],
         out: &mut [u64; D],
     ) {
-        crate::wide_int::limbs_mul_u64_fixed::<L, D>(a, b, out)
+        crate::int::algos::limbs::mul_schoolbook_fixed::<L, D>(a, b, out)
     }
     /// Non-allocating Karatsuba multiply forced to recurse at the given
     /// `threshold` (rather than the parked production
@@ -214,7 +214,7 @@ pub mod __bench_internals {
     /// termination floor). `out` is zeroed by the callee.
     #[inline(never)]
     pub fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
-        crate::wide_int::limbs_mul_karatsuba_u64_forced(a, b, out, threshold)
+        crate::int::algos::limbs::mul_karatsuba_forced(a, b, out, threshold)
     }
     #[inline(never)]
     pub fn mul_u64_into<const L: usize, const LP1: usize>(
@@ -222,7 +222,7 @@ pub mod __bench_internals {
         n: u64,
         out: &mut [u64; LP1],
     ) {
-        crate::wide_int::limbs_mul_u64_into::<L, LP1>(a, n, out)
+        crate::int::algos::limbs::mul_schoolbook_into::<L, LP1>(a, n, out)
     }
 
     // Newton-reciprocal divide research kernel — wrapped via concrete
@@ -314,7 +314,7 @@ pub use crate::cross_scale as cross;
 // `decl_decimal_bitwise!` / `decl_decimal_num_traits_basics!` from
 // `types/widths.rs`, alongside every other surface.
 //
-// `wide_int` is unconditional. D38's strict transcendentals use
+// The integer layer is unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
 // `algos::fixed_d38::Fixed` 256-bit sign-magnitude type), so the wide-
 // integer family must be available in every feature configuration —
@@ -324,20 +324,10 @@ pub use crate::cross_scale as cross;
 // 0.5.0 const-generic integer layer. The integer side of the crate
 // now mirrors the decimal layer's bucket split, all under `int/`:
 // `int::types` (the `Int<N>`/`Uint<N>` types + named `IntXXXX`
-// aliases), `int::policy` (algorithm-selection dispatch), `int::algos`
-// (width-matched algorithms), and `int::limbs` (the raw slice limb
-// primitives + named-type re-exports, absorbed from the former
-// `src/wide_int/`).
+// aliases), `int::policy` (algorithm-selection dispatch), and
+// `int::algos` (width-matched algorithms, including the raw slice limb
+// primitives in `int::algos::limbs`).
 mod int;
-// Compatibility re-export: the raw limb primitives and named `IntXXXX`
-// types moved from `src/wide_int/` into `src/int/limbs/`. The named
-// types are now `pub type` aliases over `Int<N>` / `Uint<N>`; the ~90
-// call sites that reach them via `crate::wide_int::…` keep resolving
-// through this alias — no churn at the use sites. The alias is only
-// reached from feature-gated code in low-feature builds, so the unused
-// path is allowed.
-#[allow(unused_imports)]
-pub(crate) use crate::int::limbs as wide_int;
 mod policy;
 
 #[cfg(feature = "serde")]

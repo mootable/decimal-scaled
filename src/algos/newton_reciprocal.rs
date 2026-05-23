@@ -49,8 +49,8 @@
 //! The Newton-iteration view of the same reciprocal is
 //! Wikipedia — [Division algorithm § Newton–Raphson division](https://en.wikipedia.org/wiki/Division_algorithm#Newton%E2%80%93Raphson_division).
 
-use crate::int::algos::limbs::{cmp as limbs_cmp_u64, mul_schoolbook as limbs_mul_u64, sub_assign as limbs_sub_assign_u64};
-use crate::int::policy::div::div_rem_dispatch as limbs_divmod_dispatch_u64;
+use crate::int::algos::limbs::{cmp, mul_schoolbook, sub_assign};
+use crate::int::policy::div::div_rem_dispatch;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────
 //
@@ -146,7 +146,7 @@ impl NewtonReciprocal {
         // r = num / pow_scale.
         let mut r = [0u64; MAX_R_U64];
         let mut rem = [0u64; MAX_POW_U64];
-        limbs_divmod_dispatch_u64(
+        div_rem_dispatch(
             &num[..k_u64 + 1],
             &pow_scale[..pow_len],
             &mut r[..k_u64 + 1],
@@ -188,7 +188,7 @@ fn div_newton(
     let prod_len = n.len() + r.len();
     debug_assert!(prod_len <= MAX_PROD_U64, "product buffer too small");
     let mut prod = [0u64; MAX_PROD_U64];
-    limbs_mul_u64(n, r, &mut prod[..prod_len]);
+    mul_schoolbook(n, r, &mut prod[..prod_len]);
 
     // q_approx = prod >> (64 * k_u64)
     let lo = table.k_u64.min(prod_len);
@@ -204,7 +204,7 @@ fn div_newton(
     let prod2_len = quot.len() + pow_scale.len();
     debug_assert!(prod2_len <= MAX_PROD_U64, "product buffer too small");
     let mut prod2 = [0u64; MAX_PROD_U64];
-    limbs_mul_u64(quot, pow_scale, &mut prod2[..prod2_len]);
+    mul_schoolbook(quot, pow_scale, &mut prod2[..prod2_len]);
 
     // rem = n - prod2 (mod 2^width), held in n.len()+1 limbs.
     let rem_len = n.len() + 1;
@@ -214,17 +214,17 @@ fn div_newton(
     }
     rem_out[rem_len - 1] = 0;
     let sub_len = prod2_len.min(rem_len);
-    let _ = limbs_sub_assign_u64(&mut rem_out[..sub_len], &prod2[..sub_len]);
+    let _ = sub_assign(&mut rem_out[..sub_len], &prod2[..sub_len]);
 
     // Correction loop: while rem >= pow_scale, bump quotient by 1 and
     // decrement remainder. With a correctly-sized k_u64 the loop runs at
     // most once or twice.
     loop {
-        if limbs_cmp_u64(&rem_out[..rem_len], pow_scale) < 0 {
+        if cmp(&rem_out[..rem_len], pow_scale) < 0 {
             break;
         }
         let s = rem_len.min(pow_scale.len());
-        let _ = limbs_sub_assign_u64(&mut rem_out[..s], &pow_scale[..s]);
+        let _ = sub_assign(&mut rem_out[..s], &pow_scale[..s]);
         // quot += 1
         let mut carry: u64 = 1;
         for limb in quot.iter_mut() {
@@ -290,7 +290,7 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
             carry_in = next_carry;
         }
 
-        let cmp_r = match limbs_cmp_u64(&rem[..rem_len], &half[..pow_len]) {
+        let cmp_r = match cmp(&rem[..rem_len], &half[..pow_len]) {
             n if n < 0 => core::cmp::Ordering::Less,
             0 => core::cmp::Ordering::Equal,
             _ => core::cmp::Ordering::Greater,

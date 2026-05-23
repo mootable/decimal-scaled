@@ -271,8 +271,8 @@ pub(crate) fn divmod_pow10_2word(
 /// Caller short-circuits `scale == 0` (no-op) and any `scale > 38`
 /// (the magic table only covers `0..=38`).
 ///
-/// Gated on the same `wide`/`x-wide` feature umbrella as
-/// `crate::wide_int` — it's only invoked from the wide-tier
+/// Gated on the same `wide`/`x-wide` feature umbrella as the wide
+/// integer layer — it's only invoked from the wide-tier
 /// decimal `Mul` macro arm.
 #[inline]
 pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N: usize>(
