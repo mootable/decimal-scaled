@@ -1,14 +1,14 @@
 //! Side-by-side arithmetic comparison of two `decimal-scaled` versions.
 //!
-//! `new` = the branch under test (the `decimal_scaled` path dep);
-//! `old` = the published 0.4.4 baseline (`dec_sec_0_4_4`). Both run the
-//! same six operators (add/sub/mul/div/rem/neg) across every shared width,
-//! constructed via `FromStr` so the harness depends only on the public
-//! surface common to both versions. One Criterion run produces both
-//! columns; pair `arith/<W>/new/<op>` against `arith/<W>/old/<op>`.
+//! `branch` = the branch under test (the `decimal_scaled` path dep);
+//! `prod` = the latest published release (the baseline). Both run the
+//! same operators across every shared width, constructed via `FromStr` so
+//! the harness depends only on the public surface common to both versions.
+//! One Criterion run produces both columns; pair `arith/<W>/branch/<op>`
+//! against `arith/<W>/prod/<op>`.
 //!
 //! `D9` is intentionally absent — it was removed in 0.5.0, so it has no
-//! counterpart on the `new` side.
+//! counterpart on the `branch` side.
 
 use criterion::{criterion_group, criterion_main, Criterion};
 use std::hint::black_box;
@@ -33,8 +33,8 @@ macro_rules! ops {
 macro_rules! width {
     ($c:expr, $w:literal, $scale:literal, $newmod:ident, $oldmod:ident) => {{
         let mut g = $c.benchmark_group(concat!("arith/", $w));
-        ops!(g, "new", ::decimal_scaled::$newmod<$scale>);
-        ops!(g, "old", ::dec_sec_0_4_4::$oldmod<$scale>);
+        ops!(g, "branch", ::decimal_scaled::$newmod<$scale>);
+        ops!(g, "prod", ::prod::$oldmod<$scale>);
         g.finish();
     }};
 }

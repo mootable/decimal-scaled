@@ -1,23 +1,28 @@
-name: "\U0001FA83 bench-branch-compare (vs 0.4.4)"
+name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 
-# Side-by-side Criterion comparison of the published 0.4.4 baseline against
-# the branch under test, using the shared `bench-compare/benches/lib_compare.rs`
-# harness. Both versions are linked into ONE binary (0.4.4 via the renamed
-# `dec-sec-0-4-4` dep, the branch via the `path = ".."` dep) and run through
-# the same six operators (add/sub/mul/div/rem/neg) across every shared width
-# (D18 .. D1232). No third-party crates — pure self-vs-self.
+# Side-by-side Criterion comparison of the latest published release ("prod",
+# the baseline) against the branch under test, using the shared
+# `bench-compare/benches/lib_compare.rs` harness. Both versions are linked into
+# ONE binary (prod via the renamed `prod` dep pinned to the newest published
+# version, the branch via the `path = ".."` dep) and run through the shared
+# public-function surface across every shared width (D18 .. D1232). No
+# third-party crates — pure self-vs-self.
 #
-# One run produces both columns: pair `arith/<W>/new/<op>` (the branch) against
-# `arith/<W>/old/<op>` (0.4.4).
+# Purpose: dispatch on a release branch to see the performance changes that
+# branch introduces vs the last release.
+#
+# One run produces both columns: pair `<group>/branch/<fn>` (the branch under
+# test) against `<group>/prod/<fn>` (the latest published tag).
 #
 # Trigger: workflow_dispatch only. Default head = the branch the run is
-# launched from.
+# launched from. (The workflow lives on the default branch so it is
+# dispatchable; every run targets the `ref` branch, not the default.)
 
 on:
   workflow_dispatch:
     inputs:
       ref:
-        description: "Branch / tag / SHA to benchmark against the 0.4.4 baseline (defaults to the branch the run is launched from)."
+        description: "Branch / tag / SHA to benchmark against prod, the latest published release (defaults to the branch the run is launched from)."
         required: false
         type: string
         default: ""
@@ -27,7 +32,7 @@ permissions:
 
 jobs:
   compare:
-    name: "\U0001FA83 0.4.4 vs ${{ inputs.ref || github.ref_name }}"
+    name: "\U0001FA83 prod vs ${{ inputs.ref || github.ref_name }}"
     runs-on: ubuntu-latest
     timeout-minutes: 90
 
@@ -53,24 +58,33 @@ jobs:
           restore-keys: |
             cargo-branch-compare-${{ runner.os }}-
 
+      - name: Pin prod to the latest published release
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          LATEST=$(curl -s https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; print(json.load(sys.stdin)['crate']['max_stable_version'])")
+          echo "latest published tag = $LATEST"
+          echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
+          sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [\"std\", \"strict\", \"wide\", \"x-wide\", \"xx-wide\"] }|" Cargo.toml
+
       - name: Run side-by-side bench
         working-directory: bench-compare
         run: |
           set -euo pipefail
-          echo "--- dep lines ---"; grep -E '^(decimal-scaled|dec-sec-0-4-4)' Cargo.toml
+          echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod)' Cargo.toml
           cargo bench --bench lib_compare | tee bench.out
 
-      - name: Summarise (new = branch, old = 0.4.4)
+      - name: Summarise (branch vs prod)
         if: always()
         working-directory: bench-compare
         run: |
           {
-            echo "### bench-branch-compare: \`0.4.4\` (old) vs \`${{ inputs.ref || github.ref_name }}\` (new)"
+            echo "### bench-branch-compare: \`${{ inputs.ref || github.ref_name }}\` (branch) vs prod \`${PROD_VERSION:-?}\` (latest published tag)"
             echo ''
-            echo '`new/*` = the branch under test, `old/*` = the 0.4.4 baseline. Criterion timing lines:'
+            echo '`branch/*` = the branch under test, `prod/*` = the latest published tag. Criterion timing lines:'
             echo ''
             echo '```'
-            grep -E 'arith/|time:' bench.out || echo "(no timing lines captured — see artifact)"
+            grep -E '(branch|prod)/|time:' bench.out || echo "(no timing lines captured — see artifact)"
             echo '```'
           } >> "$GITHUB_STEP_SUMMARY"
 

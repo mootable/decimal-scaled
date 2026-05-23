@@ -8,17 +8,20 @@ publish = false
 # Benches TWO versions of `decimal-scaled` side by side in ONE run:
 #   * `decimal_scaled`   — the branch under test, via the `path = ".."` dep
 #                          (whatever branch this sub-crate is checked out on).
-#   * `dec_sec_0_4_4`     — the published 0.4.4 baseline, consumed as a plain
-#                          external library under a renamed package.
+#   * `prod`             — the latest published release ("production"),
+#                          consumed as a plain external library (renamed package).
 # The harness (benches/lib_compare.rs) is identical for both — it just runs
 # each version's types through the same arithmetic ops across every width.
-# No third-party decimal crates: this is a pure self-vs-self comparison.
+# No third-party decimal crates: this is a pure self-vs-self comparison
+# (the branch vs the most recent published tag).
 
 [dependencies]
-# Branch under test (head). CI may rewrite this line to pin a specific ref.
+# Branch under test (head), via the local checkout.
 decimal-scaled = { path = "..", default-features = false, features = ["std", "strict", "wide", "x-wide", "xx-wide"] }
-# Baseline: 0.4.4 as an external library under a distinct crate name.
-dec-sec-0-4-4 = { package = "decimal-scaled", version = "=0.4.4", default-features = false, features = ["std", "strict", "wide", "x-wide", "xx-wide"] }
+# Baseline = the latest published tag, as an external library under a distinct
+# crate name. The version below is a sane local default; bench-branch-compare.yml
+# rewrites it to the newest published version at run time.
+prod = { package = "decimal-scaled", version = "0.4.4", default-features = false, features = ["std", "strict", "wide", "x-wide", "xx-wide"] }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
