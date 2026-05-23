@@ -16,7 +16,13 @@ name: "\U0001FA91 bench-history (cross-version comparison)"
 # unlimited but per-cell wall time still adds up.
 
 on:
-  workflow_dispatch: {}
+  workflow_dispatch:
+    inputs:
+      ref:
+        description: "Branch / tag / SHA to benchmark as the HEAD cell (defaults to the branch the workflow is launched from)."
+        required: false
+        type: string
+        default: ""
 
 permissions:
   contents: read
@@ -49,6 +55,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          # HEAD cell builds whatever ref you select (input wins; otherwise
+          # the branch the run was launched from). Older cells ignore this —
+          # they pin a published crates.io version, not the checkout.
+          ref: ${{ inputs.ref || github.ref }}
 
       - name: Install Rust toolchain
         uses: dtolnay/rust-toolchain@stable
