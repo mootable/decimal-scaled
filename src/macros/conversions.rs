@@ -283,25 +283,29 @@ macro_rules! decl_try_from_f64 {
                     );
                 }
                 // Round the scaled value to the nearest integer using the
-                // crate-default rounding mode, then store. `no_std` lacks
-                // the float-rounding intrinsics, so it truncates.
-                #[cfg(feature = "std")]
+                // crate-default rounding mode, then store. The rounding
+                // uses the libm-free `f64` helpers, so it behaves
+                // identically with or without `std` / `libm`.
                 let rounded = match $crate::support::rounding::DEFAULT_ROUNDING_MODE {
-                    $crate::support::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
-                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
-                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
-                        if scaled >= 0.0 {
-                            (scaled - 0.5).ceil()
-                        } else {
-                            (scaled + 0.5).floor()
-                        }
+                    $crate::support::rounding::RoundingMode::HalfToEven => {
+                        $crate::support::rounding::round_half_even_f64(scaled)
                     }
-                    $crate::support::rounding::RoundingMode::Trunc => scaled.trunc(),
-                    $crate::support::rounding::RoundingMode::Floor => scaled.floor(),
-                    $crate::support::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
+                        $crate::support::rounding::round_half_away_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
+                        $crate::support::rounding::round_half_toward_zero_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::Trunc => {
+                        $crate::support::rounding::trunc_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::Floor => {
+                        $crate::support::rounding::floor_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::Ceiling => {
+                        $crate::support::rounding::ceil_f64(scaled)
+                    }
                 };
-                #[cfg(not(feature = "std"))]
-                let rounded = scaled;
                 ::core::result::Result::Ok(Self(<$Storage>::from_f64(rounded)))
             }
         }

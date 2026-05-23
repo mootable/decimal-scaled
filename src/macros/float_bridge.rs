@@ -10,7 +10,9 @@
 //!
 //! Output saturation policy is uniform across modes: NaN -> ZERO,
 //! +Infinity -> MAX, -Infinity -> MIN, finite out-of-range -> MAX/MIN
-//! by sign. Float methods are `std`-only.
+//! by sign. The rounding step uses the libm-free `f64` rounding helpers
+//! in `crate::support::rounding`, so `from_f64` / `to_f64` remain
+//! available in `no_std` without `libm`.
 
 /// Emits `from_f64(value)`, `from_f64_with(value, mode)`,
 /// `to_f64(self)`, `to_f32(self)` for a decimal type.
@@ -29,7 +31,6 @@ macro_rules! decl_decimal_float_bridge {
             /// Constructs from an `f64` using the crate default rounding
             /// mode. NaN -> ZERO, +Infinity -> MAX, -Infinity -> MIN,
             /// out-of-range -> saturate by sign.
-            #[cfg(feature = "std")]
             #[inline]
             #[must_use]
             pub fn from_f64(value: f64) -> Self {
@@ -38,7 +39,6 @@ macro_rules! decl_decimal_float_bridge {
 
             /// Constructs from an `f64` using the supplied rounding
             /// mode. Saturation policy as in [`Self::from_f64`].
-            #[cfg(feature = "std")]
             #[inline]
             #[must_use]
             pub fn from_f64_with(
@@ -62,18 +62,24 @@ macro_rules! decl_decimal_float_bridge {
                     return Self::MIN;
                 }
                 let rounded = match mode {
-                    $crate::support::rounding::RoundingMode::HalfToEven => scaled.round_ties_even(),
-                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => scaled.round(),
-                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
-                        if scaled >= 0.0 {
-                            (scaled - 0.5).ceil()
-                        } else {
-                            (scaled + 0.5).floor()
-                        }
+                    $crate::support::rounding::RoundingMode::HalfToEven => {
+                        $crate::support::rounding::round_half_even_f64(scaled)
                     }
-                    $crate::support::rounding::RoundingMode::Trunc => scaled.trunc(),
-                    $crate::support::rounding::RoundingMode::Floor => scaled.floor(),
-                    $crate::support::rounding::RoundingMode::Ceiling => scaled.ceil(),
+                    $crate::support::rounding::RoundingMode::HalfAwayFromZero => {
+                        $crate::support::rounding::round_half_away_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::HalfTowardZero => {
+                        $crate::support::rounding::round_half_toward_zero_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::Trunc => {
+                        $crate::support::rounding::trunc_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::Floor => {
+                        $crate::support::rounding::floor_f64(scaled)
+                    }
+                    $crate::support::rounding::RoundingMode::Ceiling => {
+                        $crate::support::rounding::ceil_f64(scaled)
+                    }
                 };
                 Self(<$Storage>::from_f64(rounded))
             }

@@ -321,6 +321,121 @@ pub(crate) fn apply_rounding(raw: i128, divisor: i128, mode: RoundingMode) -> i1
     }
 }
 
+/// `2^52` — the threshold at or above which every finite `f64` is
+/// already an exact integer (the mantissa can no longer represent a
+/// fractional bit). Used by the libm-free `f64` rounding helpers to
+/// short-circuit large magnitudes, which also keeps the `as i128`
+/// truncation inside `i128` range (`2^52 < i128::MAX`).
+const F64_INTEGER_THRESHOLD: f64 = 9_007_199_254_740_992.0_f64;
+
+/// Truncate an `f64` toward zero, libm-free.
+///
+/// Equivalent to [`f64::trunc`] but built from arithmetic and `as`
+/// casts only, so it is available in `no_std` without `libm`. For
+/// magnitudes at or above `2^52` (already integral) and for non-finite
+/// inputs the value is returned unchanged; otherwise the integral part
+/// is recovered via an `i128` round-trip, which is exact in that range.
+/// The negative-zero sign is preserved to match [`f64::trunc`] bit-for-bit.
+#[inline]
+pub(crate) fn trunc_f64(x: f64) -> f64 {
+    if x.is_nan() {
+        return x;
+    }
+    let magnitude = if x < 0.0 { -x } else { x };
+    if !(magnitude < F64_INTEGER_THRESHOLD) {
+        return x;
+    }
+    let truncated = x as i128 as f64;
+    if truncated == 0.0 && x.is_sign_negative() {
+        -0.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` toward negative infinity, libm-free. Equivalent to
+/// [`f64::floor`]: drop to the truncated value, then step down by one
+/// when truncation rounded a negative value up toward zero.
+#[inline]
+pub(crate) fn floor_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    if truncated > x {
+        truncated - 1.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` toward positive infinity, libm-free. Equivalent to
+/// [`f64::ceil`]: the mirror of [`floor_f64`].
+#[inline]
+pub(crate) fn ceil_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    if truncated < x {
+        truncated + 1.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` to the nearest integer, ties away from zero, libm-free.
+/// Equivalent to [`f64::round`]: a fractional part with magnitude `>= 0.5`
+/// steps the truncated value one away from zero.
+#[inline]
+pub(crate) fn round_half_away_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    let fraction = x - truncated;
+    if fraction >= 0.5 {
+        truncated + 1.0
+    } else if fraction <= -0.5 {
+        truncated - 1.0
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` to the nearest integer, ties to even, libm-free.
+/// Equivalent to [`f64::round_ties_even`]: a fractional part strictly
+/// past `0.5` in magnitude steps one away from zero; an exact half steps
+/// only when the truncated value is odd, landing on the even neighbour.
+#[inline]
+pub(crate) fn round_half_even_f64(x: f64) -> f64 {
+    let truncated = trunc_f64(x);
+    let fraction = x - truncated;
+    if fraction > 0.5 {
+        truncated + 1.0
+    } else if fraction < -0.5 {
+        truncated - 1.0
+    } else if fraction == 0.5 {
+        if (truncated as i128) & 1 == 0 {
+            truncated
+        } else {
+            truncated + 1.0
+        }
+    } else if fraction == -0.5 {
+        if (truncated as i128) & 1 == 0 {
+            truncated
+        } else {
+            truncated - 1.0
+        }
+    } else {
+        truncated
+    }
+}
+
+/// Round an `f64` to the nearest integer, ties toward zero, libm-free.
+/// Reproduces the previous `std` formulation
+/// (`(x - 0.5).ceil()` for `x >= 0`, `(x + 0.5).floor()` otherwise)
+/// using the libm-free [`ceil_f64`] / [`floor_f64`].
+#[inline]
+pub(crate) fn round_half_toward_zero_f64(x: f64) -> f64 {
+    if x >= 0.0 {
+        ceil_f64(x - 0.5)
+    } else {
+        floor_f64(x + 0.5)
+    }
+}
+
 /// `true` when the crate is built with [`DEFAULT_ROUNDING_MODE`] set to
 /// [`RoundingMode::HalfToEven`] — i.e. none of the `rounding-*` feature
 /// flags is selected. Used by tests whose expected values assume the
