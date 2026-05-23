@@ -10,17 +10,10 @@
 //! [`parse_components`] is the shared string-parsing front-end (sign /
 //! dot / digit-character validation, plus the overlong-fractional and
 //! leading-zero checks). The arithmetic accumulator that turns the
-//! integer / fractional digit slices into a storage value is
-//! *per-storage*:
-//!
-//! - Narrow tier (D18 / D38) accumulates in `u128` inside
-//!   [`parse_decimal_bits`] — fast and the `10^SCALE` multiplier always
-//!   fits since SCALE ≤ 38.
-//! - Wide tier (D76 … D1231) accumulates in the storage type itself
-//!   via the per-width body emitted by
-//!   [`crate::macros::from_str::decl_decimal_from_str!`]'s `wide` arm.
-//!   The integer arithmetic happens at the storage width so the
-//!   `10^SCALE` multiplier never overflows even at SCALE = 1230.
+//! integer / fractional digit slices into a storage value is emitted
+//! per-storage by [`crate::macros::from_str::decl_decimal_from_str!`]'s
+//! `wide` arm: the base-10 accumulation happens directly in the storage
+//! type so the `10^SCALE` multiplier never overflows even at SCALE = 1230.
 //!
 //! # Display format
 //!
@@ -295,98 +288,6 @@ pub(crate) fn parse_components<const SCALE: u32>(
         int_str,
         frac_str,
     })
-}
-
-/// Core decimal string parser for `D38`-class native-`i128` storage.
-///
-/// Drives [`parse_components`] and accumulates the storage value in `u128`
-/// (which avoids the `i128::MIN` asymmetry), then applies the sign.
-///
-/// The wide tier (D76 … D1231) uses [`crate::macros::from_str`] to emit a
-/// per-storage accumulator with the same shape; the front-end is shared but
-/// the arithmetic happens at the storage width so `10^SCALE` cannot
-/// overflow.
-///
-/// # Precision
-///
-/// Strict: all arithmetic is integer-only; result is bit-exact.
-pub(crate) fn parse_decimal_bits<const SCALE: u32>(s: &str) -> Result<i128, ParseError> {
-    parse_decimal::<SCALE>(s).map(|d| d.to_bits().as_i128())
-}
-
-fn parse_decimal<const SCALE: u32>(s: &str) -> Result<D38<SCALE>, ParseError> {
-    let ParseComponents {
-        negative,
-        int_str,
-        frac_str,
-    } = parse_components::<SCALE>(s)?;
-
-    // Accumulate the storage value as u128 (avoids the i128::MIN asymmetry)
-    // and apply the sign at the very end.
-    let multiplier: u128 = 10u128.pow(SCALE);
-
-    // Parse the integer part and scale it by 10^SCALE.
-    let mut int_value: u128 = 0;
-    for &b in int_str {
-        let digit = u128::from(b - b'0');
-        int_value = match int_value.checked_mul(10).and_then(|v| v.checked_add(digit)) {
-            Some(v) => v,
-            None => return Err(ParseError::OutOfRange),
-        };
-    }
-    let int_scaled = match int_value.checked_mul(multiplier) {
-        Some(v) => v,
-        None => return Err(ParseError::OutOfRange),
-    };
-
-    // Parse the fractional part, then pad to exactly SCALE digits by
-    // multiplying by 10^(SCALE - frac_len).
-    let mut frac_value: u128 = 0;
-    let frac_len = frac_str.len();
-    for &b in frac_str {
-        let digit = u128::from(b - b'0');
-        frac_value = match frac_value
-            .checked_mul(10)
-            .and_then(|v| v.checked_add(digit))
-        {
-            Some(v) => v,
-            None => return Err(ParseError::OutOfRange),
-        };
-    }
-    let pad = (SCALE as usize) - frac_len;
-    if pad > 0 {
-        let pad_factor: u128 = 10u128.pow(pad as u32);
-        frac_value = match frac_value.checked_mul(pad_factor) {
-            Some(v) => v,
-            None => return Err(ParseError::OutOfRange),
-        };
-    }
-
-    let combined = match int_scaled.checked_add(frac_value) {
-        Some(v) => v,
-        None => return Err(ParseError::OutOfRange),
-    };
-
-    // Convert to i128. The negative branch handles i128::MIN whose absolute
-    // value (i128::MAX + 1) is not representable as a positive i128.
-    let raw: i128 = if negative {
-        let neg_min_abs: u128 = (i128::MAX as u128) + 1;
-        if combined > neg_min_abs {
-            return Err(ParseError::OutOfRange);
-        }
-        if combined == neg_min_abs {
-            i128::MIN
-        } else {
-            -(combined as i128)
-        }
-    } else {
-        if combined > i128::MAX as u128 {
-            return Err(ParseError::OutOfRange);
-        }
-        combined as i128
-    };
-
-    Ok(D38::<SCALE>::from_bits(crate::int::types::Int::<2>::from_i128(raw)))
 }
 
 #[cfg(test)]

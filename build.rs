@@ -63,13 +63,6 @@ impl BigU {
     fn one() -> Self {
         BigU { limbs: vec![1] }
     }
-    fn from_u64(v: u64) -> Self {
-        if v == 0 {
-            Self::zero()
-        } else {
-            BigU { limbs: vec![v] }
-        }
-    }
     fn is_zero(&self) -> bool {
         self.limbs.is_empty()
     }
@@ -238,56 +231,6 @@ fn pow10(n: u32) -> BigU {
         v.mul_u64(tail);
     }
     v
-}
-
-/// `(a · b) / 10^digits`, half-to-even.
-fn fixed_mul(a: &BigU, b: &BigU, digits: u32) -> BigU {
-    // a * b
-    let mut acc = BigU::zero();
-    // Schoolbook multiplication into acc.
-    for i in 0..a.limbs.len() {
-        if a.limbs[i] == 0 {
-            continue;
-        }
-        let mut carry: u128 = 0;
-        for j in 0..b.limbs.len() {
-            let p = u128::from(a.limbs[i]) * u128::from(b.limbs[j]) + carry;
-            let pos = i + j;
-            while acc.limbs.len() <= pos {
-                acc.limbs.push(0);
-            }
-            let s = u128::from(acc.limbs[pos]) + u128::from(p as u64);
-            acc.limbs[pos] = s as u64;
-            carry = (p >> 64) + (s >> 64);
-        }
-        let mut pos = i + b.limbs.len();
-        while carry != 0 {
-            while acc.limbs.len() <= pos {
-                acc.limbs.push(0);
-            }
-            let s = u128::from(acc.limbs[pos]) + carry;
-            acc.limbs[pos] = s as u64;
-            carry = s >> 64;
-            pos += 1;
-        }
-    }
-    acc.trim();
-    // Divide by 10^digits.
-    let divisor = pow10(digits);
-    let (q, _r) = bigu_divmod(&acc, &divisor);
-    // (Could half-to-even round on `_r` vs `divisor/2` — for the
-    // build-time generator the extra precision floor we'll trim later
-    // absorbs sub-LSB drift, so plain truncation is fine here.)
-    q
-}
-
-/// `(a · 10^digits) / b`, truncating.
-fn fixed_div(a: &BigU, b: &BigU, digits: u32) -> BigU {
-    let mut n = a.clone();
-    let scale = pow10(digits);
-    n = mul_full(&n, &scale);
-    let (q, _r) = bigu_divmod(&n, b);
-    q
 }
 
 fn mul_full(a: &BigU, b: &BigU) -> BigU {
