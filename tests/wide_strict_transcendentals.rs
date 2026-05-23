@@ -716,21 +716,21 @@ fn d76_acosh_strict_with_v_ge_two_branch() {
 // panics with a result-out-of-range message when the rounded result
 // can't fit `$Storage`.
 
-// Verified parked: `D38::<74>::try_from(70)` does not panic and does
-// not error — the SCALE-74 multiplier (10^74) overflows the i128
-// magnitude inside `multiplier()` on the conversion path and wraps
-// silently to a tiny in-range value, so nothing out-of-range ever
-// reaches `exp_strict` and no panic fires (even under debug_assertions).
-// The Decision-3 restoration (task 1.4) covers the decimal *operators*,
-// not this `from_int`/`multiplier` conversion path, so the test still
-// cannot run. The wide-tier exp kernel's own `result out of range`
-// panics for representable-range overflow are exercised elsewhere.
-#[cfg(debug_assertions)]
+// Validates the wide-tier post-condition guard (`<Type> strict
+// transcendental: result out of range`) that fires when the rounded
+// result doesn't fit `$Storage`. The operand is built directly as
+// `D76<74>` (whose ~77-digit storage holds 7·10^74) — NOT via
+// `D38<74>`, whose ~38-digit storage cannot hold that multiplier and
+// silently wraps to a tiny in-range value, so nothing out-of-range
+// would reach `exp_strict`. At SCALE=74 the `D76` range is ~5.78e2;
+// `exp(7) ≈ 1.097e3` overflows it modestly — chosen so the kernel
+// computes a genuine too-large value the range guard rejects, rather
+// than a catastrophic argument (e.g. exp(70)) that degenerates the
+// working-scale intermediate to zero before the guard is reached.
 #[test]
-#[ignore = "setup D38::<74>::try_from(70) wraps silently (10^74 multiplier overflows i128 on the from_int path, no debug panic) so no out-of-range value reaches exp_strict — not the Decision-3 operator contract restored in 1.4"]
-#[should_panic]
+#[should_panic(expected = "D76 strict transcendental: result out of range")]
 fn d76_strict_result_out_of_range_panics() {
-    let v: D76<74> = D38::<74>::try_from(70).unwrap().into();
+    let v: D76<74> = D76::<74>::try_from(7).unwrap();
     let _ = v.exp_strict();
 }
 
