@@ -242,9 +242,12 @@ Rules that make this work:
   then the literature/paper method (`newton`, `knuth`, `karatsuba`, `mg_divide`,
   `burnikel_ziegler`, `tang`, `series`, …). Hybrids keep the other method's **full
   name**: `div_tang_with_mg_divide`, `div_newton_with_mg_divide`. Append a sensible
-  `_variant` only to disambiguate. **Widths are const-generic params, NEVER
-  name-encoded** — only a genuinely width-bespoke kernel may suffix, and then with
-  the **limb count** as `<N>_limb` (e.g. `mul_karatsuba_4_limb` for `Int<4>`), never `_int2`, bit-width, or `dXX`. The `Algorithm` *enum variant*
+  `_variant` only to disambiguate. **Widths are const-generic params: PREFER one
+  algorithm generic over `N`, serving a *range* of limb counts via the matcher's
+  range arms (`min..=max`).** A width-encoded name is a **last resort** — only when
+  the algorithm genuinely cannot be generic *and* the method / `_with_` / variant
+  names can't disambiguate; then suffix the **limb count** as `<N>_limb` (e.g.
+  `mul_karatsuba_4_limb` for `Int<4>`), never `_int2`, bit-width, or `dXX`. The `Algorithm` *enum variant*
   stays the short, function-scoped method name (`Newton`, `Knuth`).
 - **`select` is `const`, called via an inline `const { … }` block, keyed only on
   the const generics.** Per monomorphisation `const { select::<N>() }` evaluates
