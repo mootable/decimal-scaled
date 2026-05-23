@@ -18,7 +18,7 @@
 
 #![cfg(feature = "wide")]
 
-use decimal_scaled::{D115, DecimalConvert, DecimalTranscendental};
+use decimal_scaled::D115;
 
 /// 1.5 at SCALE — the bench's `strict_block` ln/sin/sqrt input.
 fn x_15<const S: u32>() -> D115<S> {

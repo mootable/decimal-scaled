@@ -46,7 +46,7 @@ mod subject_ds;
 
 use decimal_scaled::RoundingMode;
 use harness::{
-    Cls, GoldenCase, Harness, Input, Method, PrecisionResult, PrecisionSubject, Width,
+    GoldenCase, Harness, Input, Method, PrecisionResult, PrecisionSubject, Width,
     parse_golden_line,
 };
 use subject_ds::DecimalScaledSubject;

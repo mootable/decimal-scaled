@@ -30,7 +30,7 @@
     )),
 ))]
 
-use decimal_scaled::{D18, D38, DecimalConstants};
+use decimal_scaled::{D18, D38};
 
 #[track_caller]
 fn assert_le_1_lsb_i32(label: &str, actual: i32, truth: i32) {

@@ -12,7 +12,7 @@
 
 use decimal_scaled::DecimalArithmetic;
 use decimal_scaled::{
-    D18s0, D18s6, D18s9, D18s17, D38, D38s0, D38s2, D38s9, D38s12, D38s37,
+    D18s0, D18s6, D18s9, D18s17, D38, D38s0, D38s9, D38s12, D38s37,
     RoundingMode,
 };
 
