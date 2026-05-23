@@ -26,9 +26,9 @@ use crate::int::types::traits::BigInt;
 /// Whether the `std` float intrinsics (`f64::sqrt` / `f64::cbrt`, used
 /// as Newton seeds) are available in this build.
 ///
-/// The wide-tier kernels that seed via the top-64-bit `f64` bridge
-/// (e.g. [`crate::algos::cbrt::generic_wide`]) branch on this const so
-/// the seed code const-folds away on `no_std`.
+/// Float-bridge seed helpers in this module (e.g. [`cbrt_f64`]) gate
+/// their `f64`-intrinsic body on this const so the seed code const-folds
+/// away on `no_std`.
 pub(crate) const FLOAT_SEED_AVAILABLE: bool = cfg!(feature = "std");
 
 /// `f64::cbrt`, available only under `std`.

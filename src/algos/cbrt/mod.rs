@@ -1,25 +1,30 @@
 //! Cube-root algorithm family.
 //!
-//! Mirrors [`crate::algos::sqrt`]: free kernel functions taking raw
-//! storage + scale + rounding mode and returning raw storage. Sign of
-//! the input is preserved (`cbrt(-x) = -cbrt(x)`); the rounding mode
-//! resolves direction relative to the signed result.
+//! Mirrors [`crate::algos::sqrt`]: each variant is a kernel — a free
+//! function taking the raw storage integer plus the runtime scale and
+//! rounding mode, and returning the raw storage integer of the cube
+//! root. Sign of the input is preserved (`cbrt(-x) = -cbrt(x)`); the
+//! rounding mode resolves direction relative to the signed result. The
+//! per-`(N, SCALE)` choice between them lives in [`crate::policy::cbrt`].
 //!
-//! Variants:
+//! Surviving algorithms (Phase-4 consolidation):
 //!
-//! - [`generic_wide`] — Newton iteration on `mag · 10^(2·SCALE)` over a
-//!   wide work integer. Width default for D57 / D76 / D115 / D153 /
-//!   D230 / D307 / D462 / D616 / D924 / D1232.
-//! - [`mg_divide_d38`] — hand-tuned 384-bit cube-root path tailored to
-//!   D38's `i128` storage. **Width specialisation for D38**, captures
-//!   the kernel that has shipped with D38 since before the algorithm
-//!   library existed.
-//! - [`widen_to_d38`] — widen → `mg_divide_d38::cbrt` → narrow.
-//!   **Width specialisation for D18**.
+//! - [`cbrt_newton`] — Newton integer cube root over a work integer `W`
+//!   that strictly covers `|raw| · 10^(2·SCALE)`. Generic over the
+//!   storage and work widths `(S, W)`; the default for every wide tier
+//!   (D57 … D1232) and, via the policy's widen-to-`Int<2>` strategy, the
+//!   narrow tiers. Exact to the last representable place (within 0.5 ULP)
+//!   under any of the six [`RoundingMode`]s.
+//! - [`cbrt_mg_divide`] — hand-tuned 384-bit cube-root path tailored to
+//!   D38's `Int<2>` storage. **Width-bespoke for `N == 2`.**
+//! - [`cbrt_newton_with_table_seed`] — `f64`-seeded narrow-work Newton
+//!   bespoke for the `(D57, 20)` cell.
+//!
+//! [`cbrt_newton`]: crate::algos::cbrt::cbrt_newton::cbrt_newton
+//! [`cbrt_mg_divide`]: crate::algos::cbrt::cbrt_mg_divide::cbrt_mg_divide
+//! [`cbrt_newton_with_table_seed`]: crate::algos::cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed
+//! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
-pub(crate) mod generic_wide;
-pub(crate) mod mg_divide_d38;
-pub(crate) mod widen_to_d38;
-
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s20;
+pub(crate) mod cbrt_mg_divide;
+pub(crate) mod cbrt_newton;
+pub(crate) mod cbrt_newton_with_table_seed;
