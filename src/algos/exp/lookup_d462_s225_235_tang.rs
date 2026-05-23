@@ -60,11 +60,9 @@ fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
     out
 }
 
-/// Tang-style `e^v_w` kernel on an already-lifted working value. Used
-/// both by [`exp_strict`] and by the hyperbolic kernels in
-/// [`crate::algos::trig::lookup_d462_s225_235_hyper`] which need a
-/// shared `(exp(v), exp(-v))` pair without paying the to_work_w lift
-/// twice.
+/// Tang-style `e^v_w` kernel on an already-lifted working value. Used by
+/// [`exp_strict`] for a shared `(exp(v), exp(-v))` pair without paying the
+/// to_work_w lift twice.
 #[must_use]
 pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     let one_w = core::one(w);

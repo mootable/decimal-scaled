@@ -34,7 +34,7 @@ enum Algorithm {
 // ── 2. the verdict ────────────────────────────────────────────────────
 
 /// A settled algorithm, or "the (runtime) length decides". The mul picker
-/// always returns `ByLength`: the choice is fully determined by the
+/// always returns `ByShape`: the choice is fully determined by the
 /// operands' lengths, known only at run time. `ByAlgorithm` is part of
 /// the canonical shape for uniformity across functions.
 #[derive(Clone, Copy)]
@@ -42,7 +42,7 @@ enum Select {
     #[allow(dead_code)]
     ByAlgorithm(Algorithm),
     /// Classifier over `(a_len, b_len)` → the chosen algorithm.
-    ByLength(fn(usize, usize) -> Algorithm),
+    ByShape(fn(usize, usize) -> Algorithm),
 }
 
 // ── policy data: the benched crossover threshold ──────────────────────
@@ -87,7 +87,7 @@ pub(crate) const fn karatsuba_threshold() -> usize {
 /// [`KARATSUBA_THRESHOLD`] take Karatsuba, everything else (unequal, or
 /// below the threshold) takes schoolbook.
 const fn select() -> Select {
-    Select::ByLength(|a_len: usize, b_len: usize| {
+    Select::ByShape(|a_len: usize, b_len: usize| {
         if a_len == b_len && a_len >= KARATSUBA_THRESHOLD {
             Algorithm::Karatsuba
         } else {
@@ -108,7 +108,7 @@ const fn select() -> Select {
 pub(crate) fn mul_fast(a: &[u64], b: &[u64], out: &mut [u64]) {
     let algo = match const { select() } {
         Select::ByAlgorithm(a) => a,
-        Select::ByLength(f) => f(a.len(), b.len()),
+        Select::ByShape(f) => f(a.len(), b.len()),
     };
     match algo {
         Algorithm::Karatsuba => {

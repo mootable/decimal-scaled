@@ -39,8 +39,6 @@ pub(crate) mod lookup_d307_s140_160_sincos;
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub(crate) mod lookup_d462_s225_235_atan;
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-pub(crate) mod lookup_d462_s225_235_hyper;
-#[cfg(any(feature = "d462", feature = "x-wide"))]
 pub(crate) mod lookup_d462_s225_235_sincos;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s18_22_atan;
