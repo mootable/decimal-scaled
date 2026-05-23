@@ -219,6 +219,54 @@ fn cross_width_ord_operator_works() {
     assert!(b >= a);
 }
 
+// ── Operator overload cross-SCALE PartialEq / PartialOrd (story 1.3.3).
+// These now work on stable via the const cmp_cross_scaled comparator —
+// no nightly / generic_const_exprs needed for COMPARISON. ─────────────
+
+#[test]
+fn cross_scale_eq_operator_works() {
+    // 5.000000 (SCALE 6) == 5.000000000000 (SCALE 12), same width.
+    let a: D38<6> = D38::<6>::from_int(5);
+    let b: D38<12> = D38::<12>::from_int(5);
+    assert!(a == b);
+    assert!(b == a);
+}
+
+#[test]
+fn cross_scale_ord_operator_works() {
+    // 5 at SCALE 6 vs 10 at SCALE 12 — across scales, same width.
+    let a: D38<6> = D38::<6>::from_int(5);
+    let b: D38<12> = D38::<12>::from_int(10);
+    assert!(a < b);
+    assert!(b > a);
+    assert!(a <= b);
+    assert!(b >= a);
+}
+
+#[test]
+fn cross_width_and_scale_eq_operator_works() {
+    // D18<2> 1.50 == D38<4> 1.5000 — cross-width AND cross-scale.
+    let a: D18<2> = D18::<2>::from_int(3);
+    let b: D38<4> = D38::<4>::from_int(3);
+    assert!(a == b);
+    assert!(b == a);
+    // Strictly greater across width+scale.
+    let bigger: D38<4> = D38::<4>::from_int(4);
+    assert!(a < bigger);
+    assert!(bigger > a);
+}
+
+#[test]
+fn cross_scale_negatives_operator() {
+    // -3 at SCALE 4 vs -3 at SCALE 2 — equal; -4 at SCALE 2 is less.
+    let a: D38<4> = D38::<4>::from_int(-3);
+    let b: D18<2> = D18::<2>::from_int(-3);
+    assert!(a == b);
+    let more_neg: D18<2> = D18::<2>::from_int(-4);
+    assert!(more_neg < a);
+    assert!(a > more_neg);
+}
+
 // ── Wide tier smoke test ─────────────────────────────────────────────
 
 #[cfg(feature = "wide")]
