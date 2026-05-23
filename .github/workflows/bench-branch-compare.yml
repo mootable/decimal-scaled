@@ -1,0 +1,117 @@
+name: "\U0001FA83 bench-branch-compare (A vs B)"
+
+# Head-to-head Criterion comparison of two branches / refs (e.g. `main` vs a
+# release branch), using the shared `bench-history/benches/comparison.rs`
+# harness — same input distributions and operations as bench-history:
+#   * widths: D38, D76, D307
+#   * functions: add, mul, div, sqrt_strict, ln_strict, sin_strict
+#
+# Each ref builds its OWN `decimal-scaled` via the path dep and runs its own
+# copy of the harness; both Criterion baselines accumulate in one shared
+# target dir, and `critcmp` prints the per-cell delta table (also written to
+# the run summary). Like-for-like — the only thing changing between the two
+# columns is the crate code at each ref.
+#
+# Trigger: workflow_dispatch only. Defaults: base = `main`, head = the branch
+# the run is launched from.
+
+on:
+  workflow_dispatch:
+    inputs:
+      base:
+        description: "Baseline branch / tag / SHA."
+        required: false
+        type: string
+        default: "main"
+      head:
+        description: "Head branch / tag / SHA to compare (defaults to the branch the run is launched from)."
+        required: false
+        type: string
+        default: ""
+
+permissions:
+  contents: read
+
+env:
+  # Shared so the `base` and `head` Criterion baselines land in one place
+  # and critcmp can pair them.
+  CARGO_TARGET_DIR: ${{ github.workspace }}/shared-target
+
+jobs:
+  compare:
+    name: "\U0001FA83 ${{ inputs.base }} vs ${{ inputs.head || github.ref_name }}"
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+
+    steps:
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Install system libs + critcmp
+        run: |
+          sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+          cargo install critcmp --locked
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-branch-compare-${{ runner.os }}-${{ hashFiles('bench-history/benches/comparison.rs') }}
+          restore-keys: |
+            cargo-branch-compare-${{ runner.os }}-
+
+      # ── base ─────────────────────────────────────────────────────────
+      - name: Checkout base (${{ inputs.base }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.base }}
+          path: base
+
+      - name: Bench base
+        working-directory: base/bench-history
+        run: |
+          set -euo pipefail
+          sed -i 's|^decimal-scaled = .*|decimal-scaled = { path = "..", default-features = false, features = ["std", "strict", "wide", "x-wide"] }|' Cargo.toml
+          echo "--- base dep line ---"; grep '^decimal-scaled' Cargo.toml
+          cargo bench --bench comparison -- --save-baseline base
+
+      # ── head ─────────────────────────────────────────────────────────
+      - name: Checkout head (${{ inputs.head || github.ref_name }})
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.head || github.ref_name }}
+          path: head
+
+      - name: Bench head
+        working-directory: head/bench-history
+        run: |
+          set -euo pipefail
+          sed -i 's|^decimal-scaled = .*|decimal-scaled = { path = "..", default-features = false, features = ["std", "strict", "wide", "x-wide"] }|' Cargo.toml
+          echo "--- head dep line ---"; grep '^decimal-scaled' Cargo.toml
+          cargo bench --bench comparison -- --save-baseline head
+
+      # ── compare ──────────────────────────────────────────────────────
+      - name: Compare (critcmp base head)
+        run: |
+          set -euo pipefail
+          critcmp base head | tee compare.txt
+          {
+            echo "### bench-branch-compare: \`${{ inputs.base }}\` (base) vs \`${{ inputs.head || github.ref_name }}\` (head)"
+            echo ''
+            echo '```'
+            cat compare.txt
+            echo '```'
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload comparison + criterion data
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: bench-branch-compare
+          path: |
+            compare.txt
+            shared-target/criterion/
+          if-no-files-found: warn
+          retention-days: 30
