@@ -29,8 +29,7 @@
 //!
 //! ## Tuning
 //!
-//! - `GUARD_NARROW = 8` matches the sibling
-//!   [`crate::algos::ln::lookup_d57_s18_22`]. The error budget here
+//! - `GUARD_NARROW = 8` is the narrow guard for this band. The error budget here
 //!   is similar — ~3 muls + ~12 muls in artanh + table addition,
 //!   total ~15 LSB-of-w. Still 6 orders of magnitude below
 //!   half-storage-ULP at SCALE ≤ 22.

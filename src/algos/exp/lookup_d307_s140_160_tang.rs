@@ -29,8 +29,6 @@
 
 #![cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
 
-use crate::int::types::Int;
-use crate::support::rounding::RoundingMode;
 use crate::types::widths::wide_trig_d307 as core;
 
 /// Narrow guard for the SCALE 140..=160 Tang-exp slot.
@@ -129,20 +127,11 @@ pub(crate) fn tang_exp_fixed(v_w: core::W, w: u32) -> core::W {
     }
 }
 
-/// Tang-style `e^x` strict kernel for `D307<SCALE>` with
-/// `SCALE ∈ 140..=160`.
-#[inline]
-#[must_use]
-pub(crate) fn exp_strict<const SCALE: u32>(raw: Int<16>, mode: RoundingMode) -> Int<16> {
-    if raw == Int::<16>::ZERO {
-        let ten: Int<16> = Int::<16>::from_u128(10);
-        return ten.pow(SCALE);
-    }
-    let w = SCALE + GUARD_NARROW;
-    let v_w = core::to_work_w(raw, GUARD_NARROW);
-    let result = tang_exp_fixed(v_w, w);
-    core::round_to_storage_with(result, w, SCALE, mode)
-}
+// The `exp_strict` Tang kernel for D307 was dropped in the Phase-4
+// migration: surface `exp` at D307 routes through `wide_kernel`
+// (`Series`), so the Tang exp realisation was dead. `tang_exp_fixed`
+// (below) stays — the trig hyperbolic kernel at SCALE 140..=160 consumes
+// it.
 
 /// Narrow guard used by the Tang exp kernel — exposed so the
 /// hyperbolic kernels can lift their argument to the same working

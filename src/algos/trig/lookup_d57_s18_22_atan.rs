@@ -1,9 +1,7 @@
 //! Bespoke narrow-`GUARD` `atan_strict` kernel slot for `D57<SCALE>`
 //! with `SCALE ∈ 18..=22`.
 //!
-//! Companion to [`super::lookup_d57_s18_22_sincos`] and
-//! [`crate::algos::ln::lookup_d57_s18_22`] /
-//! [`crate::algos::exp::lookup_d57_s18_22`]: the shared wide-tier
+//! Companion to [`super::lookup_d57_s18_22_sincos`]: the shared wide-tier
 //! `atan_fixed` core uses `GUARD = 30`. At `SCALE ∈ 18..=22` the
 //! atan Taylor / Euler-acceleration series converges in ~20-30
 //! rounded muls (vs ~100+ at SCALE 57), so a narrower

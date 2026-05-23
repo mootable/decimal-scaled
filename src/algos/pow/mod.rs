@@ -12,14 +12,9 @@
 //!
 //! - [`fixed_d38`] — D38's hand-tuned `powf` on the `Fixed` intermediate,
 //!   carrying the four-variant matrix entry shape (strict + approx, each
-//!   with an explicit-rounding sibling). Retained as the D57-disabled
-//!   fallback for the D38 surface.
-//! - [`borrow_d57`] — D38 widen → D57 inherent `powf_strict_with` /
-//!   `powf_approx_with` → narrow back. Picks up the ln + exp wide-tier
-//!   speedups in composed form. Gated on `d57` / `wide`.
+//!   with an explicit-rounding sibling). The D38 realisation of the
+//!   `powf_exp_with_ln` (`ExpWithLn`) algorithm.
 //! - [`widen_to_d38`] — D18 widen → `fixed_d38::powf` → narrow.
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod borrow_d57;
 pub(crate) mod fixed_d38;
 pub(crate) mod widen_to_d38;

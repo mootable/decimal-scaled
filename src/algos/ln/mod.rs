@@ -17,8 +17,6 @@
 //!   the wide tiers (D57 / D76 / D115 / D153 / D230 / D307 / D462 /
 //!   D616 / D924 / D1232).
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod borrow_d57;
 pub(crate) mod fixed_d38;
 pub(crate) mod wide_kernel;
 pub(crate) mod widen_to_d38;
@@ -39,8 +37,6 @@ pub(crate) mod lookup_d307_s140_160_tang;
 pub(crate) mod lookup_d307_s285_295_tang;
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub(crate) mod lookup_d462_s225_235_tang;
-#[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s18_22;
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub(crate) mod lookup_d57_s18_22_tang;
 #[cfg(any(feature = "d616", feature = "x-wide"))]

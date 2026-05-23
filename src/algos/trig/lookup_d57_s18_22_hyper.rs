@@ -3,8 +3,8 @@
 //!
 //! sinh / cosh / tanh all share the pair `(eˣ, e⁻ˣ)`. The
 //! macro-emitted inherent path runs each `exp_fixed` at
-//! `GUARD = 30`. At `SCALE ∈ 18..=22` the same narrow-GUARD trick
-//! as [`crate::algos::exp::lookup_d57_s18_22`] applies — the
+//! `GUARD = 30`. At `SCALE ∈ 18..=22` the same narrow-GUARD trick as the
+//! Tang exp kernel `lookup_d57_s18_22_tang` applies — the
 //! 12-LSB-of-w drift budget holds across the Taylor series at
 //! `w = SCALE + 12 = 30..34` with many orders of magnitude margin.
 //!

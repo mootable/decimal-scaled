@@ -1,8 +1,47 @@
-//! Floating-point power policy — narrow tier only (same scope
-//! rationale as [`crate::policy::ln`] / [`crate::policy::exp`]).
+//! Floating-point power policy — the per-`(N, SCALE)` algorithm matcher.
+//!
+//! `D<Int<N>, SCALE>::powf_strict_with(exp, mode)` delegates to
+//! [`PowPolicy::powf_impl`], which resolves the canonical
+//! [`Algorithm`]/[`select`] verdict (the `sqrt` exemplar shape):
+//!
+//! 1. an [`Algorithm`] enum — the real power algorithms, no `Default`
+//!    variant;
+//! 2. a [`Select`] verdict — a settled algorithm or "the value decides";
+//! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
+//! 4. dispatch via an inline `const { select::<N, SCALE>() }` block,
+//!    then an **exhaustive** `match algo`.
+//!
+//! # The one power algorithm — `ExpWithLn`
+//!
+//! `powf` is the hybrid `b^y = exp(y · ln b)`: a composition of the
+//! `exp` and `ln` algorithms (the established identity, not a separate
+//! transcendental method). Its fn is `powf_exp_with_ln` and the enum
+//! variant is `ExpWithLn`. Across all `(N, SCALE)` it is the sole
+//! algorithm; the narrow tiers realise it on the 256-bit `Fixed`
+//! intermediate (`pow::fixed_d38`, with D18 widening in via the
+//! `widen_to_work` strategy), the wide tiers via the inherent
+//! `powf_strict_with` shell that composes the wide-tier `exp`/`ln`
+//! cores (not yet policy-routed — see `phase4/migration_explog.md`,
+//! "the bulk of pow's Phase-4 lift").
+//!
+//! # Deferred: the `IntSquareMultiply` value matcher
+//!
+//! When the exponent is a small integer (`|n| ≤ 64`) the kernels run
+//! binary square-and-multiply instead of `exp∘ln`. Today that integer
+//! short-circuit is a value-dependent *step inside* each kernel
+//! (`pow::fixed_d38::exp_as_small_int` etc.). Promoting it to a distinct
+//! `Algorithm::IntSquareMultiply` (fn `pow_int_square_multiply`) selected
+//! by a `Select::ByValue` arm (`powf_exp_small_int`, keyed on the
+//! exponent operand) is the family's one recommended value matcher
+//! (`phase4/migration_explog.md` §powf). It is deferred here with the
+//! integer fast path left in the kernel body: `ExpWithLn` alone is a
+//! complete, total `select`, and lifting the squaring path out of the
+//! kernels is a behaviour-affecting change with no perf change (same code
+//! path) — to be done with the wide-tier `powf` policy lift. The
+//! `ByValue` verdict shape is wired below so the arm drops in cleanly.
 
 use crate::algos::pow;
-use crate::policy::triplet::{policy_triplet, wtag};
+use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 use crate::types::widths::{D18, D38};
 
@@ -14,6 +53,58 @@ pub(crate) trait PowPolicy: Sized {
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self;
 }
 
+// ── 1. the real power algorithms — NAMED, no `Default` ─────────────────
+
+/// The power algorithms this policy chooses between. The variant is the
+/// CamelCase of the kernel's name minus the `powf_` prefix
+/// (`powf_exp_with_ln` → `ExpWithLn`) — strict 1:1.
+#[derive(Clone, Copy, PartialEq, Eq)]
+enum Algorithm {
+    /// `powf_exp_with_ln` — the hybrid `b^y = exp(y · ln b)`. The single
+    /// algorithm today; realised by `pow::fixed_d38` (narrow) and the
+    /// inherent wide-tier shell.
+    ExpWithLn,
+    // Deferred: `IntSquareMultiply` (fn `pow_int_square_multiply`),
+    // selected by the `powf_exp_small_int` `ByValue` matcher. See module
+    // docs — the integer fast path currently lives inside the kernels.
+}
+
+// ── 2. the const verdict ──────────────────────────────────────────────
+
+/// A settled algorithm, or "the value decides". The `ByValue` shape is
+/// wired so the deferred small-integer-exponent matcher
+/// (`powf_exp_small_int` → `IntSquareMultiply`) drops in cleanly; `powf`
+/// returns only `ByAlgorithm(ExpWithLn)` today.
+#[derive(Clone, Copy)]
+enum Select<const N: usize> {
+    ByAlgorithm(Algorithm),
+    #[allow(dead_code)]
+    ByValue(fn(&Int<N>) -> Algorithm),
+}
+
+// ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
+
+/// Pick the power algorithm for storage limb count `N` and decimal
+/// `SCALE`. Total over the key; every cell is `ExpWithLn` (narrow tiers
+/// reach it via the `widen_to_work` strategy).
+const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
+    let _ = (N, SCALE);
+    Select::ByAlgorithm(Algorithm::ExpWithLn)
+}
+
+/// Resolve the `(N, SCALE)` verdict to a concrete `Algorithm`.
+#[inline]
+fn resolve<const N: usize, const SCALE: u32>(base: &Int<N>) -> Algorithm {
+    match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f) => f(base),
+    }
+}
+
+// ── Narrow tier (D18) — widen-to-D38 work width, then ExpWithLn ───────
+//
+// D18 widens base and exponent into the D38 `Fixed` work width (the
+// `widen_to_work` strategy) and runs `powf_exp_with_ln` there.
 impl<const SCALE: u32> PowPolicy for D18<SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
@@ -25,98 +116,33 @@ impl<const SCALE: u32> PowPolicy for D18<SCALE> {
     }
 }
 
-// ── D38 — width override (scale-gated) ────────────────────────────
+// ── D38 — ExpWithLn on the in-tree `Fixed`-256 kernel ──────────────────
 //
-// When D57 is available, D38's `powf` at HIGH scales (SCALE >= 23)
-// routes through `borrow_d57` — widen base and exponent to D57, call
-// D57's inherent `powf_{strict,approx}_with`, narrow back. D57's powf
-// composes `exp(y · ln x)` on the same wide-tier `ln_fixed`/`exp_fixed`
-// cores the matching ln/exp borrow wrappers use, so D38 picks up those
-// speedups in composed form.
-//
-// At LOW scales (SCALE < 23), `fixed_d38` wins by ~1.5× because the
-// widen+narrow overhead dominates when the bespoke Fixed kernel is
-// already cheap.
-//
-// Empirical crossover (2.0^3.0, 5 trials × 5000 iters, 2026-05-18):
-//   SCALE 18–22:  fixed wins ~1.5×.
-//   SCALE 23, 24: BORROW wins ~4.2–4.4× (large, `fixed_d38` hits a
-//                 slow taylor convergence path at working scale 53/54).
-//   SCALE 25, 26: borrow wins narrowly (~3–7%).
-//   SCALE 27:     near-parity (borrow ~1.3% slower, noise).
-//   SCALE 28, 29: BORROW wins ~5× (same slow-path spike at w=58/59).
-//   SCALE 30+:    borrow at-parity or slightly winning.
-//
-// Threshold pick (23): captures the SCALE=23/24 ~4× wins. Mild trade-off
-// on `powf_with(working_digits ≈ 10)` at scales 25, 26, 27, 30 where
-// fixed wins by 10–31%; accepted because the strict-path 4× wins are
-// the dominant signal across the matrix.
-//
-// The hand-tuned `fixed_d38` kernel is retained both as the
-// low-scale path AND as the D57-disabled fallback.
-
-// D38 — uniformly route through `fixed_d38::powf_*` after the 0.4.2
-// MG-routing of `Fixed::mul` / `div_small` / `divmod_u256_by_pow10` /
-// `rescale_down`. The previous SCALE-23 split favoured `borrow_d57`
-// at high scales because `Fixed::mul` was paying a 256-iteration bit
-// loop for the divide-by-pow10(w). With the chained MG kernel the
-// bespoke path now wins across the whole SCALE range; the empirical
-// crossover that motivated the split is no longer present.
-// D38 routes `powf` through the `policy_triplet!` free fns keyed on a
-// const-folded `match (W, SCALE)`. There is no scale cascade and no std
-// override today — `std` is identical to `base` — but the triplet shape
-// keeps D38 uniform with the other families and ready for a future
-// override cell. The strict and `_with` forms call different kernels
-// (`powf_strict` vs `powf_with`), so each gets its own triplet; the
-// `_with` triplet carries `working_digits` as an extra param.
-policy_triplet! {
-    storage = crate::int::types::Int<2>,
-    base_fn = powf_d38_base, std_fn = powf_d38_std, no_std_fn = powf_d38_no_std,
-    recv = raw, mode = mode,
-    params = { exp_raw: crate::int::types::Int<2> },
-    base = { (wtag::D38, _) => pow::fixed_d38::powf_strict::<SCALE>(raw, exp_raw, mode) },
-    std = {},
-}
-policy_triplet! {
-    storage = crate::int::types::Int<2>,
-    base_fn = powf_with_d38_base, std_fn = powf_with_d38_std, no_std_fn = powf_with_d38_no_std,
-    recv = raw, mode = mode,
-    params = { exp_raw: crate::int::types::Int<2>, working_digits: u32 },
-    base = { (wtag::D38, _) => pow::fixed_d38::powf_with::<SCALE>(raw, exp_raw, working_digits, mode) },
-    std = {},
-}
-
+// `powf` composes `exp(y·ln x)` on the 256-bit `Fixed` guard
+// intermediate. The borrow_d57 round trip was retired once the 0.4.2
+// MG-routed `Fixed` primitives made the bespoke path win across the whole
+// SCALE range (the empirical SCALE-23 crossover that motivated the split
+// is gone). The integer-exponent fast path lives inside
+// `pow::fixed_d38::powf_*` (the deferred `IntSquareMultiply` step).
 impl<const SCALE: u32> PowPolicy for D38<SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
-        #[cfg(feature = "std")]
-        {
-            Self(powf_d38_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode))
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            Self(powf_d38_no_std::<{ wtag::D38 }, SCALE>(self.0, exp.0, mode))
-        }
+        Self(match resolve::<2, SCALE>(&self.0) {
+            Algorithm::ExpWithLn => pow::fixed_d38::powf_strict::<SCALE>(self.0, exp.0, mode),
+        })
     }
     #[inline]
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        #[cfg(feature = "std")]
-        {
-            Self(powf_with_d38_std::<{ wtag::D38 }, SCALE>(
-                self.0,
-                exp.0,
-                working_digits,
-                mode,
-            ))
-        }
-        #[cfg(not(feature = "std"))]
-        {
-            Self(powf_with_d38_no_std::<{ wtag::D38 }, SCALE>(
-                self.0,
-                exp.0,
-                working_digits,
-                mode,
-            ))
-        }
+        Self(match resolve::<2, SCALE>(&self.0) {
+            Algorithm::ExpWithLn => {
+                pow::fixed_d38::powf_with::<SCALE>(self.0, exp.0, working_digits, mode)
+            }
+        })
     }
 }
+
+// Wide-tier `powf` is not policy-routed today — it lives in the inherent
+// `powf_strict_with` shell emitted by `decl_wide_transcendental!`, which
+// composes the wide-tier `exp`/`ln` cores. Migrating it into a wide-tier
+// `PowPolicy` impl (mirroring the `exp`/`ln` wide tiers above) is the
+// bulk of pow's Phase-4 lift, recorded in `phase4/migration_explog.md`.
