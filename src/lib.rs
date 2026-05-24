@@ -487,6 +487,20 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<3> {
         crate::algos::cbrt::cbrt_native::cbrt_native_d57s20(raw, mode)
     }
+    /// Candidate D57<20> cube root (0.4.4 full-radicand f64 seed + Newton
+    /// pre-step) for the `root_kernel_ab` A/B against `cbrt_native_d57s20`.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_native_fast_d57s20(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<3, 6>(
+            raw,
+            const { crate::int::types::Int::<6>::TEN.pow(40) },
+            mode,
+        )
+    }
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
     pub fn cbrt_table_seed_d57s20(

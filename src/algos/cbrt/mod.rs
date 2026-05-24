@@ -32,5 +32,9 @@
 
 pub(crate) mod cbrt_mg_divide;
 pub(crate) mod cbrt_native;
+/// Unwired faster-seed cbrt candidates for the regressed D57-family
+/// `Native` cells (diagnosis + drafts; benched by the coordinator).
+#[allow(dead_code)]
+pub(crate) mod cbrt_native_fast_d57;
 pub(crate) mod cbrt_newton;
 pub(crate) mod cbrt_newton_with_table_seed;
