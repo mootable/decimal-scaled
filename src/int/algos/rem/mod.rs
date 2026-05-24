@@ -7,4 +7,5 @@
 //!   width-agnostic remainder derived from the division policy, selected by
 //!   [`crate::int::policy::rem`].
 
+pub(crate) mod rem_schoolbook;
 pub(crate) mod rem_via_div_rem;

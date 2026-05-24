@@ -53,6 +53,7 @@
 //! `Int<N>::wrapping_rem` (const) routes directly through
 //! [`crate::int::algos::div::div_rem`] and is not altered.
 
+use crate::int::algos::rem::rem_schoolbook::rem_schoolbook;
 use crate::int::algos::rem::rem_via_div_rem::rem_via_div_rem;
 use crate::int::types::Int;
 
@@ -70,6 +71,13 @@ enum Algorithm {
     /// selection; the division policy IS the optimization boundary for this
     /// operation.
     ViaDivRem,
+    /// [`rem_schoolbook`] — binary shift-subtract long division remainder,
+    /// the naive reference baseline. Registered but unrouted: `select`
+    /// never returns this variant; it exists for unit-test reachability
+    /// and future routing experiments. `#[allow(dead_code)]` suppresses
+    /// the compiler warning.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -124,5 +132,6 @@ pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
     };
     match algo {
         Algorithm::ViaDivRem => rem_via_div_rem(a, b),
+        Algorithm::Schoolbook => rem_schoolbook(a, b),
     }
 }
