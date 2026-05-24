@@ -38,7 +38,8 @@ use crate::int::types::Int;
 /// prefix (`neg_int_layer` → `IntLayer`) — strict 1:1 with the kernel fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`neg_int_layer`] — delegates directly to `Int<N>`'s checked/wrapping
+    /// [`neg_int_layer`](crate::algos::neg::neg_int_layer::neg_int_layer) —
+    /// delegates directly to `Int<N>`'s checked/wrapping
     /// neg, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Sign flip requires no rescaling.
     IntLayer,
@@ -65,21 +66,6 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::IntLayer)
 }
 
-// ── algorithm fn ─────────────────────────────────────────────────────
-
-/// Decimal negation via the `Int<N>` layer. Applies Rust's standard
-/// integer-overflow contract: panics (with "overflow") in debug builds
-/// (`-MIN` is unrepresentable in two's-complement), wraps in release
-/// (`-MIN == MIN`). No rescaling needed — the scale is unchanged.
-#[inline]
-fn neg_int_layer<const N: usize>(a: Int<N>) -> Int<N> {
-    if cfg!(debug_assertions) {
-        a.checked_neg().expect("attempt to negate with overflow")
-    } else {
-        a.wrapping_neg()
-    }
-}
-
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Decimal negation dispatcher for storage `Int<N>` and decimal `SCALE`.
@@ -98,7 +84,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>) -> Int<N> {
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => neg_int_layer(a),
+        Algorithm::IntLayer => crate::algos::neg::neg_int_layer::neg_int_layer(a),
     }
 }
 

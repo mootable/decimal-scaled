@@ -40,7 +40,8 @@ use crate::int::types::Int;
 /// prefix (`rem_int_layer` → `IntLayer`) — strict 1:1 with the kernel fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`rem_int_layer`] — delegates directly to `Int<N>`'s checked/wrapping
+    /// [`rem_int_layer`](crate::algos::rem::rem_int_layer::rem_int_layer) —
+    /// delegates directly to `Int<N>`'s checked/wrapping
     /// rem, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Same-SCALE remainder needs no rescaling.
     IntLayer,
@@ -67,32 +68,6 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::IntLayer)
 }
 
-// ── algorithm fn ─────────────────────────────────────────────────────
-
-/// Decimal remainder via the `Int<N>` layer. Applies Rust's standard
-/// integer-overflow contract: division by zero always panics; `MIN % -ONE`
-/// panics in debug (with "overflow") and wraps in release (matching
-/// `i128::wrapping_rem`). No rescaling needed — same-SCALE operands share
-/// the scale factor.
-#[inline]
-fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    if cfg!(debug_assertions) {
-        // `checked_rem` returns `None` for both divide-by-zero and
-        // `MIN % -ONE`. `wrapping_rem` panics for divide-by-zero and returns
-        // the wrapped value for `MIN % -ONE`, so a non-panicking return means
-        // we have an `MIN % -ONE` overflow.
-        match a.checked_rem(b) {
-            Some(v) => v,
-            None => {
-                let _ = a.wrapping_rem(b);
-                panic!("attempt to calculate the remainder with overflow");
-            }
-        }
-    } else {
-        a.wrapping_rem(b)
-    }
-}
-
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Decimal remainder dispatcher for storage `Int<N>` and decimal `SCALE`.
@@ -111,7 +86,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => rem_int_layer(a, b),
+        Algorithm::IntLayer => crate::algos::rem::rem_int_layer::rem_int_layer(a, b),
     }
 }
 
