@@ -27,3 +27,4 @@
 pub(crate) mod sqrt_mg_divide;
 pub(crate) mod sqrt_newton;
 pub(crate) mod sqrt_newton_with_table_seed;
+pub(crate) mod sqrt_schoolbook;

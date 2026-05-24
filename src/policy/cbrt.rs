@@ -66,6 +66,12 @@ enum Algorithm {
     /// variation").
     #[cfg(any(feature = "d57", feature = "wide"))]
     NewtonWithTableSeed,
+    /// Schoolbook reference tag -- delegates to
+    /// [`cbrt::cbrt_schoolbook::cbrt_schoolbook`], which uses the same
+    /// `W::icbrt`-based pipeline as `cbrt_newton`. Exists as an explicit
+    /// benchmarkable seam; never selected by `select` in production.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the const verdict ──────────────────────────────────────────────
@@ -145,6 +151,7 @@ where
             )
             .resize_to::<Int<N>>()
         }
+        Algorithm::Schoolbook => cbrt::cbrt_schoolbook::cbrt_schoolbook::<Int<N>, W>(raw, SCALE, mode),
     }
 }
 
