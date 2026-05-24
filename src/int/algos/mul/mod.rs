@@ -206,7 +206,7 @@ mod tests {
         let mut got = alloc::vec![0u64; 2 * n];
         mul_schoolbook(&a, &b, &mut oracle);
         // Production entry: real fixed stack scratch, production threshold.
-        mul_karatsuba(&a, &b, &mut got, crate::int::policy::mul::karatsuba_threshold());
+        mul_karatsuba(&a, &b, &mut got, crate::int::policy::mul::KARATSUBA_THRESHOLD);
         assert_eq!(got, oracle, "max-width Karatsuba mismatch via fixed scratch");
     }
 

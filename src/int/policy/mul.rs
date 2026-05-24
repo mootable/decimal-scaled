@@ -73,13 +73,6 @@ enum Select {
 /// dispatcher threads in.
 pub(crate) const KARATSUBA_THRESHOLD: usize = 256;
 
-/// The production Karatsuba threshold as a function, so callers (and the
-/// kernel's own scratch-sizing tests) reach the policy datum by intent.
-#[inline]
-pub(crate) const fn karatsuba_threshold() -> usize {
-    KARATSUBA_THRESHOLD
-}
-
 // ── 3. the matcher: keyed on the runtime operand lengths ──────────────
 
 /// Pick the multiply algorithm for the operands' lengths. Total over the
