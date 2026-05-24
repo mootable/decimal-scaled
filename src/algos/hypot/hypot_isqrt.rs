@@ -85,3 +85,108 @@ where
         None
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::hypot_isqrt;
+    use crate::int::types::Int;
+    use crate::support::rounding::RoundingMode;
+
+    const ALL_MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Trunc,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+    ];
+
+    /// Pythagorean triple 3-4-5: hypot_isqrt(3, 4) = 5 exactly (no rounding).
+    /// The schoolbook `Schoolbook` arm delegates here, so this validates it.
+    #[test]
+    fn hypot_isqrt_pythagorean_3_4_5_all_modes() {
+        let a = Int::<2>::from_i64(3);
+        let b = Int::<2>::from_i64(4);
+        let expected = Int::<2>::from_i64(5);
+        for mode in ALL_MODES {
+            let got = hypot_isqrt::<Int<2>, Int<4>>(a, b, mode);
+            assert_eq!(
+                got,
+                Some(expected),
+                "hypot_isqrt(3,4) mode {mode:?}: expected 5, got {got:?}"
+            );
+        }
+    }
+
+    /// Pythagorean triple 5-12-13.
+    #[test]
+    fn hypot_isqrt_pythagorean_5_12_13_all_modes() {
+        let a = Int::<2>::from_i64(5);
+        let b = Int::<2>::from_i64(12);
+        let expected = Int::<2>::from_i64(13);
+        for mode in ALL_MODES {
+            let got = hypot_isqrt::<Int<2>, Int<4>>(a, b, mode);
+            assert_eq!(
+                got,
+                Some(expected),
+                "hypot_isqrt(5,12) mode {mode:?}: expected 13, got {got:?}"
+            );
+        }
+    }
+
+    /// Non-perfect case: hypot(1, 1) = sqrt(2) ~ 1.414...
+    /// Trunc/Floor gives 1; Ceiling gives 2. HalfToEven gives 1 (sqrt(2) < 1.5).
+    #[test]
+    fn hypot_isqrt_non_perfect_1_1() {
+        let a = Int::<2>::from_i64(1);
+        let b = Int::<2>::from_i64(1);
+        // sqrt(2) ~ 1.414...; floor=1, Ceiling=2
+        let got_floor = hypot_isqrt::<Int<2>, Int<4>>(a, b, RoundingMode::Trunc).unwrap();
+        let got_ceil = hypot_isqrt::<Int<2>, Int<4>>(a, b, RoundingMode::Ceiling).unwrap();
+        let got_half = hypot_isqrt::<Int<2>, Int<4>>(a, b, RoundingMode::HalfToEven).unwrap();
+        assert_eq!(got_floor.as_i128(), 1, "Trunc of sqrt(2) must be 1");
+        assert_eq!(got_ceil.as_i128(), 2, "Ceiling of sqrt(2) must be 2");
+        assert_eq!(got_half.as_i128(), 1, "HalfToEven of sqrt(2) must be 1 (< 1.5)");
+    }
+
+    /// Zero operands: hypot(0, 0) = 0.
+    #[test]
+    fn hypot_isqrt_zero_zero() {
+        let z = Int::<2>::from_i64(0);
+        for mode in ALL_MODES {
+            let got = hypot_isqrt::<Int<2>, Int<4>>(z, z, mode);
+            assert_eq!(got, Some(z), "hypot(0,0) must be 0, mode {mode:?}");
+        }
+    }
+
+    /// hypot(0, x) = |x| (isqrt(x^2) = |x|, exact).
+    #[test]
+    fn hypot_isqrt_zero_x_equals_abs_x() {
+        let z = Int::<2>::from_i64(0);
+        let x = Int::<2>::from_i64(42);
+        for mode in ALL_MODES {
+            let got = hypot_isqrt::<Int<2>, Int<4>>(z, x, mode);
+            assert_eq!(
+                got,
+                Some(x),
+                "hypot(0,42) must be 42, mode {mode:?}"
+            );
+        }
+    }
+
+    /// Negative inputs: sign drops out through squaring; hypot(-3, -4) = 5.
+    #[test]
+    fn hypot_isqrt_negative_inputs() {
+        let a = Int::<2>::from_i64(-3);
+        let b = Int::<2>::from_i64(-4);
+        let expected = Int::<2>::from_i64(5);
+        for mode in ALL_MODES {
+            let got = hypot_isqrt::<Int<2>, Int<4>>(a, b, mode);
+            assert_eq!(
+                got,
+                Some(expected),
+                "hypot(-3,-4) must be 5, mode {mode:?}"
+            );
+        }
+    }
+}

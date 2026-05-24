@@ -64,6 +64,12 @@ enum Algorithm {
     /// work width `W` covering `a² + b²`, taking the floor root through
     /// the integer-layer `isqrt`. The generic default for every tier.
     Isqrt,
+    /// Schoolbook reference tag -- delegates to the same
+    /// [`hypot::hypot_isqrt::hypot_isqrt`] kernel. `hypot_isqrt` IS the
+    /// schoolbook form (`a² + b²` in `W`, then `W::isqrt`); this variant
+    /// exists as an explicit benchmarkable seam.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the const verdict ──────────────────────────────────────────────
@@ -111,6 +117,10 @@ where
     };
     match algo {
         Algorithm::Isqrt => hypot::hypot_isqrt::hypot_isqrt::<Int<N>, W>(a, b, mode)
+            .unwrap_or_else(|| {
+                crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
+            }),
+        Algorithm::Schoolbook => hypot::hypot_isqrt::hypot_isqrt::<Int<N>, W>(a, b, mode)
             .unwrap_or_else(|| {
                 crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
             }),
