@@ -272,6 +272,13 @@ required-features = ["wide", "x-wide", "xx-wide"]
 name = "ulp_strict_golden"
 required-features = ["wide", "x-wide", "xx-wide"]
 
+# `micro_golden` is the FAST agent-validation subset of `ulp_strict_golden`
+# (same harness + same `lsbe == 0` zero-tolerance assertion, capped rows);
+# wide-feature gated so a plain `cargo build --all-targets` skips it.
+[[test]]
+name = "micro_golden"
+required-features = ["wide", "x-wide", "xx-wide"]
+
 [[bench]]
 name = "mul_div_candidates"
 path = "benches/micro/mul_div_candidates.rs"
