@@ -239,4 +239,69 @@ mod tests {
             }
         }
     }
+
+    // -- div_native vs the widen reference (narrow N == 2, the routed band) --
+
+    const ALL_MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::Floor,
+        RoundingMode::Ceiling,
+        RoundingMode::Trunc,
+        RoundingMode::HalfTowardZero,
+    ];
+
+    /// `div_native` (hardware i128) is bit-identical to `div_widen_scale`
+    /// at `N == 1` (D18) across all six rounding modes, incl. negatives.
+    #[test]
+    fn div_native_matches_widen_scale_int1_scale6() {
+        use crate::algos::div::div_native::div_native;
+        use crate::algos::div::div_widen_scale::div_widen_scale;
+        const SCALE: u32 = 6;
+        let mult = Int::<1>::TEN.pow(SCALE);
+        let cases: &[(i64, i64)] = &[
+            (2_000_000, 1_000_000), (1_000_000, 3_000_000), (7_000_000, 2_000_000),
+            (-5_000_000, 2_000_000), (1_234_567, 9_876_543), (-7, -13), (0, 5_000_000),
+        ];
+        for &(ra, rb) in cases {
+            let a = i1(ra);
+            let b = i1(rb);
+            for mode in ALL_MODES {
+                let nat = div_native::<1, SCALE>(a, b, mult, mode);
+                let wd = div_widen_scale::<1>(a, b, mult, mode);
+                assert_eq!(nat, wd, "div N1 ({ra},{rb}) mode {mode:?}");
+            }
+        }
+    }
+
+    /// `div_native` is bit-identical to `div_widen_scale` at `N == 2` (D38),
+    /// incl. a scale that forces the 256-bit fallback path.
+    #[test]
+    fn div_native_matches_widen_scale_int2() {
+        use crate::algos::div::div_native::div_native;
+        use crate::algos::div::div_widen_scale::div_widen_scale;
+        let cases: &[(i128, i128)] = &[
+            (2_000_000, 1_000_000), (1_000_000, 3_000_000), (7_000_000, 2_000_000),
+            (-5_000_000, 2_000_000), (1_234_567, 9_876_543),
+            (98_765_432_109_876_543, 12_345_678_901_234_567),
+        ];
+        for &(ra, rb) in cases {
+            let a = i2(ra);
+            let b = i2(rb);
+            for mode in ALL_MODES {
+                let mult6 = Int::<2>::TEN.pow(6);
+                assert_eq!(
+                    div_native::<2, 6>(a, b, mult6, mode),
+                    div_widen_scale::<2>(a, b, mult6, mode),
+                    "div N2 s6 ({ra},{rb}) mode {mode:?}"
+                );
+                let mult22 = Int::<2>::TEN.pow(22);
+                assert_eq!(
+                    div_native::<2, 22>(a, b, mult22, mode),
+                    div_widen_scale::<2>(a, b, mult22, mode),
+                    "div N2 s22 ({ra},{rb}) mode {mode:?}"
+                );
+            }
+        }
+    }
 }

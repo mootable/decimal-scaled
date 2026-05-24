@@ -42,10 +42,17 @@ use crate::support::rounding::RoundingMode;
 /// (`div_widen_scale` → `WidenScale`, `div_schoolbook` → `Schoolbook`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
+    /// [`crate::algos::div::div_native::div_native`] — hardware-`i128`
+    /// scale-then-divide for narrow storage (`N <= 2`, D18 / D38): widens
+    /// both operands to `i128` (lossless for `N <= 2`) and computes
+    /// `(a * 10^SCALE) / b` via the shared `mg_divide` hardware kernel (its
+    /// own `i128` fast path + `256`-bit fallback). Routed at `N == 2` (D38)
+    /// only -- microbench showed it loses at `N == 1`.
+    Native,
     /// [`crate::algos::div::div_widen_scale::div_widen_scale`] — forms
     /// `a * 10^SCALE` in a `2N`-limb scratch buffer, divides by `b` via the
     /// int layer's `div_rem`, rounds, and rebuilds `Int<N>`. The generic
-    /// default at every `(N, SCALE)`.
+    /// default for every band except `N == 2`.
     WidenScale,
     /// [`crate::algos::div::div_schoolbook::div_schoolbook`] — the
     /// unambiguous schoolbook reference (same int-layer divide; decimal
@@ -70,10 +77,20 @@ enum Select<const N: usize> {
 // ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
 
 /// Pick the division algorithm for storage limb count `N` and decimal
-/// `SCALE`. Total over the key; `WidenScale` wins at every `(N, SCALE)`.
+/// `SCALE`. Total over the key; `Native` at `N == 2`, `WidenScale`
+/// otherwise.
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     let _ = SCALE;
-    Select::ByAlgorithm(Algorithm::WidenScale)
+    // D38 (`N == 2`, i128 storage) is the one band where the hardware
+    // scale-then-divide measured faster than forming a `2N`-limb scratch
+    // numerator and running it through the slice divide (microbench:
+    // native beats widen 1.26-1.46x at s6 / s18). D18 (`N == 1`) measured
+    // ~1.08x *slower* for native, and `N >= 3` cannot use the i128 path,
+    // so both keep the generic widen-then-scale kernel.
+    match N {
+        2 => Select::ByAlgorithm(Algorithm::Native),
+        _ => Select::ByAlgorithm(Algorithm::WidenScale),
+    }
 }
 
 // ── 4. the shared dispatch: resolve the verdict, then dispatch ────────
@@ -101,6 +118,9 @@ where
         Select::ByValue(f) => f(&a, &b),
     };
     match algo {
+        Algorithm::Native => {
+            crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mult, mode)
+        }
         Algorithm::WidenScale => {
             crate::algos::div::div_widen_scale::div_widen_scale::<N>(a, b, mult, mode)
         }

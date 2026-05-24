@@ -9,4 +9,5 @@
 //! [`div_widen_scale`]: crate::algos::div::div_widen_scale::div_widen_scale
 
 pub(crate) mod div_widen_scale;
+pub(crate) mod div_native;
 pub(crate) mod div_schoolbook;
