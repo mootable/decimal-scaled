@@ -41,9 +41,9 @@
 //!   ([`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] /
 //!   [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`]);
 //!   the slice dispatcher [`mul::dispatch`] additionally
-//!   crosses over to Karatsuba at [`mul::KARATSUBA_THRESHOLD`] limbs, but
-//!   the named integer widths in this crate stay in the schoolbook
-//!   range.
+//!   crosses over to Karatsuba at the benched 48-limb threshold, so
+//!   D924 (48) / D1232 (64) storage products and wider cross-scale
+//!   multiplies take Karatsuba while the narrower widths stay schoolbook.
 //! - **÷ 10^SCALE** (decimal scale-narrowing) — this `(W, SCALE)`-keyed
 //!   path is part of the **decimal** storage boundary, not the integer
 //!   layer: D18 narrow tiers divide on hardware
@@ -86,9 +86,9 @@
 //! exhaustive `match algo` to the pure engines / kernels in
 //! [`crate::int::algos::div`] / [`crate::int::algos::support::limbs`]. The rem
 //! dispatcher is non-const and delegates to the divmod dispatcher.
-//! The benched crossover thresholds ([`div_rem::BZ_THRESHOLD`],
-//! [`mul::KARATSUBA_THRESHOLD`]) are policy DATA in those files, not magic
-//! numbers in the kernels.
+//! The benched crossover thresholds ([`div_rem::BZ_THRESHOLD`] and `mul`'s
+//! file-private Karatsuba threshold) are policy DATA in those files, not
+//! magic numbers in the kernels.
 
 /// Addition policy: default-delegating ripple-carry matcher for `Int<N>`.
 pub(crate) mod add;

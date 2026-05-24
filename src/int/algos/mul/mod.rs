@@ -206,8 +206,10 @@ mod tests {
         let mut oracle = alloc::vec![0u64; 2 * n];
         let mut got = alloc::vec![0u64; 2 * n];
         mul_schoolbook(&a, &b, &mut oracle);
-        // Production entry: real fixed stack scratch, production threshold.
-        mul_karatsuba(&a, &b, &mut got, crate::int::policy::mul::KARATSUBA_THRESHOLD);
+        // Deep threshold (8) drives maximal recursion at n=256 — the worst
+        // case for the fixed scratch (matches the sizing assert above, and is
+        // well below the production threshold, so this over-tests the buffer).
+        mul_karatsuba(&a, &b, &mut got, 8);
         assert_eq!(got, oracle, "max-width Karatsuba mismatch via fixed scratch");
     }
 

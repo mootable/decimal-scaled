@@ -121,8 +121,13 @@ fn compare_width(c: &mut Criterion, l: usize, width_label: &str) {
 fn bench_mul_kernel(c: &mut Criterion) {
     use decimal_scaled::Int;
     decimal_scaled_ab_sweep!(c =>
+        Int<8>  => |c: &mut Criterion| compare_width(c, 8,  "Int512"),
+        Int<12> => |c: &mut Criterion| compare_width(c, 12, "Int768"),
         Int<16> => |c: &mut Criterion| compare_width(c, 16, "Int1024"),
+        Int<24> => |c: &mut Criterion| compare_width(c, 24, "Int1536"),
         Int<32> => |c: &mut Criterion| compare_width(c, 32, "Int2048"),
+        Int<48> => |c: &mut Criterion| compare_width(c, 48, "Int3072"),
+        Int<64> => |c: &mut Criterion| compare_width(c, 64, "Int4096"),
     );
 }
 

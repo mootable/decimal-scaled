@@ -48,30 +48,22 @@ enum Select {
 
 // ── policy data: the benched crossover threshold ──────────────────────
 
-/// Karatsuba threshold for the u64-base multiplier: the (equal) operand
-/// limb-count at or above which [`dispatch`] routes through the
-/// non-allocating Karatsuba kernel instead of schoolbook.
+/// Karatsuba threshold: the (equal) operand limb-count at or above which
+/// [`dispatch`] routes to the non-allocating Karatsuba kernel instead of
+/// schoolbook. File-private policy data — `dispatch` threads it into the
+/// kernel as an argument; nothing outside this policy imports it.
 ///
-/// [`dispatch`] is the single site every equal-length wide multiply flows
-/// through (via the `Int<N>` widening product), so one threshold governs
-/// the crossover for every tier from one place. Set at **256 u64 limbs** —
-/// above the widest equal-length multiply the crate emits (D1232 storage
-/// = 64 limbs; the widest transcendental work-int is 192–256 limbs). At
-/// this setting every shipped tier base-cases to the LLVM-unrolled
-/// schoolbook [`mul_schoolbook`], so the kernel is reachable and correct
-/// without changing the product behaviour of any shipped width.
-///
-/// NEEDS-BENCH: the 256 value is the spec/architecture default, not a
-/// tuned crossover. It must be re-swept on the pinned GHA bench
-/// (`benches/int_ops_micro.rs`, `mul_crossover`, plus the per-tier wide
-/// `mul` cells) before being lowered to engage any shipped tier.
+/// **48**, the benched crossover (`benches/micro/mul_kernel_ab.rs`,
+/// schoolbook vs one-level Karatsuba): schoolbook wins through 32 limbs
+/// (2.1× @8 … 1.32× @32), Karatsuba wins at 48 (1.20×) and breaks even at
+/// 64 (1.01×). So D924 (48) / D1232 (64) storage products and wider
+/// cross-scale multiplies take Karatsuba; D616 (32) and narrower stay
+/// schoolbook. (The in-tree Karatsuba is weak — high crossover, small gain;
+/// a Toom-3 / tighter split would lower it. Future work.)
 ///
 /// Must be `>= 4`: the recursion's z1 sum product runs on `⌈n/2⌉ + 1`
-/// limbs, which only strictly shrinks below `n` once `n >= 4`, so a
-/// threshold below 4 would fail to terminate. **Policy data** — the
-/// kernels never see this number except as the threshold argument the
-/// dispatcher threads in.
-pub(crate) const KARATSUBA_THRESHOLD: usize = 256;
+/// limbs, which only strictly shrinks below `n` once `n >= 4`.
+const KARATSUBA_THRESHOLD: usize = 48;
 
 // ── 3. the matcher: keyed on the runtime operand lengths ──────────────
 
