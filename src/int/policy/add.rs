@@ -48,6 +48,11 @@ enum Algorithm {
     /// [`add_ripple_carry`] — ripple-carry accumulator over the `N` limbs,
     /// delegating to [`crate::int::algos::support::limbs::add_assign_fixed`].
     RippleCarry,
+    /// Schoolbook reference tag — delegates to the same [`add_ripple_carry`]
+    /// kernel. Ripple-carry IS the schoolbook addition algorithm; this
+    /// variant exists as an explicit, benchmarkable seam.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -94,5 +99,6 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
     };
     match algo {
         Algorithm::RippleCarry => add_ripple_carry(a, b),
+        Algorithm::Schoolbook => add_ripple_carry(a, b),
     }
 }

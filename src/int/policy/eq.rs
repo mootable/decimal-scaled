@@ -62,6 +62,11 @@ enum Algorithm {
     /// (reusing the comparison kernel's
     /// equal-length path). Returns `true` iff all `N` limbs match.
     Limbwise,
+    /// Schoolbook reference tag — delegates to the same [`eq_limbwise`]
+    /// kernel. Limb-by-limb equality IS the schoolbook equality algorithm;
+    /// this variant exists as an explicit, benchmarkable seam.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -108,5 +113,6 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> bool {
     };
     match algo {
         Algorithm::Limbwise => eq_limbwise(a, b),
+        Algorithm::Schoolbook => eq_limbwise(a, b),
     }
 }

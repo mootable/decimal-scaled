@@ -68,6 +68,12 @@ enum Algorithm {
     /// [`cmp_cross`](crate::int::algos::support::limbs::cmp_cross)
     /// (cross-width path, present for the generic form).
     Limbwise,
+    /// Schoolbook reference tag — delegates to the same [`cmp_limbwise`]
+    /// kernel. Limbwise sign-then-magnitude comparison IS the schoolbook
+    /// comparison algorithm; this variant exists as an explicit,
+    /// benchmarkable seam.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -115,5 +121,6 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Ordering {
     };
     match algo {
         Algorithm::Limbwise => cmp_limbwise(a, b),
+        Algorithm::Schoolbook => cmp_limbwise(a, b),
     }
 }

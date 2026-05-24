@@ -74,3 +74,66 @@ pub(crate) const fn cmp_limbwise_cross<const N: usize, const M: usize>(
         Ordering::Equal
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::cmp_limbwise;
+    use crate::int::types::Int;
+    use core::cmp::Ordering;
+
+    /// Positive vs negative: positive is greater.
+    #[test]
+    fn cmp_pos_gt_neg() {
+        let a = Int::<1>::from_i64(1);
+        let b = Int::<1>::from_i64(-1);
+        assert_eq!(cmp_limbwise(a, b), Ordering::Greater);
+        assert_eq!(cmp_limbwise(b, a), Ordering::Less);
+    }
+
+    /// Equal values compare Equal.
+    #[test]
+    fn cmp_equal_values() {
+        let a = Int::<2>::from_i128(12345_i128);
+        let b = Int::<2>::from_i128(12345_i128);
+        assert_eq!(cmp_limbwise(a, b), Ordering::Equal);
+    }
+
+    /// Zero vs zero is Equal.
+    #[test]
+    fn cmp_zero_zero() {
+        let z1 = Int::<1>::from_i64(0);
+        let z2 = Int::<1>::from_i64(0);
+        assert_eq!(cmp_limbwise(z1, z2), Ordering::Equal);
+    }
+
+    /// Magnitude ordering for two positives across limb boundary.
+    #[test]
+    fn cmp_large_positive_ordering() {
+        let a = Int::<2>::from_u128(1_u128 << 64); // 2^64
+        let b = Int::<2>::from_u128((1_u128 << 64) - 1); // 2^64 - 1
+        assert_eq!(cmp_limbwise(a, b), Ordering::Greater);
+        assert_eq!(cmp_limbwise(b, a), Ordering::Less);
+    }
+
+    /// For two negatives: the one with larger magnitude is smaller.
+    #[test]
+    fn cmp_two_negatives_magnitude_order() {
+        let a = Int::<2>::from_i128(-100_i128);
+        let b = Int::<2>::from_i128(-200_i128);
+        // -100 > -200
+        assert_eq!(cmp_limbwise(a, b), Ordering::Greater);
+        assert_eq!(cmp_limbwise(b, a), Ordering::Less);
+    }
+
+    /// MIN < MAX at every width.
+    #[test]
+    fn cmp_min_lt_max() {
+        let min1 = Int::<1>::from_i64(i64::MIN);
+        let max1 = Int::<1>::from_i64(i64::MAX);
+        assert_eq!(cmp_limbwise(min1, max1), Ordering::Less);
+
+        let min2 = Int::<2>::from_i128(i128::MIN);
+        let max2 = Int::<2>::from_i128(i128::MAX);
+        assert_eq!(cmp_limbwise(min2, max2), Ordering::Less);
+    }
+}

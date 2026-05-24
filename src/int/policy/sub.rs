@@ -53,6 +53,11 @@ enum Algorithm {
     /// [`sub_ripple_borrow`] — ripple-borrow accumulator over the `N` limbs,
     /// delegating to [`crate::int::algos::support::limbs::sub_assign_fixed`].
     RippleBorrow,
+    /// Schoolbook reference tag — delegates to the same [`sub_ripple_borrow`]
+    /// kernel. Ripple-borrow IS the schoolbook subtraction algorithm; this
+    /// variant exists as an explicit, benchmarkable seam.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -100,5 +105,6 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
     };
     match algo {
         Algorithm::RippleBorrow => sub_ripple_borrow(a, b),
+        Algorithm::Schoolbook => sub_ripple_borrow(a, b),
     }
 }
