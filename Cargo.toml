@@ -807,6 +807,15 @@ path = "benches/micro/div_kernel_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# div_bz_validity_probe: establishes whether a multiply-based recursive
+# Burnikel-Ziegler divide can beat Knuth at division-reachable widths by
+# timing one n-by-n schoolbook multiply against a full div_knuth(2n, n).
+[[bench]]
+name = "div_bz_validity_probe"
+path = "benches/micro/div_bz_validity_probe.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 [[bench]]
 name = "rem_kernel_ab"
 path = "benches/micro/rem_kernel_ab.rs"
