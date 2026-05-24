@@ -12,7 +12,7 @@
 //!   NaN-to-ZERO policy for negative bases with arbitrary fractional
 //!   exponents).
 //! - Integer-valued exponents with `|n| <= INT_FAST_PATH_THRESHOLD`
-//!   route to `D38::<SCALE>::powi(n)` — exact via square-and-multiply,
+//!   route to `powi_raw::<SCALE>` — exact via square-and-multiply on raw
 //!   ~10–500× faster than the `exp(y·ln(x))` chain.
 //!
 //! Returns the raw `i128` storage at the input's scale.
@@ -33,6 +33,49 @@ use crate::support::rounding::RoundingMode;
 /// logarithmically while the transcendental path's cost is constant,
 /// so a fixed threshold is sufficient.
 pub(crate) const INT_FAST_PATH_THRESHOLD: i32 = 64;
+
+/// Integer-exponent square-and-multiply on raw `i128` storage at
+/// `SCALE`, using `mul_widen_divide` directly instead of routing through
+/// the decimal `Mul` operator (which would re-enter the mul policy from
+/// inside an algorithm fn - the layering inversion). `ONE_S` is
+/// `10^SCALE`; passing it avoids recomputing the constant inside the loop.
+///
+/// For negative `n`, returns `ONE_S / base^|n|` via the same path, but
+/// uses the decimal `div_widen_scale` for the final reciprocal since
+/// that is a genuine downward cross-tier call to the int layer.
+#[inline]
+fn powi_raw<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) -> i128 {
+    let one_s: Int<2> = Int::<2>::TEN.pow(SCALE);
+    if n == 0 {
+        return one_s.as_i128();
+    }
+    let pos_n = n.unsigned_abs();
+    // Square-and-multiply using mul_widen_divide kernel directly.
+    let mut acc: Int<2> = one_s;
+    let mut b: Int<2> = Int::<2>::from_i128(base);
+    let mut e = pos_n;
+    while e > 0 {
+        if e & 1 == 1 {
+            acc = crate::algos::mul::mul_widen_divide::mul_widen_divide::<
+                2, 4, 1, 2, SCALE,
+            >(acc, b, mode);
+        }
+        e >>= 1;
+        if e > 0 {
+            b = crate::algos::mul::mul_widen_divide::mul_widen_divide::<
+                2, 4, 1, 2, SCALE,
+            >(b, b, mode);
+        }
+    }
+    if n > 0 {
+        acc.as_i128()
+    } else {
+        // Reciprocal: one_s / acc using div_widen_scale kernel.
+        crate::algos::div::div_widen_scale::div_widen_scale::<2, 4>(
+            one_s, acc, Int::<2>::TEN.pow(SCALE), mode,
+        ).as_i128()
+    }
+}
 
 /// Returns `Some(n)` if `exp_raw` (at `SCALE`) represents an exact
 /// integer value `n` that fits `i32` and `|n| <= INT_FAST_PATH_THRESHOLD`.
@@ -86,10 +129,7 @@ fn powf_with_raw<const SCALE: u32>(
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(Int::<2>::from_i128(base))
-            .powi(n)
-            .to_bits()
-            .as_i128();
+        return powi_raw::<SCALE>(base, n, mode);
     }
     let w = SCALE + working_digits;
     let pow = 10u128.pow(working_digits);
@@ -118,10 +158,7 @@ fn powf_strict_raw<const SCALE: u32>(base: i128, exp: i128, mode: RoundingMode) 
         return 0;
     }
     if let Some(n) = exp_as_small_int::<SCALE>(exp) {
-        return crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(Int::<2>::from_i128(base))
-            .powi(n)
-            .to_bits()
-            .as_i128();
+        return powi_raw::<SCALE>(base, n, mode);
     }
     let w = SCALE + STRICT_GUARD;
     let pow = 10u128.pow(STRICT_GUARD);
