@@ -10,7 +10,7 @@
 //! strict-trig + hyperbolic kernel. The typed-shell file in
 //! `src/types/trig.rs` has no `crate::algos::*` or
 //! `crate::algos::support::fixed::*` references left — each public method
-//! delegates one line through `policy::trig::TrigPolicy::*_impl`,
+//! delegates one line through `policy::trig` dispatch,
 //! whose default body lives here.
 //!
 //! Fast paths preserved:
@@ -879,7 +879,7 @@ pub(crate) fn atan2_with_raw<const SCALE: u32>(
 //
 // sinh / cosh / tanh / asinh / acosh / atanh kernels on the `Fixed`
 // 256-bit intermediate. The typed-shell file in `src/types/trig.rs`
-// delegates one line to each `TrigPolicy::*_impl`, whose default body
+// delegates one line to each `policy::trig` dispatch, whose body
 // resolves to the matching kernel below.
 
 #[inline]

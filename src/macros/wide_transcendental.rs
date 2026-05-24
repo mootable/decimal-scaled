@@ -3158,10 +3158,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sin_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Cosine of `self` (radians). Strict and correctly
@@ -3176,10 +3173,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cos_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Joint sine and cosine of `self` (radians), returned
@@ -3214,10 +3208,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tan_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tan_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arctangent of `self`, in radians, in `(−π/2, π/2)`.
@@ -3228,10 +3219,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arcsine of `self`, in radians, in `[−π/2, π/2]`.
@@ -3257,10 +3245,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::asin_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Arccosine of `self`, in radians, in `[0, π]`, as
@@ -3270,10 +3255,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::acos_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Four-quadrant arctangent of `self` (`y`) and `other`
@@ -3282,11 +3264,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan2_impl(
-                    self,
-                    other,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::atan2_dispatch::<_, SCALE>(self.to_bits(), other.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Hyperbolic sine, as `(eˣ − e⁻ˣ)/2`. Strict and correctly
@@ -3297,10 +3275,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sinh_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sinh_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Hyperbolic cosine, as `(eˣ + e⁻ˣ)/2`. Strict and
@@ -3311,10 +3286,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cosh_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cosh_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Hyperbolic tangent, as `sinh / cosh`. Strict and
@@ -3330,10 +3302,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tanh_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tanh_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
 
             /// Joint hyperbolic sine and cosine of `self`, returned
@@ -3661,7 +3630,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn sin_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sin_impl(self, mode)
+                Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::cos_strict`]. Delegates
@@ -3677,7 +3646,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn cos_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cos_impl(self, mode)
+                Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::tan_strict`]. Delegates
@@ -3686,7 +3655,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn tan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tan_impl(self, mode)
+                Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::atan_strict`]. Delegates
@@ -3695,7 +3664,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn atan_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan_impl(self, mode)
+                Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::asin_strict`]. Same

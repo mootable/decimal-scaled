@@ -2,10 +2,10 @@
 //!
 //! Narrow tier (D18 / D38) carries forward + inverse + atan2 on
 //! the 256-bit `Fixed` intermediate. Wide tier (D57 .. D1232) runs the
-//! tier-generic `*_series` kernels via `crate::policy::trig::TrigPolicy`;
+//! tier-generic `*_series` kernels via `crate::policy::trig`;
 //! the inverse family (asin / acos / atan2) for the wide tiers remains
 //! macro-emitted on inherent methods. Both tiers route through
-//! `crate::policy::trig::TrigPolicy`. The D38 inverse family borrows D57
+//! `crate::policy::trig`. The D38 inverse family borrows D57
 //! via the `borrow_d57` dispatch strategy in `crate::policy::trig` (a
 //! policy-layer strategy, not an algorithm).
 //!

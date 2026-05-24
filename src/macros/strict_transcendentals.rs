@@ -117,60 +117,42 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn sin_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::sin_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `cos_strict` — delegates to the policy-registered cos
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn cos_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::cos_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `tan_strict` — delegates to the policy-registered tan
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn tan_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::tan_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `asin_strict` — delegates to the policy-registered asin
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn asin_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::asin_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `acos_strict` — delegates to the policy-registered acos
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn acos_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::acos_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `atan_strict` — delegates to the policy-registered atan
             /// kernel for this `(width, SCALE)` cell.
             #[inline]
             #[must_use]
             pub fn atan_strict(self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan_impl(
-                    self,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `sinh_strict` — delegates to [`crate::types::widths::D38::sinh_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]
@@ -288,11 +270,7 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn atan2_strict(self, other: Self) -> Self {
-                <Self as $crate::policy::trig::TrigPolicy>::atan2_impl(
-                    self,
-                    other,
-                    $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                Self::from_bits($crate::policy::trig::atan2_dispatch::<_, SCALE>(self.to_bits(), other.to_bits(), $crate::support::rounding::DEFAULT_ROUNDING_MODE))
             }
             /// `powf_strict` — delegates to the policy-registered powf
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
