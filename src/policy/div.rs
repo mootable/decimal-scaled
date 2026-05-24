@@ -46,8 +46,9 @@ enum Algorithm {
     /// scale-then-divide for narrow storage (`N <= 2`, D18 / D38): widens
     /// both operands to `i128` (lossless for `N <= 2`) and computes
     /// `(a * 10^SCALE) / b` via the shared `mg_divide` hardware kernel (its
-    /// own `i128` fast path + `256`-bit fallback). Routed at `N == 2` (D38)
-    /// only -- microbench showed it loses at `N == 1`.
+    /// own `i128` fast path + `256`-bit fallback). At `N == 1` (D18) the
+    /// rescale is an `i128 / u64` schoolbook divide (two `divq`). Routed at
+    /// `N == 1` and `N == 2` -- microbench: native beats widen at both.
     Native,
     /// [`crate::algos::div::div_widen_scale::div_widen_scale`] — forms
     /// `a * 10^SCALE` in a `2N`-limb scratch buffer, divides by `b` via the
@@ -81,14 +82,18 @@ enum Select<const N: usize> {
 /// otherwise.
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     let _ = SCALE;
-    // D38 (`N == 2`, i128 storage) is the one band where the hardware
-    // scale-then-divide measured faster than forming a `2N`-limb scratch
-    // numerator and running it through the slice divide (microbench:
-    // native beats widen 1.26-1.46x at s6 / s18). D18 (`N == 1`) measured
-    // ~1.08x *slower* for native, and `N >= 3` cannot use the i128 path,
-    // so both keep the generic widen-then-scale kernel.
+    // Both narrow bands take the hardware scale-then-divide:
+    //   * D18 (`N == 1`, i64 storage): the scaled numerator `a * 10^SCALE`
+    //     fits `i128` and the divisor `b` fits `u64`, so the rescale is an
+    //     `i128 / u64` schoolbook divide (two `divq`) -- microbench: native
+    //     beats widen 2.0-2.1x (s6 / s18).
+    //   * D38 (`N == 2`, i128 storage): the shared `i128` / 256-bit kernel
+    //     beats forming a `2N`-limb scratch numerator -- microbench: native
+    //     beats widen 1.32-1.47x (s6 / s18).
+    // `N >= 3` cannot use the i128 path and keeps the generic widen-scale
+    // kernel.
     match N {
-        2 => Select::ByAlgorithm(Algorithm::Native),
+        1 | 2 => Select::ByAlgorithm(Algorithm::Native),
         _ => Select::ByAlgorithm(Algorithm::WidenScale),
     }
 }
