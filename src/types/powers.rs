@@ -359,7 +359,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn cbrt_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::cbrt::CbrtPolicy>::cbrt_impl(self, mode)
+        Self(crate::policy::cbrt::dispatch::<_, SCALE>(self.0, mode))
     }
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow,

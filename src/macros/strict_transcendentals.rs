@@ -107,10 +107,10 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn cbrt_strict(self) -> Self {
-                <Self as $crate::policy::cbrt::CbrtPolicy>::cbrt_impl(
-                    self,
+                Self($crate::policy::cbrt::dispatch::<_, SCALE>(
+                    self.0,
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
             /// `sin_strict` — delegates to the policy-registered sin
             /// kernel for this `(width, SCALE)` cell.

@@ -108,7 +108,7 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn cbrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::cbrt::CbrtPolicy>::cbrt_impl(self, mode)
+                Self($crate::policy::cbrt::dispatch::<_, SCALE>(self.0, mode))
             }
 
             /// Square root. With `strict` enabled this is the

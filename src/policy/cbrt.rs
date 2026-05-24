@@ -1,8 +1,7 @@
 //! Cube-root policy — the per-`(N, SCALE)` algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::cbrt_strict_with(mode)` delegates to
-//! [`CbrtPolicy::cbrt_impl`], which forwards to the one shared
-//! [`dispatch`] generic function. `dispatch` follows the
+//! `D<Int<N>, SCALE>::cbrt_strict_with(mode)` delegates directly to the
+//! one shared [`dispatch`] generic function. `dispatch` follows the
 //! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
 //! structure"), mirroring [`crate::policy::sqrt`]:
 //!
@@ -19,29 +18,19 @@
 //! is dead-arm-eliminated in release: each concrete `D<Int<N>, SCALE>`
 //! compiles to a direct call to one kernel, no runtime branch.
 //!
-//! # Why a `W` (work-width) parameter on the dispatch
+//! # Work width
 //!
-//! The default `Newton` kernel forms the radicand `|raw| · 10^(2·SCALE)`
-//! in a work width `W` that, because of the `10^(2·SCALE)` factor, is one
-//! step *beyond* the obvious next-up (`W = Int<4N>`, the "double-bumped"
-//! width). Computing `Int<4N>` from `N` generically needs
-//! `generic_const_exprs` (nightly, forbidden on stable), so the concrete
-//! `W` is supplied by each storage tier's `cbrt_impl` and threaded
-//! through the dispatch. `W` is a *work* width, not an algorithm
-//! distinction — `cbrt_newton` stays one generic-over-`(S, W)` algorithm;
-//! the matcher selects `W` from `N`.
+//! The `Newton` kernel forms the radicand `|raw| · 10^(2·SCALE)`, which
+//! spans up to `4N` limbs. Rather than thread a work *type* `Int<4N>`
+//! (unnameable from `N` on stable), `cbrt_newton` does that arithmetic
+//! directly in limbs and calls the int layer's width-agnostic slice
+//! `icbrt`. So the dispatch carries no work-width parameter and the policy
+//! stays a pure `(N, SCALE)` matcher.
 
 use crate::algos::cbrt;
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-
-/// Per-width policy: which kernel a `D<Int<N>, SCALE>` uses for
-/// `cbrt_strict_with`.
-pub(crate) trait CbrtPolicy: Sized {
-    /// Cube root under the supplied rounding mode. Sign is preserved.
-    fn cbrt_impl(self, mode: RoundingMode) -> Self;
-}
 
 // ── 1. the real cube-root algorithms — NAMED, no `Default` ────────────
 
@@ -123,10 +112,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// and dead-arm-eliminated at every other `N`.
 #[inline]
 #[must_use]
-fn dispatch<const N: usize, const SCALE: u32, W>(raw: Int<N>, mode: RoundingMode) -> Int<N>
-where
-    W: BigInt,
-{
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     if raw == Int::<N>::ZERO {
         return Int::<N>::ZERO;
     }
@@ -135,7 +121,7 @@ where
         Select::ByValue(f) => f(&raw),
     };
     match algo {
-        Algorithm::Newton => cbrt::cbrt_newton::cbrt_newton::<Int<N>, W>(raw, SCALE, mode),
+        Algorithm::Newton => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),
         // D18 / D38: run on `Int<2>` storage, resize back to `Int<N>`.
         // (`resize_to` is identity at N==2 and a lossless widen at N==1.)
         Algorithm::MgDivide => {
@@ -151,57 +137,6 @@ where
             )
             .resize_to::<Int<N>>()
         }
-        Algorithm::Schoolbook => cbrt::cbrt_schoolbook::cbrt_schoolbook::<Int<N>, W>(raw, SCALE, mode),
+        Algorithm::Schoolbook => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),
     }
 }
-
-// ── per-tier `CbrtPolicy` impls — each binds its concrete work width ──
-//
-// Every impl forwards to the one `dispatch`; the only per-tier datum
-// is the Newton work width `W = Int<4N>` (double-bumped — see module
-// docs). The dispatch's `const { select }` block folds away the
-// unreachable arms for each tier.
-
-/// Emit `impl CbrtPolicy for D<Int<$N>, SCALE>` forwarding to
-/// [`dispatch`] with the tier's Newton work width `Int<$W>`.
-macro_rules! cbrt_policy_tier {
-    ($N:literal, $W:literal) => {
-        impl<const SCALE: u32> CbrtPolicy
-            for crate::D<crate::int::types::Int<$N>, SCALE>
-        {
-            #[inline]
-            fn cbrt_impl(self, mode: RoundingMode) -> Self {
-                Self(dispatch::<$N, SCALE, Int<$W>>(self.0, mode))
-            }
-        }
-    };
-}
-
-// Narrow / D38: `W` is unused by their `MgDivide` arm but must name a
-// valid `BigInt`; `Int<2>` is the cheapest valid placeholder.
-cbrt_policy_tier!(1, 2); // D18 — MgDivide (widened to Int<2>)
-cbrt_policy_tier!(2, 2); // D38 — MgDivide
-
-// Wide tiers: `W = Int<4N>` is the Newton radicand work width
-// (double-bumped because of the `10^(2·SCALE)` factor). D57 also carries
-// the `(57, 20)` NewtonWithTableSeed cell, selected in `select`.
-#[cfg(any(feature = "d57", feature = "wide"))]
-cbrt_policy_tier!(3, 12); // D57
-#[cfg(any(feature = "d76", feature = "wide"))]
-cbrt_policy_tier!(4, 16); // D76
-#[cfg(any(feature = "d115", feature = "wide"))]
-cbrt_policy_tier!(6, 24); // D115
-#[cfg(any(feature = "d153", feature = "wide"))]
-cbrt_policy_tier!(8, 32); // D153
-#[cfg(any(feature = "d230", feature = "wide"))]
-cbrt_policy_tier!(12, 48); // D230
-#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-cbrt_policy_tier!(16, 64); // D307
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-cbrt_policy_tier!(24, 96); // D462
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-cbrt_policy_tier!(32, 128); // D616
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-cbrt_policy_tier!(48, 192); // D924
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-cbrt_policy_tier!(64, 256); // D1232

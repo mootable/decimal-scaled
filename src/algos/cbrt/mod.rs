@@ -28,4 +28,3 @@
 pub(crate) mod cbrt_mg_divide;
 pub(crate) mod cbrt_newton;
 pub(crate) mod cbrt_newton_with_table_seed;
-pub(crate) mod cbrt_schoolbook;
