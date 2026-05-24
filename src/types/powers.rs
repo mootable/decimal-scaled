@@ -386,7 +386,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         other: Self,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
-        <Self as crate::policy::hypot::HypotPolicy>::hypot_impl(self, other, mode)
+        Self(crate::policy::hypot::dispatch::<_, SCALE>(self.0, other.0, mode))
     }
 
     /// Returns `sqrt(self^2 + other^2)` without intermediate overflow.

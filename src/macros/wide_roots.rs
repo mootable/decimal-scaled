@@ -163,7 +163,7 @@ macro_rules! decl_wide_roots {
                 other: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <Self as $crate::policy::hypot::HypotPolicy>::hypot_impl(self, other, mode)
+                Self($crate::policy::hypot::dispatch::<_, SCALE>(self.0, other.0, mode))
             }
         }
     };
