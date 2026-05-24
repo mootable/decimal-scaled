@@ -1,21 +1,21 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Integer exponentiation policy — the square-and-multiply algorithm matcher.
+//! Integer exponentiation policy -- the square-and-multiply algorithm matcher.
 //!
 //! `Uint<N>::pow` / `Uint<N>::wrapping_pow` and the `Int<N>` siblings
 //! delegate to [`dispatch`], which follows the canonical policy shape (see
-//! `docs/ARCHITECTURE.md` → "Policy file structure"):
+//! `docs/ARCHITECTURE.md` -> "Policy file structure"):
 //!
-//! 1. an [`Algorithm`] enum — the real pow algorithm(s), no `Default`
+//! 1. an [`Algorithm`] enum -- the real pow algorithm(s), no `Default`
 //!    variant;
-//! 2. a [`Select`] verdict — a settled algorithm or "the value decides";
+//! 2. a [`Select`] verdict -- a settled algorithm or "the value decides";
 //! 3. a `const fn` [`select`] keyed on `N`, total over the key;
 //! 4. dispatch via an inline `const { select::<N>() }` block, then an
-//!    **exhaustive** `match algo` — no `_`, no panic.
+//!    **exhaustive** `match algo` -- no `_`, no panic.
 //!
 //! Because `select` is `const` and keyed only on the const generic `N`,
-//! the `const { … }` block folds per monomorphisation and the unchosen arm
+//! the `const { ... }` block folds per monomorphisation and the unchosen arm
 //! is dead-arm-eliminated in release: each concrete `Uint<N>` compiles to a
 //! direct call to the square-and-multiply kernel, no runtime branch.
 //!
@@ -28,10 +28,17 @@
 //! [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] (multiply step) kernels.
 //! Binary exponentiation by squaring is optimal for the small fixed
 //! exponents `pow` is used with in this crate (root iterations: `k-1`,
-//! `k` ≤ ~10). There is no width-specific crossover and no value-split. The
-//! layering points DOWN — the algorithm calls the kernels, never a
-//! pow/sqr/mul method on `Uint<N>`. The `ByValue` arm of [`Select`] is
-//! present for canonical-shape uniformity; `select` never returns it.
+//! `k` <= ~10). There is no width-specific crossover and no value-split. The
+//! layering points DOWN -- the algorithm calls the kernels, never a
+//! pow/sqr/mul method on `Uint<N>`.
+//!
+//! A `Schoolbook` reference arm is registered for the naive repeated-multiply
+//! algorithm (via [`crate::int::algos::pow::pow_schoolbook::pow_schoolbook`]).
+//! It is unrouted (not returned by `select`) and marked `#[allow(dead_code)]`
+//! so the exhaustive match stays warning-clean.
+//!
+//! The `ByValue` arm of [`Select`] is present for canonical-shape
+//! uniformity; `select` never returns it.
 //!
 //! # Const-ness
 //!
@@ -41,26 +48,33 @@
 //! pointer (calling a fn pointer is not permitted in `const fn`; merely
 //! matching the variant is fine).
 
+use crate::int::algos::pow::pow_schoolbook::pow_schoolbook;
 use crate::int::algos::pow::pow_square_and_multiply::pow_square_and_multiply;
 use crate::int::types::Uint;
 
-// ── 1. the real pow algorithm — NAMED, no `Default` ──────────────────
+// -- 1. the real pow algorithms -- NAMED, no `Default` --------------------
 
-/// The exponentiation algorithms this policy chooses between. The single
-/// variant is the CamelCase of the algorithm fn's name minus the `pow_`
-/// function prefix (`pow_square_and_multiply` → `SquareAndMultiply`) —
-/// strict 1:1 with the fn.
+/// The exponentiation algorithms this policy chooses between. Variants are
+/// the CamelCase of each algorithm fn's name minus the `pow_` function
+/// prefix -- strict 1:1 with the fns.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`pow_square_and_multiply`] — binary exponentiation by squaring
+    /// [`pow_square_and_multiply`] -- binary exponentiation by squaring
     /// using the const [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] kernel
     /// for the square step and the const truncated
     /// [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernel for the multiply
     /// step. `self^0 == 1`; result wraps modulo `2^BITS`.
     SquareAndMultiply,
+    /// [`pow_schoolbook`] -- naive repeated-multiply reference:
+    /// `exp - 1` sequential multiplications via
+    /// [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`]. O(exp)
+    /// multiplications vs O(log exp) for `SquareAndMultiply`. Unrouted
+    /// reference arm.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
-// ── 2. the verdict ────────────────────────────────────────────────────
+// -- 2. the verdict --------------------------------------------------------
 
 /// A settled algorithm, or "the value decides". The pow picker always
 /// returns `ByAlgorithm`: the choice is fully determined by `N` (which is
@@ -74,7 +88,7 @@ enum Select<const N: usize> {
     ByValue(fn(&Uint<N>, u32) -> Algorithm),
 }
 
-// ── 3. the matcher: const, keyed on `N`, total over the key ──────────
+// -- 3. the matcher: const, keyed on `N`, total over the key --------------
 
 /// Pick the pow algorithm for storage limb count `N`. Total over the key;
 /// square-and-multiply is width-independent so `SquareAndMultiply` wins at
@@ -83,7 +97,7 @@ const fn select<const N: usize>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::SquareAndMultiply)
 }
 
-// ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
+// -- 4. the dispatcher: fold the verdict, then dispatch --------------------
 
 /// Integer exponentiation dispatcher for `Uint<N>`.
 ///
@@ -104,5 +118,6 @@ pub(crate) const fn dispatch<const N: usize>(base: Uint<N>, exp: u32) -> Uint<N>
     };
     match algo {
         Algorithm::SquareAndMultiply => pow_square_and_multiply(base, exp),
+        Algorithm::Schoolbook => pow_schoolbook(base, exp),
     }
 }
