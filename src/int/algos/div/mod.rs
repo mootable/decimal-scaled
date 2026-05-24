@@ -260,6 +260,85 @@ mod tests {
         assert_eq!(r_canon, r_knuth);
     }
 
+    /// `div_knuth` matches the independent `div_rem` shift-subtract oracle
+    /// limb-for-limb across odd/even limb counts on both operands, the
+    /// two-limb (single wide-digit) divisor edge, divisors with a zero top
+    /// limb, and exact (zero-remainder) division.
+    #[test]
+    fn knuth_limb_count_boundaries_match_oracle() {
+        let cases: &[(&[u64], &[u64])] = &[
+            // even num / even den
+            (&[1, 2, 3, 4], &[5, 6]),
+            // odd num / even den
+            (&[1, 2, 3, 4, 5], &[5, 6]),
+            // even num / odd den
+            (&[1, 2, 3, 4, 5, 6], &[7, 8, 9]),
+            // odd num / odd den
+            (&[1, 2, 3, 4, 5], &[7, 8, 9]),
+            // 2-u64-limb divisor (single wide-digit edge)
+            (&[u64::MAX, u64::MAX, u64::MAX, 0], &[3, 7]),
+            (&[0, 0, 1, 1], &[u64::MAX, 1]),
+            // two-limb divisor whose high u64 limb is large
+            (&[u64::MAX, u64::MAX, u64::MAX, u64::MAX, 1], &[1, u64::MAX]),
+            // 3-u64-limb divisor
+            (&[u64::MAX, u64::MAX, u64::MAX, u64::MAX, u64::MAX, 0], &[1, 2, 3]),
+            // divisor with a zero top limb (den[3] == 0)
+            (&[1, 2, 3, 4, 5, 6, 7, 8], &[9, 10, 11, 0]),
+            // num exactly divisible (zero remainder)
+            (&[0, 0, 6, 0], &[0, 3]),
+        ];
+        for (num, den) in cases {
+            let mut q_ref = [0u64; 12];
+            let mut r_ref = [0u64; 12];
+            div_rem(num, den, &mut q_ref, &mut r_ref);
+            let mut q_k = [0u64; 12];
+            let mut r_k = [0u64; 12];
+            div_knuth(num, den, &mut q_k, &mut r_k);
+            assert_eq!(q_k, q_ref, "quot mismatch {:?} / {:?}", num, den);
+            assert_eq!(r_k, r_ref, "rem mismatch {:?} / {:?}", num, den);
+        }
+    }
+
+    /// Randomised differential sweep over varied limb counts (odd and even
+    /// for both operands, single- and multi-limb divisors) against the
+    /// independent `div_rem` oracle. Catches normalisation / q̂ / carry
+    /// regressions the fixed corpus might miss.
+    #[test]
+    fn knuth_random_differential_match_oracle() {
+        // Deterministic xorshift so the sweep is reproducible.
+        let mut state: u64 = 0x243F_6A88_85A3_08D3;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for _ in 0..3000 {
+            let num_len = 2 + (next() % 9) as usize; // 2..=10 u64 limbs
+            let den_len = 2 + (next() % (num_len as u64 - 1)) as usize; // 2..=num_len
+            let mut num = alloc::vec![0u64; num_len];
+            let mut den = alloc::vec![0u64; den_len];
+            for x in num.iter_mut() {
+                *x = next();
+            }
+            for x in den.iter_mut() {
+                *x = next();
+            }
+            // Ensure divisor non-zero and has an effective high limb.
+            if den.iter().all(|&x| x == 0) {
+                den[0] = 1;
+            }
+            let mut q_ref = alloc::vec![0u64; num_len];
+            let mut r_ref = alloc::vec![0u64; num_len];
+            div_rem(&num, &den, &mut q_ref, &mut r_ref);
+            let mut q_k = alloc::vec![0u64; num_len];
+            let mut r_k = alloc::vec![0u64; num_len];
+            div_knuth(&num, &den, &mut q_k, &mut r_k);
+            assert_eq!(q_k, q_ref, "quot mismatch num={:?} den={:?}", num, den);
+            assert_eq!(r_k, r_ref, "rem mismatch num={:?} den={:?}", num, den);
+        }
+    }
+
     /// BZ with a numerator that has trailing zero limbs strips them off
     /// before deciding whether to recurse.
     #[test]
