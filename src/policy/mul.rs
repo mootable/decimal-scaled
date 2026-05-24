@@ -83,11 +83,12 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 
 /// Decimal multiply dispatcher for storage `Int<N>` and decimal `SCALE`.
 ///
-/// The `const { select }` block folds away at every concrete `N`. The
-/// `mul_widen_divide` algorithm body is inlined per tier via
-/// `mul_policy_tier!` using concrete `$Storage`/`$Wider` types (because the
-/// mg-divide and Newton-reciprocal kernels require concrete `U128_LIMBS`
-/// const-generic arguments that stable Rust cannot compute from `N`).
+/// The `const { select }` block folds away at every concrete `N`. Each
+/// per-tier `mul_impl` resolves the verdict here, then delegates *down* to
+/// the generic-over-`(N, W)` [`crate::algos::mul::mul_widen_divide`] kernel,
+/// threading the concrete `$N`/`$W` and their u128-limb counts as const
+/// params (stable Rust cannot derive the work width `Int<2N>` nor lift
+/// `U128_LIMBS` into const-generic argument position).
 ///
 /// Not `const fn`: the underlying kernel is not `const` (it branches on
 /// `cfg!(debug_assertions)` and routes through multi-limb division).
@@ -101,14 +102,16 @@ fn dispatch<const N: usize, const SCALE: u32>(algo: Algorithm) -> Algorithm {
     algo
 }
 
-// ── per-tier `MulPolicy` impls — each embeds the kernel with concrete types ──
+// ── per-tier `MulPolicy` impls — each delegates *down* to the kernel ──
 //
-// The `mul_widen_divide` kernel requires concrete `$Storage` and `$Wider`
-// types to supply the `U128_LIMBS` const-generic argument to the MG/Newton
-// functions (stable Rust cannot compute this from `N`). The algorithm body
-// is therefore inlined in each `mul_impl` via `mul_policy_tier!`, exactly
-// as the existing `decl_decimal_arithmetic!(wide …)` macro did. The policy
-// is the structural seam; `mul_impl` is the canonical entry point routed
+// Every `mul_impl` is a thin matcher arm: it delegates *down* to the
+// generic-over-`(N, W)` [`crate::algos::mul::mul_widen_divide`] kernel,
+// passing the concrete `$N`/`$W` and their u128-limb counts (`(N + 1) / 2`
+// / `(W + 1) / 2`) as const params. The per-tier macro exists only to
+// supply those concrete const params — stable Rust cannot derive the work
+// width `Int<2N>` from `N`, nor lift `U128_LIMBS` into const-generic
+// argument position. The algorithm body lives in the kernel. The policy is
+// the structural seam; `mul_impl` is the canonical entry point routed
 // through by `mul_with` and `*`.
 //
 // The `const { select::<N, SCALE>() }` fold happens in `dispatch` but the
@@ -139,47 +142,16 @@ macro_rules! mul_policy_tier {
                 let algo = dispatch::<$N, SCALE>(Algorithm::WidenDivide);
                 match algo {
                     Algorithm::WidenDivide => {
-                        // mul_widen_divide kernel with concrete types.
-                        // `$Storage = Int<$N>`, `$Wider = Int<$W>`.
-                        type Storage = crate::int::types::Int<$N>;
-                        type Wider = crate::int::types::Int<$W>;
-                        let lz_a = self.0.unsigned_abs().leading_zeros();
-                        let lz_b = rhs.0.unsigned_abs().leading_zeros();
-                        if lz_a + lz_b > <Storage>::BITS {
-                            let n: Storage = self.0.wrapping_mul(rhs.0);
-                            let scaled = if SCALE == 0 {
-                                n
-                            } else if SCALE <= 38 {
-                                crate::algos::support::mg_divide::div_wide_pow10_with::<
-                                    Storage,
-                                    { <Storage as crate::int::types::traits::BigInt>::U128_LIMBS },
-                                >(n, SCALE, mode)
-                            } else {
-                                crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
-                                    Storage,
-                                    { <Storage as crate::int::types::traits::BigInt>::U128_LIMBS },
-                                >(n, SCALE, mode)
-                            };
-                            return Self(scaled);
-                        }
-                        let n: Wider = self.0.widen_mul::<Wider>(rhs.0);
-                        let scaled = if SCALE == 0 {
-                            n
-                        } else if SCALE <= 38 {
-                            crate::algos::support::mg_divide::div_wide_pow10_with::<
-                                Wider,
-                                { <Wider as crate::int::types::traits::BigInt>::U128_LIMBS },
-                            >(n, SCALE, mode)
-                        } else {
-                            crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
-                                Wider,
-                                { <Wider as crate::int::types::traits::BigInt>::U128_LIMBS },
-                            >(n, SCALE, mode)
-                        };
-                        Self(crate::macros::arithmetic::narrow_or_panic!(
-                            scaled, Storage, Wider,
-                            "attempt to multiply with overflow"
-                        ))
+                        // Delegate *down* to the generic-over-`(N, W)`
+                        // `mul_widen_divide` kernel. The concrete `$N`/`$W`
+                        // and their u128-limb counts (`(N + 1) / 2` /
+                        // `(W + 1) / 2`) are threaded in as const params
+                        // because stable Rust cannot derive the work width
+                        // `Int<2N>` nor lift `Int<_>::U128_LIMBS` into
+                        // const-generic argument position.
+                        Self(crate::algos::mul::mul_widen_divide::mul_widen_divide::<
+                            $N, $W, { ($N + 1) / 2 }, { ($W + 1) / 2 }, SCALE,
+                        >(self.0, rhs.0, mode))
                     }
                 }
             }

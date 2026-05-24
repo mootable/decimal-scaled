@@ -22,13 +22,17 @@
 //! # Why one algorithm
 //!
 //! `log(self, base) = ln(self) / ln(base)`. Every tier and scale uses the
-//! same ratio-of-natural-logs computation: the narrow tier runs through the
-//! `ln::ln_series_2limb::log_strict` kernel; the wide tiers run through the
-//! per-tier `$core::log_strict_with_kernel` / `log_approx_with_kernel` free
-//! functions (emitted by `decl_wide_transcendental!`). There is no
-//! crossover threshold that selects a different algorithm at the policy
-//! level — `LnDivide` is the one algorithm serving all cells. `ByValue` is
-//! present for canonical-shape uniformity; `select` never returns it.
+//! same ratio-of-natural-logs computation, realised by the
+//! [`crate::algos::log::log_ln_divide`] kernels the matcher delegates *down*
+//! to: the narrow tiers (D18 widens to D38; D38 calls the
+//! `ln::ln_series_2limb` log kernel) route through that module's composition
+//! kernels; the wide tiers route through the per-tier
+//! `$core::log_strict_with_kernel` / `log_approx_with_kernel` free functions
+//! (emitted by `decl_wide_transcendental!`, living in `crate::types::widths`).
+//! There is no crossover threshold that selects a different algorithm at the
+//! policy level — `LnDivide` is the one algorithm serving all cells.
+//! `ByValue` is present for canonical-shape uniformity; `select` never
+//! returns it.
 //!
 //! # Relationship to `ln.rs`
 //!
@@ -50,10 +54,11 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// `log_ln_divide` — `log(self, base) = ln(self) / ln(base)`. The
-    /// narrow tier routes through `ln::ln_series_2limb::log_strict`; the wide
-    /// tiers route through the per-tier `$core::log_strict_with_kernel` /
-    /// `log_approx_with_kernel` free functions. This is the only formula
-    /// used everywhere.
+    /// narrow tiers route through the
+    /// [`crate::algos::log::log_ln_divide`] composition kernels (D18 widens
+    /// to D38; D38 calls `ln::ln_series_2limb`); the wide tiers route through
+    /// the per-tier `$core::log_strict_with_kernel` / `log_approx_with_kernel`
+    /// free functions. This is the only formula used everywhere.
     LnDivide,
 }
 
@@ -101,17 +106,9 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
             Select::ByValue(_) => Algorithm::LnDivide,
         };
         match algo {
-            Algorithm::LnDivide => {
-                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-                let wbase: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
-                ::core::convert::TryInto::try_into(wide.log_strict_with(wbase, mode))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale(
-                            "D18::log",
-                            SCALE,
-                        )
-                    })
-            }
+            Algorithm::LnDivide => Self(
+                crate::algos::log::log_ln_divide::log_ln_divide_d18::<SCALE>(self.0, base.0, mode),
+            ),
         }
     }
 
@@ -122,17 +119,14 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
             Select::ByValue(_) => Algorithm::LnDivide,
         };
         match algo {
-            Algorithm::LnDivide => {
-                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-                let wbase: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
-                ::core::convert::TryInto::try_into(wide.log_approx_with(wbase, working_digits, mode))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale(
-                            "D18::log",
-                            SCALE,
-                        )
-                    })
-            }
+            Algorithm::LnDivide => Self(
+                crate::algos::log::log_ln_divide::log_ln_divide_d18_approx::<SCALE>(
+                    self.0,
+                    base.0,
+                    working_digits,
+                    mode,
+                ),
+            ),
         }
     }
 }
@@ -146,9 +140,9 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Select::ByValue(_) => Algorithm::LnDivide,
         };
         match algo {
-            Algorithm::LnDivide => {
-                Self(crate::algos::ln::ln_series_2limb::log_strict::<SCALE>(self.0, base.0, mode))
-            }
+            Algorithm::LnDivide => Self(
+                crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(self.0, base.0, mode),
+            ),
         }
     }
 
@@ -159,13 +153,14 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Select::ByValue(_) => Algorithm::LnDivide,
         };
         match algo {
-            Algorithm::LnDivide => Self(crate::algos::ln::ln_series_2limb::log_with(
-                self.0,
-                base.0,
-                SCALE,
-                working_digits,
-                mode,
-            )),
+            Algorithm::LnDivide => Self(
+                crate::algos::log::log_ln_divide::log_ln_divide_d38_approx::<SCALE>(
+                    self.0,
+                    base.0,
+                    working_digits,
+                    mode,
+                ),
+            ),
         }
     }
 }

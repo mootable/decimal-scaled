@@ -37,7 +37,8 @@ use crate::int::types::Int;
 /// prefix (`add_int_layer` → `IntLayer`) — strict 1:1 with the kernel fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`add_int_layer`] — delegates directly to `Int<N>`'s checked/wrapping
+    /// [`add_int_layer`](crate::algos::add::add_int_layer::add_int_layer) —
+    /// delegates directly to `Int<N>`'s checked/wrapping
     /// add, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Same-SCALE addition needs no rescaling.
     IntLayer,
@@ -66,21 +67,6 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::IntLayer)
 }
 
-// ── algorithm fn ─────────────────────────────────────────────────────
-
-/// Decimal addition via the `Int<N>` layer. Applies Rust's standard
-/// integer-overflow contract: panics (with "overflow") in debug builds,
-/// wraps (two's-complement) in release. No rescaling needed — same-SCALE
-/// operands share the scale factor.
-#[inline]
-fn add_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    if cfg!(debug_assertions) {
-        a.checked_add(b).expect("attempt to add with overflow")
-    } else {
-        a.wrapping_add(b)
-    }
-}
-
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Decimal addition dispatcher for storage `Int<N>` and decimal `SCALE`.
@@ -100,7 +86,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => add_int_layer(a, b),
+        Algorithm::IntLayer => crate::algos::add::add_int_layer::add_int_layer(a, b),
     }
 }
 

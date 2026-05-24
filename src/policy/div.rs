@@ -85,11 +85,11 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 
 /// Decimal division dispatcher for storage `Int<N>` and decimal `SCALE`.
 ///
-/// The `const { select }` block folds away at every concrete `N`. The
-/// `div_widen_scale` algorithm body is inlined per tier via
-/// `div_policy_tier!` using concrete `$Storage`/`$Wider` types (because the
-/// `widen_mul` return type and `narrow_or_panic!` both require concrete
-/// storage type tokens that stable Rust cannot compute from `N`).
+/// The `const { select }` block folds away at every concrete `N`. Each
+/// per-tier `div_impl` resolves the verdict here, then delegates *down* to
+/// the generic-over-`(N, W)` [`crate::algos::div::div_widen_scale`] kernel,
+/// threading the concrete `$N`/`$W` as const params (stable Rust cannot
+/// derive the work width `Int<2N>` from `N`).
 ///
 /// Not `const fn`: the underlying kernel is not `const` (it invokes
 /// multi-limb division and branches on `cfg!(debug_assertions)`).
@@ -103,15 +103,16 @@ fn dispatch<const N: usize, const SCALE: u32>(algo: Algorithm) -> Algorithm {
     algo
 }
 
-// ── per-tier `DivPolicy` impls — each embeds the kernel with concrete types ──
+// ── per-tier `DivPolicy` impls — each delegates *down* to the kernel ──
 //
-// The `div_widen_scale` kernel requires concrete `$Storage` and `$Wider`
-// types: `widen_mul` returns `$Wider`, `multiplier()` is defined per-tier,
-// and `narrow_or_panic!` needs the concrete types for the range check.
-// The algorithm body is therefore inlined in each `div_impl` via
-// `div_policy_tier!`, exactly as the existing `decl_decimal_arithmetic!`
-// macro did. The policy is the structural seam; `div_impl` is the canonical
-// entry point routed through by `div_with` and `/`.
+// Every `div_impl` is a thin matcher arm: it pre-computes the per-tier
+// `10^SCALE` multiplier (whose `leading_zeros()` folds at compile time),
+// then calls the generic-over-`(N, W)`
+// [`crate::algos::div::div_widen_scale`] kernel with the concrete `$N`/`$W`
+// threaded in as const params. The per-tier macro exists only to supply
+// those concrete const params; the algorithm body lives in the kernel. The
+// policy is the structural seam; `div_impl` is the canonical entry point
+// routed through by `div_with` and `/`.
 
 /// Per-width policy: which kernel a `D<Int<N>, SCALE>` uses for `div_with`.
 pub(crate) trait DivPolicy: Sized {
@@ -135,33 +136,16 @@ macro_rules! div_policy_tier {
                 let algo = dispatch::<$N, SCALE>(Algorithm::WidenScale);
                 match algo {
                     Algorithm::WidenScale => {
-                        // div_widen_scale kernel with concrete types.
-                        // `$Storage = Int<$N>`, `$Wider = Int<$W>`.
-                        type Storage = crate::int::types::Int<$N>;
-                        type Wider = crate::int::types::Int<$W>;
                         // Pre-compute `10^SCALE` via the per-tier const fn,
-                        // whose `leading_zeros()` collapses at compile time.
-                        let mult: Storage =
+                        // whose `leading_zeros()` collapses at compile time,
+                        // then delegate *down* to the generic-over-`(N, W)`
+                        // `div_widen_scale` kernel. The concrete `$N`/`$W`
+                        // are threaded in as const params because stable Rust
+                        // cannot derive the work width `Int<2N>` from `N`.
+                        let mult: crate::int::types::Int<$N> =
                             <crate::D<crate::int::types::Int<$N>, SCALE>>::multiplier();
-                        let lz_n = self.0.unsigned_abs().leading_zeros();
-                        let lz_m = mult.leading_zeros();
-                        if lz_n + lz_m > <Storage>::BITS {
-                            // Fast path: `self * mult` fits `Storage`.
-                            let n: Storage = self.0.wrapping_mul(mult);
-                            let result = $crate::macros::arithmetic::round_with_mode_wide!(
-                                n, rhs.0, Storage, mode
-                            );
-                            return Self(result);
-                        }
-                        // Slow path: widen numerator, divide in `Wider`.
-                        let b: Wider = rhs.0.resize::<Wider>();
-                        let n: Wider = self.0.widen_mul::<Wider>(mult);
-                        let result = $crate::macros::arithmetic::round_with_mode_wide!(
-                            n, b, Wider, mode
-                        );
-                        Self(crate::macros::arithmetic::narrow_or_panic!(
-                            result, Storage, Wider,
-                            "attempt to divide with overflow"
+                        Self(crate::algos::div::div_widen_scale::div_widen_scale::<$N, $W>(
+                            self.0, rhs.0, mult, mode,
                         ))
                     }
                 }

@@ -33,12 +33,22 @@
 // kernels in `<family>::<family>_mg_divide` are always built; each
 // wide-tier kernel inside `<family>::generic_wide` is independently
 // feature-gated.
+// Decimal arithmetic algorithm families — each operation, even the
+// trivial `Int<N>`-layer ones, is a named `<fn>_<method>` kernel under
+// `algos::<fn>/`, called *down* from the per-function policy matcher.
+pub(crate) mod add;
 pub(crate) mod cbrt;
+pub(crate) mod div;
 pub(crate) mod exp;
 pub(crate) mod hypot;
 pub(crate) mod ln;
+pub(crate) mod log;
+pub(crate) mod mul;
+pub(crate) mod neg;
 pub(crate) mod pow;
+pub(crate) mod rem;
 pub(crate) mod sqrt;
+pub(crate) mod sub;
 pub(crate) mod trig;
 
 // Cross-cutting support kernels consumed by multiple families and the

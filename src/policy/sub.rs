@@ -39,7 +39,8 @@ use crate::int::types::Int;
 /// kernel fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`sub_int_layer`] — delegates directly to `Int<N>`'s checked/wrapping
+    /// [`sub_int_layer`](crate::algos::sub::sub_int_layer::sub_int_layer) —
+    /// delegates directly to `Int<N>`'s checked/wrapping
     /// sub, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Same-SCALE subtraction needs no rescaling.
     IntLayer,
@@ -66,21 +67,6 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::IntLayer)
 }
 
-// ── algorithm fn ─────────────────────────────────────────────────────
-
-/// Decimal subtraction via the `Int<N>` layer. Applies Rust's standard
-/// integer-overflow contract: panics (with "overflow") in debug builds,
-/// wraps (two's-complement) in release. No rescaling needed — same-SCALE
-/// operands share the scale factor.
-#[inline]
-fn sub_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    if cfg!(debug_assertions) {
-        a.checked_sub(b).expect("attempt to subtract with overflow")
-    } else {
-        a.wrapping_sub(b)
-    }
-}
-
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
 
 /// Decimal subtraction dispatcher for storage `Int<N>` and decimal `SCALE`.
@@ -99,7 +85,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => sub_int_layer(a, b),
+        Algorithm::IntLayer => crate::algos::sub::sub_int_layer::sub_int_layer(a, b),
     }
 }
 
