@@ -26,8 +26,9 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
-    cbrt_native_d57s20, cbrt_newton_slice, cbrt_table_seed_d57s20, int_from_mag_limbs, sqrt_mg,
-    sqrt_newton_slice,
+    cbrt_native_d57s20, cbrt_native_w, cbrt_newton_slice, cbrt_newton_slice_n,
+    cbrt_table_seed_d57s20, int_from_mag_limbs, sqrt_mg, sqrt_native_w, sqrt_newton_slice,
+    sqrt_newton_slice_n,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -134,9 +135,86 @@ fn bench_cbrt(c: &mut Criterion) {
     );
 }
 
+
+// ── wide-tier roots: native tight-Int<W> f64 Newton vs generic slice ──
+// Benched at each tier's mid-scale (the lib_cmp root cell). One concrete
+// fn per (fn, N, W, SCALE) cell so the WorkScratch bound is discharged at
+// the concrete `N` (the trait is crate-internal -- a generic helper would
+// have to name it). The macro keeps the bodies single-source.
+#[derive(Clone)]
+struct WideOne<const N: usize> {
+    label: &'static str,
+    raw: Int<N>,
+}
+
+fn wide_inputs<const N: usize>() -> Vec<WideOne<N>> {
+    vec![
+        WideOne { label: "v_small", raw: fromu::<N>((1u128 << 40) | 0xABCD) },
+        WideOne { label: "v_mid", raw: fromu::<N>((1u128 << 90) | 0xBEEF) },
+        WideOne { label: "v_large", raw: fromu::<N>((1u128 << 126) | 0x1357) },
+    ]
+}
+
+macro_rules! wide_root_bench {
+    ($fnname:ident, $nat:ident, $slc:ident, $n:literal, $w:literal, $s:literal, $group:literal) => {
+        fn $fnname(c: &mut Criterion) {
+            let nat = |o: WideOne<$n>| $nat::<$n, $w, $s>(o.raw, MODE);
+            let slc = |o: WideOne<$n>| $slc::<$n, $s>(o.raw, MODE);
+            for o in wide_inputs::<$n>() {
+                for m in ALL_MODES {
+                    assert_eq!(
+                        $nat::<$n, $w, $s>(o.raw, m),
+                        $slc::<$n, $s>(o.raw, m),
+                        concat!($group, " {} mode {:?}"),
+                        o.label, m
+                    );
+                }
+            }
+            compare_all(
+                c,
+                $group,
+                |o: &WideOne<$n>| o.label.to_string(),
+                wide_inputs::<$n>(),
+                vec![
+                    ("native", Box::new(nat) as Box<dyn Fn(WideOne<$n>) -> Int<$n>>),
+                    ("slice", Box::new(slc)),
+                ],
+            );
+        }
+    };
+}
+
+// sqrt: W = ceil((64N + SCALE*log2(10)) / 64).
+wide_root_bench!(bench_sqrt_d76, sqrt_native_w, sqrt_newton_slice_n, 4, 6, 35, "sqrt_d76_s35");
+wide_root_bench!(bench_sqrt_d153, sqrt_native_w, sqrt_newton_slice_n, 8, 12, 75, "sqrt_d153_s75");
+wide_root_bench!(bench_sqrt_d307, sqrt_native_w, sqrt_newton_slice_n, 16, 24, 150, "sqrt_d307_s150");
+// cbrt: W = ceil((64N + 2*SCALE*log2(10)) / 64).
+wide_root_bench!(bench_cbrt_d76, cbrt_native_w, cbrt_newton_slice_n, 4, 8, 35, "cbrt_d76_s35");
+wide_root_bench!(bench_cbrt_d153, cbrt_native_w, cbrt_newton_slice_n, 8, 16, 75, "cbrt_d153_s75");
+wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 32, 150, "cbrt_d307_s150");
+wide_root_bench!(bench_sqrt_d115, sqrt_native_w, sqrt_newton_slice_n, 6, 9, 57, "sqrt_d115_s57");
+wide_root_bench!(bench_sqrt_d230, sqrt_native_w, sqrt_newton_slice_n, 12, 19, 115, "sqrt_d230_s115");
+wide_root_bench!(bench_cbrt_d115, cbrt_native_w, cbrt_newton_slice_n, 6, 12, 57, "cbrt_d115_s57");
+wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 25, 115, "cbrt_d230_s115");
+
+fn bench_wide(c: &mut Criterion) {
+    bench_sqrt_d76(c);
+    bench_sqrt_d153(c);
+    bench_sqrt_d307(c);
+    bench_cbrt_d76(c);
+    bench_cbrt_d153(c);
+    bench_cbrt_d307(c);
+    bench_sqrt_d115(c);
+    bench_sqrt_d230(c);
+    bench_cbrt_d115(c);
+    bench_cbrt_d230(c);
+}
+
+
 fn benches(c: &mut Criterion) {
     bench_sqrt(c);
     bench_cbrt(c);
+    bench_wide(c);
 }
 
 fn main() {

@@ -383,7 +383,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<3>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
-        crate::algos::cbrt::cbrt_native::cbrt_native(raw, mode)
+        crate::algos::cbrt::cbrt_native::cbrt_native_d57s20(raw, mode)
     }
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
@@ -400,6 +400,50 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
         crate::algos::cbrt::cbrt_newton::cbrt_newton::<3>(raw, SCALE, mode)
+    }
+    /// Generic native root candidates over storage `N`, work width `W`,
+    /// and `SCALE` -- exposed so `root_kernel_ab` can A/B the f64-seeded
+    /// tight-`Int<W>` Newton arm against the generic slice at the wide
+    /// tiers (D76 .. D307).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn sqrt_native_w<const N: usize, const W: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::sqrt::sqrt_native::sqrt_native::<N, W>(raw, SCALE, mode)
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn sqrt_newton_slice_n<const N: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+    {
+        crate::algos::sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode)
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_native_w<const N: usize, const W: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::cbrt::cbrt_native::cbrt_native::<N, W>(raw, SCALE, mode)
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn cbrt_newton_slice_n<const N: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+    {
+        crate::algos::cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode)
     }
     /// Build an `Int<N>` from a little-endian magnitude limb array (sign
     /// false). Lets the bench construct wide operands without exposing the
