@@ -35,6 +35,26 @@ pub(crate) fn div_burnikel_ziegler_with_knuth(
         return;
     }
 
+    bz_chunk_core(num, den, quot, rem, n, top);
+}
+
+/// The chunking core — divides the already-stripped `num` (effective
+/// `top` limbs) by `den` (effective `n` limbs) by splitting the dividend
+/// into `n`-limb blocks and Knuth-dividing each (block ‖ running carry)
+/// by the divisor. Callers pass the stripped effective shape `(n, top)`;
+/// the public entry above applies the engagement guard first.
+///
+/// Split out so a bench seam can drive it below the production
+/// engagement threshold (where the public entry would otherwise short to
+/// Knuth), without an engagement branch in the timed path.
+pub(crate) fn bz_chunk_core(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+    n: usize,
+    top: usize,
+) {
     for q in quot.iter_mut() {
         *q = 0;
     }
@@ -71,4 +91,27 @@ pub(crate) fn div_burnikel_ziegler_with_knuth(
     }
     let rem_n = n.min(rem.len());
     rem[..rem_n].copy_from_slice(&carry[..rem_n]);
+}
+
+/// Forced chunking entry for the crossover microbench: strips the operand
+/// shapes then runs [`bz_chunk_core`] **unconditionally**, ignoring the
+/// production engagement guard, so the Knuth-vs-BZ crossover can be timed
+/// at sub-threshold widths. Not used in production routing.
+#[cfg(feature = "bench-alt")]
+pub(crate) fn bz_chunk_core_forced(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+) {
+    let mut n = den.len();
+    while n > 0 && den[n - 1] == 0 {
+        n -= 1;
+    }
+    assert!(n > 0, "bz_chunk_core_forced: divide by zero");
+    let mut top = num.len();
+    while top > 0 && num[top - 1] == 0 {
+        top -= 1;
+    }
+    bz_chunk_core(num, den, quot, rem, n, top);
 }
