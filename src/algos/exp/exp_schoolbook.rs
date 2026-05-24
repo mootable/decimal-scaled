@@ -110,7 +110,7 @@ pub(crate) fn exp_schoolbook_fixed(v_w: Fixed, w: u32) -> Fixed {
 /// realisation of the `1 + s + s²/2! + …` textbook series with the Smith
 /// `r/2^n` reduction), rounded correctly with Ziv escalation. Mirrors
 /// `exp_series`; registered as the unrouted `Schoolbook` arm of the wide
-/// `ExpPolicy` tiers and a correctness/microbench reference.
+/// `policy::exp` tiers and a correctness/microbench reference.
 #[inline]
 #[must_use]
 pub(crate) fn exp_schoolbook<C: WideTrigCore, const SCALE: u32>(

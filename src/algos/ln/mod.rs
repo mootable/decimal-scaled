@@ -2,8 +2,8 @@
 //!
 //! Narrow tier (D18 / D38) calls the `Fixed` 256-bit intermediate
 //! kernels; wide tier (D57 .. D1232) runs the tier-generic `ln_tang` /
-//! `*_series` kernels via `crate::policy::ln::LnPolicy`.
-//! Both tiers route through `crate::policy::ln::LnPolicy`.
+//! `*_series` kernels via `crate::policy::ln`.
+//! Both tiers route through `crate::policy::ln`.
 //!
 //! Variants:
 //!

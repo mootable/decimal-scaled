@@ -1,76 +1,34 @@
-//! Log-base policy — the per-`(N, SCALE)` algorithm matcher for the
+//! Log-base policy â€” the per-(N, SCALE) algorithm matcher for the
 //! arbitrary-base decimal logarithm `log(self, base)`.
 //!
-//! See `docs/ARCHITECTURE.md` → "Policy file structure".
+//! `D<Int<N>, SCALE>::log_strict_with(base, mode)` delegates directly to
+//! the one shared [`dispatch`] generic function â€” the canonical
+//! matcher-only policy shape (see `docs/ARCHITECTURE.md`), mirrored from
+//! `sqrt`.
 //!
-//! `D<Int<N>, SCALE>::log_strict_with(base, mode)` delegates to
-//! [`LogPolicy::log_impl`], which forwards to the canonical policy shape:
-//!
-//! 1. an [`Algorithm`] enum — the real log-base algorithms, no `Default`
-//!    variant;
-//! 2. a [`Select`] verdict — a settled algorithm or "the value decides"
-//!    (`log` has no value split, so `ByValue` is never returned);
-//! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
-//! 4. dispatch via an inline `const { select::<N, SCALE>() }` block, then
-//!    an **exhaustive** `match algo` — no `_`, no panic.
-//!
-//! Because `select` is `const` and keyed only on the const generics, the
-//! `const { … }` block folds per monomorphisation and every unchosen arm
-//! is dead-arm-eliminated in release: each concrete `D<Int<N>, SCALE>`
-//! compiles to a direct call to one kernel, no runtime branch.
-//!
-//! # Why one algorithm
+//! # One algorithm â€” `LnDivide`
 //!
 //! `log(self, base) = ln(self) / ln(base)`. Every tier and scale uses the
-//! same ratio-of-natural-logs computation, realised by the
-//! [`crate::algos::log::log_ln_divide`] kernels the matcher delegates *down*
-//! to: the narrow tiers (D18 widens to D38; D38 calls the
-//! `ln::ln_series_2limb` log kernel) route through that module's composition
-//! kernels; the wide tiers route through the per-tier
-//! `$core::log_strict_with_kernel` / `log_approx_with_kernel` free functions
-//! (emitted by `decl_wide_transcendental!`, living in `crate::types::widths`).
-//! There is no crossover threshold that selects a different algorithm at the
-//! policy level — `LnDivide` is the one algorithm serving all cells.
-//! `ByValue` is present for canonical-shape uniformity; `select` never
-//! returns it.
-//!
-//! # Relationship to `ln.rs`
-//!
-//! `log` is derived from `ln` (§1a: a decimal algorithm calling another
-//! decimal algorithm's surface). The `log` policy is the structural seam
-//! for the `log` operation; it delegates to the `LnPolicy` surface (`ln`
-//! kernel + divide) rather than re-implementing `ln`. Do NOT touch
-//! `src/algos/{exp,ln,trig,pow}` kernels — this policy calls the existing
-//! `ln` SURFACE.
+//! same ratio. The narrow tiers route through the
+//! `crate::algos::log::log_ln_divide` composition kernels (D18 widens to
+//! Int<2>; D38 calls `ln::ln_series_2limb`); the wide tiers route through
+//! the per-tier `wide_trig_<tier>::log_strict_with_kernel` /
+//! `log_approx_with_kernel` free functions (emitted by
+//! `decl_wide_transcendental!`), reached by a `match N` with `resize_to`
+//! bridges (identity at the matched `N`). `Schoolbook` is the unrouted
+//! naive `ln(x)/ln(b)` reference.
 
+use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-// ── 1. the real log-base algorithm — NAMED, no `Default` ─────────────
-
-/// The log-base algorithms this policy chooses between. The single variant
-/// is the CamelCase of the kernel's conceptual name — strict 1:1 with the
-/// computation (`log_ln_divide` → `LnDivide`).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// `log_ln_divide` — `log(self, base) = ln(self) / ln(base)`. The
-    /// narrow tiers route through the
-    /// [`crate::algos::log::log_ln_divide`] composition kernels (D18 widens
-    /// to D38; D38 calls `ln::ln_series_2limb`); the wide tiers route through
-    /// the per-tier `$core::log_strict_with_kernel` / `log_approx_with_kernel`
-    /// free functions. This is the only formula used everywhere.
     LnDivide,
-    /// `log_schoolbook` — naive `ln(x)/ln(b)` composition.
-    /// Correctness reference; `select` never returns this variant.
     #[allow(dead_code)]
     Schoolbook,
 }
 
-// ── 2. the const verdict ──────────────────────────────────────────────
-
-/// A settled algorithm, or "the value decides". The log picker always
-/// returns `ByAlgorithm`. `ByValue` is part of the canonical shape for
-/// uniformity; `select` never returns it.
 #[derive(Clone, Copy)]
 enum Select<const N: usize> {
     ByAlgorithm(Algorithm),
@@ -78,223 +36,176 @@ enum Select<const N: usize> {
     ByValue(fn(&Int<N>) -> Algorithm),
 }
 
-// ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
-
-/// Pick the log-base algorithm for storage limb count `N` and decimal
-/// `SCALE`. Total over the key; `LnDivide` wins at every `(N, SCALE)`.
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
-    let _ = (N, SCALE); // keys accepted for uniformity; one algorithm
+    let _ = (N, SCALE);
     Select::ByAlgorithm(Algorithm::LnDivide)
 }
 
-// ── per-type `LogPolicy` trait ────────────────────────────────────────
-
-/// Per-type policy: which kernel a `D<Int<N>, SCALE>` uses for `log`.
-pub(crate) trait LogPolicy: Sized {
-    /// `log(self, base)` under the supplied rounding mode (strict guard).
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self;
-
-    /// `log(self, base)` with caller-chosen guard digits and rounding mode.
-    fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self;
-}
-
-// ── D18 ── widen-to-D38, call D38's log, narrow back ─────────────────
-//
-// D18 has no native log kernel. It widens to the D38 `Fixed` work width,
-// delegates to D38's `LnPolicy::log_impl`, then narrows the result back.
-impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        let algo = match const { select::<1, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(_) => Algorithm::LnDivide,
-        };
-        match algo {
-            Algorithm::LnDivide => Self(
-                crate::algos::log::log_ln_divide::log_ln_divide_d18::<SCALE>(self.0, base.0, mode),
-            ),
-            Algorithm::Schoolbook => {
-                let xw: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-                let bw: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
-                let r = crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(xw.0, bw.0, mode);
-                ::core::convert::TryInto::try_into(crate::D::<crate::int::types::Int<2>, SCALE>(r))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
-                    })
-            }
-        }
-    }
-
-    #[inline]
-    fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        let algo = match const { select::<1, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(_) => Algorithm::LnDivide,
-        };
-        match algo {
-            Algorithm::LnDivide => Self(
-                crate::algos::log::log_ln_divide::log_ln_divide_d18_approx::<SCALE>(
-                    self.0,
-                    base.0,
-                    working_digits,
-                    mode,
-                ),
-            ),
-            Algorithm::Schoolbook => {
-                let xw: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-                let bw: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
-                let r = crate::algos::log::log_schoolbook::log_schoolbook_with(xw.0, bw.0, SCALE, working_digits, mode);
-                ::core::convert::TryInto::try_into(crate::D::<crate::int::types::Int<2>, SCALE>(r))
-                    .unwrap_or_else(|_| {
-                        crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
-                    })
-            }
-        }
-    }
-}
-
-// ── D38 ── native `Fixed`-256 kernel via `ln::ln_series_2limb::log_strict` ─
-impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
-    #[inline]
-    fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-        let algo = match const { select::<2, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(_) => Algorithm::LnDivide,
-        };
-        match algo {
-            Algorithm::LnDivide => Self(
-                crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(self.0, base.0, mode),
-            ),
-            Algorithm::Schoolbook => Self(
-                crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(self.0, base.0, mode),
-            ),
-        }
-    }
-
-    #[inline]
-    fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
-        let algo = match const { select::<2, SCALE>() } {
-            Select::ByAlgorithm(a) => a,
-            Select::ByValue(_) => Algorithm::LnDivide,
-        };
-        match algo {
-            Algorithm::LnDivide => Self(
-                crate::algos::log::log_ln_divide::log_ln_divide_d38_approx::<SCALE>(
-                    self.0,
-                    base.0,
-                    working_digits,
-                    mode,
-                ),
-            ),
-            Algorithm::Schoolbook => Self(
-                crate::algos::log::log_schoolbook::log_schoolbook_with(self.0, base.0, SCALE, working_digits, mode),
-            ),
-        }
-    }
-}
-
-// ── Wide tiers — call the `LnDivide` algorithm kernel directly ────────
-//
-// The `LnDivide` realisation for each wide tier is a pair of free
-// kernels emitted into the tier's per-tier `$core` module by
-// `decl_wide_transcendental!` (`log_strict_with_kernel` /
-// `log_approx_with_kernel`). They hold the real computation — exact-power
-// pin + directed-rounding Ziv escalation. The policy calls them *down*;
-// the inherent `log_strict_with` / `log_approx_with` methods delegate
-// *down* to this policy. No inversion, no loop: the impl lives in the
-// algorithm, the method is a thin delegator.
-
-/// Emit `impl LogPolicy for D<Int<$N>, SCALE>` for a wide tier.
-/// `$core_mod` is the leaf ident of the tier's per-tier
-/// transcendental-core module (e.g. `wide_trig_d57`); it lives at
-/// `crate::types::widths::$core_mod` and carries the `LnDivide` kernels.
-#[allow(unused_macros)]
-macro_rules! log_policy_wide {
-    ($T:ident, $N:literal, $core_mod:ident) => {
-        impl<const SCALE: u32> LogPolicy for crate::types::widths::$T<SCALE> {
-            #[inline]
-            fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
-                let algo = match const { select::<$N, SCALE>() } {
-                    Select::ByAlgorithm(a) => a,
-                    Select::ByValue(_) => Algorithm::LnDivide,
-                };
-                match algo {
-                    Algorithm::LnDivide => Self::from_bits(
-                        crate::types::widths::$core_mod::log_strict_with_kernel::<SCALE>(
-                            self.to_bits(),
-                            base.to_bits(),
-                            mode,
-                        ),
-                    ),
-            Algorithm::Schoolbook => Self::from_bits(
-                        crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::$core_mod::Core, SCALE>(
-                            self.to_bits(),
-                            base.to_bits(),
-                            mode,
-                        ),
-                    ),
-                }
-            }
-
-            #[inline]
-            fn log_with_impl(self, base: Self, working_digits: u32, mode: RoundingMode) -> Self {
-                let algo = match const { select::<$N, SCALE>() } {
-                    Select::ByAlgorithm(a) => a,
-                    Select::ByValue(_) => Algorithm::LnDivide,
-                };
-                match algo {
-                    Algorithm::LnDivide => {
-                        // `working_digits == GUARD` reproduces the strict
-                        // path exactly (the prior `_approx_with` short-circuit).
-                        if working_digits == crate::types::widths::$core_mod::GUARD {
-                            Self::from_bits(
-                                crate::types::widths::$core_mod::log_strict_with_kernel::<SCALE>(
-                                    self.to_bits(),
-                                    base.to_bits(),
-                                    mode,
-                                ),
-                            )
-                        } else {
-                            Self::from_bits(
-                                crate::types::widths::$core_mod::log_approx_with_kernel::<SCALE>(
-                                    self.to_bits(),
-                                    base.to_bits(),
-                                    working_digits,
-                                    mode,
-                                ),
-                            )
-                        }
-                    }
-            Algorithm::Schoolbook => Self::from_bits(
-                        crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::$core_mod::Core, SCALE>(
-                            self.to_bits(),
-                            base.to_bits(),
-                            mode,
-                        ),
-                    ),
-                }
-            }
-        }
+#[inline]
+#[must_use]
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    mode: RoundingMode,
+) -> Int<N> {
+    let algo = match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f) => f(&raw),
     };
+    match algo {
+        Algorithm::LnDivide => ln_divide_routed::<N, SCALE>(raw, braw, mode),
+        Algorithm::Schoolbook => schoolbook_routed::<N, SCALE>(raw, braw, mode),
+    }
 }
 
-#[cfg(any(feature = "d57", feature = "wide"))]
-log_policy_wide!(D57, 3, wide_trig_d57);
-#[cfg(any(feature = "d76", feature = "wide"))]
-log_policy_wide!(D76, 4, wide_trig_d76);
-#[cfg(any(feature = "d115", feature = "wide"))]
-log_policy_wide!(D115, 6, wide_trig_d115);
-#[cfg(any(feature = "d153", feature = "wide"))]
-log_policy_wide!(D153, 8, wide_trig_d153);
-#[cfg(any(feature = "d230", feature = "wide"))]
-log_policy_wide!(D230, 12, wide_trig_d230);
-#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-log_policy_wide!(D307, 16, wide_trig_d307);
-#[cfg(any(feature = "d462", feature = "x-wide"))]
-log_policy_wide!(D462, 24, wide_trig_d462);
-#[cfg(any(feature = "d616", feature = "x-wide"))]
-log_policy_wide!(D616, 32, wide_trig_d616);
-#[cfg(any(feature = "d924", feature = "xx-wide"))]
-log_policy_wide!(D924, 48, wide_trig_d924);
-#[cfg(any(feature = "d1232", feature = "xx-wide"))]
-log_policy_wide!(D1232, 64, wide_trig_d1232);
+#[inline]
+#[must_use]
+pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Int<N> {
+    let algo = match const { select::<N, SCALE>() } {
+        Select::ByAlgorithm(a) => a,
+        Select::ByValue(f) => f(&raw),
+    };
+    match algo {
+        Algorithm::LnDivide => ln_divide_with_routed::<N, SCALE>(raw, braw, working_digits, mode),
+        Algorithm::Schoolbook => schoolbook_with_routed::<N, SCALE>(raw, braw, working_digits, mode),
+    }
+}
+
+#[inline]
+fn ln_divide_routed<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    mode: RoundingMode,
+) -> Int<N> {
+    match N {
+        1 => crate::algos::log::log_ln_divide::log_ln_divide_d18::<SCALE>(raw.resize_to::<Int<1>>(), braw.resize_to::<Int<1>>(), mode).resize_to::<Int<N>>(),
+        2 => crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => crate::types::widths::wide_trig_d57::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => crate::types::widths::wide_trig_d76::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => crate::types::widths::wide_trig_d115::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => crate::types::widths::wide_trig_d153::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => crate::types::widths::wide_trig_d230::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => crate::types::widths::wide_trig_d307::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => crate::types::widths::wide_trig_d462::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => crate::types::widths::wide_trig_d616::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => crate::types::widths::wide_trig_d924::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => crate::types::widths::wide_trig_d1232::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        _ => crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+    }
+}
+
+#[inline]
+fn schoolbook_routed<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    mode: RoundingMode,
+) -> Int<N> {
+    match N {
+        1 => crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        2 => crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        _ => crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+    }
+}
+
+#[inline]
+fn ln_divide_with_routed<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Int<N> {
+    match N {
+        1 => crate::algos::log::log_ln_divide::log_ln_divide_d18_approx::<SCALE>(raw.resize_to::<Int<1>>(), braw.resize_to::<Int<1>>(), working_digits, mode).resize_to::<Int<N>>(),
+        2 => crate::algos::log::log_ln_divide::log_ln_divide_d38_approx::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => { if working_digits == crate::types::widths::wide_trig_d57::GUARD { crate::types::widths::wide_trig_d57::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode) } else { crate::types::widths::wide_trig_d57::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => { if working_digits == crate::types::widths::wide_trig_d76::GUARD { crate::types::widths::wide_trig_d76::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode) } else { crate::types::widths::wide_trig_d76::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => { if working_digits == crate::types::widths::wide_trig_d115::GUARD { crate::types::widths::wide_trig_d115::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode) } else { crate::types::widths::wide_trig_d115::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => { if working_digits == crate::types::widths::wide_trig_d153::GUARD { crate::types::widths::wide_trig_d153::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode) } else { crate::types::widths::wide_trig_d153::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => { if working_digits == crate::types::widths::wide_trig_d230::GUARD { crate::types::widths::wide_trig_d230::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode) } else { crate::types::widths::wide_trig_d230::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => { if working_digits == crate::types::widths::wide_trig_d307::GUARD { crate::types::widths::wide_trig_d307::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode) } else { crate::types::widths::wide_trig_d307::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => { if working_digits == crate::types::widths::wide_trig_d462::GUARD { crate::types::widths::wide_trig_d462::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode) } else { crate::types::widths::wide_trig_d462::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => { if working_digits == crate::types::widths::wide_trig_d616::GUARD { crate::types::widths::wide_trig_d616::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode) } else { crate::types::widths::wide_trig_d616::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => { if working_digits == crate::types::widths::wide_trig_d924::GUARD { crate::types::widths::wide_trig_d924::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode) } else { crate::types::widths::wide_trig_d924::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => { if working_digits == crate::types::widths::wide_trig_d1232::GUARD { crate::types::widths::wide_trig_d1232::log_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode) } else { crate::types::widths::wide_trig_d1232::log_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), working_digits, mode) } }.resize_to::<Int<N>>(),
+        _ => crate::algos::log::log_ln_divide::log_ln_divide_d38_approx::<SCALE>(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), working_digits, mode).resize_to::<Int<N>>(),
+    }
+}
+
+#[inline]
+fn schoolbook_with_routed<const N: usize, const SCALE: u32>(
+    raw: Int<N>,
+    braw: Int<N>,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> Int<N> {
+    match N {
+        1 => crate::algos::log::log_schoolbook::log_schoolbook_with(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), SCALE, working_digits, mode).resize_to::<Int<N>>(),
+        2 => crate::algos::log::log_schoolbook::log_schoolbook_with(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), SCALE, working_digits, mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        3 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), braw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw.resize_to::<Int<4>>(), braw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        6 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw.resize_to::<Int<6>>(), braw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        8 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw.resize_to::<Int<8>>(), braw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw.resize_to::<Int<12>>(), braw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+        16 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw.resize_to::<Int<16>>(), braw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        24 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw.resize_to::<Int<24>>(), braw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        32 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw.resize_to::<Int<32>>(), braw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        48 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), braw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        64 => crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), braw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        _ => crate::algos::log::log_schoolbook::log_schoolbook_with(raw.resize_to::<Int<2>>(), braw.resize_to::<Int<2>>(), SCALE, working_digits, mode).resize_to::<Int<N>>(),
+    }
+}

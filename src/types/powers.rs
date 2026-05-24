@@ -220,7 +220,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         exp: crate::D<crate::int::types::Int<2>, SCALE>,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
-        <Self as crate::policy::pow::PowPolicy>::powf_impl(self, exp, mode)
+        Self::from_bits(crate::policy::pow::dispatch::<_, SCALE>(self.to_bits(), exp.to_bits(), mode))
     }
 
     /// `self^exp` with caller-chosen guard digits.
@@ -246,7 +246,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == crate::types::log_exp::STRICT_GUARD {
             return self.powf_strict_with(exp, mode);
         }
-        <Self as crate::policy::pow::PowPolicy>::powf_with_impl(self, exp, working_digits, mode)
+        Self::from_bits(crate::policy::pow::dispatch_with::<_, SCALE>(self.to_bits(), exp.to_bits(), working_digits, mode))
     }
 
     /// Raises `self` to the power `exp`.

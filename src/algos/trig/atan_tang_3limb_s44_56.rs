@@ -24,7 +24,7 @@
 //! converges in ~15 terms at `w ≤ 87`, vs the 7 halvings + ~30 terms
 //! the generic path runs.
 //!
-//! The slot is exposed through [`crate::policy::trig::TrigPolicy`]
+//! The slot is exposed through `crate::policy::trig`
 //! only for `SCALE ∈ 44..=56`; lower scales keep using the generic
 //! [`crate::algos::support::wide_trig_core::atan_series`] which is
 //! already cheaper there (fewer halvings, faster Knuth dispatch).

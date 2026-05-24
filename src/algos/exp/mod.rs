@@ -2,8 +2,8 @@
 //!
 //! Narrow tier (D18 / D38) calls the `Fixed` 256-bit intermediate
 //! kernels; wide tier (D57 .. D1232) runs the tier-generic
-//! `exp_tang` / `*_series` kernels via `crate::policy::exp::ExpPolicy`.
-//! Both tiers route through `crate::policy::exp::ExpPolicy`.
+//! `exp_tang` / `*_series` kernels via `crate::policy::exp`.
+//! Both tiers route through `crate::policy::exp`.
 //!
 //! Variants:
 //!

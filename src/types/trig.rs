@@ -31,7 +31,7 @@
 //! # Layering
 //!
 //! Every public method on this file is a one-line delegate into
-//! `policy::trig::TrigPolicy`. The correctly-rounded kernels
+//! `policy::trig`. The correctly-rounded kernels
 //! (`sin_fixed`, `atan_fixed`, `atan2_kernel`, `to_fixed`, `wide_pi`,
 //! `wide_half_pi`, `small_x_linear_threshold`, and every per-method
 //! `*_strict` / `*_with` `Fixed`-shape function for sin / cos / tan /
@@ -171,7 +171,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn sin_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::sin_impl(self, mode)
+        Self::from_bits(crate::policy::trig::sin_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -193,7 +193,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.sin_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::sin_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::sin_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Cosine of `self` (radians). `cos(x) = sin(x + π/2)`.
@@ -206,7 +206,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn cos_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::cos_impl(self, mode)
+        Self::from_bits(crate::policy::trig::cos_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -228,7 +228,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.cos_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::cos_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::cos_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Tangent. Panics if `cos(self)` is zero.
@@ -241,7 +241,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn tan_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::tan_impl(self, mode)
+        Self::from_bits(crate::policy::trig::tan_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -263,7 +263,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.tan_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::tan_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::tan_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Arctangent.
@@ -276,7 +276,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn atan_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::atan_impl(self, mode)
+        Self::from_bits(crate::policy::trig::atan_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -298,7 +298,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.atan_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::atan_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::atan_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Arcsine. Panics if `|self| > 1`.
@@ -311,7 +311,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn asin_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::asin_impl(self, mode)
+        Self::from_bits(crate::policy::trig::asin_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -333,7 +333,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.asin_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::asin_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::asin_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Arccosine. Panics if `|self| > 1`.
@@ -346,7 +346,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn acos_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::acos_impl(self, mode)
+        Self::from_bits(crate::policy::trig::acos_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -368,7 +368,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.acos_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::acos_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::acos_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Four-quadrant arctangent of `self` (`y`) and `other` (`x`).
@@ -385,7 +385,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         other: Self,
         mode: crate::support::rounding::RoundingMode,
     ) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::atan2_impl(self, other, mode)
+        Self::from_bits(crate::policy::trig::atan2_dispatch::<_, SCALE>(self.to_bits(), other.to_bits(), mode))
     }
 
     #[inline]
@@ -409,12 +409,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.atan2_strict_with(other, mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::atan2_with_impl(
-            self,
-            other,
-            working_digits,
-            mode,
-        )
+        Self::from_bits(crate::policy::trig::atan2_dispatch_with::<_, SCALE>(self.to_bits(), other.to_bits(), working_digits, mode))
     }
 
     // ── Hyperbolic family (one-line policy delegates) ─────────────
@@ -429,7 +424,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn sinh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::sinh_impl(self, mode)
+        Self::from_bits(crate::policy::trig::sinh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -451,7 +446,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.sinh_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::sinh_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::sinh_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Hyperbolic cosine.
@@ -464,7 +459,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn cosh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::cosh_impl(self, mode)
+        Self::from_bits(crate::policy::trig::cosh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -486,7 +481,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.cosh_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::cosh_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::cosh_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Hyperbolic tangent.
@@ -499,7 +494,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn tanh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::tanh_impl(self, mode)
+        Self::from_bits(crate::policy::trig::tanh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -521,7 +516,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.tanh_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::tanh_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::tanh_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Inverse hyperbolic sine. `asinh(x) = sign · ln(|x| + √(x²+1))`.
@@ -534,7 +529,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn asinh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::asinh_impl(self, mode)
+        Self::from_bits(crate::policy::trig::asinh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -556,7 +551,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.asinh_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::asinh_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::asinh_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Inverse hyperbolic cosine. Panics if `self < 1`.
@@ -569,7 +564,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn acosh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::acosh_impl(self, mode)
+        Self::from_bits(crate::policy::trig::acosh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -591,7 +586,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.acosh_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::acosh_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::acosh_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Inverse hyperbolic tangent. Panics if `|self| >= 1`.
@@ -604,7 +599,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn atanh_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::atanh_impl(self, mode)
+        Self::from_bits(crate::policy::trig::atanh_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -626,7 +621,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.atanh_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::atanh_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::atanh_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     // ── Angle conversions (one-line policy delegates) ─────────────
@@ -641,7 +636,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn to_degrees_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::to_degrees_impl(self, mode)
+        Self::from_bits(crate::policy::trig::to_degrees_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -663,7 +658,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.to_degrees_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::to_degrees_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::to_degrees_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Convert degrees to radians: `self · (π / 180)`.
@@ -676,7 +671,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn to_radians_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::trig::TrigPolicy>::to_radians_impl(self, mode)
+        Self::from_bits(crate::policy::trig::to_radians_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     #[inline]
@@ -698,7 +693,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.to_radians_strict_with(mode);
         }
-        <Self as crate::policy::trig::TrigPolicy>::to_radians_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::trig::to_radians_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 }
 

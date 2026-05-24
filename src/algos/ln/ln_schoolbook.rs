@@ -105,7 +105,7 @@ pub(crate) fn ln_schoolbook_fixed(v_w: Fixed, w: u32) -> Fixed {
 /// exponent split via the leaf [`WideTrigCore::ln_fixed`] (the wide-tier
 /// realisation of `ln(2^k·m) = k·ln2 + 2·artanh((m-1)/(m+1))`), rounded
 /// correctly with Ziv escalation. Mirrors `ln_series`; registered as the
-/// unrouted `Schoolbook` arm of the wide `LnPolicy` tiers.
+/// unrouted `Schoolbook` arm of the wide `policy::ln` tiers.
 ///
 /// # Panics
 ///
