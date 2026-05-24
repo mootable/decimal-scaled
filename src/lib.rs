@@ -286,6 +286,64 @@ pub mod __bench_internals {
         crate::int::algos::rem::rem_schoolbook::rem_schoolbook::<N>(a, b)
     }
 
+    /// Integer `sqr` kernel candidates exposed for the `int_unary_kernel_ab`
+    /// microbench (the dispatch-seam A/B that confirms the `sqr` policy
+    /// routes to `HalfProduct` at every width vs the `Schoolbook` reference).
+    #[inline(never)]
+    pub fn sqr_half_product<const N: usize>(
+        x: crate::int::types::Uint<N>,
+    ) -> crate::int::types::Uint<N> {
+        crate::int::algos::sqr::sqr_half_product::sqr_half_product::<N>(x)
+    }
+    #[inline(never)]
+    pub fn sqr_schoolbook<const N: usize>(
+        x: crate::int::types::Uint<N>,
+    ) -> crate::int::types::Uint<N> {
+        crate::int::algos::sqr::sqr_schoolbook::sqr_schoolbook::<N>(x)
+    }
+
+    /// Integer `pow` kernel candidates exposed for the `int_unary_kernel_ab`
+    /// microbench (confirms `SquareAndMultiply` beats the `Schoolbook`
+    /// repeated-multiply reference at the small fixed exponents `pow` uses).
+    #[inline(never)]
+    pub fn pow_square_and_multiply<const N: usize>(
+        base: crate::int::types::Uint<N>,
+        exp: u32,
+    ) -> crate::int::types::Uint<N> {
+        crate::int::algos::pow::pow_square_and_multiply::pow_square_and_multiply::<N>(base, exp)
+    }
+    #[inline(never)]
+    pub fn pow_schoolbook<const N: usize>(
+        base: crate::int::types::Uint<N>,
+        exp: u32,
+    ) -> crate::int::types::Uint<N> {
+        crate::int::algos::pow::pow_schoolbook::pow_schoolbook::<N>(base, exp)
+    }
+
+    /// Integer `isqrt` kernel candidates (Newton f64-seeded vs the bitwise
+    /// `Schoolbook` reference) over little-endian magnitude limb slices,
+    /// exposed for the `int_unary_kernel_ab` microbench.
+    #[inline(never)]
+    pub fn isqrt_newton_slice(n: &[u64], out: &mut [u64]) {
+        crate::int::algos::isqrt::isqrt_newton::isqrt_newton(n, out)
+    }
+    #[inline(never)]
+    pub fn isqrt_schoolbook_slice(n: &[u64], out: &mut [u64]) {
+        crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook(n, out)
+    }
+
+    /// Integer `icbrt` kernel candidates (Newton f64-seeded vs the bitwise
+    /// `Schoolbook` reference) over little-endian magnitude limb slices,
+    /// exposed for the `int_unary_kernel_ab` microbench.
+    #[inline(never)]
+    pub fn icbrt_newton_slice(n: &[u64], out: &mut [u64]) {
+        crate::int::algos::icbrt::icbrt_newton::icbrt_newton(n, out)
+    }
+    #[inline(never)]
+    pub fn icbrt_schoolbook_slice(n: &[u64], out: &mut [u64]) {
+        crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook(n, out)
+    }
+
     /// Decimal divide kernels exposed for the `mul_div_native_ab`
     /// microbench (the dispatch-seam A/B that decided narrow `N == 2`
     /// should route to the hardware-`i128` `div_native` arm; mul stays on
