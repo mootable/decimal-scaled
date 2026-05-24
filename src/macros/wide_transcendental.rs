@@ -330,7 +330,12 @@ pub(crate) mod exp_generic {
         let mut squared = sum;
         let mut i = 0;
         while i < n {
-            squared = mul(squared, squared, w_ext);
+            // Dedicated low-half comba SQUARE (`sqr`, ~N²/2 limb-mults)
+            // instead of the general `mul(x, x)` (~3N²/4 via the u128-packed
+            // low product): bit-identical low-`BITS` of `x²`, ~1.5× fewer
+            // limb-mults. `mul` is `round_div_pow10(x·x, w)`; the square
+            // feeds the same divide.
+            squared = round_div_pow10(squared.sqr(), w_ext);
             i += 1;
         }
         let sum = squared;
@@ -1944,7 +1949,15 @@ macro_rules! decl_wide_transcendental {
                 let mut squared = sum;
                 let mut i = 0;
                 while i < n {
-                    squared = mul_cached_low_u128(squared, squared, pow10_w);
+                    // Dedicated low-half comba SQUARE (~N²/2 limb-mults)
+                    // instead of `mul_cached_low_u128(x, x)` (~3N²/4 via the
+                    // u128-packed low product): bit-identical low-`BITS` of
+                    // `x²`, ~1.5× fewer limb-mults, feeding the same
+                    // `round_div` by `pow10_w`.
+                    squared = round_div(
+                        $crate::int::types::traits::BigInt::sqr(squared),
+                        pow10_w,
+                    );
                     i += 1;
                 }
                 let sum = squared;
