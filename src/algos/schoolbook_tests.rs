@@ -112,22 +112,22 @@ mod tests {
     #[test]
     fn mul_schoolbook_basic_scale2() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let r = mul_schoolbook::<1, 2, 1, 1, 2>(i1(150), i1(200), RoundingMode::HalfToEven);
+        let r = mul_schoolbook::<1, 2>(i1(150), i1(200), RoundingMode::HalfToEven);
         assert_eq!(r, i1(300));
     }
 
     #[test]
     fn mul_schoolbook_neg_pos() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let r = mul_schoolbook::<1, 2, 1, 1, 2>(i1(-200), i1(300), RoundingMode::HalfToEven);
+        let r = mul_schoolbook::<1, 2>(i1(-200), i1(300), RoundingMode::HalfToEven);
         assert_eq!(r, i1(-600));
     }
 
     #[test]
     fn mul_schoolbook_rounding_half() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let even = mul_schoolbook::<1, 2, 1, 1, 2>(i1(150), i1(133), RoundingMode::HalfToEven);
-        let away = mul_schoolbook::<1, 2, 1, 1, 2>(i1(150), i1(133), RoundingMode::HalfAwayFromZero);
+        let even = mul_schoolbook::<1, 2>(i1(150), i1(133), RoundingMode::HalfToEven);
+        let away = mul_schoolbook::<1, 2>(i1(150), i1(133), RoundingMode::HalfAwayFromZero);
         assert_eq!(even, i1(200));
         assert_eq!(away, i1(200));
     }
@@ -135,8 +135,8 @@ mod tests {
     #[test]
     fn mul_schoolbook_rounding_floor_ceil() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let floor = mul_schoolbook::<1, 2, 1, 1, 2>(i1(150), i1(133), RoundingMode::Floor);
-        let ceil = mul_schoolbook::<1, 2, 1, 1, 2>(i1(150), i1(133), RoundingMode::Ceiling);
+        let floor = mul_schoolbook::<1, 2>(i1(150), i1(133), RoundingMode::Floor);
+        let ceil = mul_schoolbook::<1, 2>(i1(150), i1(133), RoundingMode::Ceiling);
         assert_eq!(floor, i1(199));
         assert_eq!(ceil, i1(200));
     }
@@ -144,7 +144,7 @@ mod tests {
     #[test]
     fn mul_schoolbook_scale4_exact() {
         use crate::algos::mul::mul_schoolbook::mul_schoolbook;
-        let r = mul_schoolbook::<1, 2, 1, 1, 4>(i1(12500), i1(40000), RoundingMode::HalfToEven);
+        let r = mul_schoolbook::<1, 4>(i1(12500), i1(40000), RoundingMode::HalfToEven);
         assert_eq!(r, i1(50000));
     }
 
@@ -162,8 +162,8 @@ mod tests {
             let b = i2(rb);
             for mode in [RoundingMode::HalfToEven, RoundingMode::HalfAwayFromZero,
                 RoundingMode::Floor, RoundingMode::Ceiling, RoundingMode::Trunc, RoundingMode::HalfTowardZero] {
-                let sb = mul_schoolbook::<2, 4, 1, 2, SCALE>(a, b, mode);
-                let wd = mul_widen_divide::<2, 4, 1, 2, SCALE>(a, b, mode);
+                let sb = mul_schoolbook::<2, SCALE>(a, b, mode);
+                let wd = mul_widen_divide::<2, SCALE>(a, b, mode);
                 assert_eq!(sb, wd);
             }
         }
@@ -174,35 +174,35 @@ mod tests {
     #[test]
     fn div_schoolbook_basic_scale2() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1, 2>(i1(600), i1(200), i1(100), RoundingMode::HalfToEven);
+        let r = div_schoolbook::<1>(i1(600), i1(200), i1(100), RoundingMode::HalfToEven);
         assert_eq!(r, i1(300));
     }
 
     #[test]
     fn div_schoolbook_floor_truncation() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1, 2>(i1(100), i1(300), i1(100), RoundingMode::Floor);
+        let r = div_schoolbook::<1>(i1(100), i1(300), i1(100), RoundingMode::Floor);
         assert_eq!(r, i1(33));
     }
 
     #[test]
     fn div_schoolbook_ceiling_rounding() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1, 2>(i1(100), i1(300), i1(100), RoundingMode::Ceiling);
+        let r = div_schoolbook::<1>(i1(100), i1(300), i1(100), RoundingMode::Ceiling);
         assert_eq!(r, i1(34));
     }
 
     #[test]
     fn div_schoolbook_negative_dividend() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1, 2>(i1(-600), i1(200), i1(100), RoundingMode::HalfToEven);
+        let r = div_schoolbook::<1>(i1(-600), i1(200), i1(100), RoundingMode::HalfToEven);
         assert_eq!(r, i1(-300));
     }
 
     #[test]
     fn div_schoolbook_exact_half() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
-        let r = div_schoolbook::<1, 2>(i1(100), i1(200), i1(100), RoundingMode::HalfToEven);
+        let r = div_schoolbook::<1>(i1(100), i1(200), i1(100), RoundingMode::HalfToEven);
         assert_eq!(r, i1(50));
     }
 
@@ -210,12 +210,12 @@ mod tests {
     fn div_schoolbook_all_modes_one_third() {
         use crate::algos::div::div_schoolbook::div_schoolbook;
         let (a, b, mult) = (i1(100), i1(300), i1(100));
-        assert_eq!(div_schoolbook::<1, 2>(a, b, mult, RoundingMode::Floor), i1(33));
-        assert_eq!(div_schoolbook::<1, 2>(a, b, mult, RoundingMode::Ceiling), i1(34));
-        assert_eq!(div_schoolbook::<1, 2>(a, b, mult, RoundingMode::Trunc), i1(33));
-        assert_eq!(div_schoolbook::<1, 2>(a, b, mult, RoundingMode::HalfTowardZero), i1(33));
-        assert_eq!(div_schoolbook::<1, 2>(a, b, mult, RoundingMode::HalfToEven), i1(33));
-        assert_eq!(div_schoolbook::<1, 2>(a, b, mult, RoundingMode::HalfAwayFromZero), i1(33));
+        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::Floor), i1(33));
+        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::Ceiling), i1(34));
+        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::Trunc), i1(33));
+        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::HalfTowardZero), i1(33));
+        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::HalfToEven), i1(33));
+        assert_eq!(div_schoolbook::<1>(a, b, mult, RoundingMode::HalfAwayFromZero), i1(33));
     }
 
     #[test]
@@ -233,8 +233,8 @@ mod tests {
             let b = i2(rb);
             for mode in [RoundingMode::HalfToEven, RoundingMode::HalfAwayFromZero,
                 RoundingMode::Floor, RoundingMode::Ceiling, RoundingMode::Trunc, RoundingMode::HalfTowardZero] {
-                let sb = div_schoolbook::<2, 4>(a, b, mult, mode);
-                let wd = div_widen_scale::<2, 4>(a, b, mult, mode);
+                let sb = div_schoolbook::<2>(a, b, mult, mode);
+                let wd = div_widen_scale::<2>(a, b, mult, mode);
                 assert_eq!(sb, wd);
             }
         }
