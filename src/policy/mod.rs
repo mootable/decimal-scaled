@@ -41,3 +41,35 @@ pub(crate) mod sub;
 pub(crate) mod to_degrees;
 pub(crate) mod to_radians;
 pub(crate) mod trig;
+
+// ── Narrow-tier checked narrow ──────────────────────────────────────
+//
+// The exp/ln/log/pow policies route the narrow tier (N == 1, i.e. D18,
+// and the identity N == 2, i.e. D38) by computing the result at Int<2>
+// (D38 width) and narrowing back to storage. For N == 1 that narrow is
+// LOSSY and must PANIC when the D38 result exceeds the i64 storage range
+// (e.g. exp(5) at D18<17>), restoring the documented strict-overflow
+// contract. (For N == 2 it is identity; for the wide arms N >= 3 the
+// result is already computed at Int<N> and routed through their own
+// resize.)
+//
+// `Int<2>::narrow::<N>()` cannot be used here: these arms are generic
+// over N and instantiate for wide N too (dead at runtime), and the
+// inherent `narrow::<M>` requires `M <= N` at compile time. Instead we
+// resize to the storage width and verify the value survives a round-trip
+// back to Int<2>; any discrepancy means the value did not fit and we
+// panic via the shared diagnostics helper (stable substring
+// `"{method}: result out of range"`).
+#[inline]
+pub(crate) fn narrow_checked<const N: usize>(
+    wide: crate::int::types::Int<2>,
+    method: &str,
+    scale: u32,
+) -> crate::int::types::Int<N> {
+    use crate::int::types::traits::BigInt;
+    let out = wide.resize_to::<crate::int::types::Int<N>>();
+    if out.resize_to::<crate::int::types::Int<2>>() != wide {
+        crate::support::diagnostics::overflow_panic_with_scale(method, scale);
+    }
+    out
+}

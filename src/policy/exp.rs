@@ -84,13 +84,16 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
     // Only the narrow tier honours caller working_digits (matching the
     // prior ExpPolicy routing, where wide exp_with_impl ignored it).
     match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp_with(
-            raw.resize_to::<Int<2>>(),
+        1 | 2 => super::narrow_checked::<N>(
+            crate::algos::exp::exp_series_2limb::exp_with(
+                raw.resize_to::<Int<2>>(),
+                SCALE,
+                working_digits,
+                mode,
+            ),
+            "exp_with",
             SCALE,
-            working_digits,
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        ),
         _ => {
             let _ = working_digits;
             dispatch::<N, SCALE>(raw, mode)
@@ -101,7 +104,7 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
 #[inline]
 fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -122,14 +125,14 @@ fn series_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMo
         48 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
-        _ => crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
     }
 }
 
 #[inline]
 fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -150,7 +153,7 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
         48 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
-        _ => crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(crate::algos::exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp_strict", SCALE),
     }
 }
 
@@ -194,7 +197,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
 #[must_use]
 pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp2_strict", SCALE),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::types::widths::wide_trig_d57::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -215,7 +218,7 @@ pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
         48 => crate::types::widths::wide_trig_d924::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::types::widths::wide_trig_d1232::exp2_strict_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
-        _ => crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode).resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_strict::<SCALE>(raw.resize_to::<Int<2>>(), mode), "exp2_strict", SCALE),
     }
 }
 
@@ -223,7 +226,7 @@ pub(crate) fn exp2_dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode:
 #[must_use]
 pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, working_digits: u32, mode: RoundingMode) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode), "exp2_with", SCALE),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::types::widths::wide_trig_d57::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<3>>(), working_digits, mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
@@ -244,6 +247,6 @@ pub(crate) fn exp2_dispatch_with<const N: usize, const SCALE: u32>(raw: Int<N>, 
         48 => crate::types::widths::wide_trig_d924::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<48>>(), working_digits, mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         64 => crate::types::widths::wide_trig_d1232::exp2_approx_with_kernel::<SCALE>(raw.resize_to::<Int<64>>(), working_digits, mode).resize_to::<Int<N>>(),
-        _ => crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode).resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(crate::algos::exp::exp_series_2limb::exp2_with(raw.resize_to::<Int<2>>(), SCALE, working_digits, mode), "exp2_with", SCALE),
     }
 }
