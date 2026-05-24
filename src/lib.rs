@@ -260,6 +260,34 @@ pub mod __bench_internals {
             num, den, quot, rem,
         )
     }
+    /// Integer hypot kernel candidates for the `hypot_ab` microbench:
+    /// the production Pythagoras path (radicand `a²+b²` + Newton slice
+    /// `isqrt` + round) vs the native-u128 narrow fast path. Both
+    /// bit-identical; A/B confirms which is faster per width.
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn hypot_pythagoras<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> Option<crate::int::types::Int<N>>
+    where
+        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+    {
+        crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
+    }
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn hypot_u128_fast<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> Option<crate::int::types::Int<N>>
+    where
+        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+    {
+        crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast::<N>(a, b, mode)
+    }
 
     /// Remainder algorithm candidates exposed for the `rem_kernel_ab`
     /// microbench (the dispatch-seam A/B that decides the `rem` policy

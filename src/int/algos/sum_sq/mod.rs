@@ -20,3 +20,6 @@
 //! The per-`N` policy lives in [`crate::int::policy::sum_sq`].
 
 pub(crate) mod sum_sq_schoolbook;
+/// UNBENCHED CANDIDATE — comba full-width squaring variant; not selected by the policy.
+#[allow(dead_code)]
+pub(crate) mod sum_sq_comba;

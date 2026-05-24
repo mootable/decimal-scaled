@@ -804,6 +804,14 @@ path = "benches/micro/mul_kernel_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# hypot_ab: dispatch-seam A/B for the integer hypot policy — the production
+# Pythagoras path vs the native-u128 narrow fast path (the D38 regression).
+[[bench]]
+name = "hypot_ab"
+path = "benches/micro/hypot_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # mul_low_u128_ab: pilot A/B for the wide-tier exp/powf Taylor
 # work-multiply -- the truncated-low base-2^64 `mul_low_fixed` vs the
 # u128-packed `mul_low_fixed_u128` candidate at the D616/D924/D1232 work

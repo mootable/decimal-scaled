@@ -20,3 +20,6 @@
 //! The per-`N` policy lives in [`crate::int::policy::hypot`].
 
 pub(crate) mod hypot_pythagoras;
+/// Native-u128 narrow fast path (`N <= 3`); selected by the policy for the
+/// narrow tiers, falls back to `hypot_pythagoras` for radicands exceeding u128.
+pub(crate) mod hypot_u128_fast;
