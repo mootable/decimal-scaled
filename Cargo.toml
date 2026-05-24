@@ -796,3 +796,10 @@ name = "mul_kernel_ab"
 path = "benches/micro/mul_kernel_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
+
+# rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
+[[bench]]
+name = "rem_kernel_ab"
+path = "benches/micro/rem_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
