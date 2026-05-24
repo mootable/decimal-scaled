@@ -19,6 +19,7 @@
 use crate::int::algos::div::div_burnikel_ziegler_with_knuth::div_burnikel_ziegler_with_knuth;
 use crate::int::algos::div::div_knuth::div_knuth;
 use crate::int::algos::div::div_rem::div_rem;
+use crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook;
 
 // ── 1. the real division engines — NAMED, no `Default` ────────────────
 
@@ -37,6 +38,13 @@ enum Algorithm {
     /// [`div_burnikel_ziegler_with_knuth`] — Burnikel–Ziegler outer
     /// chunking, recursing to Knuth as its base case.
     BurnikelZieglerWithKnuth,
+    /// [`div_rem_schoolbook`] — binary shift-subtract long division,
+    /// the naive reference baseline. Registered but unrouted: `select`
+    /// never returns this variant; it exists for unit-test reachability
+    /// and future routing experiments. `#[allow(dead_code)]` suppresses
+    /// the compiler warning.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -115,5 +123,6 @@ pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u6
         Algorithm::BurnikelZieglerWithKnuth => {
             div_burnikel_ziegler_with_knuth(num, den, quot, rem)
         }
+        Algorithm::Schoolbook => div_rem_schoolbook(num, den, quot, rem),
     }
 }
