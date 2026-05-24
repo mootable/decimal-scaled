@@ -55,6 +55,11 @@ enum Algorithm {
     /// the canonical two's-complement negation. `MIN` negates to itself,
     /// matching the primitive signed integer contract.
     TwosComplement,
+    /// Schoolbook reference tag — delegates to the same [`neg_twos_complement`]
+    /// kernel. Bitwise-NOT-plus-one IS the schoolbook negation algorithm; this
+    /// variant exists as an explicit, benchmarkable seam.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -102,5 +107,6 @@ pub(crate) const fn dispatch<const N: usize>(a: Int<N>) -> Int<N> {
     };
     match algo {
         Algorithm::TwosComplement => neg_twos_complement(a),
+        Algorithm::Schoolbook => neg_twos_complement(a),
     }
 }
