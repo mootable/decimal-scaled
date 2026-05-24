@@ -9,7 +9,7 @@
 //! the raw `i128` storage at the input's scale; the typed method shell
 //! handles the panic-on-overflow message.
 //!
-//! Hosts the shared `Fixed` exp primitive used by the `ExpPolicy`
+//! Hosts the shared `Fixed` exp primitive used by the `policy::exp`
 //! defaults (`exp_fixed`) so the typed-shell file has no
 //! `crate::algos::*` or `crate::algos::support::fixed::*` references left.
 
@@ -187,7 +187,7 @@ fn exp2_exact_pin(raw: i128, scale: u32) -> Option<i128> {
 }
 
 /// `2^x = exp(x · ln 2)` on the `Fixed` intermediate. Used by
-/// `ExpPolicy::exp2_impl` when the D57 borrow path is not available.
+/// `policy::exp::exp2_dispatch` when the D57 borrow path is not available.
 #[inline]
 #[must_use]
 pub(crate) fn exp2_with(raw: Int<2>, scale: u32, working_digits: u32, mode: RoundingMode) -> Int<2> {

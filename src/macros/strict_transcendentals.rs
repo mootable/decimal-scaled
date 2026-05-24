@@ -67,10 +67,10 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn exp_strict(self) -> Self {
-                <Self as $crate::policy::exp::ExpPolicy>::exp_impl(
-                    self,
+                Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(
+                    self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
             /// `exp2_strict` — delegates to [`crate::types::widths::D38::exp2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]

@@ -2855,6 +2855,49 @@ macro_rules! decl_wide_transcendental {
                 let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln10(w), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
+
+            /// Strict-guard `exp2(x) = 2^x` under `mode`, on raw storage.
+            /// Mirrors the inherent `exp2_strict_with` body verbatim; the
+            /// `policy::exp` dispatch routes here so `exp2` never re-enters
+            /// a sibling decimal policy.
+            #[inline]
+            pub(crate) fn exp2_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
+                }
+                if let ::core::option::Option::Some(v) = exp2_exact_pin(raw, SCALE) {
+                    return v;
+                }
+                let k_lift = exp2_result_int_digits(raw, SCALE);
+                let base_guard = GUARD + k_lift;
+                round_to_storage_directed(base_guard, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    let arg = mul(to_work_w(raw, guard), ln2(w), w);
+                    exp_fixed_wide(arg, w)
+                })
+            }
+
+            /// Approx-guard `exp2(x)` with caller-chosen `working_digits`.
+            #[inline]
+            pub(crate) fn exp2_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if working_digits == GUARD {
+                    return exp2_strict_with_kernel::<SCALE>(raw, mode);
+                }
+                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
+                }
+                let w = SCALE + working_digits;
+                let arg = mul(to_work_w(raw, working_digits), ln2(w), w);
+                let r = exp_fixed(arg, w);
+                round_to_storage_with(r, w, SCALE, mode)
+            }
         }
 
         impl<const SCALE: u32> $Type<SCALE> {
@@ -3032,10 +3075,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp_strict(self) -> Self {
-                <Self as $crate::policy::exp::ExpPolicy>::exp_impl(
-                    self,
+                Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(
+                    self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
 
             /// `2^self`, as `exp(self · ln 2)`. Strict and correctly
@@ -3537,52 +3580,14 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn exp_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::exp::ExpPolicy>::exp_impl(self, mode)
+                Self::from_bits($crate::policy::exp::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::exp2_strict`].
             #[inline]
             #[must_use]
             pub fn exp2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ONE;
-                }
-                // Exact-power pin: `exp2(integer k) = 2^k` is an exact
-                // algebraic point. Detect an integer argument and emit the
-                // exact `2^k` so a directed mode never bumps it by one LSB
-                // (the `exp(k·ln 2)` round-off otherwise lands a hair off
-                // the grid line).
-                // Exact-power pin handles the `2^k` integer-result cases.
-                if let ::core::option::Option::Some(v) = $core::exp2_exact_pin(raw, SCALE) {
-                    return Self::from_bits(v);
-                }
-                // Large-result lift: `2^x` carries `~|x|·log10(2)` integer
-                // digits, and `exp_fixed` narrows to the working scale `w`
-                // before returning, so the second narrowing here (w →
-                // SCALE) consumes the guard budget twice. Lift the base
-                // working scale by the result's integer-digit count so the
-                // final narrowing still sees a full guard. The lift is
-                // capped to keep `exp_fixed`'s internal `2^k` reassembly +
-                // post-Taylor squarings inside the working integer; for a
-                // `2^x` whose result is so large the squaring would exceed
-                // `W` (only the inputs whose result nears the storage
-                // overflow edge), the lift is clamped and the cell may
-                // still lose LSBs — those remain in the strict-golden
-                // ignore list, tracked as the wide-tier `exp_fixed`
-                // squaring-width limit.
-                let k_lift = $core::exp2_result_int_digits(raw, SCALE);
-                let base_guard = $core::GUARD + k_lift;
-                Self::from_bits($core::round_to_storage_directed(
-                    base_guard,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        let arg = $core::mul($core::to_work_w(raw, guard), $core::ln2(w), w);
-                        $core::exp_fixed_wide(arg, w)
-                    },
-                ))
+                Self::from_bits($core::exp2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::powf_strict`].
@@ -4323,17 +4328,7 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.exp2_strict_with(mode);
-                }
-                let raw = self.to_bits();
-                if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    return Self::ONE;
-                }
-                let w = SCALE + working_digits;
-                let arg = $core::mul($core::to_work_w(raw, working_digits), $core::ln2(w), w);
-                let r = $core::exp_fixed(arg, w);
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::exp2_approx_with_kernel::<SCALE>(self.to_bits(), working_digits, mode))
             }
 
             /// `xʸ` with caller-chosen guard digits.

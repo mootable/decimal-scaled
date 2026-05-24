@@ -303,7 +303,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn exp_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::exp::ExpPolicy>::exp_impl(self, mode)
+        Self::from_bits(crate::policy::exp::dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Exponential with caller-chosen guard digits.
@@ -327,7 +327,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.exp_strict_with(mode);
         }
-        <Self as crate::policy::exp::ExpPolicy>::exp_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::exp::dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Returns `e^self` (natural exponential).
@@ -349,7 +349,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn exp2_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::exp::ExpPolicy>::exp2_impl(self, mode)
+        Self::from_bits(crate::policy::exp::exp2_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Base-2 exponential with caller-chosen guard digits.
@@ -373,7 +373,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.exp2_strict_with(mode);
         }
-        <Self as crate::policy::exp::ExpPolicy>::exp2_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::exp::exp2_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Returns `2^self` (base-2 exponential).
