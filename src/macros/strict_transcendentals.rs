@@ -301,11 +301,11 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn powf_strict(self, exp: Self) -> Self {
-                <Self as $crate::policy::pow::PowPolicy>::powf_impl(
-                    self,
-                    exp,
+                Self::from_bits($crate::policy::pow::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    exp.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
 
             // ── Mode-aware (`_strict_with`) and guard-aware
