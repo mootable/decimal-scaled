@@ -82,7 +82,7 @@ macro_rules! decl_wide_roots {
             #[inline]
             #[must_use]
             pub fn sqrt_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::sqrt::SqrtPolicy>::sqrt_impl(self, mode)
+                Self($crate::policy::sqrt::dispatch::<SCALE, $SqrtWide, _>(self.0, mode))
             }
 
             /// Correctly-rounded cube root.

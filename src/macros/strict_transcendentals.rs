@@ -95,10 +95,10 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn sqrt_strict(self) -> Self {
-                <Self as $crate::policy::sqrt::SqrtPolicy>::sqrt_impl(
-                    self,
+                Self($crate::policy::sqrt::dispatch::<SCALE, $crate::int::types::Int<2>, 1>(
+                    self.0,
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
             /// `cbrt_strict` — delegates to the policy-registered cbrt
             /// kernel for this `(width, SCALE)` cell. **0.5 ULP
