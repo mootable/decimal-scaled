@@ -29,6 +29,10 @@
 
 pub(crate) mod div_burnikel_ziegler_with_knuth;
 pub(crate) mod div_fixed;
+// candidate (not wired): direct two's-complement i128 div_rem for N<=2,
+// skips the sign-magnitude round trip Int::div_rem pays on both operands
+// and both outputs. Sibling of int::algos::rem::rem_native_direct.
+pub(crate) mod div_native_direct;
 pub(crate) mod div_knuth;
 pub(crate) mod div_mg;
 pub(crate) mod div_rem;
