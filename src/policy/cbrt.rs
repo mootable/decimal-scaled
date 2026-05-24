@@ -46,8 +46,14 @@ enum Algorithm {
     /// [`cbrt::cbrt_mg_divide::cbrt_mg_divide`] — hand-tuned 384-bit
     /// cube root for the `Int<2>` storage (D38, and D18 widened to it).
     MgDivide,
-    /// [`cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed`]
-    /// — `f64`-seeded narrow-work bespoke for the `(D57, 20)` cell.
+    /// [`cbrt::cbrt_native::cbrt_native`] — `f64`-seeded `Int<6>`
+    /// Newton bespoke for the `(D57, 20)` cell. Runs Newton directly in
+    /// tight `Int<6>` values (two iterations from the `f64::cbrt` seed)
+    /// rather than through the width-agnostic int `icbrt` policy, whose
+    /// build-max scratch buffer churn dominated this small radicand.
+    /// Microbench: ~2× faster than [`Self::NewtonWithTableSeed`] at
+    /// `(D57, 20)`. Bit-identical to [`Self::Newton`] across all six
+    /// modes.
     ///
     /// Gated with the kernel: the `(D57, 20)` cell only exists when D57
     /// is compiled in, so the variant, its `select` arm, and its
@@ -55,6 +61,14 @@ enum Algorithm {
     /// both configs — see `docs/ARCHITECTURE.md` "Feature-flagging a
     /// variation").
     #[cfg(any(feature = "d57", feature = "wide"))]
+    Native,
+    /// [`cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed`]
+    /// — the prior `Int<6>` + int-`icbrt` arm for `(D57, 20)`. Superseded
+    /// by [`Self::Native`] (the int-`icbrt` scratch churn made it ~2×
+    /// slower); kept as an explicit benchmarkable reference seam, never
+    /// selected by `select`.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[allow(dead_code)]
     NewtonWithTableSeed,
     /// Schoolbook reference tag -- delegates to
     /// [`cbrt::cbrt_schoolbook::cbrt_schoolbook`], which uses the same
@@ -92,7 +106,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // with the kernel; falls to `Newton` when D57 is not compiled in
         // (in which case the `(3, 20)` cell is unreachable anyway).
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 20) => Select::ByAlgorithm(Algorithm::NewtonWithTableSeed),
+        (3, 20) => Select::ByAlgorithm(Algorithm::Native),
         // Everything else (all wide tiers, all other scales) — generic
         // Newton over the tier's work width.
         _ => Select::ByAlgorithm(Algorithm::Newton),
@@ -132,7 +146,12 @@ where
             cbrt::cbrt_mg_divide::cbrt_mg_divide(raw.resize_to::<Int<2>>(), SCALE, mode)
                 .resize_to::<Int<N>>()
         }
-        // (D57, 20): the bespoke kernel works on `Int<3>` storage.
+        // (D57, 20): the bespoke kernels work on `Int<3>` storage.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        Algorithm::Native => {
+            cbrt::cbrt_native::cbrt_native(raw.resize_to::<Int<3>>(), mode)
+                .resize_to::<Int<N>>()
+        }
         #[cfg(any(feature = "d57", feature = "wide"))]
         Algorithm::NewtonWithTableSeed => {
             cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed(

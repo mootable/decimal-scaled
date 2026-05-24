@@ -820,3 +820,12 @@ name = "mul_div_native_ab"
 path = "benches/micro/mul_div_native_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
+
+# root_kernel_ab: dispatch-seam A/B for the root policies -- D38 hypot /
+# sqrt (256-bit mg_divide vs the slice path) and D57<20> cbrt (f64-seeded
+# Int<6> Newton vs the int-icbrt table-seed arm vs the generic slice).
+[[bench]]
+name = "root_kernel_ab"
+path = "benches/micro/root_kernel_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]

@@ -344,6 +344,51 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<N> {
         crate::algos::rem::rem_native::rem_native::<N>(a, b)
     }
+    /// Root kernels exposed for the `root_kernel_ab` microbench (the
+    /// dispatch-seam A/B recovering the D57<20> cbrt regression vs prod
+    /// 0.4.4). `sqrt_mg` / `sqrt_newton_slice` are kept as the D38 sqrt
+    /// reference seam (the kernel was confirmed unchanged vs 0.4.4 and
+    /// stays on the 256-bit arm; the hot u128 path is ~25 ns). `cbrt_*`
+    /// are the D57<20> candidates: the f64-seeded `Int<6>` native arm vs
+    /// the `Int<6>` + int-`icbrt` table-seed arm vs the generic slice.
+    #[inline(never)]
+    pub fn sqrt_mg<const SCALE: u32>(
+        raw: crate::int::types::Int<2>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<2> {
+        crate::algos::sqrt::sqrt_mg_divide::sqrt_mg_divide(raw, SCALE, mode)
+    }
+    #[inline(never)]
+    pub fn sqrt_newton_slice<const SCALE: u32>(
+        raw: crate::int::types::Int<2>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<2> {
+        crate::algos::sqrt::sqrt_newton::sqrt_newton::<2>(raw, SCALE, mode)
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_native_d57s20(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::cbrt::cbrt_native::cbrt_native(raw, mode)
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_table_seed_d57s20(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed(raw, mode)
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_newton_slice<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::cbrt::cbrt_newton::cbrt_newton::<3>(raw, SCALE, mode)
+    }
     /// Build an `Int<N>` from a little-endian magnitude limb array (sign
     /// false). Lets the bench construct wide operands without exposing the
     /// internal constructors.
