@@ -54,8 +54,6 @@ pub(crate) fn to_radians_mul_pi_ratio<C: WideTrigCore, const SCALE: u32>(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::D;
-    use crate::int::types::Int;
 
     const MODES: [RoundingMode; 6] = [
         RoundingMode::HalfToEven,
@@ -69,6 +67,8 @@ mod tests {
     #[cfg(any(feature = "d57", feature = "wide"))]
     mod wide_d57 {
         use super::*;
+        use crate::D;
+        use crate::int::types::Int;
         use crate::types::widths::wide_trig_d57::Core;
 
         const S: u32 = 19;
