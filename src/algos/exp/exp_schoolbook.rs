@@ -38,6 +38,7 @@
 
 use crate::algos::ln::ln_series_2limb::wide_ln2;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -100,6 +101,28 @@ pub(crate) fn exp_schoolbook_fixed(v_w: Fixed, w: u32) -> Fixed {
     } else {
         sum.shr((-k) as u32)
     }
+}
+
+// ── Wide tier — generic over the tier core `C: WideTrigCore` ─────────
+
+/// Schoolbook `eˣ` for a wide tier — direct Maclaurin series via the
+/// range-reduced leaf [`WideTrigCore::exp_fixed`] (the wide-tier
+/// realisation of the `1 + s + s²/2! + …` textbook series with the Smith
+/// `r/2^n` reduction), rounded correctly with Ziv escalation. Mirrors
+/// `exp_series`; registered as the unrouted `Schoolbook` arm of the wide
+/// `ExpPolicy` tiers and a correctness/microbench reference.
+#[inline]
+#[must_use]
+pub(crate) fn exp_schoolbook<C: WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    if raw == C::storage_zero() {
+        return C::storage_one(SCALE);
+    }
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        C::exp_fixed(C::to_work_w(raw, guard), SCALE + guard)
+    })
 }
 
 /// `D38` schoolbook `eˣ` with explicit working digits and rounding mode.
@@ -183,6 +206,35 @@ mod tests {
         for raw_i in [0, one / 2, one, -(one / 2), 2 * one, -one,
                       one * 693_147_180 / 1_000_000_000] {
             for mode in MODES { check::<19>(raw_i, mode); }
+        }
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    mod wide_d57 {
+        use super::*;
+        use crate::types::widths::wide_trig_d57::Core;
+        use crate::D;
+
+        const S: u32 = 19;
+        fn raw9(units: i128) -> Int<3> {
+            Int::<3>::from_i128(units * 10_i128.pow(10))
+        }
+        const INPUTS9: [i128; 7] = [
+            0, 500_000_000, 1_000_000_000, -500_000_000,
+            2_000_000_000, -1_000_000_000, 693_147_180,
+        ];
+
+        #[test]
+        fn exp_schoolbook_matches_routed() {
+            for &u in &INPUTS9 {
+                let r = raw9(u);
+                for mode in MODES {
+                    assert_eq!(
+                        crate::algos::exp::exp_schoolbook::exp_schoolbook::<Core, S>(r, mode),
+                        D::<Int<3>, S>(r).exp_strict_with(mode).0,
+                        "D57 exp schoolbook != routed at units={u} mode={mode:?}"
+                    );
+                }
+            }
         }
     }
 }

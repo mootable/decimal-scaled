@@ -180,7 +180,7 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {
             Algorithm::ExpWithLn => pow::powf_series_2limb::powf_strict::<SCALE>(self.0, exp.0, mode),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(self.0, exp.0, mode),
         })
     }
     #[inline]
@@ -189,7 +189,7 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::ExpWithLn => {
                 pow::powf_series_2limb::powf_with::<SCALE>(self.0, exp.0, working_digits, mode)
             }
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => pow::pow_schoolbook::pow_schoolbook_with(self.0, exp.0, SCALE, working_digits, mode),
         })
     }
 }

@@ -206,7 +206,7 @@ impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::Series => exp::exp_series_2limb::exp_strict::<SCALE>(self.0, mode),
             #[cfg(feature = "_wide-support")]
             Algorithm::Tang => exp::exp_series_2limb::exp_strict::<SCALE>(self.0, mode),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => exp::exp_schoolbook::exp_schoolbook_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -215,7 +215,7 @@ impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::Series => exp::exp_series_2limb::exp_with(self.0, SCALE, working_digits, mode),
             #[cfg(feature = "_wide-support")]
             Algorithm::Tang => exp::exp_series_2limb::exp_with(self.0, SCALE, working_digits, mode),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => exp::exp_schoolbook::exp_schoolbook_with(self.0, SCALE, working_digits, mode),
         })
     }
     #[inline]
@@ -261,7 +261,11 @@ macro_rules! exp_policy_wide_series {
                             self.0, mode,
                         )
                     }
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::exp::exp_schoolbook::exp_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
@@ -278,7 +282,11 @@ macro_rules! exp_policy_wide_series {
                             self.0, mode,
                         )
                     }
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::exp::exp_schoolbook::exp_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
@@ -312,7 +320,11 @@ macro_rules! exp_policy_wide_tang {
                         crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(raw, mode)
                     }
                     Algorithm::Tang => ($tang)(raw, mode),
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::exp::exp_schoolbook::exp_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
@@ -323,7 +335,11 @@ macro_rules! exp_policy_wide_tang {
                         crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(raw, mode)
                     }
                     Algorithm::Tang => ($tang)(raw, mode),
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::exp::exp_schoolbook::exp_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]

@@ -240,7 +240,7 @@ impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
             Algorithm::Series => ln::ln_series_2limb::ln_strict::<SCALE>(self.0, mode),
             #[cfg(feature = "_wide-support")]
             Algorithm::Tang => ln::ln_series_2limb::ln_strict::<SCALE>(self.0, mode),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => ln::ln_schoolbook::ln_schoolbook_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -302,7 +302,11 @@ macro_rules! ln_policy_wide_series {
                             self.0, mode,
                         )
                     }
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::ln::ln_schoolbook::ln_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
@@ -319,7 +323,11 @@ macro_rules! ln_policy_wide_series {
                             self.0, mode,
                         )
                     }
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::ln::ln_schoolbook::ln_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             ln_policy_log_family!();
@@ -343,7 +351,11 @@ macro_rules! ln_policy_wide_tang {
                         crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(raw, mode)
                     }
                     Algorithm::Tang => ($tang)(raw, mode),
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::ln::ln_schoolbook::ln_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             #[inline]
@@ -354,7 +366,11 @@ macro_rules! ln_policy_wide_tang {
                         crate::algos::support::wide_trig_core::ln_series::<$Core, SCALE>(raw, mode)
                     }
                     Algorithm::Tang => ($tang)(raw, mode),
-                    Algorithm::Schoolbook => unreachable!(),
+                    Algorithm::Schoolbook => {
+                        crate::algos::ln::ln_schoolbook::ln_schoolbook::<$Core, SCALE>(
+                            self.0, mode,
+                        )
+                    }
                 })
             }
             ln_policy_log_family!();

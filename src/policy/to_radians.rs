@@ -144,7 +144,14 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<1>, S
                         )
                     })
             }
-            Algorithm::Schoolbook => self.to_radians_impl(mode),
+            Algorithm::Schoolbook => {
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let r = crate::algos::trig::angle_schoolbook::to_radians_schoolbook_narrow::<SCALE>(wide.0, mode);
+                ::core::convert::TryInto::try_into(crate::D::<crate::int::types::Int<2>, SCALE>(r))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale("D18::to_radians", SCALE)
+                    })
+            }
         }
     }
 }
@@ -180,7 +187,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, S
                 working_digits,
                 mode,
             )),
-            Algorithm::Schoolbook => self.to_radians_impl(mode),
+            Algorithm::Schoolbook => Self(crate::algos::trig::angle_schoolbook::to_radians_schoolbook_narrow::<SCALE>(self.0, mode)),
         }
     }
 }
@@ -199,7 +206,7 @@ macro_rules! to_radians_policy_wide {
                     Select::ByValue(_) => Algorithm::MulPiRatio,
                 };
                 match algo {
-                    Algorithm::MulPiRatio => self.to_radians_strict_with(mode),
+                    Algorithm::MulPiRatio => Self::from_bits(crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<$Core, SCALE>(self.to_bits(), mode)),
                     Algorithm::Schoolbook => Self::from_bits(crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<$Core, SCALE>(self.to_bits(), mode)),
                 }
             }
@@ -211,8 +218,8 @@ macro_rules! to_radians_policy_wide {
                     Select::ByValue(_) => Algorithm::MulPiRatio,
                 };
                 match algo {
-                    Algorithm::MulPiRatio => self.to_radians_approx_with(working_digits, mode),
-                    Algorithm::Schoolbook => self.to_radians_impl(mode),
+                    Algorithm::MulPiRatio => Self::from_bits(crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<$Core, SCALE>(self.to_bits(), mode)),
+                    Algorithm::Schoolbook => Self::from_bits(crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<$Core, SCALE>(self.to_bits(), mode)),
                 }
             }
         }

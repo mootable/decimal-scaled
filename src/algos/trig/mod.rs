@@ -20,6 +20,7 @@ pub(crate) mod trig_series_2limb;
 pub(crate) mod trig_schoolbook;
 pub(crate) mod inverse_schoolbook;
 pub(crate) mod hyper_schoolbook;
+pub(crate) mod angle_mul_pi_ratio;
 pub(crate) mod angle_schoolbook;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_exp_identity;

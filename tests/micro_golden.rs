@@ -55,8 +55,22 @@ fn method_of(func: &str) -> Method {
     match func {
         "ln" => Method::Ln,
         "exp" => Method::Exp,
+        "exp2" => Method::Exp2,
+        "log2" => Method::Log2,
+        "log10" => Method::Log10,
         "sin" => Method::Sin,
+        "cos" => Method::Cos,
+        "tan" => Method::Tan,
         "atan" => Method::Atan,
+        "asin" => Method::Asin,
+        "acos" => Method::Acos,
+        "atan2" => Method::Atan2,
+        "sinh" => Method::Sinh,
+        "cosh" => Method::Cosh,
+        "tanh" => Method::Tanh,
+        "asinh" => Method::Asinh,
+        "acosh" => Method::Acosh,
+        "atanh" => Method::Atanh,
         "sqrt" => Method::Sqrt,
         "cbrt" => Method::Cbrt,
         other => panic!("unknown function: {other}"),
@@ -165,9 +179,23 @@ micro!(d57, Width::D57, {
     sqrt = "golden/sqrt_d57_s28.txt";
     cbrt = "golden/cbrt_d57_s28.txt";
     exp  = "golden/exp_d57_s28.txt";
+    exp2 = "golden/exp2_d57_s28.txt";
     ln   = "golden/ln_d57_s28.txt";
+    log2 = "golden/log2_d57_s28.txt";
+    log10 = "golden/log10_d57_s28.txt";
     sin  = "golden/sin_d57_s28.txt";
+    cos  = "golden/cos_d57_s28.txt";
+    tan  = "golden/tan_d57_s28.txt";
     atan = "golden/atan_d57_s28.txt";
+    asin = "golden/asin_d57_s28.txt";
+    acos = "golden/acos_d57_s28.txt";
+    atan2 = "golden/atan2_d57_s28.txt";
+    sinh = "golden/sinh_d57_s28.txt";
+    cosh = "golden/cosh_d57_s28.txt";
+    tanh = "golden/tanh_d57_s28.txt";
+    asinh = "golden/asinh_d57_s28.txt";
+    acosh = "golden/acosh_d57_s28.txt";
+    atanh = "golden/atanh_d57_s28.txt";
 });
 
 // Deep wide tier.
@@ -175,7 +203,21 @@ micro!(d307, Width::D307, {
     sqrt = "golden/sqrt_d307_s150.txt";
     cbrt = "golden/cbrt_d307_s150.txt";
     exp  = "golden/exp_d307_s150.txt";
+    exp2 = "golden/exp2_d307_s150.txt";
     ln   = "golden/ln_d307_s150.txt";
+    log2 = "golden/log2_d307_s150.txt";
+    log10 = "golden/log10_d307_s150.txt";
     sin  = "golden/sin_d307_s150.txt";
+    cos  = "golden/cos_d307_s150.txt";
+    tan  = "golden/tan_d307_s150.txt";
     atan = "golden/atan_d307_s150.txt";
+    asin = "golden/asin_d307_s150.txt";
+    acos = "golden/acos_d307_s150.txt";
+    atan2 = "golden/atan2_d307_s150.txt";
+    sinh = "golden/sinh_d307_s150.txt";
+    cosh = "golden/cosh_d307_s150.txt";
+    tanh = "golden/tanh_d307_s150.txt";
+    asinh = "golden/asinh_d307_s150.txt";
+    acosh = "golden/acosh_d307_s150.txt";
+    atanh = "golden/atanh_d307_s150.txt";
 });
