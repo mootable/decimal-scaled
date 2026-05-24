@@ -40,7 +40,7 @@
 //! (calling a fn pointer is not permitted in `const fn`; merely matching
 //! the variant is fine).
 
-use crate::int::algos::support::limbs::add_assign_fixed;
+use crate::int::algos::neg::neg_twos_complement::neg_twos_complement;
 use crate::int::types::Int;
 
 // ── 1. the real negation algorithm — NAMED, no `Default` ─────────────
@@ -78,30 +78,6 @@ enum Select<const N: usize> {
 /// `N`.
 const fn select<const N: usize>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::TwosComplement)
-}
-
-// ── algorithm fn: inline two's-complement negation ────────────────────
-
-/// Two's-complement negation for `Int<N>`: bitwise-NOT then increment
-/// by one, wrapping modulo `2^BITS`. `MIN` maps to itself, matching
-/// the primitive signed integer `wrapping_neg` contract.
-///
-/// Uses [`add_assign_fixed`] for the increment step so the carry
-/// propagation is the same const-safe kernel the add policy uses.
-#[inline]
-pub(crate) const fn neg_twos_complement<const N: usize>(a: Int<N>) -> Int<N> {
-    let mut out = [0u64; N];
-    let mut i = 0;
-    while i < N {
-        out[i] = !a.as_limbs()[i];
-        i += 1;
-    }
-    let mut one = [0u64; N];
-    if N > 0 {
-        one[0] = 1;
-    }
-    add_assign_fixed(&mut out, &one);
-    Int::<N>::from_limbs(out)
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────

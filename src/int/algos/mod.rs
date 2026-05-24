@@ -31,11 +31,17 @@
 //! [`support::limbs`] bucket, since they are composed by several families (the
 //! divide engines, Karatsuba, the roots, and the type layer itself).
 
+pub(crate) mod add;
+pub(crate) mod cmp;
 pub(crate) mod cube;
 pub(crate) mod div;
+pub(crate) mod eq;
 pub(crate) mod icbrt;
 pub(crate) mod isqrt;
 pub(crate) mod mul;
+pub(crate) mod neg;
 pub(crate) mod pow;
+pub(crate) mod rem;
 pub(crate) mod sqr;
+pub(crate) mod sub;
 pub(crate) mod support;

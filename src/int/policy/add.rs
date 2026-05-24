@@ -34,7 +34,7 @@
 //! without invoking the fn pointer (calling a fn pointer is not permitted in
 //! `const fn`; merely matching the variant is fine).
 
-use crate::int::algos::support::limbs::add_assign_fixed;
+use crate::int::algos::add::add_ripple_carry::add_ripple_carry;
 use crate::int::types::Int;
 
 // ── 1. the real addition algorithm — NAMED, no `Default` ─────────────
@@ -70,18 +70,6 @@ enum Select<const N: usize> {
 /// key; addition is width-independent so `RippleCarry` wins at every `N`.
 const fn select<const N: usize>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::RippleCarry)
-}
-
-// ── algorithm fn: thin delegation to the limb kernel ─────────────────
-
-/// Ripple-carry integer addition for `Int<N>`. Wraps
-/// [`add_assign_fixed`], discarding the carry-out so the result wraps
-/// modulo `2^BITS` (two's-complement wrapping semantics).
-#[inline]
-pub(crate) const fn add_ripple_carry<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    let mut limbs = *a.as_limbs();
-    add_assign_fixed(&mut limbs, b.as_limbs());
-    Int::<N>::from_limbs(limbs)
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
