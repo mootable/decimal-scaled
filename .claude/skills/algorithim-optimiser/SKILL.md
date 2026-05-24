@@ -1,3 +1,4 @@
+
 ---
 name: algorithim-optimiser
 description: Use when adding, replacing, or speed-optimising an algorithm in the decimal_scaled crate — how to write the kernel, name it per the standard, wire it to a policy, the dec-vs-int differences, the support libraries (algos/support, int/algos/support, algo_x_support), and how to microbench two candidates at a dispatch seam.
@@ -104,6 +105,30 @@ The type method then delegates one line: `pub fn isqrt(self) -> Self { isqrt_dis
 - A new algorithm's **precondition should be as wide as it is correct for**: if `<fn>_newton` is valid for all `N`, name it `<fn>_newton` (no precondition suffix) and let the `_` arm use it everywhere; only pin a `<precond>` suffix (`_2limb`, `_s44_56`) when the kernel is genuinely valid for *just* that limb/scale band.
 - The type method calls dispatch with the full key (`isqrt_dispatch(self)`, `dispatch::<N, SCALE>(…)`) and **never branches on the tier itself** — tier/scale selection is the matcher's job, not the caller's.
 
+### Work-width (`W`) threading — keep it out of the policy
+
+When a decimal algorithm computes in a **wider type than it stores** (sqrt/hypot/mul/div work in `Int<2N>`, cbrt in `Int<4N>`), stable Rust can't write `Int<2*N>` from a generic `N` (that needs nightly `generic_const_exprs`). **Do NOT solve this with a per-tier `*Policy` trait + a `*_policy_tier!` impl-generating macro** — that pushes the policy past matcher-only and is non-conformant. Bind the work width with **ONE associated-type trait on `Int<N>`**, defined once in `int/types` (a small static impl list, NOT in the policy):
+
+```rust
+pub(crate) trait DoubleWidth { type W: BigInt; }     // ×2
+impl DoubleWidth for Int<2> { type W = Int<4>; }      // one line per storage tier + each ×2 intermediate,
+// … up to Int<128> -> Int<256> (the ceiling — never Int<512>)
+```
+
+- sqrt/hypot/mul/div: `dispatch` is generic and reads `<Int<N> as DoubleWidth>::W`.
+- **cbrt's ×4 = compose the trait twice**: `<<Int<N> as DoubleWidth>::W as DoubleWidth>::W`. **No `QuadWidth`, no `OctoWidth`, no multiplier ladder** — the family ceiling is ×8 and we never reach it (max need is ×4 = `Int<256>`). Keep new trait *definitions* to 1–2 total.
+- exp/ln thread a per-tier `$Core` (`WideTrigCore` impl) the same way — at most ONE `CoreFor { type Core }` trait, and only if `$Core` can't be reached otherwise.
+- Result: the policy file stays pure `Algorithm`/`Select`/`select`/`dispatch` — **`select` + `dispatch` do the work**, no per-tier trait/macro, no algorithm bodies, no `unreachable!()` panic arms, no `_ => self.*_strict_with(…)` escape (that's the inversion).
+
+### Determining the arms — the algorithm-space method
+
+Full methodology: **`research/2026_05_24_algorithm_space_mapping.md`**. An algorithm sits over a meta numeric space (axes: **N** storage limbs, **W** work width, **S** scale, **value-class**). Map TWO regions per algorithm, kept strictly separate:
+
+- **Validity (HARD, analytical)** — where it's *correct*: the 256-bit `Fixed` ceiling (`S + GUARD ≤ 68`), work-width overflow, a kernel hard-coded to `N ≤ 2`, a series' convergence / range-reduction precondition, seed accuracy. Proven by analysis + a zero-tolerance oracle, **never a microbench** (an out-of-region algorithm can be *fast and wrong*).
+- **Optimality (EMPIRICAL)** — within validity, where it's *fastest* vs the alternatives: the crossover points (e.g. `BZ_THRESHOLD = 16`). Found by benchmark; it only re-partitions *overlapping* validity regions, never extends one past a validity wall.
+
+Recipe (also §6 of the research doc): (1) list candidates, name each `<fn>_<method>[_<precond>]`; (2) derive each validity region as inequalities on `(N,W,S)` + a value predicate; (3) confirm with a zero-tolerance golden sweep, extend `micro_golden` for any cell it misses; (4) check the validity union **tiles the whole key** — no gaps; (5) where regions overlap, find the optimum by an **N-way microbench of ALL candidate arms** (`compare_all`, §4) → single-axis sweep → bisect the crossover → record it as a named `const`, not a buried literal; (6) write `select` (`_` = widest valid generic; specific arms = validity carve-outs + optimality overrides; `ByValue` only for a genuine value split); (7) `dispatch` = `const { select() }` → exhaustive `match algo`, no `_`, no panic; (8) boundary golden at every arm edge (just-inside / just-outside, external oracle, `lsbe == 0`, all six modes).
+
 ---
 
 ## 3. Support libraries — where shared leaves live
@@ -118,19 +143,22 @@ If a leaf could serve both tiers but touches in-crate code, it belongs in `algos
 
 ---
 
-## 4. Microbench two candidates at the dispatch seam
+## 4. Microbench the candidates at the dispatch seam
 
-The dispatch `Select` seam is the "choose + swap + **microbench**" point. Use the 8.1 harness.
+The dispatch `Select` seam is the "choose + swap + **microbench**" point. **Microbench ALL algorithms available for that function at that level (N / N,S), not just two** — every registered `Algorithm` arm (the `Schoolbook` reference + every optimised variant) is a candidate; the winner becomes that `select` arm. Use the 8.1 harness.
 
 - Support module: **`benches/support/ab_microbench.rs`**. Worked example: **`benches/micro/mul_kernel_ab.rs`**.
 - API:
   ```rust
-  Candidate::new("label", |input| run(input))      // two fns of identical signature
-  micro_criterion()                                 // Criterion preset: sample 20, warm 150ms, measure 400ms — sub-60s
-  ab_compare(c, "group", |inp| label_string, inputs, candidate_a, candidate_b)  // black_box-guards in AND out
-  ab_sweep!(c => Int<16> => |c| ab_compare(...), Int<32> => |c| ab_compare(...))  // the "two types" axis
+  micro_criterion()  // Criterion preset: sample 20, warm 150ms, measure 400ms — sub-60s
+  // N-WAY (default): bench every candidate for the function+level at once.
+  compare_all(c, "group", |inp| label_string, inputs,
+              vec![("school", school_run), ("kara", kara_run), ("toom3", toom3_run)])
+  // 2-candidate convenience (delegates to compare_all):
+  ab_compare(c, "group", |inp| label_string, inputs, candidate_a, candidate_b)
+  ab_sweep!(c => Int<16> => |c| compare_all(...), Int<32> => |c| compare_all(...))  // the type axis
   ```
-- It `black_box`-guards inputs and outputs (defeat const-fold/DCE — critical here, the dispatch is *designed* to const-fold) and prints `A/B verdict [group]: <winner> beats <loser> by N.NNx`.
+- It `black_box`-guards inputs and outputs (defeat const-fold/DCE — critical here, the dispatch is *designed* to const-fold) and prints a **ranking table** (fastest→slowest, with `(N.NNx slower)` / `(~tie)` margins) plus the `A/B verdict [group]: <winner> beats <loser> by N.NNx` line (grep-stable). Add the N-th algorithm by appending one `("label", run)` tuple to the `vec!` — nothing else changes.
 - Add a `[[bench]]` entry in `Cargo.toml`: `name`, `path = "benches/<folder>/<name>.rs"`, `harness = false`, and the `required-features` the example needs.
 
 **Discipline:** validate a perf change with a **focused <60s microbench FIRST**, before the multi-hour sweeps. Run microbenches **locally**; run the full sweeps (`library_comparison`, `full_matrix`) on **GHA** (`bench-full` / `bench-history` / `bench-branch-compare` workflows) — never burn the owner's machine on a full sweep. picosecond `change:` deltas are noise; multi-hour sweep cells run 1.5–2× slower than a cold-machine microbench.
@@ -143,10 +171,9 @@ The dispatch `Select` seam is the "choose + swap + **microbench**" point. Use th
 
 **Int algorithms** (`int/algos/<fn>/`): operate on `&[u64]` limb slices or `Int<N>`/`Uint<N>`; use the limb leaves in `int/algos/support/limbs.rs` and the optimised divide via `int::policy::div_rem::dispatch` (Knuth) — NOT the const `div_rem_mag_fixed` shift-subtract path. Policy keyed on `N`. **Audit for infinite loops:** an int algorithm must never use an operator/method (`+`, `*`, `.div_rem()`) that re-dispatches back into the same algorithm.
 
-**Decimal algorithms** (`algos/<fn>/`): generic over storage `S` + work width `W` (both `: BigInt`); the policy binds the concrete `(S,W)` per tier. They must **dispatch DOWN to the `Int<N>` layer** for their integer work — via the operator overloads (and **check the overload exists** for the op you need) or by calling the int method/kernel directly:
-- `W::isqrt()`, `W::icbrt()` (the floor roots — routes to the int policy + `div_rem_dispatch`),
-- `raw.resize_to::<W>()`, `W::TEN.pow(scale)`, `w.div_rem(d)`, `w.bit_length()`.
-- This cross-tier use is **§1a-allowed and required** — it is NOT the inversion. The inversion is decimal→decimal (calling a decimal `*_strict_with` method on your own value, which re-enters a decimal policy). The `hypot` lesson: it used to call `one_plus_sq.sqrt_strict_with(mode)` (inversion + double-rounding error); fixed to form `a²+b²` in `W` and take `W::isqrt` — the root now dispatches to int and is correctly-rounded.
+**Decimal algorithms** (`algos/<fn>/`): generic over storage `N` (the `Int<N>` backing the decimal). They **dispatch DOWN to the `Int<N>` layer** for their integer work — via the operator overloads (and **check the overload exists**) or by calling the int method/kernel directly. This cross-tier use is **§1a-allowed and required** — it is NOT the inversion. The inversion is decimal→decimal (calling a decimal `*_strict_with` method on your own value, which re-enters a decimal policy). The `hypot` lesson: it used to call `one_plus_sq.sqrt_strict_with(mode)` (inversion + double-rounding); fixed to form `a²+b²` and take the floor root via the int layer.
+
+**Work-width — expand in LIMBS, never name `Int<2N>` (the limb-expansion lesson):** when a decimal kernel needs a WIDER work integer than its storage (the `sqrt` radicand spans `2N` limbs, `cbrt` `4N`, `mul`/`div` `2N`), do **NOT** thread a work *type* `W = Int<2N>`. `Int<2N>` is unnameable from a generic `N` on stable (`2*N` in type position needs nightly `generic_const_exprs`), and faking it forces the non-conformant `*Policy` trait + `*_policy_tier!` per-tier macro **and** pollutes the type-method layer with an algorithm-internal width. INSTEAD compute the wider work **directly in a fixed limb scratch buffer** (`[u64; SCRATCH]`, `SCRATCH = 288` covers the widest radicand) and call the int layer's **width-agnostic slice kernels**: `int::algos::isqrt::isqrt_newton::isqrt_newton(&n, &mut out)` / `icbrt_newton` (roots), `int::algos::mul::mul_schoolbook::mul_schoolbook` (products, incl. building `mag·10^k` by iterative ×10), `int::policy::div_rem::dispatch` (divide), and `int::algos::support::limbs::{add_assign, sub_assign, cmp, cmp_cross, shl, shr, bit_len}`. The kernel is then generic over `N` **only** (no `W`), `dispatch` carries no work-width parameter, and the policy stays a pure `(N, SCALE)` matcher — no per-tier trait/macro, no pollution, and *more* honest about the §1a boundary than a phantom `W: BigInt`. (Done for `sqrt`/`cbrt`; the int slice roots already carry their own 288-limb scratch.)
 
 **std / no_std float policy:** `std` owns floats (inherent `f64` intrinsics — `sqrt`/`cbrt`/`sin`/…); `no_std` is integer-only, **NEVER `libm` or any external math crate**. A seed that wants a float gets a `std` (f64) and a `no_std` (pure-integer) variant encapsulated in the seed leaf (`algo_x_support::seed`), so the algorithm stays agnostic. The `fast` feature (f64 bridge) implies `std`.
 
