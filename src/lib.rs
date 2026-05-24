@@ -206,6 +206,22 @@ pub mod __bench_internals {
     pub fn mul_slice(a: &[u64], b: &[u64], out: &mut [u64]) {
         crate::int::algos::mul::mul_schoolbook::mul_schoolbook(a, b, out)
     }
+    /// Truncated-low fixed-width schoolbook multiply (base-2^64),
+    /// `out = (a * b) mod 2^(64*N)`. The kernel the wide-tier exp/powf
+    /// Taylor work-multiply (`Int<N>::wrapping_mul`) routes through.
+    /// Exposed for the `mul_low_u128_ab` pilot microbench.
+    #[inline(never)]
+    pub fn mul_low_u64<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::mul::mul_schoolbook::mul_low_fixed::<N>(a, b, out)
+    }
+    /// u128-limb-packed truncated-low schoolbook multiply candidate
+    /// (even `N` only): bit-identical low `N` limbs to [`mul_low_u64`],
+    /// computed in `N/2` base-2^128 limbs. Exposed for the
+    /// `mul_low_u128_ab` pilot microbench.
+    #[inline(never)]
+    pub fn mul_low_u128<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::mul::mul_schoolbook::mul_low_fixed_u128::<N>(a, b, out)
+    }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
         a: &[u64; L],

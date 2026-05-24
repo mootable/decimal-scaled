@@ -25,7 +25,8 @@ mod tests {
         KARATSUBA_SCRATCH_LIMBS,
     };
     use super::mul_schoolbook::{
-        mul_low_fixed, mul_schoolbook, mul_schoolbook_fixed, mul_schoolbook_into,
+        mul_low_fixed, mul_low_fixed_u128, mul_schoolbook, mul_schoolbook_fixed,
+        mul_schoolbook_into,
     };
 
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
@@ -333,5 +334,85 @@ mod tests {
                 assert_eq!(&full[..N], &low[..], "mul_low_fixed mismatch");
             }
         }
+    }
+
+    /// `mul_low_fixed_u128::<N>` (the u128-packed candidate) produces the
+    /// bit-identical low `N` limbs of `mul_low_fixed::<N>` across the
+    /// carry-stressing corpus (at N = 4) and a wide spread of random
+    /// inputs at the even wide-tier work widths (N = 128 / 192 / 256, the
+    /// D616 / D924 / D1232 exp Taylor work integers). This is the
+    /// correctness gate the u128-multiply pilot rides on.
+    #[test]
+    fn mul_low_fixed_u128_matches_u64() {
+        // Edge corpus at N = 4 (all-ones / single-limb / mixed).
+        const N4: usize = 4;
+        for a in corpus() {
+            for b in corpus() {
+                let a64 = pack(&a);
+                let b64 = pack(&b);
+                let mut a_arr = [0u64; N4];
+                let mut b_arr = [0u64; N4];
+                a_arr.copy_from_slice(&a64[..N4]);
+                b_arr.copy_from_slice(&b64[..N4]);
+                let mut lo_ref = [0u64; N4];
+                let mut lo_u128 = [0u64; N4];
+                mul_low_fixed::<N4>(&a_arr, &b_arr, &mut lo_ref);
+                mul_low_fixed_u128::<N4>(&a_arr, &b_arr, &mut lo_u128);
+                assert_eq!(lo_ref, lo_u128, "u128 low-mul mismatch (corpus N=4)");
+            }
+        }
+
+        // Random spread at the wide work widths.
+        let mut state: u64 = 0xF00D_FACE_1357_9BDF;
+        let mut next = || -> u64 {
+            state = state.wrapping_add(0x9E37_79B9_7F4A_7C15);
+            let mut z = state;
+            z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+            z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+            z ^ (z >> 31)
+        };
+        macro_rules! check_rand {
+            ($n:literal, $rounds:literal) => {{
+                const N: usize = $n;
+                for _ in 0..$rounds {
+                    let mut a = [0u64; N];
+                    let mut b = [0u64; N];
+                    for x in a.iter_mut() {
+                        *x = next();
+                    }
+                    for x in b.iter_mut() {
+                        *x = next();
+                    }
+                    let mut lo_ref = [0u64; N];
+                    let mut lo_u128 = [0u64; N];
+                    mul_low_fixed::<N>(&a, &b, &mut lo_ref);
+                    mul_low_fixed_u128::<N>(&a, &b, &mut lo_u128);
+                    assert_eq!(
+                        lo_ref, lo_u128,
+                        "u128 low-mul mismatch at N = {}",
+                        N
+                    );
+                }
+            }};
+        }
+        // All-ones worst case at each width (maximal carries).
+        macro_rules! check_ones {
+            ($n:literal) => {{
+                const N: usize = $n;
+                let a = [u64::MAX; N];
+                let b = [u64::MAX; N];
+                let mut lo_ref = [0u64; N];
+                let mut lo_u128 = [0u64; N];
+                mul_low_fixed::<N>(&a, &b, &mut lo_ref);
+                mul_low_fixed_u128::<N>(&a, &b, &mut lo_u128);
+                assert_eq!(lo_ref, lo_u128, "u128 low-mul mismatch (all-ones N={})", N);
+            }};
+        }
+        check_rand!(128, 32);
+        check_rand!(192, 24);
+        check_rand!(256, 16);
+        check_ones!(128);
+        check_ones!(192);
+        check_ones!(256);
     }
 }

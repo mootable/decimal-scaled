@@ -756,6 +756,19 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
                 round_div(a * b, pow10_w)
             }
+            /// [`mul_cached`] with the truncated-low product computed in
+            /// u128 limbs ([`BigInt::wrapping_mul_low_u128`]) -- the
+            /// wide-tier exp Taylor work-multiply. Bit-identical to
+            /// `mul_cached` (both reduce the low-`BITS` product by the
+            /// same half-to-even `round_div`); the only change is the
+            /// faster low-half multiply at the even wide work widths
+            /// (`Int<128>`/`Int<192>`/`Int<256>`), benched ~1.3-1.6x in
+            /// `benches/micro/mul_low_u128_ab.rs`.
+            #[inline]
+            pub(crate) fn mul_cached_low_u128(a: W, b: W, pow10_w: W) -> W {
+                use $crate::int::types::traits::BigInt as _;
+                round_div(a.wrapping_mul_low_u128(b), pow10_w)
+            }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
@@ -1888,7 +1901,7 @@ macro_rules! decl_wide_transcendental {
                 let mut term = s_red;
                 let mut iter: u128 = 2;
                 loop {
-                    term = mul_cached(term, s_red, pow10_w) / lit(iter);
+                    term = mul_cached_low_u128(term, s_red, pow10_w) / lit(iter);
                     if term == zero() {
                         break;
                     }
@@ -1906,7 +1919,7 @@ macro_rules! decl_wide_transcendental {
                 let mut squared = sum;
                 let mut i = 0;
                 while i < n {
-                    squared = mul_cached(squared, squared, pow10_w);
+                    squared = mul_cached_low_u128(squared, squared, pow10_w);
                     i += 1;
                 }
                 let sum = squared;

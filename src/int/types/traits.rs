@@ -67,6 +67,18 @@ pub trait BigInt:
     fn wrapping_sub(self, rhs: Self) -> Self;
     fn wrapping_mul(self, rhs: Self) -> Self;
 
+    /// Truncated-low (mod `2^BITS`) product, the same value as
+    /// [`BigInt::wrapping_mul`], but computed in u128 limbs when the limb
+    /// count is even. Wide-tier exp/powf runs its Taylor work-multiply on
+    /// even-`LIMBS` work integers (`Int<128>`/`Int<192>`/`Int<256>`); the
+    /// u128-packed low-half schoolbook is ~1.3-1.6x faster there
+    /// (`benches/micro/mul_low_u128_ab.rs`). The default delegates to
+    /// [`BigInt::wrapping_mul`]; `Int<N>` overrides it for even `N`.
+    #[inline]
+    fn wrapping_mul_low_u128(self, rhs: Self) -> Self {
+        self.wrapping_mul(rhs)
+    }
+
     // ── Checked arithmetic ───────────────────────────────────────────
 
     fn checked_add(self, rhs: Self) -> Option<Self>;
@@ -184,6 +196,23 @@ impl<const N: usize> BigInt for Int<N> {
     #[inline]
     fn wrapping_mul(self, rhs: Self) -> Self {
         Int::wrapping_mul(self, rhs)
+    }
+
+    #[inline]
+    fn wrapping_mul_low_u128(self, rhs: Self) -> Self {
+        // The u128-packed low-half schoolbook requires an even limb
+        // count (it folds pairs of u64 limbs into u128 limbs); for even
+        // `N` it is bit-identical to `wrapping_mul` and faster at the
+        // wide work widths. Odd `N` keeps the base-2^64 path.
+        if N % 2 == 0 {
+            let a = *self.as_limbs();
+            let b = *rhs.as_limbs();
+            let mut out = [0u64; N];
+            crate::int::algos::mul::mul_schoolbook::mul_low_fixed_u128::<N>(&a, &b, &mut out);
+            Int::from_limbs(out)
+        } else {
+            Int::wrapping_mul(self, rhs)
+        }
     }
 
     #[inline]
