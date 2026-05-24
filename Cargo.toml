@@ -667,3 +667,12 @@ resolver = "3"
 # so runtime perf and shipped binary size are unchanged.
 [profile.release]
 debug = true
+
+# A/B microbench worked example: schoolbook vs forced-Karatsuba multiply
+# kernel at two widths, driven by the reusable `ab_microbench` support
+# module (benches/ab_microbench.rs). The fast pre-check for a multiply
+# policy `Select` arm. Kernels come from `__bench_internals` (bench-alt).
+[[bench]]
+name = "mul_kernel_ab"
+harness = false
+required-features = ["wide", "bench-alt"]
