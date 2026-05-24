@@ -812,6 +812,30 @@ path = "benches/micro/hypot_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# {exp,ln,trig}_series_tang_ab: dispatch-seam A/Bs for the transcendental
+# Series-vs-Tang policy choice. The `policy::{exp,ln,trig}::select` Tang bands
+# were tuned via kernel-ISOLATION benches; these A/B the production Tang kernel
+# vs the generic Series kernel at the band edges (in-band + just-out probes),
+# bit-identity-asserted before timing, on the `wide`-buildable narrow-wide
+# tiers (D57/D115/D153).
+[[bench]]
+name = "exp_series_tang_ab"
+path = "benches/micro/exp_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+[[bench]]
+name = "ln_series_tang_ab"
+path = "benches/micro/ln_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
+[[bench]]
+name = "trig_series_tang_ab"
+path = "benches/micro/trig_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # mul_low_u128_ab: pilot A/B for the wide-tier exp/powf Taylor
 # work-multiply -- the truncated-low base-2^64 `mul_low_fixed` vs the
 # u128-packed `mul_low_fixed_u128` candidate at the D616/D924/D1232 work

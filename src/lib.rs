@@ -569,6 +569,151 @@ pub mod __bench_internals {
     {
         crate::algos::cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode)
     }
+
+    // ── transcendental Series-vs-Tang dispatch-seam A/B exports ──────────
+    //
+    // The `policy::{exp,ln,trig}` Series-vs-Tang choice is made by hand-tuned
+    // discrete `(N, SCALE)` bands but was never gated by an N-way `compare_all`
+    // at the dispatch seam (the bands were tuned via `benches/lookup/*` kernel-
+    // ISOLATION benches). These exports expose the Series kernel and the exact
+    // production Tang kernel (same `Core`/`M`/`GUARD`/flag params the policy
+    // `tang_routed` passes) at the band cells so `*_series_tang_ab` can A/B them
+    // bit-identity-asserted at the seam, AND probe just-out-of-band scales.
+    // One concrete fn per `(fn, tier)` cell because `Core` is a concrete per-
+    // tier type; SCALE stays a const generic so the same fn covers in-band and
+    // just-out-of-band probes.
+
+    // exp — Series (generic-over-Core `exp_series`).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_series_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_series_d115<const SCALE: u32>(
+        raw: crate::int::types::Int<6>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<6> {
+        crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_series_d153<const SCALE: u32>(
+        raw: crate::int::types::Int<8>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<8> {
+        crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw, mode)
+    }
+    // exp — Tang (production params per `policy::exp::tang_routed`).
+    // D57 has TWO bands: 18..=22 (M=128,G=8) and 45..=56 (M=512,G=30); both
+    // run flags <false,false,false>. Pass the band's M/G as const generics.
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d57<const SCALE: u32, const M: u32, const G: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, M, G, false, false, false>(raw, mode)
+    }
+    // D115 band 50..=60: M=128, G=8, flags <true,true,false>.
+    #[cfg(all(feature = "_wide-support", any(feature = "d115", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d115<const SCALE: u32>(
+        raw: crate::int::types::Int<6>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<6> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 128, 8, true, true, false>(raw, mode)
+    }
+    // D153 band 70..=82: M=128, G=10, flags <true,false,true>.
+    #[cfg(all(feature = "_wide-support", any(feature = "d153", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d153<const SCALE: u32>(
+        raw: crate::int::types::Int<8>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<8> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 128, 10, true, false, true>(raw, mode)
+    }
+
+    // ln — Series (generic-over-Core `ln_series`).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn ln_series_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    #[inline(never)]
+    pub fn ln_series_d115<const SCALE: u32>(
+        raw: crate::int::types::Int<6>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<6> {
+        crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    #[inline(never)]
+    pub fn ln_series_d153<const SCALE: u32>(
+        raw: crate::int::types::Int<8>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<8> {
+        crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw, mode)
+    }
+    // ln — Tang (production params per `policy::ln::tang_routed`).
+    // D57 18..=22: <GUARD=8, ITERS=100, false>.
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn ln_tang_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, false>(raw, mode)
+    }
+    // D115 50..=60: <GUARD=8, ITERS=200, true>.
+    #[cfg(all(feature = "_wide-support", any(feature = "d115", feature = "wide")))]
+    #[inline(never)]
+    pub fn ln_tang_d115<const SCALE: u32>(
+        raw: crate::int::types::Int<6>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<6> {
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(raw, mode)
+    }
+    // D153 70..=82: <GUARD=10, ITERS=200, true>.
+    #[cfg(all(feature = "_wide-support", any(feature = "d153", feature = "wide")))]
+    #[inline(never)]
+    pub fn ln_tang_d153<const SCALE: u32>(
+        raw: crate::int::types::Int<8>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<8> {
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(raw, mode)
+    }
+
+    // trig forward (sin) — the only narrow-wide tier with a real Tang wiring
+    // is D57 (band 44..=56, M=512); tiers 4/6/12/32/48/64 route the Tang select
+    // arm back to `sin_series` (and `select` never returns Tang there), and
+    // D153/D307/D462 have their own bespoke impls. D57 is the clean `wide`-
+    // buildable band edge.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn sin_series_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
+    #[inline(never)]
+    pub fn sin_tang_d57<const SCALE: u32>(
+        raw: crate::int::types::Int<3>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<3> {
+        crate::algos::trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(raw, mode)
+    }
+
     /// Build an `Int<N>` from a little-endian magnitude limb array (sign
     /// false). Lets the bench construct wide operands without exposing the
     /// internal constructors.

@@ -46,16 +46,23 @@ enum Algorithm {
     /// [`cbrt::cbrt_mg_divide::cbrt_mg_divide`] — hand-tuned 384-bit
     /// cube root for the `Int<2>` storage (D38, and D18 widened to it).
     MgDivide,
-    /// [`cbrt::cbrt_native::cbrt_native`] — top-bits-`f64`-seeded Newton
-    /// run directly in a tight, concrete `Int<W>` (the work width `W` is
-    /// chosen per `(N, SCALE)` cell in the dispatch arm to just cover
+    /// [`cbrt::cbrt_native_fast_d57::cbrt_native_fast_a`] — `f64`-seeded
+    /// Newton run directly in a tight, concrete `Int<W>` (the work width `W`
+    /// is chosen per `(N, SCALE)` cell in the dispatch arm to just cover
     /// `mag · 10^(2·SCALE)`), rather than through the width-agnostic int
     /// `icbrt` policy, whose build-max scratch buffer churn dominated the
-    /// small mid-scale radicands. Routed cells: `(D57,20)`, `(D76,35)`,
-    /// `(D115,57)`, `(D153,75)`, `(D230,115)`, `(D307,150)`. Microbench
-    /// (`root_kernel_ab`): 1.1–2.0× faster than the generic slice
-    /// [`Self::Newton`] at every routed cell. Bit-identical to
-    /// [`Self::Newton`] across all six modes.
+    /// small mid-scale radicands. The seed is the 0.4.4 **full-radicand**
+    /// f64 cbrt seed (commit routing the Native cells to `cbrt_native_fast_a`):
+    /// a tight seed that cuts the Newton divide count, vs the earlier shipped
+    /// top-64-bits seed which over-shot ∛n by ~2.5× and regressed cbrt@D57/D76.
+    /// Routed cells: `(D57,20)`, `(D76,35)`, `(D115,57)`, `(D153,75)`,
+    /// `(D230,115)`, `(D307,150)`. Microbench (`root_kernel_ab`): the
+    /// PRE-change top-bits-seed Native was 1.1–2.0× faster than the generic
+    /// slice [`Self::Newton`]; the full-radicand-seed win margin is to be
+    /// re-confirmed by a fresh `root_kernel_ab` N-way compare on a quiet
+    /// machine. Bit-identical to [`Self::Newton`] across all six modes (the
+    /// rounding tail is shared); the seed falls back to the top-bits path
+    /// past the f64 range.
     ///
     /// Gated with the kernel: each routed `(N, SCALE)` cell only exists
     /// when its tier is compiled in, so the variant, its `select` arms,
