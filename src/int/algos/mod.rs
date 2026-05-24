@@ -36,6 +36,7 @@ pub(crate) mod cmp;
 pub(crate) mod cube;
 pub(crate) mod div;
 pub(crate) mod eq;
+pub(crate) mod hypot;
 pub(crate) mod icbrt;
 pub(crate) mod isqrt;
 pub(crate) mod mul;

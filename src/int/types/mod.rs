@@ -33,6 +33,7 @@ use crate::int::policy::cube::dispatch as cube_dispatch;
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::policy::eq::dispatch as eq_dispatch;
 use crate::int::policy::icbrt::dispatch as icbrt_dispatch;
+use crate::int::policy::hypot::dispatch as hypot_dispatch;
 use crate::int::policy::isqrt::dispatch as isqrt_dispatch;
 use crate::int::policy::mul::dispatch as mul_fast;
 use crate::int::policy::neg::dispatch as neg_dispatch;
@@ -1598,6 +1599,28 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub fn icbrt(self) -> Self {
         Self::from_limbs(*self.unsigned_abs().icbrt().as_limbs())
+    }
+
+    /// Integer hypotenuse: `round(sqrt(self^2 + other^2))` without
+    /// intermediate overflow of the radicand. Routes through the hypot
+    /// policy (`hypot_dispatch`): the radicand `self^2 + other^2` is formed
+    /// in a wider limb scratch buffer and the floor root is taken via the
+    /// integer slice `isqrt`, then a single round step under `mode` lands
+    /// the result. Returns [`None`] when the rounded result does not fit
+    /// the signed range of `Int<N>` (true overflow). The sign of each
+    /// operand drops out of the squaring; `hypot(0, 0) = 0` and
+    /// `hypot(0, x) = |x|`.
+    #[inline]
+    #[must_use]
+    pub(crate) fn hypot(
+        self,
+        other: Self,
+        mode: crate::support::rounding::RoundingMode,
+    ) -> Option<Self>
+    where
+        Self: crate::int::types::work_scratch::WorkScratch,
+    {
+        hypot_dispatch::<N>(self, other, mode)
     }
 
     /// Reinterprets the bit pattern as the unsigned sibling.

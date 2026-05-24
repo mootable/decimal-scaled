@@ -100,6 +100,8 @@ pub(crate) mod cube;
 pub(crate) mod div_rem;
 /// Equality policy: default-delegating limbwise matcher for `Int<N>`.
 pub(crate) mod eq;
+/// Integer hypotenuse policy: isqrt-vs-schoolbook matcher for `Int<N>`.
+pub(crate) mod hypot;
 /// Integer cube-root policy: native-vs-Newton matcher for `Uint<N>`.
 pub(crate) mod icbrt;
 /// Integer square-root policy: native-vs-Newton matcher for `Uint<N>`.
