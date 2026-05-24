@@ -258,7 +258,7 @@ macro_rules! decl_decimal_arithmetic {
             /// the common case. Larger scales fall through to the
             /// slower `n / (10^SCALE)` path.
             ///
-            /// Routes through [`crate::policy::mul::MulPolicy`].
+            /// Routes through the `MulPolicy` per-type policy trait.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 use $crate::policy::mul::MulPolicy as _;
@@ -278,7 +278,7 @@ macro_rules! decl_decimal_arithmetic {
             /// `$Storage` width) widened to `$Wider`, avoiding the
             /// per-call `pow(SCALE)` on the wider type.
             ///
-            /// Routes through [`crate::policy::div::DivPolicy`].
+            /// Routes through the `DivPolicy` per-type policy trait.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
                 use $crate::policy::div::DivPolicy as _;
@@ -310,7 +310,7 @@ macro_rules! decl_decimal_arithmetic {
             ///
             /// Follows Rust's standard integer-overflow contract: panics
             /// in debug builds, wraps (two's-complement) in release.
-            /// Routes through [`crate::policy::add::AddPolicy`].
+            /// Routes through the `AddPolicy` per-type policy trait.
             #[inline]
             fn add(self, rhs: Self) -> Self {
                 use $crate::policy::add::AddPolicy as _;
@@ -330,7 +330,7 @@ macro_rules! decl_decimal_arithmetic {
             /// Subtract two values of the same scale.
             ///
             /// Panics on overflow in debug builds, wraps in release.
-            /// Routes through [`crate::policy::sub::SubPolicy`].
+            /// Routes through the `SubPolicy` per-type policy trait.
             #[inline]
             fn sub(self, rhs: Self) -> Self {
                 use $crate::policy::sub::SubPolicy as _;
@@ -350,7 +350,7 @@ macro_rules! decl_decimal_arithmetic {
             /// Negate a value. Panics on overflow in debug builds
             /// (`-MIN` is unrepresentable in two's-complement), wraps in
             /// release (`-MIN == MIN`).
-            /// Routes through [`crate::policy::neg::NegPolicy`].
+            /// Routes through the `NegPolicy` per-type policy trait.
             #[inline]
             fn neg(self) -> Self {
                 use $crate::policy::neg::NegPolicy as _;
@@ -367,7 +367,7 @@ macro_rules! decl_decimal_arithmetic {
             /// Panics on the `MIN % -ONE` overflow boundary in debug
             /// builds, wraps in release (matching `i128::wrapping_rem`).
             /// Division by zero always panics.
-            /// Routes through [`crate::policy::rem::RemPolicy`].
+            /// Routes through the `RemPolicy` per-type policy trait.
             #[inline]
             fn rem(self, rhs: Self) -> Self {
                 use $crate::policy::rem::RemPolicy as _;

@@ -125,7 +125,7 @@ impl<const N: usize> Uint<N> {
 
     /// Wrapping square (`self²` modulo `2^BITS`). Named entry point for
     /// the open-coded `x * x` pattern. Thin delegator DOWN to the sqr
-    /// policy ([`sqr_dispatch`]): half-product squaring via the
+    /// policy (`sqr_dispatch`): half-product squaring via the
     /// `sqr_low_fixed` kernel — each cross term is formed once and doubled,
     /// so the limb-multiply count is `N(N+1)/2` rather than the `N²` of a
     /// general multiply.
@@ -136,7 +136,7 @@ impl<const N: usize> Uint<N> {
 
     /// Wrapping cube (`self³` modulo `2^BITS`). Named entry point for the
     /// open-coded `x * x * x` pattern. Thin delegator DOWN to the cube
-    /// policy ([`cube_dispatch`]): `sqr` then one multiply via the const
+    /// policy (`cube_dispatch`): `sqr` then one multiply via the const
     /// kernels — no cheaper form exists below two multiplies.
     #[inline]
     pub const fn wrapping_cube(self) -> Self {
@@ -330,7 +330,7 @@ impl<const N: usize> Uint<N> {
 
     /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
     /// `self^0 == 1`. Thin delegator DOWN to the pow policy
-    /// ([`pow_dispatch`]): binary square-and-multiply over the const
+    /// (`pow_dispatch`): binary square-and-multiply over the const
     /// kernels; optimal for the small fixed exponents the root iteration
     /// needs (`k-1`, `k`).
     #[inline]
@@ -358,7 +358,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Exponentiation by squaring. Routes through the pow policy
-    /// ([`pow_dispatch`]): binary square-and-multiply at every `N`.
+    /// (`pow_dispatch`): binary square-and-multiply at every `N`.
     /// Result is `self^exp` modulo `2^BITS`; `self^0 == 1`.
     #[inline]
     pub fn pow(self, exp: u32) -> Self {
@@ -366,7 +366,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Integer square root: the largest `r` with `r² <= self`.
-    /// Routes through the isqrt policy ([`isqrt_dispatch`]):
+    /// Routes through the isqrt policy (`isqrt_dispatch`):
     /// `N ∈ {1, 2}` takes the hardware native path; `N >= 3` takes
     /// the Newton limb kernel.
     #[inline]
@@ -375,21 +375,21 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Integer square: `self²` modulo `2^BITS`. Routes through the sqr
-    /// policy ([`sqr_dispatch`]): half-product squaring kernel at every `N`.
+    /// policy (`sqr_dispatch`): half-product squaring kernel at every `N`.
     #[inline]
     pub fn sqr(self) -> Self {
         sqr_dispatch(self)
     }
 
     /// Integer cube: `self³` modulo `2^BITS`. Routes through the cube
-    /// policy ([`cube_dispatch`]): sqr-then-multiply at every `N`.
+    /// policy (`cube_dispatch`): sqr-then-multiply at every `N`.
     #[inline]
     pub fn cube(self) -> Self {
         cube_dispatch(self)
     }
 
     /// Integer cube root: `floor(self^(1/3))`. Routes through the icbrt
-    /// policy ([`icbrt_dispatch`]):
+    /// policy (`icbrt_dispatch`):
     /// `N ∈ {1, 2}` takes the narrow path; `N >= 3` takes the Newton
     /// limb kernel with an `f64::cbrt` seed.
     #[inline]
@@ -1073,7 +1073,7 @@ impl<const N: usize> Int<N> {
 
     /// Wrapping exponentiation by squaring (`self^exp` modulo `2^BITS`).
     /// `self^0 == 1`. Thin delegator DOWN to the pow policy
-    /// ([`pow_dispatch`]) on the unsigned reinterpretation: binary
+    /// (`pow_dispatch`) on the unsigned reinterpretation: binary
     /// square-and-multiply over the const kernels. The low `N` limbs of a
     /// power are sign-independent, so reinterpreting as `Uint<N>` and back
     /// preserves the two's-complement result.
@@ -1101,7 +1101,7 @@ impl<const N: usize> Int<N> {
     }
 
     /// Wrapping square (`self²` modulo `2^BITS`). Thin delegator DOWN to
-    /// the sqr policy ([`sqr_dispatch`]) on the unsigned reinterpretation:
+    /// the sqr policy (`sqr_dispatch`) on the unsigned reinterpretation:
     /// half-product squaring via the const kernel. The low `N` limbs of a
     /// square are sign-independent, so reinterpreting as `Uint<N>` and back
     /// preserves the two's-complement result.
@@ -1111,7 +1111,7 @@ impl<const N: usize> Int<N> {
     }
 
     /// Wrapping cube (`self³` modulo `2^BITS`). Thin delegator DOWN to the
-    /// cube policy ([`cube_dispatch`]) on the unsigned reinterpretation:
+    /// cube policy (`cube_dispatch`) on the unsigned reinterpretation:
     /// `sqr` then one multiply via the const kernels. The low `N` limbs are
     /// sign-independent, so reinterpreting as `Uint<N>` and back preserves
     /// the two's-complement result.
@@ -1569,14 +1569,14 @@ impl<const N: usize> Int<N> {
 
     /// Integer square root of the magnitude (`floor(sqrt(|self|))`),
     /// returned non-negative. Delegates to the unsigned sibling which
-    /// routes through [`isqrt_dispatch`].
+    /// routes through `isqrt_dispatch`.
     #[inline]
     pub fn isqrt(self) -> Self {
         Self::from_limbs(*self.unsigned_abs().isqrt().as_limbs())
     }
 
     /// Integer square: `self²` modulo `2^BITS`. Routes through the sqr
-    /// policy ([`sqr_dispatch`]) on the unsigned reinterpretation, then
+    /// policy (`sqr_dispatch`) on the unsigned reinterpretation, then
     /// reinterprets back as signed. Equivalent to `wrapping_sqr`.
     #[inline]
     pub fn sqr(self) -> Self {
@@ -1584,7 +1584,7 @@ impl<const N: usize> Int<N> {
     }
 
     /// Integer cube: `self³` modulo `2^BITS`. Routes through the cube
-    /// policy ([`cube_dispatch`]) on the unsigned reinterpretation, then
+    /// policy (`cube_dispatch`) on the unsigned reinterpretation, then
     /// reinterprets back as signed. Equivalent to `wrapping_cube`.
     #[inline]
     pub fn cube(self) -> Self {
@@ -1593,7 +1593,7 @@ impl<const N: usize> Int<N> {
 
     /// Integer cube root of the magnitude (`floor(cbrt(|self|))`),
     /// returned non-negative. Delegates to the unsigned sibling which
-    /// routes through [`icbrt_dispatch`].
+    /// routes through `icbrt_dispatch`.
     #[inline]
     pub fn icbrt(self) -> Self {
         Self::from_limbs(*self.unsigned_abs().icbrt().as_limbs())
