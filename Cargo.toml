@@ -225,6 +225,53 @@ required-features = ["perf-trace"]
 name = "profile_exp_perfetto"
 required-features = ["perf-trace"]
 
+# Examples/tests that reference the wide-only decimal tiers (D57…D1232)
+# must declare the tier features they use, so a default `cargo build
+# --all-targets` (narrow tiers only) skips them instead of failing to
+# build with E0432 unresolved-import on the wide types.
+[[example]]
+name = "agm_mpmath_validate"
+required-features = ["x-wide", "xx-wide"]
+
+[[example]]
+name = "divbench"
+required-features = ["wide", "x-wide"]
+
+[[example]]
+name = "expbench"
+required-features = ["wide", "x-wide"]
+
+[[example]]
+name = "profile_exp"
+required-features = ["x-wide"]
+
+[[example]]
+name = "rounding_mode_probe"
+required-features = ["wide"]
+
+[[example]]
+name = "sqrtbench"
+required-features = ["wide", "x-wide"]
+
+[[example]]
+name = "test_pi"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
+name = "ulp_report"
+required-features = ["wide"]
+
+# `ulp_strict_golden` pulls in the wide precision harness
+# (`tests/support/precision_subject_ds.rs`, which names every tier); both
+# it and the wide serde surface need the tier features.
+[[test]]
+name = "serde_surface"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[test]]
+name = "ulp_strict_golden"
+required-features = ["wide", "x-wide", "xx-wide"]
+
 [[bench]]
 name = "mul_div_candidates"
 path = "benches/micro/mul_div_candidates.rs"
