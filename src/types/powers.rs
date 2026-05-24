@@ -300,7 +300,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn sqrt_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        Self(crate::policy::sqrt::dispatch::<SCALE, crate::int::types::Int<4>, 2>(self.0, mode))
+        <Self as crate::policy::sqrt::SqrtPolicy>::sqrt_impl(self, mode)
     }
 
     /// Returns the square root of `self`.

@@ -1,8 +1,8 @@
 //! Square-root policy — the per-`(N, SCALE)` algorithm matcher.
 //!
-//! `D<Int<N>, SCALE>::sqrt_strict_with(mode)` delegates directly to the
-//! one shared [`dispatch`] generic function (the per-tier type method
-//! supplies the work width `W`). `dispatch` follows the
+//! `D<Int<N>, SCALE>::sqrt_strict_with(mode)` delegates to
+//! [`SqrtPolicy::sqrt_impl`], which forwards to the one shared
+//! [`dispatch`] generic function. `dispatch` follows the
 //! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
 //! structure"):
 //!
@@ -25,7 +25,7 @@
 //! next-up work width `W = Int<2N>`. Computing `Int<2N>` from `N`
 //! generically needs `generic_const_exprs` (nightly, forbidden on
 //! stable), so the concrete `W` is supplied by each storage tier's
-//! type method (generated per tier) and threaded through the dispatch. `W` is a *work* width,
+//! `sqrt_impl` and threaded through the dispatch. `W` is a *work* width,
 //! not an algorithm distinction — `sqrt_newton` stays one generic-over-
 //! `(S, W)` algorithm; the matcher selects `W` from `N`.
 
@@ -33,6 +33,14 @@ use crate::algos::sqrt;
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
+
+/// Per-width policy: which kernel a `D<Int<N>, SCALE>` uses for
+/// `sqrt_strict_with`.
+pub(crate) trait SqrtPolicy: Sized {
+    /// Square root under the supplied rounding mode. Negative inputs
+    /// saturate to zero.
+    fn sqrt_impl(self, mode: RoundingMode) -> Self;
+}
 
 // ── 1. the real square-root algorithms — NAMED, no `Default` ──────────
 
@@ -114,7 +122,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// at every other `N`.
 #[inline]
 #[must_use]
-pub(crate) fn dispatch<const SCALE: u32, W, const N: usize>(raw: Int<N>, mode: RoundingMode) -> Int<N>
+fn dispatch<const N: usize, const SCALE: u32, W>(raw: Int<N>, mode: RoundingMode) -> Int<N>
 where
     W: BigInt,
 {
@@ -145,3 +153,52 @@ where
         Algorithm::Schoolbook => sqrt::sqrt_schoolbook::sqrt_schoolbook::<Int<N>, W>(raw, SCALE, mode),
     }
 }
+
+// ── per-tier `SqrtPolicy` impls — each binds its concrete work width ──
+//
+// Every impl forwards to the one `dispatch`; the only per-tier datum
+// is the Newton work width `W = Int<2N>`. The dispatch's `const { select }`
+// block folds away the unreachable arms for each tier.
+
+/// Emit `impl SqrtPolicy for D<Int<$N>, SCALE>` forwarding to
+/// [`dispatch`] with the tier's Newton work width `Int<$W>`.
+macro_rules! sqrt_policy_tier {
+    ($N:literal, $W:literal) => {
+        impl<const SCALE: u32> SqrtPolicy
+            for crate::D<crate::int::types::Int<$N>, SCALE>
+        {
+            #[inline]
+            fn sqrt_impl(self, mode: RoundingMode) -> Self {
+                Self(dispatch::<$N, SCALE, Int<$W>>(self.0, mode))
+            }
+        }
+    };
+}
+
+// Narrow / D38: `W` is unused by their `MgDivide` arm but must name a
+// valid `BigInt`; `Int<2>` is the cheapest valid placeholder.
+sqrt_policy_tier!(1, 2); // D18 — MgDivide (widened to Int<2>)
+sqrt_policy_tier!(2, 2); // D38 — MgDivide
+
+// Wide tiers: `W = Int<2N>` is the Newton radicand work width. D57 also
+// carries the `(57, 20)` NewtonWithTableSeed cell, selected in `select`.
+#[cfg(any(feature = "d57", feature = "wide"))]
+sqrt_policy_tier!(3, 6); // D57
+#[cfg(any(feature = "d76", feature = "wide"))]
+sqrt_policy_tier!(4, 8); // D76
+#[cfg(any(feature = "d115", feature = "wide"))]
+sqrt_policy_tier!(6, 12); // D115
+#[cfg(any(feature = "d153", feature = "wide"))]
+sqrt_policy_tier!(8, 16); // D153
+#[cfg(any(feature = "d230", feature = "wide"))]
+sqrt_policy_tier!(12, 24); // D230
+#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+sqrt_policy_tier!(16, 32); // D307
+#[cfg(any(feature = "d462", feature = "x-wide"))]
+sqrt_policy_tier!(24, 48); // D462
+#[cfg(any(feature = "d616", feature = "x-wide"))]
+sqrt_policy_tier!(32, 64); // D616
+#[cfg(any(feature = "d924", feature = "xx-wide"))]
+sqrt_policy_tier!(48, 96); // D924
+#[cfg(any(feature = "d1232", feature = "xx-wide"))]
+sqrt_policy_tier!(64, 128); // D1232
