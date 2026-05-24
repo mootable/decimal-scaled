@@ -10,5 +10,8 @@
 //!   [`crate::int::policy::rem`] for the wide tiers (`N >= 3`).
 
 pub(crate) mod rem_native;
+// candidate (not wired): direct two's-complement i128 `%` for N<=2, skips
+// the sign-magnitude round trip the shipped rem_native still pays.
+pub(crate) mod rem_native_direct;
 pub(crate) mod rem_schoolbook;
 pub(crate) mod rem_via_div_rem;
