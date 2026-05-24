@@ -133,6 +133,15 @@ pub(crate) mod forward {
         /// wide tiers (the policy stays exhaustive in both configs).
         #[cfg(feature = "_wide-support")]
         Tang,
+        /// `*_schoolbook` -- the naive textbook reference (Maclaurin
+        /// series on the range-reduced residue for sin/cos, `sin/cos`
+        /// for tan, the reduced arctan series for atan). UNROUTED:
+        /// `select` never returns it; registered for the correctness
+        /// reference + A/B microbench partner. Realised by the generic
+        /// `trig_schoolbook::*_schoolbook` (wide) and
+        /// `trig_schoolbook::*_schoolbook_narrow` (narrow) kernels.
+        #[allow(dead_code)]
+        Schoolbook,
     }
 
     /// A settled algorithm, or "the value decides". `ByValue` is part of
@@ -854,6 +863,8 @@ macro_rules! d38_forward_fixed {
                 forward::Algorithm::Series => trig::trig_series_2limb::sin_strict::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::trig_series_2limb::sin_strict::<SCALE>(self.0, mode),
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => trig::trig_schoolbook::sin_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -866,6 +877,8 @@ macro_rules! d38_forward_fixed {
                 forward::Algorithm::Series => trig::trig_series_2limb::cos_strict::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::trig_series_2limb::cos_strict::<SCALE>(self.0, mode),
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => trig::trig_schoolbook::cos_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -878,6 +891,8 @@ macro_rules! d38_forward_fixed {
                 forward::Algorithm::Series => trig::trig_series_2limb::tan_strict::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
                 forward::Algorithm::Tang => trig::trig_series_2limb::tan_strict::<SCALE>(self.0, mode),
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => trig::trig_schoolbook::tan_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -1150,6 +1165,8 @@ macro_rules! wide_trig_forward_series {
                 forward::Algorithm::Tang => {
                     crate::algos::support::wide_trig_core::sin_series::<$Core, SCALE>(self.0, mode)
                 }
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<$Core, SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -1166,6 +1183,8 @@ macro_rules! wide_trig_forward_series {
                 forward::Algorithm::Tang => {
                     crate::algos::support::wide_trig_core::cos_series::<$Core, SCALE>(self.0, mode)
                 }
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<$Core, SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -1182,6 +1201,8 @@ macro_rules! wide_trig_forward_series {
                 forward::Algorithm::Tang => {
                     crate::algos::support::wide_trig_core::tan_series::<$Core, SCALE>(self.0, mode)
                 }
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<$Core, SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -1198,6 +1219,8 @@ macro_rules! wide_trig_forward_series {
                 forward::Algorithm::Tang => {
                     crate::algos::support::wide_trig_core::atan_series::<$Core, SCALE>(self.0, mode)
                 }
+                #[allow(dead_code)]
+                forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<$Core, SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -1225,6 +1248,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
             forward::Algorithm::Tang => {
                 trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1241,6 +1266,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
             forward::Algorithm::Tang => {
                 trig::sincos_tang::cos_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1257,6 +1284,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
             // tan has no D57 Tang band; the arm is dead-arm-eliminated
             // (forwards to the generic kernel for exhaustiveness).
             forward::Algorithm::Tang => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1273,6 +1302,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
             forward::Algorithm::Tang => {
                 trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1439,6 +1470,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1452,6 +1485,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1465,6 +1500,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, true>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1478,6 +1515,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
             forward::Algorithm::Tang => {
                 crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d153::Core, SCALE, 12>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1550,6 +1589,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1563,6 +1604,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1576,6 +1619,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, true>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1589,6 +1634,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
             forward::Algorithm::Tang => {
                 crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d307::Core, SCALE, 10>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1652,6 +1699,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::sin_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1665,6 +1714,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::cos_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1678,6 +1729,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE
             forward::Algorithm::Tang => {
                 trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, false>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::tan_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1691,6 +1744,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE
             forward::Algorithm::Tang => {
                 crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d462::Core, SCALE, 12>(self.0, mode)
             }
+            #[allow(dead_code)]
+            forward::Algorithm::Schoolbook => crate::algos::trig::trig_schoolbook::atan_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]

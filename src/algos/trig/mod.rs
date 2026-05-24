@@ -17,6 +17,7 @@
 //!   for atan / acos, and the small-x linear band) are preserved.
 
 pub(crate) mod trig_series_2limb;
+pub(crate) mod trig_schoolbook;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_exp_identity;
 #[cfg(any(feature = "d57", feature = "wide"))]
