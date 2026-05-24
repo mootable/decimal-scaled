@@ -42,6 +42,11 @@ enum Algorithm {
     /// add, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Same-SCALE addition needs no rescaling.
     IntLayer,
+    /// Naive schoolbook reference: delegates to the same
+    /// [`add_int_layer`](crate::algos::add::add_int_layer::add_int_layer)
+    /// kernel. This variant documents the seam and stays unrouted by `select`.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -86,7 +91,9 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => crate::algos::add::add_int_layer::add_int_layer(a, b),
+        Algorithm::IntLayer | Algorithm::Schoolbook => {
+            crate::algos::add::add_int_layer::add_int_layer(a, b)
+        }
     }
 }
 
