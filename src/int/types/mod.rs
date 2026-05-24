@@ -1251,6 +1251,19 @@ impl<const N: usize> Int<N> {
     /// conversion when `v` may not fit.
     #[inline]
     pub(crate) const fn from_i128(v: i128) -> Self {
+        // Narrow non-limb fast path (const-folds): for N<=2 write the
+        // two's-complement limbs directly (truncating for N==1), skipping the
+        // magnitude split + `wrapping_neg` re-sign. Bit-identical to the
+        // magnitude path (two's-complement negation commutes with low-64
+        // truncation).
+        if N <= 2 {
+            let mut limbs = [0u64; N];
+            limbs[0] = v as u64;
+            if N == 2 {
+                limbs[1] = (v >> 64) as u64;
+            }
+            return Self { limbs };
+        }
         let mag = v.unsigned_abs();
         Self::from_mag_limbs(&[mag as u64, (mag >> 64) as u64], v < 0)
     }
@@ -1886,6 +1899,19 @@ impl<const N: usize> Int<N> {
     /// when the value may not fit.
     #[inline]
     pub(crate) const fn as_i128(self) -> i128 {
+        // Narrow non-limb fast path (const-folds per monomorphisation): for
+        // N<=2 the limbs ARE the i64/i128 two's-complement value, so skip the
+        // `unsigned_abs`/`wrapping_neg` sign-magnitude round trip (which costs
+        // two `neg_dispatch` calls on a negative operand). Always fits i128
+        // for N<=2; bit-identical to the magnitude path below.
+        if N <= 2 {
+            if N == 1 {
+                return (self.limbs[0] as i64) as i128;
+            }
+            let lo = self.limbs[0] as u128;
+            let hi = self.limbs[1] as u128;
+            return (lo | (hi << 64)) as i128;
+        }
         let mag = *self.unsigned_abs().as_limbs();
         let lo = if N > 0 { mag[0] as u128 } else { 0 };
         let hi = if N > 1 { mag[1] as u128 } else { 0 };
