@@ -27,12 +27,8 @@ fn d76_hypot_strict_zero_x() {
 
     let five: D76<6> = D38::<6>::try_from(5).unwrap().into();
     let r = D76::<6>::ZERO.hypot_strict(five);
-    // |5| with possible 1 LSB rounding
-    let diff = (r.to_bits() - five.to_bits())
-        .to_i128_checked()
-        .unwrap_or(99)
-        .abs();
-    assert!(diff <= 1);
+    // hypot(0, x) = |x| exactly (isqrt(x²) = |x|, no rounding bump).
+    assert_eq!(r, five);
 }
 
 #[test]
@@ -42,11 +38,8 @@ fn d76_hypot_strict_3_4_is_5() {
     let four: D76<6> = D38::<6>::try_from(4).unwrap().into();
     let five: D76<6> = D38::<6>::try_from(5).unwrap().into();
     let r = three.hypot_strict(four);
-    let diff = (r.to_bits() - five.to_bits())
-        .to_i128_checked()
-        .unwrap_or(99)
-        .abs();
-    assert!(diff <= 1, "got {r:?} expected {five:?}");
+    // Pythagorean triple 3²+4²=5²: the hypotenuse is an exact integer.
+    assert_eq!(r, five, "got {r:?} expected exact {five:?}");
 }
 
 #[cfg(all(feature = "x-wide", feature = "strict"))]
@@ -61,12 +54,15 @@ fn d153_d307_dispatchers_and_hypot() {
 
     let three: D153<6> = D38::<6>::try_from(3).unwrap().into();
     let four_a: D153<6> = D38::<6>::try_from(4).unwrap().into();
-    let _ = three.hypot_strict(four_a);
+    let five_a: D153<6> = D38::<6>::try_from(5).unwrap().into();
+    // Pythagorean triple 3²+4²=5²: exact integer hypotenuse.
+    assert_eq!(three.hypot_strict(four_a), five_a);
 
     let four_b: D307<6> = D76::<6>::try_from(4).unwrap().into();
     let twenty_seven_b: D307<6> = D76::<6>::try_from(27).unwrap().into();
     assert_eq!(four_b.sqrt(), four_b.sqrt_strict());
     assert_eq!(twenty_seven_b.cbrt(), twenty_seven_b.cbrt_strict());
     let three_b: D307<6> = D76::<6>::try_from(3).unwrap().into();
-    let _ = three_b.hypot_strict(four_b);
+    let five_b: D307<6> = D76::<6>::try_from(5).unwrap().into();
+    assert_eq!(three_b.hypot_strict(four_b), five_b);
 }
