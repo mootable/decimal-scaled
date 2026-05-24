@@ -15,14 +15,16 @@
 //!
 //! `powf` is the hybrid `b^y = exp(y · ln b)`: a composition of the
 //! `exp` and `ln` algorithms (the established identity, not a separate
-//! transcendental method). Its fn is `powf_exp_with_ln` and the enum
-//! variant is `ExpWithLn`. Across all `(N, SCALE)` it is the sole
-//! algorithm; the narrow tiers realise it on the 256-bit `Fixed`
-//! intermediate (`pow::powf_series_2limb`, with D18 widening in via the
-//! `widen_to_work` strategy), the wide tiers via the inherent
-//! `powf_strict_with` shell that composes the wide-tier `exp`/`ln`
-//! cores (not yet policy-routed — see `phase4/migration_explog.md`,
-//! "the bulk of pow's Phase-4 lift").
+//! transcendental method). The enum variant `ExpWithLn` names that
+//! composition — it is NOT a single kernel fn (there is no
+//! `powf_exp_with_ln`); being a composition, it is realised per tier:
+//! the narrow tiers on the 256-bit `Fixed` intermediate via
+//! [`pow::powf_series_2limb`]`::{powf_strict, powf_with}` (with D18
+//! widening in via the `widen_to_work` strategy), the wide tiers via the
+//! inherent `powf_strict_with` shell that composes the wide-tier
+//! `exp`/`ln` cores (not yet policy-routed — see
+//! `phase4/migration_explog.md`, "the bulk of pow's Phase-4 lift").
+//! Across all `(N, SCALE)` it is the sole algorithm.
 //!
 //! # Deferred: the `IntSquareMultiply` value matcher
 //!
@@ -54,14 +56,15 @@ pub(crate) trait PowPolicy: Sized {
 
 // ── 1. the real power algorithms — NAMED, no `Default` ─────────────────
 
-/// The power algorithms this policy chooses between. The variant is the
-/// CamelCase of the kernel's name minus the `powf_` prefix
-/// (`powf_exp_with_ln` → `ExpWithLn`) — strict 1:1.
+/// The power algorithms this policy chooses between. `powf` has a single
+/// algorithm — a *composition* (`exp∘ln`), so the variant names the
+/// composition rather than a 1:1 kernel fn (unlike the unary-fn policies,
+/// there is no `powf_<method>` kernel; it is realised per tier).
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// `powf_exp_with_ln` — the hybrid `b^y = exp(y · ln b)`. The single
-    /// algorithm today; realised by `pow::powf_series_2limb` (narrow) and the
-    /// inherent wide-tier shell.
+    /// `ExpWithLn` — the hybrid `b^y = exp(y · ln b)`. The single
+    /// algorithm today; realised by `pow::powf_series_2limb::{powf_strict,
+    /// powf_with}` (narrow) and the inherent wide-tier shell.
     ExpWithLn,
     // Deferred: `IntSquareMultiply` (fn `pow_int_square_multiply`),
     // selected by the `powf_exp_small_int` `ByValue` matcher. See module
