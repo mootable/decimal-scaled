@@ -94,6 +94,7 @@ Rules:
 - The per-`Algorithm` fns in the policy are **thin delegations** to the kernel in `algos/`, not real computation.
 - **Compile-away** is the point of `const`: `const { select::<…>() }` folds per monomorphisation and the unchosen arm is dead-arm-eliminated in *release*. It is NOT a language guarantee → the acceptance gate is the **IR/asm proof** (one direct call, no runtime branch, no panic path). Debug keeps all arms (correctness-neutral).
 - `ByValue` is the only arm that keeps a runtime branch — use it for value-dependent algorithm choice (placement: closure-`if` ≤2, closure-`match` 3–10, named `#[inline] fn <fn>_N<lo>_to_N<hi>` if >10 / shared / tested).
+- **Policies don't leak.** The ONLY item a policy file exposes is `dispatch` (`pub(crate)`). `Algorithm` / `Select` / `select` / any threshold or tuning `const` (e.g. a Karatsuba crossover) stay **private to the file** — `dispatch` threads a threshold into the kernel as an *argument*, kernels never import it, and nothing outside the policy imports a policy internal. A `pub(crate)` threshold imported by a test is a leak — point the test at an explicit value (it should stress its own worst case anyway), and privatise the const.
 
 The type method then delegates one line: `pub fn isqrt(self) -> Self { isqrt_dispatch(self) }`.
 
