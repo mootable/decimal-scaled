@@ -46,7 +46,7 @@ use crate::support::rounding::RoundingMode;
 /// [`WideTrigCore::ln_fixed`] in the guard-digit work integer and divided
 /// via [`WideTrigCore::div`] before correctly-rounded narrowing with Ziv
 /// escalation. Composes the C-generic `ln` leaf directly (no inversion).
-/// Registered as the unrouted `Schoolbook` arm of the wide `LogPolicy`
+/// Registered as the unrouted `Schoolbook` arm of the wide `policy::log`
 /// tiers.
 ///
 /// # Panics

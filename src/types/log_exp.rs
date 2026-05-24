@@ -40,7 +40,7 @@
 //! # Layering
 //!
 //! Every public method on this file is a one-line delegate into
-//! `policy::ln::LnPolicy` or `policy::exp::ExpPolicy`. The
+//! `policy::ln` or `policy::exp`. The
 //! correctly-rounded kernels (`ln_fixed`, `exp_fixed`,
 //! `STRICT_GUARD`, the `wide_ln2` / `wide_ln10` constants, and the
 //! per-variant `ln_strict` / `ln_with` / `log_strict` / `log_with` /
@@ -113,7 +113,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn ln_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::ln::LnPolicy>::ln_impl(self, mode)
+        Self::from_bits(crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Natural logarithm with a caller-chosen number of guard digits
@@ -139,7 +139,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.ln_strict_with(mode);
         }
-        <Self as crate::policy::ln::LnPolicy>::ln_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::ln::dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Returns the natural logarithm (base e) of `self`.
@@ -161,7 +161,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn log_strict_with(self, base: Self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::ln::LnPolicy>::log_impl(self, base, mode)
+        Self::from_bits(crate::policy::log::dispatch::<_, SCALE>(self.to_bits(), base.to_bits(), mode))
     }
 
     /// Logarithm with caller-chosen guard digits. See `ln_approx`.
@@ -187,7 +187,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.log_strict_with(base, mode);
         }
-        <Self as crate::policy::ln::LnPolicy>::log_with_impl(self, base, working_digits, mode)
+        Self::from_bits(crate::policy::log::dispatch_with::<_, SCALE>(self.to_bits(), base.to_bits(), working_digits, mode))
     }
 
     /// Returns the logarithm of `self` in the given `base`.
@@ -209,7 +209,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn log2_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::ln::LnPolicy>::log2_impl(self, mode)
+        Self::from_bits(crate::policy::ln::log2_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Base-2 log with caller-chosen guard digits.
@@ -233,7 +233,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.log2_strict_with(mode);
         }
-        <Self as crate::policy::ln::LnPolicy>::log2_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::ln::log2_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Returns the base-2 logarithm of `self`.
@@ -255,7 +255,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     #[must_use]
     pub fn log10_strict_with(self, mode: crate::support::rounding::RoundingMode) -> Self {
-        <Self as crate::policy::ln::LnPolicy>::log10_impl(self, mode)
+        Self::from_bits(crate::policy::ln::log10_dispatch::<_, SCALE>(self.to_bits(), mode))
     }
 
     /// Base-10 log with caller-chosen guard digits.
@@ -279,7 +279,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
         if working_digits == STRICT_GUARD {
             return self.log10_strict_with(mode);
         }
-        <Self as crate::policy::ln::LnPolicy>::log10_with_impl(self, working_digits, mode)
+        Self::from_bits(crate::policy::ln::log10_dispatch_with::<_, SCALE>(self.to_bits(), working_digits, mode))
     }
 
     /// Returns the base-10 logarithm of `self`.

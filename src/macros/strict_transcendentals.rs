@@ -31,10 +31,10 @@ macro_rules! decl_strict_transcendentals_via_d38 {
             #[inline]
             #[must_use]
             pub fn ln_strict(self) -> Self {
-                <Self as $crate::policy::ln::LnPolicy>::ln_impl(
-                    self,
+                Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(
+                    self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
             /// `log2_strict` — delegates to [`crate::types::widths::D38::log2_strict`] via widen → strict → narrow. **0.5 ULP correctly-rounded** at storage scale. Panics if the result doesn't fit `Self`'s range.
             #[inline]

@@ -11,7 +11,7 @@
 //! `working_digits`.
 //!
 //! Hosts the shared `Fixed` ln primitives used by every D38 strict-
-//! ln callsite plus the `LnPolicy` defaults — `STRICT_GUARD`,
+//! ln callsite plus the `policy::ln` defaults — `STRICT_GUARD`,
 //! `ln_fixed`, `wide_ln2`, `wide_ln10` — so the typed-shell file
 //! has no `crate::algos::*` or `crate::algos::support::fixed::*` references
 //! left.
@@ -332,7 +332,7 @@ fn log_exact_int_pin(value_raw: i128, base_int: i128, scale: u32, k: i128) -> Op
 }
 
 /// `log_base(v) = ln(v) / ln(base)`, both carried in the `Fixed` wide.
-/// Used by `LnPolicy::log_impl` when the D57 borrow path is not
+/// Used by `policy::log::dispatch` when the D57 borrow path is not
 /// available (no `d57` / `wide` feature).
 #[inline]
 #[must_use]

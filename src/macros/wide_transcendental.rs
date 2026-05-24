@@ -2768,6 +2768,93 @@ macro_rules! decl_wide_transcendental {
                 let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln_b, w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
+
+            /// Strict-guard `log2(x)` under `mode`, on raw storage.
+            /// Mirrors the inherent `log2_strict_with` body verbatim;
+            /// the `policy::ln` dispatch routes here so `log2` never
+            /// re-enters a sibling decimal policy.
+            #[inline]
+            pub(crate) fn log2_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
+                }
+                {
+                    let w0 = SCALE + GUARD;
+                    let r0 = div(ln_fixed(to_work(raw), w0), ln2(w0), w0);
+                    let k = round_to_nearest_int(r0, w0);
+                    let base2 = pow10_cached(SCALE) + pow10_cached(SCALE);
+                    if log_is_exact_int(to_work_w(raw, 0), base2, SCALE, k) {
+                        return exact_int_at_scale(k, SCALE);
+                    }
+                }
+                round_to_storage_directed(GUARD, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    div(ln_fixed(to_work_w(raw, guard), w), ln2(w), w)
+                })
+            }
+
+            /// Approx-guard `log2(x)` with caller-chosen `working_digits`.
+            #[inline]
+            pub(crate) fn log2_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if working_digits == GUARD {
+                    return log2_strict_with_kernel::<SCALE>(raw, mode);
+                }
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln2(w), w);
+                round_to_storage_with(r, w, SCALE, mode)
+            }
+
+            /// Strict-guard `log10(x)` under `mode`, on raw storage.
+            #[inline]
+            pub(crate) fn log10_strict_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
+                }
+                {
+                    let w0 = SCALE + GUARD;
+                    let r0 = div(ln_fixed(to_work(raw), w0), ln10(w0), w0);
+                    let k = round_to_nearest_int(r0, w0);
+                    let base10 = pow10_cached(SCALE + 1);
+                    if log_is_exact_int(to_work_w(raw, 0), base10, SCALE, k) {
+                        return exact_int_at_scale(k, SCALE);
+                    }
+                }
+                round_to_storage_directed(GUARD, SCALE, mode, |guard| {
+                    let w = SCALE + guard;
+                    div(ln_fixed(to_work_w(raw, guard), w), ln10(w), w)
+                })
+            }
+
+            /// Approx-guard `log10(x)` with caller-chosen `working_digits`.
+            #[inline]
+            pub(crate) fn log10_approx_with_kernel<const SCALE: u32>(
+                raw: $Storage,
+                working_digits: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                if working_digits == GUARD {
+                    return log10_strict_with_kernel::<SCALE>(raw, mode);
+                }
+                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
+                    panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
+                }
+                let w = SCALE + working_digits;
+                let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln10(w), w);
+                round_to_storage_with(r, w, SCALE, mode)
+            }
         }
 
         impl<const SCALE: u32> $Type<SCALE> {
@@ -2779,10 +2866,10 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn ln_strict(self) -> Self {
-                <Self as $crate::policy::ln::LnPolicy>::ln_impl(
-                    self,
+                Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(
+                    self.to_bits(),
                     $crate::support::rounding::DEFAULT_ROUNDING_MODE,
-                )
+                ))
             }
 
             /// Natural logarithm via the Brent–Salamin AGM (1976).
@@ -3370,7 +3457,7 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             #[must_use]
             pub fn ln_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                <Self as $crate::policy::ln::LnPolicy>::ln_impl(self, mode)
+                Self::from_bits($crate::policy::ln::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::ln_strict_agm`].
@@ -3414,10 +3501,8 @@ macro_rules! decl_wide_transcendental {
 
             /// Mode-aware sibling of [`Self::log_strict`].
             ///
-            /// Body delegates *down* to
-            /// `policy::log::LogPolicy::log_impl`, which routes to the
-            /// `LnDivide` algorithm kernel (`$core::log_strict_with_kernel`).
-            /// The impl lives in the algorithm, not in this method.
+            /// Body delegates *down* to `policy::log::dispatch`, which
+            /// routes to the `LnDivide` kernel (`$core::log_strict_with_kernel`).
             #[inline]
             #[must_use]
             pub fn log_strict_with(
@@ -3425,89 +3510,25 @@ macro_rules! decl_wide_transcendental {
                 base: Self,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <Self as $crate::policy::log::LogPolicy>::log_impl(self, base, mode)
+                Self::from_bits($crate::policy::log::dispatch::<_, SCALE>(
+                    self.to_bits(),
+                    base.to_bits(),
+                    mode,
+                ))
             }
 
             /// Mode-aware sibling of [`Self::log2_strict`].
             #[inline]
             #[must_use]
             pub fn log2_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log2: argument must be positive"
-                    ));
-                }
-                // Exact-power pin: `self == 2^k` ⇒ result is exactly `k`
-                // (see `log10_strict_with`).
-                {
-                    let w0 = SCALE + $core::GUARD;
-                    let r0 =
-                        $core::div($core::ln_fixed($core::to_work(raw), w0), $core::ln2(w0), w0);
-                    let k = $core::round_to_nearest_int(r0, w0);
-                    let base2 = $core::pow10_cached(SCALE) + $core::pow10_cached(SCALE); // 2 · 10^SCALE
-                    if $core::log_is_exact_int($core::to_work_w(raw, 0), base2, SCALE, k) {
-                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
-                    }
-                }
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        $core::div(
-                            $core::ln_fixed($core::to_work_w(raw, guard), w),
-                            $core::ln2(w),
-                            w,
-                        )
-                    },
-                ))
+                Self::from_bits($core::log2_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::log10_strict`].
             #[inline]
             #[must_use]
             pub fn log10_strict_with(self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log10: argument must be positive"
-                    ));
-                }
-                // Exact-power pin: if `self == 10^k` the result is exactly
-                // the integer `k` (residual provably zero), so every mode
-                // returns `k` and no directed bump is taken. Without this
-                // the `ln(self)/ln 10` round-off lands a hair off the grid
-                // line and Floor/Ceiling/Trunc bump by one LSB.
-                {
-                    let w0 = SCALE + $core::GUARD;
-                    let r0 = $core::div(
-                        $core::ln_fixed($core::to_work(raw), w0),
-                        $core::ln10(w0),
-                        w0,
-                    );
-                    let k = $core::round_to_nearest_int(r0, w0);
-                    let base10 = $core::pow10_cached(SCALE + 1); // 10 · 10^SCALE
-                    if $core::log_is_exact_int($core::to_work_w(raw, 0), base10, SCALE, k) {
-                        return Self::from_bits($core::exact_int_at_scale(k, SCALE));
-                    }
-                }
-                Self::from_bits($core::round_to_storage_directed(
-                    $core::GUARD,
-                    SCALE,
-                    mode,
-                    |guard| {
-                        let w = SCALE + guard;
-                        $core::div(
-                            $core::ln_fixed($core::to_work_w(raw, guard), w),
-                            $core::ln10(w),
-                            w,
-                        )
-                    },
-                ))
+                Self::from_bits($core::log10_strict_with_kernel::<SCALE>(self.to_bits(), mode))
             }
 
             /// Mode-aware sibling of [`Self::exp_strict`]. Delegates
@@ -4193,10 +4214,9 @@ macro_rules! decl_wide_transcendental {
             /// Log to chosen base with caller-chosen guard digits AND rounding mode.
             ///
             /// Body delegates *down* to
-            /// `policy::log::LogPolicy::log_with_impl`, which routes to the
-            /// `LnDivide` algorithm kernel (`$core::log_approx_with_kernel`,
-            /// or the strict kernel when `working_digits == GUARD`). The
-            /// impl lives in the algorithm, not in this method.
+            /// `policy::log::dispatch_with`, which routes to the `LnDivide`
+            /// kernel (`$core::log_approx_with_kernel`, or the strict kernel
+            /// when `working_digits == GUARD`).
             #[inline]
             #[must_use]
             pub fn log_approx_with(
@@ -4205,12 +4225,12 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                <Self as $crate::policy::log::LogPolicy>::log_with_impl(
-                    self,
-                    base,
+                Self::from_bits($crate::policy::log::dispatch_with::<_, SCALE>(
+                    self.to_bits(),
+                    base.to_bits(),
                     working_digits,
                     mode,
-                )
+                ))
             }
 
             /// Log base 2 with caller-chosen guard digits.
@@ -4231,23 +4251,7 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.log2_strict_with(mode);
-                }
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log2: argument must be positive"
-                    ));
-                }
-                let w = SCALE + working_digits;
-                let r = $core::div(
-                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
-                    $core::ln2(w),
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::log2_approx_with_kernel::<SCALE>(self.to_bits(), working_digits, mode))
             }
 
             /// Log base 10 with caller-chosen guard digits.
@@ -4268,23 +4272,7 @@ macro_rules! decl_wide_transcendental {
                 working_digits: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> Self {
-                if working_digits == $core::GUARD {
-                    return self.log10_strict_with(mode);
-                }
-                let raw = self.to_bits();
-                if raw <= $crate::macros::wide_roots::wide_lit!($Storage, "0") {
-                    panic!(concat!(
-                        stringify!($Type),
-                        "::log10: argument must be positive"
-                    ));
-                }
-                let w = SCALE + working_digits;
-                let r = $core::div(
-                    $core::ln_fixed($core::to_work_w(raw, working_digits), w),
-                    $core::ln10(w),
-                    w,
-                );
-                Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
+                Self::from_bits($core::log10_approx_with_kernel::<SCALE>(self.to_bits(), working_digits, mode))
             }
 
             /// `eˣ` with caller-chosen guard digits.
