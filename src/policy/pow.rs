@@ -66,12 +66,15 @@ fn exp_with_ln_routed<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(
+            crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+                base.resize_to::<Int<2>>(),
+                exponent.resize_to::<Int<2>>(),
+                mode,
+            ),
+            "powf_strict",
+            SCALE,
+        ),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d57::Core, SCALE,
@@ -122,12 +125,15 @@ fn exp_with_ln_routed<const N: usize, const SCALE: u32>(
             crate::types::widths::wide_trig_d1232::Core, SCALE,
         >(base.resize_to::<Int<64>>(), exponent.resize_to::<Int<64>>(), mode)
         .resize_to::<Int<N>>(),
-        _ => crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(
+            crate::algos::pow::powf_series_2limb::powf_strict::<SCALE>(
+                base.resize_to::<Int<2>>(),
+                exponent.resize_to::<Int<2>>(),
+                mode,
+            ),
+            "powf_strict",
+            SCALE,
+        ),
     }
 }
 
@@ -138,12 +144,15 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(
+            crate::algos::pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(
+                base.resize_to::<Int<2>>(),
+                exponent.resize_to::<Int<2>>(),
+                mode,
+            ),
+            "powf_strict",
+            SCALE,
+        ),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d57::Core, SCALE,
@@ -194,12 +203,15 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(
             crate::types::widths::wide_trig_d1232::Core, SCALE,
         >(base.resize_to::<Int<64>>(), exponent.resize_to::<Int<64>>(), mode)
         .resize_to::<Int<N>>(),
-        _ => crate::algos::pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(
+            crate::algos::pow::pow_schoolbook::pow_schoolbook_strict::<SCALE>(
+                base.resize_to::<Int<2>>(),
+                exponent.resize_to::<Int<2>>(),
+                mode,
+            ),
+            "powf_strict",
+            SCALE,
+        ),
     }
 }
 
@@ -216,13 +228,16 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N> {
     match N {
-        1 | 2 => crate::algos::pow::powf_series_2limb::powf_with::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            working_digits,
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        1 | 2 => super::narrow_checked::<N>(
+            crate::algos::pow::powf_series_2limb::powf_with::<SCALE>(
+                base.resize_to::<Int<2>>(),
+                exponent.resize_to::<Int<2>>(),
+                working_digits,
+                mode,
+            ),
+            "powf_with",
+            SCALE,
+        ),
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => crate::algos::pow::pow_schoolbook::pow_schoolbook::<
             crate::types::widths::wide_trig_d57::Core, SCALE,
@@ -273,12 +288,15 @@ pub(crate) fn dispatch_with<const N: usize, const SCALE: u32>(
             crate::types::widths::wide_trig_d1232::Core, SCALE,
         >(base.resize_to::<Int<64>>(), exponent.resize_to::<Int<64>>(), mode)
         .resize_to::<Int<N>>(),
-        _ => crate::algos::pow::powf_series_2limb::powf_with::<SCALE>(
-            base.resize_to::<Int<2>>(),
-            exponent.resize_to::<Int<2>>(),
-            working_digits,
-            mode,
-        )
-        .resize_to::<Int<N>>(),
+        _ => super::narrow_checked::<N>(
+            crate::algos::pow::powf_series_2limb::powf_with::<SCALE>(
+                base.resize_to::<Int<2>>(),
+                exponent.resize_to::<Int<2>>(),
+                working_digits,
+                mode,
+            ),
+            "powf_with",
+            SCALE,
+        ),
     }
 }
