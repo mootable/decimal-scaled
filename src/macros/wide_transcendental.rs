@@ -1996,38 +1996,86 @@ macro_rules! decl_wide_transcendental {
                 $crate::int::types::traits::BigInt::resize_to::<W>(r_wide)
             }
 
-            /// `sinh(|x|)` at working scale `w`, composed entirely in the
-            /// wider work integer [`Wexp`] so the huge `e^|x|` term, the
-            /// `1/e^|x|` reciprocal (whose numerator `10^(2w)` would
-            /// overflow `W` on the small-`W`/high-scale tiers like
-            /// D462), and the `(e^|x| − e^-|x|)/2` sum all fit. The
-            /// composed `sinh(|x|)` itself fits `W`, so the final cast is
-            /// lossless. The caller reapplies the input sign (sinh is
-            /// odd).
+            /// Whether the hyperbolic composition fits the tier's own work
+            /// integer `W` at working scale `w` for the magnitude `av_w`
+            /// (`= |x|·10^w`), so the fast per-tier kernels (cached `ln2` /
+            /// `pow10` / `exp_fixed`) can run directly instead of lifting to
+            /// [`Wexp`].
+            ///
+            /// Two intermediates must fit `W`:
+            /// - the `1/e^|x|` reciprocal numerator `10^(2w)` — `2w` digits;
+            /// - the `exp_fixed` peak — the internal `w_ext = w + extra`
+            ///   lift (`extra ≈ e^|x|`'s integer-digit count) plus the
+            ///   `2^k` reassembly (another `≈` that many integer digits),
+            ///   i.e. `≈ w + 2·result_digits`. A large argument blows this
+            ///   (and `v_ext = v_w·10^extra` would silently wrap `W`),
+            ///   so such cells must take the wider `Wexp` path.
+            ///
+            /// We bound the SUM of the two (strictly conservative) plus a
+            /// `64`-digit / `512`-bit margin for the series accumulation.
+            #[inline]
+            fn hyper_fits_w(av_w: W, w: u32) -> bool {
+                let result_digits = exp_result_int_digits(av_w, w) as u64;
+                let need_digits = 2 * w as u64 + 2 * result_digits + 64;
+                // digits → bits: `log2(10) ≈ 3.3220 ≈ 3322/1000`.
+                let need_bits = need_digits * 3322 / 1000 + 512;
+                need_bits < <W as $crate::int::types::traits::BigInt>::BITS as u64
+            }
+
+            /// `sinh(|x|)` at working scale `w` for a non-negative working
+            /// value. The normal / small regime runs the fast per-tier
+            /// kernels directly on `W` (cached `ln2` / `pow10`); only the
+            /// near-overflow-edge regime — where the `1/e^|x|` reciprocal
+            /// numerator `10^(2w)` would overflow `W` (small-`W`/high-scale
+            /// tiers like D462, or any tier at a large-result argument) —
+            /// lifts the whole composition to the wider [`Wexp`]. See
+            /// [`hyper_fits_w`]. The caller reapplies the input sign (sinh
+            /// is odd).
             pub(crate) fn sinh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
-                let r =
-                    $crate::macros::wide_transcendental::exp_generic::sinh_pos::<Wexp>(av_wide, w);
-                $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                if hyper_fits_w(av_w, w) {
+                    let ex = exp_fixed(av_w, w);
+                    let enx = div(one(w), ex, w);
+                    (ex - enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::macros::wide_transcendental::exp_generic::sinh_pos::<Wexp>(
+                        av_wide, w,
+                    );
+                    $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                }
             }
 
-            /// `cosh(|x|)` at working scale `w`, composed in [`Wexp`].
-            /// See [`sinh_pos_wide`].
+            /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
+            /// [`sinh_pos_wide`] for the `W`-vs-[`Wexp`] regime split.
             pub(crate) fn cosh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
-                let r =
-                    $crate::macros::wide_transcendental::exp_generic::cosh_pos::<Wexp>(av_wide, w);
-                $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                if hyper_fits_w(av_w, w) {
+                    let ex = exp_fixed(av_w, w);
+                    let enx = div(one(w), ex, w);
+                    (ex + enx) >> 1
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::macros::wide_transcendental::exp_generic::cosh_pos::<Wexp>(
+                        av_wide, w,
+                    );
+                    $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                }
             }
 
-            /// `tanh(|x|)` at working scale `w`, composed in [`Wexp`].
-            /// See [`sinh_pos_wide`]. The caller reapplies the input
-            /// sign (tanh is odd).
+            /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working
+            /// scale `w`. See [`sinh_pos_wide`] for the regime split. The
+            /// caller reapplies the input sign (tanh is odd).
             pub(crate) fn tanh_pos_wide(av_w: W, w: u32) -> W {
-                let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
-                let r =
-                    $crate::macros::wide_transcendental::exp_generic::tanh_pos::<Wexp>(av_wide, w);
-                $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                if hyper_fits_w(av_w, w) {
+                    let ex = exp_fixed(av_w, w);
+                    let enx = div(one(w), ex, w);
+                    div(ex - enx, ex + enx, w)
+                } else {
+                    let av_wide = $crate::int::types::traits::BigInt::resize_to::<Wexp>(av_w);
+                    let r = $crate::macros::wide_transcendental::exp_generic::tanh_pos::<Wexp>(
+                        av_wide, w,
+                    );
+                    $crate::int::types::traits::BigInt::resize_to::<W>(r)
+                }
             }
 
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
