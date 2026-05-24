@@ -9,11 +9,8 @@
 //!
 //! - [`exp_series_2limb`] — D38's `Fixed` 256-bit intermediate `exp_fixed`
 //!   path, four-variant matrix entry shape.
-//! - [`lab`] — retained Tang-exp probes not wired to dispatch (lost
-//!   on perf; kept for future re-probing).
 
 pub(crate) mod exp_series_2limb;
-pub(crate) mod lab;
 /// Tier-generic Tang-style table-driven `exp_strict` kernel, generic over
 /// `WideTrigCore`. Collapses the per-tier D57 (18..=22 / 45..=56), D115
 /// and D153 Tang exp kernels into one. The `policy::exp` Tang arms call
@@ -26,4 +23,4 @@ pub(crate) mod exp_tang;
 // (lost on perf at Int<16>), retained only for its `tang_exp_fixed` /
 // `GUARD_FOR_HYPER` surface consumed by the D307 trig hyperbolic kernel.
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-pub(crate) mod lookup_d307_s140_160_tang;
+pub(crate) mod exp_tang_16limb_s140_160;

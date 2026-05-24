@@ -280,7 +280,7 @@ pub(crate) fn atan_series<C: WideTrigCore, const SCALE: u32>(
 /// through `w = SCALE + GUARD` and narrows once with
 /// [`WideTrigCore::round_to_storage_with`] (no Ziv escalation — the band
 /// guards leave the working error many orders of magnitude below half a
-/// storage ULP). Replaces the per-tier `lookup_d*_atan` narrow wrappers.
+/// storage ULP). Replaces the per-tier atan narrow wrappers.
 #[inline]
 #[must_use]
 pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(

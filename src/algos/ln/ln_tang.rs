@@ -34,7 +34,7 @@
 //! `policy::ln` Tang arms call *down* to [`ln_tang`]; the type's
 //! `ln_strict` method delegates *down* through the policy.
 //!
-//! This collapses the thirteen per-tier `lookup_d*_tang::ln_strict`
+//! This collapses the thirteen per-tier Tang `ln_strict`
 //! kernels — structurally identical bar the `core` module
 //! (`wide_trig_d*`), the storage `Int<N>`, the narrow guard
 //! (`GUARD = 8` or `10`) and the artanh-series iteration cap — into one

@@ -20,11 +20,11 @@ pub(crate) mod trig_series_2limb;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_exp_identity;
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s18_22_inverse;
+pub(crate) mod inverse_tang_3limb_s18_22;
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s18_22_sincos;
+pub(crate) mod sincos_tang_3limb_s18_22;
 #[cfg(any(feature = "d57", feature = "wide"))]
-pub(crate) mod lookup_d57_s44_56_atan;
+pub(crate) mod atan_tang_3limb_s44_56;
 pub(crate) mod near_pole_tan;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod sincos_narrow;

@@ -19,7 +19,7 @@
 //! decimal type. `policy::trig` (the forward family) calls them *down*.
 //!
 //! Collapses the per-tier D153 70..=82, D307 140..=160, and D462
-//! 225..=235 `lookup_d*_sincos` narrow kernels into one set of generics
+//! 225..=235 sincos narrow kernels into one set of generics
 //! over `C: WideTrigCore`, the `SCALE`, and the band's narrow guard
 //! `GUARD` (plus a `NEAR_POLE` flag for `tan`, which D462 omits).
 

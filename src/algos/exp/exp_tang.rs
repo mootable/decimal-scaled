@@ -27,8 +27,8 @@
 //! *down* through the policy. The trig hyperbolic kernels reuse
 //! [`tang_exp_fixed`] directly for their shared `(e^v, e^-v)` pair.
 //!
-//! Collapses the four per-tier `lookup_d57_s18_22_tang`,
-//! `lookup_d57_s45_56`, `lookup_d115_s57_tang`, `lookup_d153_s70_82_tang`
+//! Collapses the four per-tier D57 (18..=22 / 45..=56), D115
+//! and D153 Tang exp kernels
 //! kernels into one generic over `C: WideTrigCore`, the table size `M`,
 //! and the per-band reduction/narrowing flags.
 
