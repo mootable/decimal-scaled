@@ -804,6 +804,16 @@ path = "benches/micro/mul_kernel_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# mul_low_u128_ab: pilot A/B for the wide-tier exp/powf Taylor
+# work-multiply -- the truncated-low base-2^64 `mul_low_fixed` vs the
+# u128-packed `mul_low_fixed_u128` candidate at the D616/D924/D1232 work
+# integer widths (N = 128/192/256) plus the storage widths for reference.
+[[bench]]
+name = "mul_low_u128_ab"
+path = "benches/micro/mul_low_u128_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (div_knuth vs the zero-free-scratch div_knuth_fast) at the regressed
