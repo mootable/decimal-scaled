@@ -288,6 +288,13 @@ required-features = ["wide", "x-wide", "xx-wide"]
 name = "micro_golden"
 required-features = ["wide", "x-wide", "xx-wide"]
 
+# `sanity_golden` exercises the EXACT (non-transcendental) decimal ops with
+# a wide-tier (D307) spot-check, so it needs the x-wide tier feature; a plain
+# `cargo build --all-targets` (default) therefore skips it.
+[[test]]
+name = "sanity_golden"
+required-features = ["x-wide"]
+
 [[bench]]
 name = "mul_div_candidates"
 path = "benches/micro/mul_div_candidates.rs"
