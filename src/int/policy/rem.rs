@@ -1,8 +1,8 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Remainder policy — the default-delegating algorithm matcher for signed
-//! integer remainder.
+//! Remainder policy — the per-width algorithm matcher for signed integer
+//! remainder.
 //!
 //! The `Rem` operator for `Int<N>` delegates to [`dispatch`], which follows
 //! the canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
@@ -16,19 +16,32 @@
 //!    **exhaustive** `match algo` — no `_`, no panic.
 //!
 //! Because `select` is `const` and keyed only on the const generic `N`,
-//! the `const { … }` block folds per monomorphisation and the unchosen arm
-//! is dead-arm-eliminated in release: each concrete `Int<N>` routes to the
-//! `via_div_rem` algorithm, with no runtime branch on the const path.
+//! the `const { … }` block folds per monomorphisation and the unchosen arms
+//! are dead-arm-eliminated in release: each concrete `Int<N>` routes to a
+//! single algorithm with no runtime branch on the const path.
 //!
-//! # Why there is only one algorithm
+//! # The two algorithms and the width split
 //!
-//! Signed remainder is derived from division: the remainder is exactly the
-//! second output of a divmod call, so the unique algorithm is to delegate
-//! to the division policy and take the remainder half. There is no crossover
-//! threshold that applies to remainder alone, and no value-dependent split
-//! that the division policy does not already capture. The `ByValue` arm of
-//! [`Select`] is present for canonical-shape uniformity; `select` never
-//! returns it.
+//! Remainder keys purely on `N`:
+//!
+//! * **`N <= 2`** (`Int<1>` = D18, `Int<2>` = D38) → [`rem_native`]: the
+//!   operand magnitude fits a single `u128`, so a hardware `u128 % u128`
+//!   with the dividend's sign re-applied is correct and far cheaper than
+//!   routing through the runtime division dispatcher. Microbenched at the
+//!   dispatch seam: native beats the via-div-rem path ~1.85x at `N == 1`
+//!   and ~3.0x at `N == 2`.
+//! * **`N >= 3`** → [`rem_via_div_rem`]: the magnitude exceeds `u128`, so
+//!   the remainder is the second output of a multi-limb divmod. The
+//!   division policy's Knuth / Burnikel–Ziegler engine selection IS the
+//!   remainder optimisation boundary at these widths. A remainder-only
+//!   Knuth pass (skipping the quotient store) was microbenched against the
+//!   full divmod and showed no win at any wide tier — the quotient store is
+//!   negligible next to the multiply-subtract pass — so the wide band stays
+//!   on the full-divmod path.
+//!
+//! The `ByValue` arm of [`Select`] is present for canonical-shape
+//! uniformity; `select` never returns it (the split is by `N` alone, not by
+//! operand value).
 //!
 //! # Why `dispatch` is NOT `const fn` (and `wrapping_rem` is)
 //!
@@ -53,6 +66,7 @@
 //! `Int<N>::wrapping_rem` (const) routes directly through
 //! [`crate::int::algos::div::div_rem`] and is not altered.
 
+use crate::int::algos::rem::rem_native::rem_native;
 use crate::int::algos::rem::rem_schoolbook::rem_schoolbook;
 use crate::int::algos::rem::rem_via_div_rem::rem_via_div_rem;
 use crate::int::types::Int;
@@ -65,6 +79,13 @@ use crate::int::types::Int;
 /// algorithm fn.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
+    /// [`rem_native`] — hardware `u128 % u128` on the operand magnitudes,
+    /// with the dividend's sign re-applied. Valid only for `N <= 2` (the
+    /// magnitude must fit a single `u128`); routed for `Int<1>` (D18) and
+    /// `Int<2>` (D38), where bypassing the runtime division dispatcher (no
+    /// shape classification, no `[u64; 288]` Knuth scratch, no quotient
+    /// buffer) wins decisively over [`Self::ViaDivRem`].
+    Native,
     /// [`rem_via_div_rem`] — derives the remainder by delegating to
     /// [`crate::int::policy::div_rem::dispatch`] and taking the remainder
     /// output. Reuses the division policy's Knuth / Burnikel–Ziegler engine
@@ -100,7 +121,19 @@ enum Select<const N: usize> {
 /// the key; remainder always delegates to the division policy, so
 /// `ViaDivRem` wins at every `N`.
 const fn select<const N: usize>() -> Select<N> {
-    Select::ByAlgorithm(Algorithm::ViaDivRem)
+    match N {
+        // N <= 2: magnitude fits a single u128 — the hardware `%` path
+        // beats routing through the division dispatcher (microbenched:
+        // `native` beats `via_div_rem` ~1.85x at N=1 / ~3.0x at N=2).
+        1 | 2 => Select::ByAlgorithm(Algorithm::Native),
+        // N >= 3: the magnitude exceeds u128; the division policy's Knuth /
+        // Burnikel–Ziegler engine is the remainder optimisation boundary.
+        // A remainder-only Knuth pass was microbenched and showed no win
+        // over the full divmod at any wide tier (the quotient store is
+        // negligible vs the multiply-subtract pass), so the wide band stays
+        // on `ViaDivRem`.
+        _ => Select::ByAlgorithm(Algorithm::ViaDivRem),
+    }
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
@@ -131,7 +164,44 @@ pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
         Select::ByValue(_) => Algorithm::ViaDivRem,
     };
     match algo {
+        Algorithm::Native => rem_native(a, b),
         Algorithm::ViaDivRem => rem_via_div_rem(a, b),
         Algorithm::Schoolbook => rem_schoolbook(a, b),
+    }
+}
+
+
+#[cfg(test)]
+mod tests {
+    use super::dispatch;
+    use crate::int::types::Int;
+
+    /// At the native/via-div-rem matcher boundary (`N == 2` native vs
+    /// `N == 3` via-div-rem) the signed remainder must be identical to the
+    /// truncating reference for the same values. Truncating-toward-zero:
+    /// the remainder carries the dividend's sign.
+    #[test]
+    fn dispatch_matches_truncating_reference_across_boundary() {
+        // (a, b, expected) — small enough to fit i128, hence representable
+        // at N=2 and N=3 alike. Covers all four sign combinations and 0.
+        let cases: &[(i128, i128, i128)] = &[
+            (100, 7, 2),
+            (-100, 7, -2),
+            (100, -7, 2),
+            (-100, -7, -2),
+            (0, 5, 0),
+            (5, 5, 0),
+            (i128::MAX, 3, i128::MAX % 3),
+            (i128::MIN + 1, 3, (i128::MIN + 1) % 3),
+        ];
+        for &(a, b, want) in cases {
+            // N = 2 (native arm).
+            let got2 = dispatch::<2>(Int::<2>::from_i128(a), Int::<2>::from_i128(b));
+            assert_eq!(got2.to_i128(), want, "N=2 native rem({a}, {b})");
+            // N = 3 (via-div-rem arm) — same value, wider storage.
+            let got3 = dispatch::<3>(Int::<3>::from_i128(a), Int::<3>::from_i128(b));
+            assert_eq!(got3.to_i128(), want, "N=3 via-div-rem rem({a}, {b})");
+            assert_eq!(got2.to_i128(), got3.to_i128(), "boundary disagreement ({a}, {b})");
+        }
     }
 }

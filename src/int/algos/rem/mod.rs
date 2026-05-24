@@ -3,9 +3,12 @@
 
 //! Integer remainder algorithm family.
 //!
-//! - [`rem_via_div_rem`](rem_via_div_rem::rem_via_div_rem) — the
+//! - [`rem_native`](rem_native::rem_native) - hardware `u128 % u128` for
+//!   the two narrowest tiers (`N <= 2`), bypassing the division dispatcher.
+//! - [`rem_via_div_rem`](rem_via_div_rem::rem_via_div_rem) - the
 //!   width-agnostic remainder derived from the division policy, selected by
-//!   [`crate::int::policy::rem`].
+//!   [`crate::int::policy::rem`] for the wide tiers (`N >= 3`).
 
+pub(crate) mod rem_native;
 pub(crate) mod rem_schoolbook;
 pub(crate) mod rem_via_div_rem;
