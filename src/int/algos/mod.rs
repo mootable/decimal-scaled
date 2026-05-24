@@ -24,6 +24,7 @@
 //!   const-`N` fast-arm divmod wrappers.
 //! - [`isqrt`] — Newton integer square root + its const-`N` fast-arm wrapper.
 //! - [`icbrt`] — Newton integer cube root.
+//! - [`sum_sq`] — `a^2 + b^2`, the sqrt-free magnitude core hypot shares.
 //!
 //! Shared low-level limb PRIMITIVES that are not a single function's
 //! headline algorithm — comparison, equality, bit-length, ripple add/sub,
@@ -45,4 +46,5 @@ pub(crate) mod pow;
 pub(crate) mod rem;
 pub(crate) mod sqr;
 pub(crate) mod sub;
+pub(crate) mod sum_sq;
 pub(crate) mod support;

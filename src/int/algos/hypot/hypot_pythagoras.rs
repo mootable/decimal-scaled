@@ -26,19 +26,11 @@
 
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
-use crate::int::algos::support::limbs::{add_assign, cmp_cross, is_zero, sub_assign};
+use crate::int::algos::sum_sq::sum_sq_schoolbook::{sig_len, sum_sq_radicand};
+use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
 use crate::int::types::work_scratch::WorkScratch;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-
-#[inline]
-fn sig_len(a: &[u64]) -> usize {
-    let mut l = a.len();
-    while l > 1 && a[l - 1] == 0 {
-        l -= 1;
-    }
-    l
-}
 
 /// `round(sqrt(a^2 + b^2))` via the int slice `isqrt`. `N` is the storage
 /// limb count of the `Int<N>` operands. Returns [`None`] on true overflow
@@ -50,19 +42,13 @@ where
     Int<N>: WorkScratch,
 {
     // -- n = a^2 + b^2 (magnitudes; sign drops out of squaring) ----------
+    // The radicand former is shared with `sum_sq`; hypot roots `n` rather
+    // than fit-checking it, so it keeps every representable hypot.
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
-    let la = sig_len(ma.as_limbs());
-    let lb = sig_len(mb.as_limbs());
     let mut n_buf = Int::<N>::work2();
     let n = n_buf.as_mut();
-    mul_schoolbook(&ma.as_limbs()[..la], &ma.as_limbs()[..la], &mut n[..2 * la]);
-    let mut bsq_buf = Int::<N>::work2();
-    let bsq = bsq_buf.as_mut();
-    mul_schoolbook(&mb.as_limbs()[..lb], &mb.as_limbs()[..lb], &mut bsq[..2 * lb]);
-    let span = (2 * la).max(2 * lb) + 1;
-    add_assign(&mut n[..span], &bsq[..2 * lb]);
-    let nl = sig_len(&n[..span]);
+    let nl = sum_sq_radicand::<N>(ma.as_limbs(), mb.as_limbs(), n);
     if nl == 1 && n[0] == 0 {
         return Some(Int::<N>::ZERO);
     }

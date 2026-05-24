@@ -37,6 +37,7 @@ use crate::int::policy::hypot::dispatch as hypot_dispatch;
 use crate::int::policy::isqrt::dispatch as isqrt_dispatch;
 use crate::int::policy::mul::dispatch as mul_fast;
 use crate::int::policy::neg::dispatch as neg_dispatch;
+use crate::int::policy::sum_sq::dispatch as sum_sq_dispatch;
 use crate::int::policy::pow::dispatch as pow_dispatch;
 use crate::int::policy::rem::dispatch as rem_dispatch;
 use crate::int::policy::sqr::dispatch as sqr_dispatch;
@@ -1621,6 +1622,25 @@ impl<const N: usize> Int<N> {
         Self: crate::int::types::work_scratch::WorkScratch,
     {
         hypot_dispatch::<N>(self, other, mode)
+    }
+
+    /// Sum of squares: `self^2 + other^2`, the sqrt-free magnitude
+    /// primitive. Routes through the sum-of-squares policy
+    /// (`sum_sq_dispatch`): the radicand is formed in a wider limb scratch
+    /// buffer (the same former [`Self::hypot`] roots), so there is no
+    /// intermediate truncation. Returns [`None`] when `self^2 + other^2`
+    /// exceeds the signed range of `Int<N>` (true overflow). The sign of
+    /// each operand drops out of the squaring, so the result is always
+    /// non-negative. Comparing two `sum_sq` values orders the same as
+    /// comparing the corresponding [`Self::hypot`] values (the root is
+    /// monotonic), which is why a distance comparison can skip the root.
+    #[inline]
+    #[must_use]
+    pub(crate) fn sum_sq(self, other: Self) -> Option<Self>
+    where
+        Self: crate::int::types::work_scratch::WorkScratch,
+    {
+        sum_sq_dispatch::<N>(self, other)
     }
 
     /// Reinterprets the bit pattern as the unsigned sibling.

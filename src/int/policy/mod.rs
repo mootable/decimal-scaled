@@ -74,6 +74,11 @@
 //!   [`sqr::dispatch`] (`const fn`).
 //! - **cube** — sqr-then-multiply at every `N`. Routes through
 //!   [`cube::dispatch`] (`const fn`).
+//! - **sum_sq** — `a^2 + b^2` (schoolbook) at every `N`. Routes through
+//!   [`sum_sq::dispatch`]; the hypot kernel shares its radicand former.
+//! - **hypot** — `round(sqrt(a^2 + b^2))` at every `N`. Routes through
+//!   [`hypot::dispatch`] to the Pythagoras kernel (forms the `sum_sq`
+//!   radicand, then the Newton slice `isqrt` + round step).
 //!
 //! All dispatchers follow the canonical [`Select`] / `select` /
 //! exhaustive-`match algo` policy shape (see `docs/ARCHITECTURE.md` →
@@ -118,3 +123,5 @@ pub(crate) mod rem;
 pub(crate) mod sqr;
 /// Subtract policy: default-delegating ripple-borrow matcher for `Int<N>`.
 pub(crate) mod sub;
+/// Integer sum-of-squares policy: `a^2 + b^2` schoolbook matcher for `Int<N>`.
+pub(crate) mod sum_sq;
