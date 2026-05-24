@@ -24,7 +24,7 @@
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{cmp_cross, shl};
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingDecimal;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -44,7 +44,7 @@ fn sig_len(a: &[u64]) -> usize {
 #[inline]
 fn mul_pow10_into<const N: usize>(src: &[u64], pow: u32, dst: &mut [u64]) -> usize
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingDecimal,
 {
     let s = sig_len(src);
     dst[..s].copy_from_slice(&src[..s]);
@@ -68,7 +68,7 @@ where
 #[inline]
 fn cube_into<const N: usize>(a: &[u64], la: usize, out: &mut [u64]) -> usize
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingDecimal,
 {
     let mut sq_buf = Int::<N>::work4();
     let sq = sq_buf.as_mut();
@@ -90,7 +90,7 @@ where
 #[must_use]
 pub(crate) fn cbrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: RoundingMode) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingDecimal,
 {
     if raw == Int::<N>::ZERO {
         return Int::<N>::ZERO;

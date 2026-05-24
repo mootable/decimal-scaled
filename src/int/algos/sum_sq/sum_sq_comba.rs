@@ -26,7 +26,7 @@
 
 use crate::int::algos::sum_sq::sum_sq_schoolbook::sig_len;
 use crate::int::algos::support::limbs::add_assign;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingInt;
 use crate::int::types::Int;
 
 /// Full-width product-scanning (comba) square: `out = x²` over the
@@ -81,7 +81,7 @@ fn sqr_full(x: &[u64], l: usize, out: &mut [u64]) {
 #[allow(dead_code)]
 pub(crate) fn sum_sq_radicand_comba<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     let la = sig_len(ma);
     let lb = sig_len(mb);
@@ -102,7 +102,7 @@ where
 #[allow(dead_code)]
 pub(crate) fn sum_sq_comba<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
@@ -148,7 +148,7 @@ mod tests {
     /// input, including the overflow (`None`) cases.
     fn diff_at<const N: usize>()
     where
-        Int<N>: crate::int::types::work_scratch::WorkScratch,
+        Int<N>: crate::int::types::work_scratch::WorkingInt,
     {
         let mut s = 0x1234_5678_9ABC_DEFu64 ^ (N as u64);
         for _ in 0..400 {

@@ -25,7 +25,7 @@
 //!
 //! Semantics preserved: `hypot(0, 0) = 0`; `hypot(0, x) = |x|`.
 
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -37,7 +37,7 @@ use crate::support::rounding::RoundingMode;
 #[must_use]
 pub(crate) fn hypot_pythagoras<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     crate::int::policy::hypot::dispatch::<N>(a, b, mode)
 }

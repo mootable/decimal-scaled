@@ -159,7 +159,7 @@ mod tests {
     /// correctly-rounded.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128])
     where
-        Int<N>: crate::int::types::work_scratch::WorkScratch,
+        Int<N>: crate::int::types::work_scratch::WorkingDecimal,
     {
         for &r in raws {
             let raw = Int::<N>::from_i128(r);

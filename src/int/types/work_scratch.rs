@@ -1,88 +1,90 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Work-scratch surface for the width-agnostic decimal root kernels.
+//! Per-layer working-scratch traits for the width-agnostic kernels.
 //!
-//! `sqrt_newton` / `hypot_pythagoras` form a radicand spanning up to `2N` limbs,
-//! `cbrt_newton` up to `4N`; they do that arithmetic in a fixed stack
-//! buffer rather than threading a work *type* `Int<2N>`/`Int<4N>` (which
-//! stable Rust cannot name from `N`). This trait supplies that buffer as an
-//! **associated type**, so its size lives in the `impl` — where `N` is
-//! concrete — and never appears as a generic const expression in the
-//! kernels. The kernels bound only on `Int<N>: WorkScratch` and read
-//! `Buf2`/`Buf4` as `&mut [u64]`; that bound is discharged for free at the
+//! Several kernels need stack scratch whose size is a multiple of the limb
+//! count `N` (a sqrt/hypot radicand spans `2N` limbs, a cbrt radicand `4N`,
+//! the MG `÷10^w` magnitude `⌈N/2⌉` u128 limbs, the Knuth normalised
+//! dividend/divisor up to `4N`). Stable Rust cannot name `[u64; 2N]` from a
+//! generic `N`, so each buffer is carried as an **associated type** whose
+//! size lives in the `impl` (where `N` is concrete) and never appears in the
+//! kernel signature. A kernel bounds on its layer's trait and reads the
+//! buffer it needs as `&mut [u64]`; the bound is discharged for free at the
 //! concrete `N` every type method dispatches at, so it does not cascade.
 //!
-//! Three build forms, selected by feature (size is identical numerically;
-//! only *who pays for the slack* differs):
+//! The surface is split by LAYER (it consolidates the former single-purpose
+//! `WorkScratch` + `MgScratch`):
+//! - [`WorkingDecimal`] — buffers the decimal algos (`src/algos/…`) need:
+//!   the `2N`/`4N` root radicands and the `⌈N/2⌉` u128 MG magnitude.
+//! - [`WorkingInt`] — buffers the int algos (`src/int/algos/…`) need: the
+//!   `2N`/`4N` root radicands and the Knuth divide scratch (`work_div`).
 //!
-//! - **default** — one blanket impl, build-max [`work_scratch(mult)`] for
-//!   every `N` (the widest enabled tier's size, applied uniformly).
-//! - **`exact-scratch`** (stable) — one impl per concrete storage width,
-//!   each sized exactly `mult·N + ceil(N/2)`. No nightly: the size is a
-//!   literal in each impl.
+//! Three build forms, identical sizes numerically — only *who pays for the
+//! slack* differs:
+//! - **default** — one blanket impl, build-max for every `N`.
+//! - **`exact-scratch`** (stable) — one impl per concrete width, each a
+//!   size literal.
 //! - **`exact-scratch-nightly`** — one blanket impl sized per-`N` via
-//!   [`work_scratch_n`] under `generic_const_exprs`; the const-expr (and its
-//!   `where [(); …]:` obligation) stays confined to this impl block.
-//!
-//! [`work_scratch(mult)`]: crate::int::algos::support::limbs::work_scratch
-//! [`work_scratch_n`]: crate::int::algos::support::limbs::work_scratch_n
+//!   const-expr under `generic_const_exprs`.
 
 use crate::int::types::Int;
 
-/// Stack scratch buffers for the 2N-family (`sqrt`/`hypot`) and 4N-family
-/// (`cbrt`) root kernels. The associated types keep the buffer *size* in the
-/// `impl`, out of the kernels' generics — see the module docs.
-pub(crate) trait WorkScratch {
-    /// 2N-family scratch: radicand ≤ `2N` limbs plus the carry margin.
+/// Decimal-layer working scratch: `2N`/`4N` root radicands and the
+/// `⌈N/2⌉` u128 MG `÷10^w` magnitude buffer.
+pub(crate) trait WorkingDecimal {
+    /// 2N-family radicand scratch (`sqrt`/`hypot`).
     type Buf2: AsMut<[u64]> + AsRef<[u64]>;
-    /// 4N-family scratch: radicand ≤ `4N` limbs plus the carry margin.
+    /// 4N-family radicand scratch (`cbrt`).
     type Buf4: AsMut<[u64]> + AsRef<[u64]>;
-    /// A freshly zeroed 2N-family buffer.
+    /// `⌈N/2⌉` u128 magnitude scratch (`exp_generic` ÷10^w; `== U128_LIMBS`).
+    type BufU128: AsMut<[u128]> + AsRef<[u128]>;
+    /// Freshly zeroed 2N radicand buffer.
     fn work2() -> Self::Buf2;
-    /// A freshly zeroed 4N-family buffer.
+    /// Freshly zeroed 4N radicand buffer.
     fn work4() -> Self::Buf4;
+    /// Freshly zeroed u128 magnitude buffer.
+    fn work_u128() -> Self::BufU128;
 }
 
-/// Stack u128-limb magnitude scratch for the MG (magic-multiply) `÷ 10^w`
-/// divide. The width-generic transcendental core (`exp_generic`) divides
-/// by `10^w` once per Taylor term / squaring at its work width `W`; the
-/// MG kernel needs a `ceil(N/2)`-limb u128 magnitude buffer
-/// (`== BigInt::U128_LIMBS`). Like [`WorkScratch`], this carries that
-/// buffer as an **associated type** so its size lives in the `impl`
-/// (where the width is concrete) and never appears as a generic const
-/// expression in the divide — the generic `div_wide_pow10` slices it to
-/// `W::U128_LIMBS`. Same three build forms as [`WorkScratch`].
-pub(crate) trait MgScratch {
-    /// u128 magnitude buffer, at least `ceil(N/2)` limbs (`U128_LIMBS`).
-    type BufU128: AsMut<[u128]> + AsRef<[u128]>;
-    /// A freshly zeroed magnitude buffer.
-    fn work_u128() -> Self::BufU128;
+/// Int-layer working scratch: `2N`/`4N` root radicands (`isqrt`/`icbrt`/
+/// `sum_sq`/`hypot`) and the Knuth normalised dividend/divisor scratch.
+///
+/// `work_div` sizing (in u64 limbs): the divide engine sees operands up to
+/// `4N` when keyed at a STORAGE width `N ∈ {1..64}` (the cbrt `4N` radicand
+/// divide originates there), but only `≤ N` when keyed at a wide WORK width
+/// `N ∈ {96,128,192,256}` (the transcendental reciprocal divides at
+/// `Wexp`). So it is `4N + ⌈N/2⌉` at storage widths and `N + ⌈N/2⌉` at work
+/// widths — the absolute max (`Int<256>` → ~288) is the old build-max
+/// constant, now exact per width.
+pub(crate) trait WorkingInt {
+    /// 2N-family radicand scratch (`isqrt`/`hypot`/`sum_sq`).
+    type Buf2: AsMut<[u64]> + AsRef<[u64]>;
+    /// 4N-family radicand scratch (`icbrt`).
+    type Buf4: AsMut<[u64]> + AsRef<[u64]>;
+    /// Knuth `u`/`v` divide scratch (one buffer; the engine takes two).
+    type DivBuf: AsMut<[u64]> + AsRef<[u64]>;
+    /// Freshly zeroed 2N radicand buffer.
+    fn work2() -> Self::Buf2;
+    /// Freshly zeroed 4N radicand buffer.
+    fn work4() -> Self::Buf4;
+    /// Freshly zeroed divide-scratch buffer.
+    fn work_div() -> Self::DivBuf;
 }
 
 // ── default: one blanket impl, build-max for every N ──────────────────
 #[cfg(not(feature = "exact-scratch"))]
 mod imp {
-    use super::{Int, MgScratch, WorkScratch};
+    use super::{Int, WorkingDecimal, WorkingInt};
     use crate::int::algos::support::limbs::{work_scratch, MAX_WORK_N};
 
-    // The transcendental work integer `Wexp` runs up to 8× the storage
-    // width (e.g. D307's `Int<16>` → `Wexp = Int<128>`; D616's `Int<32>`
-    // → `Int<256>`), so the widest `Wexp` is `Int<8·MAX_WORK_N>`, whose
-    // `U128_LIMBS = (8·MAX_WORK_N + 1) / 2 ≤ 4·MAX_WORK_N`. A uniform
-    // `4·MAX_WORK_N`-limb buffer therefore covers every width; the generic
-    // `div_wide_pow10` uses only the leading `W::U128_LIMBS` limbs.
-    impl<const N: usize> MgScratch for Int<N> {
-        type BufU128 = [u128; 4 * MAX_WORK_N];
-        #[inline]
-        fn work_u128() -> Self::BufU128 {
-            [0u128; 4 * MAX_WORK_N]
-        }
-    }
-
-    impl<const N: usize> WorkScratch for Int<N> {
+    // `Wexp` runs up to 8× the storage width, so its `U128_LIMBS ≤
+    // 4·MAX_WORK_N`; `work_div` likewise tops out at `4·MAX_WORK_N + slack`
+    // (the cbrt 4N radicand at the widest tier) — the old ~288 constant.
+    impl<const N: usize> WorkingDecimal for Int<N> {
         type Buf2 = [u64; work_scratch(2)];
         type Buf4 = [u64; work_scratch(4)];
+        type BufU128 = [u128; 4 * MAX_WORK_N];
         #[inline]
         fn work2() -> Self::Buf2 {
             [0u64; work_scratch(2)]
@@ -91,39 +93,46 @@ mod imp {
         fn work4() -> Self::Buf4 {
             [0u64; work_scratch(4)]
         }
+        #[inline]
+        fn work_u128() -> Self::BufU128 {
+            [0u128; 4 * MAX_WORK_N]
+        }
+    }
+
+    impl<const N: usize> WorkingInt for Int<N> {
+        type Buf2 = [u64; work_scratch(2)];
+        type Buf4 = [u64; work_scratch(4)];
+        type DivBuf = [u64; 4 * MAX_WORK_N + (MAX_WORK_N + 1) / 2];
+        #[inline]
+        fn work2() -> Self::Buf2 {
+            [0u64; work_scratch(2)]
+        }
+        #[inline]
+        fn work4() -> Self::Buf4 {
+            [0u64; work_scratch(4)]
+        }
+        #[inline]
+        fn work_div() -> Self::DivBuf {
+            [0u64; 4 * MAX_WORK_N + (MAX_WORK_N + 1) / 2]
+        }
     }
 }
 
-// ── exact-scratch (stable): one impl per concrete storage width ───────
+// ── exact-scratch (stable): one impl per concrete width ───────────────
 #[cfg(all(feature = "exact-scratch", not(feature = "exact-scratch-nightly")))]
 mod imp {
-    use super::{Int, MgScratch, WorkScratch};
+    use super::{Int, WorkingDecimal, WorkingInt};
 
-    /// `impl MgScratch for Int<$n>` per concrete width, each sized exactly
-    /// `ceil(n/2)` from the literal `$n`. Covers the transcendental *work*
-    /// widths (`Wexp`: …, 96, 128, 192, 256) as well as the storage widths,
-    /// since `exp_generic` runs its `÷ 10^w` at `Wexp`.
-    macro_rules! exact_mg_scratch {
+    /// `impl WorkingDecimal for Int<$n>` per concrete width: radicands
+    /// `mult·n + ⌈n/2⌉`, MG magnitude `⌈n/2⌉` u128. Covers storage widths
+    /// AND the transcendental work widths (96..256, where `exp_generic`
+    /// runs its ÷10^w).
+    macro_rules! exact_decimal {
         ($($n:literal),+ $(,)?) => { $(
-            impl MgScratch for Int<$n> {
-                type BufU128 = [u128; ($n + 1) / 2];
-                #[inline]
-                fn work_u128() -> Self::BufU128 {
-                    [0u128; ($n + 1) / 2]
-                }
-            }
-        )+ };
-    }
-    exact_mg_scratch!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256);
-
-    /// `impl WorkScratch for Int<$n>` per concrete width, each sized exactly
-    /// `mult·n + ceil(n/2)` from the literal `$n` — stable, no const-expr
-    /// generics.
-    macro_rules! exact_scratch {
-        ($($n:literal),+ $(,)?) => { $(
-            impl WorkScratch for Int<$n> {
+            impl WorkingDecimal for Int<$n> {
                 type Buf2 = [u64; 2 * $n + ($n + 1) / 2];
                 type Buf4 = [u64; 4 * $n + ($n + 1) / 2];
+                type BufU128 = [u128; ($n + 1) / 2];
                 #[inline]
                 fn work2() -> Self::Buf2 {
                     [0u64; 2 * $n + ($n + 1) / 2]
@@ -132,39 +141,72 @@ mod imp {
                 fn work4() -> Self::Buf4 {
                     [0u64; 4 * $n + ($n + 1) / 2]
                 }
+                #[inline]
+                fn work_u128() -> Self::BufU128 {
+                    [0u128; ($n + 1) / 2]
+                }
             }
         )+ };
     }
+    exact_decimal!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256);
 
-    // Every decimal storage width in limbs: D18=1, D38=2, D57=3, D76=4,
-    // D115=6, D153=8, D230=12, D307=16, D462=24, D616=32, D924=48, D1232=64.
-    exact_scratch!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64);
+    /// `impl WorkingInt for Int<$n>` per concrete width: radicands
+    /// `mult·n + ⌈n/2⌉`, divide scratch `$div_mult·n + ⌈n/2⌉`. STORAGE
+    /// widths use `$div_mult = 4` (cbrt 4N radicand divide); WORK widths
+    /// use `$div_mult = 1` (only the transcendental reciprocal divides
+    /// there, operands ≤ N) — so `Int<256>` is ~288, not 1024.
+    macro_rules! exact_int {
+        ($div_mult:literal; $($n:literal),+ $(,)?) => { $(
+            impl WorkingInt for Int<$n> {
+                type Buf2 = [u64; 2 * $n + ($n + 1) / 2];
+                type Buf4 = [u64; 4 * $n + ($n + 1) / 2];
+                type DivBuf = [u64; $div_mult * $n + ($n + 1) / 2];
+                #[inline]
+                fn work2() -> Self::Buf2 {
+                    [0u64; 2 * $n + ($n + 1) / 2]
+                }
+                #[inline]
+                fn work4() -> Self::Buf4 {
+                    [0u64; 4 * $n + ($n + 1) / 2]
+                }
+                #[inline]
+                fn work_div() -> Self::DivBuf {
+                    [0u64; $div_mult * $n + ($n + 1) / 2]
+                }
+            }
+        )+ };
+    }
+    // Storage widths (operands up to 4N via the cbrt radicand divide):
+    exact_int!(4; 1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64);
+    // Wide work widths (only the transcendental ÷ at Wexp, operands ≤ N):
+    exact_int!(1; 96, 128, 192, 256);
 }
 
 // ── exact-scratch-nightly: one blanket impl, exact per-N via const-expr ─
 #[cfg(feature = "exact-scratch-nightly")]
 mod imp {
-    use super::{Int, MgScratch, WorkScratch};
+    use super::{Int, WorkingDecimal, WorkingInt};
     use crate::int::algos::support::limbs::work_scratch_n;
 
-    impl<const N: usize> MgScratch for Int<N>
-    where
-        [(); (N + 1) / 2]:,
-    {
-        type BufU128 = [u128; (N + 1) / 2];
-        #[inline]
-        fn work_u128() -> Self::BufU128 {
-            [0u128; (N + 1) / 2]
+    /// Divide-scratch limbs per `N`: `4N` at storage widths, `1N` at the
+    /// wide work widths, both `+ ⌈N/2⌉`.
+    const fn div_scratch_n(n: usize) -> usize {
+        if n <= 64 {
+            4 * n + (n + 1) / 2
+        } else {
+            n + (n + 1) / 2
         }
     }
 
-    impl<const N: usize> WorkScratch for Int<N>
+    impl<const N: usize> WorkingDecimal for Int<N>
     where
         [(); work_scratch_n(2, N)]:,
         [(); work_scratch_n(4, N)]:,
+        [(); (N + 1) / 2]:,
     {
         type Buf2 = [u64; work_scratch_n(2, N)];
         type Buf4 = [u64; work_scratch_n(4, N)];
+        type BufU128 = [u128; (N + 1) / 2];
         #[inline]
         fn work2() -> Self::Buf2 {
             [0u64; work_scratch_n(2, N)]
@@ -172,6 +214,33 @@ mod imp {
         #[inline]
         fn work4() -> Self::Buf4 {
             [0u64; work_scratch_n(4, N)]
+        }
+        #[inline]
+        fn work_u128() -> Self::BufU128 {
+            [0u128; (N + 1) / 2]
+        }
+    }
+
+    impl<const N: usize> WorkingInt for Int<N>
+    where
+        [(); work_scratch_n(2, N)]:,
+        [(); work_scratch_n(4, N)]:,
+        [(); div_scratch_n(N)]:,
+    {
+        type Buf2 = [u64; work_scratch_n(2, N)];
+        type Buf4 = [u64; work_scratch_n(4, N)];
+        type DivBuf = [u64; div_scratch_n(N)];
+        #[inline]
+        fn work2() -> Self::Buf2 {
+            [0u64; work_scratch_n(2, N)]
+        }
+        #[inline]
+        fn work4() -> Self::Buf4 {
+            [0u64; work_scratch_n(4, N)]
+        }
+        #[inline]
+        fn work_div() -> Self::DivBuf {
+            [0u64; div_scratch_n(N)]
         }
     }
 }

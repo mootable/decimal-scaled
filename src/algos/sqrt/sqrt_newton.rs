@@ -26,7 +26,7 @@
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingDecimal;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -50,7 +50,7 @@ fn sig_len(a: &[u64]) -> usize {
 #[must_use]
 pub(crate) fn sqrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: RoundingMode) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingDecimal,
 {
     if raw <= Int::<N>::ZERO {
         return Int::<N>::ZERO;

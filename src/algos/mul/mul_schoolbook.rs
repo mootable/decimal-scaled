@@ -8,7 +8,7 @@
 //! This is the naive reference algorithm — no leading-zero fast path:
 //!
 //! 1. Form the full magnitude product `|a| * |b|` (`2N` u64 limbs) in a
-//!    [`WorkScratch::work2`] buffer via the int layer's slice
+//!    [`WorkingDecimal::work2`] buffer via the int layer's slice
 //!    [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`].
 //! 2. Build `10^SCALE` in the same limb domain and divide the product by
 //!    it using the int layer's width-agnostic divide
@@ -27,7 +27,7 @@
 
 use crate::int::algos::div::div_fixed::div_rem_mag_slice;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook as mul_slice;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingDecimal;
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
 
@@ -42,7 +42,7 @@ fn sig_len(a: &[u64]) -> usize {
 }
 
 /// Naive schoolbook decimal multiplication, generic over `N`. Requires
-/// `Int<N>: WorkScratch` for the `2N`-limb product scratch.
+/// `Int<N>: WorkingDecimal` for the `2N`-limb product scratch.
 ///
 /// Forms the full magnitude product in the scratch buffer, then divides by
 /// `10^SCALE` using the plain int-layer `div_rem`, rounding under `mode`.
@@ -55,7 +55,7 @@ pub(crate) fn mul_schoolbook<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingDecimal,
 {
     let neg = a.is_negative() != b.is_negative();
     let a_mag = *a.unsigned_abs().as_limbs();

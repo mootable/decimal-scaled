@@ -31,7 +31,7 @@
 //! the signed range of `Int<N>`); the type method propagates that `Option`.
 
 use crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingInt;
 use crate::int::types::Int;
 
 // -- 1. the real sum-of-squares algorithms -- NAMED, no `Default` ------
@@ -80,7 +80,7 @@ const fn select<const N: usize>() -> Select<N> {
 #[must_use]
 pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     let algo = match const { select::<N>() } {
         Select::ByAlgorithm(a) => a,

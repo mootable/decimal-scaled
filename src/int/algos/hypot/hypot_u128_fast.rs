@@ -33,7 +33,7 @@
 
 use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
 use crate::int::algos::support::limbs::fit_one;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -100,7 +100,7 @@ fn isqrt_u128(n: u128) -> u128 {
 #[allow(dead_code)]
 pub(crate) fn hypot_u128_fast<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
@@ -188,7 +188,7 @@ mod tests {
     /// input and every rounding mode — both the fast and fallback arms.
     fn diff_at<const N: usize>()
     where
-        Int<N>: crate::int::types::work_scratch::WorkScratch,
+        Int<N>: crate::int::types::work_scratch::WorkingInt,
     {
         let mut s = 0xDEAD_BEEF_CAFE_F00du64 ^ (N as u64);
         for _ in 0..300 {

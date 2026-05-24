@@ -23,10 +23,10 @@
 //! Decimal multiplication forms `a * b`, which spans up to `2N` limbs,
 //! before dividing by `10^SCALE`. Rather than thread a work *type* `Int<2N>`
 //! (unnameable from `N` on stable), the [`WidenDivide`](Algorithm::WidenDivide)
-//! kernel does that arithmetic directly in a `WorkScratch` limb buffer and
+//! kernel does that arithmetic directly in a `WorkingDecimal` limb buffer and
 //! divides via the shared MG / Newton magnitude-slice cores. So `dispatch`
 //! carries no work-width parameter and the policy stays a pure `(N, SCALE)`
-//! matcher; it adds only `where Int<N>: WorkScratch` for the scratch buffer.
+//! matcher; it adds only `where Int<N>: WorkingDecimal` for the scratch buffer.
 //!
 //! # Why there is only one selected algorithm
 //!
@@ -35,7 +35,7 @@
 //! of the single `mul_widen_divide` algorithm. `Schoolbook` is an unrouted
 //! benchmarkable reference seam (no MG / Newton, plain int `div_rem`).
 
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingDecimal;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -107,7 +107,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// The `const { select }` block folds away at every concrete `N`, leaving a
 /// direct call to the chosen kernel. `dispatch` delegates *down* to the
 /// generic-over-`N` kernel; the `2N`-wide product lives in the kernel's
-/// `WorkScratch` scratch buffer, so no work-width type is named here.
+/// `WorkingDecimal` scratch buffer, so no work-width type is named here.
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
@@ -116,7 +116,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingDecimal,
 {
     let algo = match const { select::<N, SCALE>() } {
         Select::ByAlgorithm(a) => a,

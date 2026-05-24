@@ -11,7 +11,7 @@
 //! former [`sum_sq_radicand`] so both paths share one source of truth.
 //!
 //! The work-width arithmetic is done in limbs -- no `W = Int<2N>` work type.
-//! `a^2 + b^2` spans up to `2N + 1` limbs, formed in a [`WorkScratch`] `Buf2`
+//! `a^2 + b^2` spans up to `2N + 1` limbs, formed in a [`WorkingInt`] `Buf2`
 //! scratch (sized `2N + ceil(N/2)`, so the carry margin is covered). The
 //! signs of the operands drop out of squaring, so the radicand is formed on
 //! the magnitudes.
@@ -25,7 +25,7 @@
 
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::add_assign;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::work_scratch::WorkingInt;
 use crate::int::types::Int;
 
 /// Significant limb length of `a` (index of the highest non-zero limb plus
@@ -49,7 +49,7 @@ pub(crate) fn sig_len(a: &[u64]) -> usize {
 #[inline]
 pub(crate) fn sum_sq_radicand<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     let la = sig_len(ma);
     let lb = sig_len(mb);
@@ -72,7 +72,7 @@ where
 #[must_use]
 pub(crate) fn sum_sq_schoolbook<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: WorkingInt,
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
