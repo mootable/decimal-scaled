@@ -14,3 +14,6 @@ profile.json*
 # scratch / local-only generated data — benches, sweeps, traces, profiling output
 /tmp/
 /bench-compare/target
+
+# Python bytecode cache (scripts/)
+__pycache__/
