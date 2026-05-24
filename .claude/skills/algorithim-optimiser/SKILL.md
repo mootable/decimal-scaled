@@ -123,6 +123,16 @@ Full methodology: **`research/2026_05_24_algorithm_space_mapping.md`**. An algor
 
 Recipe (also §6 of the research doc): (1) list candidates, name each `<fn>_<method>[_<precond>]`; (2) derive each validity region as inequalities on `(N,W,S)` + a value predicate; (3) confirm with a zero-tolerance golden sweep, extend `micro_golden` for any cell it misses; (4) check the validity union **tiles the whole key** — no gaps; (5) where regions overlap, find the optimum by an **N-way microbench of ALL candidate arms** (`compare_all`, §4) → single-axis sweep → bisect the crossover → record it as a named `const`, not a buried literal; (6) write `select` (`_` = widest valid generic; specific arms = validity carve-outs + optimality overrides; `ByValue` only for a genuine value split); (7) `dispatch` = `const { select() }` → exhaustive `match algo`, no `_`, no panic; (8) boundary golden at every arm edge (just-inside / just-outside, external oracle, `lsbe == 0`, all six modes).
 
+### Testing a policy — keep it LIGHT (the ONLY layer where that is allowed)
+
+A policy's real **correctness** test is the **golden** suite (routing-agnostic — it checks the output is correctly-rounded whichever arm ran) and its real **optimality** test is the **performance bench** (`compare_all` §4 / `bench-branch-compare`). So a policy's own unit tests must NOT pin which algorithm `select` chooses, nor re-assert function correctness — that hamstrings the very thing built to be re-tuned (thresholds re-benched, arms swapped, algorithms added).
+
+- **OK:** a light "`dispatch` resolves to one valid algorithm and runs" check; unit-testing a custom `ByValue`/`ByShape` classifier's mapping logic (reference the threshold `const`, not a hard literal, so a re-bench doesn't break it).
+- **NOT OK:** routing-pins (`len ≥ 256 → Karatsuba`), exhaustive pre/post-condition correctness duplicating golden.
+- Keep KERNEL correctness + scratch-**safety** tests (e.g. "Karatsuba == schoolbook product", "fixed scratch ≥ needed" — a too-small scratch is release UB); those test the kernel/invariant, not the routing choice.
+
+**This relaxation is `policy/`-ONLY. EVERYWHERE ELSE stays fully rigorous** — kernels, `algos/`, support leaves, `int/` primitives, types, conversions, parsing/formatting: pre/post-condition checks, exhaustive edge cases, every-test-asserts, zero-tolerance golden/accuracy. Do not let the policy relaxation leak into any other layer.
+
 ---
 
 ## 3. Support libraries — where shared leaves live
