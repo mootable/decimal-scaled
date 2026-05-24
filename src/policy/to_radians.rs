@@ -52,6 +52,11 @@ enum Algorithm {
     /// (narrow tier) and the inherent `to_radians_strict_with` shell (wide
     /// tiers). One computation, all tiers and scales.
     MulPiRatio,
+    /// `to_radians_schoolbook` -- naive textbook reference (multiply
+    /// by the pi ratio in the work int). UNROUTED: `select` never
+    /// returns it; correctness reference + microbench partner.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the const verdict ──────────────────────────────────────────────
@@ -108,6 +113,17 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<1>, S
                         )
                     })
             }
+            Algorithm::Schoolbook => {
+                let wide: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let r = crate::algos::trig::angle_schoolbook::to_radians_schoolbook_narrow::<SCALE>(wide.0, mode);
+                ::core::convert::TryInto::try_into(crate::D::<crate::int::types::Int<2>, SCALE>(r))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale(
+                            "D18::to_radians",
+                            SCALE,
+                        )
+                    })
+            }
         }
     }
 
@@ -128,6 +144,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<1>, S
                         )
                     })
             }
+            Algorithm::Schoolbook => self.to_radians_impl(mode),
         }
     }
 }
@@ -143,6 +160,9 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, S
         match algo {
             Algorithm::MulPiRatio => {
                 Self(crate::algos::trig::trig_series_2limb::to_radians_strict::<SCALE>(self.0, mode))
+            }
+            Algorithm::Schoolbook => {
+                Self(crate::algos::trig::angle_schoolbook::to_radians_schoolbook_narrow::<SCALE>(self.0, mode))
             }
         }
     }
@@ -160,6 +180,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, S
                 working_digits,
                 mode,
             )),
+            Algorithm::Schoolbook => self.to_radians_impl(mode),
         }
     }
 }
@@ -169,7 +190,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, S
 /// Emit `impl ToRadiansPolicy for D<Int<$N>, SCALE>` for a wide tier.
 #[allow(unused_macros)]
 macro_rules! to_radians_policy_wide {
-    ($T:ident, $N:literal) => {
+    ($T:ident, $N:literal, $Core:ty) => {
         impl<const SCALE: u32> ToRadiansPolicy for crate::types::widths::$T<SCALE> {
             #[inline]
             fn to_radians_impl(self, mode: RoundingMode) -> Self {
@@ -179,6 +200,7 @@ macro_rules! to_radians_policy_wide {
                 };
                 match algo {
                     Algorithm::MulPiRatio => self.to_radians_strict_with(mode),
+                    Algorithm::Schoolbook => Self::from_bits(crate::algos::trig::angle_schoolbook::to_radians_schoolbook::<$Core, SCALE>(self.to_bits(), mode)),
                 }
             }
 
@@ -190,6 +212,7 @@ macro_rules! to_radians_policy_wide {
                 };
                 match algo {
                     Algorithm::MulPiRatio => self.to_radians_approx_with(working_digits, mode),
+                    Algorithm::Schoolbook => self.to_radians_impl(mode),
                 }
             }
         }
@@ -197,22 +220,22 @@ macro_rules! to_radians_policy_wide {
 }
 
 #[cfg(any(feature = "d57", feature = "wide"))]
-to_radians_policy_wide!(D57, 3);
+to_radians_policy_wide!(D57, 3, crate::types::widths::wide_trig_d57::Core);
 #[cfg(any(feature = "d76", feature = "wide"))]
-to_radians_policy_wide!(D76, 4);
+to_radians_policy_wide!(D76, 4, crate::types::widths::wide_trig_d76::Core);
 #[cfg(any(feature = "d115", feature = "wide"))]
-to_radians_policy_wide!(D115, 6);
+to_radians_policy_wide!(D115, 6, crate::types::widths::wide_trig_d115::Core);
 #[cfg(any(feature = "d153", feature = "wide"))]
-to_radians_policy_wide!(D153, 8);
+to_radians_policy_wide!(D153, 8, crate::types::widths::wide_trig_d153::Core);
 #[cfg(any(feature = "d230", feature = "wide"))]
-to_radians_policy_wide!(D230, 12);
+to_radians_policy_wide!(D230, 12, crate::types::widths::wide_trig_d230::Core);
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-to_radians_policy_wide!(D307, 16);
+to_radians_policy_wide!(D307, 16, crate::types::widths::wide_trig_d307::Core);
 #[cfg(any(feature = "d462", feature = "x-wide"))]
-to_radians_policy_wide!(D462, 24);
+to_radians_policy_wide!(D462, 24, crate::types::widths::wide_trig_d462::Core);
 #[cfg(any(feature = "d616", feature = "x-wide"))]
-to_radians_policy_wide!(D616, 32);
+to_radians_policy_wide!(D616, 32, crate::types::widths::wide_trig_d616::Core);
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
-to_radians_policy_wide!(D924, 48);
+to_radians_policy_wide!(D924, 48, crate::types::widths::wide_trig_d924::Core);
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-to_radians_policy_wide!(D1232, 64);
+to_radians_policy_wide!(D1232, 64, crate::types::widths::wide_trig_d1232::Core);
