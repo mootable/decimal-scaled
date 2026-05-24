@@ -54,7 +54,7 @@
 //! 80000-2 (pi, tau, pi/2, pi/4), OEIS A001113 (e), OEIS A001622
 //! (golden ratio).
 
-use crate::algos::support::fixed_d38::Fixed;
+use crate::algos::support::fixed::Fixed;
 use crate::types::widths::D38;
 use crate::int::types::Int;
 

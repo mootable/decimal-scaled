@@ -22,7 +22,7 @@
 //! Same reasoning as [`crate::policy::exp`]: the two surviving algorithms
 //! — `ln_series` (Brent argument-reduced artanh series) and `ln_tang`
 //! (Tang table-driven reduction) — have SCALE-/width-specific kernel
-//! realisations today (narrow `Fixed`-256 in `ln::fixed_d38`, wide tiers
+//! realisations today (narrow `Fixed`-256 in `ln::ln_series_2limb`, wide tiers
 //! on the tier-generic `ln_series` / `ln_tang` kernels over
 //! `WideTrigCore`, Tang bands in the `ln::lookup_*` kernels).
 //! The matcher expresses the algorithm *choice* per cell canonically and
@@ -77,7 +77,7 @@ pub(crate) trait LnPolicy: Sized {
 enum Algorithm {
     /// `ln_series` — Brent argument-reduced `2·artanh((m−1)/(m+1))`
     /// fixed-point series. The generic default; realised by
-    /// `ln::fixed_d38` (narrow) and the generic `ln_series` (wide).
+    /// `ln::ln_series_2limb` (narrow) and the generic `ln_series` (wide).
     Series,
     /// `ln_tang` — Tang table-driven range reduction. Selected on the
     /// benched SCALE bands; realised by the `ln::lookup_*` kernels.
@@ -164,10 +164,10 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn ln_impl(self, mode: RoundingMode) -> Self {
-        // Widen → `fixed_d38::ln` → narrow (the `widen_to_work`
+        // Widen → `ln_series_2limb::ln` → narrow (the `widen_to_work`
         // dispatch strategy, a policy concern).
         let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-        let raw = ln::fixed_d38::ln_strict::<SCALE>(widened.0, mode);
+        let raw = ln::ln_series_2limb::ln_strict::<SCALE>(widened.0, mode);
         crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("ln_strict", SCALE)
         })
@@ -175,7 +175,7 @@ impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn ln_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
         let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-        let raw = ln::fixed_d38::ln_with(widened.0, SCALE, working_digits, mode);
+        let raw = ln::ln_series_2limb::ln_with(widened.0, SCALE, working_digits, mode);
         crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("ln_with", SCALE)
         })
@@ -233,14 +233,14 @@ impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
         Self(match resolve::<2, SCALE>(&self.0) {
             // N==2 only selects Series; the gated Tang arm is
             // dead-arm-eliminated and forwards to Series for exhaustiveness.
-            Algorithm::Series => ln::fixed_d38::ln_strict::<SCALE>(self.0, mode),
+            Algorithm::Series => ln::ln_series_2limb::ln_strict::<SCALE>(self.0, mode),
             #[cfg(feature = "_wide-support")]
-            Algorithm::Tang => ln::fixed_d38::ln_strict::<SCALE>(self.0, mode),
+            Algorithm::Tang => ln::ln_series_2limb::ln_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn ln_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::ln_with(self.0, SCALE, working_digits, mode))
+        Self(ln::ln_series_2limb::ln_with(self.0, SCALE, working_digits, mode))
     }
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
@@ -254,19 +254,19 @@ impl<const SCALE: u32> LnPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     }
     #[inline]
     fn log2_impl(self, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log2_strict::<SCALE>(self.0, mode))
+        Self(ln::ln_series_2limb::log2_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn log2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log2_with(self.0, SCALE, working_digits, mode))
+        Self(ln::ln_series_2limb::log2_with(self.0, SCALE, working_digits, mode))
     }
     #[inline]
     fn log10_impl(self, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log10_strict::<SCALE>(self.0, mode))
+        Self(ln::ln_series_2limb::log10_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn log10_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(ln::fixed_d38::log10_with(self.0, SCALE, working_digits, mode))
+        Self(ln::ln_series_2limb::log10_with(self.0, SCALE, working_digits, mode))
     }
 }
 

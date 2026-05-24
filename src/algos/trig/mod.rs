@@ -11,12 +11,12 @@
 //!
 //! Variants:
 //!
-//! - [`fixed_d38`] — D38 forward / inverse trig on the 256-bit `Fixed`
+//! - [`trig_series_2limb`] — D38 forward / inverse trig on the 256-bit `Fixed`
 //!   intermediate via the shared `sin_fixed`, `atan_fixed`, and
 //!   `atan2_kernel` cores. The fast paths (`x == 0`, the ±1 endpoints
 //!   for atan / acos, and the small-x linear band) are preserved.
 
-pub(crate) mod fixed_d38;
+pub(crate) mod trig_series_2limb;
 #[cfg(feature = "_wide-support")]
 pub(crate) mod hyper_exp_identity;
 #[cfg(any(feature = "d57", feature = "wide"))]

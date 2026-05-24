@@ -1,16 +1,19 @@
-//! D38 natural-logarithm kernel — `ln_fixed` on the 256-bit `Fixed`
-//! intermediate with a configurable working-scale guard.
+//! Natural-logarithm series kernel — `ln_fixed` evaluated on the
+//! 256-bit `Fixed` guard-digit intermediate with a configurable
+//! working-scale guard.
 //!
-//! Width-level specialisation for D38: the hand-tuned ln path that
-//! has shipped since before the algorithm library existed. Captures
-//! the four-variant matrix entry shape (`strict` vs `approx`, each
-//! with an explicit-rounding-mode sibling) as a single kernel
-//! parameterised by `working_digits`.
+//! The narrow `Int<2>`-storage series path: it serves the narrow
+//! D18 / D38 tier, evaluating the log series in the wider `Fixed`
+//! intermediate because the narrow storage cannot host the guard
+//! digits a correctly-rounded result needs. Captures the four-variant
+//! matrix entry shape (`strict` vs `approx`, each with an
+//! explicit-rounding-mode sibling) as a single kernel parameterised by
+//! `working_digits`.
 //!
 //! Hosts the shared `Fixed` ln primitives used by every D38 strict-
 //! ln callsite plus the `LnPolicy` defaults — `STRICT_GUARD`,
 //! `ln_fixed`, `wide_ln2`, `wide_ln10` — so the typed-shell file
-//! has no `crate::algos::*` or `crate::algos::support::fixed_d38::*` references
+//! has no `crate::algos::*` or `crate::algos::support::fixed::*` references
 //! left.
 //!
 //! Fast paths preserved verbatim from the typed surface:
@@ -21,7 +24,7 @@
 //!
 //! Panics on `raw <= 0` (the typed method's contract).
 
-use crate::algos::support::fixed_d38::Fixed;
+use crate::algos::support::fixed::Fixed;
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 
@@ -57,13 +60,13 @@ const LN10_S75: &str =
 const LN2_RAW: Int<4> = match Int::<4>::from_str_radix(LN2_S75, 10)
 {
     Ok(v) => v,
-    Err(_) => panic!("algos::ln::fixed_d38: LN2_S75 not parseable"),
+    Err(_) => panic!("algos::ln::ln_series_2limb: LN2_S75 not parseable"),
 };
 
 const LN10_RAW: Int<4> =
     match Int::<4>::from_str_radix(LN10_S75, 10) {
         Ok(v) => v,
-        Err(_) => panic!("algos::ln::fixed_d38: LN10_S75 not parseable"),
+        Err(_) => panic!("algos::ln::ln_series_2limb: LN10_S75 not parseable"),
     };
 
 /// Repacks an `Int<4>` (internally `[u64; 4]`) into a

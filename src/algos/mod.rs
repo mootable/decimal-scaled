@@ -44,6 +44,6 @@ pub(crate) mod trig;
 // Cross-cutting support kernels consumed by multiple families and the
 // arithmetic layer: the Moller-Granlund magic-number divide
 // (`support::mg_divide`), the 256-bit sign-magnitude `Fixed` work
-// integer (`support::fixed_d38`), and the Newton-Raphson reciprocal
+// integer (`support::fixed`), and the Newton-Raphson reciprocal
 // divide (`support::newton_reciprocal`).
 pub(crate) mod support;

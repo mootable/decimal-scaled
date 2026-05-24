@@ -6,7 +6,7 @@
 //!
 //! - [`mg_divide`] — the Moller-Granlund magic-number divide used by
 //!   every multiplicative `÷ 10^SCALE` rescale path.
-//! - [`fixed_d38`] — the 256-bit sign-magnitude `Fixed` work integer the
+//! - [`fixed`] — the 256-bit sign-magnitude `Fixed` work integer the
 //!   strict-transcendental fallback paths evaluate their series in.
 //! - [`newton_reciprocal`] — the Newton-Raphson reciprocal divide for
 //!   `n / 10^SCALE` at the wide tiers, head-to-head benched against
@@ -14,7 +14,7 @@
 //!   [`newton_reciprocal::dispatch_wide_pow10_with`] at the cells where
 //!   the bench matrix shows it wins.
 
-pub(crate) mod fixed_d38;
+pub(crate) mod fixed;
 pub(crate) mod mg_divide;
 
 // Typed-`W` Newton-root seed bridge over the cross-algorithm seed leaf

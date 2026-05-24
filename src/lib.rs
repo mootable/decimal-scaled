@@ -317,7 +317,7 @@ pub use crate::cross_scale as cross;
 //
 // The integer layer is unconditional. D38's strict transcendentals use
 // `Int512` as their guard-digit work integer (replacing the previous
-// `algos::support::fixed_d38::Fixed` 256-bit sign-magnitude type), so the wide-
+// `algos::support::fixed::Fixed` 256-bit sign-magnitude type), so the wide-
 // integer family must be available in every feature configuration —
 // not just `feature = "wide"` builds. Compile-time impact is modest:
 // ~2k LOC of self-contained limb arithmetic plus the const-generic

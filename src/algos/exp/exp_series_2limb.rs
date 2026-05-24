@@ -1,17 +1,20 @@
-//! D38 exponential kernel — `exp_fixed` on the 256-bit `Fixed`
-//! intermediate, parameterised by working-digit guard.
+//! Exponential series kernel — `exp_fixed` evaluated on the 256-bit
+//! `Fixed` guard-digit intermediate, parameterised by working-digit
+//! guard.
 //!
-//! Width-level specialisation for D38, capturing the hand-tuned path
-//! that has shipped since before the algorithm library existed.
-//! Returns the raw `i128` storage at the input's scale; the typed
-//! method shell handles the panic-on-overflow message.
+//! The narrow `Int<2>`-storage series path: it serves the narrow
+//! D18 / D38 tier, where the result must be correctly rounded but the
+//! storage is too small to host the guard digits directly, so the
+//! Taylor evaluation runs in the wider `Fixed` intermediate. Returns
+//! the raw `i128` storage at the input's scale; the typed method shell
+//! handles the panic-on-overflow message.
 //!
 //! Hosts the shared `Fixed` exp primitive used by the `ExpPolicy`
 //! defaults (`exp_fixed`) so the typed-shell file has no
-//! `crate::algos::*` or `crate::algos::support::fixed_d38::*` references left.
+//! `crate::algos::*` or `crate::algos::support::fixed::*` references left.
 
-use crate::algos::support::fixed_d38::Fixed;
-use crate::algos::ln::fixed_d38::{STRICT_GUARD, wide_ln2};
+use crate::algos::support::fixed::Fixed;
+use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, wide_ln2};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

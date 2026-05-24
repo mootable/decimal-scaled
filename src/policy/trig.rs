@@ -25,13 +25,13 @@
 //!
 //! - **forward (sin / cos / tan / atan)** — `Series` (the macro-emitted
 //!   Taylor-on-reduced-residue core: `wide_kernel` on the wide tiers,
-//!   `fixed_d38` on the narrow tier, the narrow-GUARD `lookup_*` slots at
+//!   `trig_series_2limb` on the narrow tier, the narrow-GUARD `lookup_*` slots at
 //!   the low bands) and `Tang` (Tang 1991 table-driven argument reduction
 //!   + residual Taylor, on the benched mid/deep SCALE bands).
 //! - **inverse (asin / acos / atan2)** — `Atan` (atan-of-ratio with
 //!   half-angle reduction / quadrant dispatch; the wide tiers compose the
 //!   inherent `*_strict_with` shells, the D57 18..=22 band uses the
-//!   narrow-GUARD lookup, D38 borrows D57 / runs `fixed_d38`).
+//!   narrow-GUARD lookup, D38 borrows D57 / runs `trig_series_2limb`).
 //! - **hyperbolic (sinh / cosh / tanh)** — `ExpIdentity` (the `(eˣ, e⁻ˣ)`
 //!   identity over `exp`; the benched SCALE bands divert to the
 //!   Tang-routed `lookup_*_hyper` kernels).
@@ -42,7 +42,7 @@
 //!
 //! Same reasoning as [`crate::policy::exp`] / [`crate::policy::ln`]: each
 //! algorithm has SCALE-/width-specific kernel realisations today (narrow
-//! `Fixed`-256 in `trig::fixed_d38`, the tier-generic `*_series` kernels
+//! `Fixed`-256 in `trig::trig_series_2limb`, the tier-generic `*_series` kernels
 //! over `WideTrigCore` in `algos::support::wide_trig_core`, Tang/narrow-GUARD
 //! bands in the `trig::lookup_*` kernels). Collapsing those kernel *bodies* to one
 //! generic-over-work-width core needs the macro-emitted core to lift to a
@@ -121,7 +121,7 @@ pub(crate) mod forward {
         /// `*_series` — the macro-emitted Taylor-on-reduced-residue core.
         /// The generic default; realised by the tier-generic `*_series`
         /// kernels in `algos::support::wide_trig_core` (wide),
-        /// `trig::fixed_d38` (narrow), and the narrow-GUARD `lookup_*`
+        /// `trig::trig_series_2limb` (narrow), and the narrow-GUARD `lookup_*`
         /// slots at the low bands (a smaller `GUARD` over the same core).
         Series,
         /// `*_tang_with_taylor` — Tang (1991) table-driven argument
@@ -223,7 +223,7 @@ pub(crate) mod inverse {
         /// the atan-of-ratio composition. Realised by the inherent
         /// `*_strict_with` shells (wide), the `lookup_*_inverse` kernels
         /// (D57 18..=22 band), `borrow_d57` (D38 with D57 present), and
-        /// `fixed_d38` (D38 without D57).
+        /// `trig_series_2limb` (D38 without D57).
         Atan,
     }
 
@@ -272,7 +272,7 @@ pub(crate) mod hyper {
         /// `sinh_exp_identity` / `cosh_exp_identity` / `tanh_exp_identity`
         /// — the `(eˣ, e⁻ˣ)` identity over `exp`. Realised by the
         /// inherent `*_strict_with` shells (default) and the
-        /// `lookup_*_hyper` kernels (benched bands), and by `fixed_d38`
+        /// `lookup_*_hyper` kernels (benched bands), and by `trig_series_2limb`
         /// on the narrow tier.
         ExpIdentity,
     }
@@ -312,7 +312,7 @@ pub(crate) mod hyper {
 // D38 inverse-trig "borrow D57" dispatch strategy
 //
 // The D38 inverse-trig family (atan / asin / acos / atan2) is qualitatively
-// faster routed through D57 than through D38's own `fixed_d38`
+// faster routed through D57 than through D38's own `trig_series_2limb`
 // adaptive-halvings path (~2× at SCALE 19; asin / acos / atan2 compose atan
 // and inherit the gap). The strategy: widen D38 → D57, run the D57 kernel
 // outside the SCALE 18..=22 lookup window (the lookup kernels cover that
@@ -413,7 +413,7 @@ mod borrow_d57 {
 // ── widen → D38 → narrow dispatch helpers ───────────────────────────
 //
 // These are the `widen_to_work` dispatch strategy for the forward / inverse
-// trig family: widen D18 → D38, run the hand-tuned `fixed_d38` kernel, narrow
+// trig family: widen D18 → D38, run the hand-tuned `trig_series_2limb` kernel, narrow
 // back. Per the layering rule they live in the policy layer, not `algos/`.
 
 macro_rules! narrow_widen {
@@ -422,7 +422,7 @@ macro_rules! narrow_widen {
         #[must_use]
         fn $name<const SCALE: u32>(v: $crate::D<$crate::int::types::Int<1>, SCALE>, mode: RoundingMode) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
             let widened: $crate::D<$crate::int::types::Int<2>, SCALE> = v.into();
-            let raw = trig::fixed_d38::$kernel::<SCALE>(widened.0, mode);
+            let raw = trig::trig_series_2limb::$kernel::<SCALE>(widened.0, mode);
             $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
@@ -438,7 +438,7 @@ macro_rules! narrow_widen_with {
             mode: RoundingMode,
         ) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
             let widened: $crate::D<$crate::int::types::Int<2>, SCALE> = v.into();
-            let raw = trig::fixed_d38::$kernel::<SCALE>(widened.0, working_digits, mode);
+            let raw = trig::trig_series_2limb::$kernel::<SCALE>(widened.0, working_digits, mode);
             $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
@@ -452,7 +452,7 @@ macro_rules! narrow_widen_binary {
         fn $name<const SCALE: u32>(y: $crate::D<$crate::int::types::Int<1>, SCALE>, x: $crate::D<$crate::int::types::Int<1>, SCALE>, mode: RoundingMode) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
             let y_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = y.into();
             let x_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = x.into();
-            let raw = trig::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
+            let raw = trig::trig_series_2limb::$kernel::<SCALE>(y_wide.0, x_wide.0, mode);
             $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
@@ -470,7 +470,7 @@ macro_rules! narrow_widen_binary_with {
         ) -> $crate::D<$crate::int::types::Int<1>, SCALE> {
             let y_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = y.into();
             let x_wide: $crate::D<$crate::int::types::Int<2>, SCALE> = x.into();
-            let raw = trig::fixed_d38::$kernel::<SCALE>(y_wide.0, x_wide.0, working_digits, mode);
+            let raw = trig::trig_series_2limb::$kernel::<SCALE>(y_wide.0, x_wide.0, working_digits, mode);
             $crate::D::<$crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().expect($err)
         }
     };
@@ -749,17 +749,17 @@ impl_narrow_trig!(
 );
 
 // ══════════════════════════════════════════════════════════════════════
-// D38 — narrow `Fixed`-256 kernels (`fixed_d38`), with the inverse family
+// D38 — narrow `Fixed`-256 kernels (`trig_series_2limb`), with the inverse family
 // borrowing D57 when it is available.
 //
 // N==2 always selects `Series` (forward) / `Atan` (inverse) /
 // `ExpIdentity` (hyper); each `match algo` is exhaustive over the gated
 // real variants and dead-arm-eliminated. The forward family runs the
-// bespoke `fixed_d38` series kernel directly (it beats the widen-and-back
+// bespoke `trig_series_2limb` series kernel directly (it beats the widen-and-back
 // path ~2× since the 0.4.2 MG-routed `Fixed` primitives). The inverse
 // family borrows D57 when present (the wide_kernel atan is ~2× faster than
-// the `fixed_d38` adaptive-halvings path; asin/acos/atan2 compose atan, so
-// they inherit the gap) and runs `fixed_d38` without D57.
+// the `trig_series_2limb` adaptive-halvings path; asin/acos/atan2 compose atan, so
+// they inherit the gap) and runs `trig_series_2limb` without D57.
 // ══════════════════════════════════════════════════════════════════════
 
 /// D38 hyperbolic + angle-conversion methods share one `Fixed` core
@@ -769,56 +769,56 @@ macro_rules! d38_hyperbolic_and_angle {
         #[inline]
         fn sinh_impl(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => trig::fixed_d38::sinh_strict::<SCALE>(self.0, mode),
+                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::sinh_strict::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         fn sinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::sinh_with(self.0, SCALE, wd, mode))
+            Self(trig::trig_series_2limb::sinh_with(self.0, SCALE, wd, mode))
         }
         #[inline]
         fn cosh_impl(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => trig::fixed_d38::cosh_strict::<SCALE>(self.0, mode),
+                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::cosh_strict::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         fn cosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::cosh_with(self.0, SCALE, wd, mode))
+            Self(trig::trig_series_2limb::cosh_with(self.0, SCALE, wd, mode))
         }
         #[inline]
         fn tanh_impl(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
-                hyper::Algorithm::ExpIdentity => trig::fixed_d38::tanh_strict::<SCALE>(self.0, mode),
+                hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::tanh_strict::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         fn tanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::tanh_with(self.0, SCALE, wd, mode))
+            Self(trig::trig_series_2limb::tanh_with(self.0, SCALE, wd, mode))
         }
         #[inline]
         fn asinh_impl(self, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::asinh_strict::<SCALE>(self.0, mode))
+            Self(trig::trig_series_2limb::asinh_strict::<SCALE>(self.0, mode))
         }
         #[inline]
         fn asinh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::asinh_with(self.0, SCALE, wd, mode))
+            Self(trig::trig_series_2limb::asinh_with(self.0, SCALE, wd, mode))
         }
         #[inline]
         fn acosh_impl(self, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::acosh_strict::<SCALE>(self.0, mode))
+            Self(trig::trig_series_2limb::acosh_strict::<SCALE>(self.0, mode))
         }
         #[inline]
         fn acosh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::acosh_with(self.0, SCALE, wd, mode))
+            Self(trig::trig_series_2limb::acosh_with(self.0, SCALE, wd, mode))
         }
         #[inline]
         fn atanh_impl(self, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::atanh_strict::<SCALE>(self.0, mode))
+            Self(trig::trig_series_2limb::atanh_strict::<SCALE>(self.0, mode))
         }
         #[inline]
         fn atanh_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::atanh_with(self.0, SCALE, wd, mode))
+            Self(trig::trig_series_2limb::atanh_with(self.0, SCALE, wd, mode))
         }
         #[inline]
         fn to_degrees_impl(self, mode: RoundingMode) -> Self {
@@ -843,7 +843,7 @@ macro_rules! d38_hyperbolic_and_angle {
     };
 }
 
-/// D38 forward family — always `Series` on the `fixed_d38` kernel. The
+/// D38 forward family — always `Series` on the `trig_series_2limb` kernel. The
 /// gated `Tang` arm is dead-arm-eliminated (N==2 never selects it; it
 /// forwards to the series kernel so the `match` stays exhaustive).
 macro_rules! d38_forward_fixed {
@@ -851,43 +851,43 @@ macro_rules! d38_forward_fixed {
         #[inline]
         fn sin_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<2, SCALE>(&self.0) {
-                forward::Algorithm::Series => trig::fixed_d38::sin_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Series => trig::trig_series_2limb::sin_strict::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => trig::fixed_d38::sin_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Tang => trig::trig_series_2limb::sin_strict::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         fn sin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::sin_with::<SCALE>(self.0, wd, mode))
+            Self(trig::trig_series_2limb::sin_with::<SCALE>(self.0, wd, mode))
         }
         #[inline]
         fn cos_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve::<2, SCALE>(&self.0) {
-                forward::Algorithm::Series => trig::fixed_d38::cos_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Series => trig::trig_series_2limb::cos_strict::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => trig::fixed_d38::cos_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Tang => trig::trig_series_2limb::cos_strict::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         fn cos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::cos_with::<SCALE>(self.0, wd, mode))
+            Self(trig::trig_series_2limb::cos_with::<SCALE>(self.0, wd, mode))
         }
         #[inline]
         fn tan_impl(self, mode: RoundingMode) -> Self {
             Self(match forward::resolve_tan::<2, SCALE>(&self.0) {
-                forward::Algorithm::Series => trig::fixed_d38::tan_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Series => trig::trig_series_2limb::tan_strict::<SCALE>(self.0, mode),
                 #[cfg(feature = "_wide-support")]
-                forward::Algorithm::Tang => trig::fixed_d38::tan_strict::<SCALE>(self.0, mode),
+                forward::Algorithm::Tang => trig::trig_series_2limb::tan_strict::<SCALE>(self.0, mode),
             })
         }
         #[inline]
         fn tan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            Self(trig::fixed_d38::tan_with::<SCALE>(self.0, wd, mode))
+            Self(trig::trig_series_2limb::tan_with::<SCALE>(self.0, wd, mode))
         }
     };
 }
 
-// D38 with D57 present — forward via `fixed_d38`, inverse borrows D57.
+// D38 with D57 present — forward via `trig_series_2limb`, inverse borrows D57.
 #[cfg(any(feature = "d57", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     d38_forward_fixed!();
@@ -938,7 +938,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     d38_hyperbolic_and_angle!();
 }
 
-// D38 without D57 — forward + inverse both on `fixed_d38`.
+// D38 without D57 — forward + inverse both on `trig_series_2limb`.
 #[cfg(not(any(feature = "d57", feature = "wide")))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     d38_forward_fixed!();
@@ -946,44 +946,44 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     #[inline]
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::fixed_d38::atan_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => trig::trig_series_2limb::atan_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn atan_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::fixed_d38::atan_with::<SCALE>(self.0, wd, mode))
+        Self(trig::trig_series_2limb::atan_with::<SCALE>(self.0, wd, mode))
     }
     #[inline]
     fn asin_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::fixed_d38::asin_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => trig::trig_series_2limb::asin_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn asin_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::fixed_d38::asin_with::<SCALE>(self.0, wd, mode))
+        Self(trig::trig_series_2limb::asin_with::<SCALE>(self.0, wd, mode))
     }
     #[inline]
     fn acos_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
-            inverse::Algorithm::Atan => trig::fixed_d38::acos_strict::<SCALE>(self.0, mode),
+            inverse::Algorithm::Atan => trig::trig_series_2limb::acos_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn acos_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::fixed_d38::acos_with::<SCALE>(self.0, wd, mode))
+        Self(trig::trig_series_2limb::acos_with::<SCALE>(self.0, wd, mode))
     }
     #[inline]
     fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => {
-                trig::fixed_d38::atan2_strict::<SCALE>(self.0, other.0, mode)
+                trig::trig_series_2limb::atan2_strict::<SCALE>(self.0, other.0, mode)
             }
         })
     }
     #[inline]
     fn atan2_with_impl(self, other: Self, wd: u32, mode: RoundingMode) -> Self {
-        Self(trig::fixed_d38::atan2_with::<SCALE>(self.0, other.0, wd, mode))
+        Self(trig::trig_series_2limb::atan2_with::<SCALE>(self.0, other.0, wd, mode))
     }
 
     d38_hyperbolic_and_angle!();

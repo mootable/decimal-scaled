@@ -24,7 +24,7 @@
 //! Taylor with the Smith `r/2^n` halving-and-squaring) and `exp_tang`
 //! (Tang two-stage table-driven range reduction) — each have a SCALE-/
 //! width-specific realisation today: the narrow tiers run on the 256-bit
-//! `Fixed` intermediate (`exp::fixed_d38`), the wide tiers on the
+//! `Fixed` intermediate (`exp::exp_series_2limb`), the wide tiers on the
 //! tier-generic `exp_series` / `exp_tang` kernels over `WideTrigCore`,
 //! and the Tang bands on the `lookup_*` kernels. The matcher here is canonical: the
 //! algorithm *choice* per cell is expressed once via `Algorithm`/`select`,
@@ -66,7 +66,7 @@ pub(crate) trait ExpPolicy: Sized {
 enum Algorithm {
     /// `exp_series` — the direct fixed-point Taylor kernel with the
     /// Smith `r/2^n` argument-halving-and-squaring trick. The generic
-    /// default; realised by `exp::fixed_d38` (narrow) and
+    /// default; realised by `exp::exp_series_2limb` (narrow) and
     /// `exp::wide_kernel` (wide).
     Series,
     /// `exp_tang` — Tang (1989) table-driven two-stage range reduction.
@@ -153,10 +153,10 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
 impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn exp_impl(self, mode: RoundingMode) -> Self {
-        // N==1 always selects Series. Widen → `fixed_d38::exp` → narrow
+        // N==1 always selects Series. Widen → `exp_series_2limb::exp` → narrow
         // (the `widen_to_work` dispatch strategy, a policy concern).
         let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-        let raw = exp::fixed_d38::exp_strict::<SCALE>(widened.0, mode);
+        let raw = exp::exp_series_2limb::exp_strict::<SCALE>(widened.0, mode);
         crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("exp_strict", SCALE)
         })
@@ -164,7 +164,7 @@ impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
     #[inline]
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
         let widened: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
-        let raw = exp::fixed_d38::exp_with(widened.0, SCALE, working_digits, mode);
+        let raw = exp::exp_series_2limb::exp_with(widened.0, SCALE, working_digits, mode);
         crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("exp_with", SCALE)
         })
@@ -199,26 +199,26 @@ impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             // N==2 only ever selects Series; the Tang arm is gated in
             // and dead-arm-eliminated (it forwards to Series so the
             // `match` stays exhaustive without a synthetic default).
-            Algorithm::Series => exp::fixed_d38::exp_strict::<SCALE>(self.0, mode),
+            Algorithm::Series => exp::exp_series_2limb::exp_strict::<SCALE>(self.0, mode),
             #[cfg(feature = "_wide-support")]
-            Algorithm::Tang => exp::fixed_d38::exp_strict::<SCALE>(self.0, mode),
+            Algorithm::Tang => exp::exp_series_2limb::exp_strict::<SCALE>(self.0, mode),
         })
     }
     #[inline]
     fn exp_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {
-            Algorithm::Series => exp::fixed_d38::exp_with(self.0, SCALE, working_digits, mode),
+            Algorithm::Series => exp::exp_series_2limb::exp_with(self.0, SCALE, working_digits, mode),
             #[cfg(feature = "_wide-support")]
-            Algorithm::Tang => exp::fixed_d38::exp_with(self.0, SCALE, working_digits, mode),
+            Algorithm::Tang => exp::exp_series_2limb::exp_with(self.0, SCALE, working_digits, mode),
         })
     }
     #[inline]
     fn exp2_impl(self, mode: RoundingMode) -> Self {
-        Self(exp::fixed_d38::exp2_strict::<SCALE>(self.0, mode))
+        Self(exp::exp_series_2limb::exp2_strict::<SCALE>(self.0, mode))
     }
     #[inline]
     fn exp2_with_impl(self, working_digits: u32, mode: RoundingMode) -> Self {
-        Self(exp::fixed_d38::exp2_with(self.0, SCALE, working_digits, mode))
+        Self(exp::exp_series_2limb::exp2_with(self.0, SCALE, working_digits, mode))
     }
 }
 

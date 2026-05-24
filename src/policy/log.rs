@@ -23,7 +23,7 @@
 //!
 //! `log(self, base) = ln(self) / ln(base)`. Every tier and scale uses the
 //! same ratio-of-natural-logs computation: the narrow tier runs through the
-//! `ln::fixed_d38::log_strict` kernel; the wide tiers run through the
+//! `ln::ln_series_2limb::log_strict` kernel; the wide tiers run through the
 //! per-tier `$core::log_strict_with_kernel` / `log_approx_with_kernel` free
 //! functions (emitted by `decl_wide_transcendental!`). There is no
 //! crossover threshold that selects a different algorithm at the policy
@@ -50,7 +50,7 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// `log_ln_divide` — `log(self, base) = ln(self) / ln(base)`. The
-    /// narrow tier routes through `ln::fixed_d38::log_strict`; the wide
+    /// narrow tier routes through `ln::ln_series_2limb::log_strict`; the wide
     /// tiers route through the per-tier `$core::log_strict_with_kernel` /
     /// `log_approx_with_kernel` free functions. This is the only formula
     /// used everywhere.
@@ -137,7 +137,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
     }
 }
 
-// ── D38 ── native `Fixed`-256 kernel via `ln::fixed_d38::log_strict` ─
+// ── D38 ── native `Fixed`-256 kernel via `ln::ln_series_2limb::log_strict` ─
 impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn log_impl(self, base: Self, mode: RoundingMode) -> Self {
@@ -147,7 +147,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
         };
         match algo {
             Algorithm::LnDivide => {
-                Self(crate::algos::ln::fixed_d38::log_strict::<SCALE>(self.0, base.0, mode))
+                Self(crate::algos::ln::ln_series_2limb::log_strict::<SCALE>(self.0, base.0, mode))
             }
         }
     }
@@ -159,7 +159,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Select::ByValue(_) => Algorithm::LnDivide,
         };
         match algo {
-            Algorithm::LnDivide => Self(crate::algos::ln::fixed_d38::log_with(
+            Algorithm::LnDivide => Self(crate::algos::ln::ln_series_2limb::log_with(
                 self.0,
                 base.0,
                 SCALE,

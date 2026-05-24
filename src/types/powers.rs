@@ -33,7 +33,7 @@
 //! radicand and take its exact integer root, then apply the rounding
 //! mode (no ties exist for integer-sqrt so the three half-modes
 //! coincide; `Floor`/`Ceiling` divert for the directed cases);
-//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `algos::support::fixed_d38`
+//! - `powf_strict` runs `exp(y·ln(x))` entirely in the `algos::support::fixed`
 //! guard-digit intermediate;
 //! - `hypot_strict` composes `sqrt_strict` via the scale-trick.
 //!

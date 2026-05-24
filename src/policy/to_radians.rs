@@ -24,7 +24,7 @@
 //!
 //! The single algorithm (`to_radians_mul_pi_ratio`) multiplies by
 //! `π / 180` (exact rational approximation in the guard-digit intermediate)
-//! via the `trig::fixed_d38::to_radians_strict` kernel (narrow tier) or the
+//! via the `trig::trig_series_2limb::to_radians_strict` kernel (narrow tier) or the
 //! inherent `to_radians_strict_with` shell (wide tiers). There is no
 //! crossover threshold — one computation everywhere.
 //!
@@ -48,7 +48,7 @@ use crate::support::rounding::RoundingMode;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// `to_radians_mul_pi_ratio` — multiply by `π/180` via the guard-digit
-    /// `Fixed` intermediate. Realised by `trig::fixed_d38::to_radians_strict`
+    /// `Fixed` intermediate. Realised by `trig::trig_series_2limb::to_radians_strict`
     /// (narrow tier) and the inherent `to_radians_strict_with` shell (wide
     /// tiers). One computation, all tiers and scales.
     MulPiRatio,
@@ -132,7 +132,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<1>, S
     }
 }
 
-// ── D38 ── native `fixed_d38` kernel ─────────────────────────────────
+// ── D38 ── native `trig_series_2limb` kernel ─────────────────────────────────
 impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn to_radians_impl(self, mode: RoundingMode) -> Self {
@@ -142,7 +142,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, S
         };
         match algo {
             Algorithm::MulPiRatio => {
-                Self(crate::algos::trig::fixed_d38::to_radians_strict::<SCALE>(self.0, mode))
+                Self(crate::algos::trig::trig_series_2limb::to_radians_strict::<SCALE>(self.0, mode))
             }
         }
     }
@@ -154,7 +154,7 @@ impl<const SCALE: u32> ToRadiansPolicy for crate::D<crate::int::types::Int<2>, S
             Select::ByValue(_) => Algorithm::MulPiRatio,
         };
         match algo {
-            Algorithm::MulPiRatio => Self(crate::algos::trig::fixed_d38::to_radians_with(
+            Algorithm::MulPiRatio => Self(crate::algos::trig::trig_series_2limb::to_radians_with(
                 self.0,
                 SCALE,
                 working_digits,

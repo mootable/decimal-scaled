@@ -1,10 +1,11 @@
-//! D38 floating-point power kernel — `powf` computed as
-//! `exp(y · ln(x))` on the 256-bit `Fixed` intermediate.
+//! Floating-point power series kernel — `powf` computed as
+//! `exp(y · ln(x))` on the 256-bit `Fixed` guard-digit intermediate.
 //!
-//! Width-level specialisation for D38, capturing the hand-tuned path
-//! that has shipped since before the algorithm library existed. The
-//! `ln`, the multiplication, and the `exp` all share the wide guard-
-//! digit working scale so no precision is dropped between stages.
+//! The narrow `Int<2>`-storage series path: it serves the narrow
+//! D18 / D38 tier, composing the `ln` and `exp` series kernels in the
+//! wider `Fixed` intermediate. The `ln`, the multiplication, and the
+//! `exp` all share the wide guard-digit working scale so no precision
+//! is dropped between stages.
 //!
 //! Fast path preserved verbatim from the typed surface:
 //! - A non-positive base saturates to `0` (matches the f64-bridge
@@ -16,9 +17,9 @@
 //!
 //! Returns the raw `i128` storage at the input's scale.
 
-use crate::algos::exp::fixed_d38::exp_fixed;
-use crate::algos::support::fixed_d38::Fixed;
-use crate::algos::ln::fixed_d38::{STRICT_GUARD, ln_fixed};
+use crate::algos::exp::exp_series_2limb::exp_fixed;
+use crate::algos::support::fixed::Fixed;
+use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, ln_fixed};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

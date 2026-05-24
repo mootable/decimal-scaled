@@ -46,10 +46,10 @@
 //! per-variant `ln_strict` / `ln_with` / `log_strict` / `log_with` /
 //! `log2_*` / `log10_*` / `exp_strict` / `exp_with` / `exp2_*`
 //! `Fixed`-shape functions) live in
-//! [`crate::algos::ln::fixed_d38`] and
-//! [`crate::algos::exp::fixed_d38`]. This file is a typed-shell
+//! [`crate::algos::ln::ln_series_2limb`] and
+//! [`crate::algos::exp::exp_series_2limb`]. This file is a typed-shell
 //! surface; there are zero `crate::algos::*` or
-//! `crate::algos::support::fixed_d38::*` references in it.
+//! `crate::algos::support::fixed::*` references in it.
 //!
 //! # Precision
 //!
@@ -57,7 +57,7 @@
 //! `f64`. Every `_strict` / `_strict_with` / `_approx` /
 //! `_approx_with` form is **correctly rounded** under the selected
 //! [`RoundingMode`]: the result is within 0.5 ULP of the exact
-//! value. They evaluate the series in the `algos::support::fixed_d38::Fixed`
+//! value. They evaluate the series in the `algos::support::fixed::Fixed`
 //! guard-digit intermediate and round once at the end.
 //!
 //! [`RoundingMode`]: crate::RoundingMode
@@ -73,8 +73,8 @@
 /// Re-export of the D38 strict-mode guard-digit constant for in-crate
 /// callers that branch on the strict-vs-approx working-scale match.
 /// The authoritative definition lives in
-/// [`crate::algos::ln::fixed_d38::STRICT_GUARD`].
-pub(crate) use crate::algos::ln::fixed_d38::STRICT_GUARD;
+/// [`crate::algos::ln::ln_series_2limb::STRICT_GUARD`].
+pub(crate) use crate::algos::ln::ln_series_2limb::STRICT_GUARD;
 
 impl<const SCALE: u32> crate::D<crate::int::types::Int<2>, SCALE> {
     // ── Logarithms ────────────────────────────────────────────────

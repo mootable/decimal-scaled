@@ -7,12 +7,12 @@
 //!
 //! Variants:
 //!
-//! - [`fixed_d38`] — D38's `Fixed` 256-bit intermediate `exp_fixed`
+//! - [`exp_series_2limb`] — D38's `Fixed` 256-bit intermediate `exp_fixed`
 //!   path, four-variant matrix entry shape.
 //! - [`lab`] — retained Tang-exp probes not wired to dispatch (lost
 //!   on perf; kept for future re-probing).
 
-pub(crate) mod fixed_d38;
+pub(crate) mod exp_series_2limb;
 pub(crate) mod lab;
 /// Tier-generic Tang-style table-driven `exp_strict` kernel, generic over
 /// `WideTrigCore`. Collapses the per-tier D57 (18..=22 / 45..=56), D115

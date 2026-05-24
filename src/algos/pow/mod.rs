@@ -10,9 +10,9 @@
 //!
 //! Variants:
 //!
-//! - [`fixed_d38`] — D38's hand-tuned `powf` on the `Fixed` intermediate,
+//! - [`powf_series_2limb`] — D38's hand-tuned `powf` on the `Fixed` intermediate,
 //!   carrying the four-variant matrix entry shape (strict + approx, each
 //!   with an explicit-rounding sibling). The D38 realisation of the
 //!   `powf_exp_with_ln` (`ExpWithLn`) algorithm.
 
-pub(crate) mod fixed_d38;
+pub(crate) mod powf_series_2limb;

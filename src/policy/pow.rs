@@ -18,7 +18,7 @@
 //! transcendental method). Its fn is `powf_exp_with_ln` and the enum
 //! variant is `ExpWithLn`. Across all `(N, SCALE)` it is the sole
 //! algorithm; the narrow tiers realise it on the 256-bit `Fixed`
-//! intermediate (`pow::fixed_d38`, with D18 widening in via the
+//! intermediate (`pow::powf_series_2limb`, with D18 widening in via the
 //! `widen_to_work` strategy), the wide tiers via the inherent
 //! `powf_strict_with` shell that composes the wide-tier `exp`/`ln`
 //! cores (not yet policy-routed — see `phase4/migration_explog.md`,
@@ -29,7 +29,7 @@
 //! When the exponent is a small integer (`|n| ≤ 64`) the kernels run
 //! binary square-and-multiply instead of `exp∘ln`. Today that integer
 //! short-circuit is a value-dependent *step inside* each kernel
-//! (`pow::fixed_d38::exp_as_small_int` etc.). Promoting it to a distinct
+//! (`pow::powf_series_2limb::exp_as_small_int` etc.). Promoting it to a distinct
 //! `Algorithm::IntSquareMultiply` (fn `pow_int_square_multiply`) selected
 //! by a `Select::ByValue` arm (`powf_exp_small_int`, keyed on the
 //! exponent operand) is the family's one recommended value matcher
@@ -60,7 +60,7 @@ pub(crate) trait PowPolicy: Sized {
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// `powf_exp_with_ln` — the hybrid `b^y = exp(y · ln b)`. The single
-    /// algorithm today; realised by `pow::fixed_d38` (narrow) and the
+    /// algorithm today; realised by `pow::powf_series_2limb` (narrow) and the
     /// inherent wide-tier shell.
     ExpWithLn,
     // Deferred: `IntSquareMultiply` (fn `pow_int_square_multiply`),
@@ -106,11 +106,11 @@ fn resolve<const N: usize, const SCALE: u32>(base: &Int<N>) -> Algorithm {
 // `widen_to_work` strategy) and runs `powf_exp_with_ln` there.
 /// `Some(n)` if `exp_raw` (at `SCALE`) represents an exact integer
 /// `n` with `|n| <= INT_FAST_PATH_THRESHOLD`. Identical contract to
-/// [`pow::fixed_d38::exp_as_small_int`], specialised here for the narrow
+/// [`pow::powf_series_2limb::exp_as_small_int`], specialised here for the narrow
 /// D18 storage where the divisor is `i128`.
 #[inline]
 fn exp_as_small_int_i128<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
-    use pow::fixed_d38::INT_FAST_PATH_THRESHOLD;
+    use pow::powf_series_2limb::INT_FAST_PATH_THRESHOLD;
     let mult = 10_i128.pow(SCALE);
     if exp_raw % mult != 0 {
         return None;
@@ -130,7 +130,7 @@ fn exp_as_small_int_i128<const SCALE: u32>(exp_raw: i128) -> Option<i32> {
 impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<1>, SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
-        // Integer-exponent fast path, then widen → `fixed_d38::powf` →
+        // Integer-exponent fast path, then widen → `powf_series_2limb::powf` →
         // narrow (the `widen_to_work` dispatch strategy, a policy concern).
         if self.to_bits() > 0 {
             if let Some(n) = exp_as_small_int_i128::<SCALE>(exp.to_bits().as_i128()) {
@@ -139,7 +139,7 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
         }
         let base_w: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         let exp_w: crate::D<crate::int::types::Int<2>, SCALE> = exp.into();
-        let raw = pow::fixed_d38::powf_strict::<SCALE>(base_w.0, exp_w.0, mode);
+        let raw = pow::powf_series_2limb::powf_strict::<SCALE>(base_w.0, exp_w.0, mode);
         crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("powf_strict", SCALE)
         })
@@ -153,7 +153,7 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
         }
         let base_w: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
         let exp_w: crate::D<crate::int::types::Int<2>, SCALE> = exp.into();
-        let raw = pow::fixed_d38::powf_with::<SCALE>(base_w.0, exp_w.0, working_digits, mode);
+        let raw = pow::powf_series_2limb::powf_with::<SCALE>(base_w.0, exp_w.0, working_digits, mode);
         crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).try_into().unwrap_or_else(|_| {
             crate::support::diagnostics::overflow_panic_with_scale("powf_with", SCALE)
         })
@@ -167,19 +167,19 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
 // MG-routed `Fixed` primitives made the bespoke path win across the whole
 // SCALE range (the empirical SCALE-23 crossover that motivated the split
 // is gone). The integer-exponent fast path lives inside
-// `pow::fixed_d38::powf_*` (the deferred `IntSquareMultiply` step).
+// `pow::powf_series_2limb::powf_*` (the deferred `IntSquareMultiply` step).
 impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<2>, SCALE> {
     #[inline]
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {
-            Algorithm::ExpWithLn => pow::fixed_d38::powf_strict::<SCALE>(self.0, exp.0, mode),
+            Algorithm::ExpWithLn => pow::powf_series_2limb::powf_strict::<SCALE>(self.0, exp.0, mode),
         })
     }
     #[inline]
     fn powf_with_impl(self, exp: Self, working_digits: u32, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {
             Algorithm::ExpWithLn => {
-                pow::fixed_d38::powf_with::<SCALE>(self.0, exp.0, working_digits, mode)
+                pow::powf_series_2limb::powf_with::<SCALE>(self.0, exp.0, working_digits, mode)
             }
         })
     }

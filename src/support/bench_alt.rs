@@ -21,7 +21,7 @@
 use crate::types::widths::D38;
 
 // D38 — every strict transcendental is an `override` (hand-tuned
-// per `algos/fixed_d38.rs`). The `_default` alias would be the
+// per `algos/support/fixed.rs`). The `_default` alias would be the
 // macro-generated `decl_wide_transcendental!` path; that path is
 // not invoked for D38 because it's more than 1.5× slower than the
 // override. With `bench-alt` a separate invocation could add the

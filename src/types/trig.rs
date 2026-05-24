@@ -37,9 +37,9 @@
 //! `*_strict` / `*_with` `Fixed`-shape function for sin / cos / tan /
 //! atan / asin / acos / atan2 / sinh / cosh / tanh / asinh / acosh /
 //! atanh / to_degrees / to_radians) live in
-//! [`crate::algos::trig::fixed_d38`]. This file is a typed-shell
+//! [`crate::algos::trig::trig_series_2limb`]. This file is a typed-shell
 //! surface; there are zero `crate::algos::*` or
-//! `crate::algos::support::fixed_d38::*` references in it.
+//! `crate::algos::support::fixed::*` references in it.
 //!
 //! [`RoundingMode::HalfToEven`]: crate::RoundingMode::HalfToEven
 //!
