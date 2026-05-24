@@ -66,6 +66,10 @@ enum Algorithm {
     /// algorithm today; realised by `pow::powf_series_2limb::{powf_strict,
     /// powf_with}` (narrow) and the inherent wide-tier shell.
     ExpWithLn,
+    /// `pow_schoolbook` — naive `exp(y·ln(x))` composition.
+    /// Correctness reference; `select` never returns this variant.
+    #[allow(dead_code)]
+    Schoolbook,
     // Deferred: `IntSquareMultiply` (fn `pow_int_square_multiply`),
     // selected by the `powf_exp_small_int` `ByValue` matcher. See module
     // docs — the integer fast path currently lives inside the kernels.
@@ -176,6 +180,7 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
     fn powf_impl(self, exp: Self, mode: RoundingMode) -> Self {
         Self(match resolve::<2, SCALE>(&self.0) {
             Algorithm::ExpWithLn => pow::powf_series_2limb::powf_strict::<SCALE>(self.0, exp.0, mode),
+            Algorithm::Schoolbook => unreachable!(),
         })
     }
     #[inline]
@@ -184,6 +189,7 @@ impl<const SCALE: u32> PowPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::ExpWithLn => {
                 pow::powf_series_2limb::powf_with::<SCALE>(self.0, exp.0, working_digits, mode)
             }
+            Algorithm::Schoolbook => unreachable!(),
         })
     }
 }
