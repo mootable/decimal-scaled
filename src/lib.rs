@@ -337,6 +337,18 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<N> {
         crate::algos::rem::rem_int_layer::rem_int_layer::<N>(a, b)
     }
+    /// The OLD wide decimal-remainder path: `Int::wrapping_rem` (the const
+    /// single-algorithm `div_rem`, whose multi-limb fallback is an
+    /// `O(bit_len)` binary shift-subtract). Exposed so `rem_kernel_ab` can
+    /// A/B the recovered operator/Knuth `rem_int_layer` against the
+    /// regressed path it replaced, on the live-bench `k * 10^SCALE` shape.
+    #[inline(never)]
+    pub fn int_wrapping_rem_slice<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        a.wrapping_rem(b)
+    }
     #[inline(never)]
     pub fn dec_rem_native<const N: usize>(
         a: crate::int::types::Int<N>,
