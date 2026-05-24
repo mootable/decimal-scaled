@@ -24,14 +24,14 @@
 //!   cargo bench --bench lib_cmp_precision \
 //!       --features wide,x-wide,xx-wide,macros
 
-#[path = "../tests/support/precision_harness.rs"]
+#[path = "../../tests/support/precision_harness.rs"]
 mod harness;
 use harness::*;
 
-#[path = "../tests/support/precision_subject_ds.rs"]
+#[path = "../../tests/support/precision_subject_ds.rs"]
 mod subject_ds;
 
-#[path = "../tests/support/precision_subjects_peers.rs"]
+#[path = "../../tests/support/precision_subjects_peers.rs"]
 mod subjects_peers;
 
 use std::fs;

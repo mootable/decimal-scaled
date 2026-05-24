@@ -32,7 +32,7 @@
 use criterion::Criterion;
 use decimal_scaled::__bench_internals::{mul_karatsuba_forced, mul_slice};
 
-#[path = "ab_microbench.rs"]
+#[path = "../support/ab_microbench.rs"]
 mod ab_microbench;
 use ab_microbench::{Candidate, ab_compare, micro_criterion};
 

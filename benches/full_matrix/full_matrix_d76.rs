@@ -1,6 +1,7 @@
 //! Per-width `full_matrix` slice for D76. Hosts the `bnum`-backed
 //! 256-bit decimal baseline (matched mantissa width).
 
+#[path = "../bnum/mod.rs"]
 mod bnum;
 
 #[macro_use]
