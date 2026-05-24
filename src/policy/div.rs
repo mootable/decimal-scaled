@@ -58,6 +58,11 @@ enum Algorithm {
     /// divides by `b`, rounding under `mode`. A fast path skips the widen
     /// step when `a * 10^SCALE` provably fits `Int<N>`.
     WidenScale,
+    /// Naive schoolbook reference: scales the numerator by `10^SCALE` in
+    /// `Int<W>` via `widen_mul`, then divides by `b` using `Int<W>::div_rem`.
+    /// No leading-zero fast path. Unrouted by `select`; used directly in tests.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -145,6 +150,14 @@ macro_rules! div_policy_tier {
                         let mult: crate::int::types::Int<$N> =
                             <crate::D<crate::int::types::Int<$N>, SCALE>>::multiplier();
                         Self(crate::algos::div::div_widen_scale::div_widen_scale::<$N, $W>(
+                            self.0, rhs.0, mult, mode,
+                        ))
+                    }
+                    #[allow(dead_code)]
+                    Algorithm::Schoolbook => {
+                        let mult: crate::int::types::Int<$N> =
+                            <crate::D<crate::int::types::Int<$N>, SCALE>>::multiplier();
+                        Self(crate::algos::div::div_schoolbook::div_schoolbook::<$N, $W>(
                             self.0, rhs.0, mult, mode,
                         ))
                     }
