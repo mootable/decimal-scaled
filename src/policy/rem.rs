@@ -45,6 +45,11 @@ enum Algorithm {
     /// rem, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Same-SCALE remainder needs no rescaling.
     IntLayer,
+    /// Naive schoolbook reference: delegates to the same
+    /// [`rem_int_layer`](crate::algos::rem::rem_int_layer::rem_int_layer)
+    /// kernel. This variant documents the seam and stays unrouted by `select`.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -86,7 +91,9 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => crate::algos::rem::rem_int_layer::rem_int_layer(a, b),
+        Algorithm::IntLayer | Algorithm::Schoolbook => {
+            crate::algos::rem::rem_int_layer::rem_int_layer(a, b)
+        }
     }
 }
 

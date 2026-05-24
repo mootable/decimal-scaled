@@ -44,6 +44,11 @@ enum Algorithm {
     /// sub, applying Rust's standard integer-overflow contract at the decimal
     /// layer. Same-SCALE subtraction needs no rescaling.
     IntLayer,
+    /// Naive schoolbook reference: delegates to the same
+    /// [`sub_int_layer`](crate::algos::sub::sub_int_layer::sub_int_layer)
+    /// kernel. This variant documents the seam and stays unrouted by `select`.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -85,7 +90,9 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -
         Select::ByValue(_) => Algorithm::IntLayer,
     };
     match algo {
-        Algorithm::IntLayer => crate::algos::sub::sub_int_layer::sub_int_layer(a, b),
+        Algorithm::IntLayer | Algorithm::Schoolbook => {
+            crate::algos::sub::sub_int_layer::sub_int_layer(a, b)
+        }
     }
 }
 

@@ -9,3 +9,4 @@
 //! [`mul_widen_divide`]: crate::algos::mul::mul_widen_divide::mul_widen_divide
 
 pub(crate) mod mul_widen_divide;
+pub(crate) mod mul_schoolbook;

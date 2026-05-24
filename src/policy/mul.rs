@@ -56,6 +56,12 @@ enum Algorithm {
     /// the unsigned-magnitude leading-zero count proves the product fits
     /// `Int<N>` exactly.
     WidenDivide,
+    /// Naive schoolbook reference: forms the full product in `Int<W>` via
+    /// `widen_mul` then divides by `10^SCALE` using `Int<W>::div_rem`,
+    /// rounding under `mode`. No MG-divide or Newton-reciprocal; purely
+    /// the int layer. Unrouted by `select`; used directly in tests.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -150,6 +156,12 @@ macro_rules! mul_policy_tier {
                         // `Int<2N>` nor lift `Int<_>::U128_LIMBS` into
                         // const-generic argument position.
                         Self(crate::algos::mul::mul_widen_divide::mul_widen_divide::<
+                            $N, $W, { ($N + 1) / 2 }, { ($W + 1) / 2 }, SCALE,
+                        >(self.0, rhs.0, mode))
+                    }
+                    #[allow(dead_code)]
+                    Algorithm::Schoolbook => {
+                        Self(crate::algos::mul::mul_schoolbook::mul_schoolbook::<
                             $N, $W, { ($N + 1) / 2 }, { ($W + 1) / 2 }, SCALE,
                         >(self.0, rhs.0, mode))
                     }
