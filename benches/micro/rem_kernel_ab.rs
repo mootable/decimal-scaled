@@ -20,8 +20,8 @@
 use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::__bench_internals::{
-    dec_rem_int_layer, dec_rem_native, int_from_mag_limbs, rem_native, rem_schoolbook,
-    rem_via_div_rem,
+    dec_rem_int_layer, dec_rem_native, int_from_mag_limbs, int_wrapping_rem_slice, rem_native,
+    rem_schoolbook, rem_via_div_rem,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -133,6 +133,59 @@ fn compare_dec_rem<const N: usize>(c: &mut Criterion, label: &str) {
     );
 }
 
+/// Build `k * 10^scale` in an `N`-limb magnitude (the exact live full_matrix
+/// decimal operand: a small integer scaled by `10^SCALE`). Iterative *10 so
+/// no const-eval of `10^SCALE` is needed.
+fn k_times_pow10<const N: usize>(k: u64, scale: u32) -> Int<N> {
+    let mut limbs = [0u64; N];
+    limbs[0] = k;
+    for _ in 0..scale {
+        let mut carry: u128 = 0;
+        for l in limbs.iter_mut() {
+            let v = (*l as u128) * 10 + carry;
+            *l = v as u64;
+            carry = v >> 64;
+        }
+    }
+    int_from_mag_limbs::<N>(&limbs)
+}
+
+/// Wide decimal-remainder dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`
+/// for `N >= 3`). The regression-recovery A/B: the recovered operator/Knuth
+/// `rem_int_layer` vs the OLD `Int::wrapping_rem` shift-subtract path it
+/// replaced. Two shapes:
+///   * `short_circuit` -- the live full_matrix operand `2 * 10^SCALE %
+///     1 * 10^SCALE` (small quotient over a wide `10^SCALE` divisor): the
+///     shape that exposed the ~25x regression.
+///   * `balanced` -- two full-width random magnitudes (general divmod): the
+///     case that must NOT regress.
+fn compare_dec_rem_wide<const N: usize>(c: &mut Criterion, label: &str, scale: u32) {
+    let two = k_times_pow10::<N>(2, scale);
+    let one = k_times_pow10::<N>(1, scale);
+    let bal_a = synth::<N>(7919, N);
+    let bal_b = synth::<N>(104729, N);
+    // correctness: new path agrees with the old wrapping_rem on both shapes.
+    assert_eq!(dec_rem_int_layer::<N>(two, one), int_wrapping_rem_slice::<N>(two, one),
+        "dec rem short_circuit disagree {label}");
+    assert_eq!(dec_rem_int_layer::<N>(bal_a, bal_b), int_wrapping_rem_slice::<N>(bal_a, bal_b),
+        "dec rem balanced disagree {label}");
+
+    let inputs = vec![
+        Pair { label: "short_circuit", a: two, b: one },
+        Pair { label: "balanced", a: bal_a, b: bal_b },
+    ];
+    compare_all(
+        c,
+        &format!("dec_rem_wide/{label}"),
+        |p: &Pair<N>| p.label.to_string(),
+        inputs,
+        vec![
+            ("operator_knuth", (|p: Pair<N>| dec_rem_int_layer::<N>(p.a, p.b)) as fn(Pair<N>) -> Int<N>),
+            ("old_wrapping_rem", |p: Pair<N>| int_wrapping_rem_slice::<N>(p.a, p.b)),
+        ],
+    );
+}
+
 fn bench(c: &mut Criterion) {
     decimal_scaled_ab_sweep!(c =>
         Int<1> => |c: &mut Criterion| compare_narrow::<1>(c, "Int64_D18"),
@@ -142,6 +195,12 @@ fn bench(c: &mut Criterion) {
         Int<4> => |c: &mut Criterion| compare_wide::<4>(c, "Int256_D76"),
         Int<8> => |c: &mut Criterion| compare_wide::<8>(c, "Int512_D153"),
         Int<64> => |c: &mut Criterion| compare_wide::<64>(c, "Int4096_D1232"),
+        // Wide decimal-rem regression recovery: operator/Knuth vs the old
+        // wrapping_rem shift-subtract, on the live `k * 10^SCALE` shape.
+        Int<16> => |c: &mut Criterion| compare_dec_rem_wide::<16>(c, "D307_s153", 153),
+        Int<32> => |c: &mut Criterion| compare_dec_rem_wide::<32>(c, "D616_s308", 308),
+        Int<48> => |c: &mut Criterion| compare_dec_rem_wide::<48>(c, "D924_s462", 462),
+        Int<64> => |c: &mut Criterion| compare_dec_rem_wide::<64>(c, "D1232_s616", 616),
     );
 }
 
