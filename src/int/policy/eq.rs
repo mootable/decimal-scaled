@@ -46,7 +46,7 @@
 //! the algorithm choice is recorded in one place and the dispatch is
 //! separately microbenchable. `PartialEq` observable behaviour is unchanged.
 
-use crate::int::algos::support::limbs::cmp_fixed;
+use crate::int::algos::eq::eq_limbwise::eq_limbwise;
 use crate::int::types::Int;
 
 // ── 1. the real equality algorithm — NAMED, no `Default` ─────────────
@@ -57,7 +57,9 @@ use crate::int::types::Int;
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
     /// [`eq_limbwise`] — limb-by-limb two's-complement equality test,
-    /// delegating to [`cmp_fixed`] (reusing the comparison kernel's
+    /// delegating to
+    /// [`cmp_fixed`](crate::int::algos::support::limbs::cmp_fixed)
+    /// (reusing the comparison kernel's
     /// equal-length path). Returns `true` iff all `N` limbs match.
     Limbwise,
 }
@@ -82,17 +84,6 @@ enum Select<const N: usize> {
 /// key; equality is width-independent so `Limbwise` wins at every `N`.
 const fn select<const N: usize>() -> Select<N> {
     Select::ByAlgorithm(Algorithm::Limbwise)
-}
-
-// ── algorithm fn: limb-by-limb equality ──────────────────────────────
-
-/// Limb-by-limb two's-complement equality for `Int<N>`. Delegates to
-/// [`cmp_fixed`] (the equal-length comparison primitive): two values are
-/// equal iff their `cmp_fixed` result is `0`. Reuses the comparison
-/// kernel so the limb loop is not duplicated here.
-#[inline]
-pub(crate) const fn eq_limbwise<const N: usize>(a: Int<N>, b: Int<N>) -> bool {
-    cmp_fixed(a.as_limbs(), b.as_limbs()) == 0
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
