@@ -251,6 +251,10 @@ name = "expbench"
 required-features = ["wide", "x-wide"]
 
 [[example]]
+name = "hyper_recover"
+required-features = ["wide", "x-wide", "xx-wide"]
+
+[[example]]
 name = "profile_exp"
 required-features = ["x-wide"]
 

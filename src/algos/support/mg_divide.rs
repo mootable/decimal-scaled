@@ -510,6 +510,52 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::int::types::traits::BigInt, co
     W::from_mag_sign_u128(&mag, neg)
 }
 
+/// Width-generic [`div_wide_pow10_with`]: same MG single-chunk
+/// `n / 10^scale` (`1 ≤ scale ≤ 38`), but the `(N+1)/2`-limb u128
+/// magnitude buffer comes from the [`MgScratch`] associated type (its
+/// size lives in the impl; we slice it to `W::U128_LIMBS` here), so the
+/// divide carries no const-generic limb count. This lets the
+/// width-generic transcendental core call the MG reciprocal without
+/// naming `{W::U128_LIMBS}` — the same fast path the per-tier
+/// `decl_wide_transcendental!` core uses, now shared by the hyperbolics.
+///
+/// [`MgScratch`]: crate::int::types::work_scratch::MgScratch
+#[inline]
+pub(crate) fn div_wide_pow10<W>(
+    n: W,
+    scale: u32,
+    mode: crate::support::rounding::RoundingMode,
+) -> W
+where
+    W: crate::int::types::traits::BigInt + crate::int::types::work_scratch::MgScratch,
+{
+    let mut buf = <W as crate::int::types::work_scratch::MgScratch>::work_u128();
+    let mag = &mut buf.as_mut()[..W::U128_LIMBS];
+    let neg = n.mag_into_u128(mag);
+    div_pow10_mag_u128(mag, scale, neg, mode);
+    W::from_mag_sign_u128(mag, neg)
+}
+
+/// Width-generic [`div_wide_pow10_chain_with`] (the `scale > 38` chain),
+/// buffer from [`MgScratch`]. See [`div_wide_pow10`].
+///
+/// [`MgScratch`]: crate::int::types::work_scratch::MgScratch
+#[inline]
+pub(crate) fn div_wide_pow10_chain<W>(
+    n: W,
+    scale: u32,
+    mode: crate::support::rounding::RoundingMode,
+) -> W
+where
+    W: crate::int::types::traits::BigInt + crate::int::types::work_scratch::MgScratch,
+{
+    let mut buf = <W as crate::int::types::work_scratch::MgScratch>::work_u128();
+    let mag = &mut buf.as_mut()[..W::U128_LIMBS];
+    let neg = n.mag_into_u128(mag);
+    div_pow10_chain_mag_u128(mag, scale, neg, mode);
+    W::from_mag_sign_u128(mag, neg)
+}
+
 /// Mode-aware rounding for an *unsigned* magnitude `q` with remainder
 /// `r` against divisor `m`, given the result sign — returns the
 /// rounded magnitude. Caller applies the sign afterwards.

@@ -106,6 +106,7 @@ pub(crate) mod exp_generic {
     #![allow(unused)]
     use crate::support::rounding::RoundingMode;
     use crate::int::types::traits::BigInt;
+    use crate::int::types::work_scratch::MgScratch;
 
     /// Hard cap on series iterations — a safety net; every series
     /// terminates far sooner by reaching a zero term.
@@ -168,17 +169,37 @@ pub(crate) mod exp_generic {
             q
         }
     }
-    /// Half-to-even quotient `n / 10^w`.
+    /// Half-to-even quotient `n / 10^w`, via the MG (magic-multiply)
+    /// reciprocal — the same fast divide the per-tier
+    /// `decl_wide_transcendental!` core uses, here for the width-generic
+    /// path the hyperbolics run through. For `1 ≤ w ≤ 38` the
+    /// single-chunk base-`2^128` kernel; for `w > 38` the chain of
+    /// `÷ 10^38` stages. Bit-identical to the generic `round_div(n,
+    /// 10^w)` (audited in `mg_divide::tests`), but replaces the
+    /// per-Taylor-term 256-limb Knuth division that dominated the wide
+    /// hyperbolic/exp cost. The buffer comes from [`MgScratch`], so no
+    /// const-generic limb count appears here.
     #[inline]
-    fn round_div_pow10<S: BigInt>(n: S, w: u32) -> S {
+    fn round_div_pow10<S: BigInt + MgScratch>(n: S, w: u32) -> S {
         if w == 0 {
             return n;
         }
-        round_div(n, pow10::<S>(w))
+        if w <= 38 {
+            return crate::algos::support::mg_divide::div_wide_pow10::<S>(
+                n,
+                w,
+                RoundingMode::HalfToEven,
+            );
+        }
+        crate::algos::support::mg_divide::div_wide_pow10_chain::<S>(
+            n,
+            w,
+            RoundingMode::HalfToEven,
+        )
     }
     /// `(a · b) / 10^w`, rounded half-to-even.
     #[inline]
-    fn mul<S: BigInt>(a: S, b: S, w: u32) -> S {
+    fn mul<S: BigInt + MgScratch>(a: S, b: S, w: u32) -> S {
         // u128-packed wide multiply: bit-identical to `a * b` (it IS the low
         // product) for even-limb work widths, ~1/4 the partial products;
         // falls back to the base-2^64 schoolbook for odd N. This is the hot
@@ -232,7 +253,7 @@ pub(crate) mod exp_generic {
     /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
     /// call (the wider path is only taken on the rare large-result
     /// regime, so memoisation is not worth the per-`S` thread-local).
-    fn ln2<S: BigInt>(w: u32) -> S {
+    fn ln2<S: BigInt + MgScratch>(w: u32) -> S {
         let t = one::<S>(w) / lit::<S>(3);
         let t2 = mul(t, t, w);
         let mut sum = t;
@@ -260,7 +281,7 @@ pub(crate) mod exp_generic {
     /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
     /// stays width-generic so the caller can run it in a wider integer
     /// for the large-result regime.
-    pub(crate) fn exp_fixed<S: BigInt>(v_w: S, w: u32) -> S {
+    pub(crate) fn exp_fixed<S: BigInt + MgScratch>(v_w: S, w: u32) -> S {
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
         let pow10_w_pre = one_w_pre;
@@ -282,7 +303,6 @@ pub(crate) mod exp_generic {
         };
         let one_w = one::<S>(w_ext);
         let l2 = ln2::<S>(w_ext);
-        let pow10_w = one_w;
         let s = v_ext - scale_by_k(l2, k);
 
         let p_bits = w_ext.saturating_mul(3).saturating_add(1);
@@ -296,7 +316,7 @@ pub(crate) mod exp_generic {
         let mut term = s_red;
         let mut iter: u128 = 2;
         loop {
-            term = mul_cached(term, s_red, pow10_w) / lit::<S>(iter as i128);
+            term = mul(term, s_red, w_ext) / lit::<S>(iter as i128);
             if term == S::ZERO {
                 break;
             }
@@ -310,7 +330,7 @@ pub(crate) mod exp_generic {
         let mut squared = sum;
         let mut i = 0;
         while i < n {
-            squared = mul_cached(squared, squared, pow10_w);
+            squared = mul(squared, squared, w_ext);
             i += 1;
         }
         let sum = squared;
@@ -347,7 +367,7 @@ pub(crate) mod exp_generic {
     /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
     /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
     /// the small term's relative error stays a small *absolute* error.
-    pub(crate) fn sinh_pos<S: BigInt>(av_w: S, w: u32) -> S {
+    pub(crate) fn sinh_pos<S: BigInt + MgScratch>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex - enx) >> 1
@@ -355,7 +375,7 @@ pub(crate) mod exp_generic {
 
     /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
     /// [`sinh_pos`].
-    pub(crate) fn cosh_pos<S: BigInt>(av_w: S, w: u32) -> S {
+    pub(crate) fn cosh_pos<S: BigInt + MgScratch>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex + enx) >> 1
@@ -363,7 +383,7 @@ pub(crate) mod exp_generic {
 
     /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
     /// `w`. See [`sinh_pos`].
-    pub(crate) fn tanh_pos<S: BigInt>(av_w: S, w: u32) -> S {
+    pub(crate) fn tanh_pos<S: BigInt + MgScratch>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         div(ex - enx, ex + enx, w)
