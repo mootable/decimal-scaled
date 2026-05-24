@@ -234,6 +234,15 @@ pub(crate) mod inverse {
         /// (D57 18..=22 band), `borrow_d57` (D38 with D57 present), and
         /// `trig_series_2limb` (D38 without D57).
         Atan,
+        /// `*_schoolbook` -- the naive textbook reference (asin via
+        /// `atan(x / sqrt(1 - x^2))` + half-angle reduction, acos via
+        /// `pi/2 - asin`, atan2 via quadrant-resolved `atan(y/x)`).
+        /// UNROUTED: `select` never returns it; registered for the
+        /// correctness reference + A/B microbench partner. Realised by
+        /// the generic `inverse_schoolbook::*_schoolbook` (wide) and
+        /// `inverse_schoolbook::*_schoolbook_narrow` (narrow) kernels.
+        #[allow(dead_code)]
+        Schoolbook,
     }
 
     /// A settled algorithm, or "the value decides". `ByValue` is part of
@@ -284,6 +293,14 @@ pub(crate) mod hyper {
         /// `lookup_*_hyper` kernels (benched bands), and by `trig_series_2limb`
         /// on the narrow tier.
         ExpIdentity,
+        /// `*_schoolbook` -- the naive textbook reference (the exp
+        /// identity `(e^x +- e^-x)/2` for sinh/cosh, the ratio for
+        /// tanh). UNROUTED: `select` never returns it; registered for
+        /// the correctness reference + A/B microbench partner. Realised
+        /// by the generic `hyper_schoolbook::*_schoolbook` (wide) and
+        /// `hyper_schoolbook::*_schoolbook_narrow` (narrow) kernels.
+        #[allow(dead_code)]
+        Schoolbook,
     }
 
     /// A settled algorithm, or "the value decides". `ByValue` is part of
@@ -779,6 +796,8 @@ macro_rules! d38_hyperbolic_and_angle {
         fn sinh_impl(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::sinh_strict::<SCALE>(self.0, mode),
+                #[allow(dead_code)]
+                hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -789,6 +808,8 @@ macro_rules! d38_hyperbolic_and_angle {
         fn cosh_impl(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::cosh_strict::<SCALE>(self.0, mode),
+                #[allow(dead_code)]
+                hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -799,6 +820,8 @@ macro_rules! d38_hyperbolic_and_angle {
         fn tanh_impl(self, mode: RoundingMode) -> Self {
             Self(match hyper::resolve::<2, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => trig::trig_series_2limb::tanh_strict::<SCALE>(self.0, mode),
+                #[allow(dead_code)]
+                hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook_narrow::<SCALE>(self.0, mode),
             })
         }
         #[inline]
@@ -911,6 +934,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => borrow_d57::atan_strict::<SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::trig_schoolbook::atan_schoolbook_narrow::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -921,6 +946,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     fn asin_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => borrow_d57::asin_strict::<SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook_narrow::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -931,6 +958,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     fn acos_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => borrow_d57::acos_strict::<SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook_narrow::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -943,6 +972,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
             inverse::Algorithm::Atan => {
                 borrow_d57::atan2_strict::<SCALE>(self.0, other.0, mode)
             }
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook_narrow::<SCALE>(self.0, other.0, mode),
         })
     }
     #[inline]
@@ -962,6 +993,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     fn atan_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => trig::trig_series_2limb::atan_strict::<SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::trig_schoolbook::atan_schoolbook_narrow::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -972,6 +1005,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     fn asin_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => trig::trig_series_2limb::asin_strict::<SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook_narrow::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -982,6 +1017,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
     fn acos_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<2, SCALE>(&self.0) {
             inverse::Algorithm::Atan => trig::trig_series_2limb::acos_strict::<SCALE>(self.0, mode),
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook_narrow::<SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -994,6 +1031,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
             inverse::Algorithm::Atan => {
                 trig::trig_series_2limb::atan2_strict::<SCALE>(self.0, other.0, mode)
             }
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook_narrow::<SCALE>(self.0, other.0, mode),
         })
     }
     #[inline]
@@ -1025,11 +1064,13 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<2>, SCALE>
 /// override (the wide-tier default tail).
 #[allow(unused_macros)]
 macro_rules! wide_trig_inverse_inherent {
-    ($N:literal) => {
+    ($N:literal, $Core:ty) => {
         #[inline]
         fn asin_impl(self, mode: RoundingMode) -> Self {
             match inverse::resolve::<$N, SCALE>(&self.0) {
                 inverse::Algorithm::Atan => self.asin_strict_with(mode),
+                #[allow(dead_code)]
+                inverse::Algorithm::Schoolbook => Self(crate::algos::trig::inverse_schoolbook::asin_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
@@ -1040,6 +1081,8 @@ macro_rules! wide_trig_inverse_inherent {
         fn acos_impl(self, mode: RoundingMode) -> Self {
             match inverse::resolve::<$N, SCALE>(&self.0) {
                 inverse::Algorithm::Atan => self.acos_strict_with(mode),
+                #[allow(dead_code)]
+                inverse::Algorithm::Schoolbook => Self(crate::algos::trig::inverse_schoolbook::acos_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
@@ -1050,6 +1093,8 @@ macro_rules! wide_trig_inverse_inherent {
         fn atan2_impl(self, other: Self, mode: RoundingMode) -> Self {
             match inverse::resolve::<$N, SCALE>(&self.0) {
                 inverse::Algorithm::Atan => self.atan2_strict_with(other, mode),
+                #[allow(dead_code)]
+                inverse::Algorithm::Schoolbook => Self(crate::algos::trig::inverse_schoolbook::atan2_schoolbook::<$Core, SCALE>(self.0, other.0, mode)),
             }
         }
         #[inline]
@@ -1114,11 +1159,13 @@ macro_rules! wide_trig_extra_inherent {
 /// override (`ExpIdentity` realised by the inherent composition).
 #[allow(unused_macros)]
 macro_rules! wide_trig_hyper_inherent {
-    ($N:literal) => {
+    ($N:literal, $Core:ty) => {
         #[inline]
         fn sinh_impl(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => self.sinh_strict_with(mode),
+                #[allow(dead_code)]
+                hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
@@ -1129,6 +1176,8 @@ macro_rules! wide_trig_hyper_inherent {
         fn cosh_impl(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => self.cosh_strict_with(mode),
+                #[allow(dead_code)]
+                hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
@@ -1139,6 +1188,8 @@ macro_rules! wide_trig_hyper_inherent {
         fn tanh_impl(self, mode: RoundingMode) -> Self {
             match hyper::resolve::<$N, SCALE>(&self.0) {
                 hyper::Algorithm::ExpIdentity => self.tanh_strict_with(mode),
+                #[allow(dead_code)]
+                hyper::Algorithm::Schoolbook => Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<$Core, SCALE>(self.0, mode)),
             }
         }
         #[inline]
@@ -1320,6 +1371,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 18..=22 => trig::inverse_tang_3limb_s18_22::asin_strict::<SCALE>(self.0, mode),
                 _ => return self.asin_strict_with(mode),
             },
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::asin_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1333,6 +1386,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 18..=22 => trig::inverse_tang_3limb_s18_22::acos_strict::<SCALE>(self.0, mode),
                 _ => return self.acos_strict_with(mode),
             },
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::acos_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1348,6 +1403,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 }
                 _ => return self.atan2_strict_with(other, mode),
             },
+            #[allow(dead_code)]
+            inverse::Algorithm::Schoolbook => trig::inverse_schoolbook::atan2_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, other.0, mode),
         })
     }
     #[inline]
@@ -1364,6 +1421,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 18..=22 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d57::Core, 128, false>),
                 _ => return self.sinh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1377,6 +1436,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 18..=22 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d57::Core, 128, false>),
                 _ => return self.cosh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1390,6 +1451,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 18..=22 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d57::Core, 128, false>),
                 _ => return self.tanh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1404,8 +1467,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
 #[cfg(any(feature = "d76", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<4>, SCALE> {
     wide_trig_forward_series!(4, crate::types::widths::wide_trig_d76::Core);
-    wide_trig_inverse_inherent!(4);
-    wide_trig_hyper_inherent!(4);
+    wide_trig_inverse_inherent!(4, crate::types::widths::wide_trig_d76::Core);
+    wide_trig_hyper_inherent!(4, crate::types::widths::wide_trig_d76::Core);
     wide_trig_extra_inherent!();
 }
 
@@ -1414,7 +1477,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<4>, SCALE>
 #[cfg(any(feature = "d115", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<6>, SCALE> {
     wide_trig_forward_series!(6, crate::types::widths::wide_trig_d115::Core);
-    wide_trig_inverse_inherent!(6);
+    wide_trig_inverse_inherent!(6, crate::types::widths::wide_trig_d115::Core);
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
@@ -1423,6 +1486,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<6>, SCALE>
                 50..=60 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d115::Core, 128, false>),
                 _ => return self.sinh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1436,6 +1501,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<6>, SCALE>
                 50..=60 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d115::Core, 128, false>),
                 _ => return self.cosh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1449,6 +1516,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<6>, SCALE>
                 50..=60 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d115::Core, 128, false>),
                 _ => return self.tanh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1524,7 +1593,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
         self.atan_impl(mode)
     }
 
-    wide_trig_inverse_inherent!(8);
+    wide_trig_inverse_inherent!(8, crate::types::widths::wide_trig_d153::Core);
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
@@ -1533,6 +1602,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
                 70..=82 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d153::Core, 128, true>),
                 _ => return self.sinh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1546,6 +1617,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
                 70..=82 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d153::Core, 128, true>),
                 _ => return self.cosh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1559,6 +1632,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
                 70..=82 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d153::Core, 128, true>),
                 _ => return self.tanh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1573,8 +1648,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<8>, SCALE>
 #[cfg(any(feature = "d230", feature = "wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<12>, SCALE> {
     wide_trig_forward_series!(12, crate::types::widths::wide_trig_d230::Core);
-    wide_trig_inverse_inherent!(12);
-    wide_trig_hyper_inherent!(12);
+    wide_trig_inverse_inherent!(12, crate::types::widths::wide_trig_d230::Core);
+    wide_trig_hyper_inherent!(12, crate::types::widths::wide_trig_d230::Core);
     wide_trig_extra_inherent!();
 }
 
@@ -1643,7 +1718,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
         self.atan_impl(mode)
     }
 
-    wide_trig_inverse_inherent!(16);
+    wide_trig_inverse_inherent!(16, crate::types::widths::wide_trig_d307::Core);
 
     #[inline]
     fn sinh_impl(self, mode: RoundingMode) -> Self {
@@ -1652,6 +1727,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
                 140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
                 _ => return self.sinh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1665,6 +1742,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
                 140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
                 _ => return self.cosh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1678,6 +1757,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
                 140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
                 _ => return self.tanh_strict_with(mode),
             },
+            #[allow(dead_code)]
+            hyper::Algorithm::Schoolbook => trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode),
         })
     }
     #[inline]
@@ -1753,8 +1834,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE
         self.atan_impl(mode)
     }
 
-    wide_trig_inverse_inherent!(24);
-    wide_trig_hyper_inherent!(24);
+    wide_trig_inverse_inherent!(24, crate::types::widths::wide_trig_d462::Core);
+    wide_trig_hyper_inherent!(24, crate::types::widths::wide_trig_d462::Core);
     wide_trig_extra_inherent!();
 }
 
@@ -1762,8 +1843,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<24>, SCALE
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<32>, SCALE> {
     wide_trig_forward_series!(32, crate::types::widths::wide_trig_d616::Core);
-    wide_trig_inverse_inherent!(32);
-    wide_trig_hyper_inherent!(32);
+    wide_trig_inverse_inherent!(32, crate::types::widths::wide_trig_d616::Core);
+    wide_trig_hyper_inherent!(32, crate::types::widths::wide_trig_d616::Core);
     wide_trig_extra_inherent!();
 }
 
@@ -1771,8 +1852,8 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<32>, SCALE
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<48>, SCALE> {
     wide_trig_forward_series!(48, crate::types::widths::wide_trig_d924::Core);
-    wide_trig_inverse_inherent!(48);
-    wide_trig_hyper_inherent!(48);
+    wide_trig_inverse_inherent!(48, crate::types::widths::wide_trig_d924::Core);
+    wide_trig_hyper_inherent!(48, crate::types::widths::wide_trig_d924::Core);
     wide_trig_extra_inherent!();
 }
 
@@ -1780,7 +1861,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<48>, SCALE
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<64>, SCALE> {
     wide_trig_forward_series!(64, crate::types::widths::wide_trig_d1232::Core);
-    wide_trig_inverse_inherent!(64);
-    wide_trig_hyper_inherent!(64);
+    wide_trig_inverse_inherent!(64, crate::types::widths::wide_trig_d1232::Core);
+    wide_trig_hyper_inherent!(64, crate::types::widths::wide_trig_d1232::Core);
     wide_trig_extra_inherent!();
 }
