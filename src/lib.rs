@@ -247,6 +247,38 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<N> {
         crate::int::algos::rem::rem_schoolbook::rem_schoolbook::<N>(a, b)
     }
+
+    /// Decimal divide kernels exposed for the `mul_div_native_ab`
+    /// microbench (the dispatch-seam A/B that decided narrow `N == 2`
+    /// should route to the hardware-`i128` `div_native` arm; mul stays on
+    /// the generic `mul_widen_divide` arm at every band).
+    #[inline(never)]
+    pub fn dec_div_native<const N: usize, const SCALE: u32>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+        mult: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::div::div_native::div_native::<N, SCALE>(a, b, mult, mode)
+    }
+    #[inline(never)]
+    pub fn dec_div_widen_scale_n1(
+        a: crate::int::types::Int<1>,
+        b: crate::int::types::Int<1>,
+        mult: crate::int::types::Int<1>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<1> {
+        crate::algos::div::div_widen_scale::div_widen_scale::<1>(a, b, mult, mode)
+    }
+    #[inline(never)]
+    pub fn dec_div_widen_scale_n2(
+        a: crate::int::types::Int<2>,
+        b: crate::int::types::Int<2>,
+        mult: crate::int::types::Int<2>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<2> {
+        crate::algos::div::div_widen_scale::div_widen_scale::<2>(a, b, mult, mode)
+    }
     /// Build an `Int<N>` from a little-endian magnitude limb array (sign
     /// false). Lets the bench construct wide operands without exposing the
     /// internal constructors.
