@@ -254,6 +254,67 @@ pub(crate) fn divmod_pow10_2word(
     }
 }
 
+/// Width-agnostic single-chunk MG divide of a u128-limb magnitude slice
+/// by `10^scale` (`1 ≤ scale ≤ 38`), in place, with `mode`-aware
+/// rounding. `mag` is the little-endian unsigned magnitude (zero-padded
+/// to its full length); `neg` is the result sign for rounding tie-breaks.
+///
+/// This is the slice core extracted from [`div_wide_pow10_with`]: the
+/// `BigInt` packing/unpacking is the only difference between the two, so
+/// the `Int<N>`-only decimal `mul` kernel can build its product directly
+/// in a u128 scratch buffer and call this — bit-identical to the typed
+/// path, no `Int<2N>` work type. Base-`2^128` schoolbook long division,
+/// each `(rem, limb) / exp` step served by [`divmod_pow10_2word`].
+#[inline]
+pub(crate) fn div_pow10_mag_u128(
+    mag: &mut [u128],
+    scale: u32,
+    neg: bool,
+    mode: crate::support::rounding::RoundingMode,
+) {
+    debug_assert!((1..=38).contains(&scale));
+    let scale_idx = scale as usize;
+    let exp = POW10_U128[scale_idx];
+
+    // Skip trailing zero limbs (buffers are zero-padded to full width).
+    let mut top = mag.len();
+    while top > 0 && mag[top - 1] == 0 {
+        top -= 1;
+    }
+
+    // Base-2^128 long divide of `mag[..top]` by `exp`, top-limb first.
+    let mut rem: u128 = 0;
+    let mut i = top;
+    while i > 0 {
+        i -= 1;
+        let limb = mag[i];
+        let (q_limb, r_limb) = divmod_pow10_2word(rem, limb, exp, scale_idx)
+            .expect("MG: rem < exp invariant violated");
+        mag[i] = q_limb;
+        rem = r_limb;
+    }
+
+    // Round the magnitude per `mode`.
+    if rem != 0 {
+        let q_is_odd = (mag[0] & 1) != 0;
+        let comp = exp - rem;
+        let cmp_r = rem.cmp(&comp);
+        if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
+            let mut carry: u128 = 1;
+            for limb in mag.iter_mut() {
+                let (s, c) = limb.overflowing_add(carry);
+                *limb = s;
+                if !c {
+                    carry = 0;
+                    break;
+                }
+                carry = 1;
+            }
+            let _ = carry;
+        }
+    }
+}
+
 /// Magic-divide a wide signed integer by `10^scale`
 /// (`1 ≤ scale ≤ 38`), returning the quotient as the same wide type
 /// with `mode`-aware rounding.
@@ -284,51 +345,96 @@ pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N:
         W::U128_LIMBS,
         "magnitude buffer must match W's u128-limb width"
     );
-    debug_assert!((1..=38).contains(&scale));
-    let scale_idx = scale as usize;
-    let exp = POW10_U128[scale_idx];
-
-    // Pack the magnitude directly into a u128 limb buffer via
-    // `BigInt::mag_into_u128`. The override on the concrete
-    // `Int*` types copies only `(L + 1) / 2` u128 limbs (8 for
-    // Int<8>, 4 for Int<4>) instead of zero-initialising and
-    // copying the full 288-u64 default buffer (~2.3 kB stack).
-    //
-    // Sized to `N = W::U128_LIMBS`, the exact u128-limb width of the
-    // work integer — 4 for `Int<8>`, 8 for `Int<16>`, …, 128 for
-    // `Int<256>` (D1232's wide-transcendental work int). The const
-    // generic keeps the stack array no wider than the actual width,
-    // so narrow tiers don't pay the widest-case zero-init.
     let mut mag = [0u128; N];
     let neg = n.mag_into_u128(&mut mag);
 
-    // Most calls operate at widths narrower than the leading limb
-    // (`mag_into_u128` zero-pads to `N`); skip the trailing zeros.
+    // All arithmetic runs on the magnitude slice via the width-agnostic
+    // core, shared with the `Int<N>`-only decimal `mul` kernel (which
+    // builds its `a*b` product straight into a u128 scratch buffer and
+    // calls `div_pow10_mag_u128` directly, never naming `Int<2N>`).
+    div_pow10_mag_u128(&mut mag, scale, neg, mode);
+
+    // Direct u128 → typed-Int unpack via the specialised
+    // `from_mag_sign_u128` override; only `(L + 1) / 2` limbs are
+    // consumed, avoiding the 288-u64 staging buffer.
+    W::from_mag_sign_u128(&mag, neg)
+}
+
+/// Width-agnostic chain MG divide of a u128-limb magnitude slice by
+/// `10^scale` for `scale > 38`, in place, with `mode`-aware rounding.
+/// Slice core extracted from [`div_wide_pow10_chain_with`]; shared with
+/// the `Int<N>`-only decimal `mul` kernel. See that wrapper's docs for
+/// the combined-remainder rounding correctness argument.
+#[inline]
+pub(crate) fn div_pow10_chain_mag_u128(
+    mag: &mut [u128],
+    scale: u32,
+    neg: bool,
+    mode: crate::support::rounding::RoundingMode,
+) {
+    debug_assert!(
+        scale > 38,
+        "chain path is for SCALE > 38; callers handle smaller scales"
+    );
+
     let mut top = mag.len();
     while top > 0 && mag[top - 1] == 0 {
         top -= 1;
     }
 
-    // Base-2^128 long divide of `mag[..top]` by `exp`, top-limb first.
-    let mut rem: u128 = 0;
+    // Chain divides by 10^38 until all but the last chunk is consumed.
+    let exp38 = POW10_U128[38];
+    let mut lower_any_nonzero = false;
+    let mut remaining = scale;
+    while remaining > 38 {
+        let mut rem: u128 = 0;
+        let mut i = top;
+        while i > 0 {
+            i -= 1;
+            let (q, r) = divmod_pow10_2word(rem, mag[i], exp38, 38)
+                .expect("MG: rem < exp invariant violated");
+            mag[i] = q;
+            rem = r;
+        }
+        if rem != 0 {
+            lower_any_nonzero = true;
+        }
+        remaining -= 38;
+        while top > 0 && mag[top - 1] == 0 {
+            top -= 1;
+        }
+    }
+
+    // Final divide by 10^remaining (1..=38).
+    let scale_idx = remaining as usize;
+    let exp_last = POW10_U128[scale_idx];
+    let mut r_last: u128 = 0;
     let mut i = top;
     while i > 0 {
         i -= 1;
-        let limb = mag[i];
-        let (q_limb, r_limb) = divmod_pow10_2word(rem, limb, exp, scale_idx)
+        let (q, r) = divmod_pow10_2word(r_last, mag[i], exp_last, scale_idx)
             .expect("MG: rem < exp invariant violated");
-        mag[i] = q_limb;
-        rem = r_limb;
+        mag[i] = q;
+        r_last = r;
     }
 
-    // Round the magnitude per `mode`.
-    if rem != 0 {
+    // Combined-remainder rounding (proof in the wrapper docs).
+    let combined_nonzero = r_last != 0 || lower_any_nonzero;
+    if combined_nonzero {
+        let half = exp_last / 2; // exact; exp_last = 10^scale_idx is even
+        let cmp_r = if r_last > half {
+            core::cmp::Ordering::Greater
+        } else if r_last < half {
+            core::cmp::Ordering::Less
+        } else if lower_any_nonzero {
+            core::cmp::Ordering::Greater
+        } else {
+            core::cmp::Ordering::Equal
+        };
         let q_is_odd = (mag[0] & 1) != 0;
-        let comp = exp - rem;
-        let cmp_r = rem.cmp(&comp);
         if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
             let mut carry: u128 = 1;
-            for limb in &mut mag {
+            for limb in mag.iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);
                 *limb = s;
                 if !c {
@@ -340,11 +446,6 @@ pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N:
             let _ = carry;
         }
     }
-
-    // Direct u128 → typed-Int unpack via the specialised
-    // `from_mag_sign_u128` override; only `(L + 1) / 2` limbs are
-    // consumed, avoiding the 288-u64 staging buffer.
-    W::from_mag_sign_u128(&mag, neg)
 }
 
 /// Chain-of-`÷ 10^38` extension of [`div_wide_pow10_with`] to scales
@@ -399,117 +500,12 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::int::types::traits::BigInt, co
         W::U128_LIMBS,
         "magnitude buffer must match W's u128-limb width"
     );
-    debug_assert!(
-        scale > 38,
-        "chain path is for SCALE > 38; callers handle ≤ 38"
-    );
-
-    // Pack magnitude directly into u128 limbs (same fast path as
-    // the single-chunk `div_wide_pow10_with`). Sized to
-    // `N = W::U128_LIMBS`, the exact u128-limb width of the work
-    // integer (`Int<256>` = 128 u128 limbs for D1232; far fewer for
-    // narrower tiers); the `top` cursor skips the trailing zeros.
     let mut mag = [0u128; N];
     let neg = n.mag_into_u128(&mut mag);
-    let mut top = mag.len();
-    while top > 0 && mag[top - 1] == 0 {
-        top -= 1;
-    }
 
-    // Chain divides by 10^38 until we've eaten all but the last chunk.
-    //
-    // Combined-remainder bookkeeping for exact rounding: the chain
-    // produces a sequence of per-chunk remainders r_1, r_2, …, r_k
-    // (from successive divides by 10^38) plus a final r_last (from
-    // dividing by 10^s where s = SCALE − 38·k). The total
-    // remainder is
-    //   r_total = r_1 + r_2·10^38 + r_3·10^76 + … + r_k·10^{38(k-1)}
-    //                                            + r_last·10^{38·k}
-    // and we need to compare r_total with m/2 = 5·10^{SCALE−1}.
-    //
-    // For correctness we only need two flags:
-    //   `lower_any_nonzero` — true iff any of r_1, …, r_k is non-zero
-    //   `r_last` — the top-chunk remainder, compared against the
-    //              corresponding chunk of m/2 (5·10^{s−1})
-    let exp38 = POW10_U128[38];
-    let mut lower_any_nonzero = false;
-    let mut remaining = scale;
-    while remaining > 38 {
-        let mut rem: u128 = 0;
-        let mut i = top;
-        while i > 0 {
-            i -= 1;
-            let (q, r) = divmod_pow10_2word(rem, mag[i], exp38, 38)
-                .expect("MG: rem < exp invariant violated");
-            mag[i] = q;
-            rem = r;
-        }
-        if rem != 0 {
-            lower_any_nonzero = true;
-        }
-        remaining -= 38;
-        while top > 0 && mag[top - 1] == 0 {
-            top -= 1;
-        }
-    }
-
-    // Final divide by 10^remaining (1..=38). The remainder of THIS
-    // divide is the top-chunk remainder; together with
-    // `lower_any_nonzero` it determines the cmp_r for the rounding
-    // decision.
-    let scale_idx = remaining as usize;
-    let exp_last = POW10_U128[scale_idx];
-    let mut r_last: u128 = 0;
-    let mut i = top;
-    while i > 0 {
-        i -= 1;
-        let (q, r) = divmod_pow10_2word(r_last, mag[i], exp_last, scale_idx)
-            .expect("MG: rem < exp invariant violated");
-        mag[i] = q;
-        r_last = r;
-    }
-
-    // Combined-remainder rounding. cmp_r is the comparison of
-    // r_total with m/2 (= 5·10^{SCALE−1}):
-    //   r_last > exp_last/2          → Greater
-    //   r_last < exp_last/2          → Less
-    //   r_last == exp_last/2 AND
-    //     any lower chunk nonzero    → Greater
-    //     else                       → Equal
-    // r_last == 0 special case: r_total = lower contribution only,
-    //   strictly less than m/2 (since lower chunks each < 10^38 and
-    //   we have at most ⌈SCALE/38⌉ − 1 of them) unless they sum to
-    //   exactly m/2 — which they can't because each chunk's max
-    //   value (10^38 − 1) × 10^{38·i} stays strictly under the next
-    //   chunk's 10^{38·(i+1)} contribution. So r_last == 0 implies
-    //   cmp_r = Less.
-    let combined_nonzero = r_last != 0 || lower_any_nonzero;
-    if combined_nonzero {
-        let half = exp_last / 2; // exact; exp_last = 10^scale_idx is even
-        let cmp_r = if r_last > half {
-            core::cmp::Ordering::Greater
-        } else if r_last < half {
-            core::cmp::Ordering::Less
-        } else if lower_any_nonzero {
-            core::cmp::Ordering::Greater
-        } else {
-            core::cmp::Ordering::Equal
-        };
-        let q_is_odd = (mag[0] & 1) != 0;
-        if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
-            let mut carry: u128 = 1;
-            for limb in &mut mag {
-                let (s, c) = limb.overflowing_add(carry);
-                *limb = s;
-                if !c {
-                    carry = 0;
-                    break;
-                }
-                carry = 1;
-            }
-            let _ = carry;
-        }
-    }
+    // Identical chain arithmetic on the magnitude slice -- the only
+    // difference from the `Int<N>`-only decimal path is the pack/unpack.
+    div_pow10_chain_mag_u128(&mut mag, scale, neg, mode);
 
     W::from_mag_sign_u128(&mag, neg)
 }

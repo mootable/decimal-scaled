@@ -265,17 +265,39 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     mode: crate::support::rounding::RoundingMode,
     table: &NewtonReciprocal,
 ) -> W {
-    use crate::support::rounding;
-
-    // BigInt bridge is u128-limb; unpack to u64 limbs for the arithmetic.
+    // BigInt bridge is u128-limb; the arithmetic core operates on that
+    // magnitude slice in place (shared with the `Int<N>`-only decimal
+    // `mul` kernel, which builds its product directly in u128 scratch).
     let mut mag_u128 = [0u128; 64];
     let neg = n.mag_into_u128(&mut mag_u128);
+    newton_pow10_mag_u128(&mut mag_u128, neg, mode, table);
+    W::from_mag_sign_u128(&mag_u128, neg)
+}
+
+/// Width-agnostic Newton-reciprocal divide of a u128-limb magnitude slice
+/// by `10^scale`, in place, with `mode`-aware rounding. `table` is the
+/// pre-computed reciprocal for `(scale, width)`. Slice core extracted from
+/// [`div_wide_pow10_newton_with`]; the only difference from the typed path
+/// is the `BigInt` pack/unpack the wrapper does around this call.
+///
+/// The interior arithmetic runs on u64 limbs (`div_newton`), so this
+/// transcodes the u128 magnitude to u64, divides, rounds, and transcodes
+/// the quotient back into `mag` in place.
+pub(crate) fn newton_pow10_mag_u128(
+    mag_u128: &mut [u128],
+    neg: bool,
+    mode: crate::support::rounding::RoundingMode,
+    table: &NewtonReciprocal,
+) {
+    use crate::support::rounding;
+
+    // Transcode the u128 magnitude to the u64 limbs the kernel runs in.
     let mut mag = [0u64; MAX_MAG_U64];
     for (i, &v) in mag_u128.iter().enumerate() {
         mag[2 * i] = v as u64;
         mag[2 * i + 1] = (v >> 64) as u64;
     }
-    let mag_len = mag_u128.len() * 2; // 128 u64 limbs
+    let mag_len = mag_u128.len() * 2;
 
     let mut top = mag_len;
     while top > 0 && mag[top - 1] == 0 {
@@ -324,14 +346,12 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
         }
     }
 
-    // Re-pack the u64 quotient into a u128-limb buffer for the BigInt bridge.
-    let mut out = [0u128; 64];
-    for (i, slot) in out.iter_mut().enumerate() {
+    // Re-pack the u64 quotient into the caller's u128 magnitude slice.
+    for (i, slot) in mag_u128.iter_mut().enumerate() {
         let lo = quot[2 * i] as u128;
         let hi = quot[2 * i + 1] as u128;
         *slot = lo | (hi << 64);
     }
-    W::from_mag_sign_u128(&out, neg)
 }
 
 /// Width-keyed dispatch decision for `n / 10^SCALE`.
@@ -463,16 +483,39 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, con
         "magnitude buffer must match W's u128-limb width"
     );
     let bits = <W as crate::int::types::traits::BigInt>::BITS;
-    if !newton_wins(bits, scale) {
-        return crate::algos::support::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode);
+    let mut mag = [0u128; N];
+    let neg = n.mag_into_u128(&mut mag);
+    dispatch_pow10_mag_u128(&mut mag, scale, neg, mode, bits);
+    W::from_mag_sign_u128(&mag, neg)
+}
+
+/// Width-agnostic dispatch for `mag / 10^scale`, in place on a u128-limb
+/// magnitude slice. `width_bits` is the work-width in bits (`mag.len() *
+/// 128`-bounded; supplied by the caller as the cache / `newton_wins` key).
+///
+/// Routes Newton vs MG-chain by [`newton_wins`], threading the
+/// thread-local reciprocal cache when Newton wins (std only). Shared with
+/// the typed [`dispatch_wide_pow10_with`] wrapper and the `Int<N>`-only
+/// decimal `mul` kernel.
+#[inline]
+pub(crate) fn dispatch_pow10_mag_u128(
+    mag: &mut [u128],
+    scale: u32,
+    neg: bool,
+    mode: crate::support::rounding::RoundingMode,
+    width_bits: u32,
+) {
+    if !newton_wins(width_bits, scale) {
+        crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode);
+        return;
     }
 
     #[cfg(feature = "std")]
     {
         // `width_limbs` in u64 limbs — the `precompute` unit.
-        let width_limbs = (bits as usize) / 64;
-        return cache::with_table(bits, scale, width_limbs, |table| {
-            div_wide_pow10_newton_with::<W>(n, scale, mode, table)
+        let width_limbs = (width_bits as usize) / 64;
+        cache::with_table(width_bits, scale, width_limbs, |table| {
+            newton_pow10_mag_u128(mag, neg, mode, table);
         });
     }
 
@@ -482,7 +525,7 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, con
         // precompute is too costly for the wide tier (one Knuth divide
         // at storage width). Forward to MG instead — Newton wins
         // depend on amortising the table across many calls.
-        crate::algos::support::mg_divide::div_wide_pow10_chain_with::<W, N>(n, scale, mode)
+        crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode);
     }
 }
 
