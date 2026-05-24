@@ -227,6 +227,7 @@ required-features = ["perf-trace"]
 
 [[bench]]
 name = "mul_div_candidates"
+path = "benches/micro/mul_div_candidates.rs"
 harness = false
 
 # Focused micro-bench for the wide-int decimal `to_string` base case
@@ -234,6 +235,7 @@ harness = false
 # digit loop, across Int256 / Int512 / Int1024 / Int4096.
 [[bench]]
 name = "int_to_string_base1e19"
+path = "benches/micro/int_to_string_base1e19.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
@@ -241,11 +243,13 @@ required-features = ["wide", "x-wide", "xx-wide"]
 # instrumentation. See .github/workflows/codspeed.yml.
 [[bench]]
 name = "pr_gate"
+path = "benches/micro/pr_gate.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "all_functions"
+path = "benches/support/all_functions.rs"
 harness = false
 
 # Focused micro-bench for the powf_strict integer-exponent fast path
@@ -254,6 +258,7 @@ harness = false
 # (slow exp(y · ln x) path) across D38<19>, D76<35>, D307<150>.
 [[bench]]
 name = "powf_integer"
+path = "benches/micro/powf_integer.rs"
 harness = false
 required-features = ["wide", "x-wide"]
 
@@ -262,6 +267,7 @@ required-features = ["wide", "x-wide"]
 # entry points (ln/exp were borrowed by commit 09e7ea9).
 [[bench]]
 name = "d38_s33_log10_micro"
+path = "benches/lookup/d38_s33_log10_micro.rs"
 harness = false
 required-features = ["wide"]
 
@@ -269,6 +275,7 @@ required-features = ["wide"]
 # `bnum` / `ruint`. Needs the wide tier.
 [[bench]]
 name = "wide_int_backends"
+path = "benches/backends/wide_int_backends.rs"
 harness = false
 required-features = ["wide"]
 
@@ -277,6 +284,7 @@ required-features = ["wide"]
 # Microbench-scale snapshot for tracking integer-algorithm changes.
 [[bench]]
 name = "int_ops_micro"
+path = "benches/micro/int_ops_micro.rs"
 harness = false
 required-features = ["wide"]
 
@@ -286,6 +294,7 @@ required-features = ["wide"]
 # wide tier.
 [[bench]]
 name = "decimal_backends"
+path = "benches/backends/decimal_backends.rs"
 harness = false
 required-features = ["wide"]
 
@@ -293,6 +302,7 @@ required-features = ["wide"]
 # (Int256-widening) algorithm head-to-head.
 [[bench]]
 name = "d_w128_mul_div_paths"
+path = "benches/micro/d_w128_mul_div_paths.rs"
 harness = false
 required-features = ["wide"]
 
@@ -300,6 +310,7 @@ required-features = ["wide"]
 # Research bench — informs ALGORITHMS.md "Evaluated and not used".
 [[bench]]
 name = "newton_vs_mg"
+path = "benches/micro/newton_vs_mg.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
@@ -308,6 +319,7 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 # driven promotion has a data point.
 [[bench]]
 name = "agm_vs_taylor"
+path = "benches/agm/agm_vs_taylor.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -317,6 +329,7 @@ required-features = ["x-wide"]
 # override decision on the deep mid-storage band.
 [[bench]]
 name = "agm_vs_taylor_d616"
+path = "benches/agm/agm_vs_taylor_d616.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -325,6 +338,7 @@ required-features = ["x-wide"]
 # D616 measurements (SCALE 250/300/400/500) all showed AGM LOSING.
 [[bench]]
 name = "agm_vs_taylor_d924"
+path = "benches/agm/agm_vs_taylor_d924.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -335,6 +349,7 @@ required-features = ["xx-wide"]
 # point for completeness.
 [[bench]]
 name = "agm_vs_taylor_d230"
+path = "benches/agm/agm_vs_taylor_d230.rs"
 harness = false
 required-features = ["wide"]
 
@@ -346,59 +361,71 @@ required-features = ["wide"]
 # end of a sweep from wiping out completed widths' criterion data.
 [[bench]]
 name = "full_matrix_d18"
+path = "benches/full_matrix/full_matrix_d18.rs"
 harness = false
 
 [[bench]]
 name = "full_matrix_d38"
+path = "benches/full_matrix/full_matrix_d38.rs"
 harness = false
 
 [[bench]]
 name = "full_matrix_d57"
+path = "benches/full_matrix/full_matrix_d57.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d76"
+path = "benches/full_matrix/full_matrix_d76.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d115"
+path = "benches/full_matrix/full_matrix_d115.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d153"
+path = "benches/full_matrix/full_matrix_d153.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d230"
+path = "benches/full_matrix/full_matrix_d230.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d307"
+path = "benches/full_matrix/full_matrix_d307.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "full_matrix_d462"
+path = "benches/full_matrix/full_matrix_d462.rs"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
 name = "full_matrix_d616"
+path = "benches/full_matrix/full_matrix_d616.rs"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
 name = "full_matrix_d924"
+path = "benches/full_matrix/full_matrix_d924.rs"
 harness = false
 required-features = ["xx-wide"]
 
 [[bench]]
 name = "full_matrix_d1232"
+path = "benches/full_matrix/full_matrix_d1232.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -409,6 +436,7 @@ required-features = ["xx-wide"]
 # D76<35> baseline.
 [[bench]]
 name = "g_math_comparison"
+path = "benches/backends/g_math_comparison.rs"
 harness = false
 required-features = ["wide"]
 
@@ -418,6 +446,7 @@ required-features = ["wide"]
 # the full lib_cmp_d{N} sweep.
 [[bench]]
 name = "quick_div"
+path = "benches/micro/quick_div.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide"]
 
@@ -426,6 +455,7 @@ required-features = ["wide", "x-wide", "xx-wide"]
 # SCALE 20 kernel tuning before kicking the full sweeps.
 [[bench]]
 name = "d57_s20"
+path = "benches/lookup/d57_s20.rs"
 harness = false
 required-features = ["wide"]
 
@@ -435,6 +465,7 @@ required-features = ["wide"]
 # `1..=38` window. Used to probe MG-routing wins on hot loops.
 [[bench]]
 name = "d76_s6"
+path = "benches/lookup/d76_s6.rs"
 harness = false
 required-features = ["wide"]
 
@@ -443,6 +474,7 @@ required-features = ["wide"]
 # narrow-GUARD and Tang-lookup wins on the D153 hot paths.
 [[bench]]
 name = "d153_s76"
+path = "benches/lookup/d153_s76.rs"
 harness = false
 required-features = ["wide"]
 
@@ -452,6 +484,7 @@ required-features = ["wide"]
 # the D616 hot paths.
 [[bench]]
 name = "d616_s308"
+path = "benches/lookup/d616_s308.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -460,6 +493,7 @@ required-features = ["x-wide"]
 # from the underlying Int8192 primitive cost.
 [[bench]]
 name = "d616_lookup_baseline"
+path = "benches/lookup/d616_lookup_baseline.rs"
 harness = false
 required-features = ["x-wide"]
 
@@ -469,6 +503,7 @@ required-features = ["x-wide"]
 # the D924 hot paths.
 [[bench]]
 name = "d924_s460"
+path = "benches/lookup/d924_s460.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -477,11 +512,13 @@ required-features = ["xx-wide"]
 # Int12288 primitive cost.
 [[bench]]
 name = "d924_lookup_baseline"
+path = "benches/lookup/d924_lookup_baseline.rs"
 # Side-by-side D1232 ln at SCALE 600 (wide_kernel) vs SCALE 615 (Tang
 # lookup). Isolates the lookup-vs-kernel speedup from the underlying
 # Int16384 primitive cost.
 [[bench]]
 name = "d1232_lookup_baseline"
+path = "benches/lookup/d1232_lookup_baseline.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -491,12 +528,14 @@ required-features = ["xx-wide"]
 # lose to AGM at the deep end of the scale range.
 [[bench]]
 name = "agm_vs_taylor_d1232"
+path = "benches/agm/agm_vs_taylor_d1232.rs"
 harness = false
 required-features = ["xx-wide"]
 
 # Gate bench for the per-L fixed-array mul specialisation.
 [[bench]]
 name = "m2_mul_fixed"
+path = "benches/micro/m2_mul_fixed.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
@@ -505,6 +544,7 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 # operand. Validates the n×1 schoolbook win across every wide tier.
 [[bench]]
 name = "m2_mul_u64_into"
+path = "benches/micro/m2_mul_u64_into.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
@@ -514,12 +554,14 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 # our 3 new fast paths, etc.).
 [[bench]]
 name = "atan_inputs"
+path = "benches/support/atan_inputs.rs"
 harness = false
 required-features = ["wide"]
 
 # Gate for ln_approx(working_digits) — caller-controlled precision.
 [[bench]]
 name = "m2_ln_approx"
+path = "benches/micro/m2_ln_approx.rs"
 harness = false
 required-features = ["wide"]
 
@@ -531,59 +573,71 @@ required-features = ["wide"]
 # in minutes. Run them all sequentially for a full matrix sweep.
 [[bench]]
 name = "lib_cmp_d18"
+path = "benches/libcmp/lib_cmp_d18.rs"
 harness = false
 
 [[bench]]
 name = "lib_cmp_d38"
+path = "benches/libcmp/lib_cmp_d38.rs"
 harness = false
 
 [[bench]]
 name = "lib_cmp_d57"
+path = "benches/libcmp/lib_cmp_d57.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "lib_cmp_d76"
+path = "benches/libcmp/lib_cmp_d76.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "lib_cmp_d115"
+path = "benches/libcmp/lib_cmp_d115.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "lib_cmp_d153"
+path = "benches/libcmp/lib_cmp_d153.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "lib_cmp_d230"
+path = "benches/libcmp/lib_cmp_d230.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "lib_cmp_d307"
+path = "benches/libcmp/lib_cmp_d307.rs"
 harness = false
 required-features = ["wide"]
 
 [[bench]]
 name = "lib_cmp_d462"
+path = "benches/libcmp/lib_cmp_d462.rs"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
 name = "lib_cmp_d616"
+path = "benches/libcmp/lib_cmp_d616.rs"
 harness = false
 required-features = ["x-wide"]
 
 [[bench]]
 name = "lib_cmp_d924"
+path = "benches/libcmp/lib_cmp_d924.rs"
 harness = false
 required-features = ["xx-wide"]
 
 [[bench]]
 name = "lib_cmp_d1232"
+path = "benches/libcmp/lib_cmp_d1232.rs"
 harness = false
 required-features = ["xx-wide"]
 
@@ -597,11 +651,13 @@ required-features = ["xx-wide"]
 # criterion timing machinery.
 [[bench]]
 name = "lib_cmp_precision"
+path = "benches/libcmp/lib_cmp_precision.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "macros"]
 
 [[bench]]
 name = "prec_fix_impact"
+path = "benches/micro/prec_fix_impact.rs"
 harness = false
 required-features = ["wide", "x-wide", "macros"]
 
@@ -674,5 +730,6 @@ debug = true
 # policy `Select` arm. Kernels come from `__bench_internals` (bench-alt).
 [[bench]]
 name = "mul_kernel_ab"
+path = "benches/micro/mul_kernel_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]

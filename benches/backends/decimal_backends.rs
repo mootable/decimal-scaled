@@ -23,6 +23,7 @@
 //!
 //! Run with: `cargo bench --features wide --bench decimal_backends`.
 
+#[path = "../bnum/mod.rs"]
 mod bnum;
 
 use bnum::BnumD76;
