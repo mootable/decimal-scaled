@@ -7,8 +7,7 @@
 //! tiers: multiply by the exact `180/pi` (resp. `pi/180`) ratio in the
 //! guard-digit work integer, then round correctly to storage. These are
 //! the `MulPiRatio` algorithm named by
-//! [`crate::policy::to_degrees::ToDegreesPolicy`] /
-//! [`crate::policy::to_radians::ToRadiansPolicy`]; the policy `MulPiRatio`
+//! `crate::policy::to_degrees` / `crate::policy::to_radians`; the policy `MulPiRatio`
 //! arm routes DOWN to them directly (no inversion through the inherent
 //! `*_strict_with` shell).
 //!

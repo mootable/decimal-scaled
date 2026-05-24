@@ -734,23 +734,21 @@ macro_rules! impl_narrow_trig {
             }
             #[inline]
             fn to_degrees_impl(self, mode: RoundingMode) -> Self {
-                use crate::policy::to_degrees::ToDegreesPolicy;
-                ToDegreesPolicy::to_degrees_impl(self, mode)
+                Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
             #[inline]
             fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                use crate::policy::to_degrees::ToDegreesPolicy;
-                ToDegreesPolicy::to_degrees_with_impl(self, wd, mode)
+                let _ = wd;
+                Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
             #[inline]
             fn to_radians_impl(self, mode: RoundingMode) -> Self {
-                use crate::policy::to_radians::ToRadiansPolicy;
-                ToRadiansPolicy::to_radians_impl(self, mode)
+                Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
             #[inline]
             fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-                use crate::policy::to_radians::ToRadiansPolicy;
-                ToRadiansPolicy::to_radians_with_impl(self, wd, mode)
+                let _ = wd;
+                Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
             }
         }
     };
@@ -854,23 +852,21 @@ macro_rules! d38_hyperbolic_and_angle {
         }
         #[inline]
         fn to_degrees_impl(self, mode: RoundingMode) -> Self {
-            use crate::policy::to_degrees::ToDegreesPolicy;
-            ToDegreesPolicy::to_degrees_impl(self, mode)
+            Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
         fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            use crate::policy::to_degrees::ToDegreesPolicy;
-            ToDegreesPolicy::to_degrees_with_impl(self, wd, mode)
+            let _ = wd;
+            Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
         fn to_radians_impl(self, mode: RoundingMode) -> Self {
-            use crate::policy::to_radians::ToRadiansPolicy;
-            ToRadiansPolicy::to_radians_impl(self, mode)
+            Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
         fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            use crate::policy::to_radians::ToRadiansPolicy;
-            ToRadiansPolicy::to_radians_with_impl(self, wd, mode)
+            let _ = wd;
+            Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
     };
 }
@@ -1134,23 +1130,21 @@ macro_rules! wide_trig_extra_inherent {
         }
         #[inline]
         fn to_degrees_impl(self, mode: RoundingMode) -> Self {
-            use crate::policy::to_degrees::ToDegreesPolicy;
-            ToDegreesPolicy::to_degrees_impl(self, mode)
+            Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
         fn to_degrees_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            use crate::policy::to_degrees::ToDegreesPolicy;
-            ToDegreesPolicy::to_degrees_with_impl(self, wd, mode)
+            let _ = wd;
+            Self::from_bits(crate::policy::to_degrees::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
         fn to_radians_impl(self, mode: RoundingMode) -> Self {
-            use crate::policy::to_radians::ToRadiansPolicy;
-            ToRadiansPolicy::to_radians_impl(self, mode)
+            Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
         #[inline]
         fn to_radians_with_impl(self, wd: u32, mode: RoundingMode) -> Self {
-            use crate::policy::to_radians::ToRadiansPolicy;
-            ToRadiansPolicy::to_radians_with_impl(self, wd, mode)
+            let _ = wd;
+            Self::from_bits(crate::policy::to_radians::dispatch::<_, SCALE>(self.to_bits(), mode))
         }
     };
 }
