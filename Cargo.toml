@@ -49,7 +49,7 @@ rustdoc-args = ["--cfg", "docsrs"]
 #                      features = ["std", "serde", "fast"] }
 # That gives ~16 decimal digits of platform-libm precision rather
 # than the deterministic 0.5 ULP strict path.
-default = ["std", "serde", "strict"]
+default = ["std", "serde", "strict", "exact-scratch"]
 std = ["alloc"]
 alloc = []
 serde = ["dep:serde"]
@@ -106,6 +106,15 @@ experimental-floats = []
 # explicit-target form is the only cross-scale entry point.
 # Requires the nightly toolchain.
 cross-scale-ops = []
+# Root-kernel work-scratch sizing. Default (neither feature) sizes the
+# scratch buffers to the build-max width and applies it uniformly. With
+# `exact-scratch` (stable) each storage width gets a per-`Int<N>` impl
+# sized exactly `mult·N + ceil(N/2)` — smaller frames, no nightly.
+# `exact-scratch-nightly` does the same per-`N` sizing with one blanket
+# impl via `generic_const_exprs` (the const-expr stays in that impl block).
+# See `crate::int::types::work_scratch`.
+exact-scratch = []
+exact-scratch-nightly = ["exact-scratch"]
 # Wide decimal tiers (D76 / D153 / D307). Each width is independently
 # opt-in; `wide` is the umbrella for the 256-bit / 512-bit tiers and
 # `x-wide` adds the 1024-bit tier. They are backed by the in-tree

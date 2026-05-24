@@ -26,14 +26,9 @@
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
+use crate::int::types::work_scratch::WorkScratch;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-
-/// Limb scratch budget — matches the int root kernels' `SCRATCH_LIMBS`
-/// (288 u64 = 18432 bits), covering the widest radicand (`2 · Int<64>`).
-use crate::int::algos::support::limbs::work_scratch;
-
-const SCRATCH: usize = work_scratch(2);
 
 /// Significant limb length of `a` (index of the highest non-zero limb + 1),
 /// clamped to at least 1 so zero has length 1.
@@ -53,17 +48,22 @@ fn sig_len(a: &[u64]) -> usize {
 /// `isqrt_newton`; the result is rounded and returned as `Int<N>`.
 #[inline]
 #[must_use]
-pub(crate) fn sqrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: RoundingMode) -> Int<N> {
+pub(crate) fn sqrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: RoundingMode) -> Int<N>
+where
+    Int<N>: WorkScratch,
+{
     if raw <= Int::<N>::ZERO {
         return Int::<N>::ZERO;
     }
 
     // ── radicand n = |raw| · 10^scale, in limb scratch ──────────────────
-    let mut n = [0u64; SCRATCH];
+    let mut n_buf = Int::<N>::work2();
+    let n = n_buf.as_mut();
     n[..N].copy_from_slice(raw.unsigned_abs().as_limbs());
     let mut nl = sig_len(&n[..N]);
     {
-        let mut tmp = [0u64; SCRATCH];
+        let mut tmp_buf = Int::<N>::work2();
+        let tmp = tmp_buf.as_mut();
         for _ in 0..scale {
             let out = nl + 1;
             for t in tmp[..out].iter_mut() {
@@ -76,14 +76,18 @@ pub(crate) fn sqrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: Roundin
     }
 
     // ── q = floor(sqrt(n)) via the int slice kernel ─────────────────────
-    let mut q = [0u64; SCRATCH];
+    let mut q_buf = Int::<N>::work2();
+    let q = q_buf.as_mut();
     isqrt_newton(&n[..nl], &mut q[..nl]);
     let ql = sig_len(&q[..nl]);
 
     // ── diff = n - q²  (q² ≤ n, so diff fits in nl limbs) ───────────────
-    let mut qsq = [0u64; SCRATCH];
-    mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(SCRATCH)]);
-    let mut diff = [0u64; SCRATCH];
+    let mut qsq_buf = Int::<N>::work2();
+    let qsq = qsq_buf.as_mut();
+    let qsq_cap = qsq.len();
+    mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
+    let mut diff_buf = Int::<N>::work2();
+    let diff = diff_buf.as_mut();
     diff[..nl].copy_from_slice(&n[..nl]);
     sub_assign(&mut diff[..nl], &qsq[..nl]);
 

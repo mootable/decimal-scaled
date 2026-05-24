@@ -29,6 +29,7 @@
 
 use crate::algos::cbrt;
 use crate::int::types::traits::BigInt;
+use crate::int::types::work_scratch::WorkScratch;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -112,7 +113,10 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 /// and dead-arm-eliminated at every other `N`.
 #[inline]
 #[must_use]
-pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N>
+where
+    Int<N>: WorkScratch,
+{
     if raw == Int::<N>::ZERO {
         return Int::<N>::ZERO;
     }

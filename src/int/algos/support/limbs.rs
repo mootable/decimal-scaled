@@ -54,10 +54,23 @@ pub(crate) const MAX_WORK_N: usize = 2;
 /// margin for the `work = n.len()+1` carry-limb sizing (reproducing the
 /// proven `288 = work_scratch(4)` at xx-wide). Kernels expand in limbs
 /// rather than a work *type* `Int<2N>`/`Int<4N>` (unnameable from `N` on
-/// stable; see the algorithim-optimiser skill §5). A future
-/// `nightly`/`generic_const_exprs` path can size to the call's actual `N`.
+/// stable; see the algorithim-optimiser skill §5). The exact per-`N`
+/// alternatives ([`work_scratch_n`], the `exact-scratch` impls) live in
+/// `crate::int::types::work_scratch`.
 pub(crate) const fn work_scratch(mult: usize) -> usize {
     mult * MAX_WORK_N + (MAX_WORK_N + 1) / 2
+}
+
+/// Exact per-`N` work-scratch budget: `mult·n + ceil(n/2)`, the same
+/// formula as [`work_scratch`] but for a *specific* limb count `n` rather
+/// than the build-max. Used by the `exact-scratch-nightly` blanket
+/// [`WorkScratch`] impl, where it appears as a `generic_const_exprs` array
+/// length confined to that impl block.
+///
+/// [`WorkScratch`]: crate::int::types::work_scratch::WorkScratch
+#[cfg(feature = "exact-scratch-nightly")]
+pub(crate) const fn work_scratch_n(mult: usize, n: usize) -> usize {
+    mult * n + (n + 1) / 2
 }
 
 /// `a == 0`.

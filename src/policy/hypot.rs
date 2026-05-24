@@ -33,6 +33,7 @@
 //! `hypot(0, 0) = 0` (bit-exact); `hypot(0, x) = |x|` (`isqrt(x²) = |x|`).
 
 use crate::algos::hypot;
+use crate::int::types::work_scratch::WorkScratch;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -88,7 +89,10 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     a: Int<N>,
     b: Int<N>,
     mode: RoundingMode,
-) -> Int<N> {
+) -> Int<N>
+where
+    Int<N>: WorkScratch,
+{
     // Both operands carry the same `10^SCALE`, so it divides out of the
     // root; `SCALE` is used only to label the out-of-range panic.
     let algo = match const { select::<N, SCALE>() } {

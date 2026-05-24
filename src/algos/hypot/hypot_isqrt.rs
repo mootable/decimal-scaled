@@ -24,12 +24,9 @@
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{add_assign, cmp_cross, is_zero, sub_assign};
+use crate::int::types::work_scratch::WorkScratch;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
-
-use crate::int::algos::support::limbs::work_scratch;
-
-const SCRATCH: usize = work_scratch(2);
 
 #[inline]
 fn sig_len(a: &[u64]) -> usize {
@@ -45,15 +42,20 @@ fn sig_len(a: &[u64]) -> usize {
 /// root does not fit `Int<N>`).
 #[inline]
 #[must_use]
-pub(crate) fn hypot_isqrt<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>> {
+pub(crate) fn hypot_isqrt<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
+where
+    Int<N>: WorkScratch,
+{
     // ── n = a² + b² (magnitudes; sign drops out of squaring) ────────────
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
     let la = sig_len(ma.as_limbs());
     let lb = sig_len(mb.as_limbs());
-    let mut n = [0u64; SCRATCH];
+    let mut n_buf = Int::<N>::work2();
+    let n = n_buf.as_mut();
     mul_schoolbook(&ma.as_limbs()[..la], &ma.as_limbs()[..la], &mut n[..2 * la]);
-    let mut bsq = [0u64; SCRATCH];
+    let mut bsq_buf = Int::<N>::work2();
+    let bsq = bsq_buf.as_mut();
     mul_schoolbook(&mb.as_limbs()[..lb], &mb.as_limbs()[..lb], &mut bsq[..2 * lb]);
     let span = (2 * la).max(2 * lb) + 1;
     add_assign(&mut n[..span], &bsq[..2 * lb]);
@@ -63,13 +65,16 @@ pub(crate) fn hypot_isqrt<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMo
     }
 
     // ── q = floor(sqrt(n)) ──────────────────────────────────────────────
-    let mut q = [0u64; SCRATCH];
+    let mut q_buf = Int::<N>::work2();
+    let q = q_buf.as_mut();
     isqrt_newton(&n[..nl], &mut q[..nl]);
     let ql = sig_len(&q[..nl]);
 
     // ── diff = n - q²  (reuse `n` in place as the remainder) ────────────
-    let mut qsq = [0u64; SCRATCH];
-    mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(SCRATCH)]);
+    let mut qsq_buf = Int::<N>::work2();
+    let qsq = qsq_buf.as_mut();
+    let qsq_cap = qsq.len();
+    mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
     sub_assign(&mut n[..nl], &qsq[..nl]);
     let halfway_round_up = cmp_cross(&n[..nl], &q[..ql]) > 0;
     let diff_nonzero = !is_zero(&n[..nl]);
@@ -93,7 +98,7 @@ pub(crate) fn hypot_isqrt<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMo
     }
 
     // ── fit check: positive magnitude must be < 2^(64N-1) (signed range) ─
-    let qfl = sig_len(&q[..(N + 2).min(SCRATCH)]);
+    let qfl = sig_len(&q[..(N + 2).min(qsq_cap)]);
     if qfl > N || (qfl == N && (q[N - 1] >> 63) != 0) {
         return None;
     }

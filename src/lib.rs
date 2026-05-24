@@ -91,8 +91,14 @@
 
 #![cfg_attr(not(feature = "std"), no_std)]
 #![cfg_attr(feature = "experimental-floats", feature(f16, f128))]
-#![cfg_attr(feature = "cross-scale-ops", feature(generic_const_exprs))]
-#![cfg_attr(feature = "cross-scale-ops", allow(incomplete_features))]
+#![cfg_attr(
+    any(feature = "cross-scale-ops", feature = "exact-scratch-nightly"),
+    feature(generic_const_exprs)
+)]
+#![cfg_attr(
+    any(feature = "cross-scale-ops", feature = "exact-scratch-nightly"),
+    allow(incomplete_features)
+)]
 // ── Clippy allow-list ─────────────────────────────────────────────────
 //
 // These are pedantic lints whose patterns this crate uses
