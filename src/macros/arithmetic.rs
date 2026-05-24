@@ -174,29 +174,6 @@ macro_rules! round_with_mode_wide {
 }
 pub(crate) use round_with_mode_wide;
 
-/// Narrows a `$Wider`-typed result down to `$Storage`, applying the
-/// runtime decimal-operator overflow contract: debug panics with
-/// `$msg`, release wraps via `resize` (two's-complement truncation —
-/// the historical behaviour, so release bit-patterns are unchanged).
-///
-/// The range test mirrors `checked_mul` / `checked_div`: out of range
-/// iff `value > $Storage::MAX` or `value < $Storage::MIN` (compared in
-/// `$Wider`).
-macro_rules! narrow_or_panic {
-    ($value:expr, $Storage:ty, $Wider:ty, $msg:expr) => {{
-        let value: $Wider = $value;
-        if cfg!(debug_assertions) {
-            let storage_max: $Wider = <$Storage>::MAX.resize::<$Wider>();
-            let storage_min: $Wider = <$Storage>::MIN.resize::<$Wider>();
-            if value > storage_max || value < storage_min {
-                panic!($msg);
-            }
-        }
-        value.resize::<$Storage>()
-    }};
-}
-pub(crate) use narrow_or_panic;
-
 /// Generates the standard arithmetic operator overloads for a decimal
 /// width `$Type<SCALE>`.
 ///
@@ -258,11 +235,11 @@ macro_rules! decl_decimal_arithmetic {
             /// the common case. Larger scales fall through to the
             /// slower `n / (10^SCALE)` path.
             ///
-            /// Routes through the `MulPolicy` per-type policy trait.
+            /// Routes through the generic [`crate::policy::mul::dispatch`]
+            /// matcher; `N` is inferred from `self.0: Int<N>`.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                use $crate::policy::mul::MulPolicy as _;
-                self.mul_impl(rhs, mode)
+                Self($crate::policy::mul::dispatch::<_, SCALE>(self.0, rhs.0, mode))
             }
 
             /// Divide two values of the same scale, rounding the
@@ -278,11 +255,11 @@ macro_rules! decl_decimal_arithmetic {
             /// `$Storage` width) widened to `$Wider`, avoiding the
             /// per-call `pow(SCALE)` on the wider type.
             ///
-            /// Routes through the `DivPolicy` per-type policy trait.
+            /// Routes through the generic [`crate::policy::div::dispatch`]
+            /// matcher; `N` is inferred from `self.0: Int<N>`.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
-                use $crate::policy::div::DivPolicy as _;
-                self.div_impl(rhs, mode)
+                Self($crate::policy::div::dispatch::<_, SCALE>(self.0, rhs.0, mode))
             }
         }
 

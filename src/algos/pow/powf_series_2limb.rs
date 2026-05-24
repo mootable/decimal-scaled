@@ -56,22 +56,22 @@ fn powi_raw<const SCALE: u32>(base: i128, n: i32, mode: RoundingMode) -> i128 {
     let mut e = pos_n;
     while e > 0 {
         if e & 1 == 1 {
-            acc = crate::algos::mul::mul_widen_divide::mul_widen_divide::<
-                2, 4, 1, 2, SCALE,
-            >(acc, b, mode);
+            acc = crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(
+                acc, b, mode,
+            );
         }
         e >>= 1;
         if e > 0 {
-            b = crate::algos::mul::mul_widen_divide::mul_widen_divide::<
-                2, 4, 1, 2, SCALE,
-            >(b, b, mode);
+            b = crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(
+                b, b, mode,
+            );
         }
     }
     if n > 0 {
         acc.as_i128()
     } else {
         // Reciprocal: one_s / acc using div_widen_scale kernel.
-        crate::algos::div::div_widen_scale::div_widen_scale::<2, 4>(
+        crate::algos::div::div_widen_scale::div_widen_scale::<2>(
             one_s, acc, Int::<2>::TEN.pow(SCALE), mode,
         ).as_i128()
     }
