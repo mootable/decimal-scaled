@@ -235,7 +235,7 @@ macro_rules! decl_decimal_arithmetic {
             /// the common case. Larger scales fall through to the
             /// slower `n / (10^SCALE)` path.
             ///
-            /// Routes through the generic [`crate::policy::mul::dispatch`]
+            /// Routes through the generic `crate::policy::mul::dispatch`
             /// matcher; `N` is inferred from `self.0: Int<N>`.
             #[inline]
             pub fn mul_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
@@ -255,7 +255,7 @@ macro_rules! decl_decimal_arithmetic {
             /// `$Storage` width) widened to `$Wider`, avoiding the
             /// per-call `pow(SCALE)` on the wider type.
             ///
-            /// Routes through the generic [`crate::policy::div::dispatch`]
+            /// Routes through the generic `crate::policy::div::dispatch`
             /// matcher; `N` is inferred from `self.0: Int<N>`.
             #[inline]
             pub fn div_with(self, rhs: Self, mode: $crate::support::rounding::RoundingMode) -> Self {
