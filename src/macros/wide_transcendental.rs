@@ -179,18 +179,23 @@ pub(crate) mod exp_generic {
     /// `(a · b) / 10^w`, rounded half-to-even.
     #[inline]
     fn mul<S: BigInt>(a: S, b: S, w: u32) -> S {
-        round_div_pow10(a * b, w)
+        // u128-packed wide multiply: bit-identical to `a * b` (it IS the low
+        // product) for even-limb work widths, ~1/4 the partial products;
+        // falls back to the base-2^64 schoolbook for odd N. This is the hot
+        // Taylor-term / squaring multiply, run at `Wexp` (up to Int<256>) for
+        // exp + the hyperbolics — the fix for the ~12× wide-tier regression.
+        round_div_pow10(a.wrapping_mul_low_u128(b), w)
     }
     /// Loop-friendly `mul` with a precomputed `10^w` divisor.
     #[inline]
     fn mul_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
-        round_div(a * b, pow10_w)
+        round_div(a.wrapping_mul_low_u128(b), pow10_w)
     }
     /// `(a · 10^w) / b`, rounded half-to-even (precomputed numerator
     /// factor).
     #[inline]
     fn div_cached<S: BigInt>(a: S, b: S, pow10_w: S) -> S {
-        round_div(a * pow10_w, b)
+        round_div(a.wrapping_mul_low_u128(pow10_w), b)
     }
     /// `a · n` for a small unsigned multiplier.
     #[inline]
