@@ -79,6 +79,10 @@ enum Algorithm {
     /// configs).
     #[cfg(feature = "_wide-support")]
     Tang,
+    /// `exp_schoolbook` — direct Maclaurin series with `ln(2)` range reduction.
+    /// Correctness reference; `select` never returns this variant.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the const verdict ──────────────────────────────────────────────
@@ -202,6 +206,7 @@ impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::Series => exp::exp_series_2limb::exp_strict::<SCALE>(self.0, mode),
             #[cfg(feature = "_wide-support")]
             Algorithm::Tang => exp::exp_series_2limb::exp_strict::<SCALE>(self.0, mode),
+            Algorithm::Schoolbook => unreachable!(),
         })
     }
     #[inline]
@@ -210,6 +215,7 @@ impl<const SCALE: u32> ExpPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::Series => exp::exp_series_2limb::exp_with(self.0, SCALE, working_digits, mode),
             #[cfg(feature = "_wide-support")]
             Algorithm::Tang => exp::exp_series_2limb::exp_with(self.0, SCALE, working_digits, mode),
+            Algorithm::Schoolbook => unreachable!(),
         })
     }
     #[inline]
@@ -255,6 +261,7 @@ macro_rules! exp_policy_wide_series {
                             self.0, mode,
                         )
                     }
+                    Algorithm::Schoolbook => unreachable!(),
                 })
             }
             #[inline]
@@ -271,6 +278,7 @@ macro_rules! exp_policy_wide_series {
                             self.0, mode,
                         )
                     }
+                    Algorithm::Schoolbook => unreachable!(),
                 })
             }
             #[inline]
@@ -304,6 +312,7 @@ macro_rules! exp_policy_wide_tang {
                         crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(raw, mode)
                     }
                     Algorithm::Tang => ($tang)(raw, mode),
+                    Algorithm::Schoolbook => unreachable!(),
                 })
             }
             #[inline]
@@ -314,6 +323,7 @@ macro_rules! exp_policy_wide_tang {
                         crate::algos::support::wide_trig_core::exp_series::<$Core, SCALE>(raw, mode)
                     }
                     Algorithm::Tang => ($tang)(raw, mode),
+                    Algorithm::Schoolbook => unreachable!(),
                 })
             }
             #[inline]

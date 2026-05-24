@@ -7,10 +7,17 @@
 //!
 //! Variants:
 //!
-//! - [`exp_series_2limb`] — D38's `Fixed` 256-bit intermediate `exp_fixed`
+//! - [`exp_series_2limb`] -- D38's `Fixed` 256-bit intermediate `exp_fixed`
 //!   path, four-variant matrix entry shape.
+//! - [`exp_schoolbook`] -- correctness reference: direct Maclaurin series
+//!   with `ln(2)` range reduction, no Smith squarings.
+//!   Registered as the unrouted `Algorithm::Schoolbook` variant.
 
 pub(crate) mod exp_series_2limb;
+/// Schoolbook exponential -- direct Maclaurin series correctness reference.
+/// Registered as the unrouted `Algorithm::Schoolbook` arm; not connected
+/// to `select`.
+pub(crate) mod exp_schoolbook;
 /// Tier-generic Tang-style table-driven `exp_strict` kernel, generic over
 /// `WideTrigCore`. Collapses the per-tier D57 (18..=22 / 45..=56), D115
 /// and D153 Tang exp kernels into one. The `policy::exp` Tang arms call
