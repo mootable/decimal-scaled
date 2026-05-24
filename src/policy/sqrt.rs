@@ -56,6 +56,23 @@ enum Algorithm {
     /// variation").
     #[cfg(any(feature = "d57", feature = "wide"))]
     NewtonWithTableSeed,
+    /// [`sqrt::sqrt_native::sqrt_native`] — top-bits-`f64`-seeded Newton
+    /// run directly in a tight, concrete `Int<W>` (the work width `W` is
+    /// chosen per `(N, SCALE)` cell in the dispatch arm to just cover
+    /// `mag · 10^SCALE`), rather than through the width-agnostic int
+    /// `isqrt` slice, whose build-max scratch buffer churn dominated the
+    /// small mid-scale radicands of the wide tiers. Routed cells:
+    /// `(D76,35)`, `(D115,57)`, `(D153,75)`, `(D230,115)`, `(D307,150)`.
+    /// Microbench (`root_kernel_ab`): 1.2–1.6× faster than the generic
+    /// slice [`Self::Newton`] at every routed cell. Bit-identical to
+    /// [`Self::Newton`] across all six modes.
+    ///
+    /// Gated with the kernel: each routed `(N, SCALE)` cell only exists
+    /// when its tier is compiled in, so the variant, its `select` arms,
+    /// and its dispatch arms are gated together (the policy stays
+    /// exhaustive in both configs).
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    Native,
     /// Schoolbook reference tag -- delegates to
     /// [], which uses the same
     /// -based pipeline as . Exists as an explicit
@@ -93,6 +110,20 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // (in which case the `(3, 20)` cell is unreachable anyway).
         #[cfg(any(feature = "d57", feature = "wide"))]
         (3, 20) => Select::ByAlgorithm(Algorithm::NewtonWithTableSeed),
+        // Bespoke f64-(top-bits)-seeded Newton in a tight, concrete
+        // `Int<W>` (no build-max slice scratch). Each routed `(N, SCALE)`
+        // cell carries its own work width `W` (sized to cover
+        // `mag · 10^SCALE` for the full storage magnitude) in the dispatch
+        // arm below. Microbench (`root_kernel_ab`): native beats the
+        // generic slice 1.2–1.6× at every cell.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (4, 35) // D76<35>,   W=6
+        | (6, 57) // D115<57>, W=9
+        | (8, 75) // D153<75>, W=12
+        | (8, 76) // D153<76>, W=12 (golden-table scale)
+        | (12, 115) // D230<115>, W=19
+        | (16, 150) // D307<150>, W=24
+        => Select::ByAlgorithm(Algorithm::Native),
         // Everything else (all wide tiers, all other scales) — generic
         // Newton over the tier's work width.
         _ => Select::ByAlgorithm(Algorithm::Newton),
@@ -141,6 +172,21 @@ where
             )
             .resize_to::<Int<N>>()
         }
+        // Native tight-`Int<W>` arm: pick the literal work width `W` for
+        // this `(N, SCALE)` cell, then run Newton directly in `Int<W>`.
+        // The `(N, SCALE)` match is const-foldable (both const generics),
+        // so each monomorphisation keeps exactly one arm and the rest are
+        // dead-arm-eliminated in release. The `_ => Newton` fallback never
+        // fires for a cell `select` routed to `Native`.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        Algorithm::Native => match (N, SCALE) {
+            (4, 35) => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, SCALE, mode),
+            (6, 57) => sqrt::sqrt_native::sqrt_native::<N, 9>(raw, SCALE, mode),
+            (8, 75) | (8, 76) => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, SCALE, mode),
+            (12, 115) => sqrt::sqrt_native::sqrt_native::<N, 19>(raw, SCALE, mode),
+            (16, 150) => sqrt::sqrt_native::sqrt_native::<N, 24>(raw, SCALE, mode),
+            _ => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
+        },
         Algorithm::Schoolbook => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
     }
 }

@@ -18,12 +18,18 @@
 //!   `N == 2`.**
 //! - [`sqrt_newton_with_table_seed`] — `f64`-seeded narrow-work Newton
 //!   bespoke for the `(D57, 20)` cell.
+//! - [`sqrt_native`] — top-bits-`f64`-seeded Newton run directly in a
+//!   tight, concrete `Int<W>` (no build-max slice scratch), for the
+//!   regressed mid-scale wide cells (D76 … D307). Bit-identical to
+//!   [`sqrt_newton`].
 //!
 //! [`sqrt_newton`]: crate::algos::sqrt::sqrt_newton::sqrt_newton
+//! [`sqrt_native`]: crate::algos::sqrt::sqrt_native::sqrt_native
 //! [`sqrt_mg_divide`]: crate::algos::sqrt::sqrt_mg_divide::sqrt_mg_divide
 //! [`sqrt_newton_with_table_seed`]: crate::algos::sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
 pub(crate) mod sqrt_mg_divide;
+pub(crate) mod sqrt_native;
 pub(crate) mod sqrt_newton;
 pub(crate) mod sqrt_newton_with_table_seed;

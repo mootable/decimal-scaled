@@ -19,8 +19,13 @@
 //!   D38's `Int<2>` storage. **Width-bespoke for `N == 2`.**
 //! - [`cbrt_newton_with_table_seed`] — `f64`-seeded narrow-work Newton
 //!   bespoke for the `(D57, 20)` cell.
+//! - [`cbrt_native`] — top-bits-`f64`-seeded Newton run directly in a
+//!   tight, concrete `Int<W>` (no build-max slice scratch), for the
+//!   regressed mid-scale wide cells (D57 … D307). Bit-identical to
+//!   [`cbrt_newton`].
 //!
 //! [`cbrt_newton`]: crate::algos::cbrt::cbrt_newton::cbrt_newton
+//! [`cbrt_native`]: crate::algos::cbrt::cbrt_native::cbrt_native
 //! [`cbrt_mg_divide`]: crate::algos::cbrt::cbrt_mg_divide::cbrt_mg_divide
 //! [`cbrt_newton_with_table_seed`]: crate::algos::cbrt::cbrt_newton_with_table_seed::cbrt_newton_with_table_seed
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
