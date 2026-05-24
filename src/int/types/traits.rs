@@ -350,3 +350,35 @@ impl<const N: usize> BigInt for Int<N> {
         Self::from_mag_limbs(&out, negative)
     }
 }
+
+// ── DoubleWidth: next-up (×2) work width for `Int<N>` ─────────────────
+//
+// The wider integer a decimal algorithm computes *in* (sqrt/hypot/mul/div
+// form `raw · 10^SCALE` in `Int<2N>`). `Int<2*N>` is not derivable from a
+// generic `N` on stable Rust (it would need `generic_const_exprs`), so the
+// map is given as one impl per concrete tier *and* per ×2 intermediate —
+// letting cbrt's ×4 be `DoubleWidth` composed twice
+// (`<<Int<N> as DoubleWidth>::W as DoubleWidth>::W`), so no separate
+// `QuadWidth`/`OctoWidth` trait is needed. Pure type-level maps, feature-
+// independent. Ceiling: `Int<128> → Int<256>` (cbrt of the widest tier).
+#[allow(dead_code)] // consumed by the decimal policy dispatchers (sqrt/cbrt/hypot/mul/div)
+pub(crate) trait DoubleWidth {
+    /// The ×2 work width.
+    type W: BigInt;
+}
+
+impl DoubleWidth for Int<1> { type W = Int<2>; }
+impl DoubleWidth for Int<2> { type W = Int<4>; }
+impl DoubleWidth for Int<3> { type W = Int<6>; }
+impl DoubleWidth for Int<4> { type W = Int<8>; }
+impl DoubleWidth for Int<6> { type W = Int<12>; }
+impl DoubleWidth for Int<8> { type W = Int<16>; }
+impl DoubleWidth for Int<12> { type W = Int<24>; }
+impl DoubleWidth for Int<16> { type W = Int<32>; }
+impl DoubleWidth for Int<24> { type W = Int<48>; }
+impl DoubleWidth for Int<32> { type W = Int<64>; }
+impl DoubleWidth for Int<48> { type W = Int<96>; }
+impl DoubleWidth for Int<64> { type W = Int<128>; }
+// ×2 intermediates (only needed for cbrt's composed ×4):
+impl DoubleWidth for Int<96> { type W = Int<192>; }
+impl DoubleWidth for Int<128> { type W = Int<256>; }
