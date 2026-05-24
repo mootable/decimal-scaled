@@ -547,45 +547,64 @@ fn tanh_strict_at_scale_12() {
 /// error which amplifies through `to_degrees`'s `180/π` factor by
 /// ~57×; that's the input's error budget, not the conversion's.
 ///
-/// Truth (at exact-storage inputs):
-///   to_degrees(0)             = 0
-///   to_degrees(1 rad)         = 180/π = 57.295779513082320876...   → 57_295_779_513_082
-///   to_degrees(2 rad)         = 360/π = 114.591559026164641753...  → 114_591_559_026_165
-///   to_radians(0)             = 0
-///   to_radians(180 deg)       = π_stored_at_S12 = 3_141_592_653_590 (within 1 LSB)
-///   to_radians(57.295779513082 deg) ≈ 1 rad (exact-at-storage of 180/π)
+/// `to_degrees(v) = v · 180/π`, correctly rounded (half-to-even) at
+/// SCALE=12. The `180/π` factor is computed externally from
+/// `π = 3.14159265358979323846264338327950288419716939937510...` to 50+
+/// digits (NOT from the crate). Inputs are exact-at-storage, so the asserted
+/// error budget is the conversion's own ≤0.5 ULP — the input carries no
+/// extra error of its own. Spans zero, ±, the unit (1 rad), sub-unit
+/// fractions, a sub-LSB-feed small input, and a large (100 rad) input.
 #[test]
-fn angle_conversion_strict_at_scale_12() {
-    assert_05_ulp(
-        "to_degrees(0)",
-        i128::from(D38s12::ZERO.to_degrees_strict().to_bits()),
-        0,
-    );
-    assert_05_ulp(
-        "to_degrees(1 rad)",
-        i128::from(D38s12::ONE.to_degrees_strict().to_bits()),
-        57_295_779_513_082,
-    );
-    assert_05_ulp(
-        "to_degrees(2 rad)",
-        i128::from(D38s12::try_from(2).unwrap().to_degrees_strict().to_bits()),
-        114_591_559_026_165,
-    );
-    assert_05_ulp(
-        "to_radians(0)",
-        i128::from(D38s12::ZERO.to_radians_strict().to_bits()),
-        0,
-    );
-    // to_radians(180 deg) — the input is exact-at-storage; output
-    // matches the stored π exactly because the formula folds:
-    // 180 * π_internal / 180 = π_internal, which rounds to the same
-    // bit pattern as D38s12::pi().
-    let deg180 = D38s12::try_from(180).unwrap();
-    assert_05_ulp(
-        "to_radians(180 deg) == stored pi",
-        i128::from(deg180.to_radians_strict().to_bits()),
-        3_141_592_653_590,
-    );
+fn to_degrees_strict_at_scale_12() {
+    // (label, input raw = radians·10^12, externally-rounded truth)
+    let cases: [(&str, i128, i128); 12] = [
+        ("to_degrees(0)", 0, 0),
+        ("to_degrees(1 rad)", 1_000_000_000_000, 57_295_779_513_082),
+        ("to_degrees(2 rad)", 2_000_000_000_000, 114_591_559_026_165),
+        ("to_degrees(3 rad)", 3_000_000_000_000, 171_887_338_539_247),
+        ("to_degrees(5 rad)", 5_000_000_000_000, 286_478_897_565_412),
+        ("to_degrees(10 rad)", 10_000_000_000_000, 572_957_795_130_823),
+        ("to_degrees(100 rad)", 100_000_000_000_000, 5_729_577_951_308_232),
+        ("to_degrees(0.5 rad)", 500_000_000_000, 28_647_889_756_541),
+        ("to_degrees(0.25 rad)", 250_000_000_000, 14_323_944_878_271),
+        ("to_degrees(1.5 rad)", 1_500_000_000_000, 85_943_669_269_623),
+        ("to_degrees(-1 rad)", -1_000_000_000_000, -57_295_779_513_082),
+        ("to_degrees(0.001 rad)", 1_000_000_000, 57_295_779_513),
+    ];
+    for (label, raw_in, truth) in cases {
+        let x = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(raw_in).unwrap());
+        assert_05_ulp(label, i128::from(x.to_degrees_strict().to_bits()), truth);
+    }
+}
+
+/// `to_radians(v) = v · π/180`, correctly rounded (half-to-even) at
+/// SCALE=12. The `π/180` factor is computed externally from the same 50+
+/// digit π (NOT from the crate). The landmark angles cross-check the
+/// independently-asserted constants exactly: `to_radians(180)` == stored π,
+/// `to_radians(90)` == stored π/2, `to_radians(45)` == stored π/4,
+/// `to_radians(360)` == stored τ. Spans zero, ±, the landmarks, 1 deg, and
+/// non-landmark angles (57°, 100°).
+#[test]
+fn to_radians_strict_at_scale_12() {
+    // (label, input raw = degrees·10^12, externally-rounded truth)
+    let cases: [(&str, i128, i128); 12] = [
+        ("to_radians(0)", 0, 0),
+        ("to_radians(180 deg)", 180_000_000_000_000, 3_141_592_653_590),
+        ("to_radians(90 deg)", 90_000_000_000_000, 1_570_796_326_795),
+        ("to_radians(45 deg)", 45_000_000_000_000, 785_398_163_397),
+        ("to_radians(360 deg)", 360_000_000_000_000, 6_283_185_307_180),
+        ("to_radians(1 deg)", 1_000_000_000_000, 17_453_292_520),
+        ("to_radians(30 deg)", 30_000_000_000_000, 523_598_775_598),
+        ("to_radians(60 deg)", 60_000_000_000_000, 1_047_197_551_197),
+        ("to_radians(270 deg)", 270_000_000_000_000, 4_712_388_980_385),
+        ("to_radians(-90 deg)", -90_000_000_000_000, -1_570_796_326_795),
+        ("to_radians(57 deg)", 57_000_000_000_000, 994_837_673_637),
+        ("to_radians(100 deg)", 100_000_000_000_000, 1_745_329_251_994),
+    ];
+    for (label, raw_in, truth) in cases {
+        let x = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(raw_in).unwrap());
+        assert_05_ulp(label, i128::from(x.to_radians_strict().to_bits()), truth);
+    }
 }
 
 // ─── log family ───────────────────────────────────────────────────────
