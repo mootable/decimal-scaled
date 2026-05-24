@@ -798,6 +798,15 @@ harness = false
 required-features = ["wide", "bench-alt"]
 
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
+# div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
+# (div_knuth vs the zero-free-scratch div_knuth_fast) at the regressed
+# wide limb counts. The fast pre-check for the wide-division recovery.
+[[bench]]
+name = "div_kernel_ab"
+path = "benches/micro/div_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 [[bench]]
 name = "rem_kernel_ab"
 path = "benches/micro/rem_kernel_ab.rs"
