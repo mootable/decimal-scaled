@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `hypot_isqrt` -- integer hypotenuse `round(sqrt(a^2 + b^2))`.
+//! `hypot_pythagoras` -- integer hypotenuse `round(sqrt(a^2 + b^2))`.
 //!
 //! The integer-tier core of the hypotenuse: given two `Int<N>` values it
 //! forms the radicand `a^2 + b^2` (on the magnitudes -- the sign drops out
@@ -45,7 +45,7 @@ fn sig_len(a: &[u64]) -> usize {
 /// (the rounded root does not fit the signed range of `Int<N>`).
 #[inline]
 #[must_use]
-pub(crate) fn hypot_isqrt<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
+pub(crate) fn hypot_pythagoras<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
 where
     Int<N>: WorkScratch,
 {
@@ -112,7 +112,7 @@ where
 
 #[cfg(test)]
 mod tests {
-    use super::hypot_isqrt;
+    use super::hypot_pythagoras;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
@@ -126,66 +126,66 @@ mod tests {
     ];
 
     #[test]
-    fn hypot_isqrt_pythagorean_3_4_5_all_modes() {
+    fn hypot_pythagoras_pythagorean_3_4_5_all_modes() {
         let a = Int::<2>::from_i64(3);
         let b = Int::<2>::from_i64(4);
         let expected = Int::<2>::from_i64(5);
         for mode in ALL_MODES {
-            assert_eq!(hypot_isqrt::<2>(a, b, mode), Some(expected), "mode {mode:?}");
+            assert_eq!(hypot_pythagoras::<2>(a, b, mode), Some(expected), "mode {mode:?}");
         }
     }
 
     #[test]
-    fn hypot_isqrt_pythagorean_5_12_13_all_modes() {
+    fn hypot_pythagoras_pythagorean_5_12_13_all_modes() {
         let a = Int::<2>::from_i64(5);
         let b = Int::<2>::from_i64(12);
         let expected = Int::<2>::from_i64(13);
         for mode in ALL_MODES {
-            assert_eq!(hypot_isqrt::<2>(a, b, mode), Some(expected), "mode {mode:?}");
+            assert_eq!(hypot_pythagoras::<2>(a, b, mode), Some(expected), "mode {mode:?}");
         }
     }
 
     #[test]
-    fn hypot_isqrt_non_perfect_1_1() {
+    fn hypot_pythagoras_non_perfect_1_1() {
         let a = Int::<2>::from_i64(1);
         let b = Int::<2>::from_i64(1);
-        assert_eq!(hypot_isqrt::<2>(a, b, RoundingMode::Trunc).unwrap().as_i128(), 1);
-        assert_eq!(hypot_isqrt::<2>(a, b, RoundingMode::Ceiling).unwrap().as_i128(), 2);
-        assert_eq!(hypot_isqrt::<2>(a, b, RoundingMode::HalfToEven).unwrap().as_i128(), 1);
+        assert_eq!(hypot_pythagoras::<2>(a, b, RoundingMode::Trunc).unwrap().as_i128(), 1);
+        assert_eq!(hypot_pythagoras::<2>(a, b, RoundingMode::Ceiling).unwrap().as_i128(), 2);
+        assert_eq!(hypot_pythagoras::<2>(a, b, RoundingMode::HalfToEven).unwrap().as_i128(), 1);
     }
 
     #[test]
-    fn hypot_isqrt_zero_zero() {
+    fn hypot_pythagoras_zero_zero() {
         let z = Int::<2>::from_i64(0);
         for mode in ALL_MODES {
-            assert_eq!(hypot_isqrt::<2>(z, z, mode), Some(z), "mode {mode:?}");
+            assert_eq!(hypot_pythagoras::<2>(z, z, mode), Some(z), "mode {mode:?}");
         }
     }
 
     #[test]
-    fn hypot_isqrt_zero_x_equals_abs_x() {
+    fn hypot_pythagoras_zero_x_equals_abs_x() {
         let z = Int::<2>::from_i64(0);
         let x = Int::<2>::from_i64(42);
         for mode in ALL_MODES {
-            assert_eq!(hypot_isqrt::<2>(z, x, mode), Some(x), "mode {mode:?}");
+            assert_eq!(hypot_pythagoras::<2>(z, x, mode), Some(x), "mode {mode:?}");
         }
     }
 
     #[test]
-    fn hypot_isqrt_negative_inputs() {
+    fn hypot_pythagoras_negative_inputs() {
         let a = Int::<2>::from_i64(-3);
         let b = Int::<2>::from_i64(-4);
         let expected = Int::<2>::from_i64(5);
         for mode in ALL_MODES {
-            assert_eq!(hypot_isqrt::<2>(a, b, mode), Some(expected), "mode {mode:?}");
+            assert_eq!(hypot_pythagoras::<2>(a, b, mode), Some(expected), "mode {mode:?}");
         }
     }
 
     #[test]
-    fn hypot_isqrt_overflow_returns_none() {
+    fn hypot_pythagoras_overflow_returns_none() {
         // a = b = MAX magnitude. a^2 + b^2 ~= 2*MAX^2, root ~= MAX*sqrt(2)
         // which exceeds the signed range -> None.
         let m = Int::<2>::MAX;
-        assert_eq!(hypot_isqrt::<2>(m, m, RoundingMode::HalfToEven), None);
+        assert_eq!(hypot_pythagoras::<2>(m, m, RoundingMode::HalfToEven), None);
     }
 }

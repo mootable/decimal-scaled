@@ -9,11 +9,11 @@
 //! value. The single variant serves every `(N, SCALE)` cell; the per-cell
 //! selection lives in [`crate::policy::hypot`].
 //!
-//! - [`hypot_isqrt`] — `round(sqrt(a² + b²))` over a work width `W` that
+//! - [`hypot_pythagoras`] — `round(sqrt(a² + b²))` over a work width `W` that
 //!   covers `a² + b²`. Generic over the storage and work widths `(S, W)`;
 //!   the rounding step is identical to
 //!   [`crate::algos::sqrt::sqrt_newton`].
 //!
-//! [`hypot_isqrt`]: crate::algos::hypot::hypot_isqrt::hypot_isqrt
+//! [`hypot_pythagoras`]: crate::algos::hypot::hypot_pythagoras::hypot_pythagoras
 
-pub(crate) mod hypot_isqrt;
+pub(crate) mod hypot_pythagoras;

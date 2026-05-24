@@ -22,7 +22,7 @@
 //!
 //! # Algorithm
 //!
-//! The single algorithm ([`crate::algos::hypot::hypot_isqrt`]) forms the
+//! The single algorithm ([`crate::algos::hypot::hypot_pythagoras`]) forms the
 //! radicand `a² + b²` in a limb scratch buffer and takes the root via the
 //! int layer's width-agnostic slice `isqrt`. The root goes **down** to the
 //! integer layer; the kernel never calls the decimal `sqrt` surface on the
@@ -44,14 +44,14 @@ use crate::support::rounding::RoundingMode;
 /// with the kernel computation.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`hypot::hypot_isqrt::hypot_isqrt`] — `round(sqrt(a² + b²))` over a
-    /// work width `W` covering `a² + b²`, taking the floor root through
-    /// the integer-layer `isqrt`. The generic default for every tier.
-    Isqrt,
-    /// Schoolbook reference tag -- delegates to the same
-    /// [`hypot::hypot_isqrt::hypot_isqrt`] kernel. `hypot_isqrt` IS the
-    /// schoolbook form (`a² + b²` in `W`, then `W::isqrt`); this variant
-    /// exists as an explicit benchmarkable seam.
+    /// [`hypot::hypot_pythagoras::hypot_pythagoras`] — `round(sqrt(a² + b²))`.
+    /// Both operands share `10^SCALE` (it cancels out of the root), so this
+    /// dispatches DOWN to the integer-tier hypot on the raw storages. The
+    /// sole hypot algorithm.
+    Pythagoras,
+    /// Benchmarkable reference seam — delegates to the same
+    /// [`hypot::hypot_pythagoras::hypot_pythagoras`] kernel. `select` never
+    /// returns this variant.
     #[allow(dead_code)]
     Schoolbook,
 }
@@ -71,18 +71,20 @@ enum Select<const N: usize> {
 // ── 3. the matcher: const, keyed on `(N, SCALE)`, total over the key ──
 
 /// Pick the hypot algorithm for storage limb count `N` and decimal `SCALE`.
-/// Total over the key; `Isqrt` wins at every `(N, SCALE)`.
+/// Total over the key; `Pythagoras` wins at every `(N, SCALE)`.
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     let _ = (N, SCALE); // keys accepted for uniformity; one algorithm
-    Select::ByAlgorithm(Algorithm::Isqrt)
+    Select::ByAlgorithm(Algorithm::Pythagoras)
 }
 
 // ── 4. the shared dispatch: resolve the verdict, then dispatch ────────
 
-/// Shared hypot dispatch for storage `Int<N>` and `hypot_isqrt` work width
-/// `W`. `W` is the next-up work width covering `a² + b²` (`Int<2N>`),
-/// supplied by the caller because `Int<2N>` is not computable from `N` on
-/// stable. Negative inputs are handled by squaring (sign drops out).
+/// Shared hypot dispatch for storage `Int<N>`, decimal `SCALE`. Both
+/// operands carry the same `10^SCALE`, so it cancels out of the root and
+/// this is exactly integer hypot on the raw storages (dispatched DOWN to the
+/// int tier, which forms `a² + b²` in a limb scratch buffer). No work-width
+/// parameter; `SCALE` only labels the out-of-range panic. Negative inputs
+/// are handled by squaring (sign drops out).
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
@@ -100,11 +102,11 @@ where
         Select::ByValue(f) => f(&a),
     };
     match algo {
-        Algorithm::Isqrt => hypot::hypot_isqrt::hypot_isqrt::<N>(a, b, mode)
+        Algorithm::Pythagoras => hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
             .unwrap_or_else(|| {
                 crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
             }),
-        Algorithm::Schoolbook => hypot::hypot_isqrt::hypot_isqrt::<N>(a, b, mode)
+        Algorithm::Schoolbook => hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
             .unwrap_or_else(|| {
                 crate::support::diagnostics::overflow_panic_with_scale("hypot", SCALE)
             }),

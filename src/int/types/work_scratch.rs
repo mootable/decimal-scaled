@@ -3,7 +3,7 @@
 
 //! Work-scratch surface for the width-agnostic decimal root kernels.
 //!
-//! `sqrt_newton` / `hypot_isqrt` form a radicand spanning up to `2N` limbs,
+//! `sqrt_newton` / `hypot_pythagoras` form a radicand spanning up to `2N` limbs,
 //! `cbrt_newton` up to `4N`; they do that arithmetic in a fixed stack
 //! buffer rather than threading a work *type* `Int<2N>`/`Int<4N>` (which
 //! stable Rust cannot name from `N`). This trait supplies that buffer as an

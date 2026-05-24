@@ -12,13 +12,11 @@
 //! family -- both decimal operands share `10^SCALE`, which cancels out of
 //! the root.
 //!
-//! - [`hypot_isqrt`](hypot_isqrt::hypot_isqrt) -- the production kernel,
-//!   floor root via the Newton slice `isqrt`.
-//! - [`hypot_schoolbook`](hypot_schoolbook::hypot_schoolbook) -- the naive
-//!   reference / benchmarkable seam, floor root via the division-free,
-//!   float-free bitwise schoolbook `isqrt`. Numerically identical.
+//! - [`hypot_pythagoras`](hypot_pythagoras::hypot_pythagoras) -- the kernel:
+//!   form `a^2 + b^2` in scratch, floor root via the Newton slice `isqrt`,
+//!   round. The sole hypot algorithm; the policy's `Schoolbook` seam points
+//!   at it.
 //!
-//! The per-`N` choice between them lives in [`crate::int::policy::hypot`].
+//! The per-`N` policy lives in [`crate::int::policy::hypot`].
 
-pub(crate) mod hypot_isqrt;
-pub(crate) mod hypot_schoolbook;
+pub(crate) mod hypot_pythagoras;

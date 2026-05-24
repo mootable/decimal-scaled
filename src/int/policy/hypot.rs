@@ -20,21 +20,20 @@
 //! dead-arm-eliminated in release: each concrete `Int<N>` compiles to a
 //! direct call to one kernel, no runtime branch.
 //!
-//! # Algorithm selection
+//! # Algorithm
 //!
-//! Both algorithms are valid at every `N`. The production kernel
-//! ([`crate::int::algos::hypot::hypot_isqrt`]) takes the floor root via the
-//! Newton slice `isqrt`; the [`Schoolbook`](Algorithm::Schoolbook)
-//! reference uses the division-free bitwise `isqrt`. The Newton path wins
-//! everywhere, so `select` returns [`Algorithm::Isqrt`] for every `N`; the
-//! `Schoolbook` arm is the registered benchmarkable seam.
+//! One algorithm ([`crate::int::algos::hypot::hypot_pythagoras`]): form
+//! `a^2 + b^2` in a limb scratch buffer, take the floor root via the Newton
+//! slice `isqrt`, round. `select` returns [`Algorithm::Pythagoras`] at every
+//! `N`; the `Schoolbook` arm is the canonical benchmarkable seam pointing at
+//! the same kernel (the per-width root choice is the `isqrt` policy's job,
+//! not hypot's).
 //!
 //! Returns [`None`] from the kernel on true overflow (the rounded root does
 //! not fit the signed range of `Int<N>`); the type method maps that to its
 //! `Option` return.
 
-use crate::int::algos::hypot::hypot_isqrt::hypot_isqrt;
-use crate::int::algos::hypot::hypot_schoolbook::hypot_schoolbook;
+use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
 use crate::int::types::work_scratch::WorkScratch;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
@@ -46,12 +45,12 @@ use crate::support::rounding::RoundingMode;
 /// strict 1:1 with the kernel fns.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`hypot_isqrt`] -- `round(sqrt(a^2 + b^2))` taking the floor root
-    /// through the Newton slice `isqrt`. The generic default for every `N`.
-    Isqrt,
-    /// [`hypot_schoolbook`] -- same arithmetic, floor root via the
-    /// division-free, float-free bitwise schoolbook `isqrt`. The
-    /// correctness baseline / benchmarkable seam; numerically identical.
+    /// [`hypot_pythagoras`] -- `round(sqrt(a^2 + b^2))` taking the floor root
+    /// through the Newton slice `isqrt`. The sole hypot algorithm.
+    Pythagoras,
+    /// Benchmarkable reference seam -- delegates to the same
+    /// [`hypot_pythagoras`] kernel (`hypot_pythagoras` IS the schoolbook
+    /// form). `select` never returns this variant.
     #[allow(dead_code)]
     Schoolbook,
 }
@@ -71,10 +70,10 @@ enum Select<const N: usize> {
 // -- 3. the matcher: const, keyed on `N`, total over the key -----------
 
 /// Pick the integer hypot algorithm for storage limb count `N`. Total over
-/// the key; [`Algorithm::Isqrt`] wins at every `N`.
+/// the key; [`Algorithm::Pythagoras`] wins at every `N`.
 const fn select<const N: usize>() -> Select<N> {
     let _ = N; // key accepted for uniformity; one algorithm at every width
-    Select::ByAlgorithm(Algorithm::Isqrt)
+    Select::ByAlgorithm(Algorithm::Pythagoras)
 }
 
 // -- 4. the shared dispatch: resolve the verdict, then dispatch --------
@@ -98,7 +97,7 @@ where
         Select::ByValue(f) => f(&a),
     };
     match algo {
-        Algorithm::Isqrt => hypot_isqrt::<N>(a, b, mode),
-        Algorithm::Schoolbook => hypot_schoolbook::<N>(a, b, mode),
+        Algorithm::Pythagoras => hypot_pythagoras::<N>(a, b, mode),
+        Algorithm::Schoolbook => hypot_pythagoras::<N>(a, b, mode),
     }
 }

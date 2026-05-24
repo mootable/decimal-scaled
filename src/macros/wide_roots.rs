@@ -154,7 +154,7 @@ macro_rules! decl_wide_roots {
             ///
             /// Body delegates *down* to
             /// `policy::hypot::HypotPolicy::hypot_impl`, which routes to
-            /// the `algos::hypot::hypot_isqrt` algorithm. The impl
+            /// the `algos::hypot::hypot_pythagoras` algorithm. The impl
             /// lives in the algorithm, not in this method.
             #[inline]
             #[must_use]
