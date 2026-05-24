@@ -1,17 +1,17 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Worked example for the `ab_microbench` support module.
+//! Worked example for the `ab_microbench` N-way comparison API.
 //!
 //! Decision being modelled: the multiply policy
 //! (`src/int/policy/mul.rs`) must choose, per storage width, between the
 //! schoolbook kernel and the non-allocating Karatsuba kernel. The settled
 //! crossover lives in `KARATSUBA_THRESHOLD_U64`; this bench is the fast
 //! pre-check a future agent runs to sanity-check (or re-derive) which of the
-//! two a given width should pick BEFORE paying for the full crossover sweep
-//! in `int_ops_micro`/`mul_div_candidates`.
+//! registered algorithm arms should win at a given width BEFORE paying for
+//! the full crossover sweep in `int_ops_micro`/`mul_div_candidates`.
 //!
-//! Two real candidate kernels (both exported via
+//! Two registered algorithm arms (both exported via
 //! `decimal_scaled::__bench_internals`, hence `bench-alt`):
 //!
 //! - `school` -> `mul_slice` (schoolbook `O(n^2)`).
@@ -19,12 +19,16 @@
 //!   each width (threshold == L) so we measure a single real Karatsuba level,
 //!   the exact shape the dispatcher produces when the threshold equals L.
 //!
+//! A third algorithm arm (e.g. `("toom3", toom3_run)`) would slot into the
+//! `compare_all` vec alongside the two existing entries - no other changes
+//! needed. The harness scales to N arms.
+//!
 //! Two concrete TYPES: the two storage widths L = 16 limbs (Int1024) and
 //! L = 32 limbs (Int2048), supplied to the recipe via the `ab_sweep!` macro.
 //!
 //! Small value set: three seeded equal-length operand pairs spanning low /
 //! mid / high limb magnitudes. The harness `black_box`-es both operands and
-//! the product, so neither kernel is const-folded away.
+//! the product, so no kernel is const-folded away.
 //!
 //! Run with:
 //! `cargo bench --features "wide bench-alt" --bench mul_kernel_ab`
@@ -34,7 +38,7 @@ use decimal_scaled::__bench_internals::{mul_karatsuba_forced, mul_slice};
 
 #[path = "../support/ab_microbench.rs"]
 mod ab_microbench;
-use ab_microbench::{Candidate, ab_compare, micro_criterion};
+use ab_microbench::{compare_all, micro_criterion};
 
 /// A seeded, equal-length operand pair plus a label for its `BenchmarkId`.
 #[derive(Clone)]
@@ -81,10 +85,13 @@ fn kara_run(ops: Operands) -> Vec<u64> {
     out
 }
 
-/// One A/B comparison for a single width. The width is the TYPE under test;
-/// `width_label` names the criterion group after the equivalent `Int<L>`.
+/// N-way comparison for a single width using all registered algorithm arms.
+///
+/// The width is the TYPE under test; `width_label` names the criterion group
+/// after the equivalent `Int<L>`. To add a third algorithm arm (e.g. Toom-3),
+/// append `("toom3", toom3_run)` to the `compare_all` vec.
 fn compare_width(c: &mut Criterion, l: usize, width_label: &str) {
-    // Correctness cross-check: both kernels must agree before we time them.
+    // Correctness cross-check: all arms must agree before we time them.
     for ops in operand_set(l) {
         assert_eq!(
             school_run(ops.clone()),
@@ -94,17 +101,21 @@ fn compare_width(c: &mut Criterion, l: usize, width_label: &str) {
         );
     }
 
-    ab_compare(
+    compare_all(
         c,
         &format!("mul_kernel/{width_label}"),
         |ops: &Operands| ops.label.to_string(),
         operand_set(l),
-        Candidate::new("school", school_run),
-        Candidate::new("kara", kara_run),
+        vec![
+            ("school", school_run as fn(Operands) -> Vec<u64>),
+            ("kara",   kara_run),
+            // ("toom3", toom3_run),  // slot a third arm here
+        ],
     );
 }
 
-/// Sweep the two concrete widths via the ergonomic macro. The `$ty` marker
+/// Sweep all registered algorithm arms at two concrete widths via the ergonomic
+/// macro. The `$ty` marker
 /// documents the storage type each width corresponds to; the closure pins
 /// the concrete limb count.
 fn bench_mul_kernel(c: &mut Criterion) {
