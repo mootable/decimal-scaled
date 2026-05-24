@@ -223,6 +223,19 @@ pub mod __bench_internals {
     pub fn mul_karatsuba_forced(a: &[u64], b: &[u64], out: &mut [u64], threshold: usize) {
         crate::int::algos::mul::mul_karatsuba::mul_karatsuba_forced(a, b, out, threshold)
     }
+    /// Division engine candidates exposed for the `div_kernel_ab`
+    /// microbench (the dispatch-seam A/B that recovers the WIDE integer
+    /// division regression). Both take little-endian u64 magnitude limb
+    /// slices; `quot` / `rem` are written by the engine.
+    #[inline(never)]
+    pub fn div_knuth_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::algos::div::div_knuth::div_knuth(num, den, quot, rem)
+    }
+    #[inline(never)]
+    pub fn div_dispatch_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::policy::div_rem::dispatch(num, den, quot, rem)
+    }
+
     /// Remainder algorithm candidates exposed for the `rem_kernel_ab`
     /// microbench (the dispatch-seam A/B that decides the `rem` policy
     /// `select` arm per width).
