@@ -829,6 +829,17 @@ path = "benches/micro/rem_kernel_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# int_unary_kernel_ab: dispatch-seam A/B for the INT unary policies with a
+# registered reference arm -- sqr (half_product vs schoolbook), pow
+# (square_and_multiply vs schoolbook), isqrt / icbrt (f64-seeded Newton vs
+# the bitwise schoolbook reference). Confirms each `select` arm routes to
+# the benched winner across narrow + wide widths.
+[[bench]]
+name = "int_unary_kernel_ab"
+path = "benches/micro/int_unary_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # mul_div_native_ab: dispatch-seam A/B for the narrow decimal mul/div
 # policies (native hardware-i128 vs the generic widen kernels at N <= 2).
 [[bench]]
