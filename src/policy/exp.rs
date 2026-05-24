@@ -378,8 +378,7 @@ exp_policy_wide_series!(D307, 16, crate::types::widths::wide_trig_d307::Core);
 
 // D462 — Tang exp probed at SCALE 225..=235 and LOST (~75% regression):
 // at Int<48> the Tang post-reduction Taylor needs ~95 wide mults vs the
-// Smith r/2^n path's ~28 wide squarings. Series stays the default; the
-// lookup kernel is retained behind `cfg(test)` as the lab probe.
+// Smith r/2^n path's ~28 wide squarings. Series stays the default.
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 exp_policy_wide_series!(D462, 24, crate::types::widths::wide_trig_d462::Core);
 

@@ -25,12 +25,12 @@
 //! call a method on a decimal type. `policy::trig` (the hyperbolic
 //! family) calls them *down*.
 //!
-//! Collapses the four per-tier `lookup_d{57_s18_22,115_s57,153_s70_82,
-//! 307_s140_160}_hyper` kernels into one generic over `C: WideTrigCore`,
+//! Collapses the four per-tier hyperbolic kernels (D57 18..=22, D115 57,
+//! D153 70..=82, D307 140..=160) into one generic over `C: WideTrigCore`,
 //! the band's narrow guard `GUARD`, and the band's working-scale `exp`
 //! kernel (a function pointer so each band keeps its own exp realisation
 //! — the Tang `tang_exp_fixed::<C, M, INTERNAL_EXTRA>` surface or, at
-//! D307, the retained per-tier `lookup_d307_s140_160_tang::tang_exp_fixed`).
+//! D307, the retained per-tier `exp_tang_16limb_s140_160::tang_exp_fixed`).
 
 use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::traits::BigInt;

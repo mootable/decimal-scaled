@@ -58,8 +58,8 @@ use crate::int::types::Int;
 /// integer-division path. Larger M shrinks the post-table residual
 /// `|y| ≤ 1/(2M)` and so shaves Taylor iterations.
 ///
-/// Mirrors the tuning from the D57 exp lookup (see
-/// [`crate::algos::exp::lookup_d57_s45_56::M`]): same `Int<16>`-wide
+/// Mirrors the tuning from the D57 exp lookup (the collapsed
+/// per-tier 45..=56 exp table): same `Int<16>`-wide
 /// work integer, same Knuth-dispatch arithmetic cost per slot, same
 /// per-thread memoisation pattern. `M = 512` strikes the same balance
 /// here — the post-table Taylor remainder is small enough that the

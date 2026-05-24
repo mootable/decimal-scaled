@@ -362,7 +362,7 @@ mod borrow_d57 {
     pub(crate) fn asin_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
-            trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(widened.0, mode)
+            trig::inverse_tang_3limb_s18_22::asin_strict::<SCALE>(widened.0, mode)
         } else {
             widened.asin_strict_with(mode).0
         };
@@ -374,7 +374,7 @@ mod borrow_d57 {
     pub(crate) fn acos_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
         let widened: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
-            trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(widened.0, mode)
+            trig::inverse_tang_3limb_s18_22::acos_strict::<SCALE>(widened.0, mode)
         } else {
             widened.acos_strict_with(mode).0
         };
@@ -391,7 +391,7 @@ mod borrow_d57 {
         let y_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(y_raw).into();
         let x_wide: crate::D<crate::int::types::Int<3>, SCALE> = crate::D::<crate::int::types::Int<2>, SCALE>::from_bits(x_raw).into();
         let result_raw = if matches!(SCALE, 18..=22) {
-            trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(y_wide.0, x_wide.0, mode)
+            trig::inverse_tang_3limb_s18_22::atan2_strict::<SCALE>(y_wide.0, x_wide.0, mode)
         } else {
             y_wide.atan2_strict_with(x_wide, mode).0
         };
@@ -1219,7 +1219,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
     fn sin_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_sincos::sin_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::sincos_tang_3limb_s18_22::sin_strict::<SCALE>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
@@ -1235,7 +1235,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
     fn cos_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_sincos::cos_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::sincos_tang_3limb_s18_22::cos_strict::<SCALE>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
@@ -1251,7 +1251,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
     fn tan_impl(self, mode: RoundingMode) -> Self {
         Self(match forward::resolve_tan::<3, SCALE>(&self.0) {
             forward::Algorithm::Series => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_sincos::tan_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::sincos_tang_3limb_s18_22::tan_strict::<SCALE>(self.0, mode),
                 _ => crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             // tan has no D57 Tang band; the arm is dead-arm-eliminated
@@ -1271,7 +1271,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
                 _ => crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(self.0, mode),
             },
             forward::Algorithm::Tang => {
-                trig::lookup_d57_s44_56_atan::atan_strict::<SCALE>(self.0, mode)
+                trig::atan_tang_3limb_s44_56::atan_strict::<SCALE>(self.0, mode)
             }
         })
     }
@@ -1286,7 +1286,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
     fn asin_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_inverse::asin_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::inverse_tang_3limb_s18_22::asin_strict::<SCALE>(self.0, mode),
                 _ => return self.asin_strict_with(mode),
             },
         })
@@ -1299,7 +1299,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
     fn acos_impl(self, mode: RoundingMode) -> Self {
         Self(match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
-                18..=22 => trig::lookup_d57_s18_22_inverse::acos_strict::<SCALE>(self.0, mode),
+                18..=22 => trig::inverse_tang_3limb_s18_22::acos_strict::<SCALE>(self.0, mode),
                 _ => return self.acos_strict_with(mode),
             },
         })
@@ -1313,7 +1313,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<3>, SCALE>
         Self(match inverse::resolve::<3, SCALE>(&self.0) {
             inverse::Algorithm::Atan => match SCALE {
                 18..=22 => {
-                    trig::lookup_d57_s18_22_inverse::atan2_strict::<SCALE>(self.0, other.0, mode)
+                    trig::inverse_tang_3limb_s18_22::atan2_strict::<SCALE>(self.0, other.0, mode)
                 }
                 _ => return self.atan2_strict_with(other, mode),
             },
@@ -1602,7 +1602,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
     fn sinh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::lookup_d307_s140_160_tang::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::lookup_d307_s140_160_tang::tang_exp_fixed),
+                140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
                 _ => return self.sinh_strict_with(mode),
             },
         })
@@ -1615,7 +1615,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
     fn cosh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::lookup_d307_s140_160_tang::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::lookup_d307_s140_160_tang::tang_exp_fixed),
+                140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
                 _ => return self.cosh_strict_with(mode),
             },
         })
@@ -1628,7 +1628,7 @@ impl<const SCALE: u32> TrigPolicy for crate::D<crate::int::types::Int<16>, SCALE
     fn tanh_impl(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::lookup_d307_s140_160_tang::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::lookup_d307_s140_160_tang::tang_exp_fixed),
+                140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
                 _ => return self.tanh_strict_with(mode),
             },
         })

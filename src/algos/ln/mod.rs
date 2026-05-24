@@ -15,7 +15,7 @@
 pub(crate) mod ln_series_2limb;
 
 /// Tier-generic Tang-style table-driven `ln_strict` kernel, generic over
-/// `WideTrigCore`. Collapses the thirteen per-tier `lookup_d*_tang`
+/// `WideTrigCore`. Collapses the thirteen per-tier Tang ln
 /// kernels (D57 .. D1232) into one. The `policy::ln` Tang arms call it
 /// with the tier's `Core`, `SCALE`, narrow guard, series cap and
 /// narrowing strategy.

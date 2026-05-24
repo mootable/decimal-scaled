@@ -38,7 +38,7 @@
 //! surface; it never calls a method on a decimal type. `policy::trig`
 //! (the forward family) calls the `*_tang_with_taylor` wrappers *down*.
 //!
-//! Collapses the per-tier D57 44..=56 `lookup_d57_s44_56_sincos` Tang
+//! Collapses the per-tier D57 44..=56 sincos Tang
 //! kernel into one generic over `C: WideTrigCore`, the `SCALE`, and the
 //! table size `M`.
 
