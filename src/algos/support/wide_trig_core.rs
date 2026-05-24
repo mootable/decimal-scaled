@@ -121,8 +121,48 @@ pub(crate) trait WideTrigCore {
 
     /// `(a · 10^w) / b`, rounded half-to-even.
     fn div(a: Self::W, b: Self::W, w: u32) -> Self::W;
+    /// `(a · b) / 10^w`, rounded half-to-even — the plain work-int
+    /// multiply. Needed by the inverse / inverse-hyperbolic schoolbooks
+    /// (`x^2`, `inv^2`, `t*(t+2)`).
+    fn mul(a: Self::W, b: Self::W, w: u32) -> Self::W;
+    /// Integer square root of a non-negative working-scale value at
+    /// scale `w` (`sqrt(v / 10^w) * 10^w`). The leaf asin/acos/asinh/
+    /// acosh schoolbooks need it (`asin = atan(x / sqrt(1 - x^2))`).
+    /// Dispatches down to the work-int root.
+    fn sqrt_fixed(v: Self::W, w: u32) -> Self::W;
+    /// `ln(1 + t)` at working scale `w`, accurate for small `t` — the
+    /// near-1 branch of the acosh schoolbook (avoids the `v^2 - 1`
+    /// cancellation as `v -> 1`).
+    fn log1p_fixed(t: Self::W, w: u32) -> Self::W;
     /// Bit length of `|v|` (0 for zero).
     fn bit_length(v: Self::W) -> u32;
+
+    // hyperbolic exp-identity kernels (sinh/cosh/tanh schoolbooks)
+
+    /// The `ceil(|x| * log10(e))` integer-digit lift for the large-arg
+    /// `e^x` reassembly, used to set the base guard so a big `sinh`/
+    /// `cosh` stays sub-storage-ULP. `mag_at_scale` is `x * 10^scale`.
+    fn exp_result_int_digits(mag_at_scale: Self::W, scale: u32) -> u32;
+    /// `sinh(|x|)` at working scale `w` via the `(e^x - e^-x)/2`
+    /// identity (composed in the wider [`Self::Wexp`]); caller reapplies
+    /// the sign.
+    fn sinh_pos_wide(av_w: Self::W, w: u32) -> Self::W;
+    /// `cosh(|x|)` at working scale `w` via the `(e^x + e^-x)/2`
+    /// identity.
+    fn cosh_pos_wide(av_w: Self::W, w: u32) -> Self::W;
+    /// `tanh(|x|)` at working scale `w` via the
+    /// `(e^x - e^-x)/(e^x + e^-x)` identity; caller reapplies the sign.
+    fn tanh_pos_wide(av_w: Self::W, w: u32) -> Self::W;
+
+    /// Directed-rounding narrowing with Ziv escalation, forcing a
+    /// confirm recompute even in nearest modes — the acosh / atanh
+    /// near-special path (the residual can sit on a rounding boundary).
+    fn round_to_storage_directed_near_special(
+        base_guard: u32,
+        target: u32,
+        mode: RoundingMode,
+        recompute: &mut dyn FnMut(u32) -> Self::W,
+    ) -> Self::Storage;
 
     // ── working-scale helpers the Tang lookup kernels need ─────────────
 

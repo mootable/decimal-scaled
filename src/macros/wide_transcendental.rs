@@ -2589,8 +2589,45 @@ macro_rules! decl_wide_transcendental {
                     div(a, b, w)
                 }
                 #[inline]
+                fn mul(a: W, b: W, w: u32) -> W {
+                    mul(a, b, w)
+                }
+                #[inline]
+                fn sqrt_fixed(v: W, w: u32) -> W {
+                    sqrt_fixed(v, w)
+                }
+                #[inline]
+                fn log1p_fixed(t: W, w: u32) -> W {
+                    log1p_fixed(t, w)
+                }
+                #[inline]
                 fn bit_length(v: W) -> u32 {
                     bit_length(v)
+                }
+                #[inline]
+                fn exp_result_int_digits(mag_at_scale: W, scale: u32) -> u32 {
+                    exp_result_int_digits(mag_at_scale, scale)
+                }
+                #[inline]
+                fn sinh_pos_wide(av_w: W, w: u32) -> W {
+                    sinh_pos_wide(av_w, w)
+                }
+                #[inline]
+                fn cosh_pos_wide(av_w: W, w: u32) -> W {
+                    cosh_pos_wide(av_w, w)
+                }
+                #[inline]
+                fn tanh_pos_wide(av_w: W, w: u32) -> W {
+                    tanh_pos_wide(av_w, w)
+                }
+                #[inline]
+                fn round_to_storage_directed_near_special(
+                    base_guard: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                    recompute: &mut dyn FnMut(u32) -> W,
+                ) -> $Storage {
+                    round_to_storage_directed_near_special(base_guard, target, mode, recompute)
                 }
                 #[inline]
                 fn one(w: u32) -> W {
