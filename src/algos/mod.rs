@@ -57,3 +57,7 @@ pub(crate) mod trig;
 // integer (`support::fixed`), and the Newton-Raphson reciprocal
 // divide (`support::newton_reciprocal`).
 pub(crate) mod support;
+
+// Unit tests for the schoolbook baselines (add/sub/neg/rem/mul/div).
+#[cfg(test)]
+mod schoolbook_tests;
