@@ -301,6 +301,49 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<2> {
         crate::algos::div::div_widen_scale::div_widen_scale::<2>(a, b, mult, mode)
     }
+    /// Decimal multiply kernels exposed for the `mul_div_native_ab`
+    /// microbench (the narrow native-vs-widen mul A/B at the dispatch seam).
+    #[inline(never)]
+    pub fn dec_mul_native<const N: usize, const SCALE: u32>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+        mult: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mult, mode)
+    }
+    #[inline(never)]
+    pub fn dec_mul_widen_divide_n1<const SCALE: u32>(
+        a: crate::int::types::Int<1>,
+        b: crate::int::types::Int<1>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<1> {
+        crate::algos::mul::mul_widen_divide::mul_widen_divide::<1, SCALE>(a, b, mode)
+    }
+    #[inline(never)]
+    pub fn dec_mul_widen_divide_n2<const SCALE: u32>(
+        a: crate::int::types::Int<2>,
+        b: crate::int::types::Int<2>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<2> {
+        crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(a, b, mode)
+    }
+    /// Decimal remainder kernels exposed for the `rem_kernel_ab` microbench
+    /// (the narrow native-vs-int-layer decimal rem A/B at the dispatch seam).
+    #[inline(never)]
+    pub fn dec_rem_int_layer<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::rem::rem_int_layer::rem_int_layer::<N>(a, b)
+    }
+    #[inline(never)]
+    pub fn dec_rem_native<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::rem::rem_native::rem_native::<N>(a, b)
+    }
     /// Build an `Int<N>` from a little-endian magnitude limb array (sign
     /// false). Lets the bench construct wide operands without exposing the
     /// internal constructors.

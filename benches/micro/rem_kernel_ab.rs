@@ -20,7 +20,8 @@
 use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::__bench_internals::{
-    int_from_mag_limbs, rem_native, rem_schoolbook, rem_via_div_rem,
+    dec_rem_int_layer, dec_rem_native, int_from_mag_limbs, rem_native, rem_schoolbook,
+    rem_via_div_rem,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -112,10 +113,32 @@ fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
     );
 }
 
+/// Decimal-rem dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`).
+/// Narrow widths only: native hardware `%` vs the generic int-layer path.
+fn compare_dec_rem<const N: usize>(c: &mut Criterion, label: &str) {
+    for p in operand_set::<N>() {
+        assert_eq!(dec_rem_native::<N>(p.clone().a, p.clone().b),
+            dec_rem_int_layer::<N>(p.clone().a, p.clone().b),
+            "dec native vs int_layer disagree {label} {}", p.label);
+    }
+    compare_all(
+        c,
+        &format!("dec_rem/{label}"),
+        |p: &Pair<N>| p.label.to_string(),
+        operand_set::<N>(),
+        vec![
+            ("native", (|p: Pair<N>| dec_rem_native::<N>(p.a, p.b)) as fn(Pair<N>) -> Int<N>),
+            ("int_layer", |p: Pair<N>| dec_rem_int_layer::<N>(p.a, p.b)),
+        ],
+    );
+}
+
 fn bench(c: &mut Criterion) {
     decimal_scaled_ab_sweep!(c =>
         Int<1> => |c: &mut Criterion| compare_narrow::<1>(c, "Int64_D18"),
         Int<2> => |c: &mut Criterion| compare_narrow::<2>(c, "Int128_D38"),
+        Int<1> => |c: &mut Criterion| compare_dec_rem::<1>(c, "D18"),
+        Int<2> => |c: &mut Criterion| compare_dec_rem::<2>(c, "D38"),
         Int<4> => |c: &mut Criterion| compare_wide::<4>(c, "Int256_D76"),
         Int<8> => |c: &mut Criterion| compare_wide::<8>(c, "Int512_D153"),
         Int<64> => |c: &mut Criterion| compare_wide::<64>(c, "Int4096_D1232"),

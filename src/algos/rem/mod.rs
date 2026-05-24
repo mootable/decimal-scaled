@@ -7,3 +7,4 @@
 //! [`rem_int_layer`]: crate::algos::rem::rem_int_layer::rem_int_layer
 
 pub(crate) mod rem_int_layer;
+pub(crate) mod rem_native;

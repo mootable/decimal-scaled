@@ -30,7 +30,8 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
-    dec_div_native, dec_div_widen_scale_n1, dec_div_widen_scale_n2, int_from_mag_limbs,
+    dec_div_native, dec_div_widen_scale_n1, dec_div_widen_scale_n2, dec_mul_native,
+    dec_mul_widen_divide_n1, dec_mul_widen_divide_n2, int_from_mag_limbs,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -97,10 +98,41 @@ fn div2<const S: u32>(c: &mut Criterion, label: &str) {
         vec![("native", Box::new(nat) as Box<dyn Fn(Pair<2>) -> Int<2>>), ("widen", Box::new(wid))]);
 }
 
+// ---- decimal multiply: native vs widen-divide ----
+
+fn mul1<const S: u32>(c: &mut Criterion, label: &str) {
+    let m = Int::<1>::TEN.pow(S);
+    let nat = move |p: Pair<1>| dec_mul_native::<1, S>(p.a, p.b, m, MODE);
+    let wid = move |p: Pair<1>| dec_mul_widen_divide_n1::<S>(p.a, p.b, MODE);
+    for p in operand_set::<1>(28) {
+        assert_eq!(nat(p.clone()), wid(p.clone()), "mul1 {label} {}", p.label);
+    }
+    compare_all(c, &format!("mul_native/{label}"), |p: &Pair<1>| p.label.to_string(),
+        operand_set::<1>(28),
+        vec![("native", Box::new(nat) as Box<dyn Fn(Pair<1>) -> Int<1>>), ("widen", Box::new(wid))]);
+}
+
+fn mul2<const S: u32>(c: &mut Criterion, label: &str) {
+    let m = Int::<2>::TEN.pow(S);
+    let nat = move |p: Pair<2>| dec_mul_native::<2, S>(p.a, p.b, m, MODE);
+    let wid = move |p: Pair<2>| dec_mul_widen_divide_n2::<S>(p.a, p.b, MODE);
+    for p in operand_set::<2>(56) {
+        assert_eq!(nat(p.clone()), wid(p.clone()), "mul2 {label} {}", p.label);
+    }
+    compare_all(c, &format!("mul_native/{label}"), |p: &Pair<2>| p.label.to_string(),
+        operand_set::<2>(56),
+        vec![("native", Box::new(nat) as Box<dyn Fn(Pair<2>) -> Int<2>>), ("widen", Box::new(wid))]);
+}
+
 fn bench(c: &mut Criterion) {
     div1::<6>(c, "D18_s6");
+    div1::<18>(c, "D18_s18");
     div2::<6>(c, "D38_s6");
     div2::<18>(c, "D38_s18");
+    mul1::<6>(c, "D18_s6");
+    mul1::<18>(c, "D18_s18");
+    mul2::<6>(c, "D38_s6");
+    mul2::<18>(c, "D38_s18");
 }
 
 fn main() {
