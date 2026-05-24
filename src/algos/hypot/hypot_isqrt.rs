@@ -27,7 +27,9 @@ use crate::int::algos::support::limbs::{add_assign, cmp_cross, is_zero, sub_assi
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-const SCRATCH: usize = 288;
+use crate::int::algos::support::limbs::work_scratch;
+
+const SCRATCH: usize = work_scratch(2);
 
 #[inline]
 fn sig_len(a: &[u64]) -> usize {

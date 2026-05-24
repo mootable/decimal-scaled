@@ -29,7 +29,9 @@ use crate::support::rounding::RoundingMode;
 
 /// Limb scratch budget — matches the int root kernels' `SCRATCH_LIMBS`
 /// (288 u64), covering the widest radicand (`4 · Int<64>` = 256 limbs).
-const SCRATCH: usize = 288;
+use crate::int::algos::support::limbs::work_scratch;
+
+const SCRATCH: usize = work_scratch(4);
 
 /// Significant limb length of `a` (index of the highest non-zero limb + 1),
 /// clamped to at least 1.

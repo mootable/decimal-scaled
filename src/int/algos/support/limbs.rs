@@ -16,6 +16,50 @@
 //! The core routines are `const fn` so the integer types built on them
 //! can expose `const` constructors and constants.
 
+/// Widest decimal storage limb count `N` enabled by the build's width
+/// features (D38=2, D307=16, D616=32, D1232=64). The work-scratch sizing
+/// derives from it via [`work_scratch`] — ONE feature-gated const + one
+/// `const fn`, no per-`Int<N>` impls.
+#[cfg(any(feature = "xx-wide", feature = "d924", feature = "d1232"))]
+pub(crate) const MAX_WORK_N: usize = 64;
+#[cfg(all(
+    not(any(feature = "xx-wide", feature = "d924", feature = "d1232")),
+    any(feature = "x-wide", feature = "d462", feature = "d616")
+))]
+pub(crate) const MAX_WORK_N: usize = 32;
+#[cfg(all(
+    not(any(
+        feature = "xx-wide", feature = "d924", feature = "d1232",
+        feature = "x-wide", feature = "d462", feature = "d616"
+    )),
+    any(
+        feature = "wide", feature = "d57", feature = "d76", feature = "d115",
+        feature = "d153", feature = "d230", feature = "d307"
+    )
+))]
+pub(crate) const MAX_WORK_N: usize = 16;
+#[cfg(not(any(
+    feature = "xx-wide", feature = "d924", feature = "d1232",
+    feature = "x-wide", feature = "d462", feature = "d616",
+    feature = "wide", feature = "d57", feature = "d76", feature = "d115",
+    feature = "d153", feature = "d230", feature = "d307"
+)))]
+pub(crate) const MAX_WORK_N: usize = 2;
+
+/// Fixed limb-scratch budget for a width-agnostic kernel whose work value
+/// spans `mult·N` limbs: `mult = 2` for the 2N-family (`sqrt`/`hypot`/
+/// `isqrt_newton`, radicand ≤ 2N), `mult = 4` for the 4N-family
+/// (`cbrt`/`icbrt_newton`, radicand ≤ 4N). Sized
+/// `mult·MAX_WORK_N + ceil(MAX_WORK_N/2)` — the work width plus a `0.5·N`
+/// margin for the `work = n.len()+1` carry-limb sizing (reproducing the
+/// proven `288 = work_scratch(4)` at xx-wide). Kernels expand in limbs
+/// rather than a work *type* `Int<2N>`/`Int<4N>` (unnameable from `N` on
+/// stable; see the algorithim-optimiser skill §5). A future
+/// `nightly`/`generic_const_exprs` path can size to the call's actual `N`.
+pub(crate) const fn work_scratch(mult: usize) -> usize {
+    mult * MAX_WORK_N + (MAX_WORK_N + 1) / 2
+}
+
 /// `a == 0`.
 #[inline]
 pub(crate) const fn is_zero(a: &[u64]) -> bool {
