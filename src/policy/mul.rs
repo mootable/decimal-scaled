@@ -85,13 +85,17 @@ enum Select<const N: usize> {
 /// `SCALE`. Total over the key; `WidenDivide` wins at every `(N, SCALE)`.
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     let _ = SCALE;
-    // D18 (`N == 1`, i64 storage) is the band where the hardware
-    // multiply-then-rescale (`i128 / u64` schoolbook divide, two `divq`)
-    // beats forming a `2N`-limb product and routing it through the MG /
-    // Newton magnitude divide (microbench: native beats widen-divide
-    // decisively at D18). `N >= 2` keeps the generic widen-divide kernel.
+    // D18 (`N == 1`, i64) and D38 (`N == 2`, i128) both fit a single `i128`
+    // product after the magnitude widens, so the hardware multiply-then-
+    // rescale (`mul_native` → `mul_div_pow10_with`, the kernel 0.4.4 shipped:
+    // one `i128` mul + a hardware `i128 / 10^SCALE` divide) beats forming a
+    // `2N`-limb product and routing it through the MG/Newton magnitude
+    // divide. Earlier microbench routed `N == 2` to widen-divide, but it was
+    // only ever compared widen-vs-native within 0.5.0 — both lost to 0.4.4's
+    // native kernel, which is what `Native` now restores. `N >= 3` (true
+    // multi-limb) keeps the generic widen-divide kernel.
     match N {
-        1 => Select::ByAlgorithm(Algorithm::Native),
+        1 | 2 => Select::ByAlgorithm(Algorithm::Native),
         _ => Select::ByAlgorithm(Algorithm::WidenDivide),
     }
 }
@@ -120,9 +124,11 @@ where
     };
     match algo {
         Algorithm::Native => {
-            // 10^SCALE in Int<N>; folds per (N, SCALE), used only on the
-            // release-wrap path.
-            let mult: Int<N> = <Int<N>>::TEN.pow(SCALE);
+            // 10^SCALE in Int<N>, used only on the release-wrap path.
+            // Forced to fold at compile time via the `const` block: a bare
+            // `TEN.pow(SCALE)` reaches the int pow as a runtime `u32`
+            // exponent and runs the square-and-multiply every call.
+            let mult: Int<N> = const { <Int<N>>::TEN.pow(SCALE) };
             crate::algos::mul::mul_native::mul_native::<N, SCALE>(a, b, mult, mode)
         }
         Algorithm::WidenDivide => {

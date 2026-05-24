@@ -116,8 +116,11 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
 where
     Int<N>: WorkScratch,
 {
-    // 10^SCALE in Int<N> storage; folds at compile time per (N, SCALE).
-    let mult: Int<N> = <Int<N>>::TEN.pow(SCALE);
+    // 10^SCALE in Int<N> storage, forced to fold at compile time per
+    // (N, SCALE) via the `const` block — a bare `TEN.pow(SCALE)` call runs
+    // the int pow square-and-multiply at RUNTIME (the exponent reaches the
+    // method as a plain `u32`), so the `const {}` is load-bearing.
+    let mult: Int<N> = const { <Int<N>>::TEN.pow(SCALE) };
     let algo = match const { select::<N, SCALE>() } {
         Select::ByAlgorithm(a) => a,
         Select::ByValue(f) => f(&a, &b),

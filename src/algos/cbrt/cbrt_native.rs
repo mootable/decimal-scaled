@@ -81,7 +81,7 @@ fn icbrt_w_seeded<const W: usize>(n: Int<W>) -> Int<W> {
 #[must_use]
 pub(crate) fn cbrt_native<const N: usize, const W: usize>(
     raw: Int<N>,
-    scale: u32,
+    pow10_2scale: Int<W>,
     mode: RoundingMode,
 ) -> Int<N> {
     if raw == Int::<N>::ZERO {
@@ -92,7 +92,11 @@ pub(crate) fn cbrt_native<const N: usize, const W: usize>(
     let widened: Int<W> = raw.resize_to::<Int<W>>();
     let negative = widened < zero;
     let mag = if negative { -widened } else { widened };
-    let n: Int<W> = mag * Int::<W>::TEN.pow(2 * scale);
+    // `pow10_2scale` is `10^(2·SCALE)` in `Int<W>`, supplied pre-computed by
+    // the caller so it folds at compile time (`const { Int::<W>::TEN.pow(2 *
+    // SCALE) }` in the dispatch) instead of running the int pow at runtime
+    // per call.
+    let n: Int<W> = mag * pow10_2scale;
 
     let q = icbrt_w_seeded::<W>(n);
 
@@ -127,7 +131,7 @@ pub(crate) fn cbrt_native<const N: usize, const W: usize>(
 #[inline]
 #[must_use]
 pub(crate) fn cbrt_native_d57s20(raw: Int<3>, mode: RoundingMode) -> Int<3> {
-    cbrt_native::<3, 6>(raw, 20, mode)
+    cbrt_native::<3, 6>(raw, const { Int::<6>::TEN.pow(2 * 20) }, mode)
 }
 
 #[cfg(all(test, feature = "std"))]
@@ -160,7 +164,7 @@ mod tests {
         for &r in raws {
             let raw = Int::<N>::from_i128(r);
             for mode in ALL_MODES {
-                let got = cbrt_native::<N, W>(raw, scale, mode);
+                let got = cbrt_native::<N, W>(raw, Int::<W>::TEN.pow(2 * scale), mode);
                 let want = cbrt_newton::<N>(raw, scale, mode);
                 assert_eq!(got, want, "N={N} W={W} scale={scale} raw={r} mode={mode:?}");
             }
@@ -249,13 +253,13 @@ mod tests {
     fn cbrt_native_near_max_magnitude_all_cells() {
         for &neg in &[false, true] {
             for mode in ALL_MODES {
-                assert_eq!(cbrt_native::<3, 6>(near_max::<3>(neg), 20, mode), cbrt_newton::<3>(near_max::<3>(neg), 20, mode), "D57 neg={neg} mode {mode:?}");
-                assert_eq!(cbrt_native::<4, 8>(near_max::<4>(neg), 35, mode), cbrt_newton::<4>(near_max::<4>(neg), 35, mode), "D76 neg={neg} mode {mode:?}");
-                assert_eq!(cbrt_native::<6, 12>(near_max::<6>(neg), 57, mode), cbrt_newton::<6>(near_max::<6>(neg), 57, mode), "D115 neg={neg} mode {mode:?}");
-                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), 75, mode), cbrt_newton::<8>(near_max::<8>(neg), 75, mode), "D153s75 neg={neg} mode {mode:?}");
-                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), 76, mode), cbrt_newton::<8>(near_max::<8>(neg), 76, mode), "D153s76 neg={neg} mode {mode:?}");
-                assert_eq!(cbrt_native::<12, 25>(near_max::<12>(neg), 115, mode), cbrt_newton::<12>(near_max::<12>(neg), 115, mode), "D230 neg={neg} mode {mode:?}");
-                assert_eq!(cbrt_native::<16, 32>(near_max::<16>(neg), 150, mode), cbrt_newton::<16>(near_max::<16>(neg), 150, mode), "D307 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<3, 6>(near_max::<3>(neg), Int::<6>::TEN.pow(2 * 20), mode), cbrt_newton::<3>(near_max::<3>(neg), 20, mode), "D57 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<4, 8>(near_max::<4>(neg), Int::<8>::TEN.pow(2 * 35), mode), cbrt_newton::<4>(near_max::<4>(neg), 35, mode), "D76 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<6, 12>(near_max::<6>(neg), Int::<12>::TEN.pow(2 * 57), mode), cbrt_newton::<6>(near_max::<6>(neg), 57, mode), "D115 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), Int::<16>::TEN.pow(2 * 75), mode), cbrt_newton::<8>(near_max::<8>(neg), 75, mode), "D153s75 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<8, 16>(near_max::<8>(neg), Int::<16>::TEN.pow(2 * 76), mode), cbrt_newton::<8>(near_max::<8>(neg), 76, mode), "D153s76 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<12, 25>(near_max::<12>(neg), Int::<25>::TEN.pow(2 * 115), mode), cbrt_newton::<12>(near_max::<12>(neg), 115, mode), "D230 neg={neg} mode {mode:?}");
+                assert_eq!(cbrt_native::<16, 32>(near_max::<16>(neg), Int::<32>::TEN.pow(2 * 150), mode), cbrt_newton::<16>(near_max::<16>(neg), 150, mode), "D307 neg={neg} mode {mode:?}");
             }
         }
     }

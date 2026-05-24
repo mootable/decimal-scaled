@@ -78,7 +78,7 @@ fn isqrt_w_seeded<const W: usize>(n: Int<W>) -> Int<W> {
 #[must_use]
 pub(crate) fn sqrt_native<const N: usize, const W: usize>(
     raw: Int<N>,
-    scale: u32,
+    pow10_scale: Int<W>,
     mode: RoundingMode,
 ) -> Int<N> {
     if raw <= Int::<N>::ZERO {
@@ -87,7 +87,10 @@ pub(crate) fn sqrt_native<const N: usize, const W: usize>(
     let zero = Int::<W>::ZERO;
     let one = Int::<W>::ONE;
     let widened: Int<W> = raw.resize_to::<Int<W>>();
-    let n: Int<W> = widened * Int::<W>::TEN.pow(scale);
+    // `pow10_scale` is `10^SCALE` in `Int<W>`, supplied pre-computed by the
+    // caller so it folds at compile time (`const { Int::<W>::TEN.pow(SCALE) }`
+    // in the dispatch) instead of running the int pow at runtime per call.
+    let n: Int<W> = widened * pow10_scale;
 
     let q = isqrt_w_seeded::<W>(n);
 
@@ -137,7 +140,7 @@ mod tests {
         for &r in raws {
             let raw = Int::<N>::from_i128(r);
             for mode in ALL_MODES {
-                let got = sqrt_native::<N, W>(raw, scale, mode);
+                let got = sqrt_native::<N, W>(raw, Int::<W>::TEN.pow(scale), mode);
                 let want = sqrt_newton::<N>(raw, scale, mode);
                 assert_eq!(got, want, "N={N} W={W} scale={scale} raw={r} mode={mode:?}");
             }
@@ -193,7 +196,7 @@ mod tests {
         let four = Int::<4>::from_i128(4) * Int::<4>::from_i128(10).pow(35);
         let two = Int::<4>::from_i128(2) * Int::<4>::from_i128(10).pow(35);
         for mode in ALL_MODES {
-            assert_eq!(sqrt_native::<4, 6>(four, 35, mode), two, "mode {mode:?}");
+            assert_eq!(sqrt_native::<4, 6>(four, Int::<6>::TEN.pow(35), mode), two, "mode {mode:?}");
         }
     }
 
@@ -215,12 +218,12 @@ mod tests {
     #[test]
     fn sqrt_native_near_max_magnitude_all_cells() {
         for mode in ALL_MODES {
-            assert_eq!(sqrt_native::<4, 6>(near_max::<4>(), 35, mode), sqrt_newton::<4>(near_max::<4>(), 35, mode), "D76 mode {mode:?}");
-            assert_eq!(sqrt_native::<6, 9>(near_max::<6>(), 57, mode), sqrt_newton::<6>(near_max::<6>(), 57, mode), "D115 mode {mode:?}");
-            assert_eq!(sqrt_native::<8, 12>(near_max::<8>(), 75, mode), sqrt_newton::<8>(near_max::<8>(), 75, mode), "D153s75 mode {mode:?}");
-            assert_eq!(sqrt_native::<8, 12>(near_max::<8>(), 76, mode), sqrt_newton::<8>(near_max::<8>(), 76, mode), "D153s76 mode {mode:?}");
-            assert_eq!(sqrt_native::<12, 19>(near_max::<12>(), 115, mode), sqrt_newton::<12>(near_max::<12>(), 115, mode), "D230 mode {mode:?}");
-            assert_eq!(sqrt_native::<16, 24>(near_max::<16>(), 150, mode), sqrt_newton::<16>(near_max::<16>(), 150, mode), "D307 mode {mode:?}");
+            assert_eq!(sqrt_native::<4, 6>(near_max::<4>(), Int::<6>::TEN.pow(35), mode), sqrt_newton::<4>(near_max::<4>(), 35, mode), "D76 mode {mode:?}");
+            assert_eq!(sqrt_native::<6, 9>(near_max::<6>(), Int::<9>::TEN.pow(57), mode), sqrt_newton::<6>(near_max::<6>(), 57, mode), "D115 mode {mode:?}");
+            assert_eq!(sqrt_native::<8, 12>(near_max::<8>(), Int::<12>::TEN.pow(75), mode), sqrt_newton::<8>(near_max::<8>(), 75, mode), "D153s75 mode {mode:?}");
+            assert_eq!(sqrt_native::<8, 12>(near_max::<8>(), Int::<12>::TEN.pow(76), mode), sqrt_newton::<8>(near_max::<8>(), 76, mode), "D153s76 mode {mode:?}");
+            assert_eq!(sqrt_native::<12, 19>(near_max::<12>(), Int::<19>::TEN.pow(115), mode), sqrt_newton::<12>(near_max::<12>(), 115, mode), "D230 mode {mode:?}");
+            assert_eq!(sqrt_native::<16, 24>(near_max::<16>(), Int::<24>::TEN.pow(150), mode), sqrt_newton::<16>(near_max::<16>(), 150, mode), "D307 mode {mode:?}");
         }
     }
 

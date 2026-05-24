@@ -57,7 +57,10 @@ pub(crate) fn sqrt_newton_with_table_seed(raw: Int<3>, mode: RoundingMode) -> In
     // SCALE = 20 ⇒ scale-10 multiplier is 10^20. `raw` ≤ ~10^57,
     // so `raw · 10^20` ≤ ~10^77 which fits Int<4> (~10^77).
     const SCALE: u32 = 20;
-    let n: Int<4> = raw.resize_to::<Int<4>>() * Int::<4>::TEN.pow(SCALE);
+    // `const {}` forces the 10^SCALE multiplier to fold at compile time; a
+    // bare `TEN.pow(SCALE)` runs the int pow square-and-multiply at runtime
+    // (the exponent reaches the method as a plain `u32`) every call.
+    let n: Int<4> = raw.resize_to::<Int<4>>() * const { Int::<4>::TEN.pow(SCALE) };
     let q: Int<4> = n.isqrt();
     let diff: Int<4> = n - q * q;
     let halfway_round_up = diff > q;

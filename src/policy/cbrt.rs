@@ -167,12 +167,12 @@ where
         // fallback never fires for a cell `select` routed to `Native`.
         #[cfg(any(feature = "d57", feature = "wide"))]
         Algorithm::Native => match (N, SCALE) {
-            (3, 20) => cbrt::cbrt_native::cbrt_native::<N, 6>(raw, SCALE, mode),
-            (4, 35) => cbrt::cbrt_native::cbrt_native::<N, 8>(raw, SCALE, mode),
-            (6, 57) => cbrt::cbrt_native::cbrt_native::<N, 12>(raw, SCALE, mode),
-            (8, 75) | (8, 76) => cbrt::cbrt_native::cbrt_native::<N, 16>(raw, SCALE, mode),
-            (12, 115) => cbrt::cbrt_native::cbrt_native::<N, 25>(raw, SCALE, mode),
-            (16, 150) => cbrt::cbrt_native::cbrt_native::<N, 32>(raw, SCALE, mode),
+            (3, 20) => cbrt::cbrt_native::cbrt_native::<N, 6>(raw, const { Int::<6>::TEN.pow(2 * SCALE) }, mode),
+            (4, 35) => cbrt::cbrt_native::cbrt_native::<N, 8>(raw, const { Int::<8>::TEN.pow(2 * SCALE) }, mode),
+            (6, 57) => cbrt::cbrt_native::cbrt_native::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
+            (8, 75) | (8, 76) => cbrt::cbrt_native::cbrt_native::<N, 16>(raw, const { Int::<16>::TEN.pow(2 * SCALE) }, mode),
+            (12, 115) => cbrt::cbrt_native::cbrt_native::<N, 25>(raw, const { Int::<25>::TEN.pow(2 * SCALE) }, mode),
+            (16, 150) => cbrt::cbrt_native::cbrt_native::<N, 32>(raw, const { Int::<32>::TEN.pow(2 * SCALE) }, mode),
             _ => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),
         },
         #[cfg(any(feature = "d57", feature = "wide"))]

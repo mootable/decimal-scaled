@@ -485,7 +485,11 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::sqrt::sqrt_native::sqrt_native::<N, W>(raw, SCALE, mode)
+        crate::algos::sqrt::sqrt_native::sqrt_native::<N, W>(
+            raw,
+            const { crate::int::types::Int::<W>::TEN.pow(SCALE) },
+            mode,
+        )
     }
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
@@ -505,7 +509,11 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<N>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N> {
-        crate::algos::cbrt::cbrt_native::cbrt_native::<N, W>(raw, SCALE, mode)
+        crate::algos::cbrt::cbrt_native::cbrt_native::<N, W>(
+            raw,
+            const { crate::int::types::Int::<W>::TEN.pow(2 * SCALE) },
+            mode,
+        )
     }
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]

@@ -180,11 +180,11 @@ where
         // fires for a cell `select` routed to `Native`.
         #[cfg(any(feature = "d57", feature = "wide"))]
         Algorithm::Native => match (N, SCALE) {
-            (4, 35) => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, SCALE, mode),
-            (6, 57) => sqrt::sqrt_native::sqrt_native::<N, 9>(raw, SCALE, mode),
-            (8, 75) | (8, 76) => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, SCALE, mode),
-            (12, 115) => sqrt::sqrt_native::sqrt_native::<N, 19>(raw, SCALE, mode),
-            (16, 150) => sqrt::sqrt_native::sqrt_native::<N, 24>(raw, SCALE, mode),
+            (4, 35) => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, const { Int::<6>::TEN.pow(SCALE) }, mode),
+            (6, 57) => sqrt::sqrt_native::sqrt_native::<N, 9>(raw, const { Int::<9>::TEN.pow(SCALE) }, mode),
+            (8, 75) | (8, 76) => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, const { Int::<12>::TEN.pow(SCALE) }, mode),
+            (12, 115) => sqrt::sqrt_native::sqrt_native::<N, 19>(raw, const { Int::<19>::TEN.pow(SCALE) }, mode),
+            (16, 150) => sqrt::sqrt_native::sqrt_native::<N, 24>(raw, const { Int::<24>::TEN.pow(SCALE) }, mode),
             _ => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
         },
         Algorithm::Schoolbook => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
