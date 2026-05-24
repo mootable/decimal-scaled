@@ -60,6 +60,10 @@ enum Algorithm {
     /// the per-tier `$core::log_strict_with_kernel` / `log_approx_with_kernel`
     /// free functions. This is the only formula used everywhere.
     LnDivide,
+    /// `log_schoolbook` — naive `ln(x)/ln(b)` composition.
+    /// Correctness reference; `select` never returns this variant.
+    #[allow(dead_code)]
+    Schoolbook,
 }
 
 // ── 2. the const verdict ──────────────────────────────────────────────
@@ -109,6 +113,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
             Algorithm::LnDivide => Self(
                 crate::algos::log::log_ln_divide::log_ln_divide_d18::<SCALE>(self.0, base.0, mode),
             ),
+            Algorithm::Schoolbook => unreachable!(),
         }
     }
 
@@ -127,6 +132,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
                     mode,
                 ),
             ),
+            Algorithm::Schoolbook => unreachable!(),
         }
     }
 }
@@ -143,6 +149,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::LnDivide => Self(
                 crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(self.0, base.0, mode),
             ),
+            Algorithm::Schoolbook => unreachable!(),
         }
     }
 
@@ -161,6 +168,7 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
                     mode,
                 ),
             ),
+            Algorithm::Schoolbook => unreachable!(),
         }
     }
 }
@@ -198,6 +206,7 @@ macro_rules! log_policy_wide {
                             mode,
                         ),
                     ),
+            Algorithm::Schoolbook => unreachable!(),
                 }
             }
 
@@ -230,6 +239,7 @@ macro_rules! log_policy_wide {
                             )
                         }
                     }
+            Algorithm::Schoolbook => unreachable!(),
                 }
             }
         }
