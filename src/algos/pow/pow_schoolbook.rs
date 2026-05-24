@@ -44,8 +44,41 @@
 use crate::algos::exp::exp_schoolbook::{SCHOOLBOOK_GUARD, exp_schoolbook_fixed};
 use crate::algos::ln::ln_schoolbook::ln_schoolbook_fixed;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
+
+// ── Wide tier — generic over the tier core `C: WideTrigCore` ─────────
+
+/// Schoolbook `x^y` for a wide tier — the textbook composition
+/// `x^y = exp(y · ln(x))`, evaluated in the guard-digit work integer:
+/// `ln(x)` via [`WideTrigCore::ln_fixed`], the product `y · ln(x)` via
+/// [`WideTrigCore::mul`], and `exp(·)` via [`WideTrigCore::exp_fixed`],
+/// then correctly-rounded narrowing with Ziv escalation. Composes the
+/// C-generic `exp`/`ln` leaves directly (no inversion). Returns the
+/// storage `0` for a non-positive base (the production NaN-to-ZERO
+/// policy). A correctness/microbench reference; not policy-routed today.
+#[inline]
+#[must_use]
+#[allow(dead_code)]
+pub(crate) fn pow_schoolbook<C: WideTrigCore, const SCALE: u32>(
+    base: C::Storage,
+    exponent: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    if base <= C::storage_zero() {
+        return C::storage_zero();
+    }
+    if exponent == C::storage_zero() {
+        return C::storage_one(SCALE);
+    }
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        let w = SCALE + guard;
+        let ln_base = C::ln_fixed(C::to_work_w(base, guard), w);
+        let arg = C::mul(C::to_work_w(exponent, guard), ln_base, w);
+        C::exp_fixed(arg, w)
+    })
+}
 
 /// `x^y` via naive `exp(y · ln(x))` on the 256-bit `Fixed` intermediate.
 ///
@@ -160,6 +193,42 @@ mod tests {
         ];
         for (b, e) in cases {
             for mode in MODES { check::<19>(b, e, mode); }
+        }
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    mod wide_d57 {
+        use super::*;
+        use crate::types::widths::wide_trig_d57::Core;
+        use crate::D;
+
+        const S: u32 = 19;
+        fn raw9(units_milli: i128) -> Int<3> {
+            // value = units_milli / 1000, expressed at scale 19.
+            Int::<3>::from_i128(units_milli * 10_i128.pow(16))
+        }
+        // (base, exp) at scale-9 milli-units; non-integer exponents so the
+        // production integer fast-path does not fire.
+        const CASES: [(i128, i128); 5] = [
+            (2_000, 500),       // 2 ^ 0.5
+            (2_000, 1_500),     // 2 ^ 1.5
+            (3_000, 500),       // 3 ^ 0.5
+            (4_000, 750),       // 4 ^ 0.75
+            (2_000, -500),      // 2 ^ -0.5
+        ];
+
+        #[test]
+        fn pow_schoolbook_matches_routed() {
+            for &(b, e) in &CASES {
+                let rb = raw9(b);
+                let re = raw9(e);
+                for mode in MODES {
+                    assert_eq!(
+                        crate::algos::pow::pow_schoolbook::pow_schoolbook::<Core, S>(rb, re, mode),
+                        D::<Int<3>, S>(rb).powf_strict_with(D::<Int<3>, S>(re), mode).0,
+                        "D57 pow schoolbook != routed at base={b} exp={e} mode={mode:?}"
+                    );
+                }
+            }
         }
     }
 }

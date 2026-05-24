@@ -113,7 +113,15 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
             Algorithm::LnDivide => Self(
                 crate::algos::log::log_ln_divide::log_ln_divide_d18::<SCALE>(self.0, base.0, mode),
             ),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => {
+                let xw: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let bw: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
+                let r = crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(xw.0, bw.0, mode);
+                ::core::convert::TryInto::try_into(crate::D::<crate::int::types::Int<2>, SCALE>(r))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
+                    })
+            }
         }
     }
 
@@ -132,7 +140,15 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<1>, SCALE> 
                     mode,
                 ),
             ),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => {
+                let xw: crate::D<crate::int::types::Int<2>, SCALE> = self.into();
+                let bw: crate::D<crate::int::types::Int<2>, SCALE> = base.into();
+                let r = crate::algos::log::log_schoolbook::log_schoolbook_with(xw.0, bw.0, SCALE, working_digits, mode);
+                ::core::convert::TryInto::try_into(crate::D::<crate::int::types::Int<2>, SCALE>(r))
+                    .unwrap_or_else(|_| {
+                        crate::support::diagnostics::overflow_panic_with_scale("D18::log", SCALE)
+                    })
+            }
         }
     }
 }
@@ -149,7 +165,9 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
             Algorithm::LnDivide => Self(
                 crate::algos::log::log_ln_divide::log_ln_divide_d38::<SCALE>(self.0, base.0, mode),
             ),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => Self(
+                crate::algos::log::log_schoolbook::log_schoolbook_strict::<SCALE>(self.0, base.0, mode),
+            ),
         }
     }
 
@@ -168,7 +186,9 @@ impl<const SCALE: u32> LogPolicy for crate::D<crate::int::types::Int<2>, SCALE> 
                     mode,
                 ),
             ),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => Self(
+                crate::algos::log::log_schoolbook::log_schoolbook_with(self.0, base.0, SCALE, working_digits, mode),
+            ),
         }
     }
 }
@@ -206,7 +226,13 @@ macro_rules! log_policy_wide {
                             mode,
                         ),
                     ),
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => Self::from_bits(
+                        crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::$core_mod::Core, SCALE>(
+                            self.to_bits(),
+                            base.to_bits(),
+                            mode,
+                        ),
+                    ),
                 }
             }
 
@@ -239,7 +265,13 @@ macro_rules! log_policy_wide {
                             )
                         }
                     }
-            Algorithm::Schoolbook => unreachable!(),
+            Algorithm::Schoolbook => Self::from_bits(
+                        crate::algos::log::log_schoolbook::log_schoolbook::<crate::types::widths::$core_mod::Core, SCALE>(
+                            self.to_bits(),
+                            base.to_bits(),
+                            mode,
+                        ),
+                    ),
                 }
             }
         }

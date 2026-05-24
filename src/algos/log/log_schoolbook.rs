@@ -35,8 +35,46 @@
 
 use crate::algos::ln::ln_schoolbook::{SCHOOLBOOK_GUARD, ln_schoolbook_fixed};
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
+
+// ── Wide tier — generic over the tier core `C: WideTrigCore` ─────────
+
+/// Schoolbook `log_b(x)` for a wide tier — the textbook quotient
+/// `log_b(x) = ln(x) / ln(b)`, both natural logs evaluated by the leaf
+/// [`WideTrigCore::ln_fixed`] in the guard-digit work integer and divided
+/// via [`WideTrigCore::div`] before correctly-rounded narrowing with Ziv
+/// escalation. Composes the C-generic `ln` leaf directly (no inversion).
+/// Registered as the unrouted `Schoolbook` arm of the wide `LogPolicy`
+/// tiers.
+///
+/// # Panics
+///
+/// Panics if `raw_x <= 0`, `raw_b <= 0`, or `b == 1` (undefined log).
+#[inline]
+#[must_use]
+pub(crate) fn log_schoolbook<C: WideTrigCore, const SCALE: u32>(
+    raw_x: C::Storage,
+    raw_b: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    if raw_x <= C::storage_zero() {
+        panic!("wide-tier log schoolbook: x must be positive");
+    }
+    if raw_b <= C::storage_zero() {
+        panic!("wide-tier log schoolbook: base must be positive");
+    }
+    if raw_b == C::storage_one(SCALE) {
+        panic!("wide-tier log schoolbook: base must not be 1");
+    }
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        let w = SCALE + guard;
+        let ln_x = C::ln_fixed(C::to_work_w(raw_x, guard), w);
+        let ln_b = C::ln_fixed(C::to_work_w(raw_b, guard), w);
+        C::div(ln_x, ln_b, w)
+    })
+}
 
 /// `log_b(x)` via naive `ln(x)/ln(b)` on the 256-bit `Fixed` intermediate.
 ///
@@ -166,6 +204,40 @@ mod tests {
         ];
         for (x, b) in cases {
             for mode in MODES { check::<19>(x, b, mode); }
+        }
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    mod wide_d57 {
+        use super::*;
+        use crate::types::widths::wide_trig_d57::Core;
+        use crate::D;
+
+        const S: u32 = 19;
+        fn raw9(units: i128) -> Int<3> {
+            Int::<3>::from_i128(units * 10_i128.pow(10))
+        }
+        // (x, b) pairs: exact powers + non-integer results, all positive, b != 1.
+        const CASES: [(i128, i128); 5] = [
+            (2_000_000_000, 2_000_000_000),
+            (4_000_000_000, 2_000_000_000),
+            (8_000_000_000, 2_000_000_000),
+            (3_000_000_000, 2_000_000_000),
+            (10_000_000_000, 10_000_000_000),
+        ];
+
+        #[test]
+        fn log_schoolbook_matches_routed() {
+            for &(x, b) in &CASES {
+                let rx = raw9(x);
+                let rb = raw9(b);
+                for mode in MODES {
+                    assert_eq!(
+                        crate::algos::log::log_schoolbook::log_schoolbook::<Core, S>(rx, rb, mode),
+                        D::<Int<3>, S>(rx).log_strict_with(D::<Int<3>, S>(rb), mode).0,
+                        "D57 log schoolbook != routed at x={x} b={b} mode={mode:?}"
+                    );
+                }
+            }
         }
     }
 }

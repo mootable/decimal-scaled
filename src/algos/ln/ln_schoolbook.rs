@@ -38,6 +38,7 @@
 
 use crate::algos::ln::ln_series_2limb::wide_ln2;
 use crate::algos::support::fixed::Fixed;
+use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::Int;
 use crate::support::rounding::{RoundingMode, is_nearest_mode};
 
@@ -96,6 +97,31 @@ pub(crate) fn ln_schoolbook_fixed(v_w: Fixed, w: u32) -> Fixed {
         ln2.mul_u128((-k) as u128).neg()
     };
     k_ln2.add(ln_m)
+}
+
+// ── Wide tier — generic over the tier core `C: WideTrigCore` ─────────
+
+/// Schoolbook `ln(x)` for a wide tier — the atanh series with binary
+/// exponent split via the leaf [`WideTrigCore::ln_fixed`] (the wide-tier
+/// realisation of `ln(2^k·m) = k·ln2 + 2·artanh((m-1)/(m+1))`), rounded
+/// correctly with Ziv escalation. Mirrors `ln_series`; registered as the
+/// unrouted `Schoolbook` arm of the wide `LnPolicy` tiers.
+///
+/// # Panics
+///
+/// Panics if `raw <= 0` (log of a non-positive value is undefined).
+#[inline]
+#[must_use]
+pub(crate) fn ln_schoolbook<C: WideTrigCore, const SCALE: u32>(
+    raw: C::Storage,
+    mode: RoundingMode,
+) -> C::Storage {
+    if raw <= C::storage_zero() {
+        panic!("wide-tier ln schoolbook: argument must be positive");
+    }
+    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+        C::ln_fixed(C::to_work_w(raw, guard), SCALE + guard)
+    })
 }
 
 /// `D38` schoolbook `ln(x)` with explicit working digits and rounding mode.
@@ -181,6 +207,36 @@ mod tests {
         let one: i128 = 10_i128.pow(19);
         for raw_i in [one, 2 * one, one / 2, 10 * one, 3 * one, one + one / 10] {
             for mode in MODES { check::<19>(raw_i, mode); }
+        }
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    mod wide_d57 {
+        use super::*;
+        use crate::types::widths::wide_trig_d57::Core;
+        use crate::D;
+
+        const S: u32 = 19;
+        fn raw9(units: i128) -> Int<3> {
+            Int::<3>::from_i128(units * 10_i128.pow(10))
+        }
+        // ln domain: positive only.
+        const INPUTS9: [i128; 6] = [
+            500_000_000, 1_000_000_000, 1_500_000_000,
+            2_000_000_000, 3_000_000_000, 10_000_000_000,
+        ];
+
+        #[test]
+        fn ln_schoolbook_matches_routed() {
+            for &u in &INPUTS9 {
+                let r = raw9(u);
+                for mode in MODES {
+                    assert_eq!(
+                        crate::algos::ln::ln_schoolbook::ln_schoolbook::<Core, S>(r, mode),
+                        D::<Int<3>, S>(r).ln_strict_with(mode).0,
+                        "D57 ln schoolbook != routed at units={u} mode={mode:?}"
+                    );
+                }
+            }
         }
     }
 }
