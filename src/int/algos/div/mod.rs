@@ -41,7 +41,9 @@ pub(crate) const SCRATCH_LIMBS: usize = 288;
 
 #[cfg(test)]
 mod tests {
-    use super::div_burnikel_ziegler_with_knuth::div_burnikel_ziegler_with_knuth;
+    use super::div_burnikel_ziegler_with_knuth::{
+        bz_chunk_core, div_burnikel_ziegler_with_knuth,
+    };
     use super::div_fixed::div_rem_mag_fixed;
     use super::div_knuth::div_knuth;
     use super::div_mg::{Mg2By1, Mg3By2};
@@ -240,9 +242,19 @@ mod tests {
         div_knuth(&num, &den, &mut q_canon, &mut r_canon);
         let mut q_bz = [0u64; 40];
         let mut r_bz = [0u64; 40];
-        div_burnikel_ziegler_with_knuth(&num, &den, &mut q_bz, &mut r_bz);
+        // Drive the chunking core directly (num=40 limbs, den=20 limbs, so
+        // top=40, n=20): this exercises the BZ block-division path
+        // regardless of the production `BZ_THRESHOLD` engagement value, so
+        // the differential survives a threshold that gates the engine off.
+        bz_chunk_core(&num, &den, &mut q_bz, &mut r_bz, 20, 40);
         assert_eq!(q_canon, q_bz, "BZ quotient mismatch");
         assert_eq!(r_canon, r_bz, "BZ remainder mismatch");
+        // The public engine entry still agrees (whatever it dispatches to).
+        let mut q_pub = [0u64; 40];
+        let mut r_pub = [0u64; 40];
+        div_burnikel_ziegler_with_knuth(&num, &den, &mut q_pub, &mut r_pub);
+        assert_eq!(q_canon, q_pub, "BZ public-entry quotient mismatch");
+        assert_eq!(r_canon, r_pub, "BZ public-entry remainder mismatch");
     }
 
     /// Knuth's q̂-cap path fires when `u_top >= v_top`.
@@ -354,9 +366,17 @@ mod tests {
         div_knuth(&num, &den, &mut q_canon, &mut r_canon);
         let mut q_bz = [0u64; 32];
         let mut r_bz = [0u64; 32];
-        div_burnikel_ziegler_with_knuth(&num, &den, &mut q_bz, &mut r_bz);
+        // Effective shape after stripping: num=16 limbs over den=20 limbs.
+        // Drive the core directly so the trailing-zero stripping + single
+        // sub-divisor chunk path is tested independent of `BZ_THRESHOLD`.
+        bz_chunk_core(&num, &den, &mut q_bz, &mut r_bz, 1, 16);
         assert_eq!(q_canon, q_bz);
         assert_eq!(r_canon, r_bz);
+        let mut q_pub = [0u64; 32];
+        let mut r_pub = [0u64; 32];
+        div_burnikel_ziegler_with_knuth(&num, &den, &mut q_pub, &mut r_pub);
+        assert_eq!(q_canon, q_pub);
+        assert_eq!(r_canon, r_pub);
     }
 
     // ── fast-arm wrappers ──────────────────────────────────────────────

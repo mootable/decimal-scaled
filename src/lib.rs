@@ -235,6 +235,15 @@ pub mod __bench_internals {
     pub fn div_dispatch_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
         crate::int::policy::div_rem::dispatch(num, den, quot, rem)
     }
+    /// Burnikel-Ziegler chunking engine FORCED on (production engagement
+    /// guard bypassed) so the Knuth-vs-BZ crossover can be timed at
+    /// sub-threshold widths in `div_kernel_ab`.
+    #[inline(never)]
+    pub fn div_bz_forced_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::algos::div::div_burnikel_ziegler_with_knuth::bz_chunk_core_forced(
+            num, den, quot, rem,
+        )
+    }
 
     /// Remainder algorithm candidates exposed for the `rem_kernel_ab`
     /// microbench (the dispatch-seam A/B that decides the `rem` policy

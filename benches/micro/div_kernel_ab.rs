@@ -3,17 +3,29 @@
 
 //! Wide integer-division engine timing bench (`src/int/algos/div`).
 //!
-//! Exercises the production Knuth-D engine ([`div_knuth`]) and the full
-//! divisor-shape dispatcher ([`div_rem::dispatch`]) at the WIDE limb counts
-//! that regressed versus the 0.4.4 prod tag (D307=16, D616=32, D924=48,
-//! D1232=64 u64 limbs). It is the fast pre-check that confirmed the
-//! merged-carry D4 multiply-subtract win at D924/D1232 before the GHA
-//! sweep. Two operand shapes per width:
+//! A/B the two production division engines directly, **Knuth-D**
+//! ([`div_knuth`]) versus the **Burnikel-Ziegler chunking** engine
+//! ([`div_burnikel_ziegler_with_knuth`]), to locate the empirical limb
+//! crossover that sets [`crate::int::policy::div_rem::BZ_THRESHOLD`].
+//!
+//! The BZ engine carries an internal engagement guard (`n <
+//! BZ_THRESHOLD` short-circuits to Knuth), so it is exercised here via
+//! `div_bz_forced_slice`, which bypasses the guard and always runs the
+//! chunking core. This lets the sweep measure BZ at sub-threshold widths
+//! and find where it starts beating Knuth.
+//!
+//! Candidate divisor widths (effective u64 limbs → tier):
+//!  3=D57, 4=D76, 6=D115, 8=D153, 12=D230, 16=D307, 24=D462, 32=D616,
+//!  48=D924, 64=D1232.
+//!
+//! Two operand shapes per width:
 //!  - `balanced`  — dividend and divisor both `N` limbs (the wide `rem` /
-//!    `div_rem` shape; `m ~ 0`).
-//!  - `wide_num`  — dividend `2N` limbs over an `N`-limb divisor (the `div`
-//!    quotient shape; a full O(m·n) Knuth quotient loop — the engine hot
-//!    path that `div` and the dispatched `cbrt` flow through).
+//!    `div_rem` shape; `m ~ 0`). BZ's `top >= 2*n` engagement gate is NOT
+//!    met here, so this shape is informational (Knuth always wins/ties).
+//!  - `wide_num`  — dividend `2N` limbs over an `N`-limb divisor (the
+//!    `div` quotient shape; the full O(m*n) Knuth quotient loop and the
+//!    shape BZ's gate actually targets — this is the crossover-deciding
+//!    shape).
 //!
 //! Inputs and outputs are `black_box`-guarded by the harness.
 //!
@@ -21,7 +33,9 @@
 //! `cargo bench --features "wide x-wide xx-wide bench-alt" --bench div_kernel_ab`
 
 use criterion::Criterion;
-use decimal_scaled::__bench_internals::{div_dispatch_slice, div_knuth_slice};
+use decimal_scaled::__bench_internals::{
+    div_bz_forced_slice, div_dispatch_slice, div_knuth_slice,
+};
 
 #[path = "../support/ab_microbench.rs"]
 mod ab_microbench;
@@ -61,24 +75,31 @@ fn run_knuth(s: Shape) -> Vec<u64> {
     div_knuth_slice(&s.num, &s.den, &mut q, &mut r);
     r
 }
-fn run_dispatch(s: Shape) -> Vec<u64> {
+fn run_bz(s: Shape) -> Vec<u64> {
     let mut q = vec![0u64; s.num.len()];
     let mut r = vec![0u64; s.num.len()];
-    div_dispatch_slice(&s.num, &s.den, &mut q, &mut r);
+    div_bz_forced_slice(&s.num, &s.den, &mut q, &mut r);
     r
 }
 
 fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> Vec<Shape>) {
-    // Correctness gate: the engine and the dispatcher agree before timing.
+    // Correctness gate: forced BZ and Knuth must agree before timing — they
+    // are two engines for the same exact-integer result (bit-identical).
     for s in shapes(n) {
         let mut q0 = vec![0u64; s.num.len()];
         let mut r0 = vec![0u64; s.num.len()];
         div_knuth_slice(&s.num, &s.den, &mut q0, &mut r0);
         let mut q1 = vec![0u64; s.num.len()];
         let mut r1 = vec![0u64; s.num.len()];
-        div_dispatch_slice(&s.num, &s.den, &mut q1, &mut r1);
-        assert_eq!(q0, q1, "knuth vs dispatch quot mismatch {label} {}", s.label);
-        assert_eq!(r0, r1, "knuth vs dispatch rem mismatch {label} {}", s.label);
+        div_bz_forced_slice(&s.num, &s.den, &mut q1, &mut r1);
+        assert_eq!(q0, q1, "knuth vs bz quot mismatch {label} {}", s.label);
+        assert_eq!(r0, r1, "knuth vs bz rem mismatch {label} {}", s.label);
+        // And the production dispatcher still agrees (engine-choice neutral).
+        let mut q2 = vec![0u64; s.num.len()];
+        let mut r2 = vec![0u64; s.num.len()];
+        div_dispatch_slice(&s.num, &s.den, &mut q2, &mut r2);
+        assert_eq!(q0, q2, "knuth vs dispatch quot mismatch {label} {}", s.label);
+        assert_eq!(r0, r2, "knuth vs dispatch rem mismatch {label} {}", s.label);
     }
     compare_all(
         c,
@@ -87,14 +108,20 @@ fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> 
         shapes(n),
         vec![
             ("knuth", run_knuth as fn(Shape) -> Vec<u64>),
-            ("dispatch", run_dispatch),
+            ("bz", run_bz),
         ],
     );
 }
 
 fn bench(c: &mut Criterion) {
     for &(n, lbl) in &[
-        (16usize, "D307_16limb"),
+        (3usize, "D57_3limb"),
+        (4, "D76_4limb"),
+        (6, "D115_6limb"),
+        (8, "D153_8limb"),
+        (12, "D230_12limb"),
+        (16, "D307_16limb"),
+        (24, "D462_24limb"),
         (32, "D616_32limb"),
         (48, "D924_48limb"),
         (64, "D1232_64limb"),
