@@ -179,6 +179,85 @@ exactly: that is the cross-tier size pollution the Constitution (rule 6)
 forbids, and it is a defect to be migrated to `single_limbs()` /
 `double_limbs()` / `quad_limbs()` / `u128_limbs()`.
 
+## Const generics — the BigRule: pass the level's OWN, never any other
+
+A recurring pollution: a policy or function that **invents a const generic**
+beyond the ones that define its level. The rule is sharp and exhaustive.
+
+**The policy entry point (`dispatch`) SHOULD take exactly the level's defining
+const(s) — and NO OTHERS:**
+
+| level | `dispatch` consts |
+|-------|-------------------|
+| int unary | `<const N>` |
+| int binary | `<const Nthis, const Nother>` |
+| decimal unary | `<const N, const S>` (width **and** scale) |
+| decimal binary | `<const Nthis, const Sthis, const Nother, const Sother>` |
+
+These are free to take because **the caller already holds them in its types**
+— inferred at the call site, never computed (`D<Int<N>, SCALE>::sqrt` already
+knows `N` and `SCALE`, so `dispatch::<N, SCALE>(…)` costs it nothing).
+
+> **Decimal binary is genuinely four consts.** Binary decimal ops are meant to
+> work across *different* widths AND scales (`D<Int<Nthis>, Sthis> op
+> D<Int<Nother>, Sother>`), so `<Nthis, Sthis, Nother, Sother>` is the real
+> target — in scope, not a far-future reservation. Where the *current*
+> implementation is still same-type (`D<Int<N>, S> op D<Int<N>, S>`), the four
+> consts collapse to the dec-unary `<N, S>` and that is what those dispatchers
+> take today; they move to the full four-const form as cross-scale/width
+> binary lands. (A binary op that *needs* both operands to be the same type is
+> the transitional state, not the design.)
+
+- **No other const value is allowed.** No work-width const, no derived const,
+  no `const LW`, no `{2*N}` / `{<_>::U128_LIMBS}` const-generic argument. A
+  const that *encodes a width derived from another* (`fn f<W, const LW>` where
+  `LW == W::U128_LIMBS`) is the canonical defect — wider-than-`N` widths come
+  from `ComputeInt` (previous section), never a const param. That is the
+  const-work-width wall the `ComputeInt` associated types exist to remove.
+- **Inward is optional.** Threading these consts *inward* (`select`,
+  `select_for_limbs`, the kernels) is optional — a helper takes a const only
+  if it uses it. Taking the level const at the `dispatch` entry but not
+  inward is normal, never a defect.
+
+**The caller guardrail + the metadata test.** A caller must be able to invoke
+a policy with *exactly what it already has*. If calling forces the caller to
+**manufacture a const, create a type, or specialise**, the *policy signature
+is wrong* — not the caller.
+
+The **metadata test** for `dispatch`: it may **freely inspect the values
+passed to it** — limb lengths, magnitude, sign, any property of the operands
+— to choose an algorithm. That *is* the job of a `ByValue` / `ByShape`
+matcher, and it is never a violation (the divide stripping its own slices to
+`den_n` is exactly this). What `dispatch` must **not** need is **external
+metadata**: any const, type, or context *beyond* its level consts and the
+operands themselves. If a function cannot be picked or run without extra
+information threaded in from outside, the design is broken.
+
+### The one exception: division has no const-width axis
+
+Division is the **single policy with no const-width axis**: it looks like the
+int-binary case that should take `<const Nthis, const Nother>`, but it cannot.
+Its operands have *independent* runtime lengths that no const expresses:
+
+- the decimal `/` divides a **`2N`-limb** scaled numerator by an **`N`-limb**
+  divisor — two different widths, neither the caller's single `N`;
+- the slice roots (`isqrt_newton`, `icbrt_newton`, `newton_reciprocal`,
+  `div_rem_mag_slice`) divide **bare `&[u64]` of runtime length** — they hold
+  no `N` in their types at all.
+
+So `int::policy::div_rem`'s `select` and `dispatch` are **non-generic and
+slice-based** (`dispatch(num, den, quot, rem)`), and the shape decision lives
+entirely in the runtime `select_for_limbs(num, den)`. Threading a `<N>` would
+force the slice roots to *manufacture* a const they do not have — the exact
+caller-side specialisation the guardrail forbids — and the divide would not
+even use it: its engine choice (and any future limb-width refinement, e.g. a
+u128-limb engine for an even, wide divisor) is a **runtime arm inside
+`select_for_limbs`**, gated on the runtime `den_n`, because that is where the
+width information actually is. Contrast `mul_low` (a genuine `select<N>`
+policy): there the operands *are* width-`N`, so `N` is the level's own const
+and passing it is correct. Division is the slice/runtime exception, not a
+template to copy.
+
 ## Limb width — the matcher's second axis (`u64` / `u128`)
 
 A wide-tier kernel can run faster in **u128 limbs** (half the limbs and carries) than in

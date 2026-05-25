@@ -1,20 +1,24 @@
 //! Division policy — the divisor-shape algorithm matcher.
 //!
-//! The integer layer carries **no `SCALE`**, and the divmod choice does
-//! not key on the const limb count `N` — it keys on the **runtime shape**
-//! of the operands (their effective limb counts after stripping leading
-//! zeros). That makes division a [`Select::ByValue`] case in the
-//! canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
-//! structure" and the value-matcher tier): the const layer settles on
-//! "the value decides", the value-matcher classifies the divisor/dividend
-//! shape and returns an [`Algorithm`] tag, and the dispatcher does an
-//! **exhaustive** `match algo` to a pure engine in
-//! [`crate::int::algos::div`].
+//! Canonical policy shape (see `docs/ARCHITECTURE.md` → "Policy file
+//! structure"), with one twist: division is the **one policy with no
+//! const-width axis**. Its operands have *independent* runtime lengths that
+//! no single level const expresses — the decimal `/` divides a `2N`-limb
+//! scaled numerator by an `N`-limb divisor, and the slice roots
+//! (`isqrt_newton` / `icbrt_newton` / `newton_reciprocal`) divide bare
+//! `&[u64]` of runtime length with no `N` in their types at all. So unlike
+//! a unary (`select<N>`) or binary (`select<Nthis, Nother>`) policy,
+//! [`select`] here is **non-generic**: it always returns [`Select::ByShape`],
+//! delegating the whole choice to the runtime [`select_for_limbs`]. (Forcing
+//! a `<N>` would make the slice roots manufacture a const they don't have —
+//! the kind of caller-side specialisation the architecture forbids — and
+//! the divide doesn't use `N` anyway, since its engine choice is runtime.)
 //!
-//! The engines stay pure — each takes an already-chosen algorithm. This
-//! file owns the *choice*: the benched crossover thresholds
-//! ([`BZ_THRESHOLD`]) are policy DATA here, not magic numbers buried in a
-//! kernel.
+//! Two selectors: [`select`] (the const matcher — here a no-op `ByShape`)
+//! and [`select_for_limbs`] (the runtime limb-shape decision it delegates
+//! to). The engines stay pure — each takes an already-chosen algorithm.
+//! This file owns the *choice*: the benched crossover threshold
+//! ([`BZ_THRESHOLD`]) is policy DATA here, not a magic number in a kernel.
 
 use crate::int::algos::div::div_burnikel_ziegler_with_knuth::div_burnikel_ziegler_with_knuth;
 use crate::int::algos::div::div_knuth::div_knuth;
@@ -39,27 +43,31 @@ enum Algorithm {
     /// chunking, recursing to Knuth as its base case.
     BurnikelZieglerWithKnuth,
     /// [`div_rem_schoolbook`] — binary shift-subtract long division,
-    /// the naive reference baseline. Registered but unrouted: `select`
-    /// never returns this variant; it exists for unit-test reachability
-    /// and future routing experiments. `#[allow(dead_code)]` suppresses
-    /// the compiler warning.
+    /// the naive reference baseline. Registered but unrouted:
+    /// `select_for_limbs` never returns this variant; it exists for
+    /// unit-test reachability and future routing experiments.
+    /// `#[allow(dead_code)]` suppresses the compiler warning.
     #[allow(dead_code)]
     Schoolbook,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
 
-/// A settled engine, or "the (runtime) shape decides". Division always
-/// returns `ByValue`: the choice is fully determined by the operands'
-/// effective limb counts, known only at run time. `ByAlgorithm` is part
-/// of the canonical shape for uniformity across functions.
+/// A settled engine, or "the (runtime) limb shape decides". For division
+/// every `N` resolves to [`Select::ByShape`] — the engine choice is
+/// determined by the operands' effective limb counts, known only at run
+/// time — so the `ByShape` arm delegates to [`select_for_limbs`].
+/// [`Select::ByAlgorithm`] is the canonical alternative (a width-keyed
+/// fixed engine); it is unused by this policy today but kept so `select<N>`
+/// could pin an engine for some `N` range without changing the verdict
+/// type.
 #[derive(Clone, Copy)]
 enum Select {
     #[allow(dead_code)]
     ByAlgorithm(Algorithm),
-    /// Classifier over the operands' effective limb counts `(den_n,
-    /// num_top)` (leading zeros stripped) → the chosen engine.
-    ByShape(fn(usize, usize) -> Algorithm),
+    /// The runtime limb shape decides: [`select_for_limbs`] applied to the
+    /// raw `(num, den)` operands (it strips leading zeros and counts itself).
+    ByShape(fn(&[u64], &[u64]) -> Algorithm),
 }
 
 // ── policy data: the benched crossover threshold ──────────────────────
@@ -96,7 +104,7 @@ enum Select {
 /// and 128-limb probe still favours Knuth ~1.10×, and the curve has
 /// plateaued — no crossover exists at any reachable width). The
 /// `balanced` (square `rem`/`div_rem`) shape never meets the
-/// `num_top ≥ 2·den_n` gate and favours Knuth ~1.4× throughout.
+/// `num_m ≥ 2·den_n` gate and favours Knuth ~1.4× throughout.
 ///
 /// Therefore the optimum is to **never engage** the block engine within
 /// the supported range: the widest storage tier is D1232 = 64 limbs (a
@@ -107,72 +115,89 @@ enum Select {
 /// D307+ wide divide by engaging the slower block engine.)
 pub(crate) const BZ_THRESHOLD: usize = 65;
 
-// ── 3. the matcher: keyed on the runtime divisor shape ────────────────
+// ── 3. the matcher: `select` (no const axis) → `select_for_limbs` ─────
 
-/// Pick the division engine for the operands' effective limb counts.
-/// Total over the shape; reproduces the exact byte-for-byte routing of
-/// the historic inline dispatcher:
-///
-/// * single-limb divisor → [`Algorithm::Rem`] (the const hardware path,
-///   covers every `10^scale` with `scale ≤ 19`);
-/// * `den_n ≥ BZ_THRESHOLD` and `num_top ≥ 2·den_n` → Burnikel–Ziegler;
-/// * everything else → Knuth.
+/// The top-level matcher. Division has no const-width axis (its operands'
+/// lengths are independent runtime values — see the module docs), so unlike
+/// a `select<N>` unary policy this is **non-generic** and always defers the
+/// choice to the runtime [`select_for_limbs`]. A future limb refinement
+/// (e.g. routing an even, wide divisor to a u128-limb engine) is a **runtime
+/// arm inside `select_for_limbs`** — gated on the runtime `den_n`, where the
+/// width information actually is — NOT a const verdict here.
 const fn select() -> Select {
-    Select::ByShape(|den_n: usize, num_top: usize| {
-        if den_n == 1 {
-            Algorithm::Rem
-        } else if den_n >= BZ_THRESHOLD && num_top >= 2 * den_n {
-            Algorithm::BurnikelZieglerWithKnuth
-        } else {
-            Algorithm::Knuth
-        }
-    })
+    Select::ByShape(select_for_limbs)
 }
 
-// ── 4. the dispatcher: classify the shape, then dispatch ──────────────
-
-/// Classify the operands' effective (leading-zero-stripped) shape and ask
-/// the matcher which engine handles it. The divisor must be non-zero. This
-/// is the policy's whole job — choose the engine; it allocates nothing.
+/// Select the division engine for an operand pair's **limb shape**. The
+/// sibling of [`select`]: `select` keys on the const width, this keys on
+/// the runtime effective limb counts, which it computes itself:
+///
+/// It works the counts out itself, and **only the ones a branch needs** —
+/// passing raw slices (rather than pre-computed counts from [`dispatch`])
+/// means the dividend is never walked on the paths that don't look at it:
+///
+/// * `den_n` — the **divisor's** effective limb count (Knuth's `n`):
+///   `den.len()` with trailing zero limbs stripped. `den_n == 0` is a
+///   divide-by-zero (asserted here). Always needed.
+/// * the **dividend's** effective limb count (`num.len()` with top zero
+///   limbs stripped) is computed **lazily**, only in the Burnikel–Ziegler
+///   guard — and the `&&` short-circuits, so it is reached only for a
+///   divisor of `≥ BZ_THRESHOLD` limbs. The common cases (single-limb
+///   divisor → `Rem`; any `2..BZ_THRESHOLD`-limb divisor → `Knuth`) never
+///   strip the dividend at all.
+///
+/// Routing: a single-limb divisor takes the hardware [`Algorithm::Rem`]
+/// path (covers every `10^scale`, `scale ≤ 19`); a divisor of at least
+/// [`BZ_THRESHOLD`] limbs whose dividend is at least twice as wide takes
+/// Burnikel–Ziegler; everything else takes Knuth.
 #[inline]
-fn classify(num: &[u64], den: &[u64]) -> Algorithm {
-    let mut n = den.len();
-    while n > 0 && den[n - 1] == 0 {
+fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
+    let den_n = effective_limbs(den);
+    assert!(den_n > 0, "dispatch: divide by zero");
+
+    if den_n == 1 {
+        Algorithm::Rem
+    } else if den_n >= BZ_THRESHOLD && effective_limbs(num) >= 2 * den_n {
+        Algorithm::BurnikelZieglerWithKnuth
+    } else {
+        Algorithm::Knuth
+    }
+}
+
+/// Effective limb count of a little-endian magnitude slice: its length with
+/// trailing (most-significant) zero limbs stripped — `0` for an all-zero
+/// slice.
+#[inline]
+fn effective_limbs(limbs: &[u64]) -> usize {
+    let mut n = limbs.len();
+    while n > 0 && limbs[n - 1] == 0 {
         n -= 1;
     }
-    assert!(n > 0, "dispatch: divide by zero");
-
-    let mut top = num.len();
-    while top > 0 && num[top - 1] == 0 {
-        top -= 1;
-    }
-
-    match const { select() } {
-        Select::ByAlgorithm(a) => a,
-        Select::ByShape(f) => f(n, top),
-    }
+    n
 }
 
-/// Runtime divide dispatcher at u64 base — the single entry every
-/// multi-limb divide flows through. Classifies the effective shape, then
-/// routes to the chosen engine; `quot` / `rem` are written by that engine.
+// ── 4. the dispatcher: fold `select<N>`, run the selector, route ──────
+
+/// Runtime divide dispatcher — the single entry every multi-limb divide
+/// flows through. Folds the `select<N>` verdict (const per monomorphisation),
+/// runs the runtime [`select_for_limbs`], and routes to the chosen engine;
+/// `quot` / `rem` are written by that engine.
 ///
-/// Slice-based (not typed): the numerator and divisor have *independent*
-/// runtime lengths that no single `const N` expresses (decimal `/` divides
-/// a `2N`-limb scaled numerator by an `N`-limb divisor; the transcendental
-/// reciprocal divides work-width values; `newton_reciprocal` passes
-/// runtime-length slices). The build-max Knuth `u`/`v` scratch lives in the
-/// engine ([`div_knuth`] owns it), not here — the matcher allocates nothing.
-/// A concrete-`N` caller that can size scratch exactly (`Int<N>: ComputeInt`)
-/// sources its own buffer family (`single_limbs` / `double_limbs`) and calls
-/// the Knuth engine [`div_knuth_into`] directly — single-limb divisors route
-/// to the hardware path inside the engine and Burnikel–Ziegler never engages
-/// at supported widths, so the engine call is this matcher's identical
-/// choice without the build-max blanket.
-///
-/// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
+/// Slice-based (no `<N>`): the numerator and divisor have *independent*
+/// runtime lengths that no single const width expresses — the decimal `/`
+/// divides a `2N`-limb scaled numerator by an `N`-limb divisor, the slice
+/// roots divide bare runtime-length slices. Every caller already holds its
+/// operands as slices, so none has to manufacture a const to call this. The
+/// build-max Knuth `u`/`v` scratch lives in the engine ([`div_knuth`] owns
+/// it), not here — the matcher allocates nothing. A concrete-`N` caller that
+/// can size scratch exactly (`Int<N>: ComputeInt`) sources its own buffer
+/// family and calls the chosen engine's `*_into` variant.
 pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-    match classify(num, den) {
+    let algo = match const { select() } {
+        Select::ByAlgorithm(fixed) => fixed,
+        Select::ByShape(selector) => selector(num, den),
+    };
+    match algo {
         Algorithm::Rem => div_rem(num, den, quot, rem),
         Algorithm::Knuth => div_knuth(num, den, quot, rem),
         Algorithm::BurnikelZieglerWithKnuth => {
