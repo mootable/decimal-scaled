@@ -13,6 +13,8 @@
 //! Inner step uses the native `u64 × u64 → u128` widening multiply
 //! (`MUL` + `UMULH` on x86-64 / aarch64).
 
+use crate::int::types::compute_int::Limb;
+
 /// `out = a · b` schoolbook. `out.len() >= a.len() + b.len()` and `out`
 /// must be zeroed by the caller.
 ///
@@ -162,104 +164,54 @@ pub(crate) const fn mul_low_fixed<const N: usize>(a: &[u64; N], b: &[u64; N], ou
     }
 }
 
-/// `out = (a * b) mod 2^(64*N)` computed in **u128 limbs** -- the
-/// even-`N` u128-packed sibling of [`mul_low_fixed`].
+/// `out = (a · b) mod 2^(64·N)` — the truncated-low schoolbook, generic over
+/// the limb type `L` (the [`Limb`] axis). For `L = u64` it is base-2^64 over
+/// `N` limbs; for `L = u128` it packs the operands into `N/2` u128 limbs
+/// (`limb = lo | hi << 64`) and runs base-2^128 — half the limb count, so
+/// ~1/4 the partial products at the cost of a wider 128×128→256 inner step —
+/// then unpacks. Bit-identical low `N` u64 limbs either way.
 ///
-/// The operands are packed little-endian into `N/2` u128 limbs
-/// (`limb = lo | hi << 64`) and the truncated-low schoolbook runs in
-/// base-2^128 over those `N/2` limbs (half the limb count of the
-/// base-2^64 [`mul_low_fixed`], so ~1/4 the partial products at the cost
-/// of a wider 128x128->256 inner step). The low `N/2` u128 result limbs
-/// are unpacked back into the `N` u64 output limbs. **`N` must be even**
-/// (caller guarantees it; the wide-tier work integers are all even:
-/// 128/192/256 limbs). Bit-identical to the low `N` limbs of
-/// [`mul_low_fixed`].
+/// ONE kernel for both widths: the matcher's [`LimbSize`] verdict picks `L`
+/// (a const-folded `match` → `mul_low_limb::<N, u64>` / `::<N, u128>`), so
+/// there is no per-limb-type copy. The `u128` arm requires **even `N`**
+/// (`L::packed_len` halves it); callers gate on that. Scratch is `[L; N]`
+/// (the value's own width — `packed_len(N) ≤ N`), not a build-max blanket.
 ///
-/// The inner 128x128->256 product is formed from four `u64 * u64 -> u128`
-/// widening muls (`MUL`+`UMULH`), the same instruction the base-2^64
-/// kernel uses; only the carry/accumulate bookkeeping changes.
+/// The carry merge `hi.add_carries(c1, c2)` never overflows: the product
+/// high limb satisfies `hi ≤ L::MAX − 1` (maximal only when the low limb is
+/// 1), and `c1`/`c2` are never both set (`c1` needs `acc + lo` to wrap to 0,
+/// after which `+ carry` cannot wrap), so `hi + c1 + c2 ≤ L::MAX`.
+///
+/// [`LimbSize`]: crate::int::types::compute_int::LimbSize
 #[inline]
-pub(crate) fn mul_low_fixed_u128<const N: usize>(
-    a: &[u64; N],
-    b: &[u64; N],
-    out: &mut [u64; N],
-) {
-    debug_assert!(N % 2 == 0, "mul_low_fixed_u128: N must be even");
-    let h = N / 2;
-    // Pack operands into u128 limbs (little-endian: lo | hi << 64).
-    // Buffers sized `N` (only the low `h = N/2` entries are used);
-    // stable Rust cannot put `N / 2` in an array-length position.
-    let mut ap = [0u128; N];
-    let mut bp = [0u128; N];
-    let mut k = 0;
-    while k < h {
-        ap[k] = (a[2 * k] as u128) | ((a[2 * k + 1] as u128) << 64);
-        bp[k] = (b[2 * k] as u128) | ((b[2 * k + 1] as u128) << 64);
-        k += 1;
-    }
-    // Low-half schoolbook in base-2^128 over `h` limbs.
-    let mut acc = [0u128; N];
+pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
+    let h = L::packed_len(N);
+    // `[L; N]` covers `packed_len(N) ≤ N` for both limb types (stable Rust
+    // cannot put `N/2` in an array-length position; only the low `h` are used).
+    let mut ap = [L::ZERO; N];
+    let mut bp = [L::ZERO; N];
+    L::pack(a, &mut ap[..h]);
+    L::pack(b, &mut bp[..h]);
+    let mut acc = [L::ZERO; N];
     let mut i = 0;
     while i < h {
         let ai = ap[i];
-        if ai != 0 {
-            // carry spans up to 128 bits between columns.
-            let mut carry: u128 = 0;
+        if ai != L::ZERO {
+            let mut carry = L::ZERO;
             let mut j = 0;
-            // Stop once `i + j` reaches `h`: those partial products lie
-            // entirely above 2^(128*h) = 2^(64*N) and drop out.
+            // Stop once `i + j` reaches `h`: those partials lie above
+            // 2^(64·N) and drop out of the truncated-low result.
             while j < h - i {
-                let (lo, hi) = mul_u128_wide(ai, bp[j]);
+                let (lo, hi) = ai.widening_mul(bp[j]);
                 let idx = i + j;
-                // acc[idx] += lo; carry-in `carry`; carry-out -> hi.
                 let (s1, c1) = acc[idx].overflowing_add(lo);
                 let (s2, c2) = s1.overflowing_add(carry);
                 acc[idx] = s2;
-                // No overflow forming the next-column carry. The product
-                // high word satisfies `hi <= 2^128 - 2`, with `hi` maximal
-                // only when `lo == 1`. `c1` is set only when `s1 == 0`
-                // (acc[idx] + lo wrapped to 0); then `s1 + carry` cannot
-                // wrap, so `c2 == 0`: `c1` and `c2` are never both set.
-                // Hence `hi + c1 + c2 <= hi + 1 <= 2^128 - 1` fits u128.
-                carry = hi + (c1 as u128) + (c2 as u128);
+                carry = hi.add_carries(c1, c2);
                 j += 1;
             }
-            // Final row carry would land in limb `h` (above the width) --
-            // discarded.
         }
         i += 1;
     }
-    // Unpack low `h` u128 limbs into the `N` u64 output limbs.
-    let mut k = 0;
-    while k < h {
-        out[2 * k] = acc[k] as u64;
-        out[2 * k + 1] = (acc[k] >> 64) as u64;
-        k += 1;
-    }
-}
-
-/// `a * b -> (low128, high128)` for two `u128` operands, built from four
-/// `u64 * u64 -> u128` widening products (`MUL`+`UMULH`). The full
-/// 256-bit product is `lo + (hi << 128)`.
-#[inline(always)]
-fn mul_u128_wide(a: u128, b: u128) -> (u128, u128) {
-    let a_lo = a as u64 as u128;
-    let a_hi = (a >> 64) as u64 as u128;
-    let b_lo = b as u64 as u128;
-    let b_hi = (b >> 64) as u64 as u128;
-
-    let ll = a_lo * b_lo; // bits 0..128
-    let lh = a_lo * b_hi; // bits 64..192
-    let hl = a_hi * b_lo; // bits 64..192
-    let hh = a_hi * b_hi; // bits 128..256
-
-    // Sum the two middle terms (each < 2^128) into the bits-64..192 lane,
-    // tracking the overflow into bit 192.
-    let (mid, mid_carry) = lh.overflowing_add(hl);
-    // low 128 bits = ll + (mid << 64), with carry into the high word.
-    let mid_lo = mid << 64; // low 64 bits of `mid` land in bits 64..128
-    let mid_hi = mid >> 64; // high 64 bits of `mid` land in bits 128..192
-    let (low, c) = ll.overflowing_add(mid_lo);
-    let high = hh + mid_hi + (c as u128) + ((mid_carry as u128) << 64);
-    (low, high)
+    L::unpack(&acc[..h], out);
 }

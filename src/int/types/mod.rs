@@ -4085,6 +4085,7 @@ mod unified_mg_feasibility {
     /// scaled wider-width quotient.
     fn scaled<const N: usize, const M: usize>(a: Int<N>, b: Int<N>, scale: u32) -> Int<M>
     where
+        Int<N>: ComputeInt,
         Int<M>: BigInt + ComputeInt,
     {
         let prod: Int<M> = a.widen_mul::<Int<M>>(b);

@@ -25,7 +25,7 @@ mod tests {
         KARATSUBA_SCRATCH_LIMBS,
     };
     use super::mul_schoolbook::{
-        mul_low_fixed, mul_low_fixed_u128, mul_schoolbook, mul_schoolbook_fixed,
+        mul_low_fixed, mul_low_limb, mul_schoolbook, mul_schoolbook_fixed,
         mul_schoolbook_into,
     };
 
@@ -338,14 +338,14 @@ mod tests {
         }
     }
 
-    /// `mul_low_fixed_u128::<N>` (the u128-packed candidate) produces the
+    /// `mul_low_limb::<N, u128>` (the u128-packed candidate) produces the
     /// bit-identical low `N` limbs of `mul_low_fixed::<N>` across the
     /// carry-stressing corpus (at N = 4) and a wide spread of random
     /// inputs at the even wide-tier work widths (N = 128 / 192 / 256, the
     /// D616 / D924 / D1232 exp Taylor work integers). This is the
     /// correctness gate the u128-multiply pilot rides on.
     #[test]
-    fn mul_low_fixed_u128_matches_u64() {
+    fn mul_low_limb_u128_matches_u64() {
         // Edge corpus at N = 4 (all-ones / single-limb / mixed).
         const N4: usize = 4;
         for a in corpus() {
@@ -359,7 +359,7 @@ mod tests {
                 let mut lo_ref = [0u64; N4];
                 let mut lo_u128 = [0u64; N4];
                 mul_low_fixed::<N4>(&a_arr, &b_arr, &mut lo_ref);
-                mul_low_fixed_u128::<N4>(&a_arr, &b_arr, &mut lo_u128);
+                mul_low_limb::<N4, u128>(&a_arr, &b_arr, &mut lo_u128);
                 assert_eq!(lo_ref, lo_u128, "u128 low-mul mismatch (corpus N=4)");
             }
         }
@@ -388,7 +388,7 @@ mod tests {
                     let mut lo_ref = [0u64; N];
                     let mut lo_u128 = [0u64; N];
                     mul_low_fixed::<N>(&a, &b, &mut lo_ref);
-                    mul_low_fixed_u128::<N>(&a, &b, &mut lo_u128);
+                    mul_low_limb::<N, u128>(&a, &b, &mut lo_u128);
                     assert_eq!(
                         lo_ref, lo_u128,
                         "u128 low-mul mismatch at N = {}",
@@ -406,7 +406,7 @@ mod tests {
                 let mut lo_ref = [0u64; N];
                 let mut lo_u128 = [0u64; N];
                 mul_low_fixed::<N>(&a, &b, &mut lo_ref);
-                mul_low_fixed_u128::<N>(&a, &b, &mut lo_u128);
+                mul_low_limb::<N, u128>(&a, &b, &mut lo_u128);
                 assert_eq!(lo_ref, lo_u128, "u128 low-mul mismatch (all-ones N={})", N);
             }};
         }

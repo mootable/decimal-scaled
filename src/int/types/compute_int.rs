@@ -106,6 +106,128 @@ pub(crate) fn max_u128_limb() -> [u128; MAX_U128_LIMB] {
     [0u128; MAX_U128_LIMB]
 }
 
+// ── The `Limb` axis — `u64` / `u128` width-generic kernels ─────────────────
+//
+// A wide-tier kernel can run faster in u128 limbs (half the limbs/carries).
+// Which width wins is a per-`(N, SCALE)` const property, so it is a second
+// matcher axis (the `Select` verdict carries a `LimbSize`). The width is
+// delivered BY TYPE: a `<L: Limb>`-generic kernel is monomorphised per width
+// via a const-folded `match` on the verdict — ONE kernel, never a per-limb
+// copy. See `docs/ARCHITECTURE.md` → "Limb width — the matcher's second axis".
+
+/// The limb width a `<L: Limb>` kernel runs in, chosen by the matcher per
+/// `(N, SCALE)`. A const, value-independent property (the const part of the
+/// `Select` verdict) — packing pairs two u64 into one u128, so `U128` is only
+/// valid for an even limb count (the matcher gates this).
+#[derive(Clone, Copy, PartialEq, Eq, Debug)]
+#[allow(dead_code)]
+pub(crate) enum LimbSize {
+    U64,
+    U128,
+}
+
+/// The scalar limb type a width-generic kernel computes in — `u64`, or the
+/// packed `u128` (two storage u64 limbs per limb). Carries the primitives a
+/// slice kernel needs plus the pack/unpack to/from the `Int<N>` u64 storage.
+/// Implemented for exactly `u64` and `u128`.
+pub(crate) trait Limb: Copy + PartialEq {
+    /// Additive identity (the array-repeat seed for scratch buffers).
+    const ZERO: Self;
+    /// Number of `L` limbs holding an `n`-u64-limb value: `n` for `u64`,
+    /// `n / 2` for `u128` (caller guarantees even `n` for the `u128` impl).
+    fn packed_len(n_u64: usize) -> usize;
+    /// Pack the low `dst.len()` little-endian u64 limbs of `src_u64` into
+    /// `dst` `L` limbs.
+    fn pack(src_u64: &[u64], dst: &mut [Self]);
+    /// Unpack `src` `L` limbs back into the low little-endian u64 limbs of
+    /// `dst_u64`.
+    fn unpack(src: &[Self], dst_u64: &mut [u64]);
+    /// Full widening product `self · rhs → (low, high)` limbs.
+    fn widening_mul(self, rhs: Self) -> (Self, Self);
+    /// `self + rhs → (sum, carry)`.
+    fn overflowing_add(self, rhs: Self) -> (Self, bool);
+    /// `self + c1 + c2` — the schoolbook carry merge. The column bound
+    /// (`hi ≤ MAX − 1`, and `c1`/`c2` never both set) guarantees no overflow.
+    fn add_carries(self, c1: bool, c2: bool) -> Self;
+}
+
+impl Limb for u64 {
+    const ZERO: Self = 0;
+    #[inline]
+    fn packed_len(n_u64: usize) -> usize {
+        n_u64
+    }
+    #[inline]
+    fn pack(src_u64: &[u64], dst: &mut [Self]) {
+        let h = dst.len();
+        dst.copy_from_slice(&src_u64[..h]);
+    }
+    #[inline]
+    fn unpack(src: &[Self], dst_u64: &mut [u64]) {
+        let h = src.len();
+        dst_u64[..h].copy_from_slice(src);
+    }
+    #[inline]
+    fn widening_mul(self, rhs: Self) -> (Self, Self) {
+        let p = (self as u128) * (rhs as u128);
+        (p as u64, (p >> 64) as u64)
+    }
+    #[inline]
+    fn overflowing_add(self, rhs: Self) -> (Self, bool) {
+        u64::overflowing_add(self, rhs)
+    }
+    #[inline]
+    fn add_carries(self, c1: bool, c2: bool) -> Self {
+        self.wrapping_add(c1 as u64).wrapping_add(c2 as u64)
+    }
+}
+
+impl Limb for u128 {
+    const ZERO: Self = 0;
+    #[inline]
+    fn packed_len(n_u64: usize) -> usize {
+        n_u64 / 2
+    }
+    #[inline]
+    fn pack(src_u64: &[u64], dst: &mut [Self]) {
+        for (k, d) in dst.iter_mut().enumerate() {
+            *d = (src_u64[2 * k] as u128) | ((src_u64[2 * k + 1] as u128) << 64);
+        }
+    }
+    #[inline]
+    fn unpack(src: &[Self], dst_u64: &mut [u64]) {
+        for (k, &s) in src.iter().enumerate() {
+            dst_u64[2 * k] = s as u64;
+            dst_u64[2 * k + 1] = (s >> 64) as u64;
+        }
+    }
+    #[inline]
+    fn widening_mul(self, rhs: Self) -> (Self, Self) {
+        // `a · b → (low128, high128)` from four u64·u64→u128 partials
+        // (`MUL`+`UMULH`); the full 256-bit product is `low + (high << 128)`.
+        let a_lo = self as u64 as u128;
+        let a_hi = (self >> 64) as u64 as u128;
+        let b_lo = rhs as u64 as u128;
+        let b_hi = (rhs >> 64) as u64 as u128;
+        let ll = a_lo * b_lo;
+        let lh = a_lo * b_hi;
+        let hl = a_hi * b_lo;
+        let hh = a_hi * b_hi;
+        let (mid, mid_carry) = lh.overflowing_add(hl);
+        let (low, c) = ll.overflowing_add(mid << 64);
+        let high = hh + (mid >> 64) + (c as u128) + ((mid_carry as u128) << 64);
+        (low, high)
+    }
+    #[inline]
+    fn overflowing_add(self, rhs: Self) -> (Self, bool) {
+        u128::overflowing_add(self, rhs)
+    }
+    #[inline]
+    fn add_carries(self, c1: bool, c2: bool) -> Self {
+        self.wrapping_add(c1 as u128).wrapping_add(c2 as u128)
+    }
+}
+
 /// The storage integer's compute-scratch capability: clean limb-multiple
 /// stack buffers for the operations that work wider than `N` limbs.
 ///

@@ -200,19 +200,23 @@ impl<const N: usize> BigInt for Int<N> {
 
     #[inline]
     fn wrapping_mul_low_u128(self, rhs: Self) -> Self {
-        // The u128-packed low-half schoolbook requires an even limb
-        // count (it folds pairs of u64 limbs into u128 limbs); for even
-        // `N` it is bit-identical to `wrapping_mul` and faster at the
-        // wide work widths. Odd `N` keeps the base-2^64 path.
+        // Truncated-low product via the ONE `<L: Limb>` kernel `mul_low_limb`
+        // (`crate::int::types::compute_int::Limb` axis). The `LimbSize` choice
+        // is the const `N % 2`: even `N` packs into u128 (half the limbs /
+        // carries — the wide-tier win), odd `N` runs base-2^64; both are the
+        // same generic kernel, bit-identical to `wrapping_mul` (mod 2^64N).
+        // (This const branch is the per-method stand-in for the policy
+        // `LimbSize` verdict until the matcher axis is wired.)
+        use crate::int::algos::mul::mul_schoolbook::mul_low_limb;
+        let a = *self.as_limbs();
+        let b = *rhs.as_limbs();
+        let mut out = [0u64; N];
         if N % 2 == 0 {
-            let a = *self.as_limbs();
-            let b = *rhs.as_limbs();
-            let mut out = [0u64; N];
-            crate::int::algos::mul::mul_schoolbook::mul_low_fixed_u128::<N>(&a, &b, &mut out);
-            Int::from_limbs(out)
+            mul_low_limb::<N, u128>(&a, &b, &mut out);
         } else {
-            Int::wrapping_mul(self, rhs)
+            mul_low_limb::<N, u64>(&a, &b, &mut out);
         }
+        Int::from_limbs(out)
     }
 
     #[inline]

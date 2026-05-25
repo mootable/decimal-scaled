@@ -212,15 +212,16 @@ pub mod __bench_internals {
     /// Exposed for the `mul_low_u128_ab` pilot microbench.
     #[inline(never)]
     pub fn mul_low_u64<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::mul::mul_schoolbook::mul_low_fixed::<N>(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u64>(a, b, out)
     }
-    /// u128-limb-packed truncated-low schoolbook multiply candidate
-    /// (even `N` only): bit-identical low `N` limbs to [`mul_low_u64`],
-    /// computed in `N/2` base-2^128 limbs. Exposed for the
-    /// `mul_low_u128_ab` pilot microbench.
+    /// u128-limb-packed truncated-low schoolbook multiply (even `N` only):
+    /// bit-identical low `N` limbs to [`mul_low_u64`], computed in `N/2`
+    /// base-2^128 limbs — the `L = u128` monomorphisation of the one
+    /// `mul_low_limb` kernel. Exposed for the `mul_low_u128_ab` `LimbSize`
+    /// microbench (u64 vs u128 of the same generic kernel).
     #[inline(never)]
     pub fn mul_low_u128<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::mul::mul_schoolbook::mul_low_fixed_u128::<N>(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u128>(a, b, out)
     }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
