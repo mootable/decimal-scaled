@@ -45,6 +45,13 @@
 // `src/macros/num_traits.rs` and the per-width invocations in
 // `core_type.rs`). This file keeps only the test module.
 
+// The `(N) as i128` casts and `try_from(...).unwrap()` forms below are
+// deliberate explicit value-construction in hand-written fixtures. clippy's
+// `from()` rewrite for the fallible conversions is ambiguous here (multiple
+// applicable `From` impls -> E0034) and rustfix cannot apply it, so these
+// cosmetic lints are allowed at the test-file scope.
+#![allow(clippy::unnecessary_cast, clippy::unnecessary_fallible_conversions)]
+
 use decimal_scaled::{D38, D38s12};
 // Zero / One / Num / Bounded / Signed / Checked* are emitted for
 // D38 by `decl_decimal_num_traits_basics!`; FromPrimitive /

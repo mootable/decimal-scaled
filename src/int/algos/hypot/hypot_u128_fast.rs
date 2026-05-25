@@ -190,7 +190,7 @@ mod tests {
     where
         Int<N>: crate::int::types::compute_int::ComputeInt,
     {
-        let mut s = 0xDEAD_BEEF_CAFE_F00du64 ^ (N as u64);
+        let mut s = 0xDEAD_BEEF_CAFE_F00D_u64 ^ (N as u64);
         for _ in 0..300 {
             // Build operands at a mix of magnitudes: small (fast-path), full
             // single-limb (fast-path edge), and multi-limb (fallback).

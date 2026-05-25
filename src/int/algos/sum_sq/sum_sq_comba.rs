@@ -150,7 +150,7 @@ mod tests {
     where
         Int<N>: crate::int::types::compute_int::ComputeInt,
     {
-        let mut s = 0x1234_5678_9ABC_DEFu64 ^ (N as u64);
+        let mut s = 0x0123_4567_89AB_CDEF_u64 ^ (N as u64);
         for _ in 0..400 {
             // Shrink one operand sometimes to exercise unequal lengths.
             let mut a = rand_int::<N>(&mut s);
@@ -158,9 +158,7 @@ mod tests {
             if mix(&mut s) & 1 == 0 {
                 a = Int::<N>::from_limbs({
                     let mut l = *a.as_limbs();
-                    for k in 1..N {
-                        l[k] = 0;
-                    }
+                    l[1..N].fill(0);
                     l[0] &= 0xFFFF_FFFF; // ~32-bit operand
                     l
                 });

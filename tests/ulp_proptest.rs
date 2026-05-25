@@ -624,8 +624,9 @@ mod hard_inputs {
             // square as i128: result is (raw * raw) / ONE.
             // For raw up to 10^21, raw*raw can overflow i128 (max ~1.7e38).
             // Restrict to raw² fitting i128 with margin.
-            let safe = if raw > ONE / 10 { raw } else { raw };
-            (safe.saturating_mul(safe)) / ONE
+            // `saturating_mul` below caps the overflow, so no input clamp is
+            // needed here.
+            (raw.saturating_mul(raw)) / ONE
         })
     }
 

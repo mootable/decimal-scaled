@@ -54,9 +54,9 @@ fn subtract_abs(a: &str, b: &str) -> String {
     let small: Vec<u8> = small.bytes().rev().map(|c| c - b'0').collect();
     let mut out = Vec::with_capacity(big.len());
     let mut borrow: i16 = 0;
-    for i in 0..big.len() {
+    for (i, &big_d) in big.iter().enumerate() {
         let s = small.get(i).copied().unwrap_or(0) as i16;
-        let mut d = big[i] as i16 - s - borrow;
+        let mut d = big_d as i16 - s - borrow;
         if d < 0 {
             d += 10;
             borrow = 1;

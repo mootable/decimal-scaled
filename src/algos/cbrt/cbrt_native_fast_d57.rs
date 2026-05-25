@@ -62,7 +62,6 @@
 //! an `f64` bootstrap seed). Implemented from the text; no external code.
 
 #![cfg(any(feature = "d57", feature = "wide"))]
-#![allow(dead_code)]
 
 use crate::algo_x_support::seed::extract_top_u64;
 use crate::int::types::traits::BigInt;

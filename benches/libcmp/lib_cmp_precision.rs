@@ -36,7 +36,7 @@ mod subjects_peers;
 
 use std::fs;
 use std::io::Write as _;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use decimal_scaled::RoundingMode;
 use subject_ds::DecimalScaledSubject;
@@ -168,7 +168,7 @@ fn results_dir() -> PathBuf {
 
 /// Write one library's rows to `results/precision/<stem>.tsv`. Stable
 /// header + stable row order ⇒ meaningful diffs across runs.
-fn write_tsv(dir: &PathBuf, name: &str, rows: &[Row]) {
+fn write_tsv(dir: &Path, name: &str, rows: &[Row]) {
     let path = dir.join(format!("{}.tsv", file_stem(name)));
     let mut f = fs::File::create(&path).expect("create result tsv");
     writeln!(
@@ -214,7 +214,7 @@ struct FileCell {
 /// Render the LSBε (ULP) shootout for one width by READING the committed
 /// per-library TSV files — proving the docs table is generated from the
 /// single committed source, not recomputed.
-fn render_from_files(dir: &PathBuf, width: Width) -> String {
+fn render_from_files(dir: &Path, width: Width) -> String {
     use std::collections::BTreeMap;
     // (library, method) -> cell, for this width.
     let mut data: BTreeMap<String, BTreeMap<String, FileCell>> = BTreeMap::new();

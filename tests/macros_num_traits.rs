@@ -2,6 +2,12 @@
 //! impls emitted for every decimal width. Covers Num, Signed,
 //! CheckedAdd/Sub/Mul/Div/Rem/Neg, FromPrimitive, ToPrimitive, NumCast.
 
+// The `try_from(...).unwrap()` / cast forms below are deliberate explicit
+// value-construction in hand-written fixtures; clippy's `from()` rewrite is
+// ambiguous here (multiple applicable `From` impls -> E0034) and rustfix
+// cannot apply it, so these cosmetic lints are allowed at the test-file scope.
+#![allow(clippy::unnecessary_cast, clippy::unnecessary_fallible_conversions)]
+
 use decimal_scaled::{D18, D38};
 use num_traits::{
     Bounded, CheckedAdd, CheckedDiv, CheckedMul, CheckedNeg, CheckedRem, CheckedSub, FromPrimitive,

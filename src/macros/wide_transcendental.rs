@@ -1889,7 +1889,7 @@ macro_rules! decl_wide_transcendental {
                     // narrowing.
                     //
                     // `|k|·log10(2) = |k| · 30103 / 100000`. Round up:
-                    let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
+                    let digits = (abs_k_u128 * 30103).div_ceil(100_000);
                     // Cap at the type's working width to avoid blowing up
                     // `pow10(extra)`; if `|k|` is so large the result
                     // would overflow storage anyway, the caller's
@@ -3920,7 +3920,7 @@ macro_rules! decl_wide_transcendental {
                     // band is symmetric. The threshold mirrors `tanh`'s:
                     // the cubic clears half a storage ULP only once
                     // `|raw| > ~10^(2·SCALE/3)`.
-                    let thresh_exp = SCALE - (SCALE + 2) / 3;
+                    let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
                         return Self::from_bits(
@@ -4014,7 +4014,7 @@ macro_rules! decl_wide_transcendental {
                     // finite-precision exp path can resolve the sub-ULP
                     // cubic, so the directed result is the analytic decision
                     // (nearest modes return `raw`).
-                    let thresh_exp = SCALE - (SCALE + 2) / 3;
+                    let thresh_exp = SCALE - SCALE.div_ceil(3);
                     let thresh = <$Storage>::from_i128(10).pow(thresh_exp);
                     if raw.abs() <= thresh {
                         return Self::from_bits(

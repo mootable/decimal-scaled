@@ -4,9 +4,9 @@
 //! - 1.2  width round-trip: `narrow_n(widen_n(x)) == x`.
 //! - 1.3  cross-width AND cross-scale exact value-equality.
 //! - 1.1  conversion round-trips (`from_int` / `to_int`, `Int::widen` /
-//!        `Int::narrow`).
+//!   `Int::narrow`).
 //! - 1.4  overflow contract: debug-panic on the operator path, `None`
-//!        on the `checked_*` path.
+//!   on the `checked_*` path.
 
 use decimal_scaled::{D18s9, D38, D38s12, Int, D};
 

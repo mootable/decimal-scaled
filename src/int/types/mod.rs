@@ -227,6 +227,11 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Bitwise AND.
+    // Operator-named inherent kernels (bitand/bitor/bitxor/not/shl/shr):
+    // deliberately NOT the std ops traits — const-usable, and `shl`/`shr` take
+    // a `u32` shift rather than the `Shl<Rhs>`/`Shr<Rhs>` shape (the std ops
+    // are implemented separately). Allow the look-alike-trait-method lint.
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn bitand(self, rhs: Self) -> Self {
         let mut out = [0u64; N];
@@ -239,6 +244,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Bitwise OR.
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn bitor(self, rhs: Self) -> Self {
         let mut out = [0u64; N];
@@ -251,6 +257,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Bitwise XOR.
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn bitxor(self, rhs: Self) -> Self {
         let mut out = [0u64; N];
@@ -263,6 +270,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Bitwise NOT (ones' complement).
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn not(self) -> Self {
         let mut out = [0u64; N];
@@ -275,6 +283,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Logical left shift by `shift` bits (modulo `2^BITS`).
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn shl(self, shift: u32) -> Self {
         let mut out = [0u64; N];
@@ -283,6 +292,7 @@ impl<const N: usize> Uint<N> {
     }
 
     /// Logical right shift by `shift` bits.
+    #[allow(clippy::should_implement_trait)]
     #[inline]
     pub fn shr(self, shift: u32) -> Self {
         let mut out = [0u64; N];
@@ -1738,9 +1748,9 @@ impl<const N: usize> Int<N> {
     /// the signed range), matching the primitive integer contract.
     #[inline]
     pub const fn checked_rem(self, rhs: Self) -> Option<Self> {
-        if is_zero_fixed(&rhs.limbs) {
-            None
-        } else if self.is_min_neg_one(rhs) {
+        if is_zero_fixed(&rhs.limbs) || self.is_min_neg_one(rhs) {
+            // Zero divisor, or the `MIN % -1` overflow case (its paired
+            // `MIN / -1` division overflows the signed range).
             None
         } else {
             Some(self.wrapping_rem(rhs))

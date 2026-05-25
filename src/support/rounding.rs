@@ -342,7 +342,10 @@ pub(crate) fn trunc_f64(x: f64) -> f64 {
         return x;
     }
     let magnitude = if x < 0.0 { -x } else { x };
-    if !(magnitude < F64_INTEGER_THRESHOLD) {
+    if magnitude >= F64_INTEGER_THRESHOLD {
+        // NaN is already returned above, so `>=` is the exact complement of
+        // `< THRESHOLD` here: already-integral / too-large magnitudes pass
+        // through unchanged.
         return x;
     }
     let truncated = x as i128 as f64;

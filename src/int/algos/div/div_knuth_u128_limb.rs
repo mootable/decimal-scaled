@@ -418,10 +418,10 @@ mod tests {
         };
         for &n in &[24usize, 32, 48, 64] {
             // Exact-scratch sizes — the `ComputeInt` family formulas.
-            let u64buf_len = 2 * n + (n + 1) / 2; // double_buffered_u64
+            let u64buf_len = 2 * n + n.div_ceil(2); // double_buffered_u64
             let v64buf_len = n + 2; // single_buffered_u64
-            let u128_u_len = (2 * n + (n + 1) / 2 + 1) / 2; // double_buffered_u128
-            let u128_v_len = (n + 1) / 2; // single_u128
+            let u128_u_len = (2 * n + n.div_ceil(2)).div_ceil(2); // double_buffered_u128
+            let u128_v_len = n.div_ceil(2); // single_u128
             for _ in 0..200 {
                 let top = 2 * n; // full wide `2N` dividend
                 let mut num = alloc::vec![0u64; top];
