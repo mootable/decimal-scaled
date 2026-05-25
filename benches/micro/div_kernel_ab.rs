@@ -34,7 +34,7 @@
 
 use criterion::Criterion;
 use decimal_scaled::__bench_internals::{
-    div_bz_forced_slice, div_dispatch_slice, div_knuth_slice,
+    div_bz_forced_slice, div_dispatch_slice, div_knuth_slice, div_knuth_u128_limb_slice,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -81,6 +81,12 @@ fn run_bz(s: Shape) -> Vec<u64> {
     div_bz_forced_slice(&s.num, &s.den, &mut q, &mut r);
     r
 }
+fn run_u128(s: Shape) -> Vec<u64> {
+    let mut q = vec![0u64; s.num.len()];
+    let mut r = vec![0u64; s.num.len()];
+    div_knuth_u128_limb_slice(&s.num, &s.den, &mut q, &mut r);
+    r
+}
 
 fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> Vec<Shape>) {
     // Correctness gate: forced BZ and Knuth must agree before timing — they
@@ -100,6 +106,13 @@ fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> 
         div_dispatch_slice(&s.num, &s.den, &mut q2, &mut r2);
         assert_eq!(q0, q2, "knuth vs dispatch quot mismatch {label} {}", s.label);
         assert_eq!(r0, r2, "knuth vs dispatch rem mismatch {label} {}", s.label);
+        // And the u128-limb candidate (base 2^128); bit-identical, falling
+        // back to base-2^64 Knuth on odd / sub-4-limb divisors.
+        let mut q3 = vec![0u64; s.num.len()];
+        let mut r3 = vec![0u64; s.num.len()];
+        div_knuth_u128_limb_slice(&s.num, &s.den, &mut q3, &mut r3);
+        assert_eq!(q0, q3, "knuth vs u128 quot mismatch {label} {}", s.label);
+        assert_eq!(r0, r3, "knuth vs u128 rem mismatch {label} {}", s.label);
     }
     compare_all(
         c,
@@ -109,6 +122,7 @@ fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> 
         vec![
             ("knuth", run_knuth as fn(Shape) -> Vec<u64>),
             ("bz", run_bz),
+            ("u128", run_u128),
         ],
     );
 }

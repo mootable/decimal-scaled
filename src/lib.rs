@@ -252,6 +252,15 @@ pub mod __bench_internals {
     pub fn div_dispatch_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
         crate::int::policy::div_rem::dispatch(num, den, quot, rem)
     }
+    /// Base-2¹²⁸ (u128-limb) Knuth candidate for `div_kernel_ab` — the
+    /// divide side of the `LimbSize` axis, PARKED (not wired into any
+    /// policy). Bit-identical to [`div_knuth_slice`]; A/B measures whether
+    /// the aligned u128 carry-chain beats base-2⁶⁴ despite the 4-mult q̂·v
+    /// product.
+    #[inline(never)]
+    pub fn div_knuth_u128_limb_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb(num, den, quot, rem)
+    }
     /// Burnikel-Ziegler chunking engine FORCED on (production engagement
     /// guard bypassed) so the Knuth-vs-BZ crossover can be timed at
     /// sub-threshold widths in `div_kernel_ab`.

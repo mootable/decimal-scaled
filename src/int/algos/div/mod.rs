@@ -34,6 +34,11 @@ pub(crate) mod div_fixed;
 // and both outputs. Sibling of int::algos::rem::rem_native_direct.
 pub(crate) mod div_native_direct;
 pub(crate) mod div_knuth;
+// candidate (not wired): Knuth Algorithm D on u128 limbs (base 2^128) — the
+// divide side of the LimbSize axis. Parked pending the div_kernel_ab verdict
+// (whether the aligned u128 carry-chain beats base-2^64 despite the 4-mult
+// q̂·v product). Bit-identical to div_knuth (its #[cfg(test)] differential).
+pub(crate) mod div_knuth_u128_limb;
 pub(crate) mod div_mg;
 pub(crate) mod div_rem;
 pub(crate) mod div_rem_schoolbook;
