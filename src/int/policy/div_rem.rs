@@ -22,6 +22,7 @@
 
 use crate::int::algos::div::div_burnikel_ziegler_with_knuth::div_burnikel_ziegler_with_knuth;
 use crate::int::algos::div::div_knuth::div_knuth;
+use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb;
 use crate::int::algos::div::div_rem::div_rem;
 use crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook;
 
@@ -42,6 +43,12 @@ enum Algorithm {
     /// [`div_burnikel_ziegler_with_knuth`] — Burnikel–Ziegler outer
     /// chunking, recursing to Knuth as its base case.
     BurnikelZieglerWithKnuth,
+    /// [`div_knuth_u128_limb`] — Knuth Algorithm D on u128 limbs (base
+    /// 2¹²⁸). The `LimbSize` axis as an engine: chosen only for the **wide
+    /// (`2n`-dividend) even-`n` divisor ≥ [`U128_DIV_THRESHOLD`]** shape,
+    /// where the aligned u128 carry-chain beats base-2⁶⁴ (it LOSES on the
+    /// balanced shape — see the threshold doc).
+    KnuthU128Limb,
     /// [`div_rem_schoolbook`] — binary shift-subtract long division,
     /// the naive reference baseline. Registered but unrouted:
     /// `select_for_limbs` never returns this variant; it exists for
@@ -115,6 +122,31 @@ enum Select {
 /// D307+ wide divide by engaging the slower block engine.)
 pub(crate) const BZ_THRESHOLD: usize = 65;
 
+/// u128-limb Knuth ([`Algorithm::KnuthU128Limb`]) engagement threshold, in
+/// u64 divisor limbs. **Policy data.**
+///
+/// **Benched** (`div_kernel_ab`, u128 base-2¹²⁸ vs u64 base-2⁶⁴). The
+/// limb-width win is **shape-dependent** — it materialises only on the
+/// **wide** `div` shape (a `2n`-limb dividend over an `n`-limb divisor; the
+/// decimal `/` scaled-numerator shape), and only once the divisor is wide
+/// enough for the aligned u128 carry-chain to outrun the doubled multiply
+/// count:
+///
+/// | divisor (limbs / tier) | wide `2n`/`n` | balanced `n`/`n` |
+/// |------------------------|---------------|------------------|
+/// | 16 / D307              | u64 1.04×     | u64 1.33×        |
+/// | 24 / D462              | **u128 1.25×**| u64 1.23×        |
+/// | 32 / D616              | **u128 1.33×**| u64 1.14×        |
+/// | 48 / D924              | **u128 1.26×**| u64 1.21×        |
+/// | 64 / D1232             | **u128 1.17×**| u64 1.29×        |
+///
+/// So u128 is routed ONLY for an **even** divisor of `≥ 24` limbs whose
+/// dividend is `≥ 2·n` (the wide shape); the balanced shape (square `rem` /
+/// the `Int<N>` `/` operator) and every narrow/odd divisor stay base-2⁶⁴
+/// Knuth, where u128 loses. The engine itself falls back to `div_knuth` for
+/// odd / `< 4`-limb divisors, so the matcher gate is the perf carve-out.
+const U128_DIV_THRESHOLD: usize = 24;
+
 // ── 3. the matcher: `select` (no const axis) → `select_for_limbs` ─────
 
 /// The top-level matcher. Division has no const-width axis (its operands'
@@ -154,14 +186,26 @@ const fn select() -> Select {
 fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
     let den_n = effective_limbs(den);
     assert!(den_n > 0, "dispatch: divide by zero");
-
     if den_n == 1 {
-        Algorithm::Rem
-    } else if den_n >= BZ_THRESHOLD && effective_limbs(num) >= 2 * den_n {
-        Algorithm::BurnikelZieglerWithKnuth
-    } else {
-        Algorithm::Knuth
+        return Algorithm::Rem;
     }
+    // `den_n >= 2` here. Both the wide engines (Burnikel–Ziegler, u128) want
+    // a `≥ 2·n` dividend, so the dividend's effective length is computed
+    // once — and lazily: only for a divisor wide enough to reach the smaller
+    // threshold. Every common `2..U128_DIV_THRESHOLD`-limb divisor returns
+    // Knuth without stripping the dividend at all.
+    if den_n >= U128_DIV_THRESHOLD {
+        let num_m = effective_limbs(num);
+        if den_n >= BZ_THRESHOLD && num_m >= 2 * den_n {
+            return Algorithm::BurnikelZieglerWithKnuth;
+        }
+        // Wide (`2n`-dividend) even divisor → the u128 limb-width engine wins
+        // here (and only here — the balanced shape stays Knuth).
+        if den_n % 2 == 0 && num_m >= 2 * den_n {
+            return Algorithm::KnuthU128Limb;
+        }
+    }
+    Algorithm::Knuth
 }
 
 /// Effective limb count of a little-endian magnitude slice: its length with
@@ -203,6 +247,7 @@ pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u6
         Algorithm::BurnikelZieglerWithKnuth => {
             div_burnikel_ziegler_with_knuth(num, den, quot, rem)
         }
+        Algorithm::KnuthU128Limb => div_knuth_u128_limb(num, den, quot, rem),
         Algorithm::Schoolbook => div_rem_schoolbook(num, den, quot, rem),
     }
 }

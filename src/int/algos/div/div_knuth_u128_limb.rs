@@ -43,8 +43,6 @@
 //!
 //! [`LimbSize`]: crate::int::types::compute_int::LimbSize
 
-#![allow(dead_code)]
-
 use crate::int::algos::div::div_mg::Mg3By2;
 use crate::int::types::compute_int::{Limb, MAX_SINGLE_LIMBS};
 
