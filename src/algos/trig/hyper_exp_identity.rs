@@ -29,8 +29,8 @@
 //! D153 70..=82, D307 140..=160) into one generic over `C: WideTrigCore`,
 //! the band's narrow guard `GUARD`, and the band's working-scale `exp`
 //! kernel (a function pointer so each band keeps its own exp realisation
-//! — the Tang `tang_exp_fixed::<C, M, INTERNAL_EXTRA>` surface or, at
-//! D307, the retained per-tier `exp_tang_16limb_s140_160::tang_exp_fixed`).
+//! — the generic Tang `exp_tang::tang_exp_fixed::<C, M, INTERNAL_EXTRA>`
+//! surface, shared by every band including D307 140..=160).
 
 use crate::algos::support::wide_trig_core::WideTrigCore;
 use crate::int::types::traits::BigInt;

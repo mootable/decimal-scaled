@@ -1684,7 +1684,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     pub(crate) fn policy_sinh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
+                140..=160 => trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d307::Core, 128, false>),
                 _ => return Self(crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1699,7 +1699,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     pub(crate) fn policy_cosh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
+                140..=160 => trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d307::Core, 128, false>),
                 _ => return Self(crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]
@@ -1714,7 +1714,7 @@ impl<const SCALE: u32> crate::D<crate::int::types::Int<16>, SCALE> {
     pub(crate) fn policy_tanh(self, mode: RoundingMode) -> Self {
         Self(match hyper::resolve::<16, SCALE>(&self.0) {
             hyper::Algorithm::ExpIdentity => match SCALE {
-                140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, { crate::algos::exp::exp_tang_16limb_s140_160::GUARD_FOR_HYPER }>(self.0, mode, crate::algos::exp::exp_tang_16limb_s140_160::tang_exp_fixed),
+                140..=160 => trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8>(self.0, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d307::Core, 128, false>),
                 _ => return Self(crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(self.0, mode)),
             },
             #[allow(dead_code)]

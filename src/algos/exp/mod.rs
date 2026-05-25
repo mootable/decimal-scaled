@@ -26,8 +26,3 @@ pub(crate) mod exp_schoolbook;
 /// [`exp_tang::tang_exp_fixed`] for their `(e^v, e^-v)` pair.
 #[cfg(feature = "_wide-support")]
 pub(crate) mod exp_tang;
-// Tang exp slot for D307 SCALE 140..=160: NOT wired to `exp` dispatch
-// (lost on perf at Int<16>), retained only for its `tang_exp_fixed` /
-// `GUARD_FOR_HYPER` surface consumed by the D307 trig hyperbolic kernel.
-#[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-pub(crate) mod exp_tang_16limb_s140_160;
