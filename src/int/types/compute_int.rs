@@ -120,10 +120,31 @@ pub(crate) fn max_u128_limb() -> [u128; MAX_U128_LIMB] {
 /// `Select` verdict) — packing pairs two u64 into one u128, so `U128` is only
 /// valid for an even limb count (the matcher gates this).
 #[derive(Clone, Copy, PartialEq, Eq, Debug)]
-#[allow(dead_code)]
 pub(crate) enum LimbSize {
     U64,
     U128,
+}
+
+impl LimbSize {
+    /// The limb-width verdict for a kernel over `n` u64 limbs: `U128` when the
+    /// packing is exact (even `n` — two u64 fold into one u128, the wide-tier
+    /// win), else `U64`. A `const fn` so callers fold it in a `const { … }`
+    /// block per monomorphisation (the unchosen `match` arm is then dead-arm
+    /// eliminated, like any policy verdict).
+    ///
+    /// This is the limb-width axis as a verdict; the algorithm axis composes
+    /// alongside it where a function also chooses *which* algorithm (a full
+    /// `Select<N>` carrying `(Algorithm, LimbSize)`). The even-`n` rule is the
+    /// correctness gate; a per-`(N, SCALE)` *perf* refinement (which even
+    /// widths actually win the u128 packing) is a microbench tuning follow-up.
+    #[inline]
+    pub(crate) const fn for_packing(n: usize) -> Self {
+        if n % 2 == 0 {
+            LimbSize::U128
+        } else {
+            LimbSize::U64
+        }
+    }
 }
 
 /// The scalar limb type a width-generic kernel computes in — `u64`, or the
