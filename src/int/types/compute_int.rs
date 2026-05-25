@@ -451,7 +451,7 @@ pub(crate) trait ComputeInt: BigInt {
 mod imp {
     use super::{
         ComputeInt, Int, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128, MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128,
-        MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128, MAX_SINGLE_U64, MAX_U128_LIMB,
+        MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128, MAX_SINGLE_U64,
     };
 
     // The blanket build-max impl: every buffer is its `MAX_*` blanket size.
