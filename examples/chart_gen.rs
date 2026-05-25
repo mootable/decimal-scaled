@@ -138,7 +138,7 @@ fn render_per_width_summaries(
         let Some(&(_, centre)) = CENTRE_SCALES.iter().find(|(w, _)| *w == width) else {
             continue;
         };
-        if !OP_ORDER.iter().any(|o| *o == op.as_str()) {
+        if !OP_ORDER.contains(&op.as_str()) {
             continue;
         }
         for (lib, points) in by_lib {
@@ -318,7 +318,7 @@ fn render_per_width_summary(
     for i in 1..n_ops {
         let x = i as f64 - 0.5;
         chart.draw_series(LineSeries::new(
-            [(x, y_floor), (x, y_ceil)].into_iter(),
+            [(x, y_floor), (x, y_ceil)],
             separator_style,
         ))?;
     }
@@ -513,7 +513,7 @@ fn render_history_chart(
         let label = (*fn_label).to_string();
         let xy_for_points = xy.clone();
         chart
-            .draw_series(LineSeries::new(xy.into_iter(), color.stroke_width(3)))?
+            .draw_series(LineSeries::new(xy, color.stroke_width(3)))?
             .label(label)
             .legend(move |(x, y)| {
                 PathElement::new(vec![(x, y), (x + 20, y)], color.stroke_width(3))

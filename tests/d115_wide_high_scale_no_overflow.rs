@@ -22,13 +22,13 @@ use decimal_scaled::D115;
 
 /// 1.5 at SCALE — the bench's `strict_block` ln/sin/sqrt input.
 fn x_15<const S: u32>() -> D115<S> {
-    let half = D115::<S>::try_from(1).unwrap() / D115::<S>::try_from(2).unwrap();
-    D115::<S>::try_from(1).unwrap() + half
+    let half = D115::<S>::from(1) / D115::<S>::from(2);
+    D115::<S>::from(1) + half
 }
 
 /// 0.5 at SCALE — the bench's `strict_block` exp input.
 fn xh_05<const S: u32>() -> D115<S> {
-    D115::<S>::try_from(1).unwrap() / D115::<S>::try_from(2).unwrap()
+    D115::<S>::from(1) / D115::<S>::from(2)
 }
 
 /// Loose absolute tolerance for the `to_f64` cross-check. The kernels

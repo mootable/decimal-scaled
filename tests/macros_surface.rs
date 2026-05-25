@@ -17,7 +17,7 @@ use decimal_scaled::{D18, D38};
 
 #[test]
 fn eq_d38_all_signed_ints() {
-    let v = D38::<2>::try_from(42).unwrap();
+    let v = D38::<2>::from(42);
     assert_eq!(v, 42i8);
     assert_eq!(42i8, v);
     assert_eq!(v, 42i16);
@@ -32,7 +32,7 @@ fn eq_d38_all_signed_ints() {
     assert_eq!(42i128, v);
 
     // Fractional values are NEVER equal to any integer.
-    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap()); // 42.01
+    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap()); // 42.01
     assert_ne!(frac, 42i32);
     assert_ne!(frac, 42i64);
     assert_ne!(frac, 42i128);
@@ -41,14 +41,14 @@ fn eq_d38_all_signed_ints() {
     assert_ne!(v, 41i32);
 
     // Negative.
-    let neg = D38::<2>::try_from(-7).unwrap();
+    let neg = D38::<2>::from(-7);
     assert_eq!(neg, -7i32);
     assert_ne!(neg, 7i32);
 }
 
 #[test]
 fn eq_d38_all_unsigned_ints_and_sign_rejection() {
-    let v = D38::<2>::try_from(42).unwrap();
+    let v = D38::<2>::from(42);
     assert_eq!(v, 42u8);
     assert_eq!(42u8, v);
     assert_eq!(v, 42u16);
@@ -63,25 +63,25 @@ fn eq_d38_all_unsigned_ints_and_sign_rejection() {
     assert_eq!(42u128, v);
 
     // Negative decimal is never equal to any unsigned primitive.
-    let neg = D38::<2>::try_from(-1).unwrap();
+    let neg = D38::<2>::from(-1);
     assert_ne!(neg, 0u32);
     assert_ne!(neg, 0u128);
     assert_ne!(neg, 5u32);
 
     // Fractional vs unsigned.
-    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap());
+    let frac = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap());
     assert_ne!(frac, 42u32);
     assert_ne!(frac, 42u128);
 }
 
 #[test]
 fn eq_narrow_signed_unsigned_int() {
-    let v18 = D18::<2>::try_from(100).unwrap();
+    let v18 = D18::<2>::from(100);
     assert_eq!(v18, 100i16);
     assert_eq!(v18, 100u16);
     assert_eq!(v18, 100i64);
     assert_eq!(v18, 100u64);
-    let neg18 = D18::<2>::try_from(-1).unwrap();
+    let neg18 = D18::<2>::from(-1);
     assert_ne!(neg18, 0u64);
     assert_ne!(neg18, 0u128);
 }
@@ -91,18 +91,18 @@ fn eq_narrow_signed_unsigned_int() {
 fn eq_wide_int() {
     use decimal_scaled::D76;
 
-    let v: D76<2> = D38::<2>::try_from(42).unwrap().into();
+    let v: D76<2> = D38::<2>::from(42).into();
     assert_eq!(v, 42i32);
     assert_eq!(42i32, v);
     assert_eq!(v, 42u32);
     assert_eq!(v, 42i128);
     assert_eq!(v, 42u128);
     // Fractional
-    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((4_201) as i128).unwrap()).into();
+    let frac: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(4_201_i128).unwrap()).into();
     assert_ne!(frac, 42i32);
     assert_ne!(frac, 42u32);
     // Negative vs unsigned
-    let neg: D76<2> = D38::<2>::try_from(-1).unwrap().into();
+    let neg: D76<2> = D38::<2>::from(-1).into();
     assert_ne!(neg, 0u32);
     assert_ne!(neg, 0u128);
 }
@@ -111,7 +111,7 @@ fn eq_wide_int() {
 #[test]
 fn eq_d38_floats() {
     // Equal when the float round-trips through from_f64/to_f64 exactly.
-    let v = D38::<2>::try_from(42).unwrap();
+    let v = D38::<2>::from(42);
     assert_eq!(v, 42.0_f64);
     assert_eq!(42.0_f64, v);
     assert_eq!(v, 42.0_f32);
@@ -127,10 +127,10 @@ fn eq_d38_floats() {
 
 #[test]
 fn from_int_narrow_signed() {
-    assert_eq!(D18::<2>::try_from(100).unwrap().to_bits(), 10_000);
-    assert_eq!(D38::<2>::try_from(42).unwrap().to_bits(), 4_200);
+    assert_eq!(D18::<2>::from(100).to_bits(), 10_000);
+    assert_eq!(D38::<2>::from(42).to_bits(), 4_200);
     // negative
-    assert_eq!(D38::<2>::try_from(-5).unwrap().to_bits(), -500);
+    assert_eq!(D38::<2>::from(-5).to_bits(), -500);
 }
 
 #[test]
@@ -145,7 +145,7 @@ fn from_primitive_paths_d38() {
     let _ = D38::<2>::from(7_u32);
     let _ = D38::<2>::from(7_u64);
     // i64 via from_int (D38's IntSrc is i64; i128 conversion is via TryFrom).
-    assert_eq!(D38::<2>::try_from(0i64).unwrap().to_bits(), 0);
+    assert_eq!(D38::<2>::from(0i64).to_bits(), 0);
     let _: D38<2> = i128::from(0i32).try_into().unwrap_or(D38::<2>::ZERO);
 }
 
@@ -164,7 +164,7 @@ fn from_primitive_paths_d18() {
 #[test]
 fn overflow_variants_add_d18() {
     let a = D18::<2>::MAX;
-    let b = D18::<2>::try_from(1).unwrap();
+    let b = D18::<2>::from(1);
     assert!(a.checked_add(b).is_none());
     assert_eq!(a.saturating_add(b), D18::<2>::MAX);
     let (_, ov) = a.overflowing_add(b);
@@ -176,7 +176,7 @@ fn overflow_variants_add_d18() {
 #[test]
 fn overflow_variants_sub_d18() {
     let a = D18::<2>::MIN;
-    let b = D18::<2>::try_from(1).unwrap();
+    let b = D18::<2>::from(1);
     assert!(a.checked_sub(b).is_none());
     assert_eq!(a.saturating_sub(b), D18::<2>::MIN);
     let (_, ov) = a.overflowing_sub(b);
@@ -193,13 +193,13 @@ fn overflow_variants_neg_d18() {
     assert!(ov);
     let _ = D18::<2>::MIN.wrapping_neg();
     // Non-MIN case
-    assert_eq!(D18::<2>::try_from(5).unwrap().checked_neg().unwrap(), D18::<2>::try_from(-5).unwrap());
+    assert_eq!(D18::<2>::from(5).checked_neg().unwrap(), D18::<2>::from(-5));
 }
 
 #[test]
 fn overflow_variants_mul_d18() {
     let a = D18::<2>::MAX;
-    let b = D18::<2>::try_from(2).unwrap();
+    let b = D18::<2>::from(2);
     assert!(a.checked_mul(b).is_none());
     assert_eq!(a.saturating_mul(b), D18::<2>::MAX);
     let (_, ov) = a.overflowing_mul(b);
@@ -208,20 +208,20 @@ fn overflow_variants_mul_d18() {
 
     // Negative * positive saturating goes to MIN
     let neg_max = D18::<2>::MIN;
-    let big = D18::<2>::try_from(3).unwrap();
+    let big = D18::<2>::from(3);
     assert_eq!(neg_max.saturating_mul(big), D18::<2>::MIN);
 }
 
 #[test]
 fn overflow_variants_div_rem_d18() {
-    let a = D18::<2>::try_from(7).unwrap();
-    let b = D18::<2>::try_from(2).unwrap();
+    let a = D18::<2>::from(7);
+    let b = D18::<2>::from(2);
     let q = a.checked_div(b).unwrap();
     // 7.00 / 2.00 = 3.50 → 350 at S=2.
     assert_eq!(q.to_bits(), 350);
     // div by zero — checked_div returns None (matches i32::checked_div);
     // saturating_div by zero panics (covered by saturating_div_by_zero_panics).
-    assert!(D18::<2>::try_from(7).unwrap().checked_div(D18::<2>::ZERO).is_none());
+    assert!(D18::<2>::from(7).checked_div(D18::<2>::ZERO).is_none());
     // overflowing_div(0) / wrapping_div(0) / wrapping_rem(0) on most
     // integer storage types panic (matches i32::overflowing_div), so we
     // don't exercise those paths here — they're well-known and the
@@ -229,7 +229,7 @@ fn overflow_variants_div_rem_d18() {
     // rem
     let r = a.checked_rem(b).unwrap();
     let _ = r;
-    assert!(D18::<2>::try_from(7).unwrap().checked_rem(D18::<2>::ZERO).is_none());
+    assert!(D18::<2>::from(7).checked_rem(D18::<2>::ZERO).is_none());
 }
 
 #[cfg(feature = "wide")]
@@ -238,14 +238,14 @@ fn overflow_variants_wide_d76() {
     use decimal_scaled::D76;
 
     let a = D76::<2>::MAX;
-    let b: D76<2> = D38::<2>::try_from(2).unwrap().into();
+    let b: D76<2> = D38::<2>::from(2).into();
     assert!(a.checked_mul(b).is_none());
     assert_eq!(a.saturating_mul(b), D76::<2>::MAX);
     let _ = a.wrapping_mul(b);
     let (_, ov) = a.overflowing_mul(b);
     assert!(ov);
     // Add overflow
-    let one: D76<2> = D38::<2>::try_from(1).unwrap().into();
+    let one: D76<2> = D38::<2>::from(1).into();
     assert!(D76::<2>::MAX.checked_add(one).is_none());
     // Sub overflow
     assert!(D76::<2>::MIN.checked_sub(one).is_none());
@@ -293,8 +293,8 @@ fn num_traits_wide() {
 #[test]
 fn bitwise_ops_d18() {
     use core::ops::*;
-    let a = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0b1100) as i64));
-    let b = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0b1010) as i64));
+    let a = D18::<2>::from_bits(decimal_scaled::Int::<1>::from(0b1100_i64));
+    let b = D18::<2>::from_bits(decimal_scaled::Int::<1>::from(0b1010_i64));
     assert_eq!((a & b).to_bits(), 0b1000);
     assert_eq!((a | b).to_bits(), 0b1110);
     assert_eq!((a ^ b).to_bits(), 0b0110);
@@ -308,11 +308,11 @@ fn bitwise_ops_d18() {
     c ^= b;
     assert_eq!(c.to_bits(), 0b0110);
     // Not
-    assert_eq!((!D18::<2>::from_bits(decimal_scaled::Int::<1>::from((0) as i64))).to_bits(), !0i64);
+    assert_eq!((!D18::<2>::from_bits(decimal_scaled::Int::<1>::from(0_i64))).to_bits(), !0i64);
     // Shifts
-    let s = D18::<2>::from_bits(decimal_scaled::Int::<1>::from((1) as i64));
+    let s = D18::<2>::from_bits(decimal_scaled::Int::<1>::from(1_i64));
     assert_eq!((s.shl(3_u32)).to_bits(), 8);
-    assert_eq!((D18::<2>::from_bits(decimal_scaled::Int::<1>::from((16) as i64)).shr(2_u32)).to_bits(), 4);
+    assert_eq!((D18::<2>::from_bits(decimal_scaled::Int::<1>::from(16_i64)).shr(2_u32)).to_bits(), 4);
 }
 
 // ─── macros/float_bridge.rs: from_f32 / to_f32 / from_f64 / to_f64 ─────
@@ -340,8 +340,8 @@ fn float_bridge_narrow() {
     assert_eq!(D18::<2>::from_f64(f64::NAN), D18::<2>::ZERO);
 
     // to_f32 / to_f64
-    assert_eq!(D18::<2>::try_from(1).unwrap().to_f32(), 1.0_f32);
-    assert_eq!(D18::<2>::try_from(1).unwrap().to_f64(), 1.0);
+    assert_eq!(D18::<2>::from(1).to_f32(), 1.0_f32);
+    assert_eq!(D18::<2>::from(1).to_f64(), 1.0);
 
     // from_f64_with: rounding-mode-aware variant
     use decimal_scaled::RoundingMode;
@@ -355,7 +355,7 @@ fn float_bridge_narrow() {
 
 #[test]
 fn try_from_d38_to_d18_in_range() {
-    let v = D38::<2>::try_from(5).unwrap();
+    let v = D38::<2>::from(5);
     let r: D18<2> = v.try_into().unwrap();
     assert_eq!(r.to_bits(), 500);
 }
@@ -390,7 +390,7 @@ fn d38_mul_overflow_wraps_in_release() {
     // The library deliberately mirrors i128 semantics, so we test the
     // checked_mul path which is always defined.
     let a = D38::<2>::MAX;
-    let b = D38::<2>::try_from(2).unwrap();
+    let b = D38::<2>::from(2);
     assert!(a.checked_mul(b).is_none());
     let (_v, ov) = a.overflowing_mul(b);
     assert!(ov);
@@ -418,7 +418,7 @@ fn d38_add_sub_overflow() {
 
 #[test]
 fn decimal_trait_methods() {
-    let v = D38::<2>::try_from(7).unwrap();
+    let v = D38::<2>::from(7);
     // scale() takes self
     assert_eq!(v.scale(), 2);
     // multiplier returns Storage type
@@ -427,7 +427,7 @@ fn decimal_trait_methods() {
     assert!(!v.is_zero());
     assert!(D38::<2>::ZERO.is_zero());
     // signum
-    assert_eq!(v.signum(), D38::<2>::try_from(1).unwrap());
+    assert_eq!(v.signum(), D38::<2>::from(1));
     assert_eq!(D38::<2>::ZERO.signum(), D38::<2>::ZERO);
-    assert_eq!(D38::<2>::try_from(-5).unwrap().signum(), D38::<2>::try_from(-1).unwrap());
+    assert_eq!(D38::<2>::from(-5).signum(), D38::<2>::from(-1));
 }

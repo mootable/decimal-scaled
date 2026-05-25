@@ -109,17 +109,17 @@ fn main() {
     row!(
         D18<9>,
         "D18<9>",
-        D18::<9>::try_from(1).unwrap() + D18::<9>::try_from(1).unwrap() / D18::<9>::try_from(2).unwrap()
+        D18::<9>::from(1) + D18::<9>::from(1) / D18::<9>::from(2)
     );
     row!(
         D18<18>,
         "D18<18>",
-        D18::<18>::try_from(1).unwrap() + D18::<18>::try_from(1).unwrap() / D18::<18>::try_from(2).unwrap()
+        D18::<18>::from(1) + D18::<18>::from(1) / D18::<18>::from(2)
     );
     row!(
         D38<19>,
         "D38<19>",
-        D38::<19>::try_from(1).unwrap() + D38::<19>::try_from(1).unwrap() / D38::<19>::try_from(2).unwrap()
+        D38::<19>::from(1) + D38::<19>::from(1) / D38::<19>::from(2)
     );
     row!(
         D38<38>,
@@ -131,32 +131,32 @@ fn main() {
         row!(
             D57<28>,
             "D57<28>",
-            D57::<28>::try_from(1).unwrap() + D57::<28>::try_from(1).unwrap() / D57::<28>::try_from(2).unwrap()
+            D57::<28>::from(1) + D57::<28>::from(1) / D57::<28>::from(2)
         );
         row!(
             D76<35>,
             "D76<35>",
-            D76::<35>::try_from(1).unwrap() + D76::<35>::try_from(1).unwrap() / D76::<35>::try_from(2).unwrap()
+            D76::<35>::from(1) + D76::<35>::from(1) / D76::<35>::from(2)
         );
         row!(
             D115<57>,
             "D115<57>",
-            D115::<57>::try_from(1).unwrap() + D115::<57>::try_from(1).unwrap() / D115::<57>::try_from(2).unwrap()
+            D115::<57>::from(1) + D115::<57>::from(1) / D115::<57>::from(2)
         );
         row!(
             D153<75>,
             "D153<75>",
-            D153::<75>::try_from(1).unwrap() + D153::<75>::try_from(1).unwrap() / D153::<75>::try_from(2).unwrap()
+            D153::<75>::from(1) + D153::<75>::from(1) / D153::<75>::from(2)
         );
         row!(
             D230<115>,
             "D230<115>",
-            D230::<115>::try_from(1).unwrap() + D230::<115>::try_from(1).unwrap() / D230::<115>::try_from(2).unwrap()
+            D230::<115>::from(1) + D230::<115>::from(1) / D230::<115>::from(2)
         );
         row!(
             D307<150>,
             "D307<150>",
-            D307::<150>::try_from(1).unwrap() + D307::<150>::try_from(1).unwrap() / D307::<150>::try_from(2).unwrap()
+            D307::<150>::from(1) + D307::<150>::from(1) / D307::<150>::from(2)
         );
     }
     #[cfg(feature = "x-wide")]
@@ -164,12 +164,12 @@ fn main() {
         row!(
             D462<230>,
             "D462<230>",
-            D462::<230>::try_from(1).unwrap() + D462::<230>::try_from(1).unwrap() / D462::<230>::try_from(2).unwrap()
+            D462::<230>::from(1) + D462::<230>::from(1) / D462::<230>::from(2)
         );
         row!(
             D616<308>,
             "D616<308>",
-            D616::<308>::try_from(1).unwrap() + D616::<308>::try_from(1).unwrap() / D616::<308>::try_from(2).unwrap()
+            D616::<308>::from(1) + D616::<308>::from(1) / D616::<308>::from(2)
         );
     }
     #[cfg(feature = "xx-wide")]
@@ -177,12 +177,12 @@ fn main() {
         row!(
             D924<461>,
             "D924<461>",
-            D924::<461>::try_from(1).unwrap() + D924::<461>::try_from(1).unwrap() / D924::<461>::try_from(2).unwrap()
+            D924::<461>::from(1) + D924::<461>::from(1) / D924::<461>::from(2)
         );
         row!(
             D1232<616>,
             "D1232<616>",
-            D1232::<616>::try_from(1).unwrap() + D1232::<616>::try_from(1).unwrap() / D1232::<616>::try_from(2).unwrap()
+            D1232::<616>::from(1) + D1232::<616>::from(1) / D1232::<616>::from(2)
         );
     }
 }

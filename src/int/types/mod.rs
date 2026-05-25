@@ -312,7 +312,7 @@ impl<const N: usize> Uint<N> {
     /// `BITS - bit_length`, and `BITS` for zero.
     #[inline]
     pub const fn leading_zeros(&self) -> u32 {
-        (Self::BITS as u32) - self.bit_length()
+        Self::BITS - self.bit_length()
     }
 
     /// `true` when the value equals one.
@@ -1155,7 +1155,7 @@ impl<const N: usize> Int<N> {
         if self.is_negative() {
             0
         } else {
-            (Self::BITS as u32) - self.bit_length()
+            Self::BITS - self.bit_length()
         }
     }
 
@@ -3043,7 +3043,7 @@ mod tests {
             // bit_length / leading_zeros consistency.
             assert_eq!(T::ONE.bit_length(), 1);
             assert_eq!(T::ZERO.bit_length(), 0);
-            assert_eq!(T::ONE.leading_zeros(), (T::BITS as u32) - 1);
+            assert_eq!(T::ONE.leading_zeros(), T::BITS - 1);
 
             // Reductions and the limb round-trip.
             let items = [T::ONE, T::ONE, T::ONE];
@@ -3181,10 +3181,7 @@ mod tests {
             assert!(rk <= n, "root^k > m for m={m}, k={k}");
             let next = root.wrapping_add(Uint::<N>::ONE);
             // (root+1)^k overflowing the width still satisfies > m.
-            match next.checked_pow(k) {
-                Some(p) => assert!(p > n, "(root+1)^k <= m for m={m}, k={k}"),
-                None => {}
-            }
+            if let Some(p) = next.checked_pow(k) { assert!(p > n, "(root+1)^k <= m for m={m}, k={k}") }
         }
 
         let samples: [u128; 14] = [

@@ -70,17 +70,17 @@ fn ln_lookup_at_one_is_zero_at_s115() {
 #[test]
 fn ln_lookup_band_lower_bound_s110() {
     // Confirms SCALE = 110 enters the lookup band (no panic / no overflow).
-    let x = D230::<110>::try_from(3).unwrap() / D230::<110>::try_from(2).unwrap();
+    let x = D230::<110>::from(3) / D230::<110>::from(2);
     let y = x.ln_strict();
-    assert!(y < D230::<110>::try_from(1).unwrap());
+    assert!(y < D230::<110>::from(1));
     assert!(y > D230::<110>::ZERO);
 }
 
 #[test]
 fn ln_lookup_band_upper_bound_s120() {
     // Confirms SCALE = 120 enters the lookup band (no panic / no overflow).
-    let x = D230::<120>::try_from(3).unwrap() / D230::<120>::try_from(2).unwrap();
+    let x = D230::<120>::from(3) / D230::<120>::from(2);
     let y = x.ln_strict();
-    assert!(y < D230::<120>::try_from(1).unwrap());
+    assert!(y < D230::<120>::from(1));
     assert!(y > D230::<120>::ZERO);
 }

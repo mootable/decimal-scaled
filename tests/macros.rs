@@ -14,43 +14,43 @@ use decimal_scaled::{D38, D38s0, D38s2, D38s5, D38s6, D38s12, d38};
 #[test]
 fn auto_scale_inference_simple() {
     let v = d38!(1.23);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((123) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()));
 }
 
 #[test]
 fn auto_scale_inference_integer() {
     let v = d38!(123);
-    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from((123) as i128).unwrap()));
+    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()));
 }
 
 #[test]
 fn auto_scale_inference_zero_fractional() {
     let v = d38!(1.0);
-    assert_eq!(v, D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from((10) as i128).unwrap()));
+    assert_eq!(v, D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(10_i128).unwrap()));
 }
 
 #[test]
 fn auto_scale_inference_trailing_zero_preserved() {
     let v = d38!(1.230);
-    assert_eq!(v, D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((1230) as i128).unwrap()));
+    assert_eq!(v, D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from(1230_i128).unwrap()));
 }
 
 #[test]
 fn auto_scale_inference_leading_zero_after_dot() {
     let v = d38!(0.001);
-    assert_eq!(v, D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()));
+    assert_eq!(v, D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()));
 }
 
 #[test]
 fn auto_scale_inference_negative() {
     let v = d38!(-1.23);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((-123) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(-123_i128).unwrap()));
 }
 
 #[test]
 fn auto_scale_inference_with_underscores() {
     let v = d38!(1_234.567_89);
-    assert_eq!(v, D38s5::from_bits(decimal_scaled::Int::<2>::try_from((123_456_789) as i128).unwrap()));
+    assert_eq!(v, D38s5::from_bits(decimal_scaled::Int::<2>::try_from(123_456_789_i128).unwrap()));
 }
 
 // --- Scientific notation ---------------------------------------------
@@ -59,20 +59,20 @@ fn auto_scale_inference_with_underscores() {
 fn sci_simple() {
     // 1.5e3 = 1500; mantissa scale 1, exponent 3 -> natural scale = max(0, 1-3) = 0.
     let v = d38!(1.5e3);
-    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from((1500) as i128).unwrap()));
+    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from(1500_i128).unwrap()));
 }
 
 #[test]
 fn sci_negative_exponent() {
     // 1.5e-3 = 0.0015; mantissa scale 1, exponent -3 -> natural scale = 4.
     let v = d38!(1.5e-3);
-    assert_eq!(v, D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((15) as i128).unwrap()));
+    assert_eq!(v, D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(15_i128).unwrap()));
 }
 
 #[test]
 fn sci_zero_exponent() {
     let v = d38!(1.5e0);
-    assert_eq!(v, D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from((15) as i128).unwrap()));
+    assert_eq!(v, D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(15_i128).unwrap()));
 }
 
 #[test]
@@ -80,20 +80,20 @@ fn sci_integer_with_exponent() {
     // 1e6 = 1_000_000; mantissa scale 0, exponent 6 -> natural scale 0,
     // digits padded by 6 zeros.
     let v = d38!(1e6);
-    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from((1_000_000) as i128).unwrap()));
+    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from(1_000_000_i128).unwrap()));
 }
 
 #[test]
 fn sci_trailing_zero_mantissa() {
     // 1.500e2 = 150.0; mantissa scale 3, exponent 2 -> natural scale 1.
     let v = d38!(1.500e2);
-    assert_eq!(v, D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from((1500) as i128).unwrap()));
+    assert_eq!(v, D38::<1>::from_bits(decimal_scaled::Int::<2>::try_from(1500_i128).unwrap()));
 }
 
 #[test]
 fn sci_negative_value() {
     let v = d38!(-2.5e-2);
-    assert_eq!(v, D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from((-25) as i128).unwrap()));
+    assert_eq!(v, D38::<3>::from_bits(decimal_scaled::Int::<2>::try_from(-25_i128).unwrap()));
 }
 
 // --- `scale N` qualifier ---------------------------------------------
@@ -101,26 +101,26 @@ fn sci_negative_value() {
 #[test]
 fn explicit_scale_up_pads_with_zeros() {
     let v = d38!(1.23, scale 4);
-    assert_eq!(v, D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((12_300) as i128).unwrap()));
+    assert_eq!(v, D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(12_300_i128).unwrap()));
 }
 
 #[test]
 fn explicit_scale_equal_is_identity() {
     let v = d38!(1.23, scale 2);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((123) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()));
 }
 
 #[test]
 fn explicit_scale_zero_on_integer() {
     let v = d38!(42, scale 0);
-    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from((42) as i128).unwrap()));
+    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from(42_i128).unwrap()));
 }
 
 #[test]
 fn explicit_scale_with_sci_notation() {
     // 1.5e3 = 1500 (natural scale 0); explicit scale 5 -> pad with 5 zeros.
     let v = d38!(1.5e3, scale 5);
-    assert_eq!(v, D38::<5>::from_bits(decimal_scaled::Int::<2>::try_from((150_000_000) as i128).unwrap()));
+    assert_eq!(v, D38::<5>::from_bits(decimal_scaled::Int::<2>::try_from(150_000_000_i128).unwrap()));
 }
 
 // --- `rounded` qualifier ---------------------------------------------
@@ -129,31 +129,31 @@ fn explicit_scale_with_sci_notation() {
 fn rounded_half_to_even_below_half() {
     // 1.234999 at scale 2 -> 1.23 (below half).
     let v = d38!(1.234999, scale 2, rounded);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((123) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()));
 }
 
 #[test]
 fn rounded_half_to_even_above_half() {
     // 1.235001 at scale 2 -> 1.24 (above half).
     let v = d38!(1.235001, scale 2, rounded);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((124) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(124_i128).unwrap()));
 }
 
 #[test]
 fn rounded_half_to_even_exact_half_ties_to_even() {
     // 1.235 at scale 2 -> 1.24 (tie, 4 is even).
     let v = d38!(1.235, scale 2, rounded);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((124) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(124_i128).unwrap()));
 
     // 1.225 at scale 2 -> 1.22 (tie, 2 is even).
     let v = d38!(1.225, scale 2, rounded);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((122) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(122_i128).unwrap()));
 }
 
 #[test]
 fn rounded_negative_value() {
     let v = d38!(-1.235, scale 2, rounded);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((-124) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(-124_i128).unwrap()));
 }
 
 // --- More named precision tiers --------------------------------------
@@ -168,32 +168,32 @@ fn explicit_scale_to_max_supported() {
 #[test]
 fn primary_alias_d38s12() {
     let v = d38!(1.500_000_000_000);
-    assert_eq!(v, D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap()));
+    assert_eq!(v, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()));
 }
 
 #[test]
 fn financial_cents() {
     let v = d38!(0.50);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((50) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(50_i128).unwrap()));
 }
 
 #[test]
 fn satoshi_grade() {
     // 0.123_456_78 at scale 8.
     let v = d38!(0.123_456_78);
-    assert_eq!(v, D38::<8>::from_bits(decimal_scaled::Int::<2>::try_from((12_345_678) as i128).unwrap()));
+    assert_eq!(v, D38::<8>::from_bits(decimal_scaled::Int::<2>::try_from(12_345_678_i128).unwrap()));
 }
 
 #[test]
 fn small_value_via_sci() {
     let v = d38!(1e-9);
-    assert_eq!(v, D38::<9>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()));
+    assert_eq!(v, D38::<9>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()));
 }
 
 #[test]
 fn six_digit_micro() {
     let v = d38!(1.234_567, scale 6);
-    assert_eq!(v, D38s6::from_bits(decimal_scaled::Int::<2>::try_from((1_234_567) as i128).unwrap()));
+    assert_eq!(v, D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_234_567_i128).unwrap()));
 }
 
 // --- Inline expressions ---------------------------------------------
@@ -201,28 +201,28 @@ fn six_digit_micro() {
 #[test]
 fn expression_simple_arithmetic() {
     let v = d38!(10 * 12 + 3, scale 0);
-    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from((123) as i128).unwrap()));
+    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()));
 }
 
 #[test]
 fn expression_with_scale_factor() {
     // Scale 4 means each input unit becomes 10_000 bits.
     let v = d38!(5, scale 4);
-    assert_eq!(v, D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((50_000) as i128).unwrap()));
+    assert_eq!(v, D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(50_000_i128).unwrap()));
 }
 
 #[test]
 fn expression_with_variable() {
     let x: i128 = 42;
     let v = d38!(x, scale 2);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((4_200) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(4_200_i128).unwrap()));
 }
 
 #[test]
 fn expression_with_const() {
     const N: i128 = 100;
     let v = d38!(N + 23, scale 2);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((12_300) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(12_300_i128).unwrap()));
 }
 
 #[test]
@@ -231,13 +231,13 @@ fn expression_function_call() {
         7
     }
     let v = d38!(produce() * 2, scale 0);
-    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from((14) as i128).unwrap()));
+    assert_eq!(v, D38s0::from_bits(decimal_scaled::Int::<2>::try_from(14_i128).unwrap()));
 }
 
 #[test]
 fn expression_negative_result() {
     let v = d38!(0 - 5, scale 2);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((-500) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(-500_i128).unwrap()));
 }
 
 #[test]
@@ -247,7 +247,7 @@ fn expression_value_at_runtime() {
     // (the literal form stays const). See research/2026_05_22_const_fn_arithmetic_followup.md.
     const N: i128 = 42;
     let v: D38s2 = d38!(N * 3, scale 2);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((12_600) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(12_600_i128).unwrap()));
 }
 
 // ── Per-width entry points: narrow tiers ──────────────────────────────
@@ -256,14 +256,14 @@ fn expression_value_at_runtime() {
 fn d18_literal_inferred_scale() {
     use decimal_scaled::{D18s4, d18};
     let v = d18!(1234.5678);
-    assert_eq!(v, D18s4::from_bits(decimal_scaled::Int::<1>::from((12_345_678) as i64)));
+    assert_eq!(v, D18s4::from_bits(decimal_scaled::Int::<1>::from(12_345_678_i64)));
 }
 
 #[test]
 fn d18_explicit_scale_pad() {
     use decimal_scaled::{D18s9, d18};
     let v = d18!(1.5, scale 9);
-    assert_eq!(v, D18s9::from_bits(decimal_scaled::Int::<1>::from((1_500_000_000) as i64)));
+    assert_eq!(v, D18s9::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_i64)));
 }
 
 #[test]
@@ -319,14 +319,14 @@ fn d307_literal_inferred() {
 fn d18_per_scale_wrapper_d18s12() {
     use decimal_scaled::{D18s12, d18s12};
     let v: D18s12 = d18s12!(1.5);
-    assert_eq!(v, D18s12::from_bits(decimal_scaled::Int::<1>::from((1_500_000_000_000) as i64)));
+    assert_eq!(v, D18s12::from_bits(decimal_scaled::Int::<1>::from(1_500_000_000_000_i64)));
 }
 
 #[test]
 fn d38_per_scale_wrapper_d38s12() {
     use decimal_scaled::{D38s12, d38s12};
     let v: D38s12 = d38s12!(1.5);
-    assert_eq!(v, D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap()));
+    assert_eq!(v, D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap()));
 }
 
 #[test]
@@ -335,7 +335,7 @@ fn d38_per_scale_wrapper_forwards_qualifiers() {
     // Scale 2 is pre-baked; `rounded` is forwarded as a tail
     // qualifier.
     let v: D38s2 = d38s2!(1.234_567, rounded);
-    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from((123) as i128).unwrap()));
+    assert_eq!(v, D38s2::from_bits(decimal_scaled::Int::<2>::try_from(123_i128).unwrap()));
 }
 
 #[cfg(feature = "wide")]

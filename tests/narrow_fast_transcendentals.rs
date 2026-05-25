@@ -37,30 +37,30 @@ fn close_d18(label: &str, actual: D18<8>, expected_bits: i64) {
 fn d18_logs_exps_fast() {
     assert_eq!(D18::<8>::ONE.ln_fast().to_bits(), 0);
     assert_eq!(D18::<8>::ZERO.exp_fast().to_bits(), 100_000_000);
-    close_d18("ln(2)", D18::<8>::try_from(2).unwrap().ln_fast(), 69_314_718);
+    close_d18("ln(2)", D18::<8>::from(2).ln_fast(), 69_314_718);
     close_d18("exp(1)", D18::<8>::ONE.exp_fast(), 271_828_183);
-    assert_eq!(D18::<8>::try_from(2).unwrap().log2_fast().to_bits(), 100_000_000);
-    assert_eq!(D18::<8>::try_from(10).unwrap().log10_fast().to_bits(), 100_000_000);
-    assert_eq!(D18::<8>::try_from(10).unwrap().exp2_fast().to_bits(), 102_400_000_000);
+    assert_eq!(D18::<8>::from(2).log2_fast().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from(10).log10_fast().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from(10).exp2_fast().to_bits(), 102_400_000_000);
 }
 
 #[test]
 fn d18_roots_pow_fast() {
-    assert_eq!(D18::<8>::try_from(4).unwrap().sqrt_fast().to_bits(), 200_000_000);
-    assert_eq!(D18::<8>::try_from(27).unwrap().cbrt_fast().to_bits(), 300_000_000);
+    assert_eq!(D18::<8>::from(4).sqrt_fast().to_bits(), 200_000_000);
+    assert_eq!(D18::<8>::from(27).cbrt_fast().to_bits(), 300_000_000);
     close_d18(
         "2^10",
-        D18::<8>::try_from(2).unwrap().powf_fast(D18::<8>::try_from(10).unwrap()),
+        D18::<8>::from(2).powf_fast(D18::<8>::from(10)),
         102_400_000_000,
     );
     close_d18(
         "hypot(3,4)",
-        D18::<8>::try_from(3).unwrap().hypot_fast(D18::<8>::try_from(4).unwrap()),
+        D18::<8>::from(3).hypot_fast(D18::<8>::from(4)),
         500_000_000,
     );
     close_d18(
         "log_2(8)",
-        D18::<8>::try_from(8).unwrap().log_fast(D18::<8>::try_from(2).unwrap()),
+        D18::<8>::from(8).log_fast(D18::<8>::from(2)),
         300_000_000,
     );
 }

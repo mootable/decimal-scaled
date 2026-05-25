@@ -27,13 +27,13 @@ fn time<F: FnMut()>(label: &str, mut f: F) {
 fn main() {
     println!("== exp_strict (narrow-tier sanity) ==");
     {
-        let a = D18::<5>::ONE / D18::<5>::try_from(2).unwrap();
+        let a = D18::<5>::ONE / D18::<5>::from(2);
         time("D9<5>::exp_strict(0.5)", || {
             black_box(black_box(a).exp_strict());
         });
     }
     {
-        let a = D18::<9>::ONE / D18::<9>::try_from(2).unwrap();
+        let a = D18::<9>::ONE / D18::<9>::from(2);
         time("D18<9>::exp_strict(0.5)", || {
             black_box(black_box(a).exp_strict());
         });
@@ -42,25 +42,25 @@ fn main() {
     println!();
     println!("== exp_strict ==");
     {
-        let a = D38::<19>::ONE / D38::<19>::try_from(2).unwrap(); // 0.5
+        let a = D38::<19>::ONE / D38::<19>::from(2); // 0.5
         time("D38<19>::exp_strict(0.5)", || {
             black_box(black_box(a).exp_strict());
         });
     }
     {
-        let a = D76::<35>::ONE / D76::<35>::try_from(2).unwrap();
+        let a = D76::<35>::ONE / D76::<35>::from(2);
         time("D76<35>::exp_strict(0.5)", || {
             black_box(black_box(a).exp_strict());
         });
     }
     {
-        let a = D153::<75>::ONE / D153::<75>::try_from(2).unwrap();
+        let a = D153::<75>::ONE / D153::<75>::from(2);
         time("D153<75>::exp_strict(0.5)", || {
             black_box(black_box(a).exp_strict());
         });
     }
     {
-        let a = D307::<150>::ONE / D307::<150>::try_from(2).unwrap();
+        let a = D307::<150>::ONE / D307::<150>::from(2);
         time("D307<150>::exp_strict(0.5)", || {
             black_box(black_box(a).exp_strict());
         });
@@ -69,25 +69,25 @@ fn main() {
     println!();
     println!("== ln_strict ==");
     {
-        let a = D38::<19>::try_from(2).unwrap() - D38::<19>::ONE / D38::<19>::try_from(2).unwrap(); // 1.5
+        let a = D38::<19>::from(2) - D38::<19>::ONE / D38::<19>::from(2); // 1.5
         time("D38<19>::ln_strict(1.5)", || {
             black_box(black_box(a).ln_strict());
         });
     }
     {
-        let a = D76::<35>::try_from(2).unwrap() - D76::<35>::ONE / D76::<35>::try_from(2).unwrap();
+        let a = D76::<35>::from(2) - D76::<35>::ONE / D76::<35>::from(2);
         time("D76<35>::ln_strict(1.5)", || {
             black_box(black_box(a).ln_strict());
         });
     }
     {
-        let a = D153::<75>::try_from(2).unwrap() - D153::<75>::ONE / D153::<75>::try_from(2).unwrap();
+        let a = D153::<75>::from(2) - D153::<75>::ONE / D153::<75>::from(2);
         time("D153<75>::ln_strict(1.5)", || {
             black_box(black_box(a).ln_strict());
         });
     }
     {
-        let a = D307::<150>::try_from(2).unwrap() - D307::<150>::ONE / D307::<150>::try_from(2).unwrap();
+        let a = D307::<150>::from(2) - D307::<150>::ONE / D307::<150>::from(2);
         time("D307<150>::ln_strict(1.5)", || {
             black_box(black_box(a).ln_strict());
         });
@@ -123,19 +123,19 @@ fn main() {
     println!();
     println!("== sin_strict (input ≈ 1.5, near π/2) ==");
     {
-        let a = D76::<35>::ONE + D76::<35>::ONE / D76::<35>::try_from(2).unwrap();
+        let a = D76::<35>::ONE + D76::<35>::ONE / D76::<35>::from(2);
         time("D76<35>::sin_strict(1.5)", || {
             black_box(black_box(a).sin_strict());
         });
     }
     {
-        let a = D153::<75>::ONE + D153::<75>::ONE / D153::<75>::try_from(2).unwrap();
+        let a = D153::<75>::ONE + D153::<75>::ONE / D153::<75>::from(2);
         time("D153<75>::sin_strict(1.5)", || {
             black_box(black_box(a).sin_strict());
         });
     }
     {
-        let a = D307::<150>::ONE + D307::<150>::ONE / D307::<150>::try_from(2).unwrap();
+        let a = D307::<150>::ONE + D307::<150>::ONE / D307::<150>::from(2);
         time("D307<150>::sin_strict(1.5)", || {
             black_box(black_box(a).sin_strict());
         });

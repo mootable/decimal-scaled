@@ -95,7 +95,7 @@ pub(crate) fn tanh_exp_identity_with_tang<C: WideTrigCore, const SCALE: u32, con
 ) -> C::Storage {
     let zero = C::storage_zero();
     if raw != zero {
-        let thresh_exp = SCALE - (SCALE + 2) / 3;
+        let thresh_exp = SCALE - SCALE.div_ceil(3);
         let thresh = <C::Storage as BigInt>::TEN.pow(thresh_exp);
         let abs_raw = if raw < zero { -raw } else { raw };
         if abs_raw <= thresh {

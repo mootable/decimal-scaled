@@ -16,8 +16,8 @@ const ALL_MODES: [RoundingMode; 6] = [
 #[test]
 fn d18_rescale_with_all_modes() {
 
-    let v = D18::<4>::from_bits(decimal_scaled::Int::<1>::from((15050) as i64));
-    let neg = D18::<4>::from_bits(decimal_scaled::Int::<1>::from((-15050) as i64));
+    let v = D18::<4>::from_bits(decimal_scaled::Int::<1>::from(15050_i64));
+    let neg = D18::<4>::from_bits(decimal_scaled::Int::<1>::from(-15050_i64));
     for m in ALL_MODES {
         let r: D18<2> = v.rescale_with::<2>(m);
         let _ = r;
@@ -32,8 +32,8 @@ fn d18_rescale_with_all_modes() {
 #[test]
 fn d38_rescale_with_all_modes() {
 
-    let v = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((15050) as i128).unwrap());
-    let neg = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((-15050) as i128).unwrap());
+    let v = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(15050_i128).unwrap());
+    let neg = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(-15050_i128).unwrap());
     for m in ALL_MODES {
         let r: D38<2> = v.rescale_with::<2>(m);
         let _ = r;
@@ -52,8 +52,8 @@ fn d38_rescale_with_all_modes() {
 fn d76_rescale_with_all_modes() {
     use decimal_scaled::D76;
 
-    let v: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((15050) as i128).unwrap()).into();
-    let neg: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from((-15050) as i128).unwrap()).into();
+    let v: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(15050_i128).unwrap()).into();
+    let neg: D76<4> = D38::<4>::from_bits(decimal_scaled::Int::<2>::try_from(-15050_i128).unwrap()).into();
     for m in ALL_MODES {
         let r: D76<2> = v.rescale_with::<2>(m);
         let _ = r;

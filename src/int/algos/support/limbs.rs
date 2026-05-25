@@ -58,7 +58,7 @@ pub(crate) const MAX_WORK_N: usize = 2;
 /// alternatives ([`n_limbs`], the `exact-scratch` impls) live in
 /// `crate::int::types::max_n_limbs`.
 pub(crate) const fn max_n_limbs(mult: usize) -> usize {
-    mult * MAX_WORK_N + (MAX_WORK_N + 1) / 2
+    mult * MAX_WORK_N + MAX_WORK_N.div_ceil(2)
 }
 
 /// Exact per-`N` work-scratch budget: `mult·n + ceil(n/2)`, the same

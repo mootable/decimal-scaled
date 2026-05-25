@@ -30,13 +30,13 @@ fn main() {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(10_000);
-    let mut acc = Work::try_from(0).unwrap();
+    let mut acc = Work::from(0);
     for i in 0..iters {
         // Vary the argument so each call goes down the same logical
         // path but does not hit the same memoised state — defensive
         // against any constant-folding the compiler might attempt.
-        let x = Work::try_from(2).unwrap() + Work::try_from(i as i128).unwrap() / Work::try_from(1_000_000).unwrap();
-        acc = acc + x.exp_strict();
+        let x = Work::from(2) + Work::try_from(i as i128).unwrap() / Work::from(1_000_000);
+        acc += x.exp_strict();
     }
     println!("{} iters; acc = {}", iters, black_box(acc));
 }

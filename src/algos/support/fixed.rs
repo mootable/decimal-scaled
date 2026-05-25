@@ -878,7 +878,7 @@ fn shl_u256(n: U256, shift: u32) -> U256 {
 /// in; `w` and `divisor` must agree (`divisor == Fixed::pow10(w)`).
 #[inline]
 fn divmod_u256_by_pow10(a: U256, divisor: U256, w: u32) -> (U256, U256) {
-    if w >= 1 && w <= 38 {
+    if (1..=38).contains(&w) {
         let exp = crate::algos::support::mg_divide::POW10_U128[w as usize];
         // Walk dividend top-down (limb 1, then limb 0).
         let (q_hi, r1) = crate::algos::support::mg_divide::divmod_pow10_2word(0, a[1], exp, w as usize)

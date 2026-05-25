@@ -51,9 +51,9 @@ const TRIPLES: [(i64, i64, i64); 5] = [
 fn d38_pythagorean_triples_exact_all_modes_two_scales() {
     // SCALE 6
     for &(a, b, h) in &TRIPLES {
-        let da = D38::<6>::try_from(a).unwrap();
-        let db = D38::<6>::try_from(b).unwrap();
-        let expected = D38::<6>::try_from(h).unwrap();
+        let da = D38::<6>::from(a);
+        let db = D38::<6>::from(b);
+        let expected = D38::<6>::from(h);
         for mode in ALL_MODES {
             let got = da.hypot_strict_with(db, mode);
             assert_eq!(
@@ -64,9 +64,9 @@ fn d38_pythagorean_triples_exact_all_modes_two_scales() {
     }
     // SCALE 19 (near the D38 fractional limit)
     for &(a, b, h) in &TRIPLES {
-        let da = D38::<19>::try_from(a).unwrap();
-        let db = D38::<19>::try_from(b).unwrap();
-        let expected = D38::<19>::try_from(h).unwrap();
+        let da = D38::<19>::from(a);
+        let db = D38::<19>::from(b);
+        let expected = D38::<19>::from(h);
         for mode in ALL_MODES {
             let got = da.hypot_strict_with(db, mode);
             assert_eq!(
@@ -87,9 +87,8 @@ fn d38_non_perfect_match_mpmath_oracle() {
     //   hypot(123,456) = 472297576
     let s6: [(i64, i64, i128); 3] = [(1, 1, 1414214), (2, 3, 3605551), (123, 456, 472297576)];
     for (a, b, raw) in s6 {
-        let got = D38::<6>::try_from(a)
-            .unwrap()
-            .hypot_strict_with(D38::<6>::try_from(b).unwrap(), RoundingMode::HalfToEven);
+        let got = D38::<6>::from(a)
+            .hypot_strict_with(D38::<6>::from(b), RoundingMode::HalfToEven);
         let expected = D38::<6>::from_bits(Int::<2>::try_from(raw).unwrap());
         assert_eq!(got, expected, "D38<6> hypot({a},{b}) vs mpmath oracle");
     }
@@ -104,9 +103,8 @@ fn d38_non_perfect_match_mpmath_oracle() {
         (123, 456, "4722975756871932113221"),
     ];
     for (a, b, raw) in s19 {
-        let got = D38::<19>::try_from(a)
-            .unwrap()
-            .hypot_strict_with(D38::<19>::try_from(b).unwrap(), RoundingMode::HalfToEven);
+        let got = D38::<19>::from(a)
+            .hypot_strict_with(D38::<19>::from(b), RoundingMode::HalfToEven);
         let expected = D38::<19>::from_bits(raw.parse::<Int<2>>().unwrap());
         assert_eq!(got, expected, "D38<19> hypot({a},{b}) vs mpmath oracle");
     }
@@ -118,9 +116,9 @@ fn d38_non_perfect_match_mpmath_oracle() {
 fn d57_pythagorean_triples_exact_all_modes_two_scales() {
     // SCALE 6
     for &(a, b, h) in &TRIPLES {
-        let da: D57<6> = D38::<6>::try_from(a).unwrap().into();
-        let db: D57<6> = D38::<6>::try_from(b).unwrap().into();
-        let expected: D57<6> = D38::<6>::try_from(h).unwrap().into();
+        let da: D57<6> = D38::<6>::from(a).into();
+        let db: D57<6> = D38::<6>::from(b).into();
+        let expected: D57<6> = D38::<6>::from(h).into();
         for mode in ALL_MODES {
             let got = da.hypot_strict_with(db, mode);
             assert_eq!(
@@ -131,9 +129,9 @@ fn d57_pythagorean_triples_exact_all_modes_two_scales() {
     }
     // SCALE 30 (wide-tier scale beyond D38's range)
     for &(a, b, h) in &TRIPLES {
-        let da = D57::<30>::try_from(a).unwrap();
-        let db = D57::<30>::try_from(b).unwrap();
-        let expected = D57::<30>::try_from(h).unwrap();
+        let da = D57::<30>::from(a);
+        let db = D57::<30>::from(b);
+        let expected = D57::<30>::from(h);
         for mode in ALL_MODES {
             let got = da.hypot_strict_with(db, mode);
             assert_eq!(
@@ -157,9 +155,8 @@ fn d57_non_perfect_match_mpmath_oracle() {
         (123, 456, "472297575687193211322083847575167"),
     ];
     for (a, b, raw) in s30 {
-        let got = D57::<30>::try_from(a)
-            .unwrap()
-            .hypot_strict_with(D57::<30>::try_from(b).unwrap(), RoundingMode::HalfToEven);
+        let got = D57::<30>::from(a)
+            .hypot_strict_with(D57::<30>::from(b), RoundingMode::HalfToEven);
         let expected = D57::<30>::from_bits(raw.parse::<Int<3>>().unwrap());
         assert_eq!(got, expected, "D57<30> hypot({a},{b}) vs mpmath oracle");
     }
@@ -208,9 +205,9 @@ fn d18_non_perfect_match_oracle() {
 #[test]
 fn d307_pythagorean_triples_exact_all_modes() {
     for &(a, b, h) in &TRIPLES {
-        let da = D307::<30>::try_from(a).unwrap();
-        let db = D307::<30>::try_from(b).unwrap();
-        let expected = D307::<30>::try_from(h).unwrap();
+        let da = D307::<30>::from(a);
+        let db = D307::<30>::from(b);
+        let expected = D307::<30>::from(h);
         for mode in ALL_MODES {
             let got = da.hypot_strict_with(db, mode);
             assert_eq!(
@@ -234,9 +231,8 @@ fn d307_non_perfect_match_oracle() {
         (123, 456, "472297575687193211322083847575167"),
     ];
     for (a, b, raw) in s30 {
-        let got = D307::<30>::try_from(a)
-            .unwrap()
-            .hypot_strict_with(D307::<30>::try_from(b).unwrap(), RoundingMode::HalfToEven);
+        let got = D307::<30>::from(a)
+            .hypot_strict_with(D307::<30>::from(b), RoundingMode::HalfToEven);
         let expected = D307::<30>::from_bits(raw.parse::<Int<16>>().unwrap());
         assert_eq!(got, expected, "D307<30> hypot({a},{b}) vs oracle");
     }
@@ -275,8 +271,8 @@ fn hypot_zero_x_is_abs_x_all_tiers_all_modes() {
     // hypot(0, x) = |x| exactly, and hypot(0, -x) = |x|.
     for &x in &[3i64, 7, 42, 100] {
         for mode in ALL_MODES {
-            let d38 = D38::<6>::try_from(x).unwrap();
-            let d38n = D38::<6>::try_from(-x).unwrap();
+            let d38 = D38::<6>::from(x);
+            let d38n = D38::<6>::from(-x);
             assert_eq!(
                 D38::<6>::ZERO.hypot_strict_with(d38, mode),
                 d38,
@@ -287,7 +283,7 @@ fn hypot_zero_x_is_abs_x_all_tiers_all_modes() {
                 d38,
                 "D38 hypot(0,-{x}) mode {mode:?} (= |{x}|)",
             );
-            let d307 = D307::<30>::try_from(x).unwrap();
+            let d307 = D307::<30>::from(x);
             assert_eq!(
                 D307::<30>::ZERO.hypot_strict_with(d307, mode),
                 d307,

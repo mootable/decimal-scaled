@@ -20,10 +20,10 @@ fn bench(c: &mut Criterion) {
     g.sample_size(20);
     g.measurement_time(std::time::Duration::from_secs(4));
 
-    let half: D = D::try_from(1).unwrap() / D::try_from(2).unwrap();
-    let one_p_half: D = D::try_from(1).unwrap() + half;
-    let two: D = D::try_from(2).unwrap();
-    let one: D = D::try_from(1).unwrap();
+    let half: D = D::from(1) / D::from(2);
+    let one_p_half: D = D::from(1) + half;
+    let two: D = D::from(2);
+    let one: D = D::from(1);
 
     g.bench_function("arith/mul", |bn| {
         bn.iter(|| black_box(two) * black_box(one))

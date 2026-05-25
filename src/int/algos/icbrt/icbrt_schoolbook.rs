@@ -86,7 +86,7 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
     rem[..n.len()].copy_from_slice(n);
 
     // result_bits = ceil(bits / 3): the number of bits in floor(cbrt(n)).
-    let result_bits = (bits + 2) / 3;
+    let result_bits = bits.div_ceil(3);
 
     // Process one bit at a time from result_bits-1 down to 0.
     let mut k = result_bits as i64 - 1;

@@ -76,7 +76,7 @@ fn divide_mag_by_pow10(mag: &mut [u128], scale: u32, neg: bool, work_bits: u32, 
 #[inline]
 fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<N> {
     if cfg!(debug_assertions) {
-        let u128_limbs = (N + 1) / 2;
+        let u128_limbs = N.div_ceil(2);
         // Any set bit beyond the storage width is overflow.
         let mut overflow = mag.iter().skip(u128_limbs).any(|&l| l != 0);
         if !overflow {
@@ -145,7 +145,7 @@ where
         if SCALE == 0 {
             return prod;
         }
-        let u128_limbs = (N + 1) / 2;
+        let u128_limbs = N.div_ceil(2);
         let mut mag = [0u128; N];
         let _ = prod.mag_into_u128(&mut mag[..u128_limbs]);
         divide_mag_by_pow10(&mut mag[..u128_limbs], SCALE, neg, <Int<N>>::BITS, mode);

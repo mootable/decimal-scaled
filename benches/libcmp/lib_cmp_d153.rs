@@ -18,13 +18,13 @@ fn bench(c: &mut Criterion) {
 
         match scale {
             0 => {
-                let a = D153::<0>::try_from(2).unwrap();
-                let b = D153::<0>::try_from(1).unwrap();
+                let a = D153::<0>::from(2);
+                let b = D153::<0>::from(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             75 => {
-                let a = D153::<75>::try_from(2).unwrap();
-                let b = D153::<75>::try_from(1).unwrap();
+                let a = D153::<75>::from(2);
+                let b = D153::<75>::from(1);
                 arith_copy!(g, "decimal-scaled", a, b);
                 g.bench_function("decimal-scaled/ln", |bn| {
                     bn.iter(|| black_box(a).ln_strict())
@@ -58,8 +58,8 @@ fn bench(c: &mut Criterion) {
                 });
             }
             153 => {
-                let a = D153::<153>::try_from(2).unwrap();
-                let b = D153::<153>::try_from(1).unwrap();
+                let a = D153::<153>::from(2);
+                let b = D153::<153>::from(1);
                 arith_copy!(g, "decimal-scaled", a, b);
             }
             _ => unreachable!(),
@@ -92,7 +92,7 @@ fn bench(c: &mut Criterion) {
         }
 
         {
-            let prec = scale.max(1) as usize;
+            let prec = scale.max(1);
             let a = DBig::from_parts(2.into(), 0).with_precision(prec).value();
             let b = DBig::from_parts(1.into(), 0).with_precision(prec).value();
             arith_clone!(g, "dashu-float", a, b);

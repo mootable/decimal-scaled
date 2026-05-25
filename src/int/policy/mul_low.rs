@@ -120,9 +120,7 @@ const fn select() -> Select {
 pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
     // Stage 1: resolve the algorithm. Stage 2: ask it for its limb width.
     let (algo, limb) = const {
-        let algo = match select() {
-            Select::ByAlgorithm(a) => a,
-        };
+        let Select::ByAlgorithm(algo) = select();
         (algo, algo.limb_size::<N>())
     };
     match (algo, limb) {

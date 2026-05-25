@@ -15,15 +15,15 @@ use decimal_scaled::{D18, D38, RoundingMode};
 
 #[test]
 fn div_euclid_rem_euclid_signs() {
-    let a = D38::<2>::try_from(7).unwrap();
-    let b = D38::<2>::try_from(2).unwrap();
+    let a = D38::<2>::from(7);
+    let b = D38::<2>::from(2);
     let q = a.div_euclid(b);
     let r = a.rem_euclid(b);
     // 7 / 2 = 3 (positive); remainder 1
     assert_eq!(q.to_bits(), 300);
     assert_eq!(r.to_bits(), 100);
     // Negative dividend → Euclidean keeps remainder non-negative.
-    let neg_seven = D38::<2>::try_from(-7).unwrap();
+    let neg_seven = D38::<2>::from(-7);
     let q = neg_seven.div_euclid(b);
     let r = neg_seven.rem_euclid(b);
     // -7.div_euclid(2) = -4; rem = 1
@@ -33,10 +33,10 @@ fn div_euclid_rem_euclid_signs() {
 
 #[test]
 fn div_floor_div_ceil_signs() {
-    let pos = D38::<2>::try_from(7).unwrap();
-    let neg = D38::<2>::try_from(-7).unwrap();
-    let two = D38::<2>::try_from(2).unwrap();
-    let neg_two = D38::<2>::try_from(-2).unwrap();
+    let pos = D38::<2>::from(7);
+    let neg = D38::<2>::from(-7);
+    let two = D38::<2>::from(2);
+    let neg_two = D38::<2>::from(-2);
 
     // 7.div_floor(2) = 3
     assert_eq!(pos.div_floor(two).to_bits(), 300);
@@ -54,31 +54,31 @@ fn div_floor_div_ceil_signs() {
     assert_eq!(neg.div_ceil(neg_two).to_bits(), 400);
 
     // Exact division (no remainder) takes the early `q` branch.
-    let eight = D38::<2>::try_from(8).unwrap();
-    let four = D38::<2>::try_from(4).unwrap();
+    let eight = D38::<2>::from(8);
+    let four = D38::<2>::from(4);
     assert_eq!(eight.div_floor(four).to_bits(), 200);
     assert_eq!(eight.div_ceil(four).to_bits(), 200);
 }
 
 #[test]
 fn abs_diff_midpoint_mul_add() {
-    let a = D38::<2>::try_from(7).unwrap();
-    let b = D38::<2>::try_from(3).unwrap();
+    let a = D38::<2>::from(7);
+    let b = D38::<2>::from(3);
     assert_eq!(a.abs_diff(b).to_bits(), 400);
     assert_eq!(b.abs_diff(a).to_bits(), 400);
     // Midpoint of 7 and 3 = 5
     let m = a.midpoint(b);
     assert_eq!(m.to_bits(), 500);
     // mul_add: 2*3 + 5 = 11
-    let r = D38::<2>::try_from(2).unwrap().mul_add(D38::<2>::try_from(3).unwrap(), D38::<2>::try_from(5).unwrap());
+    let r = D38::<2>::from(2).mul_add(D38::<2>::from(3), D38::<2>::from(5));
     assert_eq!(r.to_bits(), 1100);
 
     // Narrow variant
     assert_eq!(
-        D18::<2>::try_from(7).unwrap().abs_diff(D18::<2>::try_from(3).unwrap()).to_bits(),
+        D18::<2>::from(7).abs_diff(D18::<2>::from(3)).to_bits(),
         400
     );
-    let _ = D18::<2>::try_from(2).unwrap().mul_add(D18::<2>::try_from(3).unwrap(), D18::<2>::try_from(5).unwrap());
+    let _ = D18::<2>::from(2).mul_add(D18::<2>::from(3), D18::<2>::from(5));
 }
 
 #[test]
@@ -103,15 +103,15 @@ fn is_zero_normal_nan_infinite_finite() {
 fn int_methods_wide() {
     use decimal_scaled::D76;
 
-    let pos: D76<2> = D38::<2>::try_from(7).unwrap().into();
-    let neg: D76<2> = D38::<2>::try_from(-7).unwrap().into();
-    let two: D76<2> = D38::<2>::try_from(2).unwrap().into();
-    let neg_two: D76<2> = D38::<2>::try_from(-2).unwrap().into();
+    let pos: D76<2> = D38::<2>::from(7).into();
+    let neg: D76<2> = D38::<2>::from(-7).into();
+    let two: D76<2> = D38::<2>::from(2).into();
+    let neg_two: D76<2> = D38::<2>::from(-2).into();
 
-    let three: D76<2> = D38::<2>::try_from(3).unwrap().into();
-    let neg_four: D76<2> = D38::<2>::try_from(-4).unwrap().into();
-    let neg_three: D76<2> = D38::<2>::try_from(-3).unwrap().into();
-    let four: D76<2> = D38::<2>::try_from(4).unwrap().into();
+    let three: D76<2> = D38::<2>::from(3).into();
+    let neg_four: D76<2> = D38::<2>::from(-4).into();
+    let neg_three: D76<2> = D38::<2>::from(-3).into();
+    let four: D76<2> = D38::<2>::from(4).into();
     assert_eq!(pos.div_floor(two), three);
     assert_eq!(neg.div_floor(two), neg_four);
     assert_eq!(pos.div_floor(neg_two), neg_four);
@@ -121,9 +121,9 @@ fn int_methods_wide() {
     assert_eq!(neg.div_ceil(two), neg_three);
 
     // Exact branch
-    let eight: D76<2> = D38::<2>::try_from(8).unwrap().into();
-    let four_actual: D76<2> = D38::<2>::try_from(4).unwrap().into();
-    let two_actual: D76<2> = D38::<2>::try_from(2).unwrap().into();
+    let eight: D76<2> = D38::<2>::from(8).into();
+    let four_actual: D76<2> = D38::<2>::from(4).into();
+    let two_actual: D76<2> = D38::<2>::from(2).into();
     assert_eq!(eight.div_floor(four_actual), two_actual);
     assert_eq!(eight.div_ceil(four_actual), two_actual);
 
@@ -150,44 +150,44 @@ fn to_int_half_to_even_all_branches() {
     // with both signs, and (exact-half with even/odd quotient).
     // raw=149 → 1.49 (under half) → 1
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((149) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(149_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         1
     );
     // raw=151 → 1.51 (over half) → 2
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((151) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(151_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         2
     );
     // raw=150 → 1.50 (exact half, quot=1 odd) → 2
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(150_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         2
     );
     // raw=250 → 2.50 (exact half, quot=2 even) → 2
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((250) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(250_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         2
     );
     // negative side
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-149) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-149_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         -1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-151) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-151_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         -2
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-150) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-150_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         -2
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-250) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-250_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         -2
     );
     // exact (no remainder) — no rounding branch
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((300) as i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(300_i128).unwrap()).to_int_with(RoundingMode::HalfToEven),
         3
     );
 }
@@ -195,27 +195,27 @@ fn to_int_half_to_even_all_branches() {
 #[test]
 fn to_int_half_away_from_zero_all_branches() {
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((149) as i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(149_i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
         1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(150_i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
         2
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((151) as i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(151_i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
         2
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-149) as i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-149_i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
         -1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-150) as i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-150_i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
         -2
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-151) as i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-151_i128).unwrap()).to_int_with(RoundingMode::HalfAwayFromZero),
         -2
     );
 }
@@ -223,53 +223,53 @@ fn to_int_half_away_from_zero_all_branches() {
 #[test]
 fn to_int_half_toward_zero_all_branches() {
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((149) as i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(149_i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
         1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(150_i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
         1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((151) as i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(151_i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
         2
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-149) as i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-149_i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
         -1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-150) as i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-150_i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
         -1
     );
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-151) as i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-151_i128).unwrap()).to_int_with(RoundingMode::HalfTowardZero),
         -2
     );
 }
 
 #[test]
 fn to_int_trunc() {
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((199) as i128).unwrap()).to_int_with(RoundingMode::Trunc), 1);
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-199) as i128).unwrap()).to_int_with(RoundingMode::Trunc), -1);
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((100) as i128).unwrap()).to_int_with(RoundingMode::Trunc), 1);
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(199_i128).unwrap()).to_int_with(RoundingMode::Trunc), 1);
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-199_i128).unwrap()).to_int_with(RoundingMode::Trunc), -1);
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(100_i128).unwrap()).to_int_with(RoundingMode::Trunc), 1);
 }
 
 #[test]
 fn to_int_floor() {
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((199) as i128).unwrap()).to_int_with(RoundingMode::Floor), 1);
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-101) as i128).unwrap()).to_int_with(RoundingMode::Floor), -2);
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((100) as i128).unwrap()).to_int_with(RoundingMode::Floor), 1); // exact
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(199_i128).unwrap()).to_int_with(RoundingMode::Floor), 1);
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-101_i128).unwrap()).to_int_with(RoundingMode::Floor), -2);
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(100_i128).unwrap()).to_int_with(RoundingMode::Floor), 1); // exact
 }
 
 #[test]
 fn to_int_ceiling() {
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((101) as i128).unwrap()).to_int_with(RoundingMode::Ceiling), 2);
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(101_i128).unwrap()).to_int_with(RoundingMode::Ceiling), 2);
     assert_eq!(
-        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-199) as i128).unwrap()).to_int_with(RoundingMode::Ceiling),
+        D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-199_i128).unwrap()).to_int_with(RoundingMode::Ceiling),
         -1
     );
-    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((100) as i128).unwrap()).to_int_with(RoundingMode::Ceiling), 1); // exact
+    assert_eq!(D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(100_i128).unwrap()).to_int_with(RoundingMode::Ceiling), 1); // exact
 }
 
 #[test]
@@ -288,30 +288,30 @@ fn to_int_narrow_widths() {
     // Each width has its own to_int_with body emitted by the macro,
     // so call them all.
     assert_eq!(
-        D18::<2>::from_bits(decimal_scaled::Int::<1>::from((149) as i64)).to_int_with(RoundingMode::HalfToEven),
+        D18::<2>::from_bits(decimal_scaled::Int::<1>::from(149_i64)).to_int_with(RoundingMode::HalfToEven),
         1
     );
     assert_eq!(
-        D18::<2>::from_bits(decimal_scaled::Int::<1>::from((250) as i64)).to_int_with(RoundingMode::HalfToEven),
+        D18::<2>::from_bits(decimal_scaled::Int::<1>::from(250_i64)).to_int_with(RoundingMode::HalfToEven),
         2
     );
-    assert_eq!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from((-150) as i64)).to_int_with(RoundingMode::Floor), -2);
+    assert_eq!(D18::<2>::from_bits(decimal_scaled::Int::<1>::from(-150_i64)).to_int_with(RoundingMode::Floor), -2);
     assert_eq!(
-        D18::<2>::from_bits(decimal_scaled::Int::<1>::from((-150) as i64)).to_int_with(RoundingMode::Ceiling),
+        D18::<2>::from_bits(decimal_scaled::Int::<1>::from(-150_i64)).to_int_with(RoundingMode::Ceiling),
         -1
     );
     assert_eq!(
-        D18::<2>::from_bits(decimal_scaled::Int::<1>::from((150) as i64)).to_int_with(RoundingMode::HalfAwayFromZero),
+        D18::<2>::from_bits(decimal_scaled::Int::<1>::from(150_i64)).to_int_with(RoundingMode::HalfAwayFromZero),
         2
     );
     assert_eq!(
-        D18::<2>::from_bits(decimal_scaled::Int::<1>::from((-150) as i64)).to_int_with(RoundingMode::HalfTowardZero),
+        D18::<2>::from_bits(decimal_scaled::Int::<1>::from(-150_i64)).to_int_with(RoundingMode::HalfTowardZero),
         -1
     );
 
     // to_int default delegator
-    let _ = D18::<2>::try_from(5).unwrap().to_int();
-    let _ = D38::<2>::try_from(5).unwrap().to_int();
+    let _ = D18::<2>::from(5).to_int();
+    let _ = D38::<2>::from(5).to_int();
 }
 
 #[cfg(feature = "wide")]
@@ -322,7 +322,7 @@ fn to_int_wide_all_modes_and_signs() {
     // Easier: lift D38 raws.
     let lift_bits = |raw: i64| -> D76<2> {
         // Build by lifting a D38<2> with the right raw.
-        let n38 = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((raw as i128) as i128).unwrap());
+        let n38 = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(raw as i128).unwrap());
         n38.into()
     };
     assert_eq!(lift_bits(149).to_int_with(RoundingMode::HalfToEven), 1);
@@ -355,9 +355,9 @@ fn to_int_wide_all_modes_and_signs() {
     // Exact remainder
     assert_eq!(lift_bits(300).to_int_with(RoundingMode::HalfToEven), 3);
     // from_int / from_i32 (wide arm)
-    let five_wide: D76<2> = D38::<2>::try_from(5).unwrap().into();
-    assert_eq!(D76::<2>::try_from(5).unwrap(), five_wide);
-    assert_eq!(D76::<2>::try_from(5).unwrap(), five_wide);
+    let five_wide: D76<2> = D38::<2>::from(5).into();
+    assert_eq!(D76::<2>::from(5), five_wide);
+    assert_eq!(D76::<2>::from(5), five_wide);
     // to_int default delegator
     let _ = D76::<2>::ONE.to_int();
 }
@@ -445,7 +445,7 @@ fn to_int_wide_half_away_from_zero_negative() {
     // `to_int_with` body (the body has the same shape per-tier so D76 is
     // representative).
     use decimal_scaled::{D76, RoundingMode};
-    let v: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((-150) as i128).unwrap()).into();
+    let v: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(-150_i128).unwrap()).into();
     assert_eq!(v.to_int_with(RoundingMode::HalfAwayFromZero), -2);
 }
 
@@ -456,7 +456,7 @@ fn try_from_wide_paths() {
 
     // i128 → D76 (wide arm)
     let v: D76<2> = 100i128.try_into().unwrap();
-    let expected: D76<2> = D38::<2>::try_from(100).unwrap().into();
+    let expected: D76<2> = D38::<2>::from(100).into();
     assert_eq!(v, expected);
     // u128 → D76 (wide arm — values above i128::MAX should still succeed
     // because wide storage can hold them).
@@ -471,7 +471,7 @@ fn try_from_wide_paths() {
     #[cfg(feature = "std")]
     {
         let v: D76<2> = 1.5_f64.try_into().unwrap();
-        let expected_f: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((150) as i128).unwrap()).into();
+        let expected_f: D76<2> = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(150_i128).unwrap()).into();
         assert_eq!(v, expected_f);
         let res: Result<D76<2>, _> = f64::NAN.try_into();
         assert!(res.is_err());

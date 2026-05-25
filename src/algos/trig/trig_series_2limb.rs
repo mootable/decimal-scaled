@@ -120,7 +120,7 @@ int2_trig!(with_scale to_radians_with, to_radians_with_raw);
 /// units (one decimal digit safety margin from the exact bound).
 #[inline]
 pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
-    let thresh_exp = SCALE.saturating_sub((SCALE + 2) / 3);
+    let thresh_exp = SCALE.saturating_sub(SCALE.div_ceil(3));
     10_i128.pow(thresh_exp)
 }
 
@@ -1184,6 +1184,6 @@ pub(crate) fn to_radians_with_raw(
 /// a const generic.
 #[inline]
 fn small_x_linear_threshold_scale(scale: u32) -> i128 {
-    let thresh_exp = scale.saturating_sub((scale + 2) / 3);
+    let thresh_exp = scale.saturating_sub(scale.div_ceil(3));
     10_i128.pow(thresh_exp)
 }

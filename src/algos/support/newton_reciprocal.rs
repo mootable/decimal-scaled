@@ -153,7 +153,7 @@ impl NewtonReciprocal {
         let k_u64 = width_limbs + pow_len;
 
         // numerator = 2^(64 * k_u64) — a single 1 in limb position k_u64.
-        debug_assert!(k_u64 + 1 <= MAX_R_U64, "num buffer too small");
+        debug_assert!(k_u64 < MAX_R_U64, "num buffer too small");
         let mut num = [0u64; MAX_R_U64];
         num[k_u64] = 1u64;
 

@@ -200,7 +200,7 @@ fn ln_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -
         return 0;
     }
     let delta = raw - one_bits;
-    let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub((scale + 1) / 2));
+    let ln1p_band: i128 = 10_i128.pow(scale.saturating_sub(scale.div_ceil(2)));
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
         // ln(1 + δ/10^S)·10^S = δ − δ²/(2·10^S) + … : within the band
         // the quadratic term is below half an LSB, so the nearest-rounded
@@ -237,7 +237,7 @@ fn ln_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
         return 0;
     }
     let delta = raw - one_bits;
-    let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub((SCALE + 1) / 2));
+    let ln1p_band: i128 = 10_i128.pow(SCALE.saturating_sub(SCALE.div_ceil(2)));
     if delta.abs() <= ln1p_band && is_nearest_mode(mode) {
         // See `ln_with`: the linear approximation is correctly rounded to
         // nearest inside the band but loses the residual sign that directed

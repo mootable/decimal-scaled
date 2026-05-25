@@ -64,16 +64,16 @@ fn ln_lookup_at_one_is_zero_at_s1200() {
 
 #[test]
 fn ln_lookup_band_lower_bound_s1195() {
-    let x = D1232::<1195>::try_from(3).unwrap() / D1232::<1195>::try_from(2).unwrap();
+    let x = D1232::<1195>::from(3) / D1232::<1195>::from(2);
     let y = x.ln_strict();
-    assert!(y < D1232::<1195>::try_from(1).unwrap());
+    assert!(y < D1232::<1195>::from(1));
     assert!(y > D1232::<1195>::ZERO);
 }
 
 #[test]
 fn ln_lookup_band_upper_bound_s1205() {
-    let x = D1232::<1205>::try_from(3).unwrap() / D1232::<1205>::try_from(2).unwrap();
+    let x = D1232::<1205>::from(3) / D1232::<1205>::from(2);
     let y = x.ln_strict();
-    assert!(y < D1232::<1205>::try_from(1).unwrap());
+    assert!(y < D1232::<1205>::from(1));
     assert!(y > D1232::<1205>::ZERO);
 }

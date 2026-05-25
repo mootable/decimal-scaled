@@ -12,6 +12,8 @@ fn surface_check<D: Decimal>(seed_i32: i32) -> (D, D, D, D) {
     let v = D::from_i32(seed_i32);
     // Operators via supertrait bounds.
     let doubled = v + v;
+    // Intentional self-subtraction: the surface check verifies `a - a == 0`.
+    #[allow(clippy::eq_op)]
     let zero_via_sub = v - v;
     assert!(zero_via_sub.is_zero());
     // Sign.
@@ -58,8 +60,8 @@ fn surface_check_d76() {
     use decimal_scaled::D76;
 
     let (v, _, squared, _) = surface_check::<D76<6>>(5);
-    let expected_v: D76<6> = D38::<6>::try_from(5).unwrap().into();
-    let expected_squared: D76<6> = D38::<6>::try_from(25).unwrap().into();
+    let expected_v: D76<6> = D38::<6>::from(5).into();
+    let expected_squared: D76<6> = D38::<6>::from(25).into();
     assert_eq!(v, expected_v);
     assert_eq!(squared, expected_squared);
 }
@@ -79,8 +81,8 @@ fn fold_sum_product<D: Decimal>() -> (D, D) {
 fn sum_product_d38() {
 
     let (s, p) = fold_sum_product::<D38<2>>();
-    assert_eq!(s, D38::<2>::try_from(10).unwrap());
-    assert_eq!(p, D38::<2>::try_from(24).unwrap());
+    assert_eq!(s, D38::<2>::from(10));
+    assert_eq!(p, D38::<2>::from(24));
 }
 
 /// `to_int_with` exercised via trait dispatch under each rounding mode.
@@ -89,7 +91,7 @@ fn trait_to_int_with_modes() {
     fn cast<D: Decimal>(d: D, mode: RoundingMode) -> i64 {
         DecimalConvert::to_int_with(d, mode)
     }
-    let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from((151) as i128).unwrap());
+    let v = D38::<2>::from_bits(decimal_scaled::Int::<2>::try_from(151_i128).unwrap());
     assert_eq!(cast(v, RoundingMode::Floor), 1);
     assert_eq!(cast(v, RoundingMode::Ceiling), 2);
     assert_eq!(cast(v, RoundingMode::Trunc), 1);
@@ -102,8 +104,8 @@ fn trait_bitwise_supertraits() {
     fn high_bits_off<D: Decimal>(v: D, mask: D) -> D {
         v & !mask
     }
-    let v = D38::<0>::from_bits(decimal_scaled::Int::<2>::try_from((0b1111) as i128).unwrap());
-    let mask = D38::<0>::from_bits(decimal_scaled::Int::<2>::try_from((0b1100) as i128).unwrap());
+    let v = D38::<0>::from_bits(decimal_scaled::Int::<2>::try_from(0b1111_i128).unwrap());
+    let mask = D38::<0>::from_bits(decimal_scaled::Int::<2>::try_from(0b1100_i128).unwrap());
     let r = high_bits_off(v, mask);
     assert_eq!(r.to_bits(), 0b0011);
 }

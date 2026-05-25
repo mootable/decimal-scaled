@@ -93,16 +93,16 @@ fn constants_at_scale_12() {
 #[test]
 fn mul_strict_at_scale_12() {
     // 1.5 × 2.0 = 3.0 (exact)
-    let a = D38s12::try_from(3).unwrap() / D38s12::try_from(2).unwrap(); // 1.5 from rescale
-    let b = D38s12::try_from(2).unwrap();
+    let a = D38s12::from(3) / D38s12::from(2); // 1.5 from rescale
+    let b = D38s12::from(2);
     let r = a * b;
     assert_05_ulp("1.5 * 2.0", i128::from(r.to_bits()), 3_000_000_000_000);
 
     // 1.234567890123 × 0.000000000007 = 8.641975230861e-12 (exact at SCALE=12 = 9)
     // Truth: 1.234567890123 * 7e-12 = 8.641975230861e-12.
     // Rounded to SCALE=12: 9 (the value is 8.64e-12, just under one LSB).
-    let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_234_567_890_123) as i128).unwrap()); // 1.234567890123
-    let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((7) as i128).unwrap()); // 7e-12
+    let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_234_567_890_123_i128).unwrap()); // 1.234567890123
+    let b = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(7_i128).unwrap()); // 7e-12
     let r = a * b;
     // truth = 8.641... → at SCALE=12, the result is 9 LSBs (rounds 8.64 up).
     assert_05_ulp("1.234e0 * 7e-12", i128::from(r.to_bits()), 9);
@@ -112,8 +112,8 @@ fn mul_strict_at_scale_12() {
     assert_05_ulp("(-1.234e0) * 7e-12", i128::from(r.to_bits()), -9);
 
     // Exact-tie half: (5e-12) * (3) = 15e-12, rescale to SCALE=12 gives 15.
-    let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((5) as i128).unwrap()); // 5e-12
-    let b = D38s12::try_from(3).unwrap();
+    let a = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(5_i128).unwrap()); // 5e-12
+    let b = D38s12::from(3);
     let r = a * b;
     assert_05_ulp("5e-12 * 3", i128::from(r.to_bits()), 15);
 }
@@ -123,24 +123,24 @@ fn mul_strict_at_scale_12() {
 #[test]
 fn div_strict_at_scale_12() {
     // 1.0 / 3.0 = 0.333333333333... → at SCALE=12: 333_333_333_333
-    let r = D38s12::try_from(1).unwrap() / D38s12::try_from(3).unwrap();
+    let r = D38s12::from(1) / D38s12::from(3);
     assert_05_ulp("1/3", i128::from(r.to_bits()), 333_333_333_333);
 
     // 1.0 / 7.0 = 0.142857142857... → at SCALE=12: 142_857_142_857
-    let r = D38s12::try_from(1).unwrap() / D38s12::try_from(7).unwrap();
+    let r = D38s12::from(1) / D38s12::from(7);
     assert_05_ulp("1/7", i128::from(r.to_bits()), 142_857_142_857);
 
     // -1.0 / 3.0 = -0.333333... → -333_333_333_333
-    let r = (-D38s12::try_from(1).unwrap()) / D38s12::try_from(3).unwrap();
+    let r = (-D38s12::from(1)) / D38s12::from(3);
     assert_05_ulp("-1/3", i128::from(r.to_bits()), -333_333_333_333);
 
     // 22.0 / 7.0 ≈ 3.142857142857 (close to π)
-    let r = D38s12::try_from(22).unwrap() / D38s12::try_from(7).unwrap();
+    let r = D38s12::from(22) / D38s12::from(7);
     assert_05_ulp("22/7", i128::from(r.to_bits()), 3_142_857_142_857);
 
     // 1.0 / 1e-12 = 1e12, exact at SCALE=12.
     let one = D38s12::ONE;
-    let eps = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap());
+    let eps = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
     let r = one / eps;
     // 1.0 / 1e-12 in scaled space = (1*10^12) / 1 = 1e12. Storage at S=12: 1e24 (overflows i128).
     // Actually: a = 10^12, b = 1. n = a * 10^12 = 10^24, n/b = 10^24. Doesn't fit i128.
@@ -148,7 +148,7 @@ fn div_strict_at_scale_12() {
     let _ = r;
 
     // 1.0 / 2.0 = 0.5, exact at S=12 (raw 500_000_000_000)
-    let r = D38s12::try_from(1).unwrap() / D38s12::try_from(2).unwrap();
+    let r = D38s12::from(1) / D38s12::from(2);
     assert_05_ulp("1/2", i128::from(r.to_bits()), 500_000_000_000);
 }
 
@@ -160,26 +160,26 @@ fn rescale_strict_at_scale_12() {
     type D2 = D38<2>;
 
     // Half-to-even at exact halves.
-    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from((1_235_000) as i128).unwrap()); // 1.235000
+    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_235_000_i128).unwrap()); // 1.235000
     let r: D2 = micros.rescale::<2>();
     assert_05_ulp("1.235 -> cents (half to even = 1.24)", i128::from(r.to_bits()), 124);
 
-    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from((1_225_000) as i128).unwrap()); // 1.225000
+    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_225_000_i128).unwrap()); // 1.225000
     let r: D2 = micros.rescale::<2>();
     assert_05_ulp("1.225 -> cents (half to even = 1.22)", i128::from(r.to_bits()), 122);
 
     // Below half: 1.234999 → 1.23
-    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from((1_234_999) as i128).unwrap());
+    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_234_999_i128).unwrap());
     let r: D2 = micros.rescale::<2>();
     assert_05_ulp("1.234999 -> 1.23", i128::from(r.to_bits()), 123);
 
     // Above half: 1.235001 → 1.24
-    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from((1_235_001) as i128).unwrap());
+    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(1_235_001_i128).unwrap());
     let r: D2 = micros.rescale::<2>();
     assert_05_ulp("1.235001 -> 1.24", i128::from(r.to_bits()), 124);
 
     // Negative ties: -1.235000 → -1.24 (sign-symmetric half-to-even)
-    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from((-1_235_000) as i128).unwrap());
+    let micros = D38s6::from_bits(decimal_scaled::Int::<2>::try_from(-1_235_000_i128).unwrap());
     let r: D2 = micros.rescale::<2>();
     assert_05_ulp("-1.235 -> -1.24", i128::from(r.to_bits()), -124);
 }
@@ -198,7 +198,7 @@ fn ln_strict_at_scale_12() {
     assert_05_ulp("ln(1)", i128::from(D38s12::ONE.ln_strict().to_bits()), 0);
     assert_05_ulp(
         "ln(2)",
-        i128::from(D38s12::try_from(2).unwrap().ln_strict().to_bits()),
+        i128::from(D38s12::from(2).ln_strict().to_bits()),
         693_147_180_560,
     );
     let e = D38s12::e();
@@ -206,14 +206,14 @@ fn ln_strict_at_scale_12() {
     assert_05_ulp("ln(e)", i128::from(r.to_bits()), 1_000_000_000_000);
     assert_05_ulp(
         "ln(10)",
-        i128::from(D38s12::try_from(10).unwrap().ln_strict().to_bits()),
+        i128::from(D38s12::from(10).ln_strict().to_bits()),
         2_302_585_092_994,
     );
     // ln(0.5) = -ln(2)
-    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap());
+    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap());
     assert_05_ulp("ln(0.5)", i128::from(half.ln_strict().to_bits()), -693_147_180_560);
     // ln(0.1) = -ln(10)
-    let tenth = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((100_000_000_000) as i128).unwrap());
+    let tenth = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(100_000_000_000_i128).unwrap());
     assert_05_ulp("ln(0.1)", i128::from(tenth.ln_strict().to_bits()), -2_302_585_092_994);
 }
 
@@ -244,11 +244,11 @@ fn exp_strict_at_scale_12() {
     );
 
     // Round-trip ln/exp; verify ≤ a couple of LSB at the boundary
-    let two = D38s12::try_from(2).unwrap();
+    let two = D38s12::from(2);
     let r = two.ln_strict().exp_strict();
     assert_05_ulp("exp(ln(2)) ~= 2", i128::from(r.to_bits()), 2_000_000_000_000);
 
-    let ten = D38s12::try_from(10).unwrap();
+    let ten = D38s12::from(10);
     let r = ten.ln_strict().exp_strict();
     assert_05_ulp("exp(ln(10)) ~= 10", i128::from(r.to_bits()), 10_000_000_000_000);
 }
@@ -356,7 +356,7 @@ fn asin_strict_at_scale_12() {
         i128::from(D38s12::ONE.asin_strict().to_bits()),
         1_570_796_326_795,
     );
-    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap());
+    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap());
     // asin(0.5) = π/6
     assert_05_ulp("asin(0.5)", i128::from(half.asin_strict().to_bits()), 523_598_775_598);
 }
@@ -434,22 +434,22 @@ fn sqrt_strict_at_scale_12() {
     );
     assert_05_ulp(
         "sqrt(2)",
-        i128::from(D38s12::try_from(2).unwrap().sqrt_strict().to_bits()),
+        i128::from(D38s12::from(2).sqrt_strict().to_bits()),
         1_414_213_562_373,
     );
     assert_05_ulp(
         "sqrt(3)",
-        i128::from(D38s12::try_from(3).unwrap().sqrt_strict().to_bits()),
+        i128::from(D38s12::from(3).sqrt_strict().to_bits()),
         1_732_050_807_569,
     );
     assert_05_ulp(
         "sqrt(4)",
-        i128::from(D38s12::try_from(4).unwrap().sqrt_strict().to_bits()),
+        i128::from(D38s12::from(4).sqrt_strict().to_bits()),
         2_000_000_000_000,
     );
     assert_05_ulp(
         "sqrt(5)",
-        i128::from(D38s12::try_from(5).unwrap().sqrt_strict().to_bits()),
+        i128::from(D38s12::from(5).sqrt_strict().to_bits()),
         2_236_067_977_500,
     );
 }
@@ -464,23 +464,23 @@ fn cbrt_strict_at_scale_12() {
     );
     assert_05_ulp(
         "cbrt(2)",
-        i128::from(D38s12::try_from(2).unwrap().cbrt_strict().to_bits()),
+        i128::from(D38s12::from(2).cbrt_strict().to_bits()),
         1_259_921_049_895,
     );
     assert_05_ulp(
         "cbrt(8)",
-        i128::from(D38s12::try_from(8).unwrap().cbrt_strict().to_bits()),
+        i128::from(D38s12::from(8).cbrt_strict().to_bits()),
         2_000_000_000_000,
     );
     assert_05_ulp(
         "cbrt(27)",
-        i128::from(D38s12::try_from(27).unwrap().cbrt_strict().to_bits()),
+        i128::from(D38s12::from(27).cbrt_strict().to_bits()),
         3_000_000_000_000,
     );
     // cbrt(-8) = -2
     assert_05_ulp(
         "cbrt(-8)",
-        i128::from(D38s12::try_from(-8).unwrap().cbrt_strict().to_bits()),
+        i128::from(D38s12::from(-8).cbrt_strict().to_bits()),
         -2_000_000_000_000,
     );
 }
@@ -626,28 +626,28 @@ fn log_strict_at_scale_12() {
     assert_05_ulp("log2(1)", i128::from(D38s12::ONE.log2_strict().to_bits()), 0);
     assert_05_ulp(
         "log2(2)",
-        i128::from(D38s12::try_from(2).unwrap().log2_strict().to_bits()),
+        i128::from(D38s12::from(2).log2_strict().to_bits()),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "log2(4)",
-        i128::from(D38s12::try_from(4).unwrap().log2_strict().to_bits()),
+        i128::from(D38s12::from(4).log2_strict().to_bits()),
         2_000_000_000_000,
     );
     assert_05_ulp("log10(1)", i128::from(D38s12::ONE.log10_strict().to_bits()), 0);
     assert_05_ulp(
         "log10(10)",
-        i128::from(D38s12::try_from(10).unwrap().log10_strict().to_bits()),
+        i128::from(D38s12::from(10).log10_strict().to_bits()),
         1_000_000_000_000,
     );
     assert_05_ulp(
         "log10(100)",
-        i128::from(D38s12::try_from(100).unwrap().log10_strict().to_bits()),
+        i128::from(D38s12::from(100).log10_strict().to_bits()),
         2_000_000_000_000,
     );
     assert_05_ulp(
         "log10(2)",
-        i128::from(D38s12::try_from(2).unwrap().log10_strict().to_bits()),
+        i128::from(D38s12::from(2).log10_strict().to_bits()),
         301_029_995_664,
     );
 }
@@ -661,21 +661,21 @@ fn log_strict_at_scale_12() {
 ///   powf(10, 2) = 100
 #[test]
 fn powf_strict_at_scale_12() {
-    let two = D38s12::try_from(2).unwrap();
-    let ten = D38s12::try_from(10).unwrap();
+    let two = D38s12::from(2);
+    let ten = D38s12::from(10);
     assert_05_ulp(
         "2^10",
-        i128::from(two.powf_strict(D38s12::try_from(10).unwrap()).to_bits()),
+        i128::from(two.powf_strict(D38s12::from(10)).to_bits()),
         1_024_000_000_000_000,
     );
     // 2^0.5 = sqrt(2)
-    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap());
+    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap());
     let r = two.powf_strict(half);
     assert_05_ulp("2^0.5 ~= sqrt(2)", i128::from(r.to_bits()), 1_414_213_562_373);
     // 10^2 = 100
     assert_05_ulp(
         "10^2",
-        i128::from(ten.powf_strict(D38s12::try_from(2).unwrap()).to_bits()),
+        i128::from(ten.powf_strict(D38s12::from(2)).to_bits()),
         100_000_000_000_000,
     );
 }
@@ -706,7 +706,7 @@ fn acosh_strict_at_scale_12() {
     assert_05_ulp("acosh(1)", i128::from(D38s12::ONE.acosh_strict().to_bits()), 0);
     assert_05_ulp(
         "acosh(2)",
-        i128::from(D38s12::try_from(2).unwrap().acosh_strict().to_bits()),
+        i128::from(D38s12::from(2).acosh_strict().to_bits()),
         1_316_957_896_925,
     );
 }
@@ -714,6 +714,6 @@ fn acosh_strict_at_scale_12() {
 #[test]
 fn atanh_strict_at_scale_12() {
     assert_05_ulp("atanh(0)", i128::from(D38s12::ZERO.atanh_strict().to_bits()), 0);
-    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((500_000_000_000) as i128).unwrap());
+    let half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(500_000_000_000_i128).unwrap());
     assert_05_ulp("atanh(0.5)", i128::from(half.atanh_strict().to_bits()), 549_306_144_334);
 }

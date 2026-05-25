@@ -21,12 +21,12 @@ fn decimal_trait_is_one_default_impl() {
 #[test]
 fn decimal_trait_sum_default_impl() {
     let vals = [
-        D38s12::try_from(1).unwrap(),
-        D38s12::try_from(2).unwrap(),
-        D38s12::try_from(3).unwrap(),
+        D38s12::from(1),
+        D38s12::from(2),
+        D38s12::from(3),
     ];
     let s: D38s12 = <D38s12 as DecimalArithmetic>::sum(vals.iter().copied());
-    assert_eq!(s, D38s12::try_from(6).unwrap());
+    assert_eq!(s, D38s12::from(6));
     // Empty iter → ZERO
     let s: D38s12 = <D38s12 as DecimalArithmetic>::sum(core::iter::empty());
     assert_eq!(s, D38s12::ZERO);

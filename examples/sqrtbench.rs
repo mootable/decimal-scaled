@@ -26,7 +26,7 @@ fn time<F: FnMut()>(label: &str, mut f: F) {
 fn main() {
     println!("== D38<19>::sqrt(2) — baseline ==");
     {
-        let a = D38::<19>::try_from(2).unwrap();
+        let a = D38::<19>::from(2);
         time("D38<19>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });
@@ -35,7 +35,7 @@ fn main() {
     println!();
     println!("== D76<35>::sqrt(2) ==");
     {
-        let a = D76::<35>::try_from(2).unwrap();
+        let a = D76::<35>::from(2);
         time("D76<35>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });
@@ -44,7 +44,7 @@ fn main() {
     println!();
     println!("== D76<76>::sqrt(2) ==");
     {
-        let a = D76::<76>::try_from(2).unwrap();
+        let a = D76::<76>::from(2);
         time("D76<76>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });
@@ -53,7 +53,7 @@ fn main() {
     println!();
     println!("== D153<75>::sqrt(2) ==");
     {
-        let a = D153::<75>::try_from(2).unwrap();
+        let a = D153::<75>::from(2);
         time("D153<75>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });
@@ -62,7 +62,7 @@ fn main() {
     println!();
     println!("== D153<153>::sqrt(2) ==");
     {
-        let a = D153::<153>::try_from(2).unwrap();
+        let a = D153::<153>::from(2);
         time("D153<153>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });
@@ -71,7 +71,7 @@ fn main() {
     println!();
     println!("== D307<150>::sqrt(2) ==");
     {
-        let a = D307::<150>::try_from(2).unwrap();
+        let a = D307::<150>::from(2);
         time("D307<150>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });
@@ -80,7 +80,7 @@ fn main() {
     println!();
     println!("== D307<307>::sqrt(2) ==");
     {
-        let a = D307::<307>::try_from(2).unwrap();
+        let a = D307::<307>::from(2);
         time("D307<307>::sqrt_strict(2)", || {
             black_box(black_box(a).sqrt_strict());
         });

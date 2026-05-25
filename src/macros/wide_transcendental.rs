@@ -290,7 +290,7 @@ pub(crate) mod exp_generic {
         let extra: u32 = if abs_k_u128 == 0 {
             0
         } else {
-            let digits = (abs_k_u128 * 30103 + 99_999) / 100_000;
+            let digits = (abs_k_u128 * 30103).div_ceil(100_000);
             let capped = digits.min((<S as BigInt>::BITS / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };

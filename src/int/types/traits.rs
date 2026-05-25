@@ -174,7 +174,7 @@ impl<const N: usize> BigInt for Int<N> {
     const ZERO: Self = Int::<N>::ZERO;
     const ONE: Self = Int::<N>::ONE;
     const TEN: Self = Int::<N>::TEN;
-    const U128_LIMBS: usize = (N + 1) / 2;
+    const U128_LIMBS: usize = N.div_ceil(2);
 
     #[inline]
     fn is_zero(self) -> bool {
@@ -281,7 +281,7 @@ impl<const N: usize> BigInt for Int<N> {
         // carry a `ComputeInt` bound (the cycle) — it uses the gated build-max
         // blanket `MAX_U128_LIMB`, not a frozen literal.
         let mut u128_mag = [0u128; crate::int::types::compute_int::MAX_U128_LIMB];
-        let u128_len = (N + 1) / 2;
+        let u128_len = N.div_ceil(2);
         self.mag_into_u128(&mut u128_mag[..u128_len]);
         T::from_mag_sign_u128(&u128_mag[..u128_len], negative)
     }
@@ -360,7 +360,7 @@ impl<const N: usize> BigInt for Int<N> {
     /// `(N + 1) / 2` u128 limbs are read; excess is silently dropped.
     #[inline]
     fn from_mag_sign_u128(mag: &[u128], negative: bool) -> Self {
-        let u128_limbs = (N + 1) / 2;
+        let u128_limbs = N.div_ceil(2);
         let mut out = [0u64; N];
         let m = u128_limbs.min(mag.len());
         let n_full_pairs = N / 2;

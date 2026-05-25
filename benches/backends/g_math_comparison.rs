@@ -65,9 +65,9 @@ fn accuracy_report() {
     println!("All values reported in ULPs at the 19-digit scale (1 ULP = 10⁻¹⁹).\n");
 
     // ── sin(1) ────────────────────────────────────────────────────
-    let baseline_sin_bits = d76_19_bits(D76_19::try_from(1).unwrap().sin_strict());
+    let baseline_sin_bits = d76_19_bits(D76_19::from(1).sin_strict());
 
-    let ds_sin = D38_19::try_from(1).unwrap().sin_strict().to_bits().into();
+    let ds_sin = D38_19::from(1).sin_strict().to_bits().into();
     let gm_sin = {
         let r = evaluate(&gmath("1.0").sin()).expect("g_math sin(1)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -79,9 +79,9 @@ fn accuracy_report() {
     );
 
     // ── ln(2) ─────────────────────────────────────────────────────
-    let baseline_ln_bits = d76_19_bits(D76_19::try_from(2).unwrap().ln_strict());
+    let baseline_ln_bits = d76_19_bits(D76_19::from(2).ln_strict());
 
-    let ds_ln = D38_19::try_from(2).unwrap().ln_strict().to_bits().into();
+    let ds_ln = D38_19::from(2).ln_strict().to_bits().into();
     let gm_ln = {
         let r = evaluate(&gmath("2.0").ln()).expect("g_math ln(2)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -93,9 +93,9 @@ fn accuracy_report() {
     );
 
     // ── exp(1) — i.e. e ──────────────────────────────────────────
-    let baseline_exp_bits = d76_19_bits(D76_19::try_from(1).unwrap().exp_strict());
+    let baseline_exp_bits = d76_19_bits(D76_19::from(1).exp_strict());
 
-    let ds_exp = D38_19::try_from(1).unwrap().exp_strict().to_bits().into();
+    let ds_exp = D38_19::from(1).exp_strict().to_bits().into();
     let gm_exp = {
         let r = evaluate(&gmath("1.0").exp()).expect("g_math exp(1)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -107,9 +107,9 @@ fn accuracy_report() {
     );
 
     // ── sqrt(2) ──────────────────────────────────────────────────
-    let baseline_sqrt_bits = d76_19_bits(D76_19::try_from(2).unwrap().sqrt_strict());
+    let baseline_sqrt_bits = d76_19_bits(D76_19::from(2).sqrt_strict());
 
-    let ds_sqrt = D38_19::try_from(2).unwrap().sqrt_strict().to_bits().into();
+    let ds_sqrt = D38_19::from(2).sqrt_strict().to_bits().into();
     let gm_sqrt = {
         let r = evaluate(&gmath("2.0").sqrt()).expect("g_math sqrt(2)");
         gmath_to_d19_bits(&r.to_decimal_string(25))
@@ -126,8 +126,8 @@ fn accuracy_report() {
 fn bench_decimal_scaled(c: &mut Criterion) {
     let mut g = c.benchmark_group("decimal-scaled D38<19>");
 
-    let two = D38_19::try_from(2).unwrap();
-    let three = D38_19::try_from(3).unwrap();
+    let two = D38_19::from(2);
+    let three = D38_19::from(3);
     let one = D38_19::ONE;
 
     g.bench_function("mul", |b| {

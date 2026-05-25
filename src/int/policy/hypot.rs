@@ -80,7 +80,7 @@ enum Select<const N: usize> {
 /// fall back and only pay its fit-guard — stay on the generic Pythagoras.
 const fn select<const N: usize>() -> Select<N> {
     match N {
-        1 | 2 | 3 => Select::ByAlgorithm(Algorithm::U128Fast),
+        1..=3 => Select::ByAlgorithm(Algorithm::U128Fast),
         _ => Select::ByAlgorithm(Algorithm::Pythagoras),
     }
 }

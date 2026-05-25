@@ -42,10 +42,10 @@ fn assert_close(label: &str, a: D, b: D) {
     // ULP, plus rounding noise from the comparison arithmetic. Five LSB
     // is the documented identity-witness budget for the wider tiers.
     // Build `IDENTITY_TOL_LSB * 10^-230` as `IDENTITY_TOL_LSB / 10^230`.
-    let ten = D::try_from(10).unwrap();
+    let ten = D::from(10);
     let mut bound = ten;
     for _ in 1..230 {
-        bound = bound * ten;
+        bound *= ten;
     }
     let lsb = D::ONE / bound;
     let tol = D::try_from(IDENTITY_TOL_LSB as i128).unwrap() * lsb;
@@ -58,19 +58,19 @@ fn assert_close(label: &str, a: D, b: D) {
 #[test]
 fn ln_exp_inverse_at_d462_s230() {
     // exp(ln(1.5)) == 1.5
-    let x: D = D::try_from(3).unwrap() / D::try_from(2).unwrap();
+    let x: D = D::from(3) / D::from(2);
     let y = x.ln_strict().exp_strict();
     assert_close("exp(ln(1.5))", y, x);
 
     // exp(ln(3)) == 3
-    let three = D::try_from(3).unwrap();
+    let three = D::from(3);
     let y3 = three.ln_strict().exp_strict();
     assert_close("exp(ln(3))", y3, three);
 }
 
 #[test]
 fn pythagorean_identity_at_d462_s230() {
-    let x: D = D::try_from(3).unwrap() / D::try_from(2).unwrap(); // 1.5
+    let x: D = D::from(3) / D::from(2); // 1.5
     let s = x.sin_strict();
     let c = x.cos_strict();
     let s2 = s * s;
@@ -82,7 +82,7 @@ fn pythagorean_identity_at_d462_s230() {
 #[test]
 fn hyperbolic_identity_at_d462_s230() {
     // cosh(x)^2 - sinh(x)^2 = 1
-    let x: D = D::try_from(1).unwrap() / D::try_from(2).unwrap(); // 0.5
+    let x: D = D::from(1) / D::from(2); // 0.5
     let sh = x.sinh_strict();
     let ch = x.cosh_strict();
     let diff = ch * ch - sh * sh;
@@ -92,7 +92,7 @@ fn hyperbolic_identity_at_d462_s230() {
 #[test]
 fn tan_atan_inverse_at_d462_s230() {
     // tan(atan(0.5)) == 0.5
-    let x: D = D::try_from(1).unwrap() / D::try_from(2).unwrap();
+    let x: D = D::from(1) / D::from(2);
     let y = x.atan_strict().tan_strict();
     assert_close("tan(atan(0.5))", y, x);
 }

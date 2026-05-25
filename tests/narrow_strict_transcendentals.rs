@@ -61,7 +61,7 @@ fn d18_ln_strict() {
     // ln(2) = 0.69314718... → at S=8: 69_314_718
     assert_le_1_lsb_i64(
         "ln(2)",
-        D18::<8>::try_from(2).unwrap().ln_strict().to_bits(),
+        D18::<8>::from(2).ln_strict().to_bits(),
         69_314_718,
     );
 }
@@ -75,18 +75,18 @@ fn d18_exp_strict() {
 
 #[test]
 fn d18_log2_log10_strict() {
-    assert_eq!(D18::<8>::try_from(2).unwrap().log2_strict().to_bits(), 100_000_000);
-    assert_eq!(D18::<8>::try_from(10).unwrap().log10_strict().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from(2).log2_strict().to_bits(), 100_000_000);
+    assert_eq!(D18::<8>::from(10).log10_strict().to_bits(), 100_000_000);
 }
 
 #[test]
 fn d18_sqrt_cbrt_strict() {
-    assert_eq!(D18::<8>::try_from(4).unwrap().sqrt_strict().to_bits(), 200_000_000);
-    assert_eq!(D18::<8>::try_from(27).unwrap().cbrt_strict().to_bits(), 300_000_000);
+    assert_eq!(D18::<8>::from(4).sqrt_strict().to_bits(), 200_000_000);
+    assert_eq!(D18::<8>::from(27).cbrt_strict().to_bits(), 300_000_000);
     // sqrt(2)=1.41421356... → 141_421_356
     assert_le_1_lsb_i64(
         "sqrt(2)",
-        D18::<8>::try_from(2).unwrap().sqrt_strict().to_bits(),
+        D18::<8>::from(2).sqrt_strict().to_bits(),
         141_421_356,
     );
 }
@@ -123,18 +123,18 @@ fn d18_angle_powf_log_exp2_strict() {
     assert_eq!(D18::<8>::ZERO.to_radians_strict().to_bits(), 0);
     // 2^10 = 1024
     assert_eq!(
-        D18::<8>::try_from(2).unwrap()
-            .powf_strict(D18::<8>::try_from(10).unwrap())
+        D18::<8>::from(2)
+            .powf_strict(D18::<8>::from(10))
             .to_bits(),
         102_400_000_000,
     );
     // log_2(8) = 3
     assert_eq!(
-        D18::<8>::try_from(8).unwrap().log_strict(D18::<8>::try_from(2).unwrap()).to_bits(),
+        D18::<8>::from(8).log_strict(D18::<8>::from(2)).to_bits(),
         300_000_000,
     );
     // exp2(10) = 1024
-    assert_eq!(D18::<8>::try_from(10).unwrap().exp2_strict().to_bits(), 102_400_000_000);
+    assert_eq!(D18::<8>::from(10).exp2_strict().to_bits(), 102_400_000_000);
 }
 
 #[cfg(feature = "strict")]
@@ -148,10 +148,10 @@ fn d18_dispatcher_matches_strict() {
     assert_eq!(D18::<8>::ONE.sinh(), D18::<8>::ONE.sinh_strict());
     assert_eq!(D18::<8>::ONE.cosh(), D18::<8>::ONE.cosh_strict());
     assert_eq!(D18::<8>::ONE.tanh(), D18::<8>::ONE.tanh_strict());
-    assert_eq!(D18::<8>::try_from(4).unwrap().sqrt(), D18::<8>::try_from(4).unwrap().sqrt_strict());
+    assert_eq!(D18::<8>::from(4).sqrt(), D18::<8>::from(4).sqrt_strict());
     assert_eq!(
-        D18::<8>::try_from(27).unwrap().cbrt(),
-        D18::<8>::try_from(27).unwrap().cbrt_strict()
+        D18::<8>::from(27).cbrt(),
+        D18::<8>::from(27).cbrt_strict()
     );
     assert_eq!(D18::<8>::ONE.atan(), D18::<8>::ONE.atan_strict());
     assert_eq!(
@@ -169,12 +169,12 @@ fn d18_dispatcher_matches_strict() {
     assert_eq!(D18::<8>::ZERO.to_degrees(), D18::<8>::ZERO.to_degrees_strict());
     assert_eq!(D18::<8>::ZERO.to_radians(), D18::<8>::ZERO.to_radians_strict());
     assert_eq!(
-        D18::<8>::try_from(8).unwrap().log(D18::<8>::try_from(2).unwrap()),
-        D18::<8>::try_from(8).unwrap().log_strict(D18::<8>::try_from(2).unwrap()),
+        D18::<8>::from(8).log(D18::<8>::from(2)),
+        D18::<8>::from(8).log_strict(D18::<8>::from(2)),
     );
     assert_eq!(
-        D18::<8>::try_from(2).unwrap().powf(D18::<8>::try_from(10).unwrap()),
-        D18::<8>::try_from(2).unwrap().powf_strict(D18::<8>::try_from(10).unwrap()),
+        D18::<8>::from(2).powf(D18::<8>::from(10)),
+        D18::<8>::from(2).powf_strict(D18::<8>::from(10)),
     );
 }
 
@@ -189,7 +189,7 @@ fn d18_dispatcher_matches_strict() {
 #[test]
 #[should_panic(expected = "exp_strict: result out of range")]
 fn d18_exp_strict_overflow_panics() {
-    let _ = D18::<17>::try_from(5).unwrap().exp_strict();
+    let _ = D18::<17>::from(5).exp_strict();
 }
 
 // Sanity: D38 also panics on range overflow, but with its own message.
@@ -200,5 +200,5 @@ fn d18_exp_strict_overflow_panics() {
 fn d38_exp_strict_overflow_panics() {
     // D38<35>::exp(2) → ~7.389; storage at S=35 = 7.389e35, which is
     // below MAX (1.7e38). To force overflow we use a much larger arg.
-    let _ = D38::<35>::try_from(100).unwrap().exp_strict();
+    let _ = D38::<35>::from(100).exp_strict();
 }

@@ -8,22 +8,22 @@ use decimal_scaled::D38s12;
 
 #[test]
 fn eq_signed_exact_match() {
-    assert!(D38s12::try_from(5).unwrap() == 5_i32);
-    assert!(5_i32 == D38s12::try_from(5).unwrap());
-    assert!(D38s12::try_from(-7).unwrap() == -7_i64);
+    assert!(D38s12::from(5) == 5_i32);
+    assert!(5_i32 == D38s12::from(5));
+    assert!(D38s12::from(-7) == -7_i64);
     assert!(D38s12::ZERO == 0_i8);
 }
 
 #[test]
 fn eq_signed_fractional_is_false() {
-    let one_and_a_half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap());
+    let one_and_a_half = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
     assert!(!(one_and_a_half == 1_i32));
     assert!(!(one_and_a_half == 2_i32));
 }
 
 #[test]
 fn eq_signed_one_lsb_is_false() {
-    let just_above_zero = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap());
+    let just_above_zero = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap());
     assert!(!(just_above_zero == 0_i32));
 }
 
@@ -45,14 +45,14 @@ fn eq_i128_negative() {
 
 #[test]
 fn eq_unsigned_exact_match() {
-    assert!(D38s12::try_from(5).unwrap() == 5_u32);
-    assert!(5_u64 == D38s12::try_from(5).unwrap());
+    assert!(D38s12::from(5) == 5_u32);
+    assert!(5_u64 == D38s12::from(5));
     assert!(D38s12::ZERO == 0_u8);
 }
 
 #[test]
 fn eq_unsigned_negative_is_false() {
-    let neg = D38s12::try_from(-1).unwrap();
+    let neg = D38s12::from(-1);
     assert!(!(neg == 0_u32));
     assert!(!(neg == 1_u32));
 }
@@ -78,7 +78,7 @@ fn eq_u128_out_of_d38_range_is_false() {
 #[test]
 fn eq_float_exact_representable() {
     // 1.5 is exactly representable in both f64 and D38s12.
-    let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((1_500_000_000_000) as i128).unwrap());
+    let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(1_500_000_000_000_i128).unwrap());
     assert!(d == 1.5_f64);
     assert!(1.5_f64 == d);
     assert!(d == 1.5_f32);
@@ -133,7 +133,7 @@ fn eq_float_exact_not_round_trip() {
 #[cfg(feature = "std")]
 #[test]
 fn eq_float_negative() {
-    let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from((-2_500_000_000_000) as i128).unwrap());
+    let d = D38s12::from_bits(decimal_scaled::Int::<2>::try_from(-2_500_000_000_000_i128).unwrap());
     assert!(d == -2.5_f64);
     assert!(-2.5_f64 == d);
 }
@@ -143,10 +143,10 @@ fn eq_float_negative() {
 #[test]
 fn eq_d18_with_integer() {
     use decimal_scaled::D18s9;
-    let v = D18s9::from_bits(decimal_scaled::Int::<1>::from((7_000_000_000) as i64)); // 7.0
+    let v = D18s9::from_bits(decimal_scaled::Int::<1>::from(7_000_000_000_i64)); // 7.0
     assert!(v == 7_i64);
     assert!(v == 7_u64);
-    let neg = D18s9::from_bits(decimal_scaled::Int::<1>::from((-7_000_000_000) as i64));
+    let neg = D18s9::from_bits(decimal_scaled::Int::<1>::from(-7_000_000_000_i64));
     assert!(neg == -7_i32);
     assert!(!(neg == 7_u32));
 }

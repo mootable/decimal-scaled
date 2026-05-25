@@ -19,13 +19,13 @@ type D = D307<300>;
 // Mid-magnitude positive operand: 3.0 at SCALE=300. Same input for
 // both paths so the comparison is apples-to-apples.
 fn pos() -> D {
-    D::try_from(3).unwrap()
+    D::from(3)
 }
 
 // Small positive operand for exp (keeps the result in range).
 fn small() -> D {
-    let one = D::try_from(1).unwrap();
-    let two = D::try_from(2).unwrap();
+    let one = D::from(1);
+    let two = D::from(2);
     one / two // = 0.5
 }
 

@@ -13,8 +13,8 @@ fn bench(c: &mut Criterion) {
     g.measurement_time(std::time::Duration::from_secs(3));
 
     {
-        let a = D307::<150>::try_from(2).unwrap();
-        let b = D307::<150>::try_from(1).unwrap();
+        let a = D307::<150>::from(2);
+        let b = D307::<150>::from(1);
         g.bench_function("D307<150>/div", |bn| {
             bn.iter(|| black_box(a) / black_box(b))
         });
@@ -23,8 +23,8 @@ fn bench(c: &mut Criterion) {
         });
     }
     {
-        let a = D616::<308>::try_from(2).unwrap();
-        let b = D616::<308>::try_from(1).unwrap();
+        let a = D616::<308>::from(2);
+        let b = D616::<308>::from(1);
         g.bench_function("D616<308>/div", |bn| {
             bn.iter(|| black_box(a) / black_box(b))
         });
@@ -33,8 +33,8 @@ fn bench(c: &mut Criterion) {
         });
     }
     {
-        let a = D924::<461>::try_from(2).unwrap();
-        let b = D924::<461>::try_from(1).unwrap();
+        let a = D924::<461>::from(2);
+        let b = D924::<461>::from(1);
         g.bench_function("D924<461>/div", |bn| {
             bn.iter(|| black_box(a) / black_box(b))
         });
@@ -43,8 +43,8 @@ fn bench(c: &mut Criterion) {
         });
     }
     {
-        let a = D1232::<616>::try_from(2).unwrap();
-        let b = D1232::<616>::try_from(1).unwrap();
+        let a = D1232::<616>::from(2);
+        let b = D1232::<616>::from(1);
         g.bench_function("D1232<616>/div", |bn| {
             bn.iter(|| black_box(a) / black_box(b))
         });

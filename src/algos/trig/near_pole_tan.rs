@@ -66,7 +66,7 @@ mod tests {
     fn magnitude_one_quotient_needs_no_lift() {
         // |tan| ≈ 1 ⇒ probe ≈ 10^{w0} ⇒ bit_length ≈ w0·log2(10).
         let w0 = 158u32;
-        let bits = ((w0 as f64) * 3.321928) as u32;
+        let bits = ((w0 as f64) * std::f64::consts::LOG2_10) as u32;
         assert_eq!(tan_extra_digits(bits, w0), 0);
     }
 
@@ -74,7 +74,7 @@ mod tests {
     fn five_digit_quotient_lifts_about_five_plus_margin() {
         // |tan| ≈ 10^5 ⇒ probe bit length ≈ (w0 + 5)·log2(10).
         let w0 = 158u32;
-        let bits = (((w0 + 5) as f64) * 3.321928).ceil() as u32;
+        let bits = (((w0 + 5) as f64) * std::f64::consts::LOG2_10).ceil() as u32;
         let extra = tan_extra_digits(bits, w0);
         // ~5 magnitude digits + 6 margin, allowing ±1 for integer rounding.
         assert!((10..=12).contains(&extra), "extra = {extra}");
@@ -84,7 +84,7 @@ mod tests {
     fn large_quotient_scales_linearly() {
         // |tan| ≈ 10^40 ⇒ ~40 magnitude digits + margin.
         let w0 = 90u32;
-        let bits = (((w0 + 40) as f64) * 3.321928).ceil() as u32;
+        let bits = (((w0 + 40) as f64) * std::f64::consts::LOG2_10).ceil() as u32;
         let extra = tan_extra_digits(bits, w0);
         assert!((45..=47).contains(&extra), "extra = {extra}");
     }

@@ -34,7 +34,7 @@ fn d76_all_six_constants_at_scale_12() {
         tau_via_pi - tau
     };
     // Allow up to 1 LSB slack to absorb the independent rounding paths.
-    let one: D = decimal_scaled::D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from((1) as i128).unwrap()).into();
+    let one: D = decimal_scaled::D38::<12>::from_bits(decimal_scaled::Int::<2>::try_from(1_i128).unwrap()).into();
     assert!(diff <= one, "tau vs 2*pi diff = {diff:?}");
 }
 

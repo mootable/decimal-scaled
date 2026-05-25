@@ -26,8 +26,8 @@ fn agree_within_1_storage_lsb(label: &str, a: D, b: D) {
     // disagree by at most 1 ULP at half-ULP-tie boundaries (one rounds
     // up, the other rounds down). Tighter than 1 LSB would false-positive
     // on those legitimate cases.
-    let one = D::try_from(1).unwrap();
-    let lsb = one / D::try_from(10).unwrap().pow(615);
+    let one = D::from(1);
+    let lsb = one / D::from(10).pow(615);
     let limit = lsb;
     assert!(
         diff <= limit,

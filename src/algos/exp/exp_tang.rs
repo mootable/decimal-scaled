@@ -69,7 +69,7 @@ pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA
         let extra: u32 = if abs_k == 0 {
             0
         } else {
-            let digits = ((abs_k * 30103 + 99_999) / 100_000) as u32;
+            let digits = (abs_k * 30103).div_ceil(100_000) as u32;
             digits + 12
         };
         let v_ext = if extra == 0 {
@@ -215,7 +215,7 @@ pub(crate) fn exp_tang<
         let extra: u32 = if abs_k == 0 {
             0
         } else {
-            let digits = (abs_k * 30103 + 99_999) / 100_000;
+            let digits = (abs_k * 30103).div_ceil(100_000);
             let capped = digits.min((C::w_bits() / 4) as u128) as u32;
             capped + 12 + (capped >> 2)
         };
