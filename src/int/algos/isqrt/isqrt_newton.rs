@@ -56,17 +56,22 @@ pub(crate) fn isqrt_newton(n: &[u64], out: &mut [u64]) {
     // std-gated inherent f64) — `num_traits::Float`/libm is never reached.
     sqrt_seed(n, bits, &mut x[..work]);
 
+    // Newton working buffers hoisted OUT of the loop. The divide engine
+    // re-zeros `q`/`r` each pass and `shr` re-zeros `y`, so only the live
+    // `[..work]` slice is touched per iteration — no per-iteration build-max
+    // memset (the previous in-loop `[0u64; SCRATCH_LIMBS]` allocs were the
+    // wide-tier tax). `x = y` is likewise a `[..work]` copy, not a full array.
+    let mut q = [0u64; SCRATCH_LIMBS];
+    let mut r = [0u64; SCRATCH_LIMBS];
+    let mut y = [0u64; SCRATCH_LIMBS];
     loop {
-        let mut q = [0u64; SCRATCH_LIMBS];
-        let mut r = [0u64; SCRATCH_LIMBS];
         div_rem_dispatch(n, &x[..work], &mut q[..work], &mut r[..work]);
         add_assign(&mut q[..work], &x[..work]);
-        let mut y = [0u64; SCRATCH_LIMBS];
         shr(&q[..work], 1, &mut y[..work]);
         if cmp(&y[..work], &x[..work]) >= 0 {
             break;
         }
-        x = y;
+        x[..work].copy_from_slice(&y[..work]);
     }
     let copy_len = if out.len() < work { out.len() } else { work };
     out[..copy_len].copy_from_slice(&x[..copy_len]);

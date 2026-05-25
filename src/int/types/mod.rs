@@ -1994,7 +1994,7 @@ impl<const N: usize> Int<N> {
         // non-allocating Karatsuba kernel at or above it.
         let mut prod_buf = <Int<N> as ComputeInt>::double_limbs();
         let prod = prod_buf.as_mut();
-        mul_fast(&a, &b, &mut prod[..2 * N]);
+        mul_fast::<N>(&a, &b, &mut prod[..2 * N]);
         // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
         // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
         // product, so its `ComputeInt::u128_limbs()` buffer (`≥ N`) sizes
@@ -4085,6 +4085,7 @@ mod unified_mg_feasibility {
     /// scaled wider-width quotient.
     fn scaled<const N: usize, const M: usize>(a: Int<N>, b: Int<N>, scale: u32) -> Int<M>
     where
+        Int<N>: ComputeInt,
         Int<M>: BigInt + ComputeInt,
     {
         let prod: Int<M> = a.widen_mul::<Int<M>>(b);

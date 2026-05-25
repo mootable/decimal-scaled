@@ -212,15 +212,16 @@ pub mod __bench_internals {
     /// Exposed for the `mul_low_u128_ab` pilot microbench.
     #[inline(never)]
     pub fn mul_low_u64<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::mul::mul_schoolbook::mul_low_fixed::<N>(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u64>(a, b, out)
     }
-    /// u128-limb-packed truncated-low schoolbook multiply candidate
-    /// (even `N` only): bit-identical low `N` limbs to [`mul_low_u64`],
-    /// computed in `N/2` base-2^128 limbs. Exposed for the
-    /// `mul_low_u128_ab` pilot microbench.
+    /// u128-limb-packed truncated-low schoolbook multiply (even `N` only):
+    /// bit-identical low `N` limbs to [`mul_low_u64`], computed in `N/2`
+    /// base-2^128 limbs — the `L = u128` monomorphisation of the one
+    /// `mul_low_limb` kernel. Exposed for the `mul_low_u128_ab` `LimbSize`
+    /// microbench (u64 vs u128 of the same generic kernel).
     #[inline(never)]
     pub fn mul_low_u128<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-        crate::int::algos::mul::mul_schoolbook::mul_low_fixed_u128::<N>(a, b, out)
+        crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u128>(a, b, out)
     }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
@@ -250,6 +251,15 @@ pub mod __bench_internals {
     #[inline(never)]
     pub fn div_dispatch_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
         crate::int::policy::div_rem::dispatch(num, den, quot, rem)
+    }
+    /// Base-2¹²⁸ (u128-limb) Knuth candidate for `div_kernel_ab` — the
+    /// divide side of the `LimbSize` axis, PARKED (not wired into any
+    /// policy). Bit-identical to [`div_knuth_slice`]; A/B measures whether
+    /// the aligned u128 carry-chain beats base-2⁶⁴ despite the 4-mult q̂·v
+    /// product.
+    #[inline(never)]
+    pub fn div_knuth_u128_limb_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb(num, den, quot, rem)
     }
     /// Burnikel-Ziegler chunking engine FORCED on (production engagement
     /// guard bypassed) so the Knuth-vs-BZ crossover can be timed at
@@ -433,10 +443,14 @@ pub mod __bench_internals {
     /// Decimal remainder kernels exposed for the `rem_kernel_ab` microbench
     /// (the narrow native-vs-int-layer decimal rem A/B at the dispatch seam).
     #[inline(never)]
+    #[allow(private_bounds)]
     pub fn dec_rem_int_layer<const N: usize>(
         a: crate::int::types::Int<N>,
         b: crate::int::types::Int<N>,
-    ) -> crate::int::types::Int<N> {
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
+    {
         crate::algos::rem::rem_int_layer::rem_int_layer::<N>(a, b)
     }
     /// The OLD wide decimal-remainder path: `Int::wrapping_rem` (the const

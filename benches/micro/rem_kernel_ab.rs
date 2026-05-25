@@ -115,22 +115,37 @@ fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
 
 /// Decimal-rem dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`).
 /// Narrow widths only: native hardware `%` vs the generic int-layer path.
-fn compare_dec_rem<const N: usize>(c: &mut Criterion, label: &str) {
-    for p in operand_set::<N>() {
-        assert_eq!(dec_rem_native::<N>(p.clone().a, p.clone().b),
-            dec_rem_int_layer::<N>(p.clone().a, p.clone().b),
-            "dec native vs int_layer disagree {label} {}", p.label);
-    }
-    compare_all(
-        c,
-        &format!("dec_rem/{label}"),
-        |p: &Pair<N>| p.label.to_string(),
-        operand_set::<N>(),
-        vec![
-            ("native", (|p: Pair<N>| dec_rem_native::<N>(p.a, p.b)) as fn(Pair<N>) -> Int<N>),
-            ("int_layer", |p: Pair<N>| dec_rem_int_layer::<N>(p.a, p.b)),
-        ],
-    );
+///
+/// A macro, not a generic fn: `dec_rem_int_layer` carries a `pub(crate)`
+/// `ComputeInt` bound a bench (a separate crate) cannot name, so the body
+/// must monomorphise at a concrete width `$n` — where `Int<$n>: ComputeInt`
+/// is discharged by the impl — rather than be checked for all `N`. Mirrors
+/// `hypot_ab`'s `hypot_cell!`.
+macro_rules! dec_rem_cell {
+    ($c:expr, $n:literal, $label:literal) => {{
+        for p in operand_set::<$n>() {
+            assert_eq!(
+                dec_rem_native::<$n>(p.clone().a, p.clone().b),
+                dec_rem_int_layer::<$n>(p.clone().a, p.clone().b),
+                "dec native vs int_layer disagree {} {}",
+                $label,
+                p.label
+            );
+        }
+        compare_all(
+            $c,
+            concat!("dec_rem/", $label),
+            |p: &Pair<$n>| p.label.to_string(),
+            operand_set::<$n>(),
+            vec![
+                (
+                    "native",
+                    (|p: Pair<$n>| dec_rem_native::<$n>(p.a, p.b)) as fn(Pair<$n>) -> Int<$n>,
+                ),
+                ("int_layer", |p: Pair<$n>| dec_rem_int_layer::<$n>(p.a, p.b)),
+            ],
+        );
+    }};
 }
 
 /// Build `k * 10^scale` in an `N`-limb magnitude (the exact live full_matrix
@@ -159,48 +174,61 @@ fn k_times_pow10<const N: usize>(k: u64, scale: u32) -> Int<N> {
 ///     shape that exposed the ~25x regression.
 ///   * `balanced` -- two full-width random magnitudes (general divmod): the
 ///     case that must NOT regress.
-fn compare_dec_rem_wide<const N: usize>(c: &mut Criterion, label: &str, scale: u32) {
-    let two = k_times_pow10::<N>(2, scale);
-    let one = k_times_pow10::<N>(1, scale);
-    let bal_a = synth::<N>(7919, N);
-    let bal_b = synth::<N>(104729, N);
-    // correctness: new path agrees with the old wrapping_rem on both shapes.
-    assert_eq!(dec_rem_int_layer::<N>(two, one), int_wrapping_rem_slice::<N>(two, one),
-        "dec rem short_circuit disagree {label}");
-    assert_eq!(dec_rem_int_layer::<N>(bal_a, bal_b), int_wrapping_rem_slice::<N>(bal_a, bal_b),
-        "dec rem balanced disagree {label}");
+macro_rules! dec_rem_wide_cell {
+    ($c:expr, $n:literal, $label:literal, $scale:expr) => {{
+        let two = k_times_pow10::<$n>(2, $scale);
+        let one = k_times_pow10::<$n>(1, $scale);
+        let bal_a = synth::<$n>(7919, $n);
+        let bal_b = synth::<$n>(104729, $n);
+        // correctness: new path agrees with the old wrapping_rem on both shapes.
+        assert_eq!(
+            dec_rem_int_layer::<$n>(two, one),
+            int_wrapping_rem_slice::<$n>(two, one),
+            "dec rem short_circuit disagree {}",
+            $label
+        );
+        assert_eq!(
+            dec_rem_int_layer::<$n>(bal_a, bal_b),
+            int_wrapping_rem_slice::<$n>(bal_a, bal_b),
+            "dec rem balanced disagree {}",
+            $label
+        );
 
-    let inputs = vec![
-        Pair { label: "short_circuit", a: two, b: one },
-        Pair { label: "balanced", a: bal_a, b: bal_b },
-    ];
-    compare_all(
-        c,
-        &format!("dec_rem_wide/{label}"),
-        |p: &Pair<N>| p.label.to_string(),
-        inputs,
-        vec![
-            ("operator_knuth", (|p: Pair<N>| dec_rem_int_layer::<N>(p.a, p.b)) as fn(Pair<N>) -> Int<N>),
-            ("old_wrapping_rem", |p: Pair<N>| int_wrapping_rem_slice::<N>(p.a, p.b)),
-        ],
-    );
+        let inputs = vec![
+            Pair { label: "short_circuit", a: two, b: one },
+            Pair { label: "balanced", a: bal_a, b: bal_b },
+        ];
+        compare_all(
+            $c,
+            concat!("dec_rem_wide/", $label),
+            |p: &Pair<$n>| p.label.to_string(),
+            inputs,
+            vec![
+                (
+                    "operator_knuth",
+                    (|p: Pair<$n>| dec_rem_int_layer::<$n>(p.a, p.b)) as fn(Pair<$n>) -> Int<$n>,
+                ),
+                ("old_wrapping_rem", |p: Pair<$n>| int_wrapping_rem_slice::<$n>(p.a, p.b)),
+            ],
+        );
+    }};
 }
 
 fn bench(c: &mut Criterion) {
     decimal_scaled_ab_sweep!(c =>
         Int<1> => |c: &mut Criterion| compare_narrow::<1>(c, "Int64_D18"),
         Int<2> => |c: &mut Criterion| compare_narrow::<2>(c, "Int128_D38"),
-        Int<1> => |c: &mut Criterion| compare_dec_rem::<1>(c, "D18"),
-        Int<2> => |c: &mut Criterion| compare_dec_rem::<2>(c, "D38"),
+        Int<1> => |c: &mut Criterion| dec_rem_cell!(c, 1, "D18"),
+        Int<2> => |c: &mut Criterion| dec_rem_cell!(c, 2, "D38"),
         Int<4> => |c: &mut Criterion| compare_wide::<4>(c, "Int256_D76"),
         Int<8> => |c: &mut Criterion| compare_wide::<8>(c, "Int512_D153"),
         Int<64> => |c: &mut Criterion| compare_wide::<64>(c, "Int4096_D1232"),
         // Wide decimal-rem regression recovery: operator/Knuth vs the old
         // wrapping_rem shift-subtract, on the live `k * 10^SCALE` shape.
-        Int<16> => |c: &mut Criterion| compare_dec_rem_wide::<16>(c, "D307_s153", 153),
-        Int<32> => |c: &mut Criterion| compare_dec_rem_wide::<32>(c, "D616_s308", 308),
-        Int<48> => |c: &mut Criterion| compare_dec_rem_wide::<48>(c, "D924_s462", 462),
-        Int<64> => |c: &mut Criterion| compare_dec_rem_wide::<64>(c, "D1232_s616", 616),
+        Int<16> => |c: &mut Criterion| dec_rem_wide_cell!(c, 16, "D307_s153", 153),
+        Int<32> => |c: &mut Criterion| dec_rem_wide_cell!(c, 32, "D616_s308", 308),
+        Int<48> => |c: &mut Criterion| dec_rem_wide_cell!(c, 48, "D924_s462", 462),
+        Int<64> => |c: &mut Criterion| dec_rem_wide_cell!(c, 64, "D1232_s616", 616),
     );
 }
 

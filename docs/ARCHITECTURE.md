@@ -179,6 +179,165 @@ exactly: that is the cross-tier size pollution the Constitution (rule 6)
 forbids, and it is a defect to be migrated to `single_limbs()` /
 `double_limbs()` / `quad_limbs()` / `u128_limbs()`.
 
+## Const generics — the BigRule: pass the level's OWN, never any other
+
+A recurring pollution: a policy or function that **invents a const generic**
+beyond the ones that define its level. The rule is sharp and exhaustive.
+
+**The policy entry point (`dispatch`) SHOULD take exactly the level's defining
+const(s) — and NO OTHERS:**
+
+| level | `dispatch` consts |
+|-------|-------------------|
+| int unary | `<const N>` |
+| int binary | `<const Nthis, const Nother>` |
+| decimal unary | `<const N, const S>` (width **and** scale) |
+| decimal binary | `<const Nthis, const Sthis, const Nother, const Sother>` |
+
+These are free to take because **the caller already holds them in its types**
+— inferred at the call site, never computed (`D<Int<N>, SCALE>::sqrt` already
+knows `N` and `SCALE`, so `dispatch::<N, SCALE>(…)` costs it nothing).
+
+> **Decimal binary is genuinely four consts.** Binary decimal ops are meant to
+> work across *different* widths AND scales (`D<Int<Nthis>, Sthis> op
+> D<Int<Nother>, Sother>`), so `<Nthis, Sthis, Nother, Sother>` is the real
+> target — in scope, not a far-future reservation. Where the *current*
+> implementation is still same-type (`D<Int<N>, S> op D<Int<N>, S>`), the four
+> consts collapse to the dec-unary `<N, S>` and that is what those dispatchers
+> take today; they move to the full four-const form as cross-scale/width
+> binary lands. (A binary op that *needs* both operands to be the same type is
+> the transitional state, not the design.)
+
+- **No other const value is allowed.** No work-width const, no derived const,
+  no `const LW`, no `{2*N}` / `{<_>::U128_LIMBS}` const-generic argument. A
+  const that *encodes a width derived from another* (`fn f<W, const LW>` where
+  `LW == W::U128_LIMBS`) is the canonical defect — wider-than-`N` widths come
+  from `ComputeInt` (previous section), never a const param. That is the
+  const-work-width wall the `ComputeInt` associated types exist to remove.
+- **Inward is optional.** Threading these consts *inward* (`select`,
+  `select_for_limbs`, the kernels) is optional — a helper takes a const only
+  if it uses it. Taking the level const at the `dispatch` entry but not
+  inward is normal, never a defect.
+
+**The caller guardrail + the metadata test.** A caller must be able to invoke
+a policy with *exactly what it already has*. If calling forces the caller to
+**manufacture a const, create a type, or specialise**, the *policy signature
+is wrong* — not the caller.
+
+The **metadata test** for `dispatch`: it may **freely inspect the values
+passed to it** — limb lengths, magnitude, sign, any property of the operands
+— to choose an algorithm. That *is* the job of a `ByValue` / `ByShape`
+matcher, and it is never a violation (the divide stripping its own slices to
+`den_n` is exactly this). What `dispatch` must **not** need is **external
+metadata**: any const, type, or context *beyond* its level consts and the
+operands themselves. If a function cannot be picked or run without extra
+information threaded in from outside, the design is broken.
+
+### The one exception: division has no const-width axis
+
+Division is the **single policy with no const-width axis**: it looks like the
+int-binary case that should take `<const Nthis, const Nother>`, but it cannot.
+Its operands have *independent* runtime lengths that no const expresses:
+
+- the decimal `/` divides a **`2N`-limb** scaled numerator by an **`N`-limb**
+  divisor — two different widths, neither the caller's single `N`;
+- the slice roots (`isqrt_newton`, `icbrt_newton`, `newton_reciprocal`,
+  `div_rem_mag_slice`) divide **bare `&[u64]` of runtime length** — they hold
+  no `N` in their types at all.
+
+So `int::policy::div_rem`'s `select` and `dispatch` are **non-generic and
+slice-based** (`dispatch(num, den, quot, rem)`), and the shape decision lives
+entirely in the runtime `select_for_limbs(num, den)`. Threading a `<N>` would
+force the slice roots to *manufacture* a const they do not have — the exact
+caller-side specialisation the guardrail forbids — and the divide would not
+even use it: its engine choice (and any future limb-width refinement, e.g. a
+u128-limb engine for an even, wide divisor) is a **runtime arm inside
+`select_for_limbs`**, gated on the runtime `den_n`, because that is where the
+width information actually is. Contrast `mul_low` (a genuine `select<N>`
+policy): there the operands *are* width-`N`, so `N` is the level's own const
+and passing it is correct. Division is the slice/runtime exception, not a
+template to copy.
+
+## Limb width — the matcher's second axis (`u64` / `u128`)
+
+A wide-tier kernel can run faster in **u128 limbs** (half the limbs and carries) than in
+u64. Which limb width wins is a per-`(N, SCALE)` property, so it is a **second matcher axis**
+alongside the algorithm: the policy `Select` verdict carries `(Algorithm, LimbSize)`, where
+`LimbSize` (`U64` / `U128`, defined in `compute_int.rs`) is the *const* part of the verdict
+(limb width is value-independent — never decided inside a `ByValue` closure). `dispatch`
+const-folds the verdict and runs the kernel at the chosen width.
+
+The width is delivered **by type, not by name**: a `Limb` trait (impl'd for `u64` and
+`u128`, carrying the scalar primitives) parameterises ONE generic kernel
+`fn k<const N: usize, L: Limb>(…) where Int<N>: ComputeInt`, dispatched by a const-folded
+`match limbsize { U64 => k::<N, u64>(…), U128 => k::<N, u128>(…) }`. There is **one generic
+kernel, never a per-limb-type copy** (rule 2) — the u128 path is simply the `L = u128`
+monomorphisation (so a hand-written u128 variant of an algorithm is a *superseded duplicate*
+once the generic exists).
+
+Mechanics: storage stays `Int<N>` (u64); a `u128` kernel packs its `N` u64 limbs into
+`⌈N/2⌉` u128 (a cheap little-endian reinterpret into the u128 `ComputeInt` buffer), runs,
+unpacks. Packing pairs two u64 into one u128, so it is exact only for an **even** limb count
+— the matcher returns `U128` only for even cells; odd/narrow tiers stay `U64`. The `L`-typed
+scratch comes from `ComputeInt` (which carries both the u64 and u128 buffer families); the
+`Limb` accessors route `L` to the matching family, so the kernel never names a build-max
+size. Rolled out pilot-first, microbench-gated per cell: a cell routes `U128` only where the
+benchmark shows the win.
+
+The limb width is selected in **two stages**, and the second stage is **owned by the
+algorithm**: `select` resolves the *algorithm* first (the existing `ByAlgorithm` / `ByValue`
+axis); then the chosen algorithm yields its *own* limb width via a `const fn limb_size<const
+N>(self) -> LimbSize` method — because the u64/u128 crossover is algorithm-dependent, it lives
+on the `Algorithm` enum, not in the verdict. `dispatch` resolves the algorithm, asks it for
+its limb width, and folds both in a `const { … }` block (when the algorithm is const) so the
+whole thing collapses to one direct typed call. The limb width is **per-cell policy DATA**,
+not a blanket: each algorithm's `limb_size` arm enumerates its benched winners, with
+`LimbSize::for_packing(N)` (the even-`N` validity gate) as the default. The canonical shape
+(reference instance `int/policy/mul_low.rs`, the truncated-low product):
+
+```rust
+enum Algorithm { LowLimb /* , … */ }
+
+impl Algorithm {
+    // SECOND axis — owned by the algorithm (the crossover is algorithm-dependent).
+    // U128 only where a microbench wins AND it is valid (even N — for_packing gates odd → U64).
+    const fn limb_size<const N: usize>(self) -> LimbSize {
+        match self {
+            Algorithm::LowLimb => LimbSize::for_packing(N), // ← carve a losing even cell to U64 HERE
+        }
+    }
+}
+
+enum Select { ByAlgorithm(Algorithm) /* + ByValue for a value-chosen algorithm */ }
+const fn select() -> Select { Select::ByAlgorithm(Algorithm::LowLimb) } // <const N> if width-keyed
+
+// dispatch — stage 1: resolve the algorithm; stage 2: ask it for its limb width.
+pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
+    let (algo, limb) = const {
+        let algo = match select() { Select::ByAlgorithm(a) => a };
+        (algo, algo.limb_size::<N>())
+    };
+    match (algo, limb) {
+        (Algorithm::LowLimb, LimbSize::U64)  => mul_low_limb::<N, u64>(a, b, out),
+        (Algorithm::LowLimb, LimbSize::U128) => mul_low_limb::<N, u128>(a, b, out),
+    }
+}
+```
+
+Under a `ByValue` algorithm choice the algorithm resolves at run time; `limb_size::<N>()` is
+then read inside the chosen arm (still const per `N`, still value-independent). A function
+whose limb form is a *different algorithm* rather than a knob (the slice **divide**: its u128
+form is base-2¹²⁸ Knuth, structurally distinct — see the const-vs-runtime note below) carries
+that as its own `Algorithm` variant, so there is simply no `limb_size` knob to select.
+
+**Const-`N` vs runtime-shape functions.** The const verdict above fits functions keyed on a
+compile-time width (the truncated-low product is `<const N>`). A function whose policy is
+**`ByShape`/`ByValue`** (keyed on *runtime* operand lengths — the slice divide, whose `2N`
+scaled numerator has no nameable type) cannot carry a const `LimbSize`: there its limb-width
+choice is a **runtime** decision and belongs as a distinct `Algorithm` engine variant the
+shape classifier selects (e.g. a u128-limb Knuth engine chosen when the effective limb counts
+are even and wide enough), not a const verdict. Same axis, delivered where the key allows.
+
 ## Algorithm choosing — and pruning
 
 A single function (say `sqrt`) has several possible algorithms — a
@@ -384,11 +543,24 @@ Rules that make this work:
 
 ### Keeping the alternatives
 
-Algorithms that lose at today's widths (FFT/NTT multiplication, AGM below
-~D1232, …) are not deleted. They are preserved as documented references
-and, where the implementation is genuinely different, as compiled-out
-code — because a future CPU/LLVM instruction or a platform-specific build
-can flip a today-loser into a winner. See `ALGORITHMS.md`.
+**Algorithms are never deleted.** A kernel that loses at today's widths
+(FFT/NTT multiplication, AGM below ~D1232, …), an **unwired candidate**
+awaiting a bench/policy seam, or a **reference baseline** (the schoolbook
+`Algorithm` variants) is *kept* — as a documented reference and, where the
+implementation genuinely differs, as compiled-out / unrouted code — because a
+future CPU/LLVM instruction, a platform-specific build, or a re-tuned
+threshold can flip a today-loser into a winner. **"Unwired" or "reached only
+by its own tests" is the EXPECTED state of a kept alternative, not dead code
+to remove.** See `ALGORITHMS.md`.
+
+The one thing that *is* removed is a **superseded duplicate** — the obsolete
+*shape* of an algorithm that a migration replaced in place (e.g. a
+`const`-work-width `fn f<W, const N>` once it became `fn f<W: ComputeInt>`):
+that is the same algorithm's dead skin, not an alternative, so it goes. The
+test of "alternative (keep) vs superseded duplicate (remove)": does it
+implement a *distinct* algorithm/shape that could win under different
+conditions (keep), or is it the leftover old signature of something that now
+exists in one canonical form (remove)?
 
 ## How the guarantees are enforced — by testing
 

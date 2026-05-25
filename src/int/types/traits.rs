@@ -200,19 +200,16 @@ impl<const N: usize> BigInt for Int<N> {
 
     #[inline]
     fn wrapping_mul_low_u128(self, rhs: Self) -> Self {
-        // The u128-packed low-half schoolbook requires an even limb
-        // count (it folds pairs of u64 limbs into u128 limbs); for even
-        // `N` it is bit-identical to `wrapping_mul` and faster at the
-        // wide work widths. Odd `N` keeps the base-2^64 path.
-        if N % 2 == 0 {
-            let a = *self.as_limbs();
-            let b = *rhs.as_limbs();
-            let mut out = [0u64; N];
-            crate::int::algos::mul::mul_schoolbook::mul_low_fixed_u128::<N>(&a, &b, &mut out);
-            Int::from_limbs(out)
-        } else {
-            Int::wrapping_mul(self, rhs)
-        }
+        // Truncated-low product through the limb-width matcher
+        // `int::policy::mul_low`: it owns the `(Algorithm, LimbSize)`
+        // verdict (the architecture's second axis) and const-folds it to a
+        // single direct `mul_low_limb::<N, _>` call per monomorphisation.
+        // Bit-identical to `wrapping_mul` (mod 2^64N) at either limb width.
+        let a = *self.as_limbs();
+        let b = *rhs.as_limbs();
+        let mut out = [0u64; N];
+        crate::int::policy::mul_low::dispatch::<N>(&a, &b, &mut out);
+        Int::from_limbs(out)
     }
 
     #[inline]
@@ -280,7 +277,10 @@ impl<const N: usize> BigInt for Int<N> {
         let negative = self.is_negative();
         // Reuse the direct u64→u128 pack the concrete `mag_into_u128`
         // override performs, then rebuild `T` from the magnitude/sign.
-        let mut u128_mag = [0u128; 144];
+        // `resize_to` is a blanket `BigInt` method (every `N`), so it can't
+        // carry a `ComputeInt` bound (the cycle) — it uses the gated build-max
+        // blanket `MAX_U128_LIMB`, not a frozen literal.
+        let mut u128_mag = [0u128; crate::int::types::compute_int::MAX_U128_LIMB];
         let u128_len = (N + 1) / 2;
         self.mag_into_u128(&mut u128_mag[..u128_len]);
         T::from_mag_sign_u128(&u128_mag[..u128_len], negative)

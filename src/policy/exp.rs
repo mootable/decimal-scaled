@@ -1,24 +1,24 @@
-//! Exponential policy â€” the per-(N, SCALE) algorithm matcher (plus the
+//! Exponential policy — the per-(N, SCALE) algorithm matcher (plus the
 //! derived exp2).
 //!
 //! `D<Int<N>, SCALE>::exp_strict_with(mode)` delegates directly to the one
-//! shared [`dispatch`] generic function â€” the canonical matcher-only
+//! shared [`dispatch`] generic function — the canonical matcher-only
 //! policy shape (see `docs/ARCHITECTURE.md`), mirrored from `sqrt`:
 //!
-//! 1. an [`Algorithm`] enum â€” Series / Tang / Schoolbook, no `Default`;
+//! 1. an [`Algorithm`] enum — Series / Tang / Schoolbook, no `Default`;
 //! 2. a [`Select`] verdict;
 //! 3. a `const fn` [`select`] keyed on `(N, SCALE)`, total over the key;
 //! 4. dispatch via `const { select::<N, SCALE>() }`, then an exhaustive
-//!    `match algo` â€” no `_`, no panic.
+//!    `match algo` — no `_`, no panic.
 //!
 //! The narrow tiers run the 256-bit `Fixed` kernel (`exp_series_2limb`,
 //! D18 widened to Int<2>); the wide tiers run the tier-generic `exp_series`
 //! over `WideTrigCore`, or the per-tier `exp_tang` band kernel, reached by
 //! a `match N` with `resize_to` bridges (identity at the matched `N`).
 //!
-//! exp2 is derived (`2^x = exp(xÂ·ln2)` with an exact-power pin) and routes
+//! exp2 is derived (`2^x = exp(x·ln2)` with an exact-power pin) and routes
 //! DOWN to the narrow `exp_series_2limb::exp2_*` kernels or the wide
-//! per-tier `wide_trig_<tier>::exp2_{strict,approx}_with_kernel` free fns â€”
+//! per-tier `wide_trig_<tier>::exp2_{strict,approx}_with_kernel` free fns —
 //! never back through a sibling decimal policy.
 
 use crate::int::types::traits::BigInt;
