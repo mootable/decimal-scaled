@@ -205,35 +205,51 @@ scratch comes from `ComputeInt` (which carries both the u64 and u128 buffer fami
 size. Rolled out pilot-first, microbench-gated per cell: a cell routes `U128` only where the
 benchmark shows the win.
 
-The verdict lives in the function's policy `select` exactly like the algorithm axis — a
-`const fn` keyed on the width, returning the `(Algorithm, LimbSize)` pair, read in a
-`const { … }` block so it const-folds away. The limb width is **per-cell policy DATA**, not a
-blanket rule: a `limb_size<const N>()` helper enumerates the benched winners, with
+The limb width is selected in **two stages**, and the second stage is **owned by the
+algorithm**: `select` resolves the *algorithm* first (the existing `ByAlgorithm` / `ByValue`
+axis); then the chosen algorithm yields its *own* limb width via a `const fn limb_size<const
+N>(self) -> LimbSize` method — because the u64/u128 crossover is algorithm-dependent, it lives
+on the `Algorithm` enum, not in the verdict. `dispatch` resolves the algorithm, asks it for
+its limb width, and folds both in a `const { … }` block (when the algorithm is const) so the
+whole thing collapses to one direct typed call. The limb width is **per-cell policy DATA**,
+not a blanket: each algorithm's `limb_size` arm enumerates its benched winners, with
 `LimbSize::for_packing(N)` (the even-`N` validity gate) as the default. The canonical shape
-(the reference instance is `int/policy/mul_low.rs`, the truncated-low product):
+(reference instance `int/policy/mul_low.rs`, the truncated-low product):
 
 ```rust
-// 2. verdict — const in BOTH axes (limb width is value-independent).
-enum Select { ByAlgorithm(Algorithm, LimbSize) }
+enum Algorithm { LowLimb /* , … */ }
 
-// 3. policy DATA: the benched per-N limb-width table. U128 only where a
-//    microbench wins AND it is valid (even N — for_packing gates odd → U64).
-const fn limb_size<const N: usize>() -> LimbSize {
-    LimbSize::for_packing(N)        // ← carve out a losing even cell to U64 HERE
-}
-const fn select<const N: usize>() -> Select {
-    Select::ByAlgorithm(Algorithm::LowLimb, limb_size::<N>())
+impl Algorithm {
+    // SECOND axis — owned by the algorithm (the crossover is algorithm-dependent).
+    // U128 only where a microbench wins AND it is valid (even N — for_packing gates odd → U64).
+    const fn limb_size<const N: usize>(self) -> LimbSize {
+        match self {
+            Algorithm::LowLimb => LimbSize::for_packing(N), // ← carve a losing even cell to U64 HERE
+        }
+    }
 }
 
-// 4. dispatch — folds to ONE direct typed call, unchosen arm eliminated.
+enum Select { ByAlgorithm(Algorithm) /* + ByValue for a value-chosen algorithm */ }
+const fn select() -> Select { Select::ByAlgorithm(Algorithm::LowLimb) } // <const N> if width-keyed
+
+// dispatch — stage 1: resolve the algorithm; stage 2: ask it for its limb width.
 pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
-    let (algo, limb) = match const { select::<N>() } { Select::ByAlgorithm(a, l) => (a, l) };
+    let (algo, limb) = const {
+        let algo = match select() { Select::ByAlgorithm(a) => a };
+        (algo, algo.limb_size::<N>())
+    };
     match (algo, limb) {
         (Algorithm::LowLimb, LimbSize::U64)  => mul_low_limb::<N, u64>(a, b, out),
         (Algorithm::LowLimb, LimbSize::U128) => mul_low_limb::<N, u128>(a, b, out),
     }
 }
 ```
+
+Under a `ByValue` algorithm choice the algorithm resolves at run time; `limb_size::<N>()` is
+then read inside the chosen arm (still const per `N`, still value-independent). A function
+whose limb form is a *different algorithm* rather than a knob (the slice **divide**: its u128
+form is base-2¹²⁸ Knuth, structurally distinct — see the const-vs-runtime note below) carries
+that as its own `Algorithm` variant, so there is simply no `limb_size` knob to select.
 
 **Const-`N` vs runtime-shape functions.** The const verdict above fits functions keyed on a
 compile-time width (the truncated-low product is `<const N>`). A function whose policy is
