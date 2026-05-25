@@ -860,6 +860,17 @@ path = "benches/micro/sqr_low_u128_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# exp_wide_series_tang_ab: the N-way width x scale x algorithm map for wide
+# exp -- Series (with the u128 square) vs single-shot Tang at D307..D1232,
+# at the bbc SCALE 30 and the tiers' narrow bands, validity-gated (Tang ==
+# Series across all six modes) before timing. Decides which wide Tang arms
+# (if any) to wire; supersedes the stale wide-exp research framing.
+[[bench]]
+name = "exp_wide_series_tang_ab"
+path = "benches/micro/exp_wide_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (div_knuth vs the zero-free-scratch div_knuth_fast) at the regressed
