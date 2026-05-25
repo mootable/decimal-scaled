@@ -20,7 +20,7 @@
 
 use crate::int::algos::support::limbs::{bit_len, cmp, shl, sub_assign};
 
-const SCRATCH_LIMBS: usize = 288;
+use crate::int::types::compute_int::MAX_DOUBLE_LIMBS;
 
 /// floor(sqrt(n)) via two-bits-at-a-time bitwise algorithm.
 pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {
@@ -29,10 +29,10 @@ pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {
     if bits == 0 { return; }
     if bits <= 1 { out[0] = 1; return; }
     let work = n.len() + 1;
-    debug_assert!(work <= SCRATCH_LIMBS, "isqrt_schoolbook scratch overflow");
-    let mut p = [0u64; SCRATCH_LIMBS];
-    let mut r = [0u64; SCRATCH_LIMBS];
-    let mut tmp = [0u64; SCRATCH_LIMBS];
+    debug_assert!(work <= MAX_DOUBLE_LIMBS, "isqrt_schoolbook scratch overflow");
+    let mut p = [0u64; MAX_DOUBLE_LIMBS];
+    let mut r = [0u64; MAX_DOUBLE_LIMBS];
+    let mut tmp = [0u64; MAX_DOUBLE_LIMBS];
     // b = LOW bit of top 2-bit group.
     // bits even: start = bits-2; bits odd: start = bits-1.
     let start: i64 = if bits % 2 == 1 { (bits - 1) as i64 } else { (bits - 2) as i64 };
@@ -54,7 +54,7 @@ pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {
         r[0] |= group;
         // Step 2: t = (p << 2) | 1 = 4p + 1.
         shl(&p[..work], 2, &mut tmp[..work]);
-        let mut t = [0u64; SCRATCH_LIMBS];
+        let mut t = [0u64; MAX_DOUBLE_LIMBS];
         t[..work].copy_from_slice(&tmp[..work]);
         t[0] |= 1;
         // Step 3: accept or reject next bit.

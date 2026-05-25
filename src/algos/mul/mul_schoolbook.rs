@@ -27,7 +27,7 @@
 
 use crate::int::algos::div::div_fixed::div_rem_mag_slice;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook as mul_slice;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
 

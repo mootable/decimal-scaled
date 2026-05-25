@@ -35,7 +35,7 @@
 //! of the single `mul_widen_divide` algorithm. `Schoolbook` is an unrouted
 //! benchmarkable reference seam (no MG / Newton, plain int `div_rem`).
 
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

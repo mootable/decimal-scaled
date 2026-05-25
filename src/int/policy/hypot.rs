@@ -35,7 +35,7 @@
 
 use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
 use crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

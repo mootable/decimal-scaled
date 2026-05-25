@@ -28,7 +28,7 @@ use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::sum_sq::sum_sq_schoolbook::{sig_len, sum_sq_radicand};
 use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

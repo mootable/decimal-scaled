@@ -106,7 +106,7 @@ pub(crate) mod exp_generic {
     #![allow(unused)]
     use crate::support::rounding::RoundingMode;
     use crate::int::types::traits::BigInt;
-    use crate::int::types::work_scratch::ComputeInt;
+    use crate::int::types::compute_int::ComputeInt;
 
     /// Hard cap on series iterations — a safety net; every series
     /// terminates far sooner by reaching a zero term.
@@ -742,10 +742,11 @@ macro_rules! decl_wide_transcendental {
                     return n;
                 }
                 if w <= 38 {
-                    return $crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        W,
-                        { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, $crate::support::rounding::RoundingMode::HalfToEven);
+                    return $crate::algos::support::mg_divide::div_wide_pow10::<W>(
+                        n,
+                        w,
+                        $crate::support::rounding::RoundingMode::HalfToEven,
+                    );
                 }
                 // Newton vs MG chain dispatch (see the matrix in
                 // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`]).

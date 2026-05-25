@@ -30,9 +30,9 @@
 //! All integer arithmetic dispatches DOWN to the int layer; this fn never
 //! calls a decimal method on its own value.
 
-use crate::int::algos::div::div_fixed::div_rem_mag_slice;
+use crate::int::algos::div::div_fixed::div_rem_mag_slice_into;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
 
@@ -147,7 +147,19 @@ where
     for slot in rem[..bl.max(1)].iter_mut() {
         *slot = 0;
     }
-    div_rem_mag_slice(&num[..ntop], &b_mag[..bl], &mut quot[..qlen], &mut rem[..bl.max(1)]);
+    // Exact per-`N` Knuth scratch: the scaled numerator spans up to `2N`
+    // limbs, so its normalised `u` needs `double_limbs` (`≥ 2N + 2`); the
+    // divisor `b` is `N`-wide, so `v` needs `single_limbs` (`N + 2`).
+    let mut u_buf = Int::<N>::double_limbs();
+    let mut v_buf = Int::<N>::single_limbs();
+    div_rem_mag_slice_into(
+        &num[..ntop],
+        &b_mag[..bl],
+        &mut quot[..qlen],
+        &mut rem[..bl.max(1)],
+        u_buf.as_mut(),
+        v_buf.as_mut(),
+    );
 
     // Round per `mode`: compare remainder against b - remainder.
     let rl = sig_len(&rem[..bl.max(1)]);

@@ -25,7 +25,7 @@
 //!
 //! Semantics preserved: `hypot(0, 0) = 0`; `hypot(0, x) = |x|`.
 
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

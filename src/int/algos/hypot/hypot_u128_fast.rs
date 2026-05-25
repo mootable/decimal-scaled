@@ -33,7 +33,7 @@
 
 use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
 use crate::int::algos::support::limbs::fit_one;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -188,7 +188,7 @@ mod tests {
     /// input and every rounding mode — both the fast and fallback arms.
     fn diff_at<const N: usize>()
     where
-        Int<N>: crate::int::types::work_scratch::ComputeInt,
+        Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         let mut s = 0xDEAD_BEEF_CAFE_F00du64 ^ (N as u64);
         for _ in 0..300 {

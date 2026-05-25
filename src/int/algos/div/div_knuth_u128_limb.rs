@@ -63,10 +63,10 @@
 #![allow(dead_code)]
 
 use crate::int::algos::div::div_mg::Mg2By1;
-use crate::int::algos::div::SCRATCH_LIMBS;
+use crate::int::types::compute_int::MAX_SINGLE_LIMBS;
 
-/// u128-limb working scratch: half the u64 `SCRATCH_LIMBS`, +1 slack.
-const SCRATCH_LIMBS_128: usize = SCRATCH_LIMBS / 2 + 1;
+/// u128-limb working scratch: half the u64 `MAX_SINGLE_LIMBS`, +1 slack.
+const SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 1;
 
 /// Knuth Algorithm D with a u128-limb running dividend/divisor and a
 /// 64-bit `q̂` quotient digit. `num` / `den` are little-endian u64 slices
@@ -114,9 +114,9 @@ pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], re
     // shift in u64 space (reusing div_knuth's proven normalisation), then
     // pack pairs of u64 limbs into u128 limbs.
     let shift = den[n64 - 1].leading_zeros();
-    let mut u64buf = [0u64; SCRATCH_LIMBS];
-    let mut v64buf = [0u64; SCRATCH_LIMBS];
-    debug_assert!(top64 < SCRATCH_LIMBS && n64 <= SCRATCH_LIMBS);
+    let mut u64buf = [0u64; MAX_SINGLE_LIMBS];
+    let mut v64buf = [0u64; MAX_SINGLE_LIMBS];
+    debug_assert!(top64 < MAX_SINGLE_LIMBS && n64 <= MAX_SINGLE_LIMBS);
 
     if shift == 0 {
         u64buf[..top64].copy_from_slice(&num[..top64]);
@@ -171,7 +171,7 @@ pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], re
     knuth_d_u128_core(&mut u, &v, n128, u_len128, m64, quot);
 
     // Unpack remainder (low n64 u64 limbs of `u`), denormalise by `shift`.
-    let mut r64 = [0u64; SCRATCH_LIMBS];
+    let mut r64 = [0u64; MAX_SINGLE_LIMBS];
     for i in 0..n128 {
         r64[2 * i] = u[i] as u64;
         r64[2 * i + 1] = (u[i] >> 64) as u64;

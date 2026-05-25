@@ -31,7 +31,7 @@
 //! the signed range of `Int<N>`); the type method propagates that `Option`.
 
 use crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 
 // -- 1. the real sum-of-squares algorithms -- NAMED, no `Default` ------

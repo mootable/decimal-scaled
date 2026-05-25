@@ -24,7 +24,7 @@
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{cmp_cross, shl};
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

@@ -6,7 +6,7 @@
 //!
 //! The generic slice `isqrt`
 //! ([`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]) is
-//! width-agnostic over a **build-max** scratch buffer (`work_scratch(2)`
+//! width-agnostic over a **build-max** scratch buffer (`compute_int(2)`
 //! limbs — up to ~288 limbs for the widest enabled tier), which it zeroes
 //! several times per Newton iteration (`sq`, `q`, `r`, …). For the small
 //! radicands of the mid-scale wide cells that fixed-cost buffer churn
@@ -135,7 +135,7 @@ mod tests {
     /// it certifies the bespoke arm correctly-rounded.
     fn check_cell<const N: usize, const W: usize>(scale: u32, raws: &[i128])
     where
-        Int<N>: crate::int::types::work_scratch::ComputeInt,
+        Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         for &r in raws {
             let raw = Int::<N>::from_i128(r);

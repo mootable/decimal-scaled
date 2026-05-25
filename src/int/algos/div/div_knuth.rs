@@ -10,7 +10,7 @@
 
 use crate::int::algos::div::div_mg::Mg2By1;
 use crate::int::algos::div::div_rem::div_rem;
-use crate::int::algos::div::SCRATCH_LIMBS;
+use crate::int::types::compute_int::max_single_limbs;
 
 /// Knuth Algorithm D — build-max-scratch wrapper. Allocates the normalised
 /// `u`/`v` working buffers at the build-max width and delegates to
@@ -19,8 +19,8 @@ use crate::int::algos::div::SCRATCH_LIMBS;
 /// own buffer (`single_limbs` for a value divide, `quad_limbs` for the cbrt
 /// radicand divide), skipping the build-max zeroing.
 pub(crate) fn div_knuth(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
-    let mut u = [0u64; SCRATCH_LIMBS];
-    let mut v = [0u64; SCRATCH_LIMBS];
+    let mut u = max_single_limbs();
+    let mut v = max_single_limbs();
     div_knuth_into(num, den, quot, rem, &mut u, &mut v);
 }
 

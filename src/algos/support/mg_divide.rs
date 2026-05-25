@@ -519,7 +519,7 @@ pub(crate) fn div_wide_pow10_chain_with<W: crate::int::types::traits::BigInt, co
 /// naming `{W::U128_LIMBS}` — the same fast path the per-tier
 /// `decl_wide_transcendental!` core uses, now shared by the hyperbolics.
 ///
-/// [`ComputeInt`]: crate::int::types::work_scratch::ComputeInt
+/// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
 #[inline]
 pub(crate) fn div_wide_pow10<W>(
     n: W,
@@ -527,9 +527,9 @@ pub(crate) fn div_wide_pow10<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::work_scratch::ComputeInt,
+    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
 {
-    let mut buf = <W as crate::int::types::work_scratch::ComputeInt>::u128_limbs();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_mag_u128(mag, scale, neg, mode);
@@ -539,7 +539,7 @@ where
 /// Width-generic [`div_wide_pow10_chain_with`] (the `scale > 38` chain),
 /// buffer from [`ComputeInt`]. See [`div_wide_pow10`].
 ///
-/// [`ComputeInt`]: crate::int::types::work_scratch::ComputeInt
+/// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
 #[inline]
 pub(crate) fn div_wide_pow10_chain<W>(
     n: W,
@@ -547,9 +547,9 @@ pub(crate) fn div_wide_pow10_chain<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::work_scratch::ComputeInt,
+    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
 {
-    let mut buf = <W as crate::int::types::work_scratch::ComputeInt>::u128_limbs();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_chain_mag_u128(mag, scale, neg, mode);

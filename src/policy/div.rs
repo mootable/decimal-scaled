@@ -31,7 +31,7 @@
 //! The `10^SCALE` multiplier is evaluated here via `Int::<N>::TEN.pow(SCALE)`
 //! (folds at compile time per `(N, SCALE)`) and threaded into the kernel.
 
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 

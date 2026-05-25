@@ -26,7 +26,7 @@
 
 use crate::int::algos::sum_sq::sum_sq_schoolbook::sig_len;
 use crate::int::algos::support::limbs::add_assign;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 
 /// Full-width product-scanning (comba) square: `out = x²` over the
@@ -148,7 +148,7 @@ mod tests {
     /// input, including the overflow (`None`) cases.
     fn diff_at<const N: usize>()
     where
-        Int<N>: crate::int::types::work_scratch::ComputeInt,
+        Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         let mut s = 0x1234_5678_9ABC_DEFu64 ^ (N as u64);
         for _ in 0..400 {

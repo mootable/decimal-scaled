@@ -9,7 +9,7 @@
 //! this engine is chosen lives in [`crate::int::policy::div_rem`].
 
 use crate::int::algos::div::div_knuth::div_knuth;
-use crate::int::algos::div::SCRATCH_LIMBS;
+use crate::int::types::compute_int::max_quadruple_limbs;
 
 /// Burnikel–Ziegler outer chunking, u64 base, recursing to [`div_knuth`]
 /// as the base case.
@@ -63,10 +63,10 @@ pub(crate) fn bz_chunk_core(
     }
 
     let chunks = top.div_ceil(n);
-    let mut carry = [0u64; SCRATCH_LIMBS];
-    let mut buf = [0u64; SCRATCH_LIMBS];
-    let mut q_chunk = [0u64; SCRATCH_LIMBS];
-    let mut r_chunk = [0u64; SCRATCH_LIMBS];
+    let mut carry = max_quadruple_limbs();
+    let mut buf = max_quadruple_limbs();
+    let mut q_chunk = max_quadruple_limbs();
+    let mut r_chunk = max_quadruple_limbs();
 
     let mut idx = chunks;
     while idx > 0 {

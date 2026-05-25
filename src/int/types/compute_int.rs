@@ -31,8 +31,80 @@
 //! [`single_limbs`]: ComputeInt::single_limbs
 //! [`quad_limbs`]: ComputeInt::quad_limbs
 
+use crate::int::algos::support::limbs::{max_n_limbs, MAX_WORK_N};
 use crate::int::types::traits::BigInt;
 use crate::int::types::Int;
+
+// ── Build-max blanket sizes — the all-`N` counterparts of the per-`N`
+// `ComputeInt` buffers ────────────────────────────────────────────────────
+//
+// The COLD paths that structurally cannot size scratch exactly — the bare
+// `Int<N>` `/` / `%` operators and all-`N` `BigInt` methods (blanket over
+// every `N`, so they can neither name `[u64; N + 2]` on stable nor carry a
+// per-width `ComputeInt` bound — see the wall note on [`ComputeInt`]), plus
+// the schoolbook reference baselines — use these build-max blankets. Each is
+// the widest value of the matching [`ComputeInt`] buffer over every `N` a
+// build can form, feature-gated through
+// [`MAX_WORK_N`](crate::int::algos::support::limbs) so a narrow build does
+// NOT pay the widest tier's size. The `single`/`u128` blankets cover the
+// wide-transcendental work widths (`Int<256>` = `4·MAX_WORK_N`); the
+// `double`/`quad` radicand blankets are storage-scoped (`max_n_limbs`).
+//
+// **Hot paths never touch these.** A concrete-`N` caller carrying
+// `Int<N>: ComputeInt` sources the exact per-width [`single_limbs`] /
+// [`double_limbs`] / [`quad_limbs`] / [`u128_limbs`] buffers instead. These
+// blankets are the fallback the exact-scratch migration is progressively
+// starving; the aim is to retire them once every reaching path is exact.
+//
+// [`single_limbs`]: ComputeInt::single_limbs
+// [`double_limbs`]: ComputeInt::double_limbs
+// [`quad_limbs`]: ComputeInt::quad_limbs
+// [`u128_limbs`]: ComputeInt::u128_limbs
+
+/// Build-max [`single_limbs`](ComputeInt::single_limbs) — a value-width
+/// divide's normalised `u`/`v`, covering the widest work value
+/// (`4·MAX_WORK_N + 2`).
+pub(crate) const MAX_SINGLE_LIMBS: usize = 4 * MAX_WORK_N + 2;
+/// Build-max [`double_limbs`](ComputeInt::double_limbs) — the `2N`-family
+/// sqrt/isqrt radicand (`max_n_limbs(2)`, storage-scoped).
+pub(crate) const MAX_DOUBLE_LIMBS: usize = max_n_limbs(2);
+/// Build-max [`quad_limbs`](ComputeInt::quad_limbs) — the `4N`-family
+/// cbrt/icbrt radicand (`max_n_limbs(4)`, storage-scoped).
+pub(crate) const MAX_QUADRUPLE_LIMBS: usize = max_n_limbs(4);
+/// Build-max [`u128_limbs`](ComputeInt::u128_limbs) — the MG `÷10^w`
+/// magnitude, covering the widest work value (`4·MAX_WORK_N` u128).
+pub(crate) const MAX_U128_LIMB: usize = 4 * MAX_WORK_N;
+
+// The build-max blanket buffers, freshly zeroed — the `N`-free counterparts
+// of the per-width `ComputeInt::{single,double,quad,u128}_limbs` methods.
+// A cold blanket caller takes the *created* limbs directly (no size to
+// restate); the `MAX_*` constants above are there when only the number is
+// needed (array types, length asserts, derived sizes).
+
+/// A freshly zeroed build-max [`single_limbs`](ComputeInt::single_limbs)
+/// `u`/`v` divide buffer.
+#[inline]
+pub(crate) fn max_single_limbs() -> [u64; MAX_SINGLE_LIMBS] {
+    [0u64; MAX_SINGLE_LIMBS]
+}
+/// A freshly zeroed build-max [`double_limbs`](ComputeInt::double_limbs)
+/// radicand buffer.
+#[inline]
+pub(crate) fn max_double_limbs() -> [u64; MAX_DOUBLE_LIMBS] {
+    [0u64; MAX_DOUBLE_LIMBS]
+}
+/// A freshly zeroed build-max [`quad_limbs`](ComputeInt::quad_limbs)
+/// radicand buffer.
+#[inline]
+pub(crate) fn max_quadruple_limbs() -> [u64; MAX_QUADRUPLE_LIMBS] {
+    [0u64; MAX_QUADRUPLE_LIMBS]
+}
+/// A freshly zeroed build-max [`u128_limbs`](ComputeInt::u128_limbs)
+/// magnitude buffer.
+#[inline]
+pub(crate) fn max_u128_limb() -> [u128; MAX_U128_LIMB] {
+    [0u128; MAX_U128_LIMB]
+}
 
 /// The storage integer's compute-scratch capability: clean limb-multiple
 /// stack buffers for the operations that work wider than `N` limbs.
@@ -78,33 +150,36 @@ pub(crate) trait ComputeInt: BigInt {
 // ── default: one blanket impl, build-max for every N ──────────────────
 #[cfg(not(feature = "exact-scratch"))]
 mod imp {
-    use super::{ComputeInt, Int};
-    use crate::int::algos::support::limbs::{max_n_limbs, MAX_WORK_N};
+    use super::{
+        max_double_limbs, max_quadruple_limbs, max_single_limbs, max_u128_limb, ComputeInt, Int,
+        MAX_DOUBLE_LIMBS, MAX_QUADRUPLE_LIMBS, MAX_SINGLE_LIMBS, MAX_U128_LIMB,
+    };
 
-    // `Wexp` runs up to ~4·MAX_WORK_N limbs (the widest transcendental work
-    // integer is Int<256> = 4·64), so the value-width `single`/`u128` buffers
-    // must cover that, while the `2N`/`4N` radicands are storage-scoped
-    // (`max_n_limbs`). All build-max — the exact-scratch form sizes per width.
+    // The blanket build-max impl: every buffer is its `MAX_*` blanket size
+    // (the `single`/`u128` value buffers cover the wide-transcendental work
+    // widths; the `double`/`quad` radicands are storage-scoped), and every
+    // constructor is the matching `max_*` builder. The exact-scratch form
+    // sizes per width instead.
     impl<const N: usize> ComputeInt for Int<N> {
-        type LimbBuf1 = [u64; 4 * MAX_WORK_N + 2];
-        type LimbBuf2 = [u64; max_n_limbs(2)];
-        type LimbBuf4 = [u64; max_n_limbs(4)];
-        type LimbBufU128 = [u128; 4 * MAX_WORK_N];
+        type LimbBuf1 = [u64; MAX_SINGLE_LIMBS];
+        type LimbBuf2 = [u64; MAX_DOUBLE_LIMBS];
+        type LimbBuf4 = [u64; MAX_QUADRUPLE_LIMBS];
+        type LimbBufU128 = [u128; MAX_U128_LIMB];
         #[inline]
         fn single_limbs() -> Self::LimbBuf1 {
-            [0u64; 4 * MAX_WORK_N + 2]
+            max_single_limbs()
         }
         #[inline]
         fn double_limbs() -> Self::LimbBuf2 {
-            [0u64; max_n_limbs(2)]
+            max_double_limbs()
         }
         #[inline]
         fn quad_limbs() -> Self::LimbBuf4 {
-            [0u64; max_n_limbs(4)]
+            max_quadruple_limbs()
         }
         #[inline]
         fn u128_limbs() -> Self::LimbBufU128 {
-            [0u128; 4 * MAX_WORK_N]
+            max_u128_limb()
         }
     }
 }

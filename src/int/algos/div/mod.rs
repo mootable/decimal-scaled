@@ -38,11 +38,6 @@ pub(crate) mod div_mg;
 pub(crate) mod div_rem;
 pub(crate) mod div_rem_schoolbook;
 
-/// Scratch capacity for the runtime u64-limb division engines — 288 u64
-/// limbs (18432 bits), covering the widest work integer in the crate
-/// (Int<256> used by D1232 cbrt, 256 u64 limbs) with slack.
-pub(crate) const SCRATCH_LIMBS: usize = 288;
-
 #[cfg(test)]
 mod tests {
     use super::div_burnikel_ziegler_with_knuth::{

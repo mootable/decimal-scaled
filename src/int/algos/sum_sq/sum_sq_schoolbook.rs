@@ -25,7 +25,7 @@
 
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::add_assign;
-use crate::int::types::work_scratch::ComputeInt;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 
 /// Significant limb length of `a` (index of the highest non-zero limb plus
