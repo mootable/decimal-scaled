@@ -151,9 +151,16 @@ on stable:
   <const N>` over every `N`; they can neither name `[u64; N + 2]` nor carry a
   `ComputeInt` bound (`ComputeInt: BigInt` is the supertrait, so requiring
   `ComputeInt` on the `BigInt`/operator impl would be a cycle);
-- `Display` / radix formatting (`int_fmt`) — blanket over every `N`;
-- the runtime-variable-length reciprocal divide (`newton_reciprocal`), whose
-  operand limb counts are functions of a runtime `scale`, not any `N`.
+- `Display` / radix formatting (`int_fmt`) — blanket over every `N`.
+
+`newton_reciprocal` is **not** such an exception: its reciprocal/pow buffer
+lengths are functions of the work width *and* the divide exponent, and the
+exponent derives from the const `SCALE` — which reaches the kernel through
+the decimal policy dispatch (keyed on `(const N, const SCALE)`, the channel
+that should thread it). Both axes are const-provided, so these buffers are a
+const-sizing target (today they are frozen `MAX_*_U64` literals fed a runtime
+`scale: u32` — a Class-B defect to size down per `(width, SCALE)` threaded
+from dispatch), not a permanent blanket.
 
 Everywhere a concrete `N` is in scope — every algorithm kernel, every
 decimal policy and decimal kernel — **use the normal `ComputeInt` methods,
