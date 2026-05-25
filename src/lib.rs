@@ -434,6 +434,7 @@ pub mod __bench_internals {
     /// Decimal remainder kernels exposed for the `rem_kernel_ab` microbench
     /// (the narrow native-vs-int-layer decimal rem A/B at the dispatch seam).
     #[inline(never)]
+    #[allow(private_bounds)]
     pub fn dec_rem_int_layer<const N: usize>(
         a: crate::int::types::Int<N>,
         b: crate::int::types::Int<N>,
