@@ -1021,7 +1021,29 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> W,
             ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, false, recompute)
+                round_to_storage_directed_impl(base_guard, target, mode, false, false, recompute)
+            }
+
+            /// Directed-rounding narrowing for a kernel whose true result is
+            /// **never exactly representable** at the storage scale — a
+            /// non-zero-argument transcendental (`exp`), whose value is
+            /// irrational (Lindemann–Weierstrass) and so always sits strictly
+            /// between two storage grid lines. Identical to
+            /// [`round_to_storage_directed`] except a working residual of
+            /// exactly zero is treated as a genuine sub-resolution positive
+            /// residual: Ceiling rounds UP to the next grid line, Floor / Trunc
+            /// keep the floor, nearest modes are unaffected. This is the only
+            /// correctly-rounded answer when the deciding residual lands below
+            /// the work integer's resolution (e.g. `exp(-10^-S)` just under
+            /// `1.0`, whose residual is at scale ~`2S`). The caller MUST pin its
+            /// algebraic-exact inputs (`exp 0` etc.) before reaching here.
+            pub(crate) fn round_to_storage_directed_never_exact(
+                base_guard: u32,
+                target: u32,
+                mode: $crate::support::rounding::RoundingMode,
+                recompute: impl FnMut(u32) -> W,
+            ) -> $Storage {
+                round_to_storage_directed_impl(base_guard, target, mode, false, true, recompute)
             }
 
             /// Near-special-point directed narrowing for the derived
@@ -1041,7 +1063,7 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
                 recompute: impl FnMut(u32) -> W,
             ) -> $Storage {
-                round_to_storage_directed_impl(base_guard, target, mode, true, recompute)
+                round_to_storage_directed_impl(base_guard, target, mode, true, false, recompute)
             }
 
             fn round_to_storage_directed_impl(
@@ -1049,6 +1071,7 @@ macro_rules! decl_wide_transcendental {
                 target: u32,
                 mode: $crate::support::rounding::RoundingMode,
                 force_confirm: bool,
+                never_exact: bool,
                 mut recompute: impl FnMut(u32) -> W,
             ) -> $Storage {
                 use $crate::support::rounding::{RoundingMode, is_nearest_mode};
@@ -1124,7 +1147,28 @@ macro_rules! decl_wide_transcendental {
                     let divisor = pow10(shift);
                     let (q, rem) = mag.div_rem(divisor);
                     let result_positive = !neg;
-                    let bump = rem != lit(0)
+                    // `rem == 0` at the working scale means `|value|·10^target`
+                    // is an integer to the work-int's resolution — `q` is the
+                    // floor and the residual deciding a directed bump appears to
+                    // be exactly zero. For a `never_exact` kernel (a non-zero-
+                    // argument transcendental, whose true value is irrational by
+                    // Lindemann–Weierstrass and so NEVER lands on a finite
+                    // decimal grid line — the algebraic-exact inputs `exp 0`,
+                    // `ln 1`, … are pinned by the caller before reaching here)
+                    // a zero working residual is an ARTIFACT of finite working
+                    // precision, not a true zero: the true residual is a genuine
+                    // positive fraction sitting below the work-int's resolution
+                    // (e.g. `exp(-10^-S)` = `1 - 10^-S + 10^-2S/2 - …`, whose
+                    // deciding term is at scale ~`2S`, beyond any reachable
+                    // guard). `rem == 0` is moreover unambiguously the LOW side
+                    // of the grid line (`|value| = q·divisor + tiny_positive`):
+                    // a value just BELOW a grid line gives `rem ≈ divisor`, not
+                    // zero. So treat a zero working residual as present-and-
+                    // positive when `never_exact`, which bumps Ceiling up to the
+                    // next grid line while Floor / Trunc / nearest still keep
+                    // `q`.
+                    let residual_present = rem != lit(0) || never_exact;
+                    let bump = residual_present
                         && match mode {
                             RoundingMode::Trunc => false,
                             RoundingMode::Floor => !result_positive,
@@ -2746,6 +2790,15 @@ macro_rules! decl_wide_transcendental {
                     recompute: &mut dyn FnMut(u32) -> W,
                 ) -> $Storage {
                     round_to_storage_directed(base_guard, target, mode, recompute)
+                }
+                #[inline]
+                fn round_to_storage_directed_never_exact(
+                    base_guard: u32,
+                    target: u32,
+                    mode: $crate::support::rounding::RoundingMode,
+                    recompute: &mut dyn FnMut(u32) -> W,
+                ) -> $Storage {
+                    round_to_storage_directed_never_exact(base_guard, target, mode, recompute)
                 }
                 #[inline]
                 fn exp_fixed(v_w: W, w: u32) -> W {

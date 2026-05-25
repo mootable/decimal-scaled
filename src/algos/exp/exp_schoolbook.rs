@@ -120,7 +120,11 @@ pub(crate) fn exp_schoolbook<C: WideTrigCore, const SCALE: u32>(
     if raw == C::storage_zero() {
         return C::storage_one(SCALE);
     }
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+    // `exp(x)` for `x != 0` is transcendental — never exactly on a storage grid
+    // line (`raw == 0` is pinned above) — so a zero working residual is a
+    // sub-resolution artifact; the never-exact narrowing keeps Ceiling correct
+    // on inputs whose deciding residual is below the work-int resolution.
+    C::round_to_storage_directed_never_exact(C::GUARD, SCALE, mode, &mut |guard| {
         C::exp_fixed(C::to_work_w(raw, guard), SCALE + guard)
     })
 }

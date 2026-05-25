@@ -686,7 +686,6 @@ mod wide_s30_exp {
         check_at_scale("exp", Width::D307, 0, include_str!("golden/exp_d307_s0.txt"));
     }
     #[test]
-    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
     #[cfg(any(feature = "d307", feature = "x-wide"))]
     fn d307_exp_s306() {
         check_at_scale("exp", Width::D307, 306, include_str!("golden/exp_d307_s306.txt"));
@@ -697,7 +696,6 @@ mod wide_s30_exp {
         check_at_scale("exp", Width::D462, 0, include_str!("golden/exp_d462_s0.txt"));
     }
     #[test]
-    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
     #[cfg(any(feature = "d462", feature = "x-wide"))]
     fn d462_exp_s461() {
         check_at_scale("exp", Width::D462, 461, include_str!("golden/exp_d462_s461.txt"));
@@ -708,7 +706,6 @@ mod wide_s30_exp {
         check_at_scale("exp", Width::D616, 0, include_str!("golden/exp_d616_s0.txt"));
     }
     #[test]
-    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
     #[cfg(any(feature = "d616", feature = "x-wide"))]
     fn d616_exp_s615() {
         check_at_scale("exp", Width::D616, 615, include_str!("golden/exp_d616_s615.txt"));
@@ -719,7 +716,6 @@ mod wide_s30_exp {
         check_at_scale("exp", Width::D924, 0, include_str!("golden/exp_d924_s0.txt"));
     }
     #[test]
-    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     fn d924_exp_s923() {
         check_at_scale("exp", Width::D924, 923, include_str!("golden/exp_d924_s923.txt"));
@@ -730,7 +726,6 @@ mod wide_s30_exp {
         check_at_scale("exp", Width::D1232, 0, include_str!("golden/exp_d1232_s0.txt"));
     }
     #[test]
-    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
     fn d1232_exp_s1231() {
         check_at_scale("exp", Width::D1232, 1231, include_str!("golden/exp_d1232_s1231.txt"));

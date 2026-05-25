@@ -101,6 +101,22 @@ pub(crate) trait WideTrigCore {
         mode: RoundingMode,
         recompute: &mut dyn FnMut(u32) -> Self::W,
     ) -> Self::Storage;
+    /// Directed-rounding narrowing for a kernel whose true result is **never
+    /// exactly representable** at the storage scale — a non-zero-argument
+    /// transcendental (`exp`), irrational by Lindemann–Weierstrass and so
+    /// always strictly between two storage grid lines. Identical to
+    /// [`Self::round_to_storage_directed`] except a working residual of exactly
+    /// zero is treated as a genuine sub-resolution positive residual (Ceiling
+    /// rounds up, Floor / Trunc keep the floor, nearest is unaffected) — the
+    /// only correctly-rounded answer when the deciding residual sits below the
+    /// work integer's resolution (e.g. `exp(-10^-S)` just under `1.0`). The
+    /// caller MUST pin its algebraic-exact inputs (`exp 0`) before this.
+    fn round_to_storage_directed_never_exact(
+        base_guard: u32,
+        target: u32,
+        mode: RoundingMode,
+        recompute: &mut dyn FnMut(u32) -> Self::W,
+    ) -> Self::Storage;
 
     // ── the per-tier guard-digit kernels ──────────────────────────────
 
@@ -226,7 +242,13 @@ pub(crate) fn exp_series<C: WideTrigCore, const SCALE: u32>(
     if raw == C::storage_zero() {
         return C::storage_one(SCALE);
     }
-    C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
+    // `exp(x)` for `x != 0` is transcendental (Lindemann–Weierstrass), so its
+    // true value is never exactly on a storage grid line — a zero working
+    // residual is a sub-resolution artifact, not a true zero. Use the
+    // never-exact narrowing so Ceiling rounds up (and Floor stays) on inputs
+    // whose deciding residual sits below the work-int resolution (`exp(-10^-S)`
+    // just under `1.0`). `raw == 0` (the one exact case) is pinned above.
+    C::round_to_storage_directed_never_exact(C::GUARD, SCALE, mode, &mut |guard| {
         C::exp_fixed(C::to_work_w(raw, guard), SCALE + guard)
     })
 }

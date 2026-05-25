@@ -227,8 +227,13 @@ pub(crate) fn exp_tang<
     // Directed modes decide which side of a storage grid line the true
     // result falls; near a grid line the working-scale approximation can
     // land on the wrong side, so route through the shared Ziv escalation.
-    // Nearest modes narrow once.
-    C::round_to_storage_directed(base_guard, SCALE, mode, &mut |guard| {
+    // Nearest modes narrow once. `exp(x)` for `x != 0` is transcendental
+    // (never exactly on a grid line — `raw == 0` is pinned above), so use the
+    // never-exact narrowing: a zero working residual is a sub-resolution
+    // artifact, and Ceiling must still round up (Floor / Trunc keep the floor)
+    // on inputs whose deciding residual is below the work-int resolution
+    // (`exp(-10^-S)` just under `1.0`).
+    C::round_to_storage_directed_never_exact(base_guard, SCALE, mode, &mut |guard| {
         tang_exp_fixed::<C, M, INTERNAL_EXTRA>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
