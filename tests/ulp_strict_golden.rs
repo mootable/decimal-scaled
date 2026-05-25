@@ -692,7 +692,6 @@ mod wide_s30_exp {
         check_at_scale("exp", Width::D307, 306, include_str!("golden/exp_d307_s306.txt"));
     }
     #[test]
-    #[ignore = "KNOWN DEFECT (fix in progress): exp at SCALE 0 with large x overflows the tier work integer (result ~10^460 at working scale 0+guard exceeds Int<24>); direct exp needs the wider exp_fixed_wide work width. Tracked + being fixed."]
     #[cfg(any(feature = "d462", feature = "x-wide"))]
     fn d462_exp_s0() {
         check_at_scale("exp", Width::D462, 0, include_str!("golden/exp_d462_s0.txt"));

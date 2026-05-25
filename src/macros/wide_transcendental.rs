@@ -366,11 +366,14 @@ pub(crate) mod exp_generic {
         } else {
             round_div_pow10(scaled_at_w_ext, extra)
         };
-        // e^v > 0 for every finite v: a zero result is underflow below the
-        // working resolution, not a true zero. Return the smallest positive
-        // value so the directed narrowing rounds Ceiling up to 1 ULP (a bare
-        // zero would round Ceiling to 0 — a correctly-rounded defect).
-        if result == zero::<S>() {
+        // e^v > 0 for every finite v: a zero result here is genuine underflow
+        // of `e^(negative)` below the working resolution, not a true zero.
+        // Return the smallest positive value so the directed narrowing rounds
+        // Ceiling up to 1 ULP (a bare zero would round Ceiling to 0 — a
+        // correctly-rounded defect). Restricted to `k < 0`: for `k >= 0`,
+        // `e^v >= 1`, so a 0 result would mean the working width overflowed,
+        // and masking it as 1 would hide the defect rather than fix it.
+        if k < 0 && result == zero::<S>() {
             lit::<S>(1)
         } else {
             result
@@ -1852,6 +1855,19 @@ macro_rules! decl_wide_transcendental {
                     $crate::tracing::info_span!(concat!(stringify!($Type), "::exp_fixed"))
                         .entered();
 
+                // Large-result routing: when `e^v`'s integer-digit growth
+                // plus the internal `2^k` reassembly would overflow the
+                // tier's own work integer `W` (a large positive `v` at low
+                // SCALE — e.g. exp(1061) at D462<0>, a ~461-digit result
+                // that fits storage but not the `W`-scale lift), run the
+                // body in the wider `Wexp` and narrow back. Mirrors the
+                // `hyper_fits_w` regime split the hyperbolics use. The
+                // normal / small regime keeps the fast `W` path — the check
+                // is a few leading-zero / shift ops.
+                if !exp_fits_w(v_w, w) {
+                    return exp_fixed_wide(v_w, w);
+                }
+
                 // Cache 10^w once — used as divisor in every Taylor
                 // iteration and squaring step below. At D307<150>
                 // w=180 and `pow10(180)` costs ~50 µs by itself
@@ -2012,13 +2028,21 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     round_div_pow10(scaled_at_w_ext, extra)
                 };
-                // e^v > 0 for every finite v: a zero result is underflow below
-                // the working resolution, NOT a true zero. Return the smallest
-                // positive working value (1 = 10^-w) so the directed narrowing
-                // keeps the sign — Ceiling rounds up to 1 ULP, Floor / Trunc /
-                // nearest still give 0. A bare zero rounds Ceiling to 0 (a
-                // correctly-rounded defect the SCALE-30 golden cells catch).
-                if result == zero() {
+                // e^v > 0 for every finite v: a zero result here is genuine
+                // underflow of `e^(negative)` below the working resolution,
+                // NOT a true zero. Return the smallest positive working value
+                // (1 = 10^-w) so the directed narrowing keeps the sign —
+                // Ceiling rounds up to 1 ULP, Floor / Trunc / nearest still
+                // give 0. A bare zero rounds Ceiling to 0 (a correctly-rounded
+                // defect the SCALE-30 golden cells catch).
+                //
+                // The clamp is restricted to `k < 0` (the only regime where
+                // underflow to 0 is physical). For `k >= 0` (a large positive
+                // argument) `e^v >= 1`, so a 0 result would mean the `W`-scale
+                // lift overflowed; masking that as 1 would hide the defect.
+                // The `exp_fits_w` routing above sends those cases to the
+                // wider path before they reach here.
+                if k < 0 && result == zero() {
                     lit(1)
                 } else {
                     result
@@ -2066,6 +2090,34 @@ macro_rules! decl_wide_transcendental {
             fn hyper_fits_w(av_w: W, w: u32) -> bool {
                 let result_digits = exp_result_int_digits(av_w, w) as u64;
                 let need_digits = 2 * w as u64 + 2 * result_digits + 64;
+                // digits → bits: `log2(10) ≈ 3.3220 ≈ 3322/1000`.
+                let need_bits = need_digits * 3322 / 1000 + 512;
+                need_bits < <W as $crate::int::types::traits::BigInt>::BITS as u64
+            }
+
+            /// Whether a direct `exp_fixed(v_w, w)` fits the tier's own work
+            /// integer `W`.
+            ///
+            /// The Taylor sum sits at the internal extended scale
+            /// `w_ext = w + extra` (`extra ≈ e^|v|`'s integer-digit count
+            /// from the `k·log10 2` lift) — `≈ w + result_digits` digits —
+            /// and the final `2^k` reassembly shifts that up by another
+            /// `≈ result_digits` digits, so the peak needs `≈ w +
+            /// 2·result_digits` decimal digits. When that exceeds `W`'s
+            /// decimal capacity the per-tier `exp_fixed` body would overflow
+            /// (the `sum << shift` panic guard fires, or silently wraps a
+            /// `v_w·10^extra` lift), so the caller routes the value through
+            /// the wider [`exp_fixed_wide`] / [`Wexp`] path instead.
+            ///
+            /// Strictly conservative: a `64`-digit / `512`-bit margin
+            /// matches [`hyper_fits_w`] and covers the series accumulation
+            /// and the rounded-narrowing residue. The normal / small regime
+            /// (`result_digits` small relative to `W`'s capacity) keeps the
+            /// fast `W` path.
+            #[inline]
+            fn exp_fits_w(v_w: W, w: u32) -> bool {
+                let result_digits = exp_result_int_digits(v_w, w) as u64;
+                let need_digits = w as u64 + 2 * result_digits + 64;
                 // digits → bits: `log2(10) ≈ 3.3220 ≈ 3322/1000`.
                 let need_bits = need_digits * 3322 / 1000 + 512;
                 need_bits < <W as $crate::int::types::traits::BigInt>::BITS as u64
