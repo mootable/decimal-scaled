@@ -91,7 +91,17 @@ const fn select() -> Select {
 /// `out` must be sized `>= a.len() + b.len()`. The Karatsuba arm zeroes
 /// `out` itself; the schoolbook arm requires the caller to have zeroed it
 /// (matching the historic contract).
-pub(crate) fn dispatch(a: &[u64], b: &[u64], out: &mut [u64]) {
+///
+/// Takes the level const `N` (the operand storage width — its sole caller
+/// `Int::<N>::widen_mul` already holds it) per the const-generic BigRule
+/// (`docs/ARCHITECTURE.md`): a policy entry point carries its level's
+/// defining const even when the schoolbook-vs-Karatsuba choice is settled
+/// at run time from the operand lengths (`select` inspects those — the
+/// metadata test allows reading the operands; only *external* metadata is
+/// barred). `N` is not threaded inward today; it is the seam for any future
+/// per-`N` refinement.
+pub(crate) fn dispatch<const N: usize>(a: &[u64], b: &[u64], out: &mut [u64]) {
+    let _ = N;
     let algo = match const { select() } {
         Select::ByAlgorithm(a) => a,
         Select::ByShape(f) => f(a.len(), b.len()),
