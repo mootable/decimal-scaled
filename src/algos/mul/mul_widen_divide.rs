@@ -11,7 +11,7 @@
 //!
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! the storage limb count `N` alone and does the `2N`-wide work directly in
-//! a `ComputeInt::double_limbs()` buffer:
+//! a `ComputeInt::double_buffered_u64()` buffer:
 //!
 //! 1. form the magnitude product `|a| * |b|` (`2N` u64 limbs) via the int
 //!    layer's width-agnostic slice kernel
@@ -159,7 +159,7 @@ where
     let al = sig_len(&a_mag);
     let bl = sig_len(&b_mag);
 
-    let mut prod_buf = Int::<N>::double_limbs();
+    let mut prod_buf = Int::<N>::double_buffered_u64();
     let prod = prod_buf.as_mut();
     let plen = (al + bl).min(prod.len());
     for slot in prod[..plen].iter_mut() {

@@ -14,7 +14,7 @@ use crate::int::types::Int;
 /// the scale factor.
 ///
 /// Resolves the remainder via the Knuth engine [`div_knuth_into`] with
-/// **exact `ComputeInt` scratch** (`single_limbs`, `N + 2` per width)
+/// **exact `ComputeInt` scratch** (`single_buffered_u64`, `N + 2` per width)
 /// instead of the `Rem` operator's build-max `[u64; MAX_SINGLE_LIMBS]`
 /// Knuth buffers. `div_knuth_into` routes a single-limb divisor to the
 /// hardware path internally and Burnikel–Ziegler never engages at these
@@ -52,10 +52,10 @@ where
     let neg_r = a.is_negative();
     let mut quot = [0u64; N];
     let mut rem = [0u64; N];
-    // Exact per-`N` Knuth scratch: `single_limbs` is `[u64; N + 2]`, covering
+    // Exact per-`N` Knuth scratch: `single_buffered_u64` is `[u64; N + 2]`, covering
     // the normalised dividend `u` (`num.len() + 2`) and divisor `v`.
-    let mut u = Int::<N>::single_limbs();
-    let mut v = Int::<N>::single_limbs();
+    let mut u = Int::<N>::single_buffered_u64();
+    let mut v = Int::<N>::single_buffered_u64();
     div_knuth_into(
         a.unsigned_abs().as_limbs(),
         b.unsigned_abs().as_limbs(),

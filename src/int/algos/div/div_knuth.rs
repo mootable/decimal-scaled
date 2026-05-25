@@ -16,7 +16,7 @@ use crate::int::types::compute_int::max_single_limbs;
 /// `u`/`v` working buffers at the build-max width and delegates to
 /// [`div_knuth_into`]. Callers that can size the scratch exactly (an
 /// `Int<N>: ComputeInt` context) call `div_knuth_into` directly with their
-/// own buffer (`single_limbs` for a value divide, `quad_limbs` for the cbrt
+/// own buffer (`single_buffered_u64` for a value divide, `quad_buffered_u64` for the cbrt
 /// radicand divide), skipping the build-max zeroing.
 pub(crate) fn div_knuth(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     let mut u = max_single_limbs();

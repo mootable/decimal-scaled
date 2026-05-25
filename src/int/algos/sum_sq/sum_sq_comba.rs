@@ -87,7 +87,7 @@ where
     let lb = sig_len(mb);
     // a² into `out` (zeroed by the caller); b² into its own scratch.
     sqr_full(ma, la, &mut out[..2 * la]);
-    let mut bsq_buf = Int::<N>::double_limbs();
+    let mut bsq_buf = Int::<N>::double_buffered_u64();
     let bsq = bsq_buf.as_mut();
     sqr_full(mb, lb, &mut bsq[..2 * lb]);
     let span = (2 * la).max(2 * lb) + 1;
@@ -106,7 +106,7 @@ where
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
-    let mut n_buf = Int::<N>::double_limbs();
+    let mut n_buf = Int::<N>::double_buffered_u64();
     let n = n_buf.as_mut();
     let nl = sum_sq_radicand_comba::<N>(ma.as_limbs(), mb.as_limbs(), n);
     if nl > N || (nl == N && (n[N - 1] >> 63) != 0) {

@@ -483,7 +483,7 @@ where
     let bits = <W as crate::int::types::traits::BigInt>::BITS;
     // u128 magnitude buffer from ComputeInt (size lives in the impl); no
     // const work-width parameter — same mechanism as `div_wide_pow10`.
-    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     dispatch_pow10_mag_u128(mag, scale, neg, mode, bits);

@@ -8,7 +8,7 @@
 //! This is the naive reference algorithm — no leading-zero fast path:
 //!
 //! 1. Form the full magnitude product `|a| * |b|` (`2N` u64 limbs) in a
-//!    [`ComputeInt::double_limbs`] buffer via the int layer's slice
+//!    [`ComputeInt::double_buffered_u64`] buffer via the int layer's slice
 //!    [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`].
 //! 2. Build `10^SCALE` in the same limb domain and divide the product by
 //!    it using the int layer's width-agnostic divide
@@ -64,7 +64,7 @@ where
     let bl = sig_len(&b_mag);
 
     // Full magnitude product in the work scratch (2N u64 limbs).
-    let mut prod_buf = Int::<N>::double_limbs();
+    let mut prod_buf = Int::<N>::double_buffered_u64();
     let prod = prod_buf.as_mut();
     let plen = (al + bl).min(prod.len());
     for slot in prod[..plen].iter_mut() {
@@ -79,7 +79,7 @@ where
     }
 
     // Build 10^SCALE in a u64 limb buffer (iterative *10).
-    let mut div_buf = Int::<N>::double_limbs();
+    let mut div_buf = Int::<N>::double_buffered_u64();
     let divisor = div_buf.as_mut();
     divisor[0] = 1;
     let mut dl = 1usize;
@@ -98,9 +98,9 @@ where
 
     // q = prod / divisor, r = prod % divisor (magnitudes, via int layer).
     let ptop = sig_len(&prod[..plen]);
-    let mut quot_buf = Int::<N>::double_limbs();
+    let mut quot_buf = Int::<N>::double_buffered_u64();
     let quot = quot_buf.as_mut();
-    let mut rem_buf = Int::<N>::double_limbs();
+    let mut rem_buf = Int::<N>::double_buffered_u64();
     let rem = rem_buf.as_mut();
     for slot in quot[..ptop].iter_mut() {
         *slot = 0;

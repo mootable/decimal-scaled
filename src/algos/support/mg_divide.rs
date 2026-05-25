@@ -423,7 +423,7 @@ pub(crate) fn div_wide_pow10<W>(
 where
     W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
 {
-    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_mag_u128(mag, scale, neg, mode);
@@ -459,7 +459,7 @@ pub(crate) fn div_wide_pow10_chain<W>(
 where
     W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
 {
-    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::single_u128();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_chain_mag_u128(mag, scale, neg, mode);

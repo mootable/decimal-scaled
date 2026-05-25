@@ -1986,20 +1986,20 @@ impl<const N: usize> Int<N> {
         let a = *self.unsigned_abs().as_limbs();
         let b = *rhs.unsigned_abs().as_limbs();
         // Full product spans 2·N u64 limbs — sized exactly by the source's
-        // `ComputeInt::double_limbs()` (no build-max blanket). Route through
+        // `ComputeInt::double_buffered_u64()` (no build-max blanket). Route through
         // the equal-length multiply dispatcher: both operands are `[u64; N]`,
         // so this is the single site every wide tier's full product flows
         // through. The dispatcher base-cases to schoolbook below
         // `KARATSUBA_THRESHOLD_U64` (every shipped tier) and engages the
         // non-allocating Karatsuba kernel at or above it.
-        let mut prod_buf = <Int<N> as ComputeInt>::double_limbs();
+        let mut prod_buf = <Int<N> as ComputeInt>::double_buffered_u64();
         let prod = prod_buf.as_mut();
         mul_fast::<N>(&a, &b, &mut prod[..2 * N]);
         // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
         // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
-        // product, so its `ComputeInt::u128_limbs()` buffer (`≥ N`) sizes
+        // product, so its `ComputeInt::single_u128()` buffer (`≥ N`) sizes
         // the packed magnitude exactly.
-        let mut u128_buf = <W as ComputeInt>::u128_limbs();
+        let mut u128_buf = <W as ComputeInt>::single_u128();
         let u128_prod = u128_buf.as_mut();
         let mut i = 0;
         while i < N {
@@ -4079,7 +4079,7 @@ mod unified_mg_feasibility {
     /// `(a · b) / 10^scale` through the unified pipeline, computed as
     /// `Int<N>::widen_mul::<Int<M>>` (full product into the wider type)
     /// then `div_wide_pow10::<Int<M>>`. The wider type's u128 magnitude
-    /// width is read from its [`ComputeInt`] buffer (`u128_limbs`) inside
+    /// width is read from its [`ComputeInt`] buffer (`single_u128`) inside
     /// the divide — `ComputeInt` IS the mechanism for the wider work
     /// intermediate, so no work-width const parameter is named. Returns the
     /// scaled wider-width quotient.

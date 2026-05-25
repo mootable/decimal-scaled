@@ -13,7 +13,7 @@
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! `N` alone:
 //!
-//! 1. form `|a| * 10^SCALE` (`2N` u64 limbs) in a [`ComputeInt::double_limbs`]
+//! 1. form `|a| * 10^SCALE` (`2N` u64 limbs) in a [`ComputeInt::double_buffered_u64`]
 //!    buffer via the int slice multiply;
 //! 2. divide it by `|b|` via the int layer's width-agnostic divide
 //!    ([`crate::int::algos::div::div_fixed::div_rem_mag_slice`], which
@@ -130,7 +130,7 @@ where
     let bl = sig_len(&b_mag);
 
     // Scaled numerator |a| * 10^SCALE (up to 2N u64 limbs) in scratch.
-    let mut num_buf = Int::<N>::double_limbs();
+    let mut num_buf = Int::<N>::double_buffered_u64();
     let num = num_buf.as_mut();
     let nlen = (al + ml).min(num.len());
     for slot in num[..nlen].iter_mut() {
@@ -140,9 +140,9 @@ where
     let ntop = sig_len(&num[..nlen]);
 
     // q = num / b, r = num % b (magnitudes, via the int layer).
-    let mut quot_buf = Int::<N>::double_limbs();
+    let mut quot_buf = Int::<N>::double_buffered_u64();
     let quot = quot_buf.as_mut();
-    let mut rem_buf = Int::<N>::double_limbs();
+    let mut rem_buf = Int::<N>::double_buffered_u64();
     let rem = rem_buf.as_mut();
     let qlen = ntop.max(1);
     for slot in quot[..qlen].iter_mut() {
@@ -152,10 +152,10 @@ where
         *slot = 0;
     }
     // Exact per-`N` Knuth scratch: the scaled numerator spans up to `2N`
-    // limbs, so its normalised `u` needs `double_limbs` (`≥ 2N + 2`); the
-    // divisor `b` is `N`-wide, so `v` needs `single_limbs` (`N + 2`).
-    let mut u_buf = Int::<N>::double_limbs();
-    let mut v_buf = Int::<N>::single_limbs();
+    // limbs, so its normalised `u` needs `double_buffered_u64` (`≥ 2N + 2`); the
+    // divisor `b` is `N`-wide, so `v` needs `single_buffered_u64` (`N + 2`).
+    let mut u_buf = Int::<N>::double_buffered_u64();
+    let mut v_buf = Int::<N>::single_buffered_u64();
     div_knuth_into(
         &num[..ntop],
         &b_mag[..bl],

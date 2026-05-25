@@ -46,7 +46,7 @@ where
     // than fit-checking it, so it keeps every representable hypot.
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
-    let mut n_buf = Int::<N>::double_limbs();
+    let mut n_buf = Int::<N>::double_buffered_u64();
     let n = n_buf.as_mut();
     let nl = sum_sq_radicand::<N>(ma.as_limbs(), mb.as_limbs(), n);
     if nl == 1 && n[0] == 0 {
@@ -54,13 +54,13 @@ where
     }
 
     // -- q = floor(sqrt(n)) ----------------------------------------------
-    let mut q_buf = Int::<N>::double_limbs();
+    let mut q_buf = Int::<N>::double_buffered_u64();
     let q = q_buf.as_mut();
     isqrt_newton(&n[..nl], &mut q[..nl]);
     let ql = sig_len(&q[..nl]);
 
     // -- diff = n - q^2  (reuse `n` in place as the remainder) -----------
-    let mut qsq_buf = Int::<N>::double_limbs();
+    let mut qsq_buf = Int::<N>::double_buffered_u64();
     let qsq = qsq_buf.as_mut();
     let qsq_cap = qsq.len();
     mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
