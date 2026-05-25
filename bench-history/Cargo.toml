@@ -12,7 +12,7 @@ publish = false
 
 [dependencies]
 # REPLACED PER CELL by .github/workflows/bench-history.yml
-decimal-scaled = { version = "0.3.3", default-features = false, features = ["std", "strict", "wide", "x-wide"] }
+decimal-scaled = { version = "0.4.4", default-features = false, features = ["std", "strict", "wide", "x-wide"] }
 
 [dev-dependencies]
 criterion = { version = "0.8", default-features = false }
