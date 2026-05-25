@@ -1632,7 +1632,7 @@ impl<const N: usize> Int<N> {
         mode: crate::support::rounding::RoundingMode,
     ) -> Option<Self>
     where
-        Self: crate::int::types::work_scratch::WorkingInt,
+        Self: crate::int::types::work_scratch::ComputeInt,
     {
         hypot_dispatch::<N>(self, other, mode)
     }
@@ -1651,7 +1651,7 @@ impl<const N: usize> Int<N> {
     #[must_use]
     pub(crate) fn sum_sq(self, other: Self) -> Option<Self>
     where
-        Self: crate::int::types::work_scratch::WorkingInt,
+        Self: crate::int::types::work_scratch::ComputeInt,
     {
         sum_sq_dispatch::<N>(self, other)
     }

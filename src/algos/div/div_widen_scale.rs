@@ -13,7 +13,7 @@
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! `N` alone:
 //!
-//! 1. form `|a| * 10^SCALE` (`2N` u64 limbs) in a [`WorkingDecimal::work2`]
+//! 1. form `|a| * 10^SCALE` (`2N` u64 limbs) in a [`ComputeInt::double_limbs`]
 //!    buffer via the int slice multiply;
 //! 2. divide it by `|b|` via the int layer's width-agnostic divide
 //!    ([`crate::int::algos::div::div_fixed::div_rem_mag_slice`], which
@@ -32,7 +32,7 @@
 
 use crate::int::algos::div::div_fixed::div_rem_mag_slice;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
-use crate::int::types::work_scratch::WorkingDecimal;
+use crate::int::types::work_scratch::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
 
@@ -96,7 +96,7 @@ fn apply_sign<const N: usize>(out: [u64; N], neg: bool, msg: &str) -> Int<N> {
 }
 
 /// Widen-then-divide decimal division kernel, generic over `N`. Requires
-/// `Int<N>: WorkingDecimal` for the `2N`-limb scaled-numerator scratch.
+/// `Int<N>: ComputeInt` for the `2N`-limb scaled-numerator scratch.
 ///
 /// `mult` is the pre-computed `10^SCALE` multiplier in `Int<N>` storage
 /// (the policy evaluates the per-type `multiplier()` const so it folds at
@@ -112,7 +112,7 @@ pub(crate) fn div_widen_scale<const N: usize>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkingDecimal,
+    Int<N>: ComputeInt,
 {
     if b == Int::<N>::ZERO {
         panic!("attempt to divide by zero");
@@ -126,7 +126,7 @@ where
     let bl = sig_len(&b_mag);
 
     // Scaled numerator |a| * 10^SCALE (up to 2N u64 limbs) in scratch.
-    let mut num_buf = Int::<N>::work2();
+    let mut num_buf = Int::<N>::double_limbs();
     let num = num_buf.as_mut();
     let nlen = (al + ml).min(num.len());
     for slot in num[..nlen].iter_mut() {
@@ -136,9 +136,9 @@ where
     let ntop = sig_len(&num[..nlen]);
 
     // q = num / b, r = num % b (magnitudes, via the int layer).
-    let mut quot_buf = Int::<N>::work2();
+    let mut quot_buf = Int::<N>::double_limbs();
     let quot = quot_buf.as_mut();
-    let mut rem_buf = Int::<N>::work2();
+    let mut rem_buf = Int::<N>::double_limbs();
     let rem = rem_buf.as_mut();
     let qlen = ntop.max(1);
     for slot in quot[..qlen].iter_mut() {

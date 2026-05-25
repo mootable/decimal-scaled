@@ -272,7 +272,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> Option<crate::int::types::Int<N>>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkingInt,
+        crate::int::types::Int<N>: crate::int::types::work_scratch::ComputeInt,
     {
         crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
     }
@@ -284,7 +284,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> Option<crate::int::types::Int<N>>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkingInt,
+        crate::int::types::Int<N>: crate::int::types::work_scratch::ComputeInt,
     {
         crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast::<N>(a, b, mode)
     }
@@ -541,7 +541,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkingDecimal,
+        crate::int::types::Int<N>: crate::int::types::work_scratch::ComputeInt,
     {
         crate::algos::sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode)
     }
@@ -565,7 +565,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkingDecimal,
+        crate::int::types::Int<N>: crate::int::types::work_scratch::ComputeInt,
     {
         crate::algos::cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode)
     }
