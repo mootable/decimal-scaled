@@ -1976,30 +1976,37 @@ impl<const N: usize> Int<N> {
     /// by the wide-tier `Mul` operator to compute
     /// `Storage * Storage → Wider`. Matches the macro's `widen_mul`.
     #[inline]
-    pub(crate) fn widen_mul<W: crate::int::types::traits::BigInt>(self, rhs: Self) -> W {
+    pub(crate) fn widen_mul<W>(self, rhs: Self) -> W
+    where
+        W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+        Int<N>: crate::int::types::compute_int::ComputeInt,
+    {
+        use crate::int::types::compute_int::ComputeInt;
         let negative = self.is_negative() ^ rhs.is_negative();
         let a = *self.unsigned_abs().as_limbs();
         let b = *rhs.unsigned_abs().as_limbs();
-        // Full product spans 2·N limbs; the shared 288-limb magnitude
-        // staging width (covers Int16384) bounds every instantiation.
-        // Route through the equal-length multiply dispatcher: both
-        // operands are `[u64; N]`, so this is the single site every wide
-        // tier's full product flows through. The dispatcher base-cases to
-        // schoolbook below `KARATSUBA_THRESHOLD_U64` (every shipped tier)
-        // and engages the non-allocating Karatsuba kernel at or above it,
-        // so one call lifts every width that crosses the threshold.
-        let mut prod = [0u64; 288];
+        // Full product spans 2·N u64 limbs — sized exactly by the source's
+        // `ComputeInt::double_limbs()` (no build-max blanket). Route through
+        // the equal-length multiply dispatcher: both operands are `[u64; N]`,
+        // so this is the single site every wide tier's full product flows
+        // through. The dispatcher base-cases to schoolbook below
+        // `KARATSUBA_THRESHOLD_U64` (every shipped tier) and engages the
+        // non-allocating Karatsuba kernel at or above it.
+        let mut prod_buf = <Int<N> as ComputeInt>::double_limbs();
+        let prod = prod_buf.as_mut();
         mul_fast(&a, &b, &mut prod[..2 * N]);
-        // Pack the 2·N-limb u64 product into u128 limbs for the kept
-        // `BigInt::from_mag_sign_u128` magnitude/sign bridge.
-        let mut u128_prod = [0u128; 144];
-        let pairs = N;
+        // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
+        // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
+        // product, so its `ComputeInt::u128_limbs()` buffer (`≥ N`) sizes
+        // the packed magnitude exactly.
+        let mut u128_buf = <W as ComputeInt>::u128_limbs();
+        let u128_prod = u128_buf.as_mut();
         let mut i = 0;
-        while i < pairs {
+        while i < N {
             u128_prod[i] = (prod[2 * i] as u128) | ((prod[2 * i + 1] as u128) << 64);
             i += 1;
         }
-        W::from_mag_sign_u128(&u128_prod[..pairs], negative)
+        W::from_mag_sign_u128(&u128_prod[..N], negative)
     }
 }
 
@@ -4058,7 +4065,7 @@ mod tests {
 /// run must produce the correct `(a · b) / 10^scale` at the narrow
 /// limb widths `N = 1` (`Int64`) and `N = 2` (`Int128`) that the
 /// D18/D38-unify steps will rewire onto. This locks in the
-/// `widen_mul::<wider>` then `div_wide_pow10::<wider, U128_LIMBS>`
+/// `widen_mul::<wider>` then `div_wide_pow10::<wider>`
 /// composition before any decimal type is rewired; it is additive and
 /// asserts only — no behaviour is changed here.
 #[cfg(all(test, feature = "wide"))]
