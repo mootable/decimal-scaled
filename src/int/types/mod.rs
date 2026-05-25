@@ -4054,11 +4054,11 @@ mod tests {
 }
 
 /// Feasibility proof for the unified narrow-tier divide path: the same
-/// `widen_mul` → `div_wide_pow10_with` pipeline the wide tiers already
+/// `widen_mul` → `div_wide_pow10` pipeline the wide tiers already
 /// run must produce the correct `(a · b) / 10^scale` at the narrow
 /// limb widths `N = 1` (`Int64`) and `N = 2` (`Int128`) that the
 /// D18/D38-unify steps will rewire onto. This locks in the
-/// `widen_mul::<wider>` then `div_wide_pow10_with::<wider, U128_LIMBS>`
+/// `widen_mul::<wider>` then `div_wide_pow10::<wider, U128_LIMBS>`
 /// composition before any decimal type is rewired; it is additive and
 /// asserts only — no behaviour is changed here.
 #[cfg(all(test, feature = "wide"))]
@@ -4121,7 +4121,7 @@ mod unified_mg_feasibility {
     }
 
     /// Scale-0 identity: callers short-circuit `scale == 0` as a no-op
-    /// (`div_wide_pow10_with` is only ever invoked for `1..=38`), so the
+    /// (`div_wide_pow10` is only ever invoked for `1..=38`), so the
     /// scaled value at scale 0 is exactly the full widen_mul product.
     /// This locks that contract for the narrow widths.
     #[test]

@@ -931,9 +931,9 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware variant of [`round_to_storage`].
             ///
             /// When the narrowing distance `w - target` is in `1..=38`
-            /// the single-chunk MG kernel `div_wide_pow10_with` serves
+            /// the single-chunk MG kernel `div_wide_pow10` serves
             /// every mode directly. For `shift > 38` the chain-MG
-            /// kernel `div_wide_pow10_chain_with` does the same via
+            /// kernel `div_wide_pow10_chain` does the same via
             /// repeated `÷ 10^38` with combined-remainder bookkeeping
             /// (bit-exact for every `RoundingMode`; see
             /// `round_div_chain_audit_*` in `algos::support::mg_divide::tests`).
@@ -947,10 +947,7 @@ macro_rules! decl_wide_transcendental {
                 let rounded = if shift == 0 {
                     v
                 } else if shift <= 38 {
-                    $crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        W,
-                        { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(v, shift, mode)
+                    $crate::algos::support::mg_divide::div_wide_pow10::<W>(v, shift, mode)
                 } else {
                     // Newton vs MG chain dispatch — see the matrix
                     // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`].

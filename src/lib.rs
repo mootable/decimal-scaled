@@ -733,7 +733,7 @@ pub mod __bench_internals {
 
     // Newton-reciprocal divide research kernel — wrapped via concrete
     // shims so the bench harness gets head-to-head comparisons against
-    // [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`] without
+    // [`crate::algos::support::mg_divide::div_wide_pow10_chain`] without
     // exposing trait machinery.
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     pub mod newton_vs_mg {

@@ -21,7 +21,7 @@
 //!    ([`crate::algos::support::mg_divide::div_pow10_mag_u128`] for
 //!    `SCALE <= 38`, [`crate::algos::support::newton_reciprocal::dispatch_pow10_mag_u128`]
 //!    above) — the same magic-number / Newton-reciprocal path the typed
-//!    `div_wide_pow10_with` wrapper uses, so no Knuth-divide regression;
+//!    `div_wide_pow10` wrapper uses, so no Knuth-divide regression;
 //! 3. rebuild the signed `Int<N>` result from the quotient magnitude and
 //!    the product sign.
 //!
@@ -52,7 +52,7 @@ fn sig_len(a: &[u64]) -> usize {
 
 /// Divide the u128 magnitude `mag` (in place) by `10^SCALE`, choosing the
 /// MG single-chunk / MG chain / Newton path exactly as the typed
-/// `div_wide_pow10_with` / `dispatch_wide_pow10_with` wrappers do. `neg` is
+/// `div_wide_pow10` / `dispatch_wide_pow10_with` wrappers do. `neg` is
 /// the result sign (rounding tie-break); `work_bits` is the work width in
 /// bits (the Newton cache / threshold key). `SCALE == 0` is a no-op.
 #[inline]
