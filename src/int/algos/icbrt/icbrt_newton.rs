@@ -81,17 +81,28 @@ pub(crate) fn icbrt_newton(n: &[u64], out: &mut [u64]) {
     // Invariant: x ≥ floor(cbrt(n)) at entry of each iteration.
     // The iteration s_new = (2*s + n/s²) / 3 is monotone-non-increasing
     // and halts when s_new ≥ s (i.e. s is the floor root).
+    //
+    // Working buffers hoisted OUT of the loop — no per-iteration build-max
+    // memset (the previous in-loop `[0u64; SCRATCH_LIMBS]` allocs were the
+    // wide-tier tax). Per pass only the live slices are touched: `sq` is
+    // re-zeroed (mul_schoolbook accumulates); the n/s² divide re-zeros
+    // `q`/`r`; the /3 divide's `y`/`rem3` are re-zeroed defensively (the
+    // single-limb divisor path may not). `x = y` is a `[..work]` copy.
+    let three = [3u64];
+    let mut sq = [0u64; SCRATCH_LIMBS];
+    let mut q = [0u64; SCRATCH_LIMBS];
+    let mut r = [0u64; SCRATCH_LIMBS];
+    let mut y = [0u64; SCRATCH_LIMBS];
+    let mut rem3_buf = [0u64; SCRATCH_LIMBS];
     loop {
         // t = s²  (2 * work limbs, but only work+1 matter)
         let sq_work = (work * 2).min(SCRATCH_LIMBS);
-        let mut sq = [0u64; SCRATCH_LIMBS];
+        for s in sq[..sq_work].iter_mut() {
+            *s = 0;
+        }
         mul_schoolbook(&x[..work], &x[..work], &mut sq[..sq_work]);
 
-        // q = n / s²
-        let mut q = [0u64; SCRATCH_LIMBS];
-        let mut r = [0u64; SCRATCH_LIMBS];
-        // Ensure the divisor has the right effective length (sq_work may
-        // over-estimate — div_rem_dispatch handles leading zeros).
+        // q = n / s²  (the divide engine re-zeros q[..work] / r[..sq_work])
         div_rem_dispatch(n, &sq[..sq_work], &mut q[..work], &mut r[..sq_work]);
 
         // t = 2*s + q: add 2*x into q.
@@ -101,15 +112,16 @@ pub(crate) fn icbrt_newton(n: &[u64], out: &mut [u64]) {
         add_assign(&mut q[..work], &x[..work]);
 
         // y = t / 3
-        let three = [3u64];
-        let mut y = [0u64; SCRATCH_LIMBS];
-        let mut rem3_buf = [0u64; SCRATCH_LIMBS];
+        for v in y[..work].iter_mut() {
+            *v = 0;
+        }
+        rem3_buf[0] = 0;
         div_rem_dispatch(&q[..work], &three, &mut y[..work], &mut rem3_buf[..1]);
 
         if cmp(&y[..work], &x[..work]) >= 0 {
             break;
         }
-        x = y;
+        x[..work].copy_from_slice(&y[..work]);
     }
     let copy_len = if out.len() < work { out.len() } else { work };
     out[..copy_len].copy_from_slice(&x[..copy_len]);

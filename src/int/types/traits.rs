@@ -280,7 +280,10 @@ impl<const N: usize> BigInt for Int<N> {
         let negative = self.is_negative();
         // Reuse the direct u64→u128 pack the concrete `mag_into_u128`
         // override performs, then rebuild `T` from the magnitude/sign.
-        let mut u128_mag = [0u128; 144];
+        // `resize_to` is a blanket `BigInt` method (every `N`), so it can't
+        // carry a `ComputeInt` bound (the cycle) — it uses the gated build-max
+        // blanket `MAX_U128_LIMB`, not a frozen literal.
+        let mut u128_mag = [0u128; crate::int::types::compute_int::MAX_U128_LIMB];
         let u128_len = (N + 1) / 2;
         self.mag_into_u128(&mut u128_mag[..u128_len]);
         T::from_mag_sign_u128(&u128_mag[..u128_len], negative)
