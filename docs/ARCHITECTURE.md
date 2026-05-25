@@ -179,6 +179,32 @@ exactly: that is the cross-tier size pollution the Constitution (rule 6)
 forbids, and it is a defect to be migrated to `single_limbs()` /
 `double_limbs()` / `quad_limbs()` / `u128_limbs()`.
 
+## Limb width — the matcher's second axis (`u64` / `u128`)
+
+A wide-tier kernel can run faster in **u128 limbs** (half the limbs and carries) than in
+u64. Which limb width wins is a per-`(N, SCALE)` property, so it is a **second matcher axis**
+alongside the algorithm: the policy `Select` verdict carries `(Algorithm, LimbSize)`, where
+`LimbSize` (`U64` / `U128`, defined in `compute_int.rs`) is the *const* part of the verdict
+(limb width is value-independent — never decided inside a `ByValue` closure). `dispatch`
+const-folds the verdict and runs the kernel at the chosen width.
+
+The width is delivered **by type, not by name**: a `Limb` trait (impl'd for `u64` and
+`u128`, carrying the scalar primitives) parameterises ONE generic kernel
+`fn k<const N: usize, L: Limb>(…) where Int<N>: ComputeInt`, dispatched by a const-folded
+`match limbsize { U64 => k::<N, u64>(…), U128 => k::<N, u128>(…) }`. There is **one generic
+kernel, never a per-limb-type copy** (rule 2) — the u128 path is simply the `L = u128`
+monomorphisation (so a hand-written u128 variant of an algorithm is a *superseded duplicate*
+once the generic exists).
+
+Mechanics: storage stays `Int<N>` (u64); a `u128` kernel packs its `N` u64 limbs into
+`⌈N/2⌉` u128 (a cheap little-endian reinterpret into the u128 `ComputeInt` buffer), runs,
+unpacks. Packing pairs two u64 into one u128, so it is exact only for an **even** limb count
+— the matcher returns `U128` only for even cells; odd/narrow tiers stay `U64`. The `L`-typed
+scratch comes from `ComputeInt` (which carries both the u64 and u128 buffer families); the
+`Limb` accessors route `L` to the matching family, so the kernel never names a build-max
+size. Rolled out pilot-first, microbench-gated per cell: a cell routes `U128` only where the
+benchmark shows the win.
+
 ## Algorithm choosing — and pruning
 
 A single function (say `sqrt`) has several possible algorithms — a
