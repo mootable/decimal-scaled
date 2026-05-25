@@ -17,7 +17,7 @@
 //! kernel.
 
 use crate::int::algos::div::div_burnikel_ziegler_with_knuth::div_burnikel_ziegler_with_knuth;
-use crate::int::algos::div::div_knuth::{div_knuth, div_knuth_into};
+use crate::int::algos::div::div_knuth::div_knuth;
 use crate::int::algos::div::div_rem::div_rem;
 use crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook;
 
@@ -164,37 +164,17 @@ fn classify(num: &[u64], den: &[u64]) -> Algorithm {
 /// runtime-length slices). The build-max Knuth `u`/`v` scratch lives in the
 /// engine ([`div_knuth`] owns it), not here — the matcher allocates nothing.
 /// A concrete-`N` caller that can size scratch exactly (`Int<N>: ComputeInt`)
-/// chooses its buffer family (`single_limbs` / `double_limbs`) and calls
-/// [`dispatch_into`] instead, skipping the build-max blanket.
+/// sources its own buffer family (`single_limbs` / `double_limbs`) and calls
+/// the Knuth engine [`div_knuth_into`] directly — single-limb divisors route
+/// to the hardware path inside the engine and Burnikel–Ziegler never engages
+/// at supported widths, so the engine call is this matcher's identical
+/// choice without the build-max blanket.
+///
+/// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
 pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     match classify(num, den) {
         Algorithm::Rem => div_rem(num, den, quot, rem),
         Algorithm::Knuth => div_knuth(num, den, quot, rem),
-        Algorithm::BurnikelZieglerWithKnuth => {
-            div_burnikel_ziegler_with_knuth(num, den, quot, rem)
-        }
-        Algorithm::Schoolbook => div_rem_schoolbook(num, den, quot, rem),
-    }
-}
-
-/// [`dispatch`] with caller-provided normalised `u`/`v` Knuth scratch — the
-/// exact-scratch entry for a concrete-`N` caller (`Int<N>: ComputeInt`) that
-/// has sized the buffers to its operand width (`single_limbs` /
-/// `double_limbs`) rather than paying the engine's build-max blanket. `u`
-/// must cover `num.len() + 2`, `v` must cover `den.len()`, both zeroed. Same
-/// classification, same result; only the Knuth arm reads the caller's `u`/`v`
-/// (the `Rem` fast path and the unreached BZ / Schoolbook arms need none).
-pub(crate) fn dispatch_into(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
-    u: &mut [u64],
-    v: &mut [u64],
-) {
-    match classify(num, den) {
-        Algorithm::Rem => div_rem(num, den, quot, rem),
-        Algorithm::Knuth => div_knuth_into(num, den, quot, rem, u, v),
         Algorithm::BurnikelZieglerWithKnuth => {
             div_burnikel_ziegler_with_knuth(num, den, quot, rem)
         }

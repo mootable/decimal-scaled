@@ -8,7 +8,6 @@
 //! double-limb fast arms the fixed-width `Int<N>` types lower to.
 
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
-use crate::int::policy::div_rem::dispatch_into as div_rem_dispatch_into;
 
 /// Const-`N` fast-arm divmod over little-endian u64 magnitude limbs.
 ///
@@ -69,21 +68,3 @@ pub(crate) fn div_rem_mag_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem:
     div_rem_dispatch(num, den, quot, rem);
 }
 
-/// [`div_rem_mag_slice`] in caller-provided normalised `u`/`v` Knuth
-/// scratch — the exact-scratch entry for concrete-`N` callers
-/// (`Int<N>: ComputeInt`) that can size the buffers to the operand width
-/// instead of paying the build-max `[u64; 288]` zeroing. `u` must cover
-/// `num.len() + 2`, `v` must cover `den.len()`, both zeroed. Same engine
-/// and result as [`div_rem_mag_slice`]; see
-/// [`crate::int::policy::div_rem::dispatch_into`].
-#[inline]
-pub(crate) fn div_rem_mag_slice_into(
-    num: &[u64],
-    den: &[u64],
-    quot: &mut [u64],
-    rem: &mut [u64],
-    u: &mut [u64],
-    v: &mut [u64],
-) {
-    div_rem_dispatch_into(num, den, quot, rem, u, v);
-}

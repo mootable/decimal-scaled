@@ -30,7 +30,7 @@
 //! All integer arithmetic dispatches DOWN to the int layer; this fn never
 //! calls a decimal method on its own value.
 
-use crate::int::algos::div::div_fixed::div_rem_mag_slice_into;
+use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
@@ -152,7 +152,7 @@ where
     // divisor `b` is `N`-wide, so `v` needs `single_limbs` (`N + 2`).
     let mut u_buf = Int::<N>::double_limbs();
     let mut v_buf = Int::<N>::single_limbs();
-    div_rem_mag_slice_into(
+    div_knuth_into(
         &num[..ntop],
         &b_mag[..bl],
         &mut quot[..qlen],

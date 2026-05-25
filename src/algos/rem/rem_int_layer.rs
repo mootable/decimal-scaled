@@ -3,7 +3,7 @@
 
 //! `rem_int_layer` -- decimal remainder via the `Int<N>` layer.
 
-use crate::int::policy::div_rem::dispatch_into as div_rem_dispatch_into;
+use crate::int::algos::div::div_knuth::div_knuth_into;
 use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 
@@ -13,25 +13,24 @@ use crate::int::types::Int;
 /// `i128::wrapping_rem`). No rescaling needed -- same-SCALE operands share
 /// the scale factor.
 ///
-/// Resolves the remainder through the same Knuth / Burnikel–Ziegler engine
-/// the `Rem` operator uses ([`crate::int::policy::div_rem`]), but calls the
-/// dispatcher's [`dispatch_into`] entry with **exact `ComputeInt` scratch**
-/// (`single_limbs`, sized `N + 2` per width) instead of the operator's
-/// build-max `[u64; 288]` Knuth buffers. Both paths run the identical engine
-/// on the identical operands — bit-identical result — but the operator must
-/// stay build-max (it is blanket over all `N`, the `exact-scratch` wall),
-/// whereas this concrete-`N` decimal kernel carries `Int<N>: ComputeInt` and
-/// so sizes the normalised `u`/`v` buffers to the operand width, dropping the
-/// 288-limb memset that dominated the wide-tier remainder (98% of the cost at
-/// D57 … 12% at D1232; and a ~25x regression vs 0.4.4 at the narrow shift-
-/// subtract `div_rem` fallback this path also avoids).
+/// Resolves the remainder via the Knuth engine [`div_knuth_into`] with
+/// **exact `ComputeInt` scratch** (`single_limbs`, `N + 2` per width)
+/// instead of the `Rem` operator's build-max `[u64; MAX_SINGLE_LIMBS]`
+/// Knuth buffers. `div_knuth_into` routes a single-limb divisor to the
+/// hardware path internally and Burnikel–Ziegler never engages at these
+/// widths, so calling the engine directly is the matcher's identical
+/// choice — bit-identical result — while sizing the normalised `u`/`v` to
+/// the operand width drops the build-max memset that dominated the wide-tier
+/// remainder (98% of the cost at D57 … 12% at D1232). The bare `Rem`
+/// operator must stay build-max (blanket over all `N`, the `exact-scratch`
+/// wall); this concrete-`N` decimal kernel carries `Int<N>: ComputeInt`.
 ///
 /// Only reached for `N >= 3` (the decimal `rem` policy routes `N <= 2` to
 /// `rem_native`), so the narrow hardware-`%` path is untouched; every such
 /// `N` is in the `exact-scratch` width list, so the `ComputeInt` bound
 /// discharges at the concrete `N` and never cascades.
 ///
-/// [`dispatch_into`]: crate::int::policy::div_rem::dispatch_into
+/// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
 #[inline]
 pub(crate) fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
 where
@@ -57,7 +56,7 @@ where
     // the normalised dividend `u` (`num.len() + 2`) and divisor `v`.
     let mut u = Int::<N>::single_limbs();
     let mut v = Int::<N>::single_limbs();
-    div_rem_dispatch_into(
+    div_knuth_into(
         a.unsigned_abs().as_limbs(),
         b.unsigned_abs().as_limbs(),
         &mut quot,
