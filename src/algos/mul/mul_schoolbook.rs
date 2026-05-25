@@ -141,8 +141,11 @@ where
 /// returning the ordering of `rem` vs `divisor - rem`.
 #[inline]
 fn cmp_double_vs(rem: &[u64], divisor: &[u64]) -> core::cmp::Ordering {
-    // Build 2*rem in a local buffer wide enough (divisor.len()+1).
-    let mut two_r = [0u64; 80];
+    // `2·rem` spans at most `rem.len() + 1` limbs, and `rem < divisor`, whose
+    // length is `≤ N ≤ MAX_WORK_N` (the widest enabled tier). A no-`N` slice
+    // helper, so it takes the build-max size (`MAX_WORK_N + 1`) — never a
+    // frozen literal that a wider tier could outgrow.
+    let mut two_r = [0u64; crate::int::algos::support::limbs::MAX_WORK_N + 1];
     let mut carry: u64 = 0;
     for (i, &r) in rem.iter().enumerate() {
         let v = (r as u128) << 1 | carry as u128;
