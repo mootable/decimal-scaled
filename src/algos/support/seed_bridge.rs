@@ -31,14 +31,8 @@
 //! leaf.
 
 use crate::algo_x_support::seed::sqrt_seed;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::traits::BigInt;
-
-/// Stack-buffer capacity (in `u64` limbs) for the `W ↔ &[u64]` seed
-/// bridge — covers the widest work integer in the crate (Int<256> =
-/// 256 u64 limbs) with seed-placement slack.
-const BRIDGE_LIMBS: usize = 288;
-/// u128-limb capacity for the magnitude round-trip (`⌈BRIDGE_LIMBS / 2⌉`).
-const BRIDGE_U128_LIMBS: usize = BRIDGE_LIMBS / 2 + 1;
 
 /// Unpacks the magnitude of `n` into the `u64` work slice `out_u64`
 /// (little-endian), returning the populated length. Bridges the kept
@@ -46,9 +40,11 @@ const BRIDGE_U128_LIMBS: usize = BRIDGE_LIMBS / 2 + 1;
 /// `&[u64]` interface — pure primitive limb splitting, no `BigInt`
 /// method beyond the existing magnitude bridge.
 #[inline]
-fn mag_to_u64<W: BigInt>(n: W, out_u64: &mut [u64]) -> usize {
+fn mag_to_u64<W: BigInt + ComputeInt>(n: W, out_u64: &mut [u64]) -> usize {
     let u128_len = (W::LIMBS + 1) >> 1;
-    let mut mag = [0u128; BRIDGE_U128_LIMBS];
+    // Exact per-`W` u128 magnitude buffer (`= W::U128_LIMBS`), no build-max.
+    let mut mag_buf = W::u128_limbs();
+    let mag = mag_buf.as_mut();
     n.mag_into_u128(&mut mag[..u128_len]);
     let mut i = 0;
     while i < u128_len {
@@ -65,10 +61,11 @@ fn mag_to_u64<W: BigInt>(n: W, out_u64: &mut [u64]) -> usize {
 /// limbs into u128 limbs and hands them to the kept
 /// [`BigInt::from_mag_sign_u128`] bridge.
 #[inline]
-fn u64_to_w<W: BigInt>(seed_u64: &[u64]) -> W {
+fn u64_to_w<W: BigInt + ComputeInt>(seed_u64: &[u64]) -> W {
     let u64_len = seed_u64.len();
     let u128_len = (u64_len + 1) >> 1;
-    let mut mag = [0u128; BRIDGE_U128_LIMBS];
+    let mut mag_buf = W::u128_limbs();
+    let mag = mag_buf.as_mut();
     let mut i = 0;
     while i < u128_len {
         let lo = seed_u64[2 * i] as u128;
@@ -93,15 +90,19 @@ fn u64_to_w<W: BigInt>(seed_u64: &[u64]) -> W {
 /// over-estimates. Always returns `≥ W::ONE`.
 #[inline]
 #[must_use]
-pub(crate) fn sqrt_seed_w<W: BigInt>(n: W) -> W {
+pub(crate) fn sqrt_seed_w<W: BigInt + ComputeInt>(n: W) -> W {
     let bits = n.bit_length();
     if bits <= 1 {
         // n == 1 → ⌊√1⌋ = 1; the leaf's preconditions assume bits ≥ 2.
         return W::ONE;
     }
-    let mut n_u64 = [0u64; BRIDGE_LIMBS];
-    let n_len = mag_to_u64(n, &mut n_u64);
-    let mut seed_u64 = [0u64; BRIDGE_LIMBS];
+    // Exact per-`W` u64 work slices (`single_limbs` = `W::LIMBS + 2`, covering
+    // the magnitude's `≤ W::LIMBS + 1` live limbs), no build-max blanket.
+    let mut n_u64_buf = W::single_limbs();
+    let n_u64 = n_u64_buf.as_mut();
+    let n_len = mag_to_u64(n, n_u64);
+    let mut seed_u64_buf = W::single_limbs();
+    let seed_u64 = seed_u64_buf.as_mut();
     sqrt_seed(&n_u64[..n_len], bits, &mut seed_u64[..n_len]);
     u64_to_w::<W>(&seed_u64[..n_len])
 }
