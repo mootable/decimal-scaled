@@ -143,24 +143,33 @@ exists to remove), and it must **not** reach for the build-max blanket.
 **The build-max blanket is the fallback of last resort — NOT for
 algorithms.** `MAX_SINGLE_LIMBS` / `MAX_DOUBLE_LIMBS` / `MAX_QUADRUPLE_LIMBS`
 / `MAX_U128_LIMB` (and the `max_*_limbs()` constructors), feature-gated via
-`MAX_WORK_N`, are sized to the widest tier the build enables. They exist
-**only** for the few paths that *structurally cannot* carry a concrete `N`
-on stable:
+`MAX_WORK_N`, are sized to the widest tier the build enables. They exist for *really just one* path that
+**structurally cannot** carry a concrete `N` on stable: the blanket `Int<N>`
+`/` / `%` operators and the `BigInt` trait methods — `impl<const N>` over
+every `N`, which can neither name `[u64; N + 2]` nor carry a `ComputeInt`
+bound (`ComputeInt: BigInt` is the supertrait, so requiring `ComputeInt` on
+the operator/`BigInt` impl is a cycle). And even that is escapable: the bare
+operators are cold — decimal ops route through the `ComputeInt` kernels, not
+the `Int<N>` operator — so they can fall back to the scratchless `const`
+shift-subtract `div_rem` instead of a Knuth build-max buffer. **The build-max
+blanket is therefore a *shrinking* fallback whose target is zero.**
 
-- the blanket `Int<N>` `/` / `%` operators and the `BigInt` methods — `impl
-  <const N>` over every `N`; they can neither name `[u64; N + 2]` nor carry a
-  `ComputeInt` bound (`ComputeInt: BigInt` is the supertrait, so requiring
-  `ComputeInt` on the `BigInt`/operator impl would be a cycle);
-- `Display` / radix formatting (`int_fmt`) — blanket over every `N`.
+Paths that *look* like exceptions but are **not** — a concrete `N` or const
+`SCALE` is in scope, so they must use `ComputeInt`:
 
-`newton_reciprocal` is **not** such an exception: its reciprocal/pow buffer
-lengths are functions of the work width *and* the divide exponent, and the
-exponent derives from the const `SCALE` — which reaches the kernel through
-the decimal policy dispatch (keyed on `(const N, const SCALE)`, the channel
-that should thread it). Both axes are const-provided, so these buffers are a
-const-sizing target (today they are frozen `MAX_*_U64` literals fed a runtime
-`scale: u32` — a Class-B defect to size down per `(width, SCALE)` threaded
-from dispatch), not a permanent blanket.
+- `Display` / radix formatting (`int_fmt`): `N` is the monomorphised width at
+  `impl<const N> Display for Int<N>`. `Display` is not a `BigInt` supertrait,
+  so a `where Int<N>: ComputeInt` bound is sound — thread it and source
+  `single_limbs()`.
+- `newton_reciprocal`: its reciprocal/pow buffer lengths are functions of the
+  work width *and* the divide exponent, and the exponent derives from the
+  const `SCALE` that the decimal policy dispatch carries (keyed on
+  `(const N, const SCALE)`, the channel that should thread it). Both axes are
+  const-provided, so these buffers are a const-sizing target — today frozen
+  `MAX_*_U64` literals fed a runtime `scale: u32`, a Class-B defect to size
+  down per `(width, SCALE)` threaded from dispatch.
+- `widen_mul`, the Newton-root `seed_bridge`, every algorithm kernel:
+  concrete `N` → `ComputeInt` methods.
 
 Everywhere a concrete `N` is in scope — every algorithm kernel, every
 decimal policy and decimal kernel — **use the normal `ComputeInt` methods,
