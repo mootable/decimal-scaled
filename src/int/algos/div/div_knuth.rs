@@ -12,12 +12,34 @@ use crate::int::algos::div::div_mg::Mg2By1;
 use crate::int::algos::div::div_rem::div_rem;
 use crate::int::algos::div::SCRATCH_LIMBS;
 
-/// Knuth Algorithm D at base 2^64.
+/// Knuth Algorithm D — build-max-scratch wrapper. Allocates the normalised
+/// `u`/`v` working buffers at the build-max width and delegates to
+/// [`div_knuth_into`]. Callers that can size the scratch exactly (an
+/// `Int<N>: ComputeInt` context) call `div_knuth_into` directly with their
+/// own buffer (`single_limbs` for a value divide, `quad_limbs` for the cbrt
+/// radicand divide), skipping the build-max zeroing.
+pub(crate) fn div_knuth(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+    let mut u = [0u64; SCRATCH_LIMBS];
+    let mut v = [0u64; SCRATCH_LIMBS];
+    div_knuth_into(num, den, quot, rem, &mut u, &mut v);
+}
+
+/// Knuth Algorithm D at base 2^64, in caller-provided normalised `u`/`v`
+/// scratch. `u` and `v` must be **zeroed** on entry and at least
+/// `num.len() + 2` / `den.len()` u64 limbs respectively (the divide reads
+/// one limb above the live dividend, relying on the zero there).
 ///
 /// Every limb is a u64 and the q̂ estimator uses [`Mg2By1`]. The
 /// multiply-subtract pass uses native `u64 × u64 → u128`, which keeps the
 /// carry-merge to a single layer.
-pub(crate) fn div_knuth(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+pub(crate) fn div_knuth_into(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+    u: &mut [u64],
+    v: &mut [u64],
+) {
     for q in quot.iter_mut() {
         *q = 0;
     }
@@ -46,9 +68,7 @@ pub(crate) fn div_knuth(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u
     }
 
     let shift = den[n - 1].leading_zeros();
-    let mut u = [0u64; SCRATCH_LIMBS];
-    let mut v = [0u64; SCRATCH_LIMBS];
-    debug_assert!(top < SCRATCH_LIMBS && n <= SCRATCH_LIMBS);
+    debug_assert!(top < u.len() && n <= v.len());
 
     if shift == 0 {
         u[..top].copy_from_slice(&num[..top]);
