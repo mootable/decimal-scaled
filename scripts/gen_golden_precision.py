@@ -98,6 +98,7 @@ Usage:
 from __future__ import annotations
 
 import random
+import sys
 from pathlib import Path
 from typing import Callable
 
@@ -169,6 +170,17 @@ TIERS = [
     ("d616",  616,  308, 36),
     ("d924",  924,  460, 24),
     ("d1232", 1232, 615, 20),
+    # Low-scale (SCALE 30) cells for the wide tiers — the bench-branch-compare
+    # exp regime, where the exp policy routes a Tang rectangle. The default
+    # per-tier entries above sit at each tier's design SCALE (the Tang
+    # rectangle's TOP edge / the Series wash zone); these s30 cells validate
+    # the rectangle's LOW edge, where Tang's table reduction wins. Same width
+    # capacity, scale pinned to 30.
+    ("d307",  307,  30,  60),
+    ("d462",  462,  30,  44),
+    ("d616",  616,  30,  36),
+    ("d924",  924,  30,  24),
+    ("d1232", 1232, 30,  20),
 ]
 
 # --- mpmath function oracles ----------------------------------------------
@@ -1195,12 +1207,32 @@ def category_counts(base_count: int) -> dict[str, int]:
 COUNT_SCALE = 0.34
 
 
+def _csv_filter(flag: str) -> set[str] | None:
+    """Parse `--flag=a,b,c` from argv into a lowercase set, or None if absent.
+    When None the corresponding axis is unrestricted (full-corpus behaviour)."""
+    prefix = f"--{flag}="
+    for arg in sys.argv[1:]:
+        if arg.startswith(prefix):
+            return {v.strip().lower() for v in arg[len(prefix):].split(",") if v.strip()}
+    return None
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     total_bytes = 0
     total_cases = 0
 
+    # Optional scoping filters (absent => full corpus, the default behaviour):
+    #   --only-alias=d307,d462   --only-scale=30   --only-func=exp
+    only_alias = _csv_filter("only-alias")
+    only_scale = _csv_filter("only-scale")
+    only_func = _csv_filter("only-func")
+
     for alias, capacity, scale, base_count in TIERS:
+        if only_alias is not None and alias.lower() not in only_alias:
+            continue
+        if only_scale is not None and str(scale) not in only_scale:
+            continue
         # `max_raw` clamps both inputs and rounded outputs to what the
         # storage type can actually hold. The documented decimal
         # capacity (`10 ** (capacity - 1)`) is the headroom-conservative
@@ -1212,6 +1244,15 @@ def main() -> None:
         max_raw = 10 ** (capacity - 1)
         if alias in STORAGE_MAX:
             max_raw = min(max_raw, STORAGE_MAX[alias])
+        # The wide tiers' SCALE-30 cells validate the exp Tang rectangle, which
+        # `policy::exp` magnitude-gates to |x| < 100 (above it the policy routes
+        # Series, validated at the canonical scales). Bound the inputs to that
+        # domain — an exp-output cap of 10^(scale+44) keeps |x| roughly < 100 —
+        # so the cell exercises exactly the wired (Tang) regime, and does not
+        # reach into the large-|x| Series path (whose deep-underflow Ceiling
+        # edge is a separate, pre-existing concern, not this cell's subject).
+        if scale == 30:
+            max_raw = min(max_raw, 10 ** (scale + 44))
         counts = category_counts(max(8, int(base_count * COUNT_SCALE)))
         # Lift mpmath working precision so the oracle's intermediate
         # squarings stay safely above the tier's storage LSB. The
@@ -1219,9 +1260,17 @@ def main() -> None:
         # squares an LSB-scale residual; the global lower bound of 700
         # keeps the narrow tiers from running unnecessarily slow on
         # small `2*SCALE` values.
-        mp.dps = max(700, 2 * scale + 64)
+        # `2*scale + 64` covers the canonical cells (where x is moderate and
+        # the result is ~scale-sized). At a LOW scale the representable input
+        # range is huge, so the result can fill the tier's whole `capacity`
+        # (e.g. exp(x) at D924<30> reaches ~894 integer digits); the oracle
+        # then needs `>= capacity` significant digits or it truncates the true
+        # value. Take the max so both regimes are covered.
+        mp.dps = max(700, 2 * scale + 64, capacity + 96)
 
         for func_name, oracle, _domain in FUNCS:
+            if only_func is not None and func_name.lower() not in only_func:
+                continue
             seed_key = f"{alias}-{scale}-{func_name}-v1"
             rng = random.Random(seed_key)
 
@@ -1307,6 +1356,8 @@ def main() -> None:
         # ── Two-argument oracles (log / atan2 / powf) ──────────────────
         two_arg_count = max(20, int(base_count * COUNT_SCALE))
         for func_name, oracle2, _domain in TWO_ARG_FUNCS:
+            if only_func is not None and func_name.lower() not in only_func:
+                continue
             seed_key = f"{alias}-{scale}-{func_name}-2arg-v1"
             rng = random.Random(seed_key)
             pairs = two_arg_inputs(func_name, scale, max_raw, two_arg_count, rng)

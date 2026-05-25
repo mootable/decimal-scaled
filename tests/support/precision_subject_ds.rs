@@ -99,10 +99,15 @@ impl PrecisionSubject for DecimalScaledSubject {
         &self,
         method: Method,
         width: Width,
-        _scale: u32,
+        scale: u32,
         input: &Input,
         mode: RoundingMode,
     ) -> SubjectOutput {
+        // The wide tiers carry a second golden cell at SCALE 30 (the low-scale
+        // Tang rectangle in `policy::exp`), in addition to their canonical
+        // design scale. Pick the const-generic type by the requested scale; the
+        // canonical scale is the default. Narrow tiers have a single cell, so
+        // their canonical scale is implicit.
         match width {
             Width::D18 => eval_typed!(D18<9>, decimal_scaled::Int<1>, method, input, mode),
             Width::D38 => eval_typed!(D38<19>, decimal_scaled::Int<2>, method, input, mode),
@@ -111,10 +116,15 @@ impl PrecisionSubject for DecimalScaledSubject {
             Width::D115 => eval_typed!(D115<57>, Int<6>, method, input, mode),
             Width::D153 => eval_typed!(D153<76>, Int<8>, method, input, mode),
             Width::D230 => eval_typed!(D230<115>, Int<12>, method, input, mode),
+            Width::D307 if scale == 30 => eval_typed!(D307<30>, Int<16>, method, input, mode),
             Width::D307 => eval_typed!(D307<150>, Int<16>, method, input, mode),
+            Width::D462 if scale == 30 => eval_typed!(D462<30>, Int<24>, method, input, mode),
             Width::D462 => eval_typed!(D462<230>, Int<24>, method, input, mode),
+            Width::D616 if scale == 30 => eval_typed!(D616<30>, Int<32>, method, input, mode),
             Width::D616 => eval_typed!(D616<308>, Int<32>, method, input, mode),
+            Width::D924 if scale == 30 => eval_typed!(D924<30>, Int<48>, method, input, mode),
             Width::D924 => eval_typed!(D924<460>, Int<48>, method, input, mode),
+            Width::D1232 if scale == 30 => eval_typed!(D1232<30>, Int<64>, method, input, mode),
             Width::D1232 => eval_typed!(D1232<615>, Int<64>, method, input, mode),
         }
     }

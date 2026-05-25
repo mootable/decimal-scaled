@@ -95,9 +95,15 @@ fn method_of(func: &str) -> Method {
 /// scored cell is correctly rounded (`lsbe == 0`). A mismatch prints the
 /// full (input, mode) detail and is counted; a non-zero count fails.
 fn check(func: &str, width: Width, table: &str) {
+    check_at_scale(func, width, width.canonical_scale(), table);
+}
+
+/// As [`check`], but at an explicit `scale` rather than the width's canonical
+/// one — used for the wide tiers' second (SCALE 30) golden cell, which
+/// validates the low-scale Tang rectangle in `policy::exp`.
+fn check_at_scale(func: &str, width: Width, scale: u32, table: &str) {
     let subject = DecimalScaledSubject;
     let method = method_of(func);
-    let scale = width.canonical_scale();
     let mut failures = 0usize;
 
     for line in table.lines() {
@@ -575,4 +581,44 @@ decl_band! {
         atan2 = "golden/atan2_d1232_s615.txt";
         powf  = "golden/powf_d1232_s615.txt";
     },
+}
+
+// ─── Wide-tier low-scale (SCALE 30) exp cells ──────────────────────────
+//
+// The wide tiers' canonical bands above sit at each tier's design scale (the
+// Series wash zone / the top edge of the low-scale Tang rectangle in
+// `policy::exp`). These cells pin `exp` at SCALE 30 — the bench-branch-compare
+// regression regime, the LOW edge of the rectangle, where the policy routes
+// Tang and where Tang's table reduction wins. They validate the Tang arm
+// against the mpmath oracle across the full adversarial input spread × all six
+// modes, at a scale the canonical band does not reach. `check_at_scale` drives
+// the subject at SCALE 30 (the subject picks the `D###<30>` type for it).
+mod wide_s30_exp {
+    use super::{check_at_scale, Width};
+
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn d307_exp_s30() {
+        check_at_scale("exp", Width::D307, 30, include_str!("golden/exp_d307_s30.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn d462_exp_s30() {
+        check_at_scale("exp", Width::D462, 30, include_str!("golden/exp_d462_s30.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn d616_exp_s30() {
+        check_at_scale("exp", Width::D616, 30, include_str!("golden/exp_d616_s30.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn d924_exp_s30() {
+        check_at_scale("exp", Width::D924, 30, include_str!("golden/exp_d924_s30.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn d1232_exp_s30() {
+        check_at_scale("exp", Width::D1232, 30, include_str!("golden/exp_d1232_s30.txt"));
+    }
 }

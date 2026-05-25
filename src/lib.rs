@@ -681,7 +681,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d307", feature = "wide", feature = "x-wide")))]
     #[inline(never)]
     pub fn exp_tang_d307<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<16>, mode: crate::RoundingMode) -> crate::int::types::Int<16> {
-        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, M, G, false, false, false>(raw, mode)
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
     #[cfg(any(feature = "d462", feature = "x-wide"))]
     #[inline(never)]
@@ -691,7 +691,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d462", feature = "x-wide")))]
     #[inline(never)]
     pub fn exp_tang_d462<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
-        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, M, G, false, false, false>(raw, mode)
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
     #[cfg(any(feature = "d616", feature = "x-wide"))]
     #[inline(never)]
@@ -701,7 +701,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d616", feature = "x-wide")))]
     #[inline(never)]
     pub fn exp_tang_d616<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
-        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, M, G, false, false, false>(raw, mode)
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[inline(never)]
@@ -711,7 +711,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d924", feature = "xx-wide")))]
     #[inline(never)]
     pub fn exp_tang_d924<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
-        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, M, G, false, false, false>(raw, mode)
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
     #[inline(never)]
@@ -721,7 +721,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d1232", feature = "xx-wide")))]
     #[inline(never)]
     pub fn exp_tang_d1232<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
-        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, M, G, false, false, false>(raw, mode)
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
 
     // ln — Series (generic-over-Core `ln_series`).
