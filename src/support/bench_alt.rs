@@ -18,8 +18,6 @@
 
 #![cfg(feature = "bench-alt")]
 
-use crate::types::widths::D38;
-
 // D38 — every strict transcendental is an `override` (hand-tuned
 // per `algos/support/fixed.rs`). The `_default` alias would be the
 // macro-generated `decl_wide_transcendental!` path; that path is

@@ -437,7 +437,10 @@ pub mod __bench_internals {
     pub fn dec_rem_int_layer<const N: usize>(
         a: crate::int::types::Int<N>,
         b: crate::int::types::Int<N>,
-    ) -> crate::int::types::Int<N> {
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
+    {
         crate::algos::rem::rem_int_layer::rem_int_layer::<N>(a, b)
     }
     /// The OLD wide decimal-remainder path: `Int::wrapping_rem` (the const
