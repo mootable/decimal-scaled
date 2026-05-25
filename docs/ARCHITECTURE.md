@@ -384,11 +384,24 @@ Rules that make this work:
 
 ### Keeping the alternatives
 
-Algorithms that lose at today's widths (FFT/NTT multiplication, AGM below
-~D1232, …) are not deleted. They are preserved as documented references
-and, where the implementation is genuinely different, as compiled-out
-code — because a future CPU/LLVM instruction or a platform-specific build
-can flip a today-loser into a winner. See `ALGORITHMS.md`.
+**Algorithms are never deleted.** A kernel that loses at today's widths
+(FFT/NTT multiplication, AGM below ~D1232, …), an **unwired candidate**
+awaiting a bench/policy seam, or a **reference baseline** (the schoolbook
+`Algorithm` variants) is *kept* — as a documented reference and, where the
+implementation genuinely differs, as compiled-out / unrouted code — because a
+future CPU/LLVM instruction, a platform-specific build, or a re-tuned
+threshold can flip a today-loser into a winner. **"Unwired" or "reached only
+by its own tests" is the EXPECTED state of a kept alternative, not dead code
+to remove.** See `ALGORITHMS.md`.
+
+The one thing that *is* removed is a **superseded duplicate** — the obsolete
+*shape* of an algorithm that a migration replaced in place (e.g. a
+`const`-work-width `fn f<W, const N>` once it became `fn f<W: ComputeInt>`):
+that is the same algorithm's dead skin, not an alternative, so it goes. The
+test of "alternative (keep) vs superseded duplicate (remove)": does it
+implement a *distinct* algorithm/shape that could win under different
+conditions (keep), or is it the leftover old signature of something that now
+exists in one canonical form (remove)?
 
 ## How the guarantees are enforced — by testing
 
