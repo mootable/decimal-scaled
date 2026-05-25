@@ -16,9 +16,9 @@ use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 /// Scratch capacity for the Newton isqrt kernel — 288 u64 limbs
 /// (18432 bits), covering the widest work integer in the crate
 /// (Int<256> used by D1232 cbrt, 256 u64 limbs) with isqrt scratch slack.
-use crate::int::algos::support::limbs::work_scratch;
+use crate::int::algos::support::limbs::max_n_limbs;
 
-const SCRATCH_LIMBS: usize = work_scratch(2);
+const SCRATCH_LIMBS: usize = max_n_limbs(2);
 
 /// `out = floor(sqrt(n))`. Newton iteration on top of the runtime divide
 /// dispatcher.

@@ -2,7 +2,7 @@
 //!
 //! Research kernel — **not wired into the dispatcher**. Built behind a
 //! `pub(crate)` API so micro-benches can compare it head-to-head against
-//! [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`].
+//! [`crate::algos::support::mg_divide::div_wide_pow10_chain`].
 //!
 //! # Algorithm
 //!
@@ -257,7 +257,7 @@ fn div_newton(
 
 /// Full `n / 10^SCALE` with rounding for a `BigInt`-backed value.
 ///
-/// Direct analogue of [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`]
+/// Direct analogue of [`crate::algos::support::mg_divide::div_wide_pow10_chain`]
 /// — same signature, same semantics, different inner algorithm.
 pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     n: W,
@@ -366,13 +366,13 @@ pub(crate) fn newton_pow10_mag_u128(
 /// | Int<64>    | 4096 |  ≥ 400           |
 ///
 /// Bench source: `benches/newton_vs_mg.rs` head-to-head against
-/// [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`] at the
+/// [`crate::algos::support::mg_divide::div_wide_pow10_chain`] at the
 /// listed widths × representative SCALE bands. Larger widths (Int<128>
 /// / Int<192> / Int<256> — used by the transcendental work integers)
 /// have no bench data and fall through to MG.
 ///
 /// Scale `≤ 38` always returns `false`: the single-pass MG kernel
-/// `div_wide_pow10_with` is the chosen winner there and a chain-Newton
+/// `div_wide_pow10` is the chosen winner there and a chain-Newton
 /// would be both slower and indistinguishable rounding-wise.
 #[inline]
 const fn newton_wins(width_bits: u32, scale: u32) -> bool {
@@ -472,21 +472,22 @@ mod cache {
 /// matching call sites in `macros::arithmetic::decl_decimal_arithmetic`
 /// and `macros::wide_transcendental::decl_wide_transcendental`.
 #[inline]
-pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, const N: usize>(
+pub(crate) fn dispatch_wide_pow10<W>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
-) -> W {
-    debug_assert_eq!(
-        N,
-        W::U128_LIMBS,
-        "magnitude buffer must match W's u128-limb width"
-    );
+) -> W
+where
+    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+{
     let bits = <W as crate::int::types::traits::BigInt>::BITS;
-    let mut mag = [0u128; N];
-    let neg = n.mag_into_u128(&mut mag);
-    dispatch_pow10_mag_u128(&mut mag, scale, neg, mode, bits);
-    W::from_mag_sign_u128(&mag, neg)
+    // u128 magnitude buffer from ComputeInt (size lives in the impl); no
+    // const work-width parameter — same mechanism as `div_wide_pow10`.
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
+    let mag = &mut buf.as_mut()[..W::U128_LIMBS];
+    let neg = n.mag_into_u128(mag);
+    dispatch_pow10_mag_u128(mag, scale, neg, mode, bits);
+    W::from_mag_sign_u128(mag, neg)
 }
 
 /// Width-agnostic dispatch for `mag / 10^scale`, in place on a u128-limb
@@ -495,7 +496,7 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, con
 ///
 /// Routes Newton vs MG-chain by [`newton_wins`], threading the
 /// thread-local reciprocal cache when Newton wins (std only). Shared with
-/// the typed [`dispatch_wide_pow10_with`] wrapper and the `Int<N>`-only
+/// the typed [`dispatch_wide_pow10`] wrapper and the `Int<N>`-only
 /// decimal `mul` kernel.
 #[inline]
 pub(crate) fn dispatch_pow10_mag_u128(
@@ -532,7 +533,7 @@ pub(crate) fn dispatch_pow10_mag_u128(
 #[cfg(test)]
 mod tests {
     use super::*;
-    use crate::algos::support::mg_divide::div_wide_pow10_chain_with;
+    use crate::algos::support::mg_divide::div_wide_pow10_chain;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
@@ -548,10 +549,7 @@ mod tests {
         let n = <Int<16> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain_with::<
-            Int<16>,
-            { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
-        >(n, scale, RoundingMode::HalfToEven);
+        let want = div_wide_pow10_chain::<Int<16>>(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
 
@@ -567,10 +565,7 @@ mod tests {
         let n = <Int<32> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain_with::<
-            Int<32>,
-            { <Int<32> as crate::int::types::traits::BigInt>::U128_LIMBS },
-        >(n, scale, RoundingMode::HalfToEven);
+        let want = div_wide_pow10_chain::<Int<32>>(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
     }
 
@@ -586,10 +581,7 @@ mod tests {
         let n = <Int<64> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
 
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
-        let want = div_wide_pow10_chain_with::<
-            Int<64>,
-            { <Int<64> as crate::int::types::traits::BigInt>::U128_LIMBS },
-        >(n, scale, RoundingMode::HalfToEven);
+        let want = div_wide_pow10_chain::<Int<64>>(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
     }
 }

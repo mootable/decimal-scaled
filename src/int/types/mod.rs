@@ -16,7 +16,7 @@
 //! per monomorphisation — no runtime dispatch.
 
 pub(crate) mod traits;
-pub(crate) mod work_scratch;
+pub(crate) mod compute_int;
 
 pub use traits::BigInt;
 
@@ -1632,7 +1632,7 @@ impl<const N: usize> Int<N> {
         mode: crate::support::rounding::RoundingMode,
     ) -> Option<Self>
     where
-        Self: crate::int::types::work_scratch::WorkScratch,
+        Self: crate::int::types::compute_int::ComputeInt,
     {
         hypot_dispatch::<N>(self, other, mode)
     }
@@ -1651,7 +1651,7 @@ impl<const N: usize> Int<N> {
     #[must_use]
     pub(crate) fn sum_sq(self, other: Self) -> Option<Self>
     where
-        Self: crate::int::types::work_scratch::WorkScratch,
+        Self: crate::int::types::compute_int::ComputeInt,
     {
         sum_sq_dispatch::<N>(self, other)
     }
@@ -1976,30 +1976,37 @@ impl<const N: usize> Int<N> {
     /// by the wide-tier `Mul` operator to compute
     /// `Storage * Storage → Wider`. Matches the macro's `widen_mul`.
     #[inline]
-    pub(crate) fn widen_mul<W: crate::int::types::traits::BigInt>(self, rhs: Self) -> W {
+    pub(crate) fn widen_mul<W>(self, rhs: Self) -> W
+    where
+        W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+        Int<N>: crate::int::types::compute_int::ComputeInt,
+    {
+        use crate::int::types::compute_int::ComputeInt;
         let negative = self.is_negative() ^ rhs.is_negative();
         let a = *self.unsigned_abs().as_limbs();
         let b = *rhs.unsigned_abs().as_limbs();
-        // Full product spans 2·N limbs; the shared 288-limb magnitude
-        // staging width (covers Int16384) bounds every instantiation.
-        // Route through the equal-length multiply dispatcher: both
-        // operands are `[u64; N]`, so this is the single site every wide
-        // tier's full product flows through. The dispatcher base-cases to
-        // schoolbook below `KARATSUBA_THRESHOLD_U64` (every shipped tier)
-        // and engages the non-allocating Karatsuba kernel at or above it,
-        // so one call lifts every width that crosses the threshold.
-        let mut prod = [0u64; 288];
+        // Full product spans 2·N u64 limbs — sized exactly by the source's
+        // `ComputeInt::double_limbs()` (no build-max blanket). Route through
+        // the equal-length multiply dispatcher: both operands are `[u64; N]`,
+        // so this is the single site every wide tier's full product flows
+        // through. The dispatcher base-cases to schoolbook below
+        // `KARATSUBA_THRESHOLD_U64` (every shipped tier) and engages the
+        // non-allocating Karatsuba kernel at or above it.
+        let mut prod_buf = <Int<N> as ComputeInt>::double_limbs();
+        let prod = prod_buf.as_mut();
         mul_fast(&a, &b, &mut prod[..2 * N]);
-        // Pack the 2·N-limb u64 product into u128 limbs for the kept
-        // `BigInt::from_mag_sign_u128` magnitude/sign bridge.
-        let mut u128_prod = [0u128; 144];
-        let pairs = N;
+        // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
+        // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
+        // product, so its `ComputeInt::u128_limbs()` buffer (`≥ N`) sizes
+        // the packed magnitude exactly.
+        let mut u128_buf = <W as ComputeInt>::u128_limbs();
+        let u128_prod = u128_buf.as_mut();
         let mut i = 0;
-        while i < pairs {
+        while i < N {
             u128_prod[i] = (prod[2 * i] as u128) | ((prod[2 * i + 1] as u128) << 64);
             i += 1;
         }
-        W::from_mag_sign_u128(&u128_prod[..pairs], negative)
+        W::from_mag_sign_u128(&u128_prod[..N], negative)
     }
 }
 
@@ -4054,37 +4061,34 @@ mod tests {
 }
 
 /// Feasibility proof for the unified narrow-tier divide path: the same
-/// `widen_mul` → `div_wide_pow10_with` pipeline the wide tiers already
+/// `widen_mul` → `div_wide_pow10` pipeline the wide tiers already
 /// run must produce the correct `(a · b) / 10^scale` at the narrow
 /// limb widths `N = 1` (`Int64`) and `N = 2` (`Int128`) that the
 /// D18/D38-unify steps will rewire onto. This locks in the
-/// `widen_mul::<wider>` then `div_wide_pow10_with::<wider, U128_LIMBS>`
+/// `widen_mul::<wider>` then `div_wide_pow10::<wider>`
 /// composition before any decimal type is rewired; it is additive and
 /// asserts only — no behaviour is changed here.
 #[cfg(all(test, feature = "wide"))]
 mod unified_mg_feasibility {
     use super::Int;
-    use crate::algos::support::mg_divide::div_wide_pow10_with;
+    use crate::algos::support::mg_divide::div_wide_pow10;
+    use crate::int::types::compute_int::ComputeInt;
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 
     /// `(a · b) / 10^scale` through the unified pipeline, computed as
     /// `Int<N>::widen_mul::<Int<M>>` (full product into the wider type)
-    /// then `div_wide_pow10_with::<Int<M>, LW>`. `LW` is the wider type's
-    /// `U128_LIMBS` (`(M + 1) / 2`), supplied explicitly by each caller
-    /// because a `<Int<M> as BigInt>::U128_LIMBS` expression cannot
-    /// appear in a const-generic argument over a generic `M`. Returns the
+    /// then `div_wide_pow10::<Int<M>>`. The wider type's u128 magnitude
+    /// width is read from its [`ComputeInt`] buffer (`u128_limbs`) inside
+    /// the divide — `ComputeInt` IS the mechanism for the wider work
+    /// intermediate, so no work-width const parameter is named. Returns the
     /// scaled wider-width quotient.
-    fn scaled<const N: usize, const M: usize, const LW: usize>(
-        a: Int<N>,
-        b: Int<N>,
-        scale: u32,
-    ) -> Int<M>
+    fn scaled<const N: usize, const M: usize>(a: Int<N>, b: Int<N>, scale: u32) -> Int<M>
     where
-        Int<M>: BigInt,
+        Int<M>: BigInt + ComputeInt,
     {
         let prod: Int<M> = a.widen_mul::<Int<M>>(b);
-        div_wide_pow10_with::<Int<M>, LW>(prod, scale, RoundingMode::HalfToEven)
+        div_wide_pow10::<Int<M>>(prod, scale, RoundingMode::HalfToEven)
     }
 
     /// N = 2 → widen to N = 4, scale 5 (the plan's anchor case).
@@ -4092,7 +4096,7 @@ mod unified_mg_feasibility {
     fn n2_widen4_scale5() {
         let a = Int::<2>::from_i64(123456789);
         let b = Int::<2>::from_i64(987654321);
-        let got = scaled::<2, 4, 2>(a, b, 5);
+        let got = scaled::<2, 4>(a, b, 5);
         assert_eq!(got, Int::<4>::from_i64(1219326311126));
     }
 
@@ -4101,7 +4105,7 @@ mod unified_mg_feasibility {
     fn n1_widen2_scale3() {
         let a = Int::<1>::from_i64(123456);
         let b = Int::<1>::from_i64(654321);
-        let got = scaled::<1, 2, 1>(a, b, 3);
+        let got = scaled::<1, 2>(a, b, 3);
         assert_eq!(got, Int::<2>::from_i64(80779853));
     }
 
@@ -4113,18 +4117,18 @@ mod unified_mg_feasibility {
         // N = 1 → 2: x = 4242, k = 4.
         let x1 = 4242i64;
         let ten_pow_4 = Int::<1>::from_i64(10_000);
-        let rt1 = scaled::<1, 2, 1>(Int::<1>::from_i64(x1), ten_pow_4, 4);
+        let rt1 = scaled::<1, 2>(Int::<1>::from_i64(x1), ten_pow_4, 4);
         assert_eq!(rt1, Int::<2>::from_i64(x1));
 
         // N = 2 → 4: x = 9_876_543_210, k = 7.
         let x2 = 9_876_543_210i64;
         let ten_pow_7 = Int::<2>::from_i64(10_000_000);
-        let rt2 = scaled::<2, 4, 2>(Int::<2>::from_i64(x2), ten_pow_7, 7);
+        let rt2 = scaled::<2, 4>(Int::<2>::from_i64(x2), ten_pow_7, 7);
         assert_eq!(rt2, Int::<4>::from_i64(x2));
     }
 
     /// Scale-0 identity: callers short-circuit `scale == 0` as a no-op
-    /// (`div_wide_pow10_with` is only ever invoked for `1..=38`), so the
+    /// (`div_wide_pow10` is only ever invoked for `1..=38`), so the
     /// scaled value at scale 0 is exactly the full widen_mul product.
     /// This locks that contract for the narrow widths.
     #[test]
@@ -4151,7 +4155,7 @@ mod unified_mg_feasibility {
         // scale by 10^9 and check against the u128 reference.
         let a1 = Int::<1>::from_i64(i64::MAX);
         let b1 = Int::<1>::from_i64(i64::MAX);
-        let got1 = scaled::<1, 2, 1>(a1, b1, 9);
+        let got1 = scaled::<1, 2>(a1, b1, 9);
         let exact1 = (i64::MAX as i128) * (i64::MAX as i128);
         let pow9 = 1_000_000_000i128;
         let q1 = exact1 / pow9;
@@ -4169,7 +4173,7 @@ mod unified_mg_feasibility {
         // widened into N = 4, then scaled by 10^20. Compare against the
         // exact reference reconstructed from the full 256-bit product.
         let big = Int::<2>::MAX; // 2^127 - 1
-        let got2 = scaled::<2, 4, 2>(big, big, 20);
+        let got2 = scaled::<2, 4>(big, big, 20);
         let prod2: Int<4> = big.widen_mul::<Int<4>>(big);
         // Exact (2^127 - 1)^2 / 10^20, HalfToEven, via the wider type's
         // own div_rem against 10^20 built in Int<4>.

@@ -3,6 +3,8 @@
 
 //! `rem_int_layer` -- decimal remainder via the `Int<N>` layer.
 
+use crate::int::algos::div::div_knuth::div_knuth_into;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 
 /// Decimal remainder via the `Int<N>` layer. Applies Rust's standard
@@ -11,30 +13,56 @@ use crate::int::types::Int;
 /// `i128::wrapping_rem`). No rescaling needed -- same-SCALE operands share
 /// the scale factor.
 ///
-/// Routes the actual remainder through the `Int<N>` `Rem` operator
-/// ([`crate::int::policy::rem::dispatch`] -> `rem_via_div_rem` ->
-/// [`crate::int::policy::div_rem::dispatch`], the Knuth / Burnikel-Ziegler
-/// engine), NOT `Int::wrapping_rem` / `Int::checked_rem`. Those route to the
-/// const single-algorithm `div_rem`, whose multi-limb fallback is an
-/// `O(bit_len)` binary shift-subtract: for a wide divisor (`10^SCALE` with
-/// `SCALE > 19`, e.g. a 32-limb `10^616` at D1232) that fallback runs
-/// thousands of shift-subtract steps and dominated the wide-tier remainder
-/// (a ~25x regression vs 0.4.4, whose `Rem` operator already used the Knuth
-/// dispatcher). The operator path resolves the same remainder via Knuth in a
-/// single multiply-subtract sweep. Bit-identical result for every operand
-/// relationship; only the engine differs.
+/// Resolves the remainder via the Knuth engine [`div_knuth_into`] with
+/// **exact `ComputeInt` scratch** (`single_limbs`, `N + 2` per width)
+/// instead of the `Rem` operator's build-max `[u64; MAX_SINGLE_LIMBS]`
+/// Knuth buffers. `div_knuth_into` routes a single-limb divisor to the
+/// hardware path internally and Burnikel–Ziegler never engages at these
+/// widths, so calling the engine directly is the matcher's identical
+/// choice — bit-identical result — while sizing the normalised `u`/`v` to
+/// the operand width drops the build-max memset that dominated the wide-tier
+/// remainder (98% of the cost at D57 … 12% at D1232). The bare `Rem`
+/// operator must stay build-max (blanket over all `N`, the `exact-scratch`
+/// wall); this concrete-`N` decimal kernel carries `Int<N>: ComputeInt`.
 ///
-/// The operator is only reached for `N >= 3` (the decimal `rem` policy routes
-/// `N <= 2` to `rem_native`), so the narrow hardware-`%` path is untouched.
+/// Only reached for `N >= 3` (the decimal `rem` policy routes `N <= 2` to
+/// `rem_native`), so the narrow hardware-`%` path is untouched; every such
+/// `N` is in the `exact-scratch` width list, so the `ComputeInt` bound
+/// discharges at the concrete `N` and never cascades.
+///
+/// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
 #[inline]
-pub(crate) fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
-    // Divide-by-zero panics in both modes (the operator path asserts on a
-    // zero divisor). In debug, the `MIN % -ONE` overflow must also panic,
-    // matching the primitive contract and the prior `checked_rem` path;
-    // detect it with cheap comparisons (no divide) and panic before the
-    // operator wraps it to zero.
+pub(crate) fn rem_int_layer<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N>
+where
+    Int<N>: ComputeInt,
+{
+    // Divide-by-zero panics in both modes. In debug, the `MIN % -ONE`
+    // overflow must also panic, matching the primitive contract and the
+    // prior `checked_rem` path; detect it with cheap comparisons (no divide)
+    // and panic before the divide wraps it to zero.
     if cfg!(debug_assertions) && a == Int::<N>::MIN && b == -Int::<N>::ONE {
         panic!("attempt to calculate the remainder with overflow");
     }
-    a % b
+    assert!(
+        !b.is_zero(),
+        "attempt to calculate the remainder with a divisor of zero"
+    );
+
+    // Truncating-toward-zero: the remainder carries the dividend's sign.
+    let neg_r = a.is_negative();
+    let mut quot = [0u64; N];
+    let mut rem = [0u64; N];
+    // Exact per-`N` Knuth scratch: `single_limbs` is `[u64; N + 2]`, covering
+    // the normalised dividend `u` (`num.len() + 2`) and divisor `v`.
+    let mut u = Int::<N>::single_limbs();
+    let mut v = Int::<N>::single_limbs();
+    div_knuth_into(
+        a.unsigned_abs().as_limbs(),
+        b.unsigned_abs().as_limbs(),
+        &mut quot,
+        &mut rem,
+        u.as_mut(),
+        v.as_mut(),
+    );
+    Int::<N>::from_mag_limbs(&rem, neg_r)
 }

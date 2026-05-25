@@ -18,7 +18,7 @@
 
 /// Widest decimal storage limb count `N` enabled by the build's width
 /// features (D38=2, D307=16, D616=32, D1232=64). The work-scratch sizing
-/// derives from it via [`work_scratch`] — ONE feature-gated const + one
+/// derives from it via [`max_n_limbs`] — ONE feature-gated const + one
 /// `const fn`, no per-`Int<N>` impls.
 #[cfg(any(feature = "xx-wide", feature = "d924", feature = "d1232"))]
 pub(crate) const MAX_WORK_N: usize = 64;
@@ -52,24 +52,24 @@ pub(crate) const MAX_WORK_N: usize = 2;
 /// (`cbrt`/`icbrt_newton`, radicand ≤ 4N). Sized
 /// `mult·MAX_WORK_N + ceil(MAX_WORK_N/2)` — the work width plus a `0.5·N`
 /// margin for the `work = n.len()+1` carry-limb sizing (reproducing the
-/// proven `288 = work_scratch(4)` at xx-wide). Kernels expand in limbs
+/// proven `288 = max_n_limbs(4)` at xx-wide). Kernels expand in limbs
 /// rather than a work *type* `Int<2N>`/`Int<4N>` (unnameable from `N` on
 /// stable; see the algorithim-optimiser skill §5). The exact per-`N`
-/// alternatives ([`work_scratch_n`], the `exact-scratch` impls) live in
-/// `crate::int::types::work_scratch`.
-pub(crate) const fn work_scratch(mult: usize) -> usize {
+/// alternatives ([`n_limbs`], the `exact-scratch` impls) live in
+/// `crate::int::types::max_n_limbs`.
+pub(crate) const fn max_n_limbs(mult: usize) -> usize {
     mult * MAX_WORK_N + (MAX_WORK_N + 1) / 2
 }
 
 /// Exact per-`N` work-scratch budget: `mult·n + ceil(n/2)`, the same
-/// formula as [`work_scratch`] but for a *specific* limb count `n` rather
+/// formula as [`max_n_limbs`] but for a *specific* limb count `n` rather
 /// than the build-max. Used by the `exact-scratch-nightly` blanket
-/// [`WorkScratch`] impl, where it appears as a `generic_const_exprs` array
+/// [`ComputeInt`] impl, where it appears as a `generic_const_exprs` array
 /// length confined to that impl block.
 ///
-/// [`WorkScratch`]: crate::int::types::work_scratch::WorkScratch
+/// [`ComputeInt`]: crate::int::types::max_n_limbs::ComputeInt
 #[cfg(feature = "exact-scratch-nightly")]
-pub(crate) const fn work_scratch_n(mult: usize, n: usize) -> usize {
+pub(crate) const fn n_limbs(mult: usize, n: usize) -> usize {
     mult * n + (n + 1) / 2
 }
 

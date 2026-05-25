@@ -24,7 +24,7 @@
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{cmp_cross, shl};
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -44,12 +44,12 @@ fn sig_len(a: &[u64]) -> usize {
 #[inline]
 fn mul_pow10_into<const N: usize>(src: &[u64], pow: u32, dst: &mut [u64]) -> usize
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     let s = sig_len(src);
     dst[..s].copy_from_slice(&src[..s]);
     let mut len = s;
-    let mut tmp_buf = Int::<N>::work4();
+    let mut tmp_buf = Int::<N>::quad_limbs();
     let tmp = tmp_buf.as_mut();
     for _ in 0..pow {
         let out = len + 1;
@@ -68,9 +68,9 @@ where
 #[inline]
 fn cube_into<const N: usize>(a: &[u64], la: usize, out: &mut [u64]) -> usize
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
-    let mut sq_buf = Int::<N>::work4();
+    let mut sq_buf = Int::<N>::quad_limbs();
     let sq = sq_buf.as_mut();
     let sq_cap = sq.len();
     let sq_len = (2 * la).min(sq_cap);
@@ -90,7 +90,7 @@ where
 #[must_use]
 pub(crate) fn cbrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: RoundingMode) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     if raw == Int::<N>::ZERO {
         return Int::<N>::ZERO;
@@ -98,25 +98,25 @@ where
     let negative = raw.is_negative();
 
     // ── radicand n = |raw| · 10^(2·scale) ───────────────────────────────
-    let mut n_buf = Int::<N>::work4();
+    let mut n_buf = Int::<N>::quad_limbs();
     let n = n_buf.as_mut();
     let nl = mul_pow10_into::<N>(raw.unsigned_abs().as_limbs(), 2 * scale, n);
 
     // ── q = floor(cbrt(n)) via the int slice kernel ─────────────────────
-    let mut q_buf = Int::<N>::work4();
+    let mut q_buf = Int::<N>::quad_limbs();
     let q = q_buf.as_mut();
     icbrt_newton(&n[..nl], &mut q[..nl]);
     let ql = sig_len(&q[..nl]);
 
     // ── single half-step round (all six modes), via cube comparisons ────
     // eight_n = 8n
-    let mut eight_n_buf = Int::<N>::work4();
+    let mut eight_n_buf = Int::<N>::quad_limbs();
     let eight_n = eight_n_buf.as_mut();
     shl(&n[..nl], 3, &mut eight_n[..nl + 1]);
     let en_len = sig_len(&eight_n[..nl + 1]);
 
     // t = 2q + 1; cube = t³
-    let mut t_buf = Int::<N>::work4();
+    let mut t_buf = Int::<N>::quad_limbs();
     let t = t_buf.as_mut();
     shl(&q[..ql], 1, &mut t[..ql + 1]);
     // +1
@@ -132,16 +132,16 @@ where
         }
     }
     let tl = sig_len(&t[..ql + 1]);
-    let mut cube_buf = Int::<N>::work4();
+    let mut cube_buf = Int::<N>::quad_limbs();
     let cube = cube_buf.as_mut();
     let cube_len = cube_into::<N>(t, tl, cube);
 
     // eight_q_cubed = (2q)³  (0 when q == 0)
-    let mut two_q_buf = Int::<N>::work4();
+    let mut two_q_buf = Int::<N>::quad_limbs();
     let two_q = two_q_buf.as_mut();
     shl(&q[..ql], 1, &mut two_q[..ql + 1]);
     let tql = sig_len(&two_q[..ql + 1]);
-    let mut eight_q_cubed_buf = Int::<N>::work4();
+    let mut eight_q_cubed_buf = Int::<N>::quad_limbs();
     let eight_q_cubed = eight_q_cubed_buf.as_mut();
     let eqc_len = if ql == 1 && q[0] == 0 {
         eight_q_cubed[0] = 0;

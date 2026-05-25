@@ -35,7 +35,7 @@
 
 use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
 use crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -99,7 +99,7 @@ const fn select<const N: usize>() -> Select<N> {
 #[must_use]
 pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     let algo = match const { select::<N>() } {
         Select::ByAlgorithm(a) => a,

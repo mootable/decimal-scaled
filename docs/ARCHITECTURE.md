@@ -119,6 +119,66 @@ The cross-width API is four traits (`src/types/traits/`):
 The typed method shells (`D57::<20>::sqrt_strict_with(mode)`) are emitted
 by macros in `src/macros/` and immediately hand off to the dispatch layer.
 
+## Work-width scratch — exact `ComputeInt`, never build-max
+
+Many algorithms compute in a width *wider* than the value's own `N` u64
+limbs: a multiply's `2N` product, a `sqrt` radicand (`2N`), a `cbrt`
+radicand (`4N`), the `÷10^w` magnitude (`⌈N/2⌉` u128). Stable Rust cannot
+name `[u64; 2N]` from a generic `N`, so the width lives on an
+**associated-type buffer** on the storage integer: the `ComputeInt` trait
+(`src/int/types/compute_int.rs`) exposes per-`N` constructors —
+`single_limbs()` (`N + 2`), `double_limbs()` (`2N`-family), `quad_limbs()`
+(`4N`-family), `u128_limbs()` (`⌈N/2⌉` u128). The size is fixed in the
+`impl` where `N` is concrete and **never appears in a function signature**:
+a kernel bounds on `Int<N>: ComputeInt`, calls the method, and gets an
+exactly-sized stack buffer that folds away per monomorphisation.
+
+**The algorithm sources its own exact scratch.** A kernel that needs a
+wider width takes `where Int<N>: ComputeInt` and calls the *normal* per-`N`
+method (`Int::<N>::double_limbs()`, …). It must **not** pass a work width as
+a const-generic argument (`fn f<W, const LW: usize>` where `LW == W::U128_LIMBS`
+is a defect — that const-work-width parameter is exactly the wall `ComputeInt`
+exists to remove), and it must **not** reach for the build-max blanket.
+
+**The build-max blanket is the fallback of last resort — NOT for
+algorithms.** `MAX_SINGLE_LIMBS` / `MAX_DOUBLE_LIMBS` / `MAX_QUADRUPLE_LIMBS`
+/ `MAX_U128_LIMB` (and the `max_*_limbs()` constructors), feature-gated via
+`MAX_WORK_N`, are sized to the widest tier the build enables. They exist for *really just one* path that
+**structurally cannot** carry a concrete `N` on stable: the blanket `Int<N>`
+`/` / `%` operators and the `BigInt` trait methods — `impl<const N>` over
+every `N`, which can neither name `[u64; N + 2]` nor carry a `ComputeInt`
+bound (`ComputeInt: BigInt` is the supertrait, so requiring `ComputeInt` on
+the operator/`BigInt` impl is a cycle). And even that is escapable: the bare
+operators are cold — decimal ops route through the `ComputeInt` kernels, not
+the `Int<N>` operator — so they can fall back to the scratchless `const`
+shift-subtract `div_rem` instead of a Knuth build-max buffer. **The build-max
+blanket is therefore a *shrinking* fallback whose target is zero.**
+
+Paths that *look* like exceptions but are **not** — a concrete `N` or const
+`SCALE` is in scope, so they must use `ComputeInt`:
+
+- `Display` / radix formatting (`int_fmt`): `N` is the monomorphised width at
+  `impl<const N> Display for Int<N>`. `Display` is not a `BigInt` supertrait,
+  so a `where Int<N>: ComputeInt` bound is sound — thread it and source
+  `single_limbs()`.
+- `newton_reciprocal`: its reciprocal/pow buffer lengths are functions of the
+  work width *and* the divide exponent, and the exponent derives from the
+  const `SCALE` that the decimal policy dispatch carries (keyed on
+  `(const N, const SCALE)`, the channel that should thread it). Both axes are
+  const-provided, so these buffers are a const-sizing target — today frozen
+  `MAX_*_U64` literals fed a runtime `scale: u32`, a Class-B defect to size
+  down per `(width, SCALE)` threaded from dispatch.
+- `widen_mul`, the Newton-root `seed_bridge`, every algorithm kernel:
+  concrete `N` → `ComputeInt` methods.
+
+Everywhere a concrete `N` is in scope — every algorithm kernel, every
+decimal policy and decimal kernel — **use the normal `ComputeInt` methods,
+never a `MAX_*` variant.** A `MAX_*` / `max_*_limbs()` use on a concrete-`N`
+path is the build-max blanket leaking onto a tier that can size itself
+exactly: that is the cross-tier size pollution the Constitution (rule 6)
+forbids, and it is a defect to be migrated to `single_limbs()` /
+`double_limbs()` / `quad_limbs()` / `u128_limbs()`.
+
 ## Algorithm choosing — and pruning
 
 A single function (say `sqrt`) has several possible algorithms — a

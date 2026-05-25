@@ -8,7 +8,7 @@
 //! This is the naive reference algorithm — no leading-zero fast path:
 //!
 //! 1. Form the full magnitude product `|a| * |b|` (`2N` u64 limbs) in a
-//!    [`WorkScratch::work2`] buffer via the int layer's slice
+//!    [`ComputeInt::double_limbs`] buffer via the int layer's slice
 //!    [`crate::int::algos::mul::mul_schoolbook::mul_schoolbook`].
 //! 2. Build `10^SCALE` in the same limb domain and divide the product by
 //!    it using the int layer's width-agnostic divide
@@ -27,7 +27,7 @@
 
 use crate::int::algos::div::div_fixed::div_rem_mag_slice;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook as mul_slice;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
 
@@ -42,7 +42,7 @@ fn sig_len(a: &[u64]) -> usize {
 }
 
 /// Naive schoolbook decimal multiplication, generic over `N`. Requires
-/// `Int<N>: WorkScratch` for the `2N`-limb product scratch.
+/// `Int<N>: ComputeInt` for the `2N`-limb product scratch.
 ///
 /// Forms the full magnitude product in the scratch buffer, then divides by
 /// `10^SCALE` using the plain int-layer `div_rem`, rounding under `mode`.
@@ -55,7 +55,7 @@ pub(crate) fn mul_schoolbook<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     let neg = a.is_negative() != b.is_negative();
     let a_mag = *a.unsigned_abs().as_limbs();
@@ -64,7 +64,7 @@ where
     let bl = sig_len(&b_mag);
 
     // Full magnitude product in the work scratch (2N u64 limbs).
-    let mut prod_buf = Int::<N>::work2();
+    let mut prod_buf = Int::<N>::double_limbs();
     let prod = prod_buf.as_mut();
     let plen = (al + bl).min(prod.len());
     for slot in prod[..plen].iter_mut() {
@@ -79,7 +79,7 @@ where
     }
 
     // Build 10^SCALE in a u64 limb buffer (iterative *10).
-    let mut div_buf = Int::<N>::work2();
+    let mut div_buf = Int::<N>::double_limbs();
     let divisor = div_buf.as_mut();
     divisor[0] = 1;
     let mut dl = 1usize;
@@ -98,9 +98,9 @@ where
 
     // q = prod / divisor, r = prod % divisor (magnitudes, via int layer).
     let ptop = sig_len(&prod[..plen]);
-    let mut quot_buf = Int::<N>::work2();
+    let mut quot_buf = Int::<N>::double_limbs();
     let quot = quot_buf.as_mut();
-    let mut rem_buf = Int::<N>::work2();
+    let mut rem_buf = Int::<N>::double_limbs();
     let rem = rem_buf.as_mut();
     for slot in quot[..ptop].iter_mut() {
         *slot = 0;

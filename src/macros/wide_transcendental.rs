@@ -106,7 +106,7 @@ pub(crate) mod exp_generic {
     #![allow(unused)]
     use crate::support::rounding::RoundingMode;
     use crate::int::types::traits::BigInt;
-    use crate::int::types::work_scratch::MgScratch;
+    use crate::int::types::compute_int::ComputeInt;
 
     /// Hard cap on series iterations — a safety net; every series
     /// terminates far sooner by reaching a zero term.
@@ -177,10 +177,10 @@ pub(crate) mod exp_generic {
     /// `÷ 10^38` stages. Bit-identical to the generic `round_div(n,
     /// 10^w)` (audited in `mg_divide::tests`), but replaces the
     /// per-Taylor-term 256-limb Knuth division that dominated the wide
-    /// hyperbolic/exp cost. The buffer comes from [`MgScratch`], so no
+    /// hyperbolic/exp cost. The buffer comes from [`ComputeInt`], so no
     /// const-generic limb count appears here.
     #[inline]
-    fn round_div_pow10<S: BigInt + MgScratch>(n: S, w: u32) -> S {
+    fn round_div_pow10<S: BigInt + ComputeInt>(n: S, w: u32) -> S {
         if w == 0 {
             return n;
         }
@@ -199,7 +199,7 @@ pub(crate) mod exp_generic {
     }
     /// `(a · b) / 10^w`, rounded half-to-even.
     #[inline]
-    fn mul<S: BigInt + MgScratch>(a: S, b: S, w: u32) -> S {
+    fn mul<S: BigInt + ComputeInt>(a: S, b: S, w: u32) -> S {
         // u128-packed wide multiply: bit-identical to `a * b` (it IS the low
         // product) for even-limb work widths, ~1/4 the partial products;
         // falls back to the base-2^64 schoolbook for odd N. This is the hot
@@ -253,7 +253,7 @@ pub(crate) mod exp_generic {
     /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
     /// call (the wider path is only taken on the rare large-result
     /// regime, so memoisation is not worth the per-`S` thread-local).
-    fn ln2<S: BigInt + MgScratch>(w: u32) -> S {
+    fn ln2<S: BigInt + ComputeInt>(w: u32) -> S {
         let t = one::<S>(w) / lit::<S>(3);
         let t2 = mul(t, t, w);
         let mut sum = t;
@@ -281,7 +281,7 @@ pub(crate) mod exp_generic {
     /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
     /// stays width-generic so the caller can run it in a wider integer
     /// for the large-result regime.
-    pub(crate) fn exp_fixed<S: BigInt + MgScratch>(v_w: S, w: u32) -> S {
+    pub(crate) fn exp_fixed<S: BigInt + ComputeInt>(v_w: S, w: u32) -> S {
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
         let pow10_w_pre = one_w_pre;
@@ -372,7 +372,7 @@ pub(crate) mod exp_generic {
     /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
     /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
     /// the small term's relative error stays a small *absolute* error.
-    pub(crate) fn sinh_pos<S: BigInt + MgScratch>(av_w: S, w: u32) -> S {
+    pub(crate) fn sinh_pos<S: BigInt + ComputeInt>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex - enx) >> 1
@@ -380,7 +380,7 @@ pub(crate) mod exp_generic {
 
     /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
     /// [`sinh_pos`].
-    pub(crate) fn cosh_pos<S: BigInt + MgScratch>(av_w: S, w: u32) -> S {
+    pub(crate) fn cosh_pos<S: BigInt + ComputeInt>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex + enx) >> 1
@@ -388,7 +388,7 @@ pub(crate) mod exp_generic {
 
     /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
     /// `w`. See [`sinh_pos`].
-    pub(crate) fn tanh_pos<S: BigInt + MgScratch>(av_w: S, w: u32) -> S {
+    pub(crate) fn tanh_pos<S: BigInt + ComputeInt>(av_w: S, w: u32) -> S {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         div(ex - enx, ex + enx, w)
@@ -742,23 +742,25 @@ macro_rules! decl_wide_transcendental {
                     return n;
                 }
                 if w <= 38 {
-                    return $crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        W,
-                        { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, $crate::support::rounding::RoundingMode::HalfToEven);
+                    return $crate::algos::support::mg_divide::div_wide_pow10::<W>(
+                        n,
+                        w,
+                        $crate::support::rounding::RoundingMode::HalfToEven,
+                    );
                 }
                 // Newton vs MG chain dispatch (see the matrix in
-                // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`]).
+                // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10`]).
                 // For most wide-tier `$Work` integers `W::BITS` lands
                 // outside the bench-validated cells (Int<128> /
                 // Int<192> / Int<256>) and the dispatcher forwards to
                 // MG; the routing is here so a future bench at the
                 // larger widths can promote without touching this
                 // site.
-                $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
-                    W,
-                    { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                >(n, w, $crate::support::rounding::RoundingMode::HalfToEven)
+                $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                    n,
+                    w,
+                    $crate::support::rounding::RoundingMode::HalfToEven,
+                )
             }
             /// `(a · b) / 10^w`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
@@ -930,9 +932,9 @@ macro_rules! decl_wide_transcendental {
             /// Mode-aware variant of [`round_to_storage`].
             ///
             /// When the narrowing distance `w - target` is in `1..=38`
-            /// the single-chunk MG kernel `div_wide_pow10_with` serves
+            /// the single-chunk MG kernel `div_wide_pow10` serves
             /// every mode directly. For `shift > 38` the chain-MG
-            /// kernel `div_wide_pow10_chain_with` does the same via
+            /// kernel `div_wide_pow10_chain` does the same via
             /// repeated `÷ 10^38` with combined-remainder bookkeeping
             /// (bit-exact for every `RoundingMode`; see
             /// `round_div_chain_audit_*` in `algos::support::mg_divide::tests`).
@@ -946,17 +948,13 @@ macro_rules! decl_wide_transcendental {
                 let rounded = if shift == 0 {
                     v
                 } else if shift <= 38 {
-                    $crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        W,
-                        { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(v, shift, mode)
+                    $crate::algos::support::mg_divide::div_wide_pow10::<W>(v, shift, mode)
                 } else {
                     // Newton vs MG chain dispatch — see the matrix
-                    // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`].
-                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
-                        W,
-                        { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(v, shift, mode)
+                    // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10`].
+                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                        v, shift, mode,
+                    )
                 };
                 let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
                 let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);

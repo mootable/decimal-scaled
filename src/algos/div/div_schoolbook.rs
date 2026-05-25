@@ -19,7 +19,7 @@
 //! All integer arithmetic dispatches DOWN to the int layer; this fn never
 //! calls a decimal method on its own value.
 
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -28,7 +28,7 @@ use crate::support::rounding::RoundingMode;
 /// [`div_widen_scale`](super::div_widen_scale::div_widen_scale)).
 ///
 /// Forms the scaled numerator and divides via the int layer, rounding under
-/// `mode`. Requires `Int<N>: WorkScratch`. Panics on a zero divisor.
+/// `mode`. Requires `Int<N>: ComputeInt`. Panics on a zero divisor.
 #[inline]
 pub(crate) fn div_schoolbook<const N: usize>(
     a: Int<N>,
@@ -37,7 +37,7 @@ pub(crate) fn div_schoolbook<const N: usize>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     // The scaled-numerator-then-int-divide pipeline is the schoolbook
     // reference; `div_widen_scale` is the same pipeline (decimal division

@@ -67,3 +67,4 @@ pub(crate) fn div_rem_mag_fixed<const N: usize>(
 pub(crate) fn div_rem_mag_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
     div_rem_dispatch(num, den, quot, rem);
 }
+

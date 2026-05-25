@@ -43,7 +43,7 @@
 /// `10^i` for `i = 0..=38`. Indexed by `scale` to skip the
 /// runtime `u128::pow` (which is a 4-multiplication square-and-multiply
 /// loop for the typical scale range) in hot paths like
-/// `div_wide_pow10_with`. Last entry `10^38` is the largest power of
+/// `div_wide_pow10`. Last entry `10^38` is the largest power of
 /// ten that fits in `u128`.
 pub(crate) const POW10_U128: [u128; 39] = {
     let mut t = [1u128; 39];
@@ -259,7 +259,7 @@ pub(crate) fn divmod_pow10_2word(
 /// rounding. `mag` is the little-endian unsigned magnitude (zero-padded
 /// to its full length); `neg` is the result sign for rounding tie-breaks.
 ///
-/// This is the slice core extracted from [`div_wide_pow10_with`]: the
+/// This is the slice core extracted from [`div_wide_pow10`]: the
 /// `BigInt` packing/unpacking is the only difference between the two, so
 /// the `Int<N>`-only decimal `mul` kernel can build its product directly
 /// in a u128 scratch buffer and call this — bit-identical to the typed
@@ -315,54 +315,10 @@ pub(crate) fn div_pow10_mag_u128(
     }
 }
 
-/// Magic-divide a wide signed integer by `10^scale`
-/// (`1 ≤ scale ≤ 38`), returning the quotient as the same wide type
-/// with `mode`-aware rounding.
-///
-/// This is the wide-tier counterpart of [`mul_div_pow10`]'s magic
-/// step. The divisor `10^scale` fits a single `u128` limb (and an
-/// entry in [`MG_EXP_MAGICS`]); the work is base-`2^128` schoolbook
-/// long division over the input's magnitude, with each
-/// `(rem, limb) / exp` step served by the existing
-/// [`divmod_pow10_2word`] kernel. The magnitude buffer is
-/// 64 limbs, so the same routine serves every width from `Int<4>`
-/// to `Int<128>`.
-///
-/// Caller short-circuits `scale == 0` (no-op) and any `scale > 38`
-/// (the magic table only covers `0..=38`).
-///
-/// Gated on the same `wide`/`x-wide` feature umbrella as the wide
-/// integer layer — it's only invoked from the wide-tier
-/// decimal `Mul` macro arm.
-#[inline]
-pub(crate) fn div_wide_pow10_with<W: crate::int::types::traits::BigInt, const N: usize>(
-    n: W,
-    scale: u32,
-    mode: crate::support::rounding::RoundingMode,
-) -> W {
-    debug_assert_eq!(
-        N,
-        W::U128_LIMBS,
-        "magnitude buffer must match W's u128-limb width"
-    );
-    let mut mag = [0u128; N];
-    let neg = n.mag_into_u128(&mut mag);
-
-    // All arithmetic runs on the magnitude slice via the width-agnostic
-    // core, shared with the `Int<N>`-only decimal `mul` kernel (which
-    // builds its `a*b` product straight into a u128 scratch buffer and
-    // calls `div_pow10_mag_u128` directly, never naming `Int<2N>`).
-    div_pow10_mag_u128(&mut mag, scale, neg, mode);
-
-    // Direct u128 → typed-Int unpack via the specialised
-    // `from_mag_sign_u128` override; only `(L + 1) / 2` limbs are
-    // consumed, avoiding the 288-u64 staging buffer.
-    W::from_mag_sign_u128(&mag, neg)
-}
 
 /// Width-agnostic chain MG divide of a u128-limb magnitude slice by
 /// `10^scale` for `scale > 38`, in place, with `mode`-aware rounding.
-/// Slice core extracted from [`div_wide_pow10_chain_with`]; shared with
+/// Slice core extracted from [`div_wide_pow10_chain`]; shared with
 /// the `Int<N>`-only decimal `mul` kernel. See that wrapper's docs for
 /// the combined-remainder rounding correctness argument.
 #[inline]
@@ -448,78 +404,16 @@ pub(crate) fn div_pow10_chain_mag_u128(
     }
 }
 
-/// Chain-of-`÷ 10^38` extension of [`div_wide_pow10_with`] to scales
-/// past `38`. Factors `n / 10^SCALE` as a sequence of
-/// `(n / 10^38) / 10^38 / … / 10^last` calls, each reusing the
-/// existing base-`2^128` MG 2-by-1 kernel. The intermediate
-/// quotients stay in the same `mag` buffer so we never allocate.
-///
-/// # Rounding correctness
-///
-/// Bit-exact half-to-even (and every other `RoundingMode`) across
-/// `SCALE ∈ 39..=∞`. The chain produces a per-chunk remainder
-/// sequence `r_1, r_2, …, r_k` (from each `÷ 10^38` stage) plus
-/// a final `r_last < 10^(SCALE − 38·k)`, with the relationship
-///
-///   `n = q_final · 10^SCALE + r_last · 10^{SCALE−s}
-///                            + r_k · 10^{SCALE−s−38} + … + r_1`
-///
-/// where `s = SCALE − 38·k`. Comparing the combined remainder
-/// `r_total = r_last · 10^{SCALE−s} + lower` against `m/2`
-/// reduces to a comparison of `r_last` against `10^s / 2` plus
-/// a tie-break on whether any of the lower-chunk remainders is
-/// non-zero — captured by the `lower_any_nonzero` flag and the
-/// `r_last vs half` ordering below. Audited against the
-/// schoolbook `div_rem` reference on 380K+ random Int<4> + 190K
-/// random Int<16> inputs × every w ∈ 39..=100 × every
-/// `RoundingMode` (see `round_div_chain_audit_*` tests in this
-/// file).
-///
-/// # Why this should be faster
-///
-/// At wide tiers, the public `n / m` path (`m = 10^SCALE`,
-/// SCALE > 38) routes through `Int*::div_rem` → Knuth Algorithm D.
-/// Each Knuth quotient digit costs ~10–15 limb ops (q̂ estimation,
-/// mul-sub, occasional add-back). For `D307<150>::mul` the divisor
-/// is 8 u64 limbs and the numerator 32, so ~24 quotient digits ×
-/// ~12 ops = ~290 ops per call.
-///
-/// The chain divides `n / 10^38` four times. Each pass is one
-/// MG 2-by-1 magic multiply per u128 limb of the numerator — for
-/// D307<150> at most 16 nonzero u128 limbs × ~5 ops = ~80 ops per
-/// pass, so ~320 ops for four passes. Comparable to Knuth on op
-/// count BUT with a branchless inner loop that the CPU pipelines
-/// far better than Knuth's q̂-and-correct scheme.
-pub(crate) fn div_wide_pow10_chain_with<W: crate::int::types::traits::BigInt, const N: usize>(
-    n: W,
-    scale: u32,
-    mode: crate::support::rounding::RoundingMode,
-) -> W {
-    debug_assert_eq!(
-        N,
-        W::U128_LIMBS,
-        "magnitude buffer must match W's u128-limb width"
-    );
-    let mut mag = [0u128; N];
-    let neg = n.mag_into_u128(&mut mag);
-
-    // Identical chain arithmetic on the magnitude slice -- the only
-    // difference from the `Int<N>`-only decimal path is the pack/unpack.
-    div_pow10_chain_mag_u128(&mut mag, scale, neg, mode);
-
-    W::from_mag_sign_u128(&mag, neg)
-}
-
-/// Width-generic [`div_wide_pow10_with`]: same MG single-chunk
-/// `n / 10^scale` (`1 ≤ scale ≤ 38`), but the `(N+1)/2`-limb u128
-/// magnitude buffer comes from the [`MgScratch`] associated type (its
+/// Width-generic single-chunk MG divide `n / 10^scale`
+/// (`1 ≤ scale ≤ 38`) with `mode`-aware rounding. The `(N+1)/2`-limb u128
+/// magnitude buffer comes from the [`ComputeInt`] associated type (its
 /// size lives in the impl; we slice it to `W::U128_LIMBS` here), so the
-/// divide carries no const-generic limb count. This lets the
-/// width-generic transcendental core call the MG reciprocal without
-/// naming `{W::U128_LIMBS}` — the same fast path the per-tier
-/// `decl_wide_transcendental!` core uses, now shared by the hyperbolics.
+/// divide carries no const-generic limb count — the width-generic
+/// transcendental core calls the MG reciprocal without naming
+/// `{W::U128_LIMBS}`. Rounding is applied in the shared
+/// [`div_pow10_mag_u128`] slice core (mode threaded straight through).
 ///
-/// [`MgScratch`]: crate::int::types::work_scratch::MgScratch
+/// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
 #[inline]
 pub(crate) fn div_wide_pow10<W>(
     n: W,
@@ -527,19 +421,35 @@ pub(crate) fn div_wide_pow10<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::work_scratch::MgScratch,
+    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
 {
-    let mut buf = <W as crate::int::types::work_scratch::MgScratch>::work_u128();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_mag_u128(mag, scale, neg, mode);
     W::from_mag_sign_u128(mag, neg)
 }
 
-/// Width-generic [`div_wide_pow10_chain_with`] (the `scale > 38` chain),
-/// buffer from [`MgScratch`]. See [`div_wide_pow10`].
+/// Width-generic `÷10^38`-chain extension of [`div_wide_pow10`] to scales
+/// past `38`, with `mode`-aware rounding; u128 buffer from [`ComputeInt`].
+/// Factors `n / 10^SCALE` as a sequence of `(n / 10^38) / … / 10^last`
+/// passes reusing the base-`2^128` MG 2-by-1 kernel, intermediate
+/// quotients staying in the same `mag` buffer (no allocation).
 ///
-/// [`MgScratch`]: crate::int::types::work_scratch::MgScratch
+/// # Rounding correctness
+///
+/// Bit-exact half-to-even (and every other `RoundingMode`) across
+/// `SCALE ∈ 39..=∞`. The chain produces a per-chunk remainder sequence
+/// `r_1, …, r_k` plus a final `r_last < 10^(SCALE − 38·k)`; comparing the
+/// combined remainder against `m/2` reduces to `r_last` vs `10^s/2` plus a
+/// tie-break on whether any lower-chunk remainder is non-zero — the
+/// `lower_any_nonzero` flag in [`div_pow10_chain_mag_u128`], which owns the
+/// rounding (mode threaded straight through). Audited against the schoolbook
+/// `div_rem` reference on 380K+ random Int<4> + 190K random Int<16> inputs ×
+/// every `w ∈ 39..=100` × every `RoundingMode` (the `round_div_chain_audit_*`
+/// tests in this file).
+///
+/// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
 #[inline]
 pub(crate) fn div_wide_pow10_chain<W>(
     n: W,
@@ -547,9 +457,9 @@ pub(crate) fn div_wide_pow10_chain<W>(
     mode: crate::support::rounding::RoundingMode,
 ) -> W
 where
-    W: crate::int::types::traits::BigInt + crate::int::types::work_scratch::MgScratch,
+    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
 {
-    let mut buf = <W as crate::int::types::work_scratch::MgScratch>::work_u128();
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
     let mag = &mut buf.as_mut()[..W::U128_LIMBS];
     let neg = n.mag_into_u128(mag);
     div_pow10_chain_mag_u128(mag, scale, neg, mode);
@@ -1944,7 +1854,7 @@ mod tests {
 
     /// Reference half-to-even quotient via the generic `div_rem` path:
     /// the same routine `round_div` uses in the wide_transcendental
-    /// macro. Comparing the MG-based `div_wide_pow10_with` against this
+    /// macro. Comparing the MG-based `div_wide_pow10` against this
     /// is the audit gate for routing `round_div` through the MG kernel
     /// whenever the divisor is `10^w` with `w ≤ 38`.
     #[cfg(any(feature = "d76", feature = "wide"))]
@@ -1976,7 +1886,7 @@ mod tests {
         }
     }
 
-    /// Bit-exact audit: `div_wide_pow10_with(..HalfToEven)` must produce
+    /// Bit-exact audit: `div_wide_pow10(..HalfToEven)` must produce
     /// the same quotient as the generic-`div_rem` half-to-even reference
     /// for every divisor `10^w` with `1 ≤ w ≤ 38`, across random `Int<4>`
     /// numerators in both signs.
@@ -2045,10 +1955,7 @@ mod tests {
                 let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
                 let got =
-                    crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        Int<4>,
-                        { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
+                    crate::algos::support::mg_divide::div_wide_pow10::<Int<4>>(n, w, crate::support::rounding::RoundingMode::HalfToEven);
                 let expected = round_div_reference_int256(n, w);
                 assert_eq!(got, expected, "round_div MG audit mismatch: w={w}, n={n:?}",);
             }
@@ -2083,10 +1990,7 @@ mod tests {
                         (hi << 128_u32) + lo
                     };
                     let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
-                    let got = crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        Int<4>,
-                        { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, mode);
+                    let got = crate::algos::support::mg_divide::div_wide_pow10::<Int<4>>(n, w, mode);
                     let expected = round_div_reference_int256_with(n, w, mode);
                     assert_eq!(
                         got, expected,
@@ -2125,10 +2029,7 @@ mod tests {
                 }
 
                 let got =
-                    crate::algos::support::mg_divide::div_wide_pow10_with::<
-                        Int<16>,
-                        { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
+                    crate::algos::support::mg_divide::div_wide_pow10::<Int<16>>(n, w, crate::support::rounding::RoundingMode::HalfToEven);
                 // Reference half-to-even via div_rem.
                 let (q, r) = n.div_rem(d);
                 let expected = if r == zero {
@@ -2297,10 +2198,7 @@ mod tests {
                     };
                     let n: Int<4> = if regime % 2 == 1 { -pos } else { pos };
 
-                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
-                        Int<4>,
-                        { <Int<4> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, mode);
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<4>>(n, w, mode);
                     let expected = round_div_chain_reference_int256(n, w, mode);
                     assert_eq!(
                         got, expected,
@@ -2335,10 +2233,7 @@ mod tests {
                 }
 
                 let got =
-                    crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
-                        Int<16>,
-                        { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, crate::support::rounding::RoundingMode::HalfToEven);
+                    crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(n, w, crate::support::rounding::RoundingMode::HalfToEven);
                 let expected = round_div_chain_reference_int1024(
                     n,
                     w,
@@ -2374,10 +2269,7 @@ mod tests {
                     if rng.next() & 1 == 1 {
                         n = -n;
                     }
-                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
-                        Int<16>,
-                        { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(n, w, mode);
+                    let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(n, w, mode);
                     let expected = round_div_chain_reference_int1024(n, w, mode);
                     assert_eq!(
                         got, expected,
@@ -2420,10 +2312,7 @@ mod tests {
                         let pos_n = q * pow_w + half + delta;
                         let n = if sign_neg { -pos_n } else { pos_n };
                         for mode in all_modes() {
-                            let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
-                                Int<16>,
-                                { <Int<16> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                            >(n, w, mode);
+                            let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<16>>(n, w, mode);
                             let expected = round_div_chain_reference_int1024(n, w, mode);
                             assert_eq!(
                                 got, expected,
@@ -2452,7 +2341,7 @@ mod tests {
         d
     }
 
-    /// Regression for the original `div_wide_pow10_chain_with` buffer
+    /// Regression for the original `div_wide_pow10_chain` buffer
     /// bug: `D1232`'s work integer is `Int<256>` (128 u128 limbs =
     /// 16384 bits), but the chain kernel once packed the magnitude
     /// into a fixed 64-u128-limb (8192-bit) buffer, silently
@@ -2491,10 +2380,7 @@ mod tests {
                 for &sign_neg in &[false, true] {
                     let nn = if sign_neg { -n } else { n };
                     for mode in all_modes() {
-                        let got = crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
-                            Int<256>,
-                            { <Int<256> as crate::int::types::traits::BigInt>::U128_LIMBS },
-                        >(nn, w, mode);
+                        let got = crate::algos::support::mg_divide::div_wide_pow10_chain::<Int<256>>(nn, w, mode);
 
                         // Schoolbook reference on the untruncated value.
                         let d = pow10_int16384(w);

@@ -45,7 +45,7 @@ use crate::int::algos::support::limbs::{
 };
 
 /// Scratch capacity — 288 u64 limbs, matching the Newton icbrt budget.
-const SCRATCH_LIMBS: usize = 288;
+use crate::int::types::compute_int::MAX_QUADRUPLE_LIMBS;
 
 /// `out = floor(cbrt(n))`. Bit-by-bit integer cube root.
 ///
@@ -73,15 +73,15 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
     // sq_work: p_sq needs at most 2*(work/3)+2 limbs, but we use work+1 as
     // an upper bound (the result has at most ceil(bits/3) bits, so p_sq has
     // at most ceil(2*bits/3) bits, which is < work limbs).
-    let sq_work = (work * 2).min(SCRATCH_LIMBS);
-    debug_assert!(work <= SCRATCH_LIMBS, "icbrt_schoolbook scratch overflow");
+    let sq_work = (work * 2).min(MAX_QUADRUPLE_LIMBS);
+    debug_assert!(work <= MAX_QUADRUPLE_LIMBS, "icbrt_schoolbook scratch overflow");
 
     // `p`: partial root (result bits accumulated so far).
     // `p_sq`: p², maintained incrementally.
     // `rem`: n - p³, the running remainder.
-    let mut p = [0u64; SCRATCH_LIMBS];
-    let mut p_sq = [0u64; SCRATCH_LIMBS];
-    let mut rem = [0u64; SCRATCH_LIMBS];
+    let mut p = [0u64; MAX_QUADRUPLE_LIMBS];
+    let mut p_sq = [0u64; MAX_QUADRUPLE_LIMBS];
+    let mut rem = [0u64; MAX_QUADRUPLE_LIMBS];
     // Initialise rem = n.
     rem[..n.len()].copy_from_slice(n);
 
@@ -95,8 +95,8 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
         let bit_pos = k as u32;
         let d_limb = (bit_pos / 64) as usize;
         let d_off = bit_pos % 64;
-        let mut d = [0u64; SCRATCH_LIMBS];
-        if d_limb < SCRATCH_LIMBS {
+        let mut d = [0u64; MAX_QUADRUPLE_LIMBS];
+        if d_limb < MAX_QUADRUPLE_LIMBS {
             d[d_limb] = 1u64 << d_off;
         }
 
@@ -105,9 +105,9 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
         //
         // Step 1: t1 = 3 * p_sq  (just shift p_sq left by 1 and add once)
         // 3*p_sq = p_sq + p_sq + p_sq = p_sq*2 + p_sq = (p_sq << 1) + p_sq
-        let mut t1 = [0u64; SCRATCH_LIMBS];
+        let mut t1 = [0u64; MAX_QUADRUPLE_LIMBS];
         {
-            let mut shifted = [0u64; SCRATCH_LIMBS];
+            let mut shifted = [0u64; MAX_QUADRUPLE_LIMBS];
             shl(&p_sq[..sq_work], 1, &mut shifted[..sq_work]);
             t1[..sq_work].copy_from_slice(&shifted[..sq_work]);
             add_assign(&mut t1[..sq_work], &p_sq[..sq_work]);
@@ -115,14 +115,14 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
         // t1 = 3 * p_sq
 
         // Step 2: p_d = p * d  (using mul_schoolbook, result in 2*work area)
-        let pd_work = (work + d_limb + 1).min(SCRATCH_LIMBS);
-        let mut p_d = [0u64; SCRATCH_LIMBS];
+        let pd_work = (work + d_limb + 1).min(MAX_QUADRUPLE_LIMBS);
+        let mut p_d = [0u64; MAX_QUADRUPLE_LIMBS];
         mul_schoolbook(&p[..work], &d[..d_limb + 1], &mut p_d[..pd_work]);
 
         // Step 3: t2 = 3 * p_d = (p_d << 1) + p_d
-        let mut t2 = [0u64; SCRATCH_LIMBS];
+        let mut t2 = [0u64; MAX_QUADRUPLE_LIMBS];
         {
-            let mut shifted = [0u64; SCRATCH_LIMBS];
+            let mut shifted = [0u64; MAX_QUADRUPLE_LIMBS];
             shl(&p_d[..pd_work], 1, &mut shifted[..pd_work]);
             t2[..pd_work].copy_from_slice(&shifted[..pd_work]);
             add_assign(&mut t2[..pd_work], &p_d[..pd_work]);
@@ -134,8 +134,8 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
         let d_sq_pos = (k as u32) * 2;
         let d_sq_limb = (d_sq_pos / 64) as usize;
         let d_sq_off = d_sq_pos % 64;
-        let mut d_sq = [0u64; SCRATCH_LIMBS];
-        if d_sq_limb < SCRATCH_LIMBS {
+        let mut d_sq = [0u64; MAX_QUADRUPLE_LIMBS];
+        if d_sq_limb < MAX_QUADRUPLE_LIMBS {
             d_sq[d_sq_limb] = 1u64 << d_sq_off;
         }
         // Handle overflow into the next limb if d_sq_off == 63 and a carry
@@ -144,16 +144,16 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
 
         // Step 5: inner = t1 + t2 + d_sq = 3p^2 + 3pd + d^2
         let inner_work = sq_work.max(pd_work).max(d_sq_limb + 1) + 1;
-        let inner_work = inner_work.min(SCRATCH_LIMBS);
-        let mut inner = [0u64; SCRATCH_LIMBS];
+        let inner_work = inner_work.min(MAX_QUADRUPLE_LIMBS);
+        let mut inner = [0u64; MAX_QUADRUPLE_LIMBS];
         inner[..sq_work].copy_from_slice(&t1[..sq_work]);
         add_assign(&mut inner[..inner_work], &t2[..pd_work.min(inner_work)]);
         add_assign(&mut inner[..inner_work], &d_sq[..(d_sq_limb + 1).min(inner_work)]);
         // inner = 3*p^2 + 3*p*d + d^2
 
         // Step 6: delta = d * inner
-        let delta_work = (d_limb + 1 + inner_work).min(SCRATCH_LIMBS);
-        let mut delta = [0u64; SCRATCH_LIMBS];
+        let delta_work = (d_limb + 1 + inner_work).min(MAX_QUADRUPLE_LIMBS);
+        let mut delta = [0u64; MAX_QUADRUPLE_LIMBS];
         mul_schoolbook(&d[..d_limb + 1], &inner[..inner_work], &mut delta[..delta_work]);
         // delta = (p + d)^3 - p^3
 
@@ -163,7 +163,7 @@ pub(crate) fn icbrt_schoolbook(n: &[u64], out: &mut [u64]) {
             sub_assign(&mut rem[..work], &delta[..delta_work.min(work)]);
             add_assign(&mut p[..work], &d[..d_limb + 1]);
             // Recompute p_sq = p * p
-            let mut new_p_sq = [0u64; SCRATCH_LIMBS];
+            let mut new_p_sq = [0u64; MAX_QUADRUPLE_LIMBS];
             mul_schoolbook(&p[..work], &p[..work], &mut new_p_sq[..sq_work]);
             p_sq[..sq_work].copy_from_slice(&new_p_sq[..sq_work]);
         }

@@ -20,7 +20,7 @@
 //! # Generic over the storage width only
 //!
 //! The work-width arithmetic is done in limbs -- no `W = Int<2N>` work
-//! type. The kernel bounds only on `Int<N>: WorkScratch` for its scratch.
+//! type. The kernel bounds only on `Int<N>: ComputeInt` for its scratch.
 //!
 //! Semantics: `hypot(0, 0) = 0`; `hypot(0, x) = |x|`.
 
@@ -28,7 +28,7 @@ use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::sum_sq::sum_sq_schoolbook::{sig_len, sum_sq_radicand};
 use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -39,14 +39,14 @@ use crate::support::rounding::RoundingMode;
 #[must_use]
 pub(crate) fn hypot_pythagoras<const N: usize>(a: Int<N>, b: Int<N>, mode: RoundingMode) -> Option<Int<N>>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     // -- n = a^2 + b^2 (magnitudes; sign drops out of squaring) ----------
     // The radicand former is shared with `sum_sq`; hypot roots `n` rather
     // than fit-checking it, so it keeps every representable hypot.
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
-    let mut n_buf = Int::<N>::work2();
+    let mut n_buf = Int::<N>::double_limbs();
     let n = n_buf.as_mut();
     let nl = sum_sq_radicand::<N>(ma.as_limbs(), mb.as_limbs(), n);
     if nl == 1 && n[0] == 0 {
@@ -54,13 +54,13 @@ where
     }
 
     // -- q = floor(sqrt(n)) ----------------------------------------------
-    let mut q_buf = Int::<N>::work2();
+    let mut q_buf = Int::<N>::double_limbs();
     let q = q_buf.as_mut();
     isqrt_newton(&n[..nl], &mut q[..nl]);
     let ql = sig_len(&q[..nl]);
 
     // -- diff = n - q^2  (reuse `n` in place as the remainder) -----------
-    let mut qsq_buf = Int::<N>::work2();
+    let mut qsq_buf = Int::<N>::double_limbs();
     let qsq = qsq_buf.as_mut();
     let qsq_cap = qsq.len();
     mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);

@@ -131,13 +131,11 @@ const fn select() -> Select {
 
 // ── 4. the dispatcher: classify the shape, then dispatch ──────────────
 
-/// Runtime divide dispatcher at u64 base — the single entry every
-/// multi-limb divide flows through. Strips leading zeros to get the
-/// effective shape, asks the matcher which engine, then dispatches.
-///
-/// `quot` / `rem` are written by the chosen engine; the divisor must be
-/// non-zero.
-pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+/// Classify the operands' effective (leading-zero-stripped) shape and ask
+/// the matcher which engine handles it. The divisor must be non-zero. This
+/// is the policy's whole job — choose the engine; it allocates nothing.
+#[inline]
+fn classify(num: &[u64], den: &[u64]) -> Algorithm {
     let mut n = den.len();
     while n > 0 && den[n - 1] == 0 {
         n -= 1;
@@ -149,11 +147,32 @@ pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u6
         top -= 1;
     }
 
-    let algo = match const { select() } {
+    match const { select() } {
         Select::ByAlgorithm(a) => a,
         Select::ByShape(f) => f(n, top),
-    };
-    match algo {
+    }
+}
+
+/// Runtime divide dispatcher at u64 base — the single entry every
+/// multi-limb divide flows through. Classifies the effective shape, then
+/// routes to the chosen engine; `quot` / `rem` are written by that engine.
+///
+/// Slice-based (not typed): the numerator and divisor have *independent*
+/// runtime lengths that no single `const N` expresses (decimal `/` divides
+/// a `2N`-limb scaled numerator by an `N`-limb divisor; the transcendental
+/// reciprocal divides work-width values; `newton_reciprocal` passes
+/// runtime-length slices). The build-max Knuth `u`/`v` scratch lives in the
+/// engine ([`div_knuth`] owns it), not here — the matcher allocates nothing.
+/// A concrete-`N` caller that can size scratch exactly (`Int<N>: ComputeInt`)
+/// sources its own buffer family (`single_limbs` / `double_limbs`) and calls
+/// the Knuth engine [`div_knuth_into`] directly — single-limb divisors route
+/// to the hardware path inside the engine and Burnikel–Ziegler never engages
+/// at supported widths, so the engine call is this matcher's identical
+/// choice without the build-max blanket.
+///
+/// [`div_knuth_into`]: crate::int::algos::div::div_knuth::div_knuth_into
+pub(crate) fn dispatch(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+    match classify(num, den) {
         Algorithm::Rem => div_rem(num, den, quot, rem),
         Algorithm::Knuth => div_knuth(num, den, quot, rem),
         Algorithm::BurnikelZieglerWithKnuth => {

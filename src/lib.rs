@@ -272,7 +272,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> Option<crate::int::types::Int<N>>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras::<N>(a, b, mode)
     }
@@ -284,7 +284,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> Option<crate::int::types::Int<N>>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         crate::int::algos::hypot::hypot_u128_fast::hypot_u128_fast::<N>(a, b, mode)
     }
@@ -541,7 +541,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         crate::algos::sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode)
     }
@@ -565,7 +565,7 @@ pub mod __bench_internals {
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<N>
     where
-        crate::int::types::Int<N>: crate::int::types::work_scratch::WorkScratch,
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
     {
         crate::algos::cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode)
     }
@@ -733,7 +733,7 @@ pub mod __bench_internals {
 
     // Newton-reciprocal divide research kernel — wrapped via concrete
     // shims so the bench harness gets head-to-head comparisons against
-    // [`crate::algos::support::mg_divide::div_wide_pow10_chain_with`] without
+    // [`crate::algos::support::mg_divide::div_wide_pow10_chain`] without
     // exposing trait machinery.
     #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     pub mod newton_vs_mg {
@@ -770,18 +770,20 @@ pub mod __bench_internals {
 
                     #[inline(never)]
                     pub fn mg_chain(n: Storage, scale: u32) -> Storage {
-                        Storage(crate::algos::support::mg_divide::div_wide_pow10_chain_with::<
-                            W,
-                            { <W as crate::int::types::traits::BigInt>::U128_LIMBS },
-                        >(n.0, scale, RoundingMode::HalfToEven))
+                        Storage(crate::algos::support::mg_divide::div_wide_pow10_chain::<W>(
+                            n.0,
+                            scale,
+                            RoundingMode::HalfToEven,
+                        ))
                     }
 
                     #[inline(never)]
                     pub fn mg_single(n: Storage, scale: u32) -> Storage {
-                        Storage(crate::algos::support::mg_divide::div_wide_pow10_with::<
-                            W,
-                            { <W as crate::int::types::traits::BigInt>::U128_LIMBS },
-                        >(n.0, scale, RoundingMode::HalfToEven))
+                        Storage(crate::algos::support::mg_divide::div_wide_pow10::<W>(
+                            n.0,
+                            scale,
+                            RoundingMode::HalfToEven,
+                        ))
                     }
 
                     #[inline(never)]

@@ -11,7 +11,7 @@
 //!
 //! Following the `sqrt`/`cbrt`/`hypot` template, the kernel is generic over
 //! the storage limb count `N` alone and does the `2N`-wide work directly in
-//! a `WorkScratch::work2()` buffer:
+//! a `ComputeInt::double_limbs()` buffer:
 //!
 //! 1. form the magnitude product `|a| * |b|` (`2N` u64 limbs) via the int
 //!    layer's width-agnostic slice kernel
@@ -21,7 +21,7 @@
 //!    ([`crate::algos::support::mg_divide::div_pow10_mag_u128`] for
 //!    `SCALE <= 38`, [`crate::algos::support::newton_reciprocal::dispatch_pow10_mag_u128`]
 //!    above) — the same magic-number / Newton-reciprocal path the typed
-//!    `div_wide_pow10_with` wrapper uses, so no Knuth-divide regression;
+//!    `div_wide_pow10` wrapper uses, so no Knuth-divide regression;
 //! 3. rebuild the signed `Int<N>` result from the quotient magnitude and
 //!    the product sign.
 //!
@@ -35,7 +35,7 @@
 
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::types::traits::BigInt;
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -52,7 +52,7 @@ fn sig_len(a: &[u64]) -> usize {
 
 /// Divide the u128 magnitude `mag` (in place) by `10^SCALE`, choosing the
 /// MG single-chunk / MG chain / Newton path exactly as the typed
-/// `div_wide_pow10_with` / `dispatch_wide_pow10_with` wrappers do. `neg` is
+/// `div_wide_pow10` / `dispatch_wide_pow10` wrappers do. `neg` is
 /// the result sign (rounding tie-break); `work_bits` is the work width in
 /// bits (the Newton cache / threshold key). `SCALE == 0` is a no-op.
 #[inline]
@@ -117,7 +117,7 @@ fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<
 }
 
 /// Widen-then-divide decimal multiplication kernel, generic over the
-/// storage limb count `N`. Requires `Int<N>: WorkScratch` for the `2N`-limb
+/// storage limb count `N`. Requires `Int<N>: ComputeInt` for the `2N`-limb
 /// product scratch.
 ///
 /// A fast path skips the wide product when `a * b` provably fits `Int<N>`
@@ -132,7 +132,7 @@ pub(crate) fn mul_widen_divide<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     let neg = a.is_negative() != b.is_negative();
     let lz_a = a.unsigned_abs().leading_zeros();
@@ -159,7 +159,7 @@ where
     let al = sig_len(&a_mag);
     let bl = sig_len(&b_mag);
 
-    let mut prod_buf = Int::<N>::work2();
+    let mut prod_buf = Int::<N>::double_limbs();
     let prod = prod_buf.as_mut();
     let plen = (al + bl).min(prod.len());
     for slot in prod[..plen].iter_mut() {

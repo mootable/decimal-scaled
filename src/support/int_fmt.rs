@@ -7,10 +7,7 @@
 //! layer.
 
 use crate::int::algos::support::limbs::is_zero;
-
-/// Scratch capacity for the formatter's working buffer — 288 u64 limbs
-/// (18432 bits), covering the widest integer the crate formats.
-const SCRATCH_LIMBS: usize = 288;
+use crate::int::types::compute_int::max_single_limbs;
 
 /// `limbs /= radix` in place, returning the remainder. `radix` must be a
 /// u64 (so the per-limb divide stays inside `u128 / u64`).
@@ -45,7 +42,7 @@ pub(crate) fn fmt_into<'a>(limbs: &[u64], radix: u64, lower: bool, buf: &'a mut 
         buf[last] = b'0';
         return core::str::from_utf8(&buf[last..]).unwrap();
     }
-    let mut work = [0u64; SCRATCH_LIMBS];
+    let mut work = max_single_limbs();
     work[..limbs.len()].copy_from_slice(limbs);
     let wl = limbs.len();
     let mut pos = buf.len();

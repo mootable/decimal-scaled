@@ -24,14 +24,14 @@
 //! which spans up to `2N` limbs, before dividing by `b`. Rather than thread
 //! a work *type* `Int<2N>` (unnameable from `N` on stable), the
 //! [`WidenScale`](Algorithm::WidenScale) kernel forms the scaled numerator
-//! directly in a `WorkScratch` limb buffer and divides via the int layer's
+//! directly in a `ComputeInt` limb buffer and divides via the int layer's
 //! width-agnostic `div_rem`. So `dispatch` carries no work-width parameter;
-//! it adds only `where Int<N>: WorkScratch` for the scratch buffer.
+//! it adds only `where Int<N>: ComputeInt` for the scratch buffer.
 //!
 //! The `10^SCALE` multiplier is evaluated here via `Int::<N>::TEN.pow(SCALE)`
 //! (folds at compile time per `(N, SCALE)`) and threaded into the kernel.
 
-use crate::int::types::work_scratch::WorkScratch;
+use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -104,7 +104,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 ///
 /// The `const { select }` block folds away at every concrete `N`, leaving a
 /// direct call to the chosen kernel. The `2N`-wide scaled numerator lives
-/// in the kernel's `WorkScratch` scratch buffer, so no work-width type is
+/// in the kernel's `ComputeInt` scratch buffer, so no work-width type is
 /// named here.
 #[inline]
 #[must_use]
@@ -114,7 +114,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: WorkScratch,
+    Int<N>: ComputeInt,
 {
     // 10^SCALE in Int<N> storage, forced to fold at compile time per
     // (N, SCALE) via the `const` block — a bare `TEN.pow(SCALE)` call runs

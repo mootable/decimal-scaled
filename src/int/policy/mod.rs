@@ -48,7 +48,7 @@
 //!   path is part of the **decimal** storage boundary, not the integer
 //!   layer: D18 narrow tiers divide on hardware
 //!   (`i128_divrem_by_u64_with_mode`), D38 takes the 2-word MG path, and
-//!   the wide tiers route `mg_divide::div_wide_pow10_with`, which selects
+//!   the wide tiers route `mg_divide::div_wide_pow10`, which selects
 //!   MG-single (`SCALE ≤ 19`, divisor fits one word) vs MG-lifted
 //!   (wider) internally. It lives in `crate::algos::support::mg_divide` /
 //!   `crate::macros::arithmetic`; the integer layer exposes only the raw

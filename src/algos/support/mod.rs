@@ -10,8 +10,8 @@
 //!   strict-transcendental fallback paths evaluate their series in.
 //! - [`newton_reciprocal`] — the Newton-Raphson reciprocal divide for
 //!   `n / 10^SCALE` at the wide tiers, head-to-head benched against
-//!   [`mg_divide::div_wide_pow10_chain_with`] and routed in by
-//!   [`newton_reciprocal::dispatch_wide_pow10_with`] at the cells where
+//!   [`mg_divide::div_wide_pow10_chain`] and routed in by
+//!   [`newton_reciprocal::dispatch_wide_pow10`] at the cells where
 //!   the bench matrix shows it wins.
 
 pub(crate) mod fixed;
