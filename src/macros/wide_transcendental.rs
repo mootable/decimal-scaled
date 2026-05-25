@@ -749,17 +749,18 @@ macro_rules! decl_wide_transcendental {
                     );
                 }
                 // Newton vs MG chain dispatch (see the matrix in
-                // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`]).
+                // [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10`]).
                 // For most wide-tier `$Work` integers `W::BITS` lands
                 // outside the bench-validated cells (Int<128> /
                 // Int<192> / Int<256>) and the dispatcher forwards to
                 // MG; the routing is here so a future bench at the
                 // larger widths can promote without touching this
                 // site.
-                $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
-                    W,
-                    { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                >(n, w, $crate::support::rounding::RoundingMode::HalfToEven)
+                $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                    n,
+                    w,
+                    $crate::support::rounding::RoundingMode::HalfToEven,
+                )
             }
             /// `(a · b) / 10^w`, rounded half-to-even. The
             /// rounded variant replaces the previous truncating
@@ -950,11 +951,10 @@ macro_rules! decl_wide_transcendental {
                     $crate::algos::support::mg_divide::div_wide_pow10::<W>(v, shift, mode)
                 } else {
                     // Newton vs MG chain dispatch — see the matrix
-                    // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with`].
-                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10_with::<
-                        W,
-                        { <W as $crate::int::types::traits::BigInt>::U128_LIMBS },
-                    >(v, shift, mode)
+                    // in [`crate::algos::support::newton_reciprocal::dispatch_wide_pow10`].
+                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                        v, shift, mode,
+                    )
                 };
                 let max_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MAX);
                 let min_w = $crate::int::types::traits::BigInt::resize_to::<W>(<$Storage>::MIN);

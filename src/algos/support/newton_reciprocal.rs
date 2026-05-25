@@ -472,21 +472,22 @@ mod cache {
 /// matching call sites in `macros::arithmetic::decl_decimal_arithmetic`
 /// and `macros::wide_transcendental::decl_wide_transcendental`.
 #[inline]
-pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, const N: usize>(
+pub(crate) fn dispatch_wide_pow10<W>(
     n: W,
     scale: u32,
     mode: crate::support::rounding::RoundingMode,
-) -> W {
-    debug_assert_eq!(
-        N,
-        W::U128_LIMBS,
-        "magnitude buffer must match W's u128-limb width"
-    );
+) -> W
+where
+    W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+{
     let bits = <W as crate::int::types::traits::BigInt>::BITS;
-    let mut mag = [0u128; N];
-    let neg = n.mag_into_u128(&mut mag);
-    dispatch_pow10_mag_u128(&mut mag, scale, neg, mode, bits);
-    W::from_mag_sign_u128(&mag, neg)
+    // u128 magnitude buffer from ComputeInt (size lives in the impl); no
+    // const work-width parameter — same mechanism as `div_wide_pow10`.
+    let mut buf = <W as crate::int::types::compute_int::ComputeInt>::u128_limbs();
+    let mag = &mut buf.as_mut()[..W::U128_LIMBS];
+    let neg = n.mag_into_u128(mag);
+    dispatch_pow10_mag_u128(mag, scale, neg, mode, bits);
+    W::from_mag_sign_u128(mag, neg)
 }
 
 /// Width-agnostic dispatch for `mag / 10^scale`, in place on a u128-limb
@@ -495,7 +496,7 @@ pub(crate) fn dispatch_wide_pow10_with<W: crate::int::types::traits::BigInt, con
 ///
 /// Routes Newton vs MG-chain by [`newton_wins`], threading the
 /// thread-local reciprocal cache when Newton wins (std only). Shared with
-/// the typed [`dispatch_wide_pow10_with`] wrapper and the `Int<N>`-only
+/// the typed [`dispatch_wide_pow10`] wrapper and the `Int<N>`-only
 /// decimal `mul` kernel.
 #[inline]
 pub(crate) fn dispatch_pow10_mag_u128(

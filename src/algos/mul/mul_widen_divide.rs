@@ -52,7 +52,7 @@ fn sig_len(a: &[u64]) -> usize {
 
 /// Divide the u128 magnitude `mag` (in place) by `10^SCALE`, choosing the
 /// MG single-chunk / MG chain / Newton path exactly as the typed
-/// `div_wide_pow10` / `dispatch_wide_pow10_with` wrappers do. `neg` is
+/// `div_wide_pow10` / `dispatch_wide_pow10` wrappers do. `neg` is
 /// the result sign (rounding tie-break); `work_bits` is the work width in
 /// bits (the Newton cache / threshold key). `SCALE == 0` is a no-op.
 #[inline]
