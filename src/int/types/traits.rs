@@ -200,22 +200,15 @@ impl<const N: usize> BigInt for Int<N> {
 
     #[inline]
     fn wrapping_mul_low_u128(self, rhs: Self) -> Self {
-        // Truncated-low product via the ONE `<L: Limb>` kernel `mul_low_limb`,
-        // monomorphised at the limb width the `LimbSize` verdict picks. The
-        // verdict `LimbSize::for_packing(N)` const-folds (the `const { … }`
-        // block), so the `match` collapses to a single direct typed call per
-        // monomorphisation and the unchosen arm is dead-arm eliminated — the
-        // canonical const-folded policy-verdict shape. Both arms are the same
-        // generic kernel, bit-identical to `wrapping_mul` (mod 2^64N).
-        use crate::int::algos::mul::mul_schoolbook::mul_low_limb;
-        use crate::int::types::compute_int::LimbSize;
+        // Truncated-low product through the limb-width matcher
+        // `int::policy::mul_low`: it owns the `(Algorithm, LimbSize)`
+        // verdict (the architecture's second axis) and const-folds it to a
+        // single direct `mul_low_limb::<N, _>` call per monomorphisation.
+        // Bit-identical to `wrapping_mul` (mod 2^64N) at either limb width.
         let a = *self.as_limbs();
         let b = *rhs.as_limbs();
         let mut out = [0u64; N];
-        match const { LimbSize::for_packing(N) } {
-            LimbSize::U64 => mul_low_limb::<N, u64>(&a, &b, &mut out),
-            LimbSize::U128 => mul_low_limb::<N, u128>(&a, &b, &mut out),
-        }
+        crate::int::policy::mul_low::dispatch::<N>(&a, &b, &mut out);
         Int::from_limbs(out)
     }
 

@@ -113,6 +113,8 @@ pub(crate) mod icbrt;
 pub(crate) mod isqrt;
 /// Multiply policy: schoolbook-vs-Karatsuba algorithm matcher.
 pub(crate) mod mul;
+/// Truncated-low multiply policy: the `u64`/`u128` limb-width matcher.
+pub(crate) mod mul_low;
 /// Negate policy: default-delegating two's-complement matcher for `Int<N>`.
 pub(crate) mod neg;
 /// Integer exponentiation policy: square-and-multiply matcher for `Uint<N>`.

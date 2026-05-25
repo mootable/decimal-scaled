@@ -205,6 +205,44 @@ scratch comes from `ComputeInt` (which carries both the u64 and u128 buffer fami
 size. Rolled out pilot-first, microbench-gated per cell: a cell routes `U128` only where the
 benchmark shows the win.
 
+The verdict lives in the function's policy `select` exactly like the algorithm axis — a
+`const fn` keyed on the width, returning the `(Algorithm, LimbSize)` pair, read in a
+`const { … }` block so it const-folds away. The limb width is **per-cell policy DATA**, not a
+blanket rule: a `limb_size<const N>()` helper enumerates the benched winners, with
+`LimbSize::for_packing(N)` (the even-`N` validity gate) as the default. The canonical shape
+(the reference instance is `int/policy/mul_low.rs`, the truncated-low product):
+
+```rust
+// 2. verdict — const in BOTH axes (limb width is value-independent).
+enum Select { ByAlgorithm(Algorithm, LimbSize) }
+
+// 3. policy DATA: the benched per-N limb-width table. U128 only where a
+//    microbench wins AND it is valid (even N — for_packing gates odd → U64).
+const fn limb_size<const N: usize>() -> LimbSize {
+    LimbSize::for_packing(N)        // ← carve out a losing even cell to U64 HERE
+}
+const fn select<const N: usize>() -> Select {
+    Select::ByAlgorithm(Algorithm::LowLimb, limb_size::<N>())
+}
+
+// 4. dispatch — folds to ONE direct typed call, unchosen arm eliminated.
+pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
+    let (algo, limb) = match const { select::<N>() } { Select::ByAlgorithm(a, l) => (a, l) };
+    match (algo, limb) {
+        (Algorithm::LowLimb, LimbSize::U64)  => mul_low_limb::<N, u64>(a, b, out),
+        (Algorithm::LowLimb, LimbSize::U128) => mul_low_limb::<N, u128>(a, b, out),
+    }
+}
+```
+
+**Const-`N` vs runtime-shape functions.** The const verdict above fits functions keyed on a
+compile-time width (the truncated-low product is `<const N>`). A function whose policy is
+**`ByShape`/`ByValue`** (keyed on *runtime* operand lengths — the slice divide, whose `2N`
+scaled numerator has no nameable type) cannot carry a const `LimbSize`: there its limb-width
+choice is a **runtime** decision and belongs as a distinct `Algorithm` engine variant the
+shape classifier selects (e.g. a u128-limb Knuth engine chosen when the effective limb counts
+are even and wide enough), not a const verdict. Same axis, delivered where the key allows.
+
 ## Algorithm choosing — and pruning
 
 A single function (say `sqrt`) has several possible algorithms — a
