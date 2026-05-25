@@ -31,7 +31,9 @@
 //! calls a decimal method on its own value.
 
 use crate::int::algos::div::div_knuth::div_knuth_into;
+use crate::int::algos::div::div_knuth_u128_limb::div_knuth_u128_limb_into;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
+use crate::int::policy::div_rem::{select_for_limbs, Algorithm};
 use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::{should_bump, RoundingMode};
@@ -151,19 +153,50 @@ where
     for slot in rem[..bl.max(1)].iter_mut() {
         *slot = 0;
     }
-    // Exact per-`N` Knuth scratch: the scaled numerator spans up to `2N`
-    // limbs, so its normalised `u` needs `double_buffered_u64` (`≥ 2N + 2`); the
-    // divisor `b` is `N`-wide, so `v` needs `single_buffered_u64` (`N + 2`).
-    let mut u_buf = Int::<N>::double_buffered_u64();
-    let mut v_buf = Int::<N>::single_buffered_u64();
-    div_knuth_into(
-        &num[..ntop],
-        &b_mag[..bl],
-        &mut quot[..qlen],
-        &mut rem[..bl.max(1)],
-        u_buf.as_mut(),
-        v_buf.as_mut(),
-    );
+    // Route on the divide matcher's verdict, with exact `ComputeInt` scratch
+    // per engine. The scaled-numerator shape (`2N`-limb dividend over an
+    // `N`-limb divisor) is exactly where the u128-limb engine wins — for an
+    // even divisor of ≥ 24 limbs whose dividend is ≥ 2·n — so it picks up the
+    // wide-tier `/` win; every other shape takes Knuth (a single-limb divisor
+    // is handled inside `div_knuth_into`). Burnikel–Ziegler can't engage (the
+    // divisor `b` is `N ≤ 64 < 65` limbs) and `Schoolbook` is never returned,
+    // but both are matched (no `_`) so a new engine forces a decision here.
+    let num_s = &num[..ntop];
+    let den_s = &b_mag[..bl];
+    let q = &mut quot[..qlen];
+    let r = &mut rem[..bl.max(1)];
+    match select_for_limbs(num_s, den_s) {
+        Algorithm::KnuthU128Limb => {
+            // `u` = `2N`-value normalised dividend in u128 (`double_buffered`);
+            // `v` = `N`-value divisor in u128 (`single`); the u64 buffers hold
+            // the base-2⁶⁴ normalisation before packing.
+            let mut u64buf = Int::<N>::double_buffered_u64();
+            let mut v64buf = Int::<N>::single_buffered_u64();
+            let mut u128_u = Int::<N>::double_buffered_u128();
+            let mut u128_v = Int::<N>::single_u128();
+            div_knuth_u128_limb_into(
+                num_s,
+                den_s,
+                q,
+                r,
+                u64buf.as_mut(),
+                v64buf.as_mut(),
+                u128_u.as_mut(),
+                u128_v.as_mut(),
+            );
+        }
+        Algorithm::Rem
+        | Algorithm::Knuth
+        | Algorithm::BurnikelZieglerWithKnuth
+        | Algorithm::Schoolbook => {
+            // The scaled numerator spans up to `2N` limbs, so its normalised
+            // `u` needs `double_buffered_u64` (`≥ 2N + 2`); the divisor `b` is
+            // `N`-wide, so `v` needs `single_buffered_u64` (`N + 2`).
+            let mut u_buf = Int::<N>::double_buffered_u64();
+            let mut v_buf = Int::<N>::single_buffered_u64();
+            div_knuth_into(num_s, den_s, q, r, u_buf.as_mut(), v_buf.as_mut());
+        }
+    }
 
     // Round per `mode`: compare remainder against b - remainder.
     let rl = sig_len(&rem[..bl.max(1)]);

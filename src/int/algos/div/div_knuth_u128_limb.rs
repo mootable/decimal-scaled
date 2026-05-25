@@ -50,16 +50,69 @@ use crate::int::types::compute_int::{Limb, MAX_SINGLE_LIMBS};
 /// (the one-above window limb plus an even-rounding limb).
 const SCRATCH_LIMBS_128: usize = MAX_SINGLE_LIMBS / 2 + 2;
 
-/// Knuth Algorithm D at base 2¹²⁸. `num` / `den` are little-endian u64
-/// slices; `quot` / `rem` are written in u64 limbs to match [`div_knuth`]'s
-/// contract bit-for-bit. Even effective limb counts run the u128 core;
-/// odd / single-limb / `num < den` shapes fall back to [`div_knuth`].
+/// Knuth Algorithm D at base 2¹²⁸ — build-max-scratch wrapper. Allocates the
+/// u64 normalisation buffers and the packed u128 `u`/`v` at the build-max
+/// width and delegates to [`div_knuth_u128_limb_into`]. The slice
+/// [`dispatch`](crate::int::policy::div_rem::dispatch) calls this; a
+/// concrete-`N` caller that can size the scratch exactly
+/// (`Int<N>: ComputeInt`) calls `div_knuth_u128_limb_into` directly with its
+/// own buffer family.
 pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+    let mut u64buf = [0u64; MAX_SINGLE_LIMBS];
+    let mut v64buf = [0u64; MAX_SINGLE_LIMBS];
+    let mut u = [0u128; SCRATCH_LIMBS_128];
+    let mut v = [0u128; SCRATCH_LIMBS_128];
+    div_knuth_u128_limb_into(
+        num, den, quot, rem, &mut u64buf, &mut v64buf, &mut u, &mut v,
+    );
+}
+
+/// Base-2¹²⁸ Knuth Algorithm D in caller-provided scratch — the exact-scratch
+/// sibling of [`div_knuth_u128_limb`]. `num` / `den` are little-endian u64
+/// slices; `quot` / `rem` are written in u64 limbs to match [`div_knuth`]'s
+/// contract bit-for-bit. Even effective limb counts run the u128 core; odd /
+/// single-limb / `num < den` shapes fall back to [`div_knuth_into`].
+///
+/// A concrete-`N` caller sources the four scratch buffers from its
+/// `ComputeInt` family — for the decimal `/` wide shape (`2N`-dividend,
+/// `N`-divisor): `u64buf` = `double_buffered_u64`, `v64buf` =
+/// `single_buffered_u64`, `u` = `double_buffered_u128`, `v` = `single_u128`.
+/// All four slices are **zeroed here**, so the caller may reuse them across
+/// calls. Required minimum lengths: `u64buf ≥ num.len() + 2`,
+/// `v64buf ≥ den.len()`, `u ≥ ⌈(num.len()+2)/2⌉ + 1`, `v ≥ ⌈den.len()/2⌉`.
+/// `u64buf` is reused as the remainder unpack scratch after the dividend has
+/// been packed into `u`.
+#[allow(clippy::too_many_arguments)]
+pub(crate) fn div_knuth_u128_limb_into(
+    num: &[u64],
+    den: &[u64],
+    quot: &mut [u64],
+    rem: &mut [u64],
+    u64buf: &mut [u64],
+    v64buf: &mut [u64],
+    u: &mut [u128],
+    v: &mut [u128],
+) {
     for q in quot.iter_mut() {
         *q = 0;
     }
     for r in rem.iter_mut() {
         *r = 0;
+    }
+    // Zero the caller's scratch — the pack relies on the high limbs being
+    // zero (the window-top `u[u_len128]`, the dividend's even-rounding limb),
+    // and the caller may have reused these buffers.
+    for x in u64buf.iter_mut() {
+        *x = 0;
+    }
+    for x in v64buf.iter_mut() {
+        *x = 0;
+    }
+    for x in u.iter_mut() {
+        *x = 0;
+    }
+    for x in v.iter_mut() {
+        *x = 0;
     }
 
     // Effective u64 limb counts (strip leading zeros).
@@ -81,9 +134,10 @@ pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], re
     // The u128 core needs an EVEN-u64-limb-count divisor of at least TWO
     // u128 limbs (`n128 >= 2`, i.e. `n64 >= 4`): the base-2¹²⁸ 3-by-2 q̂
     // refinement reads `v[n128 - 2]`. Everything else — odd `n64` (no exact
-    // u128 form), or `n64 < 4` — defers to base-2⁶⁴ Knuth.
+    // u128 form), or `n64 < 4` — defers to base-2⁶⁴ Knuth, reusing the
+    // caller's (now zeroed) u64 scratch as Knuth's `u`/`v`.
     if n64 < 4 || n64 % 2 != 0 {
-        crate::int::algos::div::div_knuth::div_knuth(num, den, quot, rem);
+        crate::int::algos::div::div_knuth::div_knuth_into(num, den, quot, rem, u64buf, v64buf);
         return;
     }
 
@@ -92,9 +146,7 @@ pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], re
     // 63), so the packed divisor is base-2¹²⁸ normalised. Shift in u64
     // space (div_knuth's proven path), then pack pairs of u64 into u128.
     let shift = den[n64 - 1].leading_zeros();
-    let mut u64buf = [0u64; MAX_SINGLE_LIMBS];
-    let mut v64buf = [0u64; MAX_SINGLE_LIMBS];
-    debug_assert!(top64 < MAX_SINGLE_LIMBS && n64 <= MAX_SINGLE_LIMBS);
+    debug_assert!(top64 < u64buf.len() && n64 <= v64buf.len());
 
     if shift == 0 {
         u64buf[..top64].copy_from_slice(&num[..top64]);
@@ -123,20 +175,19 @@ pub(crate) fn div_knuth_u128_limb(num: &[u64], den: &[u64], quot: &mut [u64], re
     let u_len128 = u_len64 / 2;
 
     // Pack into u128 limbs (little-endian: limb = lo | hi << 64).
-    let mut u = [0u128; SCRATCH_LIMBS_128];
-    let mut v = [0u128; SCRATCH_LIMBS_128];
-    debug_assert!(u_len128 < SCRATCH_LIMBS_128 && n128 <= SCRATCH_LIMBS_128);
+    debug_assert!(u_len128 < u.len() && n128 <= v.len());
     <u128 as Limb>::pack(&u64buf[..u_len64], &mut u[..u_len128]);
     <u128 as Limb>::pack(&v64buf[..n64], &mut v[..n128]);
 
     // Base-2¹²⁸ Knuth D. The quotient has `m128 + 1` u128 digits; `u` has a
     // zeroed limb above the live dividend (`u[u_len128]`) for the window top.
     let m128 = u_len128 - n128;
-    knuth_d_base_u128(&mut u, &v, n128, m128, quot);
+    knuth_d_base_u128(u, v, n128, m128, quot);
 
-    // Unpack the remainder (low `n128` u128 limbs of `u` → `n64` u64 limbs),
+    // Unpack the remainder (low `n128` u128 limbs of `u` → `n64` u64 limbs)
+    // into `u64buf` (reused as `r64` now the dividend is consumed), then
     // denormalise by `shift`.
-    let mut r64 = [0u64; MAX_SINGLE_LIMBS];
+    let r64 = u64buf;
     <u128 as Limb>::unpack(&u[..n128], &mut r64[..n64]);
     if shift == 0 {
         let copy = n64.min(rem.len());
@@ -280,7 +331,7 @@ fn knuth_d_base_u128(u: &mut [u128], v: &[u128], n128: usize, m128: usize, quot:
 
 #[cfg(test)]
 mod tests {
-    use super::div_knuth_u128_limb;
+    use super::{div_knuth_u128_limb, div_knuth_u128_limb_into};
     use crate::int::algos::div::div_knuth::div_knuth;
 
     // Bit-identity vs the production base-2⁶⁴ div_knuth on even-limb,
@@ -345,6 +396,66 @@ mod tests {
             div_knuth_u128_limb(&num, &den, &mut q_c, &mut r_c);
             assert_eq!(q_c, q_ref, "fallback quot mismatch den={den:?}");
             assert_eq!(r_c, r_ref, "fallback rem mismatch den={den:?}");
+        }
+    }
+
+    // `div_knuth_u128_limb_into` (the exact-scratch sibling) on the decimal
+    // `/` wide shape — a `2N`-limb scaled numerator over an `N`-limb divisor —
+    // with the buffers sized by the SAME `ComputeInt` formulas `div_widen_scale`
+    // uses (`u64buf`=double_buffered_u64, `v64buf`=single_buffered_u64,
+    // `u`=double_buffered_u128, `v`=single_u128). Validates both the result
+    // (bit-identical to `div_knuth`) AND that the exact buffers are large
+    // enough (run in debug, the `debug_assert!`s in the engine fire on
+    // undersizing). Even storage widths where the matcher engages u128 (≥24).
+    #[test]
+    fn u128_limb_into_exact_scratch_wide_shape() {
+        let mut state: u64 = 0xD1B5_4A32_D192_ED03;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for &n in &[24usize, 32, 48, 64] {
+            // Exact-scratch sizes — the `ComputeInt` family formulas.
+            let u64buf_len = 2 * n + (n + 1) / 2; // double_buffered_u64
+            let v64buf_len = n + 2; // single_buffered_u64
+            let u128_u_len = (2 * n + (n + 1) / 2 + 1) / 2; // double_buffered_u128
+            let u128_v_len = (n + 1) / 2; // single_u128
+            for _ in 0..200 {
+                let top = 2 * n; // full wide `2N` dividend
+                let mut num = alloc::vec![0u64; top];
+                let mut den = alloc::vec![0u64; n];
+                for x in num.iter_mut() {
+                    *x = next();
+                }
+                for x in den.iter_mut() {
+                    *x = next();
+                }
+                den[n - 1] |= 1 << 63; // full-width even divisor (`den_n == n`)
+                let mut q_ref = alloc::vec![0u64; top + 1];
+                let mut r_ref = alloc::vec![0u64; top + 1];
+                div_knuth(&num, &den, &mut q_ref, &mut r_ref);
+
+                let mut q_c = alloc::vec![0u64; top + 1];
+                let mut r_c = alloc::vec![0u64; n];
+                let mut u64buf = alloc::vec![0u64; u64buf_len];
+                let mut v64buf = alloc::vec![0u64; v64buf_len];
+                let mut u128_u = alloc::vec![0u128; u128_u_len];
+                let mut u128_v = alloc::vec![0u128; u128_v_len];
+                div_knuth_u128_limb_into(
+                    &num,
+                    &den,
+                    &mut q_c,
+                    &mut r_c,
+                    &mut u64buf,
+                    &mut v64buf,
+                    &mut u128_u,
+                    &mut u128_v,
+                );
+                assert_eq!(q_c, q_ref, "into quot mismatch n={n}");
+                assert_eq!(r_c[..n], r_ref[..n], "into rem mismatch n={n}");
+            }
         }
     }
 }

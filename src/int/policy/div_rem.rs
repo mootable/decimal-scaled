@@ -32,8 +32,17 @@ use crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook;
 /// Variants are the CamelCase of each engine fn's name minus the `div_`
 /// function prefix (`div_knuth` → `Knuth`, …) — strict 1:1 with the
 /// engine fns in [`crate::int::algos::div`].
+///
+/// `pub(crate)` together with [`select_for_limbs`] so a concrete-`N` caller
+/// that needs **exact `ComputeInt` scratch** (the decimal `/` and `%` int
+/// layers) can read the matcher's verdict and route to the chosen engine's
+/// `*_into` variant with its own buffers — rather than hardcoding one engine
+/// (the matcher-bypass defect). The slice [`dispatch`] is the build-max entry
+/// for callers that don't size scratch. Exposing the verdict (not a
+/// `dispatch_into`, which would have to thread `N` through this slice policy)
+/// keeps the division policy width-free.
 #[derive(Clone, Copy, PartialEq, Eq)]
-enum Algorithm {
+pub(crate) enum Algorithm {
     /// [`div_rem`] — the `const fn` single-limb hardware fast path
     /// (`div_rem`'s Fast B is one hardware `u128 / u64` per dividend
     /// limb — already optimal for a single-limb divisor).
@@ -183,7 +192,7 @@ const fn select() -> Select {
 /// [`BZ_THRESHOLD`] limbs whose dividend is at least twice as wide takes
 /// Burnikel–Ziegler; everything else takes Knuth.
 #[inline]
-fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
+pub(crate) fn select_for_limbs(num: &[u64], den: &[u64]) -> Algorithm {
     let den_n = effective_limbs(den);
     assert!(den_n > 0, "dispatch: divide by zero");
     if den_n == 1 {
