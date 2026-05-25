@@ -123,6 +123,8 @@ pub(crate) mod pow;
 pub(crate) mod rem;
 /// Integer squaring policy: half-product via-mul matcher for `Uint<N>`.
 pub(crate) mod sqr;
+/// Truncated-low squaring policy: the `u64`/`u128` limb-width matcher.
+pub(crate) mod sqr_low;
 /// Subtract policy: default-delegating ripple-borrow matcher for `Int<N>`.
 pub(crate) mod sub;
 /// Integer sum-of-squares policy: `a^2 + b^2` schoolbook matcher for `Int<N>`.

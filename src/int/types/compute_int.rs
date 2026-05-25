@@ -191,6 +191,10 @@ impl LimbSize {
 pub(crate) trait Limb: Copy + PartialEq {
     /// Additive identity (the array-repeat seed for scratch buffers).
     const ZERO: Self;
+    /// Multiplicative identity — materialises a carry *bit* as a limb value
+    /// for multi-limb carry propagation (e.g. the symmetric-square doubling
+    /// pass), where `overflowing_add` needs a value addend, not a `bool`.
+    const ONE: Self;
     /// Number of `L` limbs holding an `n`-u64-limb value: `n` for `u64`,
     /// `n / 2` for `u128` (caller guarantees even `n` for the `u128` impl).
     fn packed_len(n_u64: usize) -> usize;
@@ -240,6 +244,7 @@ pub(crate) trait Limb: Copy + PartialEq {
 
 impl Limb for u64 {
     const ZERO: Self = 0;
+    const ONE: Self = 1;
     #[inline]
     fn packed_len(n_u64: usize) -> usize {
         n_u64
@@ -302,6 +307,7 @@ impl Limb for u64 {
 
 impl Limb for u128 {
     const ZERO: Self = 0;
+    const ONE: Self = 1;
     #[inline]
     fn packed_len(n_u64: usize) -> usize {
         n_u64 / 2

@@ -850,6 +850,16 @@ path = "benches/micro/mul_low_u128_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# sqr_low_u128_ab: pilot A/B for the wide-tier exp/powf Smith-squaring
+# work-square -- the truncated-low base-2^64 `sqr_low_limb::<N, u64>` vs the
+# u128-packed `sqr_low_limb::<N, u128>` candidate at the D616/D924/D1232 work
+# integer widths (N = 128/192/256) plus the storage widths for reference.
+[[bench]]
+name = "sqr_low_u128_ab"
+path = "benches/micro/sqr_low_u128_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (div_knuth vs the zero-free-scratch div_knuth_fast) at the regressed

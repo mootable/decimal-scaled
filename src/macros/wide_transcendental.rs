@@ -330,12 +330,12 @@ pub(crate) mod exp_generic {
         let mut squared = sum;
         let mut i = 0;
         while i < n {
-            // Dedicated low-half comba SQUARE (`sqr`, ~N²/2 limb-mults)
-            // instead of the general `mul(x, x)` (~3N²/4 via the u128-packed
-            // low product): bit-identical low-`BITS` of `x²`, ~1.5× fewer
-            // limb-mults. `mul` is `round_div_pow10(x·x, w)`; the square
-            // feeds the same divide.
-            squared = round_div_pow10(squared.sqr(), w_ext);
+            // Dedicated low-half symmetric SQUARE through the limb-width
+            // matcher (`wrapping_sqr_low_u128` → `int::policy::sqr_low`): the
+            // u128-packed `sqr_low_limb` on even work widths (half the limbs),
+            // bit-identical to the low-`BITS` of `x²`. The squaring sibling of
+            // the Taylor `mul`'s `wrapping_mul_low_u128`; feeds the same divide.
+            squared = round_div_pow10(squared.wrapping_sqr_low_u128(), w_ext);
             i += 1;
         }
         let sum = squared;

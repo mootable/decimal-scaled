@@ -95,6 +95,17 @@ pub trait BigInt:
 
     /// `self²` (wrapping), via the dedicated half-product kernel.
     fn sqr(self) -> Self;
+    /// Truncated-low (mod `2^BITS`) square, the same value as [`BigInt::sqr`],
+    /// but computed in u128 limbs when the limb count is even — the squaring
+    /// sibling of [`BigInt::wrapping_mul_low_u128`]. Wide-tier exp/powf runs its
+    /// Smith squaring loop on even-`LIMBS` work integers; the u128-packed
+    /// symmetric square is faster there (`benches/micro/sqr_low_u128_ab.rs`).
+    /// The default delegates to [`BigInt::sqr`]; `Int<N>` overrides it for even
+    /// `N` via the limb-width matcher.
+    #[inline]
+    fn wrapping_sqr_low_u128(self) -> Self {
+        self.sqr()
+    }
     /// `self³` (wrapping), `sqr` then one multiply.
     fn cube(self) -> Self;
     /// Bit length: `0` for zero, else `floor(log2|self|) + 1`.
@@ -209,6 +220,18 @@ impl<const N: usize> BigInt for Int<N> {
         let b = *rhs.as_limbs();
         let mut out = [0u64; N];
         crate::int::policy::mul_low::dispatch::<N>(&a, &b, &mut out);
+        Int::from_limbs(out)
+    }
+
+    #[inline]
+    fn wrapping_sqr_low_u128(self) -> Self {
+        // Truncated-low square through the limb-width matcher
+        // `int::policy::sqr_low`: same `(Algorithm, LimbSize)` second-axis
+        // shape as `mul_low`, const-folded to one direct `sqr_low_limb::<N, _>`
+        // call. Bit-identical to `sqr` (mod 2^64N) at either limb width.
+        let a = *self.as_limbs();
+        let mut out = [0u64; N];
+        crate::int::policy::sqr_low::dispatch::<N>(&a, &mut out);
         Int::from_limbs(out)
     }
 

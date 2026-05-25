@@ -223,6 +223,23 @@ pub mod __bench_internals {
     pub fn mul_low_u128<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
         crate::int::algos::mul::mul_schoolbook::mul_low_limb::<N, u128>(a, b, out)
     }
+    /// `out = (x²) mod 2^(64*N)` via the u64-limb truncated-low symmetric
+    /// square — the kernel the wide-tier exp/powf Smith squaring loop
+    /// (`BigInt::wrapping_sqr_low_u128`) routes through at `L = u64`. Exposed
+    /// for the `sqr_low_u128_ab` pilot microbench.
+    #[inline(never)]
+    pub fn sqr_low_u64<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::sqr::sqr_low_limb::sqr_low_limb::<N, u64>(x, out)
+    }
+    /// u128-limb-packed truncated-low symmetric square (even `N` only):
+    /// bit-identical low `N` limbs to [`sqr_low_u64`], computed in `N/2`
+    /// base-2^128 limbs — the `L = u128` monomorphisation of the one
+    /// `sqr_low_limb` kernel. Exposed for the `sqr_low_u128_ab` `LimbSize`
+    /// microbench (u64 vs u128 of the same generic kernel).
+    #[inline(never)]
+    pub fn sqr_low_u128<const N: usize>(x: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::sqr::sqr_low_limb::sqr_low_limb::<N, u128>(x, out)
+    }
     #[inline(never)]
     pub fn mul_fixed<const L: usize, const D: usize>(
         a: &[u64; L],
