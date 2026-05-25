@@ -621,4 +621,119 @@ mod wide_s30_exp {
     fn d1232_exp_s30() {
         check_at_scale("exp", Width::D1232, 30, include_str!("golden/exp_d1232_s30.txt"));
     }
+
+    // Interior scale samples across each wide tier's Tang rectangle (s30 above
+    // is the low edge; the canonical `d###` band is the top edge). These pin
+    // exp at mid-rectangle scales so the (N, SCALE) face is validated across
+    // its whole SCALE range, not just the two edges.
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn d307_exp_s70() {
+        check_at_scale("exp", Width::D307, 70, include_str!("golden/exp_d307_s70.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn d307_exp_s120() {
+        check_at_scale("exp", Width::D307, 120, include_str!("golden/exp_d307_s120.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn d462_exp_s100() {
+        check_at_scale("exp", Width::D462, 100, include_str!("golden/exp_d462_s100.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn d462_exp_s180() {
+        check_at_scale("exp", Width::D462, 180, include_str!("golden/exp_d462_s180.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn d616_exp_s130() {
+        check_at_scale("exp", Width::D616, 130, include_str!("golden/exp_d616_s130.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn d616_exp_s240() {
+        check_at_scale("exp", Width::D616, 240, include_str!("golden/exp_d616_s240.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn d924_exp_s180() {
+        check_at_scale("exp", Width::D924, 180, include_str!("golden/exp_d924_s180.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn d924_exp_s350() {
+        check_at_scale("exp", Width::D924, 350, include_str!("golden/exp_d924_s350.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn d1232_exp_s250() {
+        check_at_scale("exp", Width::D1232, 250, include_str!("golden/exp_d1232_s250.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn d1232_exp_s470() {
+        check_at_scale("exp", Width::D1232, 470, include_str!("golden/exp_d1232_s470.txt"));
+    }
+
+    // The two SCALE extremes per wide tier: 0 (integer exp — the Tang
+    // rectangle's bottom) and MAX_SCALE (= capacity - 1, near-overflow /
+    // deep-underflow). Completes the {0, S/2, S-1} minimum scale coverage.
+    #[test]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn d307_exp_s0() {
+        check_at_scale("exp", Width::D307, 0, include_str!("golden/exp_d307_s0.txt"));
+    }
+    #[test]
+    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    fn d307_exp_s306() {
+        check_at_scale("exp", Width::D307, 306, include_str!("golden/exp_d307_s306.txt"));
+    }
+    #[test]
+    #[ignore = "KNOWN DEFECT (fix in progress): exp at SCALE 0 with large x overflows the tier work integer (result ~10^460 at working scale 0+guard exceeds Int<24>); direct exp needs the wider exp_fixed_wide work width. Tracked + being fixed."]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn d462_exp_s0() {
+        check_at_scale("exp", Width::D462, 0, include_str!("golden/exp_d462_s0.txt"));
+    }
+    #[test]
+    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    fn d462_exp_s461() {
+        check_at_scale("exp", Width::D462, 461, include_str!("golden/exp_d462_s461.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn d616_exp_s0() {
+        check_at_scale("exp", Width::D616, 0, include_str!("golden/exp_d616_s0.txt"));
+    }
+    #[test]
+    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    fn d616_exp_s615() {
+        check_at_scale("exp", Width::D616, 615, include_str!("golden/exp_d616_s615.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn d924_exp_s0() {
+        check_at_scale("exp", Width::D924, 0, include_str!("golden/exp_d924_s0.txt"));
+    }
+    #[test]
+    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    fn d924_exp_s923() {
+        check_at_scale("exp", Width::D924, 923, include_str!("golden/exp_d924_s923.txt"));
+    }
+    #[test]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn d1232_exp_s0() {
+        check_at_scale("exp", Width::D1232, 0, include_str!("golden/exp_d1232_s0.txt"));
+    }
+    #[test]
+    #[ignore = "KNOWN DEFECT (fix in progress): exp(-10^-S) at MAX scale is just under 1.0; the residual deciding Ceiling (round up to 1.0) sits at scale ~2S, below the work-int resolution, so Ceiling yields 0.999..9 not 1.0 (lsbe=1). Tracked + being fixed."]
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    fn d1232_exp_s1231() {
+        check_at_scale("exp", Width::D1232, 1231, include_str!("golden/exp_d1232_s1231.txt"));
+    }
 }

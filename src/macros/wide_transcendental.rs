@@ -349,14 +349,31 @@ pub(crate) mod exp_generic {
         } else {
             let neg_k = -k as u128;
             if neg_k >= bit_length(sum) as u128 {
-                return zero::<S>();
+                // Deep underflow: e^x (x < 0 here, since k < 0) is strictly
+                // positive but below the working resolution. Return the
+                // smallest positive working value (1 = 10^-w), NOT zero, so the
+                // directed narrowing preserves the sign — Ceiling rounds up to
+                // 1 ULP while Floor / Trunc / nearest still give 0. Returning a
+                // bare zero loses positivity and rounds Ceiling to 0 (a
+                // correctly-rounded defect). Reached only by direct e^(negative)
+                // — the hyperbolics call `exp_fixed` on |x| >= 0.
+                return lit::<S>(1);
             }
             sum >> (neg_k as u32)
         };
-        if extra == 0 {
+        let result = if extra == 0 {
             scaled_at_w_ext
         } else {
             round_div_pow10(scaled_at_w_ext, extra)
+        };
+        // e^v > 0 for every finite v: a zero result is underflow below the
+        // working resolution, not a true zero. Return the smallest positive
+        // value so the directed narrowing rounds Ceiling up to 1 ULP (a bare
+        // zero would round Ceiling to 0 — a correctly-rounded defect).
+        if result == zero::<S>() {
+            lit::<S>(1)
+        } else {
+            result
         }
     }
 
@@ -1947,13 +1964,14 @@ macro_rules! decl_wide_transcendental {
                 let mut squared = sum;
                 let mut i = 0;
                 while i < n {
-                    // Dedicated low-half comba SQUARE (~N²/2 limb-mults)
-                    // instead of `mul_cached_low_u128(x, x)` (~3N²/4 via the
-                    // u128-packed low product): bit-identical low-`BITS` of
-                    // `x²`, ~1.5× fewer limb-mults, feeding the same
-                    // `round_div` by `pow10_w`.
+                    // Low-half symmetric SQUARE through the limb-width matcher
+                    // (`wrapping_sqr_low_u128` → `int::policy::sqr_low`): the
+                    // u128-packed `sqr_low_limb` on even work widths (half the
+                    // limbs), bit-identical to the low-`BITS` of `x²`, feeding
+                    // the same `round_div` by `pow10_w`. The squaring sibling of
+                    // the Taylor `mul_cached_low_u128`.
                     squared = round_div(
-                        $crate::int::types::traits::BigInt::sqr(squared),
+                        $crate::int::types::traits::BigInt::wrapping_sqr_low_u128(squared),
                         pow10_w,
                     );
                     i += 1;
@@ -1976,14 +1994,34 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     let neg_k = -k as u128;
                     if neg_k >= bit_length(sum) as u128 {
-                        return zero();
+                        // Deep underflow: e^v (v < 0 here, since k < 0) is
+                        // strictly positive but below the working resolution.
+                        // Return the smallest positive working value (1 = 10^-w),
+                        // NOT zero, so the directed narrowing keeps the sign —
+                        // Ceiling rounds up to 1 ULP while Floor / Trunc /
+                        // nearest still give 0. A bare zero loses positivity and
+                        // rounds Ceiling to 0 (a correctly-rounded defect the
+                        // SCALE-30 golden cells catch). Reached only by direct
+                        // e^(negative); the hyperbolics call exp on |x| >= 0.
+                        return lit(1);
                     }
                     sum >> (neg_k as u32)
                 };
-                if extra == 0 {
+                let result = if extra == 0 {
                     scaled_at_w_ext
                 } else {
                     round_div_pow10(scaled_at_w_ext, extra)
+                };
+                // e^v > 0 for every finite v: a zero result is underflow below
+                // the working resolution, NOT a true zero. Return the smallest
+                // positive working value (1 = 10^-w) so the directed narrowing
+                // keeps the sign — Ceiling rounds up to 1 ULP, Floor / Trunc /
+                // nearest still give 0. A bare zero rounds Ceiling to 0 (a
+                // correctly-rounded defect the SCALE-30 golden cells catch).
+                if result == zero() {
+                    lit(1)
+                } else {
+                    result
                 }
             }
 

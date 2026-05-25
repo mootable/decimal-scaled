@@ -181,6 +181,35 @@ TIERS = [
     ("d616",  616,  30,  36),
     ("d924",  924,  30,  24),
     ("d1232", 1232, 30,  20),
+    # Interior scale samples across each wide tier's exp Tang rectangle (the
+    # rectangle spans 0..top; s30 is the low edge, the canonical entry above is
+    # the top edge). Two interior scales per tier exercise Tang (small |x|) and
+    # Series (large |x|) at mid-rectangle, not just the edges.
+    ("d307",  307,  70,  60),
+    ("d307",  307,  120, 60),
+    ("d462",  462,  100, 44),
+    ("d462",  462,  180, 44),
+    ("d616",  616,  130, 36),
+    ("d616",  616,  240, 36),
+    ("d924",  924,  180, 24),
+    ("d924",  924,  350, 24),
+    ("d1232", 1232, 250, 20),
+    ("d1232", 1232, 470, 20),
+    # The two SCALE extremes per wide tier: 0 (integer exp) and MAX_SCALE
+    # (= capacity - 1, the near-overflow / deep-underflow edge). With the
+    # canonical entry (~S/2) and s30 these complete the {0, S/2, S-1} minimum
+    # coverage every width should carry; the extremes are where rounding edges
+    # (overflow guard, underflow Ceiling) are most likely to surface.
+    ("d307",  307,  0,   60),
+    ("d307",  307,  306, 60),
+    ("d462",  462,  0,   44),
+    ("d462",  462,  461, 44),
+    ("d616",  616,  0,   36),
+    ("d616",  616,  615, 36),
+    ("d924",  924,  0,   24),
+    ("d924",  924,  923, 24),
+    ("d1232", 1232, 0,   20),
+    ("d1232", 1232, 1231, 20),
 ]
 
 # --- mpmath function oracles ----------------------------------------------
@@ -1244,15 +1273,6 @@ def main() -> None:
         max_raw = 10 ** (capacity - 1)
         if alias in STORAGE_MAX:
             max_raw = min(max_raw, STORAGE_MAX[alias])
-        # The wide tiers' SCALE-30 cells validate the exp Tang rectangle, which
-        # `policy::exp` magnitude-gates to |x| < 100 (above it the policy routes
-        # Series, validated at the canonical scales). Bound the inputs to that
-        # domain — an exp-output cap of 10^(scale+44) keeps |x| roughly < 100 —
-        # so the cell exercises exactly the wired (Tang) regime, and does not
-        # reach into the large-|x| Series path (whose deep-underflow Ceiling
-        # edge is a separate, pre-existing concern, not this cell's subject).
-        if scale == 30:
-            max_raw = min(max_raw, 10 ** (scale + 44))
         counts = category_counts(max(8, int(base_count * COUNT_SCALE)))
         # Lift mpmath working precision so the oracle's intermediate
         # squarings stay safely above the tier's storage LSB. The
