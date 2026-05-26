@@ -188,7 +188,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Download every Criterion artifact from this run
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # No `name` -> pulls every artifact this run uploaded, each
           # into a subdir named after the artifact

@@ -162,7 +162,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Download compiled bench exes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: lib-cmp-perf-compiled
           path: lib-cmp-compiled
@@ -203,7 +203,7 @@ jobs:
         uses: actions/checkout@v6
 
       - name: Download every (width, scale) bench cell
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: lib-cmp-perf-*-s*
           path: lib-cmp-cells

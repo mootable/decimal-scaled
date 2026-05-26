@@ -191,7 +191,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Download compiled bench exes
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: bbc-compiled
           path: bbc-compiled
@@ -247,7 +247,7 @@ jobs:
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
 
       - name: Download every (width, scale) bench cell
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # No `name` -> every artifact this run uploaded, each into a subdir
           # named after the artifact (bbc-D18-s0/, bbc-D307-s153/, ...).

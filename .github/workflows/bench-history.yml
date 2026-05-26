@@ -158,7 +158,7 @@ jobs:
         # Each artifact `bench-history-<tag>` unpacks to
         # tmp/bench-history-results/bench-history-<tag>/<op>_<width>_s<scale>/t/new/estimates.json
         # — exactly the layout `chart_gen -- history` reads.
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           pattern: bench-history-*
           path: tmp/bench-history-results
@@ -190,7 +190,7 @@ jobs:
           ref: ${{ inputs.ref || github.ref }}
 
       - name: Download every per-version bench cell
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           # Each artifact `bench-history-<tag>` unpacks into its own subdir
           # under hist-cells/ — exactly the layout summarise_history.py reads.
