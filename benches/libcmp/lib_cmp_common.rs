@@ -68,98 +68,77 @@ pub fn num_bigint_from_one_at_scale(scale: usize) -> bigdecimal::num_bigint::Big
     BigInt::from(10).pow(scale as u32)
 }
 
-/// Standard new-tier bench body, parameterised over the type +
-/// per-tier midpoint / max scale + bit-width label used in the
-/// criterion group name. Each per-tier file invokes this macro
-/// once with its own constants. Matches the previous monolith's
-/// `decl_new_tier_bench!` semantics.
+/// Standard new-tier bench body, parameterised over the type + the tier's
+/// explicit SCALE SET + the transcendental reference scale + bit-width label
+/// used in the criterion group name. Each per-tier file invokes this macro
+/// once with its own constants.
+///
+/// The scale set mirrors the golden / `bench-branch-compare` coverage —
+/// `dedup{0, 30, S/2, S-1}` (S = the tier's max scale) — so a peer-comparison
+/// regression is visible at the scale it occurs, not just one canonical
+/// scale. Each scale's groups are named `lib_cmp/<bit>bit_s<scale>`, so a
+/// single scale is selectable by a criterion name-filter — `-- _s30/` (the
+/// trailing `/` anchors the scale: `_s30/` matches `..._s30/decimal-scaled`
+/// but NOT `..._s306/...`). The arith ops run at every scale; the
+/// transcendentals run at `$transc` (the reference scale) only, where the
+/// dashu-float peer comparison for ln/exp is also attached.
 #[macro_export]
 macro_rules! new_tier_body {
-    ($T:ident, $bit:literal, $mid:literal, $max:literal) => {
+    ($T:ident, $bit:literal, [$($scale:literal),+ $(,)?], $transc:literal) => {
         use bigdecimal::BigDecimal;
         use dashu_float::DBig;
         use decimal_scaled::$T;
         use std::hint::black_box;
 
-        pub fn bench(c: &mut criterion::Criterion) {
-            for &scale in &[0_usize, $mid, $max] {
-                let group_name = format!(concat!("lib_cmp/", $bit, "bit_s{}"), scale);
-                let mut g = c.benchmark_group(&group_name);
+        // One (decimal-scaled + peers) block at one const-generic SCALE.
+        // `$s:literal` lets `$T::<$s>` monomorphise and names the group.
+        macro_rules! tier_scale {
+            ($c:expr, $s:literal) => {{
+                let group_name = concat!("lib_cmp/", $bit, "bit_s", $s);
+                let mut g = $c.benchmark_group(group_name);
 
-                match scale {
-                    0 => {
-                        let a = $T::<0>::try_from(2).unwrap();
-                        let b = $T::<0>::try_from(1).unwrap();
-                        $crate::arith_copy!(g, "decimal-scaled", a, b);
-                    }
-                    s if s == $mid => {
-                        let a = $T::<$mid>::try_from(2).unwrap();
-                        let b = $T::<$mid>::try_from(1).unwrap();
-                        $crate::arith_copy!(g, "decimal-scaled", a, b);
-                        g.bench_function("decimal-scaled/ln", |bn| {
-                            bn.iter(|| black_box(a).ln_strict())
-                        });
-                        g.bench_function("decimal-scaled/exp", |bn| {
-                            bn.iter(|| black_box(a).exp_strict())
-                        });
-                        g.bench_function("decimal-scaled/sin", |bn| {
-                            bn.iter(|| black_box(a).sin_strict())
-                        });
-                        g.bench_function("decimal-scaled/sqrt", |bn| {
-                            bn.iter(|| black_box(a).sqrt_strict())
-                        });
-                        g.bench_function("decimal-scaled/cos", |bn| {
-                            bn.iter(|| black_box(a).cos_strict())
-                        });
-                        g.bench_function("decimal-scaled/tan", |bn| {
-                            bn.iter(|| black_box(a).tan_strict())
-                        });
-                        g.bench_function("decimal-scaled/atan", |bn| {
-                            bn.iter(|| black_box(a).atan_strict())
-                        });
-                        g.bench_function("decimal-scaled/sinh", |bn| {
-                            bn.iter(|| black_box(a).sinh_strict())
-                        });
-                        g.bench_function("decimal-scaled/cosh", |bn| {
-                            bn.iter(|| black_box(a).cosh_strict())
-                        });
-                        g.bench_function("decimal-scaled/tanh", |bn| {
-                            bn.iter(|| black_box(a).tanh_strict())
-                        });
-                    }
-                    s if s == $max => {
-                        let a = $T::<$max>::try_from(2).unwrap();
-                        let b = $T::<$max>::try_from(1).unwrap();
-                        $crate::arith_copy!(g, "decimal-scaled", a, b);
-                    }
-                    _ => unreachable!(),
+                let a = $T::<$s>::try_from(2).unwrap();
+                let b = $T::<$s>::try_from(1).unwrap();
+                $crate::arith_copy!(g, "decimal-scaled", a, b);
+                // Transcendentals only at the reference scale.
+                if $s == $transc {
+                    g.bench_function("decimal-scaled/ln", |bn| bn.iter(|| black_box(a).ln_strict()));
+                    g.bench_function("decimal-scaled/exp", |bn| bn.iter(|| black_box(a).exp_strict()));
+                    g.bench_function("decimal-scaled/sin", |bn| bn.iter(|| black_box(a).sin_strict()));
+                    g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+                    g.bench_function("decimal-scaled/cos", |bn| bn.iter(|| black_box(a).cos_strict()));
+                    g.bench_function("decimal-scaled/tan", |bn| bn.iter(|| black_box(a).tan_strict()));
+                    g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+                    g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+                    g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+                    g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
                 }
 
                 {
-                    let mant_a = $crate::lib_cmp_common::num_bigint_from_two_at_scale(scale);
-                    let mant_b = $crate::lib_cmp_common::num_bigint_from_one_at_scale(scale);
-                    let a = BigDecimal::new(mant_a, scale as i64);
-                    let b = BigDecimal::new(mant_b, scale as i64);
+                    let mant_a = $crate::lib_cmp_common::num_bigint_from_two_at_scale($s);
+                    let mant_b = $crate::lib_cmp_common::num_bigint_from_one_at_scale($s);
+                    let a = BigDecimal::new(mant_a, $s as i64);
+                    let b = BigDecimal::new(mant_b, $s as i64);
                     $crate::arith_clone!(g, "bigdecimal", a, b);
                 }
                 {
-                    let prec = scale.max(1) as usize;
+                    let prec = ($s as usize).max(1);
                     let a = DBig::from_parts(2.into(), 0).with_precision(prec).value();
                     let b = DBig::from_parts(1.into(), 0).with_precision(prec).value();
                     $crate::arith_clone!(g, "dashu-float", a, b);
-                    if scale == $mid {
+                    if $s == $transc {
                         let a2 = a.clone();
-                        g.bench_function("dashu-float/ln", |bn| {
-                            bn.iter(|| black_box(a2.clone()).ln())
-                        });
-                        g.bench_function("dashu-float/exp", |bn| {
-                            bn.iter(|| black_box(a2.clone()).exp())
-                        });
+                        g.bench_function("dashu-float/ln", |bn| bn.iter(|| black_box(a2.clone()).ln()));
+                        g.bench_function("dashu-float/exp", |bn| bn.iter(|| black_box(a2.clone()).exp()));
                     }
                 }
 
                 g.finish();
-            }
+            }};
+        }
+
+        pub fn bench(c: &mut criterion::Criterion) {
+            $( tier_scale!(c, $scale); )+
         }
     };
 }

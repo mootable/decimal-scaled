@@ -1,23 +1,38 @@
 name: "\U0001FA91 bench-history (cross-version comparison)"
 
 # Like-for-like benchmark across every published release (v0.2.5 .. v0.4.4)
-# plus current main (HEAD cell). Same harness (bench-history/benches/
-# comparison.rs), same inputs, same ops — the only thing changing per cell
-# is the `decimal-scaled` dependency version. The `chart` job then renders
-# the cross-version trend: one PNG per width, ONE LINE PER FUNCTION, x =
-# version, y = time (log scale). A version that lacks a function leaves a
-# gap in that line (no fabricated point).
+# plus current HEAD. Same harness (bench-history/benches/comparison.rs),
+# same inputs, same ops — the only thing changing per cell is the
+# `decimal-scaled` dependency version. The harness now fans out over BOTH
+# width AND scale, so the cross-version trend gains a scale dimension:
+# a regression that only appears at a particular scale is visible in the
+# table instead of hidden behind one canonical scale per width.
 #
 #   * widths: D38, D76, D307
-#   * functions: add, mul, div, sqrt_strict, ln_strict, sin_strict
-#   * one SCALE per width
+#   * functions: add, mul, div, sqrt, ln, sin
+#   * scales: {0, 10, 30} per width (capped to the old lines' FromStr u128
+#             window; 30 is the fixed reference point)
 #
-# Expand as the API surface stabilises (more widths, more functions).
+# Job graph:
+#   history   : matrix over VERSION. Each cell pins the dep, compiles the
+#               harness ONCE for that version, runs every (width × scale)
+#               group in a single criterion pass, uploads its criterion tree.
+#   chart     : per-width cross-version PNG trend lines at the reference
+#               scale (one line per function), via `chart_gen -- history`.
+#   aggregate : merges every version cell, runs `summarise_history.py` ->
+#               a (version × scale) trend table per (op × width) to the run
+#               summary + ONE downloadable artifact (table .md + medians .tsv).
 #
-# Trigger: workflow_dispatch only. Public-repo runner minutes are
-# unlimited but per-cell wall time still adds up.
+# Triggers: (1) push to a release branch or main (queue-of-1 via concurrency,
+# advisory only — NOT a required gate); (2) manual workflow_dispatch (the
+# dispatch option only appears once this file is on the default branch; the
+# push trigger works from the branch immediately).
 
 on:
+  push:
+    branches:
+      - 'release/**'
+      - 'main'
   workflow_dispatch:
     inputs:
       ref:
@@ -25,6 +40,10 @@ on:
         required: false
         type: string
         default: ""
+
+concurrency:
+  group: bench-history-${{ github.ref }}
+  cancel-in-progress: false
 
 permissions:
   contents: read
@@ -53,7 +72,7 @@ jobs:
           - { tag: "v0.4.2", source: "crates-io", version: "0.4.2" }
           - { tag: "v0.4.3", source: "crates-io", version: "0.4.3" }
           - { tag: "v0.4.4", source: "crates-io", version: "0.4.4" }
-          - { tag: "HEAD",   source: "path",      version: "" }   # current main (0.5.0 in dev)
+          - { tag: "HEAD",   source: "path",      version: "" }   # current branch (0.5.0 in dev)
 
     steps:
       - name: Checkout
@@ -100,9 +119,10 @@ jobs:
           nproc
           free -h
 
-      - name: Run bench
+      - name: Run bench (all width × scale groups for this version)
         working-directory: bench-history
-        # Single criterion run; same harness for every cell.
+        # Single criterion run; same harness for every cell. The (width ×
+        # scale) fan-out is internal to the harness — one compile per version.
         run: cargo bench --bench comparison
 
       - name: Upload Criterion results
@@ -114,9 +134,8 @@ jobs:
           if-no-files-found: warn
           retention-days: 30
 
-  # Aggregate every per-version cell into the cross-version trend charts:
-  # one PNG per width, one log-time line per function, x = version. Missing
-  # (function, version) cells leave a gap in the line — no fabricated point.
+  # Per-width cross-version PNG trend lines at the reference scale (one line
+  # per function). The full (version × scale) surface is the aggregate table.
   chart:
     name: "\U0001F4C8 render cross-version history charts"
     needs: history
@@ -137,7 +156,7 @@ jobs:
 
       - name: Download all per-version criterion artifacts
         # Each artifact `bench-history-<tag>` unpacks to
-        # tmp/bench-history-results/bench-history-<tag>/<group>/<width>/new/estimates.json
+        # tmp/bench-history-results/bench-history-<tag>/<op>_<width>_s<scale>/t/new/estimates.json
         # — exactly the layout `chart_gen -- history` reads.
         uses: actions/download-artifact@v4
         with:
@@ -154,4 +173,50 @@ jobs:
           name: history-charts
           path: docs/figures/history/*.png
           if-no-files-found: error
+          retention-days: 30
+
+  # Merge every version cell into the (version × scale) trend table.
+  aggregate:
+    name: "\U0001FA91 aggregate (version × scale trend table)"
+    needs: history
+    if: always()
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout (for summarise_history.py)
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Download every per-version bench cell
+        uses: actions/download-artifact@v4
+        with:
+          # Each artifact `bench-history-<tag>` unpacks into its own subdir
+          # under hist-cells/ — exactly the layout summarise_history.py reads.
+          pattern: bench-history-*
+          path: hist-cells
+
+      - name: Collate -> version × scale trend table (+ tsv + md)
+        working-directory: bench-history
+        env:
+          PYTHONIOENCODING: utf-8
+        run: |
+          set -euo pipefail
+          mkdir -p aggregate
+          # The collator reads ../hist-cells (sibling of bench-history).
+          ln -sfn ../hist-cells hist-cells
+          python3 summarise_history.py --tsv aggregate/history_medians.tsv --md aggregate/history_table.md | tee aggregate/history_table.txt
+          {
+            echo ""
+            cat aggregate/history_table.md
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      - name: Upload single aggregate artifact
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: bench-history-aggregate
+          path: bench-history/aggregate/
+          if-no-files-found: warn
           retention-days: 30

@@ -336,17 +336,22 @@ fn render_per_width_summary(
 
 // ------------------------------------------------------------------
 // History mode — read tmp/bench-history-results/ and render per-width
-// cross-version trend lines.
+// cross-version trend lines at the fixed reference scale.
 //
 // Layout on disk (rooted at tmp/bench-history-results/):
 //
-//   bench-history-<tag>/<group>/<width>/new/estimates.json
+//   bench-history-<tag>/<op>_<width>_s<scale>/t/new/estimates.json
 //
 // where:
 //   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, v0.4.0, v0.4.2, v0.4.3, v0.4.4, HEAD }
-//   <group> ∈ { arith_add, arith_mul, arith_div,
-//               sqrt_strict, ln_strict, sin_strict }
+//   <op>    ∈ { add, mul, div, sqrt, ln, sin }
 //   <width> ∈ { D38, D76, D307 }
+//   <scale> ∈ the harness scale set; the PNG trend uses the reference scale.
+//
+// The harness fans out over (width × scale); the cross-version PNG trend
+// plots ONE scale (the fixed reference, `HISTORY_CHART_SCALE`) so the line
+// chart stays one-line-per-function. The full (version × scale) surface is
+// rendered as a table by `summarise_history.py` in the aggregate job.
 //
 // HEAD is the current dev source (main; 0.5.0 in development). A version
 // that lacks a function leaves a gap in that function's line (no point
@@ -364,16 +369,22 @@ const HISTORY_VERSIONS: &[(&str, &str)] = &[
     ("HEAD", "main"),
 ];
 
+// op directory stem -> chart line label (now identical; kept as a pair so
+// the renderer's label vs path distinction stays explicit).
 const HISTORY_GROUPS: &[(&str, &str)] = &[
-    ("arith_add", "add"),
-    ("arith_mul", "mul"),
-    ("arith_div", "div"),
-    ("sqrt_strict", "sqrt"),
-    ("ln_strict", "ln"),
-    ("sin_strict", "sin"),
+    ("add", "add"),
+    ("mul", "mul"),
+    ("div", "div"),
+    ("sqrt", "sqrt"),
+    ("ln", "ln"),
+    ("sin", "sin"),
 ];
 
 const HISTORY_WIDTHS: &[&str] = &["D38", "D76", "D307"];
+
+// The fixed reference scale plotted in the cross-version line charts (the
+// harness scale set is {0, 10, 30}; 30 is the continuity reference point).
+const HISTORY_CHART_SCALE: usize = 30;
 
 fn render_history() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::Path;
@@ -382,10 +393,10 @@ fn render_history() -> Result<(), Box<dyn std::error::Error>> {
     let mut data: BTreeMap<(String, String), Vec<(String, f64)>> = BTreeMap::new();
 
     for (tag, vlabel) in HISTORY_VERSIONS {
-        for (group, fn_label) in HISTORY_GROUPS {
+        for (op, fn_label) in HISTORY_GROUPS {
             for width in HISTORY_WIDTHS {
                 let p = format!(
-                    "tmp/bench-history-results/bench-history-{tag}/{group}/{width}/new/estimates.json",
+                    "tmp/bench-history-results/bench-history-{tag}/{op}_{width}_s{HISTORY_CHART_SCALE}/t/new/estimates.json",
                 );
                 if !Path::new(&p).exists() {
                     eprintln!("history: missing {p}");

@@ -1,5 +1,11 @@
 //! Per-tier library_comparison bench for D76 (256-bit storage).
 //! Run: cargo bench --features "wide x-wide xx-wide" --bench lib_cmp_d76
+//!      cargo bench --features "wide" --bench lib_cmp_d76 -- _s38/   (scale 38)
+//!
+//! Scale set dedup{0, 30, S/2, S-1} with S=76: {0, 30, 38, 75}. Each scale's
+//! groups are `lib_cmp/256bit_s<scale>`; select one with `-- _s<scale>/`.
+//! Arith runs at every scale; the transcendental peer comparison at the
+//! reference scale (38) only.
 
 #[macro_use]
 mod lib_cmp_common;
@@ -11,65 +17,38 @@ use decimal_scaled::D76;
 use fastnum::dec256;
 use std::hint::black_box;
 
-fn bench(c: &mut Criterion) {
-    for &scale in &[0_usize, 35, 76] {
-        let group_name = format!("lib_cmp/256bit_s{scale}");
-        let mut g = c.benchmark_group(&group_name);
+const TRANSC: usize = 38;
 
-        match scale {
-            0 => {
-                let a = D76::<0>::from(2);
-                let b = D76::<0>::from(1);
-                arith_copy!(g, "decimal-scaled", a, b);
-            }
-            35 => {
-                let a = D76::<35>::from(2);
-                let b = D76::<35>::from(1);
-                arith_copy!(g, "decimal-scaled", a, b);
-                g.bench_function("decimal-scaled/ln", |bn| {
-                    bn.iter(|| black_box(a).ln_strict())
-                });
-                g.bench_function("decimal-scaled/exp", |bn| {
-                    bn.iter(|| black_box(a).exp_strict())
-                });
-                g.bench_function("decimal-scaled/sin", |bn| {
-                    bn.iter(|| black_box(a).sin_strict())
-                });
-                g.bench_function("decimal-scaled/sqrt", |bn| {
-                    bn.iter(|| black_box(a).sqrt_strict())
-                });
-                g.bench_function("decimal-scaled/cos", |bn| {
-                    bn.iter(|| black_box(a).cos_strict())
-                });
-                g.bench_function("decimal-scaled/tan", |bn| {
-                    bn.iter(|| black_box(a).tan_strict())
-                });
-                g.bench_function("decimal-scaled/atan", |bn| {
-                    bn.iter(|| black_box(a).atan_strict())
-                });
-                g.bench_function("decimal-scaled/sinh", |bn| {
-                    bn.iter(|| black_box(a).sinh_strict())
-                });
-                g.bench_function("decimal-scaled/cosh", |bn| {
-                    bn.iter(|| black_box(a).cosh_strict())
-                });
-                g.bench_function("decimal-scaled/tanh", |bn| {
-                    bn.iter(|| black_box(a).tanh_strict())
-                });
-            }
-            76 => {
-                let a = D76::<76>::from(2);
-                let b = D76::<76>::from(1);
-                arith_copy!(g, "decimal-scaled", a, b);
-            }
-            _ => unreachable!(),
+macro_rules! ds_scale {
+    ($g:expr, $s:literal) => {{
+        let a = D76::<$s>::from(2);
+        let b = D76::<$s>::from(1);
+        arith_copy!($g, "decimal-scaled", a, b);
+        if $s == TRANSC {
+            $g.bench_function("decimal-scaled/ln", |bn| bn.iter(|| black_box(a).ln_strict()));
+            $g.bench_function("decimal-scaled/exp", |bn| bn.iter(|| black_box(a).exp_strict()));
+            $g.bench_function("decimal-scaled/sin", |bn| bn.iter(|| black_box(a).sin_strict()));
+            $g.bench_function("decimal-scaled/sqrt", |bn| bn.iter(|| black_box(a).sqrt_strict()));
+            $g.bench_function("decimal-scaled/cos", |bn| bn.iter(|| black_box(a).cos_strict()));
+            $g.bench_function("decimal-scaled/tan", |bn| bn.iter(|| black_box(a).tan_strict()));
+            $g.bench_function("decimal-scaled/atan", |bn| bn.iter(|| black_box(a).atan_strict()));
+            $g.bench_function("decimal-scaled/sinh", |bn| bn.iter(|| black_box(a).sinh_strict()));
+            $g.bench_function("decimal-scaled/cosh", |bn| bn.iter(|| black_box(a).cosh_strict()));
+            $g.bench_function("decimal-scaled/tanh", |bn| bn.iter(|| black_box(a).tanh_strict()));
         }
+    }};
+}
+
+macro_rules! peers {
+    ($g:expr, $scale:expr) => {{
+        let g = &mut $g;
+        let scale: usize = $scale;
 
         {
             let a = dec256!(2);
             let b = dec256!(1);
             arith_copy!(g, "fastnum", a, b);
-            if scale == 35 {
+            if scale == TRANSC {
                 g.bench_function("fastnum/ln", |bn| bn.iter(|| black_box(a).ln()));
                 g.bench_function("fastnum/exp", |bn| bn.iter(|| black_box(a).exp()));
                 g.bench_function("fastnum/sin", |bn| bn.iter(|| black_box(a).sin()));
@@ -89,11 +68,9 @@ fn bench(c: &mut Criterion) {
             let a = BigDecimal::new(mant_a, scale as i64);
             let b = BigDecimal::new(mant_b, scale as i64);
             arith_clone!(g, "bigdecimal", a, b);
-            if scale == 35 {
+            if scale == TRANSC {
                 let a2 = a.clone();
-                g.bench_function("bigdecimal/sqrt", |bn| {
-                    bn.iter(|| black_box(a2.clone()).sqrt())
-                });
+                g.bench_function("bigdecimal/sqrt", |bn| bn.iter(|| black_box(a2.clone()).sqrt()));
             }
         }
 
@@ -102,19 +79,28 @@ fn bench(c: &mut Criterion) {
             let a = DBig::from_parts(2.into(), 0).with_precision(prec).value();
             let b = DBig::from_parts(1.into(), 0).with_precision(prec).value();
             arith_clone!(g, "dashu-float", a, b);
-            if scale == 35 {
+            if scale == TRANSC {
                 let a2 = a.clone();
-                g.bench_function("dashu-float/ln", |bn| {
-                    bn.iter(|| black_box(a2.clone()).ln())
-                });
-                g.bench_function("dashu-float/exp", |bn| {
-                    bn.iter(|| black_box(a2.clone()).exp())
-                });
+                g.bench_function("dashu-float/ln", |bn| bn.iter(|| black_box(a2.clone()).ln()));
+                g.bench_function("dashu-float/exp", |bn| bn.iter(|| black_box(a2.clone()).exp()));
             }
         }
+    }};
+}
 
-        g.finish();
+fn bench(c: &mut Criterion) {
+    macro_rules! cell {
+        ($s:literal) => {{
+            let mut g = c.benchmark_group(concat!("lib_cmp/256bit_s", $s));
+            ds_scale!(g, $s);
+            peers!(g, $s);
+            g.finish();
+        }};
     }
+    cell!(0);
+    cell!(30);
+    cell!(38);
+    cell!(75);
 }
 
 criterion_group!(benches, bench);

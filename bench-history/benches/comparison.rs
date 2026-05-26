@@ -1,93 +1,84 @@
-//! Like-for-like cross-version benchmark.
+//! Like-for-like cross-version benchmark, fanned out over (width × scale).
 //!
 //! Same Criterion harness, same input distributions, same operations —
 //! the only thing that changes across CI cells is the `decimal-scaled`
-//! dependency version in `../Cargo.toml`.
+//! dependency version in `../Cargo.toml`. The version axis is the cell
+//! axis (one compiled exe per version); WITHIN a version the harness now
+//! fans out over a per-width scale set so a scale-dependent shift shows up
+//! in the cross-version trend, not just one canonical scale per width.
 //!
-//! Scope is deliberately small: a directional read across versions, not
-//! a full perf sweep. Expand as the API surface stabilises.
+//! Group naming mirrors `bench-compare`: each benched id is
+//! `<op>_<W>_s<scale>/t` (the lone `t` function id is the version-neutral
+//! row — the version is the artifact the cell uploads). A single scale is
+//! therefore selectable with a criterion name-filter, e.g.
+//!   cargo bench --bench comparison -- _s30/
+//! and the trailing `/` anchors the scale (`_s30/` matches `mul_D38_s30/t`
+//! but NOT a hypothetical `_s300/`).
+//!
+//! Scale set: the published v0.2.x / v0.3.x lines have a u128 ceiling in
+//! FromStr (10^39 overflows the intermediate), so a string like "1234.5"
+//! only parses up to SCALE <= 38. For cross-version like-for-like we stay
+//! within that window: {0, 10, 30} per width (30 kept as the fixed
+//! reference point used by prior runs). v0.4.0+ handle arbitrary SCALE but
+//! we cap so every version cell runs the identical harness.
 
-use criterion::{Criterion, black_box, criterion_group, criterion_main};
+use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::{D38, D76, D307};
+use std::hint::black_box;
 
-// One canonical SCALE per width — picked roughly mid-range so the
-// kernel is exercised at a representative working precision rather than
-// the trivial SCALE=0 path.
-// Note: D307<30> rather than something deeper. The published v0.2.x /
-// v0.3.x lines have a u128 ceiling in FromStr (10^39 overflows the
-// intermediate); strings like "1234.5" only parse up to SCALE <= 38.
-// v0.4.0+ FromStr handles arbitrary SCALE, but for cross-version
-// like-for-like we cap at SCALE = 30 so every version cell can run
-// the same harness.
-type T38 = D38<10>;
-type T76 = D76<20>;
-type T307 = D307<30>;
+// Cross-version-safe scale set (see module note — FromStr u128 ceiling on
+// the old lines caps the shared window). 30 is the fixed reference scale.
+const SCALES: &[usize] = &[0, 10, 30];
 
-fn d38_inputs() -> (T38, T38) {
-    let a: T38 = "1234.5".parse().unwrap();
-    let b: T38 = "67.89".parse().unwrap();
-    (a, b)
+/// Register one width's full op set at one SCALE. The SCALE is a const
+/// generic, so the body monomorphises per scale; the `$w`/`$scale` literal
+/// pair names the group `<op>_<W>_s<scale>` and the lone `t` function id is
+/// the version-neutral row.
+macro_rules! width_at_scale {
+    ($c:expr, $w:literal, $ty:ident, $scale:literal) => {{
+        // Operands kept to a single integer digit so they parse at every
+        // scale in the set (mirrors bench-compare's S-1 narrow-room rule).
+        let a = $ty::<$scale>::try_from(2).unwrap();
+        let b = $ty::<$scale>::try_from(1).unwrap();
+
+        bench_one!($c, "add", $w, $scale, |bn| {
+            bn.iter(|| black_box(a) + black_box(b))
+        });
+        bench_one!($c, "mul", $w, $scale, |bn| {
+            bn.iter(|| black_box(a) * black_box(b))
+        });
+        bench_one!($c, "div", $w, $scale, |bn| {
+            bn.iter(|| black_box(a) / black_box(b))
+        });
+        bench_one!($c, "sqrt", $w, $scale, |bn| bn.iter(|| black_box(a).sqrt_strict()));
+        bench_one!($c, "ln", $w, $scale, |bn| bn.iter(|| black_box(a).ln_strict()));
+        bench_one!($c, "sin", $w, $scale, |bn| bn.iter(|| black_box(a).sin_strict()));
+    }};
 }
 
-fn d76_inputs() -> (T76, T76) {
-    let a: T76 = "1234.5".parse().unwrap();
-    let b: T76 = "67.89".parse().unwrap();
-    (a, b)
+/// One Criterion group `<op>_<W>_s<scale>` with a single `t` row.
+macro_rules! bench_one {
+    ($c:expr, $fn:literal, $w:literal, $scale:literal, $body:expr) => {{
+        let mut g = $c.benchmark_group(concat!($fn, "_", $w, "_s", $scale));
+        g.bench_function("t", $body);
+        g.finish();
+    }};
 }
 
-fn d307_inputs() -> (T307, T307) {
-    let a: T307 = "1234.5".parse().unwrap();
-    let b: T307 = "67.89".parse().unwrap();
-    (a, b)
+fn bench(c: &mut Criterion) {
+    // The macro needs literal scales for the group name + const generic, so
+    // unroll the (width × scale) grid explicitly. SCALES documents the set.
+    let _ = SCALES;
+    width_at_scale!(c, "D38", D38, 0);
+    width_at_scale!(c, "D38", D38, 10);
+    width_at_scale!(c, "D38", D38, 30);
+    width_at_scale!(c, "D76", D76, 0);
+    width_at_scale!(c, "D76", D76, 10);
+    width_at_scale!(c, "D76", D76, 30);
+    width_at_scale!(c, "D307", D307, 0);
+    width_at_scale!(c, "D307", D307, 10);
+    width_at_scale!(c, "D307", D307, 30);
 }
 
-fn bench_arith(c: &mut Criterion) {
-    let (a38, b38) = d38_inputs();
-    let (a76, b76) = d76_inputs();
-    let (a307, b307) = d307_inputs();
-
-    let mut g = c.benchmark_group("arith_add");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38) + black_box(b38)));
-    g.bench_function("D76", |bn| bn.iter(|| black_box(a76) + black_box(b76)));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307) + black_box(b307)));
-    g.finish();
-
-    let mut g = c.benchmark_group("arith_mul");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38) * black_box(b38)));
-    g.bench_function("D76", |bn| bn.iter(|| black_box(a76) * black_box(b76)));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307) * black_box(b307)));
-    g.finish();
-
-    let mut g = c.benchmark_group("arith_div");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38) / black_box(b38)));
-    g.bench_function("D76", |bn| bn.iter(|| black_box(a76) / black_box(b76)));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307) / black_box(b307)));
-    g.finish();
-}
-
-fn bench_transcendentals(c: &mut Criterion) {
-    let (a38, _) = d38_inputs();
-    let (a76, _) = d76_inputs();
-    let (a307, _) = d307_inputs();
-
-    let mut g = c.benchmark_group("sqrt_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sqrt_strict()));
-    g.bench_function("D76", |bn| bn.iter(|| black_box(a76).sqrt_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sqrt_strict()));
-    g.finish();
-
-    let mut g = c.benchmark_group("ln_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).ln_strict()));
-    g.bench_function("D76", |bn| bn.iter(|| black_box(a76).ln_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).ln_strict()));
-    g.finish();
-
-    let mut g = c.benchmark_group("sin_strict");
-    g.bench_function("D38", |bn| bn.iter(|| black_box(a38).sin_strict()));
-    g.bench_function("D76", |bn| bn.iter(|| black_box(a76).sin_strict()));
-    g.bench_function("D307", |bn| bn.iter(|| black_box(a307).sin_strict()));
-    g.finish();
-}
-
-criterion_group!(benches, bench_arith, bench_transcendentals);
+criterion_group!(benches, bench);
 criterion_main!(benches);
