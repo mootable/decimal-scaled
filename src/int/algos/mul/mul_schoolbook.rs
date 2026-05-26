@@ -13,7 +13,8 @@
 //! Inner step uses the native `u64 × u64 → u128` widening multiply
 //! (`MUL` + `UMULH` on x86-64 / aarch64).
 
-use crate::int::types::compute_int::Limb;
+use crate::int::types::Int;
+use crate::int::types::compute_int::{ComputeInt, Limb};
 
 /// `out = a · b` schoolbook. `out.len() >= a.len() + b.len()` and `out`
 /// must be zeroed by the caller.
@@ -214,4 +215,70 @@ pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], 
         i += 1;
     }
     L::unpack(&acc[..h], out);
+}
+
+/// `out = a · b` — the FULL `2·N`-u64 schoolbook product, generic over the
+/// limb type `L` (the [`Limb`] axis). The full-product sibling of
+/// [`mul_low_limb`]: for `L = u64` it is base-2^64 over `N` limbs (bit-identical
+/// to [`mul_schoolbook_fixed`]); for `L = u128` it packs each operand into `N/2`
+/// u128 limbs (`limb = lo | hi << 64`) and runs base-2^128 — half the limb count,
+/// so ~1/4 the partial products at the cost of a wider 128×128→256 inner step —
+/// then unpacks. Bit-identical `2·N` u64 limbs either way.
+///
+/// ONE kernel for both widths: the matcher's [`LimbSize`] verdict picks `L` (a
+/// const-folded `match` in [`crate::int::policy::mul`]), so there is no
+/// per-limb-type copy. The `u128` arm requires **even `N`** (`L::packed_len`
+/// halves it); the caller gates on that.
+///
+/// The accumulator is the value's OWN `2·N`-u64-width scratch in limb type `L`
+/// ([`Limb::double`] → `Int<N>::double_{u64,u128}`): exactly `2·h` `L`-limbs
+/// (`2·N` u64 / `N` u128), per-`N`-exact — NOT a build-max blanket. `out.len()`
+/// must be `>= 2·N` and is written in full (the kernel zeroes its accumulator).
+///
+/// [`LimbSize`]: crate::int::types::compute_int::LimbSize
+#[inline]
+pub(crate) fn mul_full_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], out: &mut [u64])
+where
+    Int<N>: ComputeInt,
+{
+    let h = L::packed_len(N); // operand packed length (N for u64, N/2 for u128)
+    let d = 2 * h; // full-product length in L-limbs (2N u64 / N u128)
+    // `[L; N]` covers `packed_len(N) ≤ N` for both limb types (only low `h` used).
+    let mut ap = [L::ZERO; N];
+    let mut bp = [L::ZERO; N];
+    L::pack(a, &mut ap[..h]);
+    L::pack(b, &mut bp[..h]);
+    // Accumulator: the value's own 2N-u64-width buffer in limb type `L`
+    // (= 2h L-limbs exactly), freshly zeroed.
+    let mut acc_buf = L::double::<Int<N>>();
+    let acc = acc_buf.as_mut();
+    let mut i = 0;
+    while i < h {
+        let ai = ap[i];
+        if ai != L::ZERO {
+            let mut carry = L::ZERO;
+            let mut j = 0;
+            while j < h {
+                let (lo, hi) = ai.widening_mul(bp[j]);
+                let idx = i + j;
+                let (s1, c1) = acc[idx].overflowing_add(lo);
+                let (s2, c2) = s1.overflowing_add(carry);
+                acc[idx] = s2;
+                carry = hi.add_carries(c1, c2);
+                j += 1;
+            }
+            // Final row carry, propagated into the high half until exhausted.
+            // The first add absorbs the full `L`-limb carry; thereafter the
+            // propagated carry is at most one (a single-limb add).
+            let mut idx = i + h;
+            while carry != L::ZERO && idx < d {
+                let (s, c) = acc[idx].overflowing_add(carry);
+                acc[idx] = s;
+                carry = if c { L::ONE } else { L::ZERO };
+                idx += 1;
+            }
+        }
+        i += 1;
+    }
+    L::unpack(&acc[..d], &mut out[..2 * N]);
 }
