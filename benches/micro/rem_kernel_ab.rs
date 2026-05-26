@@ -3,16 +3,23 @@
 
 //! Dispatch-seam A/B for the remainder policy (`src/int/policy/rem.rs`).
 //!
-//! Decision being modelled: per storage width `N`, which registered `rem`
-//! `Algorithm` arm is fastest:
+//! Decision being modelled: per storage width `N` × operand MAGNITUDE, which
+//! registered `rem` `Algorithm` arm is fastest while bit-identical to the
+//! reference:
 //!
-//! - `native`     -> `rem_native` (hardware `u128 % u128`, valid `N <= 2`).
-//! - `via_div_rem`-> `rem_via_div_rem` (the general division-policy path).
-//! - `schoolbook` -> `rem_schoolbook` (the binary shift-subtract baseline).
+//! - `native`      -> `rem_native` (hardware `u128 % u128`, valid `N <= 2`).
+//! - `small_fast`  -> `rem_small_fast` (value-gated single-word hardware `%`
+//!   with a `via_div_rem` fallback — valid at EVERY `N`; the recovery of
+//!   v0.4.4's "Fast Path A").
+//! - `via_div_rem` -> `rem_via_div_rem` (the general division-policy path —
+//!   the current baseline for `N >= 3`).
+//! - `schoolbook`  -> `rem_schoolbook` (the binary shift-subtract baseline).
 //!
-//! For each width the bench feeds three operand pairs (low / mid / high
-//! magnitude). Inputs and outputs are `black_box`-guarded by the harness so
-//! no kernel const-folds away.
+//! The KEY axis for rem is operand magnitude (the bbc regression is at
+//! SCALE-0 = small/integer operands at wide tiers). Per width we feed
+//! several magnitude shapes: `s0_word` (both operands fit one word — the
+//! bbc scale-0 shape), `mid_div` (half-width divisor), `full_div`
+//! (full-width both). Inputs/outputs are `black_box`-guarded by the harness.
 //!
 //! Run with:
 //! `cargo bench --features "wide x-wide xx-wide bench-alt" --bench rem_kernel_ab`
@@ -21,7 +28,7 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::__bench_internals::{
     dec_rem_int_layer, dec_rem_native, int_from_mag_limbs, int_wrapping_rem_slice, rem_native,
-    rem_schoolbook, rem_via_div_rem,
+    rem_native_direct, rem_schoolbook, rem_small_fast, rem_via_div_rem,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -36,7 +43,7 @@ struct Pair<const N: usize> {
     b: Int<N>,
 }
 
-/// Deterministic limb fill.
+/// Deterministic limb fill over the first `used` limbs.
 fn synth<const N: usize>(seed: u64, used: usize) -> Int<N> {
     let mut mag = [0u64; N];
     let used = used.min(N);
@@ -53,20 +60,36 @@ fn synth<const N: usize>(seed: u64, used: usize) -> Int<N> {
     int_from_mag_limbs::<N>(&mag)
 }
 
-/// Operand set for width N: dividend uses all N limbs; divisor uses about
-/// half the limbs (a representative "both multi-limb" decimal-rem shape) so
-/// the divide engine sees a real multi-limb divisor at wide N.
+/// Magnitude-sweep operand set for width N. The magnitude axis is what rem
+/// keys on (the scale-0 bbc regression is at small/integer operands):
+///   * `s0_word`  — both operands fit ONE 64-bit limb (the scale-0 shape).
+///   * `s0_u128`  — both operands fit a 128-bit word (two limbs) — the wider
+///                  small-operand case the single-word fast path still covers.
+///   * `mid_div`  — full-width dividend, ~half-width divisor.
+///   * `full_div` — both operands full N-limb (the case that must NOT regress).
 fn operand_set<const N: usize>() -> Vec<Pair<N>> {
     let half = (N / 2).max(1);
-    vec![
-        Pair { label: "small_div", a: synth::<N>(7, N), b: synth::<N>(3, 1.min(N)) },
-        Pair { label: "mid_div", a: synth::<N>(1009, N), b: synth::<N>(13, half) },
-        Pair { label: "near_div", a: synth::<N>(7919, N), b: synth::<N>(104729, N) },
-    ]
+    let mut v = vec![
+        Pair { label: "s0_word", a: synth::<N>(7, 1.min(N)), b: synth::<N>(3, 1.min(N)) },
+    ];
+    if N >= 2 {
+        v.push(Pair { label: "s0_u128", a: synth::<N>(1009, 2.min(N)), b: synth::<N>(13, 1.min(N)) });
+    }
+    if N >= 3 {
+        v.push(Pair { label: "mid_div", a: synth::<N>(7919, N), b: synth::<N>(101, half) });
+    }
+    v.push(Pair { label: "full_div", a: synth::<N>(104729, N), b: synth::<N>(7919, N) });
+    v
 }
 
 fn native_run<const N: usize>(p: Pair<N>) -> Int<N> {
     rem_native::<N>(p.a, p.b)
+}
+fn native_direct_run<const N: usize>(p: Pair<N>) -> Int<N> {
+    rem_native_direct::<N>(p.a, p.b)
+}
+fn smallfast_run<const N: usize>(p: Pair<N>) -> Int<N> {
+    rem_small_fast::<N>(p.a, p.b)
 }
 fn viadiv_run<const N: usize>(p: Pair<N>) -> Int<N> {
     rem_via_div_rem::<N>(p.a, p.b)
@@ -75,12 +98,16 @@ fn school_run<const N: usize>(p: Pair<N>) -> Int<N> {
     rem_schoolbook::<N>(p.a, p.b)
 }
 
-
-/// Narrow widths (N <= 2): native is a candidate.
+/// Narrow widths (N <= 2): native / native_direct / small_fast are all
+/// candidates against via_div_rem.
 fn compare_narrow<const N: usize>(c: &mut Criterion, label: &str) {
     for p in operand_set::<N>() {
         assert_eq!(native_run::<N>(p.clone()), viadiv_run::<N>(p.clone()),
             "native vs via_div_rem disagree {label} {}", p.label);
+        assert_eq!(native_direct_run::<N>(p.clone()), viadiv_run::<N>(p.clone()),
+            "native_direct vs via_div_rem disagree {label} {}", p.label);
+        assert_eq!(smallfast_run::<N>(p.clone()), viadiv_run::<N>(p.clone()),
+            "small_fast vs via_div_rem disagree {label} {}", p.label);
     }
     compare_all(
         c,
@@ -89,15 +116,20 @@ fn compare_narrow<const N: usize>(c: &mut Criterion, label: &str) {
         operand_set::<N>(),
         vec![
             ("native", native_run::<N> as fn(Pair<N>) -> Int<N>),
+            ("native_direct", native_direct_run::<N>),
+            ("small_fast", smallfast_run::<N>),
             ("via_div_rem", viadiv_run::<N>),
         ],
     );
 }
 
-/// Wide widths (N >= 3): native is invalid; compare via_div_rem vs the
-/// shift-subtract schoolbook baseline.
+/// Wide widths (N >= 3): native is invalid (magnitude exceeds one u128 for
+/// the full-width shape). Candidates are small_fast (value-gated word fast
+/// path + fallback), via_div_rem (baseline) and the schoolbook reference.
 fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
     for p in operand_set::<N>() {
+        assert_eq!(smallfast_run::<N>(p.clone()), viadiv_run::<N>(p.clone()),
+            "small_fast vs via_div_rem disagree {label} {}", p.label);
         assert_eq!(school_run::<N>(p.clone()), viadiv_run::<N>(p.clone()),
             "schoolbook vs via_div_rem disagree {label} {}", p.label);
     }
@@ -107,7 +139,8 @@ fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
         |p: &Pair<N>| p.label.to_string(),
         operand_set::<N>(),
         vec![
-            ("via_div_rem", viadiv_run::<N> as fn(Pair<N>) -> Int<N>),
+            ("small_fast", smallfast_run::<N> as fn(Pair<N>) -> Int<N>),
+            ("via_div_rem", viadiv_run::<N>),
             ("schoolbook", school_run::<N>),
         ],
     );
@@ -115,12 +148,6 @@ fn compare_wide<const N: usize>(c: &mut Criterion, label: &str) {
 
 /// Decimal-rem dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`).
 /// Narrow widths only: native hardware `%` vs the generic int-layer path.
-///
-/// A macro, not a generic fn: `dec_rem_int_layer` carries a `pub(crate)`
-/// `ComputeInt` bound a bench (a separate crate) cannot name, so the body
-/// must monomorphise at a concrete width `$n` — where `Int<$n>: ComputeInt`
-/// is discharged by the impl — rather than be checked for all `N`. Mirrors
-/// `hypot_ab`'s `hypot_cell!`.
 macro_rules! dec_rem_cell {
     ($c:expr, $n:literal, $label:literal) => {{
         for p in operand_set::<$n>() {
@@ -166,21 +193,14 @@ fn k_times_pow10<const N: usize>(k: u64, scale: u32) -> Int<N> {
 }
 
 /// Wide decimal-remainder dispatch seam (`src/policy/rem.rs` -> `rem_int_layer`
-/// for `N >= 3`). The regression-recovery A/B: the recovered operator/Knuth
-/// `rem_int_layer` vs the OLD `Int::wrapping_rem` shift-subtract path it
-/// replaced. Two shapes:
-///   * `short_circuit` -- the live full_matrix operand `2 * 10^SCALE %
-///     1 * 10^SCALE` (small quotient over a wide `10^SCALE` divisor): the
-///     shape that exposed the ~25x regression.
-///   * `balanced` -- two full-width random magnitudes (general divmod): the
-///     case that must NOT regress.
+/// for `N >= 3`). The recovered operator/Knuth `rem_int_layer` vs the OLD
+/// `Int::wrapping_rem` shift-subtract path it replaced.
 macro_rules! dec_rem_wide_cell {
     ($c:expr, $n:literal, $label:literal, $scale:expr) => {{
         let two = k_times_pow10::<$n>(2, $scale);
         let one = k_times_pow10::<$n>(1, $scale);
         let bal_a = synth::<$n>(7919, $n);
         let bal_b = synth::<$n>(104729, $n);
-        // correctness: new path agrees with the old wrapping_rem on both shapes.
         assert_eq!(
             dec_rem_int_layer::<$n>(two, one),
             int_wrapping_rem_slice::<$n>(two, one),
@@ -216,15 +236,23 @@ macro_rules! dec_rem_wide_cell {
 
 fn bench(c: &mut Criterion) {
     decimal_scaled_ab_sweep!(c =>
+        // Narrow tiers: native / native_direct / small_fast vs via_div_rem.
         Int<1> => |c: &mut Criterion| compare_narrow::<1>(c, "Int64_D18"),
         Int<2> => |c: &mut Criterion| compare_narrow::<2>(c, "Int128_D38"),
+        // Wide tiers: full magnitude sweep, small_fast vs via_div_rem vs school.
+        Int<3> => |c: &mut Criterion| compare_wide::<3>(c, "Int192_D57"),
+        Int<4> => |c: &mut Criterion| compare_wide::<4>(c, "Int256_D76"),
+        Int<6> => |c: &mut Criterion| compare_wide::<6>(c, "Int384_D115"),
+        Int<8> => |c: &mut Criterion| compare_wide::<8>(c, "Int512_D153"),
+        Int<12> => |c: &mut Criterion| compare_wide::<12>(c, "Int768_D230"),
+        Int<16> => |c: &mut Criterion| compare_wide::<16>(c, "Int1024_D307"),
+        Int<24> => |c: &mut Criterion| compare_wide::<24>(c, "Int1536_D462"),
+        Int<32> => |c: &mut Criterion| compare_wide::<32>(c, "Int2048_D616"),
+        Int<48> => |c: &mut Criterion| compare_wide::<48>(c, "Int3072_D924"),
+        Int<64> => |c: &mut Criterion| compare_wide::<64>(c, "Int4096_D1232"),
+        // Decimal-rem dispatch seam (kept).
         Int<1> => |c: &mut Criterion| dec_rem_cell!(c, 1, "D18"),
         Int<2> => |c: &mut Criterion| dec_rem_cell!(c, 2, "D38"),
-        Int<4> => |c: &mut Criterion| compare_wide::<4>(c, "Int256_D76"),
-        Int<8> => |c: &mut Criterion| compare_wide::<8>(c, "Int512_D153"),
-        Int<64> => |c: &mut Criterion| compare_wide::<64>(c, "Int4096_D1232"),
-        // Wide decimal-rem regression recovery: operator/Knuth vs the old
-        // wrapping_rem shift-subtract, on the live `k * 10^SCALE` shape.
         Int<16> => |c: &mut Criterion| dec_rem_wide_cell!(c, 16, "D307_s153", 153),
         Int<32> => |c: &mut Criterion| dec_rem_wide_cell!(c, 32, "D616_s308", 308),
         Int<48> => |c: &mut Criterion| dec_rem_wide_cell!(c, 48, "D924_s462", 462),

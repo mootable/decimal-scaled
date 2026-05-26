@@ -397,6 +397,25 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<N> {
         crate::int::algos::rem::rem_schoolbook::rem_schoolbook::<N>(a, b)
     }
+    /// Width-agnostic small-magnitude hardware-`%` fast path candidate (the
+    /// value-gated recovery of v0.4.4's single-word "Fast Path A"; falls
+    /// back to `via_div_rem` for genuinely-wide operands).
+    #[inline(never)]
+    pub fn rem_small_fast<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        crate::int::algos::rem::rem_small_fast::rem_small_fast::<N>(a, b)
+    }
+    /// Direct two's-complement `i128 %` remainder candidate for `N <= 2`
+    /// (skips the sign-magnitude round trip `rem_native` pays).
+    #[inline(never)]
+    pub fn rem_native_direct<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        crate::int::algos::rem::rem_native_direct::rem_native_direct::<N>(a, b)
+    }
 
     /// Integer `sqr` kernel candidates exposed for the `int_unary_kernel_ab`
     /// microbench (the dispatch-seam A/B that confirms the `sqr` policy

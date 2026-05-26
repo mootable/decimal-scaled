@@ -20,24 +20,31 @@
 //! are dead-arm-eliminated in release: each concrete `Int<N>` routes to a
 //! single algorithm with no runtime branch on the const path.
 //!
-//! # The two algorithms and the width split
+//! # The algorithms and the width split
 //!
 //! Remainder keys purely on `N`:
 //!
 //! * **`N <= 2`** (`Int<1>` = D18, `Int<2>` = D38) → [`rem_native`]: the
-//!   operand magnitude fits a single `u128`, so a hardware `u128 % u128`
-//!   with the dividend's sign re-applied is correct and far cheaper than
-//!   routing through the runtime division dispatcher. Microbenched at the
-//!   dispatch seam: native beats the via-div-rem path ~1.85x at `N == 1`
-//!   and ~3.0x at `N == 2`.
-//! * **`N >= 3`** → [`rem_via_div_rem`]: the magnitude exceeds `u128`, so
-//!   the remainder is the second output of a multi-limb divmod. The
-//!   division policy's Knuth / Burnikel–Ziegler engine selection IS the
-//!   remainder optimisation boundary at these widths. A remainder-only
-//!   Knuth pass (skipping the quotient store) was microbenched against the
-//!   full divmod and showed no win at any wide tier — the quotient store is
-//!   negligible next to the multiply-subtract pass — so the wide band stays
-//!   on the full-divmod path.
+//!   operand magnitude always fits a single `u128`, so a hardware
+//!   `u128 % u128` with the dividend's sign re-applied is correct and far
+//!   cheaper than routing through the runtime division dispatcher.
+//!   Microbenched at the dispatch seam: native beats the via-div-rem path
+//!   ~1.85x at `N == 1` and ~3.0x at `N == 2`.
+//! * **`N >= 3`** → [`rem_small_fast`]: at the wide tiers the FULL-width
+//!   magnitude exceeds `u128`, but the integer-remainder operands are
+//!   frequently small (a bare integer, a scale-0 decimal). `rem_small_fast`
+//!   takes the same hardware `u128 % u128` whenever BOTH magnitudes fit a
+//!   single word — bypassing the `[u64; N]` quotient scratch and the
+//!   `div_rem::dispatch` shape classifier — and falls back to the multi-limb
+//!   divmod ([`rem_via_div_rem`]'s path) otherwise. This recovers v0.4.4's
+//!   single-word "Fast Path A" generically (one kernel, value-gated, valid
+//!   at every `N`). Benched (`rem_kernel_ab`): `small_fast` beats the bare
+//!   `via_div_rem` 1.1–2.6× on small operands (the scale-0 shape) at every
+//!   wide tier and is at parity on full-width operands. The multi-limb
+//!   divmod fallback IS the division policy's Knuth / Burnikel–Ziegler
+//!   boundary; a remainder-only Knuth pass (skipping the quotient store) was
+//!   microbenched and showed no win (the quotient store is negligible next
+//!   to the multiply-subtract pass), so the fallback stays the full divmod.
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it (the split is by `N` alone, not by
@@ -68,6 +75,7 @@
 
 use crate::int::algos::rem::rem_native::rem_native;
 use crate::int::algos::rem::rem_schoolbook::rem_schoolbook;
+use crate::int::algos::rem::rem_small_fast::rem_small_fast;
 use crate::int::algos::rem::rem_via_div_rem::rem_via_div_rem;
 use crate::int::types::Int;
 
@@ -86,11 +94,28 @@ enum Algorithm {
     /// shape classification, no `[u64; 288]` Knuth scratch, no quotient
     /// buffer) wins decisively over [`Self::ViaDivRem`].
     Native,
+    /// [`rem_small_fast`] — the width-agnostic small-magnitude fast path:
+    /// when both operand magnitudes fit a single `u128` it takes a hardware
+    /// `u128 % u128` (no `[u64; N]` quotient scratch, no `div_rem::dispatch`
+    /// shape classifier); otherwise it falls back to the same divmod
+    /// [`Self::ViaDivRem`] takes. Recovers v0.4.4's single-word "Fast Path A"
+    /// generically. Routed for every wide tier (`N >= 3`): the integer
+    /// remainder operands are frequently small (a bare integer, a scale-0
+    /// decimal), where the full divmod setup dwarfs the divide. Benched
+    /// (`rem_kernel_ab`): `small_fast` beats `via_div_rem` 1.1–2.6× on the
+    /// small-operand (`s0_word` / `s0_u128`) cells at every width `N >= 3`,
+    /// and is at parity on full-width operands (the fallback shares the
+    /// magnitude conversion, so no extra sign-magnitude round trip is paid).
+    SmallFast,
     /// [`rem_via_div_rem`] — derives the remainder by delegating to
     /// [`crate::int::policy::div_rem::dispatch`] and taking the remainder
     /// output. Reuses the division policy's Knuth / Burnikel–Ziegler engine
     /// selection; the division policy IS the optimization boundary for this
-    /// operation.
+    /// operation. Registered but unrouted: [`Self::SmallFast`] wraps it with
+    /// the small-operand fast path and wins or ties at every wide tier, so
+    /// `select` routes `SmallFast` rather than this bare variant.
+    /// `#[allow(dead_code)]` suppresses the unrouted-variant warning.
+    #[allow(dead_code)]
     ViaDivRem,
     /// [`rem_schoolbook`] — binary shift-subtract long division remainder,
     /// the naive reference baseline. Registered but unrouted: `select`
@@ -118,21 +143,27 @@ enum Select<const N: usize> {
 // ── 3. the matcher: const, keyed on `N`, total over the key ──────────
 
 /// Pick the remainder algorithm for storage limb count `N`. Total over
-/// the key; remainder always delegates to the division policy, so
-/// `ViaDivRem` wins at every `N`.
+/// the key: `Native` for `N <= 2` (the magnitude always fits a `u128`),
+/// `SmallFast` for the wide tiers (a value-gated single-word fast path with
+/// a multi-limb divmod fallback).
 const fn select<const N: usize>() -> Select<N> {
     match N {
         // N <= 2: magnitude fits a single u128 — the hardware `%` path
         // beats routing through the division dispatcher (microbenched:
         // `native` beats `via_div_rem` ~1.85x at N=1 / ~3.0x at N=2).
         1 | 2 => Select::ByAlgorithm(Algorithm::Native),
-        // N >= 3: the magnitude exceeds u128; the division policy's Knuth /
-        // Burnikel–Ziegler engine is the remainder optimisation boundary.
-        // A remainder-only Knuth pass was microbenched and showed no win
-        // over the full divmod at any wide tier (the quotient store is
-        // negligible vs the multiply-subtract pass), so the wide band stays
-        // on `ViaDivRem`.
-        _ => Select::ByAlgorithm(Algorithm::ViaDivRem),
+        // N >= 3: the FULL-width magnitude exceeds u128, but the operands are
+        // frequently small (a bare integer, a scale-0 decimal). `SmallFast`
+        // takes a hardware `u128 % u128` whenever both magnitudes fit one
+        // word and falls back to the same divmod otherwise — recovering
+        // v0.4.4's single-word fast path generically. Benched
+        // (`rem_kernel_ab`): it beats the bare `via_div_rem` 1.1–2.6× on
+        // small operands at every wide tier and ties on full-width operands,
+        // so the wide band routes `SmallFast`. (A remainder-only Knuth pass
+        // skipping the quotient store was separately microbenched and showed
+        // no win — the quotient store is negligible vs the multiply-subtract
+        // pass — so the fallback stays the full divmod.)
+        _ => Select::ByAlgorithm(Algorithm::SmallFast),
     }
 }
 
@@ -161,10 +192,11 @@ pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
         // the arm is reached (fn pointer calls are not allowed in const fn,
         // but this outer fn is not const so reaching ByValue would be fine
         // at runtime — the arm is dead in practice).
-        Select::ByValue(_) => Algorithm::ViaDivRem,
+        Select::ByValue(_) => Algorithm::SmallFast,
     };
     match algo {
         Algorithm::Native => rem_native(a, b),
+        Algorithm::SmallFast => rem_small_fast(a, b),
         Algorithm::ViaDivRem => rem_via_div_rem(a, b),
         Algorithm::Schoolbook => rem_schoolbook(a, b),
     }
