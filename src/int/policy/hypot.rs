@@ -22,12 +22,28 @@
 //!
 //! # Algorithm
 //!
-//! One algorithm ([`crate::int::algos::hypot::hypot_pythagoras`]): form
-//! `a^2 + b^2` in a limb scratch buffer, take the floor root via the Newton
-//! slice `isqrt`, round. `select` returns [`Algorithm::Pythagoras`] at every
-//! `N`; the `Schoolbook` arm is the canonical benchmarkable seam pointing at
-//! the same kernel (the per-width root choice is the `isqrt` policy's job,
-//! not hypot's).
+//! Two algorithms:
+//!
+//! - [`crate::int::algos::hypot::hypot_pythagoras`] -- form `a^2 + b^2` in a
+//!   limb scratch buffer, take the floor root via the Newton slice `isqrt`,
+//!   round. The width-agnostic exact path.
+//! - [`crate::int::algos::hypot::hypot_u128_fast`] -- a value-gated wrapper:
+//!   when both operands fit a single `u64` limb the radicand fits a `u128`, so
+//!   it roots in `u128` (integer Newton, no multi-precision `div_rem`) and
+//!   rounds with the exact remainder; otherwise it falls through to
+//!   `hypot_pythagoras`, paying only the cheap `fit_one` fit guard. It is
+//!   bit-identical to `hypot_pythagoras` for every input and `RoundingMode`.
+//!
+//! `select` returns [`Algorithm::U128Fast`] at **every** `N`. The `hypot_ab`
+//! microbench (per-width, per-shape; pinned core 22) measured `u128_fast`
+//! 1.4-2.8x faster than `pythagoras` whenever both operands fit one limb (the
+//! `single`-shape input) at every tier from `N=2` through `N=64`, and
+//! statistically TIED with it on full-width (`multi`/`skew`) operands where the
+//! fast branch falls through. So the fast path strictly dominates the plain
+//! Pythagoras path at every width; `Pythagoras` is the kept-but-unselected
+//! fallback (and remains the kernel `u128_fast` itself delegates to). The
+//! per-width root choice inside the fallback is the `isqrt` policy's job, not
+//! hypot's.
 //!
 //! Returns [`None`] from the kernel on true overflow (the rounded root does
 //! not fit the signed range of `Int<N>`); the type method maps that to its
@@ -48,14 +64,18 @@ use crate::support::rounding::RoundingMode;
 enum Algorithm {
     /// [`hypot_pythagoras`] -- `round(sqrt(a^2 + b^2))` forming the radicand
     /// in a limb scratch and taking the floor root through the Newton slice
-    /// `isqrt`. The width-agnostic path; selected for the wide tiers.
+    /// `isqrt`. The width-agnostic exact path; the kept-but-unselected
+    /// fallback (and the kernel [`U128Fast`](Algorithm::U128Fast) itself
+    /// delegates to when the radicand exceeds a `u128`).
     Pythagoras,
-    /// [`hypot_u128_fast`] -- native-`u128` fast path for the narrow tiers
-    /// (`N <= 3`): when `a^2 + b^2` fits a `u128` it floors the root in u128
-    /// (f64 seed + exact-remainder round, no multi-precision `div_rem`),
-    /// falling back to [`hypot_pythagoras`] for radicands that don't fit.
+    /// [`hypot_u128_fast`] -- native-`u128` fast path: when both operands fit
+    /// a single `u64` limb the radicand `a^2 + b^2` fits a `u128`, so it
+    /// floors the root in `u128` (integer-seeded Newton + exact-remainder
+    /// round, no multi-precision `div_rem`), falling back to
+    /// [`hypot_pythagoras`] otherwise (paying only the cheap `fit_one` guard).
     /// Bit-identical to Pythagoras; the `hypot_ab` microbench measured it
-    /// 2.1-3.1x faster at D18/D38/D57.
+    /// 1.4-2.8x faster on single-limb operands at every width (`N=2..=64`) and
+    /// tied on full-width operands -- so it is selected at every tier.
     U128Fast,
 }
 
@@ -74,15 +94,16 @@ enum Select<const N: usize> {
 // -- 3. the matcher: const, keyed on `N`, total over the key -----------
 
 /// Pick the integer hypot algorithm for storage limb count `N`. Total over
-/// the key. Narrow tiers (`N <= 3`: D18/D38/D57) take the native-u128 fast
-/// path (`hypot_ab` microbench: 2.1-3.1x faster, bit-identical); the wider
-/// tiers — whose radicand never fits a u128, so the fast path would always
-/// fall back and only pay its fit-guard — stay on the generic Pythagoras.
+/// the key. Every tier takes the native-u128 fast path
+/// ([`Algorithm::U128Fast`]): the `hypot_ab` microbench (pinned, per-shape)
+/// measured it 1.4-2.8x faster than [`Algorithm::Pythagoras`] whenever both
+/// operands fit one `u64` limb -- across `N=2..=64` -- and statistically tied
+/// on full-width operands (it just falls through to Pythagoras, paying only
+/// the cheap `fit_one` guard). So it strictly dominates the plain Pythagoras
+/// path at every width; `Pythagoras` is the kept fallback, never selected
+/// directly.
 const fn select<const N: usize>() -> Select<N> {
-    match N {
-        1..=3 => Select::ByAlgorithm(Algorithm::U128Fast),
-        _ => Select::ByAlgorithm(Algorithm::Pythagoras),
-    }
+    Select::ByAlgorithm(Algorithm::U128Fast)
 }
 
 // -- 4. the shared dispatch: resolve the verdict, then dispatch --------

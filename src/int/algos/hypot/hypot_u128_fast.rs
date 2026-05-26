@@ -37,40 +37,34 @@ use crate::int::types::compute_int::ComputeInt;
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
-/// `floor(sqrt(n))` for a `u128`, exact. Seeds from the hardware `f64` sqrt
-/// (when `std`) or a 1-bit bracket (`no_std`), then refines with the integer
-/// Newton averaging step and a final ±1 floor correction so the result is the
-/// exact floor regardless of seed rounding.
+/// `floor(sqrt(n))` for a `u128`, exact.
+///
+/// Seeds from the classical pure-integer over-estimate `2^ceil(bits/2)`
+/// (always `>= sqrt(n)`), then runs the integer Newton averaging step
+/// `x <- (x + n/x)/2`. From a guaranteed over-estimate that recurrence is
+/// monotone-decreasing and lands on `floor(sqrt(n))` or `floor+1` in at most
+/// 7 iterations for any 128-bit `n`; a single down-correction `if` then
+/// pins the exact floor.
+///
+/// An f64-`sqrt` seed was tried but rejected: for `n` near `2^128` the f64
+/// root carries an absolute error of order `2^12`, and when that lands on the
+/// *under* side it is no longer an over-estimate, so Newton terminates early
+/// and the floor correction degrades to a linear `x -= 1` walk — thousands of
+/// `u128` divides on the worst inputs (microbenched at 195-959 correction
+/// steps, swamping the whole fast path). The integer seed is a guaranteed
+/// over-estimate, so the descent is always the fast quadratic one (<= 7 steps)
+/// and the std/no_std paths are identical.
 #[inline]
 fn isqrt_u128(n: u128) -> u128 {
     if n == 0 {
         return 0;
     }
-    // Seed.
-    #[cfg(feature = "std")]
-    let mut x: u128 = {
-        // f64 sqrt of n is within a relative 2^-52 of the true root; for a
-        // 128-bit n that is a handful of ULPs, well inside the Newton basin.
-        let approx = (n as f64).sqrt();
-        // Clamp to the representable u128 range; cast truncates toward zero.
-        if approx.is_finite() && approx >= 1.0 {
-            approx as u128
-        } else {
-            1
-        }
-    };
-    #[cfg(not(feature = "std"))]
-    let mut x: u128 = {
-        // Classical pure-integer seed `2^ceil(bits/2)` — a safe over-estimate.
-        let bits = 128 - n.leading_zeros();
-        1u128 << ((bits + 1) / 2)
-    };
-    if x == 0 {
-        x = 1;
-    }
-    // Newton averaging: x ← (x + n/x)/2, monotone-decreasing once x ≥ root.
-    // Converges to floor or floor+1 from any over-estimate; the loop stops
-    // when it stops decreasing.
+    // Pure-integer over-estimate seed `2^ceil(bits/2)` (>= sqrt(n) for every
+    // n >= 1), so the Newton recurrence is monotone-decreasing throughout.
+    let bits = 128 - n.leading_zeros();
+    let mut x: u128 = 1u128 << ((bits + 1) / 2);
+    // Newton averaging: x <- (x + n/x)/2. Monotone-decreasing from an
+    // over-estimate; stop when it stops decreasing (x is then floor or floor+1).
     loop {
         let y = (x + n / x) >> 1;
         if y >= x {
@@ -78,15 +72,9 @@ fn isqrt_u128(n: u128) -> u128 {
         }
         x = y;
     }
-    // Floor correction: the seed may have been an under-estimate (f64 round
-    // down on a near-perfect square), so walk x to the exact floor.
-    while x > 0 && x > n / x {
+    // Single floor correction: x is floor or floor+1, so at most one step.
+    if x > n / x {
         x -= 1;
-    }
-    while (x + 1) <= n / (x + 1) {
-        // (x+1)² ≤ n  ⟺  x+1 ≤ n/(x+1) when (x+1) divides cleanly; guard
-        // against overflow by comparing via division rather than squaring.
-        x += 1;
     }
     x
 }

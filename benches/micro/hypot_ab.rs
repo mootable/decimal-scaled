@@ -3,12 +3,26 @@
 
 //! Dispatch-seam A/B for the integer hypot policy (`src/int/policy/hypot.rs`).
 //!
-//! Decision being modelled: for narrow storage (D18/D38/D57) where the
-//! radicand `a² + b²` fits a `u128`, should hypot route to the generic
-//! Pythagoras path (form the radicand in scratch, floor root via the Newton
-//! slice `isqrt` with a per-iteration multi-precision `div_rem`, round) or to
-//! the native-`u128` fast path (`hypot_u128_fast`: floor sqrt in u128 with an
-//! f64 seed + exact remainder round, no multi-precision divide)?
+//! Decision being modelled: per storage width `N`, should `hypot` route to the
+//! generic Pythagoras path (form the radicand `a² + b²` in scratch, floor root
+//! via the Newton slice `isqrt` with a per-iteration multi-precision `div_rem`,
+//! round) or to the native-`u128` fast path (`hypot_u128_fast`: when both
+//! operands fit a single `u64` limb the radicand fits a `u128`, so it floors
+//! the root in u128 with an f64 seed + exact remainder round and no
+//! multi-precision divide; otherwise it falls through to `hypot_pythagoras`,
+//! paying only the cheap `fit_one` guard)?
+//!
+//! Because the fast path is VALUE-gated (`fit_one(a) && fit_one(b)`), the
+//! decision has TWO regimes per width — swept here as the magnitude/shape axis:
+//!
+//! - `single` — both operands fit one `u64` limb (the fast branch engages).
+//!   This is where `u128_fast` can win; its edge is the avoided
+//!   multi-precision `isqrt` divide loop, so it should hold at every width.
+//! - `multi`  — operands span the full width (the fast branch falls through to
+//!   Pythagoras). Here `u128_fast` adds only the `fit_one` guard, so it should
+//!   be statistically TIED with `pythagoras` and never a meaningful loss.
+//! - `skew`   — one operand single-limb, the other full width (fast branch
+//!   falls through: the radicand of a wide × narrow pair does not fit u128).
 //!
 //! Two registered arms (both bit-identical across all six RoundingModes —
 //! asserted before timing):
@@ -25,6 +39,15 @@ use decimal_scaled::{Int, RoundingMode};
 mod ab_microbench;
 use ab_microbench::{compare_all, micro_criterion};
 
+const ALL_MODES: [RoundingMode; 6] = [
+    RoundingMode::HalfToEven,
+    RoundingMode::HalfAwayFromZero,
+    RoundingMode::HalfTowardZero,
+    RoundingMode::Trunc,
+    RoundingMode::Floor,
+    RoundingMode::Ceiling,
+];
+
 const MODE: RoundingMode = RoundingMode::HalfToEven;
 
 #[derive(Clone)]
@@ -34,26 +57,69 @@ struct HIn<const N: usize> {
     b: Int<N>,
 }
 
+/// Build a magnitude/shape spread for width `N`:
+/// - `single`: both operands fit one u64 limb (fast-path engages).
+/// - `multi`:  both operands span the full width (fast-path falls through).
+/// - `skew`:   one single-limb, one full-width (fast-path falls through).
+///
+/// Magnitudes are deterministic, derived from a small splitmix so the radicand
+/// is non-trivial (not a perfect square) and the inputs stay representative
+/// across widths.
 fn inputs<const N: usize>() -> Vec<HIn<N>> {
-    let v = |x: i128| Int::<N>::try_from(x).unwrap();
+    fn mix(s: &mut u64) -> u64 {
+        *s = s.wrapping_add(0x9E37_79B9_7F4A_7C15);
+        let mut z = *s;
+        z = (z ^ (z >> 30)).wrapping_mul(0xBF58_476D_1CE4_E5B9);
+        z = (z ^ (z >> 27)).wrapping_mul(0x94D0_49BB_1331_11EB);
+        z ^ (z >> 31)
+    }
+    let mut s = 0xC0FF_EE00_1234_5678_u64 ^ (N as u64);
+
+    // A magnitude that fits a single u64 limb (clear top bit so a² + b²
+    // can't sign-overflow at N == 1, keeps the value positive everywhere).
+    let single = |s: &mut u64| {
+        let mut out = [0u64; N];
+        out[0] = mix(s) & (i64::MAX as u64);
+        Int::<N>::from_limbs(out)
+    };
+    // A magnitude that spans the FULL storage width (top limb non-zero, top
+    // sign bit cleared so the operand itself is a valid positive Int<N>).
+    let full = |s: &mut u64| {
+        let mut out = [0u64; N];
+        for k in 0..N {
+            out[k] = mix(s);
+        }
+        out[N - 1] &= i64::MAX as u64;
+        // Guarantee the top limb is non-zero so this is a genuine N-limb value.
+        if out[N - 1] == 0 {
+            out[N - 1] = 1;
+        }
+        Int::<N>::from_limbs(out)
+    };
+
     vec![
-        HIn { label: "3_4", a: v(3), b: v(4) },
-        HIn { label: "mid", a: v(123_456_789), b: v(987_654_321) },
-        HIn { label: "large", a: v(1_000_000_000_000), b: v(2_345_678_901_234) },
+        HIn { label: "single", a: single(&mut s), b: single(&mut s) },
+        HIn { label: "multi", a: full(&mut s), b: full(&mut s) },
+        HIn { label: "skew", a: single(&mut s), b: full(&mut s) },
     ]
 }
 
 macro_rules! hypot_cell {
     ($c:expr, $n:literal, $label:literal) => {{
-        // Correctness cross-check: both arms must agree before timing.
+        // Correctness cross-check: both arms must agree, on EVERY mode and
+        // EVERY shape, before timing (the validity wall — `u128_fast` is only
+        // eligible where bit-identical to `pythagoras`).
         for o in inputs::<$n>() {
-            assert_eq!(
-                hypot_pythagoras::<$n>(o.a, o.b, MODE),
-                hypot_u128_fast::<$n>(o.a, o.b, MODE),
-                "hypot arms disagree at N={} ({})",
-                $n,
-                o.label
-            );
+            for mode in ALL_MODES {
+                assert_eq!(
+                    hypot_pythagoras::<$n>(o.a, o.b, mode),
+                    hypot_u128_fast::<$n>(o.a, o.b, mode),
+                    "hypot arms disagree at N={} ({}, {:?})",
+                    $n,
+                    o.label,
+                    mode
+                );
+            }
         }
         compare_all(
             $c,
@@ -73,9 +139,19 @@ macro_rules! hypot_cell {
 }
 
 fn bench_hypot(c: &mut Criterion) {
-    hypot_cell!(c, 1, "D18");
-    hypot_cell!(c, 2, "D38");
-    hypot_cell!(c, 3, "D57");
+    // Width axis: N in {2,3,4,6,8,12,16,24,32,48,64}. (N == 1 / D18 is covered
+    // by the narrow tier; the policy crossover of interest is N >= 2.)
+    hypot_cell!(c, 2, "N2_D38");
+    hypot_cell!(c, 3, "N3_D57");
+    hypot_cell!(c, 4, "N4_D76");
+    hypot_cell!(c, 6, "N6_D115");
+    hypot_cell!(c, 8, "N8_D153");
+    hypot_cell!(c, 12, "N12_D230");
+    hypot_cell!(c, 16, "N16_D307");
+    hypot_cell!(c, 24, "N24_D462");
+    hypot_cell!(c, 32, "N32_D616");
+    hypot_cell!(c, 48, "N48_D924");
+    hypot_cell!(c, 64, "N64_D1232");
 }
 
 fn main() {
