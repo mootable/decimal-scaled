@@ -343,12 +343,14 @@ fn render_per_width_summary(
 //   bench-history-<tag>/<group>/<width>/new/estimates.json
 //
 // where:
-//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, v0.4.0, v0.4.2, HEAD }
+//   <tag>   ∈ { v0.2.5, v0.3.2, v0.3.3, v0.4.0, v0.4.2, v0.4.3, v0.4.4, HEAD }
 //   <group> ∈ { arith_add, arith_mul, arith_div,
 //               sqrt_strict, ln_strict, sin_strict }
 //   <width> ∈ { D38, D76, D307 }
 //
-// HEAD is the current released source (v0.4.4).
+// HEAD is the current dev source (main; 0.5.0 in development). A version
+// that lacks a function leaves a gap in that function's line (no point
+// plotted) rather than a fabricated value.
 // ------------------------------------------------------------------
 
 const HISTORY_VERSIONS: &[(&str, &str)] = &[
@@ -358,7 +360,8 @@ const HISTORY_VERSIONS: &[(&str, &str)] = &[
     ("v0.4.0", "v0.4.0"),
     ("v0.4.2", "v0.4.2"),
     ("v0.4.3", "v0.4.3"),
-    ("HEAD", "v0.4.4"),
+    ("v0.4.4", "v0.4.4"),
+    ("HEAD", "main"),
 ];
 
 const HISTORY_GROUPS: &[(&str, &str)] = &[

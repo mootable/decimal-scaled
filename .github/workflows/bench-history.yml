@@ -1,11 +1,13 @@
 name: "\U0001FA91 bench-history (cross-version comparison)"
 
-# Like-for-like benchmark across published tags v0.2.5 .. v0.3.3 plus
-# current HEAD. Same harness (bench-history/benches/comparison.rs), same
-# input distributions, same operations — the only thing changing per
-# cell is the `decimal-scaled` dependency version.
+# Like-for-like benchmark across every published release (v0.2.5 .. v0.4.4)
+# plus current main (HEAD cell). Same harness (bench-history/benches/
+# comparison.rs), same inputs, same ops — the only thing changing per cell
+# is the `decimal-scaled` dependency version. The `chart` job then renders
+# the cross-version trend: one PNG per width, ONE LINE PER FUNCTION, x =
+# version, y = time (log scale). A version that lacks a function leaves a
+# gap in that line (no fabricated point).
 #
-# Scope is deliberately minimal — directional read only:
 #   * widths: D38, D76, D307
 #   * functions: add, mul, div, sqrt_strict, ln_strict, sin_strict
 #   * one SCALE per width
@@ -50,7 +52,8 @@ jobs:
           # no perf delta vs v0.4.0.
           - { tag: "v0.4.2", source: "crates-io", version: "0.4.2" }
           - { tag: "v0.4.3", source: "crates-io", version: "0.4.3" }
-          - { tag: "HEAD",   source: "path",      version: "" }
+          - { tag: "v0.4.4", source: "crates-io", version: "0.4.4" }
+          - { tag: "HEAD",   source: "path",      version: "" }   # current main (0.5.0 in dev)
 
     steps:
       - name: Checkout
@@ -109,4 +112,46 @@ jobs:
           name: bench-history-${{ matrix.tag }}
           path: bench-history/target/criterion/
           if-no-files-found: warn
+          retention-days: 30
+
+  # Aggregate every per-version cell into the cross-version trend charts:
+  # one PNG per width, one log-time line per function, x = version. Missing
+  # (function, version) cells leave a gap in the line — no fabricated point.
+  chart:
+    name: "\U0001F4C8 render cross-version history charts"
+    needs: history
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        with:
+          ref: ${{ inputs.ref || github.ref }}
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@29eef336d9b2848a0b548edc03f92a220660cdb8 # stable
+
+      - name: Install system libs
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
+      - name: Download all per-version criterion artifacts
+        # Each artifact `bench-history-<tag>` unpacks to
+        # tmp/bench-history-results/bench-history-<tag>/<group>/<width>/new/estimates.json
+        # — exactly the layout `chart_gen -- history` reads.
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          pattern: bench-history-*
+          path: tmp/bench-history-results
+
+      - name: Render cross-version history charts
+        run: cargo run --release --example chart_gen -- history
+
+      - name: Upload history charts
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: history-charts
+          path: docs/figures/history/*.png
+          if-no-files-found: error
           retention-days: 30
