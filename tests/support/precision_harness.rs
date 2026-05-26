@@ -1388,7 +1388,7 @@ pub fn render_shootout(
 }
 
 // ════════════════════════════════════════════════════════════════════
-// Fidelity grading — per-function + overall A–F grade / 0–100 score
+// Fidelity grading — per-function + overall two-letter grade / 0–100 score
 // ════════════════════════════════════════════════════════════════════
 //
 // The owner's locked rubric (published alongside the tables):
@@ -1400,20 +1400,32 @@ pub fn render_shootout(
 //     (e.g. an error magnitude of `100000` ⇒ `incorrect_digits = 6`.) This
 //     is NOT `floor(log10(max_lsbe)) + 1`: `max_lsbe` is a BIT length, so
 //     that formula would score the `100000` error as 2 rather than 6.
-//   * per-cell demerit  `d = 0` if correctly rounded, else `2^incorrect_digits`.
-//   * `r = Σ demerits / tests_run` — pooled over a function's width×scale
-//     cells (per function) and over all cells (aggregate).
-//   * grade bands (score-aligned quarters):
-//       A  r == 0          score 100
-//       B  0   < r <= 0.5   score >= 75
-//       C  0.5 < r <= 1.0   score >= 50
-//       D  1.0 < r <= 1.5   score >= 25
-//       E  1.5 < r <  2.0   score  > 0
-//       F  r >= 2.0         score 0
-//   * `score = round(100 * (1 - r/2))`, clamped to [0, 100].
-//   * overall = WORST-function headline + pooled-aggregate secondary,
-//     dual-letter worst-first (`C/A` = worst C, aggregate A); per library
-//     graded over its runnable cells, with coverage published.
+//   * per-cell demerit, RELATIVE to the tier's precision:
+//       `d = 0` if correctly rounded (`incorrect_digits == 0`),
+//       else `d = min(10, ceil(incorrect_digits / tier_width * 10))`,
+//     where `tier_width` is the tier's decimal digit capacity (`D307` ⇒
+//     307). An N-digit miss in a `tier_width`-digit number costs
+//     `ceil(N/tier_width * 10)` — ceil so ANY miss is ≥ 1, capped at 10 so
+//     a catastrophic / overflow error caps at 10. Each cell therefore needs
+//     its OWN tier width (a function spans many widths).
+//   * `mean_demerit = Σ d / executed_cells` — pooled over a function's
+//     width×scale cells (per function) and over all cells (per library).
+//     `n/a` cells (function or scale the library can't run) are excluded
+//     from BOTH the count and the demerit sum.
+//   * `score (closeness) = 100 * (1 − mean_demerit/10)` ∈ [0,100]; 100 only
+//     when every cell is correctly rounded.
+//   * `%CR (reliability) = 100 * correct_cells / executed_cells` — the
+//     fraction of cells that are EXACTLY correctly rounded.
+//   * grade bands (applied to BOTH score and %CR):
+//       A  == 100 (exactly)
+//       B  [95, 100)
+//       C  [85, 95)
+//       D  [70, 85)
+//       E  [50, 70)
+//       F  < 50
+//   * the headline per library is a TWO-LETTER grade
+//     `grade(score)` followed by `grade(%CR)` (1st = how close, 2nd = how
+//     reliable), e.g. `AA`, `BC`, `CF`.
 
 /// `incorrect_digits` for a cell: the EXACT decimal-digit length of its
 /// worst error magnitude (the cell's `max_digits`, i.e. `dec_digit_len` of
@@ -1424,58 +1436,70 @@ pub fn incorrect_digits(max_digits: u32) -> u32 {
     max_digits
 }
 
-/// Per-cell demerit `d`: `0` when correctly rounded (`max_digits == 0`),
-/// else `2^incorrect_digits`.
-pub fn cell_demerit(max_digits: u32) -> f64 {
+/// Per-cell demerit `d`, RELATIVE to the tier's precision: `0` when
+/// correctly rounded (`max_digits == 0`), else
+/// `min(10, ceil(incorrect_digits / tier_width * 10))`, where `tier_width`
+/// is the tier's decimal digit capacity (e.g. `D307` ⇒ `307`). Ceil so any
+/// miss costs ≥ 1; capped at 10 so a catastrophic / overflow error = 10.
+pub fn cell_demerit(max_digits: u32, tier_width: u32) -> f64 {
     if max_digits == 0 {
         0.0
     } else {
-        2f64.powi(incorrect_digits(max_digits) as i32)
+        let tw = tier_width.max(1) as f64;
+        let raw = (incorrect_digits(max_digits) as f64 / tw * 10.0).ceil();
+        raw.min(10.0)
     }
 }
 
-/// The 0–100 score for a pooled `r`: `round(100 * (1 - r/2))`, clamped.
-pub fn score_for_r(r: f64) -> u32 {
-    let s = (100.0 * (1.0 - r / 2.0)).round();
-    s.clamp(0.0, 100.0) as u32
+/// The 0–100 closeness score for a `mean_demerit`:
+/// `100 * (1 − mean_demerit/10)`, clamped to `[0, 100]`.
+pub fn score_for_mean_demerit(mean_demerit: f64) -> f64 {
+    (100.0 * (1.0 - mean_demerit / 10.0)).clamp(0.0, 100.0)
 }
 
-/// The A–F letter grade for a pooled `r`, in the owner's score-aligned
-/// bands. Returned as a single byte char.
-pub fn grade_for_r(r: f64) -> char {
-    if r == 0.0 {
+/// The A–F letter grade for a 0–100 metric (applies to BOTH the closeness
+/// score and the %CR), in the owner's bands:
+/// A = 100 exactly · B = [95,100) · C = [85,95) · D = [70,85) ·
+/// E = [50,70) · F = < 50.
+pub fn grade_for_score(s: f64) -> char {
+    if s >= 100.0 {
         'A'
-    } else if r <= 0.5 {
+    } else if s >= 95.0 {
         'B'
-    } else if r <= 1.0 {
+    } else if s >= 85.0 {
         'C'
-    } else if r <= 1.5 {
+    } else if s >= 70.0 {
         'D'
-    } else if r < 2.0 {
+    } else if s >= 50.0 {
         'E'
     } else {
         'F'
     }
 }
 
-/// Running fidelity accumulator over a set of cells: total demerits and
-/// the cell count. `r = demerits / cells`.
+/// Running fidelity accumulator over a set of cells: total demerits, the
+/// executed-cell count, and the correctly-rounded-cell count.
 #[derive(Clone, Copy, Default)]
 pub struct Fidelity {
     pub demerits: f64,
     pub cells: usize,
+    pub correct: usize,
 }
 
 impl Fidelity {
-    /// Fold one runnable cell's worst decimal error-digit length
-    /// (`max_digits`) into the accumulator.
-    pub fn record(&mut self, max_digits: u32) {
-        self.demerits += cell_demerit(max_digits);
+    /// Fold one EXECUTED cell into the accumulator: its worst decimal
+    /// error-digit length (`max_digits`) and the cell's tier width (needed
+    /// for the precision-relative demerit). `n/a` cells must NOT be passed.
+    pub fn record(&mut self, max_digits: u32, tier_width: u32) {
+        self.demerits += cell_demerit(max_digits, tier_width);
         self.cells += 1;
+        if max_digits == 0 {
+            self.correct += 1;
+        }
     }
 
-    /// `r = Σ demerits / tests_run` (`0` when no cells ran).
-    pub fn r(&self) -> f64 {
+    /// `mean_demerit = Σ d / executed_cells` (`0` when no cells ran).
+    pub fn mean_demerit(&self) -> f64 {
         if self.cells == 0 {
             0.0
         } else {
@@ -1483,12 +1507,33 @@ impl Fidelity {
         }
     }
 
-    pub fn score(&self) -> u32 {
-        score_for_r(self.r())
+    /// Closeness score `100 * (1 − mean_demerit/10)` ∈ [0,100].
+    pub fn score(&self) -> f64 {
+        score_for_mean_demerit(self.mean_demerit())
     }
 
+    /// Reliability `%CR = 100 * correct_cells / executed_cells`.
+    pub fn cr_pct(&self) -> f64 {
+        if self.cells == 0 {
+            0.0
+        } else {
+            100.0 * self.correct as f64 / self.cells as f64
+        }
+    }
+
+    /// Letter grade of the closeness score.
     pub fn grade(&self) -> char {
-        grade_for_r(self.r())
+        grade_for_score(self.score())
+    }
+
+    /// Letter grade of the %CR.
+    pub fn cr_grade(&self) -> char {
+        grade_for_score(self.cr_pct())
+    }
+
+    /// The two-letter headline grade: `grade(score)` then `grade(%CR)`.
+    pub fn two_letter(&self) -> String {
+        format!("{}{}", self.grade(), self.cr_grade())
     }
 }
 
@@ -1499,23 +1544,45 @@ pub fn fidelity_rubric() -> &'static str {
      \n\
      Each scored cell is one `(method, width, scale)` golden table; its \
      worst error is the largest gap to the correctly-rounded oracle over \
-     the cell's inputs (`0` ⇒ bit-exact / correctly rounded).\n\
+     the cell's inputs (`0` ⇒ bit-exact / correctly rounded under the \
+     library's own reported rounding mode). `n/a` cells (a function or \
+     scale a library cannot run) are excluded from BOTH the cell count and \
+     the demerit sum.\n\
      \n\
-     * **incorrect_digits** = the EXACT decimal-digit length of that worst \
+     * **error_digits** = the EXACT decimal-digit length of that worst \
      error magnitude (the count of contaminated trailing decimal digits; \
      e.g. an error of `100000` ⇒ `6`), `0` when correctly rounded. \
      Measured on the decimal error itself, not its bit-width.\n\
-     * **per-cell demerit** `d = 0` if correctly rounded, else \
-     `d = 2^incorrect_digits`.\n\
-     * **r** `= Σ demerits / tests_run`, pooled over a function's \
-     width×scale cells (per function) and over all cells (aggregate).\n\
-     * **grade bands**: A `r=0` (100) · B `0<r≤0.5` (≥75) · C `0.5<r≤1` \
-     (≥50) · D `1<r≤1.5` (≥25) · E `1.5<r<2` (>0) · F `r≥2` (0).\n\
-     * **score** `= round(100·(1 − r/2))`, clamped `[0,100]`.\n\
-     * **overall** = worst-function headline grade/score **AND** the \
-     pooled-aggregate as a secondary metric, written worst-first as \
-     `worst/aggregate` (e.g. `C/A`). Each library is graded over its \
-     **runnable** cells only; coverage (runnable / total) is published so \
-     broader libraries — structurally more exposed to demerits — are \
-     auditable.\n"
+     * **per-cell demerit** (precision-relative): `d = 0` if correctly \
+     rounded, else `d = min(10, ceil(error_digits / tier_width × 10))`, \
+     where `tier_width` is the tier's decimal digit capacity (`D307` ⇒ \
+     307). Ceil ⇒ any miss costs ≥ 1; capped at 10 so a catastrophic / \
+     overflow error = 10. So a 3-digit miss in a 307-digit number barely \
+     registers, while a gross miss saturates.\n\
+     * **mean_demerit** `= Σ d / executed_cells`, pooled over a function's \
+     width×scale cells (per function) and over all cells (per library).\n\
+     \n\
+     **Two scores, because they measure different things.**\n\
+     \n\
+     * **score (closeness)** `= 100·(1 − mean_demerit/10)` ∈ [0,100], \
+     severity-weighted: how close the results are on average, *relative to \
+     the tier's precision*. A cell wrong by a few digits in a 307-digit \
+     number barely dents it; a catastrophic cell (demerit capped at 10) \
+     hits hard. 100 only when every cell is correctly rounded.\n\
+     * **%CR (reliability)** `= 100·correct_cells / executed_cells` — the \
+     fraction of cells that are *exactly* correctly rounded (bit-exact \
+     under the library's own reported rounding mode). It counts how *often* \
+     the library is exactly right, ignoring how small the misses are.\n\
+     \n\
+     They diverge for libraries that are *frequently but slightly* wrong: \
+     a library bit-exact only ~29% of the time (low %CR) can still score \
+     ~85 (high closeness) if its misses are tiny fractions of wide tiers.\n\
+     \n\
+     * **grade bands** (applied to BOTH score and %CR): A `= 100` · \
+     B `[95,100)` · C `[85,95)` · D `[70,85)` · E `[50,70)` · F `< 50`.\n\
+     * **headline** = a TWO-LETTER grade `grade(score)·grade(%CR)` (e.g. \
+     `AA`, `BC`, `CF`): 1st letter = how close, 2nd = how reliable. Each \
+     library is graded over its **runnable** cells only; coverage \
+     (runnable / total) is published so broader libraries — structurally \
+     more exposed to demerits — are auditable.\n"
 }

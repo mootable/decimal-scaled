@@ -414,10 +414,24 @@ fn read_lib_rows(dir: &Path, lib: &str) -> LibRows {
     LibRows { rows }
 }
 
-/// Render the fidelity grade report (per-function + overall dual grade +
-/// per-library coverage) by READING the committed per-library TSVs, with
-/// the rubric published inline. Generated from the single committed source
-/// like every other table here.
+/// Parse a tier-width string (`"D307"`) into its decimal digit capacity
+/// (`307`). Falls back to `0` for an unrecognised label (treated as a
+/// minimal width by `cell_demerit`, which clamps to ≥ 1).
+fn tier_width_of(width: &str) -> u32 {
+    width
+        .trim_start_matches(['D', 'd'])
+        .parse::<u32>()
+        .unwrap_or(0)
+}
+
+/// Render the fidelity grade report by READING the committed per-library
+/// TSVs, with the rubric published inline. Generated from the single
+/// committed source like every other table here.
+///
+/// Layout, top-down: (1) the OVERALL table (one row per library: closeness
+/// score, %CR, the two-letter grade, runnable cells — best score first);
+/// (2) the per-function tables (each function's score / %CR / grade per
+/// library); (3) coverage; with the rubric/explanation block up front.
 fn render_fidelity_report(dir: &Path) -> String {
     use std::collections::BTreeMap;
     use std::fmt::Write as _;
@@ -429,92 +443,122 @@ fn render_fidelity_report(dir: &Path) -> String {
     out.push_str(fidelity_rubric());
     out.push('\n');
 
-    // Per-library coverage line: runnable (executed) cells / total scanned.
-    out.push_str("## Coverage (runnable cells / total scanned)\n\n");
-    out.push_str("| library | runnable | total | coverage |\n");
-    out.push_str("|---|---|---|---|\n");
-
-    // Collect per-library per-function fidelity + coverage in one pass.
-    // lib -> (function -> Fidelity), plus a runnable counter.
-    let mut graded: BTreeMap<&str, (BTreeMap<String, Fidelity>, usize)> = BTreeMap::new();
+    // Collect per-library per-function fidelity + a pooled per-library
+    // accumulator + a runnable counter, in one pass. The demerit is
+    // precision-relative, so each cell folds in its OWN tier width.
+    let mut graded: BTreeMap<&str, (BTreeMap<String, Fidelity>, Fidelity, usize)> = BTreeMap::new();
     for lib in LIBS {
         let data = read_lib_rows(dir, lib);
         let mut per_fn: BTreeMap<String, Fidelity> = BTreeMap::new();
+        let mut pooled = Fidelity::default();
         let mut runnable = 0usize;
-        for (method, _width, _scale, kind, max_digits) in &data.rows {
+        for (method, width, _scale, kind, max_digits) in &data.rows {
             if kind != "executed" || *max_digits < 0 {
                 continue; // n/a cell — not representable / not exposed.
             }
             runnable += 1;
+            let tw = tier_width_of(width);
             per_fn
                 .entry(method.clone())
                 .or_default()
-                .record(*max_digits as u32);
+                .record(*max_digits as u32, tw);
+            pooled.record(*max_digits as u32, tw);
         }
-        let cov = if total_cells == 0 {
-            0.0
+        graded.insert(lib, (per_fn, pooled, runnable));
+    }
+
+    // ── 1. OVERALL table — one row per library, best score first ──
+    out.push_str("## Overall — per-library headline grade\n\n");
+    out.push_str(
+        "Sorted by closeness score (best first). The grade is two letters: \
+         1st = closeness `grade(score)`, 2nd = reliability `grade(%CR)`.\n\n",
+    );
+    out.push_str("| library | grade | score | %CR | runnable |\n");
+    out.push_str("|---|---|---|---|---|\n");
+    let mut overall: Vec<(&str, &Fidelity, usize)> = graded
+        .iter()
+        .map(|(lib, (_pf, pooled, runnable))| (*lib, pooled, *runnable))
+        .collect();
+    // Best closeness first; runnable cells break ties (more coverage wins).
+    overall.sort_by(|a, b| {
+        b.1.score()
+            .partial_cmp(&a.1.score())
+            .unwrap_or(core::cmp::Ordering::Equal)
+            .then(b.2.cmp(&a.2))
+    });
+    for (lib, pooled, runnable) in &overall {
+        if *runnable == 0 {
+            let _ = writeln!(out, "| {lib} | — | n/a | n/a | 0 |");
         } else {
-            100.0 * runnable as f64 / total_cells as f64
-        };
-        let _ = writeln!(
-            out,
-            "| {lib} | {runnable} | {total_cells} | {cov:.0}% |",
-            cov = cov
-        );
-        graded.insert(lib, (per_fn, runnable));
+            let _ = writeln!(
+                out,
+                "| {lib} | **{}** | {:.1} | {:.1} | {runnable} |",
+                pooled.two_letter(),
+                pooled.score(),
+                pooled.cr_pct(),
+            );
+        }
     }
     out.push('\n');
 
-    // Per-library grade tables (per-function + overall dual grade).
+    // ── 2. Per-library per-function grade tables ──
     for lib in LIBS {
-        let (per_fn, runnable) = match graded.get(lib) {
+        let (per_fn, pooled, runnable) = match graded.get(lib) {
             Some(g) => g,
             None => continue,
         };
         let _ = writeln!(out, "## {lib} — fidelity\n");
         if *runnable == 0 {
-            out.push_str("_No runnable cells (library represents none of the scanned surface)._\n\n");
+            out.push_str(
+                "_No runnable cells (library represents none of the scanned surface)._\n\n",
+            );
             continue;
         }
 
         // Per-function rows, in canonical method order.
-        out.push_str("| function | cells | r | grade | score |\n");
-        out.push_str("|---|---|---|---|---|\n");
-        let mut worst: Option<(char, u32, &str)> = None; // (grade, score, fn)
-        let mut pooled = Fidelity::default();
+        out.push_str("| function | cells | mean_demerit | score | %CR | grade |\n");
+        out.push_str("|---|---|---|---|---|---|\n");
         for m in Method::TRANSCENDENTAL {
             let name = m.name();
             let Some(f) = per_fn.get(name) else { continue };
             let _ = writeln!(
                 out,
-                "| {name} | {} | {:.3} | {} | {} |",
+                "| {name} | {} | {:.3} | {:.1} | {:.1} | {}{} |",
                 f.cells,
-                f.r(),
+                f.mean_demerit(),
+                f.score(),
+                f.cr_pct(),
                 f.grade(),
-                f.score()
+                f.cr_grade(),
             );
-            pooled.demerits += f.demerits;
-            pooled.cells += f.cells;
-            // Worst = lowest score (highest r); tie-break keeps the first.
-            let s = f.score();
-            match worst {
-                Some((_, ws, _)) if ws <= s => {}
-                _ => worst = Some((f.grade(), s, name)),
-            }
         }
 
-        let (wg, ws, wfn) = worst.unwrap_or(('A', 100, "—"));
-        let ag = pooled.grade();
-        let as_ = pooled.score();
         let _ = writeln!(
             out,
-            "\n**Overall {lib}: {wg}/{ag}** (worst-function `{wfn}` / aggregate) \
-             — score **{ws}** (worst) / **{as_}** (aggregate); \
-             aggregate r = {:.3} over {} cells.\n",
-            pooled.r(),
-            pooled.cells
+            "\n**Overall {lib}: {}** — score **{:.1}** (closeness) / **{:.1}%** CR \
+             (reliability); mean_demerit = {:.3} over {} runnable cells.\n",
+            pooled.two_letter(),
+            pooled.score(),
+            pooled.cr_pct(),
+            pooled.mean_demerit(),
+            pooled.cells,
         );
     }
+
+    // ── 3. Coverage (runnable cells / total scanned) ──
+    out.push_str("## Coverage (runnable cells / total scanned)\n\n");
+    out.push_str("| library | runnable | total | coverage |\n");
+    out.push_str("|---|---|---|---|\n");
+    for lib in LIBS {
+        let runnable = graded.get(lib).map(|(_, _, r)| *r).unwrap_or(0);
+        let cov = if total_cells == 0 {
+            0.0
+        } else {
+            100.0 * runnable as f64 / total_cells as f64
+        };
+        let _ = writeln!(out, "| {lib} | {runnable} | {total_cells} | {cov:.0}% |");
+    }
+    out.push('\n');
 
     out
 }
