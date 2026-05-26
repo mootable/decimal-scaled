@@ -974,7 +974,6 @@ mod band_edges {
             check_at_scale("log10", Width::D38, 37, include_str!("golden/log10_d38_s37.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D38 s0 — exp2(-1)=0.5 tie value=1 oracle=0 AND exp2(-106) Ceiling value=0 oracle=1 (underflow Ceiling); 1 LSB; needs kernel fix"]
         fn d38_exp2_s0() {
             check_at_scale("exp2", Width::D38, 0, include_str!("golden/exp2_d38_s0.txt"));
         }
@@ -1154,7 +1153,6 @@ mod band_edges {
             check_at_scale("log10", Width::D57, 56, include_str!("golden/log10_d57_s56.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D57 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d57_exp2_s0() {
             check_at_scale("exp2", Width::D57, 0, include_str!("golden/exp2_d57_s0.txt"));
         }
@@ -1333,7 +1331,6 @@ mod band_edges {
             check_at_scale("log10", Width::D76, 75, include_str!("golden/log10_d76_s75.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D76 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d76_exp2_s0() {
             check_at_scale("exp2", Width::D76, 0, include_str!("golden/exp2_d76_s0.txt"));
         }
@@ -1512,7 +1509,6 @@ mod band_edges {
             check_at_scale("log10", Width::D115, 114, include_str!("golden/log10_d115_s114.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D115 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d115_exp2_s0() {
             check_at_scale("exp2", Width::D115, 0, include_str!("golden/exp2_d115_s0.txt"));
         }
@@ -1691,7 +1687,6 @@ mod band_edges {
             check_at_scale("log10", Width::D153, 152, include_str!("golden/log10_d153_s152.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D153 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d153_exp2_s0() {
             check_at_scale("exp2", Width::D153, 0, include_str!("golden/exp2_d153_s0.txt"));
         }
@@ -1870,7 +1865,6 @@ mod band_edges {
             check_at_scale("log10", Width::D230, 229, include_str!("golden/log10_d230_s229.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D230 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d230_exp2_s0() {
             check_at_scale("exp2", Width::D230, 0, include_str!("golden/exp2_d230_s0.txt"));
         }
@@ -2041,7 +2035,6 @@ mod band_edges {
             check_at_scale("log10", Width::D307, 306, include_str!("golden/log10_d307_s306.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D307 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d307_exp2_s0() {
             check_at_scale("exp2", Width::D307, 0, include_str!("golden/exp2_d307_s0.txt"));
         }
@@ -2211,7 +2204,6 @@ mod band_edges {
             check_at_scale("log10", Width::D462, 461, include_str!("golden/log10_d462_s461.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D462 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d462_exp2_s0() {
             check_at_scale("exp2", Width::D462, 0, include_str!("golden/exp2_d462_s0.txt"));
         }
@@ -2382,7 +2374,6 @@ mod band_edges {
             check_at_scale("log10", Width::D616, 615, include_str!("golden/log10_d616_s615.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D616 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d616_exp2_s0() {
             check_at_scale("exp2", Width::D616, 0, include_str!("golden/exp2_d616_s0.txt"));
         }
@@ -2553,7 +2544,6 @@ mod band_edges {
             check_at_scale("log10", Width::D924, 923, include_str!("golden/log10_d924_s923.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D924 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d924_exp2_s0() {
             check_at_scale("exp2", Width::D924, 0, include_str!("golden/exp2_d924_s0.txt"));
         }
@@ -2726,7 +2716,6 @@ mod band_edges {
             check_at_scale("log10", Width::D1232, 1231, include_str!("golden/log10_d1232_s1231.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp2 D1232 s0 mode HalfToEven input=-1 (exp2(-1)=0.5 tie) value=1 oracle=0 delta=1 LSB — tie not rounded to even; needs kernel fix"]
         fn d1232_exp2_s0() {
             check_at_scale("exp2", Width::D1232, 0, include_str!("golden/exp2_d1232_s0.txt"));
         }

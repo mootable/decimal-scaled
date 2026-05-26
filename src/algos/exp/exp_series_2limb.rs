@@ -153,11 +153,17 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
 
 // ── exp2 kernel (D38, Fixed fallback) ─────────────────────────────
 
-/// Exact-power pin for the D38 `exp2`. Returns `Some(2^k · 10^scale)`
-/// when `raw` is an exact integer `k` and `2^k` is representable at the
-/// storage scale; else `None`. See the wide-tier `exp2_exact_pow`.
+/// Exact-power pin for the D38 `exp2`. When `raw` is an exact integer
+/// `k`, `exp2(k) = 2^k` is an exact algebraic point — a *dyadic
+/// rational*, never a transcendental residual. Returns the
+/// **correctly-rounded** storage value of `2^k` under `mode`, computed
+/// from exact integer arithmetic, so the `exp(k·ln 2)` series round-off
+/// can never bump it across a tie or grid line. Returns `None` only when
+/// `raw` is not an exact integer (the genuinely transcendental case the
+/// series kernel handles) or when a representable result overflows
+/// `i128`. See the wide-tier `exp2_exact_pow`.
 #[inline]
-fn exp2_exact_pin(raw: i128, scale: u32) -> Option<i128> {
+fn exp2_exact_pin(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
     let one_s = 10i128.checked_pow(scale)?;
     if raw % one_s != 0 {
         return None;
@@ -168,22 +174,60 @@ fn exp2_exact_pin(raw: i128, scale: u32) -> Option<i128> {
     }
     let kk = k.unsigned_abs();
     if k > 0 {
+        // 2^k · 10^scale — exact integer when representable.
         let mut v: i128 = one_s;
         for _ in 0..kk {
             v = v.checked_mul(2)?;
         }
         Some(v)
-    } else {
-        // 2^-|k| = 5^|k| · 10^(scale − |k|); representable iff |k| ≤ scale.
-        if kk > scale as u128 {
-            return None;
-        }
+    } else if kk <= scale as u128 {
+        // 2^-|k| = 5^|k| · 10^(scale − |k|) — exact, no rounding.
         let mut v = 10i128.checked_pow(scale - kk as u32)?;
         for _ in 0..kk {
             v = v.checked_mul(5)?;
         }
         Some(v)
+    } else {
+        // |k| > scale: `2^k · 10^scale = 5^scale / 2^(|k|−scale)` is a
+        // proper dyadic fraction in `(0, 1)` storage units. Round it
+        // exactly under `mode` (`exp2(-1) = 0.5` is the half-to-even tie
+        // → 0; `exp2(-146)` is a sub-resolution positive → Ceiling → 1).
+        let num = 5u128.checked_pow(scale)?; // 5^38 < 2^89, fits u128
+        let p = kk as u32 - scale; // shift amount, ≥ 1
+        Some(round_pow2_fraction(num, p, mode))
     }
+}
+
+/// Correctly-rounded storage value of the dyadic fraction `num / 2^p`
+/// (`num > 0`, `p ≥ 1`) — a strictly-positive result in `[0, num/2]`.
+///
+/// `q = num >> p`, remainder `r = num & (2^p − 1)`; the half-way divisor
+/// is `2^p`, so the tie compares `2·r` against `2^p`. When `p ≥ 128`
+/// the quotient is `0` and the whole of `num` is the (sub-half) residual
+/// — a tiny positive value that only `Ceiling` rounds up.
+#[inline]
+fn round_pow2_fraction(num: u128, p: u32, mode: RoundingMode) -> i128 {
+    if p >= 128 {
+        // num < 2^128 ≤ 2^p, so q = 0 and r = num > 0 but < 2^(p-1)
+        // (half), i.e. a sub-resolution positive residual.
+        let bump = crate::support::rounding::should_bump(
+            mode,
+            ::core::cmp::Ordering::Less, // r strictly below half
+            false,                       // q == 0 is even
+            true,                        // result positive
+        );
+        return i128::from(bump);
+    }
+    let q = (num >> p) as i128;
+    let r = num & ((1u128 << p) - 1);
+    if r == 0 {
+        return q;
+    }
+    let half = 1u128 << (p - 1);
+    let cmp_r = r.cmp(&half);
+    let q_is_odd = (q & 1) == 1;
+    let bump = crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, true);
+    q + i128::from(bump)
 }
 
 /// `2^x = exp(x · ln 2)` on the `Fixed` intermediate. Used by
@@ -204,7 +248,7 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
     // point (integer for `k >= 0`, `5^|k|·10^(scale−|k|)` for `k < 0`).
     // Emitting it directly stops the `exp(k·ln 2)` round-off from
     // bumping a directed mode by one LSB at the exact power.
-    if let Some(pinned) = exp2_exact_pin(raw, scale) {
+    if let Some(pinned) = exp2_exact_pin(raw, scale, mode) {
         return pinned;
     }
     let w = scale + working_digits;
