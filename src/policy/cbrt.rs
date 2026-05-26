@@ -111,24 +111,42 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (1, _) => Select::ByAlgorithm(Algorithm::MgDivide),
         // D38 (`Int<2>`) — hand-tuned 384-bit cube root.
         (2, _) => Select::ByAlgorithm(Algorithm::MgDivide),
-        // Bespoke f64-(top-bits)-seeded Newton run in a tight, concrete
-        // `Int<W>` (no build-max slice scratch). Each routed `(N, SCALE)`
-        // cell carries its own work width `W` (sized to cover
-        // `mag · 10^(2·SCALE)` for the full storage magnitude) in the
-        // dispatch arm below. Microbench (`root_kernel_ab`): native beats
-        // the generic slice 1.1–2.0× at every cell. Gated with the kernel;
-        // each `(N, SCALE)` cell is unreachable when its tier isn't built.
+        // D57 / D76 (N = 3 / 4) — bespoke f64-seeded Newton in a tight,
+        // concrete `Int<W>` with `W = 3N` (covering `mag · 10^(2·SCALE)`:
+        // the magnitude is ≤ 64N bits and `10^(2·SCALE)` adds ≤ 128N more
+        // for SCALE ≤ the tier's digit capacity, so 192N bits = 3N limbs
+        // suffice at any valid scale). Routed by `N` (all scales) because
+        // the build-max slice scratch the generic `Newton` kernel zeroes per
+        // Newton iteration dominates these radicands even at the full-range
+        // `W = 3N`. Microbench (`root_kernel_ab`, at the routed `W = 3N`):
+        // native beats the generic slice 1.42× (D57<20>, via `fast_a`) and
+        // 1.15× (D76<20>). Bit-identical to the oracle-gated `cbrt_native`
+        // across all six modes and signs (kernel test gate).
+        //
+        // The wider mid tiers (D115/D153, N = 6/8) are NOT routed by `N`:
+        // at the full-range `W = 3N` (18/24 limbs) the per-iteration Knuth
+        // divide outweighs the slice's scratch churn at the bbc scales, so a
+        // blanket `W = 3N` would regress them (rule 6 — size each width
+        // exactly). They keep only their high-scale `Native` cells below.
+        //
+        // Gated with the kernel; each tier's cells are unreachable when the
+        // tier isn't built (the policy stays exhaustive in both configs).
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 20) // D57<20>,  W=6
-        | (4, 35) // D76<35>,  W=8
-        | (6, 57) // D115<57>, W=12
+        (3, _) // D57, W=9
+        | (4, _) // D76, W=12
+        => Select::ByAlgorithm(Algorithm::Native),
+        // High-scale Native cells for the wider tiers, each with its own
+        // exact `W` (no build-max blanket) — the historically benched-win
+        // golden-table scales.
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (6, 57) // D115<57>, W=12
         | (8, 75) // D153<75>, W=16
-        | (8, 76) // D153<76>, W=16 (golden-table scale)
+        | (8, 76) // D153<76>, W=16
         | (12, 115) // D230<115>, W=25
         | (16, 150) // D307<150>, W=32
         => Select::ByAlgorithm(Algorithm::Native),
-        // Everything else (all wide tiers, all other scales) — generic
-        // Newton over the tier's work width.
+        // Everything else (wider tiers at other scales) — generic Newton
+        // over the int layer's width-agnostic slice `icbrt`.
         _ => Select::ByAlgorithm(Algorithm::Newton),
     }
 }
@@ -179,8 +197,10 @@ where
         // recovering the cbrt_D57/D76 regression. Bit-identical (the rounding
         // tail is shared); falls back to the top-bits seed past the f64 range.
         Algorithm::Native => match (N, SCALE) {
-            (3, 20) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 6>(raw, const { Int::<6>::TEN.pow(2 * SCALE) }, mode),
-            (4, 35) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 8>(raw, const { Int::<8>::TEN.pow(2 * SCALE) }, mode),
+            // D57 / D76 routed by N (all scales), W = 3N.
+            (3, _) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 9>(raw, const { Int::<9>::TEN.pow(2 * SCALE) }, mode),
+            (4, _) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
+            // High-scale cells for the wider tiers, each with its exact W.
             (6, 57) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
             (8, 75) | (8, 76) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 16>(raw, const { Int::<16>::TEN.pow(2 * SCALE) }, mode),
             (12, 115) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 25>(raw, const { Int::<25>::TEN.pow(2 * SCALE) }, mode),
