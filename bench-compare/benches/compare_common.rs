@@ -62,25 +62,35 @@ macro_rules! op_str {
 /// `<fn>_<W>_s<scale>` (branch/prod as the two rows).
 ///
 /// Operands (all domain-valid for every function below; the scale-0 integer
-/// fallback in parens via `op_str!`):
-///   * `x  = 2.0` (→ `2`)   — positive (sqrt/cbrt/ln/log base arg/powf base),
-///                            and >= 1 for `acosh`.
-///   * `s  = 0.5` (→ `0`)   — in [-1, 1] and (-1, 1): `asin`/`acos`/`atanh`;
+/// fallback in parens via `op_str!`). EVERY operand — and every arithmetic
+/// RESULT — is kept to a single integer digit (|v| < 10), because the highest
+/// scale in each tier's set is `S-1`, leaving exactly ONE integer digit; a
+/// 2-digit operand or product (e.g. the old `67.89`, `10.0`, or `2 * 67.89`)
+/// is `ParseError::OutOfRange` / an overflow there. The op set is identical
+/// across scales, so the narrow-integer-room S-1 cell dictates the choice.
+///   * `x  = 2.0` (→ `2`)   — positive (sqrt/cbrt/ln/log arg/powf base),
+///                            >= 1 for `acosh`; results (sqrt≈1.41, ln≈0.69,
+///                            exp/cosh of `s` ≈1.1–1.7, acosh≈1.32) all < 10.
+///   * `s  = 0.1` (→ `0`)   — in [-1, 1] and (-1, 1): `asin`/`acos`/`atanh`;
 ///                            a benign small argument for the periodic and
 ///                            hyperbolic functions and `to_*` (0 stays in
-///                            every domain at scale 0).
-///   * `b  = 67.89` (→ `67`), `e = 1.5` (→ `1`), `ten = 10.0` (→ `10`) —
-///                            second operands for arithmetic, `powf`
-///                            (exponent) and `log` (base).
+///                            every domain at scale 0). Kept small enough that
+///                            `to_degrees(0.1) ≈ 5.73 < 10` survives the S-1
+///                            single-integer-digit cell (`to_degrees(0.5)≈28.6`
+///                            would overflow it).
+///   * `b  = 3.5` (→ `3`)   — second arithmetic operand; `x±b`, `x*b`(=7),
+///                            `x/b`, `x%b` all stay |·| < 10.
+///   * `e  = 1.5` (→ `1`)   — powf exponent; `x^e = 2^1.5 ≈ 2.83 < 10`.
+///   * `base = 7.0` (→ `7`) — log base (> 0, ≠ 1); `log(2, 7)` valid.
 #[macro_export]
 macro_rules! funcs {
     ($c:expr, $w:literal, $scale:literal, $side:literal, $ty:ty) => {{
         use ::std::hint::black_box;
         let x: $ty = $crate::op_str!($scale, "2.0", "2").parse().unwrap();
-        let s: $ty = $crate::op_str!($scale, "0.5", "0").parse().unwrap();
-        let b: $ty = $crate::op_str!($scale, "67.89", "67").parse().unwrap();
+        let s: $ty = $crate::op_str!($scale, "0.1", "0").parse().unwrap();
+        let b: $ty = $crate::op_str!($scale, "3.5", "3").parse().unwrap();
         let e: $ty = $crate::op_str!($scale, "1.5", "1").parse().unwrap(); // powf exponent
-        let ten: $ty = $crate::op_str!($scale, "10.0", "10").parse().unwrap(); // log base
+        let ten: $ty = $crate::op_str!($scale, "7.0", "7").parse().unwrap(); // log base
 
         // ── arithmetic ──
         $crate::bench_one!($c, "add", $w, $scale, $side, |bn| {

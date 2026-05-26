@@ -7,30 +7,32 @@ name: "\U0001FA83 bench-branch-compare (branch vs latest tag)"
 # the newest published version, the branch via the `path = ".."` dep) and run
 # through the shared public-function surface.
 #
-# The harness is split ONE bench target per width (compare_d18 .. compare_d1232)
-# and fanned out as a matrix of parallel jobs — each job benches a single width
-# (branch + prod rows) in ~30 min instead of one >90 min sweep over every width.
-# Wall time ≈ the slowest single width. No third-party crates — pure self-vs-self.
+# The sweep now fans out over BOTH width AND scale: each per-width bench file
+# instantiates the op set at that tier's scale set (dedup{0, S/2, S-1, 30 if
+# 30<=S-1}; S = the tier's max SCALE), naming criterion groups
+# `<op>_D###_s<scale>` so a single scale is selectable by a criterion
+# name-filter (`-- s<scale>`). This surfaces SCALE-dependent regressions the
+# old single-scale (all wide tiers @ scale-30) bench hid.
 #
-# Purpose: dispatch on a release branch to see the performance changes that
-# branch introduces vs the last release.
+# Job graph — compile ONCE, then fan out, then join:
+#   build     : pin prod, `cargo bench --no-run` for ALL width targets once,
+#               upload the compiled criterion exes + Cargo.lock as `bbc-compiled`.
+#   bench      : matrix of explicit (width, scale) cells; download `bbc-compiled`,
+#               invoke the prebuilt exe directly with a `-- s<scale>` name-filter
+#               (NO recompile), upload that cell's criterion subtree.
+#   aggregate  : needs ALL bench cells; merge every cell into one criterion tree,
+#               run summarise.py -> a worst-first (op x width x scale) regression
+#               table printed to the run summary, plus a single `bbc-aggregate`
+#               artifact (combined tree + medians .tsv + rendered .md).
 #
-# Each per-width run produces both columns: pair `<group>/<W>/branch` (the
-# branch under test) against `<group>/<W>/prod` (the latest published tag).
-# A final collator job downloads every width's Criterion artifacts and renders
-# ONE combined branch-vs-prod Δ% table into the run summary.
-#
-# Triggers: (1) push to a release branch — a commit listener that benches the
-# branch automatically (queue-of-1 via the concurrency block); (2) manual
-# workflow_dispatch for on-demand runs against any ref. Push runs from the
-# branch itself, so this does NOT need to live on the default branch.
+# Triggers: (1) push to a release branch (queue-of-1 via the concurrency block);
+# (2) manual workflow_dispatch against any ref. Push runs from the branch itself,
+# so this does NOT need to live on the default branch.
 
 on:
-  # Commit listener: every push to a release branch benches it vs prod.
   push:
     branches:
       - 'release/**'
-  # Asymmetric on-demand: run against any ref whenever you choose.
   workflow_dispatch:
     inputs:
       ref:
@@ -39,10 +41,6 @@ on:
         type: string
         default: ""
 
-# One run per ref with a queue depth of 1: the in-progress bench finishes, and
-# if commits landed during it, GitHub keeps only the LATEST as pending and runs
-# that next (older pending runs are superseded). So every commit either gets its
-# own bench or is rolled into the next run on the latest commit — none stranded.
 concurrency:
   group: bench-branch-compare-${{ github.ref }}
   cancel-in-progress: false
@@ -51,34 +49,14 @@ permissions:
   contents: read
 
 jobs:
-  compare:
-    name: "\U0001FA83 prod vs ${{ inputs.ref || github.ref_name }} (${{ matrix.width }})"
+  # ------------------------------------------------------------------
+  # build: pin prod and compile EVERY width's bench exe ONCE. The compiled
+  # criterion executables + the resolved Cargo.lock are uploaded so the bench
+  # cells run them directly with a scale name-filter — no per-cell recompile.
+  build:
+    name: "\U0001FA83 build (compile all widths once)"
     runs-on: ubuntu-latest
-    # One width per job. A single width's branch+prod surface runs in well
-    # under 30 min, so this fits comfortably where the old single-job sweep
-    # over every width needed 240. Per-width cells are independently valuable.
-    timeout-minutes: 30
-
-    strategy:
-      fail-fast: false
-      # Parallel fanout — every width is its own runner. fail-fast: false so
-      # one width's failure doesn't cancel the rest, and the collator still
-      # renders every width that did finish.
-      matrix:
-        width:
-          - D18
-          - D38
-          - D57
-          - D76
-          - D115
-          - D153
-          - D230
-          - D307
-          - D462
-          - D616
-          - D924
-          - D1232
-
+    timeout-minutes: 45
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -97,9 +75,8 @@ jobs:
           path: |
             ~/.cargo/registry
             ~/.cargo/git
-          key: cargo-branch-compare-${{ runner.os }}-${{ matrix.width }}-${{ hashFiles('bench-compare/benches/compare_common.rs') }}
+          key: cargo-branch-compare-${{ runner.os }}-${{ hashFiles('bench-compare/benches/compare_common.rs') }}
           restore-keys: |
-            cargo-branch-compare-${{ runner.os }}-${{ matrix.width }}-
             cargo-branch-compare-${{ runner.os }}-
 
       - name: Pin prod to the latest published release
@@ -111,37 +88,152 @@ jobs:
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
           sed -i -E "s|^prod = .*|prod = { package = \"decimal-scaled\", version = \"=$LATEST\", default-features = false, features = [\"std\", \"strict\", \"wide\", \"x-wide\", \"xx-wide\"] }|" Cargo.toml
 
-      - name: Run side-by-side bench (${{ matrix.width }})
+      - name: Compile every width bench exe (no run)
         working-directory: bench-compare
         run: |
           set -euo pipefail
           echo "--- dep lines ---"; grep -E '^(decimal-scaled|prod)' Cargo.toml
-          WIDTH_LC=$(echo "${{ matrix.width }}" | tr '[:upper:]' '[:lower:]')
-          cargo bench --bench "compare_${WIDTH_LC}" | tee "bench-${{ matrix.width }}.out"
+          # One compile of the whole bench target set; the cells just run the exes.
+          cargo bench --no-run
+          echo "--- compiled compare exes ---"
+          ls -1 target/release/deps/compare_d*-* | grep -v '\.d$' || true
 
-      - name: Upload criterion data + raw output (${{ matrix.width }})
+      - name: Stage the compiled exes + lockfile
+        working-directory: bench-compare
+        run: |
+          set -euo pipefail
+          mkdir -p staged/deps
+          # The criterion bench executables only (drop the cargo `.d` depfiles).
+          for f in target/release/deps/compare_d*-*; do
+            case "$f" in
+              *.d) ;;                      # skip depfiles
+              *) cp "$f" staged/deps/ ;;
+            esac
+          done
+          cp Cargo.lock staged/Cargo.lock
+          echo "PROD_VERSION=${PROD_VERSION}" > staged/prod_version.env
+          echo "--- staged ---"; ls -1 staged/deps/
+
+      - name: Upload compiled bench exes
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: bbc-compiled
+          path: bench-compare/staged/
+          if-no-files-found: error
+          retention-days: 7
+
+  # ------------------------------------------------------------------
+  # bench: one job per (width, scale) cell. Downloads the prebuilt exes and
+  # runs ONLY that cell by invoking the matching exe with a `-- s<scale>`
+  # criterion name-filter. No toolchain, no recompile.
+  bench:
+    name: "\U0001FA83 ${{ matrix.width }} s${{ matrix.scale }}"
+    needs: build
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      # Explicit (width, scale) pairs — scales differ per width, so the matrix
+      # must be an `include:` list, not a cross-product. Per #1:
+      # scales = dedup{0, S/2, S-1, 30 if 30<=S-1}, S = the tier's max SCALE.
+      matrix:
+        include:
+          - { width: D18,   scale: 0 }
+          - { width: D18,   scale: 9 }
+          - { width: D18,   scale: 17 }
+          - { width: D38,   scale: 0 }
+          - { width: D38,   scale: 19 }
+          - { width: D38,   scale: 30 }
+          - { width: D38,   scale: 37 }
+          - { width: D57,   scale: 0 }
+          - { width: D57,   scale: 28 }
+          - { width: D57,   scale: 30 }
+          - { width: D57,   scale: 56 }
+          - { width: D76,   scale: 0 }
+          - { width: D76,   scale: 30 }
+          - { width: D76,   scale: 38 }
+          - { width: D76,   scale: 75 }
+          - { width: D115,  scale: 0 }
+          - { width: D115,  scale: 30 }
+          - { width: D115,  scale: 57 }
+          - { width: D115,  scale: 114 }
+          - { width: D153,  scale: 0 }
+          - { width: D153,  scale: 30 }
+          - { width: D153,  scale: 76 }
+          - { width: D153,  scale: 152 }
+          - { width: D230,  scale: 0 }
+          - { width: D230,  scale: 30 }
+          - { width: D230,  scale: 115 }
+          - { width: D230,  scale: 229 }
+          - { width: D307,  scale: 0 }
+          - { width: D307,  scale: 30 }
+          - { width: D307,  scale: 153 }
+          - { width: D307,  scale: 306 }
+          - { width: D462,  scale: 0 }
+          - { width: D462,  scale: 30 }
+          - { width: D462,  scale: 231 }
+          - { width: D462,  scale: 461 }
+          - { width: D616,  scale: 0 }
+          - { width: D616,  scale: 30 }
+          - { width: D616,  scale: 308 }
+          - { width: D616,  scale: 615 }
+          - { width: D924,  scale: 0 }
+          - { width: D924,  scale: 30 }
+          - { width: D924,  scale: 462 }
+          - { width: D924,  scale: 923 }
+          - { width: D1232, scale: 0 }
+          - { width: D1232, scale: 30 }
+          - { width: D1232, scale: 616 }
+          - { width: D1232, scale: 1231 }
+
+    steps:
+      - name: Install system libs (criterion runtime)
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1
+
+      - name: Download compiled bench exes
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: bbc-compiled
+          path: bbc-compiled
+
+      - name: Run cell ${{ matrix.width }} s${{ matrix.scale }}
+        run: |
+          set -euo pipefail
+          WIDTH_LC=$(echo "${{ matrix.width }}" | tr '[:upper:]' '[:lower:]')
+          # Resolve the hashed exe name by globbing: compare_<width_lc>-<hash>.
+          EXE=$(ls bbc-compiled/deps/compare_${WIDTH_LC}-* | grep -v '\.d$' | head -1)
+          if [ -z "$EXE" ]; then echo "no exe for compare_${WIDTH_LC}"; exit 1; fi
+          chmod +x "$EXE"
+          # Each benched id is `<op>_D###_s<scale>/<side>`. Filtering on the
+          # `_s<scale>/` substring (with the trailing group/function separator)
+          # selects EXACTLY this scale's groups and no other: e.g. `_s30/` does
+          # NOT match `_s306/` because the `/` lands right after the scale.
+          # (Verified locally on D307, whose set contains both 30 and 306.)
+          FILTER="_s${{ matrix.scale }}/"
+          echo "running: $EXE --bench $FILTER --"
+          "$EXE" --bench "$FILTER" --
+          echo "--- produced groups ---"
+          ls -1 target/criterion 2>/dev/null || true
+
+      - name: Upload cell criterion subtree
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: bench-branch-compare-${{ matrix.width }}
-          path: |
-            bench-compare/bench-${{ matrix.width }}.out
-            bench-compare/target/criterion/
+          name: bbc-${{ matrix.width }}-s${{ matrix.scale }}
+          path: target/criterion/
           if-no-files-found: warn
-          retention-days: 30
+          retention-days: 7
 
   # ------------------------------------------------------------------
-  # Collator: once every per-width job has finished (or failed), download
-  # all per-width Criterion artifacts into one merged `target/criterion`
-  # tree and run summarise.py to render ONE combined branch-vs-prod Δ%
-  # table — covering every width — into the run's step summary.
-  collate:
-    name: "\U0001FA83 combined branch-vs-prod table"
-    needs: [compare]
+  # aggregate: the final join. Needs every bench cell, merges them into one
+  # criterion tree, renders the worst-first regression table to the run summary
+  # and bundles ONE downloadable artifact (tree + medians .tsv + table .md).
+  aggregate:
+    name: "\U0001FA83 aggregate (worst-first regression table)"
+    needs: bench
     if: always()
     runs-on: ubuntu-latest
     timeout-minutes: 15
-
     steps:
       - name: Checkout (for summarise.py)
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
@@ -154,47 +246,56 @@ jobs:
           LATEST=$(curl -s -H 'User-Agent: decimal-scaled-bench (github.com/mootable/decimal-scaled)' https://crates.io/api/v1/crates/decimal-scaled | python3 -c "import sys,json; d=json.load(sys.stdin); c=d['crate']; print(c.get('max_stable_version') or c['newest_version'])")
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
 
-      - name: Download every per-width artifact
+      - name: Download every (width, scale) bench cell
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          # No `name` -> pulls every artifact this run uploaded, each into a
-          # subdir named after the artifact (bench-branch-compare-D18/, ...).
-          # Each holds that width's target/criterion subtree + raw .out.
-          path: bench-artifacts
+          # No `name` -> every artifact this run uploaded, each into a subdir
+          # named after the artifact (bbc-D18-s0/, bbc-D307-s153/, ...).
+          # We only care about the `bbc-<width>-s<scale>` cells (the
+          # `bbc-compiled` exe blob is harmless extra weight).
+          path: bbc-cells
 
-      - name: Merge per-width criterion dirs
+      - name: Merge every cell into one criterion tree
         run: |
           set -euo pipefail
           mkdir -p bench-compare/target/criterion
-          # Each artifact dir contains a `target/criterion/<group>/...` tree.
-          # The group names embed the width (`<fn>/<W>`), so merging every
-          # width's subtree into one criterion root yields no collisions.
           shopt -s nullglob
-          for d in bench-artifacts/bench-branch-compare-*/target/criterion; do
+          # Each cell artifact is the cell's `target/criterion` subtree directly.
+          for d in bbc-cells/bbc-*-s*/; do
+            # Skip the compiled-exe artifact if it matched the glob.
+            [ -d "$d" ] || continue
+            case "$d" in *bbc-compiled*) continue;; esac
             echo "merging $d"
-            cp -a "$d/." bench-compare/target/criterion/
+            cp -a "$d/." bench-compare/target/criterion/ 2>/dev/null || true
           done
-          echo "--- merged groups ---"
-          ls bench-compare/target/criterion | head -50
+          echo "--- merged group dirs (sample) ---"
+          ls -1 bench-compare/target/criterion | head -40
+          echo "--- group count ---"
+          ls -1 bench-compare/target/criterion | wc -l
 
-      - name: Summarise (one combined branch-vs-prod table)
-        if: always()
+      - name: Collate -> worst-first regression table (+ tsv + md)
         working-directory: bench-compare
         env:
           BENCH_REF: ${{ inputs.ref || github.ref_name }}
+          PYTHONIOENCODING: utf-8
         run: |
-          python3 summarise.py >> "$GITHUB_STEP_SUMMARY" || {
-            echo "### bench-branch-compare — summary parse failed; raw per-width output:" >> "$GITHUB_STEP_SUMMARY"
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-            find ../bench-artifacts -name 'bench-*.out' -exec tail -40 {} \; >> "$GITHUB_STEP_SUMMARY" 2>/dev/null || true
-            echo '```' >> "$GITHUB_STEP_SUMMARY"
-          }
+          set -euo pipefail
+          mkdir -p aggregate
+          # Print to stdout (raw log) AND capture the table for the step summary.
+          python3 summarise.py --tsv aggregate/bbc_medians.tsv --md aggregate/bbc_table.md | tee aggregate/bbc_table.txt
+          # Append the rendered markdown to the GitHub Actions run summary UI.
+          {
+            echo ""
+            cat aggregate/bbc_table.md
+          } >> "$GITHUB_STEP_SUMMARY"
+          # Bundle the combined criterion tree into the aggregate dir too.
+          cp -a target/criterion aggregate/criterion
 
-      - name: Upload merged criterion data
+      - name: Upload single aggregate artifact
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
         with:
-          name: bench-branch-compare-merged
-          path: bench-compare/target/criterion/
+          name: bbc-aggregate
+          path: bench-compare/aggregate/
           if-no-files-found: warn
           retention-days: 30
