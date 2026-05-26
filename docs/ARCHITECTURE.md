@@ -453,6 +453,34 @@ in the same file. If a flagged variation uses `f64`, it is only ever a **seed**
 to a self-correcting integer iteration — the exact integer termination pins the
 unique result, so determinism holds regardless of the platform's `f64`.
 
+### Seeds — the shared seed library (`algo_x_support::seed`)
+
+Every initial Newton/root estimate comes from **one** place: the shared seed
+library `src/algo_x_support/seed.rs` (the cross-algorithm-support leaf, the seed
+analogue of `int/algos/limbs.rs`). Kernels **call it; they never hand-roll a
+seed inline.** It exposes `sqrt_seed` / `cbrt_seed` (limb-slice) and
+`sqrt_seed_u128` (the `u128`-scalar sibling for hot scalar isqrt call sites like
+`hypot`); `isqrt`/`icbrt`/`hypot`/the decimal roots all source from it.
+
+The library is where the **feature-based optimization** lives, written once: each
+seed leaf cfg-swaps internally — under `std` it bootstraps from the inherent
+hardware `f64` intrinsic of the top 64 significant bits (~53 correct bits → the
+Newton loop converges in ~1–2 iterations), under `no_std` it is the classical
+pure-integer one-bit estimate (`2^⌈bits/2⌉` for sqrt, `2^⌈bits/3⌉` for cbrt,
+primitives only — never `libm`). **Both bodies are guaranteed _over-estimates_**
+(the odd-shift `SQRT_2` correction + round-up; Hasselgren, Crandall & Pomerance
+§9.2.1), so the downward-monotone Newton recurrence converges to the **identical
+floor** on either build and never under-runs into the catastrophic linear
+`x -= 1` floor-walk an un-corrected inline `f64` seed causes. Callers stay
+`std`/`no_std`-agnostic; the result is platform-deterministic (only the
+iteration count differs by build).
+
+Consequences: a kernel that hand-rolls a pure-integer-only seed inline silently
+**forfeits the `std` f64 fast-bootstrap on every build**; one that hand-rolls an
+un-corrected `f64` seed risks the linear floor-walk. Either is a defect — route
+the seed through the library, and if a seed needs fixing, fix it in the library
+so all callers benefit.
+
 ### Policy file structure (the per-function matcher)
 
 Each dispatched function (`sqrt`, `mul`, `exp`, …) has **one policy file** with a

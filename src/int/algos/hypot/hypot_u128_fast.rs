@@ -59,10 +59,12 @@ fn isqrt_u128(n: u128) -> u128 {
     if n == 0 {
         return 0;
     }
-    // Pure-integer over-estimate seed `2^ceil(bits/2)` (>= sqrt(n) for every
-    // n >= 1), so the Newton recurrence is monotone-decreasing throughout.
+    // Over-estimate seed from the shared seed library (feature-based: std
+    // f64-bootstrap ~53 bits → ~1-2 Newton iters; no_std pure-integer
+    // `2^ceil(bits/2)`). Guaranteed `>= sqrt(n)`, so the recurrence below
+    // stays monotone-decreasing and lands on the identical floor either way.
     let bits = 128 - n.leading_zeros();
-    let mut x: u128 = 1u128 << ((bits + 1) / 2);
+    let mut x: u128 = crate::algo_x_support::seed::sqrt_seed_u128(n, bits);
     // Newton averaging: x <- (x + n/x)/2. Monotone-decreasing from an
     // over-estimate; stop when it stops decreasing (x is then floor or floor+1).
     loop {

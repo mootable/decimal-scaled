@@ -115,6 +115,46 @@ pub(crate) fn sqrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
     }
 }
 
+/// Over-estimate seed for `floor(sqrt(n))` of a single `u128` scalar `n >= 1`
+/// (`bits = 128 - n.leading_zeros()`). The SCALAR sibling of [`sqrt_seed`] for
+/// the hot u128 isqrt call sites (hypot's `isqrt_u128`, …) that work in one
+/// `u128` rather than a limb slice.
+///
+/// Same feature-based bootstrap and convergence guarantee as [`sqrt_seed`]:
+/// under `std` the hardware `f64::sqrt` of the top 64 significant bits with
+/// the odd-shift `SQRT_2` correction + round-up (~53 correct bits in one shot
+/// → the downward Newton loop converges in ~1-2 iterations); under `no_std`
+/// the classical pure-integer 1-bit `2^ceil(bits/2)`. BOTH are guaranteed
+/// over-estimates, so the caller's downward-monotone Newton recurrence never
+/// under-runs into a linear floor-walk and lands on the identical floor root
+/// on either build. Returns a value `>= floor(sqrt(n))`.
+#[inline]
+pub(crate) fn sqrt_seed_u128(n: u128, bits: u32) -> u128 {
+    #[cfg(feature = "std")]
+    if bits >= 8 {
+        // Top 64 significant bits + their bit position (mirrors
+        // `extract_top_u64` for the scalar case): `shift = bits - min(64,bits)`.
+        let shift = bits - if bits < 64 { bits } else { 64 };
+        let top_u64 = (n >> shift) as u64;
+        let seed_f64 = (top_u64 as f64).sqrt();
+        let (seed_f64, half_shift) = if (shift & 1) == 1 {
+            (seed_f64 * core::f64::consts::SQRT_2, (shift - 1) / 2)
+        } else {
+            (seed_f64, shift / 2)
+        };
+        let truncated = seed_f64 as u128;
+        let frac_nonzero = (truncated as f64) != seed_f64;
+        // +1 for any truncated fraction, +1 for a strict over-estimate
+        // (mirrors `sqrt_seed`'s std body).
+        let seed_int = truncated
+            .saturating_add(if frac_nonzero { 1 } else { 0 })
+            .saturating_add(1);
+        return seed_int << half_shift;
+    }
+    // no_std (and `std` tiny-`n`): classical 1-bit over-estimate `2^ceil(bits/2)`.
+    1u128 << bits.div_ceil(2)
+}
+
 /// Write a safe over-estimate seed for `floor(cbrt(n))` into `out`.
 ///
 /// Same contract and convergence guarantee as [`sqrt_seed`].
