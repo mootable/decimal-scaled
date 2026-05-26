@@ -816,6 +816,16 @@ path = "benches/micro/hypot_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# to_radians_ab: dispatch-seam A/B for the wide-tier to_radians angle
+# conversion — the public method path (through the double dispatch +
+# resize_to round-trips) vs the MulPiRatio kernel called directly. Isolates
+# the routing overhead behind the to_radians regression vs 0.4.4.
+[[bench]]
+name = "to_radians_ab"
+path = "benches/micro/to_radians_ab.rs"
+harness = false
+required-features = ["wide", "bench-alt"]
+
 # {exp,ln,trig}_series_tang_ab: dispatch-seam A/Bs for the transcendental
 # Series-vs-Tang policy choice. The `policy::{exp,ln,trig}::select` Tang bands
 # were tuned via kernel-ISOLATION benches; these A/B the production Tang kernel

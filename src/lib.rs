@@ -800,6 +800,43 @@ pub mod __bench_internals {
         crate::algos::trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(raw, mode)
     }
 
+    /// `to_radians` candidates for the `to_radians_ab` microbench (the
+    /// wide-tier angle-conversion regression vs 0.4.4). `direct` calls the
+    /// `MulPiRatio` kernel straight on the tier `Core` (no policy / resize
+    /// indirection); `public` goes through the full public method path
+    /// (`D::to_radians_strict_with` -> `to_radians_dispatch` ->
+    /// `to_radians::dispatch` -> `mul_pi_ratio_routed`). The gap between the
+    /// two is the dispatch/resize overhead the rewrite added.
+    macro_rules! to_radians_bench {
+        ($direct:ident, $public:ident, $n:literal, $core:ident, $feat:literal) => {
+            #[cfg(any(feature = $feat, feature = "wide"))]
+            #[inline(never)]
+            pub fn $direct<const SCALE: u32>(
+                raw: crate::int::types::Int<$n>,
+                mode: crate::RoundingMode,
+            ) -> crate::int::types::Int<$n> {
+                crate::algos::trig::angle_mul_pi_ratio::to_radians_mul_pi_ratio::<
+                    crate::types::widths::$core::Core,
+                    SCALE,
+                >(raw, mode)
+            }
+            #[cfg(any(feature = $feat, feature = "wide"))]
+            #[inline(never)]
+            pub fn $public<const SCALE: u32>(
+                raw: crate::int::types::Int<$n>,
+                mode: crate::RoundingMode,
+            ) -> crate::int::types::Int<$n> {
+                crate::D::<crate::int::types::Int<$n>, SCALE>(raw)
+                    .to_radians_strict_with(mode)
+                    .0
+            }
+        };
+    }
+    to_radians_bench!(to_radians_direct_d57, to_radians_public_d57, 3, wide_trig_d57, "d57");
+    to_radians_bench!(to_radians_direct_d76, to_radians_public_d76, 4, wide_trig_d76, "d76");
+    to_radians_bench!(to_radians_direct_d115, to_radians_public_d115, 6, wide_trig_d115, "d115");
+    to_radians_bench!(to_radians_direct_d153, to_radians_public_d153, 8, wide_trig_d153, "d153");
+
     /// Build an `Int<N>` from a little-endian magnitude limb array (sign
     /// false). Lets the bench construct wide operands without exposing the
     /// internal constructors.
