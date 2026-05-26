@@ -53,29 +53,28 @@ impl Algorithm {
     /// it is valid (even `N` — enforced by [`LimbSize::for_packing`], which
     /// drives an odd `N` to `U64`).
     ///
-    /// **`LowLimb`** (benched `benches/micro/sqr_low_u128_ab.rs`, `u128` vs
-    /// `u64` truncated-low symmetric square). `u128` wins on the wide exp/powf
-    /// Smith-squaring WORK integers — the decisive band — and is a wash/small
-    /// win at the narrower storage widths, but LOSES at `N = 64`:
+    /// **`LowLimb`** (benched via `sqr_low_u128_ab`, `u128` vs `u64`
+    /// truncated-low symmetric square): `u128` wins at every even width
+    /// measured — the wide exp/powf Smith-squaring WORK integers (the decisive
+    /// band) and the narrower storage widths alike. Representative verdicts,
+    /// two independent core-pinned runs:
     ///
-    /// | N (square site)          | `u128` vs `u64` |
-    /// |--------------------------|-----------------|
-    /// | 128 (D616 work)          | 1.1–1.5× faster |
-    /// | 192 (D924 work)          | 1.21× faster    |
-    /// | 256 (D1232 work)         | 1.15× faster    |
-    /// | 32 / 48                  | ~1.04–1.06× (≈tie) |
-    /// | 64 (D307 work, D1232 store) | **1.25× SLOWER** |
+    /// | N (square site)             | `u128` vs `u64`      |
+    /// |-----------------------------|----------------------|
+    /// | 128 (D616 work)             | tie .. 1.29× faster  |
+    /// | 192 (D924 work)             | 1.19 .. 1.66× faster |
+    /// | 256 (D1232 work)            | tie .. 1.37× faster  |
+    /// | 64 (D307 work, D1232 store) | 1.21 .. 1.27× faster |
+    /// | 48                          | 1.17 .. 1.20× faster |
+    /// | 32                          | ~1.02 .. 1.04× (≈tie)|
     ///
-    /// So `N = 64` is carved back to `U64` (the square's symmetry already
-    /// halves the u64 work there, and the u128 pack/unpack + wider inner step
-    /// does not amortise). All other even cells take the `for_packing` default.
-    /// This is the tuning seam: the upcoming N-way width×scale×algorithm bench
-    /// confirms/refines these per-cell winners.
+    /// So every even `N` takes the `for_packing` `U128` default — no even cell
+    /// regresses. This is the tuning seam: if a future bench shows `u128`
+    /// losing at some even cell, carve that `N` out to `U64` here; the kernel
+    /// and dispatch stay untouched.
     #[inline]
     const fn limb_size<const N: usize>(self) -> LimbSize {
         match self {
-            // N=64 (the one benched even cell where u128 loses) → U64.
-            Algorithm::LowLimb if N == 64 => LimbSize::U64,
             Algorithm::LowLimb => LimbSize::for_packing(N),
         }
     }

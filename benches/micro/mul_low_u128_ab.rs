@@ -1,31 +1,16 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Pilot A/B: the wide-tier exp/powf Taylor work-multiply.
+//! A/B for the `int::policy::mul_low` limb-width (`u64` vs `u128`) axis.
 //!
-//! The wide exp/powf path (`macros::wide_transcendental::exp_fixed`) runs
-//! a Taylor loop whose hot step is `mul_cached(term, s_red, pow10_w)`,
-//! which is `round_div((term * s_red), pow10_w)`. The `term * s_red` is
-//! `Int<N>::wrapping_mul` -> the truncated-low base-2^64 schoolbook
-//! kernel `mul_low_fixed::<N>` (`src/int/algos/mul/mul_schoolbook.rs`),
-//! an O(N^2) low-half multiply on the tier's WORK integer:
-//!
-//!   * D616  -> work integer `Int<128>` (N = 128 u64 limbs)
-//!   * D924  -> work integer `Int<192>` (N = 192 u64 limbs)
-//!   * D1232 -> work integer `Int<256>` (N = 256 u64 limbs)
-//!
-//! (The decimal STORAGE widths 32 / 48 / 64 limbs are NOT where this
-//! multiply runs; the Taylor series operates in the wider guard-digit
-//! work integer `W`. Both bands are benched below so the decision is not
-//! based on the wrong width.)
-//!
-//! Candidate: `mul_low_fixed_u128::<N>`, the same truncated-low
-//! schoolbook packed into `N/2` u128 limbs (the base-2^128 shape 0.4.4
-//! ran). Half the limbs, ~1/4 the partial products, at the cost of a
-//! wider 128x128->256 inner step.
-//!
-//! DECISION RULE (from the pilot brief): u128 must win by >= 1.15x at the
-//! wide work widths (N = 128 / 192 / 256) to justify wiring it into exp.
+//! Ranks the two limb widths of the truncated-low schoolbook kernel
+//! `mul_low_limb::<N, L>` (`src/int/algos/mul/mul_schoolbook.rs`) at the even
+//! widths the wide-tier exp/powf Taylor multiply runs on (the work integers
+//! Int<128>/Int<192>/Int<256> and the storage widths 32/48/64). `u128` packs
+//! each operand into N/2 u128 limbs (half the limbs, ~1/4 the partial
+//! products, at the cost of a wider 128x128->256 inner step). The winner per
+//! even `N` becomes that cell's `LimbSize` in
+//! `int::policy::mul_low::limb_size`.
 //!
 //! Run with:
 //! `cargo bench --features "wide x-wide xx-wide bench-alt" --bench mul_low_u128_ab`
@@ -105,17 +90,16 @@ fn compare_width<const N: usize>(c: &mut Criterion, width_label: &str) {
     );
 }
 
-/// Bench every width: the three wide-tier WORK integers (the decisive
-/// band) and, for completeness, the three storage widths.
+/// Bench the even widths the wide exp/powf Taylor multiply touches: the
+/// guard-digit work integers and the storage widths (N=64 is both a D307 work
+/// integer and D1232 storage).
 fn bench_mul_low(c: &mut Criterion) {
-    // --- decisive band: the exp/powf Taylor work integers ---
-    compare_width::<128>(c, "Int128_D616_work");
-    compare_width::<192>(c, "Int192_D924_work");
-    compare_width::<256>(c, "Int256_D1232_work");
-    // --- reference band: the decimal storage widths ---
-    compare_width::<32>(c, "Int32_D616_store");
-    compare_width::<48>(c, "Int48_D924_store");
-    compare_width::<64>(c, "Int64_D1232_store");
+    compare_width::<128>(c, "Int128");
+    compare_width::<192>(c, "Int192");
+    compare_width::<256>(c, "Int256");
+    compare_width::<32>(c, "Int32");
+    compare_width::<48>(c, "Int48");
+    compare_width::<64>(c, "Int64");
 }
 
 fn main() {

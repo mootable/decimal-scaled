@@ -1,31 +1,15 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Pilot A/B: the wide-tier exp/powf Smith-squaring work-square.
+//! A/B for the `int::policy::sqr_low` limb-width (`u64` vs `u128`) axis.
 //!
-//! The wide exp/powf path (`macros::wide_transcendental::exp_fixed`) runs a
-//! Smith range-reduction loop whose hot step is `squared.wrapping_sqr_low_u128()`
-//! → `round_div_pow10(…)`. The square is the truncated-low symmetric square
-//! kernel `sqr_low_limb::<N, L>` (`src/int/algos/sqr/sqr_low_limb.rs`), an
-//! O(N²/2) low-half square on the tier's WORK integer:
-//!
-//!   * D616  → work integer `Int<128>` (N = 128 u64 limbs)
-//!   * D924  → work integer `Int<192>` (N = 192 u64 limbs)
-//!   * D1232 → work integer `Int<256>` (N = 256 u64 limbs)
-//!
-//! (The decimal STORAGE widths 32 / 48 / 64 limbs are NOT where this square
-//! runs; the Smith loop operates in the wider guard-digit work integer. Both
-//! bands are benched so the `LimbSize` decision is not based on the wrong
-//! width — mirroring the multiply sibling `mul_low_u128_ab`.)
-//!
-//! Candidate: `sqr_low_u128::<N>`, the same truncated-low symmetric square
-//! packed into N/2 u128 limbs (the base-2^128 shape 0.4.4's u128-limb work
-//! integer ran). Half the limbs, ≈¼ the partial products, at the cost of a
-//! wider 128×128→256 inner step.
-//!
-//! DECISION RULE: u128 must win at the wide work widths (N = 128 / 192 / 256)
-//! to justify routing `U128` in `int::policy::sqr_low`; carve any losing even
-//! cell back to `U64` in that policy's `limb_size` arm.
+//! Ranks the two limb widths of the truncated-low symmetric square kernel
+//! `sqr_low_limb::<N, L>` (`src/int/algos/sqr/sqr_low_limb.rs`) at the even
+//! widths the wide-tier exp/powf Smith squaring runs on (the work integers
+//! Int<128>/Int<192>/Int<256> and the storage widths 32/48/64). `u128` packs
+//! the operand into N/2 u128 limbs (half the limbs, ≈¼ the partial products,
+//! at the cost of a wider 128×128→256 inner step). The winner per even `N`
+//! becomes that cell's `LimbSize` in `int::policy::sqr_low::limb_size`.
 //!
 //! Run with:
 //! `cargo bench --features "wide x-wide xx-wide bench-alt" --bench sqr_low_u128_ab`
@@ -104,17 +88,16 @@ fn compare_width<const N: usize>(c: &mut Criterion, width_label: &str) {
     );
 }
 
-/// Bench every width: the three wide-tier WORK integers (the decisive band)
-/// and, for completeness, the three storage widths.
+/// Bench the even widths the wide exp/powf squaring touches: the guard-digit
+/// work integers and the storage widths (N=64 is both a D307 work integer and
+/// D1232 storage).
 fn bench_sqr_low(c: &mut Criterion) {
-    // --- decisive band: the exp/powf Smith-squaring work integers ---
-    compare_width::<128>(c, "Int128_D616_work");
-    compare_width::<192>(c, "Int192_D924_work");
-    compare_width::<256>(c, "Int256_D1232_work");
-    // --- reference band: the decimal storage widths ---
-    compare_width::<32>(c, "Int32_D616_store");
-    compare_width::<48>(c, "Int48_D924_store");
-    compare_width::<64>(c, "Int64_D1232_store");
+    compare_width::<128>(c, "Int128");
+    compare_width::<192>(c, "Int192");
+    compare_width::<256>(c, "Int256");
+    compare_width::<32>(c, "Int32");
+    compare_width::<48>(c, "Int48");
+    compare_width::<64>(c, "Int64");
 }
 
 fn main() {

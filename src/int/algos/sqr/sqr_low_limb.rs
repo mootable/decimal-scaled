@@ -181,10 +181,14 @@ mod tests {
         diff_at::<8>(&seeds);
         diff_at::<16>(&seeds);
         diff_at::<32>(&seeds);
+        // N=64 is a routed `U128` cell (D307 exp work / D1232 storage); pin its
+        // u128/u64 bit-identity to the comba reference.
+        diff_at::<64>(&seeds);
         all_ones_at::<2>();
         all_ones_at::<4>();
         all_ones_at::<8>();
         all_ones_at::<16>();
         all_ones_at::<32>();
+        all_ones_at::<64>();
     }
 }

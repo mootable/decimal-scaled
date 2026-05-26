@@ -30,13 +30,25 @@ if ($Mask -ne "") {
 # Start-Process does not auto-quote array elements that contain spaces, so the
 # multi-word feature string would be split into stray args. Wrap it in literal
 # double-quotes so cargo sees one --features value.
-$a = @('bench', '--features', ('"' + $Features + '"'), '--bench', $Bench)
-if ($Extra -ne "") { $a += ($Extra -split ' ') }
-Write-Host "[pin_run] cargo $($a -join ' ')  (affinity mask $affinity)"
+$feat = '"' + $Features + '"'
 
+# Pinning the cargo process pins its child rustc swarm too — a one-core compile
+# crawls. So compile UNPINNED (all cores), then run the cached bench exe PINNED.
+# That keeps the *measurement* contention-free without serialising the build.
+$wantsNoRun = ($Extra -match '(^|\s)--no-run(\s|$)')
+
+# Step 1: build unpinned (full machine). Always safe; if up-to-date it's a no-op.
+$build = @('bench', '--features', $feat, '--bench', $Bench, '--no-run')
+Write-Host "[pin_run] (unpinned build) cargo $($build -join ' ')"
+$bp = Start-Process -FilePath cargo -ArgumentList $build -PassThru -NoNewWindow -Wait
+if ($bp.ExitCode -ne 0) { exit $bp.ExitCode }
+if ($wantsNoRun) { exit 0 }   # caller only wanted the compile
+
+# Step 2: run pinned (the cached exe inherits the single-core affinity).
+$a = @('bench', '--features', $feat, '--bench', $Bench)
+if ($Extra -ne "") { $a += ($Extra -split ' ') }
+Write-Host "[pin_run] (pinned run) cargo $($a -join ' ')  (affinity mask $affinity)"
 $p = Start-Process -FilePath cargo -ArgumentList $a -PassThru -NoNewWindow
-# Affinity is set just after launch; the measured bench binary is spawned later (post-compile),
-# so it inherits the pin. For a fully-quiet compile too, run with -Extra "--no-run" first (unpinned-ish).
 $p.ProcessorAffinity = [IntPtr]$affinity
 $p.WaitForExit()
 if ($null -eq $p.ExitCode) { exit 0 } else { exit $p.ExitCode }

@@ -4,12 +4,10 @@
 //! Worked example for the `ab_microbench` N-way comparison API.
 //!
 //! Decision being modelled: the multiply policy
-//! (`src/int/policy/mul.rs`) must choose, per storage width, between the
-//! schoolbook kernel and the non-allocating Karatsuba kernel. The settled
-//! crossover lives in `KARATSUBA_THRESHOLD_U64`; this bench is the fast
-//! pre-check a future agent runs to sanity-check (or re-derive) which of the
-//! registered algorithm arms should win at a given width BEFORE paying for
-//! the full crossover sweep in `int_ops_micro`/`mul_div_candidates`.
+//! (`src/int/policy/mul.rs`) must choose, per operand length, between the
+//! schoolbook kernel and the non-allocating Karatsuba kernel. The crossover
+//! lives in `KARATSUBA_THRESHOLD`; this bench ranks the registered algorithm
+//! arms at a given width to confirm or re-derive it.
 //!
 //! Two registered algorithm arms (both exported via
 //! `decimal_scaled::__bench_internals`, hence `bench-alt`):
