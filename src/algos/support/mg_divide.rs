@@ -318,19 +318,22 @@ pub(crate) fn div_pow10_mag_u128(
 
 // ── Fixed u64 scratch sizing for the single-Knuth `÷10^w` core ────────
 //
-// The widest work integer the chain serves is `Int<256>` (D1232's
-// exp/powf work-width): `MAX_U128_LIMB = 4·MAX_WORK_N` u128 limbs, so the
-// numerator magnitude is at most `2·MAX_U128_LIMB` u64 limbs. The divisor
-// `10^w` for a working scale `w` occupies `≈ w·log2(10)/64` u64 limbs;
-// `MAX_POW10_U64` covers `w` past 2000 (D1232's band tops out near 1300).
-// All scratch is fixed-size stack — `no_std`, no heap.
+// All sizing is DERIVED from the one width axis (`MAX_U128_LIMB`), never a
+// magic literal: the widest work integer the chain serves has at most
+// `MAX_U128_LIMB` u128 limbs, i.e. `2·MAX_U128_LIMB` u64 limbs of magnitude.
+// The `÷10^w` divisor `10^w` is the rescale factor WITHIN that work width,
+// so it is bounded by the same magnitude — it can never exceed the
+// numerator buffer. Reuse that exact width-axis size rather than guessing a
+// scale ceiling. All scratch is fixed-size stack — `no_std`, no heap.
 
 /// Max `u64` limbs for the numerator / quotient magnitude buffers — twice
-/// the widest u128 magnitude.
+/// the widest u128 magnitude (the one width axis).
 const MAX_MAG_U64_KNUTH: usize =
     2 * crate::int::types::compute_int::MAX_U128_LIMB;
-/// Max `u64` limbs for the `10^w` divisor buffer.
-const MAX_POW10_U64: usize = 128;
+/// Max `u64` limbs for the `10^w` divisor buffer. `10^w` is the rescale
+/// factor within the work width, so it is bounded by the magnitude buffer —
+/// derive from the same axis, no empirical scale-ceiling literal.
+const MAX_POW10_U64: usize = MAX_MAG_U64_KNUTH;
 
 /// Build `10^w` as a little-endian `u64` magnitude into `out`, returning
 /// its effective (leading-zero-stripped) limb count. Repeated `×10` —
