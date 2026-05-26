@@ -109,12 +109,29 @@ impl PrecisionSubject for DecimalScaledSubject {
         // canonical scale is the default. Narrow tiers have a single cell, so
         // their canonical scale is implicit.
         match width {
+            // Narrow + mid tiers: the canonical (S/2) scale plus the two band
+            // edges {0, capacity-1 = MAX_SCALE}. Each band-edge cell picks the
+            // matching const-generic `D###<SCALE>` type (same storage `Int<N>`).
+            Width::D18 if scale == 0 => eval_typed!(D18<0>, decimal_scaled::Int<1>, method, input, mode),
+            Width::D18 if scale == 17 => eval_typed!(D18<17>, decimal_scaled::Int<1>, method, input, mode),
             Width::D18 => eval_typed!(D18<9>, decimal_scaled::Int<1>, method, input, mode),
+            Width::D38 if scale == 0 => eval_typed!(D38<0>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 37 => eval_typed!(D38<37>, decimal_scaled::Int<2>, method, input, mode),
             Width::D38 => eval_typed!(D38<19>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D57 if scale == 0 => eval_typed!(D57<0>, Int<3>, method, input, mode),
+            Width::D57 if scale == 56 => eval_typed!(D57<56>, Int<3>, method, input, mode),
             Width::D57 => eval_typed!(D57<28>, Int<3>, method, input, mode),
+            Width::D76 if scale == 0 => eval_typed!(D76<0>, Int<4>, method, input, mode),
+            Width::D76 if scale == 75 => eval_typed!(D76<75>, Int<4>, method, input, mode),
             Width::D76 => eval_typed!(D76<35>, Int<4>, method, input, mode),
+            Width::D115 if scale == 0 => eval_typed!(D115<0>, Int<6>, method, input, mode),
+            Width::D115 if scale == 114 => eval_typed!(D115<114>, Int<6>, method, input, mode),
             Width::D115 => eval_typed!(D115<57>, Int<6>, method, input, mode),
+            Width::D153 if scale == 0 => eval_typed!(D153<0>, Int<8>, method, input, mode),
+            Width::D153 if scale == 152 => eval_typed!(D153<152>, Int<8>, method, input, mode),
             Width::D153 => eval_typed!(D153<76>, Int<8>, method, input, mode),
+            Width::D230 if scale == 0 => eval_typed!(D230<0>, Int<12>, method, input, mode),
+            Width::D230 if scale == 229 => eval_typed!(D230<229>, Int<12>, method, input, mode),
             Width::D230 => eval_typed!(D230<115>, Int<12>, method, input, mode),
             Width::D307 if scale == 0 => eval_typed!(D307<0>, Int<16>, method, input, mode),
             Width::D307 if scale == 30 => eval_typed!(D307<30>, Int<16>, method, input, mode),

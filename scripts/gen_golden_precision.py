@@ -170,6 +170,32 @@ TIERS = [
     ("d616",  616,  308, 36),
     ("d924",  924,  460, 24),
     ("d1232", 1232, 615, 20),
+    # Band-edge {0, capacity-1} cells for the narrow + mid tiers. The
+    # canonical entries above sit at each tier's design SCALE (~capacity/2 =
+    # the S/2 band middle); these add the two SCALE extremes so every
+    # (function, width) face is validity-gated across its whole SCALE range,
+    # not just the middle. SCALE 0 is the integer regime (x is an exact
+    # integer, the result fills the tier's whole integer capacity for the
+    # exponential growers); SCALE = capacity-1 is MAX_SCALE, the near-
+    # overflow / deep-underflow edge where rounding guards (overflow clamp,
+    # underflow Ceiling, rescale boundaries) are most likely to surface.
+    # The x-wide / xx-wide tiers (d307..d1232) already carry their {0, S-1}
+    # entries below (added for the exp campaign; the full-func run now fills
+    # every function at those cells too).
+    ("d18",   18,   0,   180),
+    ("d18",   18,   17,  180),
+    ("d38",   38,   0,   160),
+    ("d38",   38,   37,  160),
+    ("d57",   57,   0,   140),
+    ("d57",   57,   56,  140),
+    ("d76",   76,   0,   120),
+    ("d76",   76,   75,  120),
+    ("d115",  115,  0,   100),
+    ("d115",  115,  114, 100),
+    ("d153",  153,  0,   90),
+    ("d153",  153,  152, 90),
+    ("d230",  230,  0,   70),
+    ("d230",  230,  229, 70),
     # Low-scale (SCALE 30) cells for the wide tiers — the bench-branch-compare
     # exp regime, where the exp policy routes a Tang rectangle. The default
     # per-tier entries above sit at each tier's design SCALE (the Tang
@@ -541,6 +567,14 @@ def safe_call(oracle: Callable[[mpf], mpf], x: mpf) -> mpf | None:
     # returns the real branch (cbrt — wrapped above). If we still get
     # a complex result here, drop the input.
     if isinstance(y, mpc):
+        return None
+    # Non-finite oracle outputs (overflow to ±inf, or nan) are not
+    # representable and must not reach `floor_and_class` (which raises on
+    # int(inf)). At SCALE 0 the representable input range is wide enough that
+    # exp/sinh/cosh of a large integer overflows the working precision to
+    # +inf; drop those (the just-fits boundary is still pinned by
+    # `overflow_edge_inputs`, which bisects to a finite result).
+    if not mp.isfinite(y):
         return None
     return y
 
@@ -1034,7 +1068,14 @@ def saturation_inputs(func_name: str, scale: int, max_raw: int) -> list[int]:
     # are probed.
     for c in (1, 2, 5, 10):
         target = mpf(1) - mpf(c) / (mpf(10) ** scale)
+        # At SCALE 0 the grid step `c/10^scale = c` pushes the target to <= 0,
+        # where atanh is no longer the near-1 saturation probe (and atanh(<=-1)
+        # is non-finite / out of domain). Skip any non-finite atanh result.
+        if not (mpf(-1) < target < mpf(1)):
+            continue
         x = atanh(target)
+        if not mp.isfinite(x):
+            continue
         raw = int(mp.floor(x * one))
         for r in (raw, raw + 1, raw + 2):
             if 0 < r <= max_raw:
@@ -1136,6 +1177,8 @@ def safe_call_two(oracle: Callable[[mpf, mpf], mpf], a: mpf, b: mpf) -> mpf | No
     except (ValueError, ZeroDivisionError, OverflowError, ArithmeticError):
         return None
     if isinstance(y, mpc):
+        return None
+    if not mp.isfinite(y):
         return None
     return y
 
