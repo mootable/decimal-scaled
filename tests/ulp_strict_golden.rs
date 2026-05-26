@@ -1124,7 +1124,6 @@ mod band_edges {
             check_at_scale("exp", Width::D57, 0, include_str!("golden/exp_d57_s0.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp D57 s56 mode Ceiling input=-1 (exp(-1e-56) just below 1) value=0.99..9 oracle=1.0..0 delta=1 LSB — underflow Ceiling at MAX scale; needs kernel fix"]
         fn d57_exp_s56() {
             check_at_scale("exp", Width::D57, 56, include_str!("golden/exp_d57_s56.txt"));
         }
