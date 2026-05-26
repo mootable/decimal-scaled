@@ -25,9 +25,10 @@
 //! # Algorithm (cleanroom — from the paper, no GPL/LGPL source)
 //!
 //! Paul Zimmermann, *Karatsuba Square Root*, INRIA Research Report RR-3805
-//! (1999), Algorithm 1 (`SqrtRem`). Given `n` in base `B`, written
-//! `n = a₃·B³ + a₂·B² + a₁·B + a₀` with the top block normalized
-//! (`a₃ ≥ B/4`, i.e. the two most-significant bits of `n` set):
+//! (1999), Algorithm 1 (`SqrtRem`); also Brent & Zimmermann, *Modern
+//! Computer Arithmetic* (Cambridge UP, 2010), Algorithm 1.13. Given `n` in
+//! base `B`, written `n = a₃·B³ + a₂·B² + a₁·B + a₀` with the top block
+//! normalized (`a₃ ≥ B/4`):
 //!
 //! ```text
 //!   (s', r')  = SqrtRem(a₃·B + a₂)          # recurse on the high half
@@ -38,18 +39,29 @@
 //!   return (s, r)                            # s = ⌊√n⌋, r = n − s²
 //! ```
 //!
-//! Correctness (paper, Theorem 1): the returned `s = ⌊√n⌋` exactly, with
-//! remainder `r = n − s²` and `0 ≤ r ≤ 2s`. The normalization guarantee that
-//! the input's top two bits are set is what bounds the quotient `q < B` and
-//! limits the post-correction to a single step. Here the recursion bottoms
-//! out (below a small limb threshold) on the shipped exact Newton kernel —
-//! the recursion only has to *reduce the width*, so the base case can be any
-//! exact `⌊√·⌋`; its remainder is recovered as `n − s²`.
+//! Correctness (paper, Theorem 1): `s = ⌊√n⌋` exactly, with `r = n − s²` and
+//! `0 ≤ r ≤ 2s`. The premise that makes the quotient `q ≤ B` and bounds the
+//! correction to a single step is the normalization `a₃ ≥ B/4` — and it must
+//! hold at **every** recursion level, not just the top.
 //!
-//! This implementation works with a base `B = 2^(64·h)` (`h` a half-limb
-//! count), normalizes by an **even** left shift `2·sh` (so
-//! `√(n·4^{sh}) = √n · 2^{sh}` recovers the root by a `>> sh`), and is
-//! width-agnostic.
+//! ## Keeping `a₃ ≥ B/4` at every level — the power-of-two window
+//!
+//! A naive split with `h = ⌈len/4⌉` blocks, normalized only within the top
+//! `u64` limb, is WRONG for `len ∉ {4,7,8,9,…}`: the most-significant limb
+//! lands in `a₂` (so `a₃ = 0 < B/4`), the quotient overshoots by ≈`B`, the
+//! remainder goes to ≈`−q²`, and the single correction becomes a
+//! `~2^{bits/2}`-iteration loop (a hang).
+//!
+//! This implementation instead normalizes into a **power-of-two limb
+//! window** `w = next_pow2(sig_len)`: it left-shifts `n` by an **even** bit
+//! amount so its most-significant bit lands in the top two bits of limb
+//! `w−1` (recovering the root by `>> shift/2`, since `√(n·2^e) = √n·2^{e/2}`
+//! for even `e`). Then `h = w/4` is exact, the high half `a₃·B + a₂` is
+//! exactly `w/2` limbs (also a power of two) and inherits the top limb — so
+//! it stays normalized — and the recursion halves cleanly with NO
+//! re-normalization. `a₃ ≥ B/4` therefore holds at every level, `q ≤ B`, and
+//! the correction is the paper's single step (a small bounded loop guards
+//! against any residual, per the defense-in-depth recursion rule).
 //!
 //! # Properties
 //!
@@ -66,20 +78,19 @@
 
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
-use crate::int::algos::support::limbs::{
-    add_assign, bit_len, cmp, shl, shr, sub_assign,
-};
+use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, shl, shr, sub_assign};
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 use crate::int::types::compute_int::MAX_DOUBLE_LIMBS;
 
 /// Scratch capacity — the double-N budget shared with the shipped Newton
-/// `isqrt` (radicand ≤ 2N). Sized like the sibling kernel's `SCRATCH_LIMBS`.
+/// `isqrt` (radicand ≤ 2N). The normalized window `w = next_pow2(sig) ≤
+/// 2·sig` and every intermediate (`num`, `q²`, `s`, `r`) stays within it.
 const SCRATCH_LIMBS: usize = MAX_DOUBLE_LIMBS;
 
-/// Below this many *significant* limbs, the recursion bottoms out on the
-/// shipped exact Newton kernel rather than splitting further. Keeps the
-/// recursion shallow and lets the (already-fast, f64-seeded) Newton kernel
-/// own the small-width regime where it wins.
+/// Below this many *significant* limbs the kernel hands straight to the
+/// shipped exact Newton root: the recursion needs a power-of-two window of
+/// at least 4 limbs to split into four blocks, and Newton already owns the
+/// small-width regime where it wins.
 const BASE_LIMBS: usize = 2;
 
 /// `out = floor(sqrt(n))`, computed by the Karatsuba Square Root recursion.
@@ -101,41 +112,50 @@ pub(crate) fn isqrt_karatsuba(n: &[u64], out: &mut [u64]) {
         return;
     }
 
-    // ── normalize: even left shift so the top two bits of the top limb are
-    // set. Shifting by an even amount `2·sh` scales n by 4^sh, so
-    // √(n·4^sh) = √n · 2^sh and the root is recovered by `>> sh`. ──────────
     let sig = sig_len(n);
-    let top = n[sig - 1];
-    let lz = top.leading_zeros(); // 0..=63
-    // We want the top limb's top two bits set: shift left by `lz` aligns the
-    // leading 1 to bit 63; one more bit may be needed but `lz` (rounded to
-    // even, and ensuring ≥ 2 leading bits) suffices for the paper's bound.
-    // Use the largest even shift ≤ lz that leaves the top two bits set:
-    // shifting by `lz` sets the top bit; the paper needs the top *two* bits,
-    // so we shift by `lz & !1` when that keeps ≥1 spare, else handle via the
-    // recursion's own correction. To stay safe + exact we normalize to the
-    // top bit (shift = lz rounded DOWN to even) and rely on `sqrtrem`'s
-    // internal guards (it does not actually require the 2nd bit for
-    // correctness — only for the tighter single-correction bound, and we
-    // loop the correction).
-    let sh_bits = lz & !1u32; // even
-    let norm_limbs = (sig + 2).min(SCRATCH_LIMBS); // room for the shift
-    let mut nn = [0u64; SCRATCH_LIMBS];
-    shl(&n[..sig], sh_bits, &mut nn[..norm_limbs]);
-    let nn_len = sig_len(&nn[..norm_limbs]);
 
-    // ── recurse ───────────────────────────────────────────────────────────
+    // ── small widths: the shipped exact Newton kernel owns them ───────────
+    if sig <= BASE_LIMBS {
+        isqrt_newton(&n[..sig], out);
+        return;
+    }
+
+    // ── normalize into a power-of-two limb window ─────────────────────────
+    // `w` = next power of two ≥ sig. Left-shift n by an EVEN bit amount so
+    // its MSB lands in the top two bits of limb `w−1` (⇒ a₃ ≥ B/4 at every
+    // recursion level). Even shift `e` ⇒ √(n·2^e) = √n·2^{e/2}, so the root
+    // is recovered by `>> e/2`.
+    let w = next_pow2_limbs(sig);
+    debug_assert!(w <= SCRATCH_LIMBS, "isqrt_karatsuba window exceeds scratch");
+    let sh = (w as u32) * 64 - bits; // ≥ 0: w ≥ sig ⇒ w·64 ≥ bits
+    let sh_even = sh & !1u32;
+
+    let mut nn = [0u64; SCRATCH_LIMBS];
+    shl(&n[..sig], sh_even, &mut nn[..w]);
+
+    // ── recurse on the normalized window ──────────────────────────────────
     let mut s = [0u64; SCRATCH_LIMBS];
     let mut r = [0u64; SCRATCH_LIMBS];
-    sqrtrem(&nn[..nn_len], &mut s, &mut r);
+    sqrtrem(&nn[..w], &mut s, &mut r);
 
-    // ── de-normalize the root: s_real = s >> (sh_bits/2) ───────────────────
+    // ── de-normalize: s_real = s >> (sh_even/2) ───────────────────────────
+    let s_len = sig_len(&s[..SCRATCH_LIMBS]);
     let mut s_out = [0u64; SCRATCH_LIMBS];
-    let s_len = sig_len(&s[..SCRATCH_LIMBS]).max(1);
-    shr(&s[..s_len], sh_bits / 2, &mut s_out[..s_len]);
+    shr(&s[..s_len], sh_even / 2, &mut s_out[..s_len]);
 
     let copy_len = out.len().min(s_len);
     out[..copy_len].copy_from_slice(&s_out[..copy_len]);
+}
+
+/// Smallest power-of-two limb count `≥ x`, at least 4 (the four-block split
+/// needs a window divisible by 4, and the recursion bottoms out at 2).
+#[inline]
+fn next_pow2_limbs(x: usize) -> usize {
+    let mut w = 4usize;
+    while w < x {
+        w <<= 1;
+    }
+    w
 }
 
 /// Significant limb count of `a` (index of the highest non-zero limb + 1),
@@ -153,11 +173,11 @@ fn sig_len(a: &[u64]) -> usize {
 }
 
 /// `(s, r) = SqrtRem(n)`: `s = ⌊√n⌋`, `r = n − s²` with `0 ≤ r ≤ 2s`.
-/// `n` must be non-zero with its top limb non-zero. `s`/`r` are zeroed,
-/// then written.
 ///
-/// Recursive Karatsuba Square Root (RR-3805 Algorithm 1). Base case: the
-/// shipped exact Newton kernel, with the remainder recovered as `n − s²`.
+/// `n.len()` is a power of two and `n` is normalized (its MSB in the top two
+/// bits of the top limb). `s`/`r` are zeroed then written. Recursive
+/// Karatsuba Square Root (RR-3805 Algorithm 1); base case = the shipped
+/// exact Newton kernel with the remainder recovered as `n − s²`.
 fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
     for v in s.iter_mut() {
         *v = 0;
@@ -165,76 +185,66 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
     for v in r.iter_mut() {
         *v = 0;
     }
-    let len = sig_len(n);
+    let w = n.len();
 
-    // ── base case: exact Newton root + remainder n − s² ─────────────────
-    if len <= BASE_LIMBS {
-        isqrt_newton(&n[..len], &mut s[..len]);
-        let s_len = sig_len(&s[..len]);
-        // r = n − s²
+    // ── base case: exact Newton root + remainder n − s² ───────────────────
+    if w <= BASE_LIMBS {
+        isqrt_newton(n, &mut s[..w]);
+        let s_len = sig_len(&s[..w]);
         let mut sq = [0u64; SCRATCH_LIMBS];
         let sq_len = (2 * s_len).min(SCRATCH_LIMBS);
         mul_schoolbook(&s[..s_len], &s[..s_len], &mut sq[..sq_len]);
-        // r = n − sq  (n ≥ sq by definition of floor root)
-        let rl = len.max(sq_len);
-        r[..len].copy_from_slice(&n[..len]);
-        sub_assign(&mut r[..rl], &sq[..sq_len.min(rl)]);
+        // r = n − s²  (n ≥ s² by definition of the floor root).
+        r[..w].copy_from_slice(n);
+        sub_assign(&mut r[..w], &sq[..sq_len.min(w)]);
         return;
     }
 
-    // ── split n into four blocks of `h` limbs: n = a3·B³+a2·B²+a1·B+a0 ───
-    // B = 2^(64·h). Choose h = ceil(len/4) so the high half (a3·B+a2) has
-    // ≤ 2h limbs and is strictly narrower than n → the recursion shrinks.
-    let h = len.div_ceil(4);
-    let block = |idx: usize| -> &[u64] {
-        let lo = idx * h;
-        if lo >= len {
-            &n[len..len] // empty
-        } else {
-            let hi = (lo + h).min(len);
-            &n[lo..hi]
-        }
-    };
-    let a0 = block(0);
-    let a1 = block(1);
-    let a3a2_lo = 2 * h; // start of the high half (a2 then a3)
-    let high = if a3a2_lo >= len { &n[len..len] } else { &n[a3a2_lo..len] };
+    // ── four equal blocks of h = w/4 limbs: n = a3·B³+a2·B²+a1·B+a0 ────────
+    // B = 2^{64·h}. high (= a3·B + a2) is the top w/2 limbs and is itself a
+    // normalized power-of-two-length number → the recursion needs no
+    // re-normalization.
+    let h = w / 4;
+    let a0 = &n[0..h];
+    let a1 = &n[h..2 * h];
+    let high = &n[2 * h..w]; // a3·B + a2, w/2 limbs
 
-    // ── (s', r') = SqrtRem(high) ─────────────────────────────────────────
+    // ── (s', r') = SqrtRem(high) ──────────────────────────────────────────
     let mut sp = [0u64; SCRATCH_LIMBS];
     let mut rp = [0u64; SCRATCH_LIMBS];
     sqrtrem(high, &mut sp, &mut rp);
     let sp_len = sig_len(&sp[..SCRATCH_LIMBS]);
     let rp_len = sig_len(&rp[..SCRATCH_LIMBS]);
 
-    // ── (q, u) = DivRem(r'·B + a1, 2·s') ─────────────────────────────────
-    // numerator = r'·B + a1  (r' shifted up by h limbs, a1 in the low h)
+    // ── (q, u) = DivRem(r'·B + a1, 2·s') ──────────────────────────────────
+    // numerator = r'·B + a1  (r' at limb offset h, a1 in the low h).
     let mut num = [0u64; SCRATCH_LIMBS];
-    let num_len = (rp_len + h + 1).min(SCRATCH_LIMBS);
-    // place r' at limb offset h
     for (i, &v) in rp[..rp_len].iter().enumerate() {
         if h + i < SCRATCH_LIMBS {
             num[h + i] = v;
         }
     }
-    // add a1 into the low h limbs
-    add_assign(&mut num[..num_len], a1);
+    add_assign(&mut num, a1);
+    let num_len = sig_len(&num[..SCRATCH_LIMBS]);
 
     // divisor = 2·s'
     let mut den = [0u64; SCRATCH_LIMBS];
-    let den_len = (sp_len + 1).min(SCRATCH_LIMBS);
-    shl(&sp[..sp_len], 1, &mut den[..den_len]);
-    let den_sig = sig_len(&den[..den_len]);
+    shl(&sp[..sp_len], 1, &mut den[..sp_len + 1]);
+    let den_len = sig_len(&den[..SCRATCH_LIMBS]);
 
     let mut q = [0u64; SCRATCH_LIMBS];
     let mut u = [0u64; SCRATCH_LIMBS];
-    let qrlen = num_len.max(den_sig);
-    div_rem_dispatch(&num[..num_len], &den[..den_sig], &mut q[..qrlen], &mut u[..qrlen]);
+    let qrlen = num_len.max(den_len);
+    div_rem_dispatch(
+        &num[..num_len],
+        &den[..den_len],
+        &mut q[..qrlen],
+        &mut u[..qrlen],
+    );
     let q_len = sig_len(&q[..qrlen]);
     let u_len = sig_len(&u[..qrlen]);
 
-    // ── s = s'·B + q ─────────────────────────────────────────────────────
-    // s' at limb offset h, q in the low limbs.
+    // ── s = s'·B + q  (s' at offset h, q low; add_assign folds any carry) ──
     for (i, &v) in sp[..sp_len].iter().enumerate() {
         if h + i < SCRATCH_LIMBS {
             s[h + i] = v;
@@ -242,8 +252,7 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
     }
     add_assign(s, &q[..q_len]);
 
-    // ── r = u·B + a0 − q² ────────────────────────────────────────────────
-    // ub_a0 = u·B + a0
+    // ── r = u·B + a0 − q² ─────────────────────────────────────────────────
     let mut rr = [0u64; SCRATCH_LIMBS];
     for (i, &v) in u[..u_len].iter().enumerate() {
         if h + i < SCRATCH_LIMBS {
@@ -251,42 +260,50 @@ fn sqrtrem(n: &[u64], s: &mut [u64], r: &mut [u64]) {
         }
     }
     add_assign(&mut rr, a0);
-    // q² (subtract)
     let mut qsq = [0u64; SCRATCH_LIMBS];
     let qsq_len = (2 * q_len).min(SCRATCH_LIMBS);
     mul_schoolbook(&q[..q_len], &q[..q_len], &mut qsq[..qsq_len]);
 
-    // r = rr − q²; if it would go negative, apply the correction loop:
-    //   while r < 0:  r += 2·s − 1;  s −= 1
-    // (paper: at most one step under full normalization; we loop to stay
-    // correct without requiring the 2nd normalized bit.)
     let one = [1u64];
     if cmp(&rr[..SCRATCH_LIMBS], &qsq[..qsq_len]) >= 0 {
         sub_assign(&mut rr, &qsq[..qsq_len]);
         r[..SCRATCH_LIMBS].copy_from_slice(&rr[..SCRATCH_LIMBS]);
     } else {
-        // deficit = q² − rr  (positive). Then repeatedly add (2·s − 1).
+        // r = rr − q² < 0. deficit = q² − rr (> 0). Apply the paper's
+        // correction `r += 2s − 1; s −= 1` until r ≥ 0.
         let mut deficit = [0u64; SCRATCH_LIMBS];
         deficit[..qsq_len].copy_from_slice(&qsq[..qsq_len]);
         sub_assign(&mut deficit, &rr[..SCRATCH_LIMBS]);
-        // r currently conceptually = −deficit; bring it ≥ 0.
+        // Under correct normalization (a3 ≥ B/4) this is a SINGLE step; the
+        // bound far above that turns any residual logic error into an
+        // instant located panic instead of a silent hang (defense-in-depth
+        // recursion rule). See the module docs.
+        let mut guard = 0usize;
         loop {
-            // twos_minus_1 = 2·s − 1
+            guard += 1;
+            debug_assert!(
+                guard <= 8,
+                "isqrt_karatsuba correction exceeded bound (guard={guard}); \
+                 normalization broken — deficit={:?} s={:?}",
+                &deficit[..SCRATCH_LIMBS.min(8)],
+                &s[..SCRATCH_LIMBS.min(8)],
+            );
+            // tm = 2·s − 1 (uses the current s).
             let mut tm = [0u64; SCRATCH_LIMBS];
-            shl(s, 1, &mut tm); // 2·s  (s has < SCRATCH_LIMBS-1 sig limbs)
+            shl(s, 1, &mut tm);
             sub_assign(&mut tm, &one);
-            // s −= 1
-            sub_assign(s, &one);
-            // If deficit ≤ tm, then r = tm − deficit ≥ 0 → done.
             if cmp(&deficit[..SCRATCH_LIMBS], &tm[..SCRATCH_LIMBS]) <= 0 {
+                // r += 2s − 1 makes it ≥ 0: r = tm − deficit. Then s −= 1.
                 let mut rfinal = [0u64; SCRATCH_LIMBS];
-                rfinal[..SCRATCH_LIMBS].copy_from_slice(&tm[..SCRATCH_LIMBS]);
+                rfinal.copy_from_slice(&tm);
                 sub_assign(&mut rfinal, &deficit[..SCRATCH_LIMBS]);
+                sub_assign(s, &one);
                 r[..SCRATCH_LIMBS].copy_from_slice(&rfinal[..SCRATCH_LIMBS]);
                 break;
             }
-            // else deficit > tm: r still negative; deficit −= tm, repeat.
+            // r += 2s − 1 still < 0: deficit −= tm; s −= 1; repeat.
             sub_assign(&mut deficit, &tm[..SCRATCH_LIMBS]);
+            sub_assign(s, &one);
         }
     }
 }
@@ -382,7 +399,10 @@ mod tests {
             2u128, 3, 5, 10, 100, 1_000, 1_000_000, 1_000_000_000,
             1_000_000_000_000u128, 4_294_967_296u128, 18_446_744_073_709_551_616u128,
         ] {
-            let sq = k * k;
+            // Skip k whose square overflows u128 (e.g. k = 2^64): the edge
+            // probe needs k² to fit; k = 2^64 is covered by the boundary
+            // list below (1u128 << 64) instead.
+            let Some(sq) = k.checked_mul(k) else { continue };
             for &n in &[sq - 1, sq, sq + 1] {
                 assert_eq!(kara_u128(n), newton_u128(n), "u128 sq-edge mismatch n={n}");
             }
@@ -399,6 +419,11 @@ mod tests {
         }
     }
 
+    // Multi-limb operands (window up to 32 limbs) need the wide-tier scratch
+    // budget (`SCRATCH_LIMBS = MAX_DOUBLE_LIMBS`, which is build-max-sized);
+    // the narrow default build sizes it for ≤2-limb tiers, where this kernel
+    // is never engaged. Gate the wide sweep to a wide build accordingly.
+    #[cfg(feature = "wide")]
     #[test]
     fn kara_matches_newton_wide_widths() {
         let mut state: u64 = 0xD1B5_4A32_D192_ED03;
@@ -424,9 +449,7 @@ mod tests {
                     "wide mismatch limbs={limbs} n={n:?}"
                 );
             }
-            // Perfect-square ±1 edges at this width: square a random base
-            // (truncated into `limbs`), compare both kernels on the same
-            // truncated operand.
+            // Perfect-square ±1 edges at this width.
             for _ in 0..10 {
                 let mut b = vec![0u64; limbs];
                 let bt = 1 + (next() as usize % limbs.div_ceil(2).max(1));
