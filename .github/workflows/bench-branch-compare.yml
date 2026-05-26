@@ -268,10 +268,16 @@ jobs:
             echo "merging $d"
             cp -a "$d/." bench-compare/target/criterion/ 2>/dev/null || true
           done
+          # List once to a file, then sample/count from the file. Piping
+          # `ls` straight into `head` makes `ls` race a closed pipe once
+          # head has its 40 lines -> SIGPIPE -> "write error: Broken pipe"
+          # -> non-zero -> `set -o pipefail` aborts the whole job. Reading
+          # head/wc from a file sidesteps the pipe entirely.
+          ls -1 bench-compare/target/criterion > /tmp/bbc_groups.txt
           echo "--- merged group dirs (sample) ---"
-          ls -1 bench-compare/target/criterion | head -40
+          head -40 /tmp/bbc_groups.txt
           echo "--- group count ---"
-          ls -1 bench-compare/target/criterion | wc -l
+          wc -l < /tmp/bbc_groups.txt
 
       - name: Collate -> worst-first regression table (+ tsv + md)
         working-directory: bench-compare
