@@ -56,23 +56,44 @@ impl Algorithm {
     /// time and this is read per-arm (still value-independent).
     ///
     /// **`LowLimb`** (benched `benches/micro/mul_low_u128_ab.rs`, `u128` vs
-    /// `u64` truncated-low schoolbook). `u128` wins at every even width
-    /// measured, decisively at the three live work-integer widths every
-    /// [`BigInt::wrapping_mul_low_u128`] call lands on (the wide-tier
-    /// exp/powf Taylor multiply runs there):
+    /// `u64` truncated-low schoolbook, full even-width sweep N=2..256, four
+    /// pinned runs core 22, low/mid/high seeded operands). The crossover sits
+    /// at the **narrow** end: even N ≥ 10 favours `u128`, decisively from
+    /// N=16 up; the tiny even cells (N ≤ 8) are at the bench resolution floor
+    /// (±3%) and lean marginally `u64`. Median per-N verdict (`+` = `u128`
+    /// faster, `−` = `u64` faster; the cost-dominant cells are bold):
     ///
-    /// | N (work integer) | `u128` vs `u64` |
-    /// |------------------|-----------------|
-    /// | 128 (D616 work)  | 1.20× faster    |
-    /// | 192 (D924 work)  | 1.35× faster    |
-    /// | 256 (D1232 work) | 1.29× faster    |
-    /// | 48 / 64 (storage, not call sites) | 1.16× faster |
-    /// | 32 (storage, not a call site)     | 1.04× (tie)  |
+    /// | N        | `u128` vs `u64` | live `wrapping_mul_low_u128` call site? |
+    /// |----------|-----------------|-----------------------------------------|
+    /// | 2        | ~1.00× (tie)    | no                                      |
+    /// | 4        | −1.03× (u64)    | no                                      |
+    /// | 6        | −1.02× (u64)    | no                                      |
+    /// | 8        | −1.02× (u64)    | **yes** — D57/D76 `W`                   |
+    /// | 10       | +1.28× (u128)   | no                                      |
+    /// | 12       | ~1.01× (tie)    | no                                      |
+    /// | 14       | +1.06× (u128)   | no                                      |
+    /// | **16**   | **+1.20× (u128)** | **yes** — D57/D76 `Wexp`, D115/D153 `W` |
+    /// | 24       | +1.25× (u128)   | no (D462 storage)                       |
+    /// | **32**   | **+1.30× (u128)** | **yes** — D115/D153 `Wexp`, D307 `W`   |
+    /// | 48       | +1.30× (u128)   | no (D924 storage)                       |
+    /// | **64**   | **+1.40× (u128)** | **yes** — D307 `Wexp`, D462 `W`        |
+    /// | **96**   | **+1.64× (u128)** | **yes** — D230 `Wexp`, D924 `W`        |
+    /// | **128**  | **+1.40× (u128)** | **yes** — D462 `Wexp`, D616 `W`        |
+    /// | **192**  | **+1.30× (u128)** | **yes** — D924 `W`                     |
+    /// | **256**  | **+1.36× (u128)** | **yes** — D616/D924/D1232 `Wexp`       |
     ///
-    /// So `U128` for every even `N` is the measured optimum — no even cell
-    /// regresses. This is the tuning seam: if a future bench shows `u128`
-    /// losing at some even cell, carve that `N` out to `U64` in THIS arm —
-    /// the kernel and dispatch stay untouched.
+    /// Every LIVE call site is an even `N ≥ 8` (the narrow D18/D38 tiers take a
+    /// hand-tuned path, never this kernel), and `u128` wins at every live cell
+    /// from N=16 up — exactly the cost-dominant wide cells the wide-exp/powf
+    /// recovery targets. The single live cell with a `u64` lean is N=8, and its
+    /// −1.02× margin is inside the resolution floor (the N ≤ 8 cells flip sign
+    /// run-to-run); carving it to `U64` would buy nothing measurable while
+    /// adding a dead-cell-driven special case. So `U128` for every even `N`
+    /// ([`LimbSize::for_packing`]) remains the measured optimum across the full
+    /// width set — no cost-dominant cell regresses. This is the tuning seam: if
+    /// a future bench shows `u128` losing meaningfully at some even cell, carve
+    /// that `N` out to `U64` in THIS arm — the kernel and dispatch stay
+    /// untouched.
     ///
     /// [`BigInt::wrapping_mul_low_u128`]: crate::int::types::traits::BigInt::wrapping_mul_low_u128
     #[inline]

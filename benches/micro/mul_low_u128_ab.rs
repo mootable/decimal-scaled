@@ -90,16 +90,28 @@ fn compare_width<const N: usize>(c: &mut Criterion, width_label: &str) {
     );
 }
 
-/// Bench the even widths the wide exp/powf Taylor multiply touches: the
-/// guard-digit work integers and the storage widths (N=64 is both a D307 work
-/// integer and D1232 storage).
+/// Bench the full even-width set: every even storage tier (N=2..64) plus the
+/// guard-digit work integers (96/128/192/256) the wide exp/powf Taylor multiply
+/// touches. Coarse-samples the whole even axis to localize the u64↔u128
+/// crossover (truncated-low = ~half the work of the full mul, so its crossover
+/// may differ from the full `mul` mapper's N=16 boundary).
 fn bench_mul_low(c: &mut Criterion) {
-    compare_width::<128>(c, "Int128");
-    compare_width::<192>(c, "Int192");
-    compare_width::<256>(c, "Int256");
+    compare_width::<2>(c, "Int02");
+    compare_width::<4>(c, "Int04");
+    compare_width::<6>(c, "Int06");
+    compare_width::<8>(c, "Int08");
+    compare_width::<10>(c, "Int10");
+    compare_width::<12>(c, "Int12");
+    compare_width::<14>(c, "Int14");
+    compare_width::<16>(c, "Int16");
+    compare_width::<24>(c, "Int24");
     compare_width::<32>(c, "Int32");
     compare_width::<48>(c, "Int48");
     compare_width::<64>(c, "Int64");
+    compare_width::<96>(c, "Int96");
+    compare_width::<128>(c, "Int128");
+    compare_width::<192>(c, "Int192");
+    compare_width::<256>(c, "Int256");
 }
 
 fn main() {
