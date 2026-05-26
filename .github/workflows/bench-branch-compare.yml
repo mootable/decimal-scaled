@@ -59,7 +59,7 @@ jobs:
     timeout-minutes: 45
     steps:
       - name: Checkout (${{ inputs.ref || github.ref_name }})
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -70,7 +70,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
 
       - name: Cache cargo registry + git
-        uses: actions/cache@27d5ce7f107fe9357f9df03efb73ab90386fccae # v5
+        uses: actions/cache@v5
         with:
           path: |
             ~/.cargo/registry
@@ -115,7 +115,7 @@ jobs:
           echo "--- staged ---"; ls -1 staged/deps/
 
       - name: Upload compiled bench exes
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@v7
         with:
           name: bbc-compiled
           path: bench-compare/staged/
@@ -191,7 +191,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libfontconfig1
 
       - name: Download compiled bench exes
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@v4
         with:
           name: bbc-compiled
           path: bbc-compiled
@@ -217,7 +217,7 @@ jobs:
 
       - name: Upload cell criterion subtree
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@v7
         with:
           name: bbc-${{ matrix.width }}-s${{ matrix.scale }}
           path: target/criterion/
@@ -236,7 +236,7 @@ jobs:
     timeout-minutes: 15
     steps:
       - name: Checkout (for summarise.py)
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6
+        uses: actions/checkout@v6
         with:
           ref: ${{ inputs.ref || github.ref }}
 
@@ -247,7 +247,7 @@ jobs:
           echo "PROD_VERSION=$LATEST" >> "$GITHUB_ENV"
 
       - name: Download every (width, scale) bench cell
-        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        uses: actions/download-artifact@v4
         with:
           # No `name` -> every artifact this run uploaded, each into a subdir
           # named after the artifact (bbc-D18-s0/, bbc-D307-s153/, ...).
@@ -299,7 +299,7 @@ jobs:
 
       - name: Upload single aggregate artifact
         if: always()
-        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        uses: actions/upload-artifact@v7
         with:
           name: bbc-aggregate
           path: bench-compare/aggregate/
