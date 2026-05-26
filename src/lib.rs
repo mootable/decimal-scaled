@@ -668,6 +668,53 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<8> {
         crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 128, 10, true, false, true>(raw, mode)
     }
+    // D115 / D153 parameterised Tang (M/G const generics, directed +
+    // external-extra flags <true,true,false> — the production wide shape) so
+    // the wide A/B can map M/G across the full scale spread at these tiers,
+    // not just the single fixed band config above.
+    #[cfg(all(feature = "_wide-support", any(feature = "d115", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d115_p<const SCALE: u32, const M: u32, const G: u32>(
+        raw: crate::int::types::Int<6>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<6> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, M, G, true, true, false>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d153", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d153_p<const SCALE: u32, const M: u32, const G: u32>(
+        raw: crate::int::types::Int<8>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<8> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, M, G, true, true, false>(raw, mode)
+    }
+
+    // exp — D76 (Int<4>) and D230 (Int<12>): the two wide-buildable tiers
+    // that had NO A/B export (D76 has no Tang rectangle at all). Series +
+    // parameterised Tang (M/G const generics, directed + external-extra
+    // flags <true,true,false> — the production wide-tier shape, valid at the
+    // max-scale extreme) so the wide A/B (`exp_wide_series_tang_ab`) can map
+    // them across the full scale spread and assert Tang == Series (validity).
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_series_d76<const SCALE: u32>(raw: crate::int::types::Int<4>, mode: crate::RoundingMode) -> crate::int::types::Int<4> {
+        crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d76", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d76<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<4>, mode: crate::RoundingMode) -> crate::int::types::Int<4> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, M, G, true, true, false>(raw, mode)
+    }
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_series_d230<const SCALE: u32>(raw: crate::int::types::Int<12>, mode: crate::RoundingMode) -> crate::int::types::Int<12> {
+        crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d230", feature = "wide")))]
+    #[inline(never)]
+    pub fn exp_tang_d230<const SCALE: u32, const M: u32, const G: u32>(raw: crate::int::types::Int<12>, mode: crate::RoundingMode) -> crate::int::types::Int<12> {
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, M, G, true, true, false>(raw, mode)
+    }
 
     // exp — wide tiers (N = 16/24/32/48/64). Series + parameterised Tang
     // (M/G as const generics, single-shot flags <false,false,false>) so the

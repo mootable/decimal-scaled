@@ -11,6 +11,17 @@
 //! Wire a wide Tang `select`/`tang_routed` arm ONLY for a cell where a Tang
 //! candidate is BOTH bit-identical to Series AND faster here.
 //!
+//! Scale spread per tier: {0, 30, S/2, S-1} where S is the tier's design max
+//! scale. The S-1 cell is the MAX-SCALE EXTREME — previously UNTESTED, and
+//! where the bench-branch-compare regressions live (`exp_D76_s75 +1160%`,
+//! `powf_D76_s75 +838%`). D76 (Int<4>) and D230 (Int<12>) had NO A/B export
+//! at all and are added here.
+//!
+//! Tang configs probed per cell: M=128/G=30 (the production wide config),
+//! M=512/G=30 (wider table), and M=512/G=60 (wider table + wider guard — the
+//! candidate for the max-scale extreme, where the narrow guard may be too thin
+//! for single-shot correctness or the larger table amortises better).
+//!
 //! Run with:
 //! `cargo bench --features "wide x-wide xx-wide bench-alt" --bench exp_wide_series_tang_ab`
 
@@ -18,8 +29,10 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
-    exp_series_d1232, exp_series_d307, exp_series_d462, exp_series_d616, exp_series_d924,
-    exp_tang_d1232, exp_tang_d307, exp_tang_d462, exp_tang_d616, exp_tang_d924, int_from_mag_limbs,
+    exp_series_d115, exp_series_d1232, exp_series_d153, exp_series_d230, exp_series_d307,
+    exp_series_d462, exp_series_d616, exp_series_d76, exp_series_d924, exp_tang_d115_p,
+    exp_tang_d1232, exp_tang_d153_p, exp_tang_d230, exp_tang_d307, exp_tang_d462, exp_tang_d616,
+    exp_tang_d76, exp_tang_d924, int_from_mag_limbs,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -113,39 +126,67 @@ fn cell<const N: usize>(
             runs.push((label, Box::new(move |o: One<N>| tang(o.raw, MODE))));
         }
     }
+    // compare_all needs >= 2 survivors; if every Tang candidate is INVALID the
+    // cell is Series-only (report it and skip the timed run).
+    if runs.len() < 2 {
+        println!("A/B verdict [{group}]: all Tang candidates INVALID -> stays Series");
+        return;
+    }
     compare_all(c, group, |o: &One<N>| o.label.to_string(), exp_inputs::<N>(scale), runs);
 }
 
+/// One (tier, scale) cell: Series vs the three Tang configs (M=128/G=30 = the
+/// production wide config; M=512/G=30 = wider table; M=512/G=60 = wider table
+/// + wider guard, the max-scale-extreme candidate). SCALE is a literal const
+/// generic so each cell is its own monomorphisation, as the policy sees it.
+macro_rules! cell4 {
+    ($c:expr, $n:literal, $name:literal, $scale:literal, $series:ident, $tang:ident) => {
+        cell::<$n>(
+            $c,
+            concat!("exp_", $name, "_s", stringify!($scale)),
+            $scale,
+            $series::<$scale>,
+            &[
+                ("tang_m128_g30", $tang::<$scale, 128, 30>),
+                ("tang_m512_g30", $tang::<$scale, 512, 30>),
+                ("tang_m512_g60", $tang::<$scale, 512, 60>),
+            ],
+        );
+    };
+}
+
+/// Sweep a tier across {0, 30, S/2, S-1} (the four sampled scales as literals).
+macro_rules! tier {
+    ($c:expr, $n:literal, $name:literal, $series:ident, $tang:ident,
+     $s0:literal, $s1:literal, $shalf:literal, $smax1:literal) => {{
+        cell4!($c, $n, $name, $s0, $series, $tang);
+        cell4!($c, $n, $name, $s1, $series, $tang);
+        cell4!($c, $n, $name, $shalf, $series, $tang);
+        cell4!($c, $n, $name, $smax1, $series, $tang);
+    }};
+}
+
 fn benches(c: &mut Criterion) {
-    // The bbc `exp/D###` cells run at SCALE 30 (operand 0.5). For each wide
-    // tier rank Series vs Tang at M=128 and M=512 (G=30) — the production wide
-    // arms currently pin M=128, so M=512 is the open candidate. A higher
-    // representative scale per tier maps the Tang->Series crossover with width.
-    // D307 (Int<16>).
-    cell::<16>(c, "exp_d307_s30", 30, exp_series_d307::<30>,
-        &[("tang_m128", exp_tang_d307::<30, 128, 30>), ("tang_m512", exp_tang_d307::<30, 512, 30>)]);
-    cell::<16>(c, "exp_d307_s150", 150, exp_series_d307::<150>,
-        &[("tang_m128", exp_tang_d307::<150, 128, 30>), ("tang_m512", exp_tang_d307::<150, 512, 30>)]);
-    // D462 (Int<24>).
-    cell::<24>(c, "exp_d462_s30", 30, exp_series_d462::<30>,
-        &[("tang_m128", exp_tang_d462::<30, 128, 30>), ("tang_m512", exp_tang_d462::<30, 512, 30>)]);
-    cell::<24>(c, "exp_d462_s230", 230, exp_series_d462::<230>,
-        &[("tang_m128", exp_tang_d462::<230, 128, 30>), ("tang_m512", exp_tang_d462::<230, 512, 30>)]);
-    // D616 (Int<32>).
-    cell::<32>(c, "exp_d616_s30", 30, exp_series_d616::<30>,
-        &[("tang_m128", exp_tang_d616::<30, 128, 30>), ("tang_m512", exp_tang_d616::<30, 512, 30>)]);
-    cell::<32>(c, "exp_d616_s308", 308, exp_series_d616::<308>,
-        &[("tang_m128", exp_tang_d616::<308, 128, 30>), ("tang_m512", exp_tang_d616::<308, 512, 30>)]);
-    // D924 (Int<48>).
-    cell::<48>(c, "exp_d924_s30", 30, exp_series_d924::<30>,
-        &[("tang_m128", exp_tang_d924::<30, 128, 30>), ("tang_m512", exp_tang_d924::<30, 512, 30>)]);
-    cell::<48>(c, "exp_d924_s461", 461, exp_series_d924::<461>,
-        &[("tang_m128", exp_tang_d924::<461, 128, 30>), ("tang_m512", exp_tang_d924::<461, 512, 30>)]);
-    // D1232 (Int<64>).
-    cell::<64>(c, "exp_d1232_s30", 30, exp_series_d1232::<30>,
-        &[("tang_m128", exp_tang_d1232::<30, 128, 30>), ("tang_m512", exp_tang_d1232::<30, 512, 30>)]);
-    cell::<64>(c, "exp_d1232_s616", 616, exp_series_d1232::<616>,
-        &[("tang_m128", exp_tang_d1232::<616, 128, 30>), ("tang_m512", exp_tang_d1232::<616, 512, 30>)]);
+    // Per tier: scales {0, 30, S/2, S-1}. S-1 is the MAX-SCALE EXTREME.
+    // D76 (Int<4>, S=75) — NO Tang rectangle exists today; the cell the bbc
+    // `exp_D76_s75 +1160%` / `powf_D76_s75 +838%` regression lives in.
+    tier!(c, 4, "d76", exp_series_d76, exp_tang_d76, 0, 30, 37, 74);
+    // D115 (Int<6>, S=114).
+    tier!(c, 6, "d115", exp_series_d115, exp_tang_d115_p, 0, 30, 57, 113);
+    // D153 (Int<8>, S=152).
+    tier!(c, 8, "d153", exp_series_d153, exp_tang_d153_p, 0, 30, 76, 151);
+    // D230 (Int<12>, S=229) — also had no A/B export.
+    tier!(c, 12, "d230", exp_series_d230, exp_tang_d230, 0, 30, 114, 228);
+    // D307 (Int<16>, S=306).
+    tier!(c, 16, "d307", exp_series_d307, exp_tang_d307, 0, 30, 153, 305);
+    // D462 (Int<24>, S=461).
+    tier!(c, 24, "d462", exp_series_d462, exp_tang_d462, 0, 30, 230, 460);
+    // D616 (Int<32>, S=615).
+    tier!(c, 32, "d616", exp_series_d616, exp_tang_d616, 0, 30, 307, 614);
+    // D924 (Int<48>, S=923).
+    tier!(c, 48, "d924", exp_series_d924, exp_tang_d924, 0, 30, 461, 922);
+    // D1232 (Int<64>, S=1231).
+    tier!(c, 64, "d1232", exp_series_d1232, exp_tang_d1232, 0, 30, 615, 1230);
 }
 
 fn main() {

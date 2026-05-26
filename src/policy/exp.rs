@@ -47,31 +47,41 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (3, 18..=22) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d57", feature = "wide"))]
         (3, 45..=56) => Select::ByAlgorithm(Algorithm::Tang),
+        // D76 (Int<4>): the headline fix. The full width × scale A/B
+        // (`benches/micro/exp_wide_series_tang_ab.rs`) shows Tang beats the
+        // Series squaring core at every D76 scale, and at the MAX scale (s74)
+        // Series is ~28× slower — the bench-branch-compare `exp_D76_s75
+        // +1160%` / `powf_D76_s75 +838%` regression. D76 had no Tang rectangle
+        // at all. Route the whole D76 scale range through the small-`|x|` gate.
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        (4, 0..=74) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // Narrow-wide tiers (N = 6/8/12/16/24) — low-scale Tang rectangles,
+        // magnitude-gated. The width × scale A/B shows Tang beats the Series
+        // squaring core at low/mid scale (the bench-branch-compare SCALE 30
+        // regime); the crossover where Series catches up scales with width, so
+        // the rectangles widen for the narrower tiers (D115/D153/D230) and
+        // shrink for the wider ones (D307/D462, where Series already wins by
+        // S/2). Tang's `k·ln 2` reduction lifts the working scale by
+        // ~`|k|·log10 2` digits, which for large `|x|` exceeds the work width —
+        // so Tang is only VALID for small `|x|` (Series builds the result by
+        // squaring and stays valid everywhere). Hence `ByValue`: Tang for
+        // `|x| < 100`, Series above.
+        //
+        // The WIDEST tiers (N >= 32: D616/D924/D1232) have NO Tang rectangle:
+        // the A/B shows Series wins at EVERY scale there (including s0/s30),
+        // and at D1232 max scale single-shot Tang is not even bit-identical to
+        // Series (its `k·ln 2` lift overflows the guard). Those widths want the
+        // orthogonal u128-square work, not Tang; they fall through to Series.
         #[cfg(any(feature = "d115", feature = "wide"))]
-        (6, 50..=60) => Select::ByAlgorithm(Algorithm::Tang),
+        (6, 0..=85) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        (8, 70..=82) => Select::ByAlgorithm(Algorithm::Tang),
-        // Wide tiers — low-scale Tang rectangles, magnitude-gated. The N-way
-        // width × scale A/B (`benches/micro/exp_wide_series_tang_ab.rs`) shows
-        // Tang beats the Series Smith core 1.7–2.3× at low scale (the
-        // bench-branch-compare SCALE 30 regime), washing to a tie by each
-        // tier's design scale (the rectangle's top edge, also the scale the
-        // canonical golden oracle covers). But Tang's `k·ln 2` reduction lifts
-        // the working scale by ~`|k|·log10 2` digits, which for large `|x|`
-        // exceeds the work width — so Tang is only VALID for small `|x|`
-        // (Series builds the result by squaring and stays valid everywhere).
-        // Hence `ByValue`: Tang for `|x| < 100`, Series above. The `_` arm
-        // keeps Series for scales above the rectangle.
+        (8, 0..=110) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        (12, 0..=140) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        (16, 0..=160) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (16, 0..=60) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        (24, 0..=235) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        #[cfg(any(feature = "d616", feature = "x-wide"))]
-        (32, 0..=315) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        (48, 0..=465) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        (64, 0..=620) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (24, 0..=60) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }
@@ -210,40 +220,32 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
             };
             out.resize_to::<Int<N>>()
         }
+        // D76 (Int<4>): full-range Tang, M=512 G=30, the directed +
+        // external-extra shape <true,true,false> — bit-identical to Series
+        // across the spread × all six modes at s0/s37/s74 in the width × scale
+        // A/B. The `select` gate (small `|x|`) keeps it valid; large-`|x|`
+        // falls through to Series.
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => {
-            let r = raw.resize_to::<Int<6>>();
-            let out = match SCALE {
-                50..=60 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 128, 8, true, true, false>(r, mode),
-                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        6 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => {
-            let r = raw.resize_to::<Int<8>>();
-            let out = match SCALE {
-                70..=82 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 128, 10, true, false, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
-        // Wide tiers — the low-scale Tang rectangles (`select` routes only the
-        // in-rectangle SCALEs here). One config per tier: M=128, G=30, the
-        // directed + external-extra shape (`DIRECTED, EXTERNAL_EXTRA`) — Ziv
-        // escalation for the directed modes and base-guard widening for the
-        // large `|k|` the 2^k reassembly amplifies (single-shot would be wrong
-        // for large-x inputs whose `|k|·log10 2` exceeds the guard).
+        8 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        12 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        // Narrow-wide tiers — the low-scale Tang rectangles (`select` routes
+        // only the in-rectangle SCALEs here). The directed + external-extra
+        // shape (`DIRECTED, EXTERNAL_EXTRA`) — Ziv escalation for the directed
+        // modes and base-guard widening for the large `|k|` the 2^k reassembly
+        // amplifies (single-shot would be wrong for large-x inputs whose
+        // `|k|·log10 2` exceeds the guard). Table M tuned per tier from the A/B
+        // (M=512 for D307, M=128 for D462). The widest tiers (N >= 32) have NO
+        // Tang arm — `select` never routes them here and they would fall to the
+        // `_` Series arm anyway; Series wins those at every scale.
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
         24 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
         _ => series_routed::<N, SCALE>(raw, mode),
     }
 }
