@@ -22,21 +22,19 @@ name: "\U0001F4DA lib-cmp perf (peer-crate timing, width × scale)"
 #               -> a worst-first (decimal-scaled vs fastest-peer) table to the
 #               run summary + ONE `lib-cmp-perf-aggregate` artifact.
 #
-# Triggers: (1) push to a release branch or main (queue-of-1 via concurrency,
-# advisory only — NOT a required gate); (2) manual workflow_dispatch (the
-# dispatch option only appears once this file is on the default branch; the
-# push trigger works from the branch immediately).
+# Triggers (advisory — NOT a required status check / merge gate), matching
+# the lib-cmp family convention: (1) pull_request whose BASE is main — runs
+# on any PR into main; (2) manual workflow_dispatch on any branch (the
+# dispatch button only appears once this file is on the default branch main).
 
 on:
-  push:
-    branches:
-      - 'release/**'
-      - 'main'
-  workflow_dispatch: {}
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
 
 concurrency:
   group: lib-cmp-perf-${{ github.ref }}
-  cancel-in-progress: false
+  cancel-in-progress: true
 
 permissions:
   contents: read

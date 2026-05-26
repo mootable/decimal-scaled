@@ -55,11 +55,13 @@ const SAMPLE_CAP: usize = 200;
 /// decimal-scaled is asked to apply; it reports back the same mode.
 const DRIVE_MODE: RoundingMode = RoundingMode::HalfToEven;
 
-/// The widths swept. The transcendental golden tables embedded in the
-/// harness cover D38 (full surface), a D76 subset, and D307<150> (the
-/// deep-scale tier, full surface); the table renders the cells that have
-/// an oracle.
-const WIDTHS: [Width; 3] = [Width::D38, Width::D76, Width::D307];
+/// The widths surfaced as per-width shootout tables in the rendered
+/// report. The scoring sweep itself is NOT gated by this — it auto-picks
+/// up EVERY `(method, width, scale)` golden file via `golden_scan()`;
+/// these are only the widths we additionally render as side-by-side
+/// LSBε/ULP tables (the canonical-scale cell per width). The grade
+/// summary covers the full scanned surface regardless.
+const TABLE_WIDTHS: [Width; 3] = [Width::D38, Width::D76, Width::D307];
 
 fn subjects() -> Vec<Box<dyn PrecisionSubject>> {
     vec![
@@ -90,6 +92,9 @@ struct Row {
     max_ulp: String,
     scored: usize,
     correctly_rounded: usize,
+    /// Worst DECIMAL error-digit length over the roster — what the
+    /// fidelity grade scores. `-1` for an n/a cell.
+    max_digits: i64,
 }
 
 /// Format a ULP value deterministically (fixed-form where small,
@@ -111,49 +116,100 @@ fn main() {
     let out_dir = results_dir();
     fs::create_dir_all(&out_dir).expect("create results/precision dir");
 
+    // Auto-pickup: every (method, width, scale) golden file on disk. NO
+    // hardcoded width/scale list — the surface grows as goldens are added.
+    let cells = golden_scan();
+    eprintln!(
+        "golden scan: {} (method, width, scale) cells from {}",
+        cells.len(),
+        golden_dir().display()
+    );
+
+    // Quiet the default panic hook during the sweep: a subject may panic
+    // on an edge input (the harness isolates each cell with catch_unwind);
+    // we surface those as an explicit summary below rather than a wall of
+    // backtraces interleaved with the table.
+    std::panic::set_hook(Box::new(|_| {}));
+    // (subject, method, width, scale) cells where a subject panicked.
+    let mut panic_cells: Vec<(String, String, String, u32)> = Vec::new();
+
     // ── 1. Sweep + persist per-library result files ────────────────
     for subject in &subjects {
         let mut rows: Vec<Row> = Vec::new();
-        // Deterministic key order: width (narrow→wide) then method
-        // (canonical order).
-        for &width in &WIDTHS {
-            for &method in &Method::TRANSCENDENTAL {
-                let cell = score_cell(subject.as_ref(), method, width, DRIVE_MODE, SAMPLE_CAP);
-                match cell {
-                    None => continue, // no oracle table for this cell
-                    Some(c) if c.scored == 0 => rows.push(Row {
-                        method: method.name(),
-                        width: width.name(),
-                        scale: width.canonical_scale(),
-                        rounding: format!("{:?}", subject.native_mode()),
-                        kind: "na",
-                        max_lsbe: -1,
-                        max_ulp: "na".to_string(),
-                        scored: 0,
-                        correctly_rounded: 0,
-                    }),
-                    Some(c) => rows.push(Row {
-                        method: method.name(),
-                        width: width.name(),
-                        scale: width.canonical_scale(),
-                        rounding: format!("{:?}", subject.native_mode()),
-                        kind: "executed",
-                        max_lsbe: c.max_lsbe as i64,
-                        max_ulp: fmt_ulp(c.max_ulp),
-                        scored: c.scored,
-                        correctly_rounded: c.correctly_rounded,
-                    }),
+        for cell in &cells {
+            let scored = score_scanned_cell(subject.as_ref(), cell, DRIVE_MODE, SAMPLE_CAP);
+            if let Some(c) = &scored {
+                if c.panicked > 0 {
+                    panic_cells.push((
+                        subject.name().to_string(),
+                        cell.method.name().to_string(),
+                        cell.width.name().to_string(),
+                        cell.scale,
+                    ));
                 }
+            }
+            match scored {
+                None => continue, // empty / unreadable table
+                Some(c) if c.scored == 0 => rows.push(Row {
+                    method: cell.method.name(),
+                    width: cell.width.name(),
+                    scale: cell.scale,
+                    rounding: format!("{:?}", subject.native_mode()),
+                    kind: "na",
+                    max_lsbe: -1,
+                    max_ulp: "na".to_string(),
+                    scored: 0,
+                    correctly_rounded: 0,
+                    max_digits: -1,
+                }),
+                Some(c) => rows.push(Row {
+                    method: cell.method.name(),
+                    width: cell.width.name(),
+                    scale: cell.scale,
+                    rounding: format!("{:?}", subject.native_mode()),
+                    kind: "executed",
+                    max_lsbe: c.max_lsbe as i64,
+                    max_ulp: fmt_ulp(c.max_ulp),
+                    scored: c.scored,
+                    correctly_rounded: c.correctly_rounded,
+                    max_digits: c.max_digits as i64,
+                }),
             }
         }
         write_tsv(&out_dir, subject.name(), &rows);
     }
 
-    // ── 2. Render the shootout table FROM the committed files ───────
+    // Restore the default panic hook for the rest of the run.
+    let _ = std::panic::take_hook();
+
+    // Surface any cells a subject panicked on — a kernel/library crash on
+    // an edge input is a robustness signal, not silently swallowed.
+    if !panic_cells.is_empty() {
+        eprintln!(
+            "WARNING: {} (subject, method, width, scale) cell(s) PANICKED during \
+             evaluation (scored as n/a):",
+            panic_cells.len()
+        );
+        for (subj, method, width, scale) in &panic_cells {
+            eprintln!("  PANIC: {subj} {method} {width} s{scale}");
+        }
+    }
+
+    // ── 2. Render the shootout tables FROM the committed files ──────
     println!("# Precision shootout — generated from results/precision/*.tsv\n");
-    for &width in &WIDTHS {
+    for &width in &TABLE_WIDTHS {
         let table = render_from_files(&out_dir, width);
         println!("{table}");
+    }
+
+    // ── 3. Fidelity grading — per-function + overall + coverage ─────
+    let report = render_fidelity_report(&out_dir);
+    println!("{report}");
+    // Surface the grade report to the CI step summary when present.
+    if let Ok(path) = std::env::var("GITHUB_STEP_SUMMARY") {
+        if let Ok(mut f) = fs::OpenOptions::new().create(true).append(true).open(path) {
+            let _ = writeln!(f, "{report}");
+        }
     }
 }
 
@@ -174,20 +230,22 @@ fn write_tsv(dir: &Path, name: &str, rows: &[Row]) {
     writeln!(
         f,
         "# library: {name}\n# key: method\twidth\tscale\trounding\tresult\n\
-         # result columns: kind(executed|na)\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\n\
+         # result columns: kind(executed|na)\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\tmax_digits\n\
+         # max_digits = exact decimal-digit length of the worst error magnitude \
+         (what the fidelity grade scores); max_lsbe is its bit-width.\n\
          # source: benches/lib_cmp_precision.rs (regenerate with \
          `cargo bench --bench lib_cmp_precision --features wide,x-wide,xx-wide,macros`)"
     )
     .unwrap();
     writeln!(
         f,
-        "method\twidth\tscale\trounding\tkind\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded"
+        "method\twidth\tscale\trounding\tkind\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\tmax_digits"
     )
     .unwrap();
     for r in rows {
         writeln!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             r.method,
             r.width,
             r.scale,
@@ -196,7 +254,8 @@ fn write_tsv(dir: &Path, name: &str, rows: &[Row]) {
             r.max_lsbe,
             r.max_ulp,
             r.scored,
-            r.correctly_rounded
+            r.correctly_rounded,
+            r.max_digits
         )
         .unwrap();
     }
@@ -220,15 +279,7 @@ fn render_from_files(dir: &Path, width: Width) -> String {
     let mut data: BTreeMap<String, BTreeMap<String, FileCell>> = BTreeMap::new();
     let mut modes: BTreeMap<String, String> = BTreeMap::new();
 
-    let libs = [
-        "decimal-scaled",
-        "fastnum",
-        "rust_decimal",
-        "dashu-float",
-        "decimal-rs",
-        "bigdecimal",
-        "g_math",
-    ];
+    let libs = LIBS;
     for lib in libs {
         let path = dir.join(format!("{}.tsv", file_stem(lib)));
         let Ok(text) = fs::read_to_string(&path) else {
@@ -243,6 +294,11 @@ fn render_from_files(dir: &Path, width: Width) -> String {
                 continue;
             }
             if cols[1] != width.name() {
+                continue;
+            }
+            // Per-width LSBε table renders the canonical-scale cell (the
+            // full multi-scale surface is in the TSVs + the grade summary).
+            if cols[2].parse::<u32>().ok() != Some(width.canonical_scale()) {
                 continue;
             }
             modes.entry(lib.to_string()).or_insert(cols[3].to_string());
@@ -307,5 +363,158 @@ fn render_from_files(dir: &Path, width: Width) -> String {
         out.push('\n');
     }
     out.push('\n');
+    out
+}
+
+/// The library roster, in render order. Single source for both the
+/// per-width tables and the grade report.
+const LIBS: [&str; 7] = [
+    "decimal-scaled",
+    "fastnum",
+    "rust_decimal",
+    "dashu-float",
+    "decimal-rs",
+    "bigdecimal",
+    "g_math",
+];
+
+/// One library's parsed result rows read back from its committed TSV.
+struct LibRows {
+    /// (method, width, scale, kind, max_digits) for every persisted row.
+    /// `max_digits` is the exact decimal error-digit length the fidelity
+    /// grade scores (`-1` for an n/a cell).
+    rows: Vec<(String, String, u32, String, i64)>,
+}
+
+fn read_lib_rows(dir: &Path, lib: &str) -> LibRows {
+    let mut rows = Vec::new();
+    let path = dir.join(format!("{}.tsv", file_stem(lib)));
+    if let Ok(text) = fs::read_to_string(&path) {
+        for line in text.lines() {
+            if line.starts_with('#') || line.starts_with("method\t") {
+                continue;
+            }
+            let cols: Vec<&str> = line.split('\t').collect();
+            // Need the trailing max_digits column (index 9). Older TSVs
+            // without it are skipped (re-run the sweep to regenerate).
+            if cols.len() < 10 {
+                continue;
+            }
+            let scale = cols[2].parse::<u32>().unwrap_or(0);
+            let max_digits = cols[9].parse::<i64>().unwrap_or(-1);
+            rows.push((
+                cols[0].to_string(),
+                cols[1].to_string(),
+                scale,
+                cols[4].to_string(),
+                max_digits,
+            ));
+        }
+    }
+    LibRows { rows }
+}
+
+/// Render the fidelity grade report (per-function + overall dual grade +
+/// per-library coverage) by READING the committed per-library TSVs, with
+/// the rubric published inline. Generated from the single committed source
+/// like every other table here.
+fn render_fidelity_report(dir: &Path) -> String {
+    use std::collections::BTreeMap;
+    use std::fmt::Write as _;
+
+    let total_cells = golden_scan().len();
+
+    let mut out = String::new();
+    out.push_str("# Fidelity grades — generated from results/precision/*.tsv\n\n");
+    out.push_str(fidelity_rubric());
+    out.push('\n');
+
+    // Per-library coverage line: runnable (executed) cells / total scanned.
+    out.push_str("## Coverage (runnable cells / total scanned)\n\n");
+    out.push_str("| library | runnable | total | coverage |\n");
+    out.push_str("|---|---|---|---|\n");
+
+    // Collect per-library per-function fidelity + coverage in one pass.
+    // lib -> (function -> Fidelity), plus a runnable counter.
+    let mut graded: BTreeMap<&str, (BTreeMap<String, Fidelity>, usize)> = BTreeMap::new();
+    for lib in LIBS {
+        let data = read_lib_rows(dir, lib);
+        let mut per_fn: BTreeMap<String, Fidelity> = BTreeMap::new();
+        let mut runnable = 0usize;
+        for (method, _width, _scale, kind, max_digits) in &data.rows {
+            if kind != "executed" || *max_digits < 0 {
+                continue; // n/a cell — not representable / not exposed.
+            }
+            runnable += 1;
+            per_fn
+                .entry(method.clone())
+                .or_default()
+                .record(*max_digits as u32);
+        }
+        let cov = if total_cells == 0 {
+            0.0
+        } else {
+            100.0 * runnable as f64 / total_cells as f64
+        };
+        let _ = writeln!(
+            out,
+            "| {lib} | {runnable} | {total_cells} | {cov:.0}% |",
+            cov = cov
+        );
+        graded.insert(lib, (per_fn, runnable));
+    }
+    out.push('\n');
+
+    // Per-library grade tables (per-function + overall dual grade).
+    for lib in LIBS {
+        let (per_fn, runnable) = match graded.get(lib) {
+            Some(g) => g,
+            None => continue,
+        };
+        let _ = writeln!(out, "## {lib} — fidelity\n");
+        if *runnable == 0 {
+            out.push_str("_No runnable cells (library represents none of the scanned surface)._\n\n");
+            continue;
+        }
+
+        // Per-function rows, in canonical method order.
+        out.push_str("| function | cells | r | grade | score |\n");
+        out.push_str("|---|---|---|---|---|\n");
+        let mut worst: Option<(char, u32, &str)> = None; // (grade, score, fn)
+        let mut pooled = Fidelity::default();
+        for m in Method::TRANSCENDENTAL {
+            let name = m.name();
+            let Some(f) = per_fn.get(name) else { continue };
+            let _ = writeln!(
+                out,
+                "| {name} | {} | {:.3} | {} | {} |",
+                f.cells,
+                f.r(),
+                f.grade(),
+                f.score()
+            );
+            pooled.demerits += f.demerits;
+            pooled.cells += f.cells;
+            // Worst = lowest score (highest r); tie-break keeps the first.
+            let s = f.score();
+            match worst {
+                Some((_, ws, _)) if ws <= s => {}
+                _ => worst = Some((f.grade(), s, name)),
+            }
+        }
+
+        let (wg, ws, wfn) = worst.unwrap_or(('A', 100, "—"));
+        let ag = pooled.grade();
+        let as_ = pooled.score();
+        let _ = writeln!(
+            out,
+            "\n**Overall {lib}: {wg}/{ag}** (worst-function `{wfn}` / aggregate) \
+             — score **{ws}** (worst) / **{as_}** (aggregate); \
+             aggregate r = {:.3} over {} cells.\n",
+            pooled.r(),
+            pooled.cells
+        );
+    }
+
     out
 }

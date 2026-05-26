@@ -201,6 +201,16 @@ impl Method {
             other => Some(other.name()),
         }
     }
+
+    /// Reverse of [`Method::golden_stem`]: map a golden-table filename
+    /// stem (e.g. `"exp"`, `"powf"`) back to its [`Method`]. `None` for
+    /// an unrecognised stem (so the scanner skips files it can't map).
+    pub fn from_stem(stem: &str) -> Option<Method> {
+        Method::TRANSCENDENTAL
+            .iter()
+            .copied()
+            .find(|m| m.golden_stem() == Some(stem))
+    }
 }
 
 // ════════════════════════════════════════════════════════════════════
@@ -259,6 +269,13 @@ impl Width {
             Width::D924 => 924,
             Width::D1232 => 1232,
         }
+    }
+
+    /// Reverse of [`Width::digits`]: map a decimal digit capacity (the
+    /// `N` parsed from a `d<N>` golden infix) back to its tier. `None`
+    /// for an `N` that is not one of the twelve tiers.
+    pub fn from_digits(n: u32) -> Option<Width> {
+        Width::ALL.iter().copied().find(|w| w.digits() == n)
     }
 
     /// The canonical scale the golden tables use for this tier.
@@ -409,6 +426,12 @@ pub enum PrecisionResult {
         /// Bit-width of `|value − oracle_cr|` in storage LSB. `0` ⇒
         /// bit-exact (correctly rounded under the reported mode).
         lsbe: u32,
+        /// Significant DECIMAL digit-length of `|value − oracle_cr|`. `0`
+        /// ⇒ bit-exact. This is the count of contaminated trailing decimal
+        /// digits in the last-place error and is what the fidelity grade
+        /// scores (an error of `100000` ⇒ `6`), distinct from `lsbe` (its
+        /// bit-width).
+        digits: u32,
         /// `|value − oracle_cr|` as a continuous distance in storage LSB
         /// (`1` LSB == `1` ULP at the tier scale).
         ulp: f64,
@@ -622,12 +645,16 @@ impl Harness {
 
         let diff = dec_abs_diff(&subject_scaled, &oracle);
         let lsbe = dec_bit_len(&diff);
+        // Decimal-digit length of the error magnitude BEFORE bit-conversion
+        // — what the fidelity grade scores (exact contaminated-digit count).
+        let digits = dec_digit_len(&diff);
         let ulp = dec_to_f64(&diff);
 
         PrecisionResult::Executed {
             value: value.clone(),
             rounding,
             lsbe,
+            digits,
             ulp,
         }
     }
@@ -911,6 +938,23 @@ pub fn dec_bit_len(mag: &str) -> u32 {
     (digits * core::f64::consts::LOG2_10).ceil() as u32
 }
 
+/// Significant DECIMAL digit length of a decimal-magnitude string. Sibling
+/// of [`dec_bit_len`], but counts base-10 digits rather than bits: strip
+/// any sign and leading zeros, then return the remaining digit count.
+/// `0` ⇒ exactly zero (correctly rounded). This is the EXACT count of
+/// contaminated trailing decimal digits in a last-place error — e.g. an
+/// error magnitude of `100000` is `6` decimal digits.
+pub fn dec_digit_len(mag: &str) -> u32 {
+    let mag = mag.strip_prefix('-').unwrap_or(mag);
+    let mag = mag.strip_prefix('+').unwrap_or(mag);
+    let mag = mag.trim_start_matches('0');
+    if mag.is_empty() {
+        0
+    } else {
+        mag.len() as u32
+    }
+}
+
 /// Convert an unsigned decimal-magnitude string to f64 (saturating to
 /// `INFINITY` past f64 range). Used for the continuous ULP distance.
 pub fn dec_to_f64(mag: &str) -> f64 {
@@ -944,11 +988,110 @@ pub fn golden_table(method: Method, width: Width) -> Option<&'static str> {
         })
 }
 
-/// Load the golden roster for `(method, width)` into parsed cases.
+/// Load the golden roster for `(method, width)` into parsed cases, at the
+/// width's canonical scale, from the compile-time embedded tables. Kept
+/// for back-compat callers; the comparative sweep uses the runtime
+/// scanner ([`golden_scan`] + [`golden_roster_at`]) so it picks up EVERY
+/// `(method, width, scale)` file on disk, not just the embedded subset.
 pub fn golden_roster(method: Method, width: Width) -> Vec<GoldenCase> {
     match golden_table(method, width) {
         None => Vec::new(),
         Some(body) => body.lines().filter_map(parse_golden_line).collect(),
+    }
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Runtime golden scanner — pick up EVERY (method, width, scale) on disk
+// ════════════════════════════════════════════════════════════════════
+//
+// The embedded `golden_tables!` roster above only lists the handful of
+// cells the historic table needed (~3 widths at 1 scale). `tests/golden/`
+// actually holds the full mpmath surface: 22 transcendental methods over
+// 12 width tiers, several scales each (narrow tiers s0/s_mid/s_max, wide
+// tiers s0/s30/.../s_max). The comparative sweep scores ALL of them by
+// scanning the directory at runtime and reverse-mapping each filename
+// `<stem>_d<N>_s<scale>.txt` to `(Method, Width, scale)`.
+
+/// One scanned golden cell: a method/width/scale triple with the absolute
+/// path to its table file.
+#[derive(Clone, Debug)]
+pub struct GoldenCell {
+    pub method: Method,
+    pub width: Width,
+    pub scale: u32,
+    pub path: std::path::PathBuf,
+}
+
+/// The `tests/golden` directory, resolved from `CARGO_MANIFEST_DIR` (the
+/// crate root regardless of where `cargo bench`/`cargo test` is invoked).
+pub fn golden_dir() -> std::path::PathBuf {
+    let mut p = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"));
+    p.push("tests");
+    p.push("golden");
+    p
+}
+
+/// Parse a golden filename stem `"<method>_d<N>_s<scale>"` (the file's
+/// name without the `.txt` extension) into `(Method, Width, scale)`.
+/// `None` if any component is unrecognised — callers skip such files.
+pub fn parse_golden_filename(stem: &str) -> Option<(Method, Width, u32)> {
+    // Split off the trailing `_s<scale>`.
+    let (head, scale_s) = stem.rsplit_once("_s")?;
+    let scale: u32 = scale_s.parse().ok()?;
+    // Split off the `_d<N>` infix.
+    let (method_s, digits_s) = head.rsplit_once("_d")?;
+    let digits: u32 = digits_s.parse().ok()?;
+    let method = Method::from_stem(method_s)?;
+    let width = Width::from_digits(digits)?;
+    Some((method, width, scale))
+}
+
+/// Scan `tests/golden/*.txt` and return every recognised
+/// `(method, width, scale)` cell, sorted deterministically by
+/// (method canonical order, width narrow→wide, scale ascending). This is
+/// the auto-pickup roster the comparative sweep iterates — it grows
+/// automatically as golden files are added, with no hardcoded list.
+pub fn golden_scan() -> Vec<GoldenCell> {
+    let dir = golden_dir();
+    let mut cells: Vec<GoldenCell> = Vec::new();
+    let Ok(entries) = std::fs::read_dir(&dir) else {
+        return cells;
+    };
+    for entry in entries.flatten() {
+        let path = entry.path();
+        if path.extension().and_then(|e| e.to_str()) != Some("txt") {
+            continue;
+        }
+        let Some(stem) = path.file_stem().and_then(|s| s.to_str()) else {
+            continue;
+        };
+        if let Some((method, width, scale)) = parse_golden_filename(stem) {
+            cells.push(GoldenCell {
+                method,
+                width,
+                scale,
+                path,
+            });
+        }
+    }
+    // Deterministic order: method (canonical), width (narrow→wide), scale.
+    let method_rank = |m: Method| Method::ALL.iter().position(|x| *x == m).unwrap_or(usize::MAX);
+    let width_rank = |w: Width| Width::ALL.iter().position(|x| *x == w).unwrap_or(usize::MAX);
+    cells.sort_by(|a, b| {
+        method_rank(a.method)
+            .cmp(&method_rank(b.method))
+            .then(width_rank(a.width).cmp(&width_rank(b.width)))
+            .then(a.scale.cmp(&b.scale))
+    });
+    cells
+}
+
+/// Load and parse the golden roster from an explicit table file path (a
+/// runtime-scanned cell). Empty vec if the file can't be read.
+pub fn golden_roster_at_path(path: &std::path::Path) -> Vec<GoldenCase> {
+    match std::fs::read_to_string(path) {
+        Ok(body) => body.lines().filter_map(parse_golden_line).collect(),
+        Err(_) => Vec::new(),
     }
 }
 
@@ -1034,7 +1177,15 @@ golden_tables! {
 pub struct CellScore {
     pub scored: usize,
     pub na: usize,
+    /// Inputs on which the subject PANICKED (counted as not-applicable for
+    /// scoring, but tracked separately so a kernel/library crash on an
+    /// edge input is surfaced, not silently swallowed).
+    pub panicked: usize,
     pub max_lsbe: u32,
+    /// Worst DECIMAL digit-length of the error magnitude over the roster
+    /// — what the fidelity grade scores (the exact contaminated-digit
+    /// count, not the bit-width `max_lsbe`).
+    pub max_digits: u32,
     pub max_ulp: f64,
     pub correctly_rounded: usize,
 }
@@ -1043,10 +1194,15 @@ impl CellScore {
     fn record(&mut self, r: &PrecisionResult) {
         match r {
             PrecisionResult::NotApplicable => self.na += 1,
-            PrecisionResult::Executed { lsbe, ulp, .. } => {
+            PrecisionResult::Executed {
+                lsbe, digits, ulp, ..
+            } => {
                 self.scored += 1;
                 if *lsbe > self.max_lsbe {
                     self.max_lsbe = *lsbe;
+                }
+                if *digits > self.max_digits {
+                    self.max_digits = *digits;
                 }
                 if *ulp > self.max_ulp {
                     self.max_ulp = *ulp;
@@ -1064,21 +1220,24 @@ impl CellScore {
     }
 }
 
-/// Score one subject on one `(method, width)` over the whole golden
-/// roster at the tier's canonical scale, under the requested driving
-/// `mode`. Returns `None` if no oracle table exists for the cell.
-pub fn score_cell(
+/// Score one subject on a pre-parsed golden `roster` at an EXPLICIT
+/// `(method, width, scale)`, under the requested driving `mode`. The
+/// scale is passed in rather than derived from the width so the same cell
+/// can be scored at every scale a tier has a golden file for (s0, s30,
+/// …, s_max), not only the canonical one. Returns `None` for an empty
+/// roster.
+pub fn score_roster(
     subject: &dyn PrecisionSubject,
     method: Method,
     width: Width,
+    scale: u32,
+    roster: &[GoldenCase],
     mode: RoundingMode,
     sample_cap: usize,
 ) -> Option<CellScore> {
-    let roster = golden_roster(method, width);
     if roster.is_empty() {
         return None;
     }
-    let scale = width.canonical_scale();
     let mut cell = CellScore::default();
     for case in roster.iter().take(sample_cap) {
         let input = Input {
@@ -1087,11 +1246,64 @@ pub fn score_cell(
             width,
             scale,
         };
-        let out = subject.eval(method, width, scale, &input, mode);
-        let r = Harness::score(&out, case, scale);
-        cell.record(&r);
+        // A subject may PANIC on an edge input (e.g. a divide-by-zero in a
+        // kernel, or a peer library's domain assert). Isolate each cell so
+        // one crash does not abort the whole sweep; a panic is recorded as
+        // not-applicable for scoring but counted in `panicked` so the
+        // caller can surface it.
+        let evaluated = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+            subject.eval(method, width, scale, &input, mode)
+        }));
+        match evaluated {
+            Ok(out) => {
+                let r = Harness::score(&out, case, scale);
+                cell.record(&r);
+            }
+            Err(_) => {
+                cell.panicked += 1;
+                cell.na += 1;
+            }
+        }
     }
     Some(cell)
+}
+
+/// Score one subject on one runtime-scanned [`GoldenCell`] (it carries
+/// the method/width/scale and the table path). The auto-pickup entry
+/// point for the comparative sweep. Returns `None` if the table is empty.
+pub fn score_scanned_cell(
+    subject: &dyn PrecisionSubject,
+    cell: &GoldenCell,
+    mode: RoundingMode,
+    sample_cap: usize,
+) -> Option<CellScore> {
+    let roster = golden_roster_at_path(&cell.path);
+    score_roster(
+        subject,
+        cell.method,
+        cell.width,
+        cell.scale,
+        &roster,
+        mode,
+        sample_cap,
+    )
+}
+
+/// Score one subject on one `(method, width)` over the embedded golden
+/// roster at the tier's canonical scale, under the requested driving
+/// `mode`. Back-compat wrapper over [`score_roster`]; the comparative
+/// sweep now uses [`score_scanned_cell`] over [`golden_scan`]. Returns
+/// `None` if no oracle table exists for the cell.
+pub fn score_cell(
+    subject: &dyn PrecisionSubject,
+    method: Method,
+    width: Width,
+    mode: RoundingMode,
+    sample_cap: usize,
+) -> Option<CellScore> {
+    let roster = golden_roster(method, width);
+    let scale = width.canonical_scale();
+    score_roster(subject, method, width, scale, &roster, mode, sample_cap)
 }
 
 /// Render a cell in the README/benchmarks precision-table format:
@@ -1173,4 +1385,137 @@ pub fn render_shootout(
         let _ = writeln!(out);
     }
     out
+}
+
+// ════════════════════════════════════════════════════════════════════
+// Fidelity grading — per-function + overall A–F grade / 0–100 score
+// ════════════════════════════════════════════════════════════════════
+//
+// The owner's locked rubric (published alongside the tables):
+//
+//   * `incorrect_digits` = the EXACT decimal-digit length of the cell's
+//     worst error magnitude (`dec_digit_len` of the decimal `diff`, BEFORE
+//     it is converted to bits) — the count of contaminated trailing
+//     decimal digits in the last-place error. `0` ⇒ correctly rounded.
+//     (e.g. an error magnitude of `100000` ⇒ `incorrect_digits = 6`.) This
+//     is NOT `floor(log10(max_lsbe)) + 1`: `max_lsbe` is a BIT length, so
+//     that formula would score the `100000` error as 2 rather than 6.
+//   * per-cell demerit  `d = 0` if correctly rounded, else `2^incorrect_digits`.
+//   * `r = Σ demerits / tests_run` — pooled over a function's width×scale
+//     cells (per function) and over all cells (aggregate).
+//   * grade bands (score-aligned quarters):
+//       A  r == 0          score 100
+//       B  0   < r <= 0.5   score >= 75
+//       C  0.5 < r <= 1.0   score >= 50
+//       D  1.0 < r <= 1.5   score >= 25
+//       E  1.5 < r <  2.0   score  > 0
+//       F  r >= 2.0         score 0
+//   * `score = round(100 * (1 - r/2))`, clamped to [0, 100].
+//   * overall = WORST-function headline + pooled-aggregate secondary,
+//     dual-letter worst-first (`C/A` = worst C, aggregate A); per library
+//     graded over its runnable cells, with coverage published.
+
+/// `incorrect_digits` for a cell: the EXACT decimal-digit length of its
+/// worst error magnitude (the cell's `max_digits`, i.e. `dec_digit_len` of
+/// the decimal error `diff`). `0` ⇒ correctly rounded. An identity pass —
+/// the digit-length is computed at scoring time, not re-derived from the
+/// bit-width — but kept as a named seam so the rubric maps to one place.
+pub fn incorrect_digits(max_digits: u32) -> u32 {
+    max_digits
+}
+
+/// Per-cell demerit `d`: `0` when correctly rounded (`max_digits == 0`),
+/// else `2^incorrect_digits`.
+pub fn cell_demerit(max_digits: u32) -> f64 {
+    if max_digits == 0 {
+        0.0
+    } else {
+        2f64.powi(incorrect_digits(max_digits) as i32)
+    }
+}
+
+/// The 0–100 score for a pooled `r`: `round(100 * (1 - r/2))`, clamped.
+pub fn score_for_r(r: f64) -> u32 {
+    let s = (100.0 * (1.0 - r / 2.0)).round();
+    s.clamp(0.0, 100.0) as u32
+}
+
+/// The A–F letter grade for a pooled `r`, in the owner's score-aligned
+/// bands. Returned as a single byte char.
+pub fn grade_for_r(r: f64) -> char {
+    if r == 0.0 {
+        'A'
+    } else if r <= 0.5 {
+        'B'
+    } else if r <= 1.0 {
+        'C'
+    } else if r <= 1.5 {
+        'D'
+    } else if r < 2.0 {
+        'E'
+    } else {
+        'F'
+    }
+}
+
+/// Running fidelity accumulator over a set of cells: total demerits and
+/// the cell count. `r = demerits / cells`.
+#[derive(Clone, Copy, Default)]
+pub struct Fidelity {
+    pub demerits: f64,
+    pub cells: usize,
+}
+
+impl Fidelity {
+    /// Fold one runnable cell's worst decimal error-digit length
+    /// (`max_digits`) into the accumulator.
+    pub fn record(&mut self, max_digits: u32) {
+        self.demerits += cell_demerit(max_digits);
+        self.cells += 1;
+    }
+
+    /// `r = Σ demerits / tests_run` (`0` when no cells ran).
+    pub fn r(&self) -> f64 {
+        if self.cells == 0 {
+            0.0
+        } else {
+            self.demerits / self.cells as f64
+        }
+    }
+
+    pub fn score(&self) -> u32 {
+        score_for_r(self.r())
+    }
+
+    pub fn grade(&self) -> char {
+        grade_for_r(self.r())
+    }
+}
+
+/// The published rubric text, emitted alongside every grade table so the
+/// grading is auditable from the report itself.
+pub fn fidelity_rubric() -> &'static str {
+    "### Fidelity grading rubric\n\
+     \n\
+     Each scored cell is one `(method, width, scale)` golden table; its \
+     worst error is the largest gap to the correctly-rounded oracle over \
+     the cell's inputs (`0` ⇒ bit-exact / correctly rounded).\n\
+     \n\
+     * **incorrect_digits** = the EXACT decimal-digit length of that worst \
+     error magnitude (the count of contaminated trailing decimal digits; \
+     e.g. an error of `100000` ⇒ `6`), `0` when correctly rounded. \
+     Measured on the decimal error itself, not its bit-width.\n\
+     * **per-cell demerit** `d = 0` if correctly rounded, else \
+     `d = 2^incorrect_digits`.\n\
+     * **r** `= Σ demerits / tests_run`, pooled over a function's \
+     width×scale cells (per function) and over all cells (aggregate).\n\
+     * **grade bands**: A `r=0` (100) · B `0<r≤0.5` (≥75) · C `0.5<r≤1` \
+     (≥50) · D `1<r≤1.5` (≥25) · E `1.5<r<2` (>0) · F `r≥2` (0).\n\
+     * **score** `= round(100·(1 − r/2))`, clamped `[0,100]`.\n\
+     * **overall** = worst-function headline grade/score **AND** the \
+     pooled-aggregate as a secondary metric, written worst-first as \
+     `worst/aggregate` (e.g. `C/A`). Each library is graded over its \
+     **runnable** cells only; coverage (runnable / total) is published so \
+     broader libraries — structurally more exposed to demerits — are \
+     auditable.\n"
 }

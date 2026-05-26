@@ -15,13 +15,17 @@ name: "\U0001F4CF lib-cmp precision (LSBε shootout refresh)"
 # precision tables) never drift from the harness output. The self-commit
 # pattern mirrors the `regenerate` job in bench-full.yml.
 #
-# Triggers:
-#   * pull_request — refresh the result files on the PR branch so a kernel
-#     change that shifts an LSBε cell shows up in the diff under review.
-#   * workflow_dispatch — manual refresh.
+# Triggers (advisory — NOT a required status check / merge gate):
+#   * pull_request (base = main) — runs on any PR INTO main so a kernel
+#     change that shifts an LSBε cell or a fidelity grade shows up under
+#     review (refreshes the result files on the PR branch + surfaces the
+#     fidelity grade report on the run's step summary).
+#   * workflow_dispatch — manual run on any branch (the dispatch button
+#     only appears once this file is on the default branch main).
 
 on:
   pull_request:
+    branches: [main]
   workflow_dispatch:
 
 permissions:
@@ -77,11 +81,33 @@ jobs:
             cargo-lib-cmp-precision-${{ runner.os }}-
 
       - name: Run the comparative precision runner
-        # Writes results/precision/*.tsv and renders the LSBε(ULP) shootout
-        # table to stdout. `harness = false` — accuracy harness, not timing.
+        # Writes results/precision/*.tsv, renders the LSBε(ULP) shootout
+        # tables, and renders the fidelity grade report (per-function +
+        # overall worst/aggregate dual-grade, the rubric, per-library
+        # coverage). The runner itself appends the fidelity report to
+        # $GITHUB_STEP_SUMMARY (UTF-8, so the ×/→/ε glyphs render); we also
+        # tee the full stdout into a file for the downloadable artifact.
+        # `harness = false` — accuracy harness, not timing.
+        env:
+          # Belt-and-suspenders so any tooling in the chain treats text as
+          # UTF-8 (the Rust runner already emits UTF-8 to the summary file).
+          PYTHONIOENCODING: utf-8
         run: |
           cargo bench --bench lib_cmp_precision \
-            --features wide,x-wide,xx-wide,macros
+            --features wide,x-wide,xx-wide,macros \
+            | tee results/precision/REPORT.md
+
+      - name: Upload precision results + fidelity grade report
+        # Single downloadable artifact: the per-library TSVs plus the
+        # rendered shootout + fidelity grade table (REPORT.md).
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: lib-cmp-precision-results
+          path: |
+            results/precision/*.tsv
+            results/precision/REPORT.md
+          if-no-files-found: warn
 
       - name: Commit refreshed precision results back to the run's branch
         env:
@@ -90,7 +116,9 @@ jobs:
           set -euo pipefail
           git config user.name  "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add results/precision
+          # Only the committed TSV source of truth — REPORT.md is an
+          # artifact-only render, not a tracked file.
+          git add results/precision/*.tsv
           if git diff --cached --quiet; then
             echo "No precision result changes to commit."
             exit 0
