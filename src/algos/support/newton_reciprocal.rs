@@ -537,6 +537,9 @@ mod tests {
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
 
+    // Exercises `Int<16>` (D307 storage); the divide scratch is sized by the
+    // build's `MAX_WORK_N`, so this only runs where that tier is enabled.
+    #[cfg(feature = "d307")]
     #[test]
     fn newton_matches_mg_chain_d307_s150() {
         let scale = 150u32;
@@ -553,6 +556,8 @@ mod tests {
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
     }
 
+    // Exercises `Int<32>` (D616 storage) — runs only where that tier is on.
+    #[cfg(feature = "d616")]
     #[test]
     fn newton_matches_mg_chain_d616_s308() {
         let scale = 308u32;
@@ -569,6 +574,8 @@ mod tests {
         assert_eq!(got, want, "Newton differs from MG chain at D616 s=308");
     }
 
+    // Exercises `Int<64>` (D1232 storage) — runs only where that tier is on.
+    #[cfg(feature = "d1232")]
     #[test]
     fn newton_matches_mg_chain_d1232_s615() {
         let scale = 615u32;
