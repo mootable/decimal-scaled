@@ -984,6 +984,15 @@ path = "benches/micro/div_pow10_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# dec_mul_rescale_ab: whole-op decimal `mul` at the bbc regression-cluster
+# cells (D57/D76/D115/D153/D230 at high scale), exercising the production
+# `mul_widen_divide` + `÷10^SCALE` rescale chain — the lever for the cluster.
+[[bench]]
+name = "dec_mul_rescale_ab"
+path = "benches/micro/dec_mul_rescale_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # div_bz_validity_probe: establishes whether a multiply-based recursive
 # Burnikel-Ziegler divide can beat Knuth at division-reachable widths by
 # timing one n-by-n schoolbook multiply against a full div_knuth(2n, n).

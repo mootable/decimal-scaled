@@ -639,6 +639,22 @@ pub mod __bench_internals {
     ) -> crate::int::types::Int<2> {
         crate::algos::mul::mul_widen_divide::mul_widen_divide::<2, SCALE>(a, b, mode)
     }
+    /// Generic-`N` decimal widen-then-divide multiply, exposed so the
+    /// wide-tier `÷10^w` rescale (the bbc `mul` regression cluster:
+    /// D76/D115/D153 at high scale) can be measured at its real storage
+    /// width and scale.
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn dec_mul_widen_divide<const N: usize, const SCALE: u32>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
+    {
+        crate::algos::mul::mul_widen_divide::mul_widen_divide::<N, SCALE>(a, b, mode)
+    }
     /// Decimal remainder kernels exposed for the `rem_kernel_ab` microbench
     /// (the narrow native-vs-int-layer decimal rem A/B at the dispatch seam).
     #[inline(never)]
