@@ -180,6 +180,7 @@ macro_rules! wide_root_bench {
 // D230/D307 @ 30) — the cells the bbc matrix actually measures. W is the
 // minimal work width covering mag·10^SCALE (sqrt) / mag·10^(2·SCALE) (cbrt)
 // at a near-storage-max magnitude.
+wide_root_bench!(bench_sqrt_d57, sqrt_native_w, sqrt_newton_slice_n, 3, 6, 20, "sqrt_d57_s20");
 wide_root_bench!(bench_sqrt_d76, sqrt_native_w, sqrt_newton_slice_n, 4, 6, 20, "sqrt_d76_s20");
 wide_root_bench!(bench_sqrt_d115, sqrt_native_w, sqrt_newton_slice_n, 6, 8, 25, "sqrt_d115_s25");
 wide_root_bench!(bench_sqrt_d153, sqrt_native_w, sqrt_newton_slice_n, 8, 10, 25, "sqrt_d153_s25");
@@ -192,6 +193,7 @@ wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 16, 30
 wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 20, 30, "cbrt_d307_s30");
 
 fn bench_wide(c: &mut Criterion) {
+    bench_sqrt_d57(c);
     bench_sqrt_d76(c);
     bench_sqrt_d115(c);
     bench_sqrt_d153(c);
