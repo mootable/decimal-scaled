@@ -47,36 +47,38 @@ enum Algorithm {
     /// isqrt for the `Int<2>` storage (D38, and D18 widened to it).
     MgDivide,
     /// [`sqrt::sqrt_newton_with_table_seed::sqrt_newton_with_table_seed`]
-    /// — `f64`-seeded narrow-work bespoke for the `(D57, 20)` cell.
+    /// — `f64`-seeded narrow-work bespoke for the `(D57, 20)` cell, kept as
+    /// an explicit benchmarkable reference seam. Superseded by
+    /// [`Self::Native`] (which seeds Newton in a tight `Int<W>` instead of
+    /// re-entering the int `isqrt` policy's build-max slice) and no longer
+    /// selected by `select`.
     ///
-    /// Gated with the kernel: the `(D57, 20)` cell only exists when D57
-    /// is compiled in, so the variant, its `select` arm, and its
-    /// dispatch arm are gated together (the policy stays exhaustive in
-    /// both configs — see `docs/ARCHITECTURE.md` "Feature-flagging a
-    /// variation").
+    /// Gated with the kernel: it only exists when D57 is compiled in, so the
+    /// variant and its dispatch arm are gated together (the policy stays
+    /// exhaustive in both configs — see `docs/ARCHITECTURE.md`
+    /// "Feature-flagging a variation").
     #[cfg(any(feature = "d57", feature = "wide"))]
+    #[allow(dead_code)]
     NewtonWithTableSeed,
-    /// [`sqrt::sqrt_native::sqrt_native`] — top-bits-`f64`-seeded Newton
-    /// run directly in a tight, concrete `Int<W>` (the work width `W` is
-    /// chosen per `(N, SCALE)` cell in the dispatch arm to just cover
-    /// `mag · 10^SCALE`), rather than through the width-agnostic int
-    /// `isqrt` slice, whose build-max scratch buffer churn dominated the
-    /// small mid-scale radicands of the wide tiers. Routed cells:
-    /// `(D76,35)`, `(D115,57)`, `(D153,75)`, `(D230,115)`, `(D307,150)`.
-    /// Microbench (`root_kernel_ab`): 1.2–1.6× faster than the generic
-    /// slice [`Self::Newton`] at every routed cell. Bit-identical to
-    /// [`Self::Newton`] across all six modes.
+    /// [`sqrt::sqrt_native::sqrt_native`] — `f64`-seeded Newton run directly
+    /// in a tight, concrete `Int<W>` with `W = 2N` (chosen per tier in the
+    /// dispatch arm to cover `mag · 10^SCALE` at any valid scale), rather
+    /// than through the width-agnostic int `isqrt` slice, whose build-max
+    /// scratch buffer churn dominated the mid-scale radicands of the wide
+    /// tiers. Routed by `N` for the mid-wide tiers D57/D76/D115/D153
+    /// (N = 3/4/6/8), every scale. Microbench (`root_kernel_ab`, bbc
+    /// scales): 1.11–1.97× faster than the generic slice [`Self::Newton`].
+    /// Bit-identical to [`Self::Newton`] across all six modes.
     ///
-    /// Gated with the kernel: each routed `(N, SCALE)` cell only exists
-    /// when its tier is compiled in, so the variant, its `select` arms,
-    /// and its dispatch arms are gated together (the policy stays
-    /// exhaustive in both configs).
+    /// Gated with the kernel: each tier only exists when compiled in, so the
+    /// variant, its `select` arms, and its dispatch arms are gated together
+    /// (the policy stays exhaustive in both configs).
     #[cfg(any(feature = "d57", feature = "wide"))]
     Native,
     /// Schoolbook reference tag -- delegates to
-    /// [], which uses the same
-    /// -based pipeline as . Exists as an explicit
-    /// benchmarkable seam; never selected by  in production.
+    /// [`sqrt::sqrt_newton::sqrt_newton`], which uses the same
+    /// slice-`isqrt`-based pipeline as `sqrt_newton`. Exists as an explicit
+    /// benchmarkable seam; never selected by `select` in production.
     #[allow(dead_code)]
     Schoolbook,
 }
