@@ -1625,7 +1625,7 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<128>,
     crate::int::types::Int<256>,
     crate::int::types::Int<256>,
-    crate::int::types::Int<256>,
+    crate::int::types::Int<512>,
     wide_trig_d1232,
     1231,
     no_const_table

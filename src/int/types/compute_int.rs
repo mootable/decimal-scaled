@@ -602,7 +602,14 @@ mod imp {
         )+ };
     }
     // Decimal storage widths + the transcendental work widths (96..256).
-    exact_compute!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256);
+    // `Int<512>` is the D1232 `exp`/hyperbolic large-result `Wexp`: D1232's
+    // own work integer is already the widest storage-derived width (`Int<256>`
+    // = `4·MAX_WORK_N`), so its `exp_fixed` overflow regime (the `2·w_ext`
+    // squaring peak at a large argument and high directed-Ziv guard) cannot be
+    // lifted to a *wider* tier-derived width — it needs a dedicated wider work
+    // integer. `Int<512>` (32768 bits) holds that peak with comfortable margin
+    // at every reachable working scale.
+    exact_compute!(1, 2, 3, 4, 6, 8, 12, 16, 24, 32, 48, 64, 96, 128, 192, 256, 512);
 }
 
 // ── exact-scratch-nightly: one blanket impl, exact per-N via const-expr ─

@@ -18,6 +18,61 @@ use crate::algos::ln::ln_series_2limb::{STRICT_GUARD, wide_ln2};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
+/// Work integer for the narrow integer-regime / MAX-scale exp fallback.
+///
+/// `Int<24>` is 1536 bits ≈ 462 decimal digits — far wider than the
+/// 256-bit `Fixed` (~77 digits) the normal narrow path runs in. The
+/// largest D38 result fits 38 storage digits, and at the strict working
+/// scale `w = SCALE + STRICT_GUARD ≤ 68` the internal `exp_fixed` peak
+/// (`≈ 2·w_ext`, `w_ext = w + extra`, `extra ≈ result_int_digits`) tops
+/// out near `2·(68 + 60) ≈ 256` digits, so `Int<24>` holds it with a
+/// comfortable margin for every D38 (and D18) cell. The work width is the
+/// fixed [`WNarrow`] type, NOT a const work-width parameter — it is a
+/// concrete wider integer the generic [`exp_generic::exp_fixed`] runs in.
+type WNarrow = Int<24>;
+
+/// Integer-digit count of `e^x` for the storage value `raw` at `scale`
+/// (`x = raw / 10^scale`). For `x ≤ 0` (`e^x ≤ 1`) the result has a
+/// single integer digit (`0` or `1`). For `x > 0`, `e^x` has
+/// `floor(x·log10 e) + 1` integer digits, computed in exact `i128`
+/// arithmetic from the rational bound `log10 e ≈ 434295 / 1_000_000`
+/// (rounded UP via `div_ceil`, so the digit count is never UNDER-stated).
+/// Over-stating is the safe direction for the [`narrow_fixed_fits`] gate:
+/// it errs toward routing a borderline cell to the wider work integer.
+#[inline]
+fn exp_result_int_digits(raw: i128, scale: u32) -> u32 {
+    if raw <= 0 {
+        return 1;
+    }
+    let one_s = 10i128.pow(scale);
+    let num = (raw as u128) * 434_295;
+    let den = (one_s as u128) * 1_000_000;
+    (num.div_ceil(den) as u32) + 1
+}
+
+/// Whether the 256-bit `Fixed` has headroom to compute `e^x` correctly at
+/// working scale `w` for the storage value `raw` at `scale`.
+///
+/// `exp_fixed`'s internal peak is the `2·w_ext` squaring (`w_ext = w +
+/// extra`, `extra ≈ result_int_digits` from the `2^k` amplification lift)
+/// — the same true peak the wide-tier gate models. The `Fixed` holds ~76
+/// decimal digits (256 bits · log10 2). We require that peak plus an
+/// 8-digit margin to stay under that, so the normal fast path keeps every
+/// cell it can round correctly and only the genuine integer-regime /
+/// near-overflow cells take the wider [`WNarrow`] route.
+#[inline]
+fn narrow_fixed_fits(raw: i128, scale: u32, w: u32) -> bool {
+    let result_digits = exp_result_int_digits(raw, scale);
+    // Mirror `exp_generic::exp_fixed`'s `extra` lift: `extra ≈
+    // result_digits + margin`, `w_ext = w + extra`, squaring peak
+    // `2·w_ext`.
+    let extra = result_digits + 12 + (result_digits >> 2);
+    let w_ext = w + extra;
+    let need = 2 * w_ext + 8;
+    // Fixed capacity in decimal digits: 256 · log10(2) ≈ 76.
+    need < 76
+}
+
 /// `e` raised to a working-scale value `v_w`, returned at the same
 /// working scale `w`.
 ///
@@ -103,6 +158,144 @@ pub(crate) fn exp_fixed(v_w: Fixed, w: u32) -> Fixed {
     }
 }
 
+/// Narrow integer-regime / MAX-scale `e^x` fallback, evaluated in the
+/// wider [`WNarrow`] (`Int<24>`) work integer instead of the 256-bit
+/// `Fixed`, then narrowed back to `i128` storage with correctly-rounded
+/// directed / nearest rounding.
+///
+/// Used when the result carries too many integer digits for the `Fixed`
+/// to hold the `exp_fixed` peak ([`narrow_fixed_fits`] is false), or when
+/// a directed mode needs the never-exact treatment of a sub-resolution
+/// `e^(negative)` (`exp(-76)·10^0 ≈ 0` must round Ceiling up to `1`, not
+/// truncate to `0`). The wider work integer gives the `2^k` reassembly
+/// the headroom the flat-`w` `Fixed` lacks, and [`exp_generic::exp_fixed`]
+/// already returns the smallest positive working value (`10^-w`) for a
+/// deep-underflow `e^(negative)` so the sign is preserved into the
+/// rounding. `exp_generic::exp_fixed::<WNarrow>` is the SAME range-reduce
+/// → squaring-Taylor → `2^k`-reassemble algorithm as the per-tier wide
+/// `exp_fixed`, just run in the wider `Int<24>` — one generic kernel, no
+/// per-tier copy.
+fn exp_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) -> i128 {
+    use crate::algos::exp::exp_generic;
+
+    let w = scale + working_digits;
+    let negative_input = raw < 0;
+    let v_mag = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
+    let v_w = if negative_input { -v_mag } else { v_mag };
+
+    let ex = exp_generic::exp_fixed::<WNarrow>(v_w, w);
+    narrow_round_mag(ex, working_digits, mode, true, false)
+}
+
+/// Narrows a non-negative [`WNarrow`] working-scale magnitude `mag`
+/// (`= value · 10^w`, `value > 0` and irrational at a non-trivial
+/// argument) to a signed `i128` storage value at scale `w − shift` under
+/// `mode`. `never_exact` mirrors the wide directed path: a zero working
+/// residual is treated as a present positive sub-resolution fraction
+/// (bumps Ceiling, not Floor/Trunc). `result_neg` reapplies an odd
+/// function's sign AFTER rounding the magnitude.
+#[inline]
+fn narrow_round_mag(
+    mag: WNarrow,
+    shift: u32,
+    mode: RoundingMode,
+    never_exact: bool,
+    result_neg: bool,
+) -> i128 {
+    use crate::support::rounding::{is_nearest_mode, should_bump};
+    let divisor = WNarrow::TEN.pow(shift);
+    let (q, rem) = mag.div_rem(divisor);
+    let result_positive = !result_neg;
+    let bump = if rem != WNarrow::ZERO {
+        if is_nearest_mode(mode) {
+            let comp = divisor - rem;
+            let cmp_r = rem.cmp(&comp);
+            should_bump(mode, cmp_r, q.bit(0), result_positive)
+        } else {
+            match mode {
+                RoundingMode::Ceiling => result_positive,
+                RoundingMode::Floor => !result_positive,
+                _ => false, // Trunc
+            }
+        }
+    } else if never_exact {
+        // Present-and-positive sub-resolution residual.
+        match mode {
+            RoundingMode::Ceiling => result_positive,
+            RoundingMode::Floor => !result_positive,
+            _ => false,
+        }
+    } else {
+        false
+    };
+    let q_mag = if bump { q + WNarrow::ONE } else { q };
+    let signed = if result_neg { -q_mag } else { q_mag };
+    signed.to_i128()
+}
+
+/// `sinh(x)` / `cosh(x)` magnitude `(e^|x| ∓ e^-|x|)/2` at working scale
+/// `w`, computed in the wide [`WNarrow`] work integer. Returns the
+/// non-negative `sinh(|x|)` / `cosh(|x|)`; the odd-function sign is
+/// reapplied by the caller via [`narrow_round_mag`].
+#[inline]
+fn hyper_pos_wide_narrow(av_w: WNarrow, w: u32, is_cosh: bool) -> WNarrow {
+    use crate::algos::exp::exp_generic;
+    let ex = exp_generic::exp_fixed::<WNarrow>(av_w, w);
+    let one_w = WNarrow::TEN.pow(w);
+    // `ex = e^|x|·10^w`. The reciprocal at the same scale is `e^-|x|·10^w
+    // = 10^(2w) / ex`. For the integer-regime |x| this is a tiny positive
+    // value (≪ 1 ULP-of-storage), formed in the wide integer to avoid the
+    // `Fixed` overflow.
+    let (enx, _r) = (one_w * one_w).div_rem(ex);
+    let two = WNarrow::from_i128(2);
+    if is_cosh {
+        (ex + enx).div_rem(two).0
+    } else {
+        (ex - enx).div_rem(two).0
+    }
+}
+
+/// Narrow integer-regime `sinh(x)` via the wide [`WNarrow`] work integer.
+/// Routed from [`crate::algos::trig::trig_series_2limb::sinh_with_raw`]
+/// when the result exceeds the 256-bit `Fixed`'s headroom. `sinh` is odd.
+pub(crate) fn sinh_wide_narrow_raw(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> i128 {
+    let w = scale + working_digits;
+    let neg = raw < 0;
+    let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
+    let sh = hyper_pos_wide_narrow(av, w, false);
+    narrow_round_mag(sh, working_digits, mode, true, neg)
+}
+
+/// Narrow integer-regime `cosh(x)` via the wide [`WNarrow`] work integer.
+/// Routed from [`crate::algos::trig::trig_series_2limb::cosh_with_raw`]
+/// when the result exceeds the 256-bit `Fixed`'s headroom. `cosh` is even
+/// (always non-negative).
+pub(crate) fn cosh_wide_narrow_raw(
+    raw: i128,
+    scale: u32,
+    working_digits: u32,
+    mode: RoundingMode,
+) -> i128 {
+    let w = scale + working_digits;
+    let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
+    let ch = hyper_pos_wide_narrow(av, w, true);
+    narrow_round_mag(ch, working_digits, mode, true, false)
+}
+
+/// Whether the narrow `sinh`/`cosh` result for `raw` at `scale` exceeds
+/// the 256-bit `Fixed`'s headroom and must route through [`WNarrow`].
+/// `sinh(x)`/`cosh(x) ≈ e^|x|/2`, so the result's integer-digit count
+/// matches `e^|x|`'s — reuse the exp gate on `|raw|`.
+#[inline]
+pub(crate) fn hyper_needs_wide_narrow(raw: i128, scale: u32, w: u32) -> bool {
+    !narrow_fixed_fits(raw.unsigned_abs() as i128, scale, w)
+}
+
 /// `e^x` with caller-chosen `working_digits` above the storage scale.
 #[inline]
 #[must_use]
@@ -117,6 +310,13 @@ fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) 
         return 10_i128.pow(scale); // ONE for this scale
     }
     let w = scale + working_digits;
+    // Integer-regime / MAX-scale / sub-resolution-directed cells exceed the
+    // 256-bit `Fixed`'s headroom (the `2^k` reassembly peak overflows) or
+    // need the never-exact directed rounding the flat-`w` `Fixed` path
+    // lacks — route them through the wider `WNarrow` work integer.
+    if !narrow_fixed_fits(raw, scale, w) || !crate::support::rounding::is_nearest_mode(mode) {
+        return exp_wide_narrow_raw(raw, scale, working_digits, mode);
+    }
     let negative_input = raw < 0;
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(working_digits));
     let v_w = if negative_input { v_w.neg() } else { v_w };
@@ -141,6 +341,11 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
         return 10_i128.pow(SCALE);
     }
     let w = SCALE + STRICT_GUARD;
+    // See [`exp_with_raw`]: integer-regime / MAX-scale / directed-mode
+    // cells route through the wider `WNarrow` work integer.
+    if !narrow_fixed_fits(raw, SCALE, w) || !crate::support::rounding::is_nearest_mode(mode) {
+        return exp_wide_narrow_raw(raw, SCALE, STRICT_GUARD, mode);
+    }
     let negative_input = raw < 0;
     let v_w = Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(STRICT_GUARD));
     let v_w = if negative_input { v_w.neg() } else { v_w };

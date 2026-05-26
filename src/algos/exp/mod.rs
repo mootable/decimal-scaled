@@ -13,6 +13,12 @@
 //!   with `ln(2)` range reduction, no Smith squarings.
 //!   Registered as the unrouted `Algorithm::Schoolbook` variant.
 
+/// Width-generic guard-digit `exp` core, generic over the work integer
+/// `S: BigInt + ComputeInt`. Always compiled (the narrow D18/D38 build
+/// reaches it for the integer-regime large-result / sub-resolution cells
+/// whose 256-bit `Fixed` intermediate cannot host the integer-digit lift),
+/// and reused by the wide tiers' `Wexp` large-result path.
+pub(crate) mod exp_generic;
 pub(crate) mod exp_series_2limb;
 /// Schoolbook exponential -- direct Maclaurin series correctness reference.
 /// Registered as the unrouted `Algorithm::Schoolbook` arm; not connected

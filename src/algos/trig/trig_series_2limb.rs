@@ -916,6 +916,17 @@ pub(crate) fn sinh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         return crate::support::rounding::tiny_odd_expanding_directed(raw, 0, 1, mode);
     }
     let w = scale + working_digits;
+    // Integer-regime: the result carries too many integer digits for the
+    // 256-bit `Fixed`'s `e^|x|` reassembly — route through the wider
+    // `WNarrow` work integer (correctly-rounded, never-exact directed).
+    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w) {
+        return crate::algos::exp::exp_series_2limb::sinh_wide_narrow_raw(
+            raw,
+            scale,
+            working_digits,
+            mode,
+        );
+    }
     let v = to_fixed_w(raw, working_digits);
     // Evaluate at |v| so the dominant `e^|x|` term is computed directly
     // and accurately; the reciprocal gives the tiny `e^-|x|`. (Computing
@@ -953,6 +964,16 @@ pub(crate) fn cosh_with_raw(raw: i128, scale: u32, working_digits: u32, mode: Ro
         return 10_i128.pow(scale);
     }
     let w = scale + working_digits;
+    // Integer-regime: route through the wider `WNarrow` work integer (see
+    // `sinh_with_raw`).
+    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w) {
+        return crate::algos::exp::exp_series_2limb::cosh_wide_narrow_raw(
+            raw,
+            scale,
+            working_digits,
+            mode,
+        );
+    }
     let v = to_fixed_w(raw, working_digits);
     // cosh is even; evaluate at |v| so the dominant `e^|x|` term is
     // computed directly (see `sinh_with` for why the sign matters: a
