@@ -1,26 +1,13 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Dispatch-seam A/B microbench for the root families vs prod 0.4.4.
-//!
-//! 1. cbrt@D57<20> (the recovered regression) -- `cbrt_native`
-//!    (f64-seeded `Int<6>` Newton) vs `cbrt_table_seed` (the prior
-//!    `Int<6>` + int-`icbrt` arm) vs `cbrt_newton_slice` (generic slice).
-//! 2. sqrt@D38 reference seam -- `sqrt_mg` (256-bit `mg_divide`, the
-//!    production arm; hot u128 path ~25 ns) vs `sqrt_newton_slice`
-//!    (generic slice). Confirms sqrt@D38 stays on `MgDivide`.
-//!
-//! hypot@D38 was investigated and left on its slice (`Isqrt`) path: a
-//! correct native 256-bit `a^2+b^2` root is slower than the f64-seeded
-//! slice `isqrt`, and 0.4.4's speed came from the now-removed
-//! double-rounding min/max ratio trick. See the report.
+//! Dispatch-seam A/B microbench for the root families: native tight-`Int<W>`
+//! f64-seeded Newton vs the generic build-max slice path, at the
+//! bench-branch-compare cells (sqrt/cbrt @ D57/D76/D115/D153/D230/D307).
 //!
 //! Each candidate is asserted bit-identical across the operand spread and
 //! all six rounding modes before timing (correctness gate), then the
 //! harness `black_box`-guards inputs/outputs so nothing const-folds.
-//!
-//! Run with:
-//! `cargo bench --features "wide bench-alt" --bench root_kernel_ab`
 
 use criterion::Criterion;
 use decimal_scaled::Int;
@@ -189,30 +176,32 @@ macro_rules! wide_root_bench {
     };
 }
 
-// sqrt: W = ceil((64N + SCALE*log2(10)) / 64).
-wide_root_bench!(bench_sqrt_d76, sqrt_native_w, sqrt_newton_slice_n, 4, 6, 35, "sqrt_d76_s35");
-wide_root_bench!(bench_sqrt_d153, sqrt_native_w, sqrt_newton_slice_n, 8, 12, 75, "sqrt_d153_s75");
-wide_root_bench!(bench_sqrt_d307, sqrt_native_w, sqrt_newton_slice_n, 16, 24, 150, "sqrt_d307_s150");
-// cbrt: W = ceil((64N + 2*SCALE*log2(10)) / 64).
-wide_root_bench!(bench_cbrt_d76, cbrt_native_w, cbrt_newton_slice_n, 4, 8, 35, "cbrt_d76_s35");
-wide_root_bench!(bench_cbrt_d153, cbrt_native_w, cbrt_newton_slice_n, 8, 16, 75, "cbrt_d153_s75");
-wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 32, 150, "cbrt_d307_s150");
-wide_root_bench!(bench_sqrt_d115, sqrt_native_w, sqrt_newton_slice_n, 6, 9, 57, "sqrt_d115_s57");
-wide_root_bench!(bench_sqrt_d230, sqrt_native_w, sqrt_newton_slice_n, 12, 19, 115, "sqrt_d230_s115");
-wide_root_bench!(bench_cbrt_d115, cbrt_native_w, cbrt_newton_slice_n, 6, 12, 57, "cbrt_d115_s57");
-wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 25, 115, "cbrt_d230_s115");
+// Benched at the bench-branch-compare scales (D76 @ 20, D115/D153 @ 25,
+// D230/D307 @ 30) — the cells the bbc matrix actually measures. W is the
+// minimal work width covering mag·10^SCALE (sqrt) / mag·10^(2·SCALE) (cbrt)
+// at a near-storage-max magnitude.
+wide_root_bench!(bench_sqrt_d76, sqrt_native_w, sqrt_newton_slice_n, 4, 6, 20, "sqrt_d76_s20");
+wide_root_bench!(bench_sqrt_d115, sqrt_native_w, sqrt_newton_slice_n, 6, 8, 25, "sqrt_d115_s25");
+wide_root_bench!(bench_sqrt_d153, sqrt_native_w, sqrt_newton_slice_n, 8, 10, 25, "sqrt_d153_s25");
+wide_root_bench!(bench_sqrt_d230, sqrt_native_w, sqrt_newton_slice_n, 12, 14, 30, "sqrt_d230_s30");
+wide_root_bench!(bench_sqrt_d307, sqrt_native_w, sqrt_newton_slice_n, 16, 18, 30, "sqrt_d307_s30");
+wide_root_bench!(bench_cbrt_d76, cbrt_native_w, cbrt_newton_slice_n, 4, 7, 20, "cbrt_d76_s20");
+wide_root_bench!(bench_cbrt_d115, cbrt_native_w, cbrt_newton_slice_n, 6, 9, 25, "cbrt_d115_s25");
+wide_root_bench!(bench_cbrt_d153, cbrt_native_w, cbrt_newton_slice_n, 8, 11, 25, "cbrt_d153_s25");
+wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 16, 30, "cbrt_d230_s30");
+wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 20, 30, "cbrt_d307_s30");
 
 fn bench_wide(c: &mut Criterion) {
     bench_sqrt_d76(c);
+    bench_sqrt_d115(c);
     bench_sqrt_d153(c);
+    bench_sqrt_d230(c);
     bench_sqrt_d307(c);
     bench_cbrt_d76(c);
-    bench_cbrt_d153(c);
-    bench_cbrt_d307(c);
-    bench_sqrt_d115(c);
-    bench_sqrt_d230(c);
     bench_cbrt_d115(c);
+    bench_cbrt_d153(c);
     bench_cbrt_d230(c);
+    bench_cbrt_d307(c);
 }
 
 
