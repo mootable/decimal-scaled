@@ -197,6 +197,89 @@ wide_root_bench!(bench_cbrt_d153, cbrt_native_w, cbrt_newton_slice_n, 8, 24, 25,
 wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 30, "cbrt_d230_s30");
 wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 48, 30, "cbrt_d307_s30");
 
+// ── MAX-SCALE (S-1) cells: the bench-branch-compare regressions ──────────
+// These are the cells the bbc flagged (sqrt/cbrt at SCALE = name-1, where the
+// radicand `mag·10^(S-1)` / `mag·10^(2(S-1))` is genuinely wide, so the tight
+// `Int<W=2N/3N>` native arm should win decisively over the generic slice — the
+// slice pays a linear-`scale`-length ×10 radicand-build loop + build-max isqrt
+// scratch). Work widths: sqrt W=2N, cbrt W=3N (cover the full scale range).
+wide_root_bench!(bench_sqrt_d115_max, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 114, "sqrt_d115_s114");
+wide_root_bench!(bench_sqrt_d153_max, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 152, "sqrt_d153_s152");
+wide_root_bench!(bench_sqrt_d230_max, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 229, "sqrt_d230_s229");
+wide_root_bench!(bench_sqrt_d307_max, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 306, "sqrt_d307_s306");
+wide_root_bench!(bench_sqrt_d462_max, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 461, "sqrt_d462_s461");
+wide_root_bench!(bench_sqrt_d616_max, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 615, "sqrt_d616_s615");
+wide_root_bench!(bench_sqrt_d924_max, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 923, "sqrt_d924_s923");
+wide_root_bench!(bench_sqrt_d1232_max, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 1231, "sqrt_d1232_s1231");
+wide_root_bench!(bench_cbrt_d115_max, cbrt_native_w, cbrt_newton_slice_n, 6, 18, 114, "cbrt_d115_s114");
+wide_root_bench!(bench_cbrt_d153_max, cbrt_native_w, cbrt_newton_slice_n, 8, 24, 152, "cbrt_d153_s152");
+wide_root_bench!(bench_cbrt_d230_max, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 229, "cbrt_d230_s229");
+wide_root_bench!(bench_cbrt_d307_max, cbrt_native_w, cbrt_newton_slice_n, 16, 48, 306, "cbrt_d307_s306");
+wide_root_bench!(bench_cbrt_d462_max, cbrt_native_w, cbrt_newton_slice_n, 24, 72, 461, "cbrt_d462_s461");
+wide_root_bench!(bench_cbrt_d616_max, cbrt_native_w, cbrt_newton_slice_n, 32, 96, 615, "cbrt_d616_s615");
+wide_root_bench!(bench_cbrt_d924_max, cbrt_native_w, cbrt_newton_slice_n, 48, 144, 923, "cbrt_d924_s923");
+wide_root_bench!(bench_cbrt_d1232_max, cbrt_native_w, cbrt_newton_slice_n, 64, 192, 1231, "cbrt_d1232_s1231");
+
+// ── crossover bisection: where does native overtake the slice by scale? ──
+// At full-range W (2N sqrt / 3N cbrt) native loses at low/mid scale (full-W
+// Knuth divides on a small radicand) but wins at high scale (slice's linear
+// ×10 build + build-max scratch dominate). Bisect the crossover per tier.
+// D307 (N=16, sqrt W=32, cbrt W=48): scales 76 / 150 / 230.
+wide_root_bench!(bench_sqrt_d307_s76, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 76, "sqrt_d307_s76");
+wide_root_bench!(bench_sqrt_d307_s150b, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 150, "sqrt_d307_s150b");
+wide_root_bench!(bench_sqrt_d307_s230, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 230, "sqrt_d307_s230");
+wide_root_bench!(bench_cbrt_d307_s76, cbrt_native_w, cbrt_newton_slice_n, 16, 48, 76, "cbrt_d307_s76");
+wide_root_bench!(bench_cbrt_d307_s150b, cbrt_native_w, cbrt_newton_slice_n, 16, 48, 150, "cbrt_d307_s150b");
+wide_root_bench!(bench_cbrt_d307_s230, cbrt_native_w, cbrt_newton_slice_n, 16, 48, 230, "cbrt_d307_s230");
+// D115 (N=6, sqrt W=12, cbrt W=18): scales 28 / 57 / 85.
+wide_root_bench!(bench_sqrt_d115_s28, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 28, "sqrt_d115_s28");
+wide_root_bench!(bench_sqrt_d115_s57b, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 57, "sqrt_d115_s57b");
+wide_root_bench!(bench_sqrt_d115_s85, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 85, "sqrt_d115_s85");
+wide_root_bench!(bench_cbrt_d115_s28, cbrt_native_w, cbrt_newton_slice_n, 6, 18, 28, "cbrt_d115_s28");
+wide_root_bench!(bench_cbrt_d115_s57b, cbrt_native_w, cbrt_newton_slice_n, 6, 18, 57, "cbrt_d115_s57b");
+wide_root_bench!(bench_cbrt_d115_s85, cbrt_native_w, cbrt_newton_slice_n, 6, 18, 85, "cbrt_d115_s85");
+// D153 (N=8, sqrt W=16, cbrt W=24): scales 38 / 76 / 114.
+wide_root_bench!(bench_sqrt_d153_s38, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 38, "sqrt_d153_s38");
+wide_root_bench!(bench_sqrt_d153_s76, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 76, "sqrt_d153_s76");
+wide_root_bench!(bench_sqrt_d153_s114, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 114, "sqrt_d153_s114");
+wide_root_bench!(bench_cbrt_d153_s38, cbrt_native_w, cbrt_newton_slice_n, 8, 24, 38, "cbrt_d153_s38");
+wide_root_bench!(bench_cbrt_d153_s76, cbrt_native_w, cbrt_newton_slice_n, 8, 24, 76, "cbrt_d153_s76");
+wide_root_bench!(bench_cbrt_d153_s114, cbrt_native_w, cbrt_newton_slice_n, 8, 24, 114, "cbrt_d153_s114");
+// D230 (N=12, sqrt W=24, cbrt W=36): scales 57 / 114 / 172.
+wide_root_bench!(bench_sqrt_d230_s57, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 57, "sqrt_d230_s57");
+wide_root_bench!(bench_sqrt_d230_s114, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 114, "sqrt_d230_s114");
+wide_root_bench!(bench_sqrt_d230_s172, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 172, "sqrt_d230_s172");
+wide_root_bench!(bench_cbrt_d230_s57, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 57, "cbrt_d230_s57");
+wide_root_bench!(bench_cbrt_d230_s114, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 114, "cbrt_d230_s114");
+wide_root_bench!(bench_cbrt_d230_s172, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 172, "cbrt_d230_s172");
+
+fn bench_wide_bisect(c: &mut Criterion) {
+    bench_sqrt_d307_s76(c);
+    bench_sqrt_d307_s150b(c);
+    bench_sqrt_d307_s230(c);
+    bench_cbrt_d307_s76(c);
+    bench_cbrt_d307_s150b(c);
+    bench_cbrt_d307_s230(c);
+    bench_sqrt_d115_s28(c);
+    bench_sqrt_d115_s57b(c);
+    bench_sqrt_d115_s85(c);
+    bench_cbrt_d115_s28(c);
+    bench_cbrt_d115_s57b(c);
+    bench_cbrt_d115_s85(c);
+    bench_sqrt_d153_s38(c);
+    bench_sqrt_d153_s76(c);
+    bench_sqrt_d153_s114(c);
+    bench_cbrt_d153_s38(c);
+    bench_cbrt_d153_s76(c);
+    bench_cbrt_d153_s114(c);
+    bench_sqrt_d230_s57(c);
+    bench_sqrt_d230_s114(c);
+    bench_sqrt_d230_s172(c);
+    bench_cbrt_d230_s57(c);
+    bench_cbrt_d230_s114(c);
+    bench_cbrt_d230_s172(c);
+}
+
 fn bench_wide(c: &mut Criterion) {
     bench_sqrt_d57(c);
     bench_sqrt_d76(c);
@@ -212,11 +295,32 @@ fn bench_wide(c: &mut Criterion) {
     bench_cbrt_d307(c);
 }
 
+fn bench_wide_max(c: &mut Criterion) {
+    bench_sqrt_d115_max(c);
+    bench_sqrt_d153_max(c);
+    bench_sqrt_d230_max(c);
+    bench_sqrt_d307_max(c);
+    bench_sqrt_d462_max(c);
+    bench_sqrt_d616_max(c);
+    bench_sqrt_d924_max(c);
+    bench_sqrt_d1232_max(c);
+    bench_cbrt_d115_max(c);
+    bench_cbrt_d153_max(c);
+    bench_cbrt_d230_max(c);
+    bench_cbrt_d307_max(c);
+    bench_cbrt_d462_max(c);
+    bench_cbrt_d616_max(c);
+    bench_cbrt_d924_max(c);
+    bench_cbrt_d1232_max(c);
+}
+
 
 fn benches(c: &mut Criterion) {
     bench_sqrt(c);
     bench_cbrt(c);
     bench_wide(c);
+    bench_wide_max(c);
+    bench_wide_bisect(c);
 }
 
 fn main() {

@@ -55,14 +55,15 @@ enum Algorithm {
     /// f64 cbrt seed (commit routing the Native cells to `cbrt_native_fast_a`):
     /// a tight seed that cuts the Newton divide count, vs the earlier shipped
     /// top-64-bits seed which over-shot ∛n by ~2.5× and regressed cbrt@D57/D76.
-    /// Routed cells: `(D57,20)`, `(D76,35)`, `(D115,57)`, `(D153,75)`,
-    /// `(D230,115)`, `(D307,150)`. Microbench (`root_kernel_ab`): the
-    /// PRE-change top-bits-seed Native was 1.1–2.0× faster than the generic
-    /// slice [`Self::Newton`]; the full-radicand-seed win margin is to be
-    /// re-confirmed by a fresh `root_kernel_ab` N-way compare on a quiet
-    /// machine. Bit-identical to [`Self::Newton`] across all six modes (the
-    /// rounding tail is shared); the seed falls back to the top-bits path
-    /// past the f64 range.
+    /// Routed by `N` for D57/D76 (N = 3/4) at every scale, and for the wider
+    /// tiers D115..D1232 (N = 6..64) at high scale only (`SCALE >= 8·N` — the
+    /// empirical crossover where the tight `Int<3N>` overtakes the slice; the
+    /// slice's linear `2·scale`-length ×10 radicand build dominates above it).
+    /// Microbench (`root_kernel_ab`): 1.1–1.4× at the mid-scale cells; at the
+    /// max-scale (S-1) bench-branch-compare cells 1.4–2.9× faster than the
+    /// generic slice [`Self::Newton`]. Bit-identical to [`Self::Newton`]
+    /// across all six modes (the rounding tail is shared); the seed falls back
+    /// to the top-bits path past the f64 range.
     ///
     /// Gated with the kernel: each routed `(N, SCALE)` cell only exists
     /// when its tier is compiled in, so the variant, its `select` arms,
@@ -135,17 +136,35 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (3, _) // D57, W=9
         | (4, _) // D76, W=12
         => Select::ByAlgorithm(Algorithm::Native),
-        // High-scale Native cells for the wider tiers, each with its own
-        // exact `W` (no build-max blanket) — the historically benched-win
-        // golden-table scales.
+        // High-scale Native for the wider tiers (D115..D1232, N = 6..64),
+        // each at the full-range work width `W = 3N` (covers `mag · 10^(2·
+        // SCALE)` at any valid scale). As for sqrt the crossover is scale-
+        // dependent: the tight `Int<3N>` Native pays full-`W` work on a small
+        // radicand at low/mid scale (slice wins there), but at high scale the
+        // slice's *linear* `2·scale`-length ×10 radicand build plus its
+        // build-max `icbrt` scratch dominate and the tight `Int<3N>` Native
+        // (radicand via a const-folded `pow`) wins. `root_kernel_ab` localizes
+        // the cbrt crossover near `SCALE ≈ 7·N`; the conservative `SCALE >=
+        // 8·N` gate sits just inside the win region (every routed cell wins,
+        // none below is regressed). At the bbc max-scale (S-1) cells this
+        // recovers 1.4–2.9× over the slice (bit-identical, all six modes).
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (6, 57) // D115<57>, W=12
-        | (8, 75) // D153<75>, W=16
-        | (8, 76) // D153<76>, W=16
-        | (12, 115) // D230<115>, W=25
-        | (16, 150) // D307<150>, W=32
-        => Select::ByAlgorithm(Algorithm::Native),
-        // Everything else (wider tiers at other scales) — generic Newton
+        (6, s) if s >= 48 => Select::ByAlgorithm(Algorithm::Native), // D115, W=18
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (8, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D153, W=24
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (12, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D230, W=36
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        (16, s) if s >= 128 => Select::ByAlgorithm(Algorithm::Native), // D307, W=48
+        #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+        (24, s) if s >= 192 => Select::ByAlgorithm(Algorithm::Native), // D462, W=72
+        #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+        (32, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D616, W=96
+        #[cfg(feature = "xx-wide")]
+        (48, s) if s >= 384 => Select::ByAlgorithm(Algorithm::Native), // D924, W=144
+        #[cfg(feature = "xx-wide")]
+        (64, s) if s >= 512 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=192
+        // Everything else (wider tiers at low/mid scales) — generic Newton
         // over the int layer's width-agnostic slice `icbrt`.
         _ => Select::ByAlgorithm(Algorithm::Newton),
     }
@@ -196,15 +215,27 @@ where
         // seed that over-shoots ∛n by ~2.5×) cuts the Newton divide count,
         // recovering the cbrt_D57/D76 regression. Bit-identical (the rounding
         // tail is shared); falls back to the top-bits seed past the f64 range.
-        Algorithm::Native => match (N, SCALE) {
-            // D57 / D76 routed by N (all scales), W = 3N.
-            (3, _) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 9>(raw, const { Int::<9>::TEN.pow(2 * SCALE) }, mode),
-            (4, _) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
-            // High-scale cells for the wider tiers, each with its exact W.
-            (6, 57) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
-            (8, 75) | (8, 76) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 16>(raw, const { Int::<16>::TEN.pow(2 * SCALE) }, mode),
-            (12, 115) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 25>(raw, const { Int::<25>::TEN.pow(2 * SCALE) }, mode),
-            (16, 150) => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 32>(raw, const { Int::<32>::TEN.pow(2 * SCALE) }, mode),
+        Algorithm::Native => match N {
+            // All wide tiers run at the full-range work width `W = 3N`, which
+            // covers `mag · 10^(2·SCALE)` for every valid SCALE of the tier
+            // (the magnitude is ≤ 64N bits and `10^(2·SCALE)` adds ≤ 128N more
+            // at the tier's max scale, so 192N bits = 3N limbs suffice).
+            // `10^(2·SCALE)` folds at compile time. The `_ => Newton` fallback
+            // is dead for any cell `select` routes to `Native`.
+            3 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 9>(raw, const { Int::<9>::TEN.pow(2 * SCALE) }, mode),
+            4 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 12>(raw, const { Int::<12>::TEN.pow(2 * SCALE) }, mode),
+            6 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 18>(raw, const { Int::<18>::TEN.pow(2 * SCALE) }, mode),
+            8 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 24>(raw, const { Int::<24>::TEN.pow(2 * SCALE) }, mode),
+            12 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 36>(raw, const { Int::<36>::TEN.pow(2 * SCALE) }, mode),
+            16 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 48>(raw, const { Int::<48>::TEN.pow(2 * SCALE) }, mode),
+            #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+            24 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 72>(raw, const { Int::<72>::TEN.pow(2 * SCALE) }, mode),
+            #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
+            32 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 96>(raw, const { Int::<96>::TEN.pow(2 * SCALE) }, mode),
+            #[cfg(feature = "xx-wide")]
+            48 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 144>(raw, const { Int::<144>::TEN.pow(2 * SCALE) }, mode),
+            #[cfg(feature = "xx-wide")]
+            64 => cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, 192>(raw, const { Int::<192>::TEN.pow(2 * SCALE) }, mode),
             _ => cbrt::cbrt_newton::cbrt_newton::<N>(raw, SCALE, mode),
         },
         #[cfg(any(feature = "d57", feature = "wide"))]
