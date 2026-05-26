@@ -53,17 +53,17 @@ enum Select {
 /// schoolbook. File-private policy data — `dispatch` threads it into the
 /// kernel as an argument; nothing outside this policy imports it.
 ///
-/// **48**, the benched crossover (`benches/micro/mul_kernel_ab.rs`,
-/// schoolbook vs one-level Karatsuba): schoolbook wins through 32 limbs
-/// (2.1× @8 … 1.32× @32), Karatsuba wins at 48 (1.20×) and breaks even at
-/// 64 (1.01×). So D924 (48) / D1232 (64) storage products and wider
-/// cross-scale multiplies take Karatsuba; D616 (32) and narrower stay
-/// schoolbook. (The in-tree Karatsuba is weak — high crossover, small gain;
-/// a Toom-3 / tighter split would lower it. Future work.)
+/// **64**, the benched crossover (`mul_kernel_ab`, schoolbook vs one-level
+/// Karatsuba): schoolbook wins through 48 limbs (2.67× @8, 2.00× @16,
+/// 1.35× @32, 1.18× @48) and Karatsuba first wins at 64 (1.14×). So only
+/// the N=64 equal-length product (D1232 storage) and wider take Karatsuba;
+/// D924 (48) and narrower stay schoolbook. (The in-tree Karatsuba is weak —
+/// high crossover, small gain; a Toom-3 / tighter split would lower it.
+/// Kept as the alternative for that re-tune.)
 ///
 /// Must be `>= 4`: the recursion's z1 sum product runs on `⌈n/2⌉ + 1`
 /// limbs, which only strictly shrinks below `n` once `n >= 4`.
-const KARATSUBA_THRESHOLD: usize = 48;
+const KARATSUBA_THRESHOLD: usize = 64;
 
 // ── 3. the matcher: keyed on the runtime operand lengths ──────────────
 
