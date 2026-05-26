@@ -54,24 +54,40 @@ impl Algorithm {
     /// drives an odd `N` to `U64`).
     ///
     /// **`LowLimb`** (benched via `sqr_low_u128_ab`, `u128` vs `u64`
-    /// truncated-low symmetric square): `u128` wins at every even width
-    /// measured — the wide exp/powf Smith-squaring WORK integers (the decisive
-    /// band) and the narrower storage widths alike. Representative verdicts,
-    /// two independent core-pinned runs:
+    /// truncated-low symmetric square): `u128` wins or ties at every even width
+    /// measured. The sweep spans the FULL even set — the narrow storage tiers
+    /// {2,4,6,8,12,16,24} (the crossover-bisection region) AND the wide exp/powf
+    /// Smith-squaring WORK integers {32,48,64,96,128,192,256} (the decisive,
+    /// live band). Representative verdicts, two independent core-22-pinned runs:
     ///
     /// | N (square site)             | `u128` vs `u64`      |
     /// |-----------------------------|----------------------|
-    /// | 128 (D616 work)             | tie .. 1.29× faster  |
-    /// | 192 (D924 work)             | 1.19 .. 1.66× faster |
-    /// | 256 (D1232 work)            | tie .. 1.37× faster  |
-    /// | 64 (D307 work, D1232 store) | 1.21 .. 1.27× faster |
-    /// | 48                          | 1.17 .. 1.20× faster |
-    /// | 32                          | ~1.02 .. 1.04× (≈tie)|
+    /// | 256 (D1232 work)            | 1.21 .. 1.26× faster |
+    /// | 192 (D924 work)             | 1.29 .. 1.39× faster |
+    /// | 128 (D616 work)             | 1.23 .. 1.30× faster |
+    /// | 96                          | 1.32 .. 1.37× faster |
+    /// | 64 (D307 work, D1232 store) | 1.16 .. 1.30× faster |
+    /// | 48                          | 1.17 .. 1.22× faster |
+    /// | 32                          | 1.06 .. 1.15× faster |
+    /// | 24                          | 1.13 .. 1.18× faster |
+    /// | 16                          | 1.10 .. 1.26× faster |
+    /// | 12                          | ≈tie (1.02× / 1.06× either way) |
+    /// | 8                           | ≈tie (u64 by ~1.01..1.05×) |
+    /// | 6                           | 1.11× faster         |
+    /// | 4                           | tie .. 1.13× faster  |
+    /// | 2                           | tie .. 1.17× faster  |
     ///
-    /// So every even `N` takes the `for_packing` `U128` default — no even cell
-    /// regresses. This is the tuning seam: if a future bench shows `u128`
-    /// losing at some even cell, carve that `N` out to `U64` here; the kernel
-    /// and dispatch stay untouched.
+    /// Every LIVE call site (the wide-transcendental Smith squaring, `N` ≥ 32)
+    /// wins `u128` decisively. The only cells that lean `u64` are the narrow
+    /// {8,12} near-ties — and those straddle zero across runs (12 flips winner
+    /// run-to-run; 8 is u64 by a single-percent margin) and, crucially, are NOT
+    /// live `sqr_low` sites (no wide-transcendental instantiates them). Carving
+    /// them to `U64` would add a special-case arm for a sub-percent gain that
+    /// never executes in production — so `for_packing`-all-even holds (mirrors
+    /// the `mul_low` mapper's same narrow-tie-but-not-live finding). This stays
+    /// the tuning seam: if a future bench shows `u128` losing at some LIVE even
+    /// cell, carve that `N` out to `U64` here; the kernel and dispatch stay
+    /// untouched.
     #[inline]
     const fn limb_size<const N: usize>(self) -> LimbSize {
         match self {

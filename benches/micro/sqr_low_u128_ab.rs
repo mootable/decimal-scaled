@@ -88,16 +88,30 @@ fn compare_width<const N: usize>(c: &mut Criterion, width_label: &str) {
     );
 }
 
-/// Bench the even widths the wide exp/powf squaring touches: the guard-digit
-/// work integers and the storage widths (N=64 is both a D307 work integer and
-/// D1232 storage).
+/// Bench the full even-width set so the `for_packing`-all-even default is
+/// validated (not just inherited) across the narrow storage tiers AND the wide
+/// exp/powf Smith-squaring work integers. Sweeps every even `N` the policy can
+/// emit U128 for — narrow {2,4,6,8,12,16,24} (crossover bisection region),
+/// mid {32,48,64} (D307 work / D1232 storage), and the wide work integers
+/// {96,128,192,256}. The winner per even `N` becomes that cell's `LimbSize`.
 fn bench_sqr_low(c: &mut Criterion) {
-    compare_width::<128>(c, "Int128");
-    compare_width::<192>(c, "Int192");
-    compare_width::<256>(c, "Int256");
+    // Narrow even widths — bisect the u64↔u128 crossover here.
+    compare_width::<2>(c, "Int2");
+    compare_width::<4>(c, "Int4");
+    compare_width::<6>(c, "Int6");
+    compare_width::<8>(c, "Int8");
+    compare_width::<12>(c, "Int12");
+    compare_width::<16>(c, "Int16");
+    compare_width::<24>(c, "Int24");
+    // Mid widths (storage + D307 work).
     compare_width::<32>(c, "Int32");
     compare_width::<48>(c, "Int48");
     compare_width::<64>(c, "Int64");
+    // Wide exp/powf Smith-squaring work integers.
+    compare_width::<96>(c, "Int96");
+    compare_width::<128>(c, "Int128");
+    compare_width::<192>(c, "Int192");
+    compare_width::<256>(c, "Int256");
 }
 
 fn main() {
