@@ -1236,6 +1236,28 @@ macro_rules! decl_wide_transcendental {
                     let cap_digits = (<W>::BITS / 8).saturating_sub(int_digits + 8);
                     let max_guard = cap_digits.saturating_sub(target).max(base_guard);
 
+                    // A directed result is trustworthy once two consecutive
+                    // guards agree AND the residual has resolved its position
+                    // relative to the grid line. Two regimes are "resolved":
+                    //
+                    //  * residual EXACTLY zero (`dist == 0`): the value sits on
+                    //    a grid line to the full working resolution and stays
+                    //    there as the guard grows — a genuine algebraic-exact
+                    //    point (`sinh 0`, `cosh 0 = 1`, `log_b(b^k)`). Accept it
+                    //    (the floor `q` is exact; no directed bump).
+                    //  * residual CLEAR of the band (`dist > divisor/1000`): the
+                    //    deciding fraction is well above any kernel round-off,
+                    //    so the directed side is certain.
+                    //
+                    // The dangerous middle case is a SMALL NON-ZERO residual
+                    // inside the band: that is a finite-precision ARTIFACT, not
+                    // the true residual. E.g. `log10(10^k − 1) = k − 10^-k/ln10`
+                    // — at a working scale `w < k` the `−10^-k` deviation is
+                    // invisible and AGM/division round-off leaves a spurious
+                    // residual on the WRONG (high) side, so Trunc/Floor would
+                    // wrongly keep `k`. While the residual sits in the band we
+                    // keep escalating until the deviation materialises (the
+                    // guard exceeds the input's digit span) or the cap is hit.
                     let mut guard = base_guard;
                     loop {
                         if guard >= max_guard {
@@ -1247,9 +1269,13 @@ macro_rules! decl_wide_transcendental {
                         // reached, then confirm with a further step.
                         let step = (target + base_guard).max(base_guard);
                         let next_guard = guard.saturating_add(step).min(max_guard);
-                        let (hi, _, _) = directed_narrow(next_guard);
-                        if hi == lo {
-                            break lo;
+                        let (hi, hi_dist, hi_div) = directed_narrow(next_guard);
+                        let hi_band = hi_div / lit(1000);
+                        // Resolved iff the residual is exactly on the grid line
+                        // (exact algebraic point) or clear of the near-grid band.
+                        let resolved = hi_dist == lit(0) || hi_dist > hi_band;
+                        if hi == lo && resolved {
+                            break hi;
                         }
                         guard = next_guard;
                         lo = hi;
@@ -1381,13 +1407,19 @@ macro_rules! decl_wide_transcendental {
                 $crate::int::types::traits::BigInt::resize_to::<$Storage>(v)
             }
 
-            /// Exact-power pin for `exp2`: if the storage raw `raw`
-            /// (= `x · 10^scale`) is an exact integer `x = k` and `2^k`
-            /// is representable at the storage scale, returns the exact
-            /// `$Storage` result; else `None` (fall through to the kernel).
+            /// Exact-power pin for `exp2`: when the storage raw `raw`
+            /// (= `x · 10^scale`) is an exact integer `x = k`,
+            /// `exp2(k) = 2^k` is an exact algebraic point — a dyadic
+            /// rational, never a transcendental residual. Returns the
+            /// **correctly-rounded** `$Storage` result under `mode`,
+            /// computed from exact integer arithmetic (so the working-scale
+            /// series can never bump it across a tie or grid line); `None`
+            /// only when `x` is not an exact integer (the genuinely
+            /// transcendental case the kernel handles).
             pub(crate) fn exp2_exact_pin(
                 raw: $Storage,
                 scale: u32,
+                mode: $crate::support::rounding::RoundingMode,
             ) -> ::core::option::Option<$Storage> {
                 let raw_w = widen_storage(raw);
                 let one_s = pow10_cached(scale);
@@ -1396,7 +1428,64 @@ macro_rules! decl_wide_transcendental {
                     return ::core::option::Option::None;
                 }
                 let k = $crate::int::types::traits::BigInt::to_i128(kq);
-                exp2_exact_pow(k, scale).map(narrow_to_storage)
+                // The exactly-representable powers (`k ≥ 0`, or `k < 0` with
+                // `|k| ≤ scale`) land on the storage grid with no rounding.
+                if let ::core::option::Option::Some(v) = exp2_exact_pow(k, scale) {
+                    return ::core::option::Option::Some(narrow_to_storage(v));
+                }
+                // `k < 0`, `|k| > scale`: `2^k · 10^scale = 5^scale / 2^p`
+                // (`p = |k| − scale ≥ 1`) is a proper dyadic fraction. Round
+                // it exactly under `mode` (`exp2(-1)=0.5` is the half-to-even
+                // tie → 0; a sub-resolution `2^k` only `Ceiling`-rounds up).
+                // For `k > 0` `exp2_exact_pow` returns `None` only on genuine
+                // overflow — defer to the kernel's panic-on-narrow there.
+                if k >= 0 {
+                    return ::core::option::Option::None;
+                }
+                let p = (k.unsigned_abs() as u32) - scale;
+                ::core::option::Option::Some(round_pow2_fraction(scale, p, mode))
+            }
+
+            /// Correctly-rounded `$Storage` value of the dyadic fraction
+            /// `5^scale / 2^p` (`p ≥ 1`) — the `exp2(k)` storage value when
+            /// `k = −(p + scale)`. The result is strictly positive and at
+            /// most `5^scale / 2`, so it always fits storage.
+            ///
+            /// `q = num >> p`, residual `r = num mod 2^p`; the half-way
+            /// divisor is `2^p` so the tie compares `2·r` with `2^p`. When
+            /// `2^p` exceeds the working width the quotient is `0` and the
+            /// whole `num` is a sub-half positive residual (only `Ceiling`
+            /// rounds up).
+            fn round_pow2_fraction(
+                scale: u32,
+                p: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> $Storage {
+                let num = lit(5).pow(scale);
+                // When `2^p` overflows the working width it strictly exceeds
+                // `2·num` (since `num < 2^BITS` and `p ≥ BITS`), so `q = 0`
+                // and the residual `num` sits strictly below half — a
+                // sub-resolution positive value (only `Ceiling` rounds up).
+                if p >= <W as $crate::int::types::traits::BigInt>::BITS {
+                    let bump = $crate::support::rounding::should_bump(
+                        mode,
+                        ::core::cmp::Ordering::Less,
+                        false,
+                        true,
+                    );
+                    return narrow_to_storage(if bump { lit(1) } else { lit(0) });
+                }
+                let denom = lit(1) << p;
+                let (q, r) = num.div_rem(denom);
+                if r.is_zero() {
+                    return narrow_to_storage(q);
+                }
+                let twice_r = r << 1;
+                let cmp_r = twice_r.cmp(&denom);
+                let q_is_odd = q.bit(0);
+                let bump =
+                    $crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, true);
+                narrow_to_storage(if bump { q + lit(1) } else { q })
             }
 
             #[inline]
@@ -3108,7 +3197,7 @@ macro_rules! decl_wide_transcendental {
                 if raw == $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     return <$Storage as $crate::int::types::traits::BigInt>::TEN.pow(SCALE);
                 }
-                if let ::core::option::Option::Some(v) = exp2_exact_pin(raw, SCALE) {
+                if let ::core::option::Option::Some(v) = exp2_exact_pin(raw, SCALE, mode) {
                     return v;
                 }
                 let k_lift = exp2_result_int_digits(raw, SCALE);
@@ -3815,7 +3904,17 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    return self.powi(n);
+                    // `x^n` for an exact integer `n` is `x^|n|` (exact
+                    // square-and-multiply) or its reciprocal `1 / x^|n|`.
+                    // The reciprocal is generally NOT exact (e.g. `93^-2`),
+                    // so it MUST be rounded under the caller's `mode` — using
+                    // the default-mode `powi` here would silently drop a
+                    // directed mode (Ceiling of a sub-resolution `x^-k` must
+                    // round up to 1, not truncate to 0).
+                    if n >= 0 {
+                        return self.powi(n);
+                    }
+                    return Self::ONE.div_with(self.powi(n.unsigned_abs() as i32), mode);
                 }
                 // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
                 // perfect-square base (e.g. 4^0.5), rounding 1 LSB short

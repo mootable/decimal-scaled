@@ -194,9 +194,15 @@ pub(crate) fn exp_tang<
         return C::storage_one(SCALE);
     }
 
-    if !DIRECTED {
-        // Single-shot narrowing (D57 18..=22 and 45..=56). Reduction runs
-        // at the const-folded `w = SCALE + GUARD`.
+    if !DIRECTED && crate::support::rounding::is_nearest_mode(mode) {
+        // Single-shot narrowing (D57 18..=22 and 45..=56) — NEAREST modes
+        // only. Reduction runs at the const-folded `w = SCALE + GUARD`; the
+        // band guard keeps the working error well under half a storage ULP,
+        // so a single narrow is correctly rounded to nearest. Directed modes
+        // (which must decide which SIDE of a grid line the true value lies,
+        // and can sit a sub-resolution residual below the work-int's
+        // resolution — `exp(-10^-S)` just under `1.0` at MAX scale) fall
+        // through to the never-exact Ziv path below.
         let w = SCALE + GUARD;
         let v_w = C::to_work_w(raw, GUARD);
         let result = tang_exp_fixed::<C, M, INTERNAL_EXTRA>(v_w, w);

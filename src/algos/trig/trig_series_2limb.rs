@@ -118,8 +118,21 @@ int2_trig!(with_scale to_radians_with, to_radians_with_raw);
 /// exactly at the storage scale. The threshold returned here is the
 /// conservative integer `10^(SCALE − ⌈(SCALE+2)/3⌉)` in storage
 /// units (one decimal digit safety margin from the exact bound).
+///
+/// At `SCALE == 0` the cubic-only bound `(1.5)^(1/3) ≈ 1.14` storage
+/// units would admit `x = 1` radian, but the function is nowhere near
+/// linear that far from the origin (`tan(1) = 1.557`, `asin(1) = π/2`),
+/// so the only argument the linear identity holds for is the
+/// already-pinned `x = 0`. A plain `saturating_sub` clamps the band
+/// exponent to `0` and wrongly returns `10^0 = 1`; we special-case
+/// `SCALE == 0` to `0` so no nonzero storage value short-circuits and the
+/// full working-scale kernel runs. For `SCALE ≥ 1` the golden-validated
+/// band stands.
 #[inline]
 pub(crate) const fn small_x_linear_threshold<const SCALE: u32>() -> i128 {
+    if SCALE == 0 {
+        return 0;
+    }
     let thresh_exp = SCALE.saturating_sub(SCALE.div_ceil(3));
     10_i128.pow(thresh_exp)
 }
