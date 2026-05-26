@@ -826,6 +826,15 @@ path = "benches/micro/to_radians_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# to_radians_baseline: per-call public-method timing matched to the
+# v0.4.4 to_radians_v044 baseline (same tiers/scales/inputs) for a direct
+# 0.4.4-vs-0.5.0 comparison.
+[[bench]]
+name = "to_radians_baseline"
+path = "benches/micro/to_radians_baseline.rs"
+harness = false
+required-features = ["wide"]
+
 # {exp,ln,trig}_series_tang_ab: dispatch-seam A/Bs for the transcendental
 # Series-vs-Tang policy choice. The `policy::{exp,ln,trig}::select` Tang bands
 # were tuned via kernel-ISOLATION benches; these A/B the production Tang kernel
