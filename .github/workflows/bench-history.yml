@@ -23,16 +23,14 @@ name: "\U0001FA91 bench-history (cross-version comparison)"
 #               a (version × scale) trend table per (op × width) to the run
 #               summary + ONE downloadable artifact (table .md + medians .tsv).
 #
-# Triggers: (1) push to a release branch or main (queue-of-1 via concurrency,
-# advisory only — NOT a required gate); (2) manual workflow_dispatch (the
-# dispatch option only appears once this file is on the default branch; the
-# push trigger works from the branch immediately).
+# Triggers: (1) pull_request into main (the PR-to-main review hook — advisory,
+# NOT a required gate); (2) manual workflow_dispatch (on-demand, any branch).
+# NO push trigger — on a branch this runs ONLY on demand; only
+# bench-branch-compare auto-runs on push.
 
 on:
-  push:
-    branches:
-      - 'release/**'
-      - 'main'
+  pull_request:
+    branches: [main]
   workflow_dispatch:
     inputs:
       ref:
