@@ -873,8 +873,8 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
-# (div_knuth vs the zero-free-scratch div_knuth_fast) at the regressed
-# wide limb counts. The fast pre-check for the wide-division recovery.
+# (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
+# wide limb counts, full-storage-width `balanced` and `wide_num` shapes.
 [[bench]]
 name = "div_kernel_ab"
 path = "benches/micro/div_kernel_ab.rs"
