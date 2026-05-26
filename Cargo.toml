@@ -890,6 +890,18 @@ path = "benches/micro/sqr_low_u128_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# sqr_full_ab: N-way A/B for the int::policy::sqr truncated-low square across
+# the full width axis N = 2..64 -- the const half_product (production arm) vs
+# the const schoolbook (route-through-mul baseline) vs the non-const
+# sqr_low_limb u64/u128 LimbSize arms (the sqr_low policy's axis), all gated
+# bit-identical before timing. Maps which const algorithm sqr must route to
+# and confirms the u128 win lives only in the non-const sqr_low policy.
+[[bench]]
+name = "sqr_full_ab"
+path = "benches/micro/sqr_full_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # exp_wide_series_tang_ab: the N-way width x scale x algorithm map for wide
 # exp -- Series (with the u128 square) vs single-shot Tang at D307..D1232,
 # at the bbc SCALE 30 and the tiers' narrow bands, validity-gated (Tang ==

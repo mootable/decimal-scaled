@@ -21,17 +21,55 @@
 //!
 //! # Algorithm
 //!
-//! The algorithm fn [`crate::int::algos::sqr::sqr_half_product::sqr_half_product`]
-//! computes `x^2` via the const half-product kernel
-//! [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`]: it exploits symmetry to
-//! form each cross term once and double it, halving the limb-multiply count
-//! relative to a general `NxN` multiply. The layering points DOWN -- the
-//! algorithm calls the kernel, never a squaring method on `Uint<N>`.
+//! Two const squaring algorithms, both bit-identical (each computes `x^2`
+//! modulo `2^BITS` exactly), selected per `N` by a **benched crossover band**:
 //!
-//! A `Schoolbook` reference arm is registered for the naive `x*x` delegate
-//! (via [`crate::int::algos::sqr::sqr_schoolbook::sqr_schoolbook`]). It is unrouted
-//! (not returned by `select`) and marked `#[allow(dead_code)]` so the
-//! exhaustive match stays warning-clean.
+//! - [`crate::int::algos::sqr::sqr_half_product::sqr_half_product`] computes
+//!   `x^2` via the const comba half-product kernel
+//!   [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`]: it exploits
+//!   symmetry to form each cross term once and double it, ≈`N^2/4`
+//!   limb-multiplies. It is the default everywhere outside the band.
+//! - [`crate::int::algos::sqr::sqr_schoolbook::sqr_schoolbook`] computes the
+//!   full `x*x` truncated to the low `N` limbs via the unrolled fixed-width
+//!   [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernel
+//!   (≈`N^2/2` limb-multiplies, no symmetry). Despite the higher multiply
+//!   count it WINS in the mid-width band: the comba's variable per-column
+//!   inner-loop bound defeats the unroller exactly where `mul_low_fixed`
+//!   still unrolls cleanly.
+//!
+//! The `sqr_full_ab` A/B (`half_product` vs `schoolbook` across `N = 2..64`,
+//! both const, the only candidates this `const fn` dispatch can route to;
+//! three independent core-pinned runs) localizes the crossover:
+//!
+//! | N           | winner       | margin            |
+//! |-------------|--------------|-------------------|
+//! | 2, 3, 4, 6  | ~tie         | <= 1.10x (noise)  |
+//! | 8, 10, 12   | schoolbook   | 1.15 .. 1.38x     |
+//! | 14, 16, ..  | half_product | 1.46 .. 1.98x     |
+//!
+//! So the `Schoolbook` band is [`SCHOOLBOOK_LO`]`..=`[`SCHOOLBOOK_HI`]
+//! (`8..=13`, placing the upper edge between the N=12 schoolbook win and the
+//! N=14 half_product win). The sub-N=8 ties stay on `HalfProduct` — the
+//! algorithmically-fewer-multiplies default, no flip on noise. N=8 (D153)
+//! and N=12 (D230) are real storage tiers, so the band recovers a real win
+//! on the square-and-multiply (`pow`/`cube`) and transcendental paths.
+//!
+//! The layering points DOWN — each algorithm calls the kernel, never a
+//! squaring method on `Uint<N>`.
+//!
+//! ## What this policy does NOT route to (the const wall)
+//!
+//! [`dispatch`] is `const fn` (`Uint<N>::wrapping_sqr` is `const fn` and feeds
+//! `pow`/`cube`/const contexts), so it can only choose between **const**
+//! kernels. The u128-packed truncated-low square
+//! [`crate::int::algos::sqr::sqr_low_limb::sqr_low_limb`] is NOT `const fn`
+//! (the [`crate::int::types::compute_int::Limb`] trait methods are not const),
+//! so the `LimbSize` (u64 / u128) axis is INELIGIBLE here. That axis — where
+//! the `sqr_full_ab` map shows `u128` overtaking both const arms at `N >= 32`
+//! — is owned by the separate **non-const** policy
+//! [`crate::int::policy::sqr_low`] (benched via `sqr_low_u128_ab`), which
+//! drives `BigInt::wrapping_sqr_low_u128`. This file deliberately does not
+//! duplicate that axis.
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
@@ -61,22 +99,22 @@ enum Algorithm {
     /// term once and doubles it: `N(N+1)/2` limb-multiplies rather than
     /// `N^2`. Result is `x^2` modulo `2^BITS`.
     HalfProduct,
-    /// [`sqr_schoolbook`] -- naive reference squaring via the const
-    /// [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernel. Treats
-    /// squaring as a general `x*x` multiply: `N^2` limb-multiplies, no
-    /// symmetry exploitation. Bit-identical to `HalfProduct`; unrouted
-    /// reference arm.
-    #[allow(dead_code)]
+    /// [`sqr_schoolbook`] -- full `x*x` truncated to the low `N` limbs via the
+    /// const unrolled [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`]
+    /// kernel: `N^2` limb-multiplies, no symmetry exploitation. Bit-identical
+    /// to `HalfProduct`. ROUTED in the benched mid-width band
+    /// [`SCHOOLBOOK_LO`]`..=`[`SCHOOLBOOK_HI`], where the fixed-width unroll
+    /// beats the comba despite the higher multiply count.
     Schoolbook,
 }
 
 // -- 2. the verdict --------------------------------------------------------
 
 /// A settled algorithm, or "the value decides". The sqr picker always
-/// returns `ByAlgorithm`: the choice is fully determined by `N` (which is
-/// constant, and the same algorithm wins at every `N`). `ByValue` is part
-/// of the canonical shape for uniformity across functions; `select` never
-/// returns it.
+/// returns `ByAlgorithm`: the choice is fully determined by `N` (constant per
+/// monomorphisation) via the benched crossover band in [`select`]. `ByValue`
+/// is part of the canonical shape for uniformity across functions; `select`
+/// never returns it.
 #[derive(Clone, Copy)]
 enum Select<const N: usize> {
     ByAlgorithm(Algorithm),
@@ -84,13 +122,34 @@ enum Select<const N: usize> {
     ByValue(fn(&Uint<N>) -> Algorithm),
 }
 
+// -- policy data: the benched crossover band ------------------------------
+
+/// Inclusive lower edge of the [`Algorithm::Schoolbook`] band. Below this the
+/// `sqr_full_ab` map is a statistical tie (`N = 2/3/4/6`, <= 1.10x both
+/// directions across runs), so those `N` stay on the fewer-multiplies
+/// [`Algorithm::HalfProduct`] default. File-private policy DATA.
+const SCHOOLBOOK_LO: usize = 8;
+
+/// Inclusive upper edge of the [`Algorithm::Schoolbook`] band. The const A/B
+/// shows `schoolbook` winning at `N = 8/10/12` and `half_product` winning at
+/// `N >= 14`, so the band ends at `13` (between the N=12 schoolbook win and
+/// the N=14 half_product win). File-private policy DATA.
+const SCHOOLBOOK_HI: usize = 13;
+
 // -- 3. the matcher: const, keyed on `N`, total over the key --------------
 
 /// Pick the squaring algorithm for storage limb count `N`. Total over the
-/// key; the half-product squaring kernel is width-independent so
-/// `HalfProduct` wins at every `N`.
+/// key: the benched mid-width band [`SCHOOLBOOK_LO`]`..=`[`SCHOOLBOOK_HI`]
+/// takes the full unrolled [`Algorithm::Schoolbook`] (it beats the comba
+/// there despite forming twice the partial products — the comba's variable
+/// inner-loop bound defeats the unroller in that band); every other width
+/// takes the symmetric [`Algorithm::HalfProduct`].
 const fn select<const N: usize>() -> Select<N> {
-    Select::ByAlgorithm(Algorithm::HalfProduct)
+    if N >= SCHOOLBOOK_LO && N <= SCHOOLBOOK_HI {
+        Select::ByAlgorithm(Algorithm::Schoolbook)
+    } else {
+        Select::ByAlgorithm(Algorithm::HalfProduct)
+    }
 }
 
 // -- 4. the dispatcher: fold the verdict, then dispatch --------------------
