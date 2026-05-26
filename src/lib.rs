@@ -668,6 +668,21 @@ pub mod __bench_internals {
     {
         crate::algos::rem::rem_int_layer::rem_int_layer::<N>(a, b)
     }
+    /// The pre-fast-path `rem_int_layer`: always the exact-scratch Knuth
+    /// divmod (no single-word `u128 % u128` short-circuit). Exposed so
+    /// `rem_kernel_ab` can A/B the small-operand fast path's win against the
+    /// divmod-only path it now guards, on the scale-0 bbc shape.
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn dec_rem_int_layer_divmod<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N>
+    where
+        crate::int::types::Int<N>: crate::int::types::compute_int::ComputeInt,
+    {
+        crate::algos::rem::rem_int_layer::rem_int_layer_divmod::<N>(a, b)
+    }
     /// The OLD wide decimal-remainder path: `Int::wrapping_rem` (the const
     /// single-algorithm `div_rem`, whose multi-limb fallback is an
     /// `O(bit_len)` binary shift-subtract). Exposed so `rem_kernel_ab` can

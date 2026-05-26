@@ -27,8 +27,9 @@
 use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::__bench_internals::{
-    dec_rem_int_layer, dec_rem_native, int_from_mag_limbs, int_wrapping_rem_slice, rem_native,
-    rem_native_direct, rem_schoolbook, rem_small_fast, rem_via_div_rem,
+    dec_rem_int_layer, dec_rem_int_layer_divmod, dec_rem_native, int_from_mag_limbs,
+    int_wrapping_rem_slice, rem_native, rem_native_direct, rem_schoolbook, rem_small_fast,
+    rem_via_div_rem,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -201,6 +202,11 @@ macro_rules! dec_rem_wide_cell {
         let one = k_times_pow10::<$n>(1, $scale);
         let bal_a = synth::<$n>(7919, $n);
         let bal_b = synth::<$n>(104729, $n);
+        // scale-0 small-operand shape: the EXACT bbc cell (`D<N>::<0>(2) %
+        // D<N>::<0>(1)`) — both operands are tiny single-word integers, the
+        // dominant scale-0 decimal-`rem` regression.
+        let s0_two = k_times_pow10::<$n>(2, 0);
+        let s0_one = k_times_pow10::<$n>(1, 0);
         assert_eq!(
             dec_rem_int_layer::<$n>(two, one),
             int_wrapping_rem_slice::<$n>(two, one),
@@ -213,8 +219,24 @@ macro_rules! dec_rem_wide_cell {
             "dec rem balanced disagree {}",
             $label
         );
+        // The fast path must be bit-identical to the divmod-only path on the
+        // s0 small shape (it short-circuits) AND the balanced shape (it
+        // doesn't) — the validity wall.
+        assert_eq!(
+            dec_rem_int_layer::<$n>(s0_two, s0_one),
+            dec_rem_int_layer_divmod::<$n>(s0_two, s0_one),
+            "dec rem fastpath s0 disagree {}",
+            $label
+        );
+        assert_eq!(
+            dec_rem_int_layer::<$n>(bal_a, bal_b),
+            dec_rem_int_layer_divmod::<$n>(bal_a, bal_b),
+            "dec rem fastpath balanced disagree {}",
+            $label
+        );
 
         let inputs = vec![
+            Pair { label: "s0_small", a: s0_two, b: s0_one },
             Pair { label: "short_circuit", a: two, b: one },
             Pair { label: "balanced", a: bal_a, b: bal_b },
         ];
@@ -225,9 +247,10 @@ macro_rules! dec_rem_wide_cell {
             inputs,
             vec![
                 (
-                    "operator_knuth",
+                    "fastpath",
                     (|p: Pair<$n>| dec_rem_int_layer::<$n>(p.a, p.b)) as fn(Pair<$n>) -> Int<$n>,
                 ),
+                ("divmod_only", |p: Pair<$n>| dec_rem_int_layer_divmod::<$n>(p.a, p.b)),
                 ("old_wrapping_rem", |p: Pair<$n>| int_wrapping_rem_slice::<$n>(p.a, p.b)),
             ],
         );
@@ -253,6 +276,15 @@ fn bench(c: &mut Criterion) {
         // Decimal-rem dispatch seam (kept).
         Int<1> => |c: &mut Criterion| dec_rem_cell!(c, 1, "D18"),
         Int<2> => |c: &mut Criterion| dec_rem_cell!(c, 2, "D38"),
+        // Wide decimal-rem cells: the s0_small input is the bbc scale-0
+        // regression cell (D57 5.34× worst), the short_circuit/balanced
+        // inputs guard the non-small shapes against regression. The scale
+        // arg drives the short_circuit operand size only.
+        Int<3> => |c: &mut Criterion| dec_rem_wide_cell!(c, 3, "D57_s28", 28),
+        Int<4> => |c: &mut Criterion| dec_rem_wide_cell!(c, 4, "D76_s38", 38),
+        Int<6> => |c: &mut Criterion| dec_rem_wide_cell!(c, 6, "D115_s57", 57),
+        Int<8> => |c: &mut Criterion| dec_rem_wide_cell!(c, 8, "D153_s76", 76),
+        Int<12> => |c: &mut Criterion| dec_rem_wide_cell!(c, 12, "D230_s115", 115),
         Int<16> => |c: &mut Criterion| dec_rem_wide_cell!(c, 16, "D307_s153", 153),
         Int<32> => |c: &mut Criterion| dec_rem_wide_cell!(c, 32, "D616_s308", 308),
         Int<48> => |c: &mut Criterion| dec_rem_wide_cell!(c, 48, "D924_s462", 462),
