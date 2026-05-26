@@ -873,11 +873,22 @@ required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
-# (div_knuth vs the zero-free-scratch div_knuth_fast) at the regressed
-# wide limb counts. The fast pre-check for the wide-division recovery.
+# (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
+# wide limb counts, full-storage-width `balanced` and `wide_num` shapes.
 [[bench]]
 name = "div_kernel_ab"
 path = "benches/micro/div_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# div_pow10_ab: the REAL per-term `÷10^w` divide shape the wide-tier
+# transcendentals run (divisor = power of ten, ~w/19 limbs), ranking the
+# production routing, base-2⁶⁴ Knuth, our base-2¹²⁸ Knuth, and a faithful
+# port of v0.4.4's u128-limb Knuth (MG 2-by-1 q̂) — the 0.4.4-vs-ours
+# comparison for the wide-divide regression.
+[[bench]]
+name = "div_pow10_ab"
+path = "benches/micro/div_pow10_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
