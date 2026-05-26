@@ -470,4 +470,57 @@ mod tests {
             }
         }
     }
+
+    // The wired crossover width (N >= 64 / D1232) plus the near-crossover
+    // tiers. The `isqrt` policy routes N >= 64 to this kernel, so its
+    // validity wall must cover the wired width DIRECTLY — not only via the
+    // golden suite. Needs the xx-wide scratch budget (window up to 64 limbs).
+    #[cfg(feature = "xx-wide")]
+    #[test]
+    fn kara_matches_newton_widest_widths() {
+        let mut state: u64 = 0x2545_F491_4F6C_DD1D;
+        let mut next = || {
+            state ^= state << 13;
+            state ^= state >> 7;
+            state ^= state << 17;
+            state
+        };
+        for &limbs in &[32usize, 48, 64] {
+            for _ in 0..20 {
+                let mut n = vec![0u64; limbs];
+                let top = 1 + (next() as usize % limbs);
+                for l in n.iter_mut().take(top) {
+                    *l = next();
+                }
+                if n[top - 1] == 0 {
+                    n[top - 1] = 1;
+                }
+                assert_eq!(
+                    kara(&n, limbs),
+                    newton(&n, limbs),
+                    "widest mismatch limbs={limbs} n={n:?}"
+                );
+            }
+            // Perfect-square ±1 edges at this width.
+            for _ in 0..6 {
+                let mut b = vec![0u64; limbs];
+                let bt = 1 + (next() as usize % limbs.div_ceil(2).max(1));
+                for l in b.iter_mut().take(bt) {
+                    *l = next();
+                }
+                if b[bt - 1] == 0 {
+                    b[bt - 1] = 1;
+                }
+                let mut sq = vec![0u64; limbs * 2 + 1];
+                crate::int::algos::mul::mul_schoolbook::mul_schoolbook(&b, &b, &mut sq);
+                let mut n = vec![0u64; limbs];
+                n.copy_from_slice(&sq[..limbs]);
+                assert_eq!(
+                    kara(&n, limbs),
+                    newton(&n, limbs),
+                    "widest square mismatch limbs={limbs}"
+                );
+            }
+        }
+    }
 }
