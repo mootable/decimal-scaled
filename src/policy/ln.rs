@@ -44,12 +44,19 @@ enum Select<const N: usize> {
 
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
+        // The table-driven Tang kernel eliminates the Series path's wide
+        // argument-reduction sqrts and is bit-identical to Series (the
+        // correctly-rounded oracle) across each narrow-wide tier's full
+        // valid scale range — confirmed 4-15x faster over 1..=MAX_SCALE by
+        // the `ln_series_tang_ab` dispatch-seam bench and golden-gated at
+        // the per-tier golden cells (d57_s28, d115_s57, d153_s76). So Tang
+        // owns the whole range at these tiers, not just a centred window.
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 18..=22) => Select::ByAlgorithm(Algorithm::Tang),
+        (3, 1..=56) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        (6, 50..=60) => Select::ByAlgorithm(Algorithm::Tang),
+        (6, 1..=114) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        (8, 70..=82) => Select::ByAlgorithm(Algorithm::Tang),
+        (8, 1..=152) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d230", feature = "wide"))]
         (12, 110..=120) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
@@ -185,7 +192,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         3 => {
             let r = raw.resize_to::<Int<3>>();
             let out = match SCALE {
-                18..=22 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, false>(r, mode),
+                1..=56 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true>(r, mode),
                 _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
             };
             out.resize_to::<Int<N>>()
@@ -194,7 +201,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         6 => {
             let r = raw.resize_to::<Int<6>>();
             let out = match SCALE {
-                50..=60 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(r, mode),
+                1..=114 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(r, mode),
                 _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(r, mode),
             };
             out.resize_to::<Int<N>>()
@@ -203,7 +210,7 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         8 => {
             let r = raw.resize_to::<Int<8>>();
             let out = match SCALE {
-                70..=82 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(r, mode),
+                1..=152 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(r, mode),
                 _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(r, mode),
             };
             out.resize_to::<Int<N>>()
