@@ -163,6 +163,10 @@ mod tests {
         check_cell::<4, 6>(35, &raws);
     }
 
+    // Work width Int<11> exceeds the narrow default build's int-kernel
+    // scratch (sized for the compiled decimal tiers); runs only where the
+    // D153 tier is real.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn sqrt_native_matches_generic_newton_d153_s75() {
         // D153 (N=8) @ SCALE=75, work width Int<11>.
@@ -177,6 +181,8 @@ mod tests {
         check_cell::<8, 11>(75, &raws);
     }
 
+    // Work width Int<21> needs the x-wide+ int-kernel scratch.
+    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn sqrt_native_matches_generic_newton_d307_s150() {
         // D307 (N=16) @ SCALE=150, work width Int<21>.
@@ -205,6 +211,7 @@ mod tests {
     /// still be bit-identical to the slice. Proves the literal `W` chosen
     /// in the policy is wide enough (a too-small `W` would overflow and
     /// diverge / be release-mode UB).
+    #[cfg(feature = "_wide-support")]
     fn near_max<const N: usize>() -> Int<N> {
         let mut mag = [0u64; N];
         for m in mag.iter_mut() {
@@ -215,6 +222,8 @@ mod tests {
         Int::<N>::from_mag_limbs(&mag, false)
     }
 
+    // Spans D76..D307; the D307 cell's work width (Int<24>) needs x-wide+.
+    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn sqrt_native_near_max_magnitude_all_cells() {
         for mode in ALL_MODES {
@@ -233,6 +242,8 @@ mod tests {
     /// (including the tier's max usable scale, where `mag · 10^SCALE` is
     /// widest and a too-small `W` would overflow → release-mode UB). Each
     /// must stay bit-identical to the oracle-gated generic `sqrt_newton`.
+    // Up to D153 W=16 — needs the wide-tier int-kernel scratch.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn sqrt_native_routed_2n_widths_near_max() {
         for mode in ALL_MODES {

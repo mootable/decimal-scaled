@@ -338,6 +338,8 @@ mod tests {
     // multi-limb-divisor shapes (the regime this kernel handles), across a
     // spread of even divisor widths up to the widest wide tier. DO NOT run
     // as part of a sweep — focused differential only.
+    // Exercises divisor widths up to 64 limbs (D1232) — needs xx-wide scratch.
+    #[cfg(feature = "xx-wide")]
     #[test]
     fn u128_limb_knuth_matches_div_knuth() {
         let mut state: u64 = 0x9E37_79B9_7F4A_7C15;
@@ -407,6 +409,8 @@ mod tests {
     // (bit-identical to `div_knuth`) AND that the exact buffers are large
     // enough (run in debug, the `debug_assert!`s in the engine fire on
     // undersizing). Even storage widths where the matcher engages u128 (≥24).
+    // Exact-scratch shapes for storage widths up to 64 (D1232) — xx-wide.
+    #[cfg(feature = "xx-wide")]
     #[test]
     fn u128_limb_into_exact_scratch_wide_shape() {
         let mut state: u64 = 0xD1B5_4A32_D192_ED03;

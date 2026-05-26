@@ -229,6 +229,9 @@ mod tests {
 
     /// `div_burnikel_ziegler_with_knuth` agrees with Knuth on medium-and-
     /// large operands. Recursion engages only above the threshold cutoff.
+    // 40-limb dividend / 20-limb divisor exceed the narrow build's div
+    // scratch (sized for the compiled decimal tiers); runs at x-wide+.
+    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn bz_matches_knuth() {
         let mut num = [0u64; 40];
@@ -319,6 +322,8 @@ mod tests {
     /// for both operands, single- and multi-limb divisors) against the
     /// independent `div_rem` oracle. Catches normalisation / q̂ / carry
     /// regressions the fixed corpus might miss.
+    // Operands up to ~10 limbs exceed the narrow build's div scratch.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn knuth_random_differential_match_oracle() {
         // Deterministic xorshift so the sweep is reproducible.
@@ -357,6 +362,8 @@ mod tests {
 
     /// BZ with a numerator that has trailing zero limbs strips them off
     /// before deciding whether to recurse.
+    // 32-limb dividend / 20-limb divisor — needs the x-wide+ div scratch.
+    #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
     #[test]
     fn bz_strips_numerator_trailing_zeros() {
         let mut num = [0u64; 32];

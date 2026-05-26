@@ -3152,6 +3152,9 @@ mod tests {
     /// `root^k == m`. Checked against a brute-force reference for small
     /// `m` and `k in {2,3,5}` across widths, plus cross-checking k=2
     /// against the shipped isqrt and large perfect-power exactness.
+    // Exercises Int<8> roots (isqrt/icbrt work widths) beyond the narrow
+    // build's int-kernel scratch; runs where the wide tiers are compiled.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn root_int_floor_and_exactness() {
         // Brute-force floor kth root of a small u128.
@@ -3773,6 +3776,8 @@ mod tests {
         assert_eq!(a % b, r);
     }
 
+    // Exercises Int<8> isqrt (work width 9) beyond the narrow build's scratch.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn int_wide_storage_surface() {
         use crate::int::types::traits::BigInt;
@@ -3809,6 +3814,8 @@ mod tests {
         assert_eq!(back, v);
     }
 
+    // Perfect-square round-trip at Int<8> exceeds the narrow build's scratch.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn int_isqrt_matches_uint_magnitude() {
         use crate::int::types::traits::BigInt;
@@ -4428,6 +4435,8 @@ mod hint_tests {
         assert_eq!(wide, Int::<16>::from_i128(-123_456_789));
     }
 
+    // Int<8> isqrt (work width 9) exceeds the narrow build's int scratch.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn isqrt_and_f64() {
         assert_eq!(Int::<8>::from_i128(144).isqrt(), Int::<8>::from_i128(12));

@@ -235,6 +235,9 @@ mod tests {
         }
     }
 
+    // Int<4> radicand (a²+b² → isqrt of ~8 limbs) exceeds the narrow build's
+    // int-kernel scratch; runs where the wide tiers are real.
+    #[cfg(feature = "_wide-support")]
     #[test]
     fn hypot_u128_fast_matches_pythagoras() {
         diff_at::<1>();
