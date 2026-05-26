@@ -1,11 +1,14 @@
-//! Per-width branch-vs-prod compare bench for D462.
-//! Run: cargo bench --bench compare_d462
+//! Per-width branch-vs-prod compare bench for D462, fanned out over SCALE.
+//! Run: cargo bench --bench compare_d462           (all scales for this width)
+//!      cargo bench --bench compare_d462 -- s30    (just scale 30)
 //!
-//! Branch (`decimal_scaled::D462<30>`) vs prod (`prod::D462<30>`) across the
-//! shared public function surface. See `compare_common.rs` for the macros
-//! + coverage notes.
+//! Branch (`decimal_scaled::D462<S>`) vs prod (`prod::D462<S>`) across the
+//! shared public function surface, at each scale in this tier's scale set.
+//! See `compare_common.rs` for the macros + coverage notes.
+//!
+//! Scale set = dedup{0, S/2, S-1, 30 if 30 <= S-1} with S=462: {0, 30, 231, 461}.
 
 #[macro_use]
 mod compare_common;
 
-width_bench!("D462", 30, D462, D462);
+width_bench!("D462", D462, D462, [0, 30, 231, 461]);

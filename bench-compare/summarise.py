@@ -1,17 +1,29 @@
 #!/usr/bin/env python3
-"""Render the branch-vs-prod Criterion results as markdown tables.
+"""Collate the branch-vs-prod Criterion results into a worst-first regression
+table across the full (op x width x scale) surface.
 
-Walks `target/criterion` (which the collator job populates by merging every
-per-width bench artifact into one tree), pairs each `branch/<fn>` benchmark
-with its `prod/<fn>` counterpart by median time, and prints ONE GitHub-
-flavoured markdown table PER WIDTH (branch | prod | Δ%) to stdout — the
-workflow appends them to `$GITHUB_STEP_SUMMARY` so the comparison is visible
-directly in the run.
+Walks `target/criterion` (which the aggregate job populates by merging every
+per-(width,scale) bench cell into one tree), pairs each `branch` measurement
+with its `prod` counterpart by median time, and renders ONE combined table
+sorted by Δ% descending (worst regression first) — so a scale-dependent
+regression that a single-scale bench used to hide is surfaced immediately.
 
-Tables are ordered by NUMERIC width ascending (D18, D38, … D1232), and rows
-within a table by numeric-aware function key, so D1232 never sorts ahead of
-the narrower widths the way a plain lexical sort would.
+The harness names each Criterion group `<op>_<W>_s<scale>` (e.g.
+`exp_D307_s153`) with `<side>` (branch|prod) as the function id. Criterion
+0.8 LOWERCASES the on-disk group directory (report.rs `.to_lowercase()`), so
+the directory is `exp_d307_s153` — NOT the original-case id. We therefore read
+the canonical-case `group_id` from each `benchmark.json` (which preserves
+`exp_D307_s153`) rather than parsing the lowercased path segment.
+
+Outputs:
+  * stdout + `$GITHUB_STEP_SUMMARY` (when the workflow redirects): the markdown
+    regression table.
+  * `--tsv PATH`: the full per-cell medians as a TSV (op, width, scale, prod_ns,
+    branch_ns, delta_ns, delta_pct, ratio).
+  * `--md PATH`: the rendered markdown table written to a file too (for the
+    downloadable aggregate artifact).
 """
+import argparse
 import glob
 import json
 import os
@@ -19,31 +31,40 @@ import re
 
 ROOT = "target/criterion"
 
-# width-label (e.g. "D18") -> { op (e.g. "add") -> {"branch": ns, "prod": ns} }
-#
-# The harness names each Criterion group `<op>/<W>` (e.g. `add/D18`) with the
-# `<side>` (branch|prod) as the function. Criterion SANITISES the `/` in a
-# group id to `_` on disk, so the actual report dir is `<op>_<W>` (e.g.
-# `add_D18`, `to_degrees_D115`) — NOT a nested `<op>/<W>`. Hence the path
-# segments below `target/criterion` are [<op>_<W>, side]. Parse the group
-# segment by stripping its trailing `_D<n>` width suffix (ops like
-# `to_degrees`/`to_radians` themselves contain `_`, so match the suffix, not
-# the first `_`).
-_GROUP = re.compile(r"^(?P<op>.+)_(?P<width>D\d+)$")
-data: dict[str, dict[str, dict[str, float]]] = {}
-for est in glob.glob(os.path.join(ROOT, "**", "new", "estimates.json"), recursive=True):
-    rel = os.path.relpath(est, ROOT).replace(os.sep, "/").split("/")[:-2]  # drop new/estimates.json
-    side = next((s for s in ("branch", "prod") if s in rel), None)
-    if side is None:
+# Canonical group id `<op>_D<width>_s<scale>` (read from benchmark.json, which
+# preserves case). `to_degrees`/`to_radians` contain `_`, so anchor on the
+# `_D<n>_s<n>` suffix, not the first `_`.
+_GROUP = re.compile(r"^(?P<op>.+)_D(?P<width>\d+)_s(?P<scale>\d+)$")
+
+# (op, width:int, scale:int) -> {"branch": ns, "prod": ns}
+data: dict[tuple, dict[str, float]] = {}
+
+# Only the `new/` snapshot (the just-run measurement); `base/` is the prior
+# baseline criterion keeps for its own delta and must be ignored. `estimates.json`
+# is a SIBLING of `benchmark.json` in that same `new/` dir.
+for bj in glob.glob(os.path.join(ROOT, "**", "new", "benchmark.json"), recursive=True):
+    try:
+        with open(bj) as f:
+            meta = json.load(f)
+    except (OSError, json.JSONDecodeError):
         continue
-    group = "/".join(p for p in rel if p != side)  # the `<op>_<W>` dir
-    m = _GROUP.match(group)
+    group_id = meta.get("group_id")
+    side = meta.get("function_id")
+    if group_id is None or side not in ("branch", "prod"):
+        continue
+    m = _GROUP.match(group_id)
     if m is None:
         continue
-    op, width = m.group("op"), m.group("width")
-    with open(est) as f:
-        med = json.load(f)["median"]["point_estimate"]
-    data.setdefault(width, {}).setdefault(op, {})[side] = med
+    est = os.path.join(os.path.dirname(bj), "estimates.json")
+    if not os.path.exists(est):
+        continue
+    try:
+        with open(est) as f:
+            med = json.load(f)["median"]["point_estimate"]
+    except (OSError, json.JSONDecodeError, KeyError):
+        continue
+    key = (m.group("op"), int(m.group("width")), int(m.group("scale")))
+    data.setdefault(key, {})[side] = med
 
 
 def fmt(ns):
@@ -56,34 +77,119 @@ def fmt(ns):
     return f"{ns / 1e6:.2f} ms"
 
 
-def width_num(label: str) -> int:
-    """Integer parsed from a `D<n>` label so widths sort numerically
-    (D1232 last), never lexically (which would float D1232 ahead of D153)."""
-    return int(label.lstrip("D").split("_")[0])
+def bucket(delta_pct: float, delta_ns: float) -> str:
+    """8.4 ship-bucket tag (see CLAUDE.md perf-campaign):
+      * >130% AND >=50ns -> MUST-FIX
+      * 101%..130%       -> defer
+      * <50ns absolute   -> exempt (noise-floor / cheap op)
+    Anything else (1%..100% with >=50ns) is an unbucketed regression."""
+    if delta_ns < 50:  # absolute floor: a sub-50ns delta is exempt regardless of %
+        return "exempt"
+    if delta_pct > 130:
+        return "MUST-FIX"
+    if 101 <= delta_pct <= 130:
+        return "defer"
+    return ""
 
+
+# Build rows: every (op,width,scale) cell that has BOTH a branch and prod median.
+rows = []
+skipped = []  # (op,width,scale) with a missing side
+for (op, width, scale), sides in data.items():
+    b = sides.get("branch")
+    p = sides.get("prod")
+    if b is None or p is None:
+        skipped.append((op, width, scale))
+        continue
+    delta_ns = b - p
+    delta_pct = (b / p - 1.0) * 100.0 if p else 0.0
+    ratio = (b / p) if p else float("inf")
+    rows.append(
+        {
+            "op": op,
+            "width": width,
+            "scale": scale,
+            "prod": p,
+            "branch": b,
+            "delta_ns": delta_ns,
+            "delta_pct": delta_pct,
+            "ratio": ratio,
+        }
+    )
+
+# Worst-first: Δ% descending.
+rows.sort(key=lambda r: r["delta_pct"], reverse=True)
 
 ref = os.environ.get("BENCH_REF", "branch")
 prod = os.environ.get("PROD_VERSION", "?")
 
+# Regression filter: Δ% > +1 AND Δ > 10ns. The rest are folded into a footnote.
+shown = [r for r in rows if r["delta_pct"] > 1.0 and r["delta_ns"] > 10.0]
+hidden = [r for r in rows if r not in shown]
+
 lines = [
     f"## bench-branch-compare: `{ref}` (branch) vs prod `{prod}` (latest published tag)",
     "",
-    "_One table per width, narrowest first. Negative Δ = the branch is faster than prod._",
+    "_Worst-first regression table across the full (op × width × scale) surface. "
+    "Positive Δ% = the branch is SLOWER than prod. "
+    "Shown: Δ% > +1 and Δ > 10 ns; the rest are summarised below._",
+    "",
+    "| op | width | scale | prod | branch | Δ | Δ% | × | bucket |",
+    "|---|---|---:|---:|---:|---:|---:|---:|---|",
 ]
+for r in shown:
+    lines.append(
+        f"| {r['op']} | D{r['width']} | {r['scale']} "
+        f"| {fmt(r['prod'])} | {fmt(r['branch'])} | {fmt(r['delta_ns'])} "
+        f"| {r['delta_pct']:+.1f}% | {r['ratio']:.2f}× | {bucket(r['delta_pct'], r['delta_ns'])} |"
+    )
 
-for width in sorted(data, key=width_num):
-    ops = data[width]
-    lines += [
-        "",
-        f"### {width}",
-        "",
-        "| op | branch | prod | Δ (branch vs prod) |",
-        "|---|---:|---:|---:|",
-    ]
-    for op in sorted(ops):
-        b = ops[op].get("branch")
-        p = ops[op].get("prod")
-        delta = f"{(b / p - 1) * 100:+.1f}%" if (b and p) else "—"
-        lines.append(f"| {op} | {fmt(b)} | {fmt(p)} | {delta} |")
+if not shown:
+    lines.append("| _(no cell regressed past the Δ% > +1 / Δ > 10 ns threshold)_ |||||||||")
 
-print("\n".join(lines))
+# Footnote: improvements + below-threshold + incomplete cells.
+improved = [r for r in rows if r["delta_pct"] <= 1.0]
+lines += [
+    "",
+    f"_Total paired cells: {len(rows)}. Regressions shown: {len(shown)}. "
+    f"At-or-better-than-prod (Δ% ≤ +1): {len(improved)}. "
+    f"Below-threshold regressions (folded): {len(hidden) - len(improved) if len(hidden) >= len(improved) else 0}._",
+]
+if skipped:
+    lines.append(
+        f"_Incomplete cells (only one side measured): {len(skipped)} — "
+        + ", ".join(f"{op}_D{w}_s{s}" for op, w, s in sorted(skipped)[:20])
+        + ("…" if len(skipped) > 20 else "")
+        + "._"
+    )
+
+table_md = "\n".join(lines)
+
+
+def write_tsv(path: str) -> None:
+    with open(path, "w", encoding="utf-8") as f:
+        f.write("op\twidth\tscale\tprod_ns\tbranch_ns\tdelta_ns\tdelta_pct\tratio\tbucket\n")
+        for r in rows:
+            f.write(
+                f"{r['op']}\tD{r['width']}\t{r['scale']}\t{r['prod']:.3f}\t{r['branch']:.3f}\t"
+                f"{r['delta_ns']:.3f}\t{r['delta_pct']:.3f}\t{r['ratio']:.4f}\t"
+                f"{bucket(r['delta_pct'], r['delta_ns'])}\n"
+            )
+
+
+def main() -> None:
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--tsv", help="write the full per-cell medians to this TSV path")
+    ap.add_argument("--md", help="also write the rendered markdown table to this path")
+    args = ap.parse_args()
+
+    print(table_md)
+    if args.md:
+        with open(args.md, "w", encoding="utf-8") as f:
+            f.write(table_md + "\n")
+    if args.tsv:
+        write_tsv(args.tsv)
+
+
+if __name__ == "__main__":
+    main()

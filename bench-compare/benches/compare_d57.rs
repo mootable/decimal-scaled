@@ -1,11 +1,14 @@
-//! Per-width branch-vs-prod compare bench for D57.
-//! Run: cargo bench --bench compare_d57
+//! Per-width branch-vs-prod compare bench for D57, fanned out over SCALE.
+//! Run: cargo bench --bench compare_d57            (all scales for this width)
+//!      cargo bench --bench compare_d57 -- s30     (just scale 30)
 //!
-//! Branch (`decimal_scaled::D57<20>`) vs prod (`prod::D57<20>`) across the
-//! shared public function surface. See `compare_common.rs` for the macros
-//! + coverage notes.
+//! Branch (`decimal_scaled::D57<S>`) vs prod (`prod::D57<S>`) across the
+//! shared public function surface, at each scale in this tier's scale set.
+//! See `compare_common.rs` for the macros + coverage notes.
+//!
+//! Scale set = dedup{0, S/2, S-1, 30 if 30 <= S-1} with S=57: {0, 28, 30, 56}.
 
 #[macro_use]
 mod compare_common;
 
-width_bench!("D57", 20, D57, D57);
+width_bench!("D57", D57, D57, [0, 28, 30, 56]);
