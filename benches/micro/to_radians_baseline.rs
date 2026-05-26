@@ -1,51 +1,35 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Per-call timing of the 0.5.0 public `to_radians_strict_with`, matched
-//! to the v0.4.4 `to_radians_v044` baseline bench (same tiers, scales,
-//! inputs, and `from_str` construction) so the numbers compare directly.
+//! Per-call timing of the 0.5.0 public `to_radians` matched to the
+//! `bench-branch-compare` cells (input `0.1`, default rounding, the
+//! per-tier {30, S-1} scales) and to the v0.4.4 `to_radians_v044`
+//! baseline so the numbers compare directly.
 //!
 //! Run: `cargo bench --features wide --bench to_radians_baseline`
 
 use core::str::FromStr;
 use criterion::{black_box, criterion_group, criterion_main, Criterion};
-use decimal_scaled::{RoundingMode, D115, D153, D57, D76};
+use decimal_scaled::{D115, D153, D57, D76};
 
-const MODE: RoundingMode = RoundingMode::HalfToEven;
+macro_rules! cell {
+    ($c:expr, $grp:literal, $ty:ty) => {{
+        let mut g = $c.benchmark_group($grp);
+        let x = <$ty>::from_str("0.1").unwrap();
+        g.bench_function("0.1", |b| b.iter(|| black_box(x).to_radians()));
+        g.finish();
+    }};
+}
 
 fn bench(c: &mut Criterion) {
-    {
-        let mut g = c.benchmark_group("to_radians/D57_s19");
-        for (lbl, deg) in [("30deg", "30"), ("45deg", "45"), ("180deg", "180")] {
-            let x = D57::<19>::from_str(deg).unwrap();
-            g.bench_function(lbl, |b| b.iter(|| black_box(x).to_radians_strict_with(MODE)));
-        }
-        g.finish();
-    }
-    {
-        let mut g = c.benchmark_group("to_radians/D76_s24");
-        for (lbl, deg) in [("30deg", "30"), ("45deg", "45"), ("180deg", "180")] {
-            let x = D76::<24>::from_str(deg).unwrap();
-            g.bench_function(lbl, |b| b.iter(|| black_box(x).to_radians_strict_with(MODE)));
-        }
-        g.finish();
-    }
-    {
-        let mut g = c.benchmark_group("to_radians/D115_s38");
-        for (lbl, deg) in [("30deg", "30"), ("45deg", "45"), ("180deg", "180")] {
-            let x = D115::<38>::from_str(deg).unwrap();
-            g.bench_function(lbl, |b| b.iter(|| black_box(x).to_radians_strict_with(MODE)));
-        }
-        g.finish();
-    }
-    {
-        let mut g = c.benchmark_group("to_radians/D153_s50");
-        for (lbl, deg) in [("30deg", "30"), ("45deg", "45"), ("180deg", "180")] {
-            let x = D153::<50>::from_str(deg).unwrap();
-            g.bench_function(lbl, |b| b.iter(|| black_box(x).to_radians_strict_with(MODE)));
-        }
-        g.finish();
-    }
+    cell!(c, "to_radians/D57_s30", D57<30>);
+    cell!(c, "to_radians/D57_s56", D57<56>);
+    cell!(c, "to_radians/D76_s30", D76<30>);
+    cell!(c, "to_radians/D76_s75", D76<75>);
+    cell!(c, "to_radians/D115_s30", D115<30>);
+    cell!(c, "to_radians/D115_s114", D115<114>);
+    cell!(c, "to_radians/D153_s30", D153<30>);
+    cell!(c, "to_radians/D153_s152", D153<152>);
 }
 
 criterion_group!(benches, bench);
