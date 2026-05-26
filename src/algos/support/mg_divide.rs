@@ -316,11 +316,60 @@ pub(crate) fn div_pow10_mag_u128(
 }
 
 
-/// Width-agnostic chain MG divide of a u128-limb magnitude slice by
+// ── Fixed u64 scratch sizing for the single-Knuth `÷10^w` core ────────
+//
+// The widest work integer the chain serves is `Int<256>` (D1232's
+// exp/powf work-width): `MAX_U128_LIMB = 4·MAX_WORK_N` u128 limbs, so the
+// numerator magnitude is at most `2·MAX_U128_LIMB` u64 limbs. The divisor
+// `10^w` for a working scale `w` occupies `≈ w·log2(10)/64` u64 limbs;
+// `MAX_POW10_U64` covers `w` past 2000 (D1232's band tops out near 1300).
+// All scratch is fixed-size stack — `no_std`, no heap.
+
+/// Max `u64` limbs for the numerator / quotient magnitude buffers — twice
+/// the widest u128 magnitude.
+const MAX_MAG_U64_KNUTH: usize =
+    2 * crate::int::types::compute_int::MAX_U128_LIMB;
+/// Max `u64` limbs for the `10^w` divisor buffer.
+const MAX_POW10_U64: usize = 128;
+
+/// Build `10^w` as a little-endian `u64` magnitude into `out`, returning
+/// its effective (leading-zero-stripped) limb count. Repeated `×10` —
+/// the same construction `NewtonReciprocal::precompute` uses, in `u64`
+/// limbs. `out` must be pre-zeroed and large enough (`≈ w/19 + 2`).
+#[inline]
+fn pow10_u64_into(w: u32, out: &mut [u64]) -> usize {
+    out[0] = 1u64;
+    let mut len = 1usize;
+    for _ in 0..w {
+        let mut carry: u128 = 0;
+        for limb in out[..len].iter_mut() {
+            let acc = (*limb as u128) * 10 + carry;
+            *limb = acc as u64;
+            carry = acc >> 64;
+        }
+        if carry != 0 {
+            out[len] = carry as u64;
+            len += 1;
+        }
+    }
+    len
+}
+
+/// Width-agnostic single-Knuth divide of a u128-limb magnitude slice by
 /// `10^scale` for `scale > 38`, in place, with `mode`-aware rounding.
-/// Slice core extracted from [`div_wide_pow10_chain`]; shared with
-/// the `Int<N>`-only decimal `mul` kernel. See that wrapper's docs for
-/// the combined-remainder rounding correctness argument.
+/// Slice core extracted from [`div_wide_pow10_chain`]; shared with the
+/// `Int<N>`-only decimal `mul` kernel.
+///
+/// Replaces the former chained `÷10^38` walk (`⌈scale/38⌉` full
+/// magnitude passes) with **one** division by the whole `10^scale`
+/// magnitude, routed through the int divisor-shape policy
+/// ([`div_rem_mag_slice`], which picks Knuth at base 2⁶⁴ for this
+/// power-of-ten divisor). The quotient and remainder are exact, so the
+/// rounding decision (compare the remainder against `10^scale / 2`) is
+/// bit-identical to the chain's combined-remainder test — every
+/// `RoundingMode`, every width. This was 0.4.4's approach (a single full
+/// divide by `10^w`), and the int Knuth ties or beats the chain at the
+/// real per-term `÷10^w` shape.
 #[inline]
 pub(crate) fn div_pow10_chain_mag_u128(
     mag: &mut [u128],
@@ -332,75 +381,74 @@ pub(crate) fn div_pow10_chain_mag_u128(
         scale > 38,
         "chain path is for SCALE > 38; callers handle smaller scales"
     );
+    use crate::int::algos::support::limbs::cmp;
 
-    let mut top = mag.len();
-    while top > 0 && mag[top - 1] == 0 {
-        top -= 1;
+    // Transcode the u128 magnitude to the u64 limbs the int Knuth engine
+    // runs in (base 2⁶⁴, little-endian: low word then high word).
+    let mut num = [0u64; MAX_MAG_U64_KNUTH];
+    debug_assert!(2 * mag.len() <= MAX_MAG_U64_KNUTH, "num buffer too small");
+    for (i, &v) in mag.iter().enumerate() {
+        num[2 * i] = v as u64;
+        num[2 * i + 1] = (v >> 64) as u64;
     }
+    let num_len = mag.len() * 2;
 
-    // Chain divides by 10^38 until all but the last chunk is consumed.
-    let exp38 = POW10_U128[38];
-    let mut lower_any_nonzero = false;
-    let mut remaining = scale;
-    while remaining > 38 {
-        let mut rem: u128 = 0;
-        let mut i = top;
+    // Build the full divisor `10^scale` once.
+    let mut pow = [0u64; MAX_POW10_U64];
+    let pow_len = pow10_u64_into(scale, &mut pow);
+
+    // One divide by the whole `10^scale` (vs the former chain of
+    // `⌈scale/38⌉` `÷10^38` passes). The divisor-shape policy picks Knuth
+    // for this multi-limb power-of-ten divisor; q,r are exact.
+    let mut quot = [0u64; MAX_MAG_U64_KNUTH];
+    let mut rem = [0u64; MAX_POW10_U64];
+    crate::int::algos::div::div_fixed::div_rem_mag_slice(
+        &num[..num_len],
+        &pow[..pow_len],
+        &mut quot[..num_len],
+        &mut rem[..pow_len],
+    );
+
+    // Round per `mode`: compare the exact remainder against `10^scale / 2`.
+    let rem_is_zero = rem[..pow_len].iter().all(|&x| x == 0);
+    if !rem_is_zero {
+        // half = 10^scale / 2 (exact; 10^scale is even for scale ≥ 1).
+        let mut half = [0u64; MAX_POW10_U64];
+        half[..pow_len].copy_from_slice(&pow[..pow_len]);
+        let mut i = pow_len;
+        let mut carry_in: u64 = 0;
         while i > 0 {
             i -= 1;
-            let (q, r) = divmod_pow10_2word(rem, mag[i], exp38, 38)
-                .expect("MG: rem < exp invariant violated");
-            mag[i] = q;
-            rem = r;
+            let next_carry = half[i] & 1;
+            half[i] = (carry_in << 63) | (half[i] >> 1);
+            carry_in = next_carry;
         }
-        if rem != 0 {
-            lower_any_nonzero = true;
-        }
-        remaining -= 38;
-        while top > 0 && mag[top - 1] == 0 {
-            top -= 1;
-        }
-    }
 
-    // Final divide by 10^remaining (1..=38).
-    let scale_idx = remaining as usize;
-    let exp_last = POW10_U128[scale_idx];
-    let mut r_last: u128 = 0;
-    let mut i = top;
-    while i > 0 {
-        i -= 1;
-        let (q, r) = divmod_pow10_2word(r_last, mag[i], exp_last, scale_idx)
-            .expect("MG: rem < exp invariant violated");
-        mag[i] = q;
-        r_last = r;
-    }
-
-    // Combined-remainder rounding (proof in the wrapper docs).
-    let combined_nonzero = r_last != 0 || lower_any_nonzero;
-    if combined_nonzero {
-        let half = exp_last / 2; // exact; exp_last = 10^scale_idx is even
-        let cmp_r = if r_last > half {
-            core::cmp::Ordering::Greater
-        } else if r_last < half {
-            core::cmp::Ordering::Less
-        } else if lower_any_nonzero {
-            core::cmp::Ordering::Greater
-        } else {
-            core::cmp::Ordering::Equal
+        let cmp_r = match cmp(&rem[..pow_len], &half[..pow_len]) {
+            n if n < 0 => core::cmp::Ordering::Less,
+            0 => core::cmp::Ordering::Equal,
+            _ => core::cmp::Ordering::Greater,
         };
-        let q_is_odd = (mag[0] & 1) != 0;
+        let q_is_odd = (quot[0] & 1) != 0;
         if crate::support::rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
-            let mut carry: u128 = 1;
-            for limb in mag.iter_mut() {
+            let mut carry: u64 = 1;
+            for limb in quot[..num_len].iter_mut() {
                 let (s, c) = limb.overflowing_add(carry);
                 *limb = s;
                 if !c {
                     carry = 0;
                     break;
                 }
-                carry = 1;
             }
             let _ = carry;
         }
+    }
+
+    // Re-pack the u64 quotient into the caller's u128 magnitude in place.
+    for (i, slot) in mag.iter_mut().enumerate() {
+        let lo = quot[2 * i] as u128;
+        let hi = quot[2 * i + 1] as u128;
+        *slot = lo | (hi << 64);
     }
 }
 
@@ -430,24 +478,21 @@ where
     W::from_mag_sign_u128(mag, neg)
 }
 
-/// Width-generic `÷10^38`-chain extension of [`div_wide_pow10`] to scales
-/// past `38`, with `mode`-aware rounding; u128 buffer from [`ComputeInt`].
-/// Factors `n / 10^SCALE` as a sequence of `(n / 10^38) / … / 10^last`
-/// passes reusing the base-`2^128` MG 2-by-1 kernel, intermediate
-/// quotients staying in the same `mag` buffer (no allocation).
+/// Width-generic extension of [`div_wide_pow10`] to scales past `38`,
+/// with `mode`-aware rounding; u128 buffer from [`ComputeInt`].
+/// Divides `n / 10^SCALE` by ONE int Knuth divide against the whole
+/// `10^SCALE` magnitude (see [`div_pow10_chain_mag_u128`]).
 ///
 /// # Rounding correctness
 ///
 /// Bit-exact half-to-even (and every other `RoundingMode`) across
-/// `SCALE ∈ 39..=∞`. The chain produces a per-chunk remainder sequence
-/// `r_1, …, r_k` plus a final `r_last < 10^(SCALE − 38·k)`; comparing the
-/// combined remainder against `m/2` reduces to `r_last` vs `10^s/2` plus a
-/// tie-break on whether any lower-chunk remainder is non-zero — the
-/// `lower_any_nonzero` flag in [`div_pow10_chain_mag_u128`], which owns the
-/// rounding (mode threaded straight through). Audited against the schoolbook
-/// `div_rem` reference on 380K+ random Int<4> + 190K random Int<16> inputs ×
-/// every `w ∈ 39..=100` × every `RoundingMode` (the `round_div_chain_audit_*`
-/// tests in this file).
+/// `SCALE ∈ 39..=∞`. The single divide yields the exact quotient and an
+/// exact remainder `r < 10^SCALE`; the rounding decision is the standard
+/// `r` vs `10^SCALE / 2` comparison threaded through
+/// [`crate::support::rounding::should_bump`]. Audited against the
+/// schoolbook `div_rem` reference on 380K+ random Int<4> + 190K random
+/// Int<16> inputs × every `w ∈ 39..=100` × every `RoundingMode` (the
+/// `round_div_chain_audit_*` tests in this file).
 ///
 /// [`ComputeInt`]: crate::int::types::compute_int::ComputeInt
 #[inline]
@@ -2058,14 +2103,13 @@ mod tests {
     }
 
     // ----------------------------------------------------------------
-    // Chain-MG audit (w > 38)
+    // Wide `÷10^w` audit (w > 38)
     // ----------------------------------------------------------------
     //
-    // The chain divides `n / 10^SCALE` by repeated `÷ 10^38` plus a
-    // final `÷ 10^(SCALE − 38·k)`. Combined-remainder bookkeeping
-    // (`lower_any_nonzero` + `r_last`) yields bit-exact half-to-even
-    // (and every other `RoundingMode`) against the schoolbook
-    // `div_rem` reference.
+    // For `w > 38` the divide does ONE int Knuth divide by the whole
+    // `10^w` magnitude, then rounds the exact remainder against
+    // `10^w / 2`. This yields bit-exact half-to-even (and every other
+    // `RoundingMode`) against the schoolbook `div_rem` reference.
     //
     // These tests confirm that property across every w in `39..=100`,
     // every mode, and a numerator distribution that exercises:

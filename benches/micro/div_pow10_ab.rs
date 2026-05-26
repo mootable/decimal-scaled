@@ -17,17 +17,24 @@
 //!
 //! This bench measures that real shape and ranks, in one `compare_all`
 //! per `w`:
-//!  - `dispatch` — the production routing (`int::policy::div_rem`),
+//!  - `dispatch` — the production routing (`int::policy::div_rem`), which
+//!                 IS the single full-`10^w` int-Knuth divide the
+//!                 production `÷10^w` chain core now performs,
 //!  - `knuth`    — base-2⁶⁴ Knuth (`div_knuth`),
 //!  - `u128`     — our base-2¹²⁸ Knuth (`div_knuth_u128_limb`,
 //!                 `Mg3By2`-based `q̂` via a 256/128 software divide),
+//!  - `mg38_chain`— the PRIOR production `÷10^w` core: a chain of
+//!                 `⌈w/38⌉` Möller–Granlund `÷10^38` magnitude passes on
+//!                 packed u128 limbs (the approach this change replaces),
 //!  - `v044_u128`— the v0.4.4 base-2¹²⁸ Knuth `q̂` scheme: ONE
 //!                 precomputed MG 2-by-1 reciprocal of the top u128
 //!                 divisor limb + a refinement loop (the divide
 //!                 v0.4.4 shipped on its `[u128]` limb storage).
 //!
-//! All candidates produce the same exact quotient/remainder; the
-//! correctness gate asserts it before timing.
+//! Every candidate yields the same exact quotient (`mg38_chain` exposes its
+//! remainder differently — it is the chain of per-pass remainders, not a
+//! single residue — so the gate checks its quotient only); the gate asserts
+//! the quotient before timing.
 //!
 //! Run with:
 //! `cargo bench --features "wide x-wide xx-wide bench-alt" --bench div_pow10_ab`
@@ -83,6 +90,7 @@ struct Shape {
     label: &'static str,
     num: Vec<u64>,
     den: Vec<u64>,
+    scale: u32,
 }
 
 /// The per-term shape for working scale `w`: divisor `10^w`, dividend a
@@ -92,7 +100,7 @@ fn shape_for_w(w: u32) -> Shape {
     let den = pow10_limbs(w);
     let num_n = 2 * den.len();
     let num = fill(1009, num_n);
-    Shape { label: "div_pow10", num, den }
+    Shape { label: "div_pow10", num, den, scale: w }
 }
 
 // ── candidate runners ─────────────────────────────────────────────────
@@ -120,6 +128,11 @@ fn run_v044(s: Shape) -> Vec<u64> {
     let mut r = vec![0u64; s.num.len()];
     v044_u128::divmod(&s.num, &s.den, &mut q, &mut r);
     r
+}
+fn run_chain(s: Shape) -> Vec<u64> {
+    // The chain core works in place on a packed u128 magnitude and divides
+    // by `10^w` (decoded from the divisor's limb count via the same scale).
+    mg38_chain::divide_by_pow10(&s.num, s.scale)
 }
 
 // ── v0.4.4 base-2¹²⁸ Knuth (MG 2-by-1 q̂ + refinement) ─────────────────
@@ -369,6 +382,147 @@ mod v044_u128 {
     }
 }
 
+// ── prior production `÷10^w` core: chain of MG `÷10^38` passes ─────────
+//
+// A faithful copy of the `mg_divide::div_pow10_chain_mag_u128` body as it
+// stood BEFORE this change: pack the u64 numerator to u128 limbs, then run
+// `⌈w/38⌉` Möller–Granlund `÷10^38` magnitude passes (each a base-2¹²⁸
+// long divide of the live limbs, one `divmod_pow10_2word` per limb per
+// pass), unpack the quotient. This is the baseline the single-Knuth divide
+// replaces; the A/B answers "does ONE Knuth-by-10^w beat the ⌈w/38⌉-pass
+// chain at the real per-term shape?".
+mod mg38_chain {
+    /// Full 256-bit product of two u128 (mirrors `mg_divide::mul_u128_to_u256`).
+    #[inline]
+    const fn mul_u128_to_u256(a: u128, b: u128) -> (u128, u128) {
+        const LOW64: u128 = u64::MAX as u128;
+        let (a_lo, a_hi) = (a & LOW64, a >> 64);
+        let (b_lo, b_hi) = (b & LOW64, b >> 64);
+        let p00 = a_lo * b_lo;
+        let p01 = a_lo * b_hi;
+        let p10 = a_hi * b_lo;
+        let p11 = a_hi * b_hi;
+        let mid = (p00 >> 64) + (p01 & LOW64) + (p10 & LOW64);
+        let low = (p00 & LOW64) | (mid << 64);
+        let high = p11 + (p01 >> 64) + (p10 >> 64) + (mid >> 64);
+        (high, low)
+    }
+
+    /// MG reciprocal of a divisor (mirrors `mg_divide::mg_reciprocal`).
+    const fn mg_reciprocal(d: u128) -> u128 {
+        let s = d.leading_zeros();
+        let d_norm = d << s;
+        let mut quot_lo: u128 = 0;
+        let mut quot_hi: u128 = 0;
+        let mut rem: u128 = 0;
+        let mut pos: i32 = 256;
+        while pos >= 0 {
+            let rem_carry = rem >> 127;
+            let shifted = (rem << 1) | if pos == 256 { 1 } else { 0 };
+            let fits = rem_carry == 1 || shifted >= d_norm;
+            rem = if fits { shifted.wrapping_sub(d_norm) } else { shifted };
+            quot_hi = (quot_hi << 1) | (quot_lo >> 127);
+            quot_lo = (quot_lo << 1) | (fits as u128);
+            pos -= 1;
+        }
+        let _ = quot_hi;
+        quot_lo
+    }
+
+    /// `10^38` and its `(reciprocal, shift)` magic, computed once.
+    fn exp38_magic() -> (u128, u128, u32) {
+        let mut e: u128 = 1;
+        for _ in 0..38 {
+            e *= 10;
+        }
+        (e, mg_reciprocal(e), e.leading_zeros())
+    }
+
+    /// 2-by-1 MG divide `(n_high·2¹²⁸ + n_low) / exp` (mirrors
+    /// `mg_divide::divmod_pow10_2word`), given the precomputed `(recip, s)`.
+    #[inline]
+    fn divmod_2word(n_high: u128, n_low: u128, exp: u128, recip: u128, s: u32) -> (u128, u128) {
+        let top = if s == 0 { n_high } else { (n_high << s) | (n_low >> (128 - s)) };
+        let bottom = n_low << s;
+        let (hi_from_top, lo_from_top) = mul_u128_to_u256(recip, top);
+        let (carry_from_bottom, _) = mul_u128_to_u256(recip, bottom);
+        let (acc_low, c0) = lo_from_top.overflowing_add(carry_from_bottom);
+        let acc_high = hi_from_top + u128::from(c0);
+        let (_, c1) = acc_low.overflowing_add(bottom);
+        let q = acc_high + top + u128::from(c1);
+        let (_, prod_low) = mul_u128_to_u256(q, exp);
+        let (rem, _) = n_low.overflowing_sub(prod_low);
+        if rem < exp {
+            (q, rem)
+        } else {
+            (q + 1, rem - exp)
+        }
+    }
+
+    /// `floor(n / 10^w)` (quotient only), `w > 38`. Returns the quotient
+    /// as a little-endian u64 magnitude the same length as `num`.
+    pub(super) fn divide_by_pow10(num: &[u64], w: u32) -> Vec<u64> {
+        // Pack the u64 numerator to u128 limbs.
+        let n128 = num.len().div_ceil(2);
+        let mut mag = vec![0u128; n128];
+        for (k, slot) in mag.iter_mut().enumerate() {
+            let lo = num[2 * k] as u128;
+            let hi = if 2 * k + 1 < num.len() { num[2 * k + 1] as u128 } else { 0 };
+            *slot = lo | (hi << 64);
+        }
+
+        let (exp38, recip38, s38) = exp38_magic();
+        let mut top = mag.len();
+        while top > 0 && mag[top - 1] == 0 {
+            top -= 1;
+        }
+
+        let mut remaining = w;
+        while remaining > 38 {
+            let mut rem: u128 = 0;
+            let mut i = top;
+            while i > 0 {
+                i -= 1;
+                let (q, r) = divmod_2word(rem, mag[i], exp38, recip38, s38);
+                mag[i] = q;
+                rem = r;
+            }
+            remaining -= 38;
+            while top > 0 && mag[top - 1] == 0 {
+                top -= 1;
+            }
+        }
+
+        // Final divide by 10^remaining (1..=38).
+        let mut exp_last: u128 = 1;
+        for _ in 0..remaining {
+            exp_last *= 10;
+        }
+        let recip_last = mg_reciprocal(exp_last);
+        let s_last = exp_last.leading_zeros();
+        let mut r_last: u128 = 0;
+        let mut i = top;
+        while i > 0 {
+            i -= 1;
+            let (q, r) = divmod_2word(r_last, mag[i], exp_last, recip_last, s_last);
+            mag[i] = q;
+            r_last = r;
+        }
+
+        // Unpack the quotient to u64.
+        let mut out = vec![0u64; num.len()];
+        for (k, &limb) in mag.iter().enumerate() {
+            if 2 * k < out.len() {
+                out[2 * k] = limb as u64;
+            }
+            if 2 * k + 1 < out.len() {
+                out[2 * k + 1] = (limb >> 64) as u64;
+            }
+        }
+        out
+    }
+}
+
 fn compare_w(c: &mut Criterion, w: u32) {
     let s = shape_for_w(w);
     // Correctness gate: every candidate agrees with the production
@@ -397,6 +551,12 @@ fn compare_w(c: &mut Criterion, w: u32) {
         assert_eq!(q, q0, "v044 quot mismatch w={w}");
         assert_eq!(r, r0, "v044 rem mismatch w={w}");
     }
+    {
+        // The prior `÷10^38`-chain core: quotient must match (its remainder
+        // semantics differ — chained per-pass residues, not one residue).
+        let cq = mg38_chain::divide_by_pow10(&s.num, w);
+        assert_eq!(cq, q0, "mg38_chain quot mismatch w={w}");
+    }
     compare_all(
         c,
         &format!("div_pow10/w{w}"),
@@ -406,6 +566,7 @@ fn compare_w(c: &mut Criterion, w: u32) {
             ("dispatch", run_dispatch as fn(Shape) -> Vec<u64>),
             ("knuth", run_knuth),
             ("u128", run_u128),
+            ("mg38_chain", run_chain),
             ("v044_u128", run_v044),
         ],
     );
