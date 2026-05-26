@@ -820,7 +820,6 @@ mod band_edges {
             check_at_scale("cos", Width::D18, 17, include_str!("golden/cos_d18_s17.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: tan D18 s0 input=1 (tan(1 rad)=1.557) value=1 oracle=2 delta=1 LSB (High class under half modes); also input=-1; needs kernel fix"]
         fn d18_tan_s0() {
             check_at_scale("tan", Width::D18, 0, include_str!("golden/tan_d18_s0.txt"));
         }
@@ -1000,7 +999,6 @@ mod band_edges {
             check_at_scale("cos", Width::D38, 37, include_str!("golden/cos_d38_s37.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: tan D38 s0 input=1 (tan(1 rad)=1.557) value=1 oracle=2 delta=1 LSB; also input=-1; needs kernel fix"]
         fn d38_tan_s0() {
             check_at_scale("tan", Width::D38, 0, include_str!("golden/tan_d38_s0.txt"));
         }
