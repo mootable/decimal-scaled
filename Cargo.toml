@@ -826,6 +826,36 @@ path = "benches/micro/isqrt_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# icbrt_ab: N-way dispatch-seam A/B for the integer icbrt policy — newton
+# (f64-cbrt-seeded Brent–Zimmermann, the wired kernel for every N) vs
+# schoolbook (bitwise restoring reference), across the full width sweep ×
+# radicand magnitude classes (incl. perfect-cube ±1 floor-correction edges).
+[[bench]]
+name = "icbrt_ab"
+path = "benches/micro/icbrt_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# sum_sq_ab: N-way dispatch-seam A/B for the integer sum-of-squares policy —
+# schoolbook (the wired kernel, each square a general x*x product) vs comba
+# (a kept alternative, symmetric product-scanning square ~L^2/2 mults),
+# across the full width sweep x operand significant-limb magnitude classes.
+[[bench]]
+name = "sum_sq_ab"
+path = "benches/micro/sum_sq_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
+# pow_ab: N-way dispatch-seam A/B for the integer exponentiation policy —
+# square_and_multiply (O(log exp), the wired kernel) vs schoolbook (O(exp)
+# repeated multiply, the reference), across the full width sweep x exponent
+# magnitude classes (e2..e31). Confirms the square-and-multiply routing.
+[[bench]]
+name = "pow_ab"
+path = "benches/micro/pow_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # to_radians_ab: dispatch-seam A/B for the wide-tier to_radians angle
 # conversion — the public method path (through the double dispatch +
 # resize_to round-trips) vs the MulPiRatio kernel called directly. Isolates

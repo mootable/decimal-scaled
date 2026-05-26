@@ -32,6 +32,19 @@
 //! DOWN — the algorithm calls the kernels, never a cube/sqr/mul method on
 //! `Uint<N>`.
 //!
+//! **No second candidate is eligible.** The only alternative axis is the
+//! `LimbSize` u128 packing used by [`crate::int::policy::sqr_low`] /
+//! [`crate::int::policy::mul_low`] (the `sqr_low_limb` / `mul_low_limb`
+//! kernels), which could roughly halve the partial-product count at wide even
+//! `N`. But those kernels are **not `const fn`** (the `Limb` trait methods are
+//! not const), and `cube`'s dispatch MUST stay `const fn` because
+//! `Int<N>::wrapping_cube` is `const fn` and is reached from `const` contexts
+//! crate-wide — so a u128 cube cannot be wired without de-const-ing the public
+//! API. There is also no hot wide-`N` cube consumer (cube is a public-API
+//! convenience; the transcendentals do not route wide cubing through it). The
+//! single const `x²·x` form is therefore confirmed optimal as-is — a u128
+//! candidate is ineligible (not wireable) AND unmotivated.
+//!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
 //!

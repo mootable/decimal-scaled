@@ -21,18 +21,18 @@
 //!
 //! # Algorithm selection
 //!
-//! The icbrt policy mirrors the isqrt policy (see [`super::isqrt`]) with
-//! the same `N`-keyed split:
+//! Unlike isqrt (which has a genuine hardware `u64::isqrt` / `u128::isqrt`
+//! narrow path), there is **no native hardware cube root**: every width is
+//! served by the one width-agnostic Newton kernel
+//! ([`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`]) — Newton
+//! iteration with a shared-library `f64::cbrt` seed over u64 limbs. The
+//! `icbrt_ab` N-way A/B confirms this Newton kernel beats the bitwise
+//! [`Algorithm::Schoolbook`] reference at EVERY width (12.9x at `N == 1`
+//! growing to ~50x at `N == 64`), so `select` returns
+//! [`Algorithm::Newton`] for all `N`.
 //!
-//! - **`N âˆˆ {1, 2}`** â†’ [`icbrt_native`]: hardware-assisted cube root using
-//!   the primitive type's cube root via `u64`/`u128` arithmetic. For small
-//!   widths the result fits a single `u64` (`N == 1`) or two limbs
-//!   (`N == 2`); a direct Newton step is faster than the general loop.
-//! - **`N >= 3`** â†’ [`icbrt_newton`]: width-agnostic Newton iteration with a
-//!   hardware-`f64::cbrt` seed over u64 limbs â€” one algorithm for all
-//!   wider integers. Implemented in
-//!   [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].
-//!
+//! [`Algorithm::Schoolbook`] is the registered-but-unselected reference
+//! baseline (kept per `docs/ARCHITECTURE.md` → "Keeping the alternatives").
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
 //!
@@ -41,6 +41,9 @@
 //! `dispatch` is **not** `const fn`. The `Newton` arm calls
 //! [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`] which performs Newton
 //! iteration and is not const-evaluable.
+//!
+//! Names follow RULES §4: `icbrt_newton` → `Newton`, `icbrt_schoolbook` →
+//! `Schoolbook`.
 
 use crate::int::algos::icbrt::icbrt_newton::icbrt_newton as icbrt_newton_kernel;
 use crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook as icbrt_schoolbook_kernel;
@@ -51,21 +54,16 @@ use crate::int::types::Uint;
 /// The integer cube-root algorithms this policy chooses between. Variants
 /// are the CamelCase of each kernel fn's name minus the `icbrt_` function
 /// prefix â€” strict 1:1 with the kernel fns.
-///
-/// Names follow RULES Â§4: `icbrt_native` â†’ `Native`, `icbrt_newton` â†’
-/// `Newton`.
 #[derive(Clone, Copy, PartialEq, Eq)]
 enum Algorithm {
-    /// [`icbrt_native`] â€” hardware-assisted path for `N âˆˆ {1, 2}`: the
-    /// cube root fits a single `u64` (`N == 1`) or two limbs (`N == 2`),
-    /// computed via direct arithmetic without the full Newton loop.
-    Native,
     /// [`icbrt_newton`] â€” width-agnostic Newton iteration with a
-    /// hardware-`f64::cbrt` seed over u64 limbs. Serves every `N >= 3`.
-    /// Delegates to [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].
+    /// shared-library `f64::cbrt` seed over u64 limbs. Serves every `N`
+    /// (there is no native hardware cube root). Delegates to
+    /// [`crate::int::algos::icbrt::icbrt_newton::icbrt_newton`].
     Newton,
     /// [`icbrt_schoolbook`] -- bit-by-bit restoring cube root;
-    /// pure integer, no division, no float seed. Serves any `N`.
+    /// pure integer, no division, no float seed. Serves any `N`. The
+    /// registered-but-unselected reference baseline.
     #[allow(dead_code)]
     Schoolbook,
 }
@@ -73,7 +71,7 @@ enum Algorithm {
 // â”€â”€ 2. the verdict â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 /// A settled algorithm, or "the value decides". The icbrt picker always
-/// returns `ByAlgorithm`: the choice is fully determined by `N`. `ByValue`
+/// returns `ByAlgorithm(Newton)`: one algorithm serves every `N`. `ByValue`
 /// is part of the canonical shape for uniformity across functions; `select`
 /// never returns it.
 #[derive(Clone, Copy)]
@@ -85,40 +83,23 @@ enum Select<const N: usize> {
 
 // â”€â”€ 3. the matcher: const, keyed on `N`, total over the key â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// Pick the icbrt algorithm for storage limb count `N`. Total over the key.
-///
-/// - `N âˆˆ {1, 2}` â†’ [`Algorithm::Native`] (narrow fast path).
-/// - `N >= 3` (the `_` arm) â†’ [`Algorithm::Newton`] (generic limb Newton).
+/// Pick the icbrt algorithm for storage limb count `N`. Total over the key;
+/// [`Algorithm::Newton`] wins at every `N` (the `icbrt_ab` A/B beats the
+/// `Schoolbook` reference 12.9x–50x across the full width sweep).
 const fn select<const N: usize>() -> Select<N> {
-    match N {
-        1 | 2 => Select::ByAlgorithm(Algorithm::Native),
-        _ => Select::ByAlgorithm(Algorithm::Newton),
-    }
+    let _ = N; // key accepted for uniformity; one algorithm at every width
+    Select::ByAlgorithm(Algorithm::Newton)
 }
 
 // â”€â”€ algorithm fns â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-/// Native hardware-assisted integer cube root for `Uint<N>` where `N âˆˆ {1, 2}`.
-///
-/// For `N == 1` the cube root fits entirely in a `u64` (max input
-/// `2^64 âˆ’ 1`, max root `2^21 + â€¦ < 2^22`). For `N == 2` the cube root
-/// of a 128-bit value fits in a `u64` as well (max 128-bit value has cube
-/// root < `2^43`). We delegate to the general Newton kernel
-/// ([`icbrt_newton_kernel`]) which handles both widths correctly via its
-/// limb loop; for these small widths the loop terminates in a handful of
-/// iterations and the result is exact.
-#[inline]
-pub(crate) fn icbrt_native<const N: usize>(x: Uint<N>) -> Uint<N> {
-    let mut out = [0u64; N];
-    icbrt_newton_kernel(x.as_limbs(), &mut out);
-    Uint::<N>::from_limbs(out)
-}
-
-/// Newton integer cube root for `Uint<N>` where `N >= 3`.
+/// Newton integer cube root for `Uint<N>` — serves every `N`.
 ///
 /// Delegates to [`icbrt_newton_kernel`]: Newton iteration with a
-/// hardware-`f64::cbrt` seed over u64 limbs; converges quadratically to
-/// `floor(x^(1/3))`.
+/// shared-library `f64::cbrt` seed over u64 limbs; converges quadratically to
+/// `floor(x^(1/3))`. For the narrow widths (`N <= 2`) the limb loop
+/// terminates in a handful of iterations; there is no distinct hardware
+/// cube-root path, so this one kernel is the icbrt for all widths.
 #[inline]
 pub(crate) fn icbrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
@@ -158,7 +139,6 @@ pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
         Select::ByValue(f) => f(&x),
     };
     match algo {
-        Algorithm::Native => icbrt_native::<N>(x),
         Algorithm::Newton => icbrt_newton::<N>(x),
         Algorithm::Schoolbook => icbrt_schoolbook_policy::<N>(x),
     }

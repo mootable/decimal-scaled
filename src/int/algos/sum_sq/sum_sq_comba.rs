@@ -1,8 +1,6 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! UNBENCHED CANDIDATE — not wired into any policy; coordinator benches + selects.
-//!
 //! `sum_sq_comba` -- the integer sum of squares `a² + b²`, forming each
 //! square with a dedicated FULL-WIDTH product-scanning (comba) squaring pass
 //! instead of a general `x·x` schoolbook multiply.
@@ -78,7 +76,6 @@ fn sqr_full(x: &[u64], l: usize, out: &mut [u64]) {
 /// [`crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_radicand`]: same
 /// contract, same result, the squares formed by [`sqr_full`].
 #[inline]
-#[allow(dead_code)]
 pub(crate) fn sum_sq_radicand_comba<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
 where
     Int<N>: ComputeInt,
@@ -99,7 +96,6 @@ where
 /// [`crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook`].
 #[inline]
 #[must_use]
-#[allow(dead_code)]
 pub(crate) fn sum_sq_comba<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
     Int<N>: ComputeInt,

@@ -32,6 +32,19 @@
 //! layering points DOWN -- the algorithm calls the kernels, never a
 //! pow/sqr/mul method on `Uint<N>`.
 //!
+//! The `pow_ab` N-way dispatch-seam A/B confirms `SquareAndMultiply` beats
+//! the `Schoolbook` reference at EVERY width across the exponent sweep
+//! (e2..e31): 1.18x at `N == 1` growing to ~3-4x at the wide tiers (the
+//! O(exp) vs O(log exp) gap widening with both width and exponent). So
+//! `select` returns `SquareAndMultiply` for all `N` -- confirmed optimal.
+//!
+//! As with [`crate::int::policy::cube`], the only further axis is the
+//! `LimbSize` u128 packing of the square/multiply steps, but
+//! `pow_square_and_multiply` is `const fn` (reached from `const fn`
+//! `Int<N>::wrapping_pow`) and the u128 `sqr_low_limb` / `mul_low_limb`
+//! kernels are not `const`, so a u128 pow is ineligible without de-const-ing
+//! the public API.
+//!
 //! A `Schoolbook` reference arm is registered for the naive repeated-multiply
 //! algorithm (via [`crate::int::algos::pow::pow_schoolbook::pow_schoolbook`]).
 //! It is unrouted (not returned by `select`) and marked `#[allow(dead_code)]`

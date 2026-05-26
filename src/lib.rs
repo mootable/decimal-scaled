@@ -487,6 +487,44 @@ pub mod __bench_internals {
         crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook(n, out)
     }
 
+    /// Per-`N` monomorphic wrappers over the two generic `sum_sq` kernels,
+    /// exposed for the `sum_sq_ab` dispatch-seam microbench: `schoolbook`
+    /// (the WIRED kernel — each square via the general `mul_schoolbook(x,x,..)`
+    /// product, ≈ L² limb-mults) vs `comba` (a KEPT alternative forming each
+    /// square with a symmetric product-scanning pass, ≈ L²/2 limb-mults).
+    /// Bit-identical by construction. Each width is a concrete monomorphisation
+    /// so the private `Int<N>: ComputeInt` bound never leaks through a generic
+    /// `pub` signature (a generic export with that bound fails to compile).
+    macro_rules! sum_sq_wrappers {
+        ($sb:ident, $cb:ident, $n:literal) => {
+            #[inline(never)]
+            pub fn $sb(
+                a: crate::int::types::Int<$n>,
+                b: crate::int::types::Int<$n>,
+            ) -> Option<crate::int::types::Int<$n>> {
+                crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook::<$n>(a, b)
+            }
+            #[inline(never)]
+            pub fn $cb(
+                a: crate::int::types::Int<$n>,
+                b: crate::int::types::Int<$n>,
+            ) -> Option<crate::int::types::Int<$n>> {
+                crate::int::algos::sum_sq::sum_sq_comba::sum_sq_comba::<$n>(a, b)
+            }
+        };
+    }
+    sum_sq_wrappers!(sum_sq_sb_n2, sum_sq_cb_n2, 2);
+    sum_sq_wrappers!(sum_sq_sb_n3, sum_sq_cb_n3, 3);
+    sum_sq_wrappers!(sum_sq_sb_n4, sum_sq_cb_n4, 4);
+    sum_sq_wrappers!(sum_sq_sb_n6, sum_sq_cb_n6, 6);
+    sum_sq_wrappers!(sum_sq_sb_n8, sum_sq_cb_n8, 8);
+    sum_sq_wrappers!(sum_sq_sb_n12, sum_sq_cb_n12, 12);
+    sum_sq_wrappers!(sum_sq_sb_n16, sum_sq_cb_n16, 16);
+    sum_sq_wrappers!(sum_sq_sb_n24, sum_sq_cb_n24, 24);
+    sum_sq_wrappers!(sum_sq_sb_n32, sum_sq_cb_n32, 32);
+    sum_sq_wrappers!(sum_sq_sb_n48, sum_sq_cb_n48, 48);
+    sum_sq_wrappers!(sum_sq_sb_n64, sum_sq_cb_n64, 64);
+
     /// Decimal divide kernels exposed for the `mul_div_native_ab`
     /// microbench (the dispatch-seam A/B that decided narrow `N == 2`
     /// should route to the hardware-`i128` `div_native` arm; mul stays on
