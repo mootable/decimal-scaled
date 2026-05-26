@@ -102,7 +102,12 @@ const KARATSUBA_THRESHOLD: usize = usize::MAX;
 /// else (unequal, or below the threshold) takes the fixed-width schoolbook.
 const fn select() -> Select {
     Select::ByShape(|a_len: usize, b_len: usize| {
-        if a_len == b_len && a_len >= KARATSUBA_THRESHOLD {
+        // KARATSUBA_THRESHOLD = usize::MAX disables Karatsuba (validated
+        // never-wins at the shipped widths); the >= seam stays for a future
+        // finite threshold, so allow the lint rather than collapse it to ==.
+        #[allow(clippy::absurd_extreme_comparisons)]
+        let take_karatsuba = a_len == b_len && a_len >= KARATSUBA_THRESHOLD;
+        if take_karatsuba {
             Algorithm::Karatsuba
         } else {
             Algorithm::Schoolbook
