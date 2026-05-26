@@ -1236,6 +1236,28 @@ macro_rules! decl_wide_transcendental {
                     let cap_digits = (<W>::BITS / 8).saturating_sub(int_digits + 8);
                     let max_guard = cap_digits.saturating_sub(target).max(base_guard);
 
+                    // A directed result is trustworthy once two consecutive
+                    // guards agree AND the residual has resolved its position
+                    // relative to the grid line. Two regimes are "resolved":
+                    //
+                    //  * residual EXACTLY zero (`dist == 0`): the value sits on
+                    //    a grid line to the full working resolution and stays
+                    //    there as the guard grows — a genuine algebraic-exact
+                    //    point (`sinh 0`, `cosh 0 = 1`, `log_b(b^k)`). Accept it
+                    //    (the floor `q` is exact; no directed bump).
+                    //  * residual CLEAR of the band (`dist > divisor/1000`): the
+                    //    deciding fraction is well above any kernel round-off,
+                    //    so the directed side is certain.
+                    //
+                    // The dangerous middle case is a SMALL NON-ZERO residual
+                    // inside the band: that is a finite-precision ARTIFACT, not
+                    // the true residual. E.g. `log10(10^k − 1) = k − 10^-k/ln10`
+                    // — at a working scale `w < k` the `−10^-k` deviation is
+                    // invisible and AGM/division round-off leaves a spurious
+                    // residual on the WRONG (high) side, so Trunc/Floor would
+                    // wrongly keep `k`. While the residual sits in the band we
+                    // keep escalating until the deviation materialises (the
+                    // guard exceeds the input's digit span) or the cap is hit.
                     let mut guard = base_guard;
                     loop {
                         if guard >= max_guard {
@@ -1247,9 +1269,13 @@ macro_rules! decl_wide_transcendental {
                         // reached, then confirm with a further step.
                         let step = (target + base_guard).max(base_guard);
                         let next_guard = guard.saturating_add(step).min(max_guard);
-                        let (hi, _, _) = directed_narrow(next_guard);
-                        if hi == lo {
-                            break lo;
+                        let (hi, hi_dist, hi_div) = directed_narrow(next_guard);
+                        let hi_band = hi_div / lit(1000);
+                        // Resolved iff the residual is exactly on the grid line
+                        // (exact algebraic point) or clear of the near-grid band.
+                        let resolved = hi_dist == lit(0) || hi_dist > hi_band;
+                        if hi == lo && resolved {
+                            break hi;
                         }
                         guard = next_guard;
                         lo = hi;

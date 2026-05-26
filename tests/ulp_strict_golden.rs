@@ -1321,7 +1321,6 @@ mod band_edges {
             check_at_scale("log2", Width::D76, 75, include_str!("golden/log2_d76_s75.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D76 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d76_log10_s0() {
             check_at_scale("log10", Width::D76, 0, include_str!("golden/log10_d76_s0.txt"));
         }
@@ -1498,7 +1497,6 @@ mod band_edges {
             check_at_scale("log2", Width::D115, 114, include_str!("golden/log2_d115_s114.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D115 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d115_log10_s0() {
             check_at_scale("log10", Width::D115, 0, include_str!("golden/log10_d115_s0.txt"));
         }
@@ -1675,7 +1673,6 @@ mod band_edges {
             check_at_scale("log2", Width::D153, 152, include_str!("golden/log2_d153_s152.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D153 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d153_log10_s0() {
             check_at_scale("log10", Width::D153, 0, include_str!("golden/log10_d153_s0.txt"));
         }
@@ -1852,7 +1849,6 @@ mod band_edges {
             check_at_scale("log2", Width::D230, 229, include_str!("golden/log2_d230_s229.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D230 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d230_log10_s0() {
             check_at_scale("log10", Width::D230, 0, include_str!("golden/log10_d230_s0.txt"));
         }
@@ -2021,7 +2017,6 @@ mod band_edges {
             check_at_scale("log2", Width::D307, 306, include_str!("golden/log2_d307_s306.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D307 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d307_log10_s0() {
             check_at_scale("log10", Width::D307, 0, include_str!("golden/log10_d307_s0.txt"));
         }
@@ -2190,7 +2185,6 @@ mod band_edges {
             check_at_scale("log2", Width::D462, 461, include_str!("golden/log2_d462_s461.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D462 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d462_log10_s0() {
             check_at_scale("log10", Width::D462, 0, include_str!("golden/log10_d462_s0.txt"));
         }
@@ -2359,7 +2353,6 @@ mod band_edges {
             check_at_scale("log2", Width::D616, 615, include_str!("golden/log2_d616_s615.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D616 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d616_log10_s0() {
             check_at_scale("log10", Width::D616, 0, include_str!("golden/log10_d616_s0.txt"));
         }
@@ -2528,7 +2521,6 @@ mod band_edges {
             check_at_scale("log2", Width::D924, 923, include_str!("golden/log2_d924_s923.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D924 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d924_log10_s0() {
             check_at_scale("log10", Width::D924, 0, include_str!("golden/log10_d924_s0.txt"));
         }
@@ -2699,7 +2691,6 @@ mod band_edges {
             check_at_scale("log2", Width::D1232, 1231, include_str!("golden/log2_d1232_s1231.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: log10 D1232 s0 mode Trunc input=10^cap-1 (all-nines MAX) value=cap oracle=cap-1 delta=1 LSB — directed-rounding boundary at MAX input; needs kernel fix"]
         fn d1232_log10_s0() {
             check_at_scale("log10", Width::D1232, 0, include_str!("golden/log10_d1232_s0.txt"));
         }
