@@ -184,7 +184,9 @@ fn exp_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: Roundin
     let v_w = if negative_input { -v_mag } else { v_mag };
 
     let ex = exp_generic::exp_fixed::<WNarrow>(v_w, w);
-    narrow_round_mag(ex, working_digits, mode, true, false)
+    narrow_round_mag(ex, working_digits, mode, true, false).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("exp kernel", scale)
+    })
 }
 
 /// Narrows a non-negative [`WNarrow`] working-scale magnitude `mag`
@@ -194,6 +196,15 @@ fn exp_wide_narrow_raw(raw: i128, scale: u32, working_digits: u32, mode: Roundin
 /// residual is treated as a present positive sub-resolution fraction
 /// (bumps Ceiling, not Floor/Trunc). `result_neg` reapplies an odd
 /// function's sign AFTER rounding the magnitude.
+///
+/// Returns `None` when the rounded storage value does not fit the `i128`
+/// the narrow tier stores its result in — a genuine RESULT-TYPE overflow
+/// (e.g. `exp(100)` at D38<35> is ~2.7e43·10^35, far beyond `i128::MAX`),
+/// DISTINCT from the working-width (`exp_fixed` internal `2·w_ext`)
+/// overflow the wider `WNarrow` work integer fixes. The caller turns the
+/// `None` into the same overflow panic / saturation the `Fixed` path's
+/// `round_to_i128_with` did, so `exp_strict` still panics on an
+/// unrepresentable result rather than silently returning a wrapped value.
 #[inline]
 fn narrow_round_mag(
     mag: WNarrow,
@@ -201,7 +212,7 @@ fn narrow_round_mag(
     mode: RoundingMode,
     never_exact: bool,
     result_neg: bool,
-) -> i128 {
+) -> Option<i128> {
     use crate::support::rounding::{is_nearest_mode, should_bump};
     let divisor = WNarrow::TEN.pow(shift);
     let (q, rem) = mag.div_rem(divisor);
@@ -229,8 +240,30 @@ fn narrow_round_mag(
         false
     };
     let q_mag = if bump { q + WNarrow::ONE } else { q };
+    // Result-type fit check (mirrors `Fixed::round_to_i128_with`): the
+    // non-negative quotient magnitude `q_mag` must fit the signed `i128`.
+    // A positive result fits iff `q_mag <= i128::MAX`; a negative result
+    // iff `q_mag <= 2^127` (= `|i128::MIN|`). Both are bounded by
+    // `bit_length <= 127`, with the single extra `2^127` value allowed
+    // only for the negative side.
+    let bl = q_mag.bit_length();
+    if bl > 128 {
+        return None;
+    }
+    if bl == 128 {
+        // The only 128-bit magnitude that fits is exactly `2^127`, and
+        // only as a negative result (`i128::MIN`).
+        let two_pow_127 = WNarrow::ONE << 127;
+        if !(result_neg && q_mag == two_pow_127) {
+            return None;
+        }
+    } else if bl == 127 && !result_neg {
+        // `2^126 <= q_mag < 2^127`: a positive result fits iff
+        // `q_mag <= i128::MAX = 2^127 - 1`. bit_length 127 already
+        // guarantees `q_mag < 2^127`, so it fits.
+    }
     let signed = if result_neg { -q_mag } else { q_mag };
-    signed.to_i128()
+    Some(signed.to_i128())
 }
 
 /// `sinh(x)` / `cosh(x)` magnitude `(e^|x| ∓ e^-|x|)/2` at working scale
@@ -268,7 +301,9 @@ pub(crate) fn sinh_wide_narrow_raw(
     let neg = raw < 0;
     let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
     let sh = hyper_pos_wide_narrow(av, w, false);
-    narrow_round_mag(sh, working_digits, mode, true, neg)
+    narrow_round_mag(sh, working_digits, mode, true, neg).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("D38::sinh", scale)
+    })
 }
 
 /// Narrow integer-regime `cosh(x)` via the wide [`WNarrow`] work integer.
@@ -284,7 +319,9 @@ pub(crate) fn cosh_wide_narrow_raw(
     let w = scale + working_digits;
     let av = WNarrow::from_i128(raw.unsigned_abs() as i128) * WNarrow::TEN.pow(working_digits);
     let ch = hyper_pos_wide_narrow(av, w, true);
-    narrow_round_mag(ch, working_digits, mode, true, false)
+    narrow_round_mag(ch, working_digits, mode, true, false).unwrap_or_else(|| {
+        crate::support::diagnostics::overflow_panic_with_scale("D38::cosh", scale)
+    })
 }
 
 /// Whether the narrow `sinh`/`cosh` result for `raw` at `scale` exceeds
