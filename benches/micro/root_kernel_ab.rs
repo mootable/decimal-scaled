@@ -176,21 +176,26 @@ macro_rules! wide_root_bench {
     };
 }
 
-// Benched at the bench-branch-compare scales (D76 @ 20, D115/D153 @ 25,
-// D230/D307 @ 30) — the cells the bbc matrix actually measures. W is the
-// minimal work width covering mag·10^SCALE (sqrt) / mag·10^(2·SCALE) (cbrt)
-// at a near-storage-max magnitude.
+// Native (tight-Int<W> f64-seeded Newton) vs the generic build-max slice,
+// benched at the bench-branch-compare scales (D57/D76 @ 20, D115/D153 @ 25,
+// D230/D307 @ 30) and at the policy's ROUTED work width — sqrt W = 2N, cbrt
+// W = 3N (sized to cover the tier's full scale range), the width the live
+// decimal op actually pays. D57/D76 are routed to Native (it wins at the
+// full-range W there); D115+ are NOT routed by N — at the full-range W the
+// per-iteration Knuth divide outweighs the slice scratch churn (these cells
+// document that crossover) and they keep only their high-scale Native cells.
 wide_root_bench!(bench_sqrt_d57, sqrt_native_w, sqrt_newton_slice_n, 3, 6, 20, "sqrt_d57_s20");
-wide_root_bench!(bench_sqrt_d76, sqrt_native_w, sqrt_newton_slice_n, 4, 6, 20, "sqrt_d76_s20");
-wide_root_bench!(bench_sqrt_d115, sqrt_native_w, sqrt_newton_slice_n, 6, 8, 25, "sqrt_d115_s25");
-wide_root_bench!(bench_sqrt_d153, sqrt_native_w, sqrt_newton_slice_n, 8, 10, 25, "sqrt_d153_s25");
-wide_root_bench!(bench_sqrt_d230, sqrt_native_w, sqrt_newton_slice_n, 12, 14, 30, "sqrt_d230_s30");
-wide_root_bench!(bench_sqrt_d307, sqrt_native_w, sqrt_newton_slice_n, 16, 18, 30, "sqrt_d307_s30");
-wide_root_bench!(bench_cbrt_d76, cbrt_native_w, cbrt_newton_slice_n, 4, 7, 20, "cbrt_d76_s20");
-wide_root_bench!(bench_cbrt_d115, cbrt_native_w, cbrt_newton_slice_n, 6, 9, 25, "cbrt_d115_s25");
-wide_root_bench!(bench_cbrt_d153, cbrt_native_w, cbrt_newton_slice_n, 8, 11, 25, "cbrt_d153_s25");
-wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 16, 30, "cbrt_d230_s30");
-wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 20, 30, "cbrt_d307_s30");
+wide_root_bench!(bench_sqrt_d76, sqrt_native_w, sqrt_newton_slice_n, 4, 8, 20, "sqrt_d76_s20");
+wide_root_bench!(bench_sqrt_d115, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 25, "sqrt_d115_s25");
+wide_root_bench!(bench_sqrt_d153, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 25, "sqrt_d153_s25");
+wide_root_bench!(bench_sqrt_d230, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 30, "sqrt_d230_s30");
+wide_root_bench!(bench_sqrt_d307, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 30, "sqrt_d307_s30");
+wide_root_bench!(bench_cbrt_d57, cbrt_native_w, cbrt_newton_slice_n, 3, 9, 20, "cbrt_d57w9_s20");
+wide_root_bench!(bench_cbrt_d76, cbrt_native_w, cbrt_newton_slice_n, 4, 12, 20, "cbrt_d76_s20");
+wide_root_bench!(bench_cbrt_d115, cbrt_native_w, cbrt_newton_slice_n, 6, 18, 25, "cbrt_d115_s25");
+wide_root_bench!(bench_cbrt_d153, cbrt_native_w, cbrt_newton_slice_n, 8, 24, 25, "cbrt_d153_s25");
+wide_root_bench!(bench_cbrt_d230, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 30, "cbrt_d230_s30");
+wide_root_bench!(bench_cbrt_d307, cbrt_native_w, cbrt_newton_slice_n, 16, 48, 30, "cbrt_d307_s30");
 
 fn bench_wide(c: &mut Criterion) {
     bench_sqrt_d57(c);
@@ -199,6 +204,7 @@ fn bench_wide(c: &mut Criterion) {
     bench_sqrt_d153(c);
     bench_sqrt_d230(c);
     bench_sqrt_d307(c);
+    bench_cbrt_d57(c);
     bench_cbrt_d76(c);
     bench_cbrt_d115(c);
     bench_cbrt_d153(c);
