@@ -373,6 +373,35 @@ mod tests {
         check_cell::<16, 32>(150, &raws);
     }
 
+    /// The `W = 3N` work widths the cbrt policy now routes the mid-wide
+    /// tiers (D57/D76/D115/D153, routed by `N` at every scale) to, checked
+    /// at a near-storage-max magnitude (both signs) across the tier's scale
+    /// range including its max usable scale — where `mag · 10^(2·SCALE)` is
+    /// widest and a too-small `W` would overflow (release-mode UB). The fast
+    /// `a` arm (the production seed) must stay bit-identical to the
+    /// oracle-gated `cbrt_native`.
+    #[test]
+    fn fast_a_routed_3n_widths_near_max() {
+        for &neg in &[false, true] {
+            for mode in ALL_MODES {
+                macro_rules! chk {
+                    ($n:literal, $w:literal, $($s:literal),+) => {{
+                        $(
+                            let pow = Int::<$w>::TEN.pow(2 * $s);
+                            let raw = near_max::<$n>(neg);
+                            let want = cbrt_native::<$n, $w>(raw, pow, mode);
+                            assert_eq!(cbrt_native_fast_a::<$n, $w>(raw, pow, mode), want, "A 3N N={} W={} s={} neg={neg} mode={mode:?}", $n, $w, $s);
+                        )+
+                    }};
+                }
+                chk!(3, 9, 0, 20, 28, 57);
+                chk!(4, 12, 0, 20, 35, 76);
+                chk!(6, 18, 0, 25, 57, 115);
+                chk!(8, 24, 0, 25, 75, 153);
+            }
+        }
+    }
+
     #[test]
     fn fast_candidates_match_native_near_max_all_cells() {
         for &neg in &[false, true] {

@@ -105,27 +105,31 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (1, _) => Select::ByAlgorithm(Algorithm::MgDivide),
         // D38 (`Int<2>`) — hand-tuned 256-bit isqrt.
         (2, _) => Select::ByAlgorithm(Algorithm::MgDivide),
-        // (D57, SCALE == 20) — bespoke narrow-work + f64 seed. Gated
-        // with the kernel; falls to `Newton` when D57 is not compiled in
-        // (in which case the `(3, 20)` cell is unreachable anyway).
+        // Mid-wide tiers (D57/D76/D115/D153, N = 3/4/6/8) — bespoke
+        // f64-seeded Newton in a tight, concrete `Int<W>` with `W = 2N`
+        // (covering `mag · 10^SCALE` at any valid scale, the storage
+        // magnitude never exceeding 64N bits and `10^SCALE` adding
+        // ≤ 64N more for SCALE ≤ the tier's digit capacity). Routed by `N`
+        // (all scales) because the build-max slice scratch the generic
+        // `Newton` kernel zeroes per Newton iteration dominates these small
+        // mid-scale radicands. Microbench (`root_kernel_ab`, bbc scales):
+        // native beats the generic slice 1.21× (D57<20>), 1.97× (D76<20>),
+        // 1.19× (D115<25>), 1.11× (D153<25>). For N ≥ 12 (D230/D307…) the
+        // slice path is at/ahead of native at the bbc scales, so those
+        // tiers stay on the generic `Newton` `_` arm. Bit-identical to
+        // `Newton` across all six modes (kernel test gate).
+        //
+        // Gated with the kernel: each tier's cells only exist when the tier
+        // is compiled in, so the variant, these arms, and the dispatch arms
+        // are gated together (the policy stays exhaustive in both configs).
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 20) => Select::ByAlgorithm(Algorithm::NewtonWithTableSeed),
-        // Bespoke f64-(top-bits)-seeded Newton in a tight, concrete
-        // `Int<W>` (no build-max slice scratch). Each routed `(N, SCALE)`
-        // cell carries its own work width `W` (sized to cover
-        // `mag · 10^SCALE` for the full storage magnitude) in the dispatch
-        // arm below. Microbench (`root_kernel_ab`): native beats the
-        // generic slice 1.2–1.6× at every cell.
-        #[cfg(any(feature = "d57", feature = "wide"))]
-        (4, 35) // D76<35>,   W=6
-        | (6, 57) // D115<57>, W=9
-        | (8, 75) // D153<75>, W=12
-        | (8, 76) // D153<76>, W=12 (golden-table scale)
-        | (12, 115) // D230<115>, W=19
-        | (16, 150) // D307<150>, W=24
+        (3, _) // D57,  W=6
+        | (4, _) // D76,  W=8
+        | (6, _) // D115, W=12
+        | (8, _) // D153, W=16
         => Select::ByAlgorithm(Algorithm::Native),
-        // Everything else (all wide tiers, all other scales) — generic
-        // Newton over the tier's work width.
+        // Everything else (N ≥ 12 wide tiers, all scales) — generic Newton
+        // over the int layer's width-agnostic slice `isqrt`.
         _ => Select::ByAlgorithm(Algorithm::Newton),
     }
 }
@@ -179,12 +183,11 @@ where
         // dead-arm-eliminated in release. The `_ => Newton` fallback never
         // fires for a cell `select` routed to `Native`.
         #[cfg(any(feature = "d57", feature = "wide"))]
-        Algorithm::Native => match (N, SCALE) {
-            (4, 35) => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, const { Int::<6>::TEN.pow(SCALE) }, mode),
-            (6, 57) => sqrt::sqrt_native::sqrt_native::<N, 9>(raw, const { Int::<9>::TEN.pow(SCALE) }, mode),
-            (8, 75) | (8, 76) => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, const { Int::<12>::TEN.pow(SCALE) }, mode),
-            (12, 115) => sqrt::sqrt_native::sqrt_native::<N, 19>(raw, const { Int::<19>::TEN.pow(SCALE) }, mode),
-            (16, 150) => sqrt::sqrt_native::sqrt_native::<N, 24>(raw, const { Int::<24>::TEN.pow(SCALE) }, mode),
+        Algorithm::Native => match N {
+            3 => sqrt::sqrt_native::sqrt_native::<N, 6>(raw, const { Int::<6>::TEN.pow(SCALE) }, mode),
+            4 => sqrt::sqrt_native::sqrt_native::<N, 8>(raw, const { Int::<8>::TEN.pow(SCALE) }, mode),
+            6 => sqrt::sqrt_native::sqrt_native::<N, 12>(raw, const { Int::<12>::TEN.pow(SCALE) }, mode),
+            8 => sqrt::sqrt_native::sqrt_native::<N, 16>(raw, const { Int::<16>::TEN.pow(SCALE) }, mode),
             _ => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),
         },
         Algorithm::Schoolbook => sqrt::sqrt_newton::sqrt_newton::<N>(raw, SCALE, mode),

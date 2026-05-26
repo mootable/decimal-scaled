@@ -227,4 +227,28 @@ mod tests {
         }
     }
 
+    /// The `W = 2N` work widths the sqrt policy now routes the mid-wide
+    /// tiers (D57/D76/D115/D153, routed by `N` at every scale) to, checked
+    /// at a near-storage-max magnitude across the tier's scale range
+    /// (including the tier's max usable scale, where `mag · 10^SCALE` is
+    /// widest and a too-small `W` would overflow → release-mode UB). Each
+    /// must stay bit-identical to the oracle-gated generic `sqrt_newton`.
+    #[test]
+    fn sqrt_native_routed_2n_widths_near_max() {
+        for mode in ALL_MODES {
+            for &s in &[0u32, 20, 28, 57] {
+                assert_eq!(sqrt_native::<3, 6>(near_max::<3>(), Int::<6>::TEN.pow(s), mode), sqrt_newton::<3>(near_max::<3>(), s, mode), "D57 W=6 s={s} mode {mode:?}");
+            }
+            for &s in &[0u32, 20, 35, 76] {
+                assert_eq!(sqrt_native::<4, 8>(near_max::<4>(), Int::<8>::TEN.pow(s), mode), sqrt_newton::<4>(near_max::<4>(), s, mode), "D76 W=8 s={s} mode {mode:?}");
+            }
+            for &s in &[0u32, 25, 57, 115] {
+                assert_eq!(sqrt_native::<6, 12>(near_max::<6>(), Int::<12>::TEN.pow(s), mode), sqrt_newton::<6>(near_max::<6>(), s, mode), "D115 W=12 s={s} mode {mode:?}");
+            }
+            for &s in &[0u32, 25, 75, 153] {
+                assert_eq!(sqrt_native::<8, 16>(near_max::<8>(), Int::<16>::TEN.pow(s), mode), sqrt_newton::<8>(near_max::<8>(), s, mode), "D153 W=16 s={s} mode {mode:?}");
+            }
+        }
+    }
+
 }
