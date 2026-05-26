@@ -328,6 +328,22 @@ pub mod __bench_internals {
             num, den, quot, rem,
         )
     }
+    /// `div_rem` single-/double-limb hardware fast-path candidate for
+    /// `div_kernel_ab` — the `Algorithm::Rem` arm. Bit-identical to the other
+    /// engines; A/B measures the small-divisor regime where the const
+    /// `u128 / u64` path is the production routing.
+    #[inline(never)]
+    pub fn div_rem_fast_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::algos::div::div_rem::div_rem(num, den, quot, rem)
+    }
+    /// `div_rem_schoolbook` binary shift-subtract reference baseline for
+    /// `div_kernel_ab` — the `Algorithm::Schoolbook` arm. Bit-identical to the
+    /// other engines; A/B confirms it is the slowest (the never-routed
+    /// baseline) at every shape.
+    #[inline(never)]
+    pub fn div_schoolbook_slice(num: &[u64], den: &[u64], quot: &mut [u64], rem: &mut [u64]) {
+        crate::int::algos::div::div_rem_schoolbook::div_rem_schoolbook(num, den, quot, rem)
+    }
     /// Integer hypot kernel candidates for the `hypot_ab` microbench:
     /// the production Pythagoras path (radicand `a²+b²` + Newton slice
     /// `isqrt` + round) vs the native-u128 narrow fast path. Both

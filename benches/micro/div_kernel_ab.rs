@@ -35,6 +35,7 @@
 use criterion::Criterion;
 use decimal_scaled::__bench_internals::{
     div_bz_forced_slice, div_dispatch_slice, div_knuth_slice, div_knuth_u128_limb_slice,
+    div_rem_fast_slice, div_schoolbook_slice,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -87,6 +88,29 @@ fn run_u128(s: Shape) -> Vec<u64> {
     div_knuth_u128_limb_slice(&s.num, &s.den, &mut q, &mut r);
     r
 }
+fn run_remfast(s: Shape) -> Vec<u64> {
+    let mut q = vec![0u64; s.num.len()];
+    let mut r = vec![0u64; s.num.len()];
+    div_rem_fast_slice(&s.num, &s.den, &mut q, &mut r);
+    r
+}
+fn run_school(s: Shape) -> Vec<u64> {
+    let mut q = vec![0u64; s.num.len()];
+    let mut r = vec![0u64; s.num.len()];
+    div_schoolbook_slice(&s.num, &s.den, &mut q, &mut r);
+    r
+}
+
+// ── small-divisor regime — the scale-0 `rem` / single-limb-divisor cells the
+// bbc flags (rem D76 s0 etc.). The divisor is ONE effective u64 limb (the
+// `Algorithm::Rem` hardware path) while the dividend is the FULL storage width
+// `N` (rem passes full `Int<N>` limb arrays). A/B the const hardware `div_rem`
+// path vs Knuth vs schoolbook so the small-divisor arm is empirically pinned.
+fn shapes_small(n: usize) -> Vec<Shape> {
+    // dividend = full N limbs, divisor = a single nonzero u64 limb.
+    let num = fill(2027, n);
+    vec![Shape { label: "small_den1", num, den: vec![0x9E37_79B9_7F4A_7C17] }]
+}
 
 fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> Vec<Shape>) {
     // Correctness gate: forced BZ and Knuth must agree before timing — they
@@ -113,6 +137,19 @@ fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> 
         div_knuth_u128_limb_slice(&s.num, &s.den, &mut q3, &mut r3);
         assert_eq!(q0, q3, "knuth vs u128 quot mismatch {label} {}", s.label);
         assert_eq!(r0, r3, "knuth vs u128 rem mismatch {label} {}", s.label);
+        // The const single-limb hardware fast path (`Algorithm::Rem`): exact
+        // for any divisor (multi-limb falls back to its own shift-subtract).
+        let mut q4 = vec![0u64; s.num.len()];
+        let mut r4 = vec![0u64; s.num.len()];
+        div_rem_fast_slice(&s.num, &s.den, &mut q4, &mut r4);
+        assert_eq!(q0, q4, "knuth vs remfast quot mismatch {label} {}", s.label);
+        assert_eq!(r0, r4, "knuth vs remfast rem mismatch {label} {}", s.label);
+        // The schoolbook reference baseline (never routed, exact everywhere).
+        let mut q5 = vec![0u64; s.num.len()];
+        let mut r5 = vec![0u64; s.num.len()];
+        div_schoolbook_slice(&s.num, &s.den, &mut q5, &mut r5);
+        assert_eq!(q0, q5, "knuth vs schoolbook quot mismatch {label} {}", s.label);
+        assert_eq!(r0, r5, "knuth vs schoolbook rem mismatch {label} {}", s.label);
     }
     compare_all(
         c,
@@ -123,11 +160,42 @@ fn compare_width(c: &mut Criterion, n: usize, label: &str, shapes: fn(usize) -> 
             ("knuth", run_knuth as fn(Shape) -> Vec<u64>),
             ("bz", run_bz),
             ("u128", run_u128),
+            ("remfast", run_remfast),
+            ("school", run_school),
+        ],
+    );
+}
+
+// Wide-shape u128-vs-knuth crossover bisection. The full sweep shows den_n=24
+// is a tie and den_n=32 a clean u128 win; this localizes the even-`n` crossover
+// without paying the O(bits) schoolbook cost. knuth + u128 only.
+fn bisect_wide(c: &mut Criterion, n: usize) {
+    for s in shapes_wide(n) {
+        let mut q0 = vec![0u64; s.num.len()];
+        let mut r0 = vec![0u64; s.num.len()];
+        div_knuth_slice(&s.num, &s.den, &mut q0, &mut r0);
+        let mut q3 = vec![0u64; s.num.len()];
+        let mut r3 = vec![0u64; s.num.len()];
+        div_knuth_u128_limb_slice(&s.num, &s.den, &mut q3, &mut r3);
+        assert_eq!(q0, q3, "knuth vs u128 quot mismatch bisect {n}");
+        assert_eq!(r0, r3, "knuth vs u128 rem mismatch bisect {n}");
+    }
+    compare_all(
+        c,
+        &format!("div_kernel/bisect_wide_{n}limb"),
+        |s: &Shape| s.label.to_string(),
+        shapes_wide(n),
+        vec![
+            ("knuth", run_knuth as fn(Shape) -> Vec<u64>),
+            ("u128", run_u128),
         ],
     );
 }
 
 fn bench(c: &mut Criterion) {
+    for &n in &[26usize, 28, 30] {
+        bisect_wide(c, n);
+    }
     for &(n, lbl) in &[
         (3usize, "D57_3limb"),
         (4, "D76_4limb"),
@@ -142,6 +210,12 @@ fn bench(c: &mut Criterion) {
     ] {
         compare_width(c, n, &format!("bal_{lbl}"), shapes_bal);
         compare_width(c, n, &format!("wide_{lbl}"), shapes_wide);
+        // Single-limb-divisor regime over a full-width dividend (the scale-0
+        // `rem` / small-divisor cells). Skip the very widest tiers for the
+        // O(bits) schoolbook baseline cost — 24 limbs is enough to rank.
+        if n <= 24 {
+            compare_width(c, n, &format!("small_{lbl}"), shapes_small);
+        }
     }
 }
 

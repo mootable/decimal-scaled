@@ -139,22 +139,29 @@ pub(crate) const BZ_THRESHOLD: usize = 65;
 /// **wide** `div` shape (a `2n`-limb dividend over an `n`-limb divisor; the
 /// decimal `/` scaled-numerator shape), and only once the divisor is wide
 /// enough for the aligned u128 carry-chain to outrun the doubled multiply
-/// count:
+/// count. A coarse sweep crossed with a `{24,26,28,30,32}` bisection of the
+/// even-`n` crossover (knuth median vs u128 median, wide shape):
 ///
-/// | divisor (limbs / tier) | wide `2n`/`n` | balanced `n`/`n` |
-/// |------------------------|---------------|------------------|
-/// | 16 / D307              | u64 1.04×     | u64 1.33×        |
-/// | 24 / D462              | **u128 1.25×**| u64 1.23×        |
-/// | 32 / D616              | **u128 1.33×**| u64 1.14×        |
-/// | 48 / D924              | **u128 1.26×**| u64 1.21×        |
-/// | 64 / D1232             | **u128 1.17×**| u64 1.29×        |
+/// | divisor (limbs / tier) | wide `2n`/`n`  | balanced `n`/`n` |
+/// |------------------------|----------------|------------------|
+/// | 16 / D307              | u64 1.26×      | u64 1.31×        |
+/// | 24 / D462              | tie (1.00×)    | u64 1.56×        |
+/// | 26                     | u64 1.06×      | —                |
+/// | 28                     | u64 1.04×      | —                |
+/// | 30                     | tie (1.00×)    | —                |
+/// | 32 / D616              | **u128 1.02×** | u64 1.51×        |
+/// | 48 / D924              | **u128 1.20×** | u64 1.53×        |
+/// | 64 / D1232             | **u128 1.15×** | u64 1.50×        |
 ///
-/// So u128 is routed ONLY for an **even** divisor of `≥ 24` limbs whose
-/// dividend is `≥ 2·n` (the wide shape); the balanced shape (square `rem` /
-/// the `Int<N>` `/` operator) and every narrow/odd divisor stay base-2⁶⁴
-/// Knuth, where u128 loses. The engine itself falls back to `div_knuth` for
-/// odd / `< 4`-limb divisors, so the matcher gate is the perf carve-out.
-const U128_DIV_THRESHOLD: usize = 24;
+/// So u128 only TIES at `den_n` 24–30 and is a clean win from `32` upward;
+/// the previous `24` gate engaged it across 24–30 where it actually loses
+/// 1.04–1.06×. u128 is therefore routed ONLY for an **even** divisor of
+/// `≥ 32` limbs whose dividend is `≥ 2·n` (the wide shape); the balanced
+/// shape (square `rem` / the `Int<N>` `/` operator) and every narrow/odd
+/// divisor stay base-2⁶⁴ Knuth, where u128 loses (balanced u64 wins ~1.5×
+/// at every width). The engine itself falls back to `div_knuth` for odd /
+/// `< 4`-limb divisors, so the matcher gate is the perf carve-out.
+const U128_DIV_THRESHOLD: usize = 32;
 
 // ── 3. the matcher: `select` (no const axis) → `select_for_limbs` ─────
 
@@ -181,11 +188,11 @@ const fn select() -> Select {
 ///   `den.len()` with trailing zero limbs stripped. `den_n == 0` is a
 ///   divide-by-zero (asserted here). Always needed.
 /// * the **dividend's** effective limb count (`num.len()` with top zero
-///   limbs stripped) is computed **lazily**, only in the Burnikel–Ziegler
-///   guard — and the `&&` short-circuits, so it is reached only for a
-///   divisor of `≥ BZ_THRESHOLD` limbs. The common cases (single-limb
-///   divisor → `Rem`; any `2..BZ_THRESHOLD`-limb divisor → `Knuth`) never
-///   strip the dividend at all.
+///   limbs stripped) is computed **lazily**, only once the divisor reaches
+///   the smaller [`U128_DIV_THRESHOLD`] gate (both wide engines want a
+///   `≥ 2·n` dividend). The common cases (single-limb divisor → `Rem`; any
+///   `2..U128_DIV_THRESHOLD`-limb divisor → `Knuth`) never strip the
+///   dividend at all.
 ///
 /// Routing: a single-limb divisor takes the hardware [`Algorithm::Rem`]
 /// path (covers every `10^scale`, `scale ≤ 19`); a divisor of at least
