@@ -40,11 +40,15 @@ impl Algorithm {
     /// algorithm because the u64/u128 crossover is algorithm-dependent. `u128`
     /// packs the operands into `N/2` limbs (≈¼ the partial products at a wider
     /// 128×128→256 inner step), valid only for EVEN `N` — [`LimbSize::for_packing`]
-    /// drives odd `N` to `U64`. Per the sibling [`crate::int::policy::mul_low`]
-    /// pilot (`mul_low_u128_ab`) `u128` wins at every even width measured; this
-    /// is the per-cell tuning seam — carve any even `N` that the bbc shows
-    /// regressing back to `U64` here, kernel and dispatch untouched. Karatsuba
-    /// has no limb-width axis (it recurses to slice schoolbook).
+    /// drives odd `N` to `U64`. The full-product A/B (`mul_full_ab`,
+    /// `mul_full_limb::<N,u64>` vs `::<N,u128>`, N = 2..64) confirms `u128`
+    /// wins or ties at EVERY even width — a statistical tie below N = 16
+    /// (within ±5%, both directions across runs) and a decisive 1.13–1.34x win
+    /// at N >= 16 (matching the sibling [`crate::int::policy::mul_low`] pilot).
+    /// So every even `N` packs to `u128`; this is the per-cell tuning seam —
+    /// carve any even `N` that the bbc shows regressing back to `U64` here,
+    /// kernel and dispatch untouched. Karatsuba has no limb-width axis (it
+    /// recurses to slice schoolbook).
     #[inline]
     const fn limb_size<const N: usize>(self) -> LimbSize {
         match self {
@@ -73,15 +77,23 @@ enum Select {
 /// [`dispatch`] routes to the non-allocating Karatsuba kernel instead of the
 /// fixed-width schoolbook. File-private policy data.
 ///
-/// **64**, the benched crossover (`mul_kernel_ab`, schoolbook vs one-level
-/// Karatsuba): schoolbook wins through 48 limbs and Karatsuba first wins at
-/// 64. So only the N=64 product (D1232 storage) and wider take Karatsuba;
-/// D924 (48) and narrower stay schoolbook. (The in-tree Karatsuba is weak — a
-/// Toom-3 / tighter split would lower it; kept for that re-tune.)
+/// **`usize::MAX` — Karatsuba is disengaged at every shipped tier.** The
+/// full-product A/B (`mul_full_ab`: slice / `mul_full_limb::<N,u64>` /
+/// `mul_full_limb::<N,u128>` / one-level Karatsuba, N = 2..64) shows the
+/// in-tree one-level Karatsuba LOSING to the u128-packed fixed-width
+/// schoolbook at every benched width, the loss widest at the narrow end and
+/// still 1.5x at N = 64 (the widest equal-length storage-tier product,
+/// D1232). There is no schoolbook→Karatsuba crossover within the shipped
+/// widths, so the previous `64` engaged Karatsuba exactly where it is
+/// ~1.5x SLOWER — a regression. The weak kernel is kept (its bit-exactness
+/// tests still run) for a future Toom-3 / tighter-split re-tune that would
+/// finally beat schoolbook and lower this threshold back into range; until
+/// then it never engages.
 ///
-/// Must be `>= 4`: the recursion's z1 sum product runs on `⌈n/2⌉ + 1`
-/// limbs, which only strictly shrinks below `n` once `n >= 4`.
-const KARATSUBA_THRESHOLD: usize = 64;
+/// The kernel still requires `>= 4` when it DOES recurse (the z1 sum product
+/// runs on `⌈n/2⌉ + 1` limbs, which only strictly shrinks below `n` once
+/// `n >= 4`); a threshold above every width trivially satisfies that.
+const KARATSUBA_THRESHOLD: usize = usize::MAX;
 
 // ── 3. the matcher: keyed on the runtime operand lengths ──────────────
 

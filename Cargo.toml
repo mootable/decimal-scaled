@@ -869,6 +869,17 @@ path = "benches/micro/mul_low_u128_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# mul_full_ab: N-way A/B for the int::policy::mul FULL equal-length product
+# -- slice schoolbook (reference) vs the fixed-width mul_full_limb::<N,u64>,
+# the u128-packed mul_full_limb::<N,u128> (even N), and one-level Karatsuba,
+# across N = 2..64. Localizes the u64/u128 LimbSize crossover and the
+# schoolbook/Karatsuba threshold; bit-identicality asserted before timing.
+[[bench]]
+name = "mul_full_ab"
+path = "benches/micro/mul_full_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # sqr_low_u128_ab: pilot A/B for the wide-tier exp/powf Smith-squaring
 # work-square -- the truncated-low base-2^64 `sqr_low_limb::<N, u64>` vs the
 # u128-packed `sqr_low_limb::<N, u128>` candidate at the D616/D924/D1232 work
