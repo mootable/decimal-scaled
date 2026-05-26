@@ -1269,7 +1269,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D57, 56, include_str!("golden/atan2_d57_s56.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D57 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d57_powf_s0() {
             check_at_scale("powf", Width::D57, 0, include_str!("golden/powf_d57_s0.txt"));
         }
@@ -1447,7 +1446,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D76, 75, include_str!("golden/atan2_d76_s75.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D76 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d76_powf_s0() {
             check_at_scale("powf", Width::D76, 0, include_str!("golden/powf_d76_s0.txt"));
         }
@@ -1625,7 +1623,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D115, 114, include_str!("golden/atan2_d115_s114.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D115 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d115_powf_s0() {
             check_at_scale("powf", Width::D115, 0, include_str!("golden/powf_d115_s0.txt"));
         }
@@ -1803,7 +1800,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D153, 152, include_str!("golden/atan2_d153_s152.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D153 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d153_powf_s0() {
             check_at_scale("powf", Width::D153, 0, include_str!("golden/powf_d153_s0.txt"));
         }
@@ -1981,7 +1977,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D230, 229, include_str!("golden/atan2_d230_s229.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D230 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d230_powf_s0() {
             check_at_scale("powf", Width::D230, 0, include_str!("golden/powf_d230_s0.txt"));
         }
@@ -2320,7 +2315,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D462, 461, include_str!("golden/atan2_d462_s461.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D462 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d462_powf_s0() {
             check_at_scale("powf", Width::D462, 0, include_str!("golden/powf_d462_s0.txt"));
         }
@@ -2490,7 +2484,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D616, 615, include_str!("golden/atan2_d616_s615.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D616 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d616_powf_s0() {
             check_at_scale("powf", Width::D616, 0, include_str!("golden/powf_d616_s0.txt"));
         }
@@ -2662,7 +2655,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D924, 923, include_str!("golden/atan2_d924_s923.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D924 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d924_powf_s0() {
             check_at_scale("powf", Width::D924, 0, include_str!("golden/powf_d924_s0.txt"));
         }
@@ -2834,7 +2826,6 @@ mod band_edges {
             check_at_scale("atan2", Width::D1232, 1231, include_str!("golden/atan2_d1232_s1231.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: powf D1232 s0 mode Ceiling input=b input2=-k (b^-k tiny positive) value=0 oracle=1 delta=1 LSB — underflow not rounded up under Ceiling; needs kernel fix"]
         fn d1232_powf_s0() {
             check_at_scale("powf", Width::D1232, 0, include_str!("golden/powf_d1232_s0.txt"));
         }

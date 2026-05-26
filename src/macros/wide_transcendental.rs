@@ -3878,7 +3878,17 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 if let ::core::option::Option::Some(n) = Self::powf_exp_as_small_int(exp) {
-                    return self.powi(n);
+                    // `x^n` for an exact integer `n` is `x^|n|` (exact
+                    // square-and-multiply) or its reciprocal `1 / x^|n|`.
+                    // The reciprocal is generally NOT exact (e.g. `93^-2`),
+                    // so it MUST be rounded under the caller's `mode` — using
+                    // the default-mode `powi` here would silently drop a
+                    // directed mode (Ceiling of a sub-resolution `x^-k` must
+                    // round up to 1, not truncate to 0).
+                    if n >= 0 {
+                        return self.powi(n);
+                    }
+                    return Self::ONE.div_with(self.powi(n.unsigned_abs() as i32), mode);
                 }
                 // x^0.5 ≡ √x. The exp(0.5·ln x) chain loses a sub-ULP at a
                 // perfect-square base (e.g. 4^0.5), rounding 1 LSB short
