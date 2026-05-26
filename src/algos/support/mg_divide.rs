@@ -2103,14 +2103,13 @@ mod tests {
     }
 
     // ----------------------------------------------------------------
-    // Chain-MG audit (w > 38)
+    // Wide `÷10^w` audit (w > 38)
     // ----------------------------------------------------------------
     //
-    // The chain divides `n / 10^SCALE` by repeated `÷ 10^38` plus a
-    // final `÷ 10^(SCALE − 38·k)`. Combined-remainder bookkeeping
-    // (`lower_any_nonzero` + `r_last`) yields bit-exact half-to-even
-    // (and every other `RoundingMode`) against the schoolbook
-    // `div_rem` reference.
+    // For `w > 38` the divide does ONE int Knuth divide by the whole
+    // `10^w` magnitude, then rounds the exact remainder against
+    // `10^w / 2`. This yields bit-exact half-to-even (and every other
+    // `RoundingMode`) against the schoolbook `div_rem` reference.
     //
     // These tests confirm that property across every w in `39..=100`,
     // every mode, and a numerator distribution that exercises:
