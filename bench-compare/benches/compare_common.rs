@@ -163,14 +163,19 @@ macro_rules! hypot_d38 {
 }
 
 /// Register one function's bench into a Criterion group named
-/// `<fn>_<W>_s<scale>`, under the row label `<side>`.
+/// `<fn>_<W>_s<scale>`, with the row label `<side>` (branch|prod). The full
+/// benched id is therefore `<fn>_<W>_s<scale>/<side>`.
 ///
-/// Criterion sanitises any `/` in a group id to `_` on disk, so we use
-/// a literal `_`-joined id here — the on-disk report dir is then exactly
-/// `<fn>_<W>_s<scale>` (e.g. `exp_D307_s153`). A single scale is therefore
-/// selectable by a criterion name-filter (`-- s<scale>`): the substring
-/// `s<scale>` (which appears in the trailing segment) matches every group
-/// for that scale and no other.
+/// A single scale is selectable by a criterion name-filter: pass
+/// `--bench _s<scale>/` — the trailing `/` (the group/function separator)
+/// anchors the scale so `_s30/` matches `<op>_D307_s30/branch` but NOT
+/// `<op>_D307_s306/branch`.
+///
+/// NOTE: Criterion 0.8 LOWERCASES the on-disk report directory (report.rs
+/// `.to_lowercase()`), so the dir is `exp_d307_s153`, NOT the original-case
+/// id. The collator (`summarise.py`) therefore reads the canonical-case
+/// `group_id` from each `benchmark.json` (which preserves `exp_D307_s153`)
+/// rather than parsing the lowercased path.
 #[macro_export]
 macro_rules! bench_one {
     ($c:expr, $fn:literal, $w:literal, $scale:literal, $side:literal, $body:expr) => {{
