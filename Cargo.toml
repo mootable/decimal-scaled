@@ -836,6 +836,16 @@ path = "benches/micro/icbrt_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# int_cube_eq_ab: dispatch-seam A/B for the integer cube and eq policies —
+# cube schoolbook (sqr-then-multiply, wired) vs comba (fused product-scanning
+# candidate); eq limbwise (cmp-kernel reuse, wired) vs xor_fold (branchless
+# OR-fold candidate), across the storage-width sweep N.
+[[bench]]
+name = "int_cube_eq_ab"
+path = "benches/micro/int_cube_eq_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # sum_sq_ab: N-way dispatch-seam A/B for the integer sum-of-squares policy —
 # schoolbook (the wired kernel, each square a general x*x product) vs comba
 # (a kept alternative, symmetric product-scanning square ~L^2/2 mults),

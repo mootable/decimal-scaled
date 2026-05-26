@@ -42,7 +42,7 @@
 
 use criterion::Criterion;
 use decimal_scaled::__bench_internals::{
-    isqrt_native_fixed, isqrt_newton_slice, isqrt_schoolbook_slice,
+    isqrt_karatsuba_slice, isqrt_native_fixed, isqrt_newton_slice, isqrt_schoolbook_slice,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -181,15 +181,26 @@ fn run_schoolbook(i: RIn) -> Vec<u64> {
     isqrt_schoolbook_slice(&i.n, &mut out);
     out
 }
+fn run_karatsuba(i: RIn) -> Vec<u64> {
+    let mut out = vec![0u64; i.n.len()];
+    isqrt_karatsuba_slice(&i.n, &mut out);
+    out
+}
 
-/// Generic (N >= 3) cell: newton vs schoolbook (native is not a distinct
-/// candidate — the const wrapper routes N >= 3 to Newton).
+/// Generic (N >= 3) cell: newton vs karatsuba vs schoolbook (native is not a
+/// distinct candidate — the const wrapper routes N >= 3 to Newton).
 fn cell_generic(c: &mut Criterion, limbs: usize, label: &str) {
     for i in inputs(limbs) {
         assert_eq!(
             run_newton(i.clone()),
             run_schoolbook(i.clone()),
             "isqrt newton vs schoolbook (reference) {label} {}",
+            i.label
+        );
+        assert_eq!(
+            run_karatsuba(i.clone()),
+            run_schoolbook(i.clone()),
+            "isqrt karatsuba vs schoolbook (reference) {label} {}",
             i.label
         );
     }
@@ -200,6 +211,7 @@ fn cell_generic(c: &mut Criterion, limbs: usize, label: &str) {
         inputs(limbs),
         vec![
             ("newton", Box::new(run_newton) as Box<dyn Fn(RIn) -> Vec<u64>>),
+            ("karatsuba", Box::new(run_karatsuba)),
             ("schoolbook", Box::new(run_schoolbook)),
         ],
     );

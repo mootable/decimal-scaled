@@ -42,6 +42,7 @@
 //! because the policy must accommodate both arms a single `const fn` is not
 //! possible. `Uint<N>::isqrt` is therefore not `const fn`.
 
+use crate::int::algos::isqrt::isqrt_karatsuba::isqrt_karatsuba as isqrt_karatsuba_kernel;
 use crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed;
 use crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook as isqrt_schoolbook_kernel;
 use crate::int::types::Uint;
@@ -60,8 +61,15 @@ enum Algorithm {
     /// `u128::isqrt` (`N == 2`). Width-bespoke; const-split inside the fn.
     Native,
     /// [`isqrt_newton`] â€” width-agnostic Newton iteration with a
-    /// hardware-`f64::sqrt` seed over u64 limbs. Serves every `N >= 3`.
+    /// hardware-`f64::sqrt` seed over u64 limbs. Serves `3 <= N < 64`.
     Newton,
+    /// [`isqrt_karatsuba`] â€” Karatsuba Square Root (Zimmermann RR-3805): one
+    /// half-width divide per recursion level, `O(log n)` total, versus
+    /// Newton's full-width divide per iteration. The `isqrt_ab` N-way A/B
+    /// shows its margin shrinks monotonically with width and crosses over the
+    /// shipped Newton kernel at the widest tier (`N == 64` / D1232), where it
+    /// wins ~1.1-1.4x; Newton stays faster below that.
+    Karatsuba,
     /// [`isqrt_schoolbook`] -- two-bits-at-a-time bitwise reference
     /// implementation; pure integer, no division, no floating-point seed.
     /// Serves any `N` as a generic reference baseline.
@@ -87,10 +95,14 @@ enum Select<const N: usize> {
 /// Pick the isqrt algorithm for storage limb count `N`. Total over the key.
 ///
 /// - `N âˆˆ {1, 2}` â†’ [`Algorithm::Native`] (hardware single-instruction path).
-/// - `N >= 3` (the `_` arm) â†’ [`Algorithm::Newton`] (generic limb Newton).
+/// - `3 <= N < 64` â†’ [`Algorithm::Newton`] (generic limb Newton).
+/// - `N >= 64` (the widest tier, D1232) â†’ [`Algorithm::Karatsuba`]: the
+///   half-width-divide recursion crosses over Newton here (the `isqrt_ab` A/B
+///   win-region; below it Newton's lower constant factor wins).
 const fn select<const N: usize>() -> Select<N> {
     match N {
         1 | 2 => Select::ByAlgorithm(Algorithm::Native),
+        64.. => Select::ByAlgorithm(Algorithm::Karatsuba),
         _ => Select::ByAlgorithm(Algorithm::Newton),
     }
 }
@@ -118,6 +130,21 @@ pub(crate) fn isqrt_native<const N: usize>(x: Uint<N>) -> Uint<N> {
 pub(crate) fn isqrt_newton<const N: usize>(x: Uint<N>) -> Uint<N> {
     let mut out = [0u64; N];
     isqrt_mag_fixed::<N>(x.as_limbs(), &mut out);
+    Uint::<N>::from_limbs(out)
+}
+
+/// Karatsuba Square Root for `Uint<N>` — the widest-tier (`N >= 64`) arm.
+///
+/// Delegates to
+/// [`isqrt_karatsuba_kernel`][`crate::int::algos::isqrt::isqrt_karatsuba::isqrt_karatsuba`]:
+/// the RR-3805 recursion whose per-level divide is half-width and runs only
+/// `O(log n)` times. Bit-identical to [`isqrt_newton`]; the `isqrt_ab` A/B
+/// shows it wins at `N == 64` where Newton's full-width-divide-per-iteration
+/// cost finally dominates.
+#[inline]
+pub(crate) fn isqrt_karatsuba<const N: usize>(x: Uint<N>) -> Uint<N> {
+    let mut out = [0u64; N];
+    isqrt_karatsuba_kernel(x.as_limbs(), &mut out);
     Uint::<N>::from_limbs(out)
 }
 
@@ -154,6 +181,7 @@ pub(crate) fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
     match algo {
         Algorithm::Native => isqrt_native::<N>(x),
         Algorithm::Newton => isqrt_newton::<N>(x),
+        Algorithm::Karatsuba => isqrt_karatsuba::<N>(x),
         Algorithm::Schoolbook => isqrt_schoolbook_policy::<N>(x),
     }
 }

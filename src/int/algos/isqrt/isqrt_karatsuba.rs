@@ -3,14 +3,14 @@
 
 //! Karatsuba Square Root over little-endian `u64` limb slices.
 //!
-//! **Candidate kernel — UNWIRED.** Bit-identical alternative to
+//! Bit-identical alternative to
 //! [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`], written to
 //! replace Newton's *full-width* per-iteration division with a recursion
 //! whose divide is **half-width** and runs only `O(log n)` times. The
-//! square-root policy still routes via the shipped Newton kernel; the
-//! coordinator benches this candidate against it and wires it (per `(N)`)
-//! only where it wins. See `docs/ARCHITECTURE.md` → "Keeping the
-//! alternatives".
+//! `isqrt_ab` N-way A/B shows it crosses over the shipped Newton kernel at
+//! the widest tier (`N == 64` / D1232) where it wins ~1.1-1.4x; the
+//! [`crate::int::policy::isqrt`] matcher routes `N >= 64` here and `3 <= N <
+//! 64` to Newton.
 //!
 //! # Why
 //!
@@ -98,7 +98,6 @@ const BASE_LIMBS: usize = 2;
 /// Bit-identical to
 /// [`crate::int::algos::isqrt::isqrt_newton::isqrt_newton`]; see the module
 /// docs for the algorithm and the RR-3805 reference.
-#[allow(dead_code)]
 pub(crate) fn isqrt_karatsuba(n: &[u64], out: &mut [u64]) {
     for o in out.iter_mut() {
         *o = 0;

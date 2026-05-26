@@ -1,7 +1,7 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! Fused product-scanning (comba) integer cubing — CANDIDATE, not wired.
+//! Fused product-scanning (comba) integer cubing.
 //!
 //! Candidate sibling of [`crate::int::algos::cube::cube_schoolbook`]. Where the
 //! shipped algorithm computes `x³` as `x²·x` — materialising the full `x²` in a
@@ -10,12 +10,13 @@
 //! product-scanning pass, the cube analogue of the symmetric comba square
 //! [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`].
 //!
-//! It is registered as an UNWIRED, UNROUTED candidate (`#[allow(dead_code)]`)
-//! per `docs/ARCHITECTURE.md` → "Keeping the alternatives". The `cube` policy
-//! does not route it; only the `#[cfg(test)]` bit-identity check below exercises
-//! it. A later policy-mapper pass benches it against `cube_schoolbook` and, if it
-//! wins at some `N` band (the narrow tiers where the `x²` materialisation
-//! dominates are the expected regime), wires it via an `Algorithm` arm.
+//! The `int_cube_eq_ab` N-way A/B benched it against `cube_schoolbook`: it
+//! wins at the narrow `N == 2` tier (~1.11x, where the `x²` materialisation
+//! dominates) and loses by a widening margin from `N >= 3` (its `~N³/6`
+//! triple-product count). [`crate::int::policy::cube`] therefore routes
+//! `N == 2` here via the [`Algorithm::Comba`] arm and every other width to
+//! `cube_schoolbook`. The remaining widths keep it as a kept alternative per
+//! `docs/ARCHITECTURE.md` → "Keeping the alternatives".
 //!
 //! ## The symmetry
 //!
@@ -49,7 +50,7 @@ use crate::int::types::Uint;
 ///
 /// Bit-identical to [`crate::int::algos::cube::cube_schoolbook::cube_schoolbook`]
 /// (and to the low `N` limbs of the exact `x·x·x`) for every input. `const fn`.
-#[allow(dead_code)]
+/// Wired by [`crate::int::policy::cube`] at the `N == 2` tier.
 #[inline]
 pub(crate) const fn cube_fused_comba<const N: usize>(x: Uint<N>) -> Uint<N> {
     let limbs = x.as_limbs();

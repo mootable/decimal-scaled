@@ -32,18 +32,23 @@
 //! DOWN — the algorithm calls the kernels, never a cube/sqr/mul method on
 //! `Uint<N>`.
 //!
-//! **No second candidate is eligible.** The only alternative axis is the
-//! `LimbSize` u128 packing used by [`crate::int::policy::sqr_low`] /
-//! [`crate::int::policy::mul_low`] (the `sqr_low_limb` / `mul_low_limb`
-//! kernels), which could roughly halve the partial-product count at wide even
-//! `N`. But those kernels are **not `const fn`** (the `Limb` trait methods are
-//! not const), and `cube`'s dispatch MUST stay `const fn` because
-//! `Int<N>::wrapping_cube` is `const fn` and is reached from `const` contexts
-//! crate-wide — so a u128 cube cannot be wired without de-const-ing the public
-//! API. There is also no hot wide-`N` cube consumer (cube is a public-API
-//! convenience; the transcendentals do not route wide cubing through it). The
-//! single const `x²·x` form is therefore confirmed optimal as-is — a u128
-//! candidate is ineligible (not wireable) AND unmotivated.
+//! **Fused product-scanning candidate (`Comba`).**
+//! [`crate::int::algos::cube::cube_fused_comba::cube_fused_comba`] forms `x³`
+//! in a SINGLE product-scanning pass (the cube analogue of the symmetric comba
+//! square) rather than materialising `x²` and re-multiplying. It is also
+//! `const fn`, so it can be wired without de-const-ing the public API. The
+//! `int_cube_eq_ab` N-way A/B shows it beats `x²·x` only at the narrow
+//! `N == 2` tier (~1.11x, reproducible); at `N == 1` it ties, and from
+//! `N >= 3` its `~N³/6` triple-product count loses to the schoolbook
+//! `N(N+1)/2 + N²` and the gap GROWS with width (1.2x at N=3 → 13x at N=64).
+//! `select` therefore routes `N == 2` to `Comba` and every other width to
+//! `Schoolbook`.
+//!
+//! The `LimbSize` u128 packing used by [`crate::int::policy::sqr_low`] /
+//! [`crate::int::policy::mul_low`] is NOT a cube candidate: those kernels are
+//! **not `const fn`** (the `Limb` trait methods are not const), and `cube`'s
+//! dispatch MUST stay `const fn` because `Int<N>::wrapping_cube` is `const fn`
+//! and is reached from `const` contexts crate-wide.
 //!
 //! The `ByValue` arm of [`Select`] is present for canonical-shape
 //! uniformity; `select` never returns it.
@@ -56,6 +61,7 @@
 //! pointer (calling a fn pointer is not permitted in `const fn`; merely
 //! matching the variant is fine).
 
+use crate::int::algos::cube::cube_fused_comba::cube_fused_comba;
 use crate::int::algos::cube::cube_schoolbook::cube_schoolbook;
 use crate::int::types::Uint;
 
@@ -69,8 +75,13 @@ enum Algorithm {
     /// [`cube_schoolbook`] — sqr-then-multiply sequence `x²·x` via the
     /// const [`crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed`] and
     /// [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernels. Result is `x³`
-    /// modulo `2^BITS`.
+    /// modulo `2^BITS`. Wins at every width except `N == 2`.
     Schoolbook,
+    /// [`cube_fused_comba`] — single fused product-scanning pass for `x³`
+    /// (the cube analogue of the symmetric comba square). `const fn`. Wins at
+    /// the narrow `N == 2` tier per the `int_cube_eq_ab` A/B; loses (and the
+    /// gap grows with width) from `N >= 3`.
+    Comba,
 }
 
 // ── 2. the verdict ────────────────────────────────────────────────────
@@ -89,10 +100,17 @@ enum Select<const N: usize> {
 
 // ── 3. the matcher: const, keyed on `N`, total over the key ──────────
 
-/// Pick the cubing algorithm for storage limb count `N`. Total over the key;
-/// sqr-then-multiply is width-independent so `Schoolbook` wins at every `N`.
+/// Pick the cubing algorithm for storage limb count `N`. Total over the key.
+///
+/// - `N == 2` → [`Algorithm::Comba`] (the fused product-scanning pass wins
+///   ~1.11x at this narrow tier per the `int_cube_eq_ab` A/B).
+/// - every other `N` (the `_` arm) → [`Algorithm::Schoolbook`] (`x²·x`; comba
+///   ties at N=1 and loses by a widening margin from N>=3).
 const fn select<const N: usize>() -> Select<N> {
-    Select::ByAlgorithm(Algorithm::Schoolbook)
+    match N {
+        2 => Select::ByAlgorithm(Algorithm::Comba),
+        _ => Select::ByAlgorithm(Algorithm::Schoolbook),
+    }
 }
 
 // ── 4. the dispatcher: fold the verdict, then dispatch ────────────────
@@ -116,5 +134,6 @@ pub(crate) const fn dispatch<const N: usize>(x: Uint<N>) -> Uint<N> {
     };
     match algo {
         Algorithm::Schoolbook => cube_schoolbook(x),
+        Algorithm::Comba => cube_fused_comba(x),
     }
 }

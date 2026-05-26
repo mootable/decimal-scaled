@@ -40,7 +40,9 @@
 //! Run: `cargo bench --features "wide x-wide xx-wide bench-alt" --bench icbrt_ab`
 
 use criterion::Criterion;
-use decimal_scaled::__bench_internals::{icbrt_newton_slice, icbrt_schoolbook_slice};
+use decimal_scaled::__bench_internals::{
+    icbrt_newton_recip_slice, icbrt_newton_slice, icbrt_schoolbook_slice,
+};
 
 #[path = "../support/ab_microbench.rs"]
 mod ab_microbench;
@@ -179,15 +181,27 @@ fn run_schoolbook(i: RIn) -> Vec<u64> {
     icbrt_schoolbook_slice(&i.n, &mut out);
     out
 }
+fn run_newton_recip(i: RIn) -> Vec<u64> {
+    let mut out = vec![0u64; i.n.len()];
+    icbrt_newton_recip_slice(&i.n, &mut out);
+    out
+}
 
 /// One width cell: newton (the wired kernel for every `N`, incl. the `N∈{1,2}`
-/// `Native` policy arm which delegates to it) vs schoolbook (the reference).
+/// `Native` policy arm which delegates to it) vs newton_recip (the
+/// division-free candidate) vs schoolbook (the reference).
 fn cell(c: &mut Criterion, limbs: usize, label: &str) {
     for i in inputs(limbs) {
         assert_eq!(
             run_newton(i.clone()),
             run_schoolbook(i.clone()),
             "icbrt newton vs schoolbook (reference) {label} {}",
+            i.label
+        );
+        assert_eq!(
+            run_newton_recip(i.clone()),
+            run_schoolbook(i.clone()),
+            "icbrt newton_recip vs schoolbook (reference) {label} {}",
             i.label
         );
     }
@@ -198,6 +212,7 @@ fn cell(c: &mut Criterion, limbs: usize, label: &str) {
         inputs(limbs),
         vec![
             ("newton", Box::new(run_newton) as Box<dyn Fn(RIn) -> Vec<u64>>),
+            ("newton_recip", Box::new(run_newton_recip)),
             ("schoolbook", Box::new(run_schoolbook)),
         ],
     );

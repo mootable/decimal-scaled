@@ -487,6 +487,62 @@ pub mod __bench_internals {
         crate::int::algos::icbrt::icbrt_schoolbook::icbrt_schoolbook(n, out)
     }
 
+    /// Karatsuba Square Root candidate (`isqrt_karatsuba`) over little-endian
+    /// magnitude limb slices, exposed for the `isqrt_ab` policy-mapper A/B.
+    /// Bit-identical to [`isqrt_newton_slice`]; A/B measures whether the
+    /// `O(log n)` half-width divides beat Newton's full-width-divide-per-iter
+    /// at each width.
+    #[inline(never)]
+    pub fn isqrt_karatsuba_slice(n: &[u64], out: &mut [u64]) {
+        crate::int::algos::isqrt::isqrt_karatsuba::isqrt_karatsuba(n, out)
+    }
+
+    /// Division-free reciprocal-Newton cube-root candidate
+    /// (`icbrt_newton_recip`) over little-endian magnitude limb slices, exposed
+    /// for the `icbrt_ab` policy-mapper A/B. Bit-identical to
+    /// [`icbrt_newton_slice`]; A/B measures whether the multiply-only
+    /// reciprocal iteration beats the shipped divide-per-iteration Newton.
+    #[inline(never)]
+    pub fn icbrt_newton_recip_slice(n: &[u64], out: &mut [u64]) {
+        crate::int::algos::icbrt::icbrt_newton_recip::icbrt_newton_recip(n, out)
+    }
+
+    /// Integer `cube` candidates exposed for the `int_cube_eq_ab` policy-mapper
+    /// A/B: the shipped sqr-then-multiply [`cube_schoolbook`] vs the fused
+    /// product-scanning (comba) [`cube_fused_comba`] candidate. Both generic
+    /// over `N`, both `const fn`, bit-identical low `N` limbs.
+    #[inline(never)]
+    pub fn cube_schoolbook<const N: usize>(
+        x: crate::int::types::Uint<N>,
+    ) -> crate::int::types::Uint<N> {
+        crate::int::algos::cube::cube_schoolbook::cube_schoolbook::<N>(x)
+    }
+    #[inline(never)]
+    pub fn cube_fused_comba<const N: usize>(
+        x: crate::int::types::Uint<N>,
+    ) -> crate::int::types::Uint<N> {
+        crate::int::algos::cube::cube_fused_comba::cube_fused_comba::<N>(x)
+    }
+
+    /// Integer `eq` candidates exposed for the `int_cube_eq_ab` policy-mapper
+    /// A/B: the shipped [`eq_limbwise`] (reuses the comparison kernel) vs the
+    /// [`eq_xor_fold`] candidate (branchless OR-fold of per-limb XORs). Both
+    /// generic over `N`, both `const fn`, bit-identical.
+    #[inline(never)]
+    pub fn eq_limbwise<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> bool {
+        crate::int::algos::eq::eq_limbwise::eq_limbwise::<N>(a, b)
+    }
+    #[inline(never)]
+    pub fn eq_xor_fold<const N: usize>(
+        a: crate::int::types::Int<N>,
+        b: crate::int::types::Int<N>,
+    ) -> bool {
+        crate::int::algos::eq::eq_xor_fold::eq_xor_fold::<N>(a, b)
+    }
+
     /// Per-`N` monomorphic wrappers over the two generic `sum_sq` kernels,
     /// exposed for the `sum_sq_ab` dispatch-seam microbench: `schoolbook`
     /// (the WIRED kernel — each square via the general `mul_schoolbook(x,x,..)`

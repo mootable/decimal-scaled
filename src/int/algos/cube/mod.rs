@@ -8,11 +8,11 @@
 //!   [`crate::int::algos::mul::mul_schoolbook::mul_low_fixed`] kernels. The per-`N`
 //!   choice lives in [`crate::int::policy::cube`].
 //!
-//! - [`cube_fused_comba`] — CANDIDATE (unwired): a single fused
-//!   product-scanning pass for `x³`, the cube analogue of the symmetric comba
-//!   square. Kept per `docs/ARCHITECTURE.md` → "Keeping the alternatives";
-//!   reached only by its own bit-identity test until a policy-mapper pass
-//!   benches and (if it wins) wires it.
+//! - [`cube_fused_comba`] — a single fused product-scanning pass for `x³`,
+//!   the cube analogue of the symmetric comba square. Wired by
+//!   [`crate::int::policy::cube`] at the `N == 2` tier (it wins there per the
+//!   `int_cube_eq_ab` A/B); a kept alternative at the other widths where
+//!   `cube_schoolbook` is faster.
 //!
 //! [`cube_schoolbook`]: crate::int::algos::cube::cube_schoolbook::cube_schoolbook
 //! [`cube_fused_comba`]: crate::int::algos::cube::cube_fused_comba::cube_fused_comba

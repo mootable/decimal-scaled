@@ -11,11 +11,11 @@
 //! - [`isqrt_schoolbook`](isqrt_schoolbook::isqrt_schoolbook) -- two-bits-at-a-time
 //!   bitwise reference implementation; pure integer, no division, no float.
 
-//! - [`isqrt_karatsuba`](isqrt_karatsuba::isqrt_karatsuba) -- **candidate,
-//!   UNWIRED**: Karatsuba Square Root (Zimmermann, INRIA RR-3805). Replaces
-//!   Newton's full-width per-iteration divide with a recursion whose divide
-//!   is half-width and runs only `O(log n)` times; the coordinator benches +
-//!   wires it where it wins.
+//! - [`isqrt_karatsuba`](isqrt_karatsuba::isqrt_karatsuba) -- Karatsuba Square
+//!   Root (Zimmermann, INRIA RR-3805). Replaces Newton's full-width
+//!   per-iteration divide with a recursion whose divide is half-width and runs
+//!   only `O(log n)` times; the `isqrt_ab` A/B shows it crosses over Newton at
+//!   the widest tier, so [`crate::int::policy::isqrt`] routes `N >= 64` here.
 
 pub(crate) mod isqrt_karatsuba;
 pub(crate) mod isqrt_mag_fixed;
