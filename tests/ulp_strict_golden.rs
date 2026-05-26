@@ -940,12 +940,12 @@ mod band_edges {
             check_at_scale("cbrt", Width::D38, 37, include_str!("golden/cbrt_d38_s37.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp D38 s0 input=85 (exp(85)~8.2e36, fills i128 capacity) value off by 32 LSB (ulp ~3.5e9) — integer-regime precision loss; needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (narrow Fixed/U256): exp D38 s0 has TWO root causes, both needing the narrow-path working-width fix. (1) Integer-regime precision loss: exp(66)=4.6e28 / exp(85)=8.2e36 fill the 37-digit i128; the narrow exp_strict_raw runs in the 256-bit Fixed (~77 decimal digits) at a FLAT w=SCALE+30 with NO integer-digit lift, so a 29-37 digit result carries only ~1-8 guard digits -> off by 7-32 LSB. Adding the wide-path's int-digit lift does NOT fit: w=int_digits(29)+guard(30)=59 makes exp(66)*10^59~4.6e87 exceed U256's 1.16e77, and exp_fixed's 2*w squaring peak overflows U512 sooner. (2) Underflow-Ceiling: exp(-76)~1e-33 (sub-resolution positive) under Ceiling must give 1 but the narrow round_to_i128_with truncates to 0 — the narrow path lacks the never-exact directed rounding the wide path (round_to_storage_directed_never_exact) and the exp2 dyadic pin already use. FIX = route the narrow integer-regime/MAX-scale exp through a wider work integer (the wide exp_fixed) AND add never-exact directed rounding to the narrow path. Coordinator: this is the narrow sibling of the wide-exp working-width campaign."]
         fn d38_exp_s0() {
             check_at_scale("exp", Width::D38, 0, include_str!("golden/exp_d38_s0.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: exp D38 s37 — near-MAX-scale exp loses accuracy (same working-width family as the wide-exp regression); needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (narrow Fixed/U256): exp D38 s37 — at MAX scale the narrow exp_strict_raw works at w=SCALE+30=67 decimal digits, near U256's ~77-digit ceiling; for a large-|argument| input whose result needs integer digits the working value (result*10^w) plus exp_fixed's 2*w squaring peak overflows U256/U512, so the result loses precision (off by several LSB). Same narrow working-width root as exp D38 s0; FIX = run the narrow integer-regime/MAX-scale exp in a wider work integer (the wide exp_fixed)."]
         fn d38_exp_s37() {
             check_at_scale("exp", Width::D38, 37, include_str!("golden/exp_d38_s37.txt"));
         }
@@ -1030,7 +1030,7 @@ mod band_edges {
             check_at_scale("acos", Width::D38, 37, include_str!("golden/acos_d38_s37.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: sinh D38 s0 input=75 (sinh(75) fills i128 capacity) value off by 19 LSB — integer-regime precision loss; needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (narrow Fixed/U256): sinh D38 s0 input=75 — sinh(75)=1.87e32 (33 digits) computed via (e^x - e^-x)/2 in the 256-bit Fixed at a flat w=SCALE+30 with no integer-digit lift, so the 33-digit result carries only ~30-33 = a few guard digits and rounds off by ~19 LSB. The needed lift (w >= int_digits + guard) overflows U256, and the e^x reciprocal numerator 10^(2w) doubles the pressure. Same narrow working-width root as exp D38 s0; FIX = run the narrow hyperbolic exp-identity in a wider work integer."]
         fn d38_sinh_s0() {
             check_at_scale("sinh", Width::D38, 0, include_str!("golden/sinh_d38_s0.txt"));
         }
@@ -1039,7 +1039,7 @@ mod band_edges {
             check_at_scale("sinh", Width::D38, 37, include_str!("golden/sinh_d38_s37.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: cosh D38 s0 input=-67 (cosh(67) fills i128 capacity) value off by 5 LSB — integer-regime precision loss; needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (narrow Fixed/U256): cosh D38 s0 input=-67 — cosh(67)=6.26e28 (29 digits) computed via (e^x + e^-x)/2 in the 256-bit Fixed at a flat w=SCALE+30 with no integer-digit lift, so the 29-digit result carries only a few guard digits and rounds off by ~5 LSB. Same narrow working-width root as exp/sinh D38 s0; FIX = run the narrow hyperbolic exp-identity in a wider work integer."]
         fn d38_cosh_s0() {
             check_at_scale("cosh", Width::D38, 0, include_str!("golden/cosh_d38_s0.txt"));
         }
@@ -2584,7 +2584,7 @@ mod band_edges {
             check_at_scale("acos", Width::D924, 923, include_str!("golden/acos_d924_s923.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: sinh D924 s0 large integer input — integer-regime precision loss (result fills capacity); needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (wide exp_fixed at extreme guard): sinh D924 s0 — PANICS 'attempt to divide by zero' in sinh_pos_wide's div(one(w), ex, w). Root cause: for a near-grid sinh input the directed Ziv loop escalates the guard up to w~1098 (cap = W::BITS/8 = 1536 for Int<192>); at that extreme working scale exp_fixed(av_w, w) overflows/wraps and returns 0, so the e^-x reciprocal divides by zero. hyper_fits_w/exp_fits_w report the value 'fits' (they bound digits, not the exp_fixed internal 2^k-reassembly peak), so the W-path is taken and exp_fixed silently returns 0. This is the wide-exp working-width root (exp_fixed correctness at very high w, and/or exp_fits_w being too optimistic); the precision-loss the old reason described is secondary to the panic. FIX = make exp_fixed correct (or guard-route to Wexp) at extreme working scales, and tighten exp_fits_w. NOTE: predates this session's directed-rounding-escalation change (verified by reverting it — still panics)."]
         fn d924_sinh_s0() {
             check_at_scale("sinh", Width::D924, 0, include_str!("golden/sinh_d924_s0.txt"));
         }
@@ -2593,7 +2593,7 @@ mod band_edges {
             check_at_scale("sinh", Width::D924, 923, include_str!("golden/sinh_d924_s923.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: cosh D924 s0 large integer input — integer-regime precision loss (result fills capacity); needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (wide exp_fixed at extreme guard): cosh D924 s0 — PANICS 'attempt to divide by zero' in cosh_pos_wide's div(one(w), ex, w), same root cause as sinh D924 s0: the directed Ziv loop escalates to w~1098 where exp_fixed returns 0 (overflow/wrap) while hyper_fits_w/exp_fits_w wrongly report 'fits'. FIX = make exp_fixed correct (or guard-route to Wexp) at extreme working scales + tighten exp_fits_w. Predates this session (verified)."]
         fn d924_cosh_s0() {
             check_at_scale("cosh", Width::D924, 0, include_str!("golden/cosh_d924_s0.txt"));
         }
@@ -2754,7 +2754,7 @@ mod band_edges {
             check_at_scale("acos", Width::D1232, 1231, include_str!("golden/acos_d1232_s1231.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: sinh D1232 s0 large integer input — integer-regime precision loss (result fills capacity); needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (wide exp_fixed at extreme guard): sinh D1232 s0 — same root cause as sinh/cosh D924 s0: the directed Ziv loop escalates the guard to the W::BITS/8 cap (Int<256>) where exp_fixed returns 0 (overflow/wrap) while hyper_fits_w/exp_fits_w report 'fits', so div(one(w), ex, w) divides by zero. FIX = exp_fixed correct (or Wexp guard-route) at extreme working scales + tighten exp_fits_w. Predates this session (verified)."]
         fn d1232_sinh_s0() {
             check_at_scale("sinh", Width::D1232, 0, include_str!("golden/sinh_d1232_s0.txt"));
         }
@@ -2763,7 +2763,7 @@ mod band_edges {
             check_at_scale("sinh", Width::D1232, 1231, include_str!("golden/sinh_d1232_s1231.txt"));
         }
         #[test]
-        #[ignore = "DEFECT: cosh D1232 s0 large integer input — integer-regime precision loss (result fills capacity); needs kernel fix"]
+        #[ignore = "WORKING-WIDTH (wide exp_fixed at extreme guard): cosh D1232 s0 — same root cause as sinh/cosh D924 s0 and sinh D1232 s0: directed Ziv escalation to the W::BITS/8 guard cap (Int<256>) reaches a working scale where exp_fixed returns 0 while exp_fits_w reports 'fits', causing the e^-x reciprocal to divide by zero. FIX = exp_fixed correct (or Wexp guard-route) at extreme working scales + tighten exp_fits_w. Predates this session (verified)."]
         fn d1232_cosh_s0() {
             check_at_scale("cosh", Width::D1232, 0, include_str!("golden/cosh_d1232_s0.txt"));
         }
