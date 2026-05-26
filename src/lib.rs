@@ -462,6 +462,18 @@ pub mod __bench_internals {
     pub fn isqrt_schoolbook_slice(n: &[u64], out: &mut [u64]) {
         crate::int::algos::isqrt::isqrt_schoolbook::isqrt_schoolbook(n, out)
     }
+    /// Native hardware integer square root candidate (`u64::isqrt` for
+    /// `N == 1`, `u128::isqrt` for `N == 2`) exposed for the dedicated
+    /// `isqrt_ab` policy-mapper microbench. Const-`N`: the
+    /// [`isqrt_mag_fixed`][m] wrapper routes `N <= 2` to the hardware path
+    /// and `N >= 3` to Newton, so this arm is only *eligible* (single
+    /// hardware instruction, no Newton loop) at `N <= 2`.
+    ///
+    /// [m]: crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed
+    #[inline(never)]
+    pub fn isqrt_native_fixed<const N: usize>(n: &[u64; N], out: &mut [u64; N]) {
+        crate::int::algos::isqrt::isqrt_mag_fixed::isqrt_mag_fixed::<N>(n, out)
+    }
 
     /// Integer `icbrt` kernel candidates (Newton f64-seeded vs the bitwise
     /// `Schoolbook` reference) over little-endian magnitude limb slices,

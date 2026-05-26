@@ -816,6 +816,16 @@ path = "benches/micro/hypot_ab.rs"
 harness = false
 required-features = ["wide", "bench-alt"]
 
+# isqrt_ab: N-way dispatch-seam A/B for the integer isqrt policy — native
+# (hardware u64/u128, N<=2) vs newton (f64-seeded + Knuth div) vs schoolbook
+# (bitwise reference), across the full width sweep × magnitude classes
+# (incl. perfect-square ±1 floor-correction edges).
+[[bench]]
+name = "isqrt_ab"
+path = "benches/micro/isqrt_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # to_radians_ab: dispatch-seam A/B for the wide-tier to_radians angle
 # conversion — the public method path (through the double dispatch +
 # resize_to round-trips) vs the MulPiRatio kernel called directly. Isolates
