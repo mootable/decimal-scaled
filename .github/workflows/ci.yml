@@ -69,6 +69,12 @@ jobs:
       - name: Full test suite (wide tiers + macros)
         # The full `cargo test` — no `--test` scoping — so every
         # example and bench target is compiled as part of the run.
+        # NOTE: `golden` is intentionally NOT passed, so the heavy
+        # `ulp_strict_golden` mpmath-oracle suite (gated behind the
+        # `golden` required-feature) is excluded here — it has its own
+        # parallel `golden (gate)` job below, run in release. This keeps
+        # `tests (gate)` fast (builds-all + the quick suite) so a normal
+        # test failure surfaces without waiting behind the golden run.
         run: cargo test --features wide,x-wide,xx-wide,macros
 
       - name: Default-feature build check
@@ -80,6 +86,41 @@ jobs:
         # behaviour. (TODO(0.5.0): gate the wide-tier test files so a
         # default `cargo test` can run the narrow-tier subset.)
         run: cargo check
+
+  # GATE: the heavy mpmath-oracle golden suite, split out of `tests
+  # (gate)` so it runs in PARALLEL with it — and in RELEASE (≈ 285 s vs
+  # the debug multi-minute), so neither gate waits behind the other.
+  # `ulp_strict_golden` is gated behind the `golden` required-feature, so
+  # the `tests (gate)` job (which omits `golden`) skips it and this job
+  # owns it. On `release/*` this is the sole golden gate (precision.yml is
+  # main-only).
+  golden:
+    name: golden (gate)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      - name: Cache cargo registry + git
+        uses: actions/cache@v5
+        with:
+          path: |
+            ~/.cargo/registry
+            ~/.cargo/git
+          key: cargo-ci-golden-${{ runner.os }}-${{ hashFiles('Cargo.toml', 'macros/Cargo.toml') }}
+          restore-keys: |
+            cargo-ci-golden-${{ runner.os }}-
+
+      - name: mpmath-oracle golden suite (release, golden feature)
+        # `--test ulp_strict_golden` builds only the lib + that one test
+        # target (no examples/benches), so no fontconfig is needed. The
+        # `golden` feature unlocks the target (it is required-feature gated).
+        run: cargo test --release --features wide,x-wide,xx-wide,macros,golden --test ulp_strict_golden
 
   # GATE: the no_std + alloc build. The crate is `#![no_std]` under
   # non-default features, but no workflow exercised that build, so a

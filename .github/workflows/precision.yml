@@ -71,7 +71,7 @@ jobs:
         # fairness fold are unit-tested by `precision_harness_smoke`, run
         # alongside so a broken harness can't mask a kernel regression.
         run: |
-          cargo test --release --features wide,x-wide,xx-wide,macros \
+          cargo test --release --features wide,x-wide,xx-wide,macros,golden \
             --test ulp_strict_golden \
             --test precision_harness_smoke
 

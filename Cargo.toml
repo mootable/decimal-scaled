@@ -82,6 +82,11 @@ fast = ["std"]
 # side without recompiling. Off by default — adds build time and binary
 # size for no runtime benefit unless you're benching.
 bench-alt = []
+# Gates the heavy `ulp_strict_golden` mpmath-oracle suite (a `[[test]]`
+# `required-features`). OFF in the `tests (gate)` CI job so it stays fast;
+# ON in the dedicated `golden (gate)` job + precision.yml (run in release).
+# A no-op feature — it only toggles whether that test target compiles/runs.
+golden = []
 # Compile-time selector for the default RoundingMode used by the
 # no-arg `rescale` family (and any future default-rounding methods).
 # If none of these is enabled, the default is HalfToEven (IEEE-754
@@ -283,7 +288,11 @@ required-features = ["wide", "x-wide", "xx-wide"]
 
 [[test]]
 name = "ulp_strict_golden"
-required-features = ["wide", "x-wide", "xx-wide"]
+# `golden` gates this heavy suite OUT of the `tests (gate)` CI job (which
+# does NOT pass `golden`) so that job stays fast (builds-all + the quick
+# suite); the dedicated `golden (gate)` CI job + precision.yml pass `golden`
+# to build and run it (in release). Local: add `,golden` to run it.
+required-features = ["wide", "x-wide", "xx-wide", "golden"]
 
 # `micro_golden` is the FAST agent-validation subset of `ulp_strict_golden`
 # (same harness + same `lsbe == 0` zero-tolerance assertion, capped rows);
