@@ -83,16 +83,18 @@ pub enum Method {
     Log,
     Atan2,
     Pow,
-    // ── arithmetic ──
+    // ── arithmetic + hypot (two-argument) ──
     Add,
     Sub,
     Mul,
     Div,
+    Rem,
+    Hypot,
 }
 
 impl Method {
     /// Every method in canonical (table) order.
-    pub const ALL: [Method; 26] = [
+    pub const ALL: [Method; 28] = [
         Method::Sqrt,
         Method::Cbrt,
         Method::Exp,
@@ -119,6 +121,8 @@ impl Method {
         Method::Sub,
         Method::Mul,
         Method::Div,
+        Method::Rem,
+        Method::Hypot,
     ];
 
     /// The transcendental surface only — what the golden oracle covers.
@@ -175,6 +179,8 @@ impl Method {
             Method::Sub => "sub",
             Method::Mul => "mul",
             Method::Div => "div",
+            Method::Rem => "rem",
+            Method::Hypot => "hypot",
         }
     }
 
@@ -189,24 +195,26 @@ impl Method {
                 | Method::Sub
                 | Method::Mul
                 | Method::Div
+                | Method::Rem
+                | Method::Hypot
         )
     }
 
-    /// The golden table stem for this method, or `None` for the
-    /// arithmetic ops (no oracle table — they are exact by construction
-    /// and not part of the golden roster).
+    /// The golden table stem for this method. Every method — including
+    /// the arithmetic ops and `hypot` — now carries a mpmath-oracle
+    /// golden table (the binary ops use the four-column format), so this
+    /// is total. The stem is the method's `name()`.
     pub fn golden_stem(self) -> Option<&'static str> {
-        match self {
-            Method::Add | Method::Sub | Method::Mul | Method::Div => None,
-            other => Some(other.name()),
-        }
+        Some(self.name())
     }
 
     /// Reverse of [`Method::golden_stem`]: map a golden-table filename
-    /// stem (e.g. `"exp"`, `"powf"`) back to its [`Method`]. `None` for
-    /// an unrecognised stem (so the scanner skips files it can't map).
+    /// stem (e.g. `"exp"`, `"powf"`, `"hypot"`, `"add"`) back to its
+    /// [`Method`]. `None` for an unrecognised stem (so the scanner skips
+    /// files it can't map). Iterates [`Method::ALL`] so the arithmetic +
+    /// `hypot` binary ops are reverse-mappable too.
     pub fn from_stem(stem: &str) -> Option<Method> {
-        Method::TRANSCENDENTAL
+        Method::ALL
             .iter()
             .copied()
             .find(|m| m.golden_stem() == Some(stem))

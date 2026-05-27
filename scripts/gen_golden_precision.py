@@ -97,6 +97,7 @@ Usage:
 
 from __future__ import annotations
 
+import math
 import random
 import sys
 from pathlib import Path
@@ -1289,6 +1290,447 @@ def _csv_filter(flag: str) -> set[str] | None:
     return None
 
 
+# ════════════════════════════════════════════════════════════════════
+# Binary operations — hypot + the arithmetic ops add/sub/mul/div/rem
+# ════════════════════════════════════════════════════════════════════
+#
+# These share the four-column golden format the two-argument
+# transcendentals use (`<a_raw>\t<b_raw>\t<floor_raw>\t<cls>`), but their
+# oracle is EXACT integer/rational arithmetic, not the finite-precision
+# mpmath float oracle:
+#
+#   * add  — (a + b) at a shared scale: storage-level a_raw + b_raw,
+#            exact (cls Z).
+#   * sub  — a_raw - b_raw, exact (cls Z).
+#   * mul  — a·b = a_raw·b_raw / 10**(2·S); the storage result is
+#            round(a_raw·b_raw / 10**S), so floor = a_raw·b_raw // 10**S
+#            (floor toward -inf), cls from the exact remainder.
+#   * div  — a/b = a_raw / b_raw; storage result round(a_raw·10**S / b_raw),
+#            floor = floor_div(a_raw·10**S, b_raw), cls from the remainder.
+#   * rem  — Rust truncated remainder at the shared scale: the storage
+#            result is exactly a_raw - b_raw·trunc(a_raw/b_raw)
+#            (sign follows the dividend), exact (cls Z).
+#   * hypot — sqrt(a² + b²) = sqrt(a_raw² + b_raw²) / 10**S · 10**S, so the
+#            storage result is round(sqrt(a_raw² + b_raw²)); floor =
+#            isqrt(a_raw² + b_raw²), cls from whether the radicand is a
+#            perfect square (Z), or whether the residual puts the true
+#            root below / at / above the half-way line to floor+1.
+#
+# Because the oracle is exact, every emitted cell pins the correctly-
+# rounded result for ALL six rounding modes — the harness derives each
+# mode from (floor_raw, cls, sign), exactly as for the transcendentals.
+
+# Tier alias -> storage limb count N (Int<N>, N * 64 bits, signed).
+BINARY_TIER_N = {
+    "d18": 1, "d38": 2, "d57": 3, "d76": 4, "d115": 6, "d153": 8,
+    "d230": 12, "d307": 16, "d462": 24, "d616": 32, "d924": 48, "d1232": 64,
+}
+
+
+def tier_signed_max(alias: str) -> int:
+    """The inclusive signed maximum `2**(64·N − 1) − 1` of the tier's
+    `Int<N>` storage. A cell whose operands or result exceed this does
+    not fit and must be dropped (the harness would reject it)."""
+    n = BINARY_TIER_N[alias]
+    return (1 << (64 * n - 1)) - 1
+
+
+def _frac_class(num: int, den: int) -> tuple[int, str]:
+    """`(floor, cls)` of the exact rational `num / den` (den > 0).
+
+    `floor` is toward negative infinity; `cls` classifies the fractional
+    remainder in [0, 1): Z (exact), L (<0.5), E (==0.5), G (>0.5)."""
+    q, r = divmod(num, den)          # Python divmod floors toward -inf for the quotient
+    if r == 0:
+        return q, "Z"
+    twice = 2 * r
+    if twice < den:
+        return q, "L"
+    if twice == den:
+        return q, "E"
+    return q, "G"
+
+
+def binary_floor_class(func_name: str, a_raw: int, b_raw: int,
+                       scale: int) -> tuple[int, str] | None:
+    """Exact `(floor_raw, cls)` for a binary op at the tier scale, or
+    `None` when the op is undefined for the pair (div/rem by zero, hypot
+    with both operands not yielding a representable root — handled by the
+    caller's range check)."""
+    one = 10 ** scale
+    if func_name == "add":
+        return a_raw + b_raw, "Z"
+    if func_name == "sub":
+        return a_raw - b_raw, "Z"
+    if func_name == "mul":
+        # round(a_raw·b_raw / 10**S): floor toward -inf + class.
+        return _frac_class(a_raw * b_raw, one)
+    if func_name == "div":
+        if b_raw == 0:
+            return None
+        # value = a_raw / b_raw, scaled result = a_raw·10**S / b_raw.
+        # Normalise the denominator positive for the floor/class fold.
+        num, den = a_raw * one, b_raw
+        if den < 0:
+            num, den = -num, -den
+        return _frac_class(num, den)
+    if func_name == "rem":
+        if b_raw == 0:
+            return None
+        # Rust truncated remainder: sign follows the dividend, magnitude
+        # = |a_raw| % |b_raw|. Storage-level (shared scale) and exact.
+        r = abs(a_raw) % abs(b_raw)
+        r = r if a_raw >= 0 else -r
+        return r, "Z"
+    if func_name == "hypot":
+        radicand = a_raw * a_raw + b_raw * b_raw
+        root = math.isqrt(radicand)
+        if root * root == radicand:
+            return root, "Z"
+        # Classify sqrt(radicand) - root in (0, 1): compare (root + 0.5)**2
+        # = root² + root + 0.25 against radicand. Use 4·radicand vs
+        # (2·root + 1)² to stay in exact integers.
+        half_sq = (2 * root + 1) ** 2          # (2·(root+0.5))²
+        four_rad = 4 * radicand
+        if four_rad < half_sq:
+            return root, "L"
+        if four_rad == half_sq:
+            # Exact tie can never occur: radicand is an integer and
+            # (root+0.5)² = root²+root+0.25 is never an integer, so 4·rad
+            # == (2·root+1)² has no integer solution. Kept for totality.
+            return root, "E"
+        return root, "G"
+    return None
+
+
+def _binary_cell(func_name: str, a_raw: int, b_raw: int, scale: int,
+                 alias: str) -> tuple[int, int, int, str] | None:
+    """Build one validated binary golden cell, or `None` if it does not
+    fit the tier (operand or either result neighbour out of signed
+    range, or the op is undefined for the pair)."""
+    smax = tier_signed_max(alias)
+    smin = -smax - 1
+    if not (smin <= a_raw <= smax) or not (smin <= b_raw <= smax):
+        return None
+    fc = binary_floor_class(func_name, a_raw, b_raw, scale)
+    if fc is None:
+        return None
+    floor_raw, cls = fc
+    # Both rounding neighbours (floor, floor+1) must be representable —
+    # any RoundingMode may select either.
+    if not (smin <= floor_raw <= smax) or not (smin <= floor_raw + 1 <= smax):
+        return None
+    return a_raw, b_raw, floor_raw, cls
+
+
+# ── Hunter + coverage cell roster (inputs only; expecteds are computed
+#    by the exact oracle above, never hand-transcribed) ──────────────────
+#
+# Each entry is (alias, scale, [(a_raw, b_raw), ...]) of RAW storage
+# integers (the decimal value is raw / 10**scale). Theory/competitor
+# cells given as decimal values in the hunter spec are pre-converted to
+# raw here (value · 10**scale). De-duplication across A/B/C and across
+# scales is handled by the emitter (per (alias, scale, func) file).
+
+def _v(value_times_one: int) -> int:
+    """Identity helper documenting that the integer is already a raw
+    storage value at the cell's scale."""
+    return value_times_one
+
+
+def hypot_hunter_cells() -> list[tuple[str, int, list[tuple[int, int]]]]:
+    """The three hunters' hypot cells (A code-holes, B theory, C
+    competitor) plus the migrated `hypot_accuracy.rs` value cells. Inputs
+    only — RAW integers at the listed scale."""
+    P127 = (1 << 127) - 1
+    P128 = (1 << 128) - 1
+    P191 = (1 << 191) - 1
+    P63 = (1 << 63) - 1
+    cells: list[tuple[str, int, list[tuple[int, int]]]] = [
+        # ── A. Code-holes (raw integers, band/edge seams) ──
+        ("d38", 19, [
+            (13043817825332782211, 13043817825332782211),   # u128-arm top
+            (13043817825332782213, 13043817825332782213),   # u128->u256 carry seam
+            (18446744073709551615, 18446744073709551615),   # max single limb (2^64-1)
+        ]),
+        ("d38", 0, [
+            (1 << 64, 3),                                    # fit_one->fit_two seam
+            (P127, 0),                                       # =MAX, fits
+            (P127, 1),                                       # Ceiling->None (overflow); kept, dropped if OOR
+        ]),
+        ("d57", 0, [
+            (240615969168004511545033772477625056926, 240615969168004511545033772477625056926),  # just under 2^256
+            (240615969168004511545033772477625056928, 240615969168004511545033772477625056928),  # crosses 2^256 -> pythagoras
+            (P128, P128),                                    # max two-limb
+            (P128, 0),                                       # perfect square (2^128-1)^2
+            (P128, 1),                                       # rem=1, Ceiling->2^128 finish out[2]
+            (P128, 1 << 64),                                 # half-modes bump to exactly 2^128
+        ]),
+        ("d18", 0, [
+            (4, 2), (8, 3), (6, 6),                          # strict half-predicate (small)
+            (P63, 1),                                        # Ceiling->None (overflow); kept, dropped if OOR
+        ]),
+        ("d57", 0, [
+            (1267650600228229401496703205376, 1125899906842624),   # rem==q
+            (1267650600228229401496703205375, 1125899906842624),   # rem==q+1
+        ]),
+        ("d307", 0, [
+            (P191, 1),                                       # Ceiling->None; kept, dropped if OOR
+            (1 << 128, 1),                                   # wide fallthrough
+        ]),
+        ("d1232", 0, [
+            (1 << 128, 1 << 128),                            # wide fallthrough
+        ]),
+        # ── B. Theory (decimal values, near-half ladder + structural) ──
+        ("d18", 0, [
+            (324, 18), (3174, 126), (30534, 8340), (3157431, 175947),   # class-L dist->3.95e-8
+            (20, 21), (29, 1), (28, 4),                      # perfect-square + neighbours
+            (9, 40),                                         # triple
+            (7, 7), (99999999999999999, 99999999999999999),
+            (100000000000000000, 1), (100000000000000000, 5),
+            (123456789, 0), (0, 0),
+            (999999999999999999, 999999999999999999),
+            (7, 1),                                          # mode-split
+        ]),
+        ("d38", 2, [
+            (27524199, 15569840),                            # class-G dist 1.19e-8 (275241.99,155698.40)
+            (6500, 7200),                                    # triple (65,72)
+        ]),
+        ("d38", 0, [
+            (2386984401, 2074199967), (24937471545, 19445372596),
+            (99, 1),                                         # mode-split
+        ]),
+        ("d57", 0, [
+            (2962151628114, 1107094274369),
+            (875921991554717, 482452759045728),
+            (9922421296738304, 1243203768508672),
+        ]),
+        ("d76", 0, [
+            (86622721824607181, 49965028406843964),          # hardest, dist 3.75e-18
+        ]),
+        ("d76", 18, [
+            (875921991554717, 482452759045728),              # (0.000875921991554717, 0.000482452759045728)
+        ]),
+        ("d18", 3, [
+            (3000, 4000),                                    # triple (3,4)
+        ]),
+        ("d38", 10, [
+            (50000000000, 120000000000),                     # triple (5,12)
+        ]),
+        ("d57", 20, [
+            (800000000000000000000, 1500000000000000000000),  # triple (8,15)
+        ]),
+        ("d76", 40, [
+            (28 * 10 ** 40, 45 * 10 ** 40),                  # triple (28,45)
+            (1 * 10 ** 40, 1 * 10 ** 40),                    # competitor (1,1)
+        ]),
+        ("d115", 50, [
+            (20 * 10 ** 50, 99 * 10 ** 50),                  # triple (20,99)
+        ]),
+        ("d38", 17, [
+            (1 * 10 ** 17, 1 * 10 ** 17),                    # sqrt(2) cancellation; a==b
+        ]),
+        # ── C. Competitor (decimal/raw, overflow + smaller-term) ──
+        ("d38", 0, [
+            (70000000000000000, 70000000000000000),
+            (90000000000000000, 40000000000000000),
+            (9000000000000000000, 9000000000000000000),
+            (123456789012345, 98765432109876),
+            (5, 1),                                          # mode-split (s6 below too)
+        ]),
+        ("d57", 0, [
+            (99999999999999999999999999, 1),
+        ]),
+        ("d38", 19, [
+            (1 * 10 ** 19, 1 * 10 ** 19),                    # (1,1)
+            (2 * 10 ** 19, 3 * 10 ** 19),                    # (2,3)
+        ]),
+        ("d57", 30, [
+            (1 * 10 ** 30, 1 * 10 ** 30),                    # (1,1)
+            (2 * 10 ** 30, 3 * 10 ** 30),                    # mode-split (2,3)
+            (3 * 10 ** 30, 1 * 10 ** 30),                    # mode-split (3,1)
+        ]),
+        ("d76", 40, [
+            # (1,1) already above at d76 s40
+        ]),
+        ("d307", 50, [
+            (2 * 10 ** 50, 3 * 10 ** 50),                    # (2,3)
+            (7 * 10 ** 50, 1 * 10 ** 50),                    # mode-split (7,1)
+        ]),
+        ("d38", 12, [
+            (1000000 * 10 ** 12, 1 * 10 ** 12),              # (1000000,1)
+        ]),
+        ("d38", 9, [
+            (100000 * 10 ** 9, 1 * 10 ** 9),                 # (100000,1)
+        ]),
+        ("d38", 6, [
+            (1000000 * 10 ** 6, 1 * 10 ** 6),                # (1000000,1)
+            (5 * 10 ** 6, 1 * 10 ** 6),                      # mode-split (5,1)
+        ]),
+        ("d38", 18, [
+            (10000000 * 10 ** 18, 3 * 10 ** 18),             # (10000000,3)
+        ]),
+        # ── Migrated hypot_accuracy.rs value cells (Pythagorean triples
+        #    + non-perfect √-cases). Triples are exact; the non-perfect
+        #    cells are re-derived authoritatively by the isqrt oracle. ──
+        ("d38", 6, [
+            (3 * 10 ** 6, 4 * 10 ** 6), (5 * 10 ** 6, 12 * 10 ** 6),
+            (8 * 10 ** 6, 15 * 10 ** 6), (7 * 10 ** 6, 24 * 10 ** 6),
+            (20 * 10 ** 6, 21 * 10 ** 6),
+            (1 * 10 ** 6, 1 * 10 ** 6), (2 * 10 ** 6, 3 * 10 ** 6),
+            (123 * 10 ** 6, 456 * 10 ** 6),
+        ]),
+        ("d38", 19, [
+            (3 * 10 ** 19, 4 * 10 ** 19), (5 * 10 ** 19, 12 * 10 ** 19),
+            (8 * 10 ** 19, 15 * 10 ** 19), (7 * 10 ** 19, 24 * 10 ** 19),
+            (20 * 10 ** 19, 21 * 10 ** 19),
+            (123 * 10 ** 19, 456 * 10 ** 19),
+        ]),
+        ("d18", 9, [
+            (3 * 10 ** 9, 4 * 10 ** 9), (5 * 10 ** 9, 12 * 10 ** 9),
+            (8 * 10 ** 9, 15 * 10 ** 9), (7 * 10 ** 9, 24 * 10 ** 9),
+            (20 * 10 ** 9, 21 * 10 ** 9),
+            (1 * 10 ** 9, 1 * 10 ** 9), (2 * 10 ** 9, 3 * 10 ** 9),
+            (123 * 10 ** 9, 456 * 10 ** 9),
+        ]),
+        ("d57", 30, [
+            (3 * 10 ** 30, 4 * 10 ** 30), (5 * 10 ** 30, 12 * 10 ** 30),
+            (8 * 10 ** 30, 15 * 10 ** 30), (7 * 10 ** 30, 24 * 10 ** 30),
+            (20 * 10 ** 30, 21 * 10 ** 30),
+            (123 * 10 ** 30, 456 * 10 ** 30),
+        ]),
+        ("d307", 30, [
+            (3 * 10 ** 30, 4 * 10 ** 30), (5 * 10 ** 30, 12 * 10 ** 30),
+            (8 * 10 ** 30, 15 * 10 ** 30), (7 * 10 ** 30, 24 * 10 ** 30),
+            (20 * 10 ** 30, 21 * 10 ** 30),
+            (1 * 10 ** 30, 1 * 10 ** 30), (2 * 10 ** 30, 3 * 10 ** 30),
+            (123 * 10 ** 30, 456 * 10 ** 30),
+        ]),
+    ]
+    return cells
+
+
+def arith_coverage_cells() -> dict[str, list[tuple[str, int, list[tuple[int, int]]]]]:
+    """`{0, S/2, S-1}` arithmetic coverage for add/sub/mul/div/rem across
+    a spread of tiers: near-max operands, opposite signs, and a
+    div-with-remainder. Inputs are RAW integers at the listed scale; the
+    exact oracle computes each expected. Returns a per-func roster."""
+    def near_max(alias: str) -> int:
+        # A magnitude comfortably inside the tier so a+b / a*b cannot
+        # overflow the signed range: ~half the signed max for add/sub,
+        # the sqrt of it for mul.
+        return tier_signed_max(alias)
+
+    # The tiers and their {0, S/2, S-1} scales to sample.
+    tier_scales = [
+        ("d18", [0, 9, 17]),
+        ("d38", [0, 19, 37]),
+        ("d57", [0, 28, 56]),
+        ("d76", [0, 35, 75]),
+        ("d307", [0, 150, 306]),
+    ]
+
+    roster: dict[str, list[tuple[str, int, list[tuple[int, int]]]]] = {
+        "add": [], "sub": [], "mul": [], "div": [], "rem": [],
+    }
+    for alias, scales in tier_scales:
+        smax = tier_signed_max(alias)
+        for s in scales:
+            one = 10 ** s
+            # Generic small + opposite-sign + a few structured pairs that
+            # exercise carries and the divide remainder. Magnitudes kept
+            # well inside range for add/sub/mul.
+            half = smax // 2
+            mul_operand = math.isqrt(smax) // 2
+            add_sub = [
+                (7 * one, 3 * one),
+                (-7 * one, 3 * one),
+                (7 * one, -3 * one),
+                (half, half // 3),
+                (smax, 0),              # near-max + 0
+                (one + 1, one - 1),     # carry/borrow at the LSB
+                (123 * one + 45, 67 * one + 89),
+            ]
+            roster["add"].append((alias, s, add_sub))
+            roster["sub"].append((alias, s, add_sub))
+            # mul: operands whose product stays in range; include the
+            # scale-narrowing remainder cases (non-multiple-of-10^S).
+            mul = [
+                (3 * one, 4 * one),                 # 12 exact
+                (mul_operand, 2 * one),
+                (-mul_operand, 3 * one),
+                (one + (one // 3 if s > 0 else 0), 7 * one),  # narrowing remainder when s>0
+                (15 * one + (one // 7 if s > 0 else 0),
+                 13 * one + (one // 11 if s > 0 else 0)),
+            ]
+            roster["mul"].append((alias, s, mul))
+            # div: include exact, with-remainder, opposite signs, near-max
+            # numerator. Divisors non-zero.
+            div = [
+                (12 * one, 4 * one),                # 3 exact
+                (10 * one, 3 * one),                # 3.333... remainder
+                (-10 * one, 3 * one),               # opposite sign, floor toward -inf
+                (10 * one, -3 * one),
+                (1 * one, 7 * one),                 # 0.1428... full fraction
+                (smax, 3 * one),                    # near-max numerator
+                (2 * one, 3 * one),
+            ]
+            roster["div"].append((alias, s, div))
+            # rem: truncated remainder, opposite signs, divisor > / < dividend.
+            rem = [
+                (10 * one, 3 * one),                # 1
+                (-10 * one, 3 * one),               # -1 (sign of dividend)
+                (10 * one, -3 * one),               # 1
+                (7 * one, 7 * one),                 # 0
+                (3 * one, 10 * one),                # 3 (divisor > dividend)
+                (smax, 1000 * one + 7) if s == 0 else (smax, 7 * one),
+            ]
+            roster["rem"].append((alias, s, rem))
+    return roster
+
+
+def emit_binary_ops() -> tuple[int, int]:
+    """Generate every hypot + arithmetic golden file. Returns
+    `(total_bytes, total_cases)`. Files are `<func>_<alias>_s<scale>.txt`
+    in the four-column format; cells are de-duplicated per file."""
+    total_bytes = 0
+    total_cases = 0
+
+    # Group all (func, alias, scale) -> set of input pairs.
+    buckets: dict[tuple[str, str, int], list[tuple[int, int]]] = {}
+
+    def add_cells(func: str, entries: list[tuple[str, int, list[tuple[int, int]]]]):
+        for alias, scale, pairs in entries:
+            key = (func, alias, scale)
+            buckets.setdefault(key, [])
+            buckets[key].extend(pairs)
+
+    add_cells("hypot", hypot_hunter_cells())
+    for func, entries in arith_coverage_cells().items():
+        add_cells(func, entries)
+
+    for (func, alias, scale), pairs in sorted(buckets.items()):
+        # De-dup pairs preserving order.
+        seen: set[tuple[int, int]] = set()
+        cases: list[tuple[int, int, int, str]] = []
+        for a_raw, b_raw in pairs:
+            if (a_raw, b_raw) in seen:
+                continue
+            seen.add((a_raw, b_raw))
+            cell = _binary_cell(func, a_raw, b_raw, scale, alias)
+            if cell is not None:
+                cases.append(cell)
+        if not cases:
+            continue
+        out_path = OUT_DIR / f"{func}_{alias}_s{scale}.txt"
+        file_bytes = emit_two_arg_file(out_path, cases)
+        total_bytes += file_bytes
+        total_cases += len(cases)
+        print(f"  {out_path.relative_to(ROOT)}: "
+              f"{len(cases)} cases, {file_bytes} bytes (binary)")
+    return total_bytes, total_cases
+
+
 def main() -> None:
     OUT_DIR.mkdir(parents=True, exist_ok=True)
     total_bytes = 0
@@ -1299,6 +1741,14 @@ def main() -> None:
     only_alias = _csv_filter("only-alias")
     only_scale = _csv_filter("only-scale")
     only_func = _csv_filter("only-func")
+
+    # Binary ops (hypot + arithmetic) — exact oracle, own cell roster.
+    # Honour --only-func so a scoped run can target just the binary ops.
+    binary_funcs = {"hypot", "add", "sub", "mul", "div", "rem"}
+    if only_func is None or (only_func & binary_funcs):
+        b_bytes, b_cases = emit_binary_ops()
+        total_bytes += b_bytes
+        total_cases += b_cases
 
     for alias, capacity, scale, base_count in TIERS:
         if only_alias is not None and alias.lower() not in only_alias:

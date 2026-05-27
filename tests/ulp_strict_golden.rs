@@ -86,6 +86,12 @@ fn method_of(func: &str) -> Method {
         "log" => Method::Log,
         "atan2" => Method::Atan2,
         "powf" => Method::Pow,
+        "add" => Method::Add,
+        "sub" => Method::Sub,
+        "mul" => Method::Mul,
+        "div" => Method::Div,
+        "rem" => Method::Rem,
+        "hypot" => Method::Hypot,
         other => panic!("unknown function: {other}"),
     }
 }
@@ -2814,6 +2820,436 @@ mod band_edges {
         #[test]
         fn d1232_powf_s1231() {
             check_at_scale("powf", Width::D1232, 1231, include_str!("golden/powf_d1232_s1231.txt"));
+        }
+    }
+}
+
+// --- Binary-op golden cells (hypot + arithmetic) --------------------
+//
+// hypot and the five arithmetic ops (add/sub/mul/div/rem) routed through
+// the same correctly-rounded harness as the transcendentals, against the
+// exact integer / isqrt oracle (four-column golden tables). hypot's value
+// cells migrated here from the retired tests/hypot_accuracy.rs; its
+// structural edge cases live in tests/hypot_edge_cases.rs.
+mod binary_ops {
+    #[allow(unused_imports)]
+    use super::{check_at_scale, Width};
+    mod d18 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d18_hypot_s0() {
+            check_at_scale("hypot", Width::D18, 0, include_str!("golden/hypot_d18_s0.txt"));
+        }
+        #[test]
+        fn d18_hypot_s3() {
+            check_at_scale("hypot", Width::D18, 3, include_str!("golden/hypot_d18_s3.txt"));
+        }
+        #[test]
+        fn d18_hypot_s9() {
+            check_at_scale("hypot", Width::D18, 9, include_str!("golden/hypot_d18_s9.txt"));
+        }
+        #[test]
+        fn d18_add_s0() {
+            check_at_scale("add", Width::D18, 0, include_str!("golden/add_d18_s0.txt"));
+        }
+        #[test]
+        fn d18_add_s9() {
+            check_at_scale("add", Width::D18, 9, include_str!("golden/add_d18_s9.txt"));
+        }
+        #[test]
+        fn d18_add_s17() {
+            check_at_scale("add", Width::D18, 17, include_str!("golden/add_d18_s17.txt"));
+        }
+        #[test]
+        fn d18_sub_s0() {
+            check_at_scale("sub", Width::D18, 0, include_str!("golden/sub_d18_s0.txt"));
+        }
+        #[test]
+        fn d18_sub_s9() {
+            check_at_scale("sub", Width::D18, 9, include_str!("golden/sub_d18_s9.txt"));
+        }
+        #[test]
+        fn d18_sub_s17() {
+            check_at_scale("sub", Width::D18, 17, include_str!("golden/sub_d18_s17.txt"));
+        }
+        #[test]
+        fn d18_mul_s0() {
+            check_at_scale("mul", Width::D18, 0, include_str!("golden/mul_d18_s0.txt"));
+        }
+        #[test]
+        fn d18_mul_s9() {
+            check_at_scale("mul", Width::D18, 9, include_str!("golden/mul_d18_s9.txt"));
+        }
+        #[test]
+        fn d18_mul_s17() {
+            check_at_scale("mul", Width::D18, 17, include_str!("golden/mul_d18_s17.txt"));
+        }
+        #[test]
+        fn d18_div_s0() {
+            check_at_scale("div", Width::D18, 0, include_str!("golden/div_d18_s0.txt"));
+        }
+        #[test]
+        fn d18_div_s9() {
+            check_at_scale("div", Width::D18, 9, include_str!("golden/div_d18_s9.txt"));
+        }
+        #[test]
+        fn d18_div_s17() {
+            check_at_scale("div", Width::D18, 17, include_str!("golden/div_d18_s17.txt"));
+        }
+        #[test]
+        fn d18_rem_s0() {
+            check_at_scale("rem", Width::D18, 0, include_str!("golden/rem_d18_s0.txt"));
+        }
+        #[test]
+        fn d18_rem_s9() {
+            check_at_scale("rem", Width::D18, 9, include_str!("golden/rem_d18_s9.txt"));
+        }
+        #[test]
+        fn d18_rem_s17() {
+            check_at_scale("rem", Width::D18, 17, include_str!("golden/rem_d18_s17.txt"));
+        }
+    }
+    mod d38 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d38_hypot_s0() {
+            check_at_scale("hypot", Width::D38, 0, include_str!("golden/hypot_d38_s0.txt"));
+        }
+        #[test]
+        fn d38_hypot_s2() {
+            check_at_scale("hypot", Width::D38, 2, include_str!("golden/hypot_d38_s2.txt"));
+        }
+        #[test]
+        fn d38_hypot_s6() {
+            check_at_scale("hypot", Width::D38, 6, include_str!("golden/hypot_d38_s6.txt"));
+        }
+        #[test]
+        fn d38_hypot_s9() {
+            check_at_scale("hypot", Width::D38, 9, include_str!("golden/hypot_d38_s9.txt"));
+        }
+        #[test]
+        fn d38_hypot_s10() {
+            check_at_scale("hypot", Width::D38, 10, include_str!("golden/hypot_d38_s10.txt"));
+        }
+        #[test]
+        fn d38_hypot_s12() {
+            check_at_scale("hypot", Width::D38, 12, include_str!("golden/hypot_d38_s12.txt"));
+        }
+        #[test]
+        fn d38_hypot_s17() {
+            check_at_scale("hypot", Width::D38, 17, include_str!("golden/hypot_d38_s17.txt"));
+        }
+        #[test]
+        fn d38_hypot_s18() {
+            check_at_scale("hypot", Width::D38, 18, include_str!("golden/hypot_d38_s18.txt"));
+        }
+        #[test]
+        fn d38_hypot_s19() {
+            check_at_scale("hypot", Width::D38, 19, include_str!("golden/hypot_d38_s19.txt"));
+        }
+        #[test]
+        fn d38_add_s0() {
+            check_at_scale("add", Width::D38, 0, include_str!("golden/add_d38_s0.txt"));
+        }
+        #[test]
+        fn d38_add_s19() {
+            check_at_scale("add", Width::D38, 19, include_str!("golden/add_d38_s19.txt"));
+        }
+        #[test]
+        fn d38_add_s37() {
+            check_at_scale("add", Width::D38, 37, include_str!("golden/add_d38_s37.txt"));
+        }
+        #[test]
+        fn d38_sub_s0() {
+            check_at_scale("sub", Width::D38, 0, include_str!("golden/sub_d38_s0.txt"));
+        }
+        #[test]
+        fn d38_sub_s19() {
+            check_at_scale("sub", Width::D38, 19, include_str!("golden/sub_d38_s19.txt"));
+        }
+        #[test]
+        fn d38_sub_s37() {
+            check_at_scale("sub", Width::D38, 37, include_str!("golden/sub_d38_s37.txt"));
+        }
+        #[test]
+        fn d38_mul_s0() {
+            check_at_scale("mul", Width::D38, 0, include_str!("golden/mul_d38_s0.txt"));
+        }
+        #[test]
+        fn d38_mul_s19() {
+            check_at_scale("mul", Width::D38, 19, include_str!("golden/mul_d38_s19.txt"));
+        }
+        #[test]
+        fn d38_mul_s37() {
+            check_at_scale("mul", Width::D38, 37, include_str!("golden/mul_d38_s37.txt"));
+        }
+        #[test]
+        fn d38_div_s0() {
+            check_at_scale("div", Width::D38, 0, include_str!("golden/div_d38_s0.txt"));
+        }
+        #[test]
+        fn d38_div_s19() {
+            check_at_scale("div", Width::D38, 19, include_str!("golden/div_d38_s19.txt"));
+        }
+        #[test]
+        fn d38_div_s37() {
+            check_at_scale("div", Width::D38, 37, include_str!("golden/div_d38_s37.txt"));
+        }
+        #[test]
+        fn d38_rem_s0() {
+            check_at_scale("rem", Width::D38, 0, include_str!("golden/rem_d38_s0.txt"));
+        }
+        #[test]
+        fn d38_rem_s19() {
+            check_at_scale("rem", Width::D38, 19, include_str!("golden/rem_d38_s19.txt"));
+        }
+        #[test]
+        fn d38_rem_s37() {
+            check_at_scale("rem", Width::D38, 37, include_str!("golden/rem_d38_s37.txt"));
+        }
+    }
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    mod d57 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d57_hypot_s0() {
+            check_at_scale("hypot", Width::D57, 0, include_str!("golden/hypot_d57_s0.txt"));
+        }
+        #[test]
+        fn d57_hypot_s20() {
+            check_at_scale("hypot", Width::D57, 20, include_str!("golden/hypot_d57_s20.txt"));
+        }
+        #[test]
+        fn d57_hypot_s30() {
+            check_at_scale("hypot", Width::D57, 30, include_str!("golden/hypot_d57_s30.txt"));
+        }
+        #[test]
+        fn d57_add_s0() {
+            check_at_scale("add", Width::D57, 0, include_str!("golden/add_d57_s0.txt"));
+        }
+        #[test]
+        fn d57_add_s28() {
+            check_at_scale("add", Width::D57, 28, include_str!("golden/add_d57_s28.txt"));
+        }
+        #[test]
+        fn d57_add_s56() {
+            check_at_scale("add", Width::D57, 56, include_str!("golden/add_d57_s56.txt"));
+        }
+        #[test]
+        fn d57_sub_s0() {
+            check_at_scale("sub", Width::D57, 0, include_str!("golden/sub_d57_s0.txt"));
+        }
+        #[test]
+        fn d57_sub_s28() {
+            check_at_scale("sub", Width::D57, 28, include_str!("golden/sub_d57_s28.txt"));
+        }
+        #[test]
+        fn d57_sub_s56() {
+            check_at_scale("sub", Width::D57, 56, include_str!("golden/sub_d57_s56.txt"));
+        }
+        #[test]
+        fn d57_mul_s0() {
+            check_at_scale("mul", Width::D57, 0, include_str!("golden/mul_d57_s0.txt"));
+        }
+        #[test]
+        fn d57_mul_s28() {
+            check_at_scale("mul", Width::D57, 28, include_str!("golden/mul_d57_s28.txt"));
+        }
+        #[test]
+        fn d57_mul_s56() {
+            check_at_scale("mul", Width::D57, 56, include_str!("golden/mul_d57_s56.txt"));
+        }
+        #[test]
+        fn d57_div_s0() {
+            check_at_scale("div", Width::D57, 0, include_str!("golden/div_d57_s0.txt"));
+        }
+        #[test]
+        fn d57_div_s28() {
+            check_at_scale("div", Width::D57, 28, include_str!("golden/div_d57_s28.txt"));
+        }
+        #[test]
+        fn d57_div_s56() {
+            check_at_scale("div", Width::D57, 56, include_str!("golden/div_d57_s56.txt"));
+        }
+        #[test]
+        fn d57_rem_s0() {
+            check_at_scale("rem", Width::D57, 0, include_str!("golden/rem_d57_s0.txt"));
+        }
+        #[test]
+        fn d57_rem_s28() {
+            check_at_scale("rem", Width::D57, 28, include_str!("golden/rem_d57_s28.txt"));
+        }
+        #[test]
+        fn d57_rem_s56() {
+            check_at_scale("rem", Width::D57, 56, include_str!("golden/rem_d57_s56.txt"));
+        }
+    }
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    mod d76 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d76_hypot_s0() {
+            check_at_scale("hypot", Width::D76, 0, include_str!("golden/hypot_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_hypot_s18() {
+            check_at_scale("hypot", Width::D76, 18, include_str!("golden/hypot_d76_s18.txt"));
+        }
+        #[test]
+        fn d76_hypot_s40() {
+            check_at_scale("hypot", Width::D76, 40, include_str!("golden/hypot_d76_s40.txt"));
+        }
+        #[test]
+        fn d76_add_s0() {
+            check_at_scale("add", Width::D76, 0, include_str!("golden/add_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_add_s35() {
+            check_at_scale("add", Width::D76, 35, include_str!("golden/add_d76_s35.txt"));
+        }
+        #[test]
+        fn d76_add_s75() {
+            check_at_scale("add", Width::D76, 75, include_str!("golden/add_d76_s75.txt"));
+        }
+        #[test]
+        fn d76_sub_s0() {
+            check_at_scale("sub", Width::D76, 0, include_str!("golden/sub_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_sub_s35() {
+            check_at_scale("sub", Width::D76, 35, include_str!("golden/sub_d76_s35.txt"));
+        }
+        #[test]
+        fn d76_sub_s75() {
+            check_at_scale("sub", Width::D76, 75, include_str!("golden/sub_d76_s75.txt"));
+        }
+        #[test]
+        fn d76_mul_s0() {
+            check_at_scale("mul", Width::D76, 0, include_str!("golden/mul_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_mul_s35() {
+            check_at_scale("mul", Width::D76, 35, include_str!("golden/mul_d76_s35.txt"));
+        }
+        #[test]
+        fn d76_mul_s75() {
+            check_at_scale("mul", Width::D76, 75, include_str!("golden/mul_d76_s75.txt"));
+        }
+        #[test]
+        fn d76_div_s0() {
+            check_at_scale("div", Width::D76, 0, include_str!("golden/div_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_div_s35() {
+            check_at_scale("div", Width::D76, 35, include_str!("golden/div_d76_s35.txt"));
+        }
+        #[test]
+        fn d76_div_s75() {
+            check_at_scale("div", Width::D76, 75, include_str!("golden/div_d76_s75.txt"));
+        }
+        #[test]
+        fn d76_rem_s0() {
+            check_at_scale("rem", Width::D76, 0, include_str!("golden/rem_d76_s0.txt"));
+        }
+        #[test]
+        fn d76_rem_s35() {
+            check_at_scale("rem", Width::D76, 35, include_str!("golden/rem_d76_s35.txt"));
+        }
+        #[test]
+        fn d76_rem_s75() {
+            check_at_scale("rem", Width::D76, 75, include_str!("golden/rem_d76_s75.txt"));
+        }
+    }
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    mod d115 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d115_hypot_s50() {
+            check_at_scale("hypot", Width::D115, 50, include_str!("golden/hypot_d115_s50.txt"));
+        }
+    }
+    #[cfg(any(feature = "d307", feature = "x-wide"))]
+    mod d307 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d307_hypot_s0() {
+            check_at_scale("hypot", Width::D307, 0, include_str!("golden/hypot_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_hypot_s30() {
+            check_at_scale("hypot", Width::D307, 30, include_str!("golden/hypot_d307_s30.txt"));
+        }
+        #[test]
+        fn d307_hypot_s50() {
+            check_at_scale("hypot", Width::D307, 50, include_str!("golden/hypot_d307_s50.txt"));
+        }
+        #[test]
+        fn d307_add_s0() {
+            check_at_scale("add", Width::D307, 0, include_str!("golden/add_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_add_s150() {
+            check_at_scale("add", Width::D307, 150, include_str!("golden/add_d307_s150.txt"));
+        }
+        #[test]
+        fn d307_add_s306() {
+            check_at_scale("add", Width::D307, 306, include_str!("golden/add_d307_s306.txt"));
+        }
+        #[test]
+        fn d307_sub_s0() {
+            check_at_scale("sub", Width::D307, 0, include_str!("golden/sub_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_sub_s150() {
+            check_at_scale("sub", Width::D307, 150, include_str!("golden/sub_d307_s150.txt"));
+        }
+        #[test]
+        fn d307_sub_s306() {
+            check_at_scale("sub", Width::D307, 306, include_str!("golden/sub_d307_s306.txt"));
+        }
+        #[test]
+        fn d307_mul_s0() {
+            check_at_scale("mul", Width::D307, 0, include_str!("golden/mul_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_mul_s150() {
+            check_at_scale("mul", Width::D307, 150, include_str!("golden/mul_d307_s150.txt"));
+        }
+        #[test]
+        fn d307_mul_s306() {
+            check_at_scale("mul", Width::D307, 306, include_str!("golden/mul_d307_s306.txt"));
+        }
+        #[test]
+        fn d307_div_s0() {
+            check_at_scale("div", Width::D307, 0, include_str!("golden/div_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_div_s150() {
+            check_at_scale("div", Width::D307, 150, include_str!("golden/div_d307_s150.txt"));
+        }
+        #[test]
+        fn d307_div_s306() {
+            check_at_scale("div", Width::D307, 306, include_str!("golden/div_d307_s306.txt"));
+        }
+        #[test]
+        fn d307_rem_s0() {
+            check_at_scale("rem", Width::D307, 0, include_str!("golden/rem_d307_s0.txt"));
+        }
+        #[test]
+        fn d307_rem_s150() {
+            check_at_scale("rem", Width::D307, 150, include_str!("golden/rem_d307_s150.txt"));
+        }
+        #[test]
+        fn d307_rem_s306() {
+            check_at_scale("rem", Width::D307, 306, include_str!("golden/rem_d307_s306.txt"));
+        }
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    mod d1232 {
+        use super::{check_at_scale, Width};
+        #[test]
+        fn d1232_hypot_s0() {
+            check_at_scale("hypot", Width::D1232, 0, include_str!("golden/hypot_d1232_s0.txt"));
         }
     }
 }
