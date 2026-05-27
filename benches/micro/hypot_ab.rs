@@ -15,9 +15,13 @@
 //! Because the fast path is VALUE-gated (`fit_one(a) && fit_one(b)`), the
 //! decision has TWO regimes per width — swept here as the magnitude/shape axis:
 //!
-//! - `single` — both operands fit one `u64` limb (the fast branch engages).
-//!   This is where `u128_fast` can win; its edge is the avoided
+//! - `single` — both operands fit one `u64` limb (the u128 fast branch
+//!   engages). This is where `u128_fast` can win; its edge is the avoided
 //!   multi-precision `isqrt` divide loop, so it should hold at every width.
+//! - `two`    — both operands fit two `u64` limbs (`< 2^128`), high limb
+//!   non-zero (the NEW u256 scalar fast branch engages). This is the decimal
+//!   `s >= 19` slow band the old `fit_one`-only gate cliffed into Pythagoras;
+//!   `u128_fast` should win here at every width >= 2.
 //! - `multi`  — operands span the full width (the fast branch falls through to
 //!   Pythagoras). Here `u128_fast` adds only the `fit_one` guard, so it should
 //!   be statistically TIED with `pythagoras` and never a meaningful loss.
@@ -82,6 +86,18 @@ fn inputs<const N: usize>() -> Vec<HIn<N>> {
         out[0] = mix(s) & (i64::MAX as u64);
         Int::<N>::from_limbs(out)
     };
+    // A magnitude that fits TWO u64 limbs (< 2^128) with the high limb
+    // non-zero -- exercises the NEW u256 scalar fast arm (the decimal `s >= 19`
+    // slow band that the old `fit_one`-only gate cliffed into Pythagoras).
+    // Top bit of limb 1 cleared so the radicand sum stays < 2^256.
+    let two = |s: &mut u64| {
+        let mut out = [0u64; N];
+        out[0] = mix(s);
+        if N >= 2 {
+            out[1] = (mix(s) & (i64::MAX as u64)) | 1; // < 2^127, high limb non-zero
+        }
+        Int::<N>::from_limbs(out)
+    };
     // A magnitude that spans the FULL storage width (top limb non-zero, top
     // sign bit cleared so the operand itself is a valid positive Int<N>).
     let full = |s: &mut u64| {
@@ -99,6 +115,7 @@ fn inputs<const N: usize>() -> Vec<HIn<N>> {
 
     vec![
         HIn { label: "single", a: single(&mut s), b: single(&mut s) },
+        HIn { label: "two", a: two(&mut s), b: two(&mut s) },
         HIn { label: "multi", a: full(&mut s), b: full(&mut s) },
         HIn { label: "skew", a: single(&mut s), b: full(&mut s) },
     ]

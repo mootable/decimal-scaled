@@ -396,7 +396,16 @@ pub(crate) const fn shl1(a: &mut [u64]) -> u64 {
 /// `true` if every limb above index 0 is zero — fits a single u64.
 #[inline]
 pub(crate) const fn fit_one(a: &[u64]) -> bool {
-    let mut i = 1;
+    fit_k(a, 1)
+}
+
+/// `true` if every limb at or above index `k` is zero — i.e. the magnitude
+/// fits `k` u64 limbs (`< 2^(64·k)`). A slice shorter than `k` trivially
+/// fits. Generalises [`fit_one`] (`fit_k(a, 1)`); `fit_k(a, 2)` is the
+/// "`< 2^128`" gate the u128/u256 fast paths key on.
+#[inline]
+pub(crate) const fn fit_k(a: &[u64], k: usize) -> bool {
+    let mut i = k;
     while i < a.len() {
         if a[i] != 0 {
             return false;
