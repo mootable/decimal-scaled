@@ -89,42 +89,21 @@ fn isqrt_u128(n: u128) -> u128 {
 }
 
 /// Full `128 × 128 -> 256` product `x · x`, as a little-endian `[u64; 4]`.
-/// Pure scalar `u128` schoolbook on the two 64-bit halves of `x` -- no
-/// multi-precision kernel.
+///
+/// Delegates to the shared fixed-width square leaf
+/// [`sqr_low_fixed`](crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed): `x`
+/// (`< 2^128`) zero-extended to four `u64` limbs has an exact `< 2^256` square,
+/// so its *full* product is exactly the low four limbs of the `N = 4` square.
+/// `sqr_low_fixed` is a `const fn` over `&[u64; N]` / `&mut [u64; N]` -- pure
+/// fixed-width stack arithmetic, NO allocation and NO `ComputeInt` slice
+/// scratch -- so the no-allocation hot-path constraint is preserved while the
+/// squaring logic stays single-sourced in the leaf (not re-hand-rolled here).
 #[inline]
 fn sq_u256(x: u128) -> [u64; 4] {
-    // Split x into two 64-bit limbs and form the full 4-limb convolution
-    // x·x = sum_{i,j} a[i]·a[j]·2^(64(i+j)) in u128 column accumulators, then
-    // normalise the carries -- the obvious, overflow-safe schoolbook (each
-    // a[i]·a[j] < 2^128 and a 2×2 convolution column holds at most two such
-    // products plus carry, well within u128).
-    let a = [x as u64, (x >> 64) as u64];
-    // 2×2 limb convolution, each partial product added at column `i+j` with its
-    // carry propagated immediately -- so no column ever holds two full 128-bit
-    // products (which would overflow u128). Five-wide accumulator covers the
-    // top carry (the result is <= 4 limbs but the running carry can touch limb
-    // 4 transiently). Textbook schoolbook square.
-    let mut limbs = [0u128; 5];
-    let mut i = 0;
-    while i < 2 {
-        let mut j = 0;
-        while j < 2 {
-            let p = a[i] as u128 * a[j] as u128;
-            let s0 = limbs[i + j] + (p as u64 as u128);
-            limbs[i + j] = s0 as u64 as u128;
-            let mut carry = (s0 >> 64) + (p >> 64);
-            let mut k = i + j + 1;
-            while carry != 0 {
-                let s = limbs[k] + carry;
-                limbs[k] = s as u64 as u128;
-                carry = s >> 64;
-                k += 1;
-            }
-            j += 1;
-        }
-        i += 1;
-    }
-    [limbs[0] as u64, limbs[1] as u64, limbs[2] as u64, limbs[3] as u64]
+    let xw = [x as u64, (x >> 64) as u64, 0, 0];
+    let mut out = [0u64; 4];
+    crate::int::algos::sqr::sqr_low_fixed::sqr_low_fixed::<4>(&xw, &mut out);
+    out
 }
 
 /// `a + b` for two `u256` (`[u64; 4]`) values, returning the 257-bit sum as
@@ -286,27 +265,42 @@ fn isqrt_u256(n: [u64; 4]) -> u128 {
     if bits == 0 {
         return 0;
     }
-    // Over-estimate seed of sqrt(n) in u128. Reuse the scalar u128 seed on the
-    // top 64 significant bits, scaled back by half the shift -- the same
-    // feature-based bootstrap the library exposes, guaranteed `>= sqrt(n)`.
-    let shift = bits - if bits < 64 { bits } else { 64 };
-    let top: u64 = extract_top64_u256(n, shift);
-    let mut x: u128 = crate::algo_x_support::seed::sqrt_seed_u128(top as u128, bits.min(64));
-    // Scale the seed back to the full magnitude: sqrt(top·2^shift) =
-    // sqrt(top)·2^(shift/2). For an odd shift fold in sqrt(2) (round up) so the
-    // result stays a strict over-estimate. Cap below 2^128.
-    let half = shift / 2;
-    if (shift & 1) == 1 {
-        // ·sqrt(2), rounded up, then ·2^half. Use a fixed numerator over a
-        // power of two to stay integer + over-estimate: x·92682/65536 >=
-        // x·sqrt(2) (92682/65536 = 1.41423.. >= 1.41421..).
-        x = (x.saturating_mul(92682) >> 16).saturating_add(1);
-    }
-    x = if half >= 128 { u128::MAX } else { x.saturating_mul(1u128 << half) };
-    // Guard: an over-estimate must be >= 1.
+    // Over-estimate seed of sqrt(n) from the shared, proven seed library. Its
+    // `sqrt_seed(&[u64], bits, out)` leaf is `&[u64]`-generic and width-agnostic
+    // BY DESIGN (its doc: "decimal-side consumers can reuse them unchanged"), so
+    // pass the radicand slice + its bit length directly. The library guarantees
+    // a strict over-estimate (its std body does a double `+1`, so the placed
+    // seed is `>= sqrt(n)`), which the Newton loop below relies on. `out` is one
+    // limb wider than the root (which is `< 2^128`, two limbs) so the rare
+    // over-estimate that touches `2^128` still fits; we read it back as a u128,
+    // saturating to `u128::MAX` if the headroom limb is non-zero.
+    let mut seed_out = [0u64; 3];
+    crate::algo_x_support::seed::sqrt_seed(&n, bits, &mut seed_out);
+    let mut x: u128 = if seed_out[2] != 0 {
+        u128::MAX
+    } else {
+        (seed_out[0] as u128) | ((seed_out[1] as u128) << 64)
+    };
+    // Guard: an over-estimate must be >= 1 (the library forces a non-zero seed,
+    // but keep the Newton pre-loop invariant explicit).
     if x == 0 {
         x = 1;
     }
+    // Over-estimate guarantee (the project's "debug_assert caps" defense): the
+    // downward-monotone Newton loop needs `x >= floor(sqrt(n))`. The library
+    // seed satisfies the stronger `x² >= n` (a strict over-estimate) -- assert
+    // that for every non-saturated seed so a future seed regression PANICS with
+    // a location in the gates. The exception is the saturation cap: when the
+    // over-estimate touches `2^128` we cap `x = u128::MAX = 2^128-1`, and for
+    // `n` just above `(2^128-1)²` (reachable on `N >= 3`, e.g. one operand near
+    // `2^128` and a small other) the true floor IS `2^128-1`, so `x` is the
+    // CORRECT seed even though `x² < n`. `x == u128::MAX` is trivially
+    // `>= floor(sqrt(n))` for any `n < 2^256`, so admit it. `x` is a `u128`
+    // (`<= 2^128-1`) so `x²` fits a `u256` exactly -- compare against `n`.
+    debug_assert!(
+        x == u128::MAX || cmp_u256(sq_u256(x), n) >= 0,
+        "isqrt_u256 seed under-estimate: seed={x} n={n:?}"
+    );
     // Newton averaging: x <- (x + n/x)/2, monotone-decreasing from the
     // over-estimate. n/x is the fixed u256/u128 scalar division.
     loop {
@@ -333,28 +327,18 @@ fn avg_u128(a: u128, b: u128) -> u128 {
     (a & b) + ((a ^ b) >> 1)
 }
 
-/// Top 64 significant bits of a `u256` (`[u64; 4]`) starting at bit position
-/// `shift` (`shift = bits - min(64, bits)`), right-aligned into a `u64`.
-/// Scalar bit extraction across the four limbs -- mirrors
-/// `seed::extract_top_u64` for the fixed `[u64; 4]` case.
+/// Three-way compare of two `u256` (`[u64; 4]`) values: `-1`/`0`/`1` for
+/// `a < b` / `a == b` / `a > b`. Most-significant limb first.
 #[inline]
-fn extract_top64_u256(n: [u64; 4], shift: u32) -> u64 {
-    let limb_idx = (shift / 64) as usize;
-    let bit_off = shift % 64;
-    if bit_off == 0 {
-        n[limb_idx]
-    } else {
-        let lo = n[limb_idx] >> bit_off;
-        let hi = if limb_idx + 1 < 4 {
-            match n[limb_idx + 1].checked_shl(64 - bit_off) {
-                Some(v) => v,
-                None => 0,
-            }
-        } else {
-            0
-        };
-        lo | hi
+fn cmp_u256(a: [u64; 4], b: [u64; 4]) -> i32 {
+    let mut i = 4;
+    while i > 0 {
+        i -= 1;
+        if a[i] != b[i] {
+            return if a[i] < b[i] { -1 } else { 1 };
+        }
     }
+    0
 }
 
 /// `round(sqrt(a² + b²))` with the scalar fast paths. `N` is the storage limb
@@ -481,14 +465,17 @@ fn finish<const N: usize>(q: u128, diff_nonzero: bool, halfway_round_up: bool, m
         RoundingMode::Ceiling => diff_nonzero,
     };
     // q < 2^128 and the bump is at most +1, so the rounded value is <= 2^128.
-    let result = q + (bump as u128);
+    // When q == u128::MAX (= 2^128-1) and bump, the sum is exactly 2^128, which
+    // does NOT fit a u128 -- use `overflowing_add` so the bit-128 carry lands in
+    // `top_overflow` instead of wrapping `result` to 0 (a silent wrong answer).
+    let (result, carried) = q.overflowing_add(bump as u128);
     let hi = (result >> 64) as u64;
     let lo = result as u64;
     // Fit check: must be < 2^(64N-1) (signed range). For N == 1 the whole
     // value must be < 2^63; for N == 2 it must be < 2^127; for N >= 3 a
     // 128-bit (here <= 2^128) value always fits, BUT result can reach 2^128
     // exactly (q = 2^128-1, bump) -- that needs bit 128, i.e. a third limb.
-    let top_overflow = (result >> 64) >> 64; // bit 128 (1 iff result == 2^128)
+    let top_overflow = carried as u128; // bit 128 (1 iff the sum == 2^128)
     match N {
         1 => {
             if hi != 0 || (lo >> 63) != 0 {
@@ -524,7 +511,7 @@ fn finish<const N: usize>(q: u128, diff_nonzero: bool, halfway_round_up: bool, m
 
 #[cfg(test)]
 mod tests {
-    use super::{hypot_u128_fast, isqrt_u256, sq_u256};
+    use super::{cmp_u256, hypot_u128_fast, isqrt_u256, sq_u256};
     use crate::int::algos::hypot::hypot_pythagoras::hypot_pythagoras;
     use crate::int::types::Int;
     use crate::support::rounding::RoundingMode;
@@ -597,6 +584,161 @@ mod tests {
             if !borrow {
                 assert_eq!(isqrt_u256(rsq_minus), r - 1, "r²-1, r={r}");
             }
+        }
+    }
+
+    /// Reference floor-sqrt of a `u256` (`[u64; 4]`), computed bit-by-bit and
+    /// completely independently of the production Newton path: build the root
+    /// one bit at a time from the top, accepting a trial bit iff its square
+    /// does not exceed `n`. O(256·squaring) but exact -- the test oracle.
+    fn isqrt_u256_ref(n: [u64; 4]) -> u128 {
+        // n < 2^256 so the floor root is < 2^128.
+        let mut root: u128 = 0;
+        let mut bit = 127i32;
+        while bit >= 0 {
+            let trial = root | (1u128 << bit);
+            // accept iff trial² <= n.
+            if cmp_u256(sq_u256(trial), n) <= 0 {
+                root = trial;
+            }
+            bit -= 1;
+        }
+        root
+    }
+
+    /// TARGETED ADVERSARIAL over-estimate test. Uniform-random inputs cannot
+    /// reach the load-bearing failure mode of the seed scaling -- a perfect-
+    /// square top window paired with a large shift and maximal low bits (density
+    /// ~2^-32). Attack it directly: for shifts across the real u256-arm range
+    /// (`bits >= ~129`, so `s` from 64 to 191, BOTH parities) and perfect-square
+    /// tops `top = k²` (incl. the boundary `k = 2^31`, `k = 2^32-1`, and random
+    /// `k` in `[2^31, 2^32)`), build `n = top·2^s + (2^s - 1)` (maximal low bits)
+    /// and assert (a) the library seed is a TRUE over-estimate (`seed² >= n`) and
+    /// (b) `isqrt_u256(n)` equals the independent bit-by-bit reference floor.
+    #[test]
+    fn isqrt_u256_adversarial_perfect_square_tops() {
+        // Recompute the production seed exactly as `isqrt_u256` does, so the
+        // over-estimate assertion exercises the same library call/buffer.
+        fn seed_of(n: [u64; 4], bits: u32) -> u128 {
+            let mut out = [0u64; 3];
+            crate::algo_x_support::seed::sqrt_seed(&n, bits, &mut out);
+            if out[2] != 0 {
+                u128::MAX
+            } else {
+                (out[0] as u128) | ((out[1] as u128) << 64)
+            }
+        }
+        fn bit_len_u256(n: [u64; 4]) -> u32 {
+            if n[3] != 0 {
+                192 + (64 - n[3].leading_zeros())
+            } else if n[2] != 0 {
+                128 + (64 - n[2].leading_zeros())
+            } else if n[1] != 0 {
+                64 + (64 - n[1].leading_zeros())
+            } else {
+                64 - n[0].leading_zeros()
+            }
+        }
+
+        let mut s = 0x5EED_A11A_C0DE_u64;
+        // perfect-square roots k (so top = k² is an exact square): the two
+        // boundary values + a spread of random k in [2^31, 2^32).
+        let mut ks: Vec<u64> = vec![1u64 << 31, (1u64 << 32) - 1];
+        for _ in 0..32 {
+            let k = (mix(&mut s) % (1u64 << 31)) + (1u64 << 31); // [2^31, 2^32)
+            ks.push(k);
+        }
+        // also a few small perfect-square tops near the top-window minimum.
+        ks.extend_from_slice(&[(1u64 << 31) + 1, (1u64 << 31) + 7, (1u64 << 32) - 2]);
+
+        for &k in &ks {
+            let top = (k as u128) * (k as u128); // top = k², a perfect square < 2^64
+            for shift in 64u32..=191 {
+                // n = top·2^shift + (2^shift - 1): maximal low bits.
+                // top < 2^64, shift <= 191 -> top·2^shift < 2^255, fits u256.
+                let mut n = [0u64; 4];
+                // place top << shift
+                let limb = (shift / 64) as usize;
+                let off = shift % 64;
+                let lo = (top << off) as u128; // low 128 bits at limb..limb+2
+                let hi = if off == 0 { 0u128 } else { top >> (128 - off) };
+                let pieces = [lo as u64, (lo >> 64) as u64, hi as u64];
+                for (idx, &pc) in pieces.iter().enumerate() {
+                    if limb + idx < 4 {
+                        n[limb + idx] = pc;
+                    }
+                }
+                // OR in (2^shift - 1): all bits below `shift` set.
+                let full_limbs = (shift / 64) as usize;
+                for l in n.iter_mut().take(full_limbs) {
+                    *l = u64::MAX;
+                }
+                if off != 0 && full_limbs < 4 {
+                    n[full_limbs] |= (1u64 << off) - 1;
+                }
+
+                let bits = bit_len_u256(n);
+                // (a) the seed must be a genuine over-estimate: seed² >= n.
+                let seed = seed_of(n, bits);
+                assert!(
+                    cmp_u256(sq_u256(seed), n) >= 0,
+                    "seed under-estimate: k={k} shift={shift} seed={seed} n={n:?}"
+                );
+                // (b) isqrt matches the independent bit-by-bit reference floor.
+                let got = isqrt_u256(n);
+                let want = isqrt_u256_ref(n);
+                assert_eq!(got, want, "floor mismatch: k={k} shift={shift} n={n:?}");
+            }
+        }
+    }
+
+    /// SATURATION-ZONE regression: when the library over-estimate touches
+    /// `2^128` the seed is capped to `u128::MAX = 2^128-1`, and for `n` just
+    /// above `(2^128-1)²` the true floor IS `2^128-1` -- so the capped seed is
+    /// correct yet `seed² < n`. The over-estimate `debug_assert` must admit this
+    /// (it asserts `x == u128::MAX || x² >= n`); a naive `x² >= n` would PANIC
+    /// here in debug even though the result is right. This case is unreachable
+    /// from uniform-random inputs, so it gets a direct attack. Asserts no debug
+    /// panic and that `isqrt_u256` matches the bit-by-bit reference floor;
+    /// cross-checks the full `hypot_u128_fast::<3>` against `hypot_pythagoras`.
+    #[test]
+    fn isqrt_u256_saturation_zone_floor_2pow128_minus_1() {
+        let max = u128::MAX; // 2^128 - 1, the largest u128 floor root
+        let maxsq = sq_u256(max); // (2^128-1)²
+        // n = (2^128-1)² + d, d small: floor(sqrt(n)) is still 2^128-1 for all
+        // d in [0, 2·(2^128-1)] (since (2^128-1)² <= n < 2^256 = (2^128)²).
+        for d in [0u128, 1, 2, 3, 7, 1000, max] {
+            let (n, carry) = super::add_u256(maxsq, [d as u64, (d >> 64) as u64, 0, 0]);
+            assert!(!carry, "n must stay < 2^256 (d={d})");
+            // (a) no debug panic on the capped seed; (b) exact floor.
+            let got = isqrt_u256(n);
+            let want = isqrt_u256_ref(n);
+            assert_eq!(want, max, "reference floor must be 2^128-1 (d={d})");
+            assert_eq!(got, want, "isqrt_u256 saturation-zone floor (d={d}) n={n:?}");
+        }
+        // A few more values near 2^256 generally (top bits set, large floor).
+        let mut s = 0xCAFE_5A7Eu64;
+        for _ in 0..500 {
+            // n near 2^256: set the top limb high, fill the rest randomly.
+            let n = [mix(&mut s), mix(&mut s), mix(&mut s), mix(&mut s) | (1u64 << 63)];
+            assert_eq!(isqrt_u256(n), isqrt_u256_ref(n), "near-2^256 floor n={n:?}");
+        }
+
+        // Full-kernel cross-check on the reachable N>=3 saturation input:
+        // hypot(2^128-1, 1) -> u256 arm, n = (2^128-1)² + 1, floor = 2^128-1.
+        let big = {
+            let mut l = [0u64; 3];
+            l[0] = u64::MAX;
+            l[1] = u64::MAX; // 2^128 - 1
+            Int::<3>::from_limbs(l)
+        };
+        let one = Int::<3>::from_i64(1);
+        for mode in ALL_MODES {
+            assert_eq!(
+                hypot_u128_fast::<3>(big, one, mode),
+                hypot_pythagoras::<3>(big, one, mode),
+                "hypot saturation-zone mismatch mode={mode:?}"
+            );
         }
     }
 
