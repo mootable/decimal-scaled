@@ -735,6 +735,12 @@ path = "benches/micro/prec_fix_impact.rs"
 harness = false
 required-features = ["wide", "x-wide", "macros"]
 
+[[bench]]
+name = "div_recover_ab"
+path = "benches/micro/div_recover_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "macros", "bench-alt"]
+
 [lints.rust]
 unused_variables = "allow"
 dead_code = "allow"

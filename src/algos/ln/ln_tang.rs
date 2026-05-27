@@ -106,12 +106,12 @@ fn ln_value<C: WideTrigCore, const CAP: u128>(v_w: C::W, w: u32) -> C::W {
     let t = C::div_cached(m_w - f_i, m_w + f_i, pow10_w);
 
     // Artanh series: 2 · (t + t³/3 + t⁵/5 + ...).
-    let t2 = C::mul_cached(t, t, pow10_w);
+    let t2 = C::mul(t, t, w);
     let mut sum = t;
     let mut term = t;
     let mut j: u128 = 1;
     loop {
-        term = C::mul_cached(term, t2, pow10_w);
+        term = C::mul(term, t2, w);
         let contrib = term / C::lit(2 * j + 1);
         if contrib == C::zero() {
             break;

@@ -153,7 +153,7 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
         x
     } else {
         let numer = x - cj_w;
-        let denom = one_w + core::mul_cached(cj_w, x, pow10_w);
+        let denom = one_w + core::mul(cj_w, x, w);
         core::div_cached(numer, denom, pow10_w)
     };
 
@@ -163,15 +163,15 @@ pub(crate) fn atan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> 
     // For M = 512, |y| ≤ 1/(2M) ≈ 9.8·10⁻⁴, so |y²| ≤ ~10⁻⁶. Each
     // pair of terms shrinks by |y|² / (2k+1), so the loop exits on a
     // zero term in ~15 iterations at w ≤ 87. Mirrors
-    // [`core::atan_taylor`] but with `mul_cached` to avoid the
-    // per-iter `pow10(w)` recompute the macro path used to incur.
+    // [`core::atan_taylor`]; the `÷10^w` reduce goes through the fast
+    // MG `core::mul` (`round_div_pow10`).
     let atan_y = {
-        let y2 = core::mul_cached(y, y, pow10_w);
+        let y2 = core::mul(y, y, w);
         let mut sum = y;
         let mut term = y;
         let mut k: u128 = 1;
         loop {
-            term = core::mul_cached(term, y2, pow10_w);
+            term = core::mul(term, y2, w);
             let contrib = term / core::lit(2 * k + 1);
             if contrib == core::zero() {
                 break;

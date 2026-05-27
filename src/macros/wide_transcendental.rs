@@ -458,22 +458,6 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn mul(a: W, b: W, w: u32) -> W {
                 round_div_pow10(a * b, w)
             }
-            /// Loop-friendly variant of [`mul`] that takes a
-            /// precomputed `10^w` divisor. Use inside Taylor /
-            /// AGM / Newton loops where `w` is constant across
-            /// every iteration — saves one `lit(10).pow(w)`
-            /// recomputation per call (which for D307<150> at w=180
-            /// is itself a full Int<64> power of ~50 µs).
-            ///
-            /// `mul_cached` keeps the legacy generic-divide path
-            /// because the caller has already paid for `pow10_w` and
-            /// we don't know `w` at this call boundary. For the MG
-            /// fast path use [`mul`] (or [`mul_w_pow10`] when both
-            /// inputs are needed).
-            #[inline]
-            pub(crate) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
-                round_div(a * b, pow10_w)
-            }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
@@ -1359,12 +1343,12 @@ macro_rules! decl_wide_transcendental {
                 }
 
                 let t = div_cached(m_w - one_w, m_w + one_w, pow10_w);
-                let t2 = mul_cached(t, t, pow10_w);
+                let t2 = mul(t, t, w);
                 let mut sum = t;
                 let mut term = t;
                 let mut j: u128 = 1;
                 loop {
-                    term = mul_cached(term, t2, pow10_w);
+                    term = mul(term, t2, w);
                     let contrib = term / lit(2 * j + 1);
                     if contrib == zero() {
                         break;
@@ -1407,12 +1391,12 @@ macro_rules! decl_wide_transcendental {
                 let two_w = one_w + one_w;
                 let pow10_w = one_w;
                 let u = div_cached(t, two_w + t, pow10_w);
-                let u2 = mul_cached(u, u, pow10_w);
+                let u2 = mul(u, u, w);
                 let mut sum = u;
                 let mut term = u;
                 let mut j: u128 = 1;
                 loop {
-                    term = mul_cached(term, u2, pow10_w);
+                    term = mul(term, u2, w);
                     let contrib = term / lit(2 * j + 1);
                     if contrib == zero() {
                         break;
@@ -1440,12 +1424,11 @@ macro_rules! decl_wide_transcendental {
             /// Reference: J.-M. Muller, *Elementary Functions* 3rd ed.
             /// (2016), 4.4; Higham 1.14.1.
             pub(crate) fn expm1_fixed(s: W, w: u32) -> W {
-                let pow10_w = one(w);
                 let mut sum = s;
                 let mut term = s;
                 let mut iter: u128 = 2;
                 loop {
-                    term = mul_cached(term, s, pow10_w) / lit(iter);
+                    term = mul(term, s, w) / lit(iter);
                     if term == zero() {
                         break;
                     }
@@ -1545,10 +1528,9 @@ macro_rules! decl_wide_transcendental {
                 let mut a = one_w;
                 let mut b = y_w;
                 let iter_cap = 80u32;
-                let pow10_w_agm = pow10_cached(w);
                 for _ in 0..iter_cap {
                     let next_a = (a + b) >> 1;
-                    let next_b = sqrt_fixed(mul_cached(a, b, pow10_w_agm), w);
+                    let next_b = sqrt_fixed(mul(a, b, w), w);
                     let d = if next_a >= next_b {
                         next_a - next_b
                     } else {
@@ -2006,13 +1988,12 @@ macro_rules! decl_wide_transcendental {
 
             /// Taylor series for `atan` on `|x| < 1`, at scale `w`.
             pub(crate) fn atan_taylor(x: W, w: u32) -> W {
-                let pow10_w = pow10_cached(w);
-                let x2 = mul_cached(x, x, pow10_w);
+                let x2 = mul(x, x, w);
                 let mut sum = x;
                 let mut term = x;
                 let mut k: u128 = 1;
                 loop {
-                    term = mul_cached(term, x2, pow10_w);
+                    term = mul(term, x2, w);
                     let contrib = term / lit(2 * k + 1);
                     if contrib == zero() {
                         break;
@@ -2176,13 +2157,12 @@ macro_rules! decl_wide_transcendental {
             ///
             /// `sin(r) = r − r³/3! + r⁵/5! − …`
             fn sin_taylor(r: W, w: u32) -> W {
-                let pow10_w = pow10_cached(w);
-                let r2 = mul_cached(r, r, pow10_w);
+                let r2 = mul(r, r, w);
                 let mut sum = r;
                 let mut term = r;
                 let mut k: u128 = 1;
                 loop {
-                    term = mul_cached(term, r2, pow10_w) / lit((2 * k) * (2 * k + 1));
+                    term = mul(term, r2, w) / lit((2 * k) * (2 * k + 1));
                     if term == zero() {
                         break;
                     }
@@ -2208,14 +2188,13 @@ macro_rules! decl_wide_transcendental {
             /// corrections — used as the "upper-half" branch of
             /// [`sin_fixed`] when the reduced argument exceeds π/4.
             fn cos_taylor(r: W, w: u32) -> W {
-                let pow10_w = pow10_cached(w);
-                let r2 = mul_cached(r, r, pow10_w);
+                let r2 = mul(r, r, w);
                 let one_w = one(w);
                 let mut sum = one_w;
                 let mut term = one_w;
                 let mut k: u128 = 1;
                 loop {
-                    term = mul_cached(term, r2, pow10_w) / lit((2 * k - 1) * (2 * k));
+                    term = mul(term, r2, w) / lit((2 * k - 1) * (2 * k));
                     if term == zero() {
                         break;
                     }
@@ -2352,7 +2331,7 @@ macro_rules! decl_wide_transcendental {
                 };
                 let pow10_w = pow10_cached(w);
                 for _ in 0..halvings {
-                    let x2 = mul_cached(x, x, pow10_w);
+                    let x2 = mul(x, x, w);
                     let denom = one_w + sqrt_fixed(one_w + x2, w);
                     x = div_cached(x, denom, pow10_w);
                 }
@@ -2661,10 +2640,6 @@ macro_rules! decl_wide_transcendental {
                 #[inline]
                 fn ln2(w: u32) -> W {
                     ln2(w)
-                }
-                #[inline]
-                fn mul_cached(a: W, b: W, pow10_w: W) -> W {
-                    mul_cached(a, b, pow10_w)
                 }
                 #[inline]
                 fn div_cached(a: W, b: W, pow10_w: W) -> W {

@@ -114,7 +114,7 @@ pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA
     let mut term = delta;
     let mut n: u128 = 2;
     loop {
-        term = C::mul_cached(term, delta, pow10_w) / C::lit(n);
+        term = C::mul(term, delta, w_ext) / C::lit(n);
         if term == C::zero() {
             break;
         }
@@ -126,7 +126,7 @@ pub(crate) fn tang_exp_fixed<C: WideTrigCore, const M: u32, const INTERNAL_EXTRA
     }
 
     let exp_cj = C::exp_table_entry(w_ext, j_idx as usize, M);
-    let exp_s = C::mul_cached(exp_cj, sum, pow10_w);
+    let exp_s = C::mul(exp_cj, sum, w_ext);
 
     let k_total = k + k_adj;
     let scaled_at_w_ext = if k_total >= 0 {

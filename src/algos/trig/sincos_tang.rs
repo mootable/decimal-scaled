@@ -106,7 +106,7 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
     let sin_cj = if j_signed < 0 { -sin_cj_abs } else { sin_cj_abs };
 
     // Stage 3: small-residual Taylor for sin(δ) and cos(δ).
-    let delta2 = C::mul_cached(delta, delta, pow10_w);
+    let delta2 = C::mul(delta, delta, w);
 
     // sin(δ) = δ − δ³/3! + δ⁵/5! − …
     let sin_delta = {
@@ -114,7 +114,7 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
         let mut term = delta;
         let mut k_term: u128 = 1;
         loop {
-            term = C::mul_cached(term, delta2, pow10_w) / C::lit((2 * k_term) * (2 * k_term + 1));
+            term = C::mul(term, delta2, w) / C::lit((2 * k_term) * (2 * k_term + 1));
             if term == C::zero() {
                 break;
             }
@@ -137,7 +137,7 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
         let mut term = one_w;
         let mut k_term: u128 = 1;
         loop {
-            term = C::mul_cached(term, delta2, pow10_w) / C::lit((2 * k_term - 1) * (2 * k_term));
+            term = C::mul(term, delta2, w) / C::lit((2 * k_term - 1) * (2 * k_term));
             if term == C::zero() {
                 break;
             }
@@ -155,10 +155,8 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
     };
 
     // Stage 4: addition formula to lift (sin δ, cos δ) onto r.
-    let sin_r =
-        C::mul_cached(sin_cj, cos_delta, pow10_w) + C::mul_cached(cos_cj, sin_delta, pow10_w);
-    let cos_r =
-        C::mul_cached(cos_cj, cos_delta, pow10_w) - C::mul_cached(sin_cj, sin_delta, pow10_w);
+    let sin_r = C::mul(sin_cj, cos_delta, w) + C::mul(cos_cj, sin_delta, w);
+    let cos_r = C::mul(cos_cj, cos_delta, w) - C::mul(sin_cj, sin_delta, w);
 
     // Stage 5: quadrant permutation. `k mod 4` selects the signed
     // permutation of (sin(r), cos(r)) that becomes (sin(x), cos(x)).

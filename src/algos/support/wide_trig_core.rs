@@ -188,9 +188,6 @@ pub(crate) trait WideTrigCore {
     fn lit(n: u128) -> Self::W;
     /// `ln 2` at working scale `w`, cached.
     fn ln2(w: u32) -> Self::W;
-    /// `(a · b) / 10^w`, rounded half-to-even, with a precomputed
-    /// `10^w` divisor (loop-friendly).
-    fn mul_cached(a: Self::W, b: Self::W, pow10_w: Self::W) -> Self::W;
     /// `(a · 10^w) / b`, rounded half-to-even, with a precomputed
     /// `10^w` numerator factor (loop-friendly).
     fn div_cached(a: Self::W, b: Self::W, pow10_w: Self::W) -> Self::W;

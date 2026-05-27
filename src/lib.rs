@@ -1114,6 +1114,74 @@ pub mod __bench_internals {
         crate::int::algos::mul::mul_schoolbook::mul_schoolbook_into::<L, LP1>(a, n, out)
     }
 
+    // ── wide-transcendental `÷10^w` round-divide A/B seam ────────────────
+    //
+    // The wide-transcendental kernels reduce a working-scale product by
+    // exactly `10^w`. Two strategies do this bit-identically (audited in
+    // `algos::support::mg_divide::tests::round_div_*`):
+    //   - SLOW: generic Knuth `div_rem` by `10^w` + half-to-even (the
+    //     macro-local `round_div` the band used before the recovery);
+    //   - FAST: the MG / Newton power-of-10 kernel `round_div_pow10`.
+    // Exposed generic over the work-integer `W` so ONE pair covers every
+    // wide work width the `div_recover_ab` sweep walks.
+
+    /// SLOW path: half-to-even `round(n / 10^w)` via the generic Knuth
+    /// `div_rem` reference (mirrors the macro-local `round_div` with a
+    /// `10^w` divisor — the pre-recovery transcendental-band reduce).
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn round_div_pow10_slow<W: crate::int::types::traits::BigInt>(n: W, w: u32) -> W {
+        let d: W = W::TEN.pow(w);
+        let zero = W::ZERO;
+        let one = W::ONE;
+        let (q, r) = n.div_rem(d);
+        if r == zero {
+            return q;
+        }
+        let ar = if r < zero { zero - r } else { r };
+        let ad = if d < zero { zero - d } else { d };
+        let comp = ad - ar;
+        let cmp_r = ar.cmp(&comp);
+        let q_is_odd = q.bit(0);
+        let result_positive = (n < zero) == (d < zero);
+        if crate::support::rounding::should_bump(
+            crate::support::rounding::RoundingMode::HalfToEven,
+            cmp_r,
+            q_is_odd,
+            result_positive,
+        ) {
+            if result_positive { q + one } else { q - one }
+        } else {
+            q
+        }
+    }
+
+    /// FAST path: half-to-even `round(n / 10^w)` via the production
+    /// power-of-10 divide kernel (the macro-local `round_div_pow10`):
+    /// single-chunk MG for `w <= 38`, MG / Newton chain dispatch above.
+    #[inline(never)]
+    #[allow(private_bounds)]
+    pub fn round_div_pow10_fast<W>(n: W, w: u32) -> W
+    where
+        W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
+    {
+        if w == 0 {
+            return n;
+        }
+        if w <= 38 {
+            return crate::algos::support::mg_divide::div_wide_pow10::<W>(
+                n,
+                w,
+                crate::support::rounding::RoundingMode::HalfToEven,
+            );
+        }
+        crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+            n,
+            w,
+            crate::support::rounding::RoundingMode::HalfToEven,
+        )
+    }
+
     // Newton-reciprocal divide research kernel — wrapped via concrete
     // shims so the bench harness gets head-to-head comparisons against
     // [`crate::algos::support::mg_divide::div_wide_pow10_chain`] without
