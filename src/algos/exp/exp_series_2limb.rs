@@ -44,10 +44,26 @@ fn exp_result_int_digits(raw: i128, scale: u32) -> u32 {
     if raw <= 0 {
         return 1;
     }
-    let one_s = 10i128.pow(scale);
-    let num = (raw as u128) * 434_295;
-    let den = (one_s as u128) * 1_000_000;
-    (num.div_ceil(den) as u32) + 1
+    // `int_digits(e^x) = ceil(x · log10 e) + 1`, `x = raw / 10^scale`,
+    // `log10 e ≈ 434295 / 1_000_000`. Computed as
+    // `ceil(raw · 434295 / (10^scale · 1_000_000)) + 1`, all in u128.
+    //
+    // Both `raw · 434295` and `10^scale · 1_000_000` can exceed `u128::MAX`
+    // for the largest in-range `raw` / `scale` (e.g. `raw ≈ 1.7e38`,
+    // `scale = 38`). Saturate the numerator and form the denominator with
+    // checked arithmetic: any cell whose numerator saturates, or whose
+    // denominator overflows `10^scale·10^6`, describes an `e^x` whose
+    // integer-digit count is astronomically past the `FAST_MAX_RESULT_DIGITS`
+    // wall (and whose `i128` storage overflows regardless), so report a
+    // count of `u32::MAX` — "does not fit fast". This is correct in release
+    // (a wrapped product would UNDER-state the count and wrongly keep the
+    // cell fast) and panic-free in debug.
+    let num = (raw as u128).saturating_mul(434_295);
+    let den = match (10u128).checked_pow(scale).and_then(|p| p.checked_mul(1_000_000)) {
+        Some(d) => d,
+        None => return u32::MAX,
+    };
+    (num.div_ceil(den).min(u32::MAX as u128 - 1) as u32) + 1
 }
 
 /// Largest `e^x` integer-digit count the fast 256-bit `Fixed` path rounds
