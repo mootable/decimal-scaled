@@ -116,10 +116,14 @@ jobs:
           restore-keys: |
             cargo-ci-golden-${{ runner.os }}-
 
+      - name: Install system libs (fontconfig for the plotters dev-dep)
+        # `cargo test` compiles ALL dev-dependencies regardless of `--test`
+        # scoping, and plotters (a dev-dep) pulls yeslogic-fontconfig-sys —
+        # so this job needs fontconfig just like `tests (gate)`.
+        run: sudo apt-get update && sudo apt-get install -y libfontconfig1-dev pkg-config
+
       - name: mpmath-oracle golden suite (release, golden feature)
-        # `--test ulp_strict_golden` builds only the lib + that one test
-        # target (no examples/benches), so no fontconfig is needed. The
-        # `golden` feature unlocks the target (it is required-feature gated).
+        # The `golden` feature unlocks the required-feature-gated target.
         run: cargo test --release --features wide,x-wide,xx-wide,macros,golden --test ulp_strict_golden
 
   # GATE: the no_std + alloc build. The crate is `#![no_std]` under
