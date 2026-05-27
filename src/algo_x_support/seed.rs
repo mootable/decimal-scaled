@@ -27,6 +27,60 @@
 //!
 //! All leaves are width-agnostic — a `&[u64]` / `u32` interface — so the
 //! decimal-side consumers can reuse them unchanged.
+//!
+//! # Over-estimate guarantee (the load-bearing invariant — PROOF)
+//!
+//! Every `sqrt_seed*` leaf returns a value `≥ √n` (the *real* square root,
+//! hence `≥ floor(√n)`). This is what makes the caller's downward-monotone
+//! Newton recurrence `x ← (x + n/x)/2` valid: from an over-estimate it
+//! decreases monotonically and lands on `floor(√n)` or `floor(√n)+1`, which a
+//! single final `if x > n/x { x -= 1 }` correction pins exactly. From an
+//! UNDER-estimate the recurrence steps *up* on the first iteration, the
+//! "stop when it stops decreasing" guard fires immediately, and the routine
+//! returns the under-estimate — a WRONG floor. So the over-estimate property
+//! is correctness-critical, not a mere performance hint.
+//!
+//! **Decomposition.** For `n` with bit-length `bits`, write
+//! `shift = bits − min(64, bits)` and `top = ⌊n / 2^shift⌋` — the top `≤64`
+//! significant bits (leading 1 at bit 63 when `bits ≥ 64`). Then
+//! `n = top·2^shift + r` with `0 ≤ r < 2^shift`. The `std` body forms a strict
+//! integer over-estimate `seed_int` of `√top` (of `√(2·top)` when `shift` is
+//! odd) via `⌊f64::sqrt(top)⌋ + [frac≠0] + 1` — note the **always-`+1`** — and
+//! returns `seed_int · 2^h` with `h = ⌊shift/2⌋`.
+//!
+//! **Even `shift = 2h`.** `√n ≤ √((top+1)·2^{2h}) = √(top+1)·2^h`. The
+//! always-`+1` gives `seed_int ≥ √top + 1`, and the elementary inequality
+//! `(√t + 1)² = t + 2√t + 1 ≥ t + 1` yields `√top + 1 ≥ √(top+1)`. Hence
+//! `seed = seed_int·2^h ≥ √(top+1)·2^h ≥ √n`. ∎
+//! The always-`+1` is **essential**: it closes the perfect-square-`top` case
+//! (`⌊√top⌋ = √top` exactly), where the low bits `r` push `√n` strictly above
+//! `√top·2^h`. Without it the seed under-estimates there — a failure of
+//! density `2^{-32}` that uniform-random tests practically never hit.
+//!
+//! **Odd `shift = 2h+1`.** `√n ≤ √(2(top+1))·2^h`. The body first over-estimates
+//! `√2·√top = √(2·top)`, so `seed_int ≥ √(2·top) + 1 ≥ √(2(top+1))` by the same
+//! lemma; hence `seed ≥ √n`. ∎
+//!
+//! **f64 rounding.** `top ≤ 2^64` rounds to the nearest f64 (`< 2^11`
+//! absolute for the largest `top`) and `f64::sqrt` is correctly rounded, so the
+//! deficit in `⌊f64::sqrt(top)⌋` is `< 1` — dominated by the always-`+1`. The
+//! `core::f64::consts::SQRT_2` constant's `~2^{-52}` relative error is `≪ 1`
+//! absolute at these magnitudes, likewise covered.
+//!
+//! **no_std / tiny-`n` path.** Returns `2^⌈bits/2⌉`; since `n < 2^bits`,
+//! `√n < 2^{bits/2} ≤ 2^⌈bits/2⌉`. ∎
+//!
+//! **Consequence for wider-than-u128 consumers.** The proof holds for
+//! ARBITRARY `bits` via the `top`/`shift` decomposition — it is not special to
+//! `n` that fit a `u128`. So the `&[u64]` slice leaf [`sqrt_seed`] is a valid
+//! over-estimate seed for a radicand of ANY width: a width-`N` isqrt kernel
+//! (e.g. the `u256` hypot root) MUST seed through this leaf rather than
+//! re-deriving the `· 2^h` scaling by hand. A hand-rolled re-derivation that
+//! drops the always-`+1` silently reintroduces the perfect-square-`top` bug
+//! that random tests cannot detect — reuse the proven leaf.
+//!
+//! Hasselgren's trick / seed strategy — Crandall & Pomerance 2005, "Prime
+//! Numbers: A Computational Perspective" §9.2.1.
 
 /// Extract the top (most significant) 64 significant bits of the
 /// little-endian `u64` magnitude `n`, given its bit length `bits` (the seed
