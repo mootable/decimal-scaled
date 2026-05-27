@@ -24,12 +24,17 @@
 //!                           to_degrees, to_radians
 //!   * binary / other:      powf, log, hypot
 //!
-//! `hypot`'s default public method (`x.hypot(y)`) is only exposed on the
-//! `D38` tier in BOTH versions under `strict` (the wider tiers expose
-//! only `hypot_strict`/`hypot_strict_with`, not the plain dispatcher), so
-//! it is benched at `D38` alone — the one width where the default method
-//! pairs cleanly branch-vs-prod. Every other function is benched across
-//! the full width set.
+//! `hypot` is benched across the full width set via its
+//! `hypot_strict` method (the integer-only correctly-rounded form). The
+//! plain `x.hypot(y)` default method is only exposed on the `D38` tier in
+//! BOTH versions under `strict` (the wider tiers expose only
+//! `hypot_strict`/`hypot_strict_with`, not the plain dispatcher), and at
+//! `D38` under `strict` the plain `hypot` delegates straight to
+//! `hypot_strict` (same kernel, same numbers) — so benching `hypot_strict`
+//! at every width pairs cleanly branch-vs-prod everywhere AND covers the
+//! D38 cell with the identical kernel the plain method would route to.
+//! This closes the prior coverage hole where `hypot` was benched at `D38`
+//! alone, leaving a regression at any wider width invisible.
 //!
 //! Each function is exercised through its DEFAULT public method (e.g.
 //! `x.sqrt()`, `x.powf(y)`); under the harness's `strict` feature these
@@ -91,6 +96,10 @@ macro_rules! funcs {
         let b: $ty = $crate::op_str!($scale, "3.5", "3").parse().unwrap();
         let e: $ty = $crate::op_str!($scale, "1.5", "1").parse().unwrap(); // powf exponent
         let ten: $ty = $crate::op_str!($scale, "7.0", "7").parse().unwrap(); // log base
+        // `hypot` operands: the 3-4-5 Pythagorean triple — both legs and the
+        // result (5) stay single-integer-digit (|·| < 10), surviving the S-1 cell.
+        let c3: $ty = $crate::op_str!($scale, "3.0", "3").parse().unwrap();
+        let d4: $ty = $crate::op_str!($scale, "4.0", "4").parse().unwrap();
 
         // ── arithmetic ──
         $crate::bench_one!($c, "add", $w, $scale, $side, |bn| {
@@ -143,21 +152,12 @@ macro_rules! funcs {
         $crate::bench_one!($c, "log", $w, $scale, $side, |bn| {
             bn.iter(|| black_box(x).log(black_box(ten)))
         });
-        // `hypot` is benched separately (D38-only) — see `hypot_d38!`.
-    }};
-}
-
-/// `hypot`'s default public method (`x.hypot(y)`) is `D38`-only in both
-/// versions under `strict`. Bench the Pythagorean triple `hypot(3, 4)`
-/// for one `D38<SCALE>`-shaped type under the given `$side` label.
-#[macro_export]
-macro_rules! hypot_d38 {
-    ($c:expr, $w:literal, $scale:literal, $side:literal, $ty:ty) => {{
-        use ::std::hint::black_box;
-        let c3: $ty = $crate::op_str!($scale, "3.0", "3").parse().unwrap();
-        let d4: $ty = $crate::op_str!($scale, "4.0", "4").parse().unwrap();
+        // `hypot` via `hypot_strict` (the integer-only correctly-rounded form,
+        // the only `hypot` method exposed at EVERY width in both versions; at
+        // D38 the plain `hypot` delegates straight to it). Benched at every
+        // width × scale, closing the prior D38-only coverage hole.
         $crate::bench_one!($c, "hypot", $w, $scale, $side, |bn| {
-            bn.iter(|| black_box(c3).hypot(black_box(d4)))
+            bn.iter(|| black_box(c3).hypot_strict(black_box(d4)))
         });
     }};
 }

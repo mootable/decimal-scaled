@@ -1,6 +1,12 @@
 #!/usr/bin/env python3
-"""Collate the branch-vs-prod Criterion results into a worst-first regression
-table across the full (op x width x scale) surface.
+"""Collate the branch-vs-prod Criterion results into a worst-first FOCUS table
+across the full (op x width x scale) surface.
+
+The table is a FOCUS FILTER, not a bucketing scheme: it surfaces, worst-first,
+every cell that is a real, measurable regression vs prod (Δ% > +1 AND Δ > 10 ns)
+— those are the cells to work. There are no MUST-FIX / defer / exempt states.
+Cells outside the filter are simply not in the focus (at-or-near prod, or below
+the comparator's ~10 ns resolution); they are still listed as data, unlabelled.
 
 Walks `target/criterion` (which the aggregate job populates by merging every
 per-(width,scale) bench cell into one tree), pairs each `branch` measurement
@@ -77,21 +83,6 @@ def fmt(ns):
     return f"{ns / 1e6:.2f} ms"
 
 
-def bucket(delta_pct: float, delta_ns: float) -> str:
-    """8.4 ship-bucket tag (see CLAUDE.md perf-campaign):
-      * >130% AND >=50ns -> MUST-FIX
-      * 101%..130%       -> defer
-      * <50ns absolute   -> exempt (noise-floor / cheap op)
-    Anything else (1%..100% with >=50ns) is an unbucketed regression."""
-    if delta_ns < 50:  # absolute floor: a sub-50ns delta is exempt regardless of %
-        return "exempt"
-    if delta_pct > 130:
-        return "MUST-FIX"
-    if 101 <= delta_pct <= 130:
-        return "defer"
-    return ""
-
-
 # Build rows: every (op,width,scale) cell that has BOTH a branch and prod median.
 rows = []
 skipped = []  # (op,width,scale) with a missing side
@@ -123,38 +114,60 @@ rows.sort(key=lambda r: r["delta_pct"], reverse=True)
 ref = os.environ.get("BENCH_REF", "branch")
 prod = os.environ.get("PROD_VERSION", "?")
 
-# Regression filter: Δ% > +1 AND Δ > 10ns. The rest are folded into a footnote.
-shown = [r for r in rows if r["delta_pct"] > 1.0 and r["delta_ns"] > 10.0]
-hidden = [r for r in rows if r not in shown]
+# FOCUS filter: the cells to work, worst-first. A cell is in focus when it is a
+# real, measurable regression vs prod — Δ% > +1 AND Δ > 10 ns. The Δ > 10 ns
+# floor is a MEASUREMENT limit: a sub-10 ns delta is below the comparator's own
+# noise (unmeasurable), NOT an exemption. Cells outside the filter are simply not
+# in the focus — they are listed plainly below as data, with no judgment label.
+focus = [r for r in rows if r["delta_pct"] > 1.0 and r["delta_ns"] > 10.0]
+rest = [r for r in rows if r not in focus]
 
 lines = [
     f"## bench-branch-compare: `{ref}` (branch) vs prod `{prod}` (latest published tag)",
     "",
-    "_Worst-first regression table across the full (op × width × scale) surface. "
+    "_Focus list across the full (op × width × scale) surface, worst-first. "
     "Positive Δ% = the branch is SLOWER than prod. "
-    "Shown: Δ% > +1 and Δ > 10 ns; the rest are summarised below._",
+    "In focus: Δ% > +1 AND Δ > 10 ns (the 10 ns floor is the bench-resolution "
+    "limit — a smaller delta is unmeasurable, not exempt). Every other cell is "
+    "listed below as data, unlabelled._",
     "",
-    "| op | width | scale | prod | branch | Δ | Δ% | × | bucket |",
-    "|---|---|---:|---:|---:|---:|---:|---:|---|",
+    "| op | width | scale | prod | branch | Δ | Δ% | × |",
+    "|---|---|---:|---:|---:|---:|---:|---:|",
 ]
-for r in shown:
+for r in focus:
     lines.append(
         f"| {r['op']} | D{r['width']} | {r['scale']} "
         f"| {fmt(r['prod'])} | {fmt(r['branch'])} | {fmt(r['delta_ns'])} "
-        f"| {r['delta_pct']:+.1f}% | {r['ratio']:.2f}× | {bucket(r['delta_pct'], r['delta_ns'])} |"
+        f"| {r['delta_pct']:+.1f}% | {r['ratio']:.2f}× |"
     )
 
-if not shown:
-    lines.append("| _(no cell regressed past the Δ% > +1 / Δ > 10 ns threshold)_ |||||||||")
+if not focus:
+    lines.append("| _(no cell in focus: none past Δ% > +1 AND Δ > 10 ns)_ ||||||||")
 
-# Footnote: improvements + below-threshold + incomplete cells.
-improved = [r for r in rows if r["delta_pct"] <= 1.0]
 lines += [
     "",
-    f"_Total paired cells: {len(rows)}. Regressions shown: {len(shown)}. "
-    f"At-or-better-than-prod (Δ% ≤ +1): {len(improved)}. "
-    f"Below-threshold regressions (folded): {len(hidden) - len(improved) if len(hidden) >= len(improved) else 0}._",
+    f"_Total paired cells: {len(rows)}. In focus: {len(focus)}. "
+    f"Not in focus (below the +1% / 10 ns focus filter — at-or-near prod, "
+    f"or below bench resolution): {len(rest)}._",
 ]
+
+# The not-in-focus cells, plainly, worst-first — data, no judgment label. These
+# are filtered out of the focus queue, not "exempt" or "deferred".
+if rest:
+    lines += [
+        "",
+        "<details><summary>Cells not in focus (data only)</summary>",
+        "",
+        "| op | width | scale | prod | branch | Δ | Δ% | × |",
+        "|---|---|---:|---:|---:|---:|---:|---:|",
+    ]
+    for r in rest:
+        lines.append(
+            f"| {r['op']} | D{r['width']} | {r['scale']} "
+            f"| {fmt(r['prod'])} | {fmt(r['branch'])} | {fmt(r['delta_ns'])} "
+            f"| {r['delta_pct']:+.1f}% | {r['ratio']:.2f}× |"
+        )
+    lines += ["", "</details>"]
 if skipped:
     lines.append(
         f"_Incomplete cells (only one side measured): {len(skipped)} — "
@@ -168,12 +181,11 @@ table_md = "\n".join(lines)
 
 def write_tsv(path: str) -> None:
     with open(path, "w", encoding="utf-8") as f:
-        f.write("op\twidth\tscale\tprod_ns\tbranch_ns\tdelta_ns\tdelta_pct\tratio\tbucket\n")
+        f.write("op\twidth\tscale\tprod_ns\tbranch_ns\tdelta_ns\tdelta_pct\tratio\n")
         for r in rows:
             f.write(
                 f"{r['op']}\tD{r['width']}\t{r['scale']}\t{r['prod']:.3f}\t{r['branch']:.3f}\t"
-                f"{r['delta_ns']:.3f}\t{r['delta_pct']:.3f}\t{r['ratio']:.4f}\t"
-                f"{bucket(r['delta_pct'], r['delta_ns'])}\n"
+                f"{r['delta_ns']:.3f}\t{r['delta_pct']:.3f}\t{r['ratio']:.4f}\n"
             )
 
 
