@@ -58,7 +58,17 @@ macro_rules! eval_typed {
             Method::Asinh => x.asinh_strict_with($mode),
             Method::Acosh => x.acosh_strict_with($mode),
             Method::Atanh => x.atanh_strict_with($mode),
-            Method::Log | Method::Atan2 | Method::Pow => {
+            // Two-argument transcendentals + arithmetic + hypot. Every
+            // one consumes the second operand from `input2`.
+            Method::Log
+            | Method::Atan2
+            | Method::Pow
+            | Method::Add
+            | Method::Sub
+            | Method::Mul
+            | Method::Div
+            | Method::Rem
+            | Method::Hypot => {
                 let raw2 = match $input.input2.as_deref().and_then(parse) {
                     Some(v) => v,
                     None => return SubjectOutput::NotApplicable,
@@ -68,12 +78,18 @@ macro_rules! eval_typed {
                     Method::Log => x.log_strict_with(d2, $mode),
                     Method::Atan2 => x.atan2_strict_with(d2, $mode),
                     Method::Pow => x.powf_strict_with(d2, $mode),
+                    // add / sub / rem are exact at a shared scale (no
+                    // rounding step), so they ignore `mode`; mul / div
+                    // round the scale-narrowing step under `mode`; hypot
+                    // rounds the sqrt under `mode`.
+                    Method::Add => x + d2,
+                    Method::Sub => x - d2,
+                    Method::Rem => x % d2,
+                    Method::Mul => x.mul_with(d2, $mode),
+                    Method::Div => x.div_with(d2, $mode),
+                    Method::Hypot => x.hypot_strict_with(d2, $mode),
                     _ => unreachable!(),
                 }
-            }
-            // Arithmetic ops have no golden oracle in this harness.
-            Method::Add | Method::Sub | Method::Mul | Method::Div => {
-                return SubjectOutput::NotApplicable;
             }
         };
         // The subject's value is its result storage integer rendered as a
@@ -113,18 +129,31 @@ impl PrecisionSubject for DecimalScaledSubject {
             // edges {0, capacity-1 = MAX_SCALE}. Each band-edge cell picks the
             // matching const-generic `D###<SCALE>` type (same storage `Int<N>`).
             Width::D18 if scale == 0 => eval_typed!(D18<0>, decimal_scaled::Int<1>, method, input, mode),
+            Width::D18 if scale == 3 => eval_typed!(D18<3>, decimal_scaled::Int<1>, method, input, mode),
             Width::D18 if scale == 17 => eval_typed!(D18<17>, decimal_scaled::Int<1>, method, input, mode),
             Width::D18 => eval_typed!(D18<9>, decimal_scaled::Int<1>, method, input, mode),
             Width::D38 if scale == 0 => eval_typed!(D38<0>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 2 => eval_typed!(D38<2>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 6 => eval_typed!(D38<6>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 9 => eval_typed!(D38<9>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 10 => eval_typed!(D38<10>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 12 => eval_typed!(D38<12>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 17 => eval_typed!(D38<17>, decimal_scaled::Int<2>, method, input, mode),
+            Width::D38 if scale == 18 => eval_typed!(D38<18>, decimal_scaled::Int<2>, method, input, mode),
             Width::D38 if scale == 37 => eval_typed!(D38<37>, decimal_scaled::Int<2>, method, input, mode),
             Width::D38 => eval_typed!(D38<19>, decimal_scaled::Int<2>, method, input, mode),
             Width::D57 if scale == 0 => eval_typed!(D57<0>, Int<3>, method, input, mode),
+            Width::D57 if scale == 20 => eval_typed!(D57<20>, Int<3>, method, input, mode),
+            Width::D57 if scale == 30 => eval_typed!(D57<30>, Int<3>, method, input, mode),
             Width::D57 if scale == 56 => eval_typed!(D57<56>, Int<3>, method, input, mode),
             Width::D57 => eval_typed!(D57<28>, Int<3>, method, input, mode),
             Width::D76 if scale == 0 => eval_typed!(D76<0>, Int<4>, method, input, mode),
+            Width::D76 if scale == 18 => eval_typed!(D76<18>, Int<4>, method, input, mode),
+            Width::D76 if scale == 40 => eval_typed!(D76<40>, Int<4>, method, input, mode),
             Width::D76 if scale == 75 => eval_typed!(D76<75>, Int<4>, method, input, mode),
             Width::D76 => eval_typed!(D76<35>, Int<4>, method, input, mode),
             Width::D115 if scale == 0 => eval_typed!(D115<0>, Int<6>, method, input, mode),
+            Width::D115 if scale == 50 => eval_typed!(D115<50>, Int<6>, method, input, mode),
             Width::D115 if scale == 114 => eval_typed!(D115<114>, Int<6>, method, input, mode),
             Width::D115 => eval_typed!(D115<57>, Int<6>, method, input, mode),
             Width::D153 if scale == 0 => eval_typed!(D153<0>, Int<8>, method, input, mode),
@@ -135,6 +164,7 @@ impl PrecisionSubject for DecimalScaledSubject {
             Width::D230 => eval_typed!(D230<115>, Int<12>, method, input, mode),
             Width::D307 if scale == 0 => eval_typed!(D307<0>, Int<16>, method, input, mode),
             Width::D307 if scale == 30 => eval_typed!(D307<30>, Int<16>, method, input, mode),
+            Width::D307 if scale == 50 => eval_typed!(D307<50>, Int<16>, method, input, mode),
             Width::D307 if scale == 70 => eval_typed!(D307<70>, Int<16>, method, input, mode),
             Width::D307 if scale == 120 => eval_typed!(D307<120>, Int<16>, method, input, mode),
             Width::D307 if scale == 306 => eval_typed!(D307<306>, Int<16>, method, input, mode),
