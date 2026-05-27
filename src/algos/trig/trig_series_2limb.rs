@@ -1221,3 +1221,121 @@ fn small_x_linear_threshold_scale(scale: u32) -> i128 {
     let thresh_exp = scale.saturating_sub(scale.div_ceil(3));
     10_i128.pow(thresh_exp)
 }
+
+// ── sinh / cosh fast-path validity wall ────────────────────────────
+// Mirror of `exp_series_2limb::fast_path_validity`: assert the narrow
+// sinh/cosh fast 256-bit `Fixed` path is bit-identical to the wider
+// `WNarrow` reference for every cell the production gate
+// (`hyper_needs_wide_narrow`) keeps fast. The tightened exp digit-gate is
+// shared (sinh/cosh route on `!narrow_fixed_fits(|raw|, ...)`), so this
+// guards that recovering the common sinh/cosh cells did not regress
+// correctness at any unbenched scale.
+#[cfg(test)]
+mod hyper_fast_path_validity {
+    use super::*;
+
+    const MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Ceiling,
+        RoundingMode::Floor,
+        RoundingMode::Trunc,
+    ];
+
+    /// FAST sinh/cosh in `Fixed`, no gate — catching any overflow panic.
+    fn fast_hyper_raw(raw: i128, scale: u32, mode: RoundingMode, is_cosh: bool) -> Option<i128> {
+        let w = scale + STRICT_GUARD;
+        std::panic::catch_unwind(|| {
+            let v = to_fixed_w(raw, STRICT_GUARD);
+            let av = Fixed {
+                negative: false,
+                mag: v.mag,
+            };
+            let ex = exp_fixed(av, w);
+            let one_w = Fixed {
+                negative: false,
+                mag: Fixed::pow10(w),
+            };
+            let enx = one_w.div(ex, w);
+            let res = if is_cosh {
+                ex.add(enx).halve()
+            } else {
+                let sh = ex.sub(enx).halve();
+                if raw < 0 { sh.neg() } else { sh }
+            };
+            res.round_to_i128_with(w, scale, mode)
+        })
+        .unwrap_or(None)
+    }
+
+    fn run(is_cosh: bool) {
+        std::panic::set_hook(Box::new(|_| {}));
+        let mut checked = 0u64;
+        for scale in 0u32..=38 {
+            let one_s = 10f64.powi(scale as i32);
+            let mut x10 = 1u64;
+            while x10 <= 1000 {
+                let x = x10 as f64 / 10.0;
+                for sign in [1i128, -1] {
+                    let raw_f = sign as f64 * x * one_s;
+                    if raw_f.abs() >= (i128::MAX as f64) {
+                        x10 += 1;
+                        continue;
+                    }
+                    let raw = raw_f as i128;
+                    if raw == 0 || raw.abs() <= small_x_linear_threshold_scale(scale) {
+                        continue; // linear band handled separately
+                    }
+                    let w = scale + STRICT_GUARD;
+                    // Gate: stays fast unless the integer-regime digit gate fires.
+                    if crate::algos::exp::exp_series_2limb::hyper_needs_wide_narrow(raw, scale, w) {
+                        continue;
+                    }
+                    for mode in MODES {
+                        let wide = match std::panic::catch_unwind(|| {
+                            if is_cosh {
+                                crate::algos::exp::exp_series_2limb::cosh_wide_narrow_raw(
+                                    raw,
+                                    scale,
+                                    STRICT_GUARD,
+                                    mode,
+                                )
+                            } else {
+                                crate::algos::exp::exp_series_2limb::sinh_wide_narrow_raw(
+                                    raw,
+                                    scale,
+                                    STRICT_GUARD,
+                                    mode,
+                                )
+                            }
+                        }) {
+                            Ok(v) => v,
+                            Err(_) => continue,
+                        };
+                        let fast = fast_hyper_raw(raw, scale, mode, is_cosh);
+                        assert_eq!(
+                            fast,
+                            Some(wide),
+                            "{} fast != wide at scale={scale} raw={raw} mode={mode:?}",
+                            if is_cosh { "cosh" } else { "sinh" }
+                        );
+                        checked += 1;
+                    }
+                }
+                x10 += 1;
+            }
+        }
+        assert!(checked > 50_000, "too few cells checked: {checked}");
+    }
+
+    #[test]
+    fn sinh_fast_bit_identical_to_wide_d38() {
+        run(false);
+    }
+
+    #[test]
+    fn cosh_fast_bit_identical_to_wide_d38() {
+        run(true);
+    }
+}

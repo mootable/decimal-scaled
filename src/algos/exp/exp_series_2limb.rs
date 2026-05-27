@@ -50,27 +50,28 @@ fn exp_result_int_digits(raw: i128, scale: u32) -> u32 {
     (num.div_ceil(den) as u32) + 1
 }
 
-/// Whether the 256-bit `Fixed` has headroom to compute `e^x` correctly at
-/// working scale `w` for the storage value `raw` at `scale`.
-///
-/// `exp_fixed`'s internal peak is the `2·w_ext` squaring (`w_ext = w +
-/// extra`, `extra ≈ result_int_digits` from the `2^k` amplification lift)
-/// — the same true peak the wide-tier gate models. The `Fixed` holds ~76
-/// decimal digits (256 bits · log10 2). We require that peak plus an
-/// 8-digit margin to stay under that, so the normal fast path keeps every
-/// cell it can round correctly and only the genuine integer-regime /
-/// near-overflow cells take the wider [`WNarrow`] route.
+/// Largest `e^x` integer-digit count the fast 256-bit `Fixed` path rounds
+/// correctly. Empirically (the `validity_probe`) the fast path first
+/// diverges from the wide reference at `≥ 25` result integer digits (the
+/// guard digits left above the `2^k`-reassembled integer part erode to too
+/// few). `22` keeps a 3-digit margin below that wall, so every cell at or
+/// below it is bit-identical to the wide path; above it the integer-regime
+/// cell takes the wider [`WNarrow`] work integer.
+const FAST_MAX_RESULT_DIGITS: u32 = 22;
+
+/// Whether the 256-bit `Fixed` fast path computes `e^x` correctly for the
+/// storage value `raw` at `scale` — i.e. the result is NOT in the
+/// integer-regime where its many integer digits leave the `Fixed` too few
+/// guard digits to round correctly. Keyed on the result's integer-digit
+/// count against [`FAST_MAX_RESULT_DIGITS`]; `w` is unused (kept for the
+/// existing callers' signature) — the squaring/`2^k`-reassembly peak is
+/// computed in the full 512-bit product inside `Fixed::mul`, so it never
+/// overflows; only the rounded result's guard-digit budget bounds the fast
+/// path, and that is purely a function of the result magnitude.
 #[inline]
 fn narrow_fixed_fits(raw: i128, scale: u32, w: u32) -> bool {
-    let result_digits = exp_result_int_digits(raw, scale);
-    // Mirror `exp_generic::exp_fixed`'s `extra` lift: `extra ≈
-    // result_digits + margin`, `w_ext = w + extra`, squaring peak
-    // `2·w_ext`.
-    let extra = result_digits + 12 + (result_digits >> 2);
-    let w_ext = w + extra;
-    let need = 2 * w_ext + 8;
-    // Fixed capacity in decimal digits: 256 · log10(2) ≈ 76.
-    need < 76
+    let _ = w;
+    exp_result_int_digits(raw, scale) <= FAST_MAX_RESULT_DIGITS
 }
 
 /// `e` raised to a working-scale value `v_w`, returned at the same
@@ -347,10 +348,18 @@ fn exp_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode) 
         return 10_i128.pow(scale); // ONE for this scale
     }
     let w = scale + working_digits;
-    // Integer-regime / MAX-scale / sub-resolution-directed cells exceed the
-    // 256-bit `Fixed`'s headroom (the `2^k` reassembly peak overflows) or
-    // need the never-exact directed rounding the flat-`w` `Fixed` path
-    // lacks — route them through the wider `WNarrow` work integer.
+    // The wider `WNarrow` work integer is needed for the cells the fast
+    // 256-bit `Fixed` path cannot round correctly:
+    //  1. integer-regime — `e^x` carries so many integer digits the `Fixed`
+    //     keeps too few guard digits (`!narrow_fixed_fits`); and
+    //  2. ALL directed modes — the fast path's flat-`w` rounding lacks the
+    //     never-exact treatment a directed mode needs for the sub-resolution
+    //     transcendental residual (a near-1 `e^(tiny)` or a sub-resolution
+    //     `e^(negative)` must round up under Ceiling, which the fast path
+    //     cannot resolve). Directed exp is not the common/benched cell, so
+    //     keeping it on the wide path costs nothing on the hot path.
+    // Every other (NEAREST-mode, non-integer-regime) cell — the COMMON
+    // narrow exp the regression was about — stays on the fast path.
     if !narrow_fixed_fits(raw, scale, w) || !crate::support::rounding::is_nearest_mode(mode) {
         return exp_wide_narrow_raw(raw, scale, working_digits, mode);
     }
@@ -378,8 +387,9 @@ fn exp_strict_raw<const SCALE: u32>(raw: i128, mode: RoundingMode) -> i128 {
         return 10_i128.pow(SCALE);
     }
     let w = SCALE + STRICT_GUARD;
-    // See [`exp_with_raw`]: integer-regime / MAX-scale / directed-mode
-    // cells route through the wider `WNarrow` work integer.
+    // See [`exp_with_raw`]: the integer-regime cells and ALL directed modes
+    // route through the wider `WNarrow` work integer; every other
+    // NEAREST-mode common cell stays on the fast `Fixed` path.
     if !narrow_fixed_fits(raw, SCALE, w) || !crate::support::rounding::is_nearest_mode(mode) {
         return exp_wide_narrow_raw(raw, SCALE, STRICT_GUARD, mode);
     }
@@ -509,4 +519,192 @@ fn exp2_with_raw(raw: i128, scale: u32, working_digits: u32, mode: RoundingMode)
 #[must_use]
 pub(crate) fn exp2_strict<const SCALE: u32>(raw: Int<2>, mode: RoundingMode) -> Int<2> {
     exp2_with(raw, SCALE, STRICT_GUARD, mode)
+}
+
+// ── Fast-path validity wall ────────────────────────────────────────
+// The narrow exp gate (`exp_with_raw` / `exp_strict_raw`) routes a cell
+// to the fast 256-bit `Fixed` path only where it is bit-identical to the
+// trusted wider-`WNarrow` reference (the path the 8 mpmath golden cells
+// validate). This test ASSERTS that validity wall across the full D38
+// scale × |x| × mode space: for every cell the production gate keeps on
+// the fast path, fast == wide. It is the consistency-wall guard that lets
+// the gate stay tight (recover the common-cell speed) without a
+// correctness regression — the same "bit-identical to the reference"
+// pattern the `exp_series_tang_ab` Tang validity wall uses.
+#[cfg(test)]
+mod fast_path_validity {
+    use super::*;
+
+    /// FAST path with NO gate (pure `Fixed`), catching the overflow panic.
+    fn fast_exp_raw_ungated(raw: i128, scale: u32, mode: RoundingMode) -> Option<i128> {
+        if raw == 0 {
+            return Some(10_i128.pow(scale));
+        }
+        let w = scale + STRICT_GUARD;
+        let negative_input = raw < 0;
+        let v_w =
+            Fixed::from_u128_mag(raw.unsigned_abs(), false).mul_u128(10u128.pow(STRICT_GUARD));
+        let v_w = if negative_input { v_w.neg() } else { v_w };
+        std::panic::catch_unwind(|| exp_fixed(v_w, w).round_to_i128_with(w, scale, mode))
+            .unwrap_or(None)
+    }
+
+    const MODES: [RoundingMode; 6] = [
+        RoundingMode::HalfToEven,
+        RoundingMode::HalfAwayFromZero,
+        RoundingMode::HalfTowardZero,
+        RoundingMode::Ceiling,
+        RoundingMode::Floor,
+        RoundingMode::Trunc,
+    ];
+
+    /// Mirror the production gate exactly: `true` ⇒ this cell stays on the
+    /// fast path (so fast MUST equal wide). Directed modes always route wide.
+    fn gate_keeps_fast(raw: i128, scale: u32, mode: RoundingMode) -> bool {
+        let w = scale + STRICT_GUARD;
+        narrow_fixed_fits(raw, scale, w) && crate::support::rounding::is_nearest_mode(mode)
+    }
+
+    // For EVERY D38 cell the production gate routes to the fast path,
+    // assert it is bit-identical to the wide reference. A fine 0.1-step
+    // |x| grid over the whole representable range, both signs, all six
+    // modes, scale 0..=38 — so an unbenched scale cannot silently get a
+    // wrong fast result.
+    #[test]
+    fn fast_path_bit_identical_to_wide_d38() {
+        std::panic::set_hook(Box::new(|_| {}));
+        let mut checked = 0u64;
+        for scale in 0u32..=38 {
+            let one_s = 10f64.powi(scale as i32);
+            let mut x10 = 1u64;
+            while x10 <= 1000 {
+                let x = x10 as f64 / 10.0;
+                for sign in [1i128, -1] {
+                    let raw_f = sign as f64 * x * one_s;
+                    if raw_f.abs() >= (i128::MAX as f64) {
+                        x10 += 1;
+                        continue;
+                    }
+                    let raw = raw_f as i128;
+                    if raw == 0 {
+                        continue;
+                    }
+                    for mode in MODES {
+                        if !gate_keeps_fast(raw, scale, mode) {
+                            continue; // routed to wide — not a fast-path claim
+                        }
+                        let wide = match std::panic::catch_unwind(|| {
+                            exp_wide_narrow_raw(raw, scale, STRICT_GUARD, mode)
+                        }) {
+                            Ok(v) => v,
+                            // Wide reference itself overflows i128 — the
+                            // narrow tier cannot represent the result; both
+                            // paths panic, not a fast-vs-wide question.
+                            Err(_) => continue,
+                        };
+                        let fast = fast_exp_raw_ungated(raw, scale, mode);
+                        assert_eq!(
+                            fast,
+                            Some(wide),
+                            "fast != wide at scale={scale} raw={raw} mode={mode:?} (gate kept fast)"
+                        );
+                        checked += 1;
+                    }
+                }
+                x10 += 1;
+            }
+        }
+        assert!(checked > 100_000, "too few cells checked: {checked}");
+    }
+
+    // The genuine wide-only cells (integer-regime + every directed mode)
+    // must actually be routed AWAY from the fast path — the gate's other
+    // half. Spot-check the 8-golden-cell shapes plus a directed cell.
+    #[test]
+    fn wide_only_cells_are_routed_wide() {
+        use RoundingMode::*;
+        // integer-regime: routed wide for ALL modes (incl. nearest)
+        for &raw in &[66i128, 85, 100] {
+            assert!(
+                !gate_keeps_fast(raw, 0, HalfToEven),
+                "exp({raw}) s0 should route WIDE (integer regime)"
+            );
+        }
+        // ALL directed modes route wide (the fast path lacks the never-exact
+        // directed rounding the transcendental residual needs) — including a
+        // deep-fractional near-1 result like exp(-1e-37) under Ceiling, the
+        // golden d38 exp s37 cell.
+        for mode in [Ceiling, Floor, Trunc] {
+            assert!(
+                !gate_keeps_fast(-1, 37, mode),
+                "exp(-1e-37) s37 {mode:?} should route WIDE (directed)"
+            );
+            assert!(
+                !gate_keeps_fast(2 * 10i128.pow(0), 0, mode),
+                "exp(2) s0 {mode:?} should route WIDE (directed)"
+            );
+        }
+        // ...but a normal nearest-mode common cell stays FAST.
+        assert!(
+            gate_keeps_fast(15 * 10i128.pow(18), 19, HalfToEven),
+            "exp(1.5) D38 s19 HalfToEven should stay FAST (common cell)"
+        );
+        assert!(
+            gate_keeps_fast(-1, 37, HalfToEven),
+            "exp(-1e-37) s37 HalfToEven should stay FAST"
+        );
+    }
+
+    // Focused timing A/B at the gate seam: the FAST `Fixed` path (what the
+    // tightened gate now picks for the common nearest-mode cells) vs the
+    // WIDE `WNarrow=Int<24>` path (what the over-broad 9.3 gate wrongly
+    // picked for them). Run with `--ignored --nocapture` for the numbers;
+    // ignored by default so it never slows the normal `--lib` run.
+    #[test]
+    #[ignore = "timing A/B — run with --ignored --nocapture"]
+    fn timing_fast_vs_wide_common_cells() {
+        use std::time::Instant;
+        // (raw, scale, label) — all common nearest-mode cells the gate now
+        // keeps fast; result stays in-range for both paths.
+        let cells: &[(i128, u32, &str)] = &[
+            (15 * 10i128.pow(18), 19, "exp(1.5) D38 s19"),
+            (27 * 10i128.pow(18) / 10, 19, "exp(2.7) D38 s19"),
+            (5 * 10i128.pow(30) / 10, 30, "exp(0.5) D38 s30"),
+            (5 * 10i128.pow(37) / 10, 37, "exp(0.5) D38 s37"),
+            (9 * 10i128.pow(9), 9, "exp(9) D18 s9"),
+            (15 * 10i128.pow(17), 17, "exp(1.5) D18 s17"),
+        ];
+        let mode = RoundingMode::HalfToEven;
+        const ITERS: u32 = 200_000;
+        for &(raw, scale, label) in cells {
+            // warm + skip any cell whose result is out of i128 range
+            if fast_exp_raw_ungated(raw, scale, mode).is_none() {
+                continue;
+            }
+            let _ = exp_wide_narrow_raw(raw, scale, STRICT_GUARD, mode);
+            let t0 = Instant::now();
+            let mut acc = 0i128;
+            for _ in 0..ITERS {
+                acc = acc.wrapping_add(
+                    fast_exp_raw_ungated(std::hint::black_box(raw), scale, mode).unwrap_or(0),
+                );
+            }
+            let fast_ns = t0.elapsed().as_nanos() as f64 / ITERS as f64;
+            let t1 = Instant::now();
+            for _ in 0..ITERS {
+                acc = acc.wrapping_add(exp_wide_narrow_raw(
+                    std::hint::black_box(raw),
+                    scale,
+                    STRICT_GUARD,
+                    mode,
+                ));
+            }
+            let wide_ns = t1.elapsed().as_nanos() as f64 / ITERS as f64;
+            std::hint::black_box(acc);
+            println!(
+                "{label:22}: fast={fast_ns:7.1}ns  wide={wide_ns:8.1}ns  speedup={:.2}x",
+                wide_ns / fast_ns
+            );
+        }
+    }
 }
