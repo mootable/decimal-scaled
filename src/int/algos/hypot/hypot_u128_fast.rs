@@ -287,12 +287,20 @@ fn isqrt_u256(n: [u64; 4]) -> u128 {
         x = 1;
     }
     // Over-estimate guarantee (the project's "debug_assert caps" defense): the
-    // seed MUST be a true over-estimate `x >= sqrt(n)`, i.e. `x² >= n`, else the
-    // downward-monotone Newton loop would under-run into a slow linear
-    // floor-walk and could return a wrong floor. `x` is a `u128` (`<= 2^128-1`)
-    // so `x²` fits a `u256` exactly -- compare it against `n` directly. Any
-    // future seed regression then PANICS with a location in the gates.
-    debug_assert!(cmp_u256(sq_u256(x), n) >= 0, "isqrt_u256 seed under-estimate: seed={x} n={n:?}");
+    // downward-monotone Newton loop needs `x >= floor(sqrt(n))`. The library
+    // seed satisfies the stronger `x² >= n` (a strict over-estimate) -- assert
+    // that for every non-saturated seed so a future seed regression PANICS with
+    // a location in the gates. The exception is the saturation cap: when the
+    // over-estimate touches `2^128` we cap `x = u128::MAX = 2^128-1`, and for
+    // `n` just above `(2^128-1)²` (reachable on `N >= 3`, e.g. one operand near
+    // `2^128` and a small other) the true floor IS `2^128-1`, so `x` is the
+    // CORRECT seed even though `x² < n`. `x == u128::MAX` is trivially
+    // `>= floor(sqrt(n))` for any `n < 2^256`, so admit it. `x` is a `u128`
+    // (`<= 2^128-1`) so `x²` fits a `u256` exactly -- compare against `n`.
+    debug_assert!(
+        x == u128::MAX || cmp_u256(sq_u256(x), n) >= 0,
+        "isqrt_u256 seed under-estimate: seed={x} n={n:?}"
+    );
     // Newton averaging: x <- (x + n/x)/2, monotone-decreasing from the
     // over-estimate. n/x is the fixed u256/u128 scalar division.
     loop {
@@ -457,14 +465,17 @@ fn finish<const N: usize>(q: u128, diff_nonzero: bool, halfway_round_up: bool, m
         RoundingMode::Ceiling => diff_nonzero,
     };
     // q < 2^128 and the bump is at most +1, so the rounded value is <= 2^128.
-    let result = q + (bump as u128);
+    // When q == u128::MAX (= 2^128-1) and bump, the sum is exactly 2^128, which
+    // does NOT fit a u128 -- use `overflowing_add` so the bit-128 carry lands in
+    // `top_overflow` instead of wrapping `result` to 0 (a silent wrong answer).
+    let (result, carried) = q.overflowing_add(bump as u128);
     let hi = (result >> 64) as u64;
     let lo = result as u64;
     // Fit check: must be < 2^(64N-1) (signed range). For N == 1 the whole
     // value must be < 2^63; for N == 2 it must be < 2^127; for N >= 3 a
     // 128-bit (here <= 2^128) value always fits, BUT result can reach 2^128
     // exactly (q = 2^128-1, bump) -- that needs bit 128, i.e. a third limb.
-    let top_overflow = (result >> 64) >> 64; // bit 128 (1 iff result == 2^128)
+    let top_overflow = carried as u128; // bit 128 (1 iff the sum == 2^128)
     match N {
         1 => {
             if hi != 0 || (lo >> 63) != 0 {
@@ -678,6 +689,56 @@ mod tests {
                 let want = isqrt_u256_ref(n);
                 assert_eq!(got, want, "floor mismatch: k={k} shift={shift} n={n:?}");
             }
+        }
+    }
+
+    /// SATURATION-ZONE regression: when the library over-estimate touches
+    /// `2^128` the seed is capped to `u128::MAX = 2^128-1`, and for `n` just
+    /// above `(2^128-1)²` the true floor IS `2^128-1` -- so the capped seed is
+    /// correct yet `seed² < n`. The over-estimate `debug_assert` must admit this
+    /// (it asserts `x == u128::MAX || x² >= n`); a naive `x² >= n` would PANIC
+    /// here in debug even though the result is right. This case is unreachable
+    /// from uniform-random inputs, so it gets a direct attack. Asserts no debug
+    /// panic and that `isqrt_u256` matches the bit-by-bit reference floor;
+    /// cross-checks the full `hypot_u128_fast::<3>` against `hypot_pythagoras`.
+    #[test]
+    fn isqrt_u256_saturation_zone_floor_2pow128_minus_1() {
+        let max = u128::MAX; // 2^128 - 1, the largest u128 floor root
+        let maxsq = sq_u256(max); // (2^128-1)²
+        // n = (2^128-1)² + d, d small: floor(sqrt(n)) is still 2^128-1 for all
+        // d in [0, 2·(2^128-1)] (since (2^128-1)² <= n < 2^256 = (2^128)²).
+        for d in [0u128, 1, 2, 3, 7, 1000, max] {
+            let (n, carry) = super::add_u256(maxsq, [d as u64, (d >> 64) as u64, 0, 0]);
+            assert!(!carry, "n must stay < 2^256 (d={d})");
+            // (a) no debug panic on the capped seed; (b) exact floor.
+            let got = isqrt_u256(n);
+            let want = isqrt_u256_ref(n);
+            assert_eq!(want, max, "reference floor must be 2^128-1 (d={d})");
+            assert_eq!(got, want, "isqrt_u256 saturation-zone floor (d={d}) n={n:?}");
+        }
+        // A few more values near 2^256 generally (top bits set, large floor).
+        let mut s = 0xCAFE_5A7Eu64;
+        for _ in 0..500 {
+            // n near 2^256: set the top limb high, fill the rest randomly.
+            let n = [mix(&mut s), mix(&mut s), mix(&mut s), mix(&mut s) | (1u64 << 63)];
+            assert_eq!(isqrt_u256(n), isqrt_u256_ref(n), "near-2^256 floor n={n:?}");
+        }
+
+        // Full-kernel cross-check on the reachable N>=3 saturation input:
+        // hypot(2^128-1, 1) -> u256 arm, n = (2^128-1)² + 1, floor = 2^128-1.
+        let big = {
+            let mut l = [0u64; 3];
+            l[0] = u64::MAX;
+            l[1] = u64::MAX; // 2^128 - 1
+            Int::<3>::from_limbs(l)
+        };
+        let one = Int::<3>::from_i64(1);
+        for mode in ALL_MODES {
+            assert_eq!(
+                hypot_u128_fast::<3>(big, one, mode),
+                hypot_pythagoras::<3>(big, one, mode),
+                "hypot saturation-zone mismatch mode={mode:?}"
+            );
         }
     }
 
