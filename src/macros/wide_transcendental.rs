@@ -474,19 +474,6 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn mul_cached(a: W, b: W, pow10_w: W) -> W {
                 round_div(a * b, pow10_w)
             }
-            /// [`mul_cached`] with the truncated-low product computed in
-            /// u128 limbs ([`BigInt::wrapping_mul_low_u128`]) -- the
-            /// wide-tier exp Taylor work-multiply. Bit-identical to
-            /// `mul_cached` (both reduce the low-`BITS` product by the
-            /// same half-to-even `round_div`); the only change is the
-            /// faster low-half multiply at the even wide work widths
-            /// (`Int<128>`/`Int<192>`/`Int<256>`), benched ~1.3-1.6x in
-            /// `benches/micro/mul_low_u128_ab.rs`.
-            #[inline]
-            pub(crate) fn mul_cached_low_u128(a: W, b: W, pow10_w: W) -> W {
-                use $crate::int::types::traits::BigInt as _;
-                round_div(a.wrapping_mul_low_u128(b), pow10_w)
-            }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
@@ -1761,7 +1748,17 @@ macro_rules! decl_wide_transcendental {
                 let mut term = s_red;
                 let mut iter: u128 = 2;
                 loop {
-                    term = mul_cached_low_u128(term, s_red, pow10_w) / lit(iter);
+                    // Taylor term: low-half u128-packed product
+                    // (`wrapping_mul_low_u128`) reduced by `÷10^(w_ext)`
+                    // through the fast MG `round_div_pow10` kernel (the
+                    // divisor is always exactly the power of ten `10^w_ext`).
+                    // Mirrors the blessed `exp_generic::exp_fixed` Taylor
+                    // step; bit-identical to the prior `round_div` reduction
+                    // (audited power-of-10 equivalence) at MG speed.
+                    term = round_div_pow10(
+                        $crate::int::types::traits::BigInt::wrapping_mul_low_u128(term, s_red),
+                        w_ext,
+                    ) / lit(iter);
                     if term == zero() {
                         break;
                     }
@@ -1782,12 +1779,15 @@ macro_rules! decl_wide_transcendental {
                     // Low-half symmetric SQUARE through the limb-width matcher
                     // (`wrapping_sqr_low_u128` → `int::policy::sqr_low`): the
                     // u128-packed `sqr_low_limb` on even work widths (half the
-                    // limbs), bit-identical to the low-`BITS` of `x²`, feeding
-                    // the same `round_div` by `pow10_w`. The squaring sibling of
-                    // the Taylor `mul_cached_low_u128`.
-                    squared = round_div(
+                    // limbs), bit-identical to the low-`BITS` of `x²`, reduced
+                    // by `÷10^(w_ext)` through the fast MG `round_div_pow10`
+                    // kernel (the divisor is always the power of ten
+                    // `10^w_ext`). The squaring sibling of the Taylor step;
+                    // bit-identical to the prior generic `round_div` at MG
+                    // speed. Mirrors `exp_generic::exp_fixed`.
+                    squared = round_div_pow10(
                         $crate::int::types::traits::BigInt::wrapping_sqr_low_u128(squared),
-                        pow10_w,
+                        w_ext,
                     );
                     i += 1;
                 }
