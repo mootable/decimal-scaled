@@ -581,7 +581,20 @@ fn bench(c: &mut Criterion) {
     //   w=180                  den ~ 10 limbs
     //   w=264 (golden cap)     den ~ 14 limbs
     //   w=360                  den ~ 19 limbs
-    for &w in &[64u32, 90, 120, 180, 264, 360] {
+    //   w=461 (D462 SCALE)     den ~ 23 limbs (D462 storage mul rescale)
+    //   w=521 (D462 SCALE+60)  den ~ 26 limbs (D462 wide-tier ÷10^w)
+    //   w=614 (D616 SCALE-2)   den ~ 31 limbs (D616 storage mul rescale)
+    //   w=674                  den ~ 34 limbs
+    //   w=923 (D924 SCALE-1)   den ~ 46 limbs (D924 storage mul rescale)
+    //   w=983 (D924 SCALE+60)  den ~ 49 limbs
+    //   w=1231 (D1232 SCALE-1) den ~ 62 limbs (D1232 storage mul rescale)
+    //   w=1291                 den ~ 65 limbs
+    //
+    // This sweeps a continuous den_n band {4..65} so the actual
+    // u128-vs-base-2⁶⁴ Knuth crossover at production divisor widths can be
+    // localized at the cluster operating points (audit
+    // 2026_05_28_d462_d924_d1232_policy_audit.md §G.H + §3.B).
+    for &w in &[64u32, 90, 120, 180, 264, 360, 461, 521, 614, 674, 923, 983, 1231, 1291] {
         compare_w(c, w);
     }
 }

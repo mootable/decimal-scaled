@@ -193,7 +193,14 @@ fn bisect_wide(c: &mut Criterion, n: usize) {
 }
 
 fn bench(c: &mut Criterion) {
-    for &n in &[26usize, 28, 30] {
+    // Wide-shape knuth-vs-u128 bisection, finer-grained around den_n=24 (the
+    // D462 storage-mul-rescale + decimal `/` divisor width, audit
+    // 2026_05_28_d462_d924_d1232_policy_audit.md §G.H). The current threshold
+    // is 32; this sweep ranks every even n in {18, 20, 22, 24, 26, 28, 30, 32,
+    // 36, 48} on the wide `2n`/`n` shape so the actual crossover can be
+    // localized at the D462 operating point rather than inferred from a coarser
+    // {24, 26, 28, 30, 32} bisection done in isolation.
+    for &n in &[18usize, 20, 22, 24, 26, 28, 30, 32, 36, 48] {
         bisect_wide(c, n);
     }
     for &(n, lbl) in &[
