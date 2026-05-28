@@ -1047,6 +1047,19 @@ path = "benches/micro/int_unary_kernel_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# neg_kernel_ab: dispatch-seam A/B for the INT-tier `neg` policy -- the
+# wide-tier `neg_D462`/`D616`/`D924`/`D1232` regression recovery.
+# fused_split (limb-0 special-cased, the routed kernel) vs two_pass
+# (NOT loop + full-width add_assign_fixed of [1,0,...,0], the previous
+# routed shape) vs fused_open (single-pass dependent-chain reference).
+# Bit-identical; A/B confirms fused_split is the wide-tier winner
+# (D462/D616/D924/D1232 by 1.40x-1.83x vs two_pass).
+[[bench]]
+name = "neg_kernel_ab"
+path = "benches/micro/neg_kernel_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # mul_div_native_ab: dispatch-seam A/B for the narrow decimal mul/div
 # policies (native hardware-i128 vs the generic widen kernels at N <= 2).
 [[bench]]

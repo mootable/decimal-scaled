@@ -5,31 +5,66 @@
 //!
 //! [`neg_twos_complement`] is the width-agnostic negation algorithm selected
 //! by the negation policy [`crate::int::policy::neg::dispatch`]. Pure kernel
-//! — bitwise-NOT then carry-propagating increment, wrapping modulo `2^BITS`;
-//! no algorithm choice.
+//! — bitwise-NOT plus carry-propagating `+1`, wrapping modulo `2^BITS`; no
+//! algorithm choice.
 
-use crate::int::algos::support::limbs::add_assign_fixed;
 use crate::int::types::Int;
 
-/// Two's-complement negation for `Int<N>`: bitwise-NOT then increment
-/// by one, wrapping modulo `2^BITS`. `MIN` maps to itself, matching
-/// the primitive signed integer `wrapping_neg` contract.
+/// Two's-complement negation for `Int<N>`: bitwise-NOT plus a
+/// carry-propagating `+1`, wrapping modulo `2^BITS`. `MIN` maps to
+/// itself, matching the primitive signed integer `wrapping_neg`
+/// contract.
 ///
-/// Uses [`add_assign_fixed`] for the increment step so the carry
-/// propagation is the same const-safe kernel the add policy uses.
+/// Limb-0 split shape — the routed kernel after the wide-tier
+/// `neg_kernel_ab` A/B (see `benches/micro/neg_kernel_ab.rs`):
+///
+/// 1. Compute `out[0] = !a[0] + 1`, capturing the carry `c0`.
+/// 2. If `c0 == false` (the overwhelmingly common path — `a[0] != MAX`),
+///    limbs `1..N` reduce to plain independent `!a[i]` writes: no
+///    cross-limb dependency chain, so the compiler can keep them
+///    register-resident / vectorise the NOT loop.
+/// 3. If `c0 == true` (`a[0] == MAX`), fall back to a dependent
+///    carry-prop chain through limbs `1..N`.
+///
+/// The previous two-pass shape (NOT loop into `out[N]`, then a
+/// full-width `add_assign_fixed(out, [1, 0, …, 0])`) paid a serialised
+/// carry chain across all N limbs on every call AND wrote a second
+/// stack array. The new shape collapses to one NOT loop with `+1` on
+/// limb 0 for typical inputs — at D462/D616/D924/D1232 the
+/// `neg_kernel_ab` ranking shows 1.40x-1.83x speed-ups across realistic
+/// (tiny, half-wide, mid, high) input mixes. Generic over `N`,
+/// const-fn so it stays available in const contexts (`abs`,
+/// `wrapping_div`, `wrapping_rem`, `from_mag_limbs`).
 #[inline]
 pub(crate) const fn neg_twos_complement<const N: usize>(a: Int<N>) -> Int<N> {
     let mut out = [0u64; N];
-    let mut i = 0;
-    while i < N {
-        out[i] = !a.as_limbs()[i];
-        i += 1;
+    if N == 0 {
+        return Int::<N>::from_limbs(out);
     }
-    let mut one = [0u64; N];
-    if N > 0 {
-        one[0] = 1;
+    let limbs = a.as_limbs();
+    let (s0, c0) = (!limbs[0]).overflowing_add(1);
+    out[0] = s0;
+    if c0 {
+        // limb 0 was MAX — carry continues through the dependent chain.
+        let mut carry: u64 = 1;
+        let mut i = 1;
+        while i < N {
+            let (s, c) = (!limbs[i]).overflowing_add(carry);
+            out[i] = s;
+            carry = c as u64;
+            i += 1;
+        }
+        // `carry` discarded — that is the modulo-2^BITS wrap (MIN → MIN).
+        let _ = carry;
+    } else {
+        // Common path: just NOT the remaining limbs — independent
+        // writes, no cross-limb dependency chain.
+        let mut i = 1;
+        while i < N {
+            out[i] = !limbs[i];
+            i += 1;
+        }
     }
-    add_assign_fixed(&mut out, &one);
     Int::<N>::from_limbs(out)
 }
 
