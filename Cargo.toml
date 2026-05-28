@@ -978,6 +978,19 @@ path = "benches/micro/exp_wide_series_tang_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# ln_wide_series_tang_ab: the N-way width x scale x algorithm map for wide
+# ln -- Series (multi-level-sqrt argument reduction) vs Tang (table-driven,
+# no sqrts) across every wide tier D76..D1232 at the 5-point scale set
+# {0, S/4, S/2, 3S/4, S-1}, validity-gated (Tang == Series across all six
+# modes) before timing. Establishes the continuous Tang win-region per tier
+# so the policy/ln Tang gates can be widened off their bbc-cell point ranges.
+# The wide-transcendental BAND regression task.
+[[bench]]
+name = "ln_wide_series_tang_ab"
+path = "benches/micro/ln_wide_series_tang_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # rem_kernel_ab: dispatch-seam A/B for the remainder policy `select` arm.
 # div_kernel_ab: dispatch-seam A/B for the integer division ENGINE
 # (Knuth base-2⁶⁴ vs Burnikel-Ziegler chunking vs Knuth base-2¹²⁸) at the
