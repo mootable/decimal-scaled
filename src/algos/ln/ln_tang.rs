@@ -54,8 +54,14 @@ const M: u32 = 128;
 /// and the artanh-series iteration cap `CAP` (a safety net; the loop
 /// terminates on a zero term far sooner). Shared across guard widths so
 /// the Ziv escalation can re-evaluate at a wider scale.
+///
+/// This is the working-scale Tang `ln` shared surface — the analogue of
+/// [`crate::algos::exp::exp_tang::tang_exp_fixed`]. The narrow-ln-strict
+/// kernel ([`ln_tang`]) wraps it with the Ziv-escalated storage narrowing;
+/// `powf_strict` composes it with `tang_exp_fixed` directly at working
+/// scale (skipping a double round-to-storage).
 #[inline]
-fn ln_value<C: WideTrigCore, const CAP: u128>(v_w: C::W, w: u32) -> C::W {
+pub(crate) fn tang_ln_fixed<C: WideTrigCore, const CAP: u128>(v_w: C::W, w: u32) -> C::W {
     let one_w = C::one(w);
     let pow10_w = one_w;
     let two_w = one_w + one_w;
@@ -166,11 +172,11 @@ pub(crate) fn ln_tang<
         // approximation can land on the wrong side. Route through the
         // shared Ziv escalation; nearest modes narrow once.
         C::round_to_storage_directed(GUARD, SCALE, mode, &mut |guard| {
-            ln_value::<C, CAP>(C::to_work_w(raw, guard), SCALE + guard)
+            tang_ln_fixed::<C, CAP>(C::to_work_w(raw, guard), SCALE + guard)
         })
     } else {
         let w = SCALE + GUARD;
-        let r = ln_value::<C, CAP>(C::to_work_w(raw, GUARD), w);
+        let r = tang_ln_fixed::<C, CAP>(C::to_work_w(raw, GUARD), w);
         C::round_to_storage_with(r, w, SCALE, mode)
     }
 }
