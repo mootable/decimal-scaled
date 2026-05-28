@@ -43,10 +43,24 @@ enum Select<const N: usize> {
 
 const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
+        // D57 (Int<3>): the seam A/B (`benches/micro/exp_series_tang_ab.rs`)
+        // sweeps the full SCALE range at the production Tang config and shows
+        // Tang beats Series at EVERY D57 scale (validity bit-identical to
+        // Series across the operand spread × all six modes at each cell):
+        // s0 4.81×, s10 2.81×, s17 2.96×, s22 2.91×, s23 2.26×, s28 2.32×,
+        // s33 2.29×, s38 19.3×, s42 1.90×, s44 2.27×, s45 1.52×, s56 44.6×.
+        // The old gate `(3, 18..=22) | (3, 45..=56)` left the s23..=44 GAP on
+        // Series — the cause of the bench-branch-compare powf_D57_s42 3.64×
+        // regression (powf's inner exp(y·ln x) lands at storage SCALE=42 in
+        // that gap → Series). Cover the WHOLE D57 scale range through the
+        // small-`|x|` value gate (Tang's `k·ln 2` lift fits the work width
+        // only for small `|x|`; large-`|x|` routes to Series, which is always
+        // valid — matching the existing D76/D115/D153/D230 wide-tier pattern).
+        // `tang_routed` splits 0..=44 (M=128,G=8) vs 45..=56 (M=512,G=30) per
+        // the seam A/B's per-cell (M,G) ranking; the boundary at s45 is where
+        // the two configs tie.
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 18..=22) => Select::ByAlgorithm(Algorithm::Tang),
-        #[cfg(any(feature = "d57", feature = "wide"))]
-        (3, 45..=56) => Select::ByAlgorithm(Algorithm::Tang),
+        (3, 0..=56) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         // D76 (Int<4>): the full width × scale A/B
         // (`benches/micro/exp_wide_series_tang_ab.rs`) shows Tang beats the
         // Series squaring core at EVERY D76 scale, including the MAX scale
@@ -76,8 +90,16 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // and at D1232 max scale single-shot Tang is not even bit-identical to
         // Series (its `k·ln 2` lift overflows the guard). Those widths want the
         // orthogonal u128-square work, not Tang; they fall through to Series.
+        // D115 (Int<6>): the wide A/B map (`benches/micro/exp_wide_series_tang_ab.rs`)
+        // sweeps {s0, s28, s57, s86, s113} and shows tang_m512_g30 beats Series
+        // at every scale (s0 1.03×, s28 1.32×, s57 1.13×, s86 1.07×, s113 1.10×)
+        // — validity bit-identical to Series at each cell. The old gate stopped
+        // at s85, leaving s86..=114 on the slower Series `_` arm; the A/B at s86
+        // and s113 (DEEP into the old gap) shows Tang still wins. Cover the
+        // WHOLE D115 scale range through the small-`|x|` value gate so no scale
+        // in 0..=114 falls through to Series.
         #[cfg(any(feature = "d115", feature = "wide"))]
-        (6, 0..=85) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (6, 0..=114) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d153", feature = "wide"))]
         (8, 0..=110) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         // D230 (Int<12>): the width × scale A/B map shows Tang wins (or ties)
@@ -249,12 +271,28 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
 #[inline]
 fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
     match N {
+        // D57: TWO continuous (M,G) sub-bands inside the merged Tang arm:
+        // 0..=44 runs the (M=128, G=8) low-band kernel, 45..=56 the (M=512,
+        // G=30) high-band kernel. The split is the same shape the seam A/B
+        // (`benches/micro/exp_series_tang_ab.rs`) already confirmed at the
+        // edges (s44 (128,8)=2.27× vs s45 (512,30)=1.52× — close wall-clocks,
+        // not a regression); inside 0..=44 (128,8) beats (512,30) by ~1.5× at
+        // every gap cell (s23/s28/s33/s38/s42/s44), so the boundary stays at
+        // 45. Flags <true,true,false> = DIRECTED + EXTERNAL_EXTRA (matching the
+        // D76/D115/D153/D230 wide-tier shape): the EXTERNAL_EXTRA guard lift
+        // covers the large-`|k|` case the merged Tang gate now exposes (at
+        // GAP scales the value gate `wide_tang_gate` admits `|x|` up to ~100,
+        // where `|k|·log10 2 ≈ 30` digits exceeds the narrow base guard);
+        // DIRECTED enables Ziv escalation for the directed modes. The old
+        // `<false,false,false>` shape worked for the narrow `18..=22` /
+        // `45..=56` bands only because the storage-bit constraint at those
+        // SCALEs implicitly bounded `|x|` to the small-`|k|` regime.
         #[cfg(any(feature = "d57", feature = "wide"))]
         3 => {
             let r = raw.resize_to::<Int<3>>();
             let out = match SCALE {
-                18..=22 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, false, false, false>(r, mode),
-                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, false, false, false>(r, mode),
+                0..=44 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 128, 8, true, true, false>(r, mode),
+                45..=56 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 512, 30, true, true, false>(r, mode),
                 _ => crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
             };
             out.resize_to::<Int<N>>()

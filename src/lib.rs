@@ -853,15 +853,20 @@ pub mod __bench_internals {
         crate::algos::support::wide_trig_core::exp_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw, mode)
     }
     // exp — Tang (production params per `policy::exp::tang_routed`).
-    // D57 has TWO bands: 18..=22 (M=128,G=8) and 45..=56 (M=512,G=30); both
-    // run flags <false,false,false>. Pass the band's M/G as const generics.
+    // D57 covers the FULL scale range 0..=56 through one continuous Tang arm
+    // (gated by `wide_tang_gate` to small `|x|` < 100), split internally into
+    // 0..=44 (M=128,G=8) and 45..=56 (M=512,G=30). Both bands run the
+    // production wide-tier flag shape <true,true,false> = DIRECTED +
+    // EXTERNAL_EXTRA (matching D76/D115/D153/D230) so the seam A/B's
+    // bit-identity wall validates the same kernel that production calls.
+    // Pass the band's M/G as const generics.
     #[cfg(all(feature = "_wide-support", any(feature = "d57", feature = "wide")))]
     #[inline(never)]
     pub fn exp_tang_d57<const SCALE: u32, const M: u32, const G: u32>(
         raw: crate::int::types::Int<3>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
-        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, M, G, false, false, false>(raw, mode)
+        crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
     // D115 band 50..=60: M=128, G=8, flags <true,true,false>.
     #[cfg(all(feature = "_wide-support", any(feature = "d115", feature = "wide")))]

@@ -119,6 +119,27 @@ fn benches(c: &mut Criterion) {
     cell::<3>(c, "exp_d57_s56_in", 56, exp_series_d57::<56>, exp_tang_d57::<56, 512, 30>);
     cell::<3>(c, "exp_d57_s44_out", 44, exp_series_d57::<44>, exp_tang_d57::<44, 512, 30>);
     cell::<3>(c, "exp_d57_s57_out", 57, exp_series_d57::<57>, exp_tang_d57::<57, 512, 30>);
+    // D57 GAP s23..=44: the discontinuity between the two Tang rectangles.
+    // bench-branch-compare powf_D57_s42 is 3.64× regressed; powf's exp(y·ln x)
+    // half evaluates at working scale ≈ 72 but the storage-cell SCALE=42 lands
+    // in this gap → Series. Probe the gap interior + boundaries with BOTH Tang
+    // shapes ((128,8) low-band and (512,30) high-band) so the bisection has
+    // continuous evidence to pick the best gate-merge / crossover scale.
+    cell::<3>(c, "exp_d57_s23_gap_128_8", 23, exp_series_d57::<23>, exp_tang_d57::<23, 128, 8>);
+    cell::<3>(c, "exp_d57_s23_gap_512_30", 23, exp_series_d57::<23>, exp_tang_d57::<23, 512, 30>);
+    cell::<3>(c, "exp_d57_s28_gap_128_8", 28, exp_series_d57::<28>, exp_tang_d57::<28, 128, 8>);
+    cell::<3>(c, "exp_d57_s28_gap_512_30", 28, exp_series_d57::<28>, exp_tang_d57::<28, 512, 30>);
+    cell::<3>(c, "exp_d57_s33_gap_128_8", 33, exp_series_d57::<33>, exp_tang_d57::<33, 128, 8>);
+    cell::<3>(c, "exp_d57_s33_gap_512_30", 33, exp_series_d57::<33>, exp_tang_d57::<33, 512, 30>);
+    cell::<3>(c, "exp_d57_s38_gap_128_8", 38, exp_series_d57::<38>, exp_tang_d57::<38, 128, 8>);
+    cell::<3>(c, "exp_d57_s38_gap_512_30", 38, exp_series_d57::<38>, exp_tang_d57::<38, 512, 30>);
+    cell::<3>(c, "exp_d57_s42_gap_128_8", 42, exp_series_d57::<42>, exp_tang_d57::<42, 128, 8>);
+    cell::<3>(c, "exp_d57_s42_gap_512_30", 42, exp_series_d57::<42>, exp_tang_d57::<42, 512, 30>);
+    cell::<3>(c, "exp_d57_s44_gap_128_8", 44, exp_series_d57::<44>, exp_tang_d57::<44, 128, 8>);
+    // Also probe s0 to confirm whether Tang wins all the way down (needed to
+    // decide between gate `0..=56` vs `1..=56` for the merged D57 arm).
+    cell::<3>(c, "exp_d57_s0_low", 0, exp_series_d57::<0>, exp_tang_d57::<0, 128, 8>);
+    cell::<3>(c, "exp_d57_s10_low", 10, exp_series_d57::<10>, exp_tang_d57::<10, 128, 8>);
     // D115 band 50..=60 (M=128, G=8).
     cell::<6>(c, "exp_d115_s50_in", 50, exp_series_d115::<50>, exp_tang_d115::<50>);
     cell::<6>(c, "exp_d115_s60_in", 60, exp_series_d115::<60>, exp_tang_d115::<60>);
