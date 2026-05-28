@@ -46,37 +46,36 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
     match (N, SCALE) {
         // The table-driven Tang kernel eliminates the Series path's wide
         // argument-reduction sqrts and is bit-identical to Series (the
-        // correctly-rounded oracle) across each narrow-wide tier's full
-        // valid scale range — confirmed 4-15x faster over 1..=MAX_SCALE by
-        // the `ln_series_tang_ab` dispatch-seam bench and golden-gated at
-        // the per-tier golden cells (d57_s28, d115_s57, d153_s76). So Tang
-        // owns the whole range at these tiers, not just a centred window.
+        // correctly-rounded oracle) across every wide tier's full valid
+        // scale range. The wide-tier `ln_wide_series_tang_ab` map (the
+        // N-way width × scale × (G, CAP) sweep, 35 cells, 3-input × 6-mode
+        // validity wall) shows Tang beats Series by 4.5×-57× at EVERY
+        // (N, SCALE) cell across {0, S/4, S/2, 3S/4, S-1} for every wide
+        // tier, with zero validity failures. So Tang owns the whole range
+        // at every tier — narrow-wide AND wide — not just point ranges
+        // snapped to bbc cells (the prior Class-I gate shape). The narrow
+        // tiers exclude SCALE=0 because the narrow-wide validation
+        // (`ln_series_tang_ab`) was only run for SCALE >= 1.
         #[cfg(any(feature = "d57", feature = "wide"))]
         (3, 1..=56) => Select::ByAlgorithm(Algorithm::Tang),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        (4, 0..=75) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d115", feature = "wide"))]
         (6, 1..=114) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d153", feature = "wide"))]
         (8, 1..=152) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        (12, 110..=120) => Select::ByAlgorithm(Algorithm::Tang),
+        (12, 0..=229) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        (16, 140..=160) => Select::ByAlgorithm(Algorithm::Tang),
-        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        (16, 285..=295) => Select::ByAlgorithm(Algorithm::Tang),
+        (16, 0..=306) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        (24, 225..=235) => Select::ByAlgorithm(Algorithm::Tang),
+        (24, 0..=461) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        (32, 300..=315) => Select::ByAlgorithm(Algorithm::Tang),
-        #[cfg(any(feature = "d616", feature = "x-wide"))]
-        (32, 585..=595) => Select::ByAlgorithm(Algorithm::Tang),
+        (32, 0..=615) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        (48, 455..=465) => Select::ByAlgorithm(Algorithm::Tang),
-        #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        (48, 895..=905) => Select::ByAlgorithm(Algorithm::Tang),
+        (48, 0..=923) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        (64, 610..=620) => Select::ByAlgorithm(Algorithm::Tang),
-        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        (64, 1195..=1205) => Select::ByAlgorithm(Algorithm::Tang),
+        (64, 0..=1231) => Select::ByAlgorithm(Algorithm::Tang),
         _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }
@@ -187,92 +186,34 @@ fn schoolbook_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: Roundi
 #[cfg(feature = "_wide-support")]
 #[inline]
 fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
+    // Per-tier `(GUARD, CAP)` tuning for the Tang kernel. The select gates
+    // cover the FULL valid scale range for each tier (see [`select`]); the
+    // `ln_wide_series_tang_ab` map confirmed every (G, CAP) candidate is
+    // bit-identical to Series at every cell (zero validity failures across
+    // 35 cells × 3 inputs × 6 modes), so the choice here is purely a
+    // performance tuning. The Tang win over Series ranges from 4.5× (low
+    // scales) to 57× (max scales) per the same map.
     match N {
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => {
-            let r = raw.resize_to::<Int<3>>();
-            let out = match SCALE {
-                1..=56 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d57::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        3 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        4 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => {
-            let r = raw.resize_to::<Int<6>>();
-            let out = match SCALE {
-                1..=114 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d115::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        6 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => {
-            let r = raw.resize_to::<Int<8>>();
-            let out = match SCALE {
-                1..=152 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d153::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        8 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => {
-            let r = raw.resize_to::<Int<12>>();
-            let out = match SCALE {
-                110..=120 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 10, 200, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d230::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        12 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => {
-            let r = raw.resize_to::<Int<16>>();
-            let out = match SCALE {
-                140..=160 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 8, 400, true>(r, mode),
-                285..=295 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, 400, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d307::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        16 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => {
-            let r = raw.resize_to::<Int<24>>();
-            let out = match SCALE {
-                225..=235 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 8, 400, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        24 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => {
-            let r = raw.resize_to::<Int<32>>();
-            let out = match SCALE {
-                300..=315 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true>(r, mode),
-                585..=595 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d616::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        32 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => {
-            let r = raw.resize_to::<Int<48>>();
-            let out = match SCALE {
-                455..=465 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 8, 400, true>(r, mode),
-                895..=905 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 10, 400, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d924::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        48 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => {
-            let r = raw.resize_to::<Int<64>>();
-            let out = match SCALE {
-                610..=620 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 8, 400, true>(r, mode),
-                1195..=1205 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 10, 400, true>(r, mode),
-                _ => crate::algos::support::wide_trig_core::ln_series::<crate::types::widths::wide_trig_d1232::Core, SCALE>(r, mode),
-            };
-            out.resize_to::<Int<N>>()
-        }
+        64 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 10, 400, true>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
         _ => series_routed::<N, SCALE>(raw, mode),
     }
 }
