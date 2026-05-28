@@ -214,25 +214,25 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
     // scales) to 57× (max scales) per the same map.
     match N {
         #[cfg(any(feature = "d57", feature = "wide"))]
-        3 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, true>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
+        3 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, true, false>(raw.resize_to::<Int<3>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d76", feature = "wide"))]
-        4 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
+        4 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true, true>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
+        6 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true, false>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true, true>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        8 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true, false>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
+        16 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d616", feature = "x-wide"))]
-        32 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
+        32 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<32>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d924", feature = "xx-wide"))]
-        48 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
+        48 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<48>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-        64 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 10, 400, true, true>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
+        64 => crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, 10, 400, true, false>(raw.resize_to::<Int<64>>(), mode).resize_to::<Int<N>>(),
         _ => series_routed::<N, SCALE>(raw, mode),
     }
 }

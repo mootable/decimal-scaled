@@ -2743,7 +2743,7 @@ macro_rules! decl_wide_transcendental {
                     // sign bit-identical to Series's `ln_fixed`. Mirrors the
                     // `true, true` flags every `policy::ln::tang_routed`
                     // arm now uses.
-                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, true>(v_w, w)
+                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, false>(v_w, w)
                 } else {
                     ln_fixed(v_w, w)
                 }
