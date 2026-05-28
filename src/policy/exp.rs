@@ -112,10 +112,29 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // top. Cover the full D230 range through the small-`|x|` value gate.
         #[cfg(any(feature = "d230", feature = "wide"))]
         (12, 0..=229) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // D307 (Int<16>): the wide A/B map sweeps {s0, s76, s153, s230, s305}
+        // and ranks Tang vs Series. At s0 / s76 Tang wins (tang_m128_g30 1.06x
+        // at s0; tang_m512_g30 1.11x at s76). At s153 Series wins (1.06x); at
+        // s305 Series wins (1.18x). A continuous Tang win-region covers
+        // 0..=~100 (bisect midpoint between the s76 Tang win and the s153
+        // Series win; 100 is comfortably inside the Tang-winning side without
+        // a finer bisect, conservative versus the s153 boundary). Extends the
+        // old 0..=60 ceiling to capture the s76 Tang win (+11% over Series).
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        (16, 0..=60) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        #[cfg(any(feature = "d462", feature = "x-wide"))]
-        (24, 0..=60) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (16, 0..=100) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // D462 (Int<24>): the wide A/B map sweeps {s0, s115, s231, s346, s460}
+        // and ranks SERIES THE WINNER AT EVERY SCALE (s0 1.08x, s115 1.04x,
+        // s231 1.16x, s346 1.20x, s460 1.15x — vs the production Tang config
+        // tang_m512_g30). Matches v0.4.4's per-tier decision (the v0.4.4
+        // `policy::exp` comment: "D462 — Tang exp probed at SCALE 225..=235
+        // and LOST (~75% regression)"). Tang's table-multiply post-reduction
+        // Taylor needs more wide mults than Series's adaptive Smith r/2^n at
+        // this depth, so the table-elimination of the `k·ln 2` reduction does
+        // NOT pay for the longer Taylor at Int<24>. No Tang gate at D462 —
+        // falls through to the `_` Series arm at every scale. D616/D924/D1232
+        // (wider tiers) already fall through to Series for the same reason
+        // (the A/B confirms Series wins 1.29x-2.06x at every sampled scale
+        // there too).
         _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }
