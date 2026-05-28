@@ -207,6 +207,18 @@ macro_rules! dec_rem_wide_cell {
         // dominant scale-0 decimal-`rem` regression.
         let s0_two = k_times_pow10::<$n>(2, 0);
         let s0_one = k_times_pow10::<$n>(1, 0);
+        // The EXACT scaled bbc `rem` cell: `2.0 % 3.5` at this SCALE, i.e.
+        // `2·10^scale % 35·10^(scale-1)`. The dividend `|2·10^s|` is SMALLER
+        // than the divisor `|3.5·10^s|`, so `x % b == x` — and the scaled
+        // divisor crosses the 128-bit line at s38+, so the u128 fast path
+        // MISSES and (before the magnitude short-circuit) it fell into a full
+        // multi-limb Knuth divmod. This is the dominant rem regression cell.
+        let bbc_x = k_times_pow10::<$n>(2, $scale);
+        let bbc_b = if $scale >= 1 {
+            k_times_pow10::<$n>(35, $scale - 1)
+        } else {
+            k_times_pow10::<$n>(3, 0)
+        };
         assert_eq!(
             dec_rem_int_layer::<$n>(two, one),
             int_wrapping_rem_slice::<$n>(two, one),
@@ -234,9 +246,18 @@ macro_rules! dec_rem_wide_cell {
             "dec rem fastpath balanced disagree {}",
             $label
         );
+        // The magnitude short-circuit on the real bbc `2.0 % 3.5` cell must be
+        // bit-identical to the pure divmod (both yield `rem == dividend`).
+        assert_eq!(
+            dec_rem_int_layer::<$n>(bbc_x, bbc_b),
+            dec_rem_int_layer_divmod::<$n>(bbc_x, bbc_b),
+            "dec rem bbc_xb (2.0 % 3.5) disagree {}",
+            $label
+        );
 
         let inputs = vec![
             Pair { label: "s0_small", a: s0_two, b: s0_one },
+            Pair { label: "bbc_xb", a: bbc_x, b: bbc_b },
             Pair { label: "short_circuit", a: two, b: one },
             Pair { label: "balanced", a: bal_a, b: bal_b },
         ];
