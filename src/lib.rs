@@ -1330,6 +1330,27 @@ pub mod __bench_internals {
                             ),
                         )
                     }
+
+                    /// u128-packed Newton variant. Pre-packs `r` and `pow_scale` at
+                    /// `precompute` time (cached in the table), then runs the WHOLE
+                    /// Newton divide entirely on u128 limbs (no per-call pack/unpack
+                    /// of the cached state, no u128<->u64 transcoding of the operand).
+                    /// Validity wall: bit-identical to `newton` at every (width,
+                    /// scale) cell -- verified by the `newton_u64_eq_u128_*` unit
+                    /// tests in `newton_reciprocal.rs`.
+                    #[inline(never)]
+                    pub fn newton_u128(n: Storage, scale: u32, table: &NewtonReciprocal) -> Storage {
+                        use crate::int::types::traits::BigInt;
+                        let mut mag_u128 = [0u128; 64];
+                        let neg = n.0.mag_into_u128(&mut mag_u128);
+                        crate::algos::support::newton_reciprocal::newton_pow10_mag_u128_packed(
+                            &mut mag_u128,
+                            neg,
+                            RoundingMode::HalfToEven,
+                            &table.0,
+                        );
+                        Storage(W::from_mag_sign_u128(&mag_u128, neg))
+                    }
                 }
             };
         }

@@ -91,6 +91,20 @@ const MAX_MAG_U64: usize = 128;
 /// Max `u64` limbs for product / scratch buffers (`n·r`, `q·D`, …).
 const MAX_PROD_U64: usize = 288;
 
+// -- u128-limb sibling sizes (packed pairs of u64) --------------------
+//
+// The cached `r_u128`/`pow_u128` mirror the u64 versions packed pairwise
+// (`limb = lo | hi << 64`). All sizes are `ceil(u64_size/2)`.
+
+/// Max `u128` limbs for the `10^scale` (`pow_u128`) buffer.
+const MAX_POW_U128: usize = MAX_POW_U64.div_ceil(2);
+/// Max `u128` limbs for the reciprocal (`r_u128`) buffer.
+const MAX_R_U128: usize = MAX_R_U64.div_ceil(2);
+/// Max `u128` limbs for the magnitude / quotient u128 buffers.
+const MAX_MAG_U128: usize = MAX_MAG_U64.div_ceil(2);
+/// Max `u128` limbs for product / scratch u128 buffers.
+const MAX_PROD_U128: usize = MAX_PROD_U64.div_ceil(2);
+
 /// Pre-computed reciprocal table for a single `(SCALE, mag_width)` pair.
 ///
 /// `r` is the reciprocal `floor(2^k / 10^SCALE)` in little-endian
@@ -114,6 +128,25 @@ pub struct NewtonReciprocal {
     pow_scale: [u64; MAX_POW_U64],
     /// Live limb count of `pow_scale`.
     pow_len: usize,
+
+    // -- u128-packed mirrors of `r` and `pow_scale` -------------------
+    //
+    // Populated once at the end of `precompute` by pairwise packing the
+    // u64 limbs above (`limb = lo | hi << 64`). The u128 Newton kernel
+    // (`div_newton_u128`) consumes these directly with NO per-call pack,
+    // recovering the v0.4.4 u128-slice mul throughput at the cost of one
+    // extra pack pass during the (already amortised) precompute.
+    /// Reciprocal limbs packed as u128 pairs, live count `r_u128_len`.
+    r_u128: [u128; MAX_R_U128],
+    /// Live limb count of `r_u128` = `r_len.div_ceil(2)`.
+    r_u128_len: usize,
+    /// Right-shift amount in u128 limbs (`k_u64 / 2`). `precompute`
+    /// rounds `k_u64` UP to even so this shift is limb-aligned in u128.
+    k_u128: usize,
+    /// `10^scale` packed as u128 pairs, live count `pow_u128_len`.
+    pow_u128: [u128; MAX_POW_U128],
+    /// Live limb count of `pow_u128` = `pow_len.div_ceil(2)`.
+    pow_u128_len: usize,
 }
 
 impl NewtonReciprocal {
@@ -150,7 +183,14 @@ impl NewtonReciprocal {
         // k = 64 * (width_limbs + pow_len) bits — then R = 2^k / 10^scale
         // has bit-length about k - bits(10^scale), and (n·R) >> k yields
         // a width_limbs-wide quotient with at most 1 ULP error.
-        let k_u64 = width_limbs + pow_len;
+        //
+        // Round UP to even so the u128-packed mirror right-shift is
+        // limb-aligned in u128 (`k_u128 = k_u64 / 2`). Adding one to k
+        // grows R by a single limb (over-estimate); the Newton add-back
+        // correction absorbs the +1 ULP. The u64 kernel sees the bumped
+        // `k_u64` too — bit-identical correction either way.
+        let k_u64_raw = width_limbs + pow_len;
+        let k_u64 = if k_u64_raw % 2 == 0 { k_u64_raw } else { k_u64_raw + 1 };
 
         // numerator = 2^(64 * k_u64) — a single 1 in limb position k_u64.
         debug_assert!(k_u64 < MAX_R_U64, "num buffer too small");
@@ -167,12 +207,45 @@ impl NewtonReciprocal {
             &mut rem[..pow_len],
         );
 
+        // -- u128-packed mirrors ----------------------------------
+        //
+        // Pack the u64 limbs of `r` and `pow_scale` pairwise into u128
+        // limbs (`limb = lo | hi << 64`). Buffers are zero-initialised,
+        // so packing the rounded-even live count is safe (any odd live
+        // tail of the u64 buffer pairs with a zeroed neighbour).
+        let r_len = k_u64 + 1;
+        let r_u128_len = r_len.div_ceil(2);
+        let pow_u128_len = pow_len.div_ceil(2);
+
+        let mut r_u128 = [0u128; MAX_R_U128];
+        let mut i = 0;
+        while i < r_u128_len {
+            let lo = r[2 * i] as u128;
+            let hi = r[2 * i + 1] as u128;
+            r_u128[i] = lo | (hi << 64);
+            i += 1;
+        }
+        let mut pow_u128 = [0u128; MAX_POW_U128];
+        let mut i = 0;
+        while i < pow_u128_len {
+            let lo = pow_scale[2 * i] as u128;
+            let hi = pow_scale[2 * i + 1] as u128;
+            pow_u128[i] = lo | (hi << 64);
+            i += 1;
+        }
+        let k_u128 = k_u64 / 2;
+
         Self {
             r,
-            r_len: k_u64 + 1,
+            r_len,
             k_u64,
             pow_scale,
             pow_len,
+            r_u128,
+            r_u128_len,
+            k_u128,
+            pow_u128,
+            pow_u128_len,
         }
     }
 }
@@ -253,6 +326,191 @@ fn div_newton(
     }
 
     rem_len
+}
+
+// -- u128-packed Newton kernel ----------------------------------------
+//
+// Mirrors `div_newton` but operates entirely on packed u128 limb slices.
+// The cached `r_u128`/`pow_u128` are consumed directly with NO per-call
+// pack/unpack; the per-call operand (n) and output (quot, rem) all stay
+// in u128 throughout. Recovers the v0.4.4 `limbs_mul`-style throughput
+// (half the limb count, ~1/4 the partial products per schoolbook) by
+// paying the pack cost ONCE in the amortised `precompute`.
+
+#[inline]
+const fn cmp_u128(a: &[u128], b: &[u128]) -> i32 {
+    let mut alen = a.len();
+    while alen > 0 && a[alen - 1] == 0 { alen -= 1; }
+    let mut blen = b.len();
+    while blen > 0 && b[blen - 1] == 0 { blen -= 1; }
+    if alen != blen { return if alen > blen { 1 } else { -1 }; }
+    let mut i = alen;
+    while i > 0 {
+        i -= 1;
+        if a[i] != b[i] { return if a[i] > b[i] { 1 } else { -1 }; }
+    }
+    0
+}
+
+#[inline]
+const fn sub_assign_u128(a: &mut [u128], b: &[u128]) -> bool {
+    let mut borrow: u128 = 0;
+    let mut i = 0;
+    while i < a.len() {
+        let bi = if i < b.len() { b[i] } else { 0 };
+        let (s1, c1) = a[i].overflowing_sub(bi);
+        let (s2, c2) = s1.overflowing_sub(borrow);
+        a[i] = s2;
+        borrow = (c1 as u128) | (c2 as u128);
+        i += 1;
+    }
+    borrow != 0
+}
+
+/// `out = a * b` schoolbook on u128 limb slices. Inner step uses the
+/// 4xu64*u64->u128 partials decomposition (`<u128 as Limb>::widening_mul`).
+#[inline]
+fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
+    use crate::int::types::compute_int::Limb;
+    let mut i = 0;
+    while i < a.len() {
+        if a[i] != 0 {
+            let mut carry: u128 = 0;
+            let mut j = 0;
+            while j < b.len() {
+                if b[j] != 0 || carry != 0 {
+                    let (prod_lo, prod_hi) = <u128 as Limb>::widening_mul(a[i], b[j]);
+                    let idx = i + j;
+                    let (s1, c1) = out[idx].overflowing_add(prod_lo);
+                    let (s2, c2) = s1.overflowing_add(carry);
+                    out[idx] = s2;
+                    carry = prod_hi.wrapping_add(c1 as u128).wrapping_add(c2 as u128);
+                }
+                j += 1;
+            }
+            let mut idx = i + b.len();
+            while carry != 0 && idx < out.len() {
+                let (s, c) = out[idx].overflowing_add(carry);
+                out[idx] = s;
+                carry = c as u128;
+                idx += 1;
+            }
+        }
+        i += 1;
+    }
+}
+
+/// Per-call Newton-reciprocal divide, u128-packed sibling of `div_newton`.
+/// All multiplies run on the cached u128-packed `r` and `pow_scale` (NO
+/// per-call pack); operand/output stay in u128 throughout.
+fn div_newton_u128(
+    n: &[u128],
+    table: &NewtonReciprocal,
+    quot: &mut [u128],
+    rem_out: &mut [u128],
+) -> usize {
+    let r = &table.r_u128[..table.r_u128_len];
+    let pow_scale = &table.pow_u128[..table.pow_u128_len];
+
+    let prod_len = n.len() + r.len();
+    debug_assert!(prod_len <= MAX_PROD_U128, "u128 product buffer too small");
+    let mut prod = [0u128; MAX_PROD_U128];
+    mul_schoolbook_u128(n, r, &mut prod[..prod_len]);
+
+    let lo = table.k_u128.min(prod_len);
+    let q_slice = &prod[lo..prod_len];
+    for (dst, src_) in quot.iter_mut().zip(q_slice.iter()) { *dst = *src_; }
+    for dst in quot.iter_mut().skip(q_slice.len()) { *dst = 0; }
+
+    let prod2_len = quot.len() + pow_scale.len();
+    debug_assert!(prod2_len <= MAX_PROD_U128, "u128 product buffer too small");
+    let mut prod2 = [0u128; MAX_PROD_U128];
+    mul_schoolbook_u128(quot, pow_scale, &mut prod2[..prod2_len]);
+
+    let rem_len = n.len() + 1;
+    debug_assert!(rem_len <= MAX_MAG_U128 + 1, "u128 rem buffer too small");
+    for (dst, src_) in rem_out.iter_mut().take(rem_len).zip(n.iter()) { *dst = *src_; }
+    rem_out[rem_len - 1] = 0;
+    let sub_len = prod2_len.min(rem_len);
+    let _ = sub_assign_u128(&mut rem_out[..sub_len], &prod2[..sub_len]);
+
+    loop {
+        if cmp_u128(&rem_out[..rem_len], pow_scale) < 0 { break; }
+        let s = rem_len.min(pow_scale.len());
+        let _ = sub_assign_u128(&mut rem_out[..s], &pow_scale[..s]);
+        let mut carry: u128 = 1;
+        for limb in quot.iter_mut() {
+            let (s, c) = limb.overflowing_add(carry);
+            *limb = s;
+            if !c { carry = 0; break; }
+        }
+        let _ = carry;
+    }
+
+    rem_len
+}
+
+/// Width-agnostic Newton-reciprocal divide of a u128 magnitude slice by
+/// `10^scale`, in place, with `mode`-aware rounding. Operates entirely
+/// in u128 limbs (NO transcoding to/from u64). Bit-identical to the u64
+/// path `newton_pow10_mag_u128`.
+pub(crate) fn newton_pow10_mag_u128_packed(
+    mag_u128: &mut [u128],
+    neg: bool,
+    mode: crate::support::rounding::RoundingMode,
+    table: &NewtonReciprocal,
+) {
+    use crate::support::rounding;
+
+    let mag_len = mag_u128.len();
+    let mut top = mag_len;
+    while top > 0 && mag_u128[top - 1] == 0 { top -= 1; }
+
+    let n_slice = &mag_u128[..top.max(1)];
+    let mut quot = [0u128; MAX_MAG_U128];
+    let mut rem = [0u128; MAX_MAG_U128 + 1];
+    let rem_len = div_newton_u128(n_slice, table, &mut quot[..mag_len], &mut rem);
+
+    let rem_is_zero = rem[..rem_len].iter().all(|&x| x == 0);
+    if !rem_is_zero {
+        let pow_len = table.pow_u128_len;
+        let mut half = [0u128; MAX_POW_U128];
+        half[..pow_len].copy_from_slice(&table.pow_u128[..pow_len]);
+        let mut i = pow_len;
+        let mut carry_in: u128 = 0;
+        while i > 0 {
+            i -= 1;
+            let next_carry = half[i] & 1;
+            half[i] = (carry_in << 127) | (half[i] >> 1);
+            carry_in = next_carry;
+        }
+
+        let cmp_r = match cmp_u128(&rem[..rem_len], &half[..pow_len]) {
+            n if n < 0 => core::cmp::Ordering::Less,
+            0 => core::cmp::Ordering::Equal,
+            _ => core::cmp::Ordering::Greater,
+        };
+        let q_is_odd = (quot[0] & 1) != 0;
+        if rounding::should_bump(mode, cmp_r, q_is_odd, !neg) {
+            let mut carry: u128 = 1;
+            for limb in quot[..mag_len].iter_mut() {
+                let (s, c) = limb.overflowing_add(carry);
+                *limb = s;
+                if !c { carry = 0; break; }
+            }
+            let _ = carry;
+        }
+    }
+
+    for (i, slot) in mag_u128.iter_mut().enumerate() { *slot = quot[i]; }
+}
+
+/// Per-width Limb-axis matcher: does the cached `(width_bits, scale)`
+/// cell run the u128-packed Newton kernel? Continuous width region per
+/// Constitution rule 6 + Class I (never a per-scale carve-out).
+#[inline]
+const fn newton_u128_wins(width_bits: u32) -> bool {
+    matches!(width_bits, 1536 | 2048 | 3072 | 4096)
 }
 
 /// Full `n / 10^SCALE` with rounding for a `BigInt`-backed value.
@@ -535,7 +793,11 @@ pub(crate) fn dispatch_pow10_mag_u128(
         // `width_limbs` in u64 limbs — the `precompute` unit.
         let width_limbs = (width_bits as usize) / 64;
         cache::with_table(width_bits, scale, width_limbs, |table| {
-            newton_pow10_mag_u128(mag, neg, mode, table);
+            if newton_u128_wins(width_bits) {
+                newton_pow10_mag_u128_packed(mag, neg, mode, table);
+            } else {
+                newton_pow10_mag_u128(mag, neg, mode, table);
+            }
         });
     }
 
@@ -646,5 +908,129 @@ mod tests {
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<64>>(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D1232 s=615");
+    }
+
+    // -- u64-vs-u128 Newton bit-identity (validity wall) ---------------
+    //
+    // The u128-packed kernel MUST produce limb-identical output to the
+    // u64 kernel for every supported width x representative scale, in
+    // every rounding mode. Any divergence is a kernel bug.
+
+    fn assert_u64_u128_match(
+        scale: u32,
+        width_limbs: usize,
+        mag_limbs: usize,
+        top_limb_idx: usize,
+        top_limb_val: u128,
+        low_perturbation: (usize, u128),
+    ) {
+        let table = NewtonReciprocal::precompute(scale, width_limbs);
+
+        let modes = [
+            RoundingMode::HalfToEven,
+            RoundingMode::HalfAwayFromZero,
+            RoundingMode::HalfTowardZero,
+            RoundingMode::Trunc,
+            RoundingMode::Floor,
+            RoundingMode::Ceiling,
+        ];
+
+        for mode in modes {
+            let mut mag_a = [0u128; 64];
+            mag_a[top_limb_idx] = top_limb_val;
+            mag_a[low_perturbation.0] = low_perturbation.1;
+            let mut mag_b = mag_a;
+
+            super::newton_pow10_mag_u128(&mut mag_a[..mag_limbs], false, mode, &table);
+            super::newton_pow10_mag_u128_packed(&mut mag_b[..mag_limbs], false, mode, &table);
+            assert_eq!(
+                mag_a, mag_b,
+                "u64 != u128 Newton at scale={scale} width={width_limbs} mode={mode:?}"
+            );
+
+            let mut mag_a = [0u128; 64];
+            mag_a[top_limb_idx] = top_limb_val;
+            mag_a[low_perturbation.0] = low_perturbation.1;
+            let mut mag_b = mag_a;
+            super::newton_pow10_mag_u128(&mut mag_a[..mag_limbs], true, mode, &table);
+            super::newton_pow10_mag_u128_packed(&mut mag_b[..mag_limbs], true, mode, &table);
+            assert_eq!(
+                mag_a, mag_b,
+                "u64 != u128 Newton (neg) at scale={scale} width={width_limbs} mode={mode:?}"
+            );
+        }
+    }
+
+    #[cfg(feature = "d307")]
+    #[test]
+    fn newton_u64_eq_u128_d307_s150() {
+        assert_u64_u128_match(150, 16, 8, 6, 1u128 << 32, (1, 0xdeadbeef_cafef00d_u128));
+    }
+
+    #[cfg(feature = "d307")]
+    #[test]
+    fn newton_u64_eq_u128_d307_s307() {
+        assert_u64_u128_match(307, 16, 8, 7, 0x1234_5678_9abc_def0u128, (0, 1));
+    }
+
+    // Int<24> = 1536-bit. The PRODUCTION row: D462 storage, D230 Work.
+    #[cfg(feature = "d462")]
+    #[test]
+    fn newton_u64_eq_u128_b1536_s200() {
+        assert_u64_u128_match(200, 24, 12, 10, 1u128 << 24, (2, 0xfeedfacecafef00d_u128));
+    }
+
+    #[cfg(feature = "d462")]
+    #[test]
+    fn newton_u64_eq_u128_b1536_s202() {
+        assert_u64_u128_match(202, 24, 12, 10, 1u128 << 24, (2, 0xfeedfacecafef00d_u128));
+    }
+
+    #[cfg(feature = "d462")]
+    #[test]
+    fn newton_u64_eq_u128_b1536_s259() {
+        assert_u64_u128_match(259, 24, 12, 10, 1u128 << 8, (1, 0xdeadbeef_cafef00d_u128));
+    }
+
+    #[cfg(feature = "d462")]
+    #[test]
+    fn newton_u64_eq_u128_b1536_s461() {
+        assert_u64_u128_match(461, 24, 12, 11, 0x1u128, (3, 0xfacefacef00d_u128));
+    }
+
+    #[cfg(feature = "d616")]
+    #[test]
+    fn newton_u64_eq_u128_d616_s308() {
+        assert_u64_u128_match(308, 32, 16, 14, 1u128 << 16, (3, 0xdeadbeef));
+    }
+
+    #[cfg(feature = "d616")]
+    #[test]
+    fn newton_u64_eq_u128_d616_s616() {
+        assert_u64_u128_match(616, 32, 16, 15, 1u128 << 8, (4, 0xfeedface));
+    }
+
+    #[cfg(feature = "d924")]
+    #[test]
+    fn newton_u64_eq_u128_d924_s460() {
+        assert_u64_u128_match(460, 48, 24, 22, 1u128 << 8, (5, 0xcafef00d));
+    }
+
+    #[cfg(feature = "d924")]
+    #[test]
+    fn newton_u64_eq_u128_d924_s924() {
+        assert_u64_u128_match(924, 48, 24, 23, 1u128, (6, 0xfeedfacef00d));
+    }
+
+    #[cfg(feature = "d1232")]
+    #[test]
+    fn newton_u64_eq_u128_d1232_s615() {
+        assert_u64_u128_match(615, 64, 32, 30, 1u128 << 8, (5, 0xcafef00d));
+    }
+
+    #[cfg(feature = "d1232")]
+    #[test]
+    fn newton_u64_eq_u128_d1232_s1231() {
+        assert_u64_u128_match(1231, 64, 32, 31, 1u128, (7, 0xdeadbeef_feedface_u128));
     }
 }
