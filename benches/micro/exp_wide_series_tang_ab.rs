@@ -155,38 +155,43 @@ macro_rules! cell4 {
     };
 }
 
-/// Sweep a tier across {0, 30, S/2, S-1} (the four sampled scales as literals).
+/// Sweep a tier across the FIVE coarse scale points
+/// `{0, S/4, S/2, 3S/4, S-1}` (the owner-standard sampling) as literals.
 macro_rules! tier {
     ($c:expr, $n:literal, $name:literal, $series:ident, $tang:ident,
-     $s0:literal, $s1:literal, $shalf:literal, $smax1:literal) => {{
+     $s0:literal, $s1:literal, $s2:literal, $s3:literal, $s4:literal) => {{
         cell4!($c, $n, $name, $s0, $series, $tang);
         cell4!($c, $n, $name, $s1, $series, $tang);
-        cell4!($c, $n, $name, $shalf, $series, $tang);
-        cell4!($c, $n, $name, $smax1, $series, $tang);
+        cell4!($c, $n, $name, $s2, $series, $tang);
+        cell4!($c, $n, $name, $s3, $series, $tang);
+        cell4!($c, $n, $name, $s4, $series, $tang);
     }};
 }
 
 fn benches(c: &mut Criterion) {
-    // Per tier: scales {0, 30, S/2, S-1}. S-1 is the MAX-SCALE EXTREME.
-    // D76 (Int<4>, S=75) — NO Tang rectangle exists today; the cell the bbc
-    // `exp_D76_s75 +1160%` / `powf_D76_s75 +838%` regression lives in.
-    tier!(c, 4, "d76", exp_series_d76, exp_tang_d76, 0, 30, 37, 74);
-    // D115 (Int<6>, S=114).
-    tier!(c, 6, "d115", exp_series_d115, exp_tang_d115_p, 0, 30, 57, 113);
-    // D153 (Int<8>, S=152).
-    tier!(c, 8, "d153", exp_series_d153, exp_tang_d153_p, 0, 30, 76, 151);
-    // D230 (Int<12>, S=229) — also had no A/B export.
-    tier!(c, 12, "d230", exp_series_d230, exp_tang_d230, 0, 30, 114, 228);
-    // D307 (Int<16>, S=306).
-    tier!(c, 16, "d307", exp_series_d307, exp_tang_d307, 0, 30, 153, 305);
-    // D462 (Int<24>, S=461).
-    tier!(c, 24, "d462", exp_series_d462, exp_tang_d462, 0, 30, 230, 460);
-    // D616 (Int<32>, S=615).
-    tier!(c, 32, "d616", exp_series_d616, exp_tang_d616, 0, 30, 307, 614);
-    // D924 (Int<48>, S=923).
-    tier!(c, 48, "d924", exp_series_d924, exp_tang_d924, 0, 30, 461, 922);
-    // D1232 (Int<64>, S=1231).
-    tier!(c, 64, "d1232", exp_series_d1232, exp_tang_d1232, 0, 30, 615, 1230);
+    // Per tier: scales {0, S/4, S/2, 3S/4, S-1} (the owner-standard 5-point
+    // coarse sampling). The TOP point is the tier's MAX-SCALE EXTREME, capped
+    // at `capacity - 2` so the x3.0 input (`e^3 ≈ 20`, two integer digits)
+    // still fits storage — a larger top scale leaves < 2 integer digits and
+    // the strict-transcendental range check panics during cell setup.
+    // D76 (Int<4>, cap 76) — the bbc `exp_D76_s75`/`powf_D76_s75` regression.
+    tier!(c, 4, "d76", exp_series_d76, exp_tang_d76, 0, 19, 38, 57, 74);
+    // D115 (Int<6>, cap 115).
+    tier!(c, 6, "d115", exp_series_d115, exp_tang_d115_p, 0, 28, 57, 86, 113);
+    // D153 (Int<8>, cap 153).
+    tier!(c, 8, "d153", exp_series_d153, exp_tang_d153_p, 0, 38, 76, 114, 151);
+    // D230 (Int<12>, cap 230).
+    tier!(c, 12, "d230", exp_series_d230, exp_tang_d230, 0, 57, 115, 172, 228);
+    // D307 (Int<16>, cap 307).
+    tier!(c, 16, "d307", exp_series_d307, exp_tang_d307, 0, 76, 153, 230, 305);
+    // D462 (Int<24>, cap 462).
+    tier!(c, 24, "d462", exp_series_d462, exp_tang_d462, 0, 115, 231, 346, 460);
+    // D616 (Int<32>, cap 616).
+    tier!(c, 32, "d616", exp_series_d616, exp_tang_d616, 0, 154, 308, 462, 614);
+    // D924 (Int<48>, cap 924).
+    tier!(c, 48, "d924", exp_series_d924, exp_tang_d924, 0, 231, 462, 693, 922);
+    // D1232 (Int<64>, cap 1232).
+    tier!(c, 64, "d1232", exp_series_d1232, exp_tang_d1232, 0, 308, 616, 924, 1230);
 }
 
 fn main() {

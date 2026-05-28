@@ -47,14 +47,18 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (3, 18..=22) => Select::ByAlgorithm(Algorithm::Tang),
         #[cfg(any(feature = "d57", feature = "wide"))]
         (3, 45..=56) => Select::ByAlgorithm(Algorithm::Tang),
-        // D76 (Int<4>): the headline fix. The full width × scale A/B
+        // D76 (Int<4>): the full width × scale A/B
         // (`benches/micro/exp_wide_series_tang_ab.rs`) shows Tang beats the
-        // Series squaring core at every D76 scale, and at the MAX scale (s74)
-        // Series is ~28× slower — the bench-branch-compare `exp_D76_s75
-        // +1160%` / `powf_D76_s75 +838%` regression. D76 had no Tang rectangle
-        // at all. Route the whole D76 scale range through the small-`|x|` gate.
+        // Series squaring core at EVERY D76 scale, including the MAX scale
+        // (s75), where the map ranks Series ~16× slower than Tang and every
+        // Tang candidate is bit-identical to Series (zero validity failures).
+        // The old gate stopped at s74, so the MAX scale `exp_D76_s75` cell —
+        // the bench-branch-compare 6.41× regression — fell through to the
+        // slow Series `_` arm (a Class-I single-cell boundary miss). Cover the
+        // WHOLE D76 scale range (0..=75, the design max) through the
+        // small-`|x|` value gate so no scale is left on the Series path.
         #[cfg(any(feature = "d76", feature = "wide"))]
-        (4, 0..=74) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (4, 0..=75) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         // Narrow-wide tiers (N = 6/8/12/16/24) — low-scale Tang rectangles,
         // magnitude-gated. The width × scale A/B shows Tang beats the Series
         // squaring core at low/mid scale (the bench-branch-compare SCALE 30
