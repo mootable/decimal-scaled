@@ -6,11 +6,11 @@
 //! shared public function surface, at each scale in this tier's scale set.
 //! See `compare_common.rs` for the macros + coverage notes.
 //!
-//! Scale set = dedup{0, S/2, S-1, 30 if 30 <= S-1} with S=18 (D18's capacity):
+//! Scale set = {0, S/4, S/2, 3S/4, S-1} with S=18: [0, 4, 9, 13, 17].
 //! {0, 9, 17} — 30 is dropped because 30 > S-1 (17). Each scale becomes a
 //! criterion group suffix `_s<scale>`, selectable via `-- s<scale>`.
 
 #[macro_use]
 mod compare_common;
 
-width_bench!("D18", D18, D18, [0, 9, 17]);
+width_bench!("D18", D18, D18, [0, 4, 9, 13, 17]);

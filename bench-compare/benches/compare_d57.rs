@@ -6,9 +6,9 @@
 //! shared public function surface, at each scale in this tier's scale set.
 //! See `compare_common.rs` for the macros + coverage notes.
 //!
-//! Scale set = dedup{0, S/2, S-1, 30 if 30 <= S-1} with S=57: {0, 28, 30, 56}.
+//! Scale set = {0, S/4, S/2, 3S/4, S-1} with S=57: [0, 14, 28, 42, 56].
 
 #[macro_use]
 mod compare_common;
 
-width_bench!("D57", D57, D57, [0, 28, 30, 56]);
+width_bench!("D57", D57, D57, [0, 14, 28, 42, 56]);

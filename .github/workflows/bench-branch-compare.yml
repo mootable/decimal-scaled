@@ -135,55 +135,68 @@ jobs:
       fail-fast: false
       # Explicit (width, scale) pairs — scales differ per width, so the matrix
       # must be an `include:` list, not a cross-product. Per #1:
-      # scales = dedup{0, S/2, S-1, 30 if 30<=S-1}, S = the tier's max SCALE.
+      # scales = {0, S/4, S/2, 3S/4, S-1}, S = the tier's max SCALE (no 30).
       matrix:
         include:
           - { width: D18,   scale: 0 }
+          - { width: D18,   scale: 4 }
           - { width: D18,   scale: 9 }
+          - { width: D18,   scale: 13 }
           - { width: D18,   scale: 17 }
           - { width: D38,   scale: 0 }
+          - { width: D38,   scale: 9 }
           - { width: D38,   scale: 19 }
-          - { width: D38,   scale: 30 }
+          - { width: D38,   scale: 28 }
           - { width: D38,   scale: 37 }
           - { width: D57,   scale: 0 }
+          - { width: D57,   scale: 14 }
           - { width: D57,   scale: 28 }
-          - { width: D57,   scale: 30 }
+          - { width: D57,   scale: 42 }
           - { width: D57,   scale: 56 }
           - { width: D76,   scale: 0 }
-          - { width: D76,   scale: 30 }
+          - { width: D76,   scale: 19 }
           - { width: D76,   scale: 38 }
+          - { width: D76,   scale: 57 }
           - { width: D76,   scale: 75 }
           - { width: D115,  scale: 0 }
-          - { width: D115,  scale: 30 }
+          - { width: D115,  scale: 28 }
           - { width: D115,  scale: 57 }
+          - { width: D115,  scale: 86 }
           - { width: D115,  scale: 114 }
           - { width: D153,  scale: 0 }
-          - { width: D153,  scale: 30 }
+          - { width: D153,  scale: 38 }
           - { width: D153,  scale: 76 }
+          - { width: D153,  scale: 114 }
           - { width: D153,  scale: 152 }
           - { width: D230,  scale: 0 }
-          - { width: D230,  scale: 30 }
+          - { width: D230,  scale: 57 }
           - { width: D230,  scale: 115 }
+          - { width: D230,  scale: 172 }
           - { width: D230,  scale: 229 }
           - { width: D307,  scale: 0 }
-          - { width: D307,  scale: 30 }
+          - { width: D307,  scale: 76 }
           - { width: D307,  scale: 153 }
+          - { width: D307,  scale: 230 }
           - { width: D307,  scale: 306 }
           - { width: D462,  scale: 0 }
-          - { width: D462,  scale: 30 }
+          - { width: D462,  scale: 115 }
           - { width: D462,  scale: 231 }
+          - { width: D462,  scale: 346 }
           - { width: D462,  scale: 461 }
           - { width: D616,  scale: 0 }
-          - { width: D616,  scale: 30 }
+          - { width: D616,  scale: 154 }
           - { width: D616,  scale: 308 }
+          - { width: D616,  scale: 462 }
           - { width: D616,  scale: 615 }
           - { width: D924,  scale: 0 }
-          - { width: D924,  scale: 30 }
+          - { width: D924,  scale: 231 }
           - { width: D924,  scale: 462 }
+          - { width: D924,  scale: 693 }
           - { width: D924,  scale: 923 }
           - { width: D1232, scale: 0 }
-          - { width: D1232, scale: 30 }
+          - { width: D1232, scale: 308 }
           - { width: D1232, scale: 616 }
+          - { width: D1232, scale: 924 }
           - { width: D1232, scale: 1231 }
 
     steps:
