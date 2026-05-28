@@ -46,6 +46,19 @@ macro_rules! bench_cell {
             })
         });
 
+        // u128-packed Newton -- full kernel on u128 limbs against the
+        // cached u128-packed `r`/`pow_scale`. Integrated-call gate per
+        // the owner's mandate (the prior standalone-mul A/B was a TRAP).
+        g.bench_function("newton_u128", |b| {
+            b.iter(|| {
+                black_box($tier::newton_u128(
+                    black_box(n),
+                    black_box($scale),
+                    black_box(&table),
+                ))
+            })
+        });
+
         g.finish();
     }};
 }
