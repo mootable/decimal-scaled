@@ -185,7 +185,8 @@ pub(crate) use decl_pow10_cached;
 ///   D924 / D1232 where the table-build's `limbs_mul × max_scale`
 ///   work exceeds the stable-rust const-eval step budget.
 macro_rules! decl_wide_transcendental {
-    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal,
+     $n_limbs:literal, $ln_tang_cap:literal, $exp_tang_m:literal) => {
         $crate::macros::wide_transcendental::decl_wide_transcendental!(
             $Type,
             $Storage,
@@ -193,10 +194,14 @@ macro_rules! decl_wide_transcendental {
             $Wexp,
             $core,
             $max_scale,
-            with_const_table
+            with_const_table,
+            $n_limbs,
+            $ln_tang_cap,
+            $exp_tang_m
         );
     };
-    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal, $table_mode:ident) => {
+    ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal, $table_mode:ident,
+     $n_limbs:literal, $ln_tang_cap:literal, $exp_tang_m:literal) => {
         /// Per-tier guard-digit transcendental core. Every function
         /// works on `$Work` integers interpreted at a working scale `w`
         /// passed explicitly alongside the value.
@@ -2679,6 +2684,108 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
+            // ── Matcher-routed working-scale `ln`/`exp` surfaces ────────
+            //
+            // The bypass-fix Class-G remediation. These wrap `ln_fixed`
+            // and `exp_fixed` with the SAME scale gates as
+            // `policy::ln::select` / `policy::exp::select` — routed via the
+            // central `policy::{ln,exp}::is_tang::<N, SCALE>` const fns so
+            // the routed surface tracks any future policy widening
+            // automatically (no hand-kept duplicate). When the policy
+            // routes Tang, the call lands in the working-scale shared
+            // surface `tang_ln_fixed` / `tang_exp_fixed` (the same
+            // surfaces `ln_tang` / `exp_tang` wrap at storage level); the
+            // storage-level Ziv/EXTERNAL_EXTRA widening that the storage
+            // kernels add OVER `tang_*_fixed` is the caller's concern at
+            // the working-scale composition sites (`powf_strict`,
+            // `log_*_with_kernel`, `asinh_strict`, …), which size their
+            // own working guard from the composition's `|k|`-amplifying
+            // arithmetic before calling here.
+            //
+            // For `exp_fixed_routed`, `tang_exp_fixed` runs with
+            // `INTERNAL_EXTRA = true` so the kernel's own `extra` lift
+            // covers arbitrary `|k|` — matching the working-scale Tang
+            // surface the trig hyperbolics already use in `policy::trig`
+            // (e.g. D153 sinh/cosh/tanh, `tang_exp_fixed::<C, 128, true>`).
+            // This is what makes the routed surface safe to use without
+            // re-checking the policy's `ByValue` small-`|x|` gate at the
+            // call site: the kernel absorbs the lift internally.
+            //
+            // `M` / `CAP` are the per-tier values supplied by the macro
+            // call (`$exp_tang_m`, `$ln_tang_cap`) — chosen to mirror the
+            // dominant per-tier values from `policy::ln::tang_routed` /
+            // `policy::exp::tang_routed`. The routed surfaces use one
+            // `(M, CAP)` per tier; per-scale-band M-splits (e.g. D57's
+            // 18..=22 vs 45..=56 in `policy::exp`) collapse to the
+            // dominant tier value here because the working-scale routed
+            // surface is single-source-per-tier.
+
+            /// Tang/Series-routed working-scale `ln(v_w) -> v_w` for this
+            /// tier. Bit-equivalent to the previous direct `ln_fixed`
+            /// call wherever the policy routes Series; routes through
+            /// the shared `tang_ln_fixed` surface (the same one
+            /// `ln_tang` wraps at storage level) wherever the policy
+            /// routes Tang. The bypass-fix call sites
+            /// (`log_strict_with_kernel`, `log2_*_with_kernel`,
+            /// `log10_*_with_kernel`, `powf_strict`, `powf_strict_with`,
+            /// `asinh_strict`, `acosh_strict`, `atanh_strict`, and their
+            /// `_with` siblings) go through this instead of `ln_fixed`
+            /// directly, so the wide-tier log family now inherits the
+            /// matcher's Tang routing (the Class-G remediation).
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn ln_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
+                    // INTERNAL_EXTRA = true: run at extended working scale
+                    // `w + 12` and residual-preserving narrow back to `w`,
+                    // so the directed-rounding Ziv escalation in the caller
+                    // (e.g. asinh_strict_with @ MAX scale) sees a residual
+                    // sign bit-identical to Series's `ln_fixed`. Mirrors the
+                    // `true, true` flags every `policy::ln::tang_routed`
+                    // arm now uses.
+                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, true>(v_w, w)
+                } else {
+                    ln_fixed(v_w, w)
+                }
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn ln_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                ln_fixed(v_w, w)
+            }
+
+            /// Tang/Series-routed working-scale `exp(v_w) -> v_w` for
+            /// this tier. Bit-equivalent to the previous direct
+            /// `exp_fixed` call wherever the policy routes Series;
+            /// routes through `tang_exp_fixed::<Core, M, true>` (the
+            /// `INTERNAL_EXTRA` lift handles arbitrary `|k|`) wherever
+            /// the policy routes Tang. The bypass-fix call sites
+            /// (`exp2_strict`, `exp2_strict_with_kernel`, `powf_strict`,
+            /// `powf_strict_with`, `sinh_cosh_strict`, plus the per-mode
+            /// `_with` siblings) go through this instead of `exp_fixed`
+            /// directly. The `exp_strict` dispatcher still routes through
+            /// `policy::exp::dispatch` so its `ByValue` gate (which
+            /// chooses Series for large-`|x|` to skip Tang's `2^k`
+            /// reassembly amplification at storage) remains in effect at
+            /// the strict-narrowing layer; the working-scale composition
+            /// sites just need a fast `e^{stuff}` and let
+            /// `tang_exp_fixed`'s internal `extra` lift cover the
+            /// large-`|k|` case.
+            #[cfg(feature = "_wide-support")]
+            #[inline]
+            pub(crate) fn exp_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                if const { $crate::policy::exp::is_tang::<$n_limbs, SCALE>() } {
+                    $crate::algos::exp::exp_tang::tang_exp_fixed::<Core, $exp_tang_m, true>(v_w, w)
+                } else {
+                    exp_fixed(v_w, w)
+                }
+            }
+            #[cfg(not(feature = "_wide-support"))]
+            #[inline]
+            pub(crate) fn exp_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
+                exp_fixed(v_w, w)
+            }
+
             // ── log-base algorithm kernels (LnDivide) ──────────────────
             //
             // The arbitrary-base logarithm `log(x, b) = ln(x)/ln(b)` for
@@ -2710,14 +2817,14 @@ macro_rules! decl_wide_transcendental {
                 }
                 // Probe at the base guard to reject base == 1.
                 let w0 = SCALE + GUARD;
-                let ln_b0 = ln_fixed(to_work(braw), w0);
+                let ln_b0 = ln_fixed_routed::<SCALE>(to_work(braw), w0);
                 if ln_b0 == zero() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
                 // Exact-power pin: `self == base^k` ⇒ result is exactly
                 // the integer `k` (see `log10_strict_with`).
                 {
-                    let r0 = div(ln_fixed(to_work(raw), w0), ln_b0, w0);
+                    let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln_b0, w0);
                     let k = round_to_nearest_int(r0, w0);
                     if log_is_exact_int(to_work_w(raw, 0), to_work_w(braw, 0), SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
@@ -2729,8 +2836,8 @@ macro_rules! decl_wide_transcendental {
                 // true residual sign, not the base-guard approximation.
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    let ln_b = ln_fixed(to_work_w(braw, guard), w);
-                    div(ln_fixed(to_work_w(raw, guard), w), ln_b, w)
+                    let ln_b = ln_fixed_routed::<SCALE>(to_work_w(braw, guard), w);
+                    div(ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w), ln_b, w)
                 })
             }
 
@@ -2757,11 +2864,11 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let ln_b = ln_fixed(to_work_w(braw, working_digits), w);
+                let ln_b = ln_fixed_routed::<SCALE>(to_work_w(braw, working_digits), w);
                 if ln_b == zero() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln_b, w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln_b, w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -2779,7 +2886,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 {
                     let w0 = SCALE + GUARD;
-                    let r0 = div(ln_fixed(to_work(raw), w0), ln2(w0), w0);
+                    let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln2(w0), w0);
                     let k = round_to_nearest_int(r0, w0);
                     let base2 = pow10_cached(SCALE) + pow10_cached(SCALE);
                     if log_is_exact_int(to_work_w(raw, 0), base2, SCALE, k) {
@@ -2788,7 +2895,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    div(ln_fixed(to_work_w(raw, guard), w), ln2(w), w)
+                    div(ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w), ln2(w), w)
                 })
             }
 
@@ -2806,7 +2913,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log2: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln2(w), w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln2(w), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -2821,7 +2928,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 {
                     let w0 = SCALE + GUARD;
-                    let r0 = div(ln_fixed(to_work(raw), w0), ln10(w0), w0);
+                    let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln10(w0), w0);
                     let k = round_to_nearest_int(r0, w0);
                     let base10 = pow10_cached(SCALE + 1);
                     if log_is_exact_int(to_work_w(raw, 0), base10, SCALE, k) {
@@ -2830,7 +2937,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 round_to_storage_directed(GUARD, SCALE, mode, |guard| {
                     let w = SCALE + guard;
-                    div(ln_fixed(to_work_w(raw, guard), w), ln10(w), w)
+                    div(ln_fixed_routed::<SCALE>(to_work_w(raw, guard), w), ln10(w), w)
                 })
             }
 
@@ -2848,7 +2955,7 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log10: argument must be positive"));
                 }
                 let w = SCALE + working_digits;
-                let r = div(ln_fixed(to_work_w(raw, working_digits), w), ln10(w), w);
+                let r = div(ln_fixed_routed::<SCALE>(to_work_w(raw, working_digits), w), ln10(w), w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
 
@@ -2891,7 +2998,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + working_digits;
                 let arg = mul(to_work_w(raw, working_digits), ln2(w), w);
-                let r = exp_fixed(arg, w);
+                let r = exp_fixed_routed::<SCALE>(arg, w);
                 round_to_storage_with(r, w, SCALE, mode)
             }
         }
@@ -3021,11 +3128,11 @@ macro_rules! decl_wide_transcendental {
                     panic!(concat!(stringify!($Type), "::log: base must be positive"));
                 }
                 let w = SCALE + $core::GUARD;
-                let ln_b = $core::ln_fixed($core::to_work(braw), w);
+                let ln_b = $core::ln_fixed_routed::<SCALE>($core::to_work(braw), w);
                 if ln_b == $core::zero() {
                     panic!(concat!(stringify!($Type), "::log: base must not equal 1"));
                 }
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), ln_b, w);
+                let r = $core::div($core::ln_fixed_routed::<SCALE>($core::to_work(raw), w), ln_b, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3042,7 +3149,7 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln2(w), w);
+                let r = $core::div($core::ln_fixed_routed::<SCALE>($core::to_work(raw), w), $core::ln2(w), w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3059,7 +3166,7 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + $core::GUARD;
-                let r = $core::div($core::ln_fixed($core::to_work(raw), w), $core::ln10(w), w);
+                let r = $core::div($core::ln_fixed_routed::<SCALE>($core::to_work(raw), w), $core::ln10(w), w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3088,7 +3195,7 @@ macro_rules! decl_wide_transcendental {
                 }
                 let w = SCALE + $core::GUARD;
                 let arg = $core::mul($core::to_work(raw), $core::ln2(w), w);
-                let r = $core::exp_fixed(arg, w);
+                let r = $core::exp_fixed_routed::<SCALE>(arg, w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3113,9 +3220,9 @@ macro_rules! decl_wide_transcendental {
                     return self.powi(n);
                 }
                 let w = SCALE + $core::GUARD;
-                let ln_x = $core::ln_fixed($core::to_work(raw), w);
+                let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work(raw), w);
                 let y = $core::to_work(exp.to_bits());
-                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
+                let r = $core::exp_fixed_routed::<SCALE>($core::mul(y, ln_x, w), w);
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3339,6 +3446,11 @@ macro_rules! decl_wide_transcendental {
                 let one_w = $core::one(w);
                 let v = $core::to_work(raw);
                 let ax = if v < $core::zero() { -v } else { v };
+                // asinh @ MAX scale (input ±1) loses sub-w precision in the
+                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
+                // residue-signal can't detect that caller-side loss. Keep
+                // on Series until ln_fixed_routed gains a PRE_RESIDUE flag
+                // (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
                     let inv = $core::div(one_w, ax, w);
                     let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
@@ -3371,7 +3483,7 @@ macro_rules! decl_wide_transcendental {
                 let inner = if v >= two_w {
                     let inv = $core::div(one_w, v, w);
                     let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                    $core::ln_fixed_routed::<SCALE>(v, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
                 } else {
                     // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
                     // `t = v - one_w` is the exact gap above 1, so
@@ -3407,7 +3519,7 @@ macro_rules! decl_wide_transcendental {
                 // storage input lifted by appending guard zeros), so
                 // neither `ln_fixed` argument suffers the `(1-x)`
                 // catastrophic cancellation the ratio form does near +-1.
-                let r = ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1;
+                let r = ($core::ln_fixed_routed::<SCALE>(one_w + v, w) - $core::ln_fixed_routed::<SCALE>(one_w - v, w)) >> 1;
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
             }
 
@@ -3603,7 +3715,7 @@ macro_rules! decl_wide_transcendental {
                 // narrowing (same budget sinh/cosh use, see those).
                 let k_lift = {
                     let w0 = SCALE + $core::GUARD;
-                    let ln_x0 = $core::ln_fixed($core::to_work(raw), w0);
+                    let ln_x0 = $core::ln_fixed_routed::<SCALE>($core::to_work(raw), w0);
                     let arg0 = $core::mul($core::to_work(eraw), ln_x0, w0);
                     // `arg0` is the exp argument at scale `w0`; narrow it
                     // to scale `SCALE` to feed the `e^|·|` digit sizer
@@ -3623,9 +3735,9 @@ macro_rules! decl_wide_transcendental {
                     mode,
                     |guard| {
                         let w = SCALE + guard;
-                        let ln_x = $core::ln_fixed($core::to_work_w(raw, guard), w);
+                        let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work_w(raw, guard), w);
                         let y = $core::to_work_w(eraw, guard);
-                        $core::exp_fixed($core::mul(y, ln_x, w), w)
+                        $core::exp_fixed_routed::<SCALE>($core::mul(y, ln_x, w), w)
                     },
                 ))
             }
@@ -3984,6 +4096,12 @@ macro_rules! decl_wide_transcendental {
                         let one_w = $core::one(w);
                         let v = $core::to_work_w(raw, guard);
                         let ax = if v < $core::zero() { -v } else { v };
+                        // asinh @ MAX scale (input ±1) loses sub-w precision
+                        // in the sqrt step before ln; tang_ln_fixed's
+                        // INTERNAL_EXTRA residue-signal can't detect that
+                        // caller-side loss. Keep on Series until
+                        // ln_fixed_routed gains a PRE_RESIDUE flag (memory
+                        // project_050_asinh_max_tang_residue).
                         let inner = if ax >= one_w {
                             let inv = $core::div(one_w, ax, w);
                             let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
@@ -4021,7 +4139,7 @@ macro_rules! decl_wide_transcendental {
                         if v >= two_w {
                             let inv = $core::div(one_w, v, w);
                             let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                            $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                            $core::ln_fixed_routed::<SCALE>(v, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
                         } else {
                             // Near 1: acosh(1+t) = log1p(t +
                             // sqrt(t*(t+2))). The gap `t = v - one_w` is
@@ -4064,7 +4182,7 @@ macro_rules! decl_wide_transcendental {
                         // - v` is the exact working-scale gap, so neither
                         // `ln_fixed` argument suffers the `(1-x)`
                         // cancellation the ratio form does near +-1.
-                        ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1
+                        ($core::ln_fixed_routed::<SCALE>(one_w + v, w) - $core::ln_fixed_routed::<SCALE>(one_w - v, w)) >> 1
                     },
                 ))
             }
@@ -4176,7 +4294,7 @@ macro_rules! decl_wide_transcendental {
                     ));
                 }
                 let w = SCALE + working_digits;
-                let r = $core::ln_fixed($core::to_work_w(raw, working_digits), w);
+                let r = $core::ln_fixed_routed::<SCALE>($core::to_work_w(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4281,7 +4399,7 @@ macro_rules! decl_wide_transcendental {
                     return Self::ONE;
                 }
                 let w = SCALE + working_digits;
-                let r = $core::exp_fixed($core::to_work_w(raw, working_digits), w);
+                let r = $core::exp_fixed_routed::<SCALE>($core::to_work_w(raw, working_digits), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4334,9 +4452,9 @@ macro_rules! decl_wide_transcendental {
                     return Self::ZERO;
                 }
                 let w = SCALE + working_digits;
-                let ln_x = $core::ln_fixed($core::to_work_w(raw, working_digits), w);
+                let ln_x = $core::ln_fixed_routed::<SCALE>($core::to_work_w(raw, working_digits), w);
                 let y = $core::to_work_w(exp.to_bits(), working_digits);
-                let r = $core::exp_fixed($core::mul(y, ln_x, w), w);
+                let r = $core::exp_fixed_routed::<SCALE>($core::mul(y, ln_x, w), w);
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
@@ -4791,6 +4909,11 @@ macro_rules! decl_wide_transcendental {
                 let one_w = $core::one(w);
                 let v = $core::to_work_w(raw, working_digits);
                 let ax = if v < $core::zero() { -v } else { v };
+                // asinh @ MAX scale (input ±1) loses sub-w precision in the
+                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
+                // residue-signal can't detect that caller-side loss. Keep
+                // on Series until ln_fixed_routed gains a PRE_RESIDUE flag
+                // (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
                     let inv = $core::div(one_w, ax, w);
                     let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
@@ -4838,7 +4961,7 @@ macro_rules! decl_wide_transcendental {
                 let inner = if v >= two_w {
                     let inv = $core::div(one_w, v, w);
                     let root = $core::sqrt_fixed(one_w - $core::mul(inv, inv, w), w);
-                    $core::ln_fixed(v, w) + $core::ln_fixed(one_w + root, w)
+                    $core::ln_fixed_routed::<SCALE>(v, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
                 } else {
                     // Near 1: acosh(1+t) = log1p(t + sqrt(t*(t+2))).
                     // `t = v - one_w` is the exact gap above 1, so
@@ -4889,7 +5012,7 @@ macro_rules! decl_wide_transcendental {
                 // storage input lifted by appending guard zeros), so
                 // neither `ln_fixed` argument suffers the `(1-x)`
                 // catastrophic cancellation the ratio form does near +-1.
-                let r = ($core::ln_fixed(one_w + v, w) - $core::ln_fixed(one_w - v, w)) >> 1;
+                let r = ($core::ln_fixed_routed::<SCALE>(one_w + v, w) - $core::ln_fixed_routed::<SCALE>(one_w - v, w)) >> 1;
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
             }
 
