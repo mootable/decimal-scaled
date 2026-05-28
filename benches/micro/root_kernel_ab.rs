@@ -13,10 +13,9 @@ use criterion::Criterion;
 use decimal_scaled::Int;
 use decimal_scaled::RoundingMode;
 use decimal_scaled::__bench_internals::{
-    cbrt_native_d57s20, cbrt_native_fast_d57s20, cbrt_native_w, cbrt_newton_slice,
-    cbrt_newton_slice_n,
-    cbrt_table_seed_d57s20, int_from_mag_limbs, sqrt_mg, sqrt_native_w, sqrt_newton_slice,
-    sqrt_newton_slice_n,
+    cbrt_native_d57s20, cbrt_native_fast_a_w, cbrt_native_fast_b_w, cbrt_native_fast_d57s20,
+    cbrt_native_w, cbrt_newton_slice, cbrt_newton_slice_n, cbrt_table_seed_d57s20,
+    int_from_mag_limbs, sqrt_mg, sqrt_native_w, sqrt_newton_slice, sqrt_newton_slice_n,
 };
 
 #[path = "../support/ab_microbench.rs"]
@@ -252,6 +251,88 @@ wide_root_bench!(bench_sqrt_d230_s172, sqrt_native_w, sqrt_newton_slice_n, 12, 2
 wide_root_bench!(bench_cbrt_d230_s57, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 57, "cbrt_d230_s57");
 wide_root_bench!(bench_cbrt_d230_s114, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 114, "cbrt_d230_s114");
 wide_root_bench!(bench_cbrt_d230_s172, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 172, "cbrt_d230_s172");
+// 3/4-band focus for cbrt (the bbc residuals): D230 around s172 + D462
+// around s346. The current policy routes both these cells to Native; bbc
+// says the chosen arm is 1.10-1.13x slower than 0.4.4, so we re-test the
+// Native-vs-slice verdict at + immediately around those points.
+wide_root_bench!(bench_cbrt_d230_s144, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 144, "cbrt_d230_s144");
+wide_root_bench!(bench_cbrt_d230_s200, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 200, "cbrt_d230_s200");
+wide_root_bench!(bench_cbrt_d462_s173, cbrt_native_w, cbrt_newton_slice_n, 24, 72, 173, "cbrt_d462_s173");
+wide_root_bench!(bench_cbrt_d462_s230, cbrt_native_w, cbrt_newton_slice_n, 24, 72, 230, "cbrt_d462_s230");
+wide_root_bench!(bench_cbrt_d462_s288, cbrt_native_w, cbrt_newton_slice_n, 24, 72, 288, "cbrt_d462_s288");
+wide_root_bench!(bench_cbrt_d462_s346, cbrt_native_w, cbrt_newton_slice_n, 24, 72, 346, "cbrt_d462_s346");
+wide_root_bench!(bench_cbrt_d462_s400, cbrt_native_w, cbrt_newton_slice_n, 24, 72, 400, "cbrt_d462_s400");
+// D307 around s230 (3/4 of S=307); already-defined s230 is the 3/4 point.
+// D616 around s461 (3/4 of S=616).
+wide_root_bench!(bench_cbrt_d616_s307, cbrt_native_w, cbrt_newton_slice_n, 32, 96, 307, "cbrt_d616_s307");
+wide_root_bench!(bench_cbrt_d616_s461, cbrt_native_w, cbrt_newton_slice_n, 32, 96, 461, "cbrt_d616_s461");
+
+// 3-way cbrt seed A/B: routed `fast_a` (0.4.4 full-radicand f64 seed, with
+// shipped-seed fallback past bit_length 1020) vs `fast_b` (width-safe top-bits
+// seed with tight 2^(r/3) residue + +1 margin) vs the slice. Run at the wide
+// cells where fast_a falls back to the shipped seed (D230_s172, D462_s346,
+// D616_s461 -- 3/4 band) -- these are exactly the bbc residual cells where the
+// shipped-seed 2.5x over-shoot dominates, so fast_b should pull ahead.
+macro_rules! wide_cbrt_3way {
+    ($fnname:ident, $n:literal, $w:literal, $s:literal, $group:literal) => {
+        fn $fnname(c: &mut Criterion) {
+            let fa = |o: WideOne<$n>| cbrt_native_fast_a_w::<$n, $w, $s>(o.raw, MODE);
+            let fb = |o: WideOne<$n>| cbrt_native_fast_b_w::<$n, $w, $s>(o.raw, MODE);
+            let slc = |o: WideOne<$n>| cbrt_newton_slice_n::<$n, $s>(o.raw, MODE);
+            for o in wide_inputs::<$n>() {
+                for m in ALL_MODES {
+                    let r_fa = cbrt_native_fast_a_w::<$n, $w, $s>(o.raw, m);
+                    let r_fb = cbrt_native_fast_b_w::<$n, $w, $s>(o.raw, m);
+                    let r_slc = cbrt_newton_slice_n::<$n, $s>(o.raw, m);
+                    assert_eq!(r_fa, r_slc, concat!($group, " fast_a vs slice {} mode {:?}"), o.label, m);
+                    assert_eq!(r_fb, r_slc, concat!($group, " fast_b vs slice {} mode {:?}"), o.label, m);
+                }
+            }
+            compare_all(
+                c,
+                $group,
+                |o: &WideOne<$n>| o.label.to_string(),
+                wide_inputs::<$n>(),
+                vec![
+                    ("fast_a", Box::new(fa) as Box<dyn Fn(WideOne<$n>) -> Int<$n>>),
+                    ("fast_b", Box::new(fb)),
+                    ("slice", Box::new(slc)),
+                ],
+            );
+        }
+    };
+}
+
+// 3/4-scale band at the bbc residual cells: D230_s172, D462_s346 (primary),
+// plus immediate neighbours (D230_s144, D230_s200; D462_s230, D462_s400) and
+// the analogous wider tiers (D616_s461, D307_s230 -- already exists, re-bench
+// here under 3way naming for direct fast_a vs fast_b comparison).
+wide_cbrt_3way!(bench_cbrt3_d230_s144, 12, 36, 144, "cbrt3_d230_s144");
+wide_cbrt_3way!(bench_cbrt3_d230_s172, 12, 36, 172, "cbrt3_d230_s172");
+wide_cbrt_3way!(bench_cbrt3_d230_s200, 12, 36, 200, "cbrt3_d230_s200");
+wide_cbrt_3way!(bench_cbrt3_d307_s230, 16, 48, 230, "cbrt3_d307_s230");
+wide_cbrt_3way!(bench_cbrt3_d462_s230, 24, 72, 230, "cbrt3_d462_s230");
+wide_cbrt_3way!(bench_cbrt3_d462_s346, 24, 72, 346, "cbrt3_d462_s346");
+wide_cbrt_3way!(bench_cbrt3_d462_s400, 24, 72, 400, "cbrt3_d462_s400");
+wide_cbrt_3way!(bench_cbrt3_d616_s461, 32, 96, 461, "cbrt3_d616_s461");
+// 3/4-band low-side: D115_s57b, D153_s76 -- where fast_a's f64 path IS valid
+// (smaller cells). These document that fast_a beats fast_b inside the f64
+// range (so fast_b is not a blanket replacement -- it's a wide-cell fix).
+wide_cbrt_3way!(bench_cbrt3_d115_s57, 6, 18, 57, "cbrt3_d115_s57");
+wide_cbrt_3way!(bench_cbrt3_d153_s76, 8, 24, 76, "cbrt3_d153_s76");
+
+fn bench_cbrt_seed_3way(c: &mut Criterion) {
+    bench_cbrt3_d230_s144(c);
+    bench_cbrt3_d230_s172(c);
+    bench_cbrt3_d230_s200(c);
+    bench_cbrt3_d307_s230(c);
+    bench_cbrt3_d462_s230(c);
+    bench_cbrt3_d462_s346(c);
+    bench_cbrt3_d462_s400(c);
+    bench_cbrt3_d616_s461(c);
+    bench_cbrt3_d115_s57(c);
+    bench_cbrt3_d153_s76(c);
+}
 
 fn bench_wide_bisect(c: &mut Criterion) {
     bench_sqrt_d307_s76(c);
@@ -278,6 +359,15 @@ fn bench_wide_bisect(c: &mut Criterion) {
     bench_cbrt_d230_s57(c);
     bench_cbrt_d230_s114(c);
     bench_cbrt_d230_s172(c);
+    bench_cbrt_d230_s144(c);
+    bench_cbrt_d230_s200(c);
+    bench_cbrt_d462_s173(c);
+    bench_cbrt_d462_s230(c);
+    bench_cbrt_d462_s288(c);
+    bench_cbrt_d462_s346(c);
+    bench_cbrt_d462_s400(c);
+    bench_cbrt_d616_s307(c);
+    bench_cbrt_d616_s461(c);
 }
 
 fn bench_wide(c: &mut Criterion) {
@@ -321,6 +411,7 @@ fn benches(c: &mut Criterion) {
     bench_wide(c);
     bench_wide_max(c);
     bench_wide_bisect(c);
+    bench_cbrt_seed_3way(c);
 }
 
 fn main() {
