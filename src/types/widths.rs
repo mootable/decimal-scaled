@@ -1327,7 +1327,7 @@ crate::macros::full::decl_decimal_full!(
     229,
     12,
     400,
-    128
+    512
 );
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s0 = D230<0>;
@@ -1407,7 +1407,7 @@ crate::macros::full::decl_decimal_full!(
     461,
     24,
     400,
-    128
+    512
 );
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub type D462s0 = D462<0>;
