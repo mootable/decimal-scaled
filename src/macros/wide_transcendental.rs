@@ -3446,13 +3446,18 @@ macro_rules! decl_wide_transcendental {
                 let one_w = $core::one(w);
                 let v = $core::to_work(raw);
                 let ax = if v < $core::zero() { -v } else { v };
+                // asinh @ MAX scale (input ±1) loses sub-w precision in the
+                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
+                // residue-signal can't detect that caller-side loss. Keep
+                // on Series until ln_fixed_routed gains a PRE_RESIDUE flag
+                // (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
                     let inv = $core::div(one_w, ax, w);
                     let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed_routed::<SCALE>(ax, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
+                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
                 } else {
                     let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed_routed::<SCALE>(ax + root, w)
+                    $core::ln_fixed(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
@@ -4091,13 +4096,19 @@ macro_rules! decl_wide_transcendental {
                         let one_w = $core::one(w);
                         let v = $core::to_work_w(raw, guard);
                         let ax = if v < $core::zero() { -v } else { v };
+                        // asinh @ MAX scale (input ±1) loses sub-w precision
+                        // in the sqrt step before ln; tang_ln_fixed's
+                        // INTERNAL_EXTRA residue-signal can't detect that
+                        // caller-side loss. Keep on Series until
+                        // ln_fixed_routed gains a PRE_RESIDUE flag (memory
+                        // project_050_asinh_max_tang_residue).
                         let inner = if ax >= one_w {
                             let inv = $core::div(one_w, ax, w);
                             let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                            $core::ln_fixed_routed::<SCALE>(ax, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
+                            $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
                         } else {
                             let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                            $core::ln_fixed_routed::<SCALE>(ax + root, w)
+                            $core::ln_fixed(ax + root, w)
                         };
                         if neg { -inner } else { inner }
                     },
@@ -4898,13 +4909,18 @@ macro_rules! decl_wide_transcendental {
                 let one_w = $core::one(w);
                 let v = $core::to_work_w(raw, working_digits);
                 let ax = if v < $core::zero() { -v } else { v };
+                // asinh @ MAX scale (input ±1) loses sub-w precision in the
+                // sqrt step before ln; tang_ln_fixed's INTERNAL_EXTRA
+                // residue-signal can't detect that caller-side loss. Keep
+                // on Series until ln_fixed_routed gains a PRE_RESIDUE flag
+                // (memory project_050_asinh_max_tang_residue).
                 let inner = if ax >= one_w {
                     let inv = $core::div(one_w, ax, w);
                     let root = $core::sqrt_fixed(one_w + $core::mul(inv, inv, w), w);
-                    $core::ln_fixed_routed::<SCALE>(ax, w) + $core::ln_fixed_routed::<SCALE>(one_w + root, w)
+                    $core::ln_fixed(ax, w) + $core::ln_fixed(one_w + root, w)
                 } else {
                     let root = $core::sqrt_fixed($core::mul(ax, ax, w) + one_w, w);
-                    $core::ln_fixed_routed::<SCALE>(ax + root, w)
+                    $core::ln_fixed(ax + root, w)
                 };
                 let signed = if raw < $crate::macros::wide_roots::wide_lit!($Storage, "0") {
                     -inner
