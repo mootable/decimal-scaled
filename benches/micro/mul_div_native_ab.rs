@@ -125,10 +125,22 @@ fn mul2<const S: u32>(c: &mut Criterion, label: &str) {
 }
 
 fn bench(c: &mut Criterion) {
-    div1::<6>(c, "D18_s6");
+    // div: full SCALE sweep across the narrow-tier band so the policy
+    // verdict (native at N==1|2) is validated at every scale the bbc
+    // grid samples, not just the {6,18} corners. The bbc div regression
+    // cluster sits at D18_s0/4/9/13/17 and D38_s0/9 -- those concrete
+    // cells anchor the table.
+    div1::<0>(c, "D18_s0");
+    div1::<4>(c, "D18_s4");
+    div1::<9>(c, "D18_s9");
+    div1::<13>(c, "D18_s13");
+    div1::<17>(c, "D18_s17");
     div1::<18>(c, "D18_s18");
-    div2::<6>(c, "D38_s6");
+    div2::<0>(c, "D38_s0");
+    div2::<9>(c, "D38_s9");
     div2::<18>(c, "D38_s18");
+    div2::<28>(c, "D38_s28");
+    div2::<37>(c, "D38_s37");
     mul1::<6>(c, "D18_s6");
     mul1::<18>(c, "D18_s18");
     mul2::<6>(c, "D38_s6");
