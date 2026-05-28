@@ -978,6 +978,16 @@ path = "benches/micro/exp_wide_series_tang_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# exp_wide_tang_bisect: targeted Tang/Series crossover bisection for D307 and
+# D462, supplementing the 5-point coarse map. D307: probes s90/s100/s115/s130
+# to localize the s76..s153 crossover. D462: probes s58 (s0..s115 midpoint) +
+# s115 (the ~tie boundary) to confirm whether Tang has a winning sub-region.
+[[bench]]
+name = "exp_wide_tang_bisect"
+path = "benches/micro/exp_wide_tang_bisect.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # hyper_wide_tang_ab: tests the 2026-05-28 audit Finding #4 "Pattern A" lead --
 # does Tang-composed (e^x, e^-x) hyperbolic beat the current schoolbook (Series-
 # composed) at D462/D616/D924/D1232? Five-point coarse-scale sweep x {sinh, cosh,
