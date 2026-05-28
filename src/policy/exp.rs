@@ -112,29 +112,58 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // top. Cover the full D230 range through the small-`|x|` value gate.
         #[cfg(any(feature = "d230", feature = "wide"))]
         (12, 0..=229) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        // D307 (Int<16>): the wide A/B map sweeps {s0, s76, s153, s230, s305}
-        // and ranks Tang vs Series. At s0 / s76 Tang wins (tang_m128_g30 1.06x
-        // at s0; tang_m512_g30 1.11x at s76). At s153 Series wins (1.06x); at
-        // s305 Series wins (1.18x). A continuous Tang win-region covers
-        // 0..=~100 (bisect midpoint between the s76 Tang win and the s153
-        // Series win; 100 is comfortably inside the Tang-winning side without
-        // a finer bisect, conservative versus the s153 boundary). Extends the
-        // old 0..=60 ceiling to capture the s76 Tang win (+11% over Series).
+        // D307 (Int<16>): the 5-point wide A/B map sweeps {s0, s76, s153, s230,
+        // s305} (`benches/micro/exp_wide_series_tang_ab.rs`) — Tang wins s0
+        // (~tie 1.00×) and s76 (+1.03× production M=512); Series wins s153
+        // (+1.04×) / s230 (+1.11×) / s305 (+1.16×). A two-pass bisection
+        // (`benches/micro/exp_wide_tang_bisect.rs`) of the s76..=s153 region
+        // sharpens the crossover: at s78 tang_m128 wins +1.02× but the
+        // production tang_m512 LOSES 1.04× (noise band); s80 / s84 / s90 /
+        // s100 / s115 / s130 are ALL Series wins (1.00–1.07×). So the OLD
+        // `0..=100` arm routed s80..=s100 to Tang where Series is the narrow
+        // winner — a Class-I single-cell-edge fit anchored to the s76 coarse
+        // sample that the bisect refutes. Tighten to `0..=80`: covers the
+        // confirmed s0..=s78 Tang win-region with s80 (the bisected ~tie) as a
+        // one-cell safety margin past the s76 sample, hands the s80+
+        // slow-side band back to Series where it belongs (architectural-review
+        // Class I: continuous win-region, bisected true crossover).
+        // Bench runs on cores 22–23 pinned.
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        (16, 0..=100) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (16, 0..=80) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         // D462 (Int<24>): the wide A/B map sweeps {s0, s115, s231, s346, s460}
-        // and ranks SERIES THE WINNER AT EVERY SCALE (s0 1.08x, s115 1.04x,
-        // s231 1.16x, s346 1.20x, s460 1.15x — vs the production Tang config
-        // tang_m512_g30). Matches v0.4.4's per-tier decision (the v0.4.4
-        // `policy::exp` comment: "D462 — Tang exp probed at SCALE 225..=235
-        // and LOST (~75% regression)"). Tang's table-multiply post-reduction
-        // Taylor needs more wide mults than Series's adaptive Smith r/2^n at
-        // this depth, so the table-elimination of the `k·ln 2` reduction does
-        // NOT pay for the longer Taylor at Int<24>. No Tang gate at D462 —
-        // falls through to the `_` Series arm at every scale. D616/D924/D1232
-        // (wider tiers) already fall through to Series for the same reason
-        // (the A/B confirms Series wins 1.29x-2.06x at every sampled scale
-        // there too).
+        // and ranks SERIES THE WINNER at every scale (s0 1.02×, s231 1.07×,
+        // s346 1.14×, s460 1.19× — vs the production Tang config tang_m512_g30;
+        // only s115 ~tied at +1.01× Tang). A two-pass bisection at s58
+        // (`benches/micro/exp_wide_tang_bisect.rs`) returns a 0.4% ~tie
+        // (Tang 304.4ms, Series 305.5ms — within bench noise), and s115 in
+        // the bisect run flips to Series +1.10× (the 5-point sweep was
+        // measurement noise). No Tang win-region exists at D462 — every
+        // confirmed-non-noise cell goes to Series. Matches v0.4.4's per-tier
+        // decision (the v0.4.4 `policy::exp` comment: "D462 — Tang exp probed
+        // at SCALE 225..=235 and LOST (~75% regression)"). Tang's
+        // table-multiply post-reduction Taylor needs more wide mults than
+        // Series's adaptive Smith r/2^n at this depth, so the table-elimination
+        // of the `k·ln 2` reduction does NOT pay for the longer Taylor at
+        // Int<24>. No Tang gate at D462 — falls through to the `_` Series arm
+        // at every scale. D616/D924/D1232 (wider tiers) already fall through
+        // to Series for the same reason: the A/B confirms Series wins
+        // 1.19×–1.50× at every sampled scale at D616 (s0 1.29×, s154 1.19×,
+        // s308 ~tie, s462 1.50×, s614 1.45×) and 1.49× at D924_s0 (rest of
+        // D924 + all of D1232 did not complete in the time budget, but trend
+        // is uniform — Series widening lead with width).
+        //
+        // **Audit Finding #5 (2026-05-28) DISPOSITION** — the
+        // `research/2026_05_28_d462_d924_d1232_policy_audit.md` audit raised
+        // that `policy::exp` Tang gates only N ∈ {3,4,6,8,12,16} and asked
+        // whether the wider tiers N ≥ 24 should also be Tang-gated. The 5-point
+        // sweep above + the D462 bisection at s58/s115 EMPIRICALLY REFUTE the
+        // audit lead for `exp`: at N=24/32/48 the Tang structural overhead
+        // (table multiply + post-reduction Taylor at very wide work widths)
+        // exceeds the saving from removing the `k·ln 2` reduction. Series's
+        // adaptive Smith r/2^n is faster at every confirmed cell at D462+.
+        // The audit lead is RESOLVED for `exp` and NOT a defect — the absent
+        // wide-tier Tang arms are evidence-backed. (The hyperbolic trig and
+        // forward-trig coverage at D462+ are unrelated and tracked separately.)
         _ => Select::ByAlgorithm(Algorithm::Series),
     }
 }
