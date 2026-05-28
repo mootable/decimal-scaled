@@ -140,9 +140,22 @@ pub(crate) mod forward {
             // D307 (`Int<16>`) Tang band.
             #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
             (16, 140..=160) => Select::ByAlgorithm(Algorithm::Tang),
-            // D462 (`Int<24>`) Tang band.
+            // D462 (`Int<24>`) — narrow-GUARD reclaim wins across the FULL
+            // SCALE range (0..=461). At D462 the `Tang` arm realises as
+            // `sincos_narrow::*_with_taylor` (GUARD=10) / `atan_narrow`
+            // (GUARD=12) — a narrowed-GUARD Taylor reclaim that runs the
+            // same `sin_fixed`/`cos_fixed`/`atan_fixed` cores but at the
+            // band's smaller working width (vs the tier's default
+            // GUARD=30). The 2026-05-28 bisection (`trig_wide_tang_bisect`)
+            // showed narrow_g10/g12 wins by 1.0×–2.4× at every probed
+            // s0/50/100/150/180/200/210/218/225/230/235/240/260/290/330/400/450
+            // across sin/cos/tan/atan (3 inputs × 6 rounding modes,
+            // bit-identical to Series), refuting the prior 225..=235
+            // point-range gate (Audit Finding #2, untested). One inner
+            // outlier (sin s230, Series +1.11×) is bench noise: neighbours
+            // s225 / s235 / s240 all show narrow wins for sin.
             #[cfg(any(feature = "d462", feature = "x-wide"))]
-            (24, 225..=235) => Select::ByAlgorithm(Algorithm::Tang),
+            (24, 0..=461) => Select::ByAlgorithm(Algorithm::Tang),
             // Everything else — generic Series (incl. the D57 18..=22
             // narrow-GUARD band, realised as a Series kernel).
             _ => Select::ByAlgorithm(Algorithm::Series),
@@ -159,8 +172,10 @@ pub(crate) mod forward {
             (8, 70..=82) => Select::ByAlgorithm(Algorithm::Tang),
             #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
             (16, 140..=160) => Select::ByAlgorithm(Algorithm::Tang),
+            // D462 — same full-range narrow-GUARD reclaim as [`select`];
+            // see that arm's comment for the bisection evidence.
             #[cfg(any(feature = "d462", feature = "x-wide"))]
-            (24, 225..=235) => Select::ByAlgorithm(Algorithm::Tang),
+            (24, 0..=461) => Select::ByAlgorithm(Algorithm::Tang),
             _ => Select::ByAlgorithm(Algorithm::Series),
         }
     }

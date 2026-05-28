@@ -1308,6 +1308,77 @@ pub mod __bench_internals {
         crate::algos::trig::sincos_tang::sin_tang_with_taylor::<crate::types::widths::wide_trig_d57::Core, SCALE, 512>(raw, mode)
     }
 
+    // D462 forward-trig bench seam — sin/cos/tan/atan Series-vs-narrow A/B
+    // for the policy-mapper bisection of the (24, 225..=235) band. The "Tang"
+    // variant at D462 is realised by `sincos_narrow::*_with_taylor` (a
+    // narrowed-GUARD Taylor reclaim — not actual Tang lookup, see the
+    // kernel module doc), parameterised by the band GUARD so the bench can
+    // sweep G. Production wires G=10 for sin/cos/tan and G=12 for atan.
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sin_series_d462<const SCALE: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::support::wide_trig_core::sin_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sin_narrow_d462<const SCALE: u32, const GUARD: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::trig::sincos_narrow::sin_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn cos_series_d462<const SCALE: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::support::wide_trig_core::cos_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn cos_narrow_d462<const SCALE: u32, const GUARD: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::trig::sincos_narrow::cos_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn tan_series_d462<const SCALE: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::support::wide_trig_core::tan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn tan_narrow_d462<const SCALE: u32, const GUARD: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::trig::sincos_narrow::tan_narrow_with_taylor::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD, false>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn atan_series_d462<const SCALE: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::support::wide_trig_core::atan_series::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn atan_narrow_d462<const SCALE: u32, const GUARD: u32>(
+        raw: crate::int::types::Int<24>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<24> {
+        crate::algos::support::wide_trig_core::atan_narrow::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode)
+    }
+
     /// `to_radians` candidates for the `to_radians_ab` microbench (the
     /// wide-tier angle-conversion regression vs 0.4.4). `direct` calls the
     /// `MulPiRatio` kernel straight on the tier `Core` (no policy / resize

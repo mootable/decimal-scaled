@@ -988,6 +988,16 @@ path = "benches/micro/exp_wide_tang_bisect.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# trig_wide_tang_bisect: targeted narrow-Taylor / Series crossover bisection for
+# D462 forward-trig (sin/cos/tan/atan), the audit Finding #2 untested band
+# (24, 225..=235). Probes inside (s225/s230/s235) + outward (s210/s218 below,
+# s240/s260/s290 above) — same shape as `exp_wide_tang_bisect`.
+[[bench]]
+name = "trig_wide_tang_bisect"
+path = "benches/micro/trig_wide_tang_bisect.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # hyper_wide_tang_ab: tests the 2026-05-28 audit Finding #4 "Pattern A" lead --
 # does Tang-composed (e^x, e^-x) hyperbolic beat the current schoolbook (Series-
 # composed) at D462/D616/D924/D1232? Five-point coarse-scale sweep x {sinh, cosh,
