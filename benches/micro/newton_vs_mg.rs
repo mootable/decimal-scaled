@@ -13,7 +13,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::__bench_internals::newton_vs_mg::{
-    NewtonReciprocal, d307, d462, d616, d924, d1232,
+    NewtonReciprocal, b6144, b8192, b12288, b16384, b32768, d1232, d307, d462, d616, d924,
 };
 use std::hint::black_box;
 
@@ -114,6 +114,64 @@ fn bench(c: &mut Criterion) {
     bench_cell!(c, d1232, "D1232_s615", 615, 64, 30);
     bench_cell!(c, d1232, "D1232_s900", 900, 64, 30);
     bench_cell!(c, d1232, "D1232_s1231", 1231, 64, 30);
+
+    // ── Wider widths (audit 2026-05-28) ─────────────────────────────
+    //
+    // Per the all-widths rule (axis = width x scale-band), every new
+    // width gets a representative `{0, S/4, S/2, 3S/4, S-1}`-style
+    // sweep + bisection cells around the suspected crossover. Scale
+    // range capped by the widest call site `w = SCALE + GUARD(30)`:
+    //   - 6144  : reaches w ≤ 953 (D924 Work) — sweep through 953.
+    //   - 8192  : reaches w ≤ 1261 (D1232 Work via mul) — sweep to 1231.
+    //   - 12288 : reaches w ≤ 953 (D924 Wide).
+    //   - 16384 : reaches w ≤ 1261 (D1232 Wide / D924 Wexp).
+    //   - 32768 : reaches w ≤ 1261 (D1232 Wexp).
+    //
+    // The sweep is intentionally coarse first (5-point); the coordinator's
+    // bisection step localises the true crossover.
+
+    // 6144-bit (Int<96>): D230 Wexp / D924 Work.
+    bench_cell!(c, b6144, "B6144_s38", 38, 96, 44);
+    bench_cell!(c, b6144, "B6144_s115", 115, 96, 44);
+    bench_cell!(c, b6144, "B6144_s200", 200, 96, 44);
+    bench_cell!(c, b6144, "B6144_s400", 400, 96, 44);
+    bench_cell!(c, b6144, "B6144_s600", 600, 96, 44);
+    bench_cell!(c, b6144, "B6144_s800", 800, 96, 44);
+    bench_cell!(c, b6144, "B6144_s953", 953, 96, 44);
+
+    // 8192-bit (Int<128>): D462 Wexp / D1232 Work.
+    bench_cell!(c, b8192, "B8192_s38", 38, 128, 60);
+    bench_cell!(c, b8192, "B8192_s200", 200, 128, 60);
+    bench_cell!(c, b8192, "B8192_s400", 400, 128, 60);
+    bench_cell!(c, b8192, "B8192_s600", 600, 128, 60);
+    bench_cell!(c, b8192, "B8192_s900", 900, 128, 60);
+    bench_cell!(c, b8192, "B8192_s1231", 1231, 128, 60);
+
+    // 12288-bit (Int<192>): D924 Wide.
+    bench_cell!(c, b12288, "B12288_s38", 38, 192, 90);
+    bench_cell!(c, b12288, "B12288_s200", 200, 192, 90);
+    bench_cell!(c, b12288, "B12288_s400", 400, 192, 90);
+    bench_cell!(c, b12288, "B12288_s600", 600, 192, 90);
+    bench_cell!(c, b12288, "B12288_s800", 800, 192, 90);
+    bench_cell!(c, b12288, "B12288_s953", 953, 192, 90);
+
+    // 16384-bit (Int<256>): D616 Wexp / D924 Wexp / D1232 Wide.
+    bench_cell!(c, b16384, "B16384_s38", 38, 256, 120);
+    bench_cell!(c, b16384, "B16384_s200", 200, 256, 120);
+    bench_cell!(c, b16384, "B16384_s400", 400, 256, 120);
+    bench_cell!(c, b16384, "B16384_s600", 600, 256, 120);
+    bench_cell!(c, b16384, "B16384_s900", 900, 256, 120);
+    bench_cell!(c, b16384, "B16384_s1231", 1231, 256, 120);
+
+    // 32768-bit (Int<512>): D1232 Wexp. The widest cell — confirms
+    // that the buffer-size raise (MAX_R_U64=584, MAX_PROD_U64=1100,
+    // MAX_MAG_U64=512) doesn't tip the per-call pack overhead past MG.
+    bench_cell!(c, b32768, "B32768_s38", 38, 512, 240);
+    bench_cell!(c, b32768, "B32768_s200", 200, 512, 240);
+    bench_cell!(c, b32768, "B32768_s400", 400, 512, 240);
+    bench_cell!(c, b32768, "B32768_s600", 600, 512, 240);
+    bench_cell!(c, b32768, "B32768_s900", 900, 512, 240);
+    bench_cell!(c, b32768, "B32768_s1231", 1231, 512, 240);
 }
 
 criterion_group!(benches, bench);

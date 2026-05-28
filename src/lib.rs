@@ -1365,6 +1365,19 @@ pub mod __bench_internals {
         shim!(d616, crate::int::types::Int<32>, "x-wide");
         shim!(d924, crate::int::types::Int<48>, "xx-wide");
         shim!(d1232, crate::int::types::Int<64>, "xx-wide");
+        // Wider tiers added 2026-05-28 for the wide-tier transcendental
+        // work / wide / Wexp integers. Bench-validated cells extend the
+        // Newton-vs-MG matrix beyond the original 1536-4096 band.
+        // - Int<96>=6144 (D230 Wexp / D924 Work)
+        // - Int<128>=8192 (D462 Wexp / D1232 Work)
+        // - Int<192>=12288 (D924 Wide)
+        // - Int<256>=16384 (D616 Wexp / D924 Wexp / D1232 Wide)
+        // - Int<512>=32768 (D1232 Wexp)
+        shim!(b6144, crate::int::types::Int<96>, "xx-wide");
+        shim!(b8192, crate::int::types::Int<128>, "xx-wide");
+        shim!(b12288, crate::int::types::Int<192>, "xx-wide");
+        shim!(b16384, crate::int::types::Int<256>, "xx-wide");
+        shim!(b32768, crate::int::types::Int<512>, "xx-wide");
     }
 
     /// `Int<N>` wrapping_neg candidates exposed for the `neg_kernel_ab`

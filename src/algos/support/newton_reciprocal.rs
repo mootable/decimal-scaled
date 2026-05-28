@@ -70,26 +70,37 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────
 //
-// The widest cell exercised is `width_limbs = 32` u128 limbs (Int<64>,
-// 4096-bit storage) at `scale` up to ~1231 (the bench sweep). Working in
-// u64 limbs (two per u128 limb), the worst-case sizes are:
+// The widest cell exercised is `width_limbs = 512` u64 limbs (32768-bit
+// storage, the D1232 Wexp working integer used by exp Tang) at `scale`
+// up to ~1261 (`SCALE_max=1231 + GUARD=30`). Working in u64 limbs (two
+// per u128 limb), the worst-case sizes are:
 //
-//   pow_scale : pow_u128 = scale/38 + 2 ≤ 36 u128 → 72 u64
-//   r         : (k_u128 + 1) = (width + pow + 1) ≤ 68 u128 → 136 u64
-//   mag (n)   : 64 u128 → 128 u64
-//   product   : n.len() + r.len() ≤ 128 + 136 = 264 u64
+//   pow_scale : pow_u64 = scale/19 + 3 ≤ 69 u64
+//   r         : (k_u64 + 1) = (width + pow + 1) ≤ 512 + 69 + 1 = 582 u64
+//   mag (n)   : 512 u64
+//   product   : n.len() + r.len() ≤ 512 + 582 = 1094 u64
 //
-// All buffers are over-sized to a single generous ceiling so the same
-// type serves every tier without const-generic gymnastics.
+// All buffers are over-sized to a single ceiling that covers every
+// width the matcher routes Newton-vs-MG against, so the same type
+// serves every tier without const-generic gymnastics.
+//
+// The build-max is internal to the runtime-instantiated
+// `NewtonReciprocal` cache type — it never leaks onto a concrete-`N`
+// path (those still size their scratch via `ComputeInt::single_*` etc.
+// per Constitution rule 6). The cache stores ONE struct per cached
+// width per thread; over-sizing here costs constant per-slot stack +
+// per-slot struct memory (~13 KB u64 mirrors + ~5 KB u128 mirrors
+// times the number of cached widths actually accessed at runtime),
+// not per-tier code duplication.
 
 /// Max `u64` limbs for the `10^SCALE` (`pow_scale`) buffer.
 const MAX_POW_U64: usize = 80;
 /// Max `u64` limbs for the reciprocal (`r`) buffer.
-const MAX_R_U64: usize = 144;
+const MAX_R_U64: usize = 584;
 /// Max `u64` limbs for the magnitude / quotient buffers.
-const MAX_MAG_U64: usize = 128;
+const MAX_MAG_U64: usize = 512;
 /// Max `u64` limbs for product / scratch buffers (`n·r`, `q·D`, …).
-const MAX_PROD_U64: usize = 288;
+const MAX_PROD_U64: usize = 1100;
 
 // -- u128-limb sibling sizes (packed pairs of u64) --------------------
 //
@@ -691,6 +702,25 @@ mod cache {
         static C_4096: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
             ::core::cell::RefCell::new(alloc::vec::Vec::new())
         };
+        // Wider widths added 2026-05-28 — the wide-tier transcendental
+        // work / wide / Wexp integers (D230 Wexp=6144 / D924 Work=6144,
+        // D462 Wexp=8192 / D1232 Work=8192, D924 Wide=12288, D616 Wexp /
+        // D924 Wexp / D1232 Wide=16384, D1232 Wexp=32768).
+        static C_6144: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+        static C_8192: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+        static C_12288: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+        static C_16384: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
+        static C_32768: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
     }
 
     /// Run `f` with a borrowed reciprocal table for `(width_bits, scale)`.
@@ -707,6 +737,11 @@ mod cache {
             2048 => &C_2048,
             3072 => &C_3072,
             4096 => &C_4096,
+            6144 => &C_6144,
+            8192 => &C_8192,
+            12288 => &C_12288,
+            16384 => &C_16384,
+            32768 => &C_32768,
             _ => unreachable!("with_table called on un-cached width {width_bits}"),
         };
         // Ensure the slot has an entry for `scale`; insert one if not.
