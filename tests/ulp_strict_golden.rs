@@ -324,28 +324,28 @@ decl_band! {
     width Width::D76,
     feature_gate cfg(any(feature = "d76", feature = "wide")),
     funcs {
-        ln    = "golden/ln_d76_s35.txt";
-        exp   = "golden/exp_d76_s35.txt";
-        exp2  = "golden/exp2_d76_s35.txt";
-        log2  = "golden/log2_d76_s35.txt";
-        log10 = "golden/log10_d76_s35.txt";
-        sin   = "golden/sin_d76_s35.txt";
-        cos   = "golden/cos_d76_s35.txt";
-        tan   = "golden/tan_d76_s35.txt";
-        atan  = "golden/atan_d76_s35.txt";
-        asin  = "golden/asin_d76_s35.txt";
-        acos  = "golden/acos_d76_s35.txt";
-        sinh  = "golden/sinh_d76_s35.txt";
-        cosh  = "golden/cosh_d76_s35.txt";
-        tanh  = "golden/tanh_d76_s35.txt";
-        asinh = "golden/asinh_d76_s35.txt";
-        acosh = "golden/acosh_d76_s35.txt";
-        atanh = "golden/atanh_d76_s35.txt";
-        sqrt  = "golden/sqrt_d76_s35.txt";
-        cbrt  = "golden/cbrt_d76_s35.txt";
-        log   = "golden/log_d76_s35.txt";
-        atan2 = "golden/atan2_d76_s35.txt";
-        powf  = "golden/powf_d76_s35.txt";
+        ln    = "golden/ln_d76_s38.txt";
+        exp   = "golden/exp_d76_s38.txt";
+        exp2  = "golden/exp2_d76_s38.txt";
+        log2  = "golden/log2_d76_s38.txt";
+        log10 = "golden/log10_d76_s38.txt";
+        sin   = "golden/sin_d76_s38.txt";
+        cos   = "golden/cos_d76_s38.txt";
+        tan   = "golden/tan_d76_s38.txt";
+        atan  = "golden/atan_d76_s38.txt";
+        asin  = "golden/asin_d76_s38.txt";
+        acos  = "golden/acos_d76_s38.txt";
+        sinh  = "golden/sinh_d76_s38.txt";
+        cosh  = "golden/cosh_d76_s38.txt";
+        tanh  = "golden/tanh_d76_s38.txt";
+        asinh = "golden/asinh_d76_s38.txt";
+        acosh = "golden/acosh_d76_s38.txt";
+        atanh = "golden/atanh_d76_s38.txt";
+        sqrt  = "golden/sqrt_d76_s38.txt";
+        cbrt  = "golden/cbrt_d76_s38.txt";
+        log   = "golden/log_d76_s38.txt";
+        atan2 = "golden/atan2_d76_s38.txt";
+        powf  = "golden/powf_d76_s38.txt";
     },
 }
 
@@ -444,28 +444,28 @@ decl_band! {
     width Width::D307,
     feature_gate cfg(any(feature = "d307", feature = "x-wide")),
     funcs {
-        ln    = "golden/ln_d307_s150.txt";
-        exp   = "golden/exp_d307_s150.txt";
-        exp2  = "golden/exp2_d307_s150.txt";
-        log2  = "golden/log2_d307_s150.txt";
-        log10 = "golden/log10_d307_s150.txt";
-        sin   = "golden/sin_d307_s150.txt";
-        cos   = "golden/cos_d307_s150.txt";
-        tan   = "golden/tan_d307_s150.txt";
-        atan  = "golden/atan_d307_s150.txt";
-        asin  = "golden/asin_d307_s150.txt";
-        acos  = "golden/acos_d307_s150.txt";
-        sinh  = "golden/sinh_d307_s150.txt";
-        cosh  = "golden/cosh_d307_s150.txt";
-        tanh  = "golden/tanh_d307_s150.txt";
-        asinh = "golden/asinh_d307_s150.txt";
-        acosh = "golden/acosh_d307_s150.txt";
-        atanh = "golden/atanh_d307_s150.txt";
-        sqrt  = "golden/sqrt_d307_s150.txt";
-        cbrt  = "golden/cbrt_d307_s150.txt";
-        log   = "golden/log_d307_s150.txt";
-        atan2 = "golden/atan2_d307_s150.txt";
-        powf  = "golden/powf_d307_s150.txt";
+        ln    = "golden/ln_d307_s153.txt";
+        exp   = "golden/exp_d307_s153.txt";
+        exp2  = "golden/exp2_d307_s153.txt";
+        log2  = "golden/log2_d307_s153.txt";
+        log10 = "golden/log10_d307_s153.txt";
+        sin   = "golden/sin_d307_s153.txt";
+        cos   = "golden/cos_d307_s153.txt";
+        tan   = "golden/tan_d307_s153.txt";
+        atan  = "golden/atan_d307_s153.txt";
+        asin  = "golden/asin_d307_s153.txt";
+        acos  = "golden/acos_d307_s153.txt";
+        sinh  = "golden/sinh_d307_s153.txt";
+        cosh  = "golden/cosh_d307_s153.txt";
+        tanh  = "golden/tanh_d307_s153.txt";
+        asinh = "golden/asinh_d307_s153.txt";
+        acosh = "golden/acosh_d307_s153.txt";
+        atanh = "golden/atanh_d307_s153.txt";
+        sqrt  = "golden/sqrt_d307_s153.txt";
+        cbrt  = "golden/cbrt_d307_s153.txt";
+        log   = "golden/log_d307_s153.txt";
+        atan2 = "golden/atan2_d307_s153.txt";
+        powf  = "golden/powf_d307_s153.txt";
     },
 }
 
@@ -474,28 +474,28 @@ decl_band! {
     width Width::D462,
     feature_gate cfg(any(feature = "d462", feature = "x-wide")),
     funcs {
-        ln    = "golden/ln_d462_s230.txt";
-        exp   = "golden/exp_d462_s230.txt";
-        exp2  = "golden/exp2_d462_s230.txt";
-        log2  = "golden/log2_d462_s230.txt";
-        log10 = "golden/log10_d462_s230.txt";
-        sin   = "golden/sin_d462_s230.txt";
-        cos   = "golden/cos_d462_s230.txt";
-        tan   = "golden/tan_d462_s230.txt";
-        atan  = "golden/atan_d462_s230.txt";
-        asin  = "golden/asin_d462_s230.txt";
-        acos  = "golden/acos_d462_s230.txt";
-        sinh  = "golden/sinh_d462_s230.txt";
-        cosh  = "golden/cosh_d462_s230.txt";
-        tanh  = "golden/tanh_d462_s230.txt";
-        asinh = "golden/asinh_d462_s230.txt";
-        acosh = "golden/acosh_d462_s230.txt";
-        atanh = "golden/atanh_d462_s230.txt";
-        sqrt  = "golden/sqrt_d462_s230.txt";
-        cbrt  = "golden/cbrt_d462_s230.txt";
-        log   = "golden/log_d462_s230.txt";
-        atan2 = "golden/atan2_d462_s230.txt";
-        powf  = "golden/powf_d462_s230.txt";
+        ln    = "golden/ln_d462_s231.txt";
+        exp   = "golden/exp_d462_s231.txt";
+        exp2  = "golden/exp2_d462_s231.txt";
+        log2  = "golden/log2_d462_s231.txt";
+        log10 = "golden/log10_d462_s231.txt";
+        sin   = "golden/sin_d462_s231.txt";
+        cos   = "golden/cos_d462_s231.txt";
+        tan   = "golden/tan_d462_s231.txt";
+        atan  = "golden/atan_d462_s231.txt";
+        asin  = "golden/asin_d462_s231.txt";
+        acos  = "golden/acos_d462_s231.txt";
+        sinh  = "golden/sinh_d462_s231.txt";
+        cosh  = "golden/cosh_d462_s231.txt";
+        tanh  = "golden/tanh_d462_s231.txt";
+        asinh = "golden/asinh_d462_s231.txt";
+        acosh = "golden/acosh_d462_s231.txt";
+        atanh = "golden/atanh_d462_s231.txt";
+        sqrt  = "golden/sqrt_d462_s231.txt";
+        cbrt  = "golden/cbrt_d462_s231.txt";
+        log   = "golden/log_d462_s231.txt";
+        atan2 = "golden/atan2_d462_s231.txt";
+        powf  = "golden/powf_d462_s231.txt";
     },
 }
 
@@ -534,28 +534,28 @@ decl_band! {
     width Width::D924,
     feature_gate cfg(any(feature = "d924", feature = "xx-wide")),
     funcs {
-        ln    = "golden/ln_d924_s460.txt";
-        exp   = "golden/exp_d924_s460.txt";
-        exp2  = "golden/exp2_d924_s460.txt";
-        log2  = "golden/log2_d924_s460.txt";
-        log10 = "golden/log10_d924_s460.txt";
-        sin   = "golden/sin_d924_s460.txt";
-        cos   = "golden/cos_d924_s460.txt";
-        tan   = "golden/tan_d924_s460.txt";
-        atan  = "golden/atan_d924_s460.txt";
-        asin  = "golden/asin_d924_s460.txt";
-        acos  = "golden/acos_d924_s460.txt";
-        sinh  = "golden/sinh_d924_s460.txt";
-        cosh  = "golden/cosh_d924_s460.txt";
-        tanh  = "golden/tanh_d924_s460.txt";
-        asinh = "golden/asinh_d924_s460.txt";
-        acosh = "golden/acosh_d924_s460.txt";
-        atanh = "golden/atanh_d924_s460.txt";
-        sqrt  = "golden/sqrt_d924_s460.txt";
-        cbrt  = "golden/cbrt_d924_s460.txt";
-        log   = "golden/log_d924_s460.txt";
-        atan2 = "golden/atan2_d924_s460.txt";
-        powf  = "golden/powf_d924_s460.txt";
+        ln    = "golden/ln_d924_s462.txt";
+        exp   = "golden/exp_d924_s462.txt";
+        exp2  = "golden/exp2_d924_s462.txt";
+        log2  = "golden/log2_d924_s462.txt";
+        log10 = "golden/log10_d924_s462.txt";
+        sin   = "golden/sin_d924_s462.txt";
+        cos   = "golden/cos_d924_s462.txt";
+        tan   = "golden/tan_d924_s462.txt";
+        atan  = "golden/atan_d924_s462.txt";
+        asin  = "golden/asin_d924_s462.txt";
+        acos  = "golden/acos_d924_s462.txt";
+        sinh  = "golden/sinh_d924_s462.txt";
+        cosh  = "golden/cosh_d924_s462.txt";
+        tanh  = "golden/tanh_d924_s462.txt";
+        asinh = "golden/asinh_d924_s462.txt";
+        acosh = "golden/acosh_d924_s462.txt";
+        atanh = "golden/atanh_d924_s462.txt";
+        sqrt  = "golden/sqrt_d924_s462.txt";
+        cbrt  = "golden/cbrt_d924_s462.txt";
+        log   = "golden/log_d924_s462.txt";
+        atan2 = "golden/atan2_d924_s462.txt";
+        powf  = "golden/powf_d924_s462.txt";
     },
 }
 
@@ -564,128 +564,45 @@ decl_band! {
     width Width::D1232,
     feature_gate cfg(any(feature = "d1232", feature = "xx-wide")),
     funcs {
-        ln    = "golden/ln_d1232_s615.txt";
-        exp   = "golden/exp_d1232_s615.txt";
-        exp2  = "golden/exp2_d1232_s615.txt";
-        log2  = "golden/log2_d1232_s615.txt";
-        log10 = "golden/log10_d1232_s615.txt";
-        sin   = "golden/sin_d1232_s615.txt";
-        cos   = "golden/cos_d1232_s615.txt";
-        tan   = "golden/tan_d1232_s615.txt";
-        atan  = "golden/atan_d1232_s615.txt";
-        asin  = "golden/asin_d1232_s615.txt";
-        acos  = "golden/acos_d1232_s615.txt";
-        sinh  = "golden/sinh_d1232_s615.txt";
-        cosh  = "golden/cosh_d1232_s615.txt";
-        tanh  = "golden/tanh_d1232_s615.txt";
-        asinh = "golden/asinh_d1232_s615.txt";
-        acosh = "golden/acosh_d1232_s615.txt";
-        atanh = "golden/atanh_d1232_s615.txt";
-        sqrt  = "golden/sqrt_d1232_s615.txt";
-        cbrt  = "golden/cbrt_d1232_s615.txt";
-        log   = "golden/log_d1232_s615.txt";
-        atan2 = "golden/atan2_d1232_s615.txt";
-        powf  = "golden/powf_d1232_s615.txt";
+        ln    = "golden/ln_d1232_s616.txt";
+        exp   = "golden/exp_d1232_s616.txt";
+        exp2  = "golden/exp2_d1232_s616.txt";
+        log2  = "golden/log2_d1232_s616.txt";
+        log10 = "golden/log10_d1232_s616.txt";
+        sin   = "golden/sin_d1232_s616.txt";
+        cos   = "golden/cos_d1232_s616.txt";
+        tan   = "golden/tan_d1232_s616.txt";
+        atan  = "golden/atan_d1232_s616.txt";
+        asin  = "golden/asin_d1232_s616.txt";
+        acos  = "golden/acos_d1232_s616.txt";
+        sinh  = "golden/sinh_d1232_s616.txt";
+        cosh  = "golden/cosh_d1232_s616.txt";
+        tanh  = "golden/tanh_d1232_s616.txt";
+        asinh = "golden/asinh_d1232_s616.txt";
+        acosh = "golden/acosh_d1232_s616.txt";
+        atanh = "golden/atanh_d1232_s616.txt";
+        sqrt  = "golden/sqrt_d1232_s616.txt";
+        cbrt  = "golden/cbrt_d1232_s616.txt";
+        log   = "golden/log_d1232_s616.txt";
+        atan2 = "golden/atan2_d1232_s616.txt";
+        powf  = "golden/powf_d1232_s616.txt";
     },
 }
 
-// ─── Wide-tier low-scale (SCALE 30) exp cells ──────────────────────────
+// ─── Wide-tier exp band-edge cells ─────────────────────────────────────
 //
-// The wide tiers' canonical bands above sit at each tier's design scale (the
-// Series wash zone / the top edge of the low-scale Tang rectangle in
-// `policy::exp`). These cells pin `exp` at SCALE 30 — the bench-branch-compare
-// regression regime, the LOW edge of the rectangle, where the policy routes
-// Tang and where Tang's table reduction wins. They validate the Tang arm
-// against the mpmath oracle across the full adversarial input spread × all six
-// modes, at a scale the canonical band does not reach. `check_at_scale` drives
-// the subject at SCALE 30 (the subject picks the `D###<30>` type for it).
+// The wide tiers' canonical bands above sit at each tier's design scale
+// (S/2 in the generator's five-point scale set). These cells pin `exp` at
+// the two SCALE extremes per wide tier: 0 (integer exp — the Tang
+// rectangle's bottom) and MAX_SCALE (= capacity - 1, near-overflow /
+// deep-underflow), completing the {0, S/2, S-1} minimum scale coverage.
+// They validate `exp` against the mpmath oracle across the full
+// adversarial input spread × all six modes at the band edges the canonical
+// band does not reach. `check_at_scale` drives the subject at the named
+// scale (the subject picks the `D###<S>` type for it).
 mod wide_s30_exp {
     use super::{check_at_scale, Width};
 
-    #[test]
-    #[cfg(any(feature = "d307", feature = "x-wide"))]
-    fn d307_exp_s30() {
-        check_at_scale("exp", Width::D307, 30, include_str!("golden/exp_d307_s30.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d462", feature = "x-wide"))]
-    fn d462_exp_s30() {
-        check_at_scale("exp", Width::D462, 30, include_str!("golden/exp_d462_s30.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d616", feature = "x-wide"))]
-    fn d616_exp_s30() {
-        check_at_scale("exp", Width::D616, 30, include_str!("golden/exp_d616_s30.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d924", feature = "xx-wide"))]
-    fn d924_exp_s30() {
-        check_at_scale("exp", Width::D924, 30, include_str!("golden/exp_d924_s30.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    fn d1232_exp_s30() {
-        check_at_scale("exp", Width::D1232, 30, include_str!("golden/exp_d1232_s30.txt"));
-    }
-
-    // Interior scale samples across each wide tier's Tang rectangle (s30 above
-    // is the low edge; the canonical `d###` band is the top edge). These pin
-    // exp at mid-rectangle scales so the (N, SCALE) face is validated across
-    // its whole SCALE range, not just the two edges.
-    #[test]
-    #[cfg(any(feature = "d307", feature = "x-wide"))]
-    fn d307_exp_s70() {
-        check_at_scale("exp", Width::D307, 70, include_str!("golden/exp_d307_s70.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d307", feature = "x-wide"))]
-    fn d307_exp_s120() {
-        check_at_scale("exp", Width::D307, 120, include_str!("golden/exp_d307_s120.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d462", feature = "x-wide"))]
-    fn d462_exp_s100() {
-        check_at_scale("exp", Width::D462, 100, include_str!("golden/exp_d462_s100.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d462", feature = "x-wide"))]
-    fn d462_exp_s180() {
-        check_at_scale("exp", Width::D462, 180, include_str!("golden/exp_d462_s180.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d616", feature = "x-wide"))]
-    fn d616_exp_s130() {
-        check_at_scale("exp", Width::D616, 130, include_str!("golden/exp_d616_s130.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d616", feature = "x-wide"))]
-    fn d616_exp_s240() {
-        check_at_scale("exp", Width::D616, 240, include_str!("golden/exp_d616_s240.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d924", feature = "xx-wide"))]
-    fn d924_exp_s180() {
-        check_at_scale("exp", Width::D924, 180, include_str!("golden/exp_d924_s180.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d924", feature = "xx-wide"))]
-    fn d924_exp_s350() {
-        check_at_scale("exp", Width::D924, 350, include_str!("golden/exp_d924_s350.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    fn d1232_exp_s250() {
-        check_at_scale("exp", Width::D1232, 250, include_str!("golden/exp_d1232_s250.txt"));
-    }
-    #[test]
-    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
-    fn d1232_exp_s470() {
-        check_at_scale("exp", Width::D1232, 470, include_str!("golden/exp_d1232_s470.txt"));
-    }
-
-    // The two SCALE extremes per wide tier: 0 (integer exp — the Tang
-    // rectangle's bottom) and MAX_SCALE (= capacity - 1, near-overflow /
-    // deep-underflow). Completes the {0, S/2, S-1} minimum scale coverage.
     #[test]
     #[cfg(any(feature = "d307", feature = "x-wide"))]
     fn d307_exp_s0() {
@@ -3105,7 +3022,7 @@ mod binary_ops {
         }
         #[test]
         fn d76_add_s35() {
-            check_at_scale("add", Width::D76, 35, include_str!("golden/add_d76_s35.txt"));
+            check_at_scale("add", Width::D76, 38, include_str!("golden/add_d76_s38.txt"));
         }
         #[test]
         fn d76_add_s75() {
@@ -3117,7 +3034,7 @@ mod binary_ops {
         }
         #[test]
         fn d76_sub_s35() {
-            check_at_scale("sub", Width::D76, 35, include_str!("golden/sub_d76_s35.txt"));
+            check_at_scale("sub", Width::D76, 38, include_str!("golden/sub_d76_s38.txt"));
         }
         #[test]
         fn d76_sub_s75() {
@@ -3129,7 +3046,7 @@ mod binary_ops {
         }
         #[test]
         fn d76_mul_s35() {
-            check_at_scale("mul", Width::D76, 35, include_str!("golden/mul_d76_s35.txt"));
+            check_at_scale("mul", Width::D76, 38, include_str!("golden/mul_d76_s38.txt"));
         }
         #[test]
         fn d76_mul_s75() {
@@ -3141,7 +3058,7 @@ mod binary_ops {
         }
         #[test]
         fn d76_div_s35() {
-            check_at_scale("div", Width::D76, 35, include_str!("golden/div_d76_s35.txt"));
+            check_at_scale("div", Width::D76, 38, include_str!("golden/div_d76_s38.txt"));
         }
         #[test]
         fn d76_div_s75() {
@@ -3153,7 +3070,7 @@ mod binary_ops {
         }
         #[test]
         fn d76_rem_s35() {
-            check_at_scale("rem", Width::D76, 35, include_str!("golden/rem_d76_s35.txt"));
+            check_at_scale("rem", Width::D76, 38, include_str!("golden/rem_d76_s38.txt"));
         }
         #[test]
         fn d76_rem_s75() {
@@ -3189,7 +3106,7 @@ mod binary_ops {
         }
         #[test]
         fn d307_add_s150() {
-            check_at_scale("add", Width::D307, 150, include_str!("golden/add_d307_s150.txt"));
+            check_at_scale("add", Width::D307, 153, include_str!("golden/add_d307_s153.txt"));
         }
         #[test]
         fn d307_add_s306() {
@@ -3201,7 +3118,7 @@ mod binary_ops {
         }
         #[test]
         fn d307_sub_s150() {
-            check_at_scale("sub", Width::D307, 150, include_str!("golden/sub_d307_s150.txt"));
+            check_at_scale("sub", Width::D307, 153, include_str!("golden/sub_d307_s153.txt"));
         }
         #[test]
         fn d307_sub_s306() {
@@ -3213,7 +3130,7 @@ mod binary_ops {
         }
         #[test]
         fn d307_mul_s150() {
-            check_at_scale("mul", Width::D307, 150, include_str!("golden/mul_d307_s150.txt"));
+            check_at_scale("mul", Width::D307, 153, include_str!("golden/mul_d307_s153.txt"));
         }
         #[test]
         fn d307_mul_s306() {
@@ -3225,7 +3142,7 @@ mod binary_ops {
         }
         #[test]
         fn d307_div_s150() {
-            check_at_scale("div", Width::D307, 150, include_str!("golden/div_d307_s150.txt"));
+            check_at_scale("div", Width::D307, 153, include_str!("golden/div_d307_s153.txt"));
         }
         #[test]
         fn d307_div_s306() {
@@ -3237,7 +3154,7 @@ mod binary_ops {
         }
         #[test]
         fn d307_rem_s150() {
-            check_at_scale("rem", Width::D307, 150, include_str!("golden/rem_d307_s150.txt"));
+            check_at_scale("rem", Width::D307, 153, include_str!("golden/rem_d307_s153.txt"));
         }
         #[test]
         fn d307_rem_s306() {

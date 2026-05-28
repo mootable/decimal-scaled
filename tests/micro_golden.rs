@@ -200,24 +200,24 @@ micro!(d57, Width::D57, {
 
 // Deep wide tier.
 micro!(d307, Width::D307, {
-    sqrt = "golden/sqrt_d307_s150.txt";
-    cbrt = "golden/cbrt_d307_s150.txt";
-    exp  = "golden/exp_d307_s150.txt";
-    exp2 = "golden/exp2_d307_s150.txt";
-    ln   = "golden/ln_d307_s150.txt";
-    log2 = "golden/log2_d307_s150.txt";
-    log10 = "golden/log10_d307_s150.txt";
-    sin  = "golden/sin_d307_s150.txt";
-    cos  = "golden/cos_d307_s150.txt";
-    tan  = "golden/tan_d307_s150.txt";
-    atan = "golden/atan_d307_s150.txt";
-    asin = "golden/asin_d307_s150.txt";
-    acos = "golden/acos_d307_s150.txt";
-    atan2 = "golden/atan2_d307_s150.txt";
-    sinh = "golden/sinh_d307_s150.txt";
-    cosh = "golden/cosh_d307_s150.txt";
-    tanh = "golden/tanh_d307_s150.txt";
-    asinh = "golden/asinh_d307_s150.txt";
-    acosh = "golden/acosh_d307_s150.txt";
-    atanh = "golden/atanh_d307_s150.txt";
+    sqrt = "golden/sqrt_d307_s153.txt";
+    cbrt = "golden/cbrt_d307_s153.txt";
+    exp  = "golden/exp_d307_s153.txt";
+    exp2 = "golden/exp2_d307_s153.txt";
+    ln   = "golden/ln_d307_s153.txt";
+    log2 = "golden/log2_d307_s153.txt";
+    log10 = "golden/log10_d307_s153.txt";
+    sin  = "golden/sin_d307_s153.txt";
+    cos  = "golden/cos_d307_s153.txt";
+    tan  = "golden/tan_d307_s153.txt";
+    atan = "golden/atan_d307_s153.txt";
+    asin = "golden/asin_d307_s153.txt";
+    acos = "golden/acos_d307_s153.txt";
+    atan2 = "golden/atan2_d307_s153.txt";
+    sinh = "golden/sinh_d307_s153.txt";
+    cosh = "golden/cosh_d307_s153.txt";
+    tanh = "golden/tanh_d307_s153.txt";
+    asinh = "golden/asinh_d307_s153.txt";
+    acosh = "golden/acosh_d307_s153.txt";
+    atanh = "golden/atanh_d307_s153.txt";
 });
