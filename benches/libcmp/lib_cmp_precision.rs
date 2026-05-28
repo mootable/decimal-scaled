@@ -95,6 +95,13 @@ struct Row {
     /// Worst DECIMAL error-digit length over the roster — what the
     /// fidelity grade scores. `-1` for an n/a cell.
     max_digits: i64,
+    /// The scale this subject was actually graded at — its own last
+    /// representable digit. For a fixed-precision peer running on a cell
+    /// deeper than its cap, this is the cap (e.g. rust_decimal on a
+    /// `D76<38>` cell ⇒ `reach_scale = 28`), and the LSBε/ULP/`max_digits`
+    /// in this row measure correctness at THAT depth. For arbitrary-
+    /// precision peers and decimal-scaled this equals `scale`.
+    reach_scale: u32,
 }
 
 /// Format a ULP value deterministically (fixed-form where small,
@@ -161,6 +168,7 @@ fn main() {
                     scored: 0,
                     correctly_rounded: 0,
                     max_digits: -1,
+                    reach_scale: c.reach_scale,
                 }),
                 Some(c) => rows.push(Row {
                     method: cell.method.name(),
@@ -173,6 +181,7 @@ fn main() {
                     scored: c.scored,
                     correctly_rounded: c.correctly_rounded,
                     max_digits: c.max_digits as i64,
+                    reach_scale: c.reach_scale,
                 }),
             }
         }
@@ -230,22 +239,28 @@ fn write_tsv(dir: &Path, name: &str, rows: &[Row]) {
     writeln!(
         f,
         "# library: {name}\n# key: method\twidth\tscale\trounding\tresult\n\
-         # result columns: kind(executed|na)\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\tmax_digits\n\
+         # result columns: kind(executed|na)\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\tmax_digits\treach_scale\n\
          # max_digits = exact decimal-digit length of the worst error magnitude \
          (what the fidelity grade scores); max_lsbe is its bit-width.\n\
+         # reach_scale = the depth (fractional digits) this library was actually \
+         graded at — its own last representable digit; equals `scale` for \
+         arbitrary-precision peers and decimal-scaled, equals the library's cap \
+         for a fixed-precision peer running on a deeper cell. The lsbe/ulp/digits \
+         in this row measure correctness at THAT depth (grade-at-own-last-digit), \
+         and the gap `scale - reach_scale` is the shallower-reach metric.\n\
          # source: benches/lib_cmp_precision.rs (regenerate with \
          `cargo bench --bench lib_cmp_precision --features wide,x-wide,xx-wide,macros`)"
     )
     .unwrap();
     writeln!(
         f,
-        "method\twidth\tscale\trounding\tkind\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\tmax_digits"
+        "method\twidth\tscale\trounding\tkind\tmax_lsbe\tmax_ulp\tscored\tcorrectly_rounded\tmax_digits\treach_scale"
     )
     .unwrap();
     for r in rows {
         writeln!(
             f,
-            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
             r.method,
             r.width,
             r.scale,
@@ -255,7 +270,8 @@ fn write_tsv(dir: &Path, name: &str, rows: &[Row]) {
             r.max_ulp,
             r.scored,
             r.correctly_rounded,
-            r.max_digits
+            r.max_digits,
+            r.reach_scale,
         )
         .unwrap();
     }
@@ -380,10 +396,12 @@ const LIBS: [&str; 7] = [
 
 /// One library's parsed result rows read back from its committed TSV.
 struct LibRows {
-    /// (method, width, scale, kind, max_digits) for every persisted row.
-    /// `max_digits` is the exact decimal error-digit length the fidelity
-    /// grade scores (`-1` for an n/a cell).
-    rows: Vec<(String, String, u32, String, i64)>,
+    /// (method, width, scale, kind, max_digits, reach_scale) for every
+    /// persisted row. `max_digits` is the exact decimal error-digit length
+    /// the fidelity grade scores (`-1` for an n/a cell); `reach_scale` is
+    /// the depth the row was graded at (the subject's own last digit),
+    /// equal to `scale` for arbitrary-precision peers and decimal-scaled.
+    rows: Vec<(String, String, u32, String, i64, u32)>,
 }
 
 fn read_lib_rows(dir: &Path, lib: &str) -> LibRows {
@@ -395,19 +413,23 @@ fn read_lib_rows(dir: &Path, lib: &str) -> LibRows {
                 continue;
             }
             let cols: Vec<&str> = line.split('\t').collect();
-            // Need the trailing max_digits column (index 9). Older TSVs
-            // without it are skipped (re-run the sweep to regenerate).
+            // Need the max_digits column (index 9). `reach_scale` (index 10)
+            // is a newer column; older TSVs default it to `scale` for
+            // back-compat, but those rows pre-date grade-at-own-last-digit
+            // and should be regenerated.
             if cols.len() < 10 {
                 continue;
             }
             let scale = cols[2].parse::<u32>().unwrap_or(0);
             let max_digits = cols[9].parse::<i64>().unwrap_or(-1);
+            let reach_scale = cols.get(10).and_then(|s| s.parse::<u32>().ok()).unwrap_or(scale);
             rows.push((
                 cols[0].to_string(),
                 cols[1].to_string(),
                 scale,
                 cols[4].to_string(),
                 max_digits,
+                reach_scale,
             ));
         }
     }
@@ -422,6 +444,58 @@ fn tier_width_of(width: &str) -> u32 {
         .trim_start_matches(['D', 'd'])
         .parse::<u32>()
         .unwrap_or(0)
+}
+
+/// Reach (precision/depth) statistics, accumulated over the executed cells
+/// of one library. Independent of rounding correctness: a peer that grades
+/// 100% correctly-rounded at every cell but only at depth 28 (rust_decimal
+/// on D76 cells, scale 38) shows up as `mean_reach = 28`, while a peer
+/// that reaches every cell shows `mean_reach == mean_cell_scale`. The two
+/// metrics — closeness/%CR and reach — are reported side by side so a
+/// shallower peer is credited for being accurate at its own last digit
+/// AND honestly shown as not reaching deeper.
+#[derive(Clone, Copy, Default)]
+struct ReachStats {
+    /// Sum of `reach_scale` over executed cells.
+    sum_reach: u64,
+    /// Sum of `cell_scale` over executed cells.
+    sum_cell: u64,
+    /// Cells where the subject reached the full cell scale (`reach == cell_scale`).
+    full_reach_cells: usize,
+    /// Total executed cells.
+    cells: usize,
+}
+
+impl ReachStats {
+    fn record(&mut self, reach: u32, cell_scale: u32) {
+        self.sum_reach += reach as u64;
+        self.sum_cell += cell_scale as u64;
+        if reach >= cell_scale {
+            self.full_reach_cells += 1;
+        }
+        self.cells += 1;
+    }
+    fn mean_reach(&self) -> f64 {
+        if self.cells == 0 {
+            0.0
+        } else {
+            self.sum_reach as f64 / self.cells as f64
+        }
+    }
+    fn mean_cell(&self) -> f64 {
+        if self.cells == 0 {
+            0.0
+        } else {
+            self.sum_cell as f64 / self.cells as f64
+        }
+    }
+    fn full_reach_pct(&self) -> f64 {
+        if self.cells == 0 {
+            0.0
+        } else {
+            100.0 * self.full_reach_cells as f64 / self.cells as f64
+        }
+    }
 }
 
 /// Render the fidelity grade report by READING the committed per-library
@@ -444,17 +518,24 @@ fn render_fidelity_report(dir: &Path) -> String {
     out.push('\n');
 
     // Collect per-library per-function fidelity + a pooled per-library
-    // accumulator + a runnable counter, in one pass. The demerit is
-    // precision-relative, so each cell folds in its OWN tier width.
-    let mut graded: BTreeMap<&str, (BTreeMap<String, Fidelity>, Fidelity, usize)> = BTreeMap::new();
+    // accumulator + a runnable counter + reach stats, in one pass. The
+    // demerit is precision-relative, so each cell folds in its OWN tier
+    // width. `reach` is the depth the cell was graded at (subject's own
+    // last digit) — independent of rounding correctness, surfaces shallower
+    // peers without penalising them as rounding failures.
+    let mut graded: BTreeMap<
+        &str,
+        (BTreeMap<String, Fidelity>, Fidelity, usize, ReachStats),
+    > = BTreeMap::new();
     for lib in LIBS {
         let data = read_lib_rows(dir, lib);
         let mut per_fn: BTreeMap<String, Fidelity> = BTreeMap::new();
         let mut pooled = Fidelity::default();
         let mut runnable = 0usize;
-        for (method, width, _scale, kind, max_digits) in &data.rows {
+        let mut reach = ReachStats::default();
+        for (method, width, scale, kind, max_digits, reach_scale) in &data.rows {
             if kind != "executed" || *max_digits < 0 {
-                continue; // n/a cell — not representable / not exposed.
+                continue; // n/a cell — method not exposed / input rejected.
             }
             runnable += 1;
             let tw = tier_width_of(width);
@@ -463,21 +544,28 @@ fn render_fidelity_report(dir: &Path) -> String {
                 .or_default()
                 .record(*max_digits as u32, tw);
             pooled.record(*max_digits as u32, tw);
+            reach.record(*reach_scale, *scale);
         }
-        graded.insert(lib, (per_fn, pooled, runnable));
+        graded.insert(lib, (per_fn, pooled, runnable, reach));
     }
 
     // ── 1. OVERALL table — one row per library, best score first ──
     out.push_str("## Overall — per-library headline grade\n\n");
     out.push_str(
-        "Sorted by closeness score (best first). The grade is two letters: \
-         1st = closeness `grade(score)`, 2nd = reliability `grade(%CR)`.\n\n",
+        "Every library is graded **at its OWN last representable digit** — its \
+         `reach_scale` — not at decimal-scaled's deeper cell scale. So a \
+         fixed-precision peer that cannot reach our scale is NOT a rounding \
+         failure: it is scored as correctly-rounded-at-its-cap (or off-by-N \
+         there) and its shallower reach is reported separately in the `reach` \
+         column (`mean reach / mean cell scale`). Sorted by closeness score \
+         (best first). The grade is two letters: 1st = closeness `grade(score)`, \
+         2nd = reliability `grade(%CR)`.\n\n",
     );
-    out.push_str("| library | grade | score | %CR | runnable |\n");
-    out.push_str("|---|---|---|---|---|\n");
-    let mut overall: Vec<(&str, &Fidelity, usize)> = graded
+    out.push_str("| library | grade | score | %CR | runnable | reach (mean / cell, full %) |\n");
+    out.push_str("|---|---|---|---|---|---|\n");
+    let mut overall: Vec<(&str, &Fidelity, usize, &ReachStats)> = graded
         .iter()
-        .map(|(lib, (_pf, pooled, runnable))| (*lib, pooled, *runnable))
+        .map(|(lib, (_pf, pooled, runnable, reach))| (*lib, pooled, *runnable, reach))
         .collect();
     // Best closeness first; runnable cells break ties (more coverage wins).
     overall.sort_by(|a, b| {
@@ -486,16 +574,19 @@ fn render_fidelity_report(dir: &Path) -> String {
             .unwrap_or(core::cmp::Ordering::Equal)
             .then(b.2.cmp(&a.2))
     });
-    for (lib, pooled, runnable) in &overall {
+    for (lib, pooled, runnable, reach) in &overall {
         if *runnable == 0 {
-            let _ = writeln!(out, "| {lib} | — | n/a | n/a | 0 |");
+            let _ = writeln!(out, "| {lib} | — | n/a | n/a | 0 | n/a |");
         } else {
             let _ = writeln!(
                 out,
-                "| {lib} | **{}** | {:.1} | {:.1} | {runnable} |",
+                "| {lib} | **{}** | {:.1} | {:.1} | {runnable} | {:.1} / {:.1} ({:.0}%) |",
                 pooled.two_letter(),
                 pooled.score(),
                 pooled.cr_pct(),
+                reach.mean_reach(),
+                reach.mean_cell(),
+                reach.full_reach_pct(),
             );
         }
     }
@@ -503,14 +594,14 @@ fn render_fidelity_report(dir: &Path) -> String {
 
     // ── 2. Per-library per-function grade tables ──
     for lib in LIBS {
-        let (per_fn, pooled, runnable) = match graded.get(lib) {
+        let (per_fn, pooled, runnable, reach) = match graded.get(lib) {
             Some(g) => g,
             None => continue,
         };
         let _ = writeln!(out, "## {lib} — fidelity\n");
         if *runnable == 0 {
             out.push_str(
-                "_No runnable cells (library represents none of the scanned surface)._\n\n",
+                "_No runnable cells (library exposes none of the scanned methods)._\n\n",
             );
             continue;
         }
@@ -536,21 +627,34 @@ fn render_fidelity_report(dir: &Path) -> String {
         let _ = writeln!(
             out,
             "\n**Overall {lib}: {}** — score **{:.1}** (closeness) / **{:.1}%** CR \
-             (reliability); mean_demerit = {:.3} over {} runnable cells.\n",
+             (reliability); mean_demerit = {:.3} over {} runnable cells. \
+             **Reach** mean **{:.1}** / cell mean **{:.1}** (full-reach on **{:.0}%** of cells) \
+             — graded at this library's OWN last representable digit, not at the \
+             cell scale.\n",
             pooled.two_letter(),
             pooled.score(),
             pooled.cr_pct(),
             pooled.mean_demerit(),
             pooled.cells,
+            reach.mean_reach(),
+            reach.mean_cell(),
+            reach.full_reach_pct(),
         );
     }
 
     // ── 3. Coverage (runnable cells / total scanned) ──
     out.push_str("## Coverage (runnable cells / total scanned)\n\n");
+    out.push_str(
+        "Coverage = cells where the library exposed the method and parsed the \
+         input. Under grade-at-own-last-digit, a fixed-precision peer running \
+         on a cell deeper than its cap is RUNNABLE (graded at its own last \
+         digit, shallower reach reported in the overall table) — runnable no \
+         longer narrows just because our scale is deeper.\n\n",
+    );
     out.push_str("| library | runnable | total | coverage |\n");
     out.push_str("|---|---|---|---|\n");
     for lib in LIBS {
-        let runnable = graded.get(lib).map(|(_, _, r)| *r).unwrap_or(0);
+        let runnable = graded.get(lib).map(|(_, _, r, _)| *r).unwrap_or(0);
         let cov = if total_cells == 0 {
             0.0
         } else {

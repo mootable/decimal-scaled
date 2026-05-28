@@ -16,28 +16,33 @@
 use super::harness::{Input, Method, PrecisionSubject, SubjectOutput, Width};
 use decimal_scaled::RoundingMode;
 
-// The widest scale a fixed-precision peer can carry before we declare it
-// unable to represent the (width, scale). Beyond this it is `n/a`.
-fn peer_max_scale(name: &str) -> u32 {
-    match name {
-        "rust_decimal" => 28,
-        "fastnum" => 34,
-        "decimal-rs" => 38,
-        "bigdecimal" => u32::MAX, // arbitrary precision (but no transcendentals)
-        "dashu-float" => u32::MAX, // arbitrary precision
-        // g_math is binary fixed-point. Its canonical evaluator infers a
-        // Q-format tier from the input literal's decimal places and, for
-        // the small magnitudes the roster uses, materialises results at
-        // roughly Q64.64 — about 19 significant fractional digits — and
-        // its `to_decimal_string` emits no more than that no matter how
-        // many digits are requested. So 19 is the deepest scale at which
-        // it produces a value of the target precision; past it the value
-        // simply cannot be represented and it is `n/a` (matching the old
-        // deep-150 table, where every fixed-precision peer scored "—").
-        "g_math" => 19,
-        _ => 0,
-    }
-}
+// ─────────────────────────────────────────────────────────────────────
+// Native scale caps for the fixed-precision peers.
+//
+// Each fixed-precision peer maxes out at a representation-bound number of
+// fractional digits — its OWN last representable digit. The harness
+// grades each subject at THAT depth (not at decimal-scaled's deeper cell
+// scale) via the `native_scale` trait method below: a peer that cannot
+// reach our deep cell scale is graded at its CAP — correctly rounded at
+// its own last digit, with the shallower reach reported separately — NOT
+// marked `n/a`/error just for being shallower than us.
+//
+// Arbitrary-precision peers (dashu-float, bigdecimal) inherit the default
+// `native_scale` (== the full cell scale), since they can carry whatever
+// width the cell demands.
+// ─────────────────────────────────────────────────────────────────────
+/// rust_decimal: 96-bit, ≤ 28 significant decimal digits.
+const RUST_DECIMAL_CAP: u32 = 28;
+/// fastnum `D128`: 128-bit decimal, ~34 significant digits.
+const FASTNUM_CAP: u32 = 34;
+/// decimal-rs: 128-bit decimal.
+const DECIMAL_RS_CAP: u32 = 38;
+/// g_math: binary fixed-point. The canonical evaluator infers a Q-format
+/// tier from the input literal's decimal places and for the small
+/// magnitudes the roster uses materialises at roughly Q64.64 — about 19
+/// significant fractional digits. So 19 is the deepest scale at which it
+/// produces a value of the target precision.
+const G_MATH_CAP: u32 = 19;
 
 // ── dashu-float ─────────────────────────────────────────────────────
 
@@ -106,6 +111,9 @@ impl PrecisionSubject for RustDecimalSubject {
     fn native_mode(&self) -> RoundingMode {
         RoundingMode::HalfToEven
     }
+    fn native_scale(&self, cell_scale: u32) -> u32 {
+        cell_scale.min(RUST_DECIMAL_CAP)
+    }
     fn eval(
         &self,
         method: Method,
@@ -117,9 +125,7 @@ impl PrecisionSubject for RustDecimalSubject {
         use rust_decimal::Decimal as RustDecimal;
         use rust_decimal::MathematicalOps;
 
-        if scale > peer_max_scale("rust_decimal") {
-            return SubjectOutput::NotApplicable;
-        }
+        let _ = scale; // graded at this subject's `native_scale`, not the cell scale
         let Ok(x) = input.value_string().parse::<RustDecimal>() else {
             return SubjectOutput::NotApplicable;
         };
@@ -156,6 +162,9 @@ impl PrecisionSubject for FastnumSubject {
     fn native_mode(&self) -> RoundingMode {
         RoundingMode::HalfAwayFromZero
     }
+    fn native_scale(&self, cell_scale: u32) -> u32 {
+        cell_scale.min(FASTNUM_CAP)
+    }
     fn eval(
         &self,
         method: Method,
@@ -166,9 +175,7 @@ impl PrecisionSubject for FastnumSubject {
     ) -> SubjectOutput {
         use fastnum::{D128, decimal::Context};
 
-        if scale > peer_max_scale("fastnum") {
-            return SubjectOutput::NotApplicable;
-        }
+        let _ = scale; // graded at this subject's `native_scale`, not the cell scale
         let parse = |s: &str| D128::from_str(s, Context::default()).ok();
         let Some(x) = parse(&input.value_string()) else {
             return SubjectOutput::NotApplicable;
@@ -222,6 +229,9 @@ impl PrecisionSubject for DecimalRsSubject {
     fn native_mode(&self) -> RoundingMode {
         RoundingMode::HalfToEven
     }
+    fn native_scale(&self, cell_scale: u32) -> u32 {
+        cell_scale.min(DECIMAL_RS_CAP)
+    }
     fn eval(
         &self,
         method: Method,
@@ -232,9 +242,7 @@ impl PrecisionSubject for DecimalRsSubject {
     ) -> SubjectOutput {
         use decimal_rs::Decimal as DecimalRs;
 
-        if scale > peer_max_scale("decimal-rs") {
-            return SubjectOutput::NotApplicable;
-        }
+        let _ = scale; // graded at this subject's `native_scale`, not the cell scale
         let Ok(x) = input.value_string().parse::<DecimalRs>() else {
             return SubjectOutput::NotApplicable;
         };
@@ -327,6 +335,9 @@ impl PrecisionSubject for GMathSubject {
     fn native_mode(&self) -> RoundingMode {
         RoundingMode::HalfToEven
     }
+    fn native_scale(&self, cell_scale: u32) -> u32 {
+        cell_scale.min(G_MATH_CAP)
+    }
     fn eval(
         &self,
         method: Method,
@@ -337,10 +348,7 @@ impl PrecisionSubject for GMathSubject {
     ) -> SubjectOutput {
         use g_math::canonical::{evaluate, gmath_parse};
 
-        if scale > peer_max_scale("g_math") {
-            return SubjectOutput::NotApplicable;
-        }
-
+        let _ = scale; // graded at this subject's `native_scale`, not the cell scale
         let Ok(x) = gmath_parse(&input.value_string()) else {
             return SubjectOutput::NotApplicable;
         };

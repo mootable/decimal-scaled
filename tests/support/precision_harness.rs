@@ -441,8 +441,14 @@ pub enum PrecisionResult {
         /// bit-width).
         digits: u32,
         /// `|value − oracle_cr|` as a continuous distance in storage LSB
-        /// (`1` LSB == `1` ULP at the tier scale).
+        /// (`1` LSB == `1` ULP at the SCORING scale — i.e. the subject's
+        /// native depth `reach_scale`, not the cell scale).
         ulp: f64,
+        /// The scale (fractional digit count) the subject was scored at —
+        /// its own last representable digit. Equals the cell scale for
+        /// arbitrary-precision peers and decimal-scaled; equals the cap
+        /// for a fixed-precision peer running on a deeper cell.
+        reach_scale: u32,
     },
     /// The subject reported [`SubjectOutput::NotApplicable`], or no
     /// oracle exists for this `(method, width)`.
@@ -472,6 +478,27 @@ pub trait PrecisionSubject {
     /// note). The harness scores the oracle under whatever the subject
     /// REPORTS per call; this is just the documentation default.
     fn native_mode(&self) -> RoundingMode;
+
+    /// The deepest scale (fractional decimal digit count) this subject can
+    /// actually MATERIALISE a result at — its OWN last representable digit
+    /// — given a golden cell at `cell_scale`. The harness grades every
+    /// subject at THIS depth, not at the cell's (decimal-scaled's) fixed
+    /// scale:
+    ///
+    ///   * a fixed-precision peer caps at its representation width (e.g.
+    ///     rust_decimal 28, fastnum 34); when a cell is deeper than that
+    ///     cap, the subject is graded at the cap (`min(cap, cell_scale)`),
+    ///     scored as *correctly rounded at its own last digit* with its
+    ///     shallower REACH reported separately — NOT marked `n/a`/error
+    ///     just because it cannot reach our scale;
+    ///   * an arbitrary-precision peer (and decimal-scaled itself) reaches
+    ///     the full `cell_scale`.
+    ///
+    /// The default is the full cell scale (arbitrary-precision behaviour);
+    /// fixed-precision peers override with `min(cap, cell_scale)`.
+    fn native_scale(&self, cell_scale: u32) -> u32 {
+        cell_scale
+    }
 
     /// Run one cell.
     fn eval(
@@ -585,6 +612,119 @@ fn bump_to_ceil(mode: RoundingMode, cls: Cls, true_nonneg: bool) -> bool {
     }
 }
 
+/// Derive the (floor, class) oracle at a SHALLOWER `target_scale` from a
+/// golden cell at the deeper `cell_scale`, using ONLY the existing mpmath
+/// `(floor, cls)` data. This is the load-bearing step for grade-at-own-
+/// last-digit: every subject is scored against the EXTERNAL mpmath oracle
+/// rounded to the subject's own native scale, never against a reference
+/// produced by decimal-scaled itself.
+///
+/// Math: at the cell scale `S`, the true value is `V = (floor + frac)/10^S`
+/// where `frac ∈ [0,1)` is captured by `cls`. For a shallower scale
+/// `s ≤ S`, let `k = S - s` and write `floor = q·10^k + r` with
+/// `r ∈ [0, 10^k)`. Then `V·10^s = q + (r + frac)/10^k`, so
+/// `floor(V·10^s) = q` and the class at `s` follows from comparing
+/// `r + frac` to `10^k/2`:
+///
+///   * `r == 0 && cls == Exact` ⇒ `Exact`
+///   * `r < half`               ⇒ `Low`
+///   * `r > half`               ⇒ `High`
+///   * `r == half && cls == Exact` ⇒ `Tie` (exact half)
+///   * `r == half && cls != Exact` ⇒ `High` (half + tiny positive frac)
+///
+/// `target_scale == cell_scale` returns `(floor, cls)` unchanged. Panics if
+/// `target_scale > cell_scale` (the oracle is never extrapolated *deeper*
+/// than the cell — that requires extending the mpmath generator).
+pub fn oracle_at_scale(
+    floor: &str,
+    cls: Cls,
+    cell_scale: u32,
+    target_scale: u32,
+) -> (String, Cls) {
+    assert!(
+        target_scale <= cell_scale,
+        "oracle_at_scale: target_scale ({target_scale}) > cell_scale ({cell_scale}); \
+         extend gen_golden_precision.py to source a deeper oracle",
+    );
+    if target_scale == cell_scale {
+        return (floor.to_string(), cls);
+    }
+    let k = (cell_scale - target_scale) as usize;
+    // r is the magnitude of `floor mod 10^k`; q is the signed floor-divide.
+    let (q, r_mag) = dec_floor_divmod_pow10(floor, k);
+    // `half = 5·10^(k-1)`, `2·half = 10^k`. Compare r_mag against half.
+    // For k == 0 (target_scale == cell_scale) we already returned above.
+    let half = {
+        let mut s = String::from("5");
+        s.push_str(&"0".repeat(k - 1));
+        s
+    };
+    let new_cls = match cmp_mag(&r_mag, &half) {
+        core::cmp::Ordering::Less => {
+            if r_mag == "0" && cls == Cls::Exact {
+                Cls::Exact
+            } else {
+                Cls::Low
+            }
+        }
+        core::cmp::Ordering::Greater => Cls::High,
+        core::cmp::Ordering::Equal => match cls {
+            Cls::Exact => Cls::Tie,
+            _ => Cls::High,
+        },
+    };
+    (q, new_cls)
+}
+
+/// Signed floor-divide of a decimal-integer string by `10^k`, returning
+/// `(quotient, |remainder|)`. `quotient` rounds toward -inf (so for a
+/// negative dividend with a non-zero remainder the quotient is one less
+/// than truncating divide). `|remainder|` is the floor remainder magnitude
+/// in `[0, 10^k)`; this is the size used to compare against `half = 5·10^(k-1)`.
+fn dec_floor_divmod_pow10(value: &str, k: usize) -> (String, String) {
+    if k == 0 {
+        return (value.to_string(), "0".to_string());
+    }
+    let (neg, mag) = split_sign(value);
+    let mag = mag.trim_start_matches('0');
+    let mag_s = if mag.is_empty() { "0" } else { mag };
+    let len = mag_s.len();
+    // Floor on the magnitude is just digit-split.
+    let (q_mag, r_mag) = if len > k {
+        let cut = len - k;
+        (mag_s[..cut].to_string(), mag_s[cut..].to_string())
+    } else {
+        // |value| < 10^k: |q| = 0, |r| = |value|.
+        ("0".to_string(), mag_s.to_string())
+    };
+    let r_mag = {
+        let t = r_mag.trim_start_matches('0');
+        if t.is_empty() { "0".to_string() } else { t.to_string() }
+    };
+    let q_mag = {
+        let t = q_mag.trim_start_matches('0');
+        if t.is_empty() { "0".to_string() } else { t.to_string() }
+    };
+
+    // Convert magnitude divmod to signed-floor: for negative dividend with
+    // a non-zero remainder, q_floor = -(|q| + 1) and r_floor = 10^k - |r|.
+    if neg && r_mag != "0" {
+        let q_inc = dec_add_mag(&q_mag, "1");
+        // r_floor (as a non-negative magnitude in [0, 10^k)) = 10^k - |r|.
+        let pow = {
+            let mut s = String::from("1");
+            s.push_str(&"0".repeat(k));
+            s
+        };
+        let r_floor = dec_sub_mag(&pow, &r_mag);
+        (format!("-{q_inc}"), r_floor)
+    } else if neg && q_mag != "0" {
+        (format!("-{q_mag}"), "0".to_string())
+    } else {
+        (q_mag, r_mag)
+    }
+}
+
 /// The correctly-rounded oracle integer (as a decimal string at the
 /// tier scale) for `(floor, cls)` under `mode`. This is the half-even-
 /// vs-truncation fairness fold: the harness rounds the oracle under the
@@ -664,6 +804,60 @@ impl Harness {
             lsbe,
             digits,
             ulp,
+            reach_scale: scale,
+        }
+    }
+
+    /// Score a subject's output at a SHALLOWER `target_scale ≤ cell_scale`
+    /// — the subject's own last representable digit. The oracle is sourced
+    /// from the SAME external mpmath `(floor, cls)` data the cell already
+    /// carries, re-rounded to `target_scale` via [`oracle_at_scale`]; no
+    /// reference value is ever produced by decimal-scaled's own algorithms.
+    ///
+    /// When `target_scale == cell_scale` this is identical to [`Harness::score`].
+    /// When `target_scale < cell_scale` the subject is graded as
+    /// "correctly rounded at its OWN last digit" — its shallower reach is
+    /// not a rounding failure, just its inherent precision limit, and the
+    /// `reach_scale` field surfaces what depth the cell was actually
+    /// scored at.
+    pub fn score_at(
+        out: &SubjectOutput,
+        case: &GoldenCase,
+        cell_scale: u32,
+        target_scale: u32,
+    ) -> PrecisionResult {
+        assert!(
+            target_scale <= cell_scale,
+            "Harness::score_at: target_scale ({target_scale}) > cell_scale ({cell_scale})",
+        );
+        let (value, rounding) = match out {
+            SubjectOutput::NotApplicable => return PrecisionResult::NotApplicable,
+            SubjectOutput::Computed { value, rounding } => (value, *rounding),
+        };
+
+        // Round the subject's emitted value to ITS native scale, under its
+        // reported mode, before diffing.
+        let Some(subject_scaled) = decimal_to_scaled_rounded(value, target_scale, rounding) else {
+            return PrecisionResult::NotApplicable;
+        };
+
+        // Source the oracle at the subject's native scale by re-rounding
+        // the EXISTING mpmath (floor, cls) — never the crate.
+        let (floor_s, cls_s) = oracle_at_scale(&case.floor, case.cls, cell_scale, target_scale);
+        let oracle = oracle_correctly_rounded(&floor_s, cls_s, rounding);
+
+        let diff = dec_abs_diff(&subject_scaled, &oracle);
+        let lsbe = dec_bit_len(&diff);
+        let digits = dec_digit_len(&diff);
+        let ulp = dec_to_f64(&diff);
+
+        PrecisionResult::Executed {
+            value: value.clone(),
+            rounding,
+            lsbe,
+            digits,
+            ulp,
+            reach_scale: target_scale,
         }
     }
 }
@@ -1196,6 +1390,12 @@ pub struct CellScore {
     pub max_digits: u32,
     pub max_ulp: f64,
     pub correctly_rounded: usize,
+    /// The scale (fractional digit count) the subject was actually graded
+    /// at — its own last representable digit. For a fixed-precision peer
+    /// this is `min(cap, cell_scale)`; for arbitrary-precision peers and
+    /// decimal-scaled it equals the cell scale. The PRECISION/REACH metric,
+    /// reported independently of rounding correctness.
+    pub reach_scale: u32,
 }
 
 impl CellScore {
@@ -1203,8 +1403,20 @@ impl CellScore {
         match r {
             PrecisionResult::NotApplicable => self.na += 1,
             PrecisionResult::Executed {
-                lsbe, digits, ulp, ..
+                lsbe,
+                digits,
+                ulp,
+                reach_scale,
+                ..
             } => {
+                // The reach is set from the first executed result and is
+                // constant across a roster (one subject + one cell ⇒ one
+                // native scale). Recording it on first record keeps the
+                // accumulator's `Default::default()` (== 0) from masking
+                // it.
+                if self.scored == 0 {
+                    self.reach_scale = *reach_scale;
+                }
                 self.scored += 1;
                 if *lsbe > self.max_lsbe {
                     self.max_lsbe = *lsbe;
@@ -1246,6 +1458,11 @@ pub fn score_roster(
     if roster.is_empty() {
         return None;
     }
+    // The subject's OWN native scale for this cell (its last representable
+    // digit). Fixed-precision peers cap at their representation width; the
+    // default impl returns the full cell scale. Capped to `scale` so a peer
+    // never claims more reach than the cell carries an oracle for.
+    let target_scale = subject.native_scale(scale).min(scale);
     let mut cell = CellScore::default();
     for case in roster.iter().take(sample_cap) {
         let input = Input {
@@ -1264,7 +1481,12 @@ pub fn score_roster(
         }));
         match evaluated {
             Ok(out) => {
-                let r = Harness::score(&out, case, scale);
+                // Score the subject at ITS OWN last representable digit
+                // (`target_scale`), against the mpmath oracle re-rounded
+                // to that depth from the existing (floor, cls) — the
+                // external mpmath data is the sole reference, never the
+                // crate's own output.
+                let r = Harness::score_at(&out, case, scale, target_scale);
                 cell.record(&r);
             }
             Err(_) => {
@@ -1272,6 +1494,11 @@ pub fn score_roster(
                 cell.na += 1;
             }
         }
+    }
+    // If every case was NA/panic the reach_scale was never set; fall back
+    // to the subject's nominal target so downstream readers still see it.
+    if cell.scored == 0 {
+        cell.reach_scale = target_scale;
     }
     Some(cell)
 }
@@ -1550,12 +1777,17 @@ impl Fidelity {
 pub fn fidelity_rubric() -> &'static str {
     "### Fidelity grading rubric\n\
      \n\
-     Each scored cell is one `(method, width, scale)` golden table; its \
-     worst error is the largest gap to the correctly-rounded oracle over \
-     the cell's inputs (`0` ⇒ bit-exact / correctly rounded under the \
-     library's own reported rounding mode). `n/a` cells (a function or \
-     scale a library cannot run) are excluded from BOTH the cell count and \
-     the demerit sum.\n\
+     Each scored cell is one `(method, width, scale)` golden table. Every \
+     library is graded **at its OWN last representable digit** (`reach_scale`): \
+     the mpmath oracle is re-rounded from the existing `(floor, cls)` data \
+     down to that depth (NEVER re-derived from any library's output), and the \
+     library's emission is rounded to the same depth under its reported mode \
+     before diffing. So a fixed-precision peer that cannot reach decimal-scaled's \
+     deep cell scale is graded at its CAP — correctly-rounded-there is `0` \
+     demerits, off-by-N-there is `N` — and its shallower reach is reported \
+     independently as a separate metric, NOT a rounding failure. `n/a` cells \
+     (a method the library does not expose at all, or an input it rejects) are \
+     excluded from BOTH the cell count and the demerit sum.\n\
      \n\
      * **error_digits** = the EXACT decimal-digit length of that worst \
      error magnitude (the count of contaminated trailing decimal digits; \
