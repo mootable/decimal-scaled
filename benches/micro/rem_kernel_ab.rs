@@ -278,6 +278,140 @@ macro_rules! dec_rem_wide_cell {
     }};
 }
 
+/// WIDTH × SCALE validation sweep (the cross-surface proof that the
+/// `|a| < |b|` short-circuit wins-or-ties EVERYWHERE, and that the genuine
+/// `|a| > |b|` divide does not regress vs the pure divmod — the 0.4.4-
+/// equivalent engine — at any scale).
+///
+/// Two shapes per `(width, scale)`:
+///   * `lt_xb`   — `2·10^s % 35·10^(s-1)` (`|a| < |b|`, the bbc shape): the
+///     short-circuit MUST fire (returns the dividend), so `fastpath` should
+///     beat `divmod_only` everywhere.
+///   * `gt_wide` — a FULL `N`-limb dividend `% ` a ~half-`N`-limb divisor
+///     (`|a| > |b|`, a genuine multi-quotient-limb Knuth divide): the
+///     short-circuit must NOT fire; `fastpath` runs the SAME divmod as
+///     `divmod_only` plus one `Uint::cmp`, so it must be ~tie (the compare is
+///     negligible). This is the shape the bbc never exercises — the region a
+///     value-gate cannot help, where any 0.4.4 regression would still be owed.
+///   * `gt_xb`   — `7·10^s % 35·10^(s-1)` (`|a| > |b|`, small quotient): the
+///     `|a|>|b|` analog of the bbc operand magnitude (divisor at the scaled
+///     width, dividend just larger), to catch a setup-cost regression on the
+///     exact bbc magnitudes but with the gate OFF.
+///
+/// `fastpath` = `dec_rem_int_layer` (my recovered path, with the compare);
+/// `divmod_only` = `dec_rem_int_layer_divmod` (pure Knuth, the 0.4.4-
+/// equivalent engine — see chunk-1 diff: identical Algorithm D + MG 2-by-1,
+/// the only delta a faster merged-u128 D4 carry in 0.5.0). Comparing fastpath
+/// vs divmod_only isolates EXACTLY the cost/benefit of my change.
+macro_rules! rem_scale_sweep {
+    ($c:expr, $n:literal, $label:literal, $s_lo:expr, $s_mid:expr, $s_hi:expr) => {{
+        for &scale in &[$s_lo, $s_mid, $s_hi] {
+            // `|a| < |b|` (gate fires): 2·10^s % 35·10^(s-1).
+            let lt_x = k_times_pow10::<$n>(2, scale);
+            let lt_b = if scale >= 1 {
+                k_times_pow10::<$n>(35, scale - 1)
+            } else {
+                k_times_pow10::<$n>(3, 0)
+            };
+            // `|a| > |b|` small-quotient (gate off): 7·10^s % 35·10^(s-1).
+            let gt_x = k_times_pow10::<$n>(7, scale);
+            let gt_b = lt_b;
+            // `|a| > |b|` genuine wide divide (gate off, many quotient limbs):
+            // full-N-limb dividend % ~half-N-limb divisor.
+            let half = ($n / 2).max(1);
+            let gt_wa = synth::<$n>(104729, $n);
+            let gt_wb = synth::<$n>(7919, half);
+
+            // Validity wall: every shape bit-identical to the pure divmod.
+            assert_eq!(
+                dec_rem_int_layer::<$n>(lt_x, lt_b),
+                dec_rem_int_layer_divmod::<$n>(lt_x, lt_b),
+                "sweep lt_xb disagree {} s={}", $label, scale
+            );
+            assert_eq!(
+                dec_rem_int_layer::<$n>(gt_x, gt_b),
+                dec_rem_int_layer_divmod::<$n>(gt_x, gt_b),
+                "sweep gt_xb disagree {} s={}", $label, scale
+            );
+            assert_eq!(
+                dec_rem_int_layer::<$n>(gt_wa, gt_wb),
+                dec_rem_int_layer_divmod::<$n>(gt_wa, gt_wb),
+                "sweep gt_wide disagree {} s={}", $label, scale
+            );
+
+            let inputs = vec![
+                Pair { label: "lt_xb", a: lt_x, b: lt_b },
+                Pair { label: "gt_xb", a: gt_x, b: gt_b },
+                Pair { label: "gt_wide", a: gt_wa, b: gt_wb },
+            ];
+            compare_all(
+                $c,
+                &format!(concat!("rem_sweep/", $label, "_s{}"), scale),
+                |p: &Pair<$n>| p.label.to_string(),
+                inputs,
+                vec![
+                    (
+                        "fastpath",
+                        (|p: Pair<$n>| dec_rem_int_layer::<$n>(p.a, p.b))
+                            as fn(Pair<$n>) -> Int<$n>,
+                    ),
+                    ("divmod_only", |p: Pair<$n>| {
+                        dec_rem_int_layer_divmod::<$n>(p.a, p.b)
+                    }),
+                ],
+            );
+        }
+    }};
+}
+
+/// Narrow-tier (`N <= 2`) width×scale sweep for the int `%` path
+/// (`rem_small_fast`, where my `|a_mag| < |b_mag|` compare also landed). The
+/// `gt_*` shapes confirm the added compare is negligible at D18/D38 too (not
+/// just the wide tiers). Native is the reference (valid at `N <= 2`).
+macro_rules! rem_narrow_sweep {
+    ($c:expr, $n:literal, $label:literal, $s_lo:expr, $s_mid:expr, $s_hi:expr) => {{
+        for &scale in &[$s_lo, $s_mid, $s_hi] {
+            let lt_x = k_times_pow10::<$n>(2, scale);
+            let lt_b = if scale >= 1 {
+                k_times_pow10::<$n>(35, scale - 1)
+            } else {
+                k_times_pow10::<$n>(3, 0)
+            };
+            let gt_x = k_times_pow10::<$n>(7, scale);
+            let gt_b = lt_b;
+            // full-width % single-limb-ish divisor (genuine divide at N<=2).
+            let gt_wa = synth::<$n>(104729, $n);
+            let gt_wb = synth::<$n>(7919, 1);
+            for (lbl, a, b) in [("lt_xb", lt_x, lt_b), ("gt_xb", gt_x, gt_b), ("gt_wide", gt_wa, gt_wb)] {
+                assert_eq!(
+                    rem_small_fast::<$n>(a, b),
+                    rem_native::<$n>(a, b),
+                    "narrow sweep {} disagree {} s={}", lbl, $label, scale
+                );
+            }
+            let inputs = vec![
+                Pair { label: "lt_xb", a: lt_x, b: lt_b },
+                Pair { label: "gt_xb", a: gt_x, b: gt_b },
+                Pair { label: "gt_wide", a: gt_wa, b: gt_wb },
+            ];
+            compare_all(
+                $c,
+                &format!(concat!("rem_narrow_sweep/", $label, "_s{}"), scale),
+                |p: &Pair<$n>| p.label.to_string(),
+                inputs,
+                vec![
+                    (
+                        "small_fast",
+                        (|p: Pair<$n>| rem_small_fast::<$n>(p.a, p.b))
+                            as fn(Pair<$n>) -> Int<$n>,
+                    ),
+                    ("native", |p: Pair<$n>| rem_native::<$n>(p.a, p.b)),
+                ],
+            );
+        }
+    }};
+}
+
 fn bench(c: &mut Criterion) {
     decimal_scaled_ab_sweep!(c =>
         // Narrow tiers: native / native_direct / small_fast vs via_div_rem.
@@ -310,6 +444,24 @@ fn bench(c: &mut Criterion) {
         Int<32> => |c: &mut Criterion| dec_rem_wide_cell!(c, 32, "D616_s308", 308),
         Int<48> => |c: &mut Criterion| dec_rem_wide_cell!(c, 48, "D924_s462", 462),
         Int<64> => |c: &mut Criterion| dec_rem_wide_cell!(c, 64, "D1232_s616", 616),
+        // WIDTH × SCALE validation sweep: {0, S/2, S-2} per width, BOTH the
+        // `|a|<|b|` gate-fires shape (lt_xb) and the `|a|>|b|` gate-off shapes
+        // (gt_xb small-quotient, gt_wide genuine multi-limb divide). Proves
+        // the short-circuit wins-or-ties across the whole surface and the
+        // added compare does not regress the genuine divide at any (width,
+        // scale). Scale set per width = {0, maxdigits/2, maxdigits-2}.
+        Int<1> => |c: &mut Criterion| rem_narrow_sweep!(c, 1, "D18", 0, 9, 16),
+        Int<2> => |c: &mut Criterion| rem_narrow_sweep!(c, 2, "D38", 0, 19, 36),
+        Int<3> => |c: &mut Criterion| rem_scale_sweep!(c, 3, "D57", 0, 28, 55),
+        Int<4> => |c: &mut Criterion| rem_scale_sweep!(c, 4, "D76", 0, 38, 74),
+        Int<6> => |c: &mut Criterion| rem_scale_sweep!(c, 6, "D115", 0, 57, 113),
+        Int<8> => |c: &mut Criterion| rem_scale_sweep!(c, 8, "D153", 0, 76, 151),
+        Int<12> => |c: &mut Criterion| rem_scale_sweep!(c, 12, "D230", 0, 115, 228),
+        Int<16> => |c: &mut Criterion| rem_scale_sweep!(c, 16, "D307", 0, 153, 305),
+        Int<24> => |c: &mut Criterion| rem_scale_sweep!(c, 24, "D462", 0, 231, 460),
+        Int<32> => |c: &mut Criterion| rem_scale_sweep!(c, 32, "D616", 0, 308, 614),
+        Int<48> => |c: &mut Criterion| rem_scale_sweep!(c, 48, "D924", 0, 462, 922),
+        Int<64> => |c: &mut Criterion| rem_scale_sweep!(c, 64, "D1232", 0, 616, 1230),
     );
 }
 
