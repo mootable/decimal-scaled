@@ -15,12 +15,18 @@ use crate::int::types::Int;
 /// the scale factor.
 ///
 /// A value-gated small-operand fast path runs FIRST: when both operand
-/// magnitudes fit a single 128-bit word it takes a hardware `u128 % u128`
-/// (no scratch, no shape classifier, no Knuth setup), recovering v0.4.4's
-/// `limbs_divmod` "Fast Path A" generically. This is the dominant scale-0
-/// decimal-`rem` shape (a bare integer / small `k`), where the divmod setup
-/// dwarfs the divide. It is bit-identical to the divmod below, so it only
-/// changes which path runs, never the result.
+/// Two value-gated fast paths run FIRST. (1) When `|a| < |b|` the truncating
+/// remainder is the dividend itself (`a % b == a`), returned after one
+/// top-down magnitude compare — no divide, no scratch. This is the dominant
+/// decimal-`rem` bbc shape (`x % b` with `|x| < |b|`, e.g. `2.0 % 3.5`) and it
+/// catches the cases the u128 probe misses (a scaled divisor crossing the
+/// 128-bit line while the dividend stays smaller — D76 s38 onward).
+/// (2) When both operand magnitudes fit a single 128-bit word it takes a
+/// hardware `u128 % u128` (no scratch, no shape classifier, no Knuth setup),
+/// recovering v0.4.4's `limbs_divmod` "Fast Path A" generically — the scale-0
+/// bare-integer / small-`k` shape where the divmod setup dwarfs the divide.
+/// Both are bit-identical to the divmod below, so they only change which path
+/// runs, never the result.
 ///
 /// Otherwise it routes on the divide matcher's verdict
 /// ([`select_for_limbs`](crate::int::policy::div_rem::select_for_limbs)) and
@@ -66,6 +72,22 @@ where
     let neg_r = a.is_negative();
     let a_abs = a.unsigned_abs();
     let b_abs = b.unsigned_abs();
+
+    // Dividend-smaller short-circuit: when `|a| < |b|` the truncating
+    // remainder is the dividend itself (`a % b == a`), so return `a`
+    // unchanged — no divide, no scratch, no shape classifier. This is one
+    // top-down `N`-limb magnitude compare (`Uint::cmp`), correct for EVERY
+    // `N` and operand value, and it catches the dominant decimal-`rem` shape
+    // the u128 fast path below MISSES: a balanced-magnitude `x % b` where the
+    // SCALED divisor crosses the 128-bit line (e.g. the bbc `2.0 % 3.5` cell
+    // at D76 s38: `2·10^38` fits a u128 but `3.5·10^38` is 129 bits, so the
+    // u128 probe fails and the operands fall into a full multi-limb Knuth
+    // divmod whose `top < n` early-out the compare reaches first, for free).
+    // Bit-identical to the divmod (which also yields `rem == a` here), so it
+    // only changes which path runs, never the result.
+    if a_abs < b_abs {
+        return a;
+    }
 
     // Small-operand fast path (recovers v0.4.4's `limbs_divmod` "Fast Path A"
     // generically): when both magnitudes fit a single 128-bit word, take the

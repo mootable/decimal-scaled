@@ -8,6 +8,11 @@
 //! single hardware divide, no scratch, no shape classification). It runs at
 //! EVERY width `N`, gated on the operand VALUE rather than the const width:
 //!
+//! * when `|a| < |b|` the truncating remainder is the dividend itself
+//!   (`a % b == a`), returned after one top-down `N`-limb magnitude compare —
+//!   no divide at all. This catches the balanced-magnitude shape the
+//!   single-word probe below misses (a divisor that crosses the 128-bit line
+//!   while the dividend stays smaller);
 //! * when both operand magnitudes fit a single `u128` (every limb above
 //!   index 1 is zero on both inputs) it takes the hardware `u128 % u128`
 //!   with the dividend's sign re-applied — bypassing the `[u64; N]` quotient
@@ -70,6 +75,18 @@ pub(crate) fn rem_small_fast<const N: usize>(a: Int<N>, b: Int<N>) -> Int<N> {
     let a_mag = a.unsigned_abs();
     let b_mag = b.unsigned_abs();
     let neg_r = a.is_negative();
+    // Dividend-smaller short-circuit: when `|a| < |b|` the truncating
+    // remainder is the dividend itself (`a % b == a`), so return `a`
+    // unchanged — one top-down `N`-limb magnitude compare (`Uint::cmp`), no
+    // hardware divide, no `[u64; N]` quotient scratch, no `div_rem` shape
+    // classifier. Correct for EVERY `N` and value, and it catches the
+    // balanced-magnitude shape the single-word `u128` probe below MISSES (an
+    // operand pair where the divisor crosses the 128-bit line but the
+    // dividend is still smaller). Bit-identical to the divmod (which also
+    // yields `rem == a` here).
+    if a_mag < b_mag {
+        return a;
+    }
     let (a_fits, a_u) = mag_fits_u128::<N>(&a_mag);
     let (b_fits, b_u) = mag_fits_u128::<N>(&b_mag);
     let mut rem = [0u64; N];
