@@ -85,8 +85,14 @@ Reproducibility: the script is deterministic — every random draw is
 seeded from `random.Random(<seeded_key>)`. Two runs produce
 byte-identical golden files.
 
+Scale sampling: each (function, width) is generated at the five-point
+SCALE set `{0, S/4, S/2, 3S/4, S-1}` (S = the tier's digit capacity,
+floor division, deduped) — scale 0 (integer regime), S-1 (MAX_SCALE,
+the near-overflow / deep-underflow edge), and the three interior
+quarters spanning the whole representable-scale range.
+
 Footprint budget: aim for <= 5 MB committed under `tests/golden/`.
-All thirteen decimal widths are covered; case counts taper hard for
+All twelve decimal widths are covered; case counts taper hard for
 the wider tiers (where each line is hundreds of digits) so the
 budget holds.
 
@@ -132,7 +138,7 @@ mp.dps = 700
 
 # --- Tier targets ---------------------------------------------------------
 #
-# (width_alias, storage_digit_capacity, scale, base_case_count)
+# (width_alias, storage_digit_capacity, base_case_count)
 #
 # `storage_digit_capacity` is the documented "decimal digits" the
 # storage type holds; `max_abs_raw` clamps random draws so the integer
@@ -140,104 +146,53 @@ mp.dps = 700
 # `10 ** (capacity - 1)` so signed arithmetic in the kernel cannot
 # trip near the type's true MAX.
 #
-# Coverage choice — EVERY one of the crate's thirteen decimal widths
-# is represented at its design-target SCALE (~ capacity / 2, matching
-# the bespoke-kernel slots and neighbour tiers). Case counts taper
-# hard at the wider tiers to stay inside the 5 MB committed budget;
-# every width is present even where its per-cell count is small.
+# Scale sampling: each (function, width) is generated at the FIVE-point
+# scale set {0, S/4, S/2, 3S/4, S-1} with S = the tier's full digit
+# capacity and floor division (`scale_set_for`). Scale 0 is the integer
+# regime; S-1 is MAX_SCALE (the near-overflow / deep-underflow edge);
+# the three interior quarters span the function's whole SCALE range.
+# Case counts taper hard at the wider tiers to stay inside the 5 MB
+# committed budget; every width is present even where its per-cell count
+# is small.
 
 # Signed storage maxima for the tiers whose true range is narrower
 # than `10 ** (capacity - 1)`. Only the primitive-backed tiers need
 # an entry — the wide-int tiers hold far more than `10 ** (capacity
 # - 1)`, so their conservative decimal cap is the binding one.
 STORAGE_MAX = {
-    "d9": 2 ** 31 - 1,   # i32::MAX
     "d18": 2 ** 63 - 1,  # i64::MAX
     "d38": 2 ** 127 - 1, # i128::MAX
 }
 
+# (alias, storage_capacity_digits, base_case_count). The SCALE set per
+# tier is derived from the capacity by `scale_set_for` below, not listed
+# per-row.
 TIERS = [
-    # (alias, storage_capacity_digits, scale, base_case_count)
-    ("d9",    9,    4,   180),
-    ("d18",   18,   9,   180),
-    ("d38",   38,   19,  160),
-    ("d57",   57,   28,  140),
-    ("d76",   76,   35,  120),
-    ("d115",  115,  57,  100),
-    ("d153",  153,  76,  90),
-    ("d230",  230,  115, 70),
-    ("d307",  307,  150, 60),
-    ("d462",  462,  230, 44),
-    ("d616",  616,  308, 36),
-    ("d924",  924,  460, 24),
-    ("d1232", 1232, 615, 20),
-    # Band-edge {0, capacity-1} cells for the narrow + mid tiers. The
-    # canonical entries above sit at each tier's design SCALE (~capacity/2 =
-    # the S/2 band middle); these add the two SCALE extremes so every
-    # (function, width) face is validity-gated across its whole SCALE range,
-    # not just the middle. SCALE 0 is the integer regime (x is an exact
-    # integer, the result fills the tier's whole integer capacity for the
-    # exponential growers); SCALE = capacity-1 is MAX_SCALE, the near-
-    # overflow / deep-underflow edge where rounding guards (overflow clamp,
-    # underflow Ceiling, rescale boundaries) are most likely to surface.
-    # The x-wide / xx-wide tiers (d307..d1232) already carry their {0, S-1}
-    # entries below (added for the exp campaign; the full-func run now fills
-    # every function at those cells too).
-    ("d18",   18,   0,   180),
-    ("d18",   18,   17,  180),
-    ("d38",   38,   0,   160),
-    ("d38",   38,   37,  160),
-    ("d57",   57,   0,   140),
-    ("d57",   57,   56,  140),
-    ("d76",   76,   0,   120),
-    ("d76",   76,   75,  120),
-    ("d115",  115,  0,   100),
-    ("d115",  115,  114, 100),
-    ("d153",  153,  0,   90),
-    ("d153",  153,  152, 90),
-    ("d230",  230,  0,   70),
-    ("d230",  230,  229, 70),
-    # Low-scale (SCALE 30) cells for the wide tiers — the bench-branch-compare
-    # exp regime, where the exp policy routes a Tang rectangle. The default
-    # per-tier entries above sit at each tier's design SCALE (the Tang
-    # rectangle's TOP edge / the Series wash zone); these s30 cells validate
-    # the rectangle's LOW edge, where Tang's table reduction wins. Same width
-    # capacity, scale pinned to 30.
-    ("d307",  307,  30,  60),
-    ("d462",  462,  30,  44),
-    ("d616",  616,  30,  36),
-    ("d924",  924,  30,  24),
-    ("d1232", 1232, 30,  20),
-    # Interior scale samples across each wide tier's exp Tang rectangle (the
-    # rectangle spans 0..top; s30 is the low edge, the canonical entry above is
-    # the top edge). Two interior scales per tier exercise Tang (small |x|) and
-    # Series (large |x|) at mid-rectangle, not just the edges.
-    ("d307",  307,  70,  60),
-    ("d307",  307,  120, 60),
-    ("d462",  462,  100, 44),
-    ("d462",  462,  180, 44),
-    ("d616",  616,  130, 36),
-    ("d616",  616,  240, 36),
-    ("d924",  924,  180, 24),
-    ("d924",  924,  350, 24),
-    ("d1232", 1232, 250, 20),
-    ("d1232", 1232, 470, 20),
-    # The two SCALE extremes per wide tier: 0 (integer exp) and MAX_SCALE
-    # (= capacity - 1, the near-overflow / deep-underflow edge). With the
-    # canonical entry (~S/2) and s30 these complete the {0, S/2, S-1} minimum
-    # coverage every width should carry; the extremes are where rounding edges
-    # (overflow guard, underflow Ceiling) are most likely to surface.
-    ("d307",  307,  0,   60),
-    ("d307",  307,  306, 60),
-    ("d462",  462,  0,   44),
-    ("d462",  462,  461, 44),
-    ("d616",  616,  0,   36),
-    ("d616",  616,  615, 36),
-    ("d924",  924,  0,   24),
-    ("d924",  924,  923, 24),
-    ("d1232", 1232, 0,   20),
-    ("d1232", 1232, 1231, 20),
+    ("d18",   18,   180),
+    ("d38",   38,   160),
+    ("d57",   57,   140),
+    ("d76",   76,   120),
+    ("d115",  115,  100),
+    ("d153",  153,  90),
+    ("d230",  230,  70),
+    ("d307",  307,  60),
+    ("d462",  462,  44),
+    ("d616",  616,  36),
+    ("d924",  924,  24),
+    ("d1232", 1232, 20),
 ]
+
+
+def scale_set_for(capacity: int) -> list[int]:
+    """The five-point SCALE sampling set {0, S/4, S/2, 3S/4, S-1} for a
+    tier of digit-capacity `S = capacity`, with floor division and dedup.
+
+    Scale 0 is the integer regime; S-1 is MAX_SCALE; the three interior
+    quarters span the whole representable-scale range. Deduped + sorted so
+    the narrowest tiers (where quarters can collide) still emit a clean
+    ordered set."""
+    s = capacity
+    return sorted({0, s // 4, s // 2, 3 * s // 4, s - 1})
 
 # --- mpmath function oracles ----------------------------------------------
 #
@@ -1611,24 +1566,22 @@ def hypot_hunter_cells() -> list[tuple[str, int, list[tuple[int, int]]]]:
 
 
 def arith_coverage_cells() -> dict[str, list[tuple[str, int, list[tuple[int, int]]]]]:
-    """`{0, S/2, S-1}` arithmetic coverage for add/sub/mul/div/rem across
-    a spread of tiers: near-max operands, opposite signs, and a
-    div-with-remainder. Inputs are RAW integers at the listed scale; the
-    exact oracle computes each expected. Returns a per-func roster."""
+    """Five-point `{0, S/4, S/2, 3S/4, S-1}` arithmetic coverage for
+    add/sub/mul/div/rem across a spread of tiers: near-max operands,
+    opposite signs, and a div-with-remainder. Inputs are RAW integers at
+    the listed scale; the exact oracle computes each expected. Returns a
+    per-func roster."""
     def near_max(alias: str) -> int:
         # A magnitude comfortably inside the tier so a+b / a*b cannot
         # overflow the signed range: ~half the signed max for add/sub,
         # the sqrt of it for mul.
         return tier_signed_max(alias)
 
-    # The tiers and their {0, S/2, S-1} scales to sample.
-    tier_scales = [
-        ("d18", [0, 9, 17]),
-        ("d38", [0, 19, 37]),
-        ("d57", [0, 28, 56]),
-        ("d76", [0, 35, 75]),
-        ("d307", [0, 150, 306]),
-    ]
+    # The tiers and their five-point {0, S/4, S/2, 3S/4, S-1} scale set
+    # (S = the tier's digit capacity), matching `scale_set_for`.
+    tier_caps = [("d18", 18), ("d38", 38), ("d57", 57), ("d76", 76),
+                 ("d307", 307)]
+    tier_scales = [(alias, scale_set_for(cap)) for alias, cap in tier_caps]
 
     roster: dict[str, list[tuple[str, int, list[tuple[int, int]]]]] = {
         "add": [], "sub": [], "mul": [], "div": [], "rem": [],
@@ -1750,183 +1703,201 @@ def main() -> None:
         total_bytes += b_bytes
         total_cases += b_cases
 
-    for alias, capacity, scale, base_count in TIERS:
+    for alias, capacity, base_count in TIERS:
         if only_alias is not None and alias.lower() not in only_alias:
-            continue
-        if only_scale is not None and str(scale) not in only_scale:
             continue
         # `max_raw` clamps both inputs and rounded outputs to what the
         # storage type can actually hold. The documented decimal
         # capacity (`10 ** (capacity - 1)`) is the headroom-conservative
-        # ceiling for the wide tiers, but the *primitive* tiers (D9 =
-        # i32, D18 = i64) saturate well below `10 ** (capacity - 1)`:
-        # i32::MAX ~ 2.1e9, i64::MAX ~ 9.2e18. Cap to the true signed
-        # maximum there so no input or output overflows the storage on
-        # the Rust side.
+        # ceiling for the wide tiers, but the *primitive* tiers (D18 =
+        # i64) saturate well below `10 ** (capacity - 1)`:
+        # i64::MAX ~ 9.2e18. Cap to the true signed maximum there so no
+        # input or output overflows the storage on the Rust side.
         max_raw = 10 ** (capacity - 1)
         if alias in STORAGE_MAX:
             max_raw = min(max_raw, STORAGE_MAX[alias])
         counts = category_counts(max(8, int(base_count * COUNT_SCALE)))
-        # Lift mpmath working precision so the oracle's intermediate
-        # squarings stay safely above the tier's storage LSB. The
-        # `2*SCALE + 64` floor covers the worst case where the oracle
-        # squares an LSB-scale residual; the global lower bound of 700
-        # keeps the narrow tiers from running unnecessarily slow on
-        # small `2*SCALE` values.
-        # `2*scale + 64` covers the canonical cells (where x is moderate and
-        # the result is ~scale-sized). At a LOW scale the representable input
-        # range is huge, so the result can fill the tier's whole `capacity`
-        # (e.g. exp(x) at D924<30> reaches ~894 integer digits); the oracle
-        # then needs `>= capacity` significant digits or it truncates the true
-        # value. Take the max so both regimes are covered.
-        mp.dps = max(700, 2 * scale + 64, capacity + 96)
 
-        for func_name, oracle, _domain in FUNCS:
-            if only_func is not None and func_name.lower() not in only_func:
+        # Five-point SCALE sweep {0, S/4, S/2, 3S/4, S-1} per tier.
+        for scale in scale_set_for(capacity):
+            if only_scale is not None and str(scale) not in only_scale:
                 continue
-            seed_key = f"{alias}-{scale}-{func_name}-v1"
-            rng = random.Random(seed_key)
-
-            inputs: list[int] = []
-
-            # Near-boundary — domain-specific small values.
-            inputs.extend(near_boundary_inputs(func_name, scale, max_raw,
-                                               counts["near_boundary"], rng))
-
-            # Random uniform.
-            inputs.extend(sample_inputs(func_name, scale, max_raw,
-                                        counts["random_uniform"], rng))
-
-            # Half-ULP-tie.
-            inputs.extend(find_half_ulp_ties(func_name, oracle, scale,
-                                             max_raw, counts["half_ulp_tie"],
-                                             rng))
-
-            # Edge values.
-            inputs.extend(edge_inputs(func_name, scale, max_raw))
-
-            # Overflow just-fits boundary (asserted, not dropped).
-            inputs.extend(overflow_edge_inputs(func_name, oracle, scale, max_raw))
-
-            # Very-large trig arguments (full Payne-Hanek).
-            inputs.extend(large_trig_inputs(func_name, scale, max_raw))
-
-            # Saturation grid-lines (tanh -> ±1).
-            inputs.extend(saturation_inputs(func_name, scale, max_raw))
-
-            # Monotonicity pairs: x+1 beside a sample of the inputs above.
-            inputs.extend(monotonicity_inputs(inputs, max_raw))
-
-            # Dedupe while preserving order.
-            seen: set[int] = set()
-            deduped: list[int] = []
-            for raw in inputs:
-                if raw not in seen:
-                    seen.add(raw)
-                    deduped.append(raw)
-
-            # Evaluate the oracle for each input.
-            cases: list[tuple[int, int, str]] = []
-            for raw_in in deduped:
-                # Drop inputs the storage type can't hold (edge rosters
-                # build a few magnitudes from `one * 10**k` that exceed
-                # the narrow-tier signed maximum).
-                if abs(raw_in) > max_raw:
-                    continue
-                # Exact algebraic points (perfect squares for sqrt,
-                # perfect cubes for cbrt) are classified symbolically via
-                # integer arithmetic, bypassing the oracle's finite-
-                # precision residual: the exact result is the `Z`
-                # (no-bump) class under every rounding mode.
-                exact = exact_algebraic_root(func_name, raw_in, scale)
-                if exact is not None:
-                    floor_raw, cls = exact, "Z"
-                    if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
-                        continue
-                    cases.append((raw_in, floor_raw, cls))
-                    continue
-                x = from_raw(raw_in, scale)
-                y = safe_call(oracle, x)
-                if y is None:
-                    continue
-                floor_raw, cls = floor_and_class(y, scale)
-                # Both neighbours (floor and floor+1) must fit the
-                # storage type — any RoundingMode may select either.
-                if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
-                    continue
-                cases.append((raw_in, floor_raw, cls))
-
-            if not cases:
-                continue
-
-            out_path = OUT_DIR / f"{func_name}_{alias}_s{scale}.txt"
-            file_bytes = emit_file(out_path, cases)
-            total_bytes += file_bytes
-            total_cases += len(cases)
-            print(f"  {out_path.relative_to(ROOT)}: "
-                  f"{len(cases)} cases, {file_bytes} bytes")
-
-        # ── Two-argument oracles (log / atan2 / powf) ──────────────────
-        two_arg_count = max(20, int(base_count * COUNT_SCALE))
-        for func_name, oracle2, _domain in TWO_ARG_FUNCS:
-            if only_func is not None and func_name.lower() not in only_func:
-                continue
-            seed_key = f"{alias}-{scale}-{func_name}-2arg-v1"
-            rng = random.Random(seed_key)
-            pairs = two_arg_inputs(func_name, scale, max_raw, two_arg_count, rng)
-
-            # Dedupe pairs, preserving order.
-            seen2: set[tuple[int, int]] = set()
-            deduped2: list[tuple[int, int]] = []
-            for p in pairs:
-                if p not in seen2:
-                    seen2.add(p)
-                    deduped2.append(p)
-
-            cases2: list[tuple[int, int, int, str]] = []
-            for a_raw, b_raw in deduped2:
-                if abs(a_raw) > max_raw or abs(b_raw) > max_raw:
-                    continue
-                # Exact-power points: `log_b(b^k) = k` and the
-                # perfect-power `base**(p/q)` are exact integers whose
-                # finite-precision `log(v)/log(b)` / `exp(y·ln x)` oracle
-                # value carries a sub-LSB residual. Classify them
-                # symbolically via integer arithmetic (mirroring
-                # `exact_algebraic_root` for sqrt / cbrt) so they pin to
-                # the `Z` (no-bump) class under every rounding mode.
-                exact2: int | None = None
-                if func_name == "log":
-                    exact2 = exact_log_base(a_raw, b_raw, scale)
-                elif func_name == "powf":
-                    exact2 = exact_powf(a_raw, b_raw, scale)
-                if exact2 is not None:
-                    if abs(exact2) > max_raw or abs(exact2) + 1 > max_raw:
-                        continue
-                    cases2.append((a_raw, b_raw, exact2, "Z"))
-                    continue
-                a = from_raw(a_raw, scale)
-                b = from_raw(b_raw, scale)
-                y = safe_call_two(oracle2, a, b)
-                if y is None:
-                    continue
-                floor_raw, cls = floor_and_class(y, scale)
-                if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
-                    continue
-                cases2.append((a_raw, b_raw, floor_raw, cls))
-
-            if not cases2:
-                continue
-
-            out_path = OUT_DIR / f"{func_name}_{alias}_s{scale}.txt"
-            file_bytes = emit_two_arg_file(out_path, cases2)
-            total_bytes += file_bytes
-            total_cases += len(cases2)
-            print(f"  {out_path.relative_to(ROOT)}: "
-                  f"{len(cases2)} cases, {file_bytes} bytes (2-arg)")
+            s_bytes, s_cases = emit_tier_scale(
+                alias, capacity, base_count, max_raw, counts, scale, only_func)
+            total_bytes += s_bytes
+            total_cases += s_cases
 
     print()
     print(f"total cases: {total_cases}")
     print(f"total bytes: {total_bytes} ({total_bytes / 1024 / 1024:.2f} MB)")
+
+
+def emit_tier_scale(alias: str, capacity: int, base_count: int, max_raw: int,
+                    counts: dict[str, int], scale: int,
+                    only_func: set[str] | None) -> tuple[int, int]:
+    """Emit every single-arg + two-arg golden file for one (tier, scale)
+    cell. Split out of `main` so the per-tier five-point SCALE sweep wraps
+    a single body. Returns `(total_bytes, total_cases)` for the cell."""
+    total_bytes = 0
+    total_cases = 0
+    # Lift mpmath working precision so the oracle's intermediate
+    # squarings stay safely above the tier's storage LSB. The
+    # `2*SCALE + 64` floor covers the worst case where the oracle
+    # squares an LSB-scale residual; the global lower bound of 700
+    # keeps the narrow tiers from running unnecessarily slow on
+    # small `2*SCALE` values.
+    # `2*scale + 64` covers the canonical cells (where x is moderate and
+    # the result is ~scale-sized). At a LOW scale the representable input
+    # range is huge, so the result can fill the tier's whole `capacity`
+    # (e.g. exp(x) at D924<0> reaches ~894 integer digits); the oracle
+    # then needs `>= capacity` significant digits or it truncates the true
+    # value. Take the max so both regimes are covered.
+    mp.dps = max(700, 2 * scale + 64, capacity + 96)
+
+    for func_name, oracle, _domain in FUNCS:
+        if only_func is not None and func_name.lower() not in only_func:
+            continue
+        seed_key = f"{alias}-{scale}-{func_name}-v1"
+        rng = random.Random(seed_key)
+
+        inputs: list[int] = []
+
+        # Near-boundary — domain-specific small values.
+        inputs.extend(near_boundary_inputs(func_name, scale, max_raw,
+                                           counts["near_boundary"], rng))
+
+        # Random uniform.
+        inputs.extend(sample_inputs(func_name, scale, max_raw,
+                                    counts["random_uniform"], rng))
+
+        # Half-ULP-tie.
+        inputs.extend(find_half_ulp_ties(func_name, oracle, scale,
+                                         max_raw, counts["half_ulp_tie"],
+                                         rng))
+
+        # Edge values.
+        inputs.extend(edge_inputs(func_name, scale, max_raw))
+
+        # Overflow just-fits boundary (asserted, not dropped).
+        inputs.extend(overflow_edge_inputs(func_name, oracle, scale, max_raw))
+
+        # Very-large trig arguments (full Payne-Hanek).
+        inputs.extend(large_trig_inputs(func_name, scale, max_raw))
+
+        # Saturation grid-lines (tanh -> ±1).
+        inputs.extend(saturation_inputs(func_name, scale, max_raw))
+
+        # Monotonicity pairs: x+1 beside a sample of the inputs above.
+        inputs.extend(monotonicity_inputs(inputs, max_raw))
+
+        # Dedupe while preserving order.
+        seen: set[int] = set()
+        deduped: list[int] = []
+        for raw in inputs:
+            if raw not in seen:
+                seen.add(raw)
+                deduped.append(raw)
+
+        # Evaluate the oracle for each input.
+        cases: list[tuple[int, int, str]] = []
+        for raw_in in deduped:
+            # Drop inputs the storage type can't hold (edge rosters
+            # build a few magnitudes from `one * 10**k` that exceed
+            # the narrow-tier signed maximum).
+            if abs(raw_in) > max_raw:
+                continue
+            # Exact algebraic points (perfect squares for sqrt,
+            # perfect cubes for cbrt) are classified symbolically via
+            # integer arithmetic, bypassing the oracle's finite-
+            # precision residual: the exact result is the `Z`
+            # (no-bump) class under every rounding mode.
+            exact = exact_algebraic_root(func_name, raw_in, scale)
+            if exact is not None:
+                floor_raw, cls = exact, "Z"
+                if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
+                    continue
+                cases.append((raw_in, floor_raw, cls))
+                continue
+            x = from_raw(raw_in, scale)
+            y = safe_call(oracle, x)
+            if y is None:
+                continue
+            floor_raw, cls = floor_and_class(y, scale)
+            # Both neighbours (floor and floor+1) must fit the
+            # storage type — any RoundingMode may select either.
+            if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
+                continue
+            cases.append((raw_in, floor_raw, cls))
+
+        if not cases:
+            continue
+
+        out_path = OUT_DIR / f"{func_name}_{alias}_s{scale}.txt"
+        file_bytes = emit_file(out_path, cases)
+        total_bytes += file_bytes
+        total_cases += len(cases)
+        print(f"  {out_path.relative_to(ROOT)}: "
+              f"{len(cases)} cases, {file_bytes} bytes")
+
+    # ── Two-argument oracles (log / atan2 / powf) ──────────────────
+    two_arg_count = max(20, int(base_count * COUNT_SCALE))
+    for func_name, oracle2, _domain in TWO_ARG_FUNCS:
+        if only_func is not None and func_name.lower() not in only_func:
+            continue
+        seed_key = f"{alias}-{scale}-{func_name}-2arg-v1"
+        rng = random.Random(seed_key)
+        pairs = two_arg_inputs(func_name, scale, max_raw, two_arg_count, rng)
+
+        # Dedupe pairs, preserving order.
+        seen2: set[tuple[int, int]] = set()
+        deduped2: list[tuple[int, int]] = []
+        for p in pairs:
+            if p not in seen2:
+                seen2.add(p)
+                deduped2.append(p)
+
+        cases2: list[tuple[int, int, int, str]] = []
+        for a_raw, b_raw in deduped2:
+            if abs(a_raw) > max_raw or abs(b_raw) > max_raw:
+                continue
+            # Exact-power points: `log_b(b^k) = k` and the
+            # perfect-power `base**(p/q)` are exact integers whose
+            # finite-precision `log(v)/log(b)` / `exp(y·ln x)` oracle
+            # value carries a sub-LSB residual. Classify them
+            # symbolically via integer arithmetic (mirroring
+            # `exact_algebraic_root` for sqrt / cbrt) so they pin to
+            # the `Z` (no-bump) class under every rounding mode.
+            exact2: int | None = None
+            if func_name == "log":
+                exact2 = exact_log_base(a_raw, b_raw, scale)
+            elif func_name == "powf":
+                exact2 = exact_powf(a_raw, b_raw, scale)
+            if exact2 is not None:
+                if abs(exact2) > max_raw or abs(exact2) + 1 > max_raw:
+                    continue
+                cases2.append((a_raw, b_raw, exact2, "Z"))
+                continue
+            a = from_raw(a_raw, scale)
+            b = from_raw(b_raw, scale)
+            y = safe_call_two(oracle2, a, b)
+            if y is None:
+                continue
+            floor_raw, cls = floor_and_class(y, scale)
+            if abs(floor_raw) > max_raw or abs(floor_raw) + 1 > max_raw:
+                continue
+            cases2.append((a_raw, b_raw, floor_raw, cls))
+
+        if not cases2:
+            continue
+
+        out_path = OUT_DIR / f"{func_name}_{alias}_s{scale}.txt"
+        file_bytes = emit_two_arg_file(out_path, cases2)
+        total_bytes += file_bytes
+        total_cases += len(cases2)
+        print(f"  {out_path.relative_to(ROOT)}: "
+              f"{len(cases2)} cases, {file_bytes} bytes (2-arg)")
+
+    return total_bytes, total_cases
 
 
 def near_boundary_inputs(func_name: str, scale: int, max_raw: int,
