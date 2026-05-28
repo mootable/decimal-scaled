@@ -13,7 +13,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::__bench_internals::newton_vs_mg::{
-    NewtonReciprocal, b6144, b8192, b12288, b16384, b32768, d1232, d307, d462, d616, d924,
+    NewtonReciprocal, b6144, d1232, d307, d462, d616, d924,
 };
 use std::hint::black_box;
 
@@ -115,22 +115,22 @@ fn bench(c: &mut Criterion) {
     bench_cell!(c, d1232, "D1232_s900", 900, 64, 30);
     bench_cell!(c, d1232, "D1232_s1231", 1231, 64, 30);
 
-    // ── Wider widths (audit 2026-05-28) ─────────────────────────────
+    // ── Wider width (audit 2026-05-28) ─────────────────────────────
     //
-    // Per the all-widths rule (axis = width x scale-band), every new
-    // width gets a representative `{0, S/4, S/2, 3S/4, S-1}`-style
-    // sweep + bisection cells around the suspected crossover. Scale
-    // range capped by the widest call site `w = SCALE + GUARD(30)`:
-    //   - 6144  : reaches w ≤ 953 (D924 Work) — sweep through 953.
-    //   - 8192  : reaches w ≤ 1261 (D1232 Work via mul) — sweep to 1231.
-    //   - 12288 : reaches w ≤ 953 (D924 Wide).
-    //   - 16384 : reaches w ≤ 1261 (D1232 Wide / D924 Wexp).
-    //   - 32768 : reaches w ≤ 1261 (D1232 Wexp).
+    // 6144-bit (Int<96>): D230 Wexp / D924 Work. Per the all-widths
+    // rule (axis = width × scale-band), a representative 5+ sweep
+    // covers the D924 transcendental w_prime range (AGM tops out at
+    // `2·SCALE_max + 4 = 1850` for D924 strict_agm — see the buffer-
+    // sizing block + `newton_wins` doc in `newton_reciprocal.rs`).
     //
-    // The sweep is intentionally coarse first (5-point); the coordinator's
-    // bisection step localises the true crossover.
+    // 8192 / 12288 / 16384 / 32768 are NOT benched here: the Newton
+    // precompute's `2^k / 10^scale` numerator at the AGM-widened
+    // scales exceeds the routed `div_knuth` build-max scratch
+    // (`MAX_SINGLE_LIMBS = 258`). The sibling-agent atanh-diagnosis
+    // integrated bench also reported MG winning 5–58× at
+    // Int<192>/Int<256> low-scale, so even with extended scratch the
+    // structural picture suggests MG is the right engine there.
 
-    // 6144-bit (Int<96>): D230 Wexp / D924 Work.
     bench_cell!(c, b6144, "B6144_s38", 38, 96, 44);
     bench_cell!(c, b6144, "B6144_s115", 115, 96, 44);
     bench_cell!(c, b6144, "B6144_s200", 200, 96, 44);
@@ -138,40 +138,12 @@ fn bench(c: &mut Criterion) {
     bench_cell!(c, b6144, "B6144_s600", 600, 96, 44);
     bench_cell!(c, b6144, "B6144_s800", 800, 96, 44);
     bench_cell!(c, b6144, "B6144_s953", 953, 96, 44);
-
-    // 8192-bit (Int<128>): D462 Wexp / D1232 Work.
-    bench_cell!(c, b8192, "B8192_s38", 38, 128, 60);
-    bench_cell!(c, b8192, "B8192_s200", 200, 128, 60);
-    bench_cell!(c, b8192, "B8192_s400", 400, 128, 60);
-    bench_cell!(c, b8192, "B8192_s600", 600, 128, 60);
-    bench_cell!(c, b8192, "B8192_s900", 900, 128, 60);
-    bench_cell!(c, b8192, "B8192_s1231", 1231, 128, 60);
-
-    // 12288-bit (Int<192>): D924 Wide.
-    bench_cell!(c, b12288, "B12288_s38", 38, 192, 90);
-    bench_cell!(c, b12288, "B12288_s200", 200, 192, 90);
-    bench_cell!(c, b12288, "B12288_s400", 400, 192, 90);
-    bench_cell!(c, b12288, "B12288_s600", 600, 192, 90);
-    bench_cell!(c, b12288, "B12288_s800", 800, 192, 90);
-    bench_cell!(c, b12288, "B12288_s953", 953, 192, 90);
-
-    // 16384-bit (Int<256>): D616 Wexp / D924 Wexp / D1232 Wide.
-    bench_cell!(c, b16384, "B16384_s38", 38, 256, 120);
-    bench_cell!(c, b16384, "B16384_s200", 200, 256, 120);
-    bench_cell!(c, b16384, "B16384_s400", 400, 256, 120);
-    bench_cell!(c, b16384, "B16384_s600", 600, 256, 120);
-    bench_cell!(c, b16384, "B16384_s900", 900, 256, 120);
-    bench_cell!(c, b16384, "B16384_s1231", 1231, 256, 120);
-
-    // 32768-bit (Int<512>): D1232 Wexp. The widest cell — confirms
-    // that the buffer-size raise (MAX_R_U64=584, MAX_PROD_U64=1100,
-    // MAX_MAG_U64=512) doesn't tip the per-call pack overhead past MG.
-    bench_cell!(c, b32768, "B32768_s38", 38, 512, 240);
-    bench_cell!(c, b32768, "B32768_s200", 200, 512, 240);
-    bench_cell!(c, b32768, "B32768_s400", 400, 512, 240);
-    bench_cell!(c, b32768, "B32768_s600", 600, 512, 240);
-    bench_cell!(c, b32768, "B32768_s900", 900, 512, 240);
-    bench_cell!(c, b32768, "B32768_s1231", 1231, 512, 240);
+    // AGM-band cells — D924 strict_agm reaches `w_prime ≈ 1850` at
+    // SCALE 923; the 6144 + AGM cell is the hot path for D924
+    // ln/exp/asinh/atanh/acosh _strict_agm.
+    bench_cell!(c, b6144, "B6144_s1234", 1234, 96, 44);
+    bench_cell!(c, b6144, "B6144_s1500", 1500, 96, 44);
+    bench_cell!(c, b6144, "B6144_s1850", 1850, 96, 44);
 }
 
 criterion_group!(benches, bench);
