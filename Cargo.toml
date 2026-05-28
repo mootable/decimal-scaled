@@ -978,6 +978,16 @@ path = "benches/micro/exp_wide_series_tang_ab.rs"
 harness = false
 required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
 
+# hyper_wide_tang_ab: tests the 2026-05-28 audit Finding #4 "Pattern A" lead --
+# does Tang-composed (e^x, e^-x) hyperbolic beat the current schoolbook (Series-
+# composed) at D462/D616/D924/D1232? Five-point coarse-scale sweep x {sinh, cosh,
+# tanh}, three Tang configs, validity-walled against schoolbook bit-identity.
+[[bench]]
+name = "hyper_wide_tang_ab"
+path = "benches/micro/hyper_wide_tang_ab.rs"
+harness = false
+required-features = ["wide", "x-wide", "xx-wide", "bench-alt"]
+
 # ln_wide_series_tang_ab: the N-way width x scale x algorithm map for wide
 # ln -- Series (multi-level-sqrt argument reduction) vs Tang (table-driven,
 # no sqrts) across every wide tier D76..D1232 at the 5-point scale set
