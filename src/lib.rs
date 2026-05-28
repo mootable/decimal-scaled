@@ -1017,7 +1017,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<3>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<3> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, false>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d57::Core, SCALE, 8, 100, false, false>(raw, mode)
     }
     // D115 50..=60: <GUARD=8, ITERS=200, true>.
     #[cfg(all(feature = "_wide-support", any(feature = "d115", feature = "wide")))]
@@ -1026,7 +1026,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<6>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<6> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 8, 200, true, true>(raw, mode)
     }
     // D153 70..=82: <GUARD=10, ITERS=200, true>.
     #[cfg(all(feature = "_wide-support", any(feature = "d153", feature = "wide")))]
@@ -1035,7 +1035,7 @@ pub mod __bench_internals {
         raw: crate::int::types::Int<8>,
         mode: crate::RoundingMode,
     ) -> crate::int::types::Int<8> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 10, 200, true, true>(raw, mode)
     }
     // ln — wide tiers (N = 4 / 12 / 16 / 24 / 32 / 48 / 64): Series + Tang
     // exports parameterised by (G, CAP) so the wide A/B
@@ -1052,7 +1052,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d76", feature = "wide")))]
     #[inline(never)]
     pub fn ln_tang_d76_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<4>, mode: crate::RoundingMode) -> crate::int::types::Int<4> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
     #[cfg(any(feature = "d230", feature = "wide"))]
     #[inline(never)]
@@ -1062,7 +1062,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d230", feature = "wide")))]
     #[inline(never)]
     pub fn ln_tang_d230_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<12>, mode: crate::RoundingMode) -> crate::int::types::Int<12> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
     #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
     #[inline(never)]
@@ -1072,7 +1072,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d307", feature = "wide", feature = "x-wide")))]
     #[inline(never)]
     pub fn ln_tang_d307_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<16>, mode: crate::RoundingMode) -> crate::int::types::Int<16> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
     #[cfg(any(feature = "d462", feature = "x-wide"))]
     #[inline(never)]
@@ -1082,7 +1082,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d462", feature = "x-wide")))]
     #[inline(never)]
     pub fn ln_tang_d462_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
     #[cfg(any(feature = "d616", feature = "x-wide"))]
     #[inline(never)]
@@ -1092,7 +1092,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d616", feature = "x-wide")))]
     #[inline(never)]
     pub fn ln_tang_d616_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
     #[cfg(any(feature = "d924", feature = "xx-wide"))]
     #[inline(never)]
@@ -1102,7 +1102,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d924", feature = "xx-wide")))]
     #[inline(never)]
     pub fn ln_tang_d924_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
     #[cfg(any(feature = "d1232", feature = "xx-wide"))]
     #[inline(never)]
@@ -1112,7 +1112,7 @@ pub mod __bench_internals {
     #[cfg(all(feature = "_wide-support", any(feature = "d1232", feature = "xx-wide")))]
     #[inline(never)]
     pub fn ln_tang_d1232_p<const SCALE: u32, const G: u32, const CAP: u128>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
-        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, G, CAP, true>(raw, mode)
+        crate::algos::ln::ln_tang::ln_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, G, CAP, true, true>(raw, mode)
     }
 
     // trig forward (sin) — the only narrow-wide tier with a real Tang wiring
