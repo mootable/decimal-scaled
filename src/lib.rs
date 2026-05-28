@@ -989,6 +989,138 @@ pub mod __bench_internals {
         crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
 
+    // ── hyperbolic (sinh/cosh/tanh) — wide-tier Series-baseline vs Tang-
+    // composed A/B exports. The "schoolbook" surface is the production
+    // wide-tier kernel `trig::hyper_schoolbook::*_schoolbook` (which composes
+    // `(e^|x| ± e^-|x|)` over `exp_fixed`, i.e. Series at these tiers per
+    // `policy::exp::select` → `Algorithm::Series` for N ≥ 24); the
+    // "tang_compose" surface is `trig::hyper_exp_identity::*_with_tang`
+    // composed over `exp_tang::tang_exp_fixed` (the working-scale Tang surface
+    // with `INTERNAL_EXTRA = true` to cover arbitrary `|k|`). The A/B bench
+    // (`benches/micro/hyper_wide_tang_ab.rs`) compares the two AT THE PRODUCTION
+    // SEAM to falsify or confirm the audit's "Pattern A → Tang routing" lead at
+    // D462/D616/D924/D1232.
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sinh_schoolbook_d462<const SCALE: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn cosh_schoolbook_d462<const SCALE: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn tanh_schoolbook_d462<const SCALE: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d462", feature = "x-wide")))]
+    #[inline(never)]
+    pub fn sinh_tang_compose_d462<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d462::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d462", feature = "x-wide")))]
+    #[inline(never)]
+    pub fn cosh_tang_compose_d462<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d462::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d462", feature = "x-wide")))]
+    #[inline(never)]
+    pub fn tanh_tang_compose_d462<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d462::Core, M, true>)
+    }
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn sinh_schoolbook_d616<const SCALE: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn cosh_schoolbook_d616<const SCALE: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn tanh_schoolbook_d616<const SCALE: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d616", feature = "x-wide")))]
+    #[inline(never)]
+    pub fn sinh_tang_compose_d616<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d616::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d616", feature = "x-wide")))]
+    #[inline(never)]
+    pub fn cosh_tang_compose_d616<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d616::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d616", feature = "x-wide")))]
+    #[inline(never)]
+    pub fn tanh_tang_compose_d616<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d616::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d616::Core, M, true>)
+    }
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn sinh_schoolbook_d924<const SCALE: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn cosh_schoolbook_d924<const SCALE: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn tanh_schoolbook_d924<const SCALE: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d924", feature = "xx-wide")))]
+    #[inline(never)]
+    pub fn sinh_tang_compose_d924<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d924::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d924", feature = "xx-wide")))]
+    #[inline(never)]
+    pub fn cosh_tang_compose_d924<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d924::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d924", feature = "xx-wide")))]
+    #[inline(never)]
+    pub fn tanh_tang_compose_d924<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d924::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d924::Core, M, true>)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn sinh_schoolbook_d1232<const SCALE: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_schoolbook::sinh_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn cosh_schoolbook_d1232<const SCALE: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_schoolbook::cosh_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn tanh_schoolbook_d1232<const SCALE: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_schoolbook::tanh_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d1232", feature = "xx-wide")))]
+    #[inline(never)]
+    pub fn sinh_tang_compose_d1232<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_exp_identity::sinh_exp_identity_with_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d1232::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d1232", feature = "xx-wide")))]
+    #[inline(never)]
+    pub fn cosh_tang_compose_d1232<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_exp_identity::cosh_exp_identity_with_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d1232::Core, M, true>)
+    }
+    #[cfg(all(feature = "_wide-support", any(feature = "d1232", feature = "xx-wide")))]
+    #[inline(never)]
+    pub fn tanh_tang_compose_d1232<const SCALE: u32, const M: u32, const GUARD: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::trig::hyper_exp_identity::tanh_exp_identity_with_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, GUARD>(raw, mode, crate::algos::exp::exp_tang::tang_exp_fixed::<crate::types::widths::wide_trig_d1232::Core, M, true>)
+    }
+
     // ln — Series (generic-over-Core `ln_series`).
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
