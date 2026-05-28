@@ -80,8 +80,16 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         (6, 0..=85) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d153", feature = "wide"))]
         (8, 0..=110) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // D230 (Int<12>): the width × scale A/B map shows Tang wins (or ties)
+        // and stays bit-identical to Series across the WHOLE scale range,
+        // including the near-max s172 (1.04×) and s228 (1.12× over Series) —
+        // the bench-branch-compare `exp_D230_s229` 1.26× regression lives just
+        // past the old 140 ceiling, where the cell fell through to the slower
+        // Series `_` arm. Unlike D307+ (where Series re-takes the lead above
+        // ~s100, so the 60 ceiling is correct), D230's Tang win extends to the
+        // top. Cover the full D230 range through the small-`|x|` value gate.
         #[cfg(any(feature = "d230", feature = "wide"))]
-        (12, 0..=140) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        (12, 0..=229) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
         (16, 0..=60) => Select::ByValue(wide_tang_gate::<N, SCALE>),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
