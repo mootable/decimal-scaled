@@ -14,6 +14,52 @@ every platform**, and the transcendental functions are computed with
 integer-only kernels that are **correctly rounded** — within 0.5 ULP of
 the true real value at the type's last representable place.
 
+## Two absolute invariants: no heap, no state
+
+These two rules sit **above** everything else on this page. They are not
+performance preferences or style choices — they are the load-bearing
+guarantees the whole design rests on, and no benchmark, no convenience, and
+no algorithm is permitted to break them.
+
+1. **No heap — the runtime path is pure stack.** No `Vec`, `Box`, `Rc`,
+   `Arc`, `alloc::*`, or any heap allocation anywhere a value is computed.
+   Every working buffer is an inline `[u64; …]` / `[u128; …]` on the stack,
+   sized at compile time (the `ComputeInt` associated-type buffers and
+   const-init `static` data are how a width wider than `N` is carried — see
+   *Work-width scratch* below). This is what lets the crate run in `no_std`
+   with no allocator and keeps every call's cost on the stack where it
+   const-folds. A heap allocation on the compute path is a **hard defect**,
+   never a tolerated one. (Historical exceptions — the `_wide-support =
+   ["alloc"]` feature, `decl_table_cache!`'s `Vec` tables, the
+   `newton_reciprocal` `thread_local!`+`Vec` cache — are defects scheduled for
+   removal, not precedents to extend.)
+
+2. **No state — thread-safety comes from being stateless, so there is NO
+   cache whatsoever.** Every function is a pure function of its inputs and
+   recomputes on each call. No `thread_local!`, no `static mut`, no
+   interior-mutability cache slot (`RefCell`/`Cell`/`Mutex`/`OnceCell`-as-
+   cache/atomics-as-cache), no memoization across calls — anywhere on the
+   runtime path. The crate is `Send`/`Sync`/re-entrant **for free** because no
+   call carries mutable state between invocations; introducing a cache would
+   trade that guarantee for a speed-up we refuse to make.
+
+   **The dividing line is WHEN the value is produced, not whether it is
+   stored.** *Compile-time* precomputed data is fine and encouraged: a
+   `const` / `const fn` / `static` table baked into the binary by the
+   compiler is immutable read-only data — it is computed once at build time,
+   never written at run time, and shared with no synchronisation. What is
+   forbidden is a value computed/populated **at run time on first use and
+   kept for later calls** — that is memoization, and it is exactly what the
+   `NewtonReciprocal` precompute cache and the `pi`/`ln2`/`ln10`/`pow10`
+   `thread_local!` caches do. The fix for such a site is either (a) lift the
+   precompute to *compile time* (a `const`/`const fn` table) where the value
+   is fixed, or (b) **recompute it each call on the stack**; it is **never**
+   to relocate the runtime cache into a mutable `static`.
+
+Together these mean the answer to "make this faster with a cache/buffer
+pool" is always **no**: the speed comes from a better generic kernel,
+const-folding, and exact-per-`N` stack scratch — never from heap or state.
+
 ## Two layers, same shape
 
 The crate is **two layers that mirror each other** — a decimal layer on
@@ -126,12 +172,37 @@ limbs: a multiply's `2N` product, a `sqrt` radicand (`2N`), a `cbrt`
 radicand (`4N`), the `÷10^w` magnitude (`⌈N/2⌉` u128). Stable Rust cannot
 name `[u64; 2N]` from a generic `N`, so the width lives on an
 **associated-type buffer** on the storage integer: the `ComputeInt` trait
-(`src/int/types/compute_int.rs`) exposes per-`N` constructors —
-`single_limbs()` (`N + 2`), `double_limbs()` (`2N`-family), `quad_limbs()`
-(`4N`-family), `u128_limbs()` (`⌈N/2⌉` u128). The size is fixed in the
-`impl` where `N` is concrete and **never appears in a function signature**:
-a kernel bounds on `Int<N>: ComputeInt`, calls the method, and gets an
-exactly-sized stack buffer that folds away per monomorphisation.
+(`src/int/types/compute_int.rs`) exposes per-`N` constructors. The size is
+fixed in the `impl` where `N` is concrete and **never appears in a function
+signature**: a kernel bounds on `Int<N>: ComputeInt`, calls the method, and
+gets an exactly-sized stack buffer that folds away per monomorphisation.
+
+**The scratch vocabulary is fixed clean limb-multiples — two families.** A
+buffer is named by a *multiple of `N`*, never by the function that wants it
+(no `LimbBufDivU128`-style per-function type). Two families, each available
+in both `u64` and `u128` element form:
+
+- **Plain `X·N` multiples** — `single` (`N`), `double` (`2N`), `quad`
+  (`4N`). The exact value/product width.
+- **Buffered variants** (a fixed `⌈N/2⌉` of headroom for normalisation /
+  carry / packing) — `single_buffered` (`N + 2`), `double_buffered`
+  (`2N + ⌈N/2⌉` ≈ 2.5N), `quad_buffered` (`4N + ⌈N/2⌉` ≈ 4.5N).
+
+**Adding a higher multiple is expected, not exceptional** — an algorithm
+that needs, say, an `8N` buffer adds one size axis the same way (a literal
+in each build-form impl, an associated type per element, and the `Limb`
+forwarder). There is nothing privileged about 1×/2×/4×.
+
+**Why these are methods, not a const expression: stable Rust, no nightly.**
+The clean way to write `[u64; 2N + ⌈N/2⌉]` from a generic `N` would be
+`generic_const_exprs` — a nightly feature. Rather than pin the crate to
+nightly, each concrete-`N` impl simply *states the exact computed size for
+that width* (the per-`N` macro emits `[u64; 2 * $n + ($n + 1) / 2]`, etc.).
+So the method **is** the const-expression workaround: it hands back the
+exact maximum for that one width, computed at the impl, with no nightly
+feature and no signature-level const. (If `generic_const_exprs` ever
+stabilises, these collapse to inline array sizes — the method surface is the
+stable-Rust stand-in for that, not a permanent design preference.)
 
 **The algorithm sources its own exact scratch.** A kernel that needs a
 wider width takes `where Int<N>: ComputeInt` and calls the *normal* per-`N`
