@@ -5,8 +5,8 @@
 //! Richest peer set: rust_decimal, fastnum, fixed::I64F64, g_math,
 //! bigdecimal, dashu-float, decimal-rs all show up here.
 //!
-//! Scale set dedup{0, 30, S/2, S-1} with S=38: {0, 19, 30, 37}. Each scale's
-//! groups are `lib_cmp/128bit_s<scale>`; select one with `-- _s<scale>/`.
+//! Scale set {0, S/4, S/2, 3S/4, S-1} with S=38: {0, 9, 19, 28, 37}. Each
+//! scale's groups are `lib_cmp/128bit_s<scale>`; select one with `-- _s<scale>/`.
 //! The arith ops run at every scale; the transcendental peer comparison runs
 //! at the reference scale (19) only.
 
@@ -166,8 +166,9 @@ fn bench(c: &mut Criterion) {
         }};
     }
     cell!(0);
+    cell!(9);
     cell!(19);
-    cell!(30);
+    cell!(28);
     cell!(37);
 }
 

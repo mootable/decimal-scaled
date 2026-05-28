@@ -74,14 +74,15 @@ pub fn num_bigint_from_one_at_scale(scale: usize) -> bigdecimal::num_bigint::Big
 /// once with its own constants.
 ///
 /// The scale set mirrors the golden / `bench-branch-compare` coverage —
-/// `dedup{0, 30, S/2, S-1}` (S = the tier's max scale) — so a peer-comparison
-/// regression is visible at the scale it occurs, not just one canonical
-/// scale. Each scale's groups are named `lib_cmp/<bit>bit_s<scale>`, so a
-/// single scale is selectable by a criterion name-filter — `-- _s30/` (the
-/// trailing `/` anchors the scale: `_s30/` matches `..._s30/decimal-scaled`
-/// but NOT `..._s306/...`). The arith ops run at every scale; the
-/// transcendentals run at `$transc` (the reference scale) only, where the
-/// dashu-float peer comparison for ln/exp is also attached.
+/// `{0, S/4, S/2, 3S/4, S-1}` (S = the tier's max scale, floor division) — so
+/// a peer-comparison regression is visible at the scale it occurs, not just
+/// one canonical scale. Each scale's groups are named
+/// `lib_cmp/<bit>bit_s<scale>`, so a single scale is selectable by a criterion
+/// name-filter — `-- _s9/` (the trailing `/` anchors the scale: `_s9/` matches
+/// `..._s9/decimal-scaled` but NOT `..._s90/...`). The arith ops run at every
+/// scale; the transcendentals run at `$transc` (the reference scale = the
+/// tier's S/2 point) only, where the dashu-float peer comparison for ln/exp is
+/// also attached.
 #[macro_export]
 macro_rules! new_tier_body {
     ($T:ident, $bit:literal, [$($scale:literal),+ $(,)?], $transc:literal) => {

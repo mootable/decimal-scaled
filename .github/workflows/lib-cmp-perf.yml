@@ -8,9 +8,9 @@ name: "\U0001F4DA lib-cmp perf (peer-crate timing, width × scale)"
 # blindness has repeatedly misled the perf campaign).
 #
 # Each per-width bench (`benches/libcmp/lib_cmp_d{N}.rs`) instantiates its tier
-# at that tier's scale set (dedup{0, 30, S/2, S-1}), naming criterion groups
-# `lib_cmp/<bit>bit_s<scale>` so a single scale is selectable by a name-filter
-# (`-- _s<scale>/`).
+# at that tier's scale set ({0, S/4, S/2, 3S/4, S-1}, floor division), naming
+# criterion groups `lib_cmp/<bit>bit_s<scale>` so a single scale is selectable
+# by a name-filter (`-- _s<scale>/`).
 #
 # Job graph — mirrors bench-branch-compare: compile ONCE, fan out, then join:
 #   build     : `cargo bench --no-run` for ALL lib_cmp width targets once
@@ -104,55 +104,69 @@ jobs:
     strategy:
       fail-fast: false
       # Explicit (width, scale) pairs — scales differ per width, so an
-      # include list, not a cross-product. scales = dedup{0, 30, S/2, S-1}.
+      # include list, not a cross-product. scales = {0, S/4, S/2, 3S/4, S-1}
+      # (floor division), matching the bench files exactly.
       matrix:
         include:
           - { width: d18,   scale: 0 }
+          - { width: d18,   scale: 4 }
           - { width: d18,   scale: 9 }
+          - { width: d18,   scale: 13 }
           - { width: d18,   scale: 17 }
           - { width: d38,   scale: 0 }
+          - { width: d38,   scale: 9 }
           - { width: d38,   scale: 19 }
-          - { width: d38,   scale: 30 }
+          - { width: d38,   scale: 28 }
           - { width: d38,   scale: 37 }
           - { width: d57,   scale: 0 }
+          - { width: d57,   scale: 14 }
           - { width: d57,   scale: 28 }
-          - { width: d57,   scale: 30 }
+          - { width: d57,   scale: 42 }
           - { width: d57,   scale: 56 }
           - { width: d76,   scale: 0 }
-          - { width: d76,   scale: 30 }
+          - { width: d76,   scale: 19 }
           - { width: d76,   scale: 38 }
+          - { width: d76,   scale: 57 }
           - { width: d76,   scale: 75 }
           - { width: d115,  scale: 0 }
-          - { width: d115,  scale: 30 }
+          - { width: d115,  scale: 28 }
           - { width: d115,  scale: 57 }
+          - { width: d115,  scale: 86 }
           - { width: d115,  scale: 114 }
           - { width: d153,  scale: 0 }
-          - { width: d153,  scale: 30 }
+          - { width: d153,  scale: 38 }
           - { width: d153,  scale: 76 }
+          - { width: d153,  scale: 114 }
           - { width: d153,  scale: 152 }
           - { width: d230,  scale: 0 }
-          - { width: d230,  scale: 30 }
+          - { width: d230,  scale: 57 }
           - { width: d230,  scale: 115 }
+          - { width: d230,  scale: 172 }
           - { width: d230,  scale: 229 }
           - { width: d307,  scale: 0 }
-          - { width: d307,  scale: 30 }
+          - { width: d307,  scale: 76 }
           - { width: d307,  scale: 153 }
+          - { width: d307,  scale: 230 }
           - { width: d307,  scale: 306 }
           - { width: d462,  scale: 0 }
-          - { width: d462,  scale: 30 }
+          - { width: d462,  scale: 115 }
           - { width: d462,  scale: 231 }
+          - { width: d462,  scale: 346 }
           - { width: d462,  scale: 461 }
           - { width: d616,  scale: 0 }
-          - { width: d616,  scale: 30 }
+          - { width: d616,  scale: 154 }
           - { width: d616,  scale: 308 }
+          - { width: d616,  scale: 462 }
           - { width: d616,  scale: 615 }
           - { width: d924,  scale: 0 }
-          - { width: d924,  scale: 30 }
+          - { width: d924,  scale: 231 }
           - { width: d924,  scale: 462 }
+          - { width: d924,  scale: 693 }
           - { width: d924,  scale: 923 }
           - { width: d1232, scale: 0 }
-          - { width: d1232, scale: 30 }
+          - { width: d1232, scale: 308 }
           - { width: d1232, scale: 616 }
+          - { width: d1232, scale: 924 }
           - { width: d1232, scale: 1231 }
 
     steps:

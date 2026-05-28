@@ -2,7 +2,7 @@
 //! Run: cargo bench --bench lib_cmp_d18
 //!      cargo bench --bench lib_cmp_d18 -- _s9/   (just scale 9)
 //!
-//! Scale set dedup{0, 30, S/2, S-1} with S=18: {0, 9, 17} (30 > S-1, dropped).
+//! Scale set {0, S/4, S/2, 3S/4, S-1} with S=18: {0, 4, 9, 13, 17}.
 //! Each scale's groups are `lib_cmp/64bit_s<scale>`; a single scale is
 //! selectable by the criterion name-filter `-- _s<scale>/` (the trailing `/`
 //! anchors the scale).
@@ -49,7 +49,9 @@ macro_rules! tier_scale {
 
 fn bench(c: &mut Criterion) {
     tier_scale!(c, 0);
+    tier_scale!(c, 4);
     tier_scale!(c, 9);
+    tier_scale!(c, 13);
     tier_scale!(c, 17);
 }
 
