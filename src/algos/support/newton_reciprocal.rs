@@ -359,17 +359,31 @@ pub(crate) fn newton_pow10_mag_u128(
 /// Returns `true` when the bench-validated Newton-vs-MG matrix says
 /// Newton wins for this `(width_bits, scale)` cell. The matrix:
 ///
-/// | Storage  | bits | Newton min SCALE |
-/// |----------|------|------------------|
-/// | Int<32>    | 2048 |  ≥ 200           |
-/// | Int<48>    | 3072 |  ≥ 200           |
-/// | Int<64>    | 4096 |  ≥ 400           |
+/// | bits | Storage match               | Newton min SCALE |
+/// |------|-----------------------------|------------------|
+/// | 1536 | Int<24> (D462 stg / D230 W) |  ≥ 200           |
+/// | 2048 | Int<32> (D616 stg / D307 W) |  ≥ 200           |
+/// | 3072 | Int<48> (D924 stg / D462 W) |  ≥ 200           |
+/// | 4096 | Int<64> (D1232 stg / D616 W)|  ≥ 400           |
 ///
-/// Bench source: `benches/newton_vs_mg.rs` head-to-head against
+/// Bench source: `benches/micro/newton_vs_mg.rs` head-to-head against
 /// [`crate::algos::support::mg_divide::div_wide_pow10_chain`] at the
-/// listed widths × representative SCALE bands. Larger widths (Int<128>
-/// / Int<192> / Int<256> — used by the transcendental work integers)
-/// have no bench data and fall through to MG.
+/// listed widths × representative SCALE bands. Larger widths (Int<96> /
+/// Int<128> / Int<192> / Int<256> — used by the transcendental work
+/// integers at the WIDEST decimal tiers) have no bench data and fall
+/// through to MG.
+///
+/// The 1536-bit row recovers the bench-branch-compare wide-`÷10^SCALE`
+/// regression at D230's work width: `exp_D230_s{172,229}` (1.38× and
+/// 1.61× cells) rescale at Int<24>=1536 bits with working scale
+/// `w = SCALE + GUARD(30) ∈ {202, 259}`. The newton_vs_mg micro at
+/// 1536 bits puts the Newton crossover between s190 (MG 1.10×) and
+/// s195 (Newton 1.03×), with Newton 1.05–1.51× across s202..461 — so
+/// the conservative `≥ 200` threshold (same value the other rows use)
+/// covers the bbc cells with margin and avoids snapping to either edge.
+/// The same 1536-bit divide is shared with D462's storage `mul`/`div`
+/// rescale fast-path (where the work width also lands at 1536 bits)
+/// and D230's storage `mul` slow-path — see `mul_widen_divide`.
 ///
 /// Scale `≤ 38` always returns `false`: the single-pass MG kernel
 /// `div_wide_pow10` is the chosen winner there and a chain-Newton
@@ -380,6 +394,7 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
         return false;
     }
     match width_bits {
+        1536 if scale >= 200 => true,
         2048 if scale >= 200 => true,
         3072 if scale >= 200 => true,
         4096 if scale >= 400 => true,
@@ -396,16 +411,19 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
 /// `NewtonReciprocal::precompute(scale, width_limbs)` then keeps the
 /// table for the rest of the thread's lifetime.
 ///
-/// Three separate slots — one per cached width — because the
-/// `width_limbs` argument differs (32 / 48 / 64 u64 limbs for
-/// Int<32> / Int<48> / Int<64>) and the `NewtonReciprocal` allocates
-/// limb-storage sized to that argument.
+/// One slot per cached width — because the `width_limbs` argument
+/// differs (24 / 32 / 48 / 64 u64 limbs for
+/// Int<24> / Int<32> / Int<48> / Int<64>) and the `NewtonReciprocal`
+/// allocates limb-storage sized to that argument.
 #[cfg(feature = "std")]
 mod cache {
     use super::NewtonReciprocal;
     use ::std::thread_local;
 
     thread_local! {
+        static C_1536: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
         static C_2048: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
             ::core::cell::RefCell::new(alloc::vec::Vec::new())
         };
@@ -427,6 +445,7 @@ mod cache {
         f: impl FnOnce(&NewtonReciprocal) -> R,
     ) -> R {
         let slot = match width_bits {
+            1536 => &C_1536,
             2048 => &C_2048,
             3072 => &C_3072,
             4096 => &C_4096,
@@ -554,6 +573,43 @@ mod tests {
         let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
         let want = div_wide_pow10_chain::<Int<16>>(n, scale, RoundingMode::HalfToEven);
         assert_eq!(got, want, "Newton differs from MG chain at D307 s=150");
+    }
+
+    // Exercises `Int<24>` (D462 storage AND D230 Work) at the bbc anchor
+    // scales — bit-identical agreement is the validity wall for the new
+    // 1536-bit `newton_wins` entry.
+    #[cfg(feature = "d462")]
+    #[test]
+    fn newton_matches_mg_chain_d462_s202() {
+        let scale = 202u32;
+        let width_limbs = 24; // Int<24> = 12 u128 = 24 u64 limbs
+        let table = NewtonReciprocal::precompute(scale, width_limbs);
+
+        let mut limbs = [0u128; 64];
+        limbs[10] = 1u128 << 24;
+        limbs[2] = 0xfeedfacecafef00d_u128;
+        let n = <Int<24> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+
+        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<24>>(n, scale, RoundingMode::HalfToEven);
+        assert_eq!(got, want, "Newton differs from MG chain at Int<24> s=202");
+    }
+
+    #[cfg(feature = "d462")]
+    #[test]
+    fn newton_matches_mg_chain_d462_s259() {
+        let scale = 259u32;
+        let width_limbs = 24;
+        let table = NewtonReciprocal::precompute(scale, width_limbs);
+
+        let mut limbs = [0u128; 64];
+        limbs[10] = 1u128 << 8;
+        limbs[1] = 0xdeadbeef_cafef00d_u128;
+        let n = <Int<24> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+
+        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<24>>(n, scale, RoundingMode::HalfToEven);
+        assert_eq!(got, want, "Newton differs from MG chain at Int<24> s=259");
     }
 
     // Exercises `Int<32>` (D616 storage) — runs only where that tier is on.

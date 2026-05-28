@@ -12,7 +12,9 @@
 #![cfg(all(feature = "bench-alt", feature = "x-wide", feature = "xx-wide"))]
 
 use criterion::{Criterion, criterion_group, criterion_main};
-use decimal_scaled::__bench_internals::newton_vs_mg::{NewtonReciprocal, d307, d616, d924, d1232};
+use decimal_scaled::__bench_internals::newton_vs_mg::{
+    NewtonReciprocal, d307, d462, d616, d924, d1232,
+};
 use std::hint::black_box;
 
 macro_rules! bench_cell {
@@ -53,6 +55,30 @@ fn bench(c: &mut Criterion) {
     bench_cell!(c, d307, "D307_s38", 38, 16, 6);
     bench_cell!(c, d307, "D307_s150", 150, 16, 6);
     bench_cell!(c, d307, "D307_s307", 307, 16, 6);
+
+    // 1536-bit (Int<24>) — D462 storage AND D230's Work integer. The bbc
+    // cells `exp_D230_s{172,229}` rescale at this width: D230 working scale
+    // `w = SCALE + GUARD(30)` lands at 202 and 259 respectively. Coarse
+    // 5-point sweep across the D462 scale range `{0, 115, 230, 346, 461}`
+    // plus the two D230 work-scale anchors (202, 259) so the bisection has
+    // direct evidence at the bbc cells. (`Int<24>` carries `MAX_R_U64`
+    // headroom — table fits.)
+    bench_cell!(c, d462, "B1536_s38", 38, 24, 10);
+    bench_cell!(c, d462, "B1536_s115", 115, 24, 10);
+    // Bisection between s115 (MG wins) and s202 (Newton wins) to localise
+    // the crossover (continuous win-region per Constitution rule 6 + the
+    // Class I no-point-snap rule).
+    bench_cell!(c, d462, "B1536_s140", 140, 24, 10);
+    bench_cell!(c, d462, "B1536_s160", 160, 24, 10);
+    bench_cell!(c, d462, "B1536_s180", 180, 24, 10);
+    bench_cell!(c, d462, "B1536_s190", 190, 24, 10);
+    bench_cell!(c, d462, "B1536_s195", 195, 24, 10);
+    bench_cell!(c, d462, "B1536_s200", 200, 24, 10);
+    bench_cell!(c, d462, "B1536_s202", 202, 24, 10);
+    bench_cell!(c, d462, "B1536_s230", 230, 24, 10);
+    bench_cell!(c, d462, "B1536_s259", 259, 24, 10);
+    bench_cell!(c, d462, "B1536_s346", 346, 24, 10);
+    bench_cell!(c, d462, "B1536_s461", 461, 24, 10);
 
     // D616 SCALE 308 (design) and 616 (max) — 2048-bit storage.
     bench_cell!(c, d616, "D616_s38", 38, 32, 14);
