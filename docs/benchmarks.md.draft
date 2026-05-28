@@ -3,8 +3,9 @@
 Head-to-head matrix sweep of `decimal-scaled` against the wider Rust
 numeric ecosystem (`bnum`, `ruint`, `rust_decimal`, `fixed`), plus
 the crate's own fast / strict transcendental variants. Every
-decimal width is exercised at three scales (smallest / midpoint /
-largest) so the reader can see how cost scales with both storage
+decimal width is exercised at five scales — the per-tier set
+`{0, S/4, S/2, 3S/4, S-1}` (where `S` is that tier's maximum
+`SCALE`) — so the reader can see how cost scales with both storage
 width and `SCALE`.
 
 The benches live in [`benches/`](../benches/) and run under

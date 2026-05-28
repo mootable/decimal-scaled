@@ -3,8 +3,9 @@
 Head-to-head matrix sweep of `decimal-scaled` against the wider Rust
 numeric ecosystem (`bnum`, `ruint`, `rust_decimal`, `fixed`), plus
 the crate's own fast / strict transcendental variants. Every
-decimal width is exercised at three scales (smallest / midpoint /
-largest) so the reader can see how cost scales with both storage
+decimal width is exercised at five scales — the per-tier set
+`{0, S/4, S/2, 3S/4, S-1}` (where `S` is that tier's maximum
+`SCALE`) — so the reader can see how cost scales with both storage
 width and `SCALE`.
 
 The benches live in [`benches/`](../benches/) and run under
@@ -263,6 +264,11 @@ throughput cost was measured directly in
 ---
 
 ## 1. Arithmetic
+
+<!-- TODO: regenerate all §1 timing tables at the new 5-point scales
+     {0, S/4, S/2, 3S/4, S-1} post-push. The per-tier scale columns
+     below (e.g. D18 s=0/9/18, D9 s=0/5/9) still reflect the old
+     sampling; numbers are stale until the next full_matrix sweep. -->
 
 Operands `a = from_int(2)`, `b = from_int(1)` - both in-range
 at every public type×scale combo. Six ops: add / sub / mul / div
@@ -523,6 +529,13 @@ that f64's 53-bit mantissa imposes.
 
 ## 3. Strict transcendentals (integer-only, correctly rounded)
 
+<!-- TODO: regenerate all §3 strict timing tables at the new 5-point
+     scales {0, S/4, S/2, 3S/4, S-1} post-push. The mid-column SCALE
+     labels below (e.g. D76 s=35, D153 s=75, D307 s=150) are the OLD
+     S/2 values; the new S/2 columns are D76 s=38, D153 s=76,
+     D307 s=153, etc. Numbers and column scales are stale until the
+     next full_matrix sweep. -->
+
 Functions: `ln_strict`, `exp_strict`, `sin_strict`,
 `sqrt_strict`. Same argument convention as the fast block (1.5
 for ln / sin / sqrt, 0.5 for exp). Deterministic across
@@ -696,6 +709,12 @@ exists.
 ---
 
 ## 5. Where each crate fits
+
+<!-- TODO: regenerate the §5 library_comparison/summary_*.png figures
+     post-push (via `cargo run --release --example chart_gen`). The
+     per-width centre-scale labels in the subsection headers below are
+     now the new S/2 values; the embedded PNGs are stale until the
+     library-comparison sweep + chart_gen re-run. -->
 
 ### Two things this crate uniquely offers
 
@@ -966,12 +985,12 @@ tens of ns at fixed internal precision). Whether that cost is
 worth paying depends on whether you need HalfToEven-at-storage
 by default or are happy to manage the render mode yourself.
 
-### I256 — 256-bit storage at scale 35
+### I256 — 256-bit storage at scale 38
 
 The candidate set narrows. `rust_decimal` / `decimal-rs` /
 `fixed::I64F64` / `g_math` aren't available at this width.
 
-![operations @ 256-bit at scale 35](figures/library_comparison/summary_256bit.png)
+![operations @ 256-bit at scale 38](figures/library_comparison/summary_256bit.png)
 
 Three crates fit at I256:
 
@@ -987,9 +1006,9 @@ Three crates fit at I256:
 - **dashu-float / bigdecimal** — when you need arbitrary
   runtime precision and the heap-allocation cost is acceptable.
 
-### I512 — 512-bit storage at scale 75
+### I512 — 512-bit storage at scale 76
 
-![operations @ 512-bit at scale 75](figures/library_comparison/summary_512bit.png)
+![operations @ 512-bit at scale 76](figures/library_comparison/summary_512bit.png)
 
 Same three-way fit as I256, scaled up. The within-crate trade
 shifts a little: decimal-scaled's strict `exp` and `sin` start
@@ -998,9 +1017,9 @@ joint kernel benefit more from the wider working scale than
 fastnum's fixed 155-digit series benefits from its fixed
 precision.
 
-### I1024 — 1024-bit storage at scale 150
+### I1024 — 1024-bit storage at scale 153
 
-![operations @ 1024-bit at scale 150](figures/library_comparison/summary_1024bit.png)
+![operations @ 1024-bit at scale 153](figures/library_comparison/summary_1024bit.png)
 
 Beyond 1024-bit no fixed-precision stack peer remains. The
 choice reduces to:
@@ -1171,6 +1190,11 @@ measurement rather than being inferred from HEAD.
 ![history at D307](figures/history/d307.png)
 
 ## 0.4.3 sweep — full raw data
+
+<!-- TODO: regenerate this entire raw dump at the new 5-point scales
+     {0, S/4, S/2, 3S/4, S-1} post-push. Every `*/D*_s*/*` row below
+     is keyed by the OLD per-tier scale set; the numbers are stale
+     until the next full_matrix sweep. -->
 
 Complete dump of the latest full_matrix sweep on GitHub Actions,
 one table per bench binary. **Median** is criterion's median

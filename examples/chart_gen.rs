@@ -382,8 +382,9 @@ const HISTORY_GROUPS: &[(&str, &str)] = &[
 
 const HISTORY_WIDTHS: &[&str] = &["D38", "D76", "D307"];
 
-// The fixed reference scale plotted in the cross-version line charts (the
-// harness scale set is {0, 10, 30}; 30 is the continuity reference point).
+// The fixed reference scale plotted in the cross-version line charts. The
+// harness samples the five-point set {0, S/4, S/2, 3S/4, S-1} per tier; the
+// trend uses S/2 (= 19 for D38) as the single continuity reference point.
 const HISTORY_CHART_SCALE: usize = 19;
 
 fn render_history() -> Result<(), Box<dyn std::error::Error>> {
