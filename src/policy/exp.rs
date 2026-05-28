@@ -270,21 +270,32 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         6 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d153", feature = "wide"))]
         8 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
+        // D230 (Int<12>): the wide A/B map (target/criterion exp_d230_s{0,57,
+        // 115,172,228}) shows tang_m512_g30 beats tang_m128_g30 by 3-9% at
+        // every scale and beats Series by 1.05-1.06x at the high scales
+        // (s172, s228) — addresses the bench-branch-compare exp_D230_s229
+        // 1.41x regression. The Tang config remains (M=512, G=30) with the
+        // directed + external-extra flag shape <true,true,false> already
+        // validated by the bench's bit-identical-to-Series wall.
         #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
+        12 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
         // Narrow-wide tiers — the low-scale Tang rectangles (`select` routes
         // only the in-rectangle SCALEs here). The directed + external-extra
         // shape (`DIRECTED, EXTERNAL_EXTRA`) — Ziv escalation for the directed
         // modes and base-guard widening for the large `|k|` the 2^k reassembly
         // amplifies (single-shot would be wrong for large-x inputs whose
         // `|k|·log10 2` exceeds the guard). Table M tuned per tier from the A/B
-        // (M=512 for D307, M=128 for D462). The widest tiers (N >= 32) have NO
-        // Tang arm — `select` never routes them here and they would fall to the
-        // `_` Series arm anyway; Series wins those at every scale.
+        // (M=512 for both D307 and D462 — the wide A/B map at the in-band
+        // s0/s30 sample points shows tang_m512_g30 < tang_m128_g30 by 5-14%
+        // at both tiers; D230 is also tang_m512_g30 above). The widest tiers
+        // (N >= 32) have NO Tang arm — `select` never routes them here and
+        // they would fall to the `_` Series arm anyway; Series wins those at
+        // every scale (and the wide A/B confirms it at D307/D462 too, hence
+        // the existing narrow `0..=60` gates here).
         #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
         16 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
         #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 128, 30, true, true, false>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        24 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
         _ => series_routed::<N, SCALE>(raw, mode),
     }
 }
