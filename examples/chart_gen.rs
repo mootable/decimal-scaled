@@ -112,12 +112,12 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 /// Centre scale to feature per power-of-two storage width. Matches
 /// the docs/benchmarks.md §5 subsections.
 const CENTRE_SCALES: &[(&str, u32)] = &[
-    ("128bit", 19),
-    ("256bit", 35),
-    ("512bit", 75),
-    ("1024bit", 150),
-    ("2048bit", 308),
-    ("4096bit", 616),
+    ("128bit", 19),   // D38  S/2
+    ("256bit", 38),   // D76  S/2
+    ("512bit", 76),   // D153 S/2
+    ("1024bit", 153), // D307 S/2
+    ("2048bit", 308), // D616 S/2
+    ("4096bit", 616), // D1232 S/2
 ];
 
 const OP_ORDER: &[&str] = &[
@@ -384,7 +384,7 @@ const HISTORY_WIDTHS: &[&str] = &["D38", "D76", "D307"];
 
 // The fixed reference scale plotted in the cross-version line charts (the
 // harness scale set is {0, 10, 30}; 30 is the continuity reference point).
-const HISTORY_CHART_SCALE: usize = 30;
+const HISTORY_CHART_SCALE: usize = 19;
 
 fn render_history() -> Result<(), Box<dyn std::error::Error>> {
     use std::path::Path;

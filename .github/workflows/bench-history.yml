@@ -10,8 +10,12 @@ name: "\U0001FA91 bench-history (cross-version comparison)"
 #
 #   * widths: D38, D76, D307
 #   * functions: add, mul, div, sqrt, ln, sin
-#   * scales: {0, 10, 30} per width (capped to the old lines' FromStr u128
-#             window; 30 is the fixed reference point)
+#   * scales: {0, 9, 19, 28, 37} for EVERY width — the D38 tier's 5-point
+#             {0, S/4, S/2, 3S/4, S-1} set, the largest such set that fits
+#             the old lines' SCALE <= 38 FromStr/u128 window. The cross-
+#             version cap forbids D76/D307's native high scales (they'd
+#             overflow v0.2.x/v0.3.x); every version cell must run the
+#             identical harness. See comparison.rs's module note.
 #
 # Job graph:
 #   history   : matrix over VERSION. Each cell pins the dep, compiles the

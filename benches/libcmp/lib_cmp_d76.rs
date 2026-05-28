@@ -2,8 +2,8 @@
 //! Run: cargo bench --features "wide x-wide xx-wide" --bench lib_cmp_d76
 //!      cargo bench --features "wide" --bench lib_cmp_d76 -- _s38/   (scale 38)
 //!
-//! Scale set dedup{0, 30, S/2, S-1} with S=76: {0, 30, 38, 75}. Each scale's
-//! groups are `lib_cmp/256bit_s<scale>`; select one with `-- _s<scale>/`.
+//! Scale set {0, S/4, S/2, 3S/4, S-1} with S=76: {0, 19, 38, 57, 75}. Each
+//! scale's groups are `lib_cmp/256bit_s<scale>`; select one with `-- _s<scale>/`.
 //! Arith runs at every scale; the transcendental peer comparison at the
 //! reference scale (38) only.
 
@@ -98,8 +98,9 @@ fn bench(c: &mut Criterion) {
         }};
     }
     cell!(0);
-    cell!(30);
+    cell!(19);
     cell!(38);
+    cell!(57);
     cell!(75);
 }
 

@@ -4,8 +4,8 @@
 #[macro_use]
 mod lib_cmp_common;
 
-// Scale set dedup{0, 30, S/2, S-1} with S=616: {0, 30, 308, 615}.
-new_tier_body!(D616, "2048", [0, 30, 308, 615], 30);
+// Scale set {0, S/4, S/2, 3S/4, S-1} with S=616: {0, 154, 308, 462, 615}.
+new_tier_body!(D616, "2048", [0, 154, 308, 462, 615], 308);
 
 criterion::criterion_group!(benches, bench);
 criterion::criterion_main!(benches);
