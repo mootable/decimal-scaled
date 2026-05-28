@@ -2736,7 +2736,14 @@ macro_rules! decl_wide_transcendental {
             #[inline]
             pub(crate) fn ln_fixed_routed<const SCALE: u32>(v_w: W, w: u32) -> W {
                 if const { $crate::policy::ln::is_tang::<$n_limbs, SCALE>() } {
-                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap>(v_w, w)
+                    // INTERNAL_EXTRA = true: run at extended working scale
+                    // `w + 12` and residual-preserving narrow back to `w`,
+                    // so the directed-rounding Ziv escalation in the caller
+                    // (e.g. asinh_strict_with @ MAX scale) sees a residual
+                    // sign bit-identical to Series's `ln_fixed`. Mirrors the
+                    // `true, true` flags every `policy::ln::tang_routed`
+                    // arm now uses.
+                    $crate::algos::ln::ln_tang::tang_ln_fixed::<Core, $ln_tang_cap, true>(v_w, w)
                 } else {
                     ln_fixed(v_w, w)
                 }
