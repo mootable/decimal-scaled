@@ -678,7 +678,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<16>,
     crate::int::types::Int<32>,
     wide_trig_d76,
-    75
+    75,
+    4,
+    400,
+    512
 );
 // Cross-width widening into D76 (lossless): D18 / D38 -> D76.
 #[cfg(any(feature = "d76", feature = "wide"))]
@@ -831,7 +834,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<32>,
     crate::int::types::Int<64>,
     wide_trig_d153,
-    152
+    152,
+    8,
+    200,
+    512
 );
 // Cross-width widening into D153 (lossless): D38 / D76 -> D153.
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -978,7 +984,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<64>,
     crate::int::types::Int<128>,
     wide_trig_d307,
-    306
+    306,
+    16,
+    400,
+    512
 );
 // Cross-width widening into D307 (lossless): D76 / D153 -> D307.
 #[cfg(all(
@@ -1153,7 +1162,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<16>,
     crate::int::types::Int<32>,
     wide_trig_d57,
-    56
+    56,
+    3,
+    100,
+    128
 );
 #[cfg(any(feature = "d57", feature = "wide"))]
 pub type D57s0 = D57<0>;
@@ -1232,7 +1244,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<32>,
     crate::int::types::Int<64>,
     wide_trig_d115,
-    114
+    114,
+    6,
+    200,
+    512
 );
 #[cfg(any(feature = "d115", feature = "wide"))]
 pub type D115s0 = D115<0>;
@@ -1309,7 +1324,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<48>,
     crate::int::types::Int<96>,
     wide_trig_d230,
-    229
+    229,
+    12,
+    400,
+    128
 );
 #[cfg(any(feature = "d230", feature = "wide"))]
 pub type D230s0 = D230<0>;
@@ -1386,7 +1404,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<64>,
     crate::int::types::Int<128>,
     wide_trig_d462,
-    461
+    461,
+    24,
+    400,
+    128
 );
 #[cfg(any(feature = "d462", feature = "x-wide"))]
 pub type D462s0 = D462<0>;
@@ -1464,7 +1485,10 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<128>,
     crate::int::types::Int<256>,
     wide_trig_d616,
-    615
+    615,
+    32,
+    400,
+    512
 );
 #[cfg(any(feature = "d616", feature = "x-wide"))]
 pub type D616s0 = D616<0>;
@@ -1545,6 +1569,9 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<256>,
     wide_trig_d924,
     923,
+    48,
+    400,
+    512,
     no_const_table
 );
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
@@ -1628,6 +1655,9 @@ crate::macros::full::decl_decimal_full!(
     crate::int::types::Int<512>,
     wide_trig_d1232,
     1231,
+    64,
+    400,
+    512,
     no_const_table
 );
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]

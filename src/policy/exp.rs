@@ -124,6 +124,33 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     }
 }
 
+/// Returns `true` iff the policy's scale gate for this `(N, SCALE)` cell
+/// routes Tang (ByAlgorithm OR ByValue — the latter is the wide-tier
+/// small-`|x|` gate; at WORKING SCALE the routed surface dispatches Tang
+/// regardless, because the working-scale `tang_exp_fixed::<C, M, true>`
+/// handles arbitrary `|k|` via its `INTERNAL_EXTRA` lift — the storage-
+/// level value gate is a strict-narrowing concern that does not apply at
+/// the working-scale composition sites in `decl_wide_transcendental!`).
+///
+/// Used by the working-scale `exp_fixed_routed<SCALE>` surface emitted
+/// per tier by `decl_wide_transcendental!` to keep its scale gates in
+/// sync with the canonical [`select`] above. If [`select`] widens
+/// further, the routed surface tracks it automatically through this query.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
+    match select::<N, SCALE>() {
+        Select::ByAlgorithm(Algorithm::Tang) => true,
+        // Value-gated cells: at working scale, route Tang for the whole
+        // policy scale range (the kernel's `INTERNAL_EXTRA` covers
+        // arbitrary `|k|`); the storage-level value gate stays in place
+        // through `dispatch`.
+        Select::ByValue(_) => true,
+        _ => false,
+    }
+}
+
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {

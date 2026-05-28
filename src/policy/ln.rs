@@ -88,6 +88,25 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     }
 }
 
+/// Returns `true` iff the policy routes Tang at this `(N, SCALE)` cell.
+///
+/// Used by the working-scale `ln_fixed_routed<SCALE>` surface emitted per
+/// tier by `decl_wide_transcendental!` to keep its scale gates in sync
+/// with the canonical [`select`] above — the SAME wide-tier Tang gates,
+/// just read at the working-scale call sites that compose ln (log, log2,
+/// log10, powf, asinh, acosh, atanh) instead of at the strict storage
+/// dispatcher [`dispatch`]. If [`select`] widens further, the routed
+/// surface tracks it automatically through this query.
+#[cfg(feature = "_wide-support")]
+#[inline]
+#[must_use]
+pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
+    match select::<N, SCALE>() {
+        Select::ByAlgorithm(Algorithm::Tang) => true,
+        _ => false,
+    }
+}
+
 #[inline]
 #[must_use]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode) -> Int<N> {
