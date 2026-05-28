@@ -249,6 +249,69 @@ wide_root_bench!(bench_cbrt_d153_s114, cbrt_native_w, cbrt_newton_slice_n, 8, 24
 wide_root_bench!(bench_sqrt_d230_s57, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 57, "sqrt_d230_s57");
 wide_root_bench!(bench_sqrt_d230_s114, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 114, "sqrt_d230_s114");
 wide_root_bench!(bench_sqrt_d230_s172, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 172, "sqrt_d230_s172");
+// D230 sqrt threshold-tightening bisection (current threshold s>=48 was
+// based on conservative s>=4N heuristic; at s=57 slice still wins 1.09x —
+// crossover is above 57).
+wide_root_bench!(bench_sqrt_d230_s72, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 72, "sqrt_d230_s72");
+wide_root_bench!(bench_sqrt_d230_s85, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 85, "sqrt_d230_s85");
+wide_root_bench!(bench_sqrt_d230_s100, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 100, "sqrt_d230_s100");
+// D307 sqrt threshold-tightening bisection (current threshold s>=64).
+// At s=30 slice wins 3.74x, at s=76 native wins 1.05x. Crossover between.
+wide_root_bench!(bench_sqrt_d307_s48, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 48, "sqrt_d307_s48");
+wide_root_bench!(bench_sqrt_d307_s56, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 56, "sqrt_d307_s56");
+wide_root_bench!(bench_sqrt_d307_s64, sqrt_native_w, sqrt_newton_slice_n, 16, 32, 64, "sqrt_d307_s64");
+// D153 sqrt threshold-tightening bisection (current threshold s>=32).
+// At s=25 slice wins 1.21x, at s=38 native wins 1.07x. Crossover between.
+wide_root_bench!(bench_sqrt_d153_s28, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 28, "sqrt_d153_s28");
+wide_root_bench!(bench_sqrt_d153_s32, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 32, "sqrt_d153_s32");
+wide_root_bench!(bench_sqrt_d153_s35, sqrt_native_w, sqrt_newton_slice_n, 8, 16, 35, "sqrt_d153_s35");
+// D115 sqrt threshold-tightening bisection (current threshold s>=24).
+// At s=25 tied, at s=28 native wins 1.06x. Want lowest valid threshold.
+wide_root_bench!(bench_sqrt_d115_s20, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 20, "sqrt_d115_s20");
+wide_root_bench!(bench_sqrt_d115_s22, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 22, "sqrt_d115_s22");
+wide_root_bench!(bench_sqrt_d115_s24, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 24, "sqrt_d115_s24");
+// D462 sqrt crossover sweep (currently threshold s>=96 = 4N).
+wide_root_bench!(bench_sqrt_d462_s24, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 24, "sqrt_d462_s24");
+wide_root_bench!(bench_sqrt_d462_s48, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 48, "sqrt_d462_s48");
+wide_root_bench!(bench_sqrt_d462_s72, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 72, "sqrt_d462_s72");
+wide_root_bench!(bench_sqrt_d462_s96, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 96, "sqrt_d462_s96");
+wide_root_bench!(bench_sqrt_d462_s120, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 120, "sqrt_d462_s120");
+wide_root_bench!(bench_sqrt_d462_s230, sqrt_native_w, sqrt_newton_slice_n, 24, 48, 230, "sqrt_d462_s230");
+// D616 sqrt crossover sweep (currently threshold s>=128 = 4N).
+wide_root_bench!(bench_sqrt_d616_s32, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 32, "sqrt_d616_s32");
+wide_root_bench!(bench_sqrt_d616_s64, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 64, "sqrt_d616_s64");
+wide_root_bench!(bench_sqrt_d616_s96, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 96, "sqrt_d616_s96");
+wide_root_bench!(bench_sqrt_d616_s128, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 128, "sqrt_d616_s128");
+wide_root_bench!(bench_sqrt_d616_s307, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 307, "sqrt_d616_s307");
+// D924 sqrt crossover sweep (currently threshold s>=192 = 4N).
+wide_root_bench!(bench_sqrt_d924_s96, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 96, "sqrt_d924_s96");
+wide_root_bench!(bench_sqrt_d924_s144, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 144, "sqrt_d924_s144");
+wide_root_bench!(bench_sqrt_d924_s192, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 192, "sqrt_d924_s192");
+wide_root_bench!(bench_sqrt_d924_s462, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 462, "sqrt_d924_s462");
+// D1232 sqrt crossover sweep (currently threshold s>=256 = 4N).
+wide_root_bench!(bench_sqrt_d1232_s128, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 128, "sqrt_d1232_s128");
+wide_root_bench!(bench_sqrt_d1232_s192, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 192, "sqrt_d1232_s192");
+wide_root_bench!(bench_sqrt_d1232_s256, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 256, "sqrt_d1232_s256");
+wide_root_bench!(bench_sqrt_d1232_s615, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 615, "sqrt_d1232_s615");
+// D616 sqrt second-pass bisection (s=128 slice 1.20x, s=307 native 1.64x).
+wide_root_bench!(bench_sqrt_d616_s160, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 160, "sqrt_d616_s160");
+wide_root_bench!(bench_sqrt_d616_s192, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 192, "sqrt_d616_s192");
+wide_root_bench!(bench_sqrt_d616_s224, sqrt_native_w, sqrt_newton_slice_n, 32, 64, 224, "sqrt_d616_s224");
+// D924 sqrt second-pass bisection (s=192 tied 1.03x, s=462 native 2.19x).
+wide_root_bench!(bench_sqrt_d924_s220, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 220, "sqrt_d924_s220");
+wide_root_bench!(bench_sqrt_d924_s260, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 260, "sqrt_d924_s260");
+wide_root_bench!(bench_sqrt_d924_s320, sqrt_native_w, sqrt_newton_slice_n, 48, 96, 320, "sqrt_d924_s320");
+// D1232 sqrt second-pass bisection (s=256 tied 1.01x, s=615 native 2.60x).
+wide_root_bench!(bench_sqrt_d1232_s300, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 300, "sqrt_d1232_s300");
+wide_root_bench!(bench_sqrt_d1232_s400, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 400, "sqrt_d1232_s400");
+wide_root_bench!(bench_sqrt_d1232_s500, sqrt_native_w, sqrt_newton_slice_n, 64, 128, 500, "sqrt_d1232_s500");
+// D230 sqrt second-pass bisection (s=57 slice 1.07x, s=72 native 1.05x — tight).
+wide_root_bench!(bench_sqrt_d230_s62, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 62, "sqrt_d230_s62");
+wide_root_bench!(bench_sqrt_d230_s66, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 66, "sqrt_d230_s66");
+wide_root_bench!(bench_sqrt_d230_s70, sqrt_native_w, sqrt_newton_slice_n, 12, 24, 70, "sqrt_d230_s70");
+// D115 sqrt second-pass — confirm s=22 is the right gate (vs s=21).
+wide_root_bench!(bench_sqrt_d115_s21, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 21, "sqrt_d115_s21");
+wide_root_bench!(bench_sqrt_d115_s23, sqrt_native_w, sqrt_newton_slice_n, 6, 12, 23, "sqrt_d115_s23");
 wide_root_bench!(bench_cbrt_d230_s57, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 57, "cbrt_d230_s57");
 wide_root_bench!(bench_cbrt_d230_s114, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 114, "cbrt_d230_s114");
 wide_root_bench!(bench_cbrt_d230_s172, cbrt_native_w, cbrt_newton_slice_n, 12, 36, 172, "cbrt_d230_s172");
@@ -278,6 +341,54 @@ fn bench_wide_bisect(c: &mut Criterion) {
     bench_cbrt_d230_s57(c);
     bench_cbrt_d230_s114(c);
     bench_cbrt_d230_s172(c);
+    // sqrt threshold-tightening bisection
+    bench_sqrt_d115_s20(c);
+    bench_sqrt_d115_s22(c);
+    bench_sqrt_d115_s24(c);
+    bench_sqrt_d153_s28(c);
+    bench_sqrt_d153_s32(c);
+    bench_sqrt_d153_s35(c);
+    bench_sqrt_d230_s72(c);
+    bench_sqrt_d230_s85(c);
+    bench_sqrt_d230_s100(c);
+    bench_sqrt_d307_s48(c);
+    bench_sqrt_d307_s56(c);
+    bench_sqrt_d307_s64(c);
+    // sqrt wide-tier crossover sweep
+    bench_sqrt_d462_s24(c);
+    bench_sqrt_d462_s48(c);
+    bench_sqrt_d462_s72(c);
+    bench_sqrt_d462_s96(c);
+    bench_sqrt_d462_s120(c);
+    bench_sqrt_d462_s230(c);
+    bench_sqrt_d616_s32(c);
+    bench_sqrt_d616_s64(c);
+    bench_sqrt_d616_s96(c);
+    bench_sqrt_d616_s128(c);
+    bench_sqrt_d616_s307(c);
+    bench_sqrt_d924_s96(c);
+    bench_sqrt_d924_s144(c);
+    bench_sqrt_d924_s192(c);
+    bench_sqrt_d924_s462(c);
+    bench_sqrt_d1232_s128(c);
+    bench_sqrt_d1232_s192(c);
+    bench_sqrt_d1232_s256(c);
+    bench_sqrt_d1232_s615(c);
+    // second-pass bisection
+    bench_sqrt_d115_s21(c);
+    bench_sqrt_d115_s23(c);
+    bench_sqrt_d230_s62(c);
+    bench_sqrt_d230_s66(c);
+    bench_sqrt_d230_s70(c);
+    bench_sqrt_d616_s160(c);
+    bench_sqrt_d616_s192(c);
+    bench_sqrt_d616_s224(c);
+    bench_sqrt_d924_s220(c);
+    bench_sqrt_d924_s260(c);
+    bench_sqrt_d924_s320(c);
+    bench_sqrt_d1232_s300(c);
+    bench_sqrt_d1232_s400(c);
+    bench_sqrt_d1232_s500(c);
 }
 
 fn bench_wide(c: &mut Criterion) {

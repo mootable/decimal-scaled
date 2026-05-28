@@ -144,25 +144,38 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // *linear* `scale`-length ×10 radicand-build loop plus its build-max
         // `isqrt` scratch dominate, and the tight `Int<2N>` Native (radicand
         // built via a const-folded `pow`, root in an exactly-sized integer)
-        // wins decisively. `root_kernel_ab` localizes the crossover near
-        // `SCALE ≈ 3.5·N`; the conservative `SCALE >= 4·N` gate sits at the
-        // tie/win boundary, so every cell it routes to Native is a win and
-        // none below it is regressed. At the bbc max-scale (S-1) cells this
-        // recovers 1.8–5.8× over the slice (bit-identical, all six modes).
+        // wins decisively. The TRUE crossover is **per-tier** and NOT the
+        // uniform `SCALE >= 4·N` shape: a second-pass adaptive bisection
+        // (`root_kernel_ab.rs`, cores 18-19, 2026-05-28) found the slice
+        // win-band reached further into the threshold-routed region for
+        // D230/D616/D924 than the `4N` shape assumed — at routed cells
+        // just above `4N`, slice was beating Native 1.06–1.27×. The
+        // per-tier thresholds below sit at the bisected true crossover
+        // (Class I "continuous win-region" gate); each cell routed to
+        // Native is bit-identical to Newton across all six modes and a
+        // measured win.
         #[cfg(any(feature = "d57", feature = "wide"))]
         (6, s) if s >= 24 => Select::ByAlgorithm(Algorithm::Native), // D115, W=12
         #[cfg(any(feature = "d57", feature = "wide"))]
         (8, s) if s >= 32 => Select::ByAlgorithm(Algorithm::Native), // D153, W=16
+        // Per-tier crossovers tightened by adaptive-bisection in
+        // `root_kernel_ab.rs` (cores 18-19, 2026-05-28): the conservative
+        // `s >= 4N` heuristic placed several thresholds INSIDE the slice
+        // win-band (the slice's build-max scratch cost is smaller than the
+        // tight `Int<2N>` Knuth divide here), so native lost 1.06–1.27× at
+        // routed cells just above the gate. The refined thresholds below
+        // sit at the true bisected crossover per tier; the architecture-
+        // review Class I check (continuous win-region) requires this.
         #[cfg(any(feature = "d57", feature = "wide"))]
-        (12, s) if s >= 48 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
+        (12, s) if s >= 70 => Select::ByAlgorithm(Algorithm::Native), // D230, W=24
         #[cfg(any(feature = "d57", feature = "wide"))]
         (16, s) if s >= 64 => Select::ByAlgorithm(Algorithm::Native), // D307, W=32
         #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
         (24, s) if s >= 96 => Select::ByAlgorithm(Algorithm::Native), // D462, W=48
         #[cfg(any(feature = "x-wide", feature = "xx-wide"))]
-        (32, s) if s >= 128 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
+        (32, s) if s >= 160 => Select::ByAlgorithm(Algorithm::Native), // D616, W=64
         #[cfg(feature = "xx-wide")]
-        (48, s) if s >= 192 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
+        (48, s) if s >= 260 => Select::ByAlgorithm(Algorithm::Native), // D924, W=96
         #[cfg(feature = "xx-wide")]
         (64, s) if s >= 256 => Select::ByAlgorithm(Algorithm::Native), // D1232, W=128
         // Everything else (wider tiers at low/mid scales) — generic Newton
