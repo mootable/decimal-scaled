@@ -1424,10 +1424,12 @@ pub mod __bench_internals {
                     pub struct Storage(W);
 
                     /// Build a representative non-zero numerator from a top-limb position.
+                    /// Buffer sized to 256 u128 limbs to accommodate the widest
+                    /// tier benched (`Int<512>` = 256 u128 limbs).
                     #[inline(never)]
                     pub fn build_numerator(top_limb_idx: usize) -> Storage {
                         use crate::int::types::traits::BigInt;
-                        let mut mag = [0u128; 64];
+                        let mut mag = [0u128; 256];
                         mag[top_limb_idx] = 1u128 << 32;
                         mag[1] = 0xdeadbeef_cafef00d_u128;
                         Storage(W::from_mag_sign_u128(&mag, false))
@@ -1473,15 +1475,21 @@ pub mod __bench_internals {
                     #[inline(never)]
                     pub fn newton_u128(n: Storage, scale: u32, table: &NewtonReciprocal) -> Storage {
                         use crate::int::types::traits::BigInt;
-                        let mut mag_u128 = [0u128; 64];
-                        let neg = n.0.mag_into_u128(&mut mag_u128);
+                        // Match production slicing: the Newton kernel operates
+                        // on EXACTLY `W::U128_LIMBS` u128 limbs (the storage
+                        // type's width). Passing the whole 256-limb buffer
+                        // would inflate the schoolbook product cost on smaller
+                        // widths — production never does that.
+                        let mut mag_u128 = [0u128; 256];
+                        let mag = &mut mag_u128[..W::U128_LIMBS];
+                        let neg = n.0.mag_into_u128(mag);
                         crate::algos::support::newton_reciprocal::newton_pow10_mag_u128_packed(
-                            &mut mag_u128,
+                            mag,
                             neg,
                             RoundingMode::HalfToEven,
                             &table.0,
                         );
-                        Storage(W::from_mag_sign_u128(&mag_u128, neg))
+                        Storage(W::from_mag_sign_u128(mag, neg))
                     }
                 }
             };
@@ -1497,6 +1505,17 @@ pub mod __bench_internals {
         shim!(d616, crate::int::types::Int<32>, "x-wide");
         shim!(d924, crate::int::types::Int<48>, "xx-wide");
         shim!(d1232, crate::int::types::Int<64>, "xx-wide");
+        // Wider tier added 2026-05-28: Int<96>=6144 = D230 Wexp /
+        // D924 Work. Bench-validated cells extend the Newton-vs-MG
+        // matrix beyond the original 1536-4096 band.
+        //
+        // 8192 / 12288 / 16384 / 32768 are NOT exposed here: their
+        // Newton precompute numerator at the AGM-widened scales
+        // exceeds the routed Knuth build-max scratch
+        // (`MAX_SINGLE_LIMBS = 258`), and the integrated-bench picture
+        // (sibling-agent atanh diagnosis) suggests MG is the right
+        // engine at those widths anyway.
+        shim!(b6144, crate::int::types::Int<96>, "xx-wide");
     }
 
     /// `Int<N>` wrapping_neg candidates exposed for the `neg_kernel_ab`

@@ -13,7 +13,7 @@
 
 use criterion::{Criterion, criterion_group, criterion_main};
 use decimal_scaled::__bench_internals::newton_vs_mg::{
-    NewtonReciprocal, d307, d462, d616, d924, d1232,
+    NewtonReciprocal, b6144, d1232, d307, d462, d616, d924,
 };
 use std::hint::black_box;
 
@@ -114,6 +114,36 @@ fn bench(c: &mut Criterion) {
     bench_cell!(c, d1232, "D1232_s615", 615, 64, 30);
     bench_cell!(c, d1232, "D1232_s900", 900, 64, 30);
     bench_cell!(c, d1232, "D1232_s1231", 1231, 64, 30);
+
+    // ── Wider width (audit 2026-05-28) ─────────────────────────────
+    //
+    // 6144-bit (Int<96>): D230 Wexp / D924 Work. Per the all-widths
+    // rule (axis = width × scale-band), a representative 5+ sweep
+    // covers the D924 transcendental w_prime range (AGM tops out at
+    // `2·SCALE_max + 4 = 1850` for D924 strict_agm — see the buffer-
+    // sizing block + `newton_wins` doc in `newton_reciprocal.rs`).
+    //
+    // 8192 / 12288 / 16384 / 32768 are NOT benched here: the Newton
+    // precompute's `2^k / 10^scale` numerator at the AGM-widened
+    // scales exceeds the routed `div_knuth` build-max scratch
+    // (`MAX_SINGLE_LIMBS = 258`). The sibling-agent atanh-diagnosis
+    // integrated bench also reported MG winning 5–58× at
+    // Int<192>/Int<256> low-scale, so even with extended scratch the
+    // structural picture suggests MG is the right engine there.
+
+    bench_cell!(c, b6144, "B6144_s38", 38, 96, 44);
+    bench_cell!(c, b6144, "B6144_s115", 115, 96, 44);
+    bench_cell!(c, b6144, "B6144_s200", 200, 96, 44);
+    bench_cell!(c, b6144, "B6144_s400", 400, 96, 44);
+    bench_cell!(c, b6144, "B6144_s600", 600, 96, 44);
+    bench_cell!(c, b6144, "B6144_s800", 800, 96, 44);
+    bench_cell!(c, b6144, "B6144_s953", 953, 96, 44);
+    // AGM-band cells — D924 strict_agm reaches `w_prime ≈ 1850` at
+    // SCALE 923; the 6144 + AGM cell is the hot path for D924
+    // ln/exp/asinh/atanh/acosh _strict_agm.
+    bench_cell!(c, b6144, "B6144_s1234", 1234, 96, 44);
+    bench_cell!(c, b6144, "B6144_s1500", 1500, 96, 44);
+    bench_cell!(c, b6144, "B6144_s1850", 1850, 96, 44);
 }
 
 criterion_group!(benches, bench);

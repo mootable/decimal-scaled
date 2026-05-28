@@ -70,26 +70,53 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 
 // ── Fixed buffer sizing (in u64 limbs) ──────────────────────────────
 //
-// The widest cell exercised is `width_limbs = 32` u128 limbs (Int<64>,
-// 4096-bit storage) at `scale` up to ~1231 (the bench sweep). Working in
-// u64 limbs (two per u128 limb), the worst-case sizes are:
+// The widest cell exercised is `width_limbs = 96` u64 limbs (6144-bit,
+// the D230 Wexp / D924 Work tier). Working in u64 limbs (two per u128
+// limb), the worst-case sizes — taking the AGM-widened scale ceiling
+// `w_prime = 2·SCALE + 4` (D924 max SCALE 923 → w_prime ≤ 1850) — are:
 //
-//   pow_scale : pow_u128 = scale/38 + 2 ≤ 36 u128 → 72 u64
-//   r         : (k_u128 + 1) = (width + pow + 1) ≤ 68 u128 → 136 u64
-//   mag (n)   : 64 u128 → 128 u64
-//   product   : n.len() + r.len() ≤ 128 + 136 = 264 u64
+//   pow_scale : pow_u64 = scale/19 + 3 ≤ 100 u64 (at w_prime ≤ 1850)
+//   r         : (k_u64 + 1) = (width + pow + 1) ≤ 96 + 100 + 1 = 197 u64
+//   mag (n)   : 96 u64 (Int<96>); legacy 4096 path still uses ≤ 64
+//   product   : n.len() + r.len() ≤ 128 + 200 = 328 u64
 //
-// All buffers are over-sized to a single generous ceiling so the same
-// type serves every tier without const-generic gymnastics.
+// All buffers are over-sized to a single ceiling that covers every
+// width the matcher routes Newton-vs-MG against, so the same type
+// serves every tier without const-generic gymnastics.
+//
+// The build-max is internal to the runtime-instantiated
+// `NewtonReciprocal` cache type — it never leaks onto a concrete-`N`
+// path (those still size their scratch via `ComputeInt::single_*` etc.
+// per Constitution rule 6). The cache stores ONE struct per cached
+// width per thread; over-sizing here costs constant per-slot stack +
+// per-slot struct memory, not per-tier code duplication.
+//
+// The 8192 / 12288 / 16384 / 32768 widths the 2026-05-28 audit also
+// identified (D462 Wexp / D1232 Work / D924 Wide / D616 Wexp / D924
+// Wexp / D1232 Wide / D1232 Wexp) are deferred. At those widths the
+// Newton precompute's `2^k / 10^scale` numerator at the AGM-widened
+// scale exceeds the routed `div_knuth`'s `MAX_SINGLE_LIMBS = 258`
+// build-max scratch — D1232 strict_agm runs at `w_prime ≈ 2466`
+// which puts an 8192-bit Newton's numerator at 260+ limbs, and a
+// 12288-bit Newton's at 293+, both past the build-max scratch the
+// routed Knuth can hold. The sibling-agent atanh-diagnosis bench
+// also reported Newton LOSING by 5–58× at Int<192>/Int<256> w=38
+// (low-scale shape), so even with extended scratch the integrated
+// picture isn't settled. Revisit when both the wider-numerator divide
+// scratch and the AGM-scale `newton_vs_mg` evidence line up.
 
-/// Max `u64` limbs for the `10^SCALE` (`pow_scale`) buffer.
-const MAX_POW_U64: usize = 80;
-/// Max `u64` limbs for the reciprocal (`r`) buffer.
-const MAX_R_U64: usize = 144;
-/// Max `u64` limbs for the magnitude / quotient buffers.
+/// Max `u64` limbs for the `10^SCALE` (`pow_scale`) buffer. Covers the
+/// D924 AGM scale at width 6144 (`w_prime ≤ 1850`, `pow_u64 ≤ 100`).
+const MAX_POW_U64: usize = 104;
+/// Max `u64` limbs for the reciprocal (`r`) buffer. Covers the
+/// 6144 + D924 AGM cell (`k_u64 + 1 ≤ 197`).
+const MAX_R_U64: usize = 200;
+/// Max `u64` limbs for the magnitude / quotient buffers. Covers
+/// the widest enabled width's magnitude (6144 → 96 u64), with margin.
 const MAX_MAG_U64: usize = 128;
 /// Max `u64` limbs for product / scratch buffers (`n·r`, `q·D`, …).
-const MAX_PROD_U64: usize = 288;
+/// Covers `MAX_MAG_U64 + MAX_R_U64`.
+const MAX_PROD_U64: usize = 332;
 
 // -- u128-limb sibling sizes (packed pairs of u64) --------------------
 //
@@ -508,9 +535,18 @@ pub(crate) fn newton_pow10_mag_u128_packed(
 /// Per-width Limb-axis matcher: does the cached `(width_bits, scale)`
 /// cell run the u128-packed Newton kernel? Continuous width region per
 /// Constitution rule 6 + Class I (never a per-scale carve-out).
+///
+/// 2026-05-28 audit extension: the u128-packed kernel wins at the
+/// existing 1536–4096 band and at the new 6144 width (`newton_vs_mg`
+/// integrated bench, cores 22–23, sees u128 1.18–3.46× over MG and
+/// 1.0–1.24× over u64 across s115–s953).
+///
+/// Wider widths (8192/12288/16384/32768) stay on MG entirely — see
+/// [`newton_wins`] for the AGM-widening / buffer-scratch / contradicting
+/// integrated-bench reasons.
 #[inline]
 const fn newton_u128_wins(width_bits: u32) -> bool {
-    matches!(width_bits, 1536 | 2048 | 3072 | 4096)
+    matches!(width_bits, 1536 | 2048 | 3072 | 4096 | 6144)
 }
 
 /// Full `n / 10^SCALE` with rounding for a `BigInt`-backed value.
@@ -526,10 +562,16 @@ pub(crate) fn div_wide_pow10_newton_with<W: crate::int::types::traits::BigInt>(
     // BigInt bridge is u128-limb; the arithmetic core operates on that
     // magnitude slice in place (shared with the `Int<N>`-only decimal
     // `mul` kernel, which builds its product directly in u128 scratch).
-    let mut mag_u128 = [0u128; 64];
-    let neg = n.mag_into_u128(&mut mag_u128);
-    newton_pow10_mag_u128(&mut mag_u128, neg, mode, table);
-    W::from_mag_sign_u128(&mag_u128, neg)
+    //
+    // Buffer sized to 256 u128 limbs to fit the widest tier exercised
+    // (`Int<512>` = 32768-bit, 256 u128 limbs). The kernel is sliced
+    // to `W::U128_LIMBS` so narrower widths don't pay the wide cost.
+    let mut mag_u128 = [0u128; 256];
+    let limbs = <W as crate::int::types::traits::BigInt>::U128_LIMBS;
+    let mag = &mut mag_u128[..limbs];
+    let neg = n.mag_into_u128(mag);
+    newton_pow10_mag_u128(mag, neg, mode, table);
+    W::from_mag_sign_u128(mag, neg)
 }
 
 /// Width-agnostic Newton-reciprocal divide of a u128-limb magnitude slice
@@ -617,19 +659,44 @@ pub(crate) fn newton_pow10_mag_u128(
 /// Returns `true` when the bench-validated Newton-vs-MG matrix says
 /// Newton wins for this `(width_bits, scale)` cell. The matrix:
 ///
-/// | bits | Storage match               | Newton min SCALE |
-/// |------|-----------------------------|------------------|
-/// | 1536 | Int<24> (D462 stg / D230 W) |  ≥ 200           |
-/// | 2048 | Int<32> (D616 stg / D307 W) |  ≥ 200           |
-/// | 3072 | Int<48> (D924 stg / D462 W) |  ≥ 200           |
-/// | 4096 | Int<64> (D1232 stg / D616 W)|  ≥ 400           |
+/// | bits  | Storage match                       | Newton min SCALE |
+/// |-------|-------------------------------------|------------------|
+/// | 1536  | Int<24>  (D462 stg / D230 Work)     |  ≥ 200           |
+/// | 2048  | Int<32>  (D616 stg / D307 Work)     |  ≥ 200           |
+/// | 3072  | Int<48>  (D924 stg / D462 Work)     |  ≥ 200           |
+/// | 4096  | Int<64>  (D1232 stg / D616 Work)    |  ≥ 400           |
+/// | 6144  | Int<96>  (D230 Wexp / D924 Work)    |  ≥ 200           |
 ///
 /// Bench source: `benches/micro/newton_vs_mg.rs` head-to-head against
 /// [`crate::algos::support::mg_divide::div_wide_pow10_chain`] at the
-/// listed widths × representative SCALE bands. Larger widths (Int<96> /
-/// Int<128> / Int<192> / Int<256> — used by the transcendental work
-/// integers at the WIDEST decimal tiers) have no bench data and fall
-/// through to MG.
+/// listed widths × representative SCALE bands.
+///
+/// Widths 8192 / 12288 / 16384 / 32768 (D462 Wexp / D1232 Work / D924
+/// Wide / D616 Wexp / D924 Wexp / D1232 Wide / D1232 Wexp) are
+/// **deferred**. Two-part reason:
+///
+/// 1. **AGM widening invalidates the simple max-scale analysis.** The
+///    `_strict_agm` ln/exp paths lift the working scale to
+///    `w_prime = SCALE + GUARD + guard_agm(SCALE) ≈ 2·SCALE + 4` at
+///    high SCALE — so D924 Wide=12288 actually sees `w ≈ 1850` (not
+///    953), D1232 Work=8192 actually sees `w ≈ 2466` (not 1261). The
+///    Newton precompute's `2^k / 10^scale` numerator at those scales
+///    needs more u64 limbs than the routed `div_knuth`'s build-max
+///    scratch (`MAX_SINGLE_LIMBS = 258`) can hold: 12288 + AGM scale
+///    1850 → ~293 num limbs, 8192 + AGM scale 2466 → ~260 num limbs.
+///    The first golden run after enabling 8192/12288 panicked
+///    `div_knuth.rs:81` with the AGM-scale numerator. 6144 is the
+///    widest width whose AGM-scale numerator (~197 limbs) still fits.
+/// 2. **Sibling-agent integrated bench (atanh diagnosis) at
+///    Int<192>/Int<256>** reported Newton losing 5–58× to MG chain in
+///    the low-scale shape (e.g. w=38 → MG 2.63 µs vs Newton 109 µs).
+///    The crossover may exist but is structurally higher than at the
+///    narrower widths, and the picture isn't yet settled.
+///
+/// Revisit when (a) a wider-numerator divide kernel is wired into the
+/// Newton precompute (Knuth-into with caller-sized scratch), and (b)
+/// the integrated `newton_vs_mg` evidence at the AGM scale (not just
+/// the SCALE-band) confirms Newton wins.
 ///
 /// The 1536-bit row recovers the bench-branch-compare wide-`÷10^SCALE`
 /// regression at D230's work width: `exp_D230_s{172,229}` (1.38× and
@@ -642,6 +709,25 @@ pub(crate) fn newton_pow10_mag_u128(
 /// The same 1536-bit divide is shared with D462's storage `mul`/`div`
 /// rescale fast-path (where the work width also lands at 1536 bits)
 /// and D230's storage `mul` slow-path — see `mul_widen_divide`.
+///
+/// The 6144-bit row (audit 2026-05-28) covers the D230 `exp`/`atanh`
+/// Wexp band and the D924 Work integer's transcendental rescales.
+/// Bench evidence (cores 22–23, integrated `newton_vs_mg`):
+///
+/// | scale | mg_chain   | newton     | newton_u128 | best win |
+/// |-------|------------|------------|-------------|----------|
+/// | 38    | 1.17 µs MG | 2.68 µs    | 2.70 µs     | MG 2.3×  |
+/// | 115   | 3.06 µs    | 2.99 µs    | 2.60 µs     | u128 1.18× |
+/// | 200   | 4.75 µs    | 3.27 µs    | 2.92 µs     | u128 1.63× |
+/// | 400   | 8.13 µs    | 4.44 µs    | 4.15 µs     | u128 1.96× |
+/// | 600   | 10.67 µs   | 4.87 µs    | 3.90 µs     | u128 2.73× |
+/// | 800   | 12.36 µs   | 4.75 µs    | 4.34 µs     | u128 2.85× |
+/// | 953   | 13.90 µs   | 4.97 µs    | 4.02 µs     | u128 3.46× |
+///
+/// The crossover is between s38 (MG wins, single-pass) and s115 (Newton
+/// edges). The `≥ 200` threshold matches every other 0.5.0 row, keeps
+/// the gate on a continuous region per Constitution rule 6 + Class I,
+/// and avoids snapping to a specific bbc cell.
 ///
 /// Scale `≤ 38` always returns `false`: the single-pass MG kernel
 /// `div_wide_pow10` is the chosen winner there and a chain-Newton
@@ -656,6 +742,7 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
         2048 if scale >= 200 => true,
         3072 if scale >= 200 => true,
         4096 if scale >= 400 => true,
+        6144 if scale >= 200 => true,
         _ => false,
     }
 }
@@ -691,6 +778,15 @@ mod cache {
         static C_4096: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
             ::core::cell::RefCell::new(alloc::vec::Vec::new())
         };
+        // Wider widths added 2026-05-28 — the wide-tier transcendental
+        // work integers covered by the buffer-raise. Currently 6144
+        // only; 8192/12288/16384/32768 are deferred (see
+        // [`super::newton_wins`] for the AGM-widening / scratch /
+        // integrated-bench reasons).
+        // - 6144 = Int<96> (D230 Wexp / D924 Work)
+        static C_6144: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
+            ::core::cell::RefCell::new(alloc::vec::Vec::new())
+        };
     }
 
     /// Run `f` with a borrowed reciprocal table for `(width_bits, scale)`.
@@ -707,6 +803,7 @@ mod cache {
             2048 => &C_2048,
             3072 => &C_3072,
             4096 => &C_4096,
+            6144 => &C_6144,
             _ => unreachable!("with_table called on un-cached width {width_bits}"),
         };
         // Ensure the slot has an entry for `scale`; insert one if not.
@@ -936,7 +1033,9 @@ mod tests {
         ];
 
         for mode in modes {
-            let mut mag_a = [0u128; 64];
+            // Buffer sized to 128 u128 limbs to fit Int<192>=96 u128
+            // (the widest mag the audit-extended widths exercise).
+            let mut mag_a = [0u128; 128];
             mag_a[top_limb_idx] = top_limb_val;
             mag_a[low_perturbation.0] = low_perturbation.1;
             let mut mag_b = mag_a;
@@ -948,7 +1047,7 @@ mod tests {
                 "u64 != u128 Newton at scale={scale} width={width_limbs} mode={mode:?}"
             );
 
-            let mut mag_a = [0u128; 64];
+            let mut mag_a = [0u128; 128];
             mag_a[top_limb_idx] = top_limb_val;
             mag_a[low_perturbation.0] = low_perturbation.1;
             let mut mag_b = mag_a;
@@ -1032,5 +1131,72 @@ mod tests {
     #[test]
     fn newton_u64_eq_u128_d1232_s1231() {
         assert_u64_u128_match(1231, 64, 32, 31, 1u128, (7, 0xdeadbeef_feedface_u128));
+    }
+
+    // ── Wider-width validity wall (audit 2026-05-28) ──────────────────
+    //
+    // Int<96> / Int<128> / Int<192> exercised at the bbc-anchor scales
+    // and the maxima. Bit-identical agreement with the Knuth-routed
+    // `div_rem_mag_slice` path is the validity wall for the new
+    // `newton_wins` (6144 / 8192 / 12288) entries.
+
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    fn newton_matches_mg_chain_b6144_s200() {
+        let scale = 200u32;
+        let width_limbs = 96; // Int<96> = 48 u128 = 96 u64
+        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let mut limbs = [0u128; 64];
+        limbs[40] = 1u128 << 24;
+        limbs[3] = 0xfeedfacecafef00d_u128;
+        let n = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<96>>(n, scale, RoundingMode::HalfToEven);
+        assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=200");
+    }
+
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    fn newton_matches_mg_chain_b6144_s953() {
+        let scale = 953u32;
+        let width_limbs = 96;
+        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        let mut limbs = [0u128; 64];
+        limbs[46] = 1u128 << 8;
+        limbs[1] = 0xdeadbeef_cafef00d_u128;
+        let n = <Int<96> as crate::int::types::traits::BigInt>::from_mag_sign_u128(&limbs, false);
+        let got = div_wide_pow10_newton_with(n, scale, RoundingMode::HalfToEven, &table);
+        let want = div_wide_pow10_chain::<Int<96>>(n, scale, RoundingMode::HalfToEven);
+        assert_eq!(got, want, "Newton differs from MG chain at Int<96> s=953");
+    }
+
+    // u64 vs u128 bit-identity at the new 6144 width covered by
+    // `newton_u128_wins` — production-shape cells across the D924
+    // SCALE band AND the AGM-widened scales the strict_agm transcendentals
+    // exercise.
+
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    fn newton_u64_eq_u128_b6144_s200() {
+        assert_u64_u128_match(200, 96, 48, 40, 1u128 << 24, (3, 0xfeedfacecafef00d_u128));
+    }
+
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    fn newton_u64_eq_u128_b6144_s953() {
+        assert_u64_u128_match(953, 96, 48, 46, 1u128 << 8, (1, 0xdeadbeef_cafef00d_u128));
+    }
+
+    // AGM-band cells — D924 strict_agm runs at `w_prime ≤ 1850`.
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    fn newton_u64_eq_u128_b6144_s1234() {
+        assert_u64_u128_match(1234, 96, 48, 46, 1u128 << 16, (2, 0xcafef00dbeef_u128));
+    }
+
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    fn newton_u64_eq_u128_b6144_s1850() {
+        assert_u64_u128_match(1850, 96, 48, 47, 1u128, (5, 0xfacefacef00d_u128));
     }
 }
