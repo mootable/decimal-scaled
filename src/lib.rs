@@ -1334,6 +1334,13 @@ pub mod __bench_internals {
             };
         }
         shim!(d307, crate::int::types::Int<16>, "x-wide");
+        // `Int<24>` = 1536-bit storage; matches D462 storage, but ALSO the
+        // production Work integer used by D230 (Int<12> storage doubles to
+        // Int<24> for the wide-trig `Work` type). The bbc regression cells
+        // `exp_D230_s{172,229}` rescale at this width, so the Newton-vs-MG
+        // dispatch decision needs `1536`-bit data — hence the dedicated shim
+        // (the previous d307/d616/d924/d1232 set skipped 1536).
+        shim!(d462, crate::int::types::Int<24>, "x-wide");
         shim!(d616, crate::int::types::Int<32>, "x-wide");
         shim!(d924, crate::int::types::Int<48>, "xx-wide");
         shim!(d1232, crate::int::types::Int<64>, "xx-wide");
