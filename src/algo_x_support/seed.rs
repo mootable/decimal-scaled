@@ -214,12 +214,18 @@ pub(crate) fn sqrt_seed_u128(n: u128, bits: u32) -> u128 {
 /// Same contract and convergence guarantee as [`sqrt_seed`].
 ///
 /// `std`: hardware `f64::cbrt` bootstrap. `cbrt(top · 2^shift) =
-/// cbrt(top) · 2^(shift/3)`; the `shift % 3` residue is folded into an
-/// exact power-of-two multiplier (round up), and the result is rounded up
-/// to a strict over-estimate. `no_std`: classical pure-integer 1-bit seed
-/// `2^ceil(bits/3)` (the root has at most `ceil(bits/3)` bits, so this
-/// over-estimates). The Brent–Zimmermann downward Newton iteration
-/// self-corrects to the floor cube root from any over-estimate.
+/// cbrt(top) · 2^(shift/3)`; the `shift % 3` residue is folded into the
+/// **exact** fractional `2^(r/3)` multiplier — `2^(1/3) ≈ 1.2599` for
+/// `r=1`, `2^(2/3) ≈ 1.5874` for `r=2` — then rounded up to a strict
+/// over-estimate. (The earlier coarse `2^r` integer multiplier — `×2` and
+/// `×4` — over-shot the true cbrt by up to ~2.52× and cost the Newton loop
+/// several extra `O(W²)` divides per call; the exact fractional multiplier
+/// keeps the seed within ~`1 + 2⁻⁵²` of `∛n`, which is the whole tightness
+/// win.) `no_std`: classical pure-integer 1-bit seed `2^ceil(bits/3)` (the
+/// root has at most `ceil(bits/3)` bits, so this over-estimates). The
+/// Brent–Zimmermann downward Newton iteration self-corrects to the floor
+/// cube root from any positive over-estimate, so the convergence guarantee
+/// is unchanged — only the iteration *count* improves.
 ///
 /// Hasselgren seed strategy — Crandall & Pomerance 2005 §9.2.1.
 #[inline]
@@ -230,23 +236,27 @@ pub(crate) fn cbrt_seed(n: &[u64], bits: u32, out: &mut [u64]) {
     if bits >= 9 {
         let (top_u64, shift) = extract_top_u64(n, bits);
         let rem3 = shift % 3;
-        let seed_f64 = {
-            let raw = (top_u64 as f64).cbrt();
-            if rem3 == 0 {
-                raw
-            } else {
-                // rem3 == 1: ·2^(1/3) ≈ 1.2599 (round up → 2).
-                // rem3 == 2: ·2^(2/3) ≈ 1.5874 (round up → 2).
-                raw * (1u64 << rem3) as f64
-            }
+        // Exact fractional residue: cbrt(top · 2^shift) =
+        // cbrt(top) · 2^(shift/3); the integral `shift/3` is absorbed into
+        // `half_shift` below, the fractional residue stays here as an
+        // exact f64 multiplier (vs the earlier coarse `1u64 << rem3` ≡
+        // `×2` / `×4`).
+        let factor = match rem3 {
+            1 => 1.259_921_049_894_873_2_f64, // 2^(1/3)
+            2 => 1.587_401_051_968_199_5_f64, // 2^(2/3)
+            _ => 1.0_f64,
         };
+        let seed_f64 = (top_u64 as f64).cbrt() * factor;
         // half_shift = shift / 3 (the fractional third absorbed above).
         let half_shift = shift / 3;
         let truncated = seed_f64 as u128;
         let frac_nonzero = (truncated as f64) != seed_f64;
-        // Add 2 to guarantee a strict over-estimate (truncation + f64 cbrt
-        // rounding); add 1 when already integral.
-        let seed_int: u128 = truncated.saturating_add(if frac_nonzero { 2 } else { 1 });
+        // +1 for any truncated fraction, +1 for a strict over-estimate
+        // (the f64 cbrt + multiply each round-rounded to ≤ 1 ULP, well
+        // within this `+1`). Mirrors the `sqrt_seed` margin.
+        let seed_int: u128 = truncated
+            .saturating_add(if frac_nonzero { 1 } else { 0 })
+            .saturating_add(1);
         place_seed(seed_int, half_shift, out, work);
         return;
     }

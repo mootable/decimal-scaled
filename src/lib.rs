@@ -801,6 +801,40 @@ pub mod __bench_internals {
             mode,
         )
     }
+    /// `cbrt_native_fast_a` candidate: 0.4.4 full-radicand f64 cbrt seed (with
+    /// shipped-seed fallback past the f64 range). The kernel currently routed
+    /// by `policy::cbrt::Native` at every routed cell. Exposed for the wide
+    /// `(N, W, SCALE)` A/B against `cbrt_native_w` and the slice.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_native_fast_a_w<const N: usize, const W: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::cbrt::cbrt_native_fast_d57::cbrt_native_fast_a::<N, W>(
+            raw,
+            const { crate::int::types::Int::<W>::TEN.pow(2 * SCALE) },
+            mode,
+        )
+    }
+    /// `cbrt_native_fast_b` candidate: width-safe top-bits seed with the
+    /// exact `2^(r/3)` residue multiplier and `+1` margin (vs the shipped
+    /// seed's coarse `2^r` + `+2`). Cuts the seed over-shoot from ~2.5x to
+    /// ~1x, so the monotone Newton loop runs fewer divides. Targets the wide
+    /// `bit_length > 1020` cells where `fast_a` falls back to the shipped
+    /// seed (D230_s172, D462_s346, ...). Bit-identical to `cbrt_native`.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn cbrt_native_fast_b_w<const N: usize, const W: usize, const SCALE: u32>(
+        raw: crate::int::types::Int<N>,
+        mode: crate::RoundingMode,
+    ) -> crate::int::types::Int<N> {
+        crate::algos::cbrt::cbrt_native_fast_d57::cbrt_native_fast_b::<N, W>(
+            raw,
+            const { crate::int::types::Int::<W>::TEN.pow(2 * SCALE) },
+            mode,
+        )
+    }
     #[cfg(any(feature = "d57", feature = "wide"))]
     #[inline(never)]
     #[allow(private_bounds)]
