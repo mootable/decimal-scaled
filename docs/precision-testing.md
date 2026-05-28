@@ -14,7 +14,7 @@ The contract is proved at `delta == 0` storage LSB against a
 high-precision [mpmath](https://mpmath.org/) oracle, for **every**
 [`RoundingMode`](../src/support/rounding.rs) — `HalfToEven`,
 `HalfAwayFromZero`, `HalfTowardZero`, `Trunc`, `Floor`, `Ceiling` —
-across **all twelve** decimal widths at their design-target scale.
+across **all twelve** decimal widths over a five-point scale set.
 
 There are four independent layers, each catching a different
 failure mode.
@@ -53,7 +53,7 @@ wrong answer. The next layer addresses that.
 `tests/golden/` and asserts kernel results are the **correctly
 rounded** value — bit-exact (`delta == 0` storage LSB, ZERO
 tolerance) with the [mpmath](https://mpmath.org/) oracle
-(BSD-3-Clause) at every tier's design-target SCALE, under **every**
+(BSD-3-Clause) over each tier's five-point scale set, under **every**
 `RoundingMode`. This is the definitive proof of the headline
 guarantee.
 
@@ -76,9 +76,12 @@ covers all modes, no per-mode tables — and asserts the kernel's
 `floor_raw` / `cls` at `max(700, 2·SCALE + 64)` decimal digits of
 working precision (see "Oracle working precision" below).
 
-Tiers covered: **all twelve** decimal widths at their design-target
-SCALE — D18<9>, D38<19>, D57<28>, D76<35>, D115<57>, D153<76>,
-D230<115>, D307<150>, D462<230>, D616<308>, D924<460>, D1232<615>.
+Tiers covered: **all twelve** decimal widths, each over the five-point
+scale set `{0, S/4, S/2, 3S/4, S-1}` (S = the tier's digit capacity,
+floor division) — scale 0 (integer regime), S-1 (MAX_SCALE, the
+near-overflow / deep-underflow edge), and the three interior quarters.
+E.g. D18 = {0, 4, 9, 13, 17}, D38 = {0, 9, 19, 28, 37}, D76 =
+{0, 19, 38, 57, 75}, D1232 = {0, 308, 616, 924, 1231}.
 Functions: ln, exp, sin, cos, tan, atan, sqrt, cbrt.
 
 ### Known kernel holes (ignored cells)
@@ -118,10 +121,10 @@ output; investigate before committing the new tables.
 
 Regenerate when:
 
-- adding a new tier × scale that isn't covered in `TIERS` in the
-  generator
+- adding a new decimal width to the `TIERS` table (its five-point
+  scale set is derived from the capacity by `scale_set_for`)
+- changing the per-tier scale sampling set (`scale_set_for`)
 - adding a new function to `FUNCS` in the generator
-- adding a new decimal width to the `TIERS` table
 - increasing case counts (commit footprint budget is ≤ 5 MB; current
   generation lands ~1.5 MB across all twelve widths)
 
@@ -233,14 +236,9 @@ tolerance.
 ## What isn't covered yet
 
 The golden suite now covers **all twelve** widths × **every**
-`RoundingMode` at the design-target SCALE. Remaining gaps:
+`RoundingMode` over the five-point scale set `{0, S/4, S/2, 3S/4, S-1}`.
+Remaining gaps:
 
-- **Higher-derivative function families** — `powf`,
-  `log_arbitrary_base`, `hypot`, `atan2`, the hyperbolic family. Not
-  in the golden `FUNCS` set yet; currently covered by the existing
-  wide-tier cross-witness suite.
-- **Multiple scales per width** — each width is proved at one
-  design-target SCALE; non-target scales rely on cross-witness.
 - **Outstanding kernel holes** — the directed-rounding 1-LSB
   boundary cells and the D115<57> `exp` precision cell are tracked as
   `#[ignore]`d tests (see "Known kernel holes" above), not coverage
