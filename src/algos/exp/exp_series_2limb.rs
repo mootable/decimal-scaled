@@ -45,25 +45,65 @@ fn exp_result_int_digits(raw: i128, scale: u32) -> u32 {
         return 1;
     }
     // `int_digits(e^x) = ceil(x · log10 e) + 1`, `x = raw / 10^scale`,
-    // `log10 e ≈ 434295 / 1_000_000`. Computed as
-    // `ceil(raw · 434295 / (10^scale · 1_000_000)) + 1`, all in u128.
+    // `log10 e ≈ 434295 / 1_000_000`. We need
+    // `ceil(raw · 434295 / (10^scale · 1_000_000)) + 1`.
     //
-    // Both `raw · 434295` and `10^scale · 1_000_000` can exceed `u128::MAX`
-    // for the largest in-range `raw` / `scale` (e.g. `raw ≈ 1.7e38`,
-    // `scale = 38`). Saturate the numerator and form the denominator with
-    // checked arithmetic: any cell whose numerator saturates, or whose
-    // denominator overflows `10^scale·10^6`, describes an `e^x` whose
-    // integer-digit count is astronomically past the `FAST_MAX_RESULT_DIGITS`
-    // wall (and whose `i128` storage overflows regardless), so report a
-    // count of `u32::MAX` — "does not fit fast". This is correct in release
-    // (a wrapped product would UNDER-state the count and wrongly keep the
-    // cell fast) and panic-free in debug.
-    let num = (raw as u128).saturating_mul(434_295);
-    let den = match (10u128).checked_pow(scale).and_then(|p| p.checked_mul(1_000_000)) {
-        Some(d) => d,
-        None => return u32::MAX,
+    // Forming `raw · 434295` and `10^scale · 1_000_000` directly both
+    // overflow `u128` for in-range cells (`raw ≈ 1.7e38`, and any
+    // `scale ≥ 33` makes `10^scale·10^6 > u128::MAX`). The old code
+    // returned `u32::MAX` ("does not fit") whenever the DENOMINATOR
+    // overflowed — but that is wrong: a SMALL argument at a HIGH scale
+    // (e.g. `exp(0.1)` at scale 37, `raw = 10^36`) has a tiny result that
+    // fits the fast path, yet `10^37·10^6` overflows and the gate forced
+    // the cell onto the expensive wide `WNarrow` path. That mis-routing is
+    // exactly the D38/cosh/sinh high-scale exp regression.
+    //
+    // The integer-digit count of `e^x` is governed by the MAGNITUDE of
+    // `x = raw / 10^scale`, which never overflows even when `raw·434295`
+    // and `10^scale·10^6` individually do. We want, exactly as before,
+    //   `ceil(raw · 434295 / (10^scale · 10^6)) + 1`.
+    // Compute it overflow-free by first dividing `raw` by `10^scale`
+    // (split into integer part `q` and remainder `r`), then forming the
+    // `·434295/10^6` product on the BOUNDED pieces:
+    //
+    //   raw·434295 / 10^scale = q·434295 + (r·434295)/10^scale
+    //
+    // where `q = ⌊x⌋`. The result int-digit count is past the 22-digit
+    // fast band once `q ≳ 50`, so capping `q` at 60 keeps `q·434295`
+    // inside u128 without ever mis-classifying an in-band cell — and the
+    // remainder term `r·434295 < 10^scale·434295` is divided back down by
+    // `10^scale`, never overflowing because `r < 10^scale ≤ 10^38` and
+    // `434295 < 10^6` give `r·434295 < 10^44`… which DOES overflow for
+    // large scale, so divide `r` toward the reduced scale first: drop the
+    // low digits of `r` that cannot affect the `/10^6` ceil. Keeping the
+    // top 12 significant digits of the fraction (`10^6` precision ×6 guard)
+    // is exact for the comparison; do it by reducing `r`/`10^scale` to
+    // `r6 = r·10^7 / 10^scale` (the fraction ×10^7, ≤ 10^7), all in u128.
+    let one_s = match 10u128.checked_pow(scale) {
+        Some(p) => p,
+        // `scale > 38` cannot occur for an `i128`-storage tier; an
+        // enormous scale means `x < 1`, single integer digit.
+        None => return 1,
     };
-    (num.div_ceil(den).min(u32::MAX as u128 - 1) as u32) + 1
+    let raw_u = raw as u128;
+    let q = raw_u / one_s; // integer part of x = ⌊raw / 10^scale⌋
+    let r = raw_u % one_s; // fractional remainder, r < 10^scale
+    // Past q = 50 the count certainly exceeds the 22-digit band; cap at 60
+    // so q·434295 stays in u128 and never under-states an in-band cell.
+    let q_capped = q.min(60);
+    // Fraction of x scaled by 10^7 (one guard digit beyond the 10^6 in
+    // log10 e): r/10^scale ∈ [0,1) ⇒ r7 = ⌊r·10^7 / 10^scale⌋ ∈ [0, 10^7).
+    // Form it overflow-free: if scale ≤ 7, r·10^(7−scale); else r / 10^(scale−7).
+    let r7 = if scale <= 7 {
+        r * 10u128.pow(7 - scale)
+    } else {
+        r / 10u128.pow(scale - 7)
+    };
+    // x·10^7 ≈ q·10^7 + r7, then ·434295 / 10^6, ceil, +1.
+    // numerator = (q·10^7 + r7)·434295, all bounded (q ≤ 60, r7 < 10^7).
+    let x_e7 = q_capped * 10_000_000 + r7; // x · 10^7 (q capped)
+    let num = x_e7 * 434_295; // / 10^7 / 10^6 = / 10^13 gives x·log10 e
+    (num.div_ceil(10u128.pow(13)).min(u32::MAX as u128 - 1) as u32) + 1
 }
 
 /// Largest `e^x` integer-digit count the fast 256-bit `Fixed` path rounds
@@ -689,6 +729,15 @@ mod fast_path_validity {
             (5 * 10i128.pow(37) / 10, 37, "exp(0.5) D38 s37"),
             (9 * 10i128.pow(9), 9, "exp(9) D18 s9"),
             (15 * 10i128.pow(17), 17, "exp(1.5) D18 s17"),
+            // The high-scale small-|x| cells the corrected digit-gate now
+            // keeps FAST (previously forced WIDE by the denominator-overflow
+            // bug) — the bench-branch-compare `exp_D38_s37`/`cosh`/`sinh`
+            // regression operands (`exp(0.1)`). The speedup column here is the
+            // measured fast-vs-wide gain these cells recover.
+            (10i128.pow(36), 37, "exp(0.1) D38 s37 *bbc*"),
+            (10i128.pow(37), 38, "exp(0.1) D38 s38"),
+            (10i128.pow(35), 36, "exp(0.1) D38 s36"),
+            (15 * 10i128.pow(36) / 10, 37, "exp(1.5) D38 s37"),
         ];
         let mode = RoundingMode::HalfToEven;
         const ITERS: u32 = 200_000;
