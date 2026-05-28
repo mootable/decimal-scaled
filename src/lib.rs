@@ -1338,6 +1338,81 @@ pub mod __bench_internals {
         shim!(d924, crate::int::types::Int<48>, "xx-wide");
         shim!(d1232, crate::int::types::Int<64>, "xx-wide");
     }
+
+    /// `Int<N>` wrapping_neg candidates exposed for the `neg_kernel_ab`
+    /// dispatch-seam A/B microbench (the wide-tier neg recovery).
+    ///
+    /// Three candidates, all bit-identical:
+    /// - `neg_fused_split` — the production routed kernel: limb-0
+    ///   special-cased so the common path (limb 0 != MAX) reduces to
+    ///   independent `!limb` writes for limbs 1..N with no cross-limb
+    ///   dependency chain. Wins 1.40x-1.83x at D462/D616/D924/D1232 vs
+    ///   the previous two-pass form.
+    /// - `neg_two_pass` — the previous routed shape: NOT loop into
+    ///   `out[N]`, then a full-width `add_assign_fixed(out, [1, 0, …,
+    ///   0])` over a second stack array. Retained here for the A/B
+    ///   seam only.
+    /// - `neg_fused_open` — single-pass open-coded NOT fused with a
+    ///   carry-propagating `+1` (dependent carry chain across every
+    ///   limb). Retained for the A/B; loses to `neg_fused_split` at
+    ///   wide widths because the dependent chain blocks vectorisation
+    ///   on the common path.
+    #[inline(never)]
+    pub fn neg_fused_split<const N: usize>(
+        a: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        crate::int::algos::neg::neg_twos_complement::neg_twos_complement::<N>(a)
+    }
+    /// Previous routed shape, retained as the `neg_kernel_ab` reference
+    /// baseline. Bit-identical to `neg_fused_split`.
+    #[inline(never)]
+    pub fn neg_two_pass<const N: usize>(a: crate::int::types::Int<N>) -> crate::int::types::Int<N> {
+        let limbs_in = a.as_limbs();
+        let mut out = [0u64; N];
+        let mut i = 0;
+        while i < N {
+            out[i] = !limbs_in[i];
+            i += 1;
+        }
+        let mut one = [0u64; N];
+        if N > 0 {
+            one[0] = 1;
+        }
+        // Inline `add_assign_fixed` so this baseline does not depend on a
+        // private kernel re-export; bit-identical to the previous
+        // routed shape.
+        let mut carry: u64 = 0;
+        let mut i = 0;
+        while i < N {
+            let (s1, c1) = out[i].overflowing_add(one[i]);
+            let (s2, c2) = s1.overflowing_add(carry);
+            out[i] = s2;
+            carry = (c1 as u64) + (c2 as u64);
+            i += 1;
+        }
+        let _ = carry;
+        crate::int::types::Int::<N>::from_limbs(out)
+    }
+    /// Fused open-coded variant: single-pass NOT + carry-propagating
+    /// `+1`, dependent carry chain across every limb. Retained as a
+    /// `neg_kernel_ab` candidate; bit-identical to `neg_fused_split`.
+    #[inline(never)]
+    pub fn neg_fused_open<const N: usize>(
+        a: crate::int::types::Int<N>,
+    ) -> crate::int::types::Int<N> {
+        let mut out = [0u64; N];
+        let limbs = a.as_limbs();
+        let mut carry: u64 = 1;
+        let mut i = 0;
+        while i < N {
+            let (s, c) = (!limbs[i]).overflowing_add(carry);
+            out[i] = s;
+            carry = c as u64;
+            i += 1;
+        }
+        let _ = carry;
+        crate::int::types::Int::<N>::from_limbs(out)
+    }
 }
 mod macros;
 
