@@ -63,7 +63,7 @@
 //! `pow`/`cube`/const contexts), so it can only choose between **const**
 //! kernels. The u128-packed truncated-low square
 //! [`crate::int::algos::sqr::sqr_low_limb::sqr_low_limb`] is NOT `const fn`
-//! (the [`crate::int::types::compute_int::Limb`] trait methods are not const),
+//! (the [`crate::int::types::compute_limbs::Limb`] trait methods are not const),
 //! so the `LimbSize` (u64 / u128) axis is INELIGIBLE here. That axis — where
 //! the `sqr_full_ab` map shows `u128` overtaking both const arms at `N >= 32`
 //! — is owned by the separate **non-const** policy

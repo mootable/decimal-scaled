@@ -45,7 +45,7 @@ use crate::int::algos::support::limbs::{
 };
 
 /// Scratch capacity — 288 u64 limbs, matching the Newton icbrt budget.
-use crate::int::types::compute_int::MAX_QUADRUPLE_LIMBS;
+use crate::int::types::compute_limbs::MAX_QUADRUPLE_LIMBS;
 
 /// `out = floor(cbrt(n))`. Bit-by-bit integer cube root.
 ///

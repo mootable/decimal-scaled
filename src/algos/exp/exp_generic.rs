@@ -9,7 +9,7 @@
 //! precision needed to round correctly.
 //!
 //! This module lifts the `exp_fixed` body out to a free function generic
-//! over any [`BigInt`] + [`ComputeInt`] integer `S`, so a large-result
+//! over any [`BigInt`] integer `S` (whose scratch carrier impls [`ComputeLimbs`]), so a large-result
 //! cell can run it in a WIDER work integer (the wide tiers' `Wexp`, or the
 //! narrow D18/D38 tier's wider work integer) where the full lift + squaring
 //! peak fit, then narrow correctly-rounded back to storage. The module is
@@ -19,7 +19,7 @@
 
 #![allow(unused)]
 
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::ComputeLimbs;
 use crate::int::types::traits::BigInt;
 use crate::support::rounding::RoundingMode;
 
@@ -92,10 +92,13 @@ use crate::support::rounding::RoundingMode;
     /// `÷ 10^38` stages. Bit-identical to the generic `round_div(n,
     /// 10^w)` (audited in `mg_divide::tests`), but replaces the
     /// per-Taylor-term 256-limb Knuth division that dominated the wide
-    /// hyperbolic/exp cost. The buffer comes from [`ComputeInt`], so no
+    /// hyperbolic/exp cost. The buffer comes from `S`'s scratch carrier ([`ComputeLimbs`]), so no
     /// const-generic limb count appears here.
     #[inline]
-    fn round_div_pow10<S: BigInt + ComputeInt>(n: S, w: u32) -> S {
+    fn round_div_pow10<S: BigInt>(n: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         if w == 0 {
             return n;
         }
@@ -114,7 +117,10 @@ use crate::support::rounding::RoundingMode;
     }
     /// `(a · b) / 10^w`, rounded half-to-even.
     #[inline]
-    fn mul<S: BigInt + ComputeInt>(a: S, b: S, w: u32) -> S {
+    fn mul<S: BigInt>(a: S, b: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         // u128-packed wide multiply: bit-identical to `a * b` (it IS the low
         // product) for even-limb work widths, ~1/4 the partial products;
         // falls back to the base-2^64 schoolbook for odd N. This is the hot
@@ -168,7 +174,10 @@ use crate::support::rounding::RoundingMode;
     /// `ln 2` at working scale `w`, via `2·artanh(1/3)`. Recomputed per
     /// call (the wider path is only taken on the rare large-result
     /// regime, so memoisation is not worth the per-`S` thread-local).
-    fn ln2<S: BigInt + ComputeInt>(w: u32) -> S {
+    fn ln2<S: BigInt>(w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let t = one::<S>(w) / lit::<S>(3);
         let t2 = mul(t, t, w);
         let mut sum = t;
@@ -196,7 +205,10 @@ use crate::support::rounding::RoundingMode;
     /// repeated-squaring Taylor core, reassemble `2^k · exp(s)`), but
     /// stays width-generic so the caller can run it in a wider integer
     /// for the large-result regime.
-    pub(crate) fn exp_fixed<S: BigInt + ComputeInt>(v_w: S, w: u32) -> S {
+    pub(crate) fn exp_fixed<S: BigInt>(v_w: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let one_w_pre = one::<S>(w);
         let l2_pre = ln2::<S>(w);
         let pow10_w_pre = one_w_pre;
@@ -307,7 +319,10 @@ use crate::support::rounding::RoundingMode;
     /// `(e^|x| − e^-|x|)/2`. The dominant `e^|x|` term is evaluated
     /// directly (`exp_fixed`) and the small `e^-|x|` via reciprocal, so
     /// the small term's relative error stays a small *absolute* error.
-    pub(crate) fn sinh_pos<S: BigInt + ComputeInt>(av_w: S, w: u32) -> S {
+    pub(crate) fn sinh_pos<S: BigInt>(av_w: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex - enx) >> 1
@@ -315,7 +330,10 @@ use crate::support::rounding::RoundingMode;
 
     /// `cosh(|x|) = (e^|x| + e^-|x|)/2` at working scale `w`. See
     /// [`sinh_pos`].
-    pub(crate) fn cosh_pos<S: BigInt + ComputeInt>(av_w: S, w: u32) -> S {
+    pub(crate) fn cosh_pos<S: BigInt>(av_w: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         (ex + enx) >> 1
@@ -323,7 +341,10 @@ use crate::support::rounding::RoundingMode;
 
     /// `tanh(|x|) = (e^|x| − e^-|x|)/(e^|x| + e^-|x|)` at working scale
     /// `w`. See [`sinh_pos`].
-    pub(crate) fn tanh_pos<S: BigInt + ComputeInt>(av_w: S, w: u32) -> S {
+    pub(crate) fn tanh_pos<S: BigInt>(av_w: S, w: u32) -> S
+    where
+        S::Scratch: ComputeLimbs,
+    {
         let ex = exp_fixed::<S>(av_w, w);
         let enx = div(one::<S>(w), ex, w);
         div(ex - enx, ex + enx, w)

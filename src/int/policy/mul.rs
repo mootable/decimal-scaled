@@ -16,8 +16,7 @@
 
 use crate::int::algos::mul::mul_karatsuba::mul_karatsuba;
 use crate::int::algos::mul::mul_schoolbook::mul_full_limb;
-use crate::int::types::Int;
-use crate::int::types::compute_int::{ComputeInt, LimbSize};
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs, LimbSize};
 
 // ── 1. the real multiply algorithms — NAMED, no `Default` ─────────────
 
@@ -132,7 +131,7 @@ const fn select() -> Select {
 #[inline]
 pub(crate) fn dispatch<const N: usize>(a: &[u64; N], b: &[u64; N], out: &mut [u64])
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     // Lengths are both N (equal), so the run-time classifier folds to a
     // const verdict per monomorphisation; resolve its limb width too.

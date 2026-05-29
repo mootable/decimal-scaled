@@ -10,7 +10,7 @@
 
 use crate::int::algos::div::div_mg::Mg2By1;
 use crate::int::algos::div::div_rem::div_rem;
-use crate::int::types::compute_int::max_single_limbs;
+use crate::int::types::compute_limbs::max_single_limbs;
 
 /// Knuth Algorithm D — build-max-scratch wrapper. Allocates the normalised
 /// `u`/`v` working buffers at the build-max width and delegates to

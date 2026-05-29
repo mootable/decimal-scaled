@@ -110,7 +110,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
 #[inline]
 pub(crate) fn dispatch<const N: usize, const SCALE: u32>(a: Int<N>, b: Int<N>) -> Int<N>
 where
-    Int<N>: crate::int::types::compute_int::ComputeInt,
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     let algo = match const { select::<N, SCALE>() } {
         Select::ByAlgorithm(a) => a,
@@ -136,7 +136,7 @@ pub(crate) trait RemPolicy: Sized {
 
 impl<const N: usize, const SCALE: u32> RemPolicy for crate::D<Int<N>, SCALE>
 where
-    Int<N>: crate::int::types::compute_int::ComputeInt,
+    crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
 {
     #[inline]
     fn rem_impl(self, rhs: Self) -> Self {

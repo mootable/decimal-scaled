@@ -7,7 +7,7 @@
 //! layer.
 
 use crate::int::algos::support::limbs::is_zero;
-use crate::int::types::compute_int::max_single_limbs;
+use crate::int::types::compute_limbs::max_single_limbs;
 
 /// `limbs /= radix` in place, returning the remainder. `radix` must be a
 /// u64 (so the per-limb divide stays inside `u128 / u64`).

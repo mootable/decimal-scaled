@@ -53,7 +53,7 @@
 
 use crate::int::algos::sum_sq::sum_sq_comba::sum_sq_comba;
 use crate::int::algos::sum_sq::sum_sq_schoolbook::sum_sq_schoolbook;
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
 // -- 1. the real sum-of-squares algorithms -- NAMED, no `Default` ------
@@ -118,7 +118,7 @@ const fn select<const N: usize>() -> Select<N> {
 #[must_use]
 pub(crate) fn dispatch<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let algo = match const { select::<N>() } {
         Select::ByAlgorithm(a) => a,

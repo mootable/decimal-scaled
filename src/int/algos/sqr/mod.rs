@@ -8,7 +8,7 @@
 //!   lives in [`crate::int::policy::sqr`].
 //! - [`sqr_low_fixed`] -- the truncated half-product squaring KERNEL the
 //!   algorithm (and the cube / pow square-and-multiply loops) compute on.
-//! - [`sqr_low_limb`] -- the [`crate::int::types::compute_int::Limb`]-generic
+//! - [`sqr_low_limb`] -- the [`crate::int::types::compute_limbs::Limb`]-generic
 //!   (u64 / u128) sibling of [`sqr_low_fixed`], the truncated-low symmetric
 //!   square the limb-width matcher [`crate::int::policy::sqr_low`] runs.
 //! - [`sqr_schoolbook`] -- naive reference squaring via [`sqr_low_fixed`]:

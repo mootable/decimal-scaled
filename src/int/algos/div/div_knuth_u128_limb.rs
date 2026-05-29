@@ -41,10 +41,10 @@
 //! Bit-identical to [`div_knuth`] (the `#[cfg(test)]` differential below);
 //! NOT WIRED.
 //!
-//! [`LimbSize`]: crate::int::types::compute_int::LimbSize
+//! [`LimbSize`]: crate::int::types::compute_limbs::LimbSize
 
 use crate::int::algos::div::div_mg::Mg3By2;
-use crate::int::types::compute_int::{Limb, MAX_SINGLE_LIMBS};
+use crate::int::types::compute_limbs::{Limb, MAX_SINGLE_LIMBS};
 
 /// u128-limb working scratch: half the u64 `MAX_SINGLE_LIMBS`, +2 slack
 /// (the one-above window limb plus an even-rounding limb).

@@ -80,7 +80,7 @@ use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::support::limbs::{add_assign, bit_len, cmp, shl, shr, sub_assign};
 use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
-use crate::int::types::compute_int::MAX_DOUBLE_LIMBS;
+use crate::int::types::compute_limbs::MAX_DOUBLE_LIMBS;
 
 /// Scratch capacity — the double-N budget shared with the shipped Newton
 /// `isqrt` (radicand ≤ 2N). The normalized window `w = next_pow2(sig) ≤

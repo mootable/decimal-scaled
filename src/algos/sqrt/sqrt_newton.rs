@@ -26,7 +26,7 @@
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::algos::isqrt::isqrt_newton::isqrt_newton;
 use crate::int::algos::support::limbs::{cmp_cross, is_zero, sub_assign};
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -50,19 +50,19 @@ fn sig_len(a: &[u64]) -> usize {
 #[must_use]
 pub(crate) fn sqrt_newton<const N: usize>(raw: Int<N>, scale: u32, mode: RoundingMode) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     if raw <= Int::<N>::ZERO {
         return Int::<N>::ZERO;
     }
 
     // ── radicand n = |raw| · 10^scale, in limb scratch ──────────────────
-    let mut n_buf = Int::<N>::double_buffered_u64();
+    let mut n_buf = Limbs::<N>::double_buffered_u64();
     let n = n_buf.as_mut();
     n[..N].copy_from_slice(raw.unsigned_abs().as_limbs());
     let mut nl = sig_len(&n[..N]);
     {
-        let mut tmp_buf = Int::<N>::double_buffered_u64();
+        let mut tmp_buf = Limbs::<N>::double_buffered_u64();
         let tmp = tmp_buf.as_mut();
         for _ in 0..scale {
             let out = nl + 1;
@@ -76,17 +76,17 @@ where
     }
 
     // ── q = floor(sqrt(n)) via the int slice kernel ─────────────────────
-    let mut q_buf = Int::<N>::double_buffered_u64();
+    let mut q_buf = Limbs::<N>::double_buffered_u64();
     let q = q_buf.as_mut();
     isqrt_newton(&n[..nl], &mut q[..nl]);
     let ql = sig_len(&q[..nl]);
 
     // ── diff = n - q²  (q² ≤ n, so diff fits in nl limbs) ───────────────
-    let mut qsq_buf = Int::<N>::double_buffered_u64();
+    let mut qsq_buf = Limbs::<N>::double_buffered_u64();
     let qsq = qsq_buf.as_mut();
     let qsq_cap = qsq.len();
     mul_schoolbook(&q[..ql], &q[..ql], &mut qsq[..(2 * ql).min(qsq_cap)]);
-    let mut diff_buf = Int::<N>::double_buffered_u64();
+    let mut diff_buf = Limbs::<N>::double_buffered_u64();
     let diff = diff_buf.as_mut();
     diff[..nl].copy_from_slice(&n[..nl]);
     sub_assign(&mut diff[..nl], &qsq[..nl]);

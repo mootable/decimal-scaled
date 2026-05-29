@@ -26,12 +26,12 @@
 //! [`WidenScale`](Algorithm::WidenScale) kernel forms the scaled numerator
 //! directly in a `ComputeInt` limb buffer and divides via the int layer's
 //! width-agnostic `div_rem`. So `dispatch` carries no work-width parameter;
-//! it adds only `where Int<N>: ComputeInt` for the scratch buffer.
+//! it adds only `where Limbs<N>: ComputeLimbs` for the scratch buffer.
 //!
 //! The `10^SCALE` multiplier is evaluated here via `Int::<N>::TEN.pow(SCALE)`
 //! (folds at compile time per `(N, SCALE)`) and threaded into the kernel.
 
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -114,7 +114,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     // 10^SCALE in Int<N> storage, forced to fold at compile time per
     // (N, SCALE) via the `const` block — a bare `TEN.pow(SCALE)` call runs

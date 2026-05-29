@@ -35,7 +35,7 @@
 
 use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 use crate::int::types::traits::BigInt;
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -117,7 +117,7 @@ fn narrow_mag_to_int<const N: usize>(mag: &[u128], neg: bool, msg: &str) -> Int<
 }
 
 /// Widen-then-divide decimal multiplication kernel, generic over the
-/// storage limb count `N`. Requires `Int<N>: ComputeInt` for the `2N`-limb
+/// storage limb count `N`. Requires `Limbs<N>: ComputeLimbs` for the `2N`-limb
 /// product scratch.
 ///
 /// A fast path skips the wide product when `a * b` provably fits `Int<N>`
@@ -132,7 +132,7 @@ pub(crate) fn mul_widen_divide<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let neg = a.is_negative() != b.is_negative();
     let lz_a = a.unsigned_abs().leading_zeros();
@@ -159,7 +159,7 @@ where
     let al = sig_len(&a_mag);
     let bl = sig_len(&b_mag);
 
-    let mut prod_buf = Int::<N>::double_buffered_u64();
+    let mut prod_buf = Limbs::<N>::double_buffered_u64();
     let prod = prod_buf.as_mut();
     let plen = (al + bl).min(prod.len());
     for slot in prod[..plen].iter_mut() {

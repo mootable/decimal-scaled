@@ -26,7 +26,7 @@
 //! kernel does that arithmetic directly in a `ComputeInt` limb buffer and
 //! divides via the shared MG / Newton magnitude-slice cores. So `dispatch`
 //! carries no work-width parameter and the policy stays a pure `(N, SCALE)`
-//! matcher; it adds only `where Int<N>: ComputeInt` for the scratch buffer.
+//! matcher; it adds only `where Limbs<N>: ComputeLimbs` for the scratch buffer.
 //!
 //! # Why there is only one selected algorithm
 //!
@@ -35,7 +35,7 @@
 //! of the single `mul_widen_divide` algorithm. `Schoolbook` is an unrouted
 //! benchmarkable reference seam (no MG / Newton, plain int `div_rem`).
 
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
@@ -116,7 +116,7 @@ pub(crate) fn dispatch<const N: usize, const SCALE: u32>(
     mode: RoundingMode,
 ) -> Int<N>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let algo = match const { select::<N, SCALE>() } {
         Select::ByAlgorithm(a) => a,

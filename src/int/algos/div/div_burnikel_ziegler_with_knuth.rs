@@ -9,7 +9,7 @@
 //! this engine is chosen lives in [`crate::int::policy::div_rem`].
 
 use crate::int::algos::div::div_knuth::div_knuth;
-use crate::int::types::compute_int::max_quadruple_limbs;
+use crate::int::types::compute_limbs::max_quadruple_limbs;
 
 /// Burnikel–Ziegler outer chunking, u64 base, recursing to [`div_knuth`]
 /// as the base case.

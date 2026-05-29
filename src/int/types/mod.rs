@@ -16,7 +16,7 @@
 //! per monomorphisation — no runtime dispatch.
 
 pub(crate) mod traits;
-pub(crate) mod compute_int;
+pub(crate) mod compute_limbs;
 
 pub use traits::BigInt;
 
@@ -1642,7 +1642,7 @@ impl<const N: usize> Int<N> {
         mode: crate::support::rounding::RoundingMode,
     ) -> Option<Self>
     where
-        Self: crate::int::types::compute_int::ComputeInt,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         hypot_dispatch::<N>(self, other, mode)
     }
@@ -1661,7 +1661,7 @@ impl<const N: usize> Int<N> {
     #[must_use]
     pub(crate) fn sum_sq(self, other: Self) -> Option<Self>
     where
-        Self: crate::int::types::compute_int::ComputeInt,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         sum_sq_dispatch::<N>(self, other)
     }
@@ -1988,10 +1988,11 @@ impl<const N: usize> Int<N> {
     #[inline]
     pub(crate) fn widen_mul<W>(self, rhs: Self) -> W
     where
-        W: crate::int::types::traits::BigInt + crate::int::types::compute_int::ComputeInt,
-        Int<N>: crate::int::types::compute_int::ComputeInt,
+        W: crate::int::types::traits::BigInt,
+        W::Scratch: crate::int::types::compute_limbs::ComputeLimbs,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
-        use crate::int::types::compute_int::ComputeInt;
+        use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
         let negative = self.is_negative() ^ rhs.is_negative();
         let a = *self.unsigned_abs().as_limbs();
         let b = *rhs.unsigned_abs().as_limbs();
@@ -2002,14 +2003,14 @@ impl<const N: usize> Int<N> {
         // through. The dispatcher base-cases to schoolbook below
         // `KARATSUBA_THRESHOLD_U64` (every shipped tier) and engages the
         // non-allocating Karatsuba kernel at or above it.
-        let mut prod_buf = <Int<N> as ComputeInt>::double_buffered_u64();
+        let mut prod_buf = <Limbs<N> as ComputeLimbs>::double_buffered_u64();
         let prod = prod_buf.as_mut();
         mul_fast::<N>(&a, &b, &mut prod[..2 * N]);
         // Pack the `2·N`-u64 product into `N` u128 limbs for the kept
         // `BigInt::from_mag_sign_u128` bridge. The result `W` holds the
-        // product, so its `ComputeInt::single_u128()` buffer (`≥ N`) sizes
-        // the packed magnitude exactly.
-        let mut u128_buf = <W as ComputeInt>::single_u128();
+        // product, so its scratch carrier's `single_u128()` buffer (`≥ N`)
+        // sizes the packed magnitude exactly.
+        let mut u128_buf = <W::Scratch as ComputeLimbs>::single_u128();
         let u128_prod = u128_buf.as_mut();
         let mut i = 0;
         while i < N {
@@ -4086,21 +4087,22 @@ mod tests {
 mod unified_mg_feasibility {
     use super::Int;
     use crate::algos::support::mg_divide::div_wide_pow10;
-    use crate::int::types::compute_int::ComputeInt;
+    use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
     use crate::int::types::traits::BigInt;
     use crate::support::rounding::RoundingMode;
 
     /// `(a · b) / 10^scale` through the unified pipeline, computed as
     /// `Int<N>::widen_mul::<Int<M>>` (full product into the wider type)
     /// then `div_wide_pow10::<Int<M>>`. The wider type's u128 magnitude
-    /// width is read from its [`ComputeInt`] buffer (`single_u128`) inside
-    /// the divide — `ComputeInt` IS the mechanism for the wider work
-    /// intermediate, so no work-width const parameter is named. Returns the
-    /// scaled wider-width quotient.
+    /// width is read from its scratch carrier's [`ComputeLimbs`] buffer
+    /// (`single_u128`) inside the divide — the `Limbs<N>` carrier IS the
+    /// mechanism for the wider work intermediate, so no work-width const
+    /// parameter is named. Returns the scaled wider-width quotient.
     fn scaled<const N: usize, const M: usize>(a: Int<N>, b: Int<N>, scale: u32) -> Int<M>
     where
-        Int<N>: ComputeInt,
-        Int<M>: BigInt + ComputeInt,
+        Limbs<N>: ComputeLimbs,
+        Int<M>: BigInt,
+        Limbs<M>: ComputeLimbs,
     {
         let prod: Int<M> = a.widen_mul::<Int<M>>(b);
         div_wide_pow10::<Int<M>>(prod, scale, RoundingMode::HalfToEven)

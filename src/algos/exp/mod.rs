@@ -14,7 +14,8 @@
 //!   Registered as the unrouted `Algorithm::Schoolbook` variant.
 
 /// Width-generic guard-digit `exp` core, generic over the work integer
-/// `S: BigInt + ComputeInt`. Always compiled (the narrow D18/D38 build
+/// `S: BigInt` (whose scratch carrier `S::Scratch` impls `ComputeLimbs`).
+/// Always compiled (the narrow D18/D38 build
 /// reaches it for the integer-regime large-result / sub-resolution cells
 /// whose 256-bit `Fixed` intermediate cannot host the integer-digit lift),
 /// and reused by the wide tiers' `Wexp` large-result path.

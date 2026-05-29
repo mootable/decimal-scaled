@@ -23,10 +23,10 @@
 //!
 //! [`BigInt::wrapping_sqr_low_u128`]: crate::int::types::traits::BigInt::wrapping_sqr_low_u128
 //! [`sqr_low_limb`]: crate::int::algos::sqr::sqr_low_limb::sqr_low_limb
-//! [`LimbSize`]: crate::int::types::compute_int::LimbSize
+//! [`LimbSize`]: crate::int::types::compute_limbs::LimbSize
 
 use crate::int::algos::sqr::sqr_low_limb::sqr_low_limb;
-use crate::int::types::compute_int::LimbSize;
+use crate::int::types::compute_limbs::LimbSize;
 
 // ── 1. the algorithm — singleton: truncated-low symmetric square ───────
 

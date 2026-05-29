@@ -1,20 +1,31 @@
 // SPDX-FileCopyrightText: 2026 John Moxley
 // SPDX-License-Identifier: MIT OR Apache-2.0
 
-//! `ComputeInt` — the storage integer's compute-scratch capability.
+//! `ComputeLimbs` — the compute-scratch capability, carried by [`Limbs<N>`].
 //!
 //! [`crate::int::types::traits::BigInt`] is the cheap, in-place integer
-//! surface (add/sub/mul/sqr/cube/pow/cmp/convert/bit). `ComputeInt: BigInt`
-//! is the *compute* tier on top of it: the operations whose working width
-//! exceeds the value's own `N` limbs and so need a wider scratch buffer.
+//! surface (add/sub/mul/sqr/cube/pow/cmp/convert/bit) on the VALUE integer
+//! [`Int<N>`](crate::int::types::Int). `ComputeLimbs` is the *compute-scratch*
+//! tier: the buffers for
+//! operations whose working width exceeds the value's own `N` limbs.
+//!
+//! It is **NOT** a capability of the value integer — it is carried by a
+//! separate zero-sized sizing marker [`Limbs<N>`] (the LIMB CARRIER, never
+//! instantiated). The value integer names its carrier through the
+//! [`BigInt::Scratch`](crate::int::types::traits::BigInt::Scratch)
+//! associated type (`Int<N>::Scratch = Limbs<N>`). This severs the old
+//! `ComputeInt: BigInt` supertrait cycle: `ComputeLimbs` no longer requires
+//! `BigInt`, and `BigInt` merely *names* its scratch carrier — so a helper
+//! generic over a value integer `W: BigInt` reaches scratch as
+//! `W::Scratch::single_u128()` without `W` itself carrying a scratch bound.
 //!
 //! Stable Rust cannot name `[u64; 2N]` from a generic `N`, so each buffer is
 //! an **associated type** whose size lives in the `impl` (where `N` is
 //! concrete) and never appears in a kernel signature. A kernel bounds on
-//! `Int<N>: ComputeInt` and reads the buffer it needs as `&mut [u64]`; the
-//! bound discharges for free at the concrete `N` every type method
+//! `Limbs<N>: ComputeLimbs` and reads the buffer it needs as `&mut [u64]`;
+//! the bound discharges for free at the concrete `N` every type method
 //! dispatches at, so it does not cascade. The whole decimal layer reaches it
-//! through its storage (`D<Int<N>, SCALE>` requires `Int<N>: ComputeInt`).
+//! through its storage (`D<Int<N>, SCALE>` requires `Limbs<N>: ComputeLimbs`).
 //!
 //! # The buffer family — value-width × element × plain/buffered
 //!
@@ -45,7 +56,7 @@
 //! | `quad_buffered`    | `[u64; 4N+⌈N/2⌉]`  | `[u128; ⌈(4N+⌈N/2⌉)/2⌉]`   |
 //!
 //! Three build forms, identical sizes numerically — only *who pays for the
-//! slack* differs:
+//! slack* differs (each impls `ComputeLimbs for Limbs<N>`):
 //! - **default** — one blanket impl, build-max for every `N`.
 //! - **`exact-scratch`** (stable) — one impl per concrete width, each a
 //!   size literal.
@@ -62,27 +73,47 @@
 #![allow(clippy::manual_div_ceil)]
 
 use crate::int::algos::support::limbs::{max_n_limbs, MAX_WORK_N};
-use crate::int::types::traits::BigInt;
-use crate::int::types::Int;
+
+/// The **limb carrier** — a zero-sized sizing marker, parameterised by the
+/// same `N`-u64-limb width as [`Int<N>`](crate::int::types::Int), that carries the [`ComputeLimbs`]
+/// compute-scratch buffers. Never instantiated: it exists only so its
+/// per-`N` associated buffer types (sized in the `ComputeLimbs` impl, where
+/// `N` is concrete) can be named at a call site as `Limbs::<N>::single_u64()`
+/// without the size appearing in any signature. The value integer
+/// [`Int<N>`](crate::int::types::Int) names its carrier through
+/// [`BigInt::Scratch`](crate::int::types::traits::BigInt::Scratch)
+/// (`= Limbs<N>`), keeping scratch OFF the one storage type while staying
+/// exact-per-`N`.
+///
+/// Declared `pub` (not `pub(crate)`) ONLY because it is named in the
+/// `pub` [`BigInt::Scratch`](crate::int::types::traits::BigInt::Scratch)
+/// associated type, and an associated-type assignment on a `pub` trait may
+/// not leak a more-private type (E0446). It is NOT crate-public API: it
+/// lives in the private `int` module (`mod int;`), exactly like the `pub
+/// struct Int<N>` / `pub struct Uint<N>` value types beside it, so it is
+/// unreachable from outside the crate.
+pub struct Limbs<const N: usize>;
 
 // ── Build-max blanket sizes — the all-`N` counterparts of the per-`N`
-// `ComputeInt` buffers ────────────────────────────────────────────────────
+// `ComputeLimbs` buffers ──────────────────────────────────────────────────
 //
 // The COLD paths that structurally cannot size scratch exactly — the bare
 // `Int<N>` `/` / `%` operators and all-`N` `BigInt` methods (blanket over
-// every `N`, so they can neither name `[u64; N + 2]` on stable nor carry a
-// per-width `ComputeInt` bound — see the wall note on [`ComputeInt`]), plus
-// the schoolbook reference baselines — use these build-max blankets. Each is
-// the widest value of the matching [`ComputeInt`] buffer over every `N` a
-// build can form, feature-gated through
+// every `N`; while the `BigInt::Scratch` bridge now lets a blanket `BigInt`
+// method reach `Self::Scratch::*` when `Self::Scratch: ComputeLimbs` is in
+// scope, the genuinely-`N`-less schoolbook reference baselines and the
+// width-erased slice engines still cannot prove that bound for an arbitrary
+// `N`), plus the schoolbook reference baselines — use these build-max
+// blankets. Each is the widest value of the matching [`ComputeLimbs`] buffer
+// over every `N` a build can form, feature-gated through
 // [`MAX_WORK_N`](crate::int::algos::support::limbs) so a narrow build does
 // NOT pay the widest tier's size. The `single`/`u128` blankets cover the
 // wide-transcendental work widths (`Int<256>` = `4·MAX_WORK_N`); the
 // `double`/`quad` radicand blankets are storage-scoped (`max_n_limbs`).
 //
 // **Hot paths never touch these.** A concrete-`N` caller carrying
-// `Int<N>: ComputeInt` sources the exact per-width family methods
-// ([`single_buffered_u64`](ComputeInt::single_buffered_u64), …) instead.
+// `Limbs<N>: ComputeLimbs` sources the exact per-width family methods
+// ([`single_buffered_u64`](ComputeLimbs::single_buffered_u64), …) instead.
 // These blankets are the fallback the exact-scratch migration is
 // progressively starving; the aim is to retire them once every reaching path
 // is exact.
@@ -186,7 +217,7 @@ impl LimbSize {
 /// The scalar limb type a width-generic kernel computes in — `u64`, or the
 /// packed `u128` (two storage u64 limbs per limb). Carries the primitives a
 /// slice kernel needs, the pack/unpack to/from the `Int<N>` u64 storage, and
-/// the width-generic scratch fetch (the [`ComputeInt`] buffer family, by
+/// the width-generic scratch fetch (the [`ComputeLimbs`] buffer family, by
 /// element). Implemented for exactly `u64` and `u128`.
 pub(crate) trait Limb: Copy + PartialEq {
     /// Additive identity (the array-repeat seed for scratch buffers).
@@ -213,33 +244,33 @@ pub(crate) trait Limb: Copy + PartialEq {
     fn add_carries(self, c1: bool, c2: bool) -> Self;
 
     // Width-generic scratch fetch. Each forwards to the matching
-    // [`ComputeInt`] per-element buffer for this limb type, so a
+    // [`ComputeLimbs`] per-element buffer for this limb type, so a
     // `<L: Limb>` kernel sources its own exactly-sized scratch as
-    // `L::double_buffered::<Int<N>>()` regardless of `L`.
+    // `L::double_buffered::<Limbs<N>>()` regardless of `L`.
     /// `single` (`N`-value-width) buffer in this limb type.
-    type Single<I: ComputeInt>: AsMut<[Self]> + AsRef<[Self]>;
+    type Single<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// `single_buffered` (`N`-value + headroom) buffer in this limb type.
-    type SingleBuffered<I: ComputeInt>: AsMut<[Self]> + AsRef<[Self]>;
+    type SingleBuffered<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// `double` (`2N`-value-width) buffer in this limb type.
-    type Double<I: ComputeInt>: AsMut<[Self]> + AsRef<[Self]>;
+    type Double<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// `double_buffered` (`2N`-value + radicand slack) buffer.
-    type DoubleBuffered<I: ComputeInt>: AsMut<[Self]> + AsRef<[Self]>;
+    type DoubleBuffered<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// `quad` (`4N`-value-width) buffer in this limb type.
-    type Quad<I: ComputeInt>: AsMut<[Self]> + AsRef<[Self]>;
+    type Quad<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// `quad_buffered` (`4N`-value + radicand slack) buffer.
-    type QuadBuffered<I: ComputeInt>: AsMut<[Self]> + AsRef<[Self]>;
+    type QuadBuffered<I: ComputeLimbs>: AsMut<[Self]> + AsRef<[Self]>;
     /// Fetch a freshly zeroed `single` buffer in this limb type.
-    fn single<I: ComputeInt>() -> Self::Single<I>;
+    fn single<I: ComputeLimbs>() -> Self::Single<I>;
     /// Fetch a freshly zeroed `single_buffered` buffer in this limb type.
-    fn single_buffered<I: ComputeInt>() -> Self::SingleBuffered<I>;
+    fn single_buffered<I: ComputeLimbs>() -> Self::SingleBuffered<I>;
     /// Fetch a freshly zeroed `double` buffer in this limb type.
-    fn double<I: ComputeInt>() -> Self::Double<I>;
+    fn double<I: ComputeLimbs>() -> Self::Double<I>;
     /// Fetch a freshly zeroed `double_buffered` buffer in this limb type.
-    fn double_buffered<I: ComputeInt>() -> Self::DoubleBuffered<I>;
+    fn double_buffered<I: ComputeLimbs>() -> Self::DoubleBuffered<I>;
     /// Fetch a freshly zeroed `quad` buffer in this limb type.
-    fn quad<I: ComputeInt>() -> Self::Quad<I>;
+    fn quad<I: ComputeLimbs>() -> Self::Quad<I>;
     /// Fetch a freshly zeroed `quad_buffered` buffer in this limb type.
-    fn quad_buffered<I: ComputeInt>() -> Self::QuadBuffered<I>;
+    fn quad_buffered<I: ComputeLimbs>() -> Self::QuadBuffered<I>;
 }
 
 impl Limb for u64 {
@@ -273,34 +304,34 @@ impl Limb for u64 {
         self.wrapping_add(c1 as u64).wrapping_add(c2 as u64)
     }
 
-    type Single<I: ComputeInt> = I::SingleU64;
-    type SingleBuffered<I: ComputeInt> = I::SingleBufferedU64;
-    type Double<I: ComputeInt> = I::DoubleU64;
-    type DoubleBuffered<I: ComputeInt> = I::DoubleBufferedU64;
-    type Quad<I: ComputeInt> = I::QuadU64;
-    type QuadBuffered<I: ComputeInt> = I::QuadBufferedU64;
+    type Single<I: ComputeLimbs> = I::SingleU64;
+    type SingleBuffered<I: ComputeLimbs> = I::SingleBufferedU64;
+    type Double<I: ComputeLimbs> = I::DoubleU64;
+    type DoubleBuffered<I: ComputeLimbs> = I::DoubleBufferedU64;
+    type Quad<I: ComputeLimbs> = I::QuadU64;
+    type QuadBuffered<I: ComputeLimbs> = I::QuadBufferedU64;
     #[inline]
-    fn single<I: ComputeInt>() -> Self::Single<I> {
+    fn single<I: ComputeLimbs>() -> Self::Single<I> {
         I::single_u64()
     }
     #[inline]
-    fn single_buffered<I: ComputeInt>() -> Self::SingleBuffered<I> {
+    fn single_buffered<I: ComputeLimbs>() -> Self::SingleBuffered<I> {
         I::single_buffered_u64()
     }
     #[inline]
-    fn double<I: ComputeInt>() -> Self::Double<I> {
+    fn double<I: ComputeLimbs>() -> Self::Double<I> {
         I::double_u64()
     }
     #[inline]
-    fn double_buffered<I: ComputeInt>() -> Self::DoubleBuffered<I> {
+    fn double_buffered<I: ComputeLimbs>() -> Self::DoubleBuffered<I> {
         I::double_buffered_u64()
     }
     #[inline]
-    fn quad<I: ComputeInt>() -> Self::Quad<I> {
+    fn quad<I: ComputeLimbs>() -> Self::Quad<I> {
         I::quad_u64()
     }
     #[inline]
-    fn quad_buffered<I: ComputeInt>() -> Self::QuadBuffered<I> {
+    fn quad_buffered<I: ComputeLimbs>() -> Self::QuadBuffered<I> {
         I::quad_buffered_u64()
     }
 }
@@ -351,50 +382,57 @@ impl Limb for u128 {
         self.wrapping_add(c1 as u128).wrapping_add(c2 as u128)
     }
 
-    type Single<I: ComputeInt> = I::SingleU128;
-    type SingleBuffered<I: ComputeInt> = I::SingleBufferedU128;
-    type Double<I: ComputeInt> = I::DoubleU128;
-    type DoubleBuffered<I: ComputeInt> = I::DoubleBufferedU128;
-    type Quad<I: ComputeInt> = I::QuadU128;
-    type QuadBuffered<I: ComputeInt> = I::QuadBufferedU128;
+    type Single<I: ComputeLimbs> = I::SingleU128;
+    type SingleBuffered<I: ComputeLimbs> = I::SingleBufferedU128;
+    type Double<I: ComputeLimbs> = I::DoubleU128;
+    type DoubleBuffered<I: ComputeLimbs> = I::DoubleBufferedU128;
+    type Quad<I: ComputeLimbs> = I::QuadU128;
+    type QuadBuffered<I: ComputeLimbs> = I::QuadBufferedU128;
     #[inline]
-    fn single<I: ComputeInt>() -> Self::Single<I> {
+    fn single<I: ComputeLimbs>() -> Self::Single<I> {
         I::single_u128()
     }
     #[inline]
-    fn single_buffered<I: ComputeInt>() -> Self::SingleBuffered<I> {
+    fn single_buffered<I: ComputeLimbs>() -> Self::SingleBuffered<I> {
         I::single_buffered_u128()
     }
     #[inline]
-    fn double<I: ComputeInt>() -> Self::Double<I> {
+    fn double<I: ComputeLimbs>() -> Self::Double<I> {
         I::double_u128()
     }
     #[inline]
-    fn double_buffered<I: ComputeInt>() -> Self::DoubleBuffered<I> {
+    fn double_buffered<I: ComputeLimbs>() -> Self::DoubleBuffered<I> {
         I::double_buffered_u128()
     }
     #[inline]
-    fn quad<I: ComputeInt>() -> Self::Quad<I> {
+    fn quad<I: ComputeLimbs>() -> Self::Quad<I> {
         I::quad_u128()
     }
     #[inline]
-    fn quad_buffered<I: ComputeInt>() -> Self::QuadBuffered<I> {
+    fn quad_buffered<I: ComputeLimbs>() -> Self::QuadBuffered<I> {
         I::quad_buffered_u128()
     }
 }
 
-/// The storage integer's compute-scratch capability: clean limb-multiple
-/// stack buffers for the operations that work wider than `N` limbs, on the
-/// `single`/`double`/`quad` × `u64`/`u128` × plain/`buffered` family (see the
-/// module docs for the size table). The element-suffixed methods are the
-/// direct accessors; [`Limb`] forwards to them so a width-generic kernel can
-/// fetch its own-typed buffer as `L::double_buffered::<Int<N>>()`.
+/// The compute-scratch capability, carried by [`Limbs<N>`]: clean
+/// limb-multiple stack buffers for the operations that work wider than `N`
+/// limbs, on the `single`/`double`/`quad` × `u64`/`u128` × plain/`buffered`
+/// family (see the module docs for the size table). The element-suffixed
+/// methods are the direct accessors; [`Limb`] forwards to them so a
+/// width-generic kernel can fetch its own-typed buffer as
+/// `L::double_buffered::<Limbs<N>>()`.
+///
+/// This trait has **no supertrait** — it is a pure sizing capability on the
+/// `Limbs<N>` carrier, deliberately *not* `: BigInt`. The old
+/// `ComputeInt: BigInt` supertrait made scratch a capability of the value
+/// integer and forced a cycle; the value integer now names its carrier via
+/// [`BigInt::Scratch`](crate::int::types::traits::BigInt::Scratch) instead.
 ///
 /// **Add more limb buffers if an algorithm needs them** — there is nothing
 /// special about 1×/2×/4×; add a size axis the same way (a literal in each of
 /// the three build-form impls below, an associated type per element, and the
 /// [`Limb`] forwarder).
-pub(crate) trait ComputeInt: BigInt {
+pub(crate) trait ComputeLimbs {
     /// `[u64; N]` — plain value width.
     type SingleU64: AsMut<[u64]> + AsRef<[u64]>;
     /// `[u128; ⌈N/2⌉]` — plain value width (the MG `÷10^w` magnitude).
@@ -450,7 +488,7 @@ pub(crate) trait ComputeInt: BigInt {
 #[cfg(not(feature = "exact-scratch"))]
 mod imp {
     use super::{
-        ComputeInt, Int, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128, MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128,
+        ComputeLimbs, Limbs, MAX_DOUBLE_LIMBS, MAX_DOUBLE_U128, MAX_QUADRUPLE_LIMBS, MAX_QUAD_U128,
         MAX_SINGLE_BUF_U128, MAX_SINGLE_LIMBS, MAX_SINGLE_U128, MAX_SINGLE_U64,
     };
 
@@ -460,7 +498,7 @@ mod imp {
     // `double`/`quad` u64 reuse the buffered blanket (the cold blanket can
     // over-allocate the `⌈N/2⌉` slack harmlessly). The exact-scratch form
     // sizes per width instead.
-    impl<const N: usize> ComputeInt for Int<N> {
+    impl<const N: usize> ComputeLimbs for Limbs<N> {
         type SingleU64 = [u64; MAX_SINGLE_U64];
         type SingleU128 = [u128; MAX_SINGLE_U128];
         type SingleBufferedU64 = [u64; MAX_SINGLE_LIMBS];
@@ -527,9 +565,9 @@ mod imp {
 // ── exact-scratch (stable): one impl per concrete width ───────────────
 #[cfg(all(feature = "exact-scratch", not(feature = "exact-scratch-nightly")))]
 mod imp {
-    use super::{ComputeInt, Int};
+    use super::{ComputeLimbs, Limbs};
 
-    /// `impl ComputeInt for Int<$n>` per concrete width — every buffer a
+    /// `impl ComputeLimbs for Limbs<$n>` per concrete width — every buffer a
     /// size literal. `single` = `n` (value width), `single_buffered` = `n+2`
     /// (a value divide's `u`/`v`); `double`/`quad` = `mult·n` plain,
     /// `mult·n + ⌈n/2⌉` buffered radicands; each u128 buffer is `⌈u64/2⌉` of
@@ -537,7 +575,7 @@ mod imp {
     /// work widths (96..256, where the value-width divide and `÷10^w` run).
     macro_rules! exact_compute {
         ($($n:literal),+ $(,)?) => { $(
-            impl ComputeInt for Int<$n> {
+            impl ComputeLimbs for Limbs<$n> {
                 type SingleU64 = [u64; $n];
                 type SingleU128 = [u128; ($n + 1) / 2];
                 type SingleBufferedU64 = [u64; $n + 2];
@@ -615,10 +653,10 @@ mod imp {
 // ── exact-scratch-nightly: one blanket impl, exact per-N via const-expr ─
 #[cfg(feature = "exact-scratch-nightly")]
 mod imp {
-    use super::{ComputeInt, Int};
+    use super::{ComputeLimbs, Limbs};
     use crate::int::algos::support::limbs::n_limbs;
 
-    impl<const N: usize> ComputeInt for Int<N>
+    impl<const N: usize> ComputeLimbs for Limbs<N>
     where
         [(); N]:,
         [(); (N + 1) / 2]:,

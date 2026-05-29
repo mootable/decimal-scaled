@@ -24,7 +24,7 @@
 
 use crate::int::algos::sum_sq::sum_sq_schoolbook::sig_len;
 use crate::int::algos::support::limbs::add_assign;
-use crate::int::types::compute_int::ComputeInt;
+use crate::int::types::compute_limbs::{ComputeLimbs, Limbs};
 use crate::int::types::Int;
 
 /// Full-width product-scanning (comba) square: `out = x²` over the
@@ -78,13 +78,13 @@ fn sqr_full(x: &[u64], l: usize, out: &mut [u64]) {
 #[inline]
 pub(crate) fn sum_sq_radicand_comba<const N: usize>(ma: &[u64], mb: &[u64], out: &mut [u64]) -> usize
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let la = sig_len(ma);
     let lb = sig_len(mb);
     // a² into `out` (zeroed by the caller); b² into its own scratch.
     sqr_full(ma, la, &mut out[..2 * la]);
-    let mut bsq_buf = Int::<N>::double_buffered_u64();
+    let mut bsq_buf = Limbs::<N>::double_buffered_u64();
     let bsq = bsq_buf.as_mut();
     sqr_full(mb, lb, &mut bsq[..2 * lb]);
     let span = (2 * la).max(2 * lb) + 1;
@@ -98,11 +98,11 @@ where
 #[must_use]
 pub(crate) fn sum_sq_comba<const N: usize>(a: Int<N>, b: Int<N>) -> Option<Int<N>>
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let ma = a.unsigned_abs();
     let mb = b.unsigned_abs();
-    let mut n_buf = Int::<N>::double_buffered_u64();
+    let mut n_buf = Limbs::<N>::double_buffered_u64();
     let n = n_buf.as_mut();
     let nl = sum_sq_radicand_comba::<N>(ma.as_limbs(), mb.as_limbs(), n);
     if nl > N || (nl == N && (n[N - 1] >> 63) != 0) {
@@ -144,7 +144,7 @@ mod tests {
     /// input, including the overflow (`None`) cases.
     fn diff_at<const N: usize>()
     where
-        Int<N>: crate::int::types::compute_int::ComputeInt,
+        Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         let mut s = 0x0123_4567_89AB_CDEF_u64 ^ (N as u64);
         for _ in 0..400 {

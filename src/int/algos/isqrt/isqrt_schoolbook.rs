@@ -20,7 +20,7 @@
 
 use crate::int::algos::support::limbs::{bit_len, cmp, shl, sub_assign};
 
-use crate::int::types::compute_int::MAX_DOUBLE_LIMBS;
+use crate::int::types::compute_limbs::MAX_DOUBLE_LIMBS;
 
 /// floor(sqrt(n)) via two-bits-at-a-time bitwise algorithm.
 pub(crate) fn isqrt_schoolbook(n: &[u64], out: &mut [u64]) {

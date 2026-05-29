@@ -13,8 +13,7 @@
 //! Inner step uses the native `u64 × u64 → u128` widening multiply
 //! (`MUL` + `UMULH` on x86-64 / aarch64).
 
-use crate::int::types::Int;
-use crate::int::types::compute_int::{ComputeInt, Limb};
+use crate::int::types::compute_limbs::{ComputeLimbs, Limb, Limbs};
 
 /// `out = a · b` schoolbook. `out.len() >= a.len() + b.len()` and `out`
 /// must be zeroed by the caller.
@@ -183,7 +182,7 @@ pub(crate) const fn mul_low_fixed<const N: usize>(a: &[u64; N], b: &[u64; N], ou
 /// 1), and `c1`/`c2` are never both set (`c1` needs `acc + lo` to wrap to 0,
 /// after which `+ carry` cannot wrap), so `hi + c1 + c2 ≤ L::MAX`.
 ///
-/// [`LimbSize`]: crate::int::types::compute_int::LimbSize
+/// [`LimbSize`]: crate::int::types::compute_limbs::LimbSize
 #[inline]
 pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], out: &mut [u64; N]) {
     let h = L::packed_len(N);
@@ -235,11 +234,11 @@ pub(crate) fn mul_low_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], 
 /// (`2·N` u64 / `N` u128), per-`N`-exact — NOT a build-max blanket. `out.len()`
 /// must be `>= 2·N` and is written in full (the kernel zeroes its accumulator).
 ///
-/// [`LimbSize`]: crate::int::types::compute_int::LimbSize
+/// [`LimbSize`]: crate::int::types::compute_limbs::LimbSize
 #[inline]
 pub(crate) fn mul_full_limb<const N: usize, L: Limb>(a: &[u64; N], b: &[u64; N], out: &mut [u64])
 where
-    Int<N>: ComputeInt,
+    Limbs<N>: ComputeLimbs,
 {
     let h = L::packed_len(N); // operand packed length (N for u64, N/2 for u128)
     let d = 2 * h; // full-product length in L-limbs (2N u64 / N u128)
@@ -250,7 +249,7 @@ where
     L::pack(b, &mut bp[..h]);
     // Accumulator: the value's own 2N-u64-width buffer in limb type `L`
     // (= 2h L-limbs exactly), freshly zeroed.
-    let mut acc_buf = L::double::<Int<N>>();
+    let mut acc_buf = L::double::<Limbs<N>>();
     let acc = acc_buf.as_mut();
     let mut i = 0;
     while i < h {
