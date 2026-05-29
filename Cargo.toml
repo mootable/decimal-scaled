@@ -62,8 +62,11 @@ strict = []
 # Runtime-polymorphic façade. Adds the `DynDecimal` object-safe trait
 # and `DecimalWidth` enum, with a blanket impl bridging every concrete
 # `Dxx<S>` type. Off by default — typed `Decimal` users pay nothing.
-# Boxing cost (heap allocation per binary op) is the price of erasure.
-dyn = []
+# Boxing cost (heap allocation per binary op) is the price of erasure,
+# so the façade pulls in `alloc` (its `Box`/`String` returns are the
+# crate's only sanctioned heap path; the typed `Decimal` core stays
+# heap-free).
+dyn = ["alloc"]
 # Opt out of strict dispatch: plain transcendentals forward to the
 # f64 bridge. Only takes effect when `strict` is NOT enabled — if
 # both are present, strict wins. Both `*_strict` and `*_fast`
