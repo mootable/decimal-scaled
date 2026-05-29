@@ -73,63 +73,43 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         // small-`|x|` value gate so no scale is left on the Series path.
         #[cfg(any(feature = "d76", feature = "wide"))]
         (4, 0..=75) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        // Narrow-wide tiers (N = 6/8/12/16/24) — low-scale Tang rectangles,
-        // magnitude-gated. The width × scale A/B shows Tang beats the Series
-        // squaring core at low/mid scale (the bench-branch-compare SCALE 30
-        // regime); the crossover where Series catches up scales with width, so
-        // the rectangles widen for the narrower tiers (D115/D153/D230) and
-        // shrink for the wider ones (D307/D462, where Series already wins by
-        // S/2). Tang's `k·ln 2` reduction lifts the working scale by
-        // ~`|k|·log10 2` digits, which for large `|x|` exceeds the work width —
-        // so Tang is only VALID for small `|x|` (Series builds the result by
-        // squaring and stays valid everywhere). Hence `ByValue`: Tang for
-        // `|x| < 100`, Series above.
+        // Narrow-wide tiers (N = 6/8/12/16) — the storage-strict exp path.
+        // RE-MAPPED 2026-05-29 against the freshly-baked exp Tang rodata table
+        // (`src/algos/support/exp_tang_table.rs`, commits b390abd9/6f5929d4):
+        // the OLD Tang rectangles here were tuned BEFORE the bake (when the
+        // table was a per-call Series recompute), so they over-routed Tang.
+        // The post-bake N-way A/B `benches/micro/exp_wide_series_tang_ab.rs`
+        // (PINNED core 22, Series vs 3 Tang configs vs Schoolbook, validity-
+        // gated bit-identical to Series × all six modes) shows SERIES (the
+        // generic squaring core) now BEATS every Tang config at EVERY scale at
+        // these tiers — the table bake did not move Tang ahead, and Tang's
+        // table-multiply + post-reduction Taylor costs MORE than Series's
+        // adaptive Smith `r/2^n` from D115 up. Measured medians (Tang =
+        // production tang_m512_g30, ratio = Series-faster-by):
+        //   D115: s0 1.55×, s28 1.40× (Schoolbook≈Series winner), s57 1.29×,
+        //         s86 (Series wins), s113 1.28× — Series/Schoolbook are the
+        //         top two at all five samples; Tang ranks #3+ everywhere.
+        //   D153: s0 1.40×, s38 (Series), s76 (Schoolbook), s114, s151 —
+        //         Series/Schoolbook always the top two; Tang #3+.
+        //   D230: s0 1.65×, s57, s115, s228 — Series/Schoolbook top two. The
+        //         lone s172 cell shows tang_m512 +5% over Series, but it is a
+        //         single non-continuous point bracketed by s115 (Series) and
+        //         s228 (Series) — bench noise, NOT a continuous win-region, so
+        //         per architectural-review Class I it is NOT carved out.
+        //   D307: s0 1.79×, s76 1.59×, s153, s230, s305 — Series/Schoolbook
+        //         top two at every sample; Tang #3+ across the whole range.
+        // So D115/D153/D230/D307 fall through to the `_` Series arm at EVERY
+        // scale — no Tang gate. (Schoolbook ties Series within ~2-13% noise at
+        // these tiers — same Fixed Smith core — and is the unrouted reference;
+        // Series stays the canonical wide kernel, so the `_` arm is Series.)
         //
-        // The WIDEST tiers (N >= 32: D616/D924/D1232) have NO Tang rectangle:
-        // the A/B shows Series wins at EVERY scale there (including s0/s30),
-        // and at D1232 max scale single-shot Tang is not even bit-identical to
-        // Series (its `k·ln 2` lift overflows the guard). Those widths want the
-        // orthogonal u128-square work, not Tang; they fall through to Series.
-        // D115 (Int<6>): the wide A/B map (`benches/micro/exp_wide_series_tang_ab.rs`)
-        // sweeps {s0, s28, s57, s86, s113} and shows tang_m512_g30 beats Series
-        // at every scale (s0 1.03×, s28 1.32×, s57 1.13×, s86 1.07×, s113 1.10×)
-        // — validity bit-identical to Series at each cell. The old gate stopped
-        // at s85, leaving s86..=114 on the slower Series `_` arm; the A/B at s86
-        // and s113 (DEEP into the old gap) shows Tang still wins. Cover the
-        // WHOLE D115 scale range through the small-`|x|` value gate so no scale
-        // in 0..=114 falls through to Series.
-        #[cfg(any(feature = "d115", feature = "wide"))]
-        (6, 0..=114) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        #[cfg(any(feature = "d153", feature = "wide"))]
-        (8, 0..=110) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        // D230 (Int<12>): the width × scale A/B map shows Tang wins (or ties)
-        // and stays bit-identical to Series across the WHOLE scale range,
-        // including the near-max s172 (1.04×) and s228 (1.12× over Series) —
-        // the bench-branch-compare `exp_D230_s229` 1.26× regression lives just
-        // past the old 140 ceiling, where the cell fell through to the slower
-        // Series `_` arm. Unlike D307+ (where Series re-takes the lead above
-        // ~s100, so the 60 ceiling is correct), D230's Tang win extends to the
-        // top. Cover the full D230 range through the small-`|x|` value gate.
-        #[cfg(any(feature = "d230", feature = "wide"))]
-        (12, 0..=229) => Select::ByValue(wide_tang_gate::<N, SCALE>),
-        // D307 (Int<16>): the 5-point wide A/B map sweeps {s0, s76, s153, s230,
-        // s305} (`benches/micro/exp_wide_series_tang_ab.rs`) — Tang wins s0
-        // (~tie 1.00×) and s76 (+1.03× production M=512); Series wins s153
-        // (+1.04×) / s230 (+1.11×) / s305 (+1.16×). A two-pass bisection
-        // (`benches/micro/exp_wide_tang_bisect.rs`) of the s76..=s153 region
-        // sharpens the crossover: at s78 tang_m128 wins +1.02× but the
-        // production tang_m512 LOSES 1.04× (noise band); s80 / s84 / s90 /
-        // s100 / s115 / s130 are ALL Series wins (1.00–1.07×). So the OLD
-        // `0..=100` arm routed s80..=s100 to Tang where Series is the narrow
-        // winner — a Class-I single-cell-edge fit anchored to the s76 coarse
-        // sample that the bisect refutes. Tighten to `0..=80`: covers the
-        // confirmed s0..=s78 Tang win-region with s80 (the bisected ~tie) as a
-        // one-cell safety margin past the s76 sample, hands the s80+
-        // slow-side band back to Series where it belongs (architectural-review
-        // Class I: continuous win-region, bisected true crossover).
-        // Bench runs on cores 22–23 pinned.
-        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        (16, 0..=80) => Select::ByValue(wide_tang_gate::<N, SCALE>),
+        // The WIDEST tiers (N >= 24: D462/D616/D924/D1232) likewise fall
+        // through to Series: the A/B confirms Series/Schoolbook win at every
+        // sampled scale (D462 s0 1.12×, … D1232 every sample), and at D1232 MAX
+        // scale (s1230) single-shot Tang is not even bit-identical to Series
+        // (ALL three Tang configs reported INVALID by the validity wall — its
+        // `k·ln 2` lift overflows the guard), so Tang is INELIGIBLE there
+        // regardless of speed. No Tang gate for N >= 24.
         // D462 (Int<24>): the wide A/B map sweeps {s0, s115, s231, s346, s460}
         // and ranks SERIES THE WINNER at every scale (s0 1.02×, s231 1.07×,
         // s346 1.14×, s460 1.19× — vs the production Tang config tang_m512_g30;
@@ -154,7 +134,7 @@ const fn select<const N: usize, const SCALE: u32>() -> Select<N> {
         //
         // **Audit Finding #5 (2026-05-28) DISPOSITION** — the
         // `research/2026_05_28_d462_d924_d1232_policy_audit.md` audit raised
-        // that `policy::exp` Tang gates only N ∈ {3,4,6,8,12,16} and asked
+        // that `policy::exp` Tang then gated N ∈ {3,4,6,8,12,16} and asked
         // whether the wider tiers N ≥ 24 should also be Tang-gated. The 5-point
         // sweep above + the D462 bisection at s58/s115 EMPIRICALLY REFUTE the
         // audit lead for `exp`: at N=24/32/48 the Tang structural overhead
@@ -194,31 +174,35 @@ fn resolve<const N: usize, const SCALE: u32>(raw: &Int<N>) -> Algorithm {
     }
 }
 
-/// Returns `true` iff the policy's scale gate for this `(N, SCALE)` cell
-/// routes Tang (ByAlgorithm OR ByValue — the latter is the wide-tier
-/// small-`|x|` gate; at WORKING SCALE the routed surface dispatches Tang
-/// regardless, because the working-scale `tang_exp_fixed::<C, M, true>`
-/// handles arbitrary `|k|` via its `INTERNAL_EXTRA` lift — the storage-
-/// level value gate is a strict-narrowing concern that does not apply at
-/// the working-scale composition sites in `decl_wide_transcendental!`).
+/// Returns `true` iff the WORKING-SCALE composition surface should route
+/// `e^{stuff}` through Tang (`tang_exp_fixed::<C, M, true>`) rather than the
+/// Series `exp_fixed` for this `(N, SCALE)` cell.
 ///
-/// Used by the working-scale `exp_fixed_routed<SCALE>` surface emitted
-/// per tier by `decl_wide_transcendental!` to keep its scale gates in
-/// sync with the canonical [`select`] above. If [`select`] widens
-/// further, the routed surface tracks it automatically through this query.
+/// Consumed by the working-scale `exp_fixed_routed<SCALE>` surface emitted per
+/// tier by `decl_wide_transcendental!` — the composition sites for `exp2`,
+/// `powf`, and the hyperbolics (`sinh`/`cosh`/`tanh`). This is a DISTINCT
+/// operating point from the storage-strict [`select`] above: it runs at the
+/// caller's working width `w` (a few extra digits) with the kernel's
+/// `INTERNAL_EXTRA` lift covering arbitrary `|k|`, NOT at storage SCALE with
+/// the small-`|x|` value gate. The two were the same query before 2026-05-29,
+/// but the storage-strict exp A/B (`exp_wide_series_tang_ab`) remapped
+/// D115/D153/D230/D307 OFF Tang at storage scale on measured evidence; that
+/// evidence does NOT cover the composition operating point (different `w`,
+/// different `|k|` regime), and the hyperbolic working-scale path is a
+/// separately-benched WIN that must not be silently retargeted — so the
+/// working-scale gate is kept independent and unchanged here (Tang for the
+/// narrow-wide tiers N ∈ {3,4,6,8,12,16}; Series for N >= 24, matching the
+/// pre-remap routing). A future composition-path A/B (sinh/cosh/tanh/powf/exp2
+/// at working scale) can re-key this gate on its own measurements.
 #[cfg(feature = "_wide-support")]
 #[inline]
 #[must_use]
 pub(crate) const fn is_tang<const N: usize, const SCALE: u32>() -> bool {
-    match select::<N, SCALE>() {
-        Select::ByAlgorithm(Algorithm::Tang) => true,
-        // Value-gated cells: at working scale, route Tang for the whole
-        // policy scale range (the kernel's `INTERNAL_EXTRA` covers
-        // arbitrary `|k|`); the storage-level value gate stays in place
-        // through `dispatch`.
-        Select::ByValue(_) => true,
-        _ => false,
-    }
+    let _ = SCALE;
+    // The narrow-wide tiers ran Tang at working scale before the storage-strict
+    // remap; preserve that for the composition surface (no measurement says to
+    // change it). N >= 24 was — and stays — Series.
+    matches!(N, 3 | 4 | 6 | 8 | 12 | 16)
 }
 
 #[inline]
@@ -347,41 +331,26 @@ fn tang_routed<const N: usize, const SCALE: u32>(raw: Int<N>, mode: RoundingMode
         }
         // D76 (Int<4>): full-range Tang, M=512 G=30, the directed +
         // external-extra shape <true,true,false> — bit-identical to Series
-        // across the spread × all six modes at s0/s37/s74 in the width × scale
-        // A/B. The `select` gate (small `|x|`) keeps it valid; large-`|x|`
-        // falls through to Series.
+        // across the spread × all six modes at every sampled scale (s0/s19/s38/
+        // s57/s74) in the wide A/B (`exp_wide_series_tang_ab`), where Tang wins
+        // 1.05-1.20× at every scale (and the value-gate sweep shows Tang wins
+        // 8-10× for `|x|` 10..110 where Series's reduction blows up). The
+        // `select` gate (small `|x|`) keeps it valid; large-`|x|` falls through
+        // to Series. (NOTE: at s74 the *tang_m512_g60* probe was reported
+        // INVALID by the validity wall, but the PRODUCTION tang_m512_g30 stays
+        // bit-identical — the production config is the one wired here.)
         #[cfg(any(feature = "d76", feature = "wide"))]
         4 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d76::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<4>>(), mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d115", feature = "wide"))]
-        6 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d115::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<6>>(), mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d153", feature = "wide"))]
-        8 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d153::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<8>>(), mode).resize_to::<Int<N>>(),
-        // D230 (Int<12>): the wide A/B map (target/criterion exp_d230_s{0,57,
-        // 115,172,228}) shows tang_m512_g30 beats tang_m128_g30 by 3-9% at
-        // every scale and beats Series by 1.05-1.06x at the high scales
-        // (s172, s228) — addresses the bench-branch-compare exp_D230_s229
-        // 1.41x regression. The Tang config remains (M=512, G=30) with the
-        // directed + external-extra flag shape <true,true,false> already
-        // validated by the bench's bit-identical-to-Series wall.
-        #[cfg(any(feature = "d230", feature = "wide"))]
-        12 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d230::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<12>>(), mode).resize_to::<Int<N>>(),
-        // Narrow-wide tiers — the low-scale Tang rectangles (`select` routes
-        // only the in-rectangle SCALEs here). The directed + external-extra
-        // shape (`DIRECTED, EXTERNAL_EXTRA`) — Ziv escalation for the directed
-        // modes and base-guard widening for the large `|k|` the 2^k reassembly
-        // amplifies (single-shot would be wrong for large-x inputs whose
-        // `|k|·log10 2` exceeds the guard). Table M tuned per tier from the A/B
-        // (M=512 for both D307 and D462 — the wide A/B map at the in-band
-        // s0/s30 sample points shows tang_m512_g30 < tang_m128_g30 by 5-14%
-        // at both tiers; D230 is also tang_m512_g30 above). The widest tiers
-        // (N >= 32) have NO Tang arm — `select` never routes them here and
-        // they would fall to the `_` Series arm anyway; Series wins those at
-        // every scale (and the wide A/B confirms it at D307/D462 too, hence
-        // the existing narrow `0..=60` gates here).
-        #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
-        16 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d307::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<16>>(), mode).resize_to::<Int<N>>(),
-        #[cfg(any(feature = "d462", feature = "x-wide"))]
-        24 => crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d462::Core, SCALE, 512, 30, true, true, false>(raw.resize_to::<Int<24>>(), mode).resize_to::<Int<N>>(),
+        // N >= 6: `select` routes EVERY scale to Series here (the 2026-05-29
+        // post-bake storage-strict A/B showed Series/Schoolbook beat every Tang
+        // config at D115/D153/D230/D307+, and Tang is INELIGIBLE at D1232 max
+        // scale — see the `select` comment), so `tang_routed` is never reached
+        // for N >= 6. The per-tier Tang kernels (`exp_tang::<wide_trig_dNNN>`)
+        // remain available as kept alternatives in `algos/exp/exp_tang.rs` for
+        // a future re-bench; no stale `tang_routed` delegation is kept for them
+        // — the `_` arm below is the single source of truth that they run
+        // Series. (The working-scale composition surface for these tiers routes
+        // via `is_tang` / `exp_fixed_routed`, NOT through here.)
         _ => series_routed::<N, SCALE>(raw, mode),
     }
 }
