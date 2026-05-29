@@ -4053,8 +4053,10 @@ use crate::int::types::traits::BigInt;
 /// working scale — `slot_hi = floor(slot / 2^(B − 64·p))`, the binary
 /// fixed-point of `L_idx` at exponent `bp = 64·p` — then reconstruct
 ///
-///     round(L_idx · 10^w) = round(slot_hi · 10^w / 2^bp)
-///                         = (slot_hi · 10^w + 2^(bp−1)) >> bp
+/// ```text
+/// round(L_idx · 10^w) = round(slot_hi · 10^w / 2^bp)
+///                     = (slot_hi · 10^w + 2^(bp−1)) >> bp
+/// ```
 ///
 /// entirely in `W`: one zero-extend, one multiply, one add, one
 /// shift. `p` is chosen so `bp` carries the working scale's bits plus
