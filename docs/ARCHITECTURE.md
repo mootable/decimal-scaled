@@ -56,6 +56,24 @@ no algorithm is permitted to break them.
    is fixed, or (b) **recompute it each call on the stack**; it is **never**
    to relocate the runtime cache into a mutable `static`.
 
+   **Where a runtime computation genuinely IS needed, minimise it to the cases
+   that need it — const-fold the common path, never recompute on the hot path,
+   and never blanket-remove the runtime path when a rare case legitimately
+   needs it.** Many values are const-derivable for the *common* case yet
+   runtime-varying in a *rare* one. Example: `pi`/`ln2`/`ln10` are fixed at the
+   common working scale `w = SCALE + GUARD` — a compile-time `const` per
+   `(width, SCALE)` const-folded off the propagated `SCALE` — but a rare
+   directed-rounding / Ziv guard escalation genuinely needs them at a higher,
+   runtime-varying scale. The rule: **bake the common case** (the hot path then
+   never recomputes — recalculating `pi` on every call is the anti-pattern) and
+   **keep the runtime recompute ONLY for the rare case that provably cannot be
+   const.** A runtime input such as a working scale `w` may stay a runtime value
+   where it genuinely varies — the goal is not to delete the runtime parameter
+   but to stop *deriving the const-derivable value from it on the hot path*. The
+   bar (enforce it in review): a runtime recomputation is retained only at sites
+   where a `SCALE`/`GUARD`-derived `const` provably cannot stand in — and only
+   there.
+
 Together these mean the answer to "make this faster with a cache/buffer
 pool" is always **no**: the speed comes from a better generic kernel,
 const-folding, and exact-per-`N` stack scratch — never from heap or state.
@@ -320,6 +338,14 @@ These are free to take because **the caller already holds them in its types**
 — inferred at the call site, never computed (`D<Int<N>, SCALE>::sqrt` already
 knows `N` and `SCALE`, so `dispatch::<N, SCALE>(…)` costs it nothing).
 
+**These same consts propagate freely across the WHOLE layer — every policy AND
+every algorithm, not just `dispatch`:** the **decimal** layer may carry
+**`IntWidth` (`N`) and `SCALE`**; the **int** layer may carry **`IntWidth`
+(`N`) only** (int has no scale axis). Any policy or algorithm in the layer is
+free to take its layer's consts (they ride down from the type for nothing); the
+rule is only that it may take **no more** than those — no derived width, no
+new const knob.
+
 > **Decimal binary is genuinely four consts.** Binary decimal ops are meant to
 > work across *different* widths AND scales (`D<Int<Nthis>, Sthis> op
 > D<Int<Nother>, Sother>`), so `<Nthis, Sthis, Nother, Sother>` is the real
@@ -336,10 +362,21 @@ knows `N` and `SCALE`, so `dispatch::<N, SCALE>(…)` costs it nothing).
   `LW == W::U128_LIMBS`) is the canonical defect — wider-than-`N` widths come
   from `ComputeLimbs` (previous section), never a const param. That is the
   const-work-width wall the `ComputeLimbs` associated types exist to remove.
-- **Inward is optional.** Threading these consts *inward* (`select`,
-  `select_for_limbs`, the kernels) is optional — a helper takes a const only
-  if it uses it. Taking the level const at the `dispatch` entry but not
-  inward is normal, never a defect.
+- **Inward is optional — and propagating the level's OWN const inward to
+  enable const-folding is a WIN, not pollution.** Threading these consts
+  *inward* (`select`, `select_for_limbs`, the kernels) is optional — a helper
+  takes a const only if it uses it. Taking the level const at the `dispatch`
+  entry but not inward is normal, never a defect. And the converse is equally
+  fine: `SCALE`/`N` ride down from `D<Int<N>, SCALE>` for **nothing** (the type
+  already carries them), so threading them into a kernel so a working-scale
+  value **const-folds** — e.g. baking `pi`/`ln2`/`ln10` at `SCALE + GUARD` as a
+  per-`(W, SCALE)` compile-time const, eliminating a per-call scale-down divide
+  — is encouraged; the kernel simply monomorphises per consts it was always
+  entitled to. **The line is: const-fold off the level's OWN `SCALE`/`N`;
+  never INVENT a new const item or parameter the type doesn't already give
+  you.** A *new* const knob — a derived width (`const LW`, above), or any const
+  added solely to carry a value into a method — is the defect, because it bloats
+  the signatures; propagating an existing level const is free.
 
 **The caller guardrail + the metadata test.** A caller must be able to invoke
 a policy with *exactly what it already has*. If calling forces the caller to
