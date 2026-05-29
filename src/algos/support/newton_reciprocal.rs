@@ -747,94 +747,6 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
     }
 }
 
-/// Per-`(width_bits, scale)` reciprocal table cache.
-///
-/// Mirrors the existing `pow10_cached` / `pi_cached` / `ln2_cached`
-/// thread-local `Vec<(u32, …)>` pattern in
-/// [`crate::macros::wide_transcendental`]. Linear scan over the live
-/// SCALEs (typically 1–3 entries per build); each miss runs one
-/// `NewtonReciprocal::precompute(scale, width_limbs)` then keeps the
-/// table for the rest of the thread's lifetime.
-///
-/// One slot per cached width — because the `width_limbs` argument
-/// differs (24 / 32 / 48 / 64 u64 limbs for
-/// Int<24> / Int<32> / Int<48> / Int<64>) and the `NewtonReciprocal`
-/// allocates limb-storage sized to that argument.
-#[cfg(feature = "std")]
-mod cache {
-    use super::NewtonReciprocal;
-    use ::std::thread_local;
-
-    thread_local! {
-        static C_1536: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
-            ::core::cell::RefCell::new(alloc::vec::Vec::new())
-        };
-        static C_2048: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
-            ::core::cell::RefCell::new(alloc::vec::Vec::new())
-        };
-        static C_3072: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
-            ::core::cell::RefCell::new(alloc::vec::Vec::new())
-        };
-        static C_4096: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
-            ::core::cell::RefCell::new(alloc::vec::Vec::new())
-        };
-        // Wider widths added 2026-05-28 — the wide-tier transcendental
-        // work integers covered by the buffer-raise. Currently 6144
-        // only; 8192/12288/16384/32768 are deferred (see
-        // [`super::newton_wins`] for the AGM-widening / scratch /
-        // integrated-bench reasons).
-        // - 6144 = Int<96> (D230 Wexp / D924 Work)
-        static C_6144: ::core::cell::RefCell<alloc::vec::Vec<(u32, NewtonReciprocal)>> = const {
-            ::core::cell::RefCell::new(alloc::vec::Vec::new())
-        };
-    }
-
-    /// Run `f` with a borrowed reciprocal table for `(width_bits, scale)`.
-    /// On first call per `(thread, width_bits, scale)` the table is
-    /// computed and stashed; subsequent calls borrow it from the slot.
-    pub(super) fn with_table<R>(
-        width_bits: u32,
-        scale: u32,
-        width_limbs: usize,
-        f: impl FnOnce(&NewtonReciprocal) -> R,
-    ) -> R {
-        let slot = match width_bits {
-            1536 => &C_1536,
-            2048 => &C_2048,
-            3072 => &C_3072,
-            4096 => &C_4096,
-            6144 => &C_6144,
-            _ => unreachable!("with_table called on un-cached width {width_bits}"),
-        };
-        // Ensure the slot has an entry for `scale`; insert one if not.
-        // The thread_local + RefCell pattern avoids ever holding the
-        // borrow across the precompute itself (precompute does not
-        // re-enter the cache, but keeping the borrow scope tight is
-        // robust against future changes).
-        let needs_insert = slot.with(|c| {
-            let cache = c.borrow();
-            !cache.iter().any(|(s, _)| *s == scale)
-        });
-        if needs_insert {
-            let table = NewtonReciprocal::precompute(scale, width_limbs);
-            slot.with(|c| {
-                let mut cache = c.borrow_mut();
-                if !cache.iter().any(|(s, _)| *s == scale) {
-                    cache.push((scale, table));
-                }
-            });
-        }
-        slot.with(|c| {
-            let cache = c.borrow();
-            let entry = cache
-                .iter()
-                .find(|(s, _)| *s == scale)
-                .expect("cache invariant: entry inserted above");
-            f(&entry.1)
-        })
-    }
-}
-
 /// Width-class dispatch for `n / 10^SCALE`.
 ///
 /// When the `(W::BITS, scale)` cell wins under [`newton_wins`] the
@@ -891,21 +803,30 @@ pub(crate) fn dispatch_pow10_mag_u128(
     {
         // `width_limbs` in u64 limbs — the `precompute` unit.
         let width_limbs = (width_bits as usize) / 64;
-        cache::with_table(width_bits, scale, width_limbs, |table| {
-            if newton_u128_wins(width_bits) {
-                newton_pow10_mag_u128_packed(mag, neg, mode, table);
-            } else {
-                newton_pow10_mag_u128(mag, neg, mode, table);
-            }
-        });
+        // Phase 9: the per-`(width, scale)` reciprocal table was a
+        // `thread_local!` `Vec<(scale, NewtonReciprocal)>` memo (state +
+        // heap). Both are forbidden by the Constitution's no-state /
+        // no-heap rules, so it is removed. The reciprocal is value-
+        // independent for a given `(width, scale)` but is neither cheaply
+        // const (Knuth divide at const-eval) nor cheap to recompute, so
+        // the Rule-2-correct fallback is to recompute the (fixed-size,
+        // stack-only) `NewtonReciprocal` on each call. This costs one
+        // extra Knuth divide per `÷10^SCALE` — see the dispatch perf note
+        // on `newton_wins`.
+        let table = NewtonReciprocal::precompute(scale, width_limbs);
+        if newton_u128_wins(width_bits) {
+            newton_pow10_mag_u128_packed(mag, neg, mode, &table);
+        } else {
+            newton_pow10_mag_u128(mag, neg, mode, &table);
+        }
     }
 
     #[cfg(not(feature = "std"))]
     {
-        // no_std fallback: no thread-local cache available; per-call
-        // precompute is too costly for the wide tier (one Knuth divide
-        // at storage width). Forward to MG instead — Newton wins
-        // depend on amortising the table across many calls.
+        // no_std fallback: per-call precompute is one Knuth divide at
+        // storage width, costly for the wide tier; the Newton win
+        // depended on amortising the table across calls (now removed).
+        // Forward to MG instead.
         crate::algos::support::mg_divide::div_pow10_chain_mag_u128(mag, scale, neg, mode);
     }
 }

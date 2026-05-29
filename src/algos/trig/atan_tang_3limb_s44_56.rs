@@ -66,26 +66,31 @@ use crate::int::types::Int;
 /// inner loop runs in ~15 iterations, against a one-off cold-start
 /// table seed of `M · atan_fixed(w)` calls (~22 ms at SCALE=57).
 ///
-/// Per-thread memory cost: `M · sizeof(W) = M · 128 B` for the
-/// `Int<16>` wide-tier trig core, so ~64 KB at M = 512.
 const M: u32 = 512;
 
-crate::algos::support::table_cache::decl_table_cache!(entry = core::W, compute = compute_table);
-
-/// Build the `atan(j / M)` table at working scale `w` using the
-/// canonical `atan_fixed` kernel (one call per slot, paid once per
-/// thread per `w`).
-fn compute_table(w: u32) -> alloc::vec::Vec<core::W> {
-    let mut out = alloc::vec::Vec::with_capacity(M as usize);
-    let one_w = core::one(w);
-    // j = 0: atan(0) = 0.
-    out.push(core::zero());
-    for j in 1..M {
-        // c_j = j / M at working scale = (j · 10^w) / M.
-        let cj_w = (one_w * core::lit(j as u128)) / core::lit(M as u128);
-        out.push(core::atan_fixed(cj_w, w));
+/// `atan(idx / M)` at working scale `w` — the single table slot the
+/// kernel needs (`idx ∈ [0, M)`). idx = 0 → atan(0) = 0.
+///
+/// This is value-independent: the result for a given `(w, idx)` is
+/// identical for every call. Phase 9 removed the former per-thread
+/// `thread_local!` `Vec` memo (state + heap, both forbidden) in favour
+/// of this stateless single-slot recompute — heap-free, computed on the
+/// stack each call.
+///
+/// FLAGGED (Phase 9, build.rs follow-up): the full `atan(j/M)` table IS
+/// bakeable as compile-time `static` rodata, but only via a `build.rs`
+/// codegen step — `core::atan_fixed` runs `BigInt` divides and is NOT a
+/// `const fn`, so an in-crate `const fn` builder cannot produce it.
+/// Baking it to recover the lookup speed is deferred; until then every
+/// call recomputes its slot (the expected, accepted Phase-9 regression).
+#[inline]
+fn table_entry(w: u32, idx: usize) -> core::W {
+    if idx == 0 {
+        return core::zero();
     }
-    out
+    // c_j = idx / M at working scale = (idx · 10^w) / M.
+    let cj_w = (core::one(w) * core::lit(idx as u128)) / core::lit(M as u128);
+    core::atan_fixed(cj_w, w)
 }
 
 /// `atan(x)` strict kernel for `D57<SCALE>` with `SCALE ∈ 44..=56`.
