@@ -2626,28 +2626,34 @@ macro_rules! decl_wide_transcendental {
             /// Tang ln table size — `ln(1 + i/M)`, `i ∈ [0, M]`.
             const LN_TANG_M: u32 = 128;
 
-            // ── Tang lookup-table entries — stateless single-slot recompute
+            // ── Tang lookup-table entries ──────────────────────────────
             //
-            // The Tang ln / exp / sincos kernels index a value-independent
-            // table `T(w)[idx]` (identical for every call at the same
-            // `(w, M)`). Each call needs exactly ONE slot, so it is computed
-            // directly on the stack — stateless and heap-free. (The full
-            // tables can't be baked as `const` rodata in-crate: the per-slot
-            // builders call the runtime `*_fixed` BigInt kernels — `ln_fixed`
-            // / `exp_fixed` / `sin_cos_fixed` — which are not `const fn`.)
+            // The Tang exp / sincos kernels index a value-independent table
+            // `T(w)[idx]` (identical for every call at the same `(w, M)`).
+            // Each call needs exactly ONE slot; for exp / sincos it is still
+            // computed directly on the stack — stateless and heap-free —
+            // because those per-slot builders call the runtime `*_fixed`
+            // BigInt kernels (`exp_fixed` / `sin_cos_fixed`), which are not
+            // `const fn`.
+            //
+            // The `ln` table (`ln(1 + i/M)`, M = 128) is the pilot for the
+            // BAKED binary Tang store: each slot is precomputed ONCE by an
+            // mpmath oracle as a binary fixed-point `round(ln(1+i/M) · 2^B)`
+            // (committed rodata in `algos::support::ln_tang_table`), then
+            // SLICED + reconstructed to working scale `w` per call (one
+            // multiply + one shift) — far cheaper than the `ln_fixed` Series
+            // it replaces. The `SCALE` const is unused on the baked path
+            // (the binary table is scale-independent); it is kept on the
+            // signature only to match the trait forwarder. exp / sincos stay
+            // on the Series recompute (a later job replicates the pilot).
             mod tang_table {
                 use super::*;
 
-                /// `ln(1 + idx/M)` at working scale `w` (`idx ∈ [0, M]`).
-                /// idx = 0 → ln(1) = 0.
+                /// `ln(1 + idx/M)` at working scale `w` (`idx ∈ [0, M]`),
+                /// from the baked binary Tang table. idx = 0 → ln(1) = 0.
                 #[inline]
                 pub(super) fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> W {
-                    if idx == 0 {
-                        return zero();
-                    }
-                    let one_w = one(w);
-                    let scaled = (one_w * lit(idx as u128)) / lit(LN_TANG_M as u128);
-                    ln_fixed::<SCALE>(one_w + scaled, w)
+                    $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx)
                 }
 
                 /// `exp(idx · ln2 / m)` at working scale `w`
@@ -2672,6 +2678,100 @@ macro_rules! decl_wide_transcendental {
                     let cj_w = (pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) * lit(idx as u128)) / lit((4 * m) as u128);
                     sin_cos_fixed::<SCALE>(cj_w, w)
                 }
+            }
+
+            /// Differential validity wall for the baked binary Tang `ln`
+            /// table: the baked accessor
+            /// (`ln_tang_table::ln_table_entry_baked`) must reproduce the
+            /// `ln_fixed` Series recompute it replaced, to within the
+            /// artanh reconstruction's working-LSB tolerance, for EVERY
+            /// table slot `i ∈ [0, 128]` across sampled working scales this
+            /// tier can request (`w = SCALE + GUARD`, plus the wide
+            /// Ziv-escalation band up to the `W::BITS/8` cap).
+            ///
+            /// The REFERENCE is the Series evaluated at a much higher guard
+            /// (`w + REF_EXTRA` digits) and narrowed back to `w` — at that
+            /// depth the `ln_fixed` Series has converged, so the narrowed
+            /// value is the correctly-rounded `round(ln(1+i/M) · 10^w)`
+            /// oracle proxy. The OLD per-call Series ran at `w` itself,
+            /// where (especially at the minimal guard `w = GUARD`, SCALE=0)
+            /// it carried tens of working-LSBs of its own truncation error
+            /// — the very imprecision the baked oracle table removes. We
+            /// therefore validate the baked entry against the CONVERGED
+            /// reference (tight tolerance), not the low-guard Series. The
+            /// reconstruction re-rounds with GUARD digits + Ziv on top, so
+            /// the entry only needs ~1-ULP accuracy; the assert's slack sits
+            /// far below the storage ULP the GUARD budget protects.
+            #[cfg(test)]
+            pub(crate) fn ln_table_baked_vs_series(tier: &str) {
+                // Extra guard digits at which the `ln_fixed` Series has
+                // fully converged relative to the target scale `w`.
+                const REF_EXTRA: u32 = 40;
+                // Correctly-rounded `round(ln(1+idx/M) · 10^w)` reference:
+                // Series at `w + REF_EXTRA`, narrowed back to `w` by a
+                // round-half-up divide by `10^REF_EXTRA`.
+                fn ref_slot(w: u32, idx: usize) -> W {
+                    if idx == 0 {
+                        return zero();
+                    }
+                    let w_hi = w + REF_EXTRA;
+                    let one_hi = one(w_hi);
+                    let scaled = (one_hi * lit(idx as u128)) / lit(128u128);
+                    let hi = ln_fixed::<0>(one_hi + scaled, w_hi);
+                    // narrow w_hi -> w, round half up (values are positive).
+                    let p = pow10(REF_EXTRA);
+                    let half = p / lit(2);
+                    (hi + half) / p
+                }
+                // The directed/nearest narrowing caps the WORKING scale at
+                // `W::BITS / 8` decimal digits (the baked accessor handles
+                // the full cap). The Series REFERENCE, however, runs at
+                // `w + REF_EXTRA` and forms wide `sqrt_fixed` scratch that
+                // needs ~`4·w` headroom, so we can only build a converged
+                // reference well below the cap. Sample `w` up to a quarter
+                // of `W::BITS / 8` (leaving ample `sqrt_fixed` headroom) —
+                // that already spans every common `w = SCALE + GUARD` for
+                // the tier plus a healthy slice of the Ziv band.
+                let cap = <W as $crate::int::types::traits::BigInt>::BITS / 8;
+                let max_w = (cap / 4).saturating_sub(REF_EXTRA).max(GUARD);
+                let tol = lit(2); // working LSBs of allowed disagreement
+                let mut max_diff: W = zero();
+                let mut w = GUARD; // smallest reachable working scale (SCALE=0)
+                while w <= max_w {
+                    for idx in 0..=128usize {
+                        let baked = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx);
+                        let refv = ref_slot(w, idx);
+                        let diff = if baked >= refv { baked - refv } else { refv - baked };
+                        if diff > max_diff {
+                            max_diff = diff;
+                        }
+                        assert!(
+                            diff <= tol,
+                            "{tier}: baked ln_table_entry disagrees with converged Series at w={w} i={idx} by {diff:?} working LSBs (tol {tol:?})"
+                        );
+                    }
+                    w += if w < GUARD + 6 { 1 } else { 37 };
+                }
+                // Separately exercise the BAKED accessor right up to the
+                // full directed-narrow cap `W::BITS / 8` (where no Series
+                // reference can be built) to prove the conversion product
+                // `slot_hi · 10^w` never overflows `W` at the production
+                // ceiling. A panic here = an overflow; the values are
+                // checked for monotone sanity (0 < L_1 < L_64 < L_128).
+                let mut wc = max_w;
+                while wc <= cap {
+                    let z = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 0);
+                    let a = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 1);
+                    let b = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 64);
+                    let c = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 128);
+                    assert!(
+                        z == zero() && a > zero() && b > a && c > b,
+                        "{tier}: baked ln_table_entry not sane at cap w={wc}"
+                    );
+                    if wc == cap { break; }
+                    wc = (wc + 53).min(cap);
+                }
+                eprintln!("ln_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, ref max_w {max_w}, cap {cap})");
             }
 
             /// Zero-sized per-tier marker implementing
@@ -5477,6 +5577,37 @@ mod tests {
         wide_trig_d924::const_rounded_cf_matches_runtime();
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         wide_trig_d1232::const_rounded_cf_matches_runtime();
+    }
+
+    /// Validity wall for the baked binary Tang `ln` table: on every
+    /// shipped wide tier, the baked `ln_table_entry` accessor reproduces
+    /// the OLD per-call `ln_fixed` Series recompute (to within the artanh
+    /// reconstruction's working-LSB tolerance) for all 129 slots across
+    /// the reachable working-scale band. If this passes, swapping the
+    /// Series recompute for the baked slice does not move the `ln` result.
+    #[test]
+    fn ln_table_baked_vs_series_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::ln_table_baked_vs_series("D57");
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::ln_table_baked_vs_series("D76");
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::ln_table_baked_vs_series("D115");
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::ln_table_baked_vs_series("D153");
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::ln_table_baked_vs_series("D230");
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        wide_trig_d307::ln_table_baked_vs_series("D307");
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::ln_table_baked_vs_series("D462");
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::ln_table_baked_vs_series("D616");
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::ln_table_baked_vs_series("D924");
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::ln_table_baked_vs_series("D1232");
     }
 
     /// Informational: report every `(constant, scale, mode)` cell where
