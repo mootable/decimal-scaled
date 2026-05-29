@@ -2653,7 +2653,7 @@ macro_rules! decl_wide_transcendental {
                 /// from the baked binary Tang table. idx = 0 → ln(1) = 0.
                 #[inline]
                 pub(super) fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> W {
-                    $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx)
+                    $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx, pow10_table(w))
                 }
 
                 /// `exp(idx · ln2 / m)` at working scale `w`
@@ -2739,7 +2739,7 @@ macro_rules! decl_wide_transcendental {
                 let mut w = GUARD; // smallest reachable working scale (SCALE=0)
                 while w <= max_w {
                     for idx in 0..=128usize {
-                        let baked = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx);
+                        let baked = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(w, idx, pow10_table(w));
                         let refv = ref_slot(w, idx);
                         let diff = if baked >= refv { baked - refv } else { refv - baked };
                         if diff > max_diff {
@@ -2760,10 +2760,10 @@ macro_rules! decl_wide_transcendental {
                 // checked for monotone sanity (0 < L_1 < L_64 < L_128).
                 let mut wc = max_w;
                 while wc <= cap {
-                    let z = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 0);
-                    let a = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 1);
-                    let b = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 64);
-                    let c = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 128);
+                    let z = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 0, pow10_table(wc));
+                    let a = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 1, pow10_table(wc));
+                    let b = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 64, pow10_table(wc));
+                    let c = $crate::algos::support::ln_tang_table::ln_table_entry_baked::<W>(wc, 128, pow10_table(wc));
                     assert!(
                         z == zero() && a > zero() && b > a && c > b,
                         "{tier}: baked ln_table_entry not sane at cap w={wc}"

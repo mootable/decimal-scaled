@@ -4067,7 +4067,7 @@ use crate::int::types::traits::BigInt;
 /// makes the slice a contiguous high-limb PREFIX: a narrow tier reads
 /// fewer limbs, the widest tier reads the whole entry.
 #[inline]
-pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize) -> W {
+pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize, pow10_w: W) -> W {
     if idx == 0 {
         return W::ZERO;
     }
@@ -4096,8 +4096,8 @@ pub(crate) fn ln_table_entry_baked<W: BigInt>(w: u32, idx: usize) -> W {
             | W::from_mag_sign_u128(&[slot[k] as u128], false);
     }
     let bp = (64 * p) as u32;
-    // pow10(w) in W.
-    let pow10_w = W::TEN.pow(w);
+    // `10^w` in `W` — supplied by the caller from the kernel's baked
+    // `pow10_table` static (a lookup, not a per-call recompute).
     let scaled = slot_hi * pow10_w;
     // Round-half-up: add 2^(bp−1), then shift right by bp.
     let bias = W::ONE << (bp - 1);
