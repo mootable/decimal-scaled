@@ -81,7 +81,7 @@
 //!
 //! [`RoundingMode`]: crate::support::rounding::RoundingMode
 
-/// Emits the per-tier `pow10_cached(w)` helper. Two flavours:
+/// Emits the per-tier `pow10_table(w)` helper. Two flavours:
 ///
 /// - `with_const_table` — emits a `static POW10_TABLE: [W; max_scale+GUARD+1]`
 ///   initialised at compile time (one `wrapping_mul` per entry, chained
@@ -92,7 +92,7 @@
 ///   in stable rust (D924, D1232).
 #[doc(hidden)]
 #[macro_export]
-macro_rules! decl_pow10_cached {
+macro_rules! decl_pow10_table {
     (with_const_table, $max_scale:literal) => {
         /// Upper bound on the strict-path working width
         /// `w = SCALE + GUARD`. Sizes the const `POW10_TABLE`.
@@ -135,7 +135,7 @@ macro_rules! decl_pow10_cached {
         /// branch guarantees `w as usize < POW10_TABLE.len()` (the
         /// table is sized `POW10_TABLE_MAX_W + 1`).
         #[inline]
-        pub(crate) fn pow10_cached(w: u32) -> W {
+        pub(crate) fn pow10_table(w: u32) -> W {
             if w <= POW10_TABLE_MAX_W {
                 // SAFETY: `w <= POW10_TABLE_MAX_W` implies
                 // `w as usize <= POW10_TABLE_MAX_W as usize <
@@ -156,12 +156,12 @@ macro_rules! decl_pow10_cached {
         /// `static` via a `build.rs` codegen step, which sidesteps the
         /// const-eval budget; not done here.)
         #[inline]
-        pub(crate) fn pow10_cached(w: u32) -> W {
+        pub(crate) fn pow10_table(w: u32) -> W {
             pow10(w)
         }
     };
 }
-pub(crate) use decl_pow10_cached;
+pub(crate) use decl_pow10_table;
 
 /// Emits the strict transcendental surface for a wide decimal tier.
 ///
@@ -179,8 +179,8 @@ pub(crate) use decl_pow10_cached;
 ///   `POW10_TABLE`. Used for D38..=D616 where the const-eval step
 ///   budget can build the table at compile time.
 /// - `$Type, $Storage, $Work, $core, $max_scale, no_const_table`
-///   — keeps the legacy TLS `Vec<(u32, W)>` cache only. Used for
-///   D924 / D1232 where the table-build's `limbs_mul × max_scale`
+///   — recomputes `10^w` on the stack each call (no const table). Used
+///   for D924 / D1232 where the table-build's `limbs_mul × max_scale`
 ///   work exceeds the stable-rust const-eval step budget.
 macro_rules! decl_wide_transcendental {
     ($Type:ident, $Storage:ty, $Work:ty, $Wexp:ty, $core:ident, $max_scale:literal,
@@ -316,7 +316,7 @@ macro_rules! decl_wide_transcendental {
                 // exponentiate to a u32 upper bound on int_part.
                 let av = abs(v_w_at_scale);
                 let bl_v = bit_length(av);
-                let bl_one_s = bit_length(pow10_cached(scale));
+                let bl_one_s = bit_length(pow10_table(scale));
                 if bl_v <= bl_one_s {
                     // |v| < 1, no integer part — minimal lift.
                     return 5;
@@ -361,10 +361,10 @@ macro_rules! decl_wide_transcendental {
             pub(crate) fn pow10(n: u32) -> W {
                 lit(10).pow(n)
             }
-            $crate::macros::wide_transcendental::decl_pow10_cached!($table_mode, $max_scale);
+            $crate::macros::wide_transcendental::decl_pow10_table!($table_mode, $max_scale);
             #[inline]
             pub(crate) fn one(w: u32) -> W {
-                pow10_cached(w)
+                pow10_table(w)
             }
             /// Half-to-even round of `(numerator / divisor)` for
             /// the signed wide integer `W`. Pulled out so the
@@ -464,7 +464,7 @@ macro_rules! decl_wide_transcendental {
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
-                round_div(a * pow10_cached(w), b)
+                round_div(a * pow10_table(w), b)
             }
             /// Loop-friendly variant of [`div`] taking a precomputed
             /// `10^w` numerator factor.
@@ -524,7 +524,7 @@ macro_rules! decl_wide_transcendental {
                     bit_length(av) + (w as u32) * 4 < W::BITS,
                     "sqrt_fixed: |v| * 10^w overflows the working width"
                 );
-                let n = av * pow10_cached(w);
+                let n = av * pow10_table(w);
                 if n <= zero() {
                     // √0 = 0; also guards the Newton loop's n / x divide.
                     return zero();
@@ -560,7 +560,7 @@ macro_rules! decl_wide_transcendental {
             /// `BigInt::resize_to` magnitude/sign bridge, then scales by
             /// `10^GUARD`.
             pub(crate) fn to_work(raw: $Storage) -> W {
-                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_cached(GUARD)
+                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_table(GUARD)
             }
 
             /// Runtime-guard variant of [`to_work`]: scales raw by
@@ -568,7 +568,7 @@ macro_rules! decl_wide_transcendental {
             /// the `_approx` family where the guard width is chosen at
             /// call time.
             pub(crate) fn to_work_w(raw: $Storage, working_digits: u32) -> W {
-                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_cached(working_digits)
+                $crate::int::types::traits::BigInt::resize_to::<W>(raw) * pow10_table(working_digits)
             }
 
             /// Rounds a working-scale value down to scale `target` using
@@ -936,7 +936,7 @@ macro_rules! decl_wide_transcendental {
             /// Rounds a working-scale value to the nearest integer (ties
             /// away from zero). Used for the range-reduction quotient.
             pub(crate) fn round_to_nearest_int(v: W, w: u32) -> i128 {
-                let divisor = pow10_cached(w);
+                let divisor = pow10_table(w);
                 let (q, r) = v.div_rem(divisor);
                 let half = divisor >> 1;
                 let qi = if abs(r) >= half {
@@ -972,7 +972,7 @@ macro_rules! decl_wide_transcendental {
             /// power short-circuits to `false` (a value that large is not
             /// a representable exact power at this width).
             pub(crate) fn log_is_exact_int(value_raw: W, base_raw: W, scale: u32, k: i128) -> bool {
-                let one_s = pow10_cached(scale);
+                let one_s = pow10_table(scale);
                 if k == 0 {
                     return value_raw == one_s;
                 }
@@ -1062,7 +1062,7 @@ macro_rules! decl_wide_transcendental {
                 mode: $crate::support::rounding::RoundingMode,
             ) -> ::core::option::Option<$Storage> {
                 let raw_w = widen_storage(raw);
-                let one_s = pow10_cached(scale);
+                let one_s = pow10_table(scale);
                 let (kq, kr) = raw_w.div_rem(one_s);
                 if kr != lit(0) {
                     return ::core::option::Option::None;
@@ -1201,7 +1201,7 @@ macro_rules! decl_wide_transcendental {
             /// `|x| < 1` (the result has no integer-digit growth).
             fn pow_result_digits(av: W, scale: u32, factor: u128) -> u128 {
                 let bl_v = bit_length(av);
-                let bl_one = bit_length(pow10_cached(scale));
+                let bl_one = bit_length(pow10_table(scale));
                 if bl_v <= bl_one {
                     return 0;
                 }
@@ -1223,7 +1223,7 @@ macro_rules! decl_wide_transcendental {
             /// when not exactly representable, so the caller falls through
             /// to the working-scale kernel.
             pub(crate) fn exp2_exact_pow(k: i128, scale: u32) -> ::core::option::Option<W> {
-                let one_s = pow10_cached(scale);
+                let one_s = pow10_table(scale);
                 if k == 0 {
                     return ::core::option::Option::Some(one_s);
                 }
@@ -1247,7 +1247,7 @@ macro_rules! decl_wide_transcendental {
                     if (kk as u128) > scale as u128 {
                         return ::core::option::Option::None;
                     }
-                    let mut v = pow10_cached(scale - kk as u32);
+                    let mut v = pow10_table(scale - kk as u32);
                     let five = lit(5);
                     let mut i: u128 = 0;
                     while i < kk {
@@ -2271,7 +2271,7 @@ macro_rules! decl_wide_transcendental {
                 } else {
                     7 // D153 heavy / D307
                 };
-                let pow10_w = pow10_cached(w);
+                let pow10_w = pow10_table(w);
                 for _ in 0..halvings {
                     let x2 = mul(x, x, w);
                     let denom = one_w + sqrt_fixed(one_w + x2, w);
@@ -2289,11 +2289,9 @@ macro_rules! decl_wide_transcendental {
             // The tier-generic `ln_tang` / `exp_tang` kernels
             // (`algos::ln::ln_tang`, `algos::exp::exp_tang`) drive the
             // table through the `WideTrigCore::{ln,exp}_table_entry`
-            // trait methods, which forward here. The table-build cost
-            // (one `*_fixed` kernel per slot) is memoised per thread —
-            // ln keyed on `w`, exp keyed on `(w, M)` since the exp
-            // table size varies per band (128 / 512). On `no_std` the
-            // table is rebuilt per call (no thread-local storage).
+            // trait methods, which forward here. Each entry is a pure
+            // function of its `(w, idx[, M])` key and is computed on the
+            // stack on demand — one slot per call, no stored table.
 
             /// Tang ln table size — `ln(1 + i/M)`, `i ∈ [0, M]`.
             const LN_TANG_M: u32 = 128;
@@ -2733,7 +2731,7 @@ macro_rules! decl_wide_transcendental {
                     let w0 = SCALE + GUARD;
                     let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln2(w0), w0);
                     let k = round_to_nearest_int(r0, w0);
-                    let base2 = pow10_cached(SCALE) + pow10_cached(SCALE);
+                    let base2 = pow10_table(SCALE) + pow10_table(SCALE);
                     if log_is_exact_int(to_work_w(raw, 0), base2, SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }
@@ -2775,7 +2773,7 @@ macro_rules! decl_wide_transcendental {
                     let w0 = SCALE + GUARD;
                     let r0 = div(ln_fixed_routed::<SCALE>(to_work(raw), w0), ln10(w0), w0);
                     let k = round_to_nearest_int(r0, w0);
-                    let base10 = pow10_cached(SCALE + 1);
+                    let base10 = pow10_table(SCALE + 1);
                     if log_is_exact_int(to_work_w(raw, 0), base10, SCALE, k) {
                         return exact_int_at_scale(k, SCALE);
                     }

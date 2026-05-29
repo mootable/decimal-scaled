@@ -59,12 +59,11 @@ use crate::int::types::Int;
 /// `|y| ≤ 1/(2M)` and so shaves Taylor iterations.
 ///
 /// Mirrors the tuning from the D57 exp lookup (the collapsed
-/// per-tier 45..=56 exp table): same `Int<16>`-wide
-/// work integer, same Knuth-dispatch arithmetic cost per slot, same
-/// per-thread memoisation pattern. `M = 512` strikes the same balance
-/// here — the post-table Taylor remainder is small enough that the
-/// inner loop runs in ~15 iterations, against a one-off cold-start
-/// table seed of `M · atan_fixed(w)` calls (~22 ms at SCALE=57).
+/// per-tier 45..=56 exp table): same `Int<16>`-wide work integer,
+/// same Knuth-dispatch arithmetic cost per slot. `M = 512` strikes
+/// the balance — the post-table Taylor remainder is small enough that
+/// the inner loop runs in ~15 iterations, and a call touches exactly
+/// one table slot (computed on the stack via [`table_entry`]).
 ///
 const M: u32 = 512;
 

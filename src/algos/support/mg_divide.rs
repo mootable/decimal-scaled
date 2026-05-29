@@ -1917,7 +1917,7 @@ mod tests {
     /// numerators in both signs.
     ///
     /// If this passes the MG kernel is a drop-in replacement for the
-    /// existing `round_div(n, pow10_cached(w))` whenever the divisor is
+    /// existing `round_div(n, pow10_table(w))` whenever the divisor is
     /// a known power of ten with `w ≤ 38` — which is the entire `mul` /
     /// `mul_cached` / `round_to_storage_with` call-set in the
     /// wide_transcendental macro.

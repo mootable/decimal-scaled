@@ -1556,8 +1556,8 @@ impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<48>, SCALE> {
 
 #[cfg(any(feature = "d924", feature = "xx-wide"))]
 // `no_const_table`: 953-entry `Int<192>` POW10_TABLE build exceeds
-// the stable-rust const-eval step budget. Stays on the per-thread
-// `Vec<(u32, W)>` cache.
+// the stable-rust const-eval step budget, so `10^w` is recomputed on
+// the stack each call instead of read from a compile-time table.
 crate::macros::full::decl_decimal_full!(
     wide D924,
     crate::int::types::Int<48>,
@@ -1642,8 +1642,8 @@ impl<const SCALE: u32> Default for crate::D<crate::int::types::Int<64>, SCALE> {
 
 #[cfg(any(feature = "d1232", feature = "xx-wide"))]
 // `no_const_table`: 1262-entry `Int<256>` POW10_TABLE build exceeds
-// the stable-rust const-eval step budget. Stays on the per-thread
-// `Vec<(u32, W)>` cache.
+// the stable-rust const-eval step budget, so `10^w` is recomputed on
+// the stack each call instead of read from a compile-time table.
 crate::macros::full::decl_decimal_full!(
     wide D1232,
     crate::int::types::Int<64>,
