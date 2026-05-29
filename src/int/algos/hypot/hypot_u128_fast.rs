@@ -747,7 +747,7 @@ mod tests {
     /// arm, and the wide fallback.
     fn diff_at<const N: usize>()
     where
-        Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         let mut s = 0xDEAD_BEEF_CAFE_F00D_u64 ^ (N as u64);
         for _ in 0..400 {

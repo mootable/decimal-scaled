@@ -144,7 +144,7 @@ mod tests {
     /// input, including the overflow (`None`) cases.
     fn diff_at<const N: usize>()
     where
-        Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
+        crate::int::types::compute_limbs::Limbs<N>: crate::int::types::compute_limbs::ComputeLimbs,
     {
         let mut s = 0x0123_4567_89AB_CDEF_u64 ^ (N as u64);
         for _ in 0..400 {
