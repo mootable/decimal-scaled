@@ -2668,15 +2668,27 @@ macro_rules! decl_wide_transcendental {
                 }
 
                 /// `(sin(c_j), cos(c_j))` with `c_j = idx · π / (4·m)` at
-                /// working scale `w` (`idx ∈ [0, m]`). idx = 0 →
-                /// (sin 0, cos 0) = (0, 1).
+                /// working scale `w` (`idx ∈ [0, m]`), from the baked
+                /// binary Tang table. idx = 0 → (sin 0, cos 0) = (0, 1).
+                ///
+                /// BAKED binary Tang store: each `(sin, cos)` pair is
+                /// precomputed ONCE by an mpmath oracle as binary
+                /// fixed-point `round(value · 2^B)` (committed rodata in
+                /// `algos::support::sincos_tang_table`), then SLICED +
+                /// reconstructed to working scale `w` per call (one
+                /// multiply + one shift per component) — far cheaper than
+                /// the `sin_cos_fixed` Series it replaces. `SCALE` is
+                /// unused on the baked path (the binary table is
+                /// scale-independent); it is kept on the signature only to
+                /// match the trait forwarder.
                 #[inline]
                 pub(super) fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (W, W) {
-                    if idx == 0 {
-                        return (zero(), one(w));
-                    }
-                    let cj_w = (pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) * lit(idx as u128)) / lit((4 * m) as u128);
-                    sin_cos_fixed::<SCALE>(cj_w, w)
+                    $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(
+                        w,
+                        idx,
+                        m,
+                        pow10_table(w),
+                    )
                 }
             }
 
@@ -2772,6 +2784,112 @@ macro_rules! decl_wide_transcendental {
                     wc = (wc + 53).min(cap);
                 }
                 eprintln!("ln_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, ref max_w {max_w}, cap {cap})");
+            }
+
+            /// Differential validity wall for the baked binary Tang
+            /// `(sin(c_j), cos(c_j))` table: the baked accessor
+            /// (`sincos_tang_table::sincos_table_entry_baked`) must
+            /// reproduce the `sin_cos_fixed` Series recompute it replaced,
+            /// to within a small working-LSB tolerance, for EVERY table
+            /// slot `j ∈ [0, M]` across sampled working scales this tier
+            /// can request.
+            ///
+            /// The REFERENCE is the Series evaluated at a much higher guard
+            /// (`w + REF_EXTRA` digits) and narrowed back to `w` — at that
+            /// depth the `sin_cos_fixed` Series has converged, so the
+            /// narrowed value is the correctly-rounded `round(value · 10^w)`
+            /// oracle proxy. The OLD per-call Series ran at `w` itself,
+            /// where (especially at the minimal guard) it carried its own
+            /// truncation error — the imprecision the baked oracle table
+            /// removes. We therefore validate the baked entry against the
+            /// CONVERGED reference (tight tolerance), not the low-guard
+            /// Series. The final sin/cos/tan re-rounds with GUARD digits +
+            /// Ziv on top, so the entry only needs ~1-ULP accuracy.
+            #[cfg(test)]
+            pub(crate) fn sincos_table_baked_vs_series(tier: &str) {
+                use crate::algos::support::sincos_tang_table::SINCOS_TANG_M;
+                // Extra guard digits at which the `sin_cos_fixed` Series has
+                // fully converged relative to the target scale `w`.
+                const REF_EXTRA: u32 = 40;
+                let m = SINCOS_TANG_M;
+                // Correctly-rounded `round(value · 10^w)` reference pair:
+                // `sin_cos_fixed` at `w + REF_EXTRA`, narrowed back to `w`
+                // by a round-half-up divide by `10^REF_EXTRA`. For idx = 0
+                // the pair is exactly `(0, 10^w)`.
+                fn ref_pair(w: u32, idx: usize, m: u32) -> (W, W) {
+                    if idx == 0 {
+                        return (zero(), one(w));
+                    }
+                    let w_hi = w + REF_EXTRA;
+                    let cj_hi = (pi_cf::<0>(w_hi, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                        * lit(idx as u128))
+                        / lit((4 * m) as u128);
+                    let (s_hi, c_hi) = sin_cos_fixed::<0>(cj_hi, w_hi);
+                    let p = pow10(REF_EXTRA);
+                    let half = p / lit(2);
+                    ((s_hi + half) / p, (c_hi + half) / p)
+                }
+                // Match `ln_table_baked_vs_series`: the directed/nearest
+                // narrowing caps the WORKING scale at `W::BITS / 8` decimal
+                // digits (the baked accessor handles the full cap). The
+                // Series REFERENCE runs at `w + REF_EXTRA` and forms wide
+                // scratch, so we sample `w` up to a quarter of `W::BITS / 8`
+                // — already spanning every common `w = SCALE + GUARD` plus a
+                // healthy slice of the Ziv band.
+                let cap = <W as $crate::int::types::traits::BigInt>::BITS / 8;
+                let max_w = (cap / 4).saturating_sub(REF_EXTRA).max(GUARD);
+                let tol = lit(2); // working LSBs of allowed disagreement
+                let mut max_diff: W = zero();
+                let mut w = GUARD; // smallest reachable working scale (SCALE=0)
+                while w <= max_w {
+                    for idx in 0..=(m as usize) {
+                        let (bs, bc) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(w, idx, m, pow10_table(w));
+                        let (rs, rc) = ref_pair(w, idx, m);
+                        let ds = if bs >= rs { bs - rs } else { rs - bs };
+                        let dc = if bc >= rc { bc - rc } else { rc - bc };
+                        if ds > max_diff { max_diff = ds; }
+                        if dc > max_diff { max_diff = dc; }
+                        assert!(
+                            ds <= tol && dc <= tol,
+                            "{tier}: baked sincos_table_entry disagrees with converged Series at w={w} idx={idx} by (sin {ds:?}, cos {dc:?}) working LSBs (tol {tol:?})"
+                        );
+                    }
+                    w += if w < GUARD + 6 { 1 } else { 37 };
+                }
+                // Separately exercise the BAKED accessor right up to the
+                // full directed-narrow cap `W::BITS / 8` (where no Series
+                // reference can be built) to prove the conversion product
+                // never overflows `W` at the production ceiling. A panic
+                // here = an overflow; the values are checked for sanity.
+                // Sampling `c_1 = π/(4M)` (near 0: sin tiny, cos ≈ 1),
+                // `c_h = π/8` at idx = M/2 (sin < cos, both > 0), and
+                // `c_M = π/4` at idx = M (sin = cos = √2/2 exactly), all
+                // strictly inside `(0, 10^wc)`; and idx = 0 → `(0, 10^wc)`.
+                let mut wc = max_w;
+                while wc <= cap {
+                    let pw = pow10_table(wc);
+                    let (z_s, z_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, 0, m, pw);
+                    let (a_s, a_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, 1, m, pw);
+                    let (h_s, h_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, (m / 2) as usize, m, pw);
+                    let (m_s, m_c) = $crate::algos::support::sincos_tang_table::sincos_table_entry_baked::<W>(wc, m as usize, m, pw);
+                    assert!(
+                        // idx = 0 → (0, 1):
+                        z_s == zero() && z_c == pw
+                            // idx = 1 (near 0): 0 < sin < cos < 1:
+                            && a_s > zero() && a_s < a_c && a_c < pw
+                            // idx = M/2 (π/8): sin and cos increase/decrease
+                            // monotonically from idx=1, both strictly in (0,1),
+                            // sin still < cos:
+                            && h_s > a_s && h_s < h_c && h_c < a_c && h_c < pw
+                            // idx = M (π/4): sin = cos = √2/2, both > the
+                            // idx=M/2 sin and < the idx=M/2 cos:
+                            && m_s == m_c && m_s > h_s && m_c < h_c && m_s < pw,
+                        "{tier}: baked sincos_table_entry not sane at cap w={wc}"
+                    );
+                    if wc == cap { break; }
+                    wc = (wc + 53).min(cap);
+                }
+                eprintln!("sincos_table_baked_vs_series {tier}: max |baked-ref| = {max_diff:?} working LSBs (tol {tol:?}, ref max_w {max_w}, cap {cap})");
             }
 
             /// Zero-sized per-tier marker implementing
@@ -5608,6 +5726,38 @@ mod tests {
         wide_trig_d924::ln_table_baked_vs_series("D924");
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         wide_trig_d1232::ln_table_baked_vs_series("D1232");
+    }
+
+    /// Validity wall for the baked binary Tang `(sin, cos)` table: on
+    /// every shipped wide tier, the baked `sincos_table_entry` accessor
+    /// reproduces the OLD per-call `sin_cos_fixed` Series recompute (to
+    /// within a small working-LSB tolerance) for all `M + 1` slots across
+    /// the reachable working-scale band. If this passes, swapping the
+    /// Series recompute for the baked slice does not move the sin/cos/tan
+    /// result.
+    #[test]
+    fn sincos_table_baked_vs_series_all_tiers() {
+        use crate::types::widths::*;
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        wide_trig_d57::sincos_table_baked_vs_series("D57");
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        wide_trig_d76::sincos_table_baked_vs_series("D76");
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        wide_trig_d115::sincos_table_baked_vs_series("D115");
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        wide_trig_d153::sincos_table_baked_vs_series("D153");
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        wide_trig_d230::sincos_table_baked_vs_series("D230");
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        wide_trig_d307::sincos_table_baked_vs_series("D307");
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        wide_trig_d462::sincos_table_baked_vs_series("D462");
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        wide_trig_d616::sincos_table_baked_vs_series("D616");
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        wide_trig_d924::sincos_table_baked_vs_series("D924");
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        wide_trig_d1232::sincos_table_baked_vs_series("D1232");
     }
 
     /// Informational: report every `(constant, scale, mode)` cell where
