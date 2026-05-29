@@ -76,7 +76,7 @@ pub(crate) fn pow_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let w = SCALE + guard;
         let ln_base = C::ln_fixed::<SCALE>(C::to_work_w(base, guard), w);
         let arg = C::mul(C::to_work_w(exponent, guard), ln_base, w);
-        C::exp_fixed(arg, w)
+        C::exp_fixed::<SCALE>(arg, w)
     })
 }
 

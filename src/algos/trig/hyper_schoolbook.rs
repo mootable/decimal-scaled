@@ -30,7 +30,7 @@ pub(crate) fn sinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let w = SCALE + guard;
         let v = C::to_work_w(raw, guard);
         let av = if v < C::zero() { C::zero() - v } else { v };
-        let sh = C::sinh_pos_wide(av, w);
+        let sh = C::sinh_pos_wide::<SCALE>(av, w);
         if neg { C::zero() - sh } else { sh }
     })
 }
@@ -48,7 +48,7 @@ pub(crate) fn cosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let w = SCALE + guard;
         let v = C::to_work_w(raw, guard);
         let av = if v < C::zero() { C::zero() - v } else { v };
-        C::cosh_pos_wide(av, w)
+        C::cosh_pos_wide::<SCALE>(av, w)
     })
 }
 
@@ -66,7 +66,7 @@ pub(crate) fn tanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let w = SCALE + guard;
         let v = C::to_work_w(raw, guard);
         let av = if v < C::zero() { C::zero() - v } else { v };
-        let th = C::tanh_pos_wide(av, w);
+        let th = C::tanh_pos_wide::<SCALE>(av, w);
         if neg { C::zero() - th } else { th }
     })
 }

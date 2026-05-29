@@ -120,8 +120,9 @@ pub(crate) trait WideTrigCore {
 
     // ── the per-tier guard-digit kernels ──────────────────────────────
 
-    /// `e^v` for a working-scale value `v` at scale `w`.
-    fn exp_fixed(v_w: Self::W, w: u32) -> Self::W;
+    /// `e^v` for a working-scale value `v` at scale `w`. `SCALE`
+    /// const-folds the internal `ln 2` — see [`Self::ln_fixed`].
+    fn exp_fixed<const SCALE: u32>(v_w: Self::W, w: u32) -> Self::W;
     /// Natural log of a positive working-scale value at scale `w`.
     ///
     /// `SCALE` is the decimal layer's own storage scale: on the common
@@ -171,14 +172,18 @@ pub(crate) trait WideTrigCore {
     fn exp_result_int_digits(mag_at_scale: Self::W, scale: u32) -> u32;
     /// `sinh(|x|)` at working scale `w` via the `(e^x - e^-x)/2`
     /// identity (composed in the wider [`Self::Wexp`]); caller reapplies
-    /// the sign.
-    fn sinh_pos_wide(av_w: Self::W, w: u32) -> Self::W;
+    /// the sign. `SCALE` const-folds the internal `ln 2` (via
+    /// `exp_fixed`) — see [`Self::ln_fixed`].
+    fn sinh_pos_wide<const SCALE: u32>(av_w: Self::W, w: u32) -> Self::W;
     /// `cosh(|x|)` at working scale `w` via the `(e^x + e^-x)/2`
-    /// identity.
-    fn cosh_pos_wide(av_w: Self::W, w: u32) -> Self::W;
+    /// identity. `SCALE` const-folds the internal `ln 2` — see
+    /// [`Self::sinh_pos_wide`].
+    fn cosh_pos_wide<const SCALE: u32>(av_w: Self::W, w: u32) -> Self::W;
     /// `tanh(|x|)` at working scale `w` via the
     /// `(e^x - e^-x)/(e^x + e^-x)` identity; caller reapplies the sign.
-    fn tanh_pos_wide(av_w: Self::W, w: u32) -> Self::W;
+    /// `SCALE` const-folds the internal `ln 2` — see
+    /// [`Self::sinh_pos_wide`].
+    fn tanh_pos_wide<const SCALE: u32>(av_w: Self::W, w: u32) -> Self::W;
 
     /// Directed-rounding narrowing with Ziv escalation, forcing a
     /// confirm recompute even in nearest modes — the acosh / atanh
@@ -274,7 +279,7 @@ pub(crate) fn exp_series<C: WideTrigCore, const SCALE: u32>(
     // whose deciding residual sits below the work-int resolution (`exp(-10^-S)`
     // just under `1.0`). `raw == 0` (the one exact case) is pinned above.
     C::round_to_storage_directed_never_exact(C::GUARD, SCALE, mode, &mut |guard| {
-        C::exp_fixed(C::to_work_w(raw, guard), SCALE + guard)
+        C::exp_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
 
