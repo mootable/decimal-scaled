@@ -21,6 +21,34 @@ use crate::types::consts::DecimalConstants;
 #[cfg(feature = "_wide-support")]
 use crate::int::types::Int;
 
+/// Unwrap a storage-range-checked wide constant, panicking with the
+/// canonical "constant out of storage range" message when the value
+/// does not fit the type's storage at the requested `SCALE`.
+///
+/// This is the wide-tier analogue of the narrow path's
+/// `d38::checked_to_i128`: the public `DecimalConstants` accessors that
+/// can overflow (`deg_per_rad` ≈ 57.3 near a tier's top scale) source
+/// their value through
+/// [`crate::algos::support::const_table::deg_per_rad_by_scale_checked`]
+/// (etc.), which returns `None` on overflow; this turns that `None`
+/// into the same panic every other constant raises (`pi`/`tau`/`e` go
+/// through `rescale`, whose `checked_mul` panics). The INTERNAL
+/// `to_degrees`/`to_radians` kernel path uses the unchecked
+/// `deg_per_rad_by_scale` into a wide WORK integer and must not panic.
+#[cfg(feature = "_wide-support")]
+#[inline]
+fn checked_storage<S>(value: Option<S>, name: &'static str, scale: u32) -> S {
+    match value {
+        Some(v) => v,
+        None => panic!(
+            "constant out of storage range: {name} cannot fit storage at SCALE = {scale} \
+             (storage range is ±Storage::MAX / 10^SCALE)",
+            name = name,
+            scale = scale,
+        ),
+    }
+}
+
 include!(concat!(env!("OUT_DIR"), "/wide_consts.rs"));
 
 // ─── Per-work-width references for the working-scale helpers ──────────
@@ -383,6 +411,34 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<4>, 
                 .to_bits(),
         )
     }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage(
+            crate::algos::support::const_table::deg_per_rad_by_scale_checked::<
+                crate::int::types::Int<4>,
+            >(SCALE, mode),
+            "deg_per_rad",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage(
+            crate::algos::support::const_table::rad_per_deg_by_scale_checked::<
+                crate::int::types::Int<4>,
+            >(SCALE, mode),
+            "rad_per_deg",
+            SCALE,
+        ))
+    }
 }
 
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -459,6 +515,34 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<8>, 
                 .to_bits(),
         )
     }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage(
+            crate::algos::support::const_table::deg_per_rad_by_scale_checked::<
+                crate::int::types::Int<8>,
+            >(SCALE, mode),
+            "deg_per_rad",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage(
+            crate::algos::support::const_table::rad_per_deg_by_scale_checked::<
+                crate::int::types::Int<8>,
+            >(SCALE, mode),
+            "rad_per_deg",
+            SCALE,
+        ))
+    }
 }
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
@@ -534,6 +618,34 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<16>,
                 .rescale_with::<SCALE>(mode)
                 .to_bits(),
         )
+    }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage(
+            crate::algos::support::const_table::deg_per_rad_by_scale_checked::<
+                crate::int::types::Int<16>,
+            >(SCALE, mode),
+            "deg_per_rad",
+            SCALE,
+        ))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(checked_storage(
+            crate::algos::support::const_table::rad_per_deg_by_scale_checked::<
+                crate::int::types::Int<16>,
+            >(SCALE, mode),
+            "rad_per_deg",
+            SCALE,
+        ))
     }
 }
 
@@ -721,6 +833,34 @@ macro_rules! decl_wide_consts_tier {
                         .rescale_with::<SCALE>(mode)
                         .to_bits(),
                 )
+            }
+            #[inline]
+            fn deg_per_rad() -> Self {
+                Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+            #[inline]
+            fn rad_per_deg() -> Self {
+                Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+            #[inline]
+            fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::wide::checked_storage(
+                    crate::algos::support::const_table::deg_per_rad_by_scale_checked::<$Storage>(
+                        SCALE, mode,
+                    ),
+                    "deg_per_rad",
+                    SCALE,
+                ))
+            }
+            #[inline]
+            fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+                Self($crate::types::consts::wide::checked_storage(
+                    crate::algos::support::const_table::rad_per_deg_by_scale_checked::<$Storage>(
+                        SCALE, mode,
+                    ),
+                    "rad_per_deg",
+                    SCALE,
+                ))
             }
         }
     };
@@ -920,3 +1060,43 @@ decl_wide_consts_tier!(
     "d1232",
     "xx-wide",
 );
+
+// ─── storage-range guard tests for the wide-tier deg_per_rad ─────
+//
+// `deg_per_rad` (~57.3) is the first `DecimalConstants` value large
+// enough to exceed a tier's storage range near the tier's top scale.
+// The public accessor must PANIC with the canonical "out of storage
+// range" message (like `D38<38>::pi()`), not silently fold a wrapped
+// value. The internal `to_degrees`/`to_radians` kernel path uses the
+// unchecked accessor into a wide work integer and is unaffected.
+#[cfg(test)]
+mod range_guard_tests {
+    use super::DecimalConstants;
+
+    /// `D1232<1231>::deg_per_rad()` needs ≈ 5.73×10^1232, which exceeds
+    /// `Int<64>` signed max (≈ 9.9×10^1232 is the unsigned ceiling; the
+    /// value reaches into the sign bit) → must panic.
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[test]
+    #[should_panic(expected = "out of storage range")]
+    fn deg_per_rad_at_d1232_top_scale_panics() {
+        let _ = crate::types::widths::D1232::<1231>::deg_per_rad();
+    }
+
+    /// `D924<923>::deg_per_rad()` overflows `Int<48>` at its top scale →
+    /// must panic.
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[test]
+    #[should_panic(expected = "out of storage range")]
+    fn deg_per_rad_at_d924_top_scale_panics() {
+        let _ = crate::types::widths::D924::<923>::deg_per_rad();
+    }
+
+    /// One scale below the overflow edge the value still fits, so the
+    /// guard must NOT panic (confirms the guard is exact, not blanket).
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[test]
+    fn deg_per_rad_just_below_d1232_edge_fits() {
+        let _ = crate::types::widths::D1232::<1230>::deg_per_rad();
+    }
+}
