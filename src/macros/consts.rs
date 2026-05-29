@@ -118,6 +118,30 @@ macro_rules! decl_decimal_consts {
                     $crate::types::consts::e_at_target_with::<SCALE>(mode),
                 ))
             }
+            #[inline]
+            fn deg_per_rad() -> Self {
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::deg_per_rad_at_target::<SCALE>(),
+                ))
+            }
+            #[inline]
+            fn rad_per_deg() -> Self {
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::rad_per_deg_at_target::<SCALE>(),
+                ))
+            }
+            #[inline]
+            fn deg_per_rad_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::deg_per_rad_at_target_with::<SCALE>(mode),
+                ))
+            }
+            #[inline]
+            fn rad_per_deg_with(mode: $crate::support::rounding::RoundingMode) -> Self {
+                Self(<$Storage>::from_i128(
+                    $crate::types::consts::rad_per_deg_at_target_with::<SCALE>(mode),
+                ))
+            }
         }
     };
 

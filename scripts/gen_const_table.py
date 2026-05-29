@@ -89,6 +89,16 @@ W_BASE = 336    # max working scale of D307 (the widest base/x-wide-min tier)
 W_XW = 645      # max working scale of D616
 W_XXW = 1261    # max working scale of D1232
 
+# The ALWAYS-PRESENT narrow band. The public `DecimalConstants` trait
+# (D18 = Int<1>, scale 0..=17; D38 = Int<2>, scale 0..=38) sources its
+# constants from this table in EVERY build — including default (no
+# `_wide-support`) and `--no-default-features` (no_std). It is therefore
+# emitted WITHOUT any feature gate. It covers 0..=38: scale 38 is past
+# D38's representable range for pi/tau/e (they overflow i128 there), but
+# the entry must still exist so the narrow path can READ it and apply
+# its own storage-range guard (panic with "out of storage range").
+W_NARROW = 38   # max D38 scale (entry present so the narrow path can range-check it)
+
 # Gate strings. The base band is needed by every wide-support build.
 BASE_CFG = 'feature = "_wide-support"'
 # The x-wide band (337..=645) is reached by D462/D616 (and any build that
@@ -195,14 +205,23 @@ def main():
     w("//!")
     w("//! The value is width-independent: an accessor zero-extends the")
     w("//! stored limbs into the caller's work integer (the high limbs stay")
-    w("//! zero). Scale bands are feature-gated to match the tiers that can")
-    w("//! request them (mirrors `src/types/consts/wide.rs`).")
+    w("//! zero). The narrow band (`*_NARROW`, scales 0..=%d) is ALWAYS" % W_NARROW)
+    w("//! present — the public `DecimalConstants` trait on D18/D38 reads it")
+    w("//! in every build (default / no_std included). The three wider bands")
+    w("//! are feature-gated to match the tiers that can request them")
+    w("//! (mirrors `src/types/consts/wide.rs`).")
     w("")
     w("/// A single table entry: `(scale, floor-limbs little-endian, round-up bit)`.")
     w("pub(crate) type Entry = (u32, &'static [u64], u8);")
     w("")
 
-    bands = [
+    # The NARROW band (0..=W_NARROW) is ALWAYS present (no `cfg`): the
+    # public `DecimalConstants` trait on D18/D38 reads it in every build.
+    # The three wider bands stay feature-gated exactly as before, so a
+    # `_wide-support` build's BASE/XW/XXW bytes are byte-identical to the
+    # previous table; only the small always-present NARROW band is new.
+    narrow_band = ("NARROW", 0, W_NARROW, None)
+    wide_bands = [
         ("BASE", 0, W_BASE, BASE_CFG),
         ("XW", W_BASE + 1, W_XW, XW_CFG),
         ("XXW", W_XW + 1, W_XXW, XXW_CFG),
@@ -211,8 +230,9 @@ def main():
     for name, getter in CONSTS:
         value = getter()
         upper = name.upper()
-        for band, lo, hi, cfg in bands:
-            w(f"#[cfg({cfg})]")
+        for band, lo, hi, cfg in [narrow_band, *wide_bands]:
+            if cfg is not None:
+                w(f"#[cfg({cfg})]")
             w(f"static {upper}_{band}: &[Entry] = &[")
             out.extend(emit_entries(value, lo, hi))
             w("];")
@@ -229,6 +249,13 @@ def main():
         w("/// to the single matching entry per monomorphisation — no runtime")
         w("/// search on the hot path.")
         w(f"pub(crate) const fn {name}_entry(scale: u32) -> (&'static [u64], u8) {{")
+        w("    // NARROW band (0..=%d) is always present — the public" % W_NARROW)
+        w("    // `DecimalConstants` trait on D18/D38 reads it in every build,")
+        w("    // including default / no_std (no `_wide-support`).")
+        w(f"    if (scale as usize) < {upper}_NARROW.len() {{")
+        w(f"        let e = {upper}_NARROW[scale as usize];")
+        w("        return (e.1, e.2);")
+        w("    }")
         w(f"    #[cfg({BASE_CFG})]")
         w("    {")
         w(f"        if (scale as usize) < {upper}_BASE.len() {{")
@@ -383,9 +410,13 @@ def main():
     w("")
     w("    /// `by_scale` and `by_w` return identical values for the same")
     w("    /// scale (they differ only in const-fold behaviour, not value).")
+    w("    /// Uses an `Int<16>` work integer, which only exists in a")
+    w('    /// `_wide-support` build, so the test is gated to that build (a')
+    w("    /// narrow-only build has no work integer this wide to exercise).")
+    w('    #[cfg(feature = "_wide-support")]')
     w("    #[test]")
     w("    fn by_scale_eq_by_w() {")
-    w("        for s in [0u32, 1, 17, 18, 19, 30, 86] {")
+    w("        for s in [0u32, 1, 17, 18, 19, 30, 38, 86] {")
     w("            for m in [HalfToEven, Trunc, Ceiling, Floor, HalfAwayFromZero, HalfTowardZero] {")
     w("                assert_eq!(pi_by_scale::<Int<16>>(s, m), pi_by_w::<Int<16>>(s, m));")
     w("                assert_eq!(ln2_by_scale::<Int<16>>(s, m), ln2_by_w::<Int<16>>(s, m));")
@@ -394,10 +425,15 @@ def main():
     w("    }")
     w("")
     w("    /// Width-independence: the same scale gives the same value")
-    w("    /// (zero-extended) in different work-int widths.")
+    w("    /// (zero-extended) in different work-int widths. Exercises")
+    w("    /// `Int<16>` / `Int<32>` work integers (and `resize_to` between")
+    w('    /// them), which only exist in a `_wide-support` build — so the')
+    w("    /// test is gated there. The always-present narrow band is")
+    w("    /// covered by `modes_derive_from_floor_and_roundbit` above.")
+    w('    #[cfg(feature = "_wide-support")]')
     w("    #[test]")
     w("    fn value_is_width_independent() {")
-    w("        for s in [0u32, 5, 17, 18, 30, 50] {")
+    w("        for s in [0u32, 5, 17, 18, 30, 38, 50] {")
     w("            let a = pi_by_scale::<Int<16>>(s, HalfToEven);")
     w("            let b = pi_by_scale::<Int<32>>(s, HalfToEven);")
     w("            assert_eq!(a, b.resize_to::<Int<16>>());")

@@ -383,6 +383,26 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<4>, 
                 .to_bits(),
         )
     }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(crate::algos::support::const_table::deg_per_rad_by_scale::<
+            crate::int::types::Int<4>,
+        >(SCALE, mode))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(crate::algos::support::const_table::rad_per_deg_by_scale::<
+            crate::int::types::Int<4>,
+        >(SCALE, mode))
+    }
 }
 
 #[cfg(any(feature = "d153", feature = "wide"))]
@@ -459,6 +479,26 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<8>, 
                 .to_bits(),
         )
     }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(crate::algos::support::const_table::deg_per_rad_by_scale::<
+            crate::int::types::Int<8>,
+        >(SCALE, mode))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(crate::algos::support::const_table::rad_per_deg_by_scale::<
+            crate::int::types::Int<8>,
+        >(SCALE, mode))
+    }
 }
 
 #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
@@ -534,6 +574,26 @@ impl<const SCALE: u32> DecimalConstants for crate::D<crate::int::types::Int<16>,
                 .rescale_with::<SCALE>(mode)
                 .to_bits(),
         )
+    }
+    #[inline]
+    fn deg_per_rad() -> Self {
+        Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn rad_per_deg() -> Self {
+        Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+    }
+    #[inline]
+    fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(crate::algos::support::const_table::deg_per_rad_by_scale::<
+            crate::int::types::Int<16>,
+        >(SCALE, mode))
+    }
+    #[inline]
+    fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+        Self(crate::algos::support::const_table::rad_per_deg_by_scale::<
+            crate::int::types::Int<16>,
+        >(SCALE, mode))
     }
 }
 
@@ -721,6 +781,26 @@ macro_rules! decl_wide_consts_tier {
                         .rescale_with::<SCALE>(mode)
                         .to_bits(),
                 )
+            }
+            #[inline]
+            fn deg_per_rad() -> Self {
+                Self::deg_per_rad_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+            #[inline]
+            fn rad_per_deg() -> Self {
+                Self::rad_per_deg_with(crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+            #[inline]
+            fn deg_per_rad_with(mode: crate::support::rounding::RoundingMode) -> Self {
+                Self(crate::algos::support::const_table::deg_per_rad_by_scale::<$Storage>(
+                    SCALE, mode,
+                ))
+            }
+            #[inline]
+            fn rad_per_deg_with(mode: crate::support::rounding::RoundingMode) -> Self {
+                Self(crate::algos::support::const_table::rad_per_deg_by_scale::<$Storage>(
+                    SCALE, mode,
+                ))
             }
         }
     };
