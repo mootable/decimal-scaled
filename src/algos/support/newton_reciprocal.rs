@@ -84,12 +84,11 @@ use crate::int::algos::mul::mul_schoolbook::mul_schoolbook;
 // width the matcher routes Newton-vs-MG against, so the same type
 // serves every tier without const-generic gymnastics.
 //
-// The build-max is internal to the runtime-instantiated
-// `NewtonReciprocal` cache type — it never leaks onto a concrete-`N`
-// path (those still size their scratch via `ComputeInt::single_*` etc.
-// per Constitution rule 6). The cache stores ONE struct per cached
-// width per thread; over-sizing here costs constant per-slot stack +
-// per-slot struct memory, not per-tier code duplication.
+// The build-max is internal to the runtime-sized `NewtonReciprocal`
+// reciprocal struct — it never leaks onto a concrete-`N` path (those
+// still size their scratch via `ComputeLimbs::single_*` etc. per
+// Constitution rule 6). Over-sizing here costs constant per-call stack,
+// not per-tier code duplication.
 //
 // The 8192 / 12288 / 16384 / 32768 widths the 2026-05-28 audit also
 // identified (D462 Wexp / D1232 Work / D924 Wide / D616 Wexp / D924
@@ -120,7 +119,7 @@ const MAX_PROD_U64: usize = 332;
 
 // -- u128-limb sibling sizes (packed pairs of u64) --------------------
 //
-// The cached `r_u128`/`pow_u128` mirror the u64 versions packed pairwise
+// The precomputed `r_u128`/`pow_u128` mirror the u64 versions packed pairwise
 // (`limb = lo | hi << 64`). All sizes are `ceil(u64_size/2)`.
 
 /// Max `u128` limbs for the `10^scale` (`pow_u128`) buffer.
@@ -358,7 +357,7 @@ fn div_newton(
 // -- u128-packed Newton kernel ----------------------------------------
 //
 // Mirrors `div_newton` but operates entirely on packed u128 limb slices.
-// The cached `r_u128`/`pow_u128` are consumed directly with NO per-call
+// The precomputed `r_u128`/`pow_u128` are consumed directly with NO per-call
 // pack/unpack; the per-call operand (n) and output (quot, rem) all stay
 // in u128 throughout. Recovers the v0.4.4 `limbs_mul`-style throughput
 // (half the limb count, ~1/4 the partial products per schoolbook) by
@@ -428,7 +427,7 @@ fn mul_schoolbook_u128(a: &[u128], b: &[u128], out: &mut [u128]) {
 }
 
 /// Per-call Newton-reciprocal divide, u128-packed sibling of `div_newton`.
-/// All multiplies run on the cached u128-packed `r` and `pow_scale` (NO
+/// All multiplies run on the precomputed u128-packed `r` and `pow_scale` (NO
 /// per-call pack); operand/output stay in u128 throughout.
 fn div_newton_u128(
     n: &[u128],
@@ -532,7 +531,7 @@ pub(crate) fn newton_pow10_mag_u128_packed(
     for (i, slot) in mag_u128.iter_mut().enumerate() { *slot = quot[i]; }
 }
 
-/// Per-width Limb-axis matcher: does the cached `(width_bits, scale)`
+/// Per-width Limb-axis matcher: does the `(width_bits, scale)`
 /// cell run the u128-packed Newton kernel? Continuous width region per
 /// Constitution rule 6 + Class I (never a per-scale carve-out).
 ///
@@ -750,8 +749,8 @@ const fn newton_wins(width_bits: u32, scale: u32) -> bool {
 /// Width-class dispatch for `n / 10^SCALE`.
 ///
 /// When the `(W::BITS, scale)` cell wins under [`newton_wins`] the
-/// call routes through the Newton kernel with a thread-local cached
-/// reciprocal table; otherwise it forwards to the MG chain kernel.
+/// call routes through the Newton kernel (recomputing the reciprocal
+/// each call); otherwise it forwards to the MG chain kernel.
 ///
 /// Used at the `mul` / transcendental-rounding call sites where the
 /// numerator width is `W` and `scale` is a runtime value — see the
@@ -780,12 +779,12 @@ where
 
 /// Width-agnostic dispatch for `mag / 10^scale`, in place on a u128-limb
 /// magnitude slice. `width_bits` is the work-width in bits (`mag.len() *
-/// 128`-bounded; supplied by the caller as the cache / `newton_wins` key).
+/// 128`-bounded; supplied by the caller as the `newton_wins` key).
 ///
-/// Routes Newton vs MG-chain by [`newton_wins`], threading the
-/// thread-local reciprocal cache when Newton wins (std only). Shared with
-/// the typed [`dispatch_wide_pow10`] wrapper and the `Int<N>`-only
-/// decimal `mul` kernel.
+/// Routes Newton vs MG-chain by [`newton_wins`]; the Newton arm is
+/// std-only (no_std forwards to MG). Shared with the typed
+/// [`dispatch_wide_pow10`] wrapper and the `Int<N>`-only decimal `mul`
+/// kernel.
 #[inline]
 pub(crate) fn dispatch_pow10_mag_u128(
     mag: &mut [u128],
@@ -803,16 +802,10 @@ pub(crate) fn dispatch_pow10_mag_u128(
     {
         // `width_limbs` in u64 limbs — the `precompute` unit.
         let width_limbs = (width_bits as usize) / 64;
-        // Phase 9: the per-`(width, scale)` reciprocal table was a
-        // `thread_local!` `Vec<(scale, NewtonReciprocal)>` memo (state +
-        // heap). Both are forbidden by the Constitution's no-state /
-        // no-heap rules, so it is removed. The reciprocal is value-
-        // independent for a given `(width, scale)` but is neither cheaply
-        // const (Knuth divide at const-eval) nor cheap to recompute, so
-        // the Rule-2-correct fallback is to recompute the (fixed-size,
-        // stack-only) `NewtonReciprocal` on each call. This costs one
-        // extra Knuth divide per `÷10^SCALE` — see the dispatch perf note
-        // on `newton_wins`.
+        // Recompute the fixed-size, stack-only `NewtonReciprocal` for this
+        // `(width, scale)` each call: value-independent but not const-
+        // evaluable (Knuth divide), so a per-call stack recompute is the
+        // stateless, heap-free form.
         let table = NewtonReciprocal::precompute(scale, width_limbs);
         if newton_u128_wins(width_bits) {
             newton_pow10_mag_u128_packed(mag, neg, mode, &table);

@@ -71,18 +71,10 @@ const M: u32 = 512;
 /// `atan(idx / M)` at working scale `w` — the single table slot the
 /// kernel needs (`idx ∈ [0, M)`). idx = 0 → atan(0) = 0.
 ///
-/// This is value-independent: the result for a given `(w, idx)` is
-/// identical for every call. Phase 9 removed the former per-thread
-/// `thread_local!` `Vec` memo (state + heap, both forbidden) in favour
-/// of this stateless single-slot recompute — heap-free, computed on the
-/// stack each call.
-///
-/// FLAGGED (Phase 9, build.rs follow-up): the full `atan(j/M)` table IS
-/// bakeable as compile-time `static` rodata, but only via a `build.rs`
-/// codegen step — `core::atan_fixed` runs `BigInt` divides and is NOT a
-/// `const fn`, so an in-crate `const fn` builder cannot produce it.
-/// Baking it to recover the lookup speed is deferred; until then every
-/// call recomputes its slot (the expected, accepted Phase-9 regression).
+/// Value-independent for a given `(w, idx)`, recomputed on the stack each
+/// call: stateless and heap-free. (`core::atan_fixed` runs `BigInt`
+/// divides and is not a `const fn`, so the table cannot be baked as
+/// `const` rodata in-crate.)
 #[inline]
 fn table_entry(w: u32, idx: usize) -> core::W {
     if idx == 0 {

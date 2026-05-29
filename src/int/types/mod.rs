@@ -4103,6 +4103,7 @@ mod unified_mg_feasibility {
         Limbs<N>: ComputeLimbs,
         Int<M>: BigInt,
         Limbs<M>: ComputeLimbs,
+        <Int<M> as BigInt>::Scratch: ComputeLimbs,
     {
         let prod: Int<M> = a.widen_mul::<Int<M>>(b);
         div_wide_pow10::<Int<M>>(prod, scale, RoundingMode::HalfToEven)
