@@ -123,15 +123,25 @@ pub(crate) trait WideTrigCore {
     /// `e^v` for a working-scale value `v` at scale `w`.
     fn exp_fixed(v_w: Self::W, w: u32) -> Self::W;
     /// Natural log of a positive working-scale value at scale `w`.
-    fn ln_fixed(v_w: Self::W, w: u32) -> Self::W;
-    /// Sine of a working-scale value at scale `w`.
-    fn sin_fixed(v_w: Self::W, w: u32) -> Self::W;
-    /// Cosine of a working-scale value at scale `w`.
-    fn cos_fixed(v_w: Self::W, w: u32) -> Self::W;
-    /// Joint sine + cosine of a working-scale value at scale `w`.
-    fn sin_cos_fixed(v_w: Self::W, w: u32) -> (Self::W, Self::W);
-    /// Arctangent of a working-scale value at scale `w`.
-    fn atan_fixed(v_w: Self::W, w: u32) -> Self::W;
+    ///
+    /// `SCALE` is the decimal layer's own storage scale: on the common
+    /// path `w == SCALE + GUARD`, so the kernel reads its `ln 2`
+    /// constant from the compile-time baked `WideConst<SCALE>` rather
+    /// than re-deriving it at runtime; any other `w` (Ziv escalation)
+    /// falls to the runtime const. Bit-identical either way.
+    fn ln_fixed<const SCALE: u32>(v_w: Self::W, w: u32) -> Self::W;
+    /// Sine of a working-scale value at scale `w`. `SCALE` const-folds
+    /// the internal `π` — see [`Self::ln_fixed`].
+    fn sin_fixed<const SCALE: u32>(v_w: Self::W, w: u32) -> Self::W;
+    /// Cosine of a working-scale value at scale `w`. `SCALE` const-folds
+    /// the internal `π` — see [`Self::ln_fixed`].
+    fn cos_fixed<const SCALE: u32>(v_w: Self::W, w: u32) -> Self::W;
+    /// Joint sine + cosine of a working-scale value at scale `w`. `SCALE`
+    /// const-folds the internal `π` — see [`Self::ln_fixed`].
+    fn sin_cos_fixed<const SCALE: u32>(v_w: Self::W, w: u32) -> (Self::W, Self::W);
+    /// Arctangent of a working-scale value at scale `w`. `SCALE`
+    /// const-folds the internal `π/2` — see [`Self::ln_fixed`].
+    fn atan_fixed<const SCALE: u32>(v_w: Self::W, w: u32) -> Self::W;
 
     // ── working-scale helpers the tan kernel needs ────────────────────
 
@@ -186,8 +196,10 @@ pub(crate) trait WideTrigCore {
     fn one(w: u32) -> Self::W;
     /// The work-integer literal `n` (small unsigned).
     fn lit(n: u128) -> Self::W;
-    /// `ln 2` at working scale `w`, cached.
-    fn ln2(w: u32) -> Self::W;
+    /// `ln 2` at working scale `w`, const-folded at the layer's own
+    /// `SCALE` (the baked `WideConst<SCALE>` on the common
+    /// `w == SCALE + GUARD` path) — see [`Self::ln_fixed`].
+    fn ln2<const SCALE: u32>(w: u32) -> Self::W;
     /// `(a · 10^w) / b`, rounded half-to-even, with a precomputed
     /// `10^w` numerator factor (loop-friendly).
     fn div_cached(a: Self::W, b: Self::W, pow10_w: Self::W) -> Self::W;
@@ -202,27 +214,32 @@ pub(crate) trait WideTrigCore {
 
     /// The `ln(1 + i/M)` Tang table slot at working scale `w` (table
     /// size `M = 128`; the `i = 0` slot is `0`, the `i = M` slot is
-    /// `ln 2`). Memoised per thread per `w` by the tier's `Core`.
-    fn ln_table_entry(w: u32, idx: usize) -> Self::W;
+    /// `ln 2`). Recomputed on the stack per call; `SCALE` const-folds
+    /// the internal `ln 2` — see [`Self::ln_fixed`].
+    fn ln_table_entry<const SCALE: u32>(w: u32, idx: usize) -> Self::W;
 
     /// The Tang exp table slot `exp(j · ln2 / M)` at working scale `w`
-    /// for table size `M`. Memoised per thread per `(w, M)` by the
-    /// tier's `Core`.
-    fn exp_table_entry(w: u32, idx: usize, m: u32) -> Self::W;
+    /// for table size `M`. Recomputed on the stack per call; `SCALE`
+    /// const-folds the internal `ln 2` — see [`Self::ln_fixed`].
+    fn exp_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> Self::W;
 
     // ── π constants + the sincos Tang table (the sincos Tang kernel) ───
 
-    /// `π` at working scale `w`, cached.
-    fn pi(w: u32) -> Self::W;
-    /// `π/2` at working scale `w`, cached.
-    fn half_pi(w: u32) -> Self::W;
+    /// `π` at working scale `w`, const-folded at the layer's own `SCALE`
+    /// (the baked `WideConst<SCALE>` on the common `w == SCALE + GUARD`
+    /// path) — see [`Self::ln_fixed`].
+    fn pi<const SCALE: u32>(w: u32) -> Self::W;
+    /// `π/2` at working scale `w`, const-folded at the layer's own
+    /// `SCALE` — see [`Self::pi`].
+    fn half_pi<const SCALE: u32>(w: u32) -> Self::W;
 
     /// The sincos Tang table slot `(sin(c_j), cos(c_j))` at working
     /// scale `w` for table size `m`, where `c_j = j · π / (4·m)` and
     /// `j ∈ [0, m]` (the `j = m` slot is `(sin π/4, cos π/4)`, needed
     /// because rounding can lift a residual to the table boundary).
-    /// Memoised per thread per `(w, m)` by the tier's `Core`.
-    fn sincos_table_entry(w: u32, idx: usize, m: u32) -> (Self::W, Self::W);
+    /// Recomputed on the stack per call; `SCALE` const-folds the
+    /// internal `π` — see [`Self::ln_fixed`].
+    fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (Self::W, Self::W);
 }
 
 /// `exp_strict` for a wide tier — generic over the tier `C`.
@@ -262,7 +279,7 @@ pub(crate) fn ln_series<C: WideTrigCore, const SCALE: u32>(
         panic!("wide-tier ln: argument must be positive");
     }
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::ln_fixed(C::to_work_w(raw, guard), SCALE + guard)
+        C::ln_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
 
@@ -275,7 +292,7 @@ pub(crate) fn sin_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::sin_fixed(C::to_work_w(raw, guard), SCALE + guard)
+        C::sin_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
 
@@ -289,7 +306,7 @@ pub(crate) fn cos_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::cos_fixed(C::to_work_w(raw, guard), SCALE + guard)
+        C::cos_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
 
@@ -304,7 +321,7 @@ pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     let w0 = SCALE + C::GUARD;
-    let (sin0, cos0) = C::sin_cos_fixed(C::to_work(raw), w0);
+    let (sin0, cos0) = C::sin_cos_fixed::<SCALE>(C::to_work(raw), w0);
     if cos0 == C::zero() {
         panic!("wide-tier tan: cosine is zero (argument is an odd multiple of pi/2)");
     }
@@ -315,7 +332,7 @@ pub(crate) fn tan_series<C: WideTrigCore, const SCALE: u32>(
         return C::round_to_storage_with(probe, w0, SCALE, mode);
     }
     let w = w0 + extra;
-    let (sin_w, cos_w) = C::sin_cos_fixed(C::to_work_w(raw, C::GUARD + extra), w);
+    let (sin_w, cos_w) = C::sin_cos_fixed::<SCALE>(C::to_work_w(raw, C::GUARD + extra), w);
     let r = C::div(sin_w, cos_w, w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }
@@ -329,7 +346,7 @@ pub(crate) fn atan_series<C: WideTrigCore, const SCALE: u32>(
     mode: RoundingMode,
 ) -> C::Storage {
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::atan_fixed(C::to_work_w(raw, guard), SCALE + guard)
+        C::atan_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
 
@@ -348,6 +365,6 @@ pub(crate) fn atan_narrow<C: WideTrigCore, const SCALE: u32, const GUARD: u32>(
 ) -> C::Storage {
     let w = SCALE + GUARD;
     let v_w = C::to_work_w(raw, GUARD);
-    let r = C::atan_fixed(v_w, w);
+    let r = C::atan_fixed::<SCALE>(v_w, w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }

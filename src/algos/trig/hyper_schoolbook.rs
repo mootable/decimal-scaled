@@ -90,10 +90,10 @@ pub(crate) fn asinh_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let inner = if ax >= one_w {
             let inv = C::div(one_w, ax, w);
             let root = C::sqrt_fixed(one_w + C::mul(inv, inv, w), w);
-            C::ln_fixed(ax, w) + C::ln_fixed(one_w + root, w)
+            C::ln_fixed::<SCALE>(ax, w) + C::ln_fixed::<SCALE>(one_w + root, w)
         } else {
             let root = C::sqrt_fixed(C::mul(ax, ax, w) + one_w, w);
-            C::ln_fixed(ax + root, w)
+            C::ln_fixed::<SCALE>(ax + root, w)
         };
         if neg { C::zero() - inner } else { inner }
     })
@@ -120,7 +120,7 @@ pub(crate) fn acosh_schoolbook<C: WideTrigCore, const SCALE: u32>(
         if v >= two_w {
             let inv = C::div(one_w, v, w);
             let root = C::sqrt_fixed(one_w - C::mul(inv, inv, w), w);
-            C::ln_fixed(v, w) + C::ln_fixed(one_w + root, w)
+            C::ln_fixed::<SCALE>(v, w) + C::ln_fixed::<SCALE>(one_w + root, w)
         } else {
             let t = v - one_w;
             let root = C::sqrt_fixed(C::mul(t, t + two_w, w), w);
@@ -148,7 +148,7 @@ pub(crate) fn atanh_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let w = SCALE + guard;
         let one_w = C::one(w);
         let v = C::to_work_w(raw, guard);
-        (C::ln_fixed(one_w + v, w) - C::ln_fixed(one_w - v, w)) >> 1
+        (C::ln_fixed::<SCALE>(one_w + v, w) - C::ln_fixed::<SCALE>(one_w - v, w)) >> 1
     })
 }
 

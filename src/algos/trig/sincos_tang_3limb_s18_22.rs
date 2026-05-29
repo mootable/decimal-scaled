@@ -86,8 +86,8 @@ pub(crate) fn sin_cos_strict<const SCALE: u32>(
     let w = SCALE + GUARD_NARROW;
     let v_w = core::to_work_w(raw, GUARD_NARROW);
     let result = match which {
-        Which::Sin => core::sin_fixed(v_w, w),
-        Which::Cos => core::cos_fixed(v_w, w),
+        Which::Sin => core::sin_fixed::<SCALE>(v_w, w),
+        Which::Cos => core::cos_fixed::<SCALE>(v_w, w),
     };
     core::round_to_storage_with(result, w, SCALE, mode)
 }
@@ -119,7 +119,7 @@ pub(crate) fn tan_strict<const SCALE: u32>(raw: Int<3>, mode: RoundingMode) -> I
     }
     let w = SCALE + GUARD_NARROW;
     let v_w = core::to_work_w(raw, GUARD_NARROW);
-    let (sin_w, cos_w) = core::sin_cos_fixed(v_w, w);
+    let (sin_w, cos_w) = core::sin_cos_fixed::<SCALE>(v_w, w);
     if cos_w == core::zero() {
         panic!("D57::tan: cosine is zero (argument is an odd multiple of pi/2)");
     }

@@ -75,8 +75,8 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
     let v_w = C::to_work(raw);
     let one_w = C::one(w);
     let pow10_w = one_w;
-    let pi_w = C::pi(w);
-    let half_pi_w = C::half_pi(w);
+    let pi_w = C::pi::<SCALE>(w);
+    let half_pi_w = C::half_pi::<SCALE>(w);
 
     // Stage 1: x = k·(π/2) + r, |r| ≤ π/4 + small rounding slack.
     let k = C::round_to_nearest_int(C::div_cached(v_w, half_pi_w, pow10_w), w);
@@ -102,7 +102,7 @@ fn sin_cos_strict<C: WideTrigCore, const SCALE: u32, const M: u32>(
     let j_abs = j_signed.unsigned_abs() as u32;
     debug_assert!(j_abs <= M, "sin_cos_strict tang: table index {j_abs} > M={M}");
     let j_idx = if j_abs > M { M as usize } else { j_abs as usize };
-    let (sin_cj_abs, cos_cj) = C::sincos_table_entry(w, j_idx, M);
+    let (sin_cj_abs, cos_cj) = C::sincos_table_entry::<SCALE>(w, j_idx, M);
     let sin_cj = if j_signed < 0 { -sin_cj_abs } else { sin_cj_abs };
 
     // Stage 3: small-residual Taylor for sin(δ) and cos(δ).

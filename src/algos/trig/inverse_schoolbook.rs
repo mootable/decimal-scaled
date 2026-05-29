@@ -18,22 +18,22 @@ use crate::int::types::Int;
 use crate::support::rounding::RoundingMode;
 
 #[inline]
-fn asin_work<C: WideTrigCore>(v: C::W, w: u32) -> C::W {
+fn asin_work<C: WideTrigCore, const SCALE: u32>(v: C::W, w: u32) -> C::W {
     let one_w = C::one(w);
     let abs_v = if v < C::zero() { C::zero() - v } else { v };
     let half_w = one_w >> 1;
     if abs_v == one_w {
-        let hp = C::half_pi(w);
+        let hp = C::half_pi::<SCALE>(w);
         if v < C::zero() { C::zero() - hp } else { hp }
     } else if abs_v <= half_w {
         let denom = C::sqrt_fixed(one_w - C::mul(v, v, w), w);
-        C::atan_fixed(C::div(v, denom, w), w)
+        C::atan_fixed::<SCALE>(C::div(v, denom, w), w)
     } else {
         let inner = (one_w - abs_v) >> 1;
         let inner_sqrt = C::sqrt_fixed(inner, w);
         let inner_denom = C::sqrt_fixed(one_w - C::mul(inner_sqrt, inner_sqrt, w), w);
-        let inner_asin = C::atan_fixed(C::div(inner_sqrt, inner_denom, w), w);
-        let result_abs = C::half_pi(w) - inner_asin - inner_asin;
+        let inner_asin = C::atan_fixed::<SCALE>(C::div(inner_sqrt, inner_denom, w), w);
+        let result_abs = C::half_pi::<SCALE>(w) - inner_asin - inner_asin;
         if v < C::zero() { C::zero() - result_abs } else { result_abs }
     }
 }
@@ -52,7 +52,7 @@ pub(crate) fn asin_schoolbook<C: WideTrigCore, const SCALE: u32>(
     if abs_v0 > one_w {
         panic!("schoolbook asin: argument out of domain [-1, 1]");
     }
-    let r = asin_work::<C>(v0, w);
+    let r = asin_work::<C, SCALE>(v0, w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }
 
@@ -70,7 +70,7 @@ pub(crate) fn acos_schoolbook<C: WideTrigCore, const SCALE: u32>(
     if abs_v0 > one_w {
         panic!("schoolbook acos: argument out of domain [-1, 1]");
     }
-    let r = C::half_pi(w) - asin_work::<C>(v0, w);
+    let r = C::half_pi::<SCALE>(w) - asin_work::<C, SCALE>(v0, w);
     C::round_to_storage_with(r, w, SCALE, mode)
 }
 
@@ -86,9 +86,9 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
     let z = C::storage_zero();
     let r = if x_raw == z {
         if y_raw > z {
-            C::half_pi(w)
+            C::half_pi::<SCALE>(w)
         } else if y_raw < z {
-            C::zero() - C::half_pi(w)
+            C::zero() - C::half_pi::<SCALE>(w)
         } else {
             C::zero()
         }
@@ -99,19 +99,19 @@ pub(crate) fn atan2_schoolbook<C: WideTrigCore, const SCALE: u32>(
         let abs_y = if y < zero_w { zero_w - y } else { y };
         let abs_x = if x < zero_w { zero_w - x } else { x };
         let base = if abs_x >= abs_y {
-            C::atan_fixed(C::div(y, x, w), w)
+            C::atan_fixed::<SCALE>(C::div(y, x, w), w)
         } else {
-            let inv = C::atan_fixed(C::div(x, y, w), w);
-            let hp = C::half_pi(w);
+            let inv = C::atan_fixed::<SCALE>(C::div(x, y, w), w);
+            let hp = C::half_pi::<SCALE>(w);
             let same_sign = (y < zero_w) == (x < zero_w);
             if same_sign { hp - inv } else { (zero_w - hp) - inv }
         };
         if x_raw > z {
             base
         } else if y_raw >= z {
-            base + C::pi(w)
+            base + C::pi::<SCALE>(w)
         } else {
-            base - C::pi(w)
+            base - C::pi::<SCALE>(w)
         }
     };
     C::round_to_storage_with(r, w, SCALE, mode)

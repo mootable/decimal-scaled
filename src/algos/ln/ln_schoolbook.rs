@@ -120,7 +120,7 @@ pub(crate) fn ln_schoolbook<C: WideTrigCore, const SCALE: u32>(
         panic!("wide-tier ln schoolbook: argument must be positive");
     }
     C::round_to_storage_directed(C::GUARD, SCALE, mode, &mut |guard| {
-        C::ln_fixed(C::to_work_w(raw, guard), SCALE + guard)
+        C::ln_fixed::<SCALE>(C::to_work_w(raw, guard), SCALE + guard)
     })
 }
 
