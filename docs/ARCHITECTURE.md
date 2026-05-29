@@ -43,6 +43,21 @@ no algorithm is permitted to break them.
    call carries mutable state between invocations; introducing a cache would
    trade that guarantee for a speed-up we refuse to make.
 
+   **The line is MUTABILITY, not whether something is global.** An immutable
+   `static` is ALLOWED — it is the *sanctioned* form for compile-time-baked
+   read-only data (e.g. the per-scale constant tables), and reading it at a
+   *runtime* index is a lookup, not a recompute and not state. A `static mut`,
+   or a `static` made mutable through interior mutability, is a singleton and
+   is BANNED. Concretely:
+
+   - ✅ `static FOO: [u64; N] = …` / `const FOO: … = …` — immutable,
+     compile-time, read-only data (the per-scale constant + Tang tables).
+   - ❌ `static mut FOO` — a mutable singleton.
+   - ❌ any `static` whose contents change at run time — `OnceCell` /
+     `OnceLock` / `Mutex` / `RwLock` / `RefCell` / `Cell` / atomics used as a
+     cache or accumulator (interior mutability as a singleton / memo).
+   - ❌ heap on the compute path — `Vec` / `Box` / `Rc` / `Arc` / `alloc::*`.
+
    **The dividing line is WHEN the value is produced, not whether it is
    stored.** *Compile-time* precomputed data is fine and encouraged: a
    `const` / `const fn` / `static` table baked into the binary by the
