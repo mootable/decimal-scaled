@@ -437,6 +437,55 @@ fn e_const(digits: u32) -> BigU {
     rescale_down_hte(sum, work, digits)
 }
 
+/// `artanh(1/m) = 1/m + 1/(3·m³) + 1/(5·m⁵) + …` at `digits` working
+/// precision. The series is all-positive (unlike `atan`), converging
+/// geometrically by `m²` per term.
+fn artanh_recip(m: u64, digits: u32) -> BigU {
+    let one = pow10(digits);
+    let mut term = one;
+    term.div_u64(m);
+    let mut sum = term.clone();
+    let m_sq = m * m;
+    let mut k: u64 = 1;
+    loop {
+        let mut new_term = term.clone();
+        new_term.div_u64(m_sq);
+        if new_term.is_zero() {
+            break;
+        }
+        let mut contrib = new_term.clone();
+        contrib.div_u64(2 * k + 1);
+        sum.add_assign(&contrib);
+        term = new_term;
+        k += 1;
+        if k > 50_000 {
+            break;
+        }
+    }
+    sum
+}
+
+/// `ln 2 = 2·artanh(1/3)`, half-to-even rounded to `digits` precision.
+fn ln2_const(digits: u32) -> BigU {
+    let work = digits + 10;
+    let mut v = artanh_recip(3, work);
+    v.mul_u64(2);
+    rescale_down_hte(v, work, digits)
+}
+
+/// `ln 10 = 3·ln 2 + 2·artanh(1/9)`, half-to-even rounded to `digits`
+/// precision. (`ln 10 = ln 8 + ln(10/8) = 3·ln 2 + ln(1.25)` and
+/// `ln(1.25) = 2·artanh(1/9)`.)
+fn ln10_const(digits: u32) -> BigU {
+    let work = digits + 10;
+    let mut v = artanh_recip(3, work);
+    v.mul_u64(6); // 3·ln 2 = 3·(2·artanh(1/3)) = 6·artanh(1/3)
+    let mut tail = artanh_recip(9, work);
+    tail.mul_u64(2); // ln(1.25) = 2·artanh(1/9)
+    v.add_assign(&tail);
+    rescale_down_hte(v, work, digits)
+}
+
 /// Golden ratio φ = (1 + √5) / 2 via Newton on √5, half-to-even
 /// rounded to `digits` precision.
 fn golden(digits: u32) -> BigU {
@@ -499,6 +548,71 @@ fn emit_constant(
     Ok(())
 }
 
+/// Truncate (floor) `value` — which carries `true × 10^from` — to `to`
+/// fractional digits, dropping the residual. The kept digits are the
+/// exact digits of the true value, so a later round to any scale
+/// `w ≤ to` recovers the correct residual from them.
+fn truncate_down(value: &BigU, from: u32, to: u32) -> BigU {
+    if to >= from {
+        return value.clone();
+    }
+    let divisor = pow10(from - to);
+    let (q, _) = bigu_divmod(value, &divisor);
+    q
+}
+
+/// Three-way comparison of the sub-LSB residual of the true value
+/// against half an LSB at scale `to`, for the floor-truncated reference
+/// at that scale. `value` carries `true × 10^from` with `from > to`.
+///
+/// Returns the `Ordering` of `residual` against `divisor / 2`, where
+/// `residual = value mod 10^(from − to)` and `divisor = 10^(from − to)`.
+/// This is the `cmp_r` the rounding strategy consumes to decide a bump
+/// at the reference's own top scale (where the stored digits hold no
+/// residual of their own). For the irrational constants the residual is
+/// never exactly half, so `Equal` does not occur in practice; it is
+/// mapped to `Greater` defensively.
+fn residual_cmp_half(value: &BigU, from: u32, to: u32) -> std::cmp::Ordering {
+    let divisor = pow10(from - to);
+    let (_, r) = bigu_divmod(value, &divisor);
+    let mut half = divisor;
+    half.div_u64(2);
+    r.cmp(&half)
+}
+
+/// Emits one per-work-width reference for a constant `c < 10`: the
+/// floor-truncated digit string at `ref_scale` and the build-time
+/// residual-vs-half hint used to round correctly at that top scale.
+///
+/// `master` carries `c × 10^master_scale` (`master_scale ≥ ref_scale`),
+/// computed once at the widest precision and shared by every width and
+/// tier so each constant has a single generated value.
+fn emit_width_ref(
+    out: &mut impl Write,
+    base_name: &str,
+    master: &BigU,
+    master_scale: u32,
+    ref_scale: u32,
+) -> std::io::Result<()> {
+    let floored = truncate_down(master, master_scale, ref_scale);
+    emit_constant(out, &format!("{base_name}_DIGITS"), &floored, ref_scale, 1)?;
+    writeln!(
+        out,
+        "pub(super) const {base_name}_SCALE: u32 = {ref_scale};"
+    )?;
+    let cmp = residual_cmp_half(master, master_scale, ref_scale);
+    let token = match cmp {
+        std::cmp::Ordering::Less => "Less",
+        std::cmp::Ordering::Equal | std::cmp::Ordering::Greater => "Greater",
+    };
+    writeln!(
+        out,
+        "pub(super) const {base_name}_TOP_CMP_HALF: ::core::cmp::Ordering = \
+         ::core::cmp::Ordering::{token};"
+    )?;
+    Ok(())
+}
+
 fn main() -> std::io::Result<()> {
     let out_dir = PathBuf::from(env::var_os("OUT_DIR").expect("OUT_DIR not set"));
     let out_path = out_dir.join("wide_consts.rs");
@@ -517,10 +631,26 @@ fn main() -> std::io::Result<()> {
     writeln!(&mut f, "// `Int*::from_str_radix` at compile time.")?;
     writeln!(&mut f)?;
 
+    // Single high-precision references, computed once and shared by
+    // every emitted scale. `π` feeds both the per-tier
+    // `DecimalConstants` raws (and their `τ` / `π/2` / `π/4` siblings)
+    // and the per-work-width helper references, so it is generated here
+    // exactly once; each emission rounds this master down to its scale.
+    // `ln 2` / `ln 10` are the working-scale helper constants.
+    const MASTER_SCALE: u32 = 4951;
+    let pi_master = pi(MASTER_SCALE);
+    let ln2_master = ln2_const(MASTER_SCALE);
+    let ln10_master = ln10_const(MASTER_SCALE);
+
+    // `π` rounded half-to-even to `sr` fractional digits, from the
+    // master. The master's digits down to `MASTER_SCALE` are exact, so
+    // for `sr ≪ MASTER_SCALE` this is the correctly-rounded `π` at `sr`.
+    let pi_at = |sr: u32| rescale_down_hte(pi_master.clone(), MASTER_SCALE, sr);
+
     // D38: SCALE_REF=37 — the i128 ceiling. All six constants get
     // the full surface here so src/consts.rs can drop its hand-written
     // raw values entirely.
-    let pi37 = pi(37);
+    let pi37 = pi_at(37);
     let mut tau37 = pi37.clone();
     tau37.mul_u64(2);
     let mut half_pi37 = pi37.clone();
@@ -537,7 +667,7 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "GOLDEN_D38_S37", &phi37, 37, 1)?;
 
     // D76: SCALE_REF=75.
-    let pi75 = pi(75);
+    let pi75 = pi_at(75);
     let mut tau75 = pi75.clone();
     tau75.mul_u64(2);
     let mut half_pi75 = pi75.clone();
@@ -554,7 +684,7 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "GOLDEN_D76_S75", &phi75, 75, 1)?;
 
     // D153: SCALE_REF=152 (v0.4.0 cap: MAX_SCALE = name - 1).
-    let pi152 = pi(152);
+    let pi152 = pi_at(152);
     let mut tau152 = pi152.clone();
     tau152.mul_u64(2);
     let mut half_pi152 = pi152.clone();
@@ -571,7 +701,7 @@ fn main() -> std::io::Result<()> {
     emit_constant(&mut f, "GOLDEN_D153_S152", &phi152, 152, 1)?;
 
     // D307: SCALE_REF=306 (v0.4.0 cap).
-    let pi306 = pi(306);
+    let pi306 = pi_at(306);
     let mut tau306 = pi306.clone();
     tau306.mul_u64(2);
     let mut half_pi306 = pi306.clone();
@@ -604,7 +734,7 @@ fn main() -> std::io::Result<()> {
         ("D924", 923),
         ("D1232", 1231),
     ] {
-        let p = pi(scale_ref);
+        let p = pi_at(scale_ref);
         let mut t = p.clone();
         t.mul_u64(2);
         let mut hp = p.clone();
@@ -654,6 +784,62 @@ fn main() -> std::io::Result<()> {
             &phi,
             scale_ref,
             1,
+        )?;
+    }
+
+    // ─── Per-work-width references for the working-scale helpers ───
+    //
+    // `pi(w)` / `ln2(w)` / `ln10(w)` in
+    // `macros/wide_transcendental.rs` need each constant at an
+    // arbitrary working scale `w` on the tier's work integer `W`. One
+    // reference per (constant, work-width) covers every such `w`: the
+    // constant is stored at the width's maximum usable scale, then
+    // rounded down to `w` on demand. Every `w` the helpers reach is
+    // representable in `W`, hence ≤ that maximum, so the reference
+    // always carries the digits.
+    //
+    // Each constant is `< 10` (one integer digit), so the maximum scale
+    // is `W − 1` decimal digits — capped one lower on the widths whose
+    // signed magnitude ceiling leads with a digit too small to seat the
+    // integer part at `W − 1` (the constant would not fit). The values
+    // are floor-truncated at that scale and paired with a build-time
+    // residual-vs-half hint (`*_TOP_CMP_HALF`) so the helper rounds
+    // correctly even at the reference's own top scale, where the stored
+    // digits hold no further residual.
+    //
+    // `(work-int limb count N, pi scale, ln2 scale, ln10 scale)`. The
+    // π / ln10 caps drop by one on `Int<32>` because its magnitude
+    // ceiling (`1.61…×10^616`) cannot seat their integer digit at 616.
+    for &(n_limbs, pi_ref, ln2_ref, ln10_ref) in &[
+        (8u32, 153u32, 153u32, 153u32),
+        (16, 307, 307, 307),
+        (32, 615, 616, 615),
+        (48, 923, 924, 924),
+        (64, 1232, 1232, 1232),
+        (128, 2465, 2465, 2465),
+        (192, 3698, 3698, 3698),
+        (256, 4931, 4931, 4931),
+    ] {
+        emit_width_ref(
+            &mut f,
+            &format!("PI_W{n_limbs}"),
+            &pi_master,
+            MASTER_SCALE,
+            pi_ref,
+        )?;
+        emit_width_ref(
+            &mut f,
+            &format!("LN2_W{n_limbs}"),
+            &ln2_master,
+            MASTER_SCALE,
+            ln2_ref,
+        )?;
+        emit_width_ref(
+            &mut f,
+            &format!("LN10_W{n_limbs}"),
+            &ln10_master,
+            MASTER_SCALE,
+            ln10_ref,
         )?;
     }
 

@@ -1271,31 +1271,95 @@ macro_rules! decl_wide_transcendental {
                 }
             }
 
-            /// `ln 2` at working scale `w`. Thread-local memoised
-            /// per `w` (std feature) so the artanh series runs once
-            /// per `(thread, working-scale)` pair, not per call.
-            pub(crate) fn ln2(w: u32) -> W {
-                ln2_compute(w)
-            }
-            fn ln2_compute(w: u32) -> W {
-                let t = one(w) / lit(3);
-                let t2 = mul(t, t, w);
-                let mut sum = t;
-                let mut term = t;
-                let mut j: u128 = 1;
-                loop {
-                    term = mul(term, t2, w);
-                    let contrib = term / lit(2 * j + 1);
-                    if contrib == zero() {
-                        break;
-                    }
-                    sum = sum + contrib;
-                    j += 1;
-                    if j > SERIES_CAP {
-                        break;
-                    }
+            /// The work-integer's u64-limb count, the key into the
+            /// per-width constant references in
+            /// [`crate::types::consts::wide`].
+            const W_LIMBS: u32 = <W as $crate::int::types::traits::BigInt>::BITS / 64;
+
+            /// `π` floor-truncated at its per-width stored scale, parsed
+            /// once per monomorphisation.
+            const PI_REF_DIGITS: W =
+                match <W>::from_str_radix($crate::types::consts::wide::pi_w_ref(W_LIMBS).0, 10) {
+                    Ok(v) => v,
+                    Err(()) => panic!("wide consts: pi reference not parseable"),
+                };
+            const PI_REF_SCALE: u32 = $crate::types::consts::wide::pi_w_ref(W_LIMBS).1;
+            const PI_REF_TOP_CMP: ::core::cmp::Ordering =
+                $crate::types::consts::wide::pi_w_ref(W_LIMBS).2;
+
+            /// `ln 2` floor-truncated at its per-width stored scale.
+            const LN2_REF_DIGITS: W =
+                match <W>::from_str_radix($crate::types::consts::wide::ln2_w_ref(W_LIMBS).0, 10) {
+                    Ok(v) => v,
+                    Err(()) => panic!("wide consts: ln2 reference not parseable"),
+                };
+            const LN2_REF_SCALE: u32 = $crate::types::consts::wide::ln2_w_ref(W_LIMBS).1;
+            const LN2_REF_TOP_CMP: ::core::cmp::Ordering =
+                $crate::types::consts::wide::ln2_w_ref(W_LIMBS).2;
+
+            /// `ln 10` floor-truncated at its per-width stored scale.
+            const LN10_REF_DIGITS: W =
+                match <W>::from_str_radix($crate::types::consts::wide::ln10_w_ref(W_LIMBS).0, 10) {
+                    Ok(v) => v,
+                    Err(()) => panic!("wide consts: ln10 reference not parseable"),
+                };
+            const LN10_REF_SCALE: u32 = $crate::types::consts::wide::ln10_w_ref(W_LIMBS).1;
+            const LN10_REF_TOP_CMP: ::core::cmp::Ordering =
+                $crate::types::consts::wide::ln10_w_ref(W_LIMBS).2;
+
+            /// Rounds a per-width constant reference — floor-truncated
+            /// digits at scale `ref_scale`, with `top_cmp` describing
+            /// the true value's sub-LSB residual against half at that
+            /// scale — down to working scale `w` under `mode`.
+            ///
+            /// For `w < ref_scale` the dropped digits `w+1..=ref_scale`
+            /// are the exact digits of the true value, so the divide's
+            /// own residual decides the round. At `w == ref_scale` the
+            /// stored digits hold no further residual, so the build-time
+            /// `top_cmp` hint supplies it. Every working scale the
+            /// helpers reach is representable in `W`, hence
+            /// `w <= ref_scale`.
+            fn const_rounded(
+                digits: W,
+                ref_scale: u32,
+                top_cmp: ::core::cmp::Ordering,
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                debug_assert!(
+                    w <= ref_scale,
+                    "wide consts: working scale exceeds the per-width reference scale"
+                );
+                if w >= ref_scale {
+                    return if $crate::support::rounding::should_bump(
+                        mode,
+                        top_cmp,
+                        digits.bit(0),
+                        true,
+                    ) {
+                        digits + lit(1)
+                    } else {
+                        digits
+                    };
                 }
-                sum + sum
+                let shift = ref_scale - w;
+                if shift <= 38 {
+                    $crate::algos::support::mg_divide::div_wide_pow10::<W>(digits, shift, mode)
+                } else {
+                    $crate::algos::support::newton_reciprocal::dispatch_wide_pow10::<W>(
+                        digits, shift, mode,
+                    )
+                }
+            }
+
+            /// `ln 2` at working scale `w`, rounded under the crate
+            /// default mode from the per-width compile-time reference.
+            pub(crate) fn ln2(w: u32) -> W {
+                ln2_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+            }
+            /// `ln 2` at working scale `w`, rounded under `mode`.
+            pub(crate) fn ln2_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
+                const_rounded(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode)
             }
 
             /// Natural logarithm of a positive working-scale value.
@@ -1444,12 +1508,14 @@ macro_rules! decl_wide_transcendental {
                 sum
             }
 
-            /// `ln 10` at working scale `w`. Memoised, see [`ln2`].
+            /// `ln 10` at working scale `w`, rounded under the crate
+            /// default mode from the per-width compile-time reference.
             pub(crate) fn ln10(w: u32) -> W {
-                ln10_compute(w)
+                ln10_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
-            fn ln10_compute(w: u32) -> W {
-                ln_fixed(one(w) * lit(10), w)
+            /// `ln 10` at working scale `w`, rounded under `mode`.
+            pub(crate) fn ln10_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
+                const_rounded(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode)
             }
 
             /// Natural log of a positive working-scale value via the
@@ -2014,25 +2080,16 @@ macro_rules! decl_wide_transcendental {
                 sum
             }
 
-            /// `π` at working scale `w`, via Machin's formula.
-            /// Memoised per `w` (std feature); see [`ln2`].
+            /// `π` at working scale `w`, rounded under the crate default
+            /// mode from the per-width compile-time reference.
             pub(crate) fn pi(w: u32) -> W {
-                pi_compute(w)
+                pi_with(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
             }
-            fn pi_compute(w: u32) -> W {
-                let a = atan_taylor(one(w) / lit(5), w);
-                let b = atan_taylor(one(w) / lit(239), w);
-                mul_u(a, 16) - mul_u(b, 4)
+            /// `π` at working scale `w`, rounded under `mode`.
+            pub(crate) fn pi_with(w: u32, mode: $crate::support::rounding::RoundingMode) -> W {
+                const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
             }
 
-            // ── pi / ln2 / ln10 / pow10 fallback recompute ─────────────
-            //
-            // These working-scale constants are value-independent (the
-            // result for a given `w` is identical every call), so they are
-            // recomputed on the stack — stateless, heap-free. `pow10` for
-            // the strict-path `w` range is served by the compile-time
-            // `static POW10_TABLE` (see `decl_pow10_cached!`); only the
-            // out-of-range `_approx` tail and the series constants recompute.
             /// `π/2` at working scale `w`.
             pub(crate) fn half_pi(w: u32) -> W {
                 pi(w) >> 1
