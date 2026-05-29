@@ -3744,16 +3744,14 @@ macro_rules! decl_wide_transcendental {
             pub fn to_degrees_strict(self) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                debug_assert!(
-                    $core::bit_length(v) + 8 < <$Work>::BITS,
-                    concat!(
-                        stringify!($Type),
-                        "::to_degrees: |self| * 180 overflows the working integer"
-                    )
-                );
-                let r = $core::div(
-                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
-                    $core::pi(w),
+                // `x * 180/π`: multiply by the const-folded `deg_per_rad`
+                // (180/π) constant instead of dividing by the runtime-
+                // recomputed `pi(w)`. Same value, but no per-call π
+                // rescale (`const_rounded`) and no divide — mirrors
+                // `to_radians_strict`'s `pi_cf` multiply path.
+                let r = $core::mul(
+                    v,
+                    $core::deg_per_rad_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage(r, w, SCALE))
@@ -4412,16 +4410,11 @@ macro_rules! decl_wide_transcendental {
             ) -> Self {
                 let w = SCALE + $core::GUARD;
                 let v = $core::to_work(self.to_bits());
-                debug_assert!(
-                    $core::bit_length(v) + 8 < <$Work>::BITS,
-                    concat!(
-                        stringify!($Type),
-                        "::to_degrees: |self| * 180 overflows the working integer"
-                    )
-                );
-                let r = $core::div(
-                    v * $crate::macros::wide_roots::wide_lit!($Work, "180"),
-                    $core::pi(w),
+                // See `to_degrees_strict`: const-folded `deg_per_rad`
+                // multiply, no runtime `pi(w)` recompute, no divide.
+                let r = $core::mul(
+                    v,
+                    $core::deg_per_rad_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE),
                     w,
                 );
                 Self::from_bits($core::round_to_storage_with(r, w, SCALE, mode))
