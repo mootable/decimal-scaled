@@ -1495,40 +1495,19 @@ macro_rules! decl_wide_transcendental {
                 <W>::from_u128(n)
             }
 
-            /// Per-`(W, SCALE)` compile-time-baked transcendental
-            /// constants at the base working scale `SCALE + GUARD`.
-            ///
-            /// Each associated const evaluates [`const_rounded_cf`] at
-            /// compile time (associated consts may use the impl's `SCALE`
-            /// — a fn-body `const` may not, which is why this is a type).
-            /// One `.rodata` value per `(W, SCALE, constant, mode)`; the
-            /// `*_cf` fetches select among them with zero runtime divide
-            /// on the common non-escalated path.
-            pub(crate) struct WideConst<const SCALE: u32>;
-            impl<const SCALE: u32> WideConst<SCALE> {
-                const BASE_W: u32 = SCALE + GUARD;
-                // π
-                const PI_HTE: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfToEven);
-                const PI_HAFZ: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfAwayFromZero);
-                const PI_HTZ: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfTowardZero);
-                const PI_TRUNC: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Trunc);
-                const PI_FLOOR: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Floor);
-                const PI_CEIL: W = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Ceiling);
-                // ln 2
-                const LN2_HTE: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfToEven);
-                const LN2_HAFZ: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfAwayFromZero);
-                const LN2_HTZ: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfTowardZero);
-                const LN2_TRUNC: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Trunc);
-                const LN2_FLOOR: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Floor);
-                const LN2_CEIL: W = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Ceiling);
-                // ln 10
-                const LN10_HTE: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfToEven);
-                const LN10_HAFZ: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfAwayFromZero);
-                const LN10_HTZ: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::HalfTowardZero);
-                const LN10_TRUNC: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Trunc);
-                const LN10_FLOOR: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Floor);
-                const LN10_CEIL: W = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, Self::BASE_W, $crate::support::rounding::RoundingMode::Ceiling);
-            }
+            // The per-`(W, SCALE, constant, mode)` compile-time-baked
+            // `WideConst<SCALE>` struct that used to live here (one
+            // `.rodata` value per width × scale × mode, computed by
+            // `const_rounded_cf`) has been REPLACED by the per-scale,
+            // width-deduplicated oracle table in
+            // `crate::algos::support::const_table`. The `*_cf` functions
+            // below now source the baked constant from that table's
+            // `<const>_by_scale` accessor (keyed on the const working
+            // scale `SCALE + GUARD`, so it const-folds to one entry per
+            // monomorphisation and zero-extends the shared limbs into
+            // `W`), instead of one duplicated bake per width. The Ziv
+            // escalation path (`w != SCALE + GUARD`) is unchanged — it
+            // still falls to the runtime `const_rounded` divide.
 
             /// `π` const-folded at the base working scale `SCALE + GUARD`
             /// for this `(W, SCALE)` cell — no runtime divide. The common
@@ -1540,16 +1519,11 @@ macro_rules! decl_wide_transcendental {
                 w: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> W {
-                use $crate::support::rounding::RoundingMode as Rm;
                 if w == SCALE + GUARD {
-                    return match mode {
-                        Rm::HalfToEven => WideConst::<SCALE>::PI_HTE,
-                        Rm::HalfAwayFromZero => WideConst::<SCALE>::PI_HAFZ,
-                        Rm::HalfTowardZero => WideConst::<SCALE>::PI_HTZ,
-                        Rm::Trunc => WideConst::<SCALE>::PI_TRUNC,
-                        Rm::Floor => WideConst::<SCALE>::PI_FLOOR,
-                        Rm::Ceiling => WideConst::<SCALE>::PI_CEIL,
-                    };
+                    // Hot path: source `π` from the per-scale oracle table
+                    // keyed on the CONST working scale — const-folds to one
+                    // entry per monomorphisation, zero-extends into `W`.
+                    return $crate::algos::support::const_table::pi_by_scale::<W>(SCALE + GUARD, mode);
                 }
                 const_rounded(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode)
             }
@@ -1561,16 +1535,10 @@ macro_rules! decl_wide_transcendental {
                 w: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> W {
-                use $crate::support::rounding::RoundingMode as Rm;
                 if w == SCALE + GUARD {
-                    return match mode {
-                        Rm::HalfToEven => WideConst::<SCALE>::LN2_HTE,
-                        Rm::HalfAwayFromZero => WideConst::<SCALE>::LN2_HAFZ,
-                        Rm::HalfTowardZero => WideConst::<SCALE>::LN2_HTZ,
-                        Rm::Trunc => WideConst::<SCALE>::LN2_TRUNC,
-                        Rm::Floor => WideConst::<SCALE>::LN2_FLOOR,
-                        Rm::Ceiling => WideConst::<SCALE>::LN2_CEIL,
-                    };
+                    // Hot path: source `ln 2` from the per-scale oracle
+                    // table keyed on the CONST working scale — see `pi_cf`.
+                    return $crate::algos::support::const_table::ln2_by_scale::<W>(SCALE + GUARD, mode);
                 }
                 const_rounded(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode)
             }
@@ -1582,16 +1550,10 @@ macro_rules! decl_wide_transcendental {
                 w: u32,
                 mode: $crate::support::rounding::RoundingMode,
             ) -> W {
-                use $crate::support::rounding::RoundingMode as Rm;
                 if w == SCALE + GUARD {
-                    return match mode {
-                        Rm::HalfToEven => WideConst::<SCALE>::LN10_HTE,
-                        Rm::HalfAwayFromZero => WideConst::<SCALE>::LN10_HAFZ,
-                        Rm::HalfTowardZero => WideConst::<SCALE>::LN10_HTZ,
-                        Rm::Trunc => WideConst::<SCALE>::LN10_TRUNC,
-                        Rm::Floor => WideConst::<SCALE>::LN10_FLOOR,
-                        Rm::Ceiling => WideConst::<SCALE>::LN10_CEIL,
-                    };
+                    // Hot path: source `ln 10` from the per-scale oracle
+                    // table keyed on the CONST working scale — see `pi_cf`.
+                    return $crate::algos::support::const_table::ln10_by_scale::<W>(SCALE + GUARD, mode);
                 }
                 const_rounded(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode)
             }
@@ -1639,6 +1601,53 @@ macro_rules! decl_wide_transcendental {
                         w += if w < 5 || w + 5 > ref_scale { 1 } else { 7 };
                     }
                 }
+            }
+
+            /// Records every `(constant, scale, mode)` cell where the new
+            /// per-scale oracle table (`const_table::*_by_scale`) differs
+            /// from the OLD per-`(W, SCALE)` `const_rounded_cf` bake, across
+            /// every const working scale `w = SCALE + GUARD` this tier can
+            /// request (`SCALE in 0..=$max_scale`) and every rounding mode.
+            ///
+            /// Per the owner directive the mpmath table value is
+            /// AUTHORITATIVE and SUPERSEDES the old computed value, so a
+            /// divergence is NOT a failure — it means the old path carried a
+            /// latent rounding bug now fixed. This fn therefore never panics
+            /// on a value divergence; it prints each divergence (so the
+            /// coordinator can cross-check against golden, whose oracle is
+            /// also mpmath) and returns the divergence count.
+            #[cfg(test)]
+            pub(crate) fn const_table_vs_const_rounded_cf(tier: &str) -> u64 {
+                use $crate::support::rounding::RoundingMode::*;
+                let modes = [HalfToEven, HalfAwayFromZero, HalfTowardZero, Trunc, Floor, Ceiling];
+                let mut diverged: u64 = 0;
+                let mut scale = 0u32;
+                while scale <= ($max_scale as u32) {
+                    let w = scale + GUARD;
+                    for mode in modes {
+                        let old_pi = const_rounded_cf(PI_REF_DIGITS, PI_REF_SCALE, PI_REF_TOP_CMP, w, mode);
+                        let new_pi = $crate::algos::support::const_table::pi_by_scale::<W>(w, mode);
+                        if old_pi != new_pi {
+                            diverged += 1;
+                            eprintln!("DIVERGE {tier} pi scale={scale} w={w} mode={mode:?}: old={old_pi:?} new={new_pi:?}");
+                        }
+                        let old_ln2 = const_rounded_cf(LN2_REF_DIGITS, LN2_REF_SCALE, LN2_REF_TOP_CMP, w, mode);
+                        let new_ln2 = $crate::algos::support::const_table::ln2_by_scale::<W>(w, mode);
+                        if old_ln2 != new_ln2 {
+                            diverged += 1;
+                            eprintln!("DIVERGE {tier} ln2 scale={scale} w={w} mode={mode:?}: old={old_ln2:?} new={new_ln2:?}");
+                        }
+                        let old_ln10 = const_rounded_cf(LN10_REF_DIGITS, LN10_REF_SCALE, LN10_REF_TOP_CMP, w, mode);
+                        let new_ln10 = $crate::algos::support::const_table::ln10_by_scale::<W>(w, mode);
+                        if old_ln10 != new_ln10 {
+                            diverged += 1;
+                            eprintln!("DIVERGE {tier} ln10 scale={scale} w={w} mode={mode:?}: old={old_ln10:?} new={new_ln10:?}");
+                        }
+                    }
+                    // dense near the ends, strided in the middle
+                    scale += if scale < 5 || scale + 5 > ($max_scale as u32) { 1 } else { 7 };
+                }
+                diverged
             }
 
             /// `ln 2` at working scale `w`, rounded under the crate
@@ -2387,6 +2396,35 @@ macro_rules! decl_wide_transcendental {
                 pi_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE) >> 1
             }
 
+            /// `180/π` (degrees per radian) at working scale `w`, sourced
+            /// from the per-scale oracle table. On the common
+            /// (`w == SCALE + GUARD`) path the const-folded
+            /// [`crate::algos::support::const_table::deg_per_rad_by_scale`]
+            /// reads the baked entry keyed on the const scale; any other
+            /// `w` (no Ziv escalation reaches this in the angle kernels,
+            /// but keep it total) falls to the runtime-keyed `by_w`.
+            pub(crate) fn deg_per_rad_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    return $crate::algos::support::const_table::deg_per_rad_by_scale::<W>(SCALE + GUARD, mode);
+                }
+                $crate::algos::support::const_table::deg_per_rad_by_w::<W>(w, mode)
+            }
+
+            /// `π/180` (radians per degree) at working scale `w` — see
+            /// [`deg_per_rad_cf`].
+            pub(crate) fn rad_per_deg_cf<const SCALE: u32>(
+                w: u32,
+                mode: $crate::support::rounding::RoundingMode,
+            ) -> W {
+                if w == SCALE + GUARD {
+                    return $crate::algos::support::const_table::rad_per_deg_by_scale::<W>(SCALE + GUARD, mode);
+                }
+                $crate::algos::support::const_table::rad_per_deg_by_w::<W>(w, mode)
+            }
+
             /// Taylor series for `sin` on a reduced `r ∈ [0, π/4]`.
             ///
             /// `sin(r) = r − r³/3! + r⁵/5! − …`
@@ -2812,6 +2850,14 @@ macro_rules! decl_wide_transcendental {
                 #[inline]
                 fn half_pi<const SCALE: u32>(w: u32) -> W {
                     half_pi::<SCALE>(w)
+                }
+                #[inline]
+                fn deg_per_rad<const SCALE: u32>(w: u32) -> W {
+                    deg_per_rad_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
+                }
+                #[inline]
+                fn rad_per_deg<const SCALE: u32>(w: u32) -> W {
+                    rad_per_deg_cf::<SCALE>(w, $crate::support::rounding::DEFAULT_ROUNDING_MODE)
                 }
                 #[inline]
                 fn sincos_table_entry<const SCALE: u32>(w: u32, idx: usize, m: u32) -> (W, W) {
@@ -5432,6 +5478,39 @@ mod tests {
         wide_trig_d924::const_rounded_cf_matches_runtime();
         #[cfg(any(feature = "d1232", feature = "xx-wide"))]
         wide_trig_d1232::const_rounded_cf_matches_runtime();
+    }
+
+    /// Informational: report every `(constant, scale, mode)` cell where
+    /// the new per-scale oracle table differs from the old
+    /// `const_rounded_cf` bake, per tier. The mpmath table is
+    /// AUTHORITATIVE (owner directive), so this test does NOT fail on a
+    /// divergence — it prints them (run with `--nocapture`) and the total,
+    /// for the coordinator to cross-check against golden.
+    #[test]
+    fn const_table_vs_const_rounded_cf_report() {
+        use crate::types::widths::*;
+        let mut total: u64 = 0;
+        #[cfg(any(feature = "d76", feature = "wide"))]
+        { total += wide_trig_d76::const_table_vs_const_rounded_cf("D76"); }
+        #[cfg(any(feature = "d153", feature = "wide"))]
+        { total += wide_trig_d153::const_table_vs_const_rounded_cf("D153"); }
+        #[cfg(any(feature = "d307", feature = "x-wide"))]
+        { total += wide_trig_d307::const_table_vs_const_rounded_cf("D307"); }
+        #[cfg(any(feature = "d57", feature = "wide"))]
+        { total += wide_trig_d57::const_table_vs_const_rounded_cf("D57"); }
+        #[cfg(any(feature = "d115", feature = "wide"))]
+        { total += wide_trig_d115::const_table_vs_const_rounded_cf("D115"); }
+        #[cfg(any(feature = "d230", feature = "wide"))]
+        { total += wide_trig_d230::const_table_vs_const_rounded_cf("D230"); }
+        #[cfg(any(feature = "d462", feature = "x-wide"))]
+        { total += wide_trig_d462::const_table_vs_const_rounded_cf("D462"); }
+        #[cfg(any(feature = "d616", feature = "x-wide"))]
+        { total += wide_trig_d616::const_table_vs_const_rounded_cf("D616"); }
+        #[cfg(any(feature = "d924", feature = "xx-wide"))]
+        { total += wide_trig_d924::const_table_vs_const_rounded_cf("D924"); }
+        #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+        { total += wide_trig_d1232::const_table_vs_const_rounded_cf("D1232"); }
+        eprintln!("const_table_vs_const_rounded_cf: {total} divergent cells (mpmath authoritative)");
     }
 
     /// The wide-tier strict transcendentals are correctly rounded, so

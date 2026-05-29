@@ -233,6 +233,17 @@ pub(crate) trait WideTrigCore {
     /// `SCALE` — see [`Self::pi`].
     fn half_pi<const SCALE: u32>(w: u32) -> Self::W;
 
+    /// `180/π` (degrees per radian) at working scale `w`, const-folded at
+    /// the layer's own `SCALE` — see [`Self::pi`]. The exact angle-scale
+    /// factor the `to_degrees` `MulPiRatio` kernel multiplies by (`x *
+    /// 180/π`), replacing the runtime divide-by-`π`.
+    fn deg_per_rad<const SCALE: u32>(w: u32) -> Self::W;
+    /// `π/180` (radians per degree) at working scale `w`, const-folded at
+    /// the layer's own `SCALE` — see [`Self::pi`]. The exact angle-scale
+    /// factor the `to_radians` `MulPiRatio` kernel multiplies by (`x *
+    /// π/180`).
+    fn rad_per_deg<const SCALE: u32>(w: u32) -> Self::W;
+
     /// The sincos Tang table slot `(sin(c_j), cos(c_j))` at working
     /// scale `w` for table size `m`, where `c_j = j · π / (4·m)` and
     /// `j ∈ [0, m]` (the `j = m` slot is `(sin π/4, cos π/4)`, needed
