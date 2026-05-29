@@ -136,11 +136,16 @@ exact-scratch-nightly = ["exact-scratch"]
 # enumerate all twelve tier features by hand and a single-tier build
 # (`--features d57`) would miss the support it depends on.
 #
-# Implies `alloc`: every wide tier's transcendental lookup tables are
-# heap-cached (`decl_table_cache!` → `alloc::vec::Vec`), so a no-default
-# single-tier build (`--no-default-features --features d57`) must pull in
-# `extern crate alloc`, which is itself gated on the `alloc` feature.
-_wide-support = ["alloc"]
+# Heap-free (Phase 9): the wide-tier transcendental lookup tables used to
+# be heap-cached (`thread_local!` + `alloc::vec::Vec`); those runtime
+# caches were removed in favour of stateless on-stack recompute, so the
+# wide-support path no longer needs `alloc`. This marker pulls in NO
+# features — `_wide-support = []` keeps it as the heap-free backstop: a
+# `no_std` single-tier build (`--no-default-features --features d57`) gets
+# no `alloc`, so any reintroduced `alloc::vec::Vec` on the wide path is a
+# hard compile error rather than a silent heap allocation. (`std` still
+# pulls `alloc` for the std build; that is the std backend's own affair.)
+_wide-support = []
 wide = ["d57", "d76", "d115", "d153", "d230"]
 d57 = ["_wide-support"]
 d76 = ["_wide-support"]

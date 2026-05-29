@@ -24,12 +24,6 @@ pub(crate) mod mg_divide;
 // `W::isqrt` / `W::icbrt`.
 pub(crate) mod seed_bridge;
 
-// Per-thread, working-scale-keyed table memoisation for the Tang-style
-// lookup kernels (`decl_table_cache!`). Encapsulates the std (thread_local
-// cache) vs no_std (rebuild-per-call) divergence inside the macro body so
-// the lookup kernels stay cfg-free. A support memo, not a policy matcher.
-pub(crate) mod table_cache;
-
 // Tier-generic surface over the per-tier wide guard-digit cores. The
 // `WideTrigCore` trait + six `*_series` functions collapse the 60
 // per-tier `*_strict_<tier>` wrappers in `algos::{exp,ln,trig}::wide_kernel`
