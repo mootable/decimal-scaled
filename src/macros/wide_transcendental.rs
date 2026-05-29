@@ -459,18 +459,33 @@ macro_rules! decl_wide_transcendental {
             /// the series-evaluation core.
             #[inline]
             pub(crate) fn mul(a: W, b: W, w: u32) -> W {
-                round_div_pow10(a * b, w)
+                // Truncated-low product (mod 2^(64·N)), routed through the
+                // `mul_low` matcher so even-`N` work integers run the
+                // u128-packed kernel (bit-identical low `N` limbs to `a * b`,
+                // ~1.2–1.4× faster at the wide work widths N≥48). This is the
+                // per-term Series multiply, so the packing lands on every
+                // wide-tier Taylor term.
+                round_div_pow10(
+                    $crate::int::types::traits::BigInt::wrapping_mul_low_u128(a, b),
+                    w,
+                )
             }
             /// `(a · 10^w) / b`, rounded half-to-even.
             #[inline]
             pub(crate) fn div(a: W, b: W, w: u32) -> W {
-                round_div(a * pow10_table(w), b)
+                round_div(
+                    $crate::int::types::traits::BigInt::wrapping_mul_low_u128(a, pow10_table(w)),
+                    b,
+                )
             }
             /// Loop-friendly variant of [`div`] taking a precomputed
             /// `10^w` numerator factor.
             #[inline]
             pub(crate) fn div_cached(a: W, b: W, pow10_w: W) -> W {
-                round_div(a * pow10_w, b)
+                round_div(
+                    $crate::int::types::traits::BigInt::wrapping_mul_low_u128(a, pow10_w),
+                    b,
+                )
             }
             /// `a · n` for a small unsigned multiplier.
             ///
