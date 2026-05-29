@@ -1023,6 +1023,63 @@ pub mod __bench_internals {
         crate::algos::exp::exp_tang::exp_tang::<crate::types::widths::wide_trig_d1232::Core, SCALE, M, G, true, true, false>(raw, mode)
     }
 
+    // exp — Schoolbook (the `Algorithm::Schoolbook` reference arm of the wide
+    // `policy::exp` tiers — the naive Maclaurin series in a Fixed intermediate,
+    // generic over `Core`). Exported per tier so the policy-mapper A/B can
+    // include Schoolbook as a third candidate at every wide cell (owner
+    // directive 2026-05-29: bench every Algorithm variant, no exceptions).
+    // Same `(Int<N>, mode)` shape as `exp_series_d*`.
+    #[cfg(any(feature = "d57", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d57<const SCALE: u32>(raw: crate::int::types::Int<3>, mode: crate::RoundingMode) -> crate::int::types::Int<3> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d57::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d76", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d76<const SCALE: u32>(raw: crate::int::types::Int<4>, mode: crate::RoundingMode) -> crate::int::types::Int<4> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d76::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d115", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d115<const SCALE: u32>(raw: crate::int::types::Int<6>, mode: crate::RoundingMode) -> crate::int::types::Int<6> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d115::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d153", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d153<const SCALE: u32>(raw: crate::int::types::Int<8>, mode: crate::RoundingMode) -> crate::int::types::Int<8> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d153::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d230", feature = "wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d230<const SCALE: u32>(raw: crate::int::types::Int<12>, mode: crate::RoundingMode) -> crate::int::types::Int<12> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d230::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d307", feature = "wide", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d307<const SCALE: u32>(raw: crate::int::types::Int<16>, mode: crate::RoundingMode) -> crate::int::types::Int<16> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d307::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d462", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d462<const SCALE: u32>(raw: crate::int::types::Int<24>, mode: crate::RoundingMode) -> crate::int::types::Int<24> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d462::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d616", feature = "x-wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d616<const SCALE: u32>(raw: crate::int::types::Int<32>, mode: crate::RoundingMode) -> crate::int::types::Int<32> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d616::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d924", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d924<const SCALE: u32>(raw: crate::int::types::Int<48>, mode: crate::RoundingMode) -> crate::int::types::Int<48> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d924::Core, SCALE>(raw, mode)
+    }
+    #[cfg(any(feature = "d1232", feature = "xx-wide"))]
+    #[inline(never)]
+    pub fn exp_schoolbook_d1232<const SCALE: u32>(raw: crate::int::types::Int<64>, mode: crate::RoundingMode) -> crate::int::types::Int<64> {
+        crate::algos::exp::exp_schoolbook::exp_schoolbook::<crate::types::widths::wide_trig_d1232::Core, SCALE>(raw, mode)
+    }
+
     // ── hyperbolic (sinh/cosh/tanh) — wide-tier Series-baseline vs Tang-
     // composed A/B exports. The "schoolbook" surface is the production
     // wide-tier kernel `trig::hyper_schoolbook::*_schoolbook` (which composes
