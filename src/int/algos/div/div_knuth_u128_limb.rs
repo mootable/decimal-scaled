@@ -355,8 +355,8 @@ mod tests {
             for _ in 0..400 {
                 let extra = 1 + (next() % (n64 as u64 + 2)) as usize; // 1..=n64+2 u64
                 let top64 = n64 + extra;
-                let mut num = alloc::vec![0u64; top64];
-                let mut den = alloc::vec![0u64; n64];
+                let mut num = vec![0u64; top64];
+                let mut den = vec![0u64; n64];
                 for x in num.iter_mut() {
                     *x = next();
                 }
@@ -366,11 +366,11 @@ mod tests {
                 if den[n64 - 1] == 0 {
                     den[n64 - 1] = 1; // ensure effective top limb
                 }
-                let mut q_ref = alloc::vec![0u64; top64 + 1];
-                let mut r_ref = alloc::vec![0u64; top64 + 1];
+                let mut q_ref = vec![0u64; top64 + 1];
+                let mut r_ref = vec![0u64; top64 + 1];
                 div_knuth(&num, &den, &mut q_ref, &mut r_ref);
-                let mut q_c = alloc::vec![0u64; top64 + 1];
-                let mut r_c = alloc::vec![0u64; top64 + 1];
+                let mut q_c = vec![0u64; top64 + 1];
+                let mut r_c = vec![0u64; top64 + 1];
                 div_knuth_u128_limb(&num, &den, &mut q_c, &mut r_c);
                 assert_eq!(q_c, q_ref, "quot mismatch n64={n64} num={num:?} den={den:?}");
                 assert_eq!(
@@ -385,16 +385,16 @@ mod tests {
     // The odd / single-limb fallback returns div_knuth's exact result.
     #[test]
     fn u128_limb_knuth_odd_falls_back() {
-        let num = alloc::vec![0x1234u64, 0x5678, 0x9abc, 0xdef0, 0x1111];
+        let num = vec![0x1234u64, 0x5678, 0x9abc, 0xdef0, 0x1111];
         for den in [
-            alloc::vec![0x3u64],                 // single limb
-            alloc::vec![0x7u64, 0x9, 0xb],       // odd (3) limbs
+            vec![0x3u64],                 // single limb
+            vec![0x7u64, 0x9, 0xb],       // odd (3) limbs
         ] {
-            let mut q_ref = alloc::vec![0u64; num.len() + 1];
-            let mut r_ref = alloc::vec![0u64; num.len() + 1];
+            let mut q_ref = vec![0u64; num.len() + 1];
+            let mut r_ref = vec![0u64; num.len() + 1];
             div_knuth(&num, &den, &mut q_ref, &mut r_ref);
-            let mut q_c = alloc::vec![0u64; num.len() + 1];
-            let mut r_c = alloc::vec![0u64; num.len() + 1];
+            let mut q_c = vec![0u64; num.len() + 1];
+            let mut r_c = vec![0u64; num.len() + 1];
             div_knuth_u128_limb(&num, &den, &mut q_c, &mut r_c);
             assert_eq!(q_c, q_ref, "fallback quot mismatch den={den:?}");
             assert_eq!(r_c, r_ref, "fallback rem mismatch den={den:?}");
@@ -428,8 +428,8 @@ mod tests {
             let u128_v_len = n.div_ceil(2); // single_u128
             for _ in 0..200 {
                 let top = 2 * n; // full wide `2N` dividend
-                let mut num = alloc::vec![0u64; top];
-                let mut den = alloc::vec![0u64; n];
+                let mut num = vec![0u64; top];
+                let mut den = vec![0u64; n];
                 for x in num.iter_mut() {
                     *x = next();
                 }
@@ -437,16 +437,16 @@ mod tests {
                     *x = next();
                 }
                 den[n - 1] |= 1 << 63; // full-width even divisor (`den_n == n`)
-                let mut q_ref = alloc::vec![0u64; top + 1];
-                let mut r_ref = alloc::vec![0u64; top + 1];
+                let mut q_ref = vec![0u64; top + 1];
+                let mut r_ref = vec![0u64; top + 1];
                 div_knuth(&num, &den, &mut q_ref, &mut r_ref);
 
-                let mut q_c = alloc::vec![0u64; top + 1];
-                let mut r_c = alloc::vec![0u64; n];
-                let mut u64buf = alloc::vec![0u64; u64buf_len];
-                let mut v64buf = alloc::vec![0u64; v64buf_len];
-                let mut u128_u = alloc::vec![0u128; u128_u_len];
-                let mut u128_v = alloc::vec![0u128; u128_v_len];
+                let mut q_c = vec![0u64; top + 1];
+                let mut r_c = vec![0u64; n];
+                let mut u64buf = vec![0u64; u64buf_len];
+                let mut v64buf = vec![0u64; v64buf_len];
+                let mut u128_u = vec![0u128; u128_u_len];
+                let mut u128_v = vec![0u128; u128_v_len];
                 div_knuth_u128_limb_into(
                     &num,
                     &den,

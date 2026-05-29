@@ -30,8 +30,8 @@ mod tests {
     };
 
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
-    fn pack(limbs: &[u128]) -> alloc::vec::Vec<u64> {
-        let mut out = alloc::vec![0u64; 2 * limbs.len()];
+    fn pack(limbs: &[u128]) -> Vec<u64> {
+        let mut out = vec![0u64; 2 * limbs.len()];
         for (i, &l) in limbs.iter().enumerate() {
             out[2 * i] = l as u64;
             out[2 * i + 1] = (l >> 64) as u64;
@@ -39,15 +39,15 @@ mod tests {
         out
     }
 
-    fn corpus() -> alloc::vec::Vec<alloc::vec::Vec<u128>> {
-        alloc::vec![
-            alloc::vec![0u128, 0, 0, 0],
-            alloc::vec![1u128, 0, 0, 0],
-            alloc::vec![u128::MAX, 0, 0, 0],
-            alloc::vec![u128::MAX, u128::MAX, 0, 0],
-            alloc::vec![u128::MAX, u128::MAX, u128::MAX, u128::MAX],
-            alloc::vec![123u128, 456, 0, 0],
-            alloc::vec![
+    fn corpus() -> Vec<Vec<u128>> {
+        vec![
+            vec![0u128, 0, 0, 0],
+            vec![1u128, 0, 0, 0],
+            vec![u128::MAX, 0, 0, 0],
+            vec![u128::MAX, u128::MAX, 0, 0],
+            vec![u128::MAX, u128::MAX, u128::MAX, u128::MAX],
+            vec![123u128, 456, 0, 0],
+            vec![
                 0x1234_5678_9abc_def0_fedc_ba98_7654_3210_u128,
                 0xa5a5_a5a5_5a5a_5a5a_3c3c_3c3c_c3c3_c3c3,
                 0,
@@ -66,12 +66,12 @@ mod tests {
                 let a64 = pack(&a);
                 let b64 = pack(&b);
                 let n = a64.len().min(b64.len());
-                let mut a_buf = alloc::vec![0u64; n];
-                let mut b_buf = alloc::vec![0u64; n];
+                let mut a_buf = vec![0u64; n];
+                let mut b_buf = vec![0u64; n];
                 a_buf.copy_from_slice(&a64[..n]);
                 b_buf.copy_from_slice(&b64[..n]);
-                let mut out_school = alloc::vec![0u64; 2 * n];
-                let mut out_kara = alloc::vec![0u64; 2 * n];
+                let mut out_school = vec![0u64; 2 * n];
+                let mut out_kara = vec![0u64; 2 * n];
                 mul_schoolbook(&a_buf, &b_buf, &mut out_school);
                 mul_karatsuba_with_threshold(&a_buf, &b_buf, &mut out_kara, 4);
                 assert_eq!(out_kara, out_school, "Karatsuba mismatch at n={n}");
@@ -127,20 +127,20 @@ mod tests {
                 30
             };
 
-            let mut pairs: alloc::vec::Vec<(alloc::vec::Vec<u64>, alloc::vec::Vec<u64>)> =
-                alloc::vec::Vec::new();
+            let mut pairs: Vec<(Vec<u64>, Vec<u64>)> =
+                Vec::new();
             for ka in 0..5 {
                 for kb in 0..5 {
-                    let mut a = alloc::vec![0u64; n];
-                    let mut b = alloc::vec![0u64; n];
+                    let mut a = vec![0u64; n];
+                    let mut b = vec![0u64; n];
                     edge_fill(&mut a, ka, &mut next);
                     edge_fill(&mut b, kb, &mut next);
                     pairs.push((a, b));
                 }
             }
             for _ in 0..random_pairs {
-                let mut a = alloc::vec![0u64; n];
-                let mut b = alloc::vec![0u64; n];
+                let mut a = vec![0u64; n];
+                let mut b = vec![0u64; n];
                 for x in a.iter_mut() {
                     *x = next();
                 }
@@ -151,18 +151,18 @@ mod tests {
             }
 
             for (a, b) in &pairs {
-                let mut oracle = alloc::vec![0u64; 2 * n];
+                let mut oracle = vec![0u64; 2 * n];
                 mul_schoolbook(a, b, &mut oracle);
 
                 for &th in THRESHOLDS {
-                    let mut got = alloc::vec![0u64; 2 * n];
+                    let mut got = vec![0u64; 2 * n];
                     mul_karatsuba_with_threshold(a, b, &mut got, th);
                     assert_eq!(
                         got, oracle,
                         "non-alloc Karatsuba mismatch at n={n}, threshold={th}\na={a:?}\nb={b:?}"
                     );
 
-                    let mut got_swapped = alloc::vec![0u64; 2 * n];
+                    let mut got_swapped = vec![0u64; 2 * n];
                     mul_karatsuba_with_threshold(b, a, &mut got_swapped, th);
                     assert_eq!(
                         got_swapped, oracle,
@@ -195,16 +195,16 @@ mod tests {
         );
 
         let n = 256;
-        let mut a = alloc::vec![0u64; n];
-        let mut b = alloc::vec![0u64; n];
+        let mut a = vec![0u64; n];
+        let mut b = vec![0u64; n];
         for x in a.iter_mut() {
             *x = next();
         }
         for x in b.iter_mut() {
             *x = next();
         }
-        let mut oracle = alloc::vec![0u64; 2 * n];
-        let mut got = alloc::vec![0u64; 2 * n];
+        let mut oracle = vec![0u64; 2 * n];
+        let mut got = vec![0u64; 2 * n];
         mul_schoolbook(&a, &b, &mut oracle);
         // Deep threshold (8) drives maximal recursion at n=256 — the worst
         // case for the fixed scratch (matches the sizing assert above, and is
@@ -231,7 +231,7 @@ mod tests {
                         let mut b_arr = [0u64; $L];
                         a_arr.copy_from_slice(&a64[..$L]);
                         b_arr.copy_from_slice(&b64[..$L]);
-                        let mut out_slice = alloc::vec![0u64; $D];
+                        let mut out_slice = vec![0u64; $D];
                         let mut out_fixed = [0u64; $D];
                         mul_schoolbook(&a_arr, &b_arr, &mut out_slice);
                         mul_schoolbook_fixed::<$L, $D>(&a_arr, &b_arr, &mut out_fixed);

@@ -57,8 +57,8 @@ mod tests {
     use crate::int::policy::div_rem::dispatch as div_rem_dispatch;
 
     /// Pack a `[u128; N]` little-endian limb array into `[u64; 2*N]`.
-    fn pack(limbs: &[u128]) -> alloc::vec::Vec<u64> {
-        let mut out = alloc::vec![0u64; 2 * limbs.len()];
+    fn pack(limbs: &[u128]) -> Vec<u64> {
+        let mut out = vec![0u64; 2 * limbs.len()];
         for (i, &l) in limbs.iter().enumerate() {
             out[2 * i] = l as u64;
             out[2 * i + 1] = (l >> 64) as u64;
@@ -66,15 +66,15 @@ mod tests {
         out
     }
 
-    fn corpus() -> alloc::vec::Vec<alloc::vec::Vec<u128>> {
-        alloc::vec![
-            alloc::vec![0u128, 0, 0, 0],
-            alloc::vec![1u128, 0, 0, 0],
-            alloc::vec![u128::MAX, 0, 0, 0],
-            alloc::vec![u128::MAX, u128::MAX, 0, 0],
-            alloc::vec![u128::MAX, u128::MAX, u128::MAX, u128::MAX],
-            alloc::vec![123u128, 456, 0, 0],
-            alloc::vec![
+    fn corpus() -> Vec<Vec<u128>> {
+        vec![
+            vec![0u128, 0, 0, 0],
+            vec![1u128, 0, 0, 0],
+            vec![u128::MAX, 0, 0, 0],
+            vec![u128::MAX, u128::MAX, 0, 0],
+            vec![u128::MAX, u128::MAX, u128::MAX, u128::MAX],
+            vec![123u128, 456, 0, 0],
+            vec![
                 0x1234_5678_9abc_def0_fedc_ba98_7654_3210_u128,
                 0xa5a5_a5a5_5a5a_5a5a_3c3c_3c3c_c3c3_c3c3,
                 0,
@@ -96,11 +96,11 @@ mod tests {
                 if is_zero(&d64) {
                     continue;
                 }
-                let mut q64 = alloc::vec![0u64; n64.len()];
-                let mut r64 = alloc::vec![0u64; n64.len()];
+                let mut q64 = vec![0u64; n64.len()];
+                let mut r64 = vec![0u64; n64.len()];
                 div_rem(&n64, &d64, &mut q64, &mut r64);
 
-                let mut recon = alloc::vec![0u64; q64.len() + d64.len() + 1];
+                let mut recon = vec![0u64; q64.len() + d64.len() + 1];
                 mul_schoolbook(&q64, &d64, &mut recon);
                 let _ = add_assign(&mut recon, &r64);
                 assert_eq!(&recon[..n64.len()], &n64[..], "q·den + r != num");
@@ -124,12 +124,12 @@ mod tests {
                 if dn < 2 {
                     continue;
                 }
-                let mut q_ref = alloc::vec![0u64; n64.len()];
-                let mut r_ref = alloc::vec![0u64; n64.len()];
+                let mut q_ref = vec![0u64; n64.len()];
+                let mut r_ref = vec![0u64; n64.len()];
                 div_rem_dispatch(&n64, &d64, &mut q_ref, &mut r_ref);
 
-                let mut q_knuth = alloc::vec![0u64; n64.len()];
-                let mut r_knuth = alloc::vec![0u64; n64.len()];
+                let mut q_knuth = vec![0u64; n64.len()];
+                let mut r_knuth = vec![0u64; n64.len()];
                 div_knuth(&n64, &d64, &mut q_knuth, &mut r_knuth);
 
                 assert_eq!(q_knuth, q_ref, "knuth q mismatch");
@@ -165,10 +165,10 @@ mod tests {
             let mg = Mg3By2::new(d1, d0);
             let (q, r1, r0) = mg.div_rem(n2, n1, n0);
 
-            let num = alloc::vec![n0, n1, n2];
-            let den = alloc::vec![d0, d1];
-            let mut q_ref = alloc::vec![0u64; 3];
-            let mut r_ref = alloc::vec![0u64; 3];
+            let num = vec![n0, n1, n2];
+            let den = vec![d0, d1];
+            let mut q_ref = vec![0u64; 3];
+            let mut r_ref = vec![0u64; 3];
             div_rem(&num, &den, &mut q_ref, &mut r_ref);
 
             assert_eq!(q_ref[0], q, "Mg3By2 q mismatch");
@@ -337,8 +337,8 @@ mod tests {
         for _ in 0..3000 {
             let num_len = 2 + (next() % 9) as usize; // 2..=10 u64 limbs
             let den_len = 2 + (next() % (num_len as u64 - 1)) as usize; // 2..=num_len
-            let mut num = alloc::vec![0u64; num_len];
-            let mut den = alloc::vec![0u64; den_len];
+            let mut num = vec![0u64; num_len];
+            let mut den = vec![0u64; den_len];
             for x in num.iter_mut() {
                 *x = next();
             }
@@ -349,11 +349,11 @@ mod tests {
             if den.iter().all(|&x| x == 0) {
                 den[0] = 1;
             }
-            let mut q_ref = alloc::vec![0u64; num_len];
-            let mut r_ref = alloc::vec![0u64; num_len];
+            let mut q_ref = vec![0u64; num_len];
+            let mut r_ref = vec![0u64; num_len];
             div_rem(&num, &den, &mut q_ref, &mut r_ref);
-            let mut q_k = alloc::vec![0u64; num_len];
-            let mut r_k = alloc::vec![0u64; num_len];
+            let mut q_k = vec![0u64; num_len];
+            let mut r_k = vec![0u64; num_len];
             div_knuth(&num, &den, &mut q_k, &mut r_k);
             assert_eq!(q_k, q_ref, "quot mismatch num={:?} den={:?}", num, den);
             assert_eq!(r_k, r_ref, "rem mismatch num={:?} den={:?}", num, den);
